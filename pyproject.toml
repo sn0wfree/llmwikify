@@ -122,7 +122,7 @@ minversion = "7.0"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short --cov=src/llmwikify --cov-report=term-missing"
+addopts = "-v --tb=short"
 
 [tool.coverage.run]
 branch = true

@@ -52,38 +52,67 @@ reference_index:
 # ============================================================================
 # Configure which pages should be excluded from orphan detection.
 # Orphan pages are those with no inbound links.
+#
+# Design Principle: Zero Domain Assumptions
+# - All defaults are EMPTY (no preset patterns)
+# - You decide what to exclude based on your wiki's needs
+# - Examples below are for guidance only
 
 orphan_detection:
   # Regex patterns for page names to exclude from orphan detection
-  # Default patterns (always applied):
-  #   - ^\d{4}-\d{2}-\d{2}$  (dates: 2025-07-31)
-  #   - ^\d{4}-\d{2}$        (months: 2025-07)
-  #   - ^\d{4}-Q[1-4]$       (quarters: 2025-Q1)
+  # Default: [] (empty - zero domain assumption)
   #
-  # Add your custom patterns below:
+  # Common patterns (choose based on your needs):
+  #
+  # Time-series pages:
+  #   - '^\d{4}-\d{2}-\d{2}$'  # Daily logs/journals (2025-07-31)
+  #   - '^\d{4}-\d{2}$'        # Monthly summaries (2025-07)
+  #   - '^\d{4}-q[1-4]$'       # Quarterly reports (2025-Q1, case-insensitive)
+  #
+  # Meeting notes:
+  #   - '^meeting-.*'          # Meeting notes
+  #   - '^笔记 -.*'             # 中文会议笔记
+  #
+  # Project-specific:
+  #   - '^release-.*'          # Release notes
+  #   - '^experiment-.*'       # Experiment logs
   exclude_patterns:
-    # Examples:
-    # - '^\d{4}-\d{2}-\d{2}$'      # Daily logs/journals
-    # - '^meeting-.*'              # Meeting notes
-    # - '^book-note-.*'            # Book notes
-    # - '^release-.*'              # Release notes
+    # Add your patterns here:
+    # - '^\d{4}-\d{2}-\d{2}$'
   
   # Frontmatter keys that indicate a page should be excluded
-  # Default: ['redirect_to'] (redirect pages)
+  # Default: [] (empty - no preset conventions)
+  #
+  # Common patterns:
+  #   - 'redirect_to'          # Custom redirect convention
+  #   - 'template: true'       # Template pages
+  #   - 'deprecated: true'     # Deprecated docs
+  #   - 'draft: true'          # Draft pages
   exclude_frontmatter:
-    # Examples:
-    # - 'redirect_to'              # Redirect pages
-    # - 'template: true'           # Template pages
-    # - 'deprecated: true'         # Deprecated docs
+    # Add your keys here:
+    # - 'redirect_to'
   
   # Directory names that indicate archived content
-  # Default: ['archive', 'logs', 'history']
+  # Default: [] (empty - no preset directory names)
+  #
+  # Examples:
+  #   # English
+  #   - 'archive'
+  #   - 'logs'
+  #   - 'old'
+  #   
+  #   # 中文
+  #   - '历史'
+  #   - '归档'
+  #   - '日志'
+  #   
+  #   # Project-specific
+  #   - 'releases'
+  #   - 'meetings'
+  #   - 'experiments'
   archive_directories:
-    # Examples:
-    # - 'daily'                    # Daily summaries
-    # - 'journal'                  # Personal journal
-    # - 'meetings'                 # Meeting notes archive
-    # - 'releases'                 # Old releases
+    # Add your directories here:
+    # - 'archive'
 
 # ============================================================================
 # Performance Settings

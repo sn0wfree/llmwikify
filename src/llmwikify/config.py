@@ -26,13 +26,9 @@ DEFAULT_CONFIG = {
         "auto_export": True,
     },
     "orphan_detection": {
-        "default_exclude_patterns": [
-            r"^\d{4}-\d{2}-\d{2}$",  # Date: 2025-07-31
-            r"^\d{4}-\d{2}$",        # Month: 2025-07
-            r"^\d{4}-Q[1-4]$",       # Quarter: 2025-Q1
-        ],
-        "exclude_frontmatter": ["redirect_to"],
-        "archive_directories": ["archive", "logs", "history"],
+        "default_exclude_patterns": [],
+        "exclude_frontmatter": [],
+        "archive_directories": [],
     },
     "performance": {
         "batch_size": 100,
