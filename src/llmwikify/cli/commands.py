@@ -21,10 +21,20 @@ class WikiCLI:
     
     def init(self, args) -> int:
         """Initialize wiki."""
-        agent = getattr(args, 'agent', 'claude')
-        result = self.wiki.init(agent=agent)
-        print(result)
-        return 0
+        overwrite = getattr(args, 'overwrite', False)
+        result = self.wiki.init(overwrite=overwrite)
+        
+        if result['status'] == 'already_exists':
+            print(f"⚠️  Wiki already initialized at {self.root}")
+            print(f"   Existing files: {', '.join(result['existing_files'])}")
+            print(f"   Use --overwrite to reinitialize.")
+            return 0
+        else:
+            print(f"✅ {result['message']}")
+            print(f"   Created: {', '.join(result['created_files'])}")
+            if result['skipped_files']:
+                print(f"   Skipped: {', '.join(result['skipped_files'])}")
+            return 0
     
     def ingest(self, args) -> int:
         """Ingest a source file."""
@@ -455,7 +465,8 @@ Examples:
   llmwikify references "Company"          Show references
   llmwikify build-index                   Build reference index
   llmwikify recommend                     Get smart recommendations
-  llmwikify init --agent claude           Initialize wiki
+  llmwikify init                          Initialize wiki
+  llmwikify init --overwrite              Reinitialize wiki
   llmwikify serve                         Start MCP server
 """
     )
@@ -464,7 +475,7 @@ Examples:
     
     # init
     p = subparsers.add_parser('init', help='Initialize wiki')
-    p.add_argument('--agent', '-a', default='claude', choices=['claude', 'codex', 'cursor', 'generic'])
+    p.add_argument('--overwrite', action='store_true', help='Recreate index.md and log.md if they exist')
     
     # ingest
     p = subparsers.add_parser('ingest', help='Ingest PDF/URL/YouTube')

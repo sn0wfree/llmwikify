@@ -1,5 +1,6 @@
 """MCP server for llmwikify."""
 
+import json
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -45,7 +46,7 @@ class MCPServer:
                         inputSchema={
                             "type": "object",
                             "properties": {
-                                "agent": {"type": "string", "default": "claude"}
+                                "overwrite": {"type": "boolean", "default": False, "description": "Recreate index.md and log.md if they exist. Always skips wiki.md and config example."}
                             }
                         }
                     ),
@@ -137,7 +138,7 @@ class MCPServer:
             @self._mcp.call_tool()
             def call_tool(name: str, arguments: dict):
                 if name == "wiki_init":
-                    return self.wiki.init(arguments.get('agent', 'claude'))
+                    return json.dumps(self.wiki.init(overwrite=arguments.get('overwrite', False)))
                 elif name == "wiki_ingest":
                     return self.wiki.ingest_source(arguments['source'])
                 elif name == "wiki_write_page":
