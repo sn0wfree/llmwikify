@@ -1,0 +1,55 @@
+# Wiki Configuration
+# 
+# This file configures llmwikify.py behavior for your specific use case.
+# llmwikify.py is a general-purpose LLM-Wiki tool - configure it to match your domain.
+#
+# Copy this to .wiki-config.yaml and customize as needed.
+
+# ============================================================================
+# Orphan Page Detection
+# ============================================================================
+# Pages that should not be flagged as "orphaned" (no inbound links)
+# These are excluded based on universal patterns, not domain assumptions.
+
+orphan_pages:
+  # Regex patterns for page names to exclude
+  # Default patterns (always applied):
+  #   - ^\d{4}-\d{2}-\d{2}$  (dates: 2025-07-31)
+  #   - ^\d{4}-\d{2}$        (months: 2025-07)
+  #   - ^\d{4}-Q[1-4]$       (quarters: 2025-Q1)
+  exclude_patterns: []
+  # Examples for different use cases:
+  # - '^\d{4}-\d{2}-\d{2}$'      # Daily logs/journals
+  # - '^meeting-.*'              # Meeting notes
+  # - '^book-note-.*'            # Book notes
+  # - '^release-.*'              # Release notes
+  
+  # Frontmatter keys that indicate a page should be excluded
+  # Default: ['redirect_to'] (redirect pages)
+  exclude_frontmatter: []
+  # Examples:
+  # - 'redirect_to'              # Redirect pages
+  # - 'template: true'           # Template pages
+  # - 'deprecated: true'         # Deprecated docs
+  
+  # Directory names that indicate archived/content that may be orphaned
+  # Default: ['archive', 'logs', 'history']
+  archive_directories: []
+  # Examples:
+  # - 'daily'                    # Daily summaries
+  # - 'journal'                  # Personal journal
+  # - 'meetings'                 # Meeting notes archive
+  # - 'releases'                 # Old releases
+
+# ============================================================================
+# Other Configuration (Future)
+# ============================================================================
+# Add more llmwikify.py configuration options here as they are implemented.
+
+# Example:
+# lint:
+#   empty_page_threshold: 50  # Minimum content length to not be "empty"
+# 
+# search:
+#   default_limit: 10
+#   fts5_tokenizer: 'porter unicode61'
