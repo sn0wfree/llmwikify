@@ -22,7 +22,11 @@ from .core import Wiki, WikiIndex
 from .cli import WikiCLI
 from .mcp import MCPServer
 from .extractors import ExtractedContent, Link
-from .config import load_config, get_default_config
+from .config import (
+    load_config,
+    get_default_config,
+    get_mcp_config,
+)
 
 # Convenience functions
 def create_wiki(path: str | Path, config: Optional[Dict] = None) -> Wiki:
@@ -55,6 +59,7 @@ __all__ = [
     # Configuration
     "load_config",
     "get_default_config",
+    "get_mcp_config",
     
     # Convenience functions
     "create_wiki",

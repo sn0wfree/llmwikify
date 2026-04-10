@@ -139,3 +139,28 @@ performance:
 #   archive_directories:
 #     - 'experiments'
 #     - 'papers'
+
+# ============================================================================
+# MCP Server Configuration
+# ============================================================================
+
+mcp:
+  # Server host address
+  # Use "0.0.0.0" to allow external connections
+  host: "127.0.0.1"
+  
+  # Server port number
+  port: 8765
+  
+  # Transport protocol
+  # Options: "stdio" (default), "http", "sse"
+  # - stdio: Standard I/O (for CLI/LLM integration)
+  # - http: HTTP transport (for web APIs)
+  # - sse: Server-Sent Events (for streaming)
+  transport: "stdio"
+
+# Example: Expose MCP server to network
+# mcp:
+#   host: "0.0.0.0"
+#   port: 8765
+#   transport: "http"
