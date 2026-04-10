@@ -1,55 +1,141 @@
-# Wiki Configuration
+# llmwikify Configuration File
 # 
-# This file configures llmwikify.py behavior for your specific use case.
-# llmwikify.py is a general-purpose LLM-Wiki tool - configure it to match your domain.
-#
+# This file configures llmwikify behavior for your specific wiki.
 # Copy this to .wiki-config.yaml and customize as needed.
+# 
+# All settings are optional - omit any section to use defaults.
+
+# ============================================================================
+# Directory Structure
+# ============================================================================
+
+directories:
+  # Raw sources directory (drop PDFs, URLs exports, etc. here)
+  raw: "raw"
+  
+  # Wiki pages directory (LLM-maintained markdown files)
+  wiki: "wiki"
+
+# ============================================================================
+# File Names
+# ============================================================================
+
+files:
+  # Wiki index file
+  index: "index.md"
+  
+  # Activity log file  
+  log: "log.md"
+
+# ============================================================================
+# Database Configuration
+# ============================================================================
+
+database:
+  # Database file name (relative to wiki root)
+  # Use different names for different wikis to avoid conflicts
+  name: ".llmwikify.db"
+
+# ============================================================================
+# Reference Index Configuration
+# ============================================================================
+
+reference_index:
+  # JSON export filename (for Obsidian compatibility)
+  name: "reference_index.json"
+  
+  # Auto-export JSON after building index
+  auto_export: true
 
 # ============================================================================
 # Orphan Page Detection
 # ============================================================================
-# Pages that should not be flagged as "orphaned" (no inbound links)
-# These are excluded based on universal patterns, not domain assumptions.
+# Configure which pages should be excluded from orphan detection.
+# Orphan pages are those with no inbound links.
 
-orphan_pages:
-  # Regex patterns for page names to exclude
+orphan_detection:
+  # Regex patterns for page names to exclude from orphan detection
   # Default patterns (always applied):
   #   - ^\d{4}-\d{2}-\d{2}$  (dates: 2025-07-31)
   #   - ^\d{4}-\d{2}$        (months: 2025-07)
   #   - ^\d{4}-Q[1-4]$       (quarters: 2025-Q1)
-  exclude_patterns: []
-  # Examples for different use cases:
-  # - '^\d{4}-\d{2}-\d{2}$'      # Daily logs/journals
-  # - '^meeting-.*'              # Meeting notes
-  # - '^book-note-.*'            # Book notes
-  # - '^release-.*'              # Release notes
+  #
+  # Add your custom patterns below:
+  exclude_patterns:
+    # Examples:
+    # - '^\d{4}-\d{2}-\d{2}$'      # Daily logs/journals
+    # - '^meeting-.*'              # Meeting notes
+    # - '^book-note-.*'            # Book notes
+    # - '^release-.*'              # Release notes
   
   # Frontmatter keys that indicate a page should be excluded
   # Default: ['redirect_to'] (redirect pages)
-  exclude_frontmatter: []
-  # Examples:
-  # - 'redirect_to'              # Redirect pages
-  # - 'template: true'           # Template pages
-  # - 'deprecated: true'         # Deprecated docs
+  exclude_frontmatter:
+    # Examples:
+    # - 'redirect_to'              # Redirect pages
+    # - 'template: true'           # Template pages
+    # - 'deprecated: true'         # Deprecated docs
   
-  # Directory names that indicate archived/content that may be orphaned
+  # Directory names that indicate archived content
   # Default: ['archive', 'logs', 'history']
-  archive_directories: []
-  # Examples:
-  # - 'daily'                    # Daily summaries
-  # - 'journal'                  # Personal journal
-  # - 'meetings'                 # Meeting notes archive
-  # - 'releases'                 # Old releases
+  archive_directories:
+    # Examples:
+    # - 'daily'                    # Daily summaries
+    # - 'journal'                  # Personal journal
+    # - 'meetings'                 # Meeting notes archive
+    # - 'releases'                 # Old releases
 
 # ============================================================================
-# Other Configuration (Future)
+# Performance Settings
 # ============================================================================
-# Add more llmwikify.py configuration options here as they are implemented.
 
-# Example:
-# lint:
-#   empty_page_threshold: 50  # Minimum content length to not be "empty"
-# 
-# search:
-#   default_limit: 10
-#   fts5_tokenizer: 'porter unicode61'
+performance:
+  # Batch size for index building (files per batch)
+  # Higher = faster but more memory
+  batch_size: 100
+  
+  # SQLite cache size in KB
+  # -1000 = 1MB, -64000 = 64MB
+  cache_size: 64000
+
+# ============================================================================
+# Logging Configuration (Future)
+# ============================================================================
+
+# logging:
+#   level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+#   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# ============================================================================
+# Examples for Different Use Cases
+# ============================================================================
+
+# Example 1: Personal Knowledge Base
+# orphan_detection:
+#   exclude_patterns:
+#     - '^journal-.*'
+#     - '^daily-.*'
+#   archive_directories:
+#     - 'archive'
+#     - 'old'
+
+# Example 2: Project Documentation
+# orphan_detection:
+#   exclude_patterns:
+#     - '^release-.*'
+#     - '^changelog-.*'
+#     - '^meeting-.*'
+#   archive_directories:
+#     - 'releases'
+#     - 'meetings'
+
+# Example 3: Research Wiki
+# database:
+#   name: ".research-notes.db"
+# orphan_detection:
+#   exclude_patterns:
+#     - '^experiment-.*'
+#     - '^paper-note-.*'
+#   archive_directories:
+#     - 'experiments'
+#     - 'papers'
