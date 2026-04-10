@@ -6,7 +6,7 @@ import json
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llmwikify.llmwikify import WikiIndex
+from llmwikify.core import WikiIndex
 
 
 class TestWikiIndex:

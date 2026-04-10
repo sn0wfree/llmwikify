@@ -6,7 +6,7 @@ import sys
 import tempfile
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llmwikify.llmwikify import extract, detect_source_type, _extract_text_file, WikiIndex
+from llmwikify.extractors import extract, detect_source_type, extract_text_file
 
 
 class TestDetectSourceType:
@@ -42,7 +42,7 @@ class TestExtractTextFile:
         test_file = temp_wiki / "test.md"
         test_file.write_text("# Test Title\n\nContent here")
         
-        result = _extract_text_file(test_file)
+        result = extract_text_file(test_file)
         
         assert result.source_type == "markdown"
         assert result.title == "Test Title"
@@ -53,7 +53,7 @@ class TestExtractTextFile:
         test_file = temp_wiki / "test.txt"
         test_file.write_text("Plain text content")
         
-        result = _extract_text_file(test_file)
+        result = extract_text_file(test_file)
         
         assert result.source_type == "text"
         assert "Plain text" in result.text

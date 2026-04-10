@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llmwikify.llmwikify import Wiki
+from llmwikify.core import Wiki
 
 
 class TestWiki:

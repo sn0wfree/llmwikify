@@ -75,8 +75,8 @@ Issues = "https://github.com/sn0wfree/llmwikify/issues"
 Changelog = "https://github.com/sn0wfree/llmwikify/blob/main/CHANGELOG.md"
 
 [project.scripts]
-llmwikify = "llmwikify.llmwikify:main"
-wiki = "llmwikify.llmwikify:main"
+llmwikify = "llmwikify.cli:main"
+wiki = "llmwikify.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
