@@ -1,0 +1,10 @@
+include README.md
+include LICENSE
+include CHANGELOG.md
+include pyproject.toml
+recursive-include src/llmwikify *.py
+recursive-include src/llmwikify py.typed
+recursive-include docs *.md
+recursive-include tests *.py
+recursive-exclude tests __pycache__
+recursive-exclude tests *.pyc

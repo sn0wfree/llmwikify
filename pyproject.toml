@@ -1,0 +1,139 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llmwikify"
+version = "0.10.0"
+description = "General-purpose LLM-Wiki CLI and Python library - Build persistent, LLM-maintained knowledge bases"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "sn0wfree", email = "linlu1234567@sina.com"}
+]
+maintainers = [
+    {name = "sn0wfree", email = "linlu1234567@sina.com"}
+]
+keywords = [
+    "wiki",
+    "llm", 
+    "knowledge-base",
+    "obsidian",
+    "mcp",
+    "notebook",
+    "second-brain",
+    "pkms",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Documentation",
+    "Topic :: Text Processing",
+    "Topic :: Utilities",
+]
+dependencies = [
+    # Zero core dependencies - standard library only
+]
+
+[project.optional-dependencies]
+pdf = ["pymupdf>=1.23.0"]
+web = ["trafilatura>=1.7.0"]
+youtube = ["youtube-transcript-api>=0.6.0"]
+mcp = ["mcp>=1.0.0"]
+config = ["pyyaml>=6.0"]
+all = [
+    "llmwikify[pdf,web,youtube,mcp,config]",
+]
+dev = [
+    "llmwikify[all]",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "build>=0.10.0",
+    "twine>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/sn0wfree/llmwikify"
+Documentation = "https://llmwikify.readthedocs.io"
+Repository = "https://github.com/sn0wfree/llmwikify"
+Issues = "https://github.com/sn0wfree/llmwikify/issues"
+Changelog = "https://github.com/sn0wfree/llmwikify/blob/main/CHANGELOG.md"
+
+[project.scripts]
+llmwikify = "llmwikify.llmwikify:main"
+wiki = "llmwikify.llmwikify:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["llmwikify"]
+
+[tool.setuptools.package-data]
+llmwikify = ["py.typed"]
+
+[tool.black]
+line-length = 88
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "I",  # isort
+    "W",  # pycodestyle warnings
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short --cov=src/llmwikify --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = true
+source = ["src/llmwikify"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
