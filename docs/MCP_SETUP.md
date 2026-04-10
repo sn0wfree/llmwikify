@@ -2,6 +2,8 @@
 
 **llmwikify** provides an MCP (Model Context Protocol) server that exposes wiki operations as tools for LLMs.
 
+**Current**: 13 tools available (v0.12.6)
+
 ---
 
 ## 🚀 Quick Start
@@ -14,7 +16,8 @@ from llmwikify import Wiki, MCPServer
 # Open wiki
 wiki = Wiki("/path/to/wiki")
 
-# Create and start server (uses defaults: stdio transport)
+# Create and start server
+# Auto-reads config from wiki.config["mcp"] if no explicit config
 server = MCPServer(wiki)
 server.serve()
 ```
@@ -28,7 +31,17 @@ Starting MCP server with STDIO transport...
 
 ## ⚙️ Configuration
 
-### Option 1: Programmatic Configuration
+### Option 1: Auto-Read from Wiki Config (Recommended)
+
+```python
+from llmwikify import Wiki, MCPServer
+
+wiki = Wiki("/path/to/wiki")  # Loads .wiki-config.yaml automatically
+server = MCPServer(wiki)      # Reads mcp settings from wiki.config["mcp"]
+server.serve()
+```
+
+### Option 2: Programmatic Configuration
 
 ```python
 from llmwikify import Wiki, MCPServer
@@ -37,9 +50,9 @@ wiki = Wiki("/path/to/wiki")
 
 # Custom configuration
 config = {
-    "host": "0.0.0.0",  # Allow external connections
+    "host": "0.0.0.0",
     "port": 8765,
-    "transport": "http",  # Use HTTP instead of stdio
+    "transport": "http",
 }
 
 server = MCPServer(wiki, config=config)
@@ -51,7 +64,7 @@ server.serve()
 Starting MCP server on 0.0.0.0:8765 with HTTP transport...
 ```
 
-### Option 2: Override at Runtime
+### Option 3: Override at Runtime
 
 ```python
 server = MCPServer(wiki)
@@ -64,7 +77,7 @@ server.serve(
 )
 ```
 
-### Option 3: Configuration File
+### Option 4: Configuration File
 
 Create `.wiki-config.yaml` in wiki root:
 
@@ -75,19 +88,20 @@ mcp:
   transport: "stdio"  # or "http" or "sse"
 ```
 
-Then use in code:
+Then:
 
 ```python
-from llmwikify import Wiki, MCPServer, load_config
-from pathlib import Path
+from llmwikify import Wiki, MCPServer
 
-wiki_root = Path("/path/to/wiki")
-config = load_config(wiki_root)
-
-wiki = Wiki(wiki_root, config=config)
-server = MCPServer(wiki, config=config.get('mcp'))
+wiki = Wiki("/path/to/wiki")  # Auto-loads .wiki-config.yaml
+server = MCPServer(wiki)      # Reads mcp section
 server.serve()
 ```
+
+**Configuration Priority**:
+1. Explicit `config` parameter to `MCPServer()`
+2. `wiki.config["mcp"]` (from `.wiki-config.yaml`)
+3. `DEFAULT_CONFIG` (stdio, 127.0.0.1:8765)
 
 ---
 
@@ -168,20 +182,53 @@ mcp:
 
 ---
 
-## 📋 Available Tools
+## 📋 Available Tools (13 Total)
 
-The MCP server exposes these 8 wiki tools:
+| Tool | Description | Added |
+|------|-------------|-------|
+| `wiki_init` | Initialize wiki directory structure | v0.9.0 |
+| `wiki_ingest` | Ingest source (auto-collects to raw/) | v0.9.0 |
+| `wiki_write_page` | Write/update a wiki page | v0.9.0 |
+| `wiki_read_page` | Read a wiki page | v0.9.0 |
+| `wiki_search` | Full-text search with snippets | v0.9.0 |
+| `wiki_lint` | Health check (broken links, orphans) | v0.9.0 |
+| `wiki_status` | Get wiki status overview | v0.9.0 |
+| `wiki_log` | Append entry to wiki log | v0.9.0 |
+| `wiki_recommend` | Missing pages and orphan detection | v0.12.0 |
+| `wiki_build_index` | Build reference index from all pages | v0.12.0 |
+| `wiki_read_schema` | Read wiki.md (schema/conventions) | v0.12.4 |
+| `wiki_update_schema` | Update wiki.md with new conventions | v0.12.4 |
+| `wiki_synthesize` | **Save query answer as wiki page** | **v0.12.6** |
 
-| Tool | Description |
-|------|-------------|
-| `wiki_init` | Initialize a wiki |
-| `wiki_ingest` | Ingest a source file |
-| `wiki_write_page` | Write a wiki page |
-| `wiki_read_page` | Read a wiki page |
-| `wiki_search` | Search the wiki |
-| `wiki_lint` | Health-check the wiki |
-| `wiki_status` | Get wiki status |
-| `wiki_log` | Append entry to wiki log |
+### wiki_synthesize (v0.12.6+)
+
+The key tool for the Query compounding cycle. Saves LLM-generated answers as persistent wiki pages.
+
+```json
+{
+  "query": "Compare gold and copper mining",
+  "answer": "# Mining Comparison\n\n...",
+  "source_pages": ["Gold Mining", "Copper Mining"],
+  "raw_sources": ["raw/report.pdf"],
+  "page_name": "Query: Mining Comparison",
+  "auto_link": true,
+  "auto_log": true,
+  "update_existing": false
+}
+```
+
+**Returns**:
+```json
+{
+  "status": "created",
+  "page_name": "Query: Mining Comparison",
+  "page_path": "wiki/Query: Mining Comparison.md",
+  "source_pages": ["Gold Mining", "Copper Mining"],
+  "raw_sources": ["raw/report.pdf"],
+  "logged": true,
+  "hint": "A similar query page already exists..."
+}
+```
 
 ---
 
@@ -224,7 +271,7 @@ curl http://localhost:8765
 
 **Solution**: Use a different port
 ```python
-server.serve(port=8766)  # Use different port
+server.serve(port=8766)
 ```
 
 ### Connection Refused
@@ -294,24 +341,14 @@ Access from other machines:
 curl http://your-server-ip:8765
 ```
 
-### Example 3: Development Setup
-
-```yaml
-# .wiki-config.yaml
-mcp:
-  host: "127.0.0.1"
-  port: 8765
-  transport: "sse"  # For real-time updates
-```
-
 ---
 
 ## 🎯 Best Practices
 
-1. **Use STDIO by default** - Most secure, works with LLMs
-2. **Change port if conflict** - Default is 8765
-3. **Don't expose to network** unless necessary
-4. **Use configuration file** for consistency
+1. **Use STDIO by default** — Most secure, works with LLMs
+2. **Auto-read config** — Don't pass config explicitly unless needed
+3. **Change port if conflict** — Default is 8765
+4. **Don't expose to network** unless necessary
 5. **Test locally first** before exposing
 
 ---
@@ -324,4 +361,4 @@ mcp:
 
 ---
 
-*Last updated: 2026-04-10 | Version: 0.11.0*
+*Last updated: 2026-04-10 | Version: 0.12.6 | 13 tools*

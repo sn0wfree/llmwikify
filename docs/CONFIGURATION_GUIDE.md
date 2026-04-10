@@ -2,15 +2,17 @@
 
 **llmwikify** uses a flexible configuration system that allows you to customize behavior while maintaining zero core dependencies.
 
+**Current**: v0.12.6
+
 ---
 
 ## 📋 Overview
 
 Configuration is loaded in this priority order (highest to lowest):
 
-1. **Programmatic config** - Dict passed to `Wiki()` or `create_wiki()`
-2. **User config file** - `.wiki-config.yaml` in wiki root
-3. **Built-in defaults** - Embedded in `config.py`
+1. **Programmatic config** — Dict passed to `Wiki()` or `create_wiki()`
+2. **User config file** — `.wiki-config.yaml` in wiki root
+3. **Built-in defaults** — Embedded in `config.py`
 
 This design ensures:
 - ✅ Zero dependencies (defaults are embedded)
@@ -114,12 +116,12 @@ orphan_detection:
   exclude_patterns:
     - '^\d{4}-\d{2}-\d{2}$'  # Dates (2025-07-31)
     - '^meeting-.*'          # Meeting notes
-  
+
   # Frontmatter keys that mark exclusion
   exclude_frontmatter:
     - 'redirect_to'          # Redirect pages
     - 'template: true'       # Template pages
-  
+
   # Directory names that indicate archives
   archive_directories:
     - 'archive'
@@ -127,10 +129,7 @@ orphan_detection:
     - 'old'
 ```
 
-**Default patterns** (always applied):
-- `^\d{4}-\d{2}-\d{2}$` - Dates
-- `^\d{4}-\d{2}$` - Months
-- `^\d{4}-Q[1-4]$` - Quarters
+**⚠️ Zero Domain Assumption**: By default, all exclusion lists are **empty**. You must explicitly configure what to exclude. No dates, no redirect_to, no archive directories are assumed.
 
 ---
 
@@ -150,12 +149,29 @@ performance:
 
 ---
 
+### 7. mcp
+
+MCP server settings (used when `MCPServer(wiki)` reads from wiki config):
+
+```yaml
+mcp:
+  host: "127.0.0.1"
+  port: 8765
+  transport: "stdio"  # or "http" or "sse"
+```
+
+**Config priority** in `MCPServer`:
+1. Explicit `config` parameter
+2. `wiki.config["mcp"]` (from `.wiki-config.yaml`)
+3. `DEFAULT_CONFIG` (stdio, 127.0.0.1:8765)
+
+---
+
 ## 🎯 Use Case Examples
 
 ### Example 1: Personal Knowledge Base
 
 ```yaml
-# Personal wiki with journal and book notes
 database:
   name: ".personal-wiki.db"
 
@@ -167,6 +183,9 @@ orphan_detection:
   archive_directories:
     - 'archive'
     - 'old'
+
+mcp:
+  transport: "stdio"
 ```
 
 ---
@@ -174,7 +193,6 @@ orphan_detection:
 ### Example 2: Project Documentation
 
 ```yaml
-# Project docs with releases and meetings
 database:
   name: ".project-docs.db"
 
@@ -194,7 +212,6 @@ orphan_detection:
 ### Example 3: Research Wiki
 
 ```yaml
-# Research notes with experiments and papers
 database:
   name: ".research-notes.db"
 
@@ -217,7 +234,6 @@ orphan_detection:
 ### Example 4: Team Wiki
 
 ```yaml
-# Team wiki with meeting notes and decisions
 database:
   name: ".team-wiki.db"
 
@@ -230,6 +246,11 @@ orphan_detection:
     - 'meetings'
     - 'decisions'
     - 'archive'
+
+mcp:
+  host: "127.0.0.1"
+  port: 8765
+  transport: "stdio"
 ```
 
 ---
@@ -251,6 +272,10 @@ custom_config = {
     },
     "orphan_detection": {
         "exclude_patterns": ["^draft-.*"]
+    },
+    "mcp": {
+        "transport": "http",
+        "port": 9000
     }
 }
 
@@ -308,10 +333,10 @@ print(config['database']['name'])  # From .wiki-config.yaml or default
 
 ## 📚 Related
 
-- [Configuration System Design](../archive/reports/MODULARIZATION_REPORT.md)
-- [Wiki Initialization](../README.md#initialization)
-- [Orphan Detection Guide](./ORPHAN_DETECTION.md)
+- [MCP Setup Guide](./MCP_SETUP.md)
+- [Configuration System Design](../ARCHITECTURE.md#configuration)
+- [Zero Domain Assumption](../README.md#design-principle-zero-domain-assumptions)
 
 ---
 
-*Last updated: 2026-04-10 | Version: 0.11.0*
+*Last updated: 2026-04-10 | Version: 0.12.6*
