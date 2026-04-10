@@ -10,10 +10,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - Enhanced wiki_lint: contradiction detection, stale claims, data gaps (rules + LLM)
 - Enhanced wiki_search: include_content, include_sources, include_links parameters
-- Expose wiki_hint as MCP tool
 - Incremental index updates
 - Web UI (optional)
 - Graph visualization (graphviz/Mermaid)
+
+---
+
+## [0.14.0] - 2026-04-10
+
+### Added
+- **`merge_or_replace` parameter** in `synthesize_query()` — replaces `update_existing` with three explicit strategies:
+  - `"sink"` (default) — append to sink buffer for later review
+  - `"merge"` — LLM reads old content, consolidates, replaces formal page
+  - `"replace"` — overwrite the formal page entirely
+- **Sink suggestion generation** — each sink entry now includes actionable observations:
+  - **Content Gap detection**: compares new answer with formal page to find missing topics
+  - **Source quality analysis**: checks for missing citations, new sources, completeness
+  - **Query pattern analysis**: detects repeated questions, increasing complexity trends
+  - **Knowledge growth suggestions**: identifies new concepts, possible contradictions
+- **Sink dedup detection**: flags entries with >70% text similarity to existing sink entries
+- **Sink urgency tracking** in `sink_status()`: ok / attention (7d+) / aging (14d+) / stale (30d+)
+- **`sink_warnings` in `lint()`**: reports stale/aging sinks that need attention
+- **Observational hint format** in `synthesize_query()`: non-directive language respects LLM autonomy
+
+### Changed
+- **BREAKING**: `update_existing` parameter removed from `synthesize_query()` and MCP tool
+- **BREAKING**: `wiki_synthesize` MCP tool now uses `merge_or_replace` (string enum) instead of `update_existing` (boolean)
+- `synthesize_query()` returns `status: "merged"` or `"replaced"` instead of `"updated"`
+- Hint format changed from `suggestion` (directive) to `observation` + `options` (non-directive)
+
+---
+
+## [0.13.0] - 2026-04-10
+
+### Added
+- **Query Sink feature** — Compound answers without creating duplicate pages
+  - When a similar query page exists, new answers append to `sink/` instead of creating timestamped copies
+  - Sink files: `sink/Query: Topic.sink.md` — one per formal query page
+  - Chronological entries with timestamp, query, answer, and sources
+  - Bidirectional linking: sink frontmatter → formal page, formal page frontmatter → sink
+- **New methods on Wiki class**:
+  - `sink_status()` — overview of all sinks with entry counts
+  - `read_sink(page_name)` — read pending entries from a sink file
+  - `clear_sink(page_name)` — clear processed entries after merge
+  - `_append_to_sink()` — internal method to append entries
+  - `_get_sink_info_for_page()` — get sink status for a page
+  - `_find_or_create_sink_file()` — find or create sink file
+  - `_update_page_sink_meta()` — update formal page frontmatter with sink metadata
+- **Enhanced `synthesize_query()`**: returns `status: "sunk"` when answer goes to sink
+- **Enhanced `read_page()`**: returns `has_sink` and `sink_entries`, supports reading sink files via `sink/` prefix
+- **Enhanced `search()`**: attaches `has_sink` and `sink_entries` to each result
+- **Enhanced `lint()`**: includes `sink_status` in return value
+- **Enhanced `_update_index_file()`**: shows pending sink entry count in index.md
+- **New MCP tool**: `wiki_sink_status` — overview of all query sinks
+- **Updated wiki.md template**: documents sink workflow and conventions
+- **27 new tests** in `test_sink_flow.py` — comprehensive sink feature coverage
 
 ---
 
