@@ -133,6 +133,25 @@ class MCPServer:
                             }
                         }
                     ),
+                    types.Tool(
+                        name="wiki_read_schema",
+                        description="Read wiki.md (schema/conventions file that tells the LLM how to maintain this wiki)",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {}
+                        }
+                    ),
+                    types.Tool(
+                        name="wiki_update_schema",
+                        description="Update wiki.md with new conventions/workflows. Old version is NOT backed up automatically - read current content first if you need to preserve it.",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "content": {"type": "string", "description": "New wiki.md content"}
+                            },
+                            "required": ["content"]
+                        }
+                    ),
                 ]
             
             @self._mcp.call_tool()
@@ -157,6 +176,10 @@ class MCPServer:
                     return self.wiki.recommend()
                 elif name == "wiki_build_index":
                     return self.wiki.build_index(auto_export=arguments.get('auto_export', True))
+                elif name == "wiki_read_schema":
+                    return self.wiki.read_schema()
+                elif name == "wiki_update_schema":
+                    return self.wiki.update_schema(arguments['content'])
                 else:
                     raise ValueError(f"Unknown tool: {name}")
             

@@ -452,3 +452,93 @@ redirect_to: target.md
         
         assert 'orphan-company' in orphan_names  # Should report
         assert '2025-07-31' not in orphan_names  # Should NOT report
+    
+    def test_read_schema(self, temp_wiki):
+        """Test reading wiki.md schema."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        result = wiki.read_schema()
+        
+        assert 'content' in result
+        assert 'file' in result
+        assert 'hint' in result
+        assert '# Wiki Schema' in result['content']
+        assert 'wiki.md' in result['file']
+        
+        wiki.close()
+    
+    def test_read_schema_has_hint(self, temp_wiki):
+        """Test that read_schema includes backup hint."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        result = wiki.read_schema()
+        
+        assert 'hint' in result
+        assert 'Save a copy' in result['hint']
+        assert 'before making changes' in result['hint']
+        
+        wiki.close()
+    
+    def test_read_schema_not_initialized(self, temp_wiki):
+        """Test reading schema before init returns error."""
+        wiki = Wiki(temp_wiki)
+        
+        result = wiki.read_schema()
+        
+        assert 'error' in result
+        assert 'Run init() first' in result['error']
+        
+        wiki.close()
+    
+    def test_update_schema(self, temp_wiki):
+        """Test updating wiki.md schema."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        original_content = wiki.read_schema()['content']
+        new_content = "# New Schema\n\nUpdated conventions\n"
+        
+        result = wiki.update_schema(new_content)
+        
+        assert result['status'] == 'updated'
+        assert 'file' in result
+        assert 'suggestions' in result
+        assert result['suggestions'][0].startswith('Review existing')
+        
+        # Verify content was updated
+        read_result = wiki.read_schema()
+        assert read_result['content'] == new_content
+        
+        wiki.close()
+    
+    def test_update_schema_warnings(self, temp_wiki):
+        """Test that update_schema returns warnings for bad format."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        # Missing title header
+        result = wiki.update_schema("Just some text without a title")
+        assert 'warnings' in result
+        assert any('title header' in w for w in result['warnings'])
+        
+        # Content too short
+        result = wiki.update_schema("# Title\n")
+        assert 'warnings' in result
+        assert any('too short' in w for w in result['warnings'])
+        
+        # Good content should have no warnings
+        result = wiki.update_schema("# Schema\n\nThis is a proper schema file with enough content to be valid.")
+        assert 'warnings' not in result
+        
+        wiki.close()
+    
+    def test_update_schema_not_initialized(self, temp_wiki):
+        """Test updating schema before init returns error."""
+        wiki = Wiki(temp_wiki)
+        
+        result = wiki.update_schema("# Test\n")
+        
+        assert 'error' in result
+        assert 'Run init() first' in result['error']
