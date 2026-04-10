@@ -268,6 +268,11 @@ root/
 - Lists all pages with one-line summaries
 - Do NOT edit manually
 
+### index.md vs build_index
+- **index.md**: Content catalog — human-readable, LLM query entry point. Lists all pages with one-line summaries. Updated automatically on write.
+- **build_index**: Technical operation — rebuilds SQLite FTS5 full-text index and exports `reference_index.json` (bidirectional link graph). Used by `wiki_search` under the hood.
+- Query flow: Read `index.md` first for overview → Use `wiki_search` to drill down → Use `wiki_read_page` for full content
+
 ### log.md
 - Append-only chronological record
 - Format: `## [timestamp] operation | details`
@@ -284,11 +289,23 @@ root/
 6. Append to log.md: `## [timestamp] ingest | Source Name`
 
 ### Answer a Query
-1. Search wiki using search functionality
-2. Read relevant pages for context
-3. Synthesize answer with citations to wiki pages
-4. If answer provides new insights, create a new wiki page
-5. Append to log.md: `## [timestamp] query | Question topic`
+1. Search wiki using `wiki_search` to find relevant pages
+2. Read relevant pages using `wiki_read_page` for full context
+3. Synthesize answer with citations to wiki pages and raw sources
+4. **Save the answer back to the wiki** using `wiki_synthesize`:
+   - Provide the original query and your answer content
+   - Include `source_pages` (wiki pages you referenced)
+   - Include `raw_sources` (raw source files, e.g., `raw/article.md`)
+    - The tool auto-creates a `Query: {{topic}}` page with a structured Sources section
+   - The tool auto-logs to log.md (disable with `auto_log=False`)
+5. If updating a previous answer to the same question, use `update_existing=True`
+6. Query answers compound in the knowledge base — they become persistent wiki pages just like ingested sources
+
+### Query Page Naming
+- Auto-generated: `Query: {{Topic}}` (first 50 chars of query, title-cased)
+- If a similar query page exists, a date suffix is added: `Query: {{Topic}} (2026-04-10)`
+- Use `page_name` parameter to override the auto-generated name
+- Use `update_existing=True` to revise an existing query page instead of creating a new one
 
 ### Maintain Wiki Health
 1. Run lint periodically to check for:
@@ -989,6 +1006,255 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
             result["warnings"] = warnings
         
         return result
+    
+    def synthesize_query(
+        self,
+        query: str,
+        answer: str,
+        source_pages: Optional[List[str]] = None,
+        raw_sources: Optional[List[str]] = None,
+        page_name: Optional[str] = None,
+        auto_link: bool = True,
+        auto_log: bool = True,
+        update_existing: bool = False,
+    ) -> dict:
+        """Save a query answer as a new wiki page.
+        
+        Implements the Query compounding cycle: answers filed back into the wiki
+        as persistent pages, just like ingested sources.
+        
+        Args:
+            query: Original question that was asked.
+            answer: LLM-generated answer content (markdown).
+            source_pages: Wiki pages referenced to generate this answer.
+            raw_sources: Raw source files referenced (e.g., 'raw/article.md').
+            page_name: Custom page name. Auto-generated as 'Query: {topic}' if omitted.
+            auto_link: Automatically add source_pages as [[wikilinks]] in Sources section.
+            auto_log: Automatically append to log.md.
+            update_existing: If True and a similar page exists, update it instead of creating new.
+        
+        Returns:
+            Dict with status, page_name, page_path, sources info, hint about duplicates.
+        """
+        source_pages = source_pages or []
+        raw_sources = raw_sources or []
+        
+        # Find similar existing query page
+        similar_page = self._find_similar_query_page(query)
+        hint = ""
+        
+        if similar_page and update_existing:
+            # Update existing page
+            page_name = similar_page
+            page_path = self.wiki_dir / f"{page_name}.md"
+            
+            if auto_link:
+                answer = self._append_sources_section(
+                    answer, query, source_pages, raw_sources
+                )
+            
+            page_path.write_text(answer)
+            
+            # Re-index
+            rel_path = str(page_path.relative_to(self.wiki_dir))
+            self.index.upsert_page(page_name, answer, rel_path)
+            self._update_index_file()
+            
+            status = "updated"
+            message = f"Updated existing query page: {page_name}"
+            
+        elif similar_page:
+            # Create new with timestamp suffix
+            base_name = self._generate_query_page_name(query)
+            timestamp_suffix = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            page_name = f"{base_name} ({timestamp_suffix})"
+            
+            # Ensure uniqueness if multiple on same day
+            page_path = self.wiki_dir / f"{page_name}.md"
+            counter = 1
+            while page_path.exists():
+                page_name = f"{base_name} ({timestamp_suffix}-{counter})"
+                page_path = self.wiki_dir / f"{page_name}.md"
+                counter += 1
+            
+            hint = (
+                f"A similar query page '{similar_page}' already exists. "
+                f"Consider using update_existing=True to revise it instead, "
+                f"or keep this new page if this is a different perspective."
+            )
+            
+            self._create_query_page(page_path, page_name, answer, query, source_pages, raw_sources, auto_link)
+            status = "created"
+            message = f"Created new query page: {page_name}"
+            
+        else:
+            # Create new page
+            page_name = page_name or self._generate_query_page_name(query)
+            page_path = self.wiki_dir / f"{page_name}.md"
+            
+            # Handle name collision with non-query pages
+            counter = 1
+            while page_path.exists():
+                base = page_name
+                page_name = f"{base} ({counter})"
+                page_path = self.wiki_dir / f"{page_name}.md"
+                counter += 1
+            
+            self._create_query_page(page_path, page_name, answer, query, source_pages, raw_sources, auto_link)
+            status = "created"
+            message = f"Created query page: {page_name}"
+        
+        # Auto-log
+        logged = False
+        if auto_log:
+            log_detail = f"{query} → [[{page_name}]]"
+            self.append_log("query", log_detail)
+            logged = True
+        
+        return {
+            "status": status,
+            "page_name": page_name,
+            "page_path": str(page_path.relative_to(self.root)),
+            "source_pages": source_pages,
+            "raw_sources": raw_sources,
+            "logged": logged,
+            "hint": hint,
+            "message": message,
+        }
+    
+    def _generate_query_page_name(self, query: str) -> str:
+        """Generate a page name from a query string.
+        
+        Extracts topic (first 50 chars, slugified) and prefixes with 'Query: '.
+        """
+        topic = query.strip()[:50].strip()
+        # Capitalize first letter of each word for readability
+        topic = topic.title()
+        # Remove trailing punctuation
+        topic = topic.rstrip(".,;:!?")
+        return f"Query: {topic}"
+    
+    def _find_similar_query_page(self, query: str) -> Optional[str]:
+        """Find an existing query page with similar topic.
+        
+        Searches for pages starting with 'Query: ' that share significant
+        keywords with the given query.
+        """
+        if not self.wiki_dir.exists():
+            return None
+        
+        # Extract keywords from query
+        stop_words = {"what", "is", "the", "a", "an", "how", "do", "does", "why",
+                       "can", "could", "would", "should", "will", "did", "are", "was",
+                       "were", "be", "been", "being", "have", "has", "had", "of", "to",
+                       "in", "for", "on", "with", "at", "by", "from", "and", "or", "not",
+                       "but", "if", "then", "than", "so", "as", "about", "compare",
+                       "what's", "how's", "tell", "me", "explain"}
+        keywords = set(
+            w.lower().strip(".,;:!?\"'()[]{}")
+            for w in query.split()
+            if w.lower() not in stop_words and len(w) > 2
+        )
+        
+        if not keywords:
+            return None
+        
+        best_match = None
+        best_score = 0
+        
+        for page in self.wiki_dir.glob("*.md"):
+            page_name = page.stem
+            
+            if not page_name.startswith("Query:"):
+                continue
+            
+            # Extract keywords from page name
+            page_keywords = set(
+                w.lower().strip(".,;:!?\"'()[]{}")
+                for w in page_name.replace("Query:", "").split()
+                if w.lower() not in stop_words and len(w) > 2
+            )
+            
+            if not page_keywords:
+                continue
+            
+            # Calculate overlap (Jaccard-like)
+            overlap = len(keywords & page_keywords)
+            union = len(keywords | page_keywords)
+            score = overlap / union if union > 0 else 0
+            
+            # Also check full text for keyword matches
+            try:
+                content = page.read_text()
+                content_keywords = set(
+                    w.lower() for w in re.findall(r'\b\w{4,}\b', content)
+                    if w.lower() not in stop_words
+                )
+                content_overlap = len(keywords & content_keywords)
+                content_score = content_overlap / len(keywords) if keywords else 0
+                score = max(score, content_score * 0.8)
+            except Exception:
+                pass
+            
+            if score > best_score and score >= 0.3:
+                best_score = score
+                best_match = page_name
+        
+        return best_match
+    
+    def _create_query_page(
+        self,
+        page_path: Path,
+        page_name: str,
+        answer: str,
+        query: str,
+        source_pages: List[str],
+        raw_sources: List[str],
+        auto_link: bool,
+    ) -> None:
+        """Create a new query page with sources section."""
+        content = answer
+        
+        if auto_link and (source_pages or raw_sources):
+            content = self._append_sources_section(content, query, source_pages, raw_sources)
+        
+        page_path.write_text(content)
+        
+        # Index the page
+        rel_path = str(page_path.relative_to(self.wiki_dir))
+        self.index.upsert_page(page_name, content, rel_path)
+        self._update_index_file()
+    
+    def _append_sources_section(
+        self,
+        answer: str,
+        query: str,
+        source_pages: List[str],
+        raw_sources: List[str],
+    ) -> str:
+        """Append structured Sources section to answer content."""
+        sources_section = "\n\n---\n\n## Sources\n\n"
+        
+        # Query metadata
+        sources_section += f"### Query\n"
+        sources_section += f"- **Question**: {query}\n"
+        sources_section += f"- **Generated**: {self._now()}\n"
+        
+        # Wiki pages
+        if source_pages:
+            sources_section += "\n### Wiki Pages Referenced\n"
+            for page in source_pages:
+                sources_section += f"- [[{page}]]\n"
+        
+        # Raw sources
+        if raw_sources:
+            sources_section += "\n### Raw Sources\n"
+            for raw_path in raw_sources:
+                # Extract filename for display
+                filename = Path(raw_path).name
+                sources_section += f"- [Source: {filename}]({raw_path})\n"
+        
+        return answer + sources_section
     
     def close(self):
         """Close database connections."""
