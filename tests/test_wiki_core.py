@@ -13,22 +13,61 @@ class TestWiki:
     
     def test_init(self, temp_wiki):
         """Test wiki initialization."""
-        # Remove pre-created directories
-        import shutil
-        if (temp_wiki / 'wiki').exists():
-            shutil.rmtree(temp_wiki / 'wiki')
-        if (temp_wiki / 'raw').exists():
-            shutil.rmtree(temp_wiki / 'raw')
-        
         wiki = Wiki(temp_wiki)
-        result = wiki.init(agent="claude")
+        result = wiki.init()
         
-        assert "Wiki initialized" in result
+        assert result['status'] == 'created'
+        assert 'index.md' in result['created_files']
+        assert 'log.md' in result['created_files']
+        assert '.wiki-config.yaml.example' in result['created_files']
+        assert 'wiki.md' in result['created_files']
+        assert 'raw/' in result['skipped_files']
+        assert 'wiki/' in result['skipped_files']
         assert (temp_wiki / 'raw').exists()
         assert (temp_wiki / 'wiki').exists()
         assert (temp_wiki / 'wiki' / 'index.md').exists()
         assert (temp_wiki / 'wiki' / 'log.md').exists()
         assert (temp_wiki / '.wiki-config.yaml.example').exists()
+        assert (temp_wiki / 'wiki.md').exists()
+        
+        wiki.close()
+    
+    def test_init_idempotent(self, temp_wiki):
+        """Test that init is idempotent without overwrite."""
+        wiki = Wiki(temp_wiki)
+        result1 = wiki.init()
+        assert result1['status'] == 'created'
+        
+        result2 = wiki.init()
+        assert result2['status'] == 'already_exists'
+        assert result2['created_files'] == []
+        assert 'raw/' in result2['existing_files']
+        assert 'wiki/' in result2['existing_files']
+        assert 'index.md' in result2['existing_files']
+        assert 'log.md' in result2['existing_files']
+        
+        wiki.close()
+    
+    def test_init_overwrite(self, temp_wiki):
+        """Test that init with overwrite recreates index and log."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        # Write custom content to log.md
+        (temp_wiki / 'wiki' / 'log.md').write_text("# Custom Log\n")
+        
+        result = wiki.init(overwrite=True)
+        
+        assert result['status'] == 'created'
+        assert 'index.md' in result['created_files']
+        assert 'log.md' in result['created_files']
+        assert 'wiki.md' in result['skipped_files']
+        assert '.wiki-config.yaml.example' in result['skipped_files']
+        
+        # log.md should be recreated
+        log_content = (temp_wiki / 'wiki' / 'log.md').read_text()
+        assert "# Custom Log" not in log_content
+        assert "Initialized:" in log_content
         
         wiki.close()
     
