@@ -78,11 +78,16 @@ class WikiIndex:
                 [(l['source_page'], l['target'], l['section'], l['display'], l['file_path']) for l in links]
             )
         
-        # 4. Update metadata
-        self.conn.execute("DELETE FROM pages WHERE page_name = ?", (page_name,))
+        # 4. Update metadata (ON CONFLICT preserves created_at)
         self.conn.execute(
             """INSERT INTO pages (page_name, file_path, content_length, word_count, link_count)
-               VALUES (?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(page_name) DO UPDATE SET
+                   file_path = excluded.file_path,
+                   content_length = excluded.content_length,
+                   word_count = excluded.word_count,
+                   link_count = excluded.link_count,
+                   updated_at = CURRENT_TIMESTAMP""",
             (page_name, file_path, len(content), len(content.split()), len(links))
         )
         
@@ -96,23 +101,36 @@ class WikiIndex:
         self.conn.commit()
     
     def search(self, query: str, limit: int = 10) -> List[dict]:
-        """Full-text search with ranking."""
-        cursor = self.conn.execute(
-            """SELECT page_name, content, bm25(pages_fts) as score
-               FROM pages_fts
-               WHERE pages_fts MATCH ?
-               ORDER BY score
-               LIMIT ?""",
-            (query, limit)
-        )
+        """Full-text search with ranking and highlighted snippets."""
+        try:
+            cursor = self.conn.execute(
+                """SELECT page_name,
+                          snippet(pages_fts, 1, '**', '**', '...', 32) as snippet,
+                          bm25(pages_fts) as score
+                   FROM pages_fts
+                   WHERE pages_fts MATCH ?
+                   ORDER BY score
+                   LIMIT ?""",
+                (query, limit)
+            )
+        except sqlite3.OperationalError:
+            # FTS5 query syntax error, fallback to LIKE
+            cursor = self.conn.execute(
+                """SELECT page_name,
+                          substr(content, 1, 200) as snippet,
+                          0 as score
+                   FROM pages_fts
+                   WHERE content LIKE ?
+                   LIMIT ?""",
+                (f"%{query}%", limit)
+            )
         
         results = []
         for row in cursor.fetchall():
-            content = row['content']
-            snippet = content[:200] + "..." if len(content) > 200 else content
+            snippet = row['snippet']
             results.append({
                 "page_name": row['page_name'],
-                "score": row['score'],
+                "score": abs(row['score']),
                 "snippet": snippet,
             })
         
