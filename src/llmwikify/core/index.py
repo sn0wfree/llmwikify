@@ -67,7 +67,7 @@ class WikiIndex:
         )
         
         # 2. Parse links from content
-        links = self._parse_links(content, file_path)
+        links = self._parse_links(content, page_name, file_path)
         
         # 3. Update links
         self.conn.execute("DELETE FROM page_links WHERE source_page = ?", (page_name,))
@@ -167,7 +167,7 @@ class WikiIndex:
         cursor = self.conn.execute("SELECT COUNT(*) FROM page_links")
         return cursor.fetchone()[0]
     
-    def _parse_links(self, content: str, file_path: str = "") -> List[dict]:
+    def _parse_links(self, content: str, source_page: str, file_path: str = "") -> List[dict]:
         """Parse [[wikilinks]] from content."""
         import re
         pattern = r'\[\[([^\]]+)\]\]'
@@ -194,7 +194,7 @@ class WikiIndex:
                 section = ''
             
             links.append({
-                "source_page": Path(file_path).stem if file_path else "",
+                "source_page": source_page,
                 "target": target.strip(),
                 "section": section,
                 "display": display.strip(),

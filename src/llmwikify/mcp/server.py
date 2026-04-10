@@ -1,7 +1,7 @@
 """MCP server for llmwikify."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from ..core import Wiki
 
@@ -9,9 +9,22 @@ from ..core import Wiki
 class MCPServer:
     """MCP server that exposes wiki tools."""
     
-    def __init__(self, wiki: Wiki):
+    # Default configuration
+    DEFAULT_CONFIG = {
+        "host": "127.0.0.1",
+        "port": 8765,
+        "transport": "stdio",  # or "http" or "sse"
+    }
+    
+    def __init__(self, wiki: Wiki, config: Optional[Dict[str, Any]] = None):
         self.wiki = wiki
         self._mcp = None
+        
+        # Merge user config with defaults
+        self.config = self.DEFAULT_CONFIG.copy()
+        if config:
+            self.config.update(config)
+        
         self._register_mcp()
     
     def _register_mcp(self):
@@ -130,10 +143,34 @@ class MCPServer:
         except ImportError:
             raise ImportError("MCP server requires 'mcp' package: pip install mcp")
     
-    def serve(self, transport: str = "stdio"):
-        """Start MCP server."""
+    def serve(self, transport: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None):
+        """Start MCP server.
+        
+        Args:
+            transport: Transport protocol ("stdio", "http", or "sse")
+                      Overrides config if provided
+            host: Host address to bind to (for HTTP/SSE transports)
+                 Overrides config if provided
+            port: Port number to listen on (for HTTP/SSE transports)
+                 Overrides config if provided
+        """
         if self._mcp is None:
             self._register_mcp()
         
+        # Use provided arguments or fall back to config
+        transport = transport or self.config.get("transport", "stdio")
+        host = host or self.config.get("host", "127.0.0.1")
+        port = port or self.config.get("port", 8765)
+        
         import mcp.server.stdio
-        self._mcp.run(transport=transport)
+        
+        if transport == "stdio":
+            # STDIO transport doesn't use host/port
+            print(f"Starting MCP server with STDIO transport...")
+            self._mcp.run(transport="stdio")
+        elif transport in ("http", "sse"):
+            # HTTP/SSE transport uses host and port
+            print(f"Starting MCP server on {host}:{port} with {transport.upper()} transport...")
+            self._mcp.run(transport=transport, host=host, port=port)
+        else:
+            raise ValueError(f"Unsupported transport: {transport}. Use 'stdio', 'http', or 'sse'")

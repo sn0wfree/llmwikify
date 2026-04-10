@@ -38,6 +38,11 @@ DEFAULT_CONFIG = {
         "batch_size": 100,
         "cache_size": 64000,
     },
+    "mcp": {
+        "host": "127.0.0.1",
+        "port": 8765,
+        "transport": "stdio",
+    },
 }
 
 
@@ -155,3 +160,24 @@ def get_file_path(wiki_root: Path, file_type: str, config: Optional[Dict[str, An
     
     file_name = config.get("files", {}).get(file_type, DEFAULT_CONFIG["files"][file_type])
     return wiki_root / file_name
+
+
+def get_mcp_config(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Get MCP server configuration.
+    
+    Args:
+        config: Optional configuration dict
+    
+    Returns:
+        MCP configuration dict with host, port, and transport
+    """
+    if config is None:
+        config = get_default_config()
+    
+    mcp_config = DEFAULT_CONFIG["mcp"].copy()
+    user_mcp = config.get("mcp", {})
+    
+    if user_mcp:
+        mcp_config.update(user_mcp)
+    
+    return mcp_config
