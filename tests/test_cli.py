@@ -6,7 +6,7 @@ import argparse
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llmwikify.llmwikify import WikiCLI
+from llmwikify.cli import WikiCLI
 
 
 class TestCLI:

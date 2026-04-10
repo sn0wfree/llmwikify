@@ -10,18 +10,21 @@ Based on Karpathy's LLM Wiki Principles:
 """
 
 __version__ = "0.10.0"
-__author__ = "Your Name"
-__email__ = "your@email.com"
+__author__ = "sn0wfree"
+__email__ = "linlu1234567@sina.com"
 __license__ = "MIT"
 
 from pathlib import Path
+from typing import Optional, Dict
 
-# Import main components
-from .llmwikify import Wiki, WikiIndex, WikiCLI, MCPServer
-from .llmwikify import ExtractedContent, Link, Issue, PageMeta
+# Import main components from modules
+from .core import Wiki, WikiIndex
+from .cli import WikiCLI
+from .mcp import MCPServer
+from .extractors import ExtractedContent, Link
 
 # Convenience functions
-def create_wiki(path: str | Path, config: dict | None = None) -> Wiki:
+def create_wiki(path: str | Path, config: Optional[Dict] = None) -> Wiki:
     """Create or open a wiki at the given path.
     
     Args:
@@ -47,8 +50,6 @@ __all__ = [
     # Data classes
     "ExtractedContent",
     "Link",
-    "Issue",
-    "PageMeta",
     
     # Convenience functions
     "create_wiki",

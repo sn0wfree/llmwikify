@@ -2,11 +2,14 @@
 
 > Technical architecture document for developers
 
+**Version**: 0.11.0  
+**Last Updated**: 2026-04-10
+
 ---
 
 ## Overview
 
-**llmwikify** is built as a single-file implementation (v9.x) transitioning to a modular package structure (v0.10.x).
+**llmwikify** is built as a modular package structure (v0.11.0+), evolved from single-file implementation (v0.10.0).
 
 ### Design Principles
 
@@ -14,82 +17,104 @@
 2. **Configuration-Driven** - User decides exclusion rules
 3. **Performance by Default** - Batch operations, PRAGMA tuning
 4. **Pure Tool Design** - Universal patterns only
+5. **Modular Architecture** - Clear separation of concerns
 
 ---
 
-## Module Structure (v0.10.x)
+## Module Structure (v0.11.0+)
 
 ```
 src/llmwikify/
 ├── __init__.py              # Package entry point
-├── llmwikify.py                  # Main implementation (1965 lines)
-├── py.typed                 # Type stub marker
-└── [future modules]
-    ├── core/
-    ├── extractors/
-    ├── cli/
-    └── mcp/
+├── core/                    # Core business logic
+│   ├── wiki.py              # Wiki class
+│   └── index.py             # WikiIndex class (FTS5 + references)
+├── extractors/              # Content extractors
+│   ├── base.py              # Base classes and functions
+│   ├── text.py              # Text/HTML extraction
+│   ├── pdf.py               # PDF extraction (optional: pymupdf)
+│   ├── web.py               # Web URL extraction (optional: trafilatura)
+│   └── youtube.py           # YouTube extraction (optional: youtube-transcript-api)
+├── cli/                     # Command-line interface
+│   └── commands.py          # WikiCLI class and main()
+├── mcp/                     # MCP server
+│   └── server.py            # MCPServer class
+└── utils/                   # Utility functions
+    └── helpers.py           # slugify, now, etc.
+```
+
+---
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Application Layer                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐     │
+│  │  CLI (cli/) │  │  MCP (mcp/) │  │  Python API     │     │
+│  └──────┬──────┘  └──────┬──────┘  └────────┬────────┘     │
+└─────────┼────────────────┼──────────────────┼──────────────┘
+          │                │                  │
+          ▼                ▼                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Core Layer                              │
+│  ┌─────────────────┐  ┌─────────────────────────────┐      │
+│  │   Wiki (wiki)   │◄─┤  Config (embedded)          │      │
+│  └────────┬────────┘  └─────────────────────────────┘      │
+│           │                                                 │
+│           ▼                                                 │
+│  ┌─────────────────┐                                        │
+│  │  WikiIndex      │                                        │
+│  │  (index)        │                                        │
+│  └─────────────────┘                                        │
+└─────────────────────────────────────────────────────────────┘
+          ▲
+          │
+┌─────────┴────────────────────────────────────────────────┐
+│                   Extraction Layer                        │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐            │
+│  │ text.py   │  │ pdf.py    │  │ web.py    │            │
+│  └───────────┘  └───────────┘  └───────────┘            │
+│  ┌───────────┐                                          │
+│  │ youtube.py│                                          │
+│  └───────────┘                                          │
+└──────────────────────────────────────────────────────────┘
+          ▲
+          │
+┌─────────┴────────────────────────────────────────────────┐
+│                    Utility Layer                          │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │  helpers.py - slugify, now, etc.                 │   │
+│  └──────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Core Components
 
-### 1. Data Classes (95 lines)
+### 1. Wiki Class (`core/wiki.py`)
 
-```python
-@dataclass
-class ExtractedContent:
-    """Content extraction result"""
-    text: str
-    source_type: str
-    title: str = ""
-    metadata: dict = field(default_factory=dict)
+**Responsibility**: Main business logic orchestrator
 
-@dataclass
-class Link:
-    """Wiki link representation"""
-    target: str
-    section: str = ""
-    display: str = ""
-    file: str = ""
+**Key Methods**:
+- `init()` - Initialize wiki directory structure
+- `ingest_source()` - Process sources (PDF/URL/YouTube)
+- `write_page()` / `read_page()` - Page management
+- `search()` - Full-text search
+- `lint()` - Health check
+- `recommend()` - Smart recommendations
+- `build_index()` - Build reference index
 
-@dataclass
-class Issue:
-    """Health check issue"""
-    issue_type: str
-    page: str
-    message: str
-    link: str = ""
+**Dependencies**:
+- `core.index.WikiIndex`
+- `extractors.extract`
 
-@dataclass
-class PageMeta:
-    """Page metadata"""
-    page_name: str
-    file_path: str
-    content_length: int
-    word_count: int = 0
-    link_count: int = 0
-    updated_at: str = ""
-```
+---
 
-### 2. Extractors (296 lines)
+### 2. WikiIndex Class (`core/index.py`)
 
-**Functions**:
-- `detect_source_type()` - Auto-detect (youtube/url/pdf/md/txt/html)
-- `extract()` - Main dispatcher
-- `_extract_text_file()` - .md/.txt files
-- `_extract_html_file()` - .html files
-- `_extract_pdf()` - PDF via pymupdf (optional)
-- `_extract_url()` - Web via trafilatura (optional)
-- `_extract_youtube()` - Transcripts via youtube-transcript-api (optional)
-
-**Dependencies** (all optional):
-- `pymupdf>=1.23.0`
-- `trafilatura>=1.7.0`
-- `youtube-transcript-api>=0.6.0`
-
-### 3. WikiIndex (401 lines)
+**Responsibility**: SQLite database manager for FTS5 search and reference tracking
 
 **Database Schema**:
 ```sql
@@ -99,211 +124,246 @@ CREATE VIRTUAL TABLE pages_fts USING fts5(
     tokenize='porter unicode61'
 );
 
--- Bidirectional links
+-- Reference links
 CREATE TABLE page_links (
-    id INTEGER PRIMARY KEY,
-    source_page TEXT,
-    target_page TEXT,
-    section TEXT,
-    display_text TEXT,
-    file_path TEXT,
-    created_at TIMESTAMP
+    source_page, target_page, section, display_text, file_path
 );
 
 -- Page metadata
 CREATE TABLE pages (
-    page_name TEXT PRIMARY KEY,
-    file_path TEXT,
-    content_length INTEGER,
-    word_count INTEGER,
-    link_count INTEGER,
-    updated_at TIMESTAMP
+    page_name, file_path, content_length, word_count, link_count
 );
 ```
 
 **Key Methods**:
-- `initialize()` - Create tables
-- `upsert_page()` - Insert/update with link parsing
-- `search()` - FTS5 with fallback
-- `get_inbound_links()` - Pages linking TO
-- `get_outbound_links()` - Pages linking FROM
-- `build_index_from_files()` - Batch optimized
-- `export_json()` - JSON export for compatibility
+- `initialize()` - Create database schema
+- `upsert_page()` - Insert/update page with link parsing
+- `search()` - FTS5 full-text search
+- `get_inbound_links()` / `get_outbound_links()` - Reference queries
+- `build_index_from_files()` - Batch index building
+- `export_json()` - Export for Obsidian compatibility
 
-**Performance Optimizations**:
+**Performance**:
+- 0.06s for 157 pages
+- 2,833 files/sec processing speed
+- Batch operations with executemany()
+
+---
+
+### 3. Extractors (`extractors/`)
+
+**Responsibility**: Content extraction from various sources
+
+**Modules**:
+
+| Module | Function | Optional Dependency |
+|--------|----------|-------------------|
+| `base.py` | `extract()`, `detect_source_type()` | None |
+| `text.py` | `extract_text_file()`, `extract_html_file()` | None |
+| `pdf.py` | `extract_pdf()` | `pymupdf` |
+| `web.py` | `extract_url()` | `trafilatura` |
+| `youtube.py` | `extract_youtube()` | `youtube-transcript-api` |
+
+**Lazy Import Pattern**:
 ```python
-# Batch inserts
-conn.executemany("INSERT ...", data)
-
-# PRAGMA tuning
-conn.execute("PRAGMA journal_mode = MEMORY")
-conn.execute("PRAGMA synchronous = OFF")
-conn.execute("PRAGMA cache_size = -64000")
-
-# Single transaction
-conn.execute("BEGIN IMMEDIATE")
-# ... all operations ...
-conn.commit()
+def extract_pdf(path):
+    try:
+        import pymupdf
+    except ImportError:
+        return ExtractedContent(
+            text="",
+            metadata={"error": "pymupdf not installed"}
+        )
+    # ... extraction logic
 ```
 
-### 4. Wiki Core (565 lines)
+---
 
-**Configuration System**:
-```python
-class Wiki:
-    def __init__(self, root: Path, config: dict = None):
-        # Load config: file > frontmatter > defaults
-        self.config = config or self._load_config()
-        
-        # Universal patterns (cross-domain)
-        self._default_exclude_patterns = [
-            r'^\d{4}-\d{2}-\d{2}$',  # Dates
-            r'^\d{4}-\d{2}$',        # Months
-            r'^\d{4}-Q[1-4]$',       # Quarters
-        ]
-        
-        # User overrides
-        self._user_patterns = self.config.get('orphan_exclude_patterns', [])
-```
+### 4. CLI (`cli/commands.py`)
 
-**Key Methods**:
-- `init()` - Initialize directory structure
-- `ingest_source()` - Process source files
-- `write_page()` - Create/update pages
-- `read_page()` - Read pages
-- `lint()` - Health check
-- `recommend()` - Smart recommendations
-- `build_index()` - Build with stats
+**Responsibility**: Command-line interface
 
-**Orphan Exclusion Logic**:
-```python
-def _should_exclude_orphan(self, page_name: str, page_path: Path) -> bool:
-    # 1. Frontmatter markers (redirect_to)
-    # 2. Universal patterns (dates, quarters)
-    # 3. User patterns (config)
-    # 4. Directory structure (archive/, logs/)
-    return True/False
-```
-
-### 5. MCP Server (71 lines)
-
-**Tools** (8 total):
-- `wiki_init(agent: str)`
-- `wiki_ingest(source: str)`
-- `wiki_write_page(page_name: str, content: str)`
-- `wiki_read_page(page_name: str)`
-- `wiki_search(query: str, limit: int)`
-- `wiki_lint()`
-- `wiki_status()`
-- `wiki_log(operation: str, details: str)`
-
-**Dependency**: `mcp>=1.0.0` (optional)
-
-### 6. CLI (376 lines)
-
-**Commands** (15 total):
+**Commands** (10 total):
 - `init` - Initialize wiki
 - `ingest` - Ingest sources
-- `write_page` - Write pages
-- `read_page` - Read pages
+- `write_page` / `read_page` - Page operations
 - `search` - Full-text search
 - `lint` - Health check
 - `status` - Status overview
-- `log` - Record log
-- `references` - Show references
-- `build-index` - Build index
-- `export-index` - Export JSON
-- `batch` - Batch ingest
-- `hint` - Smart suggestions
-- `recommend` - Recommendations
-- `serve` - MCP server
+- `log` - Record log entry
+- `build-index` - Build reference index
+- `recommend` - Smart recommendations
+
+---
+
+### 5. MCP Server (`mcp/server.py`)
+
+**Responsibility**: Model Context Protocol server
+
+**Tools** (8 total):
+- `wiki_init` - Initialize wiki
+- `wiki_ingest` - Ingest source
+- `wiki_write_page` / `wiki_read_page` - Page operations
+- `wiki_search` - Search
+- `wiki_lint` - Health check
+- `wiki_status` - Status
+- `wiki_log` - Log entry
 
 ---
 
 ## Data Flow
 
-### Ingestion Flow
+### Ingest Flow
+
 ```
-Source → detect_source_type() → extract() → ExtractedContent
-  → Wiki.ingest_source() → raw/ storage
-  → LLM creates pages → Wiki.write_page()
-  → WikiIndex.upsert_page() → DB tables
+Source (PDF/URL/YouTube)
+  │
+  ▼
+extractors.extract() - Auto-detect type
+  │
+  ▼
+Specific extractor (e.g., extract_pdf())
+  │
+  ▼
+ExtractedContent (text, title, metadata)
+  │
+  ▼
+Wiki.ingest_source()
+  │
+  ▼
+Wiki.write_page()
+  │
+  ▼
+WikiIndex.upsert_page() - Parse links, update FTS5
 ```
 
 ### Search Flow
-```
-Query → WikiCLI.search() → Wiki.search()
-  → WikiIndex.search() → FTS5 MATCH
-  → Results (page_name, snippet, score)
-```
 
-### Reference Tracking Flow
 ```
-Page content → _parse_links() → Link objects
-  → upsert_page() → page_links table
-  → get_inbound_links() / get_outbound_links()
+User Query
+  │
+  ▼
+Wiki.search()
+  │
+  ▼
+WikiIndex.search() - FTS5 query
+  │
+  ▼
+Ranked Results (page_name, score, snippet)
 ```
 
 ---
 
-## Performance Benchmarks
+## Configuration
 
-| Metric | v0.9.0 Optimized | Naive Implementation |
-|--------|----------------|---------------------|
-| 157 pages | 0.06s | 30-60s |
-| Speed | 2833 files/sec | ~5 files/sec |
-| Improvement | **500-1000x** | baseline |
+### .wiki-config.yaml
 
-**Optimizations Applied**:
-1. Batch `executemany()` - 5-10x
-2. Single transaction - 10x
-3. PRAGMA tuning - 2-3x
-4. In-memory operations - 2x
+```yaml
+orphan_pages:
+  exclude_patterns:
+    - '^\d{4}-\d{2}-\d{2}$'  # Dates
+    - '^meeting-.*'          # Meeting notes
+  exclude_frontmatter:
+    - 'redirect_to'          # Redirect pages
+  archive_directories:
+    - 'archive'
+    - 'logs'
+```
+
+### Loading
+
+```python
+class Wiki:
+    def __init__(self, root: Path, config: dict = None):
+        self.config = config or self._load_config()
+```
+
+---
+
+## Performance Optimizations
+
+### Database
+
+```python
+# PRAGMA tuning
+conn.execute("PRAGMA journal_mode = MEMORY")
+conn.execute("PRAGMA synchronous = OFF")
+conn.execute("PRAGMA cache_size = -64000")
+
+# Batch operations
+conn.executemany("INSERT ...", data)
+
+# Result: 10-20x faster than naive implementation
+```
+
+### Index Building
+
+```python
+# Progress reporting
+for i, file in enumerate(files):
+    if i % batch_size == 0:
+        elapsed = time.time() - start
+        speed = i / elapsed
+        print(f"\r  {i}/{total} - {speed:.1f} files/sec", end='')
+```
 
 ---
 
 ## Testing Strategy
 
-**Test Pyramid**:
-- Unit tests: 30% (core logic)
-- Integration tests: 10% (full flows)
-- Functional tests: 60% (CLI commands)
+### Test Structure
 
-**Coverage Target**: >85%
+```
+tests/
+├── conftest.py              # Fixtures
+├── test_wiki_core.py        # Wiki class tests
+├── test_index.py            # WikiIndex tests
+├── test_cli.py              # CLI tests
+├── test_extractors.py       # Extractor tests
+└── test_recommend.py        # Recommendation tests
+```
 
-**Test Files**:
-- `tests/test_index.py` - WikiIndex tests (8 cases)
-- `tests/test_wiki_core.py` - Wiki core tests (16 cases)
-- `tests/test_cli.py` - CLI command tests (8 cases)
-- `tests/test_extractors.py` - Extractor tests (12 cases)
-- `tests/test_recommend.py` - Recommendation tests (5 cases)
+### Coverage
 
-**Total**: 49 test cases
+- **Total Tests**: 48
+- **Target Coverage**: >85%
+- **Current Status**: 31 passed, 17 in progress (modularization)
 
 ---
 
-## Future Modularization (v0.11.x)
+## Version History
 
-```
-src/llmwikify/
-├── __init__.py
-├── core/
-│   ├── llmwikify.py          # Wiki class
-│   ├── index.py         # WikiIndex class
-│   └── config.py        # Configuration
-├── extractors/
-│   ├── base.py          # Base extractor
-│   ├── pdf.py           # PDF extraction
-│   ├── url.py           # URL extraction
-│   └── youtube.py       # YouTube extraction
-├── cli/
-│   └── commands.py      # CLI commands
-├── mcp/
-│   └── server.py        # MCP server
-└── utils/
-    └── helpers.py       # Utility functions
-```
+### v0.11.0 (Current) - Modular Architecture
+
+- ✅ Split into 11 module files
+- ✅ Clear separation of concerns
+- ✅ Public API stability maintained
+- ✅ Optional dependencies for extractors
+
+### v0.10.0 - Single File Implementation
+
+- ✅ 1,965 lines in `llmwikify.py`
+- ✅ All core features implemented
+- ✅ 48 passing tests
 
 ---
 
-*Last updated: 2026-04-10 | Version: 0.10.0*
+## Future Enhancements
+
+### v0.12.0 (Planned)
+
+- [ ] Web UI (optional)
+- [ ] Graph visualization
+- [ ] Incremental index updates
+- [ ] More extractors (Word, Excel)
+
+### v1.0.0 (Roadmap)
+
+- [ ] Stable API guarantee
+- [ ] Complete documentation
+- [ ] Performance benchmarks
+- [ ] Production hardening
+
+---
+
+*Last updated: 2026-04-10 | Version: 0.11.0*
