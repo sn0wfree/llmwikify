@@ -1,6 +1,6 @@
 # llmwikify Project Summary
 
-> Complete overview of the llmwikify package
+> Complete overview of the llmwikify package — Current: v0.12.6
 
 ---
 
@@ -8,43 +8,48 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Lines** | 1,965 (llmwikify.py) |
-| **Components** | 6 major modules |
+| **Version** | 0.12.6 |
+| **Modules** | 11+ files |
 | **CLI Commands** | 15 |
-| **MCP Tools** | 8 |
-| **Test Cases** | 48 (100% passing) |
-| **Coverage** | >85% |
-| **Dependencies** | 0 core, 5 optional |
+| **MCP Tools** | 13 |
+| **Test Cases** | 110 (100% passing) |
+| **Core Dependencies** | 0 (standard library only) |
+| **Optional Dependencies** | 5 |
 
 ---
 
 ## 🎯 What Was Built
 
 ### Core Implementation
-- ✅ **llmwikify.py** (1,965 lines) - Single-file implementation
-- ✅ **SQLite FTS5** - Full-text search engine
-- ✅ **Reference tracking** - Bidirectional links
-- ✅ **Configuration system** - Pure tool design
-- ✅ **MCP server** - LLM integration
-- ✅ **CLI interface** - 15 commands
+- ✅ **Modular package** — `core/`, `extractors/`, `cli/`, `mcp/`, `config.py`, `llm_client.py`
+- ✅ **SQLite FTS5** — Full-text search with BM25 ranking, snippet highlighting, LIKE fallback
+- ✅ **Reference tracking** — Bidirectional wikilinks with section-level granularity
+- ✅ **Configuration system** — Zero domain assumption, user-configurable exclusions
+- ✅ **MCP server** — 13 tools for LLM integration
+- ✅ **CLI interface** — 15 commands
+- ✅ **Query compounding** — `wiki_synthesize` saves answers as persistent wiki pages
 
 ### Documentation
-- ✅ **README.md** - Comprehensive user guide
-- ✅ **ARCHITECTURE.md** - Technical documentation
-- ✅ **CONFIG_GUIDE.md** - Configuration reference
-- ✅ **LLM_WIKI_PRINCIPLES.md** - Design philosophy
-- ✅ **REFERENCE_TRACKING_GUIDE.md** - Feature guide
+- ✅ **README.md** — Comprehensive user guide
+- ✅ **ARCHITECTURE.md** — Technical architecture
+- ✅ **CHANGELOG.md** — Version history (v0.9.0 → v0.12.6)
+- ✅ **MIGRATION.md** — Migration guides
+- ✅ **CONFIGURATION_GUIDE.md** — Configuration reference
+- ✅ **CONFIG_GUIDE.md** — 中文配置指南
+- ✅ **REFERENCE_TRACKING_GUIDE.md** — Feature guide
+- ✅ **LLM_WIKI_PRINCIPLES.md** — Design philosophy
 
 ### Testing
-- ✅ **48 test cases** - Full coverage
-- ✅ **pytest configuration** - Ready to run
-- ✅ **Fixtures** - Temp directory isolation
+- ✅ **110 test cases** — all passing
+- ✅ **pytest configuration** — Ready to run
+- ✅ **Fixtures** — Temp directory isolation
+- ✅ **7 test files** — Full module coverage
 
 ### Packaging
-- ✅ **pyproject.toml** - Modern Python packaging
-- ✅ **.gitignore** - Standard exclusions
-- ✅ **LICENSE** - MIT license
-- ✅ **py.typed** - Type stub marker
+- ✅ **pyproject.toml** — Modern Python packaging
+- ✅ **.gitignore** — Standard exclusions
+- ✅ **LICENSE** — MIT license
+- ✅ **py.typed** — Type stub marker
 
 ---
 
@@ -52,33 +57,52 @@
 
 ```
 /home/ll/llmwikify/
-├── README.md                       (650+ lines)
-├── ARCHITECTURE.md                 (400+ lines)
-├── PROJECT_SUMMARY.md              (this file)
-├── pyproject.toml                  (150+ lines)
-├── LICENSE                         (MIT)
+├── README.md                       # User guide (~480 lines)
+├── ARCHITECTURE.md                 # Technical docs (~370 lines)
+├── CHANGELOG.md                    # Version history
+├── PROJECT_SUMMARY.md              # This file
+├── PROJECT_STRUCTURE.md            # Project structure overview
+├── MIGRATION.md                    # Migration guides
+├── pyproject.toml                  # Package configuration
+├── LICENSE                         # MIT
 ├── .gitignore
-├── .wiki-config.yaml.example       (60 lines)
-├── src/
-│   └── llmwikify/
-│       ├── __init__.py             (50 lines)
-│       ├── llmwikify.py                 (1,965 lines)
-│       └── py.typed
+├── .wiki-config.yaml.example       # Config template
+├── src/llmwikify/
+│   ├── __init__.py                 # Package entry (~66 lines)
+│   ├── core/
+│   │   ├── wiki.py                 # Wiki class (~1,260 lines)
+│   │   └── index.py                # WikiIndex (~309 lines)
+│   ├── extractors/
+│   │   ├── base.py                 # detect_source_type, extract
+│   │   ├── text.py                 # Text/HTML
+│   │   ├── pdf.py                  # PDF (optional: pymupdf)
+│   │   ├── web.py                  # URL (optional: trafilatura)
+│   │   └── youtube.py              # YouTube (optional: youtube-transcript-api)
+│   ├── cli/
+│   │   └── commands.py             # 15 CLI commands
+│   ├── mcp/
+│   │   └── server.py               # 13 MCP tools
+│   ├── config.py                   # Configuration system
+│   └── llm_client.py               # LLM API client
 ├── docs/
-│   ├── CONFIG_GUIDE.md             (350 lines)
-│   ├── LLM_WIKI_PRINCIPLES.md      (75 lines)
-│   └── REFERENCE_TRACKING_GUIDE.md (241 lines)
+│   ├── CONFIGURATION_GUIDE.md      # English config guide
+│   ├── CONFIG_GUIDE.md             # 中文配置指南
+│   ├── LLM_WIKI_PRINCIPLES.md      # Karpathy principles
+│   ├── REFERENCE_TRACKING_GUIDE.md # Reference tracking
+│   └── MCP_SETUP.md                # MCP server setup
 ├── tests/
-│   ├── conftest.py                 (70 lines)
-│   ├── test_cli.py                 (124 lines)
-│   ├── test_extractors.py          (116 lines)
-│   ├── test_index.py               (186 lines)
-│   ├── test_recommend.py           (118 lines)
-│   └── test_wiki_core.py           (230 lines)
-└── examples/                       (placeholder)
+│   ├── conftest.py                 # Fixtures
+│   ├── test_wiki_core.py           # 36 tests
+│   ├── test_query_flow.py          # 27 tests (synthesize_query)
+│   ├── test_index.py               # 8 tests
+│   ├── test_recommend.py           # 5 tests
+│   ├── test_cli.py                 # 8 tests
+│   ├── test_extractors.py          # 12 tests
+│   └── test_llm_client.py          # 14 tests
+└── archive/reports/                 # Historical development reports
 ```
 
-**Total**: ~4,500 lines of code + documentation
+**Total**: ~5,000+ lines of code + documentation
 
 ---
 
@@ -90,16 +114,13 @@
 META_PAGES = {"index", "log", "daily-summary"}
 
 # ✅ CORRECT (universal patterns)
-DEFAULT_PATTERNS = [
-    r'^\d{4}-\d{2}-\d{2}$',  # Date format (any domain)
-    r'^\d{4}-\d{2}$',        # Month format
-]
+DEFAULT_EXCLUDE = []  # Empty — user configures what they need
 ```
 
 ### 2. Configuration-Driven
 ```yaml
 # User decides what to exclude
-orphan_pages:
+orphan_detection:
   exclude_patterns:
     - '^\d{4}-\d{2}-\d{2}$'  # Their choice
   archive_directories:
@@ -111,10 +132,24 @@ orphan_pages:
 # Batch operations
 conn.executemany("INSERT ...", data)
 
+# ON CONFLICT preserves created_at
 # PRAGMA tuning
-conn.execute("PRAGMA journal_mode = MEMORY")
-
 # Result: 0.06s for 157 pages (10-20x faster)
+```
+
+### 4. Knowledge Compounding (v0.12.6+)
+```python
+# Query answers saved as persistent wiki pages
+wiki.synthesize_query(
+    query="Compare A and B",
+    answer="# Analysis\n\n...",
+    source_pages=["A", "B"],
+    raw_sources=["raw/report.pdf"],
+)
+# → Creates "Query: Compare A And B" page
+# → Auto-adds Sources section
+# → Auto-logs to log.md
+# → Knowledge compounds over time
 ```
 
 ---
@@ -130,14 +165,18 @@ pip install -e ".[dev]"
 ### Test
 ```bash
 pytest
-# Output: 48 passed in 0.26s
+# Output: 110 passed
 ```
 
 ### Use
 ```bash
 # CLI
-llmwikify init --agent claude
-llmwikify build-index
+llmwikify init
+llmwikify ingest document.pdf
+llmwikify search "topic"
+
+# MCP Server
+llmwikify serve
 
 # Python API
 from llmwikify import Wiki
@@ -153,59 +192,52 @@ wiki.init()
 - **500-1000x faster** than naive implementation
 - **0.06 seconds** for 157 pages
 - **2,833 files/sec** processing speed
+- **ON CONFLICT** preserves created_at timestamps
 
 ### Code Quality
-- **48 test cases** - all passing
-- **>85% coverage** target
+- **110 test cases** — all passing
+- **Modular architecture** — 11+ files, clear separation
 - **Type hints** throughout
 - **Docstrings** for all public APIs
 
 ### Design
-- **Zero domain assumptions** - truly general-purpose
-- **Configuration-driven** - user controls behavior
-- **Zero core dependencies** - standard library only
+- **Zero domain assumptions** — truly general-purpose
+- **Configuration-driven** — user controls behavior
+- **Zero core dependencies** — standard library only
+- **Query compounding** — answers persist as wiki pages
 
 ### Documentation
-- **4 comprehensive guides** - 1,100+ lines
-- **README.md** - 650+ lines
-- **ARCHITECTURE.md** - 400+ lines
+- **7 comprehensive guides** — 2,000+ lines
+- **README.md** — 480+ lines
+- **ARCHITECTURE.md** — 370+ lines
+- **CHANGELOG.md** — Full version history
 - **Example configs** for multiple use cases
 
 ---
 
-## 🚀 Next Steps
+## 🚀 Version Timeline
 
-### Immediate (v0.10.0)
-1. ✅ Package structure created
-2. ✅ Documentation written
-3. ✅ Tests passing
-4. ⏳ First PyPI release
-
-### Short-term (v0.10.1-v0.10.x)
-- [ ] CI/CD pipeline (GitHub Actions)
-- [ ] ReadTheDocs integration
-- [ ] More example configurations
-- [ ] User feedback integration
-
-### Mid-term (v11.0)
-- [ ] Modular refactor (core/extractors/cli/mcp)
-- [ ] Web UI (optional)
-- [ ] Graph visualization
-- [ ] Incremental updates
-
-### Long-term (v12.0+)
-- [ ] Obsidian plugin
-- [ ] VS Code extension
-- [ ] LLM Agent integrations
-- [ ] Enterprise features
+| Version | Date | Key Feature |
+|---------|------|-------------|
+| 0.12.6 | 2026-04-10 | wiki_synthesize — Query compounding |
+| 0.12.5 | 2026-04-10 | Raw source collection, citation conventions |
+| 0.12.4 | 2026-04-10 | Schema MCP tools (read/update) |
+| 0.12.3 | 2026-04-10 | Pure-data ingest, unified errors |
+| 0.12.2 | 2026-04-10 | ON CONFLICT, FTS5 snippets, LIKE fallback |
+| 0.12.1 | 2026-04-10 | Idempotent init with overwrite |
+| 0.12.0 | 2026-04-10 | Complete CLI (15 commands), wiki.md template |
+| 0.11.1 | 2026-04-10 | Zero domain assumption enforcement |
+| 0.11.0 | 2026-04-10 | Modular architecture |
+| 0.10.0 | 2026-04-10 | Single-file release |
+| 0.9.0  | 2026-04-09 | Initial features (FTS5, references, MCP) |
 
 ---
 
 ## 📈 Success Metrics
 
-### Current (v0.10.0)
-- Code: ✅ Complete
-- Tests: ✅ 48 passing
+### Current (v0.12.6)
+- Code: ✅ Complete modular architecture
+- Tests: ✅ 110 passing
 - Docs: ✅ Comprehensive
 - Package: ✅ Ready
 
@@ -219,11 +251,11 @@ wiki.init()
 
 ## 🙏 Credits
 
-- **Andrej Karpathy** - LLM Wiki Principles
-- **llm-wiki-kit** - Original inspiration
-- **Obsidian** - Markdown wiki platform
-- **MCP** - Model Context Protocol
+- **Andrej Karpathy** — LLM Wiki Principles
+- **llm-wiki-kit** — Original inspiration
+- **Obsidian** — Markdown wiki platform
+- **MCP** — Model Context Protocol
 
 ---
 
-*Project created: 2026-04-10 | Version: 0.10.0 | Status: Ready for PyPI*
+*Project created: 2026-04-10 | Version: 0.12.6 | Status: Active development*
