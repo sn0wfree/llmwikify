@@ -90,7 +90,8 @@ class TestWiki:
         result = wiki.status()
         
         assert result['initialized'] == True
-        assert result['page_count'] == 1
+        # page_count includes index.md and log.md
+        assert result['page_count'] == 3  # Test + index + log
         
         wiki.close()
     
@@ -134,7 +135,8 @@ class TestWiki:
         
         result = wiki.build_index(auto_export=True)
         
-        assert result['total_pages'] == 2
+        # total_pages includes index.md and log.md
+        assert result['total_pages'] == 4  # Page A + Page B + index + log
         assert result['total_links'] == 1
         assert 'json_export' in result
         
@@ -163,18 +165,37 @@ class TestWiki:
         assert Wiki._slugify("Special!@# Characters") == "special-characters"
         assert Wiki._slugify("Already-hyphenated") == "already-hyphenated"
     
-    def test_should_exclude_orphan_dated_page(self, temp_wiki):
-        """Test that dated pages are excluded from orphan detection."""
+    def test_no_exclusion_without_config(self, temp_wiki):
+        """Verify zero domain assumption: no defaults."""
         wiki = Wiki(temp_wiki)
         wiki.init()
         
-        # Date format pages should be excluded
+        # Without config, date pages should NOT be excluded
+        assert wiki._should_exclude_orphan('2025-07-31', temp_wiki / 'wiki' / '2025-07-31.md') == False
+        assert wiki._should_exclude_orphan('2025-07', temp_wiki / 'wiki' / '2025-07.md') == False
+        assert wiki._should_exclude_orphan('2025-Q1', temp_wiki / 'wiki' / '2025-Q1.md') == False
+    
+    def test_exclusion_with_explicit_config(self, temp_wiki):
+        """Verify user-configured patterns work."""
+        config = {
+            'orphan_detection': {
+                'exclude_patterns': [
+                    r'^\d{4}-\d{2}-\d{2}$',
+                    r'^\d{4}-\d{2}$',
+                    r'^\d{4}-q[1-4]$',  # lowercase for case-insensitive matching
+                ]
+            }
+        }
+        wiki = Wiki(temp_wiki, config=config)
+        wiki.init()
+        
+        # With explicit config, date pages should be excluded
         assert wiki._should_exclude_orphan('2025-07-31', temp_wiki / 'wiki' / '2025-07-31.md') == True
         assert wiki._should_exclude_orphan('2025-07', temp_wiki / 'wiki' / '2025-07.md') == True
         assert wiki._should_exclude_orphan('2025-Q1', temp_wiki / 'wiki' / '2025-Q1.md') == True
     
-    def test_should_exclude_orphan_redirect_page(self, temp_wiki):
-        """Test that redirect pages are excluded from orphan detection."""
+    def test_no_redirect_exclusion_without_config(self, temp_wiki):
+        """Verify redirect_to is not excluded by default."""
         wiki = Wiki(temp_wiki)
         wiki.init()
         
@@ -185,6 +206,27 @@ redirect_to: target.md
 # Redirect
 """)
         
+        # Without config, redirect_to pages should NOT be excluded
+        assert wiki._should_exclude_orphan('redirect', redirect_page) == False
+    
+    def test_redirect_exclusion_with_config(self, temp_wiki):
+        """Verify redirect_to works when configured."""
+        config = {
+            'orphan_detection': {
+                'exclude_frontmatter': ['redirect_to']
+            }
+        }
+        wiki = Wiki(temp_wiki, config=config)
+        wiki.init()
+        
+        redirect_page = temp_wiki / 'wiki' / 'Redirect.md'
+        redirect_page.write_text("""---
+redirect_to: target.md
+---
+# Redirect
+""")
+        
+        # With explicit config, redirect_to pages should be excluded
         assert wiki._should_exclude_orphan('redirect', redirect_page) == True
     
     def test_should_exclude_orphan_normal_page(self, temp_wiki):
@@ -200,7 +242,9 @@ redirect_to: target.md
     def test_should_exclude_orphan_user_config(self, temp_wiki):
         """Test that user-configured patterns are respected."""
         config = {
-            'orphan_exclude_patterns': [r'^draft-.*']
+            'orphan_detection': {
+                'exclude_patterns': [r'^draft-.*']
+            }
         }
         wiki = Wiki(temp_wiki, config=config)
         wiki.init()
@@ -210,12 +254,17 @@ redirect_to: target.md
         
         assert wiki._should_exclude_orphan('draft-test', draft_page) == True
     
-    def test_lint_excludes_special_pages(self, temp_wiki):
-        """Test that lint() excludes special pages from orphan detection."""
-        wiki = Wiki(temp_wiki)
+    def test_lint_respects_config(self, temp_wiki):
+        """Test that lint() respects user configuration."""
+        config = {
+            'orphan_detection': {
+                'exclude_patterns': [r'^\d{4}-\d{2}-\d{2}$']
+            }
+        }
+        wiki = Wiki(temp_wiki, config=config)
         wiki.init()
         
-        # Create dated page (should be excluded)
+        # Create dated page (should be excluded when configured)
         dated = temp_wiki / 'wiki' / '2025-07-31.md'
         dated.write_text("# Daily Summary")
         

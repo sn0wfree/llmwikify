@@ -47,9 +47,9 @@ class TestRecommend:
         orphan_names = [o['page'] for o in orphans]
         
         # Orphan and Hub should be orphans (no inbound links)
-        assert 'orphan' in orphan_names
-        assert 'hub' in orphan_names
-        assert 'linked' not in orphan_names  # Has inbound from Hub
+        assert 'Orphan' in orphan_names
+        assert 'Hub' in orphan_names
+        assert 'Linked' not in orphan_names  # Has inbound from Hub
         
         wiki.close()
     
@@ -104,10 +104,10 @@ class TestRecommend:
         wiki = Wiki(temp_wiki)
         wiki.init()
         
-        # Create well-linked pages
-        wiki.write_page("Index", "# Index\n\n[[Page A]]\n[[Page B]]")
+        # Create well-linked pages (using generic names, not special pages)
+        wiki.write_page("Hub", "# Hub\n\n[[Page A]]\n[[Page B]]")
         wiki.write_page("Page A", "# A\n\nSee [[Page B]]")
-        wiki.write_page("Page B", "# B\n\nBack to [[Index]]")
+        wiki.write_page("Page B", "# B\n\nBack to [[Hub]]")
         
         result = wiki.recommend()
         

@@ -26,9 +26,16 @@ class Wiki:
         self.wiki_dir = get_directory(self.root, 'wiki', self.config)
         
         # Set up file paths from config
-        self.index_file = get_file_path(self.root, 'index', self.config)
-        self.log_file = get_file_path(self.root, 'log', self.config)
+        # index and log files are in the wiki directory
+        index_name = get_file_path(self.root, 'index', self.config).name
+        log_name = get_file_path(self.root, 'log', self.config).name
+        self.index_file = self.wiki_dir / index_name
+        self.log_file = self.wiki_dir / log_name
         self.db_path = get_db_path(self.root, self.config)
+        
+        # Special page names (from config, used for exclusion logic)
+        self._index_page_name = self.index_file.stem
+        self._log_page_name = self.log_file.stem
         
         # Reference index path
         ref_index_name = self.config.get('reference_index', {}).get('name', 'reference_index.json')
@@ -39,8 +46,8 @@ class Wiki:
         orphan_config = self.config.get('orphan_detection', {})
         self._default_exclude_patterns = orphan_config.get('default_exclude_patterns', [])
         self._user_exclude_patterns = orphan_config.get('exclude_patterns', [])
-        self._exclude_frontmatter_keys = orphan_config.get('exclude_frontmatter', ['redirect_to'])
-        self._archive_dirs = orphan_config.get('archive_directories', ['archive', 'logs', 'history'])
+        self._exclude_frontmatter_keys = orphan_config.get('exclude_frontmatter', [])
+        self._archive_dirs = orphan_config.get('archive_directories', [])
         
         # Performance settings
         perf_config = self.config.get('performance', {})
@@ -194,7 +201,7 @@ class Wiki:
         # Check for orphan pages
         for page in self.wiki_dir.glob("*.md"):
             page_name = page.stem
-            if page_name in ('index', 'log'):
+            if page_name in (self._index_page_name, self._log_page_name):
                 continue
             
             if self._should_exclude_orphan(page_name, page):
@@ -226,7 +233,7 @@ class Wiki:
             links = re.findall(r'\[\[(.*?)\]\]', content)
             for link in links:
                 target = link.split('|')[0].split('#')[0].strip()
-                if target not in ('index', 'log'):
+                if target not in (self._index_page_name, self._log_page_name):
                     link_counts[target] = link_counts.get(target, 0) + 1
         
         for target, count in link_counts.items():
@@ -241,7 +248,7 @@ class Wiki:
         # Find orphan pages
         for page in self.wiki_dir.glob("*.md"):
             page_name = page.stem
-            if page_name in ('index', 'log'):
+            if page_name in (self._index_page_name, self._log_page_name):
                 continue
             
             if self._should_exclude_orphan(page_name, page):
