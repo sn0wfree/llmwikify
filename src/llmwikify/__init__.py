@@ -9,7 +9,7 @@ Based on Karpathy's LLM Wiki Principles:
 - Bidirectional reference tracking
 """
 
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 __author__ = "sn0wfree"
 __email__ = "linlu1234567@sina.com"
 __license__ = "MIT"
@@ -22,6 +22,7 @@ from .core import Wiki, WikiIndex
 from .cli import WikiCLI
 from .mcp import MCPServer
 from .extractors import ExtractedContent, Link
+from .config import load_config, get_default_config
 
 # Convenience functions
 def create_wiki(path: str | Path, config: Optional[Dict] = None) -> Wiki:
@@ -50,6 +51,10 @@ __all__ = [
     # Data classes
     "ExtractedContent",
     "Link",
+    
+    # Configuration
+    "load_config",
+    "get_default_config",
     
     # Convenience functions
     "create_wiki",

@@ -9,13 +9,7 @@ from datetime import datetime, timezone
 
 from .index import WikiIndex
 from ..extractors import extract
-
-# Constants
-RAW_DIR = "raw"
-WIKI_DIR = "wiki"
-INDEX_FILE = "index.md"
-LOG_FILE = "log.md"
-DB_FILE = ".llm-wiki-kit.db"
+from ..config import load_config, get_directory, get_file_path, get_db_path
 
 
 class Wiki:
@@ -23,83 +17,42 @@ class Wiki:
     
     def __init__(self, root: Path, config: Optional[dict] = None):
         self.root = root.resolve()
-        self.raw_dir = self.root / RAW_DIR
-        self.wiki_dir = self.root / WIKI_DIR
-        self.index_file = self.root / INDEX_FILE
-        self.log_file = self.root / LOG_FILE
-        self.db_path = self.root / DB_FILE
+        
+        # Load configuration (external file or built-in defaults)
+        self.config = config or load_config(self.root)
+        
+        # Set up directory structure from config
+        self.raw_dir = get_directory(self.root, 'raw', self.config)
+        self.wiki_dir = get_directory(self.root, 'wiki', self.config)
+        
+        # Set up file paths from config
+        self.index_file = get_file_path(self.root, 'index', self.config)
+        self.log_file = get_file_path(self.root, 'log', self.config)
+        self.db_path = get_db_path(self.root, self.config)
+        
+        # Reference index path
+        ref_index_name = self.config.get('reference_index', {}).get('name', 'reference_index.json')
         self._ref_index_path: Optional[Path] = None
+        self._ref_index_name = ref_index_name
         
-        # Load configuration (pure tool design - zero domain assumptions)
-        self.config = config or self._load_config()
+        # Orphan detection configuration
+        orphan_config = self.config.get('orphan_detection', {})
+        self._default_exclude_patterns = orphan_config.get('default_exclude_patterns', [])
+        self._user_exclude_patterns = orphan_config.get('exclude_patterns', [])
+        self._exclude_frontmatter_keys = orphan_config.get('exclude_frontmatter', ['redirect_to'])
+        self._archive_dirs = orphan_config.get('archive_directories', ['archive', 'logs', 'history'])
         
-        # Universal exclusion patterns (minimal, cross-domain)
-        self._default_exclude_patterns = [
-            r'^\d{4}-\d{2}-\d{2}$',      # Date format: 2025-07-31
-            r'^\d{4}-\d{2}$',            # Month format: 2025-07
-            r'^\d{4}-Q[1-4]$',           # Quarter format: 2025-Q1
-        ]
-        
-        # User-configured patterns
-        self._user_exclude_patterns = self.config.get('orphan_exclude_patterns', [])
-        
-        # Frontmatter keys that indicate exclusion
-        self._exclude_frontmatter_keys = self.config.get('orphan_exclude_frontmatter', ['redirect_to'])
-        
-        # Archive directory names
-        self._archive_dirs = self.config.get('archive_directories', ['archive', 'logs', 'history'])
+        # Performance settings
+        perf_config = self.config.get('performance', {})
+        self._batch_size = perf_config.get('batch_size', 100)
         
         self._index: Optional[WikiIndex] = None
-    
-    def _load_config(self) -> dict:
-        """Load configuration from .wiki-config.yaml."""
-        config_file = self.root / ".wiki-config.yaml"
-        if config_file.exists():
-            try:
-                import yaml
-                config = yaml.safe_load(config_file.read_text()) or {}
-                return config
-            except Exception:
-                pass  # Use defaults on error
-        return {}
-    
-    def _should_exclude_orphan(self, page_name: str, page_path: Path) -> bool:
-        """Check if a page should be excluded from orphan detection."""
-        page_name_lower = page_name.lower()
-        
-        # Check default patterns
-        for pattern in self._default_exclude_patterns:
-            if re.match(pattern, page_name_lower):
-                return True
-        
-        # Check user-configured patterns
-        for pattern in self._user_exclude_patterns:
-            if re.match(pattern, page_name_lower):
-                return True
-        
-        # Check frontmatter
-        if page_path.exists():
-            content = page_path.read_text()
-            for key in self._exclude_frontmatter_keys:
-                if f"{key}:" in content:
-                    return True
-        
-        # Check if in archive directory
-        try:
-            rel_path = page_path.relative_to(self.wiki_dir)
-            for part in rel_path.parts:
-                if part.lower() in self._archive_dirs:
-                    return True
-        except ValueError:
-            pass
-        
-        return False
     
     @property
     def ref_index_path(self) -> Path:
         """Path to reference index JSON."""
         if self._ref_index_path is None:
-            self._ref_index_path = self.wiki_dir / "reference_index.json"
+            self._ref_index_path = self.wiki_dir / self._ref_index_name
         return self._ref_index_path
     
     @property
@@ -127,7 +80,7 @@ class Wiki:
         # Create index.md
         self.index_file.write_text(
             "# Wiki Index\n\n"
-            f"Generated by llmwikify v0.10.0\n\n"
+            f"Generated by llmwikify v{self._get_version()}\n\n"
             f"Agent: {agent}\n\n"
             "---\n\n"
             "## Pages\n\n"
@@ -137,20 +90,26 @@ class Wiki:
         # Create log.md
         self.log_file.write_text(
             "# Wiki Log\n\n"
-            f"Initialized: {_now()}\n\n"
+            f"Initialized: {self._now()}\n\n"
             "---\n"
         )
         
         # Create config example
-        config_example = self.root / ".wiki-config.yaml.example"
+        config_example = self.root / self.config.get('files', {}).get('config_example', '.wiki-config.yaml.example')
         if not config_example.exists():
             config_example.write_text(
                 "# Wiki Configuration\n"
                 "# See docs/CONFIG_GUIDE.md for details\n\n"
-                "orphan_pages:\n"
-                "  exclude_patterns:\n"
-                "    - '^\\d{4}-\\d{2}-\\d{2}$'  # Dates\n"
-                "    - '^\\d{4}-\\d{2}$'        # Months\n"
+                "# Override default constants\n"
+                "# database:\n"
+                "#   name: \".my-wiki.db\"\n\n"
+                "# orphan_detection:\n"
+                "#   exclude_patterns:\n"
+                "#     - '^\\d{4}-\\d{2}-\\d{2}$'  # Dates\n"
+                "#     - '^meeting-.*'             # Meeting notes\n"
+                "#   archive_directories:\n"
+                "#     - 'archive'\n"
+                "#     - 'logs'\n"
             )
         
         return f"Wiki initialized at {self.root}"
@@ -314,14 +273,14 @@ class Wiki:
     
     def append_log(self, operation: str, details: str) -> str:
         """Append entry to wiki log."""
-        entry = f"## [{_now()}] {operation} | {details}\n"
+        entry = f"## [{self._now()}] {operation} | {details}\n"
         with open(self.log_file, 'a') as f:
             f.write(entry)
         return "Logged"
     
     def build_index(self, auto_export: bool = True, output_path: Optional[Path] = None) -> dict:
         """Build reference index."""
-        result = self.index.build_index_from_files(self.wiki_dir)
+        result = self.index.build_index_from_files(self.wiki_dir, batch_size=self._batch_size)
         
         if auto_export:
             export_path = output_path or self.ref_index_path
@@ -342,21 +301,61 @@ class Wiki:
         """Get pages that this page links to."""
         return self.index.get_outbound_links(page_name)
     
+    def _should_exclude_orphan(self, page_name: str, page_path: Path) -> bool:
+        """Check if a page should be excluded from orphan detection."""
+        page_name_lower = page_name.lower()
+        
+        # Check default patterns
+        for pattern in self._default_exclude_patterns:
+            if re.match(pattern, page_name_lower):
+                return True
+        
+        # Check user-configured patterns
+        for pattern in self._user_exclude_patterns:
+            if re.match(pattern, page_name_lower):
+                return True
+        
+        # Check frontmatter
+        if page_path.exists():
+            content = page_path.read_text()
+            for key in self._exclude_frontmatter_keys:
+                if f"{key}:" in content:
+                    return True
+        
+        # Check if in archive directory
+        try:
+            rel_path = page_path.relative_to(self.wiki_dir)
+            for part in rel_path.parts:
+                if part.lower() in self._archive_dirs:
+                    return True
+        except ValueError:
+            pass
+        
+        return False
+    
     @staticmethod
     def _slugify(text: str) -> str:
         """Convert text to URL-friendly slug."""
-        import re
         text = text.lower().strip()
         text = re.sub(r'[^\w\s-]', '', text)
         text = re.sub(r'[-\s]+', '-', text)
         return text
     
+    @staticmethod
+    def _now() -> str:
+        """Get current ISO timestamp."""
+        return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+    
+    @staticmethod
+    def _get_version() -> str:
+        """Get llmwikify version."""
+        try:
+            from .. import __version__
+            return __version__
+        except ImportError:
+            return "0.11.0"
+    
     def close(self):
         """Close database connections."""
         if self._index:
             self._index.close()
-
-
-def _now() -> str:
-    """Get current ISO timestamp."""
-    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
