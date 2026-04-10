@@ -137,7 +137,8 @@ class TestWiki:
         
         # total_pages includes index.md and log.md
         assert result['total_pages'] == 4  # Page A + Page B + index + log
-        assert result['total_links'] == 1
+        # Links: Page A → Page B (1) + index.md → Page A, Page B (2) = 3
+        assert result['total_links'] == 3
         assert 'json_export' in result
         
         wiki.close()
