@@ -42,13 +42,78 @@ class WikiCLI:
         result = self.wiki.ingest_source(source)
         
         if "error" in result:
-            print(f"❌ Error: {result['error']}")
+            print(f"Error: {result['error']}")
             return 1
         
-        print(f"✅ Ingested: {source}")
-        print(f"   Title: {result['title']}")
-        print(f"   Type: {result['source_type']}")
-        print(f"   Length: {result['content_length']} chars")
+        # Display extraction summary
+        print(f"Ingested: {result['title']} ({result['source_type']})")
+        print(f"Content length: {result['content_length']:,} chars")
+        
+        if result.get('saved_to_raw'):
+            print(f"Saved to raw: {result['source_name']}")
+        elif result.get('already_exists'):
+            print(f"Already in raw: {result['source_name']}")
+        
+        if result['content_length'] > 8000:
+            print(f"Note: Content truncated to 8,000 chars for LLM processing")
+        
+        smart = getattr(args, 'smart', False)
+        dry_run = getattr(args, 'dry_run', False)
+        
+        if dry_run:
+            if smart:
+                print("\n[DRY RUN] LLM smart mode requested.")
+                print("Remove --dry-run to execute LLM processing.")
+            else:
+                print("\nNo pages created. Use --smart for LLM-assisted processing.")
+            return 0
+        
+        if smart:
+            return self._ingest_smart(result)
+        else:
+            print("\nNo pages created automatically.")
+            print("Use --smart for LLM-assisted page creation (requires llm.enabled=true in config).")
+            return 0
+    
+    def _ingest_smart(self, result: dict) -> int:
+        """Execute LLM smart processing on ingested content."""
+        try:
+            operations_result = self.wiki._llm_process_source(result)
+        except ValueError as e:
+            print(f"\nLLM not configured: {e}")
+            print("Enable LLM in .wiki-config.yaml:")
+            print("  llm:")
+            print("    enabled: true")
+            print("    api_key: your-key-here")
+            print("    model: gpt-4o")
+            return 1
+        except Exception as e:
+            print(f"\nLLM processing failed: {e}")
+            return 1
+        
+        operations = operations_result.get("operations", [])
+        print(f"\nLLM Plan ({len(operations)} operations):")
+        
+        for i, op in enumerate(operations, 1):
+            action = op.get("action", "unknown")
+            if action == "write_page":
+                print(f"  {i}. write_page: {op.get('page_name', 'unnamed')}")
+            elif action == "log":
+                print(f"  {i}. log: {op.get('operation', '')} | {op.get('details', '')}")
+            else:
+                print(f"  {i}. {action}")
+        
+        # Execute operations
+        print("\nExecuting...")
+        execution = self.wiki.execute_operations(operations)
+        
+        for r in execution.get("results", []):
+            status_icon = "ok" if r.get("status") == "done" else "!!"
+            action = r.get("action", "")
+            detail = r.get("page", r.get("operation", ""))
+            print(f"  [{status_icon}] {action}: {detail}")
+        
+        print(f"\nCompleted: {execution['operations_executed']} operations")
         return 0
     
     def write_page(self, args) -> int:
@@ -460,7 +525,9 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  llmwikify ingest document.pdf           Ingest a PDF file
+  llmwikify ingest document.pdf           Show extraction summary
+  llmwikify ingest document.pdf --smart   LLM-assisted page creation
+  llmwikify ingest document.pdf --dry-run Preview without changes
   llmwikify search "gold mining"          Full-text search
   llmwikify references "Company"          Show references
   llmwikify build-index                   Build reference index
@@ -478,8 +545,12 @@ Examples:
     p.add_argument('--overwrite', action='store_true', help='Recreate index.md and log.md if they exist')
     
     # ingest
-    p = subparsers.add_parser('ingest', help='Ingest PDF/URL/YouTube')
+    p = subparsers.add_parser('ingest', help='Ingest a source file')
     p.add_argument('file', type=str, help='File path or URL')
+    p.add_argument('--smart', '-s', action='store_true',
+                   help='Use LLM to analyze content and create wiki pages (requires llm.enabled=true)')
+    p.add_argument('--dry-run', '-n', action='store_true',
+                   help='Show extraction summary without creating pages')
     
     # write_page
     p = subparsers.add_parser('write_page', help='Write page')

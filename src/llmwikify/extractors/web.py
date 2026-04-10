@@ -11,7 +11,7 @@ def _extract_url(url: str) -> ExtractedContent:
     except ImportError:
         return ExtractedContent(
             text="",
-            source_type="url",
+            source_type="error",
             title=url,
             metadata={"error": "trafilatura not installed. Install with: pip install trafilatura"}
         )
@@ -21,7 +21,7 @@ def _extract_url(url: str) -> ExtractedContent:
         if not downloaded:
             return ExtractedContent(
                 text="",
-                source_type="url",
+                source_type="error",
                 title=url,
                 metadata={"error": f"Failed to download {url}"}
             )
@@ -43,7 +43,7 @@ def _extract_url(url: str) -> ExtractedContent:
     except Exception as e:
         return ExtractedContent(
             text="",
-            source_type="url",
+            source_type="error",
             title=url,
             metadata={"error": f"Failed to extract from {url}: {e}"},
         )

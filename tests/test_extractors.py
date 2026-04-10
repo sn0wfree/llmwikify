@@ -7,6 +7,8 @@ import tempfile
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from llmwikify.extractors import extract, detect_source_type, extract_text_file
+from llmwikify.extractors.base import ExtractedContent
+from llmwikify.core.index import WikiIndex
 
 
 class TestDetectSourceType:
@@ -66,7 +68,7 @@ class TestLinkParsing:
         content = "Check [[Page Name]] for details"
         db_path = temp_wiki / "test.db"
         index = WikiIndex(db_path)
-        links = index._parse_links(content)
+        links = index._parse_links(content, "Test Page")
         
         assert len(links) == 1
         assert links[0]['target'] == 'Page Name'
@@ -76,7 +78,7 @@ class TestLinkParsing:
         content = "See [[page|Custom Text]]"
         db_path = temp_wiki / "test.db"
         index = WikiIndex(db_path)
-        links = index._parse_links(content)
+        links = index._parse_links(content, "Test Page")
         
         assert len(links) == 1
         assert links[0]['target'] == 'page'
@@ -86,7 +88,7 @@ class TestLinkParsing:
         content = "Go to [[page#section]]"
         db_path = temp_wiki / "test.db"
         index = WikiIndex(db_path)
-        links = index._parse_links(content)
+        links = index._parse_links(content, "Test Page")
         
         assert len(links) == 1
         assert links[0]['target'] == 'page'
@@ -96,7 +98,7 @@ class TestLinkParsing:
         content = "Link: [[page#section|Display]]"
         db_path = temp_wiki / "test.db"
         index = WikiIndex(db_path)
-        links = index._parse_links(content)
+        links = index._parse_links(content, "Test Page")
         
         assert len(links) == 1
         assert links[0]['target'] == 'page'
@@ -107,10 +109,41 @@ class TestLinkParsing:
         content = "[[A]] and [[B|Display B]] and [[C#section]]"
         db_path = temp_wiki / "test.db"
         index = WikiIndex(db_path)
-        links = index._parse_links(content)
+        links = index._parse_links(content, "Test Page")
         
         assert len(links) == 3
         targets = [l['target'] for l in links]
         assert 'A' in targets
         assert 'B' in targets
         assert 'C' in targets
+
+
+class TestExtractedContent:
+    """Test ExtractedContent data class."""
+    
+    def test_content_length(self):
+        ec = ExtractedContent(text="Hello World", source_type="text")
+        assert ec.content_length == 11
+    
+    def test_empty_content(self):
+        ec = ExtractedContent(text="", source_type="error")
+        assert ec.content_length == 0
+
+
+class TestErrorHandling:
+    """Test extractor error handling."""
+    
+    def test_file_not_found_returns_error(self):
+        result = extract("/nonexistent/path/file.txt")
+        assert result.source_type == "error"
+        assert "File not found" in result.metadata["error"]
+    
+    def test_pdf_missing_dep_returns_error(self, temp_wiki):
+        """PDF extractor returns error type when pymupdf not available."""
+        test_file = temp_wiki / "test.pdf"
+        test_file.write_text("fake pdf content")
+        
+        result = extract(str(test_file))
+        # If pymupdf not installed, should return error type
+        if result.source_type == "error":
+            assert "pymupdf" in result.metadata["error"].lower()

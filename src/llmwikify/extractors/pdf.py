@@ -12,7 +12,7 @@ def _extract_pdf(path: Path) -> ExtractedContent:
     except ImportError:
         return ExtractedContent(
             text="",
-            source_type="pdf",
+            source_type="error",
             title=path.stem,
             metadata={"error": "pymupdf not installed. Install with: pip install pymupdf"}
         )
