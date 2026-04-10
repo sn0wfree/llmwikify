@@ -31,6 +31,7 @@ class Wiki:
         log_name = get_file_path(self.root, 'log', self.config).name
         self.index_file = self.wiki_dir / index_name
         self.log_file = self.wiki_dir / log_name
+        self.wiki_md_file = self.root / 'wiki.md'
         self.db_path = get_db_path(self.root, self.config)
         
         # Special page names (from config, used for exclusion logic)
@@ -147,9 +148,8 @@ class Wiki:
             skipped.append(".wiki-config.yaml.example")
         
         # Create wiki.md (always skip if exists)
-        wiki_md = self.root / 'wiki.md'
-        if not wiki_md.exists():
-            wiki_md.write_text(self._generate_wiki_md())
+        if not self.wiki_md_file.exists():
+            self.wiki_md_file.write_text(self._generate_wiki_md())
             created.append("wiki.md")
         else:
             skipped.append("wiki.md")
@@ -366,10 +366,11 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
             "instructions": (
                 "You have received a new source document. Please:\n"
                 "1. Read and understand the content\n"
-                "2. Create/update relevant wiki pages using wiki_write_page\n"
-                "3. Update index.md with the new page listing\n"
-                "4. Add [[wikilinks]] between related pages\n"
-                "5. Log what you did using wiki_log"
+                "2. See wiki.md (at the project root) for wiki conventions and workflows\n"
+                "3. Create/update relevant wiki pages using wiki_write_page\n"
+                "4. Update index.md with the new page listing\n"
+                "5. Add [[wikilinks]] between related pages\n"
+                "6. Log what you did using wiki_log"
             ),
         }
     
@@ -878,6 +879,60 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
                 "high_priority": sum(1 for h in hints if h['priority'] == 'high'),
             }
         }
+    
+    def read_schema(self) -> dict:
+        """Read wiki.md (schema/conventions file).
+        
+        Returns:
+            Dict with 'content', 'file', and a 'hint' reminding the LLM
+            to save a copy before making changes.
+        """
+        if not self.wiki_md_file.exists():
+            return {"error": "wiki.md not found. Run init() first."}
+        
+        return {
+            "content": self.wiki_md_file.read_text(),
+            "file": str(self.wiki_md_file),
+            "hint": "Tip: Save a copy of the current content before making changes to wiki.md",
+        }
+    
+    def update_schema(self, content: str) -> dict:
+        """Update wiki.md with new conventions/workflows.
+        
+        Validates format but does not block writing. Returns warnings
+        for issues and suggestions for post-update actions.
+        
+        Args:
+            content: New wiki.md content.
+        
+        Returns:
+            Dict with 'status', 'file', optional 'warnings' and 'suggestions'.
+        """
+        if not self.wiki_md_file.exists():
+            return {"error": "wiki.md not found. Run init() first."}
+        
+        # Format validation (warnings only, does not block)
+        warnings = []
+        if not content.strip().startswith("#"):
+            warnings.append("Missing title header (should start with #)")
+        if len(content.strip()) < 50:
+            warnings.append("Content seems too short for a schema file")
+        
+        self.wiki_md_file.write_text(content)
+        
+        result = {
+            "status": "updated",
+            "file": str(self.wiki_md_file),
+            "suggestions": [
+                "Review existing wiki pages to ensure compliance with new conventions",
+                "Update pages that may conflict with new workflows or linking rules",
+            ],
+        }
+        
+        if warnings:
+            result["warnings"] = warnings
+        
+        return result
     
     def close(self):
         """Close database connections."""
