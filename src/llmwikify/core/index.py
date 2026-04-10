@@ -249,6 +249,7 @@ class WikiIndex:
         data = {
             "built_at": datetime.now(timezone.utc).isoformat(),
             "total_pages": self.get_page_count(),
+            "total_links": self.get_link_count(),
             "outbound_links": {},
             "inbound_links": {},
             "summary": {

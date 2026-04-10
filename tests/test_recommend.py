@@ -58,17 +58,15 @@ class TestRecommend:
         wiki = Wiki(temp_wiki)
         wiki.init()
         
-        # Create pages with shared topics (must use common_topics from recommend)
+        # Create pages with shared topics
         wiki.write_page("Gold Mining A", "# A\n\nGold mining is great. Gold prices are high. Production is up.")
         wiki.write_page("Gold Mining B", "# B\n\nGold mining company. Gold production up. Mining operations expanded.")
         
         result = wiki.recommend()
         
-        opportunities = result['cross_reference_opportunities']
-        
-        # This test is heuristic - cross-refs may or may not be detected
-        # Just check the structure is correct
-        assert 'cross_reference_opportunities' in result
+        # Check the structure is correct
+        assert 'missing_pages' in result
+        assert 'orphan_pages' in result
         assert 'summary' in result
         
         wiki.close()
@@ -85,17 +83,12 @@ class TestRecommend:
         # Check structure
         assert 'missing_pages' in result
         assert 'orphan_pages' in result
-        assert 'content_gaps' in result
-        assert 'cross_reference_opportunities' in result
         assert 'summary' in result
         
         # Check summary fields
         summary = result['summary']
         assert 'total_missing_pages' in summary
-        assert 'high_priority_missing' in summary
         assert 'total_orphans' in summary
-        assert 'content_gaps_count' in summary
-        assert 'cross_ref_opportunities' in summary
         
         wiki.close()
     

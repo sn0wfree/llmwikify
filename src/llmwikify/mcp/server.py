@@ -117,6 +117,21 @@ class MCPServer:
                             "required": ["operation", "details"]
                         }
                     ),
+                    types.Tool(
+                        name="wiki_recommend",
+                        description="Get wiki recommendations (missing pages, orphans)",
+                        inputSchema={"type": "object", "properties": {}}
+                    ),
+                    types.Tool(
+                        name="wiki_build_index",
+                        description="Build reference index from all wiki pages",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "auto_export": {"type": "boolean", "default": True}
+                            }
+                        }
+                    ),
                 ]
             
             @self._mcp.call_tool()
@@ -137,6 +152,10 @@ class MCPServer:
                     return self.wiki.status()
                 elif name == "wiki_log":
                     return self.wiki.append_log(arguments['operation'], arguments['details'])
+                elif name == "wiki_recommend":
+                    return self.wiki.recommend()
+                elif name == "wiki_build_index":
+                    return self.wiki.build_index(auto_export=arguments.get('auto_export', True))
                 else:
                     raise ValueError(f"Unknown tool: {name}")
             
