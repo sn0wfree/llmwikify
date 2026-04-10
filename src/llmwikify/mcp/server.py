@@ -170,10 +170,15 @@ class MCPServer:
                                 "page_name": {"type": "string", "description": "Custom page name. Auto-generated as 'Query: {topic}' if omitted."},
                                 "auto_link": {"type": "boolean", "default": True, "description": "Automatically add source_pages and raw_sources as links in a Sources section"},
                                 "auto_log": {"type": "boolean", "default": True, "description": "Automatically append to log.md"},
-                                "update_existing": {"type": "boolean", "default": False, "description": "If a similar query page exists, update it instead of creating a new page"}
+                                "merge_or_replace": {"type": "string", "enum": ["sink", "merge", "replace"], "default": "sink", "description": "Strategy when a similar query page exists: 'sink'=append to buffer (default), 'merge'=read old content then consolidate and replace, 'replace'=overwrite the formal page entirely"}
                             },
                             "required": ["query", "answer"]
                         }
+                    ),
+                    types.Tool(
+                        name="wiki_sink_status",
+                        description="Overview of all query sinks with entry counts. Returns topics with pending entries and their status. Use during lint to identify which sinks need review and merging.",
+                        inputSchema={"type": "object", "properties": {}}
                     ),
                 ]
             
@@ -212,8 +217,10 @@ class MCPServer:
                         page_name=arguments.get('page_name'),
                         auto_link=arguments.get('auto_link', True),
                         auto_log=arguments.get('auto_log', True),
-                        update_existing=arguments.get('update_existing', False),
+                        merge_or_replace=arguments.get('merge_or_replace', 'sink'),
                     ))
+                elif name == "wiki_sink_status":
+                    return json.dumps(self.wiki.sink_status())
                 else:
                     raise ValueError(f"Unknown tool: {name}")
             

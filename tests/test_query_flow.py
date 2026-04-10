@@ -236,7 +236,7 @@ class TestSynthesizeDuplicateDetection:
     """Test duplicate query detection and handling."""
     
     def test_synthesize_duplicate_creates_timestamp(self, temp_wiki):
-        """Second identical query gets date suffix."""
+        """Similar queries go to sink instead of creating duplicate pages."""
         wiki = Wiki(temp_wiki)
         wiki.init()
         
@@ -250,20 +250,17 @@ class TestSynthesizeDuplicateDetection:
             answer="# Answer 2",
         )
         
-        assert result1['page_name'] != result2['page_name']
-        assert result2['page_name'] != result1['page_name']
-        assert '20' in result2['page_name']  # Contains year/date
+        assert result1['status'] == 'created'
+        assert result2['status'] == 'sunk'
         
-        # Both pages should exist
-        page1 = temp_wiki / 'wiki' / f"{result1['page_name']}.md"
-        page2 = temp_wiki / 'wiki' / f"{result2['page_name']}.md"
-        assert page1.exists()
-        assert page2.exists()
+        sink_file = temp_wiki / 'sink' / f"{result1['page_name']}.sink.md"
+        assert sink_file.exists()
+        assert "# Answer 2" in sink_file.read_text()
         
         wiki.close()
     
     def test_synthesize_duplicate_has_hint(self, temp_wiki):
-        """Duplicate detection returns hint about existing page."""
+        """Duplicate detection returns hint about existing page and sink."""
         wiki = Wiki(temp_wiki)
         wiki.init()
         
@@ -278,13 +275,16 @@ class TestSynthesizeDuplicateDetection:
         )
         
         assert result['hint'] != ""
-        assert 'already exists' in result['hint'].lower()
-        assert 'update_existing' in result['hint']
+        import json
+        hint_data = json.loads(result['hint'])
+        assert hint_data['action_taken'] == 'appended_to_sink'
+        assert 'sink_path' in hint_data
+        assert 'similar_page_exists' in hint_data['type']
         
         wiki.close()
     
-    def test_synthesize_update_existing(self, temp_wiki):
-        """update_existing=True revises the existing page."""
+    def test_synthesize_replace_existing(self, temp_wiki):
+        """merge_or_replace='replace' revises the existing page."""
         wiki = Wiki(temp_wiki)
         wiki.init()
         
@@ -296,10 +296,10 @@ class TestSynthesizeDuplicateDetection:
         result2 = wiki.synthesize_query(
             query="What is machine learning?",
             answer="# Updated Answer\n\nNew, improved content.",
-            update_existing=True,
+            merge_or_replace="replace",
         )
         
-        assert result2['status'] == 'updated'
+        assert result2['status'] == 'replaced'
         assert result2['page_name'] == result1['page_name']
         
         # Page should have updated content
@@ -355,15 +355,16 @@ class TestSynthesizeDuplicateDetection:
         wiki.close()
     
     def test_synthesize_same_day_multiple(self, temp_wiki):
-        """Multiple duplicates on same day get counter suffix."""
+        """Multiple duplicates on same day append to same sink file."""
         wiki = Wiki(temp_wiki)
         wiki.init()
         
         wiki.synthesize_query(query="Same question", answer="# 1")
-        wiki.synthesize_query(query="Same question", answer="# 2")
+        result2 = wiki.synthesize_query(query="Same question", answer="# 2")
         result3 = wiki.synthesize_query(query="Same question", answer="# 3")
         
-        assert '-1' in result3['page_name'] or '-2' in result3['page_name']
+        assert result2['status'] == 'sunk'
+        assert result3['status'] == 'sunk'
         
         wiki.close()
 
@@ -404,20 +405,20 @@ class TestQueryPageNaming:
         wiki.close()
     
     def test_page_name_collision_with_existing(self, temp_wiki):
-        """If auto-generated name collides with non-query page, adds counter."""
+        """Collision with existing Query: page sinks instead of creating duplicate."""
         wiki = Wiki(temp_wiki)
         wiki.init()
         
-        # Create a non-query page that would collide
-        wiki.write_page("Query: Test Page", "# Existing non-query page")
+        wiki.write_page("Query: Test Page", "# Existing query page")
         
         result = wiki.synthesize_query(
             query="Test page",
             answer="# Answer",
         )
         
-        assert result['page_name'] != 'Query: Test Page'
-        assert 'Query: Test Page' in result['page_name'] or '(1)' in result['page_name']
+        assert result['status'] == 'sunk'
+        sink_file = temp_wiki / 'sink' / 'Query: Test Page.sink.md'
+        assert sink_file.exists()
         
         wiki.close()
 

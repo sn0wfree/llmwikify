@@ -9,7 +9,7 @@ Based on Karpathy's LLM Wiki Principles:
 - Bidirectional reference tracking
 """
 
-__version__ = "0.12.6"
+__version__ = "0.14.0"
 __author__ = "sn0wfree"
 __email__ = "linlu1234567@sina.com"
 __license__ = "MIT"
