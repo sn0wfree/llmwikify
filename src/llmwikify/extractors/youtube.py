@@ -33,7 +33,7 @@ def _extract_youtube(url: str) -> ExtractedContent:
     except ImportError:
         return ExtractedContent(
             text="",
-            source_type="youtube",
+            source_type="error",
             title=url,
             metadata={"error": "youtube-transcript-api not installed. Install with: pip install youtube-transcript-api"}
         )
@@ -42,7 +42,7 @@ def _extract_youtube(url: str) -> ExtractedContent:
     if not video_id:
         return ExtractedContent(
             text="",
-            source_type="youtube",
+            source_type="error",
             title=url,
             metadata={"error": f"Could not extract video ID from: {url}"}
         )
@@ -64,7 +64,7 @@ def _extract_youtube(url: str) -> ExtractedContent:
     except Exception as e:
         return ExtractedContent(
             text="",
-            source_type="youtube",
+            source_type="error",
             title=url,
             metadata={"error": str(e)},
         )

@@ -183,7 +183,7 @@ class TestWiki:
         wiki.close()
     
     def test_ingest_source_file(self, temp_wiki):
-        """Test source ingestion from file."""
+        """Test source ingestion returns data without auto-creating pages."""
         wiki = Wiki(temp_wiki)
         wiki.init()
         
@@ -196,6 +196,140 @@ class TestWiki:
         assert 'error' not in result
         assert result['source_type'] == 'markdown'
         assert 'Test Document' in result['title']
+        assert 'content' in result
+        assert 'instructions' in result
+        assert 'current_index' in result
+        assert result['saved_to_raw'] == False
+        assert result['already_exists'] == False
+        
+        wiki.close()
+    
+    def test_ingest_saves_url_to_raw(self, temp_wiki, monkeypatch):
+        """Test that URL/YouTube sources are saved to raw/."""
+        from llmwikify.extractors import ExtractedContent
+        
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        mock_result = ExtractedContent(
+            text="Article content here",
+            source_type="url",
+            title="Test Article",
+            metadata={"url": "https://example.com/article"}
+        )
+        from llmwikify.core import wiki as wiki_module
+        orig_extract = wiki_module.extract
+        wiki_module.extract = lambda *a, **k: mock_result
+        
+        result = wiki.ingest_source("https://example.com/article")
+        
+        wiki_module.extract = orig_extract
+        
+        assert 'error' not in result
+        assert result['saved_to_raw'] == True
+        assert result['source_name'] == 'test-article.md'
+        
+        saved_file = temp_wiki / 'raw' / 'test-article.md'
+        assert saved_file.exists()
+        assert saved_file.read_text() == "Article content here"
+        
+        wiki.close()
+    
+    def test_ingest_url_already_exists(self, temp_wiki, monkeypatch):
+        """Test that re-ingesting same URL reports already_exists."""
+        from llmwikify.extractors import ExtractedContent
+        
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        saved_file = temp_wiki / 'raw' / 'test-article.md'
+        saved_file.write_text("Existing content")
+        
+        mock_result = ExtractedContent(
+            text="New article content",
+            source_type="url",
+            title="Test Article",
+            metadata={"url": "https://example.com/article"}
+        )
+        from llmwikify.core import wiki as wiki_module
+        orig_extract = wiki_module.extract
+        wiki_module.extract = lambda *a, **k: mock_result
+        
+        result = wiki.ingest_source("https://example.com/article")
+        
+        wiki_module.extract = orig_extract
+        
+        assert 'error' not in result
+        assert result['already_exists'] == True
+        assert result['saved_to_raw'] == False
+        assert saved_file.read_text() == "Existing content"
+        
+        wiki.close()
+    
+    def test_llm_process_source(self, temp_wiki, monkeypatch):
+        """Test LLM processing returns operations list."""
+        wiki = Wiki(temp_wiki, config={'llm': {'enabled': True, 'api_key': 'test', 'model': 'gpt-4o'}})
+        wiki.init()
+        
+        operations_data = [
+            {"action": "write_page", "page_name": "Test Page", "content": "# Test Page\n\nContent"},
+            {"action": "log", "operation": "ingest", "details": "Test source"},
+        ]
+        
+        class MockClient:
+            @classmethod
+            def from_config(cls, config):
+                return cls()
+            def chat_json(self, messages):
+                return operations_data
+        
+        import sys
+        import llmwikify.llm_client as llm_module
+        orig_client = llm_module.LLMClient
+        llm_module.LLMClient = MockClient
+        sys.modules['llmwikify.llm_client'] = llm_module
+        sys.modules['llmwikify.core.llm_client'] = llm_module
+        
+        source_data = {
+            "title": "Test Source",
+            "source_type": "text",
+            "content": "Some content to analyze",
+            "current_index": "",
+        }
+        
+        result = wiki._llm_process_source(source_data)
+        
+        llm_module.LLMClient = orig_client
+        sys.modules['llmwikify.llm_client'] = llm_module
+        
+        assert result['status'] == 'success'
+        assert len(result['operations']) == 2
+        assert result['operations'][0]['action'] == 'write_page'
+        
+        wiki.close()
+    
+    def test_execute_operations(self, temp_wiki):
+        """Test executing LLM-generated operations."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        operations = [
+            {"action": "write_page", "page_name": "Test Page", "content": "# Test Page\n\nContent"},
+            {"action": "log", "operation": "ingest", "details": "Test source"},
+            {"action": "write_page", "page_name": "", "content": ""},  # invalid
+        ]
+        
+        result = wiki.execute_operations(operations)
+        
+        assert result['status'] == 'completed'
+        assert result['operations_executed'] == 3
+        assert result['results'][0]['status'] == 'done'
+        assert result['results'][1]['status'] == 'done'
+        assert result['results'][2]['status'] == 'skipped'
+        
+        # Verify page was created
+        page = temp_wiki / 'wiki' / 'Test Page.md'
+        assert page.exists()
         
         wiki.close()
     

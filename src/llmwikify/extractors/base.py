@@ -14,6 +14,10 @@ class ExtractedContent:
     title: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def content_length(self) -> int:
+        return len(self.text)
+
 
 @dataclass
 class Link:
@@ -72,8 +76,8 @@ def extract(source: str, wiki_root: Optional[Path] = None) -> ExtractedContent:
     if not path.exists():
         return ExtractedContent(
             text="",
-            source_type=source_type,
-            title="",
+            source_type="error",
+            title=str(path),
             metadata={"error": f"File not found: {source}"}
         )
     

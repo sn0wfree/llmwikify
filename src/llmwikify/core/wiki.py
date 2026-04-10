@@ -311,27 +311,156 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
 """
     
     def ingest_source(self, source: str) -> dict:
-        """Ingest a source file (PDF/URL/YouTube)."""
-        try:
-            result = extract(source, wiki_root=self.root)
+        """Ingest a source file and return extracted data for LLM processing.
+        
+        Does NOT automatically write wiki pages. Returns extracted content
+        along with current wiki index so the LLM can decide which pages
+        to create/update and how to cross-reference.
+        
+        For URL/YouTube sources, saves extracted text to raw/ for persistence.
+        """
+        result = extract(source, wiki_root=self.root)
+        
+        if result.source_type == "error":
+            return {"error": result.metadata.get("error", "Unknown extraction error")}
+        
+        if not result.text:
+            return {"error": "No content extracted"}
+        
+        # URL/YouTube: save to raw/ for persistence
+        saved_to_raw = False
+        already_exists = False
+        source_name = Path(source).name if Path(source).exists() else source
+        
+        if result.source_type in ("url", "youtube"):
+            safe_name = self._slugify(result.title) + ".md"
+            saved_path = self.raw_dir / safe_name
             
-            if not result.text:
-                return {"error": "No content extracted"}
-            
-            # Create wiki page
-            page_name = result.title or Path(source).stem
-            content = f"# {page_name}\n\n{result.text}\n"
-            
-            self.write_page(page_name, content)
-            
-            return {
-                "title": page_name,
-                "source_type": result.source_type,
-                "content_length": len(result.text),
-            }
-            
-        except Exception as e:
-            return {"error": str(e)}
+            if saved_path.exists():
+                already_exists = True
+                source_name = safe_name
+            else:
+                self.raw_dir.mkdir(parents=True, exist_ok=True)
+                saved_path.write_text(result.text)
+                saved_to_raw = True
+                source_name = safe_name
+        
+        # Read current index for LLM context
+        index_content = ""
+        if self.index_file.exists():
+            index_content = self.index_file.read_text()
+        
+        # Log the ingest
+        self.append_log("ingest", f"Source ({result.source_type}): {result.title}")
+        
+        return {
+            "source_name": source_name,
+            "source_type": result.source_type,
+            "title": result.title,
+            "content": result.text,
+            "content_length": len(result.text),
+            "metadata": result.metadata,
+            "saved_to_raw": saved_to_raw,
+            "already_exists": already_exists,
+            "current_index": index_content,
+            "instructions": (
+                "You have received a new source document. Please:\n"
+                "1. Read and understand the content\n"
+                "2. Create/update relevant wiki pages using wiki_write_page\n"
+                "3. Update index.md with the new page listing\n"
+                "4. Add [[wikilinks]] between related pages\n"
+                "5. Log what you did using wiki_log"
+            ),
+        }
+    
+    def _llm_process_source(self, source_data: dict) -> dict:
+        """Use LLM to analyze source content and generate wiki operations.
+        
+        Args:
+            source_data: Dict from ingest_source() with content, title, etc.
+        
+        Returns:
+            Dict with 'operations' list and 'status'.
+        """
+        from ..llm_client import LLMClient
+        
+        client = LLMClient.from_config(self.config)
+        
+        system_prompt = (
+            "You are a wiki maintenance agent. You analyze source documents "
+            "and create structured wiki pages.\n\n"
+            "Rules:\n"
+            "- Create focused pages (one topic per page)\n"
+            "- Use [[wikilink]] syntax for cross-references\n"
+            "- Keep pages concise and well-structured\n"
+            "- Update existing pages when content overlaps\n"
+            "- Add meaningful summaries and connections\n"
+        )
+        
+        user_prompt = (
+            f"Ingest this source:\n\n"
+            f"Title: {source_data['title']}\n"
+            f"Type: {source_data['source_type']}\n"
+            f"Content:\n---\n{source_data['content'][:8000]}\n---\n\n"
+            f"Current wiki index:\n---\n{source_data.get('current_index', '')}\n---\n\n"
+            f"Return a JSON array of operations to perform. "
+            f"Each operation is either 'write_page' or 'log':\n"
+            f'[{{"action": "write_page", "page_name": "Page Name", "content": "# Page Name\\n\\n..."}}, '
+            f'{{"action": "log", "operation": "ingest", "details": "..."}}]'
+        )
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        
+        operations = client.chat_json(messages)
+        
+        if not isinstance(operations, list):
+            raise ValueError(f"Expected list of operations, got {type(operations).__name__}")
+        
+        return {
+            "status": "success",
+            "operations": operations,
+            "source_title": source_data["title"],
+        }
+    
+    def execute_operations(self, operations: list) -> dict:
+        """Execute a list of wiki operations from LLM processing.
+        
+        Args:
+            operations: List of {action, ...} dicts from _llm_process_source().
+        
+        Returns:
+            Dict with results of each operation.
+        """
+        results = []
+        for op in operations:
+            action = op.get("action", "")
+            if action == "write_page":
+                page_name = op.get("page_name", "")
+                content = op.get("content", "")
+                if page_name and content:
+                    self.write_page(page_name, content)
+                    results.append({"action": "write_page", "page": page_name, "status": "done"})
+                else:
+                    results.append({"action": "write_page", "status": "skipped", "reason": "missing page_name or content"})
+            elif action == "log":
+                operation = op.get("operation", "")
+                details = op.get("details", "")
+                if operation and details:
+                    self.append_log(operation, details)
+                    results.append({"action": "log", "operation": operation, "status": "done"})
+                else:
+                    results.append({"action": "log", "status": "skipped", "reason": "missing operation or details"})
+            else:
+                results.append({"action": action, "status": "unknown"})
+        
+        return {
+            "status": "completed",
+            "operations_executed": len(results),
+            "results": results,
+        }
     
     def write_page(self, page_name: str, content: str) -> str:
         """Write a wiki page."""

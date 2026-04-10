@@ -34,6 +34,13 @@ DEFAULT_CONFIG = {
         "batch_size": 100,
         "cache_size": 64000,
     },
+    "llm": {
+        "enabled": False,
+        "provider": "openai",
+        "base_url": "",
+        "api_key": "",
+        "model": "gpt-4o",
+    },
     "mcp": {
         "host": "127.0.0.1",
         "port": 8765,
