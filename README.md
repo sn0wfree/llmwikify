@@ -453,6 +453,7 @@ mypy src/llmwikify
 - [ ] More extractors (Word, Excel)
 
 ### v0.12.0 (Future)
+- [ ] MCP server authentication (API key / token)
 - [ ] Obsidian plugin (read JSON index)
 - [ ] VS Code extension
 - [ ] LLM Agent integrations (Claude Code, Cursor)

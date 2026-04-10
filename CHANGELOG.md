@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
+- MCP server authentication (API key / token)
 - Web UI (optional)
 - Graph visualization (graphviz/Mermaid)
 - Incremental index updates

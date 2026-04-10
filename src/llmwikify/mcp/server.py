@@ -25,6 +25,11 @@ class MCPServer:
         self.config = self.DEFAULT_CONFIG.copy()
         if config:
             self.config.update(config)
+        else:
+            # Auto-read from wiki's loaded configuration
+            user_mcp = wiki.config.get("mcp", {})
+            if user_mcp:
+                self.config.update(user_mcp)
         
         self._register_mcp()
     
