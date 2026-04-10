@@ -157,6 +157,24 @@ class MCPServer:
                             "required": ["content"]
                         }
                     ),
+                    types.Tool(
+                        name="wiki_synthesize",
+                        description="Save a query answer as a new wiki page. Answers compound in the knowledge base just like ingested sources — comparisons, analyses, and discoveries become persistent wiki pages.",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string", "description": "Original question that was asked"},
+                                "answer": {"type": "string", "description": "LLM-generated answer content (markdown). Will be saved as a wiki page with source citations."},
+                                "source_pages": {"type": "array", "items": {"type": "string"}, "description": "Wiki pages referenced to generate this answer. Will be added as [[wikilinks]] in the Sources section."},
+                                "raw_sources": {"type": "array", "items": {"type": "string"}, "description": "Raw source files referenced (e.g., 'raw/article.md'). Will be added as markdown links in Sources section."},
+                                "page_name": {"type": "string", "description": "Custom page name. Auto-generated as 'Query: {topic}' if omitted."},
+                                "auto_link": {"type": "boolean", "default": True, "description": "Automatically add source_pages and raw_sources as links in a Sources section"},
+                                "auto_log": {"type": "boolean", "default": True, "description": "Automatically append to log.md"},
+                                "update_existing": {"type": "boolean", "default": False, "description": "If a similar query page exists, update it instead of creating a new page"}
+                            },
+                            "required": ["query", "answer"]
+                        }
+                    ),
                 ]
             
             @self._mcp.call_tool()
@@ -185,6 +203,17 @@ class MCPServer:
                     return self.wiki.read_schema()
                 elif name == "wiki_update_schema":
                     return self.wiki.update_schema(arguments['content'])
+                elif name == "wiki_synthesize":
+                    return json.dumps(self.wiki.synthesize_query(
+                        query=arguments['query'],
+                        answer=arguments['answer'],
+                        source_pages=arguments.get('source_pages'),
+                        raw_sources=arguments.get('raw_sources'),
+                        page_name=arguments.get('page_name'),
+                        auto_link=arguments.get('auto_link', True),
+                        auto_log=arguments.get('auto_log', True),
+                        update_existing=arguments.get('update_existing', False),
+                    ))
                 else:
                     raise ValueError(f"Unknown tool: {name}")
             
