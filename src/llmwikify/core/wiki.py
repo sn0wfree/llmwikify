@@ -3,6 +3,7 @@
 import json
 import re
 import os
+import shutil
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
@@ -236,11 +237,25 @@ root/
 - The LLM owns the wiki/ directory; humans own the raw/ directory
 
 ### Linking
-- Use `[[wikilink]]` syntax for cross-references
+- Use `[[wikilink]]` syntax for cross-references between wiki pages
 - Link to entities, concepts, and related topics
 - Update links when creating or modifying pages
 - Section links: `[[Page Name#Section]]`
 - Display text: `[[Page Name|Custom Display]]`
+
+### Source Citations
+- Cite raw sources in wiki pages using standard markdown links (NOT wikilinks)
+- Raw files are NOT wiki pages — never use `[[raw/filename]]` syntax
+- Two approaches — choose based on context:
+  - **Page-level**: Add `## Sources` section at page end listing all sources
+    ```markdown
+    ## Sources
+    - [Source: Article Title](raw/slugified-title.md)
+    - [Source: research-paper.pdf](raw/research-paper.pdf)
+    ```
+  - **Inline**: Add citations after key claims `[Source](raw/filename)`
+- Format: `[Source: Title](raw/filename)` — use relative paths from wiki root
+- When ingesting a new source, cite it in every wiki page you create or update
 
 ### Page Structure
 - Start with `# Title` (matching page name)
@@ -317,7 +332,10 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
         along with current wiki index so the LLM can decide which pages
         to create/update and how to cross-reference.
         
-        For URL/YouTube sources, saves extracted text to raw/ for persistence.
+        All source files are collected into raw/ for centralized management.
+        - URL/YouTube: extracted text is saved to raw/
+        - Local files outside raw/: copied to raw/
+        - Local files already in raw/: no copy needed
         """
         result = extract(source, wiki_root=self.root)
         
@@ -327,23 +345,52 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
         if not result.text:
             return {"error": "No content extracted"}
         
-        # URL/YouTube: save to raw/ for persistence
+        # Collect source file into raw/
         saved_to_raw = False
         already_exists = False
-        source_name = Path(source).name if Path(source).exists() else source
+        hint = ""
+        source_name = ""
+        
+        self.raw_dir.mkdir(parents=True, exist_ok=True)
         
         if result.source_type in ("url", "youtube"):
+            # URL/YouTube: save extracted text to raw/
             safe_name = self._slugify(result.title) + ".md"
             saved_path = self.raw_dir / safe_name
             
             if saved_path.exists():
                 already_exists = True
                 source_name = safe_name
+                hint = f"Source already exists in raw/{safe_name}"
             else:
-                self.raw_dir.mkdir(parents=True, exist_ok=True)
                 saved_path.write_text(result.text)
                 saved_to_raw = True
                 source_name = safe_name
+                hint = f"Extracted text saved to raw/{safe_name}"
+        else:
+            # Local file: check if already in raw/
+            original_path = Path(source).resolve()
+            try:
+                original_path.relative_to(self.raw_dir.resolve())
+                # File is already inside raw/
+                source_name = str(original_path.relative_to(self.raw_dir))
+                saved_to_raw = False
+                hint = f"Source is already in raw/{source_name}"
+            except ValueError:
+                # File is outside raw/, copy it in
+                safe_name = self._slugify(result.title or original_path.stem) + original_path.suffix
+                saved_path = self.raw_dir / safe_name
+                
+                if saved_path.exists():
+                    already_exists = True
+                    source_name = safe_name
+                    hint = f"Source already exists in raw/{safe_name}"
+                else:
+                    # Cross-platform copy: read bytes and write (no permission issues)
+                    saved_path.write_bytes(original_path.read_bytes())
+                    saved_to_raw = True
+                    source_name = safe_name
+                    hint = f"Source copied to raw/{safe_name} from {original_path}"
         
         # Read current index for LLM context
         index_content = ""
@@ -351,10 +398,14 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
             index_content = self.index_file.read_text()
         
         # Log the ingest
-        self.append_log("ingest", f"Source ({result.source_type}): {result.title}")
+        log_detail = f"Source ({result.source_type}): {result.title}"
+        if saved_to_raw:
+            log_detail += f" → raw/{source_name}"
+        self.append_log("ingest", log_detail)
         
         return {
             "source_name": source_name,
+            "source_raw_path": f"raw/{source_name}",
             "source_type": result.source_type,
             "title": result.title,
             "content": result.text,
@@ -362,6 +413,7 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
             "metadata": result.metadata,
             "saved_to_raw": saved_to_raw,
             "already_exists": already_exists,
+            "hint": hint,
             "current_index": index_content,
             "instructions": (
                 "You have received a new source document. Please:\n"
@@ -370,7 +422,11 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
                 "3. Create/update relevant wiki pages using wiki_write_page\n"
                 "4. Update index.md with the new page listing\n"
                 "5. Add [[wikilinks]] between related pages\n"
-                "6. Log what you did using wiki_log"
+                "6. Cite the source in wiki pages using standard markdown (NOT wikilinks):\n"
+                "   - Page-level: add '## Sources' section with [Source: Title](raw/filename)\n"
+                "   - Inline: cite after key claims like [Source](raw/filename)\n"
+                "   - Choose the approach that best fits the context\n"
+                "7. Log what you did using wiki_log"
             ),
         }
     

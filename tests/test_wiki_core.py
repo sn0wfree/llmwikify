@@ -542,3 +542,96 @@ redirect_to: target.md
         
         assert 'error' in result
         assert 'Run init() first' in result['error']
+    
+    def test_ingest_local_file_copied_to_raw(self, temp_wiki):
+        """Test that local files outside raw/ are copied in."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        # Create a file OUTSIDE raw/
+        outside_dir = temp_wiki / 'documents'
+        outside_dir.mkdir()
+        test_file = outside_dir / 'research-report.md'
+        test_file.write_text("# Research Report\n\nKey findings here")
+        
+        result = wiki.ingest_source(str(test_file))
+        
+        assert 'error' not in result
+        assert result['saved_to_raw'] == True
+        assert result['already_exists'] == False
+        assert 'source_raw_path' in result
+        assert result['source_raw_path'] == 'raw/research-report.md'
+        assert 'hint' in result
+        assert 'copied' in result['hint'].lower()
+        
+        # Verify file was copied
+        copied_file = temp_wiki / 'raw' / 'research-report.md'
+        assert copied_file.exists()
+        assert copied_file.read_text() == "# Research Report\n\nKey findings here"
+        
+        wiki.close()
+    
+    def test_ingest_local_file_already_in_raw(self, temp_wiki):
+        """Test that files already in raw/ are not re-copied."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        # Create a file INSIDE raw/
+        test_file = temp_wiki / 'raw' / 'existing-source.md'
+        test_file.write_text("# Existing Source\n\nAlready here")
+        
+        result = wiki.ingest_source(str(test_file))
+        
+        assert 'error' not in result
+        assert result['saved_to_raw'] == False
+        assert result['already_exists'] == False
+        assert 'source_raw_path' in result
+        assert result['source_raw_path'] == 'raw/existing-source.md'
+        assert 'hint' in result
+        assert 'already in raw' in result['hint'].lower()
+        
+        wiki.close()
+    
+    def test_ingest_local_file_duplicate_in_raw(self, temp_wiki):
+        """Test that re-ingesting a file already copied to raw/ reports already_exists."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        # First ingest: copies the file
+        outside_dir = temp_wiki / 'documents'
+        outside_dir.mkdir()
+        test_file = outside_dir / 'report.md'
+        test_file.write_text("# Report Content\n\nSome data")
+        
+        result1 = wiki.ingest_source(str(test_file))
+        assert result1['saved_to_raw'] == True
+        
+        # Second ingest: file already exists in raw/
+        result2 = wiki.ingest_source(str(test_file))
+        assert result2['already_exists'] == True
+        assert result2['saved_to_raw'] == False
+        assert 'hint' in result2
+        assert 'already exists' in result2['hint'].lower()
+        
+        # Original file should be unchanged
+        assert test_file.read_text() == "# Report Content\n\nSome data"
+        
+        wiki.close()
+    
+    def test_ingest_instructions_include_citation_guidance(self, temp_wiki):
+        """Test that ingest instructions include source citation guidance."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        test_file = temp_wiki / 'raw' / 'test.md'
+        test_file.write_text("# Test\n\nContent")
+        
+        result = wiki.ingest_source(str(test_file))
+        
+        instructions = result['instructions']
+        assert '## Sources' in instructions
+        assert 'raw/' in instructions
+        assert 'NOT wikilinks' in instructions
+        assert '[Source' in instructions
+        
+        wiki.close()

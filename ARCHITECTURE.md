@@ -359,6 +359,7 @@ tests/
 
 ### v1.0.0 (Roadmap)
 
+- [ ] MCP server authentication
 - [ ] Stable API guarantee
 - [ ] Complete documentation
 - [ ] Performance benchmarks
