@@ -5,7 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 199 passing](https://img.shields.io/badge/tests-199%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Tests: 217 passing](https://img.shields.io/badge/tests-217%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 
 ---
 
@@ -74,6 +74,13 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 - `topic_overlap` (informational): Query pages with ≥85% keyword overlap
 - `missing_cross_ref` (informational): Concepts mentioned but not wikilinked
 - Two-tier hints: critical (max 3) + informational (max 5)
+
+### 🔍 Smart Investigations (v0.16.0+)
+- `contradictions`: Cross-page conflicts (value, year, negation patterns)
+- `data_gaps`: Unsourced claims and vague temporal references
+- `suggested_questions`: LLM-generated investigation questions (optional)
+- `suggested_sources`: LLM-recommended source types (optional)
+- Pure observations — LLM makes final judgments
 
 ### 🚀 Performance Optimized
 - Batch inserts with `executemany()`
@@ -522,6 +529,12 @@ mypy src/llmwikify
 ---
 
 ## 📈 Roadmap
+
+### ✅ v0.16.0 (Released)
+- Smart investigations: contradiction detection (value, year, negation)
+- Data gap detection (unsourced claims, vague temporal references)
+- LLM-generated investigation suggestions (optional)
+- 217 tests passing
 
 ### ✅ v0.15.0 (Released)
 - Enhanced ingest metadata (file_type, file_size, word_count, has_images, content_preview)
