@@ -5,7 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 110 passing](https://img.shields.io/badge/tests-110%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Tests: 199 passing](https://img.shields.io/badge/tests-199%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 
 ---
 
@@ -48,10 +48,28 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 - **wiki_synthesize** — Save query answers as persistent wiki pages
 - Auto-generated `Query: {Topic}` pages with structured Sources sections
 - Smart duplicate detection with date suffix for multiple runs
-- `update_existing=True` to revise previous answers
+- `merge_or_replace` parameter: sink, merge, or replace strategies
 - Auto-links to wiki pages and raw sources
 - Auto-logs to `log.md` with parseable format
 - Answers compound in the knowledge base just like ingested sources
+
+### 🔄 Query Sink (v0.13.0+)
+- Compound answers without creating duplicate pages
+- Pending entries saved to sink/ for later review
+- Urgency tracking: ok / attention (7d+) / aging (14d+) / stale (30d+)
+- Smart suggestions: content gaps, source quality, query patterns
+- Dedup detection flags entries with >70% text similarity
+
+### 📥 Enhanced Ingest (v0.15.0+)
+- Rich metadata: file_type, file_size, word_count, has_images, content_preview
+- No summary returned — respects "LLM reads source" principle
+- Auto-collects all sources into raw/ directory
+
+### 🧹 Smart Lint with Clues (v0.15.0+)
+- `dated_claim` (critical): Pages referencing years ≥3 years older than latest raw source
+- `topic_overlap` (informational): Query pages with ≥85% keyword overlap
+- `missing_cross_ref` (informational): Concepts mentioned but not wikilinked
+- Two-tier hints: critical (max 3) + informational (max 5)
 
 ### 🚀 Performance Optimized
 - Batch inserts with `executemany()`
@@ -501,29 +519,27 @@ mypy src/llmwikify
 
 ## 📈 Roadmap
 
-### v0.12.0 (Completed)
+### ✅ v0.15.0 (Released)
+- Enhanced ingest metadata (file_type, file_size, word_count, has_images, content_preview)
+- Clue-based lint detection: dated_claim, topic_overlap, missing_cross_ref
+- Two-tier hint system: critical + informational (max 8 total)
+- Query sink enhancement: merge_or_replace, suggestions, dedup, urgency tracking
+- 199 tests passing
+
+### ✅ v0.12.0 - v0.14.0 (Completed)
 - ✅ Complete CLI commands (15 total)
 - ✅ Auto-index on page write
-- ✅ wiki.md template generation
-- ✅ Hint and recommend commands
-- ✅ wiki_read_schema / wiki_update_schema MCP tools
 - ✅ Raw source collection (all sources into raw/)
-- ✅ Source citation conventions in wiki.md
-- ✅ MCP config auto-read from wiki.config
-- ✅ **wiki_synthesize — Query knowledge compounding cycle**
-- ✅ 110 tests passing
-
-### v0.13.0 (Planned)
-- [ ] Enhanced wiki_lint: contradiction detection, stale claims, data gaps
-- [ ] Enhanced wiki_search: include_content, include_sources, include_links
-- [ ] Expose wiki_hint as MCP tool
-- [ ] Incremental index updates
+- ✅ wiki_synthesize — Query knowledge compounding cycle
+- ✅ Query sink feature with bidirectional linking
+- ✅ Smart recommendations and hints
 
 ### v1.0.0 (Roadmap)
 - [ ] Web UI (optional)
 - [ ] Graph visualization (graphviz/Mermaid)
-- [ ] MCP server authentication (API key / token)
+- [ ] MCP server authentication
 - [ ] More extractors (Word, Excel)
+- [ ] Incremental index updates
 - [ ] Stable API guarantee
 - [ ] Production hardening
 
@@ -531,8 +547,8 @@ mypy src/llmwikify
 
 ## 🙏 Acknowledgments
 
+- **[llm-wiki-kit](https://github.com/iamsashank09/llm-wiki-kit)** — Original inspiration and foundational design by Sashank. This project extends the core concepts of LLM-maintained wikis with enhanced CLI tools, MCP server support, query knowledge compounding, and configuration-driven flexibility.
 - **Andrej Karpathy** — [LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md)
-- **llm-wiki-kit** — Original inspiration
 - **Obsidian** — Markdown wiki platform
 - **MCP (Model Context Protocol)** — LLM integration standard
 
