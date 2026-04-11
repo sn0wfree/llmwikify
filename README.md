@@ -9,6 +9,10 @@
 
 ---
 
+> ⚠️ **Beta Release** — This project is currently in beta testing. You may encounter bugs, incomplete features, or breaking changes. Please report issues on [GitHub](https://github.com/sn0wfree/llmwikify/issues). Feedback and contributions are welcome!
+
+---
+
 ## 🎯 What is llmwikify?
 
 **llmwikify** is a general-purpose LLM-Wiki management tool that helps you build and maintain a persistent knowledge base using LLMs. Unlike RAG systems that rediscover knowledge from scratch on every query, llmwikify incrementally builds and maintains a structured, interlinked wiki that compounds over time.
