@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmwikify"
-version = "0.11.0"
+version = "0.15.0"
 description = "General-purpose LLM-Wiki CLI and Python library - Build persistent, LLM-maintained knowledge bases"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.10"
 authors = [
     {name = "sn0wfree", email = "linlu1234567@sina.com"}
@@ -30,7 +30,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Education",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -38,7 +37,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Education",
     "Topic :: Scientific/Engineering",
-    "Topic :: Software Documentation",
     "Topic :: Text Processing",
     "Topic :: Utilities",
 ]
@@ -80,7 +78,7 @@ wiki = "llmwikify.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["llmwikify"]
+packages = ["llmwikify", "llmwikify.cli", "llmwikify.core", "llmwikify.extractors", "llmwikify.mcp", "llmwikify.utils"]
 
 [tool.setuptools.package-data]
 llmwikify = ["py.typed"]
