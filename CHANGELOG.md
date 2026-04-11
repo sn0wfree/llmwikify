@@ -8,11 +8,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Enhanced wiki_lint: contradiction detection, stale claims, data gaps (rules + LLM)
-- Enhanced wiki_search: include_content, include_sources, include_links parameters
 - Incremental index updates
 - Web UI (optional)
 - Graph visualization (graphviz/Mermaid)
+
+---
+
+## [0.15.0] - 2026-04-10
+
+### Added
+- **Enhanced `ingest_source()` metadata** — returns rich file metadata for LLM context:
+  - `file_type` — detected from extension (markdown, pdf, text, html, etc.)
+  - `file_size` — byte size of the raw source file
+  - `word_count` — word count of extracted text
+  - `has_images` / `image_count` — detects markdown image references
+  - `text_extracted` — boolean flag
+  - `content_preview` — first 200 chars of extracted text
+  - **No summary returned** — respects "LLM reads source" principle
+- **Clue-based lint detection** — three new observation types, LLM makes final judgment:
+  - `dated_claim` (critical, max 3): Pages referencing years ≥3 years older than latest raw source
+  - `topic_overlap` (informational, max 2): Query: pages with ≥85% keyword Jaccard overlap
+  - `missing_cross_ref` (informational, max 3): Concepts mentioned in 2+ pages without wikilink
+- **`hints` structure in `lint()`** — two-tier classification:
+  - `hints.critical[]` — demands attention (max 3)
+  - `hints.informational[]` — optional context (max 5)
+  - Total max 8 hints per lint pass
+- **`_detect_file_type()` helper** — static method for file extension detection
+
+### Changed
+- `lint()` return structure now includes `hints: {critical: [...], informational: [...]}`
+- All lint hints use observational language (non-directive, respects LLM autonomy)
+
+### Principle Coverage
+- **Ingest: "LLM reads source, discusses key takeaways"** — ✅ Enhanced (metadata, not summary)
+- **Lint: "stale claims superseded by newer sources"** — ✅ New (dated_claim, clue-based)
+- **Lint: "missing cross-references"** — ✅ New (missing_cross_ref, clue-based)
+- **Zero domain assumption** — ✅ All hints are observations, not judgments
 
 ---
 

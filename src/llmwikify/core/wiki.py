@@ -444,11 +444,33 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
             log_detail += f" → raw/{source_name}"
         self.append_log("ingest", log_detail)
         
+        # Compute file metadata for LLM context
+        raw_file = self.raw_dir / source_name
+        file_size = 0
+        word_count = 0
+        has_images = False
+        image_count = 0
+        
+        if raw_file.exists():
+            file_size = raw_file.stat().st_size
+            word_count = len(result.text.split()) if result.text else 0
+            # Detect image references in markdown
+            image_refs = re.findall(r'!\[.*?\]\((.*?)\)', result.text or '')
+            image_count = len(image_refs)
+            has_images = image_count > 0
+        
         return {
             "source_name": source_name,
             "source_raw_path": f"raw/{source_name}",
             "source_type": result.source_type,
+            "file_type": self._detect_file_type(source_name),
+            "file_size": file_size,
+            "word_count": word_count,
+            "has_images": has_images,
+            "image_count": image_count,
+            "text_extracted": bool(result.text),
             "title": result.title,
+            "content_preview": (result.text or "")[:200],
             "content": result.text,
             "content_length": len(result.text),
             "metadata": result.metadata,
@@ -456,6 +478,7 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
             "already_exists": already_exists,
             "hint": hint,
             "current_index": index_content,
+            "message": "Source ingested. Read the file to extract key takeaways.",
             "instructions": (
                 "You have received a new source document. Please:\n"
                 "1. Read and understand the content\n"
@@ -629,6 +652,198 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
         
         return results
     
+    def _detect_dated_claims(self) -> List[dict]:
+        """Find year mentions in pages that predate latest raw source by 3+ years.
+        
+        Returns critical hints (max 3) for LLM to evaluate.
+        """
+        hints = []
+        now = datetime.now(timezone.utc)
+        current_year = now.year
+        
+        # Find latest year mentioned in raw sources
+        latest_source_year = 0
+        if self.raw_dir.exists():
+            for src in self.raw_dir.glob("*"):
+                content = src.read_text(errors="ignore")
+                years = re.findall(r'\b(20\d{2})\b', content)
+                if years:
+                    latest_source_year = max(latest_source_year, max(int(y) for y in years))
+        
+        if latest_source_year == 0:
+            return hints
+        
+        # Scan wiki pages for dated claims
+        for page in self.wiki_dir.glob("*.md"):
+            page_name = page.stem
+            if page_name in (self._index_page_name, self._log_page_name):
+                continue
+            if page_name.startswith("sink/") or page_name.startswith("Query:"):
+                continue
+            
+            content = page.read_text()
+            years_in_page = re.findall(r'\b(20\d{2})\b', content)
+            
+            for year_str in years_in_page:
+                year = int(year_str)
+                # Check if year is between 2018 and current_year-3
+                if 2018 <= year <= current_year - 3:
+                    if latest_source_year - year >= 3:
+                        hints.append({
+                            "type": "dated_claim",
+                            "page": page_name,
+                            "file": str(page),
+                            "claim_year": year,
+                            "latest_source_year": latest_source_year,
+                            "gap_years": latest_source_year - year,
+                            "observation": (
+                                f"'{page_name}' references {year}, but the latest raw source is from {latest_source_year}. "
+                                f"The gap is {latest_source_year - year} years. "
+                                f"Content may be outdated."
+                            ),
+                        })
+                        break  # One hint per page
+            
+            if len(hints) >= 3:
+                break
+        
+        return hints[:3]
+    
+    def _detect_query_page_overlap(self) -> List[dict]:
+        """Find Query: pages with >=85% keyword Jaccard overlap.
+        
+        Returns informational hints (max 2) for LLM to evaluate.
+        """
+        hints = []
+        stop_words = {"what", "is", "the", "a", "an", "how", "do", "does", "why",
+                       "can", "could", "would", "should", "will", "did", "are", "was",
+                       "were", "be", "been", "being", "have", "has", "had", "of", "to",
+                       "in", "for", "on", "with", "at", "by", "from", "and", "or", "not",
+                       "but", "if", "then", "than", "so", "as", "about", "compare"}
+        
+        if not self.wiki_dir.exists():
+            return hints
+        
+        query_pages = []
+        for page in self.wiki_dir.glob("*.md"):
+            page_name = page.stem
+            if not page_name.startswith("Query:"):
+                continue
+            
+            keywords = set(
+                w.lower().strip(".,;:!?\"'()[]{}")
+                for w in page_name.replace("Query:", "").split()
+                if w.lower() not in stop_words and len(w) > 2
+            )
+            
+            if keywords:
+                query_pages.append({
+                    "page_name": page_name,
+                    "keywords": keywords,
+                    "file": str(page),
+                })
+        
+        # Compare all pairs
+        seen_pairs = set()
+        for i in range(len(query_pages)):
+            for j in range(i + 1, len(query_pages)):
+                p1 = query_pages[i]
+                p2 = query_pages[j]
+                
+                union = len(p1["keywords"] | p2["keywords"])
+                if union == 0:
+                    continue
+                
+                overlap = len(p1["keywords"] & p2["keywords"])
+                jaccard = overlap / union
+                
+                if jaccard >= 0.85:
+                    pair_key = tuple(sorted([p1["page_name"], p2["page_name"]]))
+                    if pair_key not in seen_pairs:
+                        seen_pairs.add(pair_key)
+                        hints.append({
+                            "type": "topic_overlap",
+                            "page_a": p1["page_name"],
+                            "page_b": p2["page_name"],
+                            "jaccard_score": round(jaccard, 3),
+                            "shared_keywords": sorted(p1["keywords"] & p2["keywords"]),
+                            "observation": (
+                                f"'{p1['page_name']}' and '{p2['page_name']}' share {len(p1['keywords'] & p2['keywords'])} keywords "
+                                f"(Jaccard: {jaccard:.0%}). They may cover overlapping topics."
+                            ),
+                        })
+            
+            if len(hints) >= 2:
+                break
+        
+        return hints[:2]
+    
+    def _detect_missing_cross_refs(self) -> List[dict]:
+        """Find concepts mentioned in 2+ pages but not wikilinked.
+        
+        Returns informational hints (max 3) for LLM to evaluate.
+        """
+        hints = []
+        
+        if not self.wiki_dir.exists():
+            return hints
+        
+        # Collect all existing wiki page names as potential concepts
+        existing_pages = set()
+        for page in self.wiki_dir.glob("*.md"):
+            existing_pages.add(page.stem)
+        
+        # Track concept mentions: concept -> list of pages that mention it without linking
+        concept_mentions: Dict[str, List[str]] = {}
+        
+        for page in self.wiki_dir.glob("*.md"):
+            page_name = page.stem
+            if page_name in (self._index_page_name, self._log_page_name):
+                continue
+            
+            content = page.read_text()
+            
+            # Find existing wikilinks in this page
+            wikilinks = set()
+            for link in re.findall(r'\[\[(.*?)\]\]', content):
+                target = link.split('|')[0].split('#')[0].strip()
+                wikilinks.add(target)
+            
+            # Check if other page names are mentioned in text (case-insensitive)
+            for candidate in existing_pages:
+                if candidate == page_name:
+                    continue
+                if candidate in wikilinks:
+                    continue  # Already linked
+                
+                # Check if candidate name appears in content (word boundary match)
+                # Split candidate into words and check if they appear together
+                pattern = r'\b' + re.escape(candidate) + r'\b'
+                if re.search(pattern, content, re.IGNORECASE):
+                    if candidate not in concept_mentions:
+                        concept_mentions[candidate] = []
+                    concept_mentions[candidate].append(page_name)
+        
+        # Filter to concepts mentioned in 2+ pages
+        for concept, pages in sorted(concept_mentions.items(), key=lambda x: -len(x[1])):
+            if len(pages) >= 2:
+                hints.append({
+                    "type": "missing_cross_ref",
+                    "concept": concept,
+                    "mentioning_pages": pages[:5],  # Max 5 pages listed
+                    "mention_count": len(pages),
+                    "observation": (
+                        f"'{concept}' is mentioned in {len(pages)} pages ({', '.join(pages[:3])}"
+                        f"{'...' if len(pages) > 3 else ''}) but not linked. "
+                        f"Consider adding [[{concept}]] wikilinks."
+                    ),
+                })
+            
+            if len(hints) >= 3:
+                break
+        
+        return hints[:3]
+    
     def lint(self) -> dict:
         """Health check the wiki."""
         issues = []
@@ -681,10 +896,24 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
                         "suggestion": f"Review and merge {sink['entry_count']} pending entries",
                     })
         
+        # Generate hints (clue-based, non-mandatory)
+        critical_hints = self._detect_dated_claims()
+        informational_hints = []
+        informational_hints.extend(self._detect_query_page_overlap())
+        informational_hints.extend(self._detect_missing_cross_refs())
+        
+        # Enforce limits: critical max 3, informational max 5
+        critical_hints = critical_hints[:3]
+        informational_hints = informational_hints[:5]
+        
         return {
             "total_pages": len(list(self.wiki_dir.glob("*.md"))),
             "issue_count": len(issues),
             "issues": issues,
+            "hints": {
+                "critical": critical_hints,
+                "informational": informational_hints,
+            },
             "sink_status": sink_status,
             "sink_warnings": sink_warnings,
         }
@@ -833,6 +1062,25 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
             pass
         
         return False
+    
+    @staticmethod
+    def _detect_file_type(filename: str) -> str:
+        """Detect file type from extension."""
+        ext = Path(filename).suffix.lower()
+        type_map = {
+            '.md': 'markdown',
+            '.markdown': 'markdown',
+            '.pdf': 'pdf',
+            '.txt': 'text',
+            '.html': 'html',
+            '.htm': 'html',
+            '.csv': 'csv',
+            '.json': 'json',
+            '.xml': 'xml',
+            '.docx': 'docx',
+            '.doc': 'doc',
+        }
+        return type_map.get(ext, 'unknown')
     
     @staticmethod
     def _slugify(text: str) -> str:
