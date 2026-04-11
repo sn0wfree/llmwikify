@@ -844,8 +844,308 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
         
         return hints[:3]
     
-    def lint(self) -> dict:
-        """Health check the wiki."""
+    def _detect_potential_contradictions(self) -> List[dict]:
+        """Scan wiki pages for potential contradictions.
+        
+        Returns observational hints (max 3) for LLM to evaluate.
+        Detection strategies:
+        - value_conflict: Same entity has different values (e.g., revenue: $10M vs $15M)
+        - year_conflict: Same event has different years
+        - negation_pattern: One page asserts X, another asserts not X
+        """
+        contradictions = []
+        seen_pairs = set()
+        
+        if not self.wiki_dir.exists():
+            return contradictions
+        
+        # Collect all pages content
+        pages_content = {}
+        for page in self.wiki_dir.glob("*.md"):
+            page_name = page.stem
+            if page_name in (self._index_page_name, self._log_page_name):
+                continue
+            pages_content[page_name] = page.read_text()
+        
+        # Strategy 1: Extract key-value pairs and find conflicts
+        entity_facts: Dict[str, Dict[str, List[tuple]]] = {}
+        for page_name, content in pages_content.items():
+            # Match simple key: value patterns (one per line)
+            for line in content.split('\n'):
+                line = line.strip().lstrip('- ').strip()
+                if ':' in line and not line.startswith('#') and not line.startswith('http'):
+                    parts = line.split(':', 1)
+                    if len(parts) == 2:
+                        key = parts[0].strip().lower()
+                        value = parts[1].strip()
+                        if len(key) >= 2 and len(key) <= 30 and len(value) >= 2 and len(value) <= 50:
+                            if key not in entity_facts:
+                                entity_facts[key] = {}
+                            if page_name not in entity_facts[key]:
+                                entity_facts[key][page_name] = []
+                            entity_facts[key][page_name].append(value)
+        
+        # Find conflicting values across pages
+        for attr, page_values in entity_facts.items():
+            if len(page_values) < 2:
+                continue
+            all_values = []
+            for page_name, values in page_values.items():
+                for v in values:
+                    all_values.append((page_name, v))
+            
+            # Check if values differ significantly
+            unique_values = set(v.lower() for _, v in all_values)
+            if len(unique_values) >= 2:
+                pair_key = tuple(sorted([p for p, _ in all_values]))
+                if pair_key not in seen_pairs:
+                    seen_pairs.add(pair_key)
+                    values_str = ", ".join(f"{p}={v}" for p, v in all_values[:3])
+                    contradictions.append({
+                        "type": "value_conflict",
+                        "attribute": attr,
+                        "pages": [{"page": p, "value": v} for p, v in all_values[:4]],
+                        "observation": f"Pages reference different values for '{attr}': {values_str}",
+                    })
+            
+            if len(contradictions) >= 3:
+                break
+        
+        # Strategy 2: Year conflicts (e.g., "launched in 2020" vs "launched in 2022")
+        year_claims: Dict[str, List[dict]] = {}
+        year_pattern = re.compile(
+            r'([^\n]{3,30}?)\s+(?:launched|founded|started|established|created|born|died|closed|shutdown|ended)\s+(?:in\s+)?(20\d{2}|19\d{2})',
+            re.IGNORECASE
+        )
+        for page_name, content in pages_content.items():
+            for line in content.split('\n'):
+                for match in year_pattern.finditer(line):
+                    entity = match.group(1).strip()
+                    year = match.group(2)
+                    if entity and len(entity) <= 30:
+                        if entity not in year_claims:
+                            year_claims[entity] = []
+                        year_claims[entity].append({"page": page_name, "year": year})
+        
+        for entity, claims in year_claims.items():
+            years = set(c["year"] for c in claims)
+            if len(years) >= 2:
+                claims_str = ", ".join(f"{c['page']}={c['year']}" for c in claims[:3])
+                contradictions.append({
+                    "type": "year_conflict",
+                    "entity": entity,
+                    "claims": claims,
+                    "observation": f"'{entity}' has conflicting year claims: {claims_str}",
+                })
+            
+            if len(contradictions) >= 3:
+                break
+        
+        # Strategy 3: Negation patterns (X is Y vs X is not Y)
+        negation_claims: Dict[str, List[dict]] = {}
+        for page_name, content in pages_content.items():
+            for line in content.split('\n'):
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                # Find assertions with and without negation
+                assertion_pattern = re.compile(
+                    r'([\w\s]{3,25}?)\s+(?:is|are|was|were)\s+(?:not\s+|no\s+longer\s+)?([\w\s]{3,30}?)(?:\.|,|;|$)',
+                    re.IGNORECASE
+                )
+                for match in assertion_pattern.finditer(line):
+                    subject = match.group(1).strip()
+                    predicate = match.group(2).strip()
+                    full_match = match.group(0).lower()
+                    is_negated = bool(re.search(r'\b(?:is|are|was|were)\s+(?:not|no longer)', full_match))
+                    
+                    key = subject.lower()
+                    if key not in negation_claims:
+                        negation_claims[key] = []
+                    negation_claims[key].append({
+                        "page": page_name,
+                        "predicate": predicate,
+                        "negated": is_negated,
+                    })
+        
+        for subject, claims in negation_claims.items():
+            has_positive = any(not c["negated"] for c in claims)
+            has_negative = any(c["negated"] for c in claims)
+            if has_positive and has_negative:
+                contradictions.append({
+                    "type": "negation_pattern",
+                    "subject": subject,
+                    "claims": claims,
+                    "observation": (
+                        f"'{subject}' has both affirmative and negative claims across pages"
+                    ),
+                })
+            
+            if len(contradictions) >= 3:
+                break
+        
+        return contradictions[:3]
+    
+    def _detect_data_gaps(self) -> List[dict]:
+        """Detect potential data gaps in wiki pages.
+        
+        Returns observational hints (max 3) for LLM to evaluate.
+        Detection strategies:
+        - unsourced_claim: Page has assertions but no ## Sources section
+        - vague_temporal: Page uses vague time references (recently, soon, etc.)
+        - incomplete_entity: Page mentions entity but lacks key attributes
+        """
+        gaps = []
+        
+        if not self.wiki_dir.exists():
+            return gaps
+        
+        for page in self.wiki_dir.glob("*.md"):
+            page_name = page.stem
+            if page_name in (self._index_page_name, self._log_page_name):
+                continue
+            if page_name.startswith("Query:"):
+                continue
+            
+            content = page.read_text()
+            
+            # Strategy 1: Unsourced claims - page has assertions but no sources section
+            has_sources_section = bool(re.search(r'^#{1,3}\s+Sources', content, re.MULTILINE | re.IGNORECASE))
+            has_inline_citations = bool(re.search(r'\[Source[^\]]*\]\(', content))
+            
+            # Check for assertion-like content (non-empty, non-header lines)
+            lines = content.split('\n')
+            assertion_lines = [
+                line.strip() for line in lines
+                if line.strip()
+                and not line.startswith('#')
+                and not line.startswith('---')
+                and not line.startswith('[')
+                and len(line.strip()) > 20
+            ]
+            
+            if len(assertion_lines) >= 3 and not has_sources_section and not has_inline_citations:
+                gaps.append({
+                    "type": "unsourced_claims",
+                    "page": page_name,
+                    "assertion_count": len(assertion_lines),
+                    "observation": (
+                        f"'{page_name}' contains {len(assertion_lines)} assertion(s) "
+                        f"without cited sources"
+                    ),
+                })
+            
+            if len(gaps) >= 3:
+                break
+            
+            # Strategy 2: Vague temporal references
+            vague_time_words = re.findall(
+                r'\b(recently|soon|upcoming|former|previous|last year|next year|in the past|currently|nowadays|these days)\b',
+                content, re.IGNORECASE
+            )
+            if vague_time_words:
+                gaps.append({
+                    "type": "vague_temporal",
+                    "page": page_name,
+                    "vague_references": list(set(w.lower() for w in vague_time_words))[:5],
+                    "observation": (
+                        f"'{page_name}' uses vague temporal references: "
+                        f"{', '.join(set(w.lower() for w in vague_time_words[:3]))}"
+                    ),
+                })
+            
+            if len(gaps) >= 3:
+                break
+            
+            # Strategy 3: Incomplete entity - mentions entities without details
+            # Look for entity names mentioned but no follow-up details
+            entity_mentions = re.findall(r'\[\[([^\]|#]+)\]\]', content)
+            for mentioned in entity_mentions:
+                mentioned_clean = mentioned.strip()
+                if not mentioned_clean:
+                    continue
+                # Check if there's a dedicated page for this entity
+                mentioned_path = self.wiki_dir / f"{mentioned_clean}.md"
+                if not mentioned_path.exists():
+                    # Entity mentioned but no page exists - could be a gap
+                    pass  # This is already covered by missing_cross_ref
+        
+        return gaps[:3]
+    
+    def _llm_generate_investigations(
+        self,
+        contradictions: List[dict],
+        data_gaps: List[dict],
+    ) -> dict:
+        """Use LLM to generate investigation suggestions.
+        
+        Returns dict with suggested_questions and suggested_sources.
+        Only called when lint(generate_investigations=True).
+        """
+        try:
+            from ..llm_client import LLMClient
+            
+            client = LLMClient.from_config(self.config)
+        except Exception:
+            return {
+                "suggested_questions": [],
+                "suggested_sources": [],
+                "warning": "LLM client not available",
+            }
+        
+        # Build context for LLM
+        context_summary = {
+            "total_pages": len(list(self.wiki_dir.glob("*.md"))) if self.wiki_dir.exists() else 0,
+            "contradictions": contradictions,
+            "data_gaps": data_gaps,
+        }
+        
+        system_prompt = (
+            "You are a wiki quality analyst. Based on the provided observations, "
+            "suggest specific questions to investigate and types of sources to consult. "
+            "Be concrete and actionable. Do NOT make judgments about what is correct. "
+            "Return only valid JSON."
+        )
+        
+        user_prompt = (
+            f"Wiki Analysis:\n\n"
+            f"Potential Contradictions:\n{json.dumps(contradictions, indent=2)}\n\n"
+            f"Data Gaps:\n{json.dumps(data_gaps, indent=2)}\n\n"
+            f"Wiki Summary: {context_summary['total_pages']} pages\n\n"
+            f"Please suggest:\n"
+            f"1. Up to 5 specific questions worth investigating to resolve these issues\n"
+            f"2. Up to 3 types of sources that could help fill the gaps\n\n"
+            f"Return JSON with exactly these keys:\n"
+            f'{{"suggested_questions": [...], "suggested_sources": [...]}}'
+        )
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        
+        try:
+            result = client.chat_json(messages)
+            if isinstance(result, dict):
+                return {
+                    "suggested_questions": result.get("suggested_questions", []),
+                    "suggested_sources": result.get("suggested_sources", []),
+                }
+        except Exception:
+            pass
+        
+        return {
+            "suggested_questions": [],
+            "suggested_sources": [],
+            "warning": "LLM investigation generation failed",
+        }
+    
+    def lint(self, generate_investigations: bool = False) -> dict:
+        """Health check the wiki.
+        
+        Args:
+            generate_investigations: If True, use LLM to suggest investigations.
+        """
         issues = []
         
         # Check for broken links
@@ -906,6 +1206,19 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
         critical_hints = critical_hints[:3]
         informational_hints = informational_hints[:5]
         
+        # Generate investigations (v0.16.0)
+        contradictions = self._detect_potential_contradictions()
+        data_gaps = self._detect_data_gaps()
+        
+        investigations = {
+            "contradictions": contradictions,
+            "data_gaps": data_gaps,
+        }
+        
+        if generate_investigations:
+            llm_suggestions = self._llm_generate_investigations(contradictions, data_gaps)
+            investigations.update(llm_suggestions)
+        
         return {
             "total_pages": len(list(self.wiki_dir.glob("*.md"))),
             "issue_count": len(issues),
@@ -914,6 +1227,7 @@ Do NOT modify `.wiki-config.yaml` unless explicitly asked by the user.
                 "critical": critical_hints,
                 "informational": informational_hints,
             },
+            "investigations": investigations,
             "sink_status": sink_status,
             "sink_warnings": sink_warnings,
         }

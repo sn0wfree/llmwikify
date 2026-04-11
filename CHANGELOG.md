@@ -14,6 +14,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.16.0] - 2026-04-11
+
+### Added
+- **Smart Investigations** — Contradiction detection and data gap analysis for wiki health:
+  - `_detect_potential_contradictions()` — Cross-page contradiction scanning:
+    - `value_conflict`: Same entity has different values (e.g., revenue: $10M vs $15M)
+    - `year_conflict`: Same event has different years (e.g., launched in 2020 vs 2022)
+    - `negation_pattern`: One page asserts X, another asserts not X
+  - `_detect_data_gaps()` — Data quality gap detection:
+    - `unsourced_claims`: Pages with assertions but no `## Sources` section
+    - `vague_temporal`: Pages using vague time references (recently, soon, last year)
+  - `_llm_generate_investigations()` — LLM-driven investigation suggestions:
+    - Generates specific questions to resolve contradictions
+    - Recommends source types to fill data gaps
+    - Graceful fallback when LLM not available
+- **`lint(generate_investigations=True)`** — Optional enhanced analysis:
+  - `investigations.contradictions[]` — Observational hints (max 3), no severity classification
+  - `investigations.data_gaps[]` — Observational hints (max 3), no severity classification
+  - `investigations.suggested_questions[]` — LLM-generated (only when enabled)
+  - `investigations.suggested_sources[]` — LLM-generated (only when enabled)
+- **18 new tests** in `test_v016_investigations.py` — Comprehensive coverage
+
+### Changed
+- `lint()` return structure now includes `investigations` key (independent from `hints`)
+- Investigations are **not** classified as critical/informational — pure observations for LLM judgment
+
+### Principle Coverage
+- **Lint: "contradictions between pages"** — ✅ New (value_conflict, year_conflict, negation_pattern)
+- **Lint: "data gaps that could be filled with a web search"** — ✅ New (unsourced_claims, vague_temporal)
+- **Lint: "suggesting new questions to investigate"** — ✅ New (LLM-generated)
+- **Lint: "new sources to look for"** — ✅ New (LLM-generated)
+- **Zero domain assumption** — ✅ Investigations are observations, not judgments
+- **Pure tool design** — ✅ LLM makes final decisions; `generate_investigations=False` skips LLM calls
+
+---
+
 ## [0.15.0] - 2026-04-10
 
 ### Added
