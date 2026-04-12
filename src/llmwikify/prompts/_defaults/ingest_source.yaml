@@ -1,6 +1,9 @@
 name: ingest_source
-description: "Process a source document and generate wiki operations"
-version: "1.0"
+description: "DEPRECATED: Use analyze_source + generate_wiki_ops instead. Process a source document and generate wiki operations in a single call."
+version: "1.1"
+trigger:
+  type: "api_call"
+  when: "ingest_source"
 
 params:
   max_tokens: 4096

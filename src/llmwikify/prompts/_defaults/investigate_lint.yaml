@@ -1,6 +1,9 @@
 name: investigate_lint
-description: "Generate investigation suggestions based on lint contradictions and data gaps"
-version: "1.0"
+description: "Generate investigation suggestions based on lint contradictions and data gaps. Called when lint(generate_investigations=True)."
+version: "1.1"
+trigger:
+  type: "conditional"
+  when: "lint_investigate"
 
 params:
   max_tokens: 2048

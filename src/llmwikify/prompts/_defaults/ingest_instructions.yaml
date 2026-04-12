@@ -1,6 +1,9 @@
 name: ingest_instructions
-description: "Workflow instructions returned to LLM after source ingestion"
-version: "1.0"
+description: "Workflow instructions returned to LLM after source ingestion. Guides LLM on what to do with a new source."
+version: "1.1"
+trigger:
+  type: "api_call"
+  when: "ingest_instructions"
 
 params: {}
 

@@ -1,6 +1,9 @@
 name: wiki_schema
-description: "Wiki maintenance instructions document shown to LLM via MCP"
-version: "1.0"
+description: "Wiki maintenance instructions document shown to LLM via MCP. Defines conventions, workflows, and best practices."
+version: "1.1"
+trigger:
+  type: "api_call"
+  when: "read_schema"
 
 params: {}
 
