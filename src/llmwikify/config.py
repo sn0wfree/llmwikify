@@ -46,6 +46,9 @@ DEFAULT_CONFIG = {
         "port": 8765,
         "transport": "stdio",
     },
+    "prompts": {
+        "custom_dir": None,
+    },
 }
 
 

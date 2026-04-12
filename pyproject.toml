@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmwikify"
-version = "0.15.0"
+version = "0.17.0"
 description = "General-purpose LLM-Wiki CLI and Python library - Build persistent, LLM-maintained knowledge bases"
 readme = "README.md"
 license = "MIT"
@@ -41,7 +41,8 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    # Zero core dependencies - standard library only
+    "jinja2>=3.1.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -78,7 +79,7 @@ wiki = "llmwikify.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["llmwikify", "llmwikify.cli", "llmwikify.core", "llmwikify.extractors", "llmwikify.mcp", "llmwikify.utils"]
+packages = ["llmwikify", "llmwikify.cli", "llmwikify.core", "llmwikify.extractors", "llmwikify.mcp", "llmwikify.utils", "llmwikify.prompts", "llmwikify.prompts._defaults"]
 
 [tool.setuptools.package-data]
 llmwikify = ["py.typed"]
