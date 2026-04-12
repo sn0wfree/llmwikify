@@ -1,0 +1,34 @@
+id: "04_wiki_ops_generation"
+description: "Test that generate_wiki_ops creates proper write_page and log operations from analysis."
+
+analysis:
+  topics: ["Artificial Intelligence", "Machine Learning"]
+  entities:
+    - name: "DeepMind"
+      type: "organization"
+      attributes: {location: "London"}
+  key_facts:
+    - "DeepMind developed AlphaFold"
+    - "AlphaFold solved protein folding in 2020"
+  suggested_pages:
+    - name: "DeepMind"
+      summary: "AI research lab owned by Google"
+      priority: "high"
+    - name: "AlphaFold"
+      summary: "Protein folding prediction system"
+      priority: "high"
+  cross_refs: ["Artificial Intelligence", "Google"]
+  content_type: "technical_article"
+
+wiki_index: |
+  - [[Artificial Intelligence]] - Broad field of computer science
+  - [[Google]] - Technology company
+
+existing_pages: ["Artificial Intelligence", "Google"]
+
+expected:
+  min_write_page_ops: 2
+  must_include_log: true
+  must_use_wikilinks: true
+  suggested_page_names: ["DeepMind", "AlphaFold"]
+  pipeline: "generate_wiki_ops"

@@ -1,0 +1,100 @@
+name: wiki_synthesize
+description: "Instruct the LLM on how to format a query answer for wiki synthesis. Used when saving a query response as a persistent wiki page."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "synthesize_query"
+
+params:
+  max_tokens: 8192
+  temperature: 0.3
+
+system: |
+  You are answering a question against a persistent wiki knowledge base. Your answer will be filed back into the wiki as a new page, so it must be structured, self-contained, and properly sourced.
+
+  {% if provider == "ollama" %}
+  IMPORTANT: Follow the formatting rules below precisely.
+  {% endif %}
+
+  Answer Formatting Rules:
+  - Start with a clear H1 heading that captures the topic
+  - Use H2/H3 headings to organize subtopics
+  - Use bullet points and lists where appropriate
+  - Keep paragraphs concise and focused
+  - Use [[wikilink]] syntax when referencing existing wiki pages
+  - Do NOT fabricate facts not present in the provided source pages
+  - If uncertain about a claim, flag it as "unclear from available sources"
+  - Use observational language — "The sources indicate...", "According to the documents..." — rather than definitive assertions
+
+  Source Citation:
+  - The system will automatically append a Sources section with your referenced pages
+  - In your answer body, reference sources naturally: "As noted in [[Machine Learning]], ..."
+  - Distinguish between wiki pages ([[Page Name]]) and raw sources ([raw/file.md](raw/file.md))
+
+  Synthesis Guidelines:
+  - Connect new information to existing wiki pages using wikilinks
+  - If the answer contradicts existing wiki pages, note the contradiction
+  - Identify data gaps or areas where more sources would help
+  - Your answer should stand alone as a reference page
+
+user: |
+  Question: {{ query }}
+
+  {% if wiki_page_count is defined and wiki_page_count > 0 %}
+  Current Wiki State: {{ wiki_page_count }} pages
+  {% endif %}
+
+  {% if existing_pages is defined and existing_pages %}
+  Existing Wiki Pages (for cross-referencing):
+  {{ existing_pages }}
+  {% endif %}
+
+  {% if wiki_index is defined and wiki_index %}
+  Wiki Index Summary:
+  ---
+  {{ wiki_index }}
+  ---
+  {% endif %}
+
+  {% if source_pages is defined and source_pages %}
+  Wiki Pages Provided as Context:
+  {% for page in source_pages %}
+  ---
+  Page: {{ page.name }}
+  Content:
+  {{ page.content }}
+  ---
+  {% endfor %}
+  {% endif %}
+
+  {% if raw_sources is defined and raw_sources %}
+  Raw Sources Provided as Context:
+  {% for source in raw_sources %}
+  ---
+  Source: {{ source.name }}
+  Content:
+  {{ source.content }}
+  ---
+  {% endfor %}
+  {% endif %}
+
+  {% if recent_log is defined and recent_log %}
+  Recent Wiki Activity:
+  ---
+  {{ recent_log }}
+  ---
+  {% endif %}
+
+  Provide a comprehensive, well-structured answer to the question above. The answer will be saved as a wiki page and should be self-contained, properly structured, and reference existing wiki content using [[wikilink]] syntax.
+
+context_injection:
+  wiki_page_count: "_get_page_count"
+  wiki_index: "_get_index_summary"
+  existing_pages: "_get_existing_page_names"
+  recent_log: "_get_recent_log"
+
+post_process:
+  validate_schema: "synthesize_output"
+  required_keys: ["answer"]
+  retry_on_failure:
+    max_attempts: 2

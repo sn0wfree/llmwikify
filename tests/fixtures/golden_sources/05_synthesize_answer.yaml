@@ -1,0 +1,28 @@
+id: "05_synthesize_answer"
+description: "Test that wiki_synthesize produces structured answers with proper headings and source references."
+
+query: "What is the difference between supervised and unsupervised learning?"
+
+source_pages:
+  - name: "Machine Learning"
+    content: |
+      # Machine Learning
+
+      Machine learning is a subset of artificial intelligence that enables systems to learn from data.
+
+      ## Types of ML
+      - Supervised learning: uses labeled training data
+      - Unsupervised learning: finds patterns in unlabeled data
+      - Reinforcement learning: learns through rewards/punishments
+
+raw_sources: []
+
+wiki_index: |
+  - [[Machine Learning]] - Subset of AI that learns from data
+  - [[Artificial Intelligence]] - Field of computer science
+
+expected:
+  must_have_heading: true
+  must_reference_sources: true
+  min_content_length: 50
+  pipeline: "wiki_synthesize"

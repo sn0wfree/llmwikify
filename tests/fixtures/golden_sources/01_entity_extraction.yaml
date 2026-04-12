@@ -1,0 +1,25 @@
+id: "01_entity_extraction"
+description: "Test that analyze_source extracts topics and entities from a technical article with multiple entities."
+
+source:
+  title: "OpenAI Announces GPT-5"
+  content: |
+    OpenAI CEO Sam Altman announced GPT-5 at a press conference in San Francisco on March 15, 2026.
+    The new model achieves 92% accuracy on the MMLU benchmark, surpassing GPT-4's 86%.
+    Google's DeepMind team, led by Demis Hassabis, responded by stating their Gemini model
+    remains competitive. The announcement was covered by Reuters and The Verge.
+
+    Key facts:
+    - GPT-5 has 10 trillion parameters
+    - Training cost was $500 million
+    - Available via API starting April 2026
+    - Microsoft remains the primary investor with $13 billion total investment
+
+wiki_index: ""
+
+expected:
+  min_topics: 2
+  min_entities: 3
+  entity_names: ["OpenAI", "GPT-5", "Sam Altman", "Google", "DeepMind", "Microsoft"]
+  min_key_facts: 2
+  pipeline: "analyze_source"

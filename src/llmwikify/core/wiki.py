@@ -1628,6 +1628,102 @@ class Wiki:
         
         return result
     
+    def _llm_generate_synthesize_answer(
+        self,
+        query: str,
+        source_pages: Optional[List[str]] = None,
+        raw_sources: Optional[List[str]] = None,
+    ) -> dict:
+        """Use LLM to generate a structured answer for a query.
+        
+        This method reads the provided source pages and raw sources,
+        injects wiki context, and calls the LLM to produce a well-structured
+        answer suitable for wiki synthesis.
+        
+        Args:
+            query: The question to answer.
+            source_pages: Wiki page names to use as context.
+            raw_sources: Raw source file paths to use as context.
+        
+        Returns:
+            Dict with 'answer' (str), 'suggested_page_name' (optional str),
+            and 'source_citations' (list of page names referenced).
+        """
+        try:
+            from ..llm_client import LLMClient
+            client = LLMClient.from_config(self.config)
+        except Exception:
+            return {
+                "answer": "",
+                "suggested_page_name": "",
+                "source_citations": [],
+                "warning": "LLM client not available",
+            }
+        
+        registry = self._get_prompt_registry()
+        
+        # Read source page contents
+        source_page_data = []
+        for page_name in (source_pages or []):
+            page_path = self.wiki_dir / f"{page_name}.md"
+            if page_path.exists():
+                source_page_data.append({
+                    "name": page_name,
+                    "content": page_path.read_text(),
+                })
+        
+        # Read raw source contents
+        raw_source_data = []
+        for raw_path in (raw_sources or []):
+            full_path = self.root / raw_path
+            if full_path.exists():
+                raw_source_data.append({
+                    "name": raw_path,
+                    "content": full_path.read_text(),
+                })
+        
+        # Inject dynamic context from wiki state
+        template = registry._load_template("wiki_synthesize")
+        dynamic_context = {}
+        if template.context_injection:
+            dynamic_context = registry.inject_context(template.context_injection, wiki=self)
+        
+        # Build variables for prompt rendering
+        variables = {
+            **dynamic_context,
+            "query": query,
+            "source_pages": source_page_data,
+            "raw_sources": raw_source_data,
+        }
+        
+        messages = registry.get_messages("wiki_synthesize", **variables)
+        params = registry.get_api_params("wiki_synthesize")
+        
+        try:
+            result = client.chat_json(messages, **params)
+            
+            errors = registry.validate_output("wiki_synthesize", result)
+            if errors:
+                return {
+                    "answer": "",
+                    "suggested_page_name": "",
+                    "source_citations": [],
+                    "warning": f"LLM output validation failed: {'; '.join(errors)}",
+                }
+            
+            return {
+                "answer": result.get("answer", ""),
+                "suggested_page_name": result.get("suggested_page_name", ""),
+                "source_citations": result.get("source_citations", []),
+            }
+        except Exception as e:
+            return {
+                "answer": "",
+                "suggested_page_name": "",
+                "source_citations": [],
+                "warning": f"LLM synthesis generation failed: {e}",
+            }
+    
     def synthesize_query(
         self,
         query: str,

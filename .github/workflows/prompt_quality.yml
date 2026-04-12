@@ -1,0 +1,56 @@
+name: Prompt Quality Checks
+on:
+  push:
+    paths:
+      - 'src/llmwikify/prompts/**'
+      - 'src/llmwikify/core/prompt_registry.py'
+      - 'src/llmwikify/core/principle_checker.py'
+      - 'scripts/eval_prompts.py'
+      - 'scripts/check_prompt_principles.py'
+  pull_request:
+    paths:
+      - 'src/llmwikify/prompts/**'
+      - 'src/llmwikify/core/prompt_registry.py'
+      - 'src/llmwikify/core/principle_checker.py'
+      - 'scripts/eval_prompts.py'
+      - 'scripts/check_prompt_principles.py'
+
+jobs:
+  prompt-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install jinja2 pyyaml pytest
+
+      - name: Principle Compliance Check
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/check_prompt_principles.py --format ci
+
+      - name: Offline Prompt Evaluation
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/eval_prompts.py --format json --output eval_results.json
+
+      - name: Harness Regression Tests
+        env:
+          PYTHONPATH: src
+        run: |
+          pytest tests/test_v019_harness_regression.py -v
+
+      - name: Upload Evaluation Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-eval-results
+          path: eval_results.json
