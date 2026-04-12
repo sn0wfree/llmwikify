@@ -433,3 +433,66 @@ class TestBuiltInTemplates:
         assert "NOT wikilinks" in result
         assert "[Source" in result
         assert "raw/" in result
+
+
+class TestProviderOverridesExtended:
+    def test_provider_override_context_injection(self, tmp_path):
+        template = {
+            "name": "ctx_test",
+            "version": "1.0",
+            "params": {},
+            "context_injection": {"default": "_default_method"},
+            "overrides": {
+                "ollama": {
+                    "context_injection": {"ollama_ctx": "_ollama_method"},
+                },
+            },
+        }
+        (tmp_path / "ctx_test.yaml").write_text(yaml.dump(template))
+        
+        registry_openai = PromptRegistry(provider="openai", custom_dir=tmp_path)
+        registry_ollama = PromptRegistry(provider="ollama", custom_dir=tmp_path)
+        
+        assert registry_openai._load_template("ctx_test").context_injection == {"default": "_default_method"}
+        assert registry_ollama._load_template("ctx_test").context_injection == {"default": "_default_method", "ollama_ctx": "_ollama_method"}
+    
+    def test_provider_override_post_process(self, tmp_path):
+        template = {
+            "name": "pp_test",
+            "version": "1.0",
+            "params": {},
+            "post_process": {"validate_schema": "default_schema"},
+            "overrides": {
+                "anthropic": {
+                    "post_process": {"validate_schema": "anthropic_schema", "retry_on_failure": {"max_attempts": 3}},
+                },
+            },
+        }
+        (tmp_path / "pp_test.yaml").write_text(yaml.dump(template))
+        
+        registry_default = PromptRegistry(provider="openai", custom_dir=tmp_path)
+        registry_anthropic = PromptRegistry(provider="anthropic", custom_dir=tmp_path)
+        
+        assert registry_default._load_template("pp_test").post_process["validate_schema"] == "default_schema"
+        assert registry_anthropic._load_template("pp_test").post_process["validate_schema"] == "anthropic_schema"
+        assert registry_anthropic._load_template("pp_test").post_process["retry_on_failure"]["max_attempts"] == 3
+    
+    def test_provider_override_trigger(self, tmp_path):
+        template = {
+            "name": "trigger_test",
+            "version": "1.0",
+            "params": {},
+            "trigger": {"type": "api_call", "when": ""},
+            "overrides": {
+                "ollama": {
+                    "trigger": {"type": "disabled", "when": ""},
+                },
+            },
+        }
+        (tmp_path / "trigger_test.yaml").write_text(yaml.dump(template))
+        
+        registry_openai = PromptRegistry(provider="openai", custom_dir=tmp_path)
+        registry_ollama = PromptRegistry(provider="ollama", custom_dir=tmp_path)
+        
+        assert registry_openai._load_template("trigger_test").trigger["type"] == "api_call"
+        assert registry_ollama._load_template("trigger_test").trigger["type"] == "disabled"
