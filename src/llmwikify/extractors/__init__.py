@@ -10,6 +10,7 @@ from .text import extract_text_file, extract_html_file
 from .pdf import extract_pdf
 from .web import extract_url
 from .youtube import extract_youtube
+from .markitdown_extractor import MarkItDownExtractor, MARKITDOWN_FORMATS
 
 __all__ = [
     "detect_source_type",
@@ -21,4 +22,6 @@ __all__ = [
     "extract_pdf",
     "extract_url",
     "extract_youtube",
+    "MarkItDownExtractor",
+    "MARKITDOWN_FORMATS",
 ]

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmwikify"
-version = "0.18.0"
+version = "0.20.0"
 description = "General-purpose LLM-Wiki CLI and Python library - Build persistent, LLM-maintained knowledge bases"
 readme = "README.md"
 license = "MIT"
@@ -46,13 +46,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-pdf = ["pymupdf>=1.23.0"]
-web = ["trafilatura>=1.7.0"]
-youtube = ["youtube-transcript-api>=0.6.0"]
 mcp = ["mcp>=1.0.0"]
 config = ["pyyaml>=6.0"]
+extractors = [
+    "markitdown[all]>=0.1.0",
+    "pymupdf>=1.23.0",
+    "trafilatura>=1.7.0",
+    "youtube-transcript-api>=0.6.0",
+]
 all = [
-    "llmwikify[pdf,web,youtube,mcp,config]",
+    "llmwikify[extractors,mcp,config]",
 ]
 dev = [
     "llmwikify[all]",

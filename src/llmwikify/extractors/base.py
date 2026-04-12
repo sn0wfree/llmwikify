@@ -45,9 +45,22 @@ def detect_source_type(source: str) -> str:
     return {
         ".pdf": "pdf",
         ".md": "markdown",
+        ".markdown": "markdown",
         ".txt": "text",
         ".html": "html",
         ".htm": "html",
+        # MarkItDown enhanced formats
+        ".docx": "docx", ".doc": "doc",
+        ".xlsx": "xlsx", ".xls": "xls",
+        ".pptx": "pptx", ".ppt": "ppt",
+        ".jpg": "image", ".jpeg": "image", ".png": "image",
+        ".gif": "image", ".bmp": "image", ".tiff": "image",
+        ".tif": "image", ".webp": "image", ".svg": "image",
+        ".mp3": "audio", ".wav": "audio", ".m4a": "audio",
+        ".csv": "csv", ".json": "json", ".xml": "xml",
+        ".epub": "epub",
+        ".zip": "zip",
+        ".msg": "outlook",
     }.get(ext, "text")
 
 
@@ -72,7 +85,7 @@ def extract(source: str, wiki_root: Optional[Path] = None) -> ExtractedContent:
     path = Path(source)
     if not path.is_absolute() and wiki_root:
         path = wiki_root / path
-    
+
     if not path.exists():
         return ExtractedContent(
             text="",
@@ -80,13 +93,37 @@ def extract(source: str, wiki_root: Optional[Path] = None) -> ExtractedContent:
             title=str(path),
             metadata={"error": f"File not found: {source}"}
         )
-    
+
+    ext = path.suffix.lower()
+
+    # MarkItDown-enhanced formats (Office, images, audio, etc.)
+    markitdown_formats = {
+        ".pdf", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt",
+        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif",
+        ".webp", ".svg",
+        ".mp3", ".wav", ".m4a",
+        ".csv", ".json", ".xml",
+        ".epub", ".zip", ".msg",
+    }
+
+    if ext in markitdown_formats:
+        from .markitdown_extractor import MarkItDownExtractor
+        extractor = MarkItDownExtractor()
+        result = extractor.convert(path)
+        if result:
+            return result
+        # MarkItDown unavailable or failed — fall through to legacy extractors
+
     # Dispatch to file extractors
     if source_type == "pdf":
         from .pdf import extract_pdf
         return extract_pdf(path)
-    elif source_type in ("markdown", "text", "html"):
-        from .text import extract_text_file, extract_html_file
-        return extract_html_file(path) if source_type == "html" else extract_text_file(path)
+    elif source_type in ("markdown", "text"):
+        from .text import extract_text_file
+        return extract_text_file(path)
+    elif source_type == "html":
+        from .text import extract_html_file
+        return extract_html_file(path)
     else:
+        from .text import extract_text_file
         return extract_text_file(path)
