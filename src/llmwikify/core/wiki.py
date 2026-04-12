@@ -73,6 +73,36 @@ class Wiki:
         provider = self.config.get("llm", {}).get("provider", "openai")
         return PromptRegistry(provider=provider, custom_dir=self._prompt_custom_dir)
     
+    def _get_index_summary(self) -> str:
+        """Return a condensed wiki index (max 500 chars)."""
+        if not self.index_file.exists():
+            return "(no index)"
+        content = self.index_file.read_text()
+        if len(content) <= 500:
+            return content
+        return content[:497] + "..."
+    
+    def _get_recent_log(self, limit: int = 3) -> str:
+        """Return recent log entries."""
+        if not self.log_file.exists():
+            return "(no log)"
+        lines = self.log_file.read_text().strip().split("\n")
+        return "\n".join(lines[-limit:])
+    
+    def _get_page_count(self) -> int:
+        """Return number of wiki pages."""
+        if not self.wiki_dir.exists():
+            return 0
+        return len([p for p in self.wiki_dir.glob("*.md") 
+                    if p.stem not in (self._index_page_name, self._log_page_name)])
+    
+    def _get_existing_page_names(self) -> List[str]:
+        """Return list of existing wiki page names."""
+        if not self.wiki_dir.exists():
+            return []
+        return [p.stem for p in self.wiki_dir.glob("*.md")
+                if p.stem not in (self._index_page_name, self._log_page_name)]
+    
     @property
     def ref_index_path(self) -> Path:
         """Path to reference index JSON."""
@@ -354,14 +384,16 @@ class Wiki:
         }
     
     def _llm_process_source(self, source_data: dict) -> dict:
-        """Use LLM to analyze source content and generate wiki operations.
+        """Process source with LLM. Supports both single-call and chaining modes."""
+        chaining_enabled = self.config.get("llm", {}).get("prompt_chaining", {}).get("ingest", False)
         
-        Args:
-            source_data: Dict from ingest_source() with content, title, etc.
-        
-        Returns:
-            Dict with 'operations' list and 'status'.
-        """
+        if chaining_enabled:
+            return self._llm_process_source_chained(source_data)
+        else:
+            return self._llm_process_source_single(source_data)
+    
+    def _llm_process_source_single(self, source_data: dict) -> dict:
+        """Original single-call mode (backward compatible)."""
         from ..llm_client import LLMClient
         
         client = LLMClient.from_config(self.config)
@@ -379,6 +411,125 @@ class Wiki:
             "max_content_chars": max_content_chars,
             "content_truncated": content_truncated,
         }
+        
+        messages = registry.get_messages("ingest_source", **variables)
+        params = registry.get_api_params("ingest_source")
+        
+        operations = self._call_llm_with_retry("ingest_source", messages, params)
+        
+        errors = registry.validate_output("ingest_source", operations)
+        if errors:
+            raise ValueError(f"LLM output validation failed: {'; '.join(errors)}")
+        
+        return {
+            "status": "success",
+            "operations": operations,
+            "source_title": source_data["title"],
+            "mode": "single",
+        }
+    
+    def _llm_process_source_chained(self, source_data: dict) -> dict:
+        """Chained mode: analyze_source → generate_wiki_ops."""
+        from ..llm_client import LLMClient
+        
+        client = LLMClient.from_config(self.config)
+        registry = self._get_prompt_registry()
+        
+        max_content_chars = registry.get_params("analyze_source").get("max_content_chars", 8000)
+        content = source_data["content"][:max_content_chars]
+        content_truncated = len(source_data["content"]) > max_content_chars
+        
+        analysis_messages = registry.get_messages(
+            "analyze_source",
+            title=source_data["title"],
+            source_type=source_data["source_type"],
+            content=content,
+            current_index=source_data.get("current_index", ""),
+            max_content_chars=max_content_chars,
+            content_truncated=content_truncated,
+        )
+        analysis_params = registry.get_api_params("analyze_source")
+        
+        analysis = self._call_llm_with_retry("analyze_source", analysis_messages, analysis_params)
+        
+        errors = registry.validate_output("analyze_source", analysis)
+        if errors:
+            raise ValueError(f"Analysis validation failed: {'; '.join(errors)}")
+        
+        template = registry._load_template("generate_wiki_ops")
+        dynamic_context = {}
+        if template.context_injection:
+            dynamic_context = registry.inject_context(template.context_injection, wiki=self)
+        
+        ops_messages = registry.get_messages(
+            "generate_wiki_ops",
+            **dynamic_context,
+            analysis_json=json.dumps(analysis, indent=2),
+            current_index=source_data.get("current_index", ""),
+        )
+        ops_params = registry.get_api_params("generate_wiki_ops")
+        
+        operations = self._call_llm_with_retry("generate_wiki_ops", ops_messages, ops_params)
+        
+        errors = registry.validate_output("generate_wiki_ops", operations)
+        if errors:
+            raise ValueError(f"Operations validation failed: {'; '.join(errors)}")
+        
+        if not isinstance(operations, list):
+            raise ValueError(f"Expected list of operations, got {type(operations).__name__}")
+        
+        return {
+            "status": "success",
+            "operations": operations,
+            "analysis": analysis,
+            "source_title": source_data["title"],
+            "mode": "chained",
+        }
+    
+    def _call_llm_with_retry(
+        self,
+        prompt_name: str,
+        messages: List[Dict[str, str]],
+        params: dict,
+    ) -> Any:
+        """Call LLM with retry on validation failure."""
+        from ..llm_client import LLMClient
+        
+        client = LLMClient.from_config(self.config)
+        registry = self._get_prompt_registry()
+        retry_config = registry.get_retry_config(prompt_name)
+        max_attempts = retry_config.get("max_attempts", 1)
+        
+        last_errors: List[str] = []
+        for attempt in range(1, max_attempts + 1):
+            try:
+                result = client.chat_json(messages, **params)
+                
+                errors = registry.validate_output(prompt_name, result)
+                if not errors:
+                    return result
+                
+                last_errors = errors
+                if attempt < max_attempts:
+                    error_text = "\n".join(f"- {e}" for e in errors)
+                    retry_prompt = (
+                        f"Your previous response had errors:\n{error_text}\n\n"
+                        f"Please fix and return a corrected response."
+                    )
+                    messages = [
+                        messages[0],
+                        {"role": "user", "content": retry_prompt},
+                    ]
+            
+            except (ConnectionError, ValueError) as e:
+                last_errors = [str(e)]
+                if attempt >= max_attempts:
+                    raise
+        
+        raise ValueError(
+            f"LLM failed after {max_attempts} attempts for '{prompt_name}': "
+            f"{'; '.join(last_errors)}"
+        )
         
         messages = registry.get_messages("ingest_source", **variables)
         params = registry.get_params("ingest_source")

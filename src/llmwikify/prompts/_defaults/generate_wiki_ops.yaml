@@ -1,0 +1,57 @@
+name: generate_wiki_ops
+description: "Convert document analysis into wiki page operations. Second step of ingest chaining."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "generate_wiki_ops"
+
+params:
+  max_tokens: 8192
+  temperature: 0.1
+
+system: |
+  You are a wiki operations planner. Convert document analysis into wiki write operations.
+  
+  {% if provider == "ollama" %}
+  IMPORTANT: Output ONLY a valid JSON array. Do NOT include any text before or after the JSON. Do NOT use markdown code blocks.
+  {% endif %}
+  
+  Rules:
+  - Create one page per suggested_page from the analysis
+  - Each page should be focused on a single topic
+  - Use [[wikilink]] syntax for cross-references
+  - Do NOT fabricate facts not present in the analysis
+  - Include a log operation summarizing what was done
+  - If a page already exists, write an updated version
+
+user: |
+  Document Analysis:
+  {{ analysis_json }}
+  
+  {% if existing_pages is defined and existing_pages %}
+  Existing Wiki Pages: {{ existing_pages }}
+  
+  {% endif %}
+  Current Wiki Index:
+  ---
+  {{ current_index }}
+  ---
+  
+  Generate wiki operations:
+  - For each suggested_page with priority "high" or "medium", create a write_page operation
+  - Include [[wikilinks]] to pages in cross_refs when relevant
+  - Add a log operation summarizing the ingest
+  
+  Return JSON array:
+  [{"action": "write_page", "page_name": "...", "content": "# Page Name\n\n..."},
+   {"action": "log", "operation": "ingest", "details": "..."}]
+
+context_injection:
+  existing_pages: "_get_existing_page_names"
+  page_count: "_get_page_count"
+
+post_process:
+  validate_schema: "operations_array"
+  required_type: "array"
+  retry_on_failure:
+    max_attempts: 2

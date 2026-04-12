@@ -37,9 +37,13 @@ DEFAULT_CONFIG = {
     "llm": {
         "enabled": False,
         "provider": "openai",
-        "base_url": "",
+        "model": "gpt-4",
+        "base_url": "http://localhost:11434",
         "api_key": "",
-        "model": "gpt-4o",
+        "timeout": 120,
+        "prompt_chaining": {
+            "ingest": False,
+        },
     },
     "mcp": {
         "host": "127.0.0.1",
