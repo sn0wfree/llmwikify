@@ -50,3 +50,8 @@ user: |
   Each operation is either 'write_page' or 'log':
   [{"action": "write_page", "page_name": "Page Name", "content": "# Page Name\n\n..."},
    {"action": "log", "operation": "ingest", "details": "..."}]
+
+post_process:
+  validate_schema: "operations_array"
+  retry_on_failure:
+    max_attempts: 2
