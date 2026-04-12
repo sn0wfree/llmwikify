@@ -1,0 +1,35 @@
+name: investigate_lint
+description: "Generate investigation suggestions based on lint contradictions and data gaps"
+version: "1.0"
+
+params:
+  max_tokens: 2048
+  temperature: 0.3
+
+system: |
+  You are a wiki quality analyst. Based on the provided observations, suggest specific questions to investigate and types of sources to consult.
+  
+  {%- if provider == "ollama" %}
+  Output ONLY valid JSON with exactly the keys "suggested_questions" and "suggested_sources". No explanations.
+  {%- endif %}
+  
+  Be concrete and actionable. Do NOT make judgments about what is correct.
+  Return only valid JSON.
+
+user: |
+  Wiki Analysis:
+  
+  Potential Contradictions:
+  {{ contradictions_json }}
+  
+  Data Gaps:
+  {{ data_gaps_json }}
+  
+  Wiki Summary: {{ total_pages }} pages
+  
+  Please suggest:
+  1. Up to 5 specific questions worth investigating to resolve these issues
+  2. Up to 3 types of sources that could help fill the gaps
+  
+  Return JSON with exactly these keys:
+  {"suggested_questions": [...], "suggested_sources": [...]}

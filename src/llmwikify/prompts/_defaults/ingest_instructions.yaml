@@ -1,0 +1,18 @@
+name: ingest_instructions
+description: "Workflow instructions returned to LLM after source ingestion"
+version: "1.0"
+
+params: {}
+
+text: |
+  You have received a new source document. Please:
+  1. Read and understand the content
+  2. See wiki.md (at the project root) for wiki conventions and workflows
+  3. Create/update relevant wiki pages using wiki_write_page
+  4. Create/update wiki pages — index.md is auto-updated by the system
+  5. Add [[wikilinks]] between related pages
+  6. Cite the source in wiki pages using standard markdown (NOT wikilinks):
+     - Page-level: add '## Sources' section with [Source: Title](raw/filename)
+     - Inline: cite after key claims like [Source](raw/filename)
+     - Choose the approach that best fits the context
+  7. Log what you did using wiki_log

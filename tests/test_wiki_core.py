@@ -280,7 +280,7 @@ class TestWiki:
             @classmethod
             def from_config(cls, config):
                 return cls()
-            def chat_json(self, messages):
+            def chat_json(self, messages, **kwargs):
                 return operations_data
         
         import sys

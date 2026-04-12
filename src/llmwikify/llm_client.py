@@ -65,13 +65,19 @@ class LLMClient:
             model=model,
         )
     
-    def chat(self, messages: List[Dict[str, str]], json_mode: bool = False) -> str:
+    def chat(
+        self,
+        messages: List[Dict[str, str]],
+        json_mode: bool = False,
+        **generation_params: Any,
+    ) -> str:
         """Send chat completion request.
         
         Args:
             messages: List of {role, content} dicts
             json_mode: If True, request JSON response format
-        
+            **generation_params: Optional params like temperature, max_tokens, top_p
+            
         Returns:
             Assistant response text
         """
@@ -95,6 +101,10 @@ class LLMClient:
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
         
+        for key in ("temperature", "max_tokens", "top_p"):
+            if key in generation_params:
+                payload[key] = generation_params[key]
+        
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=120)
             resp.raise_for_status()
@@ -105,12 +115,16 @@ class LLMClient:
         except (KeyError, IndexError) as e:
             raise ValueError(f"Unexpected LLM API response format: {e}")
     
-    def chat_json(self, messages: List[Dict[str, str]]) -> Any:
+    def chat_json(
+        self,
+        messages: List[Dict[str, str]],
+        **generation_params: Any,
+    ) -> Any:
         """Send chat completion and parse JSON response.
         
         Handles markdown code blocks: ```json\n{...}\n```
         """
-        raw = self.chat(messages, json_mode=True)
+        raw = self.chat(messages, json_mode=True, **generation_params)
         return self._parse_json_response(raw)
     
     @staticmethod
