@@ -5,7 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 217 passing](https://img.shields.io/badge/tests-217%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Tests: 443 passing](https://img.shields.io/badge/tests-443%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 
 ---
 
@@ -97,11 +97,13 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 ### 📦 Zero Core Dependencies
 - Standard library only
 - Optional dependencies for extended functionality:
-  - `pymupdf` — PDF extraction
+  - `markitdown[all]` — Enhanced file extraction (Word, Excel, PowerPoint, images with OCR, audio, EPub, ZIP)
+  - `pymupdf` — PDF extraction (fallback)
   - `trafilatura` — Web scraping
   - `youtube-transcript-api` — YouTube transcripts
   - `mcp` — MCP server support
   - `pyyaml` — Configuration loading
+  - `jinja2` — Prompt template rendering
 
 ---
 
@@ -112,7 +114,7 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 pip install llmwikify
 ```
 
-### Full Installation (All Features)
+### Full Installation (All Features including MarkItDown)
 ```bash
 pip install llmwikify[all]
 ```
@@ -122,6 +124,32 @@ pip install llmwikify[all]
 git clone https://github.com/sn0wfree/llmwikify.git
 cd llmwikify
 pip install -e ".[dev]"
+```
+
+---
+
+## 🔌 Enhanced File Extraction (v0.20.0+)
+
+llmwikify now supports a much wider range of file formats through **MarkItDown** integration:
+
+| Format | Support | Description |
+|--------|---------|-------------|
+| PDF (text + OCR) | ✅ | pymupdf fallback + MarkItDown OCR |
+| Word (.docx, .doc) | ✅ | Full text + structure extraction |
+| Excel (.xlsx, .xls) | ✅ | Tables and data extraction |
+| PowerPoint (.pptx, .ppt) | ✅ | Slides with image descriptions |
+| Images (.jpg, .png, etc.) | ✅ | EXIF metadata + LLM vision OCR |
+| Audio (.mp3, .wav) | ✅ | Speech transcription |
+| HTML | ✅ | Better than regex-based extraction |
+| CSV, JSON, XML | ✅ | Data format extraction |
+| EPub | ✅ | E-book extraction |
+| ZIP | ✅ | Recursive file iteration |
+| YouTube | ✅ | Transcript extraction |
+| URL | ✅ | Web article extraction |
+
+Install the full extraction stack:
+```bash
+pip install llmwikify[extractors]
 ```
 
 ---
@@ -390,7 +418,7 @@ pytest tests/test_query_flow.py -v
 pytest --cov=src/llmwikify --cov-report=html
 ```
 
-**Test Coverage**: 110 tests, all passing
+**Test Coverage**: 443 tests, all passing
 
 ### Test Files
 
@@ -403,6 +431,16 @@ pytest --cov=src/llmwikify --cov-report=html
 | `test_cli.py` | 8 | CLI commands |
 | `test_extractors.py` | 12 | Content extractors |
 | `test_llm_client.py` | 14 | LLM client config and JSON parsing |
+| `test_v015_features.py` | 15 | Enhanced ingest + lint features |
+| `test_v016_investigations.py` | 12 | Smart investigations |
+| `test_prompt_registry.py` | 34 | Prompt template loading and rendering |
+| `test_v018_prompt_engineering.py` | 26 | Phase 3 prompt engineering |
+| `test_v018_integration.py` | 28 | Phase 3 integration tests |
+| `test_v019_principle_checker.py` | 34 | Principle compliance checker |
+| `test_v019_eval_prompts.py` | 26 | Offline prompt evaluation |
+| `test_v019_wiki_synthesize.py` | 31 | wiki_synthesize prompt externalization |
+| `test_v019_harness_regression.py` | 16 | Prompt regression tests + golden sources |
+| `test_v020_markitdown_extractor.py` | 32 | MarkItDown extractor integration |
 
 ---
 
@@ -463,23 +501,26 @@ orphan_detection:
 ┌─────────────────────────────────────────────────────────────┐
 │                     llmwikify Architecture                  │
 └─────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
+                                │
+                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  1. Core Layer                                              │
 │     Wiki (wiki.py) — Business logic, synthesize_query       │
 │     WikiIndex (index.py) — FTS5 + Reference Tracking        │
+│     PromptRegistry — YAML+Jinja2 prompt management          │
+│     PrincipleChecker — LLM Wiki Principle compliance        │
 └─────────────────────────────────────────────────────────────┘
-                               ▲
-                               │
+                                ▲
+                                │
 ┌─────────┴────────────────────────────────────────────────┐
 │                   Extraction Layer                        │
-│  text.py │ pdf.py │ web.py │ youtube.py                 │
+│  text.py │ pdf.py │ web.py │ youtube.py │               │
+│  markitdown_extractor.py (Office, images, audio, etc.)  │
 └──────────────────────────────────────────────────────────┘
-                               ▲
-                               │
-               ┌───────────────┴───────────────┐
-               ▼                               ▼
+                                ▲
+                                │
+                ┌───────────────┴───────────────┐
+                ▼                               ▼
 ┌────────────────────────┐        ┌────────────────────────┐
 │  CLI (15 commands)     │        │  MCP Server (13 tools) │
 └────────────────────────┘        └────────────────────────┘
@@ -530,6 +571,31 @@ mypy src/llmwikify
 
 ## 📈 Roadmap
 
+### ✅ v0.20.0 (Released)
+- **MarkItDown Integration**: Unified file extractor for Word, Excel, PowerPoint, images (OCR), audio, EPub, ZIP
+- **Enhanced Format Support**: 20+ file types (pdf, docx, xlsx, pptx, jpg, png, mp3, csv, json, xml, epub, zip)
+- **Graceful Fallback**: Existing extractors preserved as fallback when MarkItDown unavailable
+- **LLM Vision Ready**: MarkItDown configured with LLM client for image OCR and descriptions
+- **443 tests passing** (+32 new)
+
+### ✅ v0.19.0 (Released)
+- **Prompt Harness Engineering**: Systematic prompt quality evaluation
+- **Principle Compliance Checker**: 7 principles checked across all prompt templates
+- **Offline Prompt Evaluation**: 8 automated checks (loading, rendering, context, schema, etc.)
+- **Golden Source Framework**: 5 test scenarios with mock LLM
+- **Prompt Regression Tests**: 16 tests ensuring pipeline stability
+- **wiki_synthesize Externalized**: YAML+Jinja2 template with context injection + validation
+- **CI Workflow**: Automated prompt quality checks on push/PR
+- **411 tests passing** (+76 new)
+
+### ✅ v0.18.0 (Released)
+- **Prompt Externalization**: All hardcoded prompts extracted to YAML + Jinja2 templates
+- **Provider Overrides**: OpenAI, Ollama, Anthropic specific prompt variants
+- **Chaining Mode**: Two-step ingest (analyze_source → generate_wiki_ops)
+- **Validation & Retry**: Schema validation with configurable retry
+- **Dynamic Context Injection**: Wiki state injected into prompts (index, log, page count)
+- **335 tests passing**
+
 ### ✅ v0.16.0 (Released)
 - Smart investigations: contradiction detection (value, year, negation)
 - Data gap detection (unsourced claims, vague temporal references)
@@ -555,7 +621,6 @@ mypy src/llmwikify
 - [ ] Web UI (optional)
 - [ ] Graph visualization (graphviz/Mermaid)
 - [ ] MCP server authentication
-- [ ] More extractors (Word, Excel)
 - [ ] Incremental index updates
 - [ ] Stable API guarantee
 - [ ] Production hardening
