@@ -1,0 +1,22 @@
+id: "03_data_gap_detection"
+description: "Test that analyze_source identifies data gaps and vague claims in the source."
+
+source:
+  title: "The Future of Technology"
+  content: |
+    Technology is advancing rapidly and will change everything soon.
+    Recently, several companies have made breakthroughs in quantum computing.
+    The new systems are much faster than before and will be available shortly.
+    Experts believe this will transform industries in the near future.
+    Many startups are working on AI-powered solutions for various problems.
+    The market is expected to grow significantly over the next few years.
+
+wiki_index: ""
+
+expected:
+  min_topics: 1
+  min_entities: 0
+  min_data_gaps: 1
+  has_vague_claims: true
+  vague_keywords: ["soon", "recently", "shortly", "near future", "significantly"]
+  pipeline: "analyze_source"

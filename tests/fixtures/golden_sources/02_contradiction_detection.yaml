@@ -1,0 +1,20 @@
+id: "02_contradiction_detection"
+description: "Test that analyze_source detects contradictions between new source and existing wiki index."
+
+source:
+  title: "AI Safety Breakthrough in 2026"
+  content: |
+    Researchers at Stanford University have achieved complete AI alignment.
+    All AI systems deployed in 2026 are fully safe and cannot produce harmful outputs.
+    The AI Safety Institute confirmed zero incidents of AI misalignment in production systems.
+
+wiki_index: |
+  - [[AI Safety]] - Major challenges remain in alignment; no production system is fully aligned
+  - [[Stanford HAI]] - Research ongoing; alignment is an open problem
+
+expected:
+  min_topics: 1
+  min_entities: 1
+  must_detect_contradictions: true
+  contradiction_keywords: ["alignment", "fully safe", "zero incidents"]
+  pipeline: "analyze_source"

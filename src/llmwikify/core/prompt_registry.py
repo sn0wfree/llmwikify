@@ -291,6 +291,27 @@ class PromptRegistry:
             if "content_type" in output and not isinstance(output["content_type"], str):
                 errors.append("'content_type' must be a string")
         
+        elif schema_name == "synthesize_output":
+            if not isinstance(output, dict):
+                return [f"Expected object, got {type(output).__name__}"]
+
+            if "answer" not in output:
+                errors.append("Missing required key: 'answer'")
+
+            if "answer" in output and not isinstance(output["answer"], str):
+                errors.append("'answer' must be a string")
+                return errors
+
+            if "answer" in output:
+                answer = output["answer"]
+                if not isinstance(answer, str) or not answer.strip():
+                    errors.append("'answer' must not be empty")
+                else:
+                    if not any(answer.strip().startswith(h) for h in ("#", "##", "###")):
+                        errors.append("Answer should start with a markdown heading")
+                    if len(answer.strip()) < 20:
+                        errors.append("Answer is too short to be a useful wiki page")
+
         elif schema_name == "operations_array":
             if not isinstance(output, list):
                 return [f"Expected array, got {type(output).__name__}"]
