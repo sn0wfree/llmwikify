@@ -523,3 +523,73 @@ class TestRawAnalysis:
         assert stats['total'] == 0
         assert stats['categories'] == {}
         wiki.close()
+
+    def test_analyze_raw_flat_structure(self, temp_wiki):
+        """Flat raw/ with files at root level."""
+        raw = temp_wiki / 'raw'
+        raw.mkdir()
+        (raw / 'a.md').write_text("# A")
+        (raw / 'b.md').write_text("# B")
+        (raw / 'c.txt').write_text("C")
+
+        wiki = Wiki(temp_wiki)
+        stats = wiki._analyze_raw()
+
+        assert stats['total'] == 3
+        assert stats['categories']['(root)'] == 3
+        wiki.close()
+
+    def test_analyze_raw_multi_level_subdir(self, temp_wiki):
+        """Multi-level nested subdirectories: raw/gold/2024/Q1/article.md"""
+        raw = temp_wiki / 'raw'
+        raw.mkdir()
+        (raw / 'gold' / '2024' / 'Q1').mkdir(parents=True)
+        (raw / 'gold' / '2024' / 'Q1' / 'jan.md').write_text("# Jan")
+        (raw / 'gold' / '2024' / 'Q2').mkdir(parents=True)
+        (raw / 'gold' / '2024' / 'Q2' / 'may.md').write_text("# May")
+        (raw / 'gold' / '2023').mkdir(parents=True)
+        (raw / 'gold' / '2023' / 'annual.md').write_text("# Annual")
+        (raw / 'copper').mkdir()
+        (raw / 'copper' / 'news.md').write_text("# News")
+
+        wiki = Wiki(temp_wiki)
+        stats = wiki._analyze_raw()
+
+        assert stats['total'] == 4
+        assert stats['categories']['gold'] == 3
+        assert stats['categories']['copper'] == 1
+        wiki.close()
+
+    def test_analyze_raw_mixed_files_and_dirs(self, temp_wiki):
+        """Mixed: root-level files + multi-level subdirectories."""
+        raw = temp_wiki / 'raw'
+        raw.mkdir()
+        (raw / 'root.md').write_text("# Root")
+        (raw / 'root2.txt').write_text("Root2")
+        (raw / 'gold' / '2024' / 'Q1').mkdir(parents=True)
+        (raw / 'gold' / '2024' / 'Q1' / 'a.md').write_text("# A")
+        (raw / 'empty_dir').mkdir()
+
+        wiki = Wiki(temp_wiki)
+        stats = wiki._analyze_raw()
+
+        assert stats['total'] == 3
+        assert stats['categories']['(root)'] == 2
+        assert stats['categories']['gold'] == 1
+        assert 'empty_dir' not in stats['categories']
+        wiki.close()
+
+    def test_analyze_raw_only_empty_subdirs(self, temp_wiki):
+        """Only empty subdirectories, no files."""
+        raw = temp_wiki / 'raw'
+        raw.mkdir()
+        (raw / 'gold').mkdir()
+        (raw / 'copper' / 'sub').mkdir(parents=True)
+        (raw / 'empty').mkdir()
+
+        wiki = Wiki(temp_wiki)
+        stats = wiki._analyze_raw()
+
+        assert stats['total'] == 0
+        assert stats['categories'] == {}
+        wiki.close()
