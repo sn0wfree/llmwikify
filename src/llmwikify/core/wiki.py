@@ -13,6 +13,9 @@ from .query_sink import QuerySink
 from ..extractors import extract
 from ..config import load_config, get_directory, get_db_path
 
+TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
+VALID_AGENTS = ("opencode", "claude", "codex", "generic")
+
 
 class Wiki:
     """Main Wiki manager."""
@@ -129,19 +132,30 @@ class Wiki:
                 self.wiki_dir.exists() and 
                 self.db_path.exists())
     
-    def init(self, overwrite: bool = False) -> dict:
+    def init(self, overwrite: bool = False, agent: Optional[str] = None,
+             force: bool = False, merge: bool = False) -> dict:
         """Initialize wiki directory structure.
         
         Args:
             overwrite: If True, recreate index.md and log.md even if they exist.
                        Always skips wiki.md and config_example if they exist.
+            agent: Agent type for config generation. One of: opencode, claude, codex, generic.
+                   None = skip agent config generation.
+            force: If True, overwrite existing files without prompting.
+            merge: If True, merge into existing wiki.md instead of skipping.
         
         Returns:
             Structured result with status, created_files, and message.
         """
         already_exists = self.is_initialized()
         
+        # If wiki is fully initialized, handle as "already_exists" but still
+        # attempt agent config generation if requested.
         if already_exists and not overwrite:
+            created = []
+            skipped = []
+            warnings = []
+            
             existing = []
             if self.raw_dir.exists():
                 existing.append("raw/")
@@ -151,16 +165,50 @@ class Wiki:
                 existing.append("index.md")
             if self.log_file.exists():
                 existing.append("log.md")
+            
+            # Still attempt agent config generation
+            if agent and agent != "generic":
+                agent_filename = "CLAUDE.md" if agent == "claude" else "AGENTS.md"
+                agent_path = self.root / agent_filename
+                if not agent_path.exists() or force:
+                    content = self._generate_agent_md(agent)
+                    if content:
+                        agent_path.write_text(content)
+                        created.append(agent_filename)
+                else:
+                    skipped.append(agent_filename)
+                    warnings.append(f"{agent_filename} already exists, skipping.")
+                
+                mcp_filename = ".mcp.json" if agent == "claude" else (
+                    "opencode.json" if agent == "opencode" else ".opencode.json"
+                )
+                mcp_path = self.root / mcp_filename
+                if not mcp_path.exists() or force:
+                    content = self._generate_mcp_config(agent)
+                    if content:
+                        mcp_path.write_text(content)
+                        created.append(mcp_filename)
+                else:
+                    skipped.append(mcp_filename)
+                    warnings.append(f"{mcp_filename} already exists, skipping.")
+            
+            raw_stats = self._analyze_raw()
+            
+            status_msg = "already_exists" if not created else "agent_config_added"
             return {
-                "status": "already_exists",
-                "created_files": [],
+                "status": status_msg,
+                "created_files": created,
                 "existing_files": existing,
-                "skipped_files": [],
-                "message": "Wiki already initialized. Use overwrite=true to reinitialize.",
+                "skipped_files": skipped,
+                "warnings": warnings,
+                "raw_stats": raw_stats,
+                "agent": agent,
+                "message": f"Wiki already initialized at {self.root}",
             }
         
         created = []
         skipped = []
+        warnings = []
         
         # Create directories
         if not self.raw_dir.exists():
@@ -206,18 +254,85 @@ class Wiki:
         else:
             skipped.append(".wiki-config.yaml.example")
         
-        # Create wiki.md (always skip if exists)
-        if not self.wiki_md_file.exists():
+        # Schema conflict detection and handling
+        legacy_wiki = self.root / 'WIKI.md'
+        has_wiki = self.wiki_md_file.exists()
+        has_WIKI = legacy_wiki.exists()
+        
+        if has_wiki and not force and not merge:
+            warnings.append(
+                f"Schema file already exists: wiki.md ({self.wiki_md_file.stat().st_size} bytes). "
+                "Use --force to overwrite or --merge to merge."
+            )
+            skipped.append("wiki.md")
+        elif (has_wiki or merge) and merge:
+            # Merge: keep existing, just append raw analysis if any
+            skipped.append("wiki.md (merged)")
+        elif force and has_wiki:
             self.wiki_md_file.write_text(self._generate_wiki_md())
             created.append("wiki.md")
-        else:
-            skipped.append("wiki.md")
+        elif not has_wiki:
+            self.wiki_md_file.write_text(self._generate_wiki_md())
+            created.append("wiki.md")
+        
+        # Handle legacy WIKI.md
+        if has_WIKI and not has_wiki:
+            warnings.append(
+                "Legacy WIKI.md found. The new schema will be generated as wiki.md (lowercase). "
+                "Consider removing or merging WIKI.md."
+            )
+        
+        # Generate agent config files (only if agent is specified)
+        if agent and agent != "generic":
+            # Agent entry file
+            agent_filename = "CLAUDE.md" if agent == "claude" else "AGENTS.md"
+            agent_path = self.root / agent_filename
+            if not agent_path.exists() or force:
+                content = self._generate_agent_md(agent)
+                if content:
+                    agent_path.write_text(content)
+                    created.append(agent_filename)
+                else:
+                    skipped.append(agent_filename)
+            else:
+                skipped.append(agent_filename)
+                warnings.append(f"{agent_filename} already exists, skipping.")
+            
+            # MCP config
+            mcp_filename = ".mcp.json" if agent == "claude" else (
+                "opencode.json" if agent == "opencode" else ".opencode.json"
+            )
+            mcp_path = self.root / mcp_filename
+            if not mcp_path.exists() or force:
+                content = self._generate_mcp_config(agent)
+                if content:
+                    mcp_path.write_text(content)
+                    created.append(mcp_filename)
+                else:
+                    skipped.append(mcp_filename)
+            else:
+                skipped.append(mcp_filename)
+                warnings.append(f"{mcp_filename} already exists, skipping.")
+        
+        # Generate .gitignore (always, if not exists)
+        gitignore_path = self.root / '.gitignore'
+        if not gitignore_path.exists():
+            content = self._generate_gitignore()
+            if content:
+                gitignore_path.write_text(content)
+                created.append(".gitignore")
+        
+        # Analyze raw/ for report
+        raw_stats = self._analyze_raw()
         
         return {
             "status": "created",
             "created_files": created,
             "existing_files": [],
             "skipped_files": skipped,
+            "warnings": warnings,
+            "raw_stats": raw_stats,
+            "agent": agent,
             "message": f"Wiki initialized at {self.root}",
         }
     
@@ -272,6 +387,82 @@ class Wiki:
         """Generate wiki.md - LLM agent instructions for wiki maintenance."""
         registry = self._get_prompt_registry()
         return registry.render_document("wiki_schema", version=self._get_version())
+    
+    def _analyze_raw(self) -> dict:
+        """Analyze raw/ directory structure for init report.
+        
+        Returns:
+            {"total": int, "categories": {name: count, ...}}
+        """
+        result = {"total": 0, "categories": {}}
+        if not self.raw_dir.exists():
+            return result
+        
+        for item in sorted(self.raw_dir.iterdir()):
+            if item.is_dir():
+                count = len(list(item.glob("*.md"))) + len(list(item.glob("*.txt")))
+                if count > 0:
+                    result["categories"][item.name] = count
+                    result["total"] += count
+            elif item.suffix in (".md", ".txt", ".pdf", ".html"):
+                result["total"] += 1
+        
+        # Files directly in raw/ (not in subdirs)
+        direct_files = len([f for f in self.raw_dir.glob("*") if f.is_file() and f.suffix in (".md", ".txt", ".pdf", ".html")])
+        if direct_files > 0:
+            result["categories"]["(root)"] = direct_files
+            result["total"] += direct_files
+        
+        return result
+    
+    @staticmethod
+    def _render_template(name: str, **variables: Any) -> str:
+        """Render a template file with Jinja2 variable substitution."""
+        from jinja2 import Environment, BaseLoader
+        template_path = TEMPLATES_DIR / name
+        if not template_path.exists():
+            return ""
+        content = template_path.read_text()
+        env = Environment(loader=BaseLoader(), trim_blocks=True, lstrip_blocks=True)
+        return env.from_string(content).render(**variables)
+    
+    def _generate_agent_md(self, agent: str) -> str:
+        """Generate agent-specific AGENTS.md or CLAUDE.md content."""
+        raw_stats = self._analyze_raw()
+        raw_count = raw_stats["total"]
+        categories = raw_stats["categories"]
+        cats_str = ", ".join(f"{k} ({v})" for k, v in sorted(categories.items(), key=lambda x: -x[1])) if categories else ""
+        
+        template_map = {
+            "opencode": "agents_opencode.md",
+            "claude": "agents_claude.md",
+            "codex": "agents_codex.md",
+        }
+        template_name = template_map.get(agent, "agents_opencode.md")
+        
+        return self._render_template(
+            template_name,
+            project_name=self.root.name,
+            version=self._get_version(),
+            raw_count=raw_count,
+            raw_categories=cats_str,
+        )
+    
+    def _generate_mcp_config(self, agent: str) -> str:
+        """Generate agent-specific MCP configuration JSON."""
+        template_map = {
+            "opencode": "opencode.json",
+            "claude": "claude_mcp.json",
+            "codex": "codex_mcp.json",
+        }
+        template_name = template_map.get(agent)
+        if not template_name:
+            return ""
+        return self._render_template(template_name)
+    
+    def _generate_gitignore(self) -> str:
+        """Generate .gitignore content."""
+        return self._render_template("_gitignore")
     
     def ingest_source(self, source: str) -> dict:
         """Ingest a source file and return extracted data for LLM processing.

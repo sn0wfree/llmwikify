@@ -2,9 +2,9 @@
 
 > Technical architecture document for developers
 
-**Version**: 0.24.0  
-**Last Updated**: 2026-04-12  
-**Tests**: 490 passing (522 collected, 32 markitdown skipped)
+**Version**: 0.25.0  
+**Last Updated**: 2026-04-13  
+**Tests**: 492 passing (524 collected, 32 markitdown skipped)
 
 ---
 
@@ -483,6 +483,16 @@ Progress reporting with batch size control and speed tracking.
 ---
 
 ## Version History
+
+### v0.25.0 — Agent-Aware Init + One-Command Setup
+- **Agent-Aware Init**: `llmwikify init --agent <type>` generates complete project setup:
+  - `opencode` → `opencode.json` + `AGENTS.md`
+  - `claude` → `.mcp.json` + `CLAUDE.md`
+  - `codex` → `.opencode.json` + `AGENTS.md`
+  - `generic` → wiki structure only
+- **Raw Source Analysis**: Auto-analyzes `raw/` directory, includes stats in generated files
+- **Schema Conflict Detection**: Warns on existing `wiki.md`/`WIKI.md`, supports `--force`/`--merge`
+- **492 tests passing** (+18 new for init --agent)
 
 ### v0.24.0 — CLI Simplification + Dead Code Removal + QuerySink Extraction
 - **CLI Reduced**: 22 → 19 commands (hint, recommend, export-index merged into lint/build-index)
