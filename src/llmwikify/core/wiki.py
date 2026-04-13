@@ -148,14 +148,14 @@ class Wiki:
             Structured result with status, created_files, and message.
         """
         already_exists = self.is_initialized()
-        
+
         # If wiki is fully initialized, handle as "already_exists" but still
-        # attempt agent config generation if requested.
+        # attempt agent config generation and wiki.md merge if requested.
         if already_exists and not overwrite:
             created = []
             skipped = []
             warnings = []
-            
+
             existing = []
             if self.raw_dir.exists():
                 existing.append("raw/")
@@ -165,7 +165,17 @@ class Wiki:
                 existing.append("index.md")
             if self.log_file.exists():
                 existing.append("log.md")
-            
+
+            # Merge wiki.md schema if requested
+            if merge:
+                merged_content = self._merge_wiki_md()
+                original_content = self.wiki_md_file.read_text()
+                if merged_content != original_content:
+                    self.wiki_md_file.write_text(merged_content)
+                    created.append("wiki.md (merged)")
+                else:
+                    skipped.append("wiki.md (up-to-date)")
+
             # Still attempt agent config generation
             if agent and agent != "generic":
                 agent_filename = "CLAUDE.md" if agent == "claude" else "AGENTS.md"
@@ -178,7 +188,7 @@ class Wiki:
                 else:
                     skipped.append(agent_filename)
                     warnings.append(f"{agent_filename} already exists, skipping.")
-                
+
                 mcp_filename = ".mcp.json" if agent == "claude" else (
                     "opencode.json" if agent == "opencode" else ".opencode.json"
                 )
@@ -191,9 +201,9 @@ class Wiki:
                 else:
                     skipped.append(mcp_filename)
                     warnings.append(f"{mcp_filename} already exists, skipping.")
-            
+
             raw_stats = self._analyze_raw()
-            
+
             status_msg = "already_exists" if not created else "agent_config_added"
             return {
                 "status": status_msg,
@@ -282,9 +292,14 @@ class Wiki:
                 "Use --force to overwrite or --merge to merge."
             )
             skipped.append("wiki.md")
-        elif (has_wiki or merge) and merge:
-            # Merge: keep existing, just append raw analysis if any
-            skipped.append("wiki.md (merged)")
+        elif merge and has_wiki:
+            merged_content = self._merge_wiki_md()
+            original_content = self.wiki_md_file.read_text()
+            if merged_content != original_content:
+                self.wiki_md_file.write_text(merged_content)
+                created.append("wiki.md (merged)")
+            else:
+                skipped.append("wiki.md (up-to-date)")
         elif force and has_wiki:
             self.wiki_md_file.write_text(self._generate_wiki_md())
             created.append("wiki.md")
@@ -506,6 +521,95 @@ class Wiki:
     def _generate_gitignore(self) -> str:
         """Generate .gitignore content."""
         return self._render_template("_gitignore")
+
+    @staticmethod
+    def _parse_sections(content: str) -> list:
+        """Parse markdown into list of (section_header, section_body).
+
+        Only parses H2 headers (## Header) for top-level sections.
+        Returns list of tuples: ("Section Name", "section content without header")
+        """
+        sections = []
+        lines = content.split("\n")
+        current_header = None
+        current_body = []
+
+        for line in lines:
+            if line.startswith("## ") and not line.startswith("### "):
+                if current_header is not None:
+                    sections.append((current_header, "\n".join(current_body).strip()))
+                current_header = line[3:].strip()
+                current_body = []
+            elif current_header is not None:
+                current_body.append(line)
+
+        if current_header is not None:
+            sections.append((current_header, "\n".join(current_body).strip()))
+
+        return sections
+
+    @staticmethod
+    def _find_insertion_point(content: str) -> int:
+        """Find position to insert new sections.
+
+        Priority: before "## Best Practices", before "## Configuration", else end of file.
+        """
+        for marker in ["## Best Practices", "## Configuration"]:
+            pos = content.find(marker)
+            if pos != -1:
+                return pos
+        return len(content)
+
+    def _merge_wiki_md(self) -> str:
+        """Merge new schema into existing wiki.md.
+
+        Strategy: Parse H2 section headers from both documents.
+        - Keep existing sections unchanged (user customization preserved)
+        - Append new sections that don't exist in current wiki.md
+        - Insert new sections before ## Best Practices / ## Configuration
+        - Update version number only if sections were added
+        """
+        existing = self.wiki_md_file.read_text()
+        new_schema = self._generate_wiki_md()
+
+        existing_sections = self._parse_sections(existing)
+        new_sections = self._parse_sections(new_schema)
+
+        existing_headers = {header.lower() for header, _ in existing_sections}
+
+        sections_to_add = [
+            (header, body) for header, body in new_sections
+            if header.lower() not in existing_headers
+        ]
+
+        if not sections_to_add:
+            return existing
+
+        insert_pos = self._find_insertion_point(existing)
+        before = existing[:insert_pos]
+        after = existing[insert_pos:]
+
+        new_content = "\n\n".join(
+            f"## {header}\n\n{body}" for header, body in sections_to_add
+        )
+
+        separator = "\n\n" if not before.endswith("\n\n") else ""
+        merged = (
+            f"{before}"
+            f"{separator}"
+            f"## Schema Updates (v{self._get_version()})\n\n"
+            f"{new_content}\n\n"
+            f"---\n\n"
+            f"{after}"
+        )
+
+        merged = re.sub(
+            r"Generated by llmwikify v[\d.]+",
+            f"Generated by llmwikify v{self._get_version()}",
+            merged,
+        )
+
+        return merged
     
     def ingest_source(self, source: str) -> dict:
         """Ingest a source file and return extracted data for LLM processing.
