@@ -346,7 +346,7 @@ class TestAllPromptsLoadable:
     def test_all_builtin_prompts_load(self):
         registry = PromptRegistry()
         prompts = [
-            "analyze_source", "generate_wiki_ops", "ingest_source",
+            "analyze_source", "generate_wiki_ops",
             "ingest_instructions", "investigate_lint", "wiki_schema",
             "wiki_synthesize",
         ]
@@ -359,7 +359,6 @@ class TestAllPromptsLoadable:
         prompts = [
             ("analyze_source", {"title": "T", "content": "C", "source_type": "md", "current_index": ""}),
             ("generate_wiki_ops", {"analysis_json": "{}", "current_index": ""}),
-            ("ingest_source", {"title": "T", "content": "C", "source_type": "md", "current_index": ""}),
             ("wiki_synthesize", {"query": "Q?"}),
         ]
         for name, variables in prompts:

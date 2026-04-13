@@ -76,20 +76,20 @@ class MarkItDownExtractor:
                 from ..llm_client import LLMClient
                 llm_client = LLMClient.from_config(self._config)
                 llm_model = self._config["llm"].get("model", "gpt-4o")
-            except Exception:
+            except (ImportError, ValueError, OSError):
                 pass
 
         try:
             if llm_client:
                 self._md = MarkItDown(
-                    enable_plugins=False,
+                    enable_plugins=True,
                     llm_client=llm_client,
                     llm_model=llm_model,
                 )
             else:
                 self._md = MarkItDown(enable_plugins=False)
             self._available = True
-        except Exception:
+        except (ImportError, RuntimeError, OSError):
             self._available = False
 
     def convert(self, path: Path) -> Optional[ExtractedContent]:
@@ -128,7 +128,7 @@ class MarkItDownExtractor:
                     "extension": ext,
                 },
             )
-        except Exception:
+        except (OSError, RuntimeError, ValueError):
             return None
 
     @staticmethod

@@ -1,0 +1,42 @@
+# Research Wiki — Example Configuration
+#
+# Use case: Academic research, paper notes, experiment logs
+# Key patterns: Paper summaries, experiment pages, hypothesis tracking
+
+orphan_detection:
+  exclude_patterns:
+    - '^experiment-.*'             # Experiment logs
+    - '^paper-note-.*'             # Paper reading notes
+    - '^\d{4}-\d{2}-\d{2}$'        # Daily research journal
+  exclude_frontmatter:
+    - 'redirect_to'
+    - 'draft'
+  archive_directories:
+    - 'experiments'
+    - 'papers'
+    - 'drafts'
+
+llm:
+  enabled: true
+  provider: "openai"
+  model: "gpt-4o"
+  api_key: "env:OPENAI_API_KEY"
+  prompt_chaining:
+    ingest: true                   # Analyze paper → generate wiki ops
+  timeout: 180                     # Longer timeout for paper analysis
+
+mcp:
+  host: "127.0.0.1"
+  port: 8765
+  transport: "stdio"
+
+prompts:
+  custom_dir: null
+
+performance:
+  batch_size: 100
+  cache_size: 64000
+
+reference_index:
+  name: "reference_index.json"
+  auto_export: true

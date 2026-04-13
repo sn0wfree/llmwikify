@@ -12,12 +12,6 @@ DEFAULT_CONFIG = {
         "raw": "raw",
         "wiki": "wiki",
     },
-    "files": {
-        "index": "index.md",
-        "log": "log.md",
-        "config": ".wiki-config.yaml",
-        "config_example": ".wiki-config.yaml.example",
-    },
     "database": {
         "name": ".llmwikify.db",
     },
@@ -32,7 +26,6 @@ DEFAULT_CONFIG = {
     },
     "performance": {
         "batch_size": 100,
-        "cache_size": 64000,
     },
     "llm": {
         "enabled": False,
@@ -41,9 +34,6 @@ DEFAULT_CONFIG = {
         "base_url": "http://localhost:11434",
         "api_key": "",
         "timeout": 120,
-        "prompt_chaining": {
-            "ingest": False,
-        },
     },
     "mcp": {
         "host": "127.0.0.1",
@@ -77,7 +67,7 @@ def load_config(wiki_root: Path, config_file: Optional[str] = None) -> Dict[str,
     if config_file:
         config_path = wiki_root / config_file
     else:
-        config_path = wiki_root / DEFAULT_CONFIG["files"]["config"]
+        config_path = wiki_root / '.wiki-config.yaml'
     
     # Try to load user configuration
     if config_path.exists():
@@ -91,9 +81,9 @@ def load_config(wiki_root: Path, config_file: Optional[str] = None) -> Dict[str,
         except ImportError:
             # PyYAML not installed, use defaults
             pass
-        except Exception as e:
+        except Exception:
             # Config file has errors, use defaults
-            print(f"Warning: Failed to load config from {config_path}: {e}")
+            pass
     
     return config
 
@@ -152,24 +142,6 @@ def get_directory(wiki_root: Path, dir_type: str, config: Optional[Dict[str, Any
     
     dir_name = config.get("directories", {}).get(dir_type, DEFAULT_CONFIG["directories"][dir_type])
     return wiki_root / dir_name
-
-
-def get_file_path(wiki_root: Path, file_type: str, config: Optional[Dict[str, Any]] = None) -> Path:
-    """Get a file path based on configuration.
-    
-    Args:
-        wiki_root: Wiki root directory
-        file_type: Type of file ('index', 'log', etc.)
-        config: Optional configuration dict
-    
-    Returns:
-        Path to file
-    """
-    if config is None:
-        config = get_default_config()
-    
-    file_name = config.get("files", {}).get(file_type, DEFAULT_CONFIG["files"][file_type])
-    return wiki_root / file_name
 
 
 def get_mcp_config(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

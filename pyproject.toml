@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmwikify"
-version = "0.20.0"
+version = "0.24.0"
 description = "General-purpose LLM-Wiki CLI and Python library - Build persistent, LLM-maintained knowledge bases"
 readme = "README.md"
 license = "MIT"
@@ -48,6 +48,12 @@ dependencies = [
 [project.optional-dependencies]
 mcp = ["mcp>=1.0.0"]
 config = ["pyyaml>=6.0"]
+watch = ["watchdog>=3.0.0"]
+graph = [
+    "networkx>=3.0",
+    "pyvis>=0.3.0",
+    "python-louvain>=0.16",
+]
 extractors = [
     "markitdown[all]>=0.1.0",
     "pymupdf>=1.23.0",
@@ -55,13 +61,12 @@ extractors = [
     "youtube-transcript-api>=0.6.0",
 ]
 all = [
-    "llmwikify[extractors,mcp,config]",
+    "llmwikify[extractors,mcp,config,watch,graph]",
 ]
 dev = [
     "llmwikify[all]",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
-    "pytest-asyncio>=0.21.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
@@ -82,7 +87,7 @@ wiki = "llmwikify.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["llmwikify", "llmwikify.cli", "llmwikify.core", "llmwikify.extractors", "llmwikify.mcp", "llmwikify.utils", "llmwikify.prompts", "llmwikify.prompts._defaults"]
+packages = ["llmwikify", "llmwikify.cli", "llmwikify.core", "llmwikify.extractors", "llmwikify.mcp", "llmwikify.prompts", "llmwikify.prompts._defaults"]
 
 [tool.setuptools.package-data]
 llmwikify = ["py.typed"]

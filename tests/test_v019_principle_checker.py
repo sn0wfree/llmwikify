@@ -148,7 +148,7 @@ class TestPrincipleCheckerCheckTemplate:
             "system": "You are a test prompt.",
             "user": "Do something.",
         }
-        result = checker.check_template("ingest_source", data)
+        result = checker.check_template("analyze_source", data)
         contradiction_violations = [v for v in result.violations if v.principle == "contradiction_detection"]
         assert len(contradiction_violations) == 1
 
@@ -255,7 +255,6 @@ class TestPrincipleCheckerCheckAllTemplates:
             "analyze_source",
             "generate_wiki_ops",
             "ingest_instructions",
-            "ingest_source",
             "investigate_lint",
             "wiki_schema",
             "wiki_synthesize",

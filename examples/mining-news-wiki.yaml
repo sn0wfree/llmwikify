@@ -1,0 +1,38 @@
+# Mining News Wiki — Example Configuration
+#
+# Use case: Daily mining industry news aggregation with company/entity tracking
+# Key patterns: Daily summaries (date-named), company pages, commodity pages
+
+orphan_detection:
+  exclude_patterns:
+    - '^\d{4}-\d{2}-\d{2}$'        # Daily summaries (2025-07-31)
+    - '^weekly-.*'                  # Weekly insights
+  exclude_frontmatter:
+    - 'redirect_to'
+  archive_directories:
+    - 'daily'
+    - 'analysis'
+
+llm:
+  enabled: true
+  provider: "openai"
+  model: "gpt-4o"
+  api_key: "env:OPENAI_API_KEY"
+  prompt_chaining:
+    ingest: true
+
+mcp:
+  host: "127.0.0.1"
+  port: 8765
+  transport: "stdio"
+
+prompts:
+  custom_dir: null
+
+performance:
+  batch_size: 100
+  cache_size: 64000
+
+reference_index:
+  name: "reference_index.json"
+  auto_export: true

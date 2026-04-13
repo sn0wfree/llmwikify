@@ -1,0 +1,43 @@
+# Project Documentation — Example Configuration
+#
+# Use case: Software project docs, release notes, meeting notes, RFCs
+# Key patterns: Release pages, meeting notes, RFC documents
+
+orphan_detection:
+  exclude_patterns:
+    - '^release-.*'                # Release notes (release-v1.2.3)
+    - '^meeting-.*'                # Meeting notes
+    - '^rfc-.*'                    # Request for comments
+    - '^\d{4}-\d{2}-\d{2}$'        # Daily standup notes
+  exclude_frontmatter:
+    - 'redirect_to'
+    - 'deprecated'
+  archive_directories:
+    - 'releases'
+    - 'meetings'
+    - 'archive'
+    - 'deprecated'
+
+llm:
+  enabled: true
+  provider: "openai"
+  model: "gpt-4o"
+  api_key: "env:OPENAI_API_KEY"
+  prompt_chaining:
+    ingest: true                   # Two-step: analyze → generate ops
+
+mcp:
+  host: "127.0.0.1"
+  port: 8765
+  transport: "stdio"
+
+prompts:
+  custom_dir: null
+
+performance:
+  batch_size: 200
+  cache_size: 128000
+
+reference_index:
+  name: "reference_index.json"
+  auto_export: true

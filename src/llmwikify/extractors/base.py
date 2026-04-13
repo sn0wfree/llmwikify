@@ -114,16 +114,31 @@ def extract(source: str, wiki_root: Optional[Path] = None) -> ExtractedContent:
             return result
         # MarkItDown unavailable or failed — fall through to legacy extractors
 
-    # Dispatch to file extractors
-    if source_type == "pdf":
-        from .pdf import extract_pdf
-        return extract_pdf(path)
-    elif source_type in ("markdown", "text"):
-        from .text import extract_text_file
-        return extract_text_file(path)
-    elif source_type == "html":
-        from .text import extract_html_file
-        return extract_html_file(path)
+    # Legacy extractors with known file types
+    legacy_types = {
+        "pdf": ("pdf",),
+        "markdown": ("markdown", "text"),
+        "text": ("markdown", "text"),
+        "html": ("html",),
+    }
+
+    if source_type in ("pdf", "markdown", "text", "html"):
+        if source_type == "pdf":
+            from .pdf import extract_pdf
+            return extract_pdf(path)
+        elif source_type in ("markdown", "text"):
+            from .text import extract_text_file
+            return extract_text_file(path)
+        elif source_type == "html":
+            from .text import extract_html_file
+            return extract_html_file(path)
     else:
-        from .text import extract_text_file
-        return extract_text_file(path)
+        # No legacy extractor available for this format
+        return ExtractedContent(
+            text="",
+            source_type="error",
+            title=str(path),
+            metadata={
+                "error": f"No extractor available for '{ext}' files. Install markitdown[all] for support."
+            }
+        )

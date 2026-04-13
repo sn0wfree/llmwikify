@@ -49,14 +49,14 @@ class TestSinkDirectoryCreation:
 
 
 class TestGetSinkInfoForPage:
-    """Test _get_sink_info_for_page method."""
+    """Test query_sink.get_info_for_page method."""
 
     def test_no_sink_file(self, temp_wiki):
         """Returns has_sink=False when no sink file exists."""
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        info = wiki._get_sink_info_for_page("Query: Gold Mining")
+        info = wiki.query_sink.get_info_for_page("Query: Gold Mining")
 
         assert info['has_sink'] is False
         assert info['sink_entries'] == 0
@@ -75,7 +75,7 @@ class TestGetSinkInfoForPage:
             '---\n\n## [2026-04-10 11:00] Query: How does gold mining work?\n\nAnswer 2\n'
         )
 
-        info = wiki._get_sink_info_for_page("Query: Gold Mining")
+        info = wiki.query_sink.get_info_for_page("Query: Gold Mining")
 
         assert info['has_sink'] is True
         assert info['sink_entries'] == 2
@@ -93,7 +93,7 @@ class TestGetSinkInfoForPage:
             '> All entries processed.\n'
         )
 
-        info = wiki._get_sink_info_for_page("Query: Test")
+        info = wiki.query_sink.get_info_for_page("Query: Test")
 
         assert info['has_sink'] is True
         assert info['sink_entries'] == 0
@@ -101,14 +101,14 @@ class TestGetSinkInfoForPage:
 
 
 class TestFindOrCreateSinkFile:
-    """Test _find_or_create_sink_file method."""
+    """Test query_sink._find_or_create_sink_file method."""
 
     def test_creates_new_sink_file(self, temp_wiki):
         """Creates sink file with proper frontmatter."""
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = wiki._find_or_create_sink_file("Query: Gold Mining")
+        sink_file = wiki.query_sink._find_or_create_sink_file("Query: Gold Mining")
 
         assert sink_file.exists()
         assert sink_file.name == 'Query: Gold Mining.sink.md'
@@ -128,7 +128,7 @@ class TestFindOrCreateSinkFile:
         original_content = '---\nformal_page: "Query: Test"\n---\n\nExisting content\n'
         sink_file.write_text(original_content)
 
-        result = wiki._find_or_create_sink_file("Query: Test")
+        result = wiki.query_sink._find_or_create_sink_file("Query: Test")
 
         assert result == sink_file
         assert sink_file.read_text() == original_content
@@ -144,7 +144,7 @@ class TestFindOrCreateSinkFile:
             '---\ntitle: Gold Mining\n---\n\n# Query: Gold Mining\n\nContent\n'
         )
 
-        wiki._find_or_create_sink_file("Query: Gold Mining")
+        wiki.query_sink._find_or_create_sink_file("Query: Gold Mining")
 
         content = formal_path.read_text()
         assert 'sink_path:' in content
@@ -152,7 +152,7 @@ class TestFindOrCreateSinkFile:
 
 
 class TestAppendToSink:
-    """Test _append_to_sink method."""
+    """Test query_sink.append_to_sink method."""
 
     def test_appends_entry_to_sink(self, temp_wiki):
         """Appends query answer to sink file."""
@@ -162,7 +162,7 @@ class TestAppendToSink:
         formal_path = temp_wiki / 'wiki' / 'Query: Gold Mining.md'
         formal_path.write_text('# Query: Gold Mining\n\nContent\n')
 
-        sink_path = wiki._append_to_sink(
+        sink_path = wiki.query_sink.append_to_sink(
             "Query: Gold Mining",
             "What is gold mining?",
             "Gold mining is the process of extracting gold.",
@@ -187,7 +187,7 @@ class TestAppendToSink:
         formal_path = temp_wiki / 'wiki' / 'Query: Test.md'
         formal_path.write_text('# Query: Test\n\nContent\n')
 
-        wiki._append_to_sink(
+        wiki.query_sink.append_to_sink(
             "Query: Test",
             "Test query?",
             "Answer content.",
@@ -211,8 +211,8 @@ class TestAppendToSink:
         formal_path = temp_wiki / 'wiki' / 'Query: Test.md'
         formal_path.write_text('# Query: Test\n\nContent\n')
 
-        wiki._append_to_sink("Query: Test", "Q1", "A1", [], [])
-        wiki._append_to_sink("Query: Test", "Q2", "A2", [], [])
+        wiki.query_sink.append_to_sink("Query: Test", "Q1", "A1", [], [])
+        wiki.query_sink.append_to_sink("Query: Test", "Q2", "A2", [], [])
 
         sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
         content = sink_file.read_text()
@@ -756,7 +756,7 @@ class TestWikiMdTemplate:
 
 
 class TestUpdatePageSinkMeta:
-    """Test _update_page_sink_meta method."""
+    """Test query_sink._update_page_sink_meta method."""
 
     def test_updates_existing_frontmatter(self, temp_wiki):
         """Adds sink_path to existing frontmatter."""
@@ -773,7 +773,7 @@ class TestUpdatePageSinkMeta:
             '---\nformal_page: "Query: Test"\n---\n\n# Query Sink: Test\n\n'
         )
 
-        wiki._update_page_sink_meta(page_path, sink_file)
+        wiki.query_sink._update_page_sink_meta(page_path, sink_file)
 
         content = page_path.read_text()
         assert 'sink_path: sink/Query: Test.sink.md' in content
@@ -794,7 +794,7 @@ class TestUpdatePageSinkMeta:
             '---\nformal_page: "Query: Test"\n---\n\n# Query Sink: Test\n\n'
         )
 
-        wiki._update_page_sink_meta(page_path, sink_file)
+        wiki.query_sink._update_page_sink_meta(page_path, sink_file)
 
         content = page_path.read_text()
         assert content.startswith('---')
@@ -815,7 +815,7 @@ class TestSinkSuggestions:
             "# Gold Mining\n\nGold mining involves open-pit extraction and underground methods. Environmental impact is significant."
         )
 
-        suggestions = wiki._detect_content_gaps(
+        suggestions = wiki.query_sink._detect_content_gaps(
             "Gold mining is just extracting gold from the ground.",
             "Query: Gold Mining"
         )
@@ -830,7 +830,7 @@ class TestSinkSuggestions:
 
         wiki.write_page("Query: Gold Mining", "# Gold Mining\n\nBasic extraction methods.")
 
-        suggestions = wiki._detect_content_gaps(
+        suggestions = wiki.query_sink._detect_content_gaps(
             "Gold mining uses Cyanidation and Heap Leaching with modern Environmental Regulations.",
             "Query: Gold Mining"
         )
@@ -845,7 +845,7 @@ class TestSinkSuggestions:
 
         wiki.write_page("Query: Gold Mining", "# Gold Mining\n\nContent. [[Mining Methods]]\n\n[Source](raw/article.md)")
 
-        suggestions = wiki._suggest_source_improvements([], [], "Query: Gold Mining")
+        suggestions = wiki.query_sink._suggest_source_improvements([], [], "Query: Gold Mining")
 
         assert any("No Sources" in s for s in suggestions)
         wiki.close()
@@ -857,7 +857,7 @@ class TestSinkSuggestions:
 
         wiki.write_page("Query: Gold Mining", "# Gold Mining\n\nContent. [[Mining Methods]] [[Environmental Law]] [[Safety Regulations]]")
 
-        suggestions = wiki._suggest_source_improvements(["Mining Methods"], [], "Query: Gold Mining")
+        suggestions = wiki.query_sink._suggest_source_improvements(["Mining Methods"], [], "Query: Gold Mining")
 
         assert any("Missing Sources" in s for s in suggestions)
         wiki.close()
@@ -878,7 +878,7 @@ class TestSinkSuggestions:
             '## [2026-04-10 12:00] Query: Tell me gold mining?\n\nAnswer 3\n\n'
         )
 
-        suggestions = wiki._analyze_query_patterns("What is gold mining?", "Query: Gold Mining")
+        suggestions = wiki.query_sink._analyze_query_patterns("What is gold mining?", "Query: Gold Mining")
 
         assert any("Repeated Question" in s for s in suggestions)
         wiki.close()
@@ -890,7 +890,7 @@ class TestSinkSuggestions:
 
         wiki.write_page("Query: Gold Mining", "# Gold Mining\n\nBasic extraction.")
 
-        suggestions = wiki._suggest_knowledge_growth(
+        suggestions = wiki.query_sink._suggest_knowledge_growth(
             "Cyanidation and Heap Leaching and Amalgamation are key processes.",
             "Query: Gold Mining"
         )
@@ -908,7 +908,7 @@ class TestSinkSuggestions:
         sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
         sink_file.write_text('---\nformal_page: "Query: Gold Mining"\n---\n\n# Query Sink\n\n')
 
-        suggestions = wiki._suggest_knowledge_growth(
+        suggestions = wiki.query_sink._suggest_knowledge_growth(
             "However, this is not the case and contradicts previous findings.",
             "Query: Gold Mining"
         )
@@ -934,7 +934,7 @@ class TestSinkDedup:
         )
 
         new_answer = "Gold mining is the process of extracting gold from ore using various methods. Extra detail."
-        warning = wiki._check_sink_duplicate(sink_file, new_answer)
+        warning = wiki.query_sink._check_sink_duplicate(sink_file, new_answer)
 
         assert warning is not None
         assert "High similarity" in warning
@@ -954,7 +954,7 @@ class TestSinkDedup:
         )
 
         new_answer = "Photosynthesis is how plants convert sunlight into energy."
-        warning = wiki._check_sink_duplicate(sink_file, new_answer)
+        warning = wiki.query_sink._check_sink_duplicate(sink_file, new_answer)
 
         assert warning is None
         wiki.close()
@@ -970,7 +970,7 @@ class TestSinkUrgency:
 
         wiki.write_page("Query: Gold Mining", "# Gold Mining\n\nContent.")
 
-        wiki._append_to_sink("Query: Gold Mining", "Test query", "Test answer", [], [])
+        wiki.query_sink.append_to_sink("Query: Gold Mining", "Test query", "Test answer", [], [])
 
         status = wiki.sink_status()
 

@@ -61,7 +61,7 @@ def _extract_youtube(url: str) -> ExtractedContent:
             },
         )
         
-    except Exception as e:
+    except (ConnectionError, TimeoutError, ValueError, OSError) as e:
         return ExtractedContent(
             text="",
             source_type="error",

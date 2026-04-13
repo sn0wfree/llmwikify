@@ -1,0 +1,40 @@
+# Personal Knowledge Base — Example Configuration
+#
+# Use case: Personal learning notes, book summaries, course materials
+# Key patterns: Book notes, course pages, journal entries
+
+orphan_detection:
+  exclude_patterns:
+    - '^book-note-.*'              # Book notes
+    - '^course-.*'                 # Course pages
+    - '^\d{4}-\d{2}-\d{2}$'        # Daily journal entries
+  exclude_frontmatter:
+    - 'redirect_to'
+  archive_directories:
+    - 'journal'
+    - 'notes'
+    - 'archive'
+
+llm:
+  enabled: false                   # Local mode, no LLM calls
+  provider: "ollama"
+  model: "llama3"
+  base_url: "http://localhost:11434"
+  prompt_chaining:
+    ingest: false
+
+mcp:
+  host: "127.0.0.1"
+  port: 8765
+  transport: "stdio"
+
+prompts:
+  custom_dir: null
+
+performance:
+  batch_size: 50
+  cache_size: 32000
+
+reference_index:
+  name: "reference_index.json"
+  auto_export: true

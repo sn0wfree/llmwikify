@@ -280,15 +280,9 @@ class TestBuiltInTemplates:
     def test_generate_wiki_ops_has_post_process(self):
         registry = PromptRegistry()
         template = registry._load_template("generate_wiki_ops")
-        
+
         assert template.post_process.get("validate_schema") == "operations_array"
         assert template.post_process.get("retry_on_failure", {}).get("max_attempts") == 2
-    
-    def test_ingest_source_deprecated_description(self):
-        registry = PromptRegistry()
-        template = registry._load_template("ingest_source")
-        
-        assert "DEPRECATED" in template.description
 
 
 class TestPromptTemplateMetadata:
