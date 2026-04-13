@@ -8,7 +8,7 @@
 This is a knowledge base powered by [llmwikify](https://github.com/sn0wfree/llmwikify).
 The LLM reads raw sources and incrementally builds a persistent, interlinked wiki.
 
-- **Sources**: `raw/` ({{raw_count}} files{% if raw_categories %} across {{raw_categories}} categories{% endif %})
+- **Sources**: `raw/` directory
 - **Wiki**: `wiki/` (LLM-maintained markdown pages)
 - **Schema**: `wiki.md` — **read this before editing the wiki**
 

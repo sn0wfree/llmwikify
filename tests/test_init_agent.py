@@ -51,7 +51,7 @@ class TestInitAgentOpenCode:
         wiki.close()
 
     def test_raw_analysis_in_agent_md(self, temp_wiki):
-        """Agent MD includes raw/ analysis."""
+        """Agent MD references raw/ directory."""
         (temp_wiki / 'raw').mkdir()
         (temp_wiki / 'raw' / 'gold').mkdir()
         (temp_wiki / 'raw' / 'gold' / 'article.md').write_text("# Test\nContent")
@@ -62,7 +62,7 @@ class TestInitAgentOpenCode:
         wiki.init(agent='opencode')
 
         content = (temp_wiki / 'AGENTS.md').read_text()
-        assert '2 files' in content
+        assert '`raw/` directory' in content
         wiki.close()
 
 

@@ -486,24 +486,17 @@ class Wiki:
     
     def _generate_agent_md(self, agent: str) -> str:
         """Generate agent-specific AGENTS.md or CLAUDE.md content."""
-        raw_stats = self._analyze_raw()
-        raw_count = raw_stats["total"]
-        categories = raw_stats["categories"]
-        cats_str = ", ".join(f"{k} ({v})" for k, v in sorted(categories.items(), key=lambda x: -x[1])) if categories else ""
-        
         template_map = {
             "opencode": "agents_opencode.md",
             "claude": "agents_claude.md",
             "codex": "agents_codex.md",
         }
         template_name = template_map.get(agent, "agents_opencode.md")
-        
+
         return self._render_template(
             template_name,
             project_name=self.root.name,
             version=self._get_version(),
-            raw_count=raw_count,
-            raw_categories=cats_str,
         )
     
     def _generate_mcp_config(self, agent: str) -> str:
