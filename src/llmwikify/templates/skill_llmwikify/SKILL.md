@@ -1,6 +1,6 @@
 ---
 name: llmwikify
-description: Manage a persistent, interlinked wiki knowledge base. Ingest sources, search, write pages, track claims, query knowledge graph via CLI.
+description: Use when the user wants to ingest documents, search the wiki, create/edit wiki pages, check wiki health, query knowledge graph, or manage a llmwikify knowledge base. Commands: ingest, search, write_page, read_page, lint, status, batch, graph-query.
 ---
 
 # llmwikify — CLI Skill

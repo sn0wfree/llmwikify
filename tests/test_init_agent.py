@@ -104,6 +104,29 @@ class TestInitAgentOpenCode:
         assert skill_md.read_text() == original
         wiki2.close()
 
+    def test_opencode_json_has_instructions(self, temp_wiki):
+        """opencode.json includes instructions field for skill auto-load."""
+        wiki = Wiki(temp_wiki)
+        wiki.init(agent='opencode')
+
+        import json
+        config = json.loads((temp_wiki / 'opencode.json').read_text())
+        assert 'instructions' in config
+        assert '.agents/skills/llmwikify/SKILL.md' in config['instructions']
+        wiki.close()
+
+    def test_agents_md_has_kb_management(self, temp_wiki):
+        """AGENTS.md includes Knowledge Base Management section."""
+        wiki = Wiki(temp_wiki)
+        wiki.init(agent='opencode')
+
+        content = (temp_wiki / 'AGENTS.md').read_text()
+        assert '## Knowledge Base Management' in content
+        assert 'MCP mode' in content
+        assert 'CLI mode' in content
+        assert 'Choose whichever works best' in content
+        wiki.close()
+
 
 class TestInitAgentClaude:
     """Test init with --agent claude."""

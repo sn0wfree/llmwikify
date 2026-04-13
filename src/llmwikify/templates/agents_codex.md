@@ -78,3 +78,32 @@ The wiki organizes pages into the following structure (see `wiki.md` for details
 - Review `wiki.md` for detailed page conventions and templates
 - Start ingesting sources from `raw/`
 - Run `wiki_lint` periodically to maintain wiki health
+
+## Knowledge Base Management
+
+You have two ways to operate the wiki:
+
+**MCP mode** (structured JSON):
+- MCP tools are auto-configured in `.opencode.json`
+- Use `wiki_search`, `wiki_ingest`, `wiki_write_page`, etc.
+- Better error handling and structured responses
+
+**CLI mode** (via Bash):
+- Use `llmwikify` CLI commands directly
+- Skill content auto-loaded via instructions
+- See `.agents/skills/llmwikify/SKILL.md` for full details
+
+**Key CLI commands:**
+- `llmwikify ingest raw/file.md [--smart]` — Extract and ingest source
+- `llmwikify search "query"` — Full-text search
+- `llmwikify write_page "Name" --content "..."` — Create/edit pages
+- `llmwikify read_page "Name"` — Read page content
+- `llmwikify lint` — Health check
+- `llmwikify status` — Wiki status summary
+- `llmwikify batch raw/dir/` — Batch ingest
+- `llmwikify graph-query stats` — Graph statistics
+
+Choose whichever works best in your current context.
+See `.agents/skills/llmwikify/resources/cli-reference.md` for full CLI reference.
+
+**Workflow:** ingest → create pages → write relations → update index → review overview
