@@ -253,7 +253,7 @@ class TestSynthesizeDuplicateDetection:
         assert result1['status'] == 'created'
         assert result2['status'] == 'sunk'
         
-        sink_file = temp_wiki / 'sink' / f"{result1['page_name']}.sink.md"
+        sink_file = temp_wiki / 'wiki' / '.sink' / f"{result1['page_name']}.sink.md"
         assert sink_file.exists()
         assert "# Answer 2" in sink_file.read_text()
         
@@ -417,7 +417,7 @@ class TestQueryPageNaming:
         )
         
         assert result['status'] == 'sunk'
-        sink_file = temp_wiki / 'sink' / 'Query: Test Page.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test Page.sink.md'
         assert sink_file.exists()
         
         wiki.close()

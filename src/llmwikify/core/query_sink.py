@@ -17,7 +17,7 @@ class QuerySink:
     def __init__(self, root: Path, wiki_dir: Path) -> None:
         self.root = root.resolve()
         self.wiki_dir = wiki_dir
-        self.sink_dir = root / 'sink'
+        self.sink_dir = wiki_dir / '.sink'
 
     @staticmethod
     def _now() -> str:

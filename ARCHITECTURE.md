@@ -493,6 +493,7 @@ Progress reporting with batch size control and speed tracking.
 - **QuerySink Extracted**: ~480 lines of sink logic moved from Wiki to dedicated `QuerySink` class
 - **Wiki Reduced**: 2,477 → 2,021 lines
 - **Prompt Templates**: 8 → 7 (deprecated `ingest_source.yaml` removed)
+- **Sink Location**: `sink/` → `wiki/.sink/` — sink moved to hidden wiki subdirectory, matching its semantic role as wiki's operation buffer
 - **490 tests passing** (522 collected, 32 markitdown skipped)
 
 ### v0.23.0 — Graph Visualization + Community Detection

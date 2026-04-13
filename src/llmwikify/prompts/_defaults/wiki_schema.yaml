@@ -88,7 +88,7 @@ document: |
   1. Search wiki using `wiki_search` to find relevant pages
   2. Read relevant pages using `wiki_read_page` for full context
   {% raw %}
-     - If results show `has_sink: true`, also read the sink file: `wiki_read_page("sink/{{Topic}}.sink.md")`
+      - If results show `has_sink: true`, also read the sink file: `wiki_read_page("wiki/.sink/{{Topic}}.sink.md")`
   {% endraw %}
   3. Synthesize answer with citations to wiki pages and raw sources
   4. **Save the answer back to the wiki** using `wiki_synthesize`:
@@ -103,20 +103,20 @@ document: |
      - Your answer will be saved to the sink (status: "sunk")
   {% raw %}
      - Read the existing page first: `wiki_read_page("Query: {{topic}}")`
-     - Read pending sink entries: `wiki_read_page("sink/Query: {{topic}}.sink.md")`
+      - Read pending sink entries: `wiki_read_page("wiki/.sink/Query: {{topic}}.sink.md")`
   {% endraw %}
      - Synthesize a comprehensive answer combining both, then use `update_existing=True`
   6. Query answers compound in the knowledge base — they become persistent wiki pages just like ingested sources
   
   ### Query Sink
-  - When a similar query page exists, new answers go to `sink/` instead of creating duplicates
-  - Sink files: `sink/Query: Topic.sink.md` — one per formal query page
+   - When a similar query page exists, new answers go to `wiki/.sink/` instead of creating duplicates
+   - Sink files: `wiki/.sink/Query: Topic.sink.md` — one per formal query page
   - Format: chronological entries with timestamp, query, answer, and sources
   - Each sink file links to its formal page via frontmatter (`formal_page`)
   - Formal pages link to their sink via frontmatter (`sink_path`, `sink_entries`)
   - During lint: use `wiki_sink_status` to find sinks with pending entries
-  - Read sinks with `wiki_read_page("sink/Query: Topic.sink.md")`
-  - After merging, clear sinks with `wiki_write_page("sink/Query: Topic.sink.md", content)`
+   - Read sinks with `wiki_read_page("wiki/.sink/Query: Topic.sink.md")`
+   - After merging, clear sinks with `wiki_write_page("wiki/.sink/Query: Topic.sink.md", content)`
   
   ### Query Page Naming
   {% raw %}
