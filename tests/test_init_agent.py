@@ -194,6 +194,28 @@ class TestInitForceAndSkip:
         assert 'Custom Agent Config' not in content
         wiki.close()
 
+    def test_merge_regenerates_agent_file(self, temp_wiki):
+        """Agent file regenerated with --merge."""
+        (temp_wiki / 'AGENTS.md').write_text("# Custom Agent Config")
+        wiki = Wiki(temp_wiki)
+        result = wiki.init(agent='opencode', merge=True)
+
+        content = (temp_wiki / 'AGENTS.md').read_text()
+        assert 'Agent Instructions' in content
+        assert 'Custom Agent Config' not in content
+        wiki.close()
+
+    def test_merge_regenerates_mcp_config(self, temp_wiki):
+        """MCP config regenerated with --merge."""
+        (temp_wiki / 'opencode.json').write_text('{"old": true}')
+        wiki = Wiki(temp_wiki)
+        result = wiki.init(agent='opencode', merge=True)
+
+        config = json.loads((temp_wiki / 'opencode.json').read_text())
+        assert 'mcp' in config
+        assert 'old' not in config
+        wiki.close()
+
 
 class TestInitAgentOnExistingWiki:
     """Test adding agent config to an already-initialized wiki."""

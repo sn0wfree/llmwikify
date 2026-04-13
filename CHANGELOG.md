@@ -15,10 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--agent generic` → `wiki.md` + `.gitignore` only
 - **Raw Source Analysis**: Init auto-analyzes `raw/` directory structure and includes stats in generated files
 - **Schema Conflict Detection**: Warns when `wiki.md` or `WIKI.md` already exists, with `--force`/`--merge` options
+- **`mcp` CLI Subcommand**: Start MCP server for Agent interaction (`llmwikify mcp`), default stdio transport
+- **`--merge` Agent Config Regeneration**: `llmwikify init --agent <type> --merge` now regenerates agent config files in addition to merging wiki.md
+
+### Changed
+- **MCP Server → FastMCP**: Replaced low-level `mcp.server.Server` with FastMCP (`@mcp.tool` decorators). 377 lines → 180 lines. Cleaner API, automatic schema generation, and industry-standard framework.
+- **Dependency**: `mcp>=1.0.0` → `fastmcp>=3.0.0`
+- **API**: `MCPServer(wiki)` replaced by `create_mcp_server(wiki)` + `serve_mcp(wiki)`
+- **`serve` CLI Subcommand**: Reserved for future self-hosted Agent with LLM API integration (no longer MCP server entry point)
 
 ### Planned
 - Web UI (optional)
-- MCP server authentication
+- Self-hosted Agent mode (`serve`) — Direct LLM API integration without external Agent
 - Incremental index updates
 - Stable API guarantee
 - Production hardening

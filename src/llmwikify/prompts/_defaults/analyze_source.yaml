@@ -1,22 +1,22 @@
 name: analyze_source
-description: "Extract topics, entities, and key facts from a source document. First step of ingest chaining."
-version: "1.0"
+description: "Extract topics, entities, relations, and key facts from a source document. First step of ingest chaining."
+version: "1.1"
 trigger:
   type: "api_call"
   when: "analyze_source"
 
 params:
-  max_tokens: 2048
+  max_tokens: 4096
   temperature: 0.1
   max_content_chars: 8000
 
 system: |
   You are a document analyst. Extract structured information from source documents.
-  
+
   {% if provider == "ollama" %}
   IMPORTANT: Output ONLY valid JSON. No explanations. Do NOT use markdown code blocks.
   {% endif %}
-  
+
   Rules:
   - Only extract facts present in the source content
   - Do NOT fabricate information
@@ -24,10 +24,14 @@ system: |
   - Note any claims that CONTRADICT information in the current wiki index
   - Flag any vague or unsupported claims in the source
   - Identify potential data gaps — topics mentioned but not fully explained
+  - Extract entities (people, organizations, locations, products, events)
+  - Extract relations between entities and concepts using these types:
+    is_a, uses, related_to, contradicts, supports, replaces, optimizes, extends
+  - Extract specific factual claims that could be tracked over time
 
 user: |
   Analyze this source document:
-  
+
   Title: {{ title }}
   Type: {{ source_type }}
   {% if content_truncated %}
@@ -38,18 +42,28 @@ user: |
   ---
   {{ content }}
   ---
-  
+
   Current wiki index (for contradiction detection):
   ---
   {{ current_index }}
   ---
-  
+
   Return JSON with:
   {
     "topics": ["main topic 1", "main topic 2"],
-    "entities": [{"name": "Entity Name", "type": "person|organization|event|concept|place", "attributes": {"key": "value"}}],
+    "entities": [
+      {"name": "Entity Name", "type": "person|organization|location|product|event", "attributes": {"key": "value"}}
+    ],
+    "relations": [
+      {"source": "Entity A", "target": "Entity B", "relation": "is_a|uses|related_to|contradicts|supports|replaces|optimizes|extends", "context": "brief context"}
+    ],
+    "claims": [
+      {"statement": "specific factual claim", "confidence": "high|medium|low", "context": "where in the document"}
+    ],
     "key_facts": ["fact 1", "fact 2"],
-    "suggested_pages": [{"name": "Page Name", "summary": "One-line summary", "priority": "high|medium|low"}],
+    "suggested_pages": [
+      {"name": "Page Name", "type": "entity|concept|claim|source-summary", "summary": "One-line summary", "priority": "high|medium|low"}
+    ],
     "cross_refs": ["Existing Wiki Page 1", "Existing Wiki Page 2"],
     "content_type": "technical_article|meeting_notes|research_paper|news|documentation|other",
     "potential_contradictions": ["claim in source that may conflict with existing wiki"],

@@ -5,7 +5,7 @@
 
 ## Overview
 
-This is a knowledge base powered by [llmwikify](https://github.com/anomalyco/llmwikify).
+This is a knowledge base powered by [llmwikify](https://github.com/sn0wfree/llmwikify).
 The LLM reads raw sources and incrementally builds a persistent, interlinked wiki.
 
 - **Sources**: `raw/` ({{raw_count}} files{% if raw_categories %} across {{raw_categories}} categories{% endif %})
@@ -26,14 +26,14 @@ You have access to the llmwikify MCP server, which provides these tools:
 | `wiki_synthesize` | Save a query answer as a persistent wiki page |
 | `wiki_build_index` | Rebuild FTS5 search index |
 | `wiki_lint` | Health check (broken links, orphans, contradictions) |
-| `wiki_status` | Wiki status summary |
+| `wiki_status` | Wiki status summary (includes pages by type and graph stats) |
 | `wiki_log` | Read operation log |
 | `wiki_sink_status` | Overview of pending sink entries |
 | `wiki_references` | Page reference tracking |
 | `wiki_read_schema` | Read wiki.md (schema) |
 | `wiki_update_schema` | Update wiki.md |
-| `wiki_graph` | Knowledge graph query/analysis |
-| `wiki_graph_analyze` | Graph export, community detection |
+| `wiki_graph` | Knowledge graph query/modify (query, path, stats, write) |
+| `wiki_graph_analyze` | Graph export, community detection, report |
 
 ## Core Rules
 
@@ -43,6 +43,35 @@ You have access to the llmwikify MCP server, which provides these tools:
 4. **Use `[[wikilinks]]`** for cross-references between wiki pages
 5. **Do not create duplicate pages** — merge new info into existing pages
 6. **Query answers go to sink** when a similar page exists — use `wiki_synthesize` with default `merge_or_replace="sink"`
+7. **Write graph relations** — use `wiki_graph(action="write")` to maintain the knowledge graph alongside pages
+8. **Track claims** — separate factual claims from interpretation; use `wiki/claims/` pages with supporting/contradicting evidence
+
+## Page Types
+
+The wiki organizes pages into the following structure (see `wiki.md` for details):
+
+| Type | Location | Purpose |
+|------|----------|---------|
+| Source | `wiki/sources/` | Source summaries |
+| Entity | `wiki/entities/` | People, orgs, locations, products |
+| Concept | `wiki/concepts/` | Theories, frameworks, methods |
+| Comparison | `wiki/comparisons/` | Side-by-side analyses |
+| Synthesis | `wiki/synthesis/` | Cross-source analysis |
+| Claim | `wiki/claims/` | Factual claims with evidence tracking |
+| Overview | `wiki/overview.md` | Top-level synthesis |
+
+## Ingest Workflow
+
+1. Call `wiki_ingest(source="raw/{file}")` — returns full content, detected entities, and relations
+2. Review the response for `detected_entities`, `detected_relations`, and `detected_claims`
+3. Create appropriate wiki pages using `wiki_write_page`:
+   - Always: `wiki/sources/{slug}.md`
+   - If entities detected: `wiki/entities/{name}.md`
+   - If concepts detected: `wiki/concepts/{name}.md`
+   - If claims identified: `wiki/claims/{slug}.md`
+4. Write graph relations: `wiki_graph(action="write", relations=[...])`
+5. Add `[[wikilinks]]` between related pages
+6. Call `wiki_log` to record what was done
 
 ## Next Steps
 

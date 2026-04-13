@@ -389,7 +389,7 @@ class TestBuiltInTemplates:
 
         assert template.name == "analyze_source"
         assert "document analyst" in template.system
-        assert template.params.get("max_tokens") == 2048
+        assert template.params.get("max_tokens") == 4096
         assert template.params.get("temperature") == 0.1
 
     def test_investigate_lint_template_exists(self):

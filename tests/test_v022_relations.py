@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from llmwikify.core.index import WikiIndex
-from llmwikify.core.relation_engine import RelationEngine, RELATION_TYPES, CONFIDENCE_LEVELS
+from llmwikify.core.relation_engine import RelationEngine, DEFAULT_RELATION_TYPES, CONFIDENCE_LEVELS
 
 
 @pytest.fixture
@@ -21,15 +21,15 @@ def temp_db(tmp_path):
 
 @pytest.fixture
 def engine(temp_db):
-    return RelationEngine(temp_db)
+    return RelationEngine(temp_db, wiki_root=None)
 
 
 class TestRelationSchema:
     def test_relation_types(self):
-        assert "is_a" in RELATION_TYPES
-        assert "uses" in RELATION_TYPES
-        assert "contradicts" in RELATION_TYPES
-        assert len(RELATION_TYPES) == 8
+        assert "is_a" in DEFAULT_RELATION_TYPES
+        assert "uses" in DEFAULT_RELATION_TYPES
+        assert "contradicts" in DEFAULT_RELATION_TYPES
+        assert len(DEFAULT_RELATION_TYPES) == 8
 
     def test_confidence_levels(self):
         assert CONFIDENCE_LEVELS == {"EXTRACTED", "INFERRED", "AMBIGUOUS"}

@@ -20,7 +20,7 @@ from typing import Optional, Dict
 # Import main components from modules
 from .core import Wiki, WikiIndex
 from .cli import WikiCLI
-from .mcp import MCPServer
+from .mcp import create_mcp_server, serve_mcp
 from .extractors import ExtractedContent, Link
 from .config import (
     load_config,
@@ -50,7 +50,8 @@ __all__ = [
     "Wiki",
     "WikiIndex", 
     "WikiCLI",
-    "MCPServer",
+    "create_mcp_server",
+    "serve_mcp",
     
     # Data classes
     "ExtractedContent",

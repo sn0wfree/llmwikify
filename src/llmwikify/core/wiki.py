@@ -170,7 +170,7 @@ class Wiki:
             if agent and agent != "generic":
                 agent_filename = "CLAUDE.md" if agent == "claude" else "AGENTS.md"
                 agent_path = self.root / agent_filename
-                if not agent_path.exists() or force:
+                if not agent_path.exists() or force or merge:
                     content = self._generate_agent_md(agent)
                     if content:
                         agent_path.write_text(content)
@@ -183,7 +183,7 @@ class Wiki:
                     "opencode.json" if agent == "opencode" else ".opencode.json"
                 )
                 mcp_path = self.root / mcp_filename
-                if not mcp_path.exists() or force:
+                if not mcp_path.exists() or force or merge:
                     content = self._generate_mcp_config(agent)
                     if content:
                         mcp_path.write_text(content)
@@ -223,6 +223,15 @@ class Wiki:
         else:
             skipped.append("wiki/")
         
+        # Create wiki subdirectories for page types
+        for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
+            sub_path = self.wiki_dir / subdir
+            if not sub_path.exists():
+                sub_path.mkdir(parents=True, exist_ok=True)
+                created.append(f"wiki/{subdir}/")
+            else:
+                skipped.append(f"wiki/{subdir}/")
+        
         if not self.sink_dir.exists():
             self.sink_dir.mkdir(parents=True, exist_ok=True)
             created.append("wiki/.sink/")
@@ -245,6 +254,14 @@ class Wiki:
             created.append("log.md")
         else:
             skipped.append("log.md")
+        
+        # Create overview.md (default synthesis page)
+        overview_path = self.wiki_dir / "overview.md"
+        if not overview_path.exists() or overwrite:
+            overview_path.write_text(self._generate_overview_content())
+            created.append("overview.md")
+        else:
+            skipped.append("overview.md")
         
         # Create config example (always skip if exists)
         config_example = self.root / '.wiki-config.yaml.example'
@@ -287,7 +304,7 @@ class Wiki:
             # Agent entry file
             agent_filename = "CLAUDE.md" if agent == "claude" else "AGENTS.md"
             agent_path = self.root / agent_filename
-            if not agent_path.exists() or force:
+            if not agent_path.exists() or force or merge:
                 content = self._generate_agent_md(agent)
                 if content:
                     agent_path.write_text(content)
@@ -303,7 +320,7 @@ class Wiki:
                 "opencode.json" if agent == "opencode" else ".opencode.json"
             )
             mcp_path = self.root / mcp_filename
-            if not mcp_path.exists() or force:
+            if not mcp_path.exists() or force or merge:
                 content = self._generate_mcp_config(agent)
                 if content:
                     mcp_path.write_text(content)
@@ -352,6 +369,32 @@ class Wiki:
             "# Wiki Log\n\n"
             f"Initialized: {self._now()}\n\n"
             "---\n"
+        )
+    
+    def _generate_overview_content(self) -> str:
+        """Generate initial overview.md content."""
+        return (
+            "---\n"
+            "title: Overview\n"
+            "type: overview\n"
+            f"created: {self._now()[:10]}\n"
+            f"updated: {self._now()[:10]}\n"
+            "sources: []\n"
+            "tags: []\n"
+            "---\n\n"
+            "# Overview\n\n"
+            "> This page is the top-level synthesis of the entire knowledge base.\n"
+            "> Revise as sources are ingested and understanding deepens.\n\n"
+            "## Scope\n\n"
+            "*(Describe the wiki's domain and purpose)*\n\n"
+            "## Current State\n\n"
+            "*(Summary of current understanding based on ingested sources)*\n\n"
+            "## Key Themes\n\n"
+            "*(List key themes with [[wikilinks]] to relevant pages)*\n\n"
+            "## Working Theses\n\n"
+            "*(Working hypotheses or arguments the wiki is building)*\n\n"
+            "## Open Questions\n\n"
+            "*(Questions that remain unanswered as sources are added)*\n"
         )
     
     def _generate_config_example(self) -> str:
@@ -633,6 +676,9 @@ class Wiki:
         return {
             "status": "success",
             "operations": operations,
+            "relations": analysis.get("relations", []),
+            "entities": analysis.get("entities", []),
+            "claims": analysis.get("claims", []),
             "analysis": analysis,
             "source_title": source_data["title"],
             "mode": "chained",
@@ -735,7 +781,7 @@ class Wiki:
         
         from .relation_engine import RelationEngine
         
-        engine = RelationEngine(self.index)
+        engine = RelationEngine(self.index, wiki_root=self.root)
         
         # Enrich with source_file if not present
         for r in relations:
@@ -743,6 +789,14 @@ class Wiki:
                 r["source_file"] = source_file
         
         count = engine.add_relations(relations)
+        
+        if count == 0 and relations:
+            valid_types = engine.get_relation_types()
+            return {
+                "status": "skipped",
+                "count": 0,
+                "reason": f"No valid relations added. Valid types: {sorted(valid_types)}",
+            }
         
         return {
             "status": "completed",
@@ -753,7 +807,7 @@ class Wiki:
     def get_relation_engine(self) -> "RelationEngine":
         """Get the relation engine instance."""
         from .relation_engine import RelationEngine
-        return RelationEngine(self.index)
+        return RelationEngine(self.index, wiki_root=self.root)
     
     def write_page(self, page_name: str, content: str) -> str:
         """Write a wiki page."""
@@ -1440,7 +1494,7 @@ class Wiki:
     
     def status(self) -> dict:
         """Get wiki status."""
-        return {
+        result = {
             "initialized": self.is_initialized(),
             "root": str(self.root),
             "page_count": len(list(self.wiki_dir.glob("*.md"))),
@@ -1448,6 +1502,29 @@ class Wiki:
             "indexed_pages": self.index.get_page_count() if self.is_initialized() else "N/A",
             "total_links": self.index.get_link_count() if self.is_initialized() else "N/A",
         }
+
+        # Count pages by type
+        pages_by_type = {}
+        for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
+            sub_path = self.wiki_dir / subdir
+            if sub_path.exists():
+                pages_by_type[subdir] = len(list(sub_path.glob("*.md")))
+        # Root-level pages (overview, index, log excluded)
+        root_pages = len([f for f in self.wiki_dir.glob("*.md") if f.stem not in ("index", "log")])
+        if root_pages > 0:
+            pages_by_type["root"] = root_pages
+        result["pages_by_type"] = pages_by_type
+
+        # Graph stats
+        if self.is_initialized():
+            try:
+                engine = self.get_relation_engine()
+                stats = engine.get_stats()
+                result["graph_stats"] = stats
+            except Exception:
+                result["graph_stats"] = {"total_relations": 0, "unique_concepts": 0}
+
+        return result
     
     def append_log(self, operation: str, details: str) -> str:
         """Append entry to wiki log."""

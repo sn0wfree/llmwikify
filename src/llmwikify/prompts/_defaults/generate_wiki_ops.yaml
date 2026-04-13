@@ -1,6 +1,6 @@
 name: generate_wiki_ops
 description: "Convert document analysis into wiki page operations. Second step of ingest chaining."
-version: "1.0"
+version: "1.1"
 trigger:
   type: "api_call"
   when: "generate_wiki_ops"
@@ -11,11 +11,11 @@ params:
 
 system: |
   You are a wiki operations planner. Convert document analysis into wiki write operations.
-  
+
   {% if provider == "ollama" %}
   IMPORTANT: Output ONLY a valid JSON array. Do NOT include any text before or after the JSON. Do NOT use markdown code blocks.
   {% endif %}
-  
+
   Rules:
   - Create one page per suggested_page from the analysis
   - Each page should be focused on a single topic
@@ -23,27 +23,32 @@ system: |
   - Do NOT fabricate facts not present in the analysis
   - Include a log operation summarizing what was done
   - If a page already exists, write an updated version
+  - Create entity pages in wiki/entities/{name}.md format
+  - Create concept pages in wiki/concepts/{name}.md format
+  - Create claim pages in wiki/claims/{slug}.md format
+  - Create source summaries in wiki/sources/{slug}.md format
+  - Include YAML frontmatter with title, type, created, sources fields
 
 user: |
   Document Analysis:
   {{ analysis_json }}
-  
+
   {% if existing_pages is defined and existing_pages %}
   Existing Wiki Pages: {{ existing_pages }}
-  
+
   {% endif %}
   Current Wiki Index:
   ---
   {{ current_index }}
   ---
-  
+
   Generate wiki operations:
   - For each suggested_page with priority "high" or "medium", create a write_page operation
   - Include [[wikilinks]] to pages in cross_refs when relevant
   - Add a log operation summarizing the ingest
-  
+
   Return JSON array:
-  [{"action": "write_page", "page_name": "...", "content": "# Page Name\n\n..."},
+  [{"action": "write_page", "page_name": "...", "content": "# Page Name\n\n---\ntitle: ...\ntype: ...\n---\n..."},
    {"action": "log", "operation": "ingest", "details": "..."}]
 
 context_injection:
