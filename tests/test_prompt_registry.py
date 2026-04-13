@@ -15,10 +15,10 @@ def temp_prompts_dir(tmp_path):
     """Create a temporary prompts directory with test templates."""
     defaults_dir = tmp_path / "_defaults"
     defaults_dir.mkdir()
-    
-    ingest_template = {
-        "name": "ingest_source",
-        "description": "Test ingest template",
+
+    analyze_template = {
+        "name": "analyze_source",
+        "description": "Test analyze template",
         "version": "1.0",
         "params": {
             "max_tokens": 4096,
@@ -27,8 +27,8 @@ def temp_prompts_dir(tmp_path):
         "system": "You are a wiki agent.\n{% if provider == 'ollama' %}Output only JSON.{% endif %}",
         "user": "Process: {{ title }}\nContent: {{ content }}\nMax chars: {{ max_content_chars }}",
     }
-    (defaults_dir / "ingest_source.yaml").write_text(yaml.dump(ingest_template))
-    
+    (defaults_dir / "analyze_source.yaml").write_text(yaml.dump(analyze_template))
+
     investigate_template = {
         "name": "investigate_lint",
         "description": "Test investigate template",
@@ -41,7 +41,7 @@ def temp_prompts_dir(tmp_path):
         "user": "Contradictions: {{ contradictions_json }}\nGaps: {{ data_gaps_json }}\nPages: {{ total_pages }}",
     }
     (defaults_dir / "investigate_lint.yaml").write_text(yaml.dump(investigate_template))
-    
+
     return defaults_dir
 
 
@@ -49,8 +49,8 @@ def temp_prompts_dir(tmp_path):
 def custom_prompts_dir(tmp_path):
     """Create a custom prompts directory with override template."""
     custom_override = {
-        "name": "ingest_source",
-        "description": "Custom ingest override",
+        "name": "analyze_source",
+        "description": "Custom analyze override",
         "version": "2.0",
         "params": {
             "max_tokens": 8192,
@@ -59,7 +59,7 @@ def custom_prompts_dir(tmp_path):
         "system": "Custom agent for {{ provider }}.",
         "user": "Custom: {{ title }}",
     }
-    (tmp_path / "ingest_source.yaml").write_text(yaml.dump(custom_override))
+    (tmp_path / "analyze_source.yaml").write_text(yaml.dump(custom_override))
     return tmp_path
 
 
@@ -68,69 +68,69 @@ class TestPromptRegistryInit:
         registry = PromptRegistry()
         assert registry.provider == "openai"
         assert registry.custom_dir is None
-    
+
     def test_custom_provider(self):
         registry = PromptRegistry(provider="ollama")
         assert registry.provider == "ollama"
-    
+
     def test_custom_dir(self, tmp_path):
         registry = PromptRegistry(custom_dir=tmp_path)
         assert registry.custom_dir == tmp_path
 
 
 class TestPromptRegistryLoading:
-    def test_load_builtin_ingest_template(self, temp_prompts_dir):
+    def test_load_builtin_analyze_template(self, temp_prompts_dir):
         registry = PromptRegistry(custom_dir=temp_prompts_dir)
-        template = registry._load_template("ingest_source")
-        
-        assert template.name == "ingest_source"
+        template = registry._load_template("analyze_source")
+
+        assert template.name == "analyze_source"
         assert template.version == "1.0"
         assert "wiki agent" in template.system
         assert template.params["max_tokens"] == 4096
-    
+
     def test_load_builtin_investigate_template(self, temp_prompts_dir):
         registry = PromptRegistry(custom_dir=temp_prompts_dir)
         template = registry._load_template("investigate_lint")
-        
+
         assert template.name == "investigate_lint"
         assert "analyst" in template.system
-    
+
     def test_custom_dir_takes_priority(self, temp_prompts_dir, custom_prompts_dir):
         registry = PromptRegistry(
             provider="openai",
             custom_dir=custom_prompts_dir,
         )
-        
-        template = registry._load_template("ingest_source")
+
+        template = registry._load_template("analyze_source")
         assert "Custom agent" in template.system
         assert template.params["max_tokens"] == 8192
-    
+
     def test_file_not_found(self, tmp_path):
         registry = PromptRegistry(custom_dir=tmp_path)
-        
+
         with pytest.raises(FileNotFoundError, match="not found"):
             registry._load_template("nonexistent")
-    
+
     def test_caching(self, temp_prompts_dir):
         registry = PromptRegistry(custom_dir=temp_prompts_dir)
-        
-        t1 = registry._load_template("ingest_source")
-        t2 = registry._load_template("ingest_source")
-        
+
+        t1 = registry._load_template("analyze_source")
+        t2 = registry._load_template("analyze_source")
+
         assert t1 is t2
 
 
 class TestPromptRegistryRendering:
     def test_get_messages_openai(self, temp_prompts_dir):
         registry = PromptRegistry(provider="openai", custom_dir=temp_prompts_dir)
-        
+
         messages = registry.get_messages(
-            "ingest_source",
+            "analyze_source",
             title="Test Doc",
             content="Some content",
             max_content_chars=8000,
         )
-        
+
         assert len(messages) == 2
         assert messages[0]["role"] == "system"
         assert messages[1]["role"] == "user"
@@ -138,17 +138,17 @@ class TestPromptRegistryRendering:
         assert "Output only JSON" not in messages[0]["content"]
         assert "Process: Test Doc" in messages[1]["content"]
         assert "Some content" in messages[1]["content"]
-    
+
     def test_get_messages_ollama(self, temp_prompts_dir):
         registry = PromptRegistry(provider="ollama", custom_dir=temp_prompts_dir)
-        
+
         messages = registry.get_messages(
-            "ingest_source",
+            "analyze_source",
             title="Test Doc",
             content="Some content",
             max_content_chars=8000,
         )
-        
+
         assert "Output only JSON" in messages[0]["content"]
     
     def test_get_messages_investigate(self, temp_prompts_dir):
@@ -170,9 +170,9 @@ class TestPromptRegistryRendering:
     
     def test_get_messages_missing_variable(self, temp_prompts_dir):
         registry = PromptRegistry(custom_dir=temp_prompts_dir)
-        
-        messages = registry.get_messages("ingest_source")
-        
+
+        messages = registry.get_messages("analyze_source")
+
         assert "{{ title }}" not in messages[1]["content"]
     
     def test_get_messages_empty_template(self, tmp_path):
@@ -194,20 +194,20 @@ class TestPromptRegistryRendering:
     def test_jinja2_conditionals(self, temp_prompts_dir):
         registry_openai = PromptRegistry(provider="openai", custom_dir=temp_prompts_dir)
         registry_ollama = PromptRegistry(provider="ollama", custom_dir=temp_prompts_dir)
-        
-        msg_openai = registry_openai.get_messages("ingest_source")
-        msg_ollama = registry_ollama.get_messages("ingest_source")
-        
+
+        msg_openai = registry_openai.get_messages("analyze_source")
+        msg_ollama = registry_ollama.get_messages("analyze_source")
+
         assert "Output only JSON" not in msg_openai[0]["content"]
         assert "Output only JSON" in msg_ollama[0]["content"]
 
 
 class TestPromptRegistryParams:
-    def test_get_params_ingest(self, temp_prompts_dir):
+    def test_get_params_analyze(self, temp_prompts_dir):
         registry = PromptRegistry(custom_dir=temp_prompts_dir)
-        
-        params = registry.get_params("ingest_source")
-        
+
+        params = registry.get_params("analyze_source")
+
         assert params["max_tokens"] == 4096
         assert params["temperature"] == 0.1
     
@@ -224,9 +224,9 @@ class TestPromptRegistryParams:
             provider="openai",
             custom_dir=custom_prompts_dir,
         )
-        
-        params = registry.get_params("ingest_source")
-        
+
+        params = registry.get_params("analyze_source")
+
         assert params["max_tokens"] == 8192
         assert params["temperature"] == 0.0
 
@@ -383,15 +383,15 @@ class TestGetApiParams:
 
 
 class TestBuiltInTemplates:
-    def test_ingest_source_template_exists(self):
+    def test_analyze_source_template_exists(self):
         registry = PromptRegistry()
-        template = registry._load_template("ingest_source")
-        
-        assert template.name == "ingest_source"
-        assert "wiki maintenance agent" in template.system
-        assert template.params.get("max_tokens") == 4096
+        template = registry._load_template("analyze_source")
+
+        assert template.name == "analyze_source"
+        assert "document analyst" in template.system
+        assert template.params.get("max_tokens") == 2048
         assert template.params.get("temperature") == 0.1
-    
+
     def test_investigate_lint_template_exists(self):
         registry = PromptRegistry()
         template = registry._load_template("investigate_lint")

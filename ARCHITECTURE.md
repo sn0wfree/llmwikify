@@ -2,14 +2,15 @@
 
 > Technical architecture document for developers
 
-**Version**: 0.12.6  
-**Last Updated**: 2026-04-10
+**Version**: 0.24.0  
+**Last Updated**: 2026-04-12  
+**Tests**: 490 passing (522 collected, 32 markitdown skipped)
 
 ---
 
 ## Overview
 
-**llmwikify** is built as a modular package structure (v0.11.0+), evolved from single-file implementation (v0.10.0). Current version: **v0.12.6** with 13 MCP tools, 15 CLI commands, and 110 passing tests.
+**llmwikify** is a modular Python package for building persistent, LLM-maintained knowledge bases. It has evolved from a single-file implementation (v0.10.0, 1,965 lines) into a fully modular architecture with 10+ submodules, 19 CLI commands, 16 MCP tools, and comprehensive test coverage.
 
 ### Design Principles
 
@@ -18,30 +19,57 @@
 3. **Performance by Default** — Batch operations, PRAGMA tuning
 4. **Pure Tool Design** — Universal patterns only
 5. **Modular Architecture** — Clear separation of concerns
-6. **Knowledge Compounding** — Query answers saved back to wiki as persistent pages
+6. **Knowledge Compounding** — Query answers saved back to wiki
+7. **User Control** — Watch defaults to notify-only, graph analysis is opt-in
 
 ---
 
-## Module Structure (v0.11.0+)
+## Module Structure
 
 ```
 src/llmwikify/
 ├── __init__.py              # Package entry point, create_wiki()
+├── config.py                # Configuration system (load_config, DEFAULT_CONFIG)
+├── llm_client.py            # LLM API client (OpenAI-compatible)
+├── py.typed                 # PEP 561 type marker
+│
 ├── core/                    # Core business logic
-│   ├── wiki.py              # Wiki class (~1,260 lines)
-│   └── index.py             # WikiIndex class (FTS5 + references)
+│   ├── __init__.py
+│   ├── wiki.py              # Wiki class (~2,000 lines) — main orchestrator
+│   ├── index.py             # WikiIndex class (FTS5 + references)
+│   ├── query_sink.py        # QuerySink class — sink buffer management
+│   ├── relation_engine.py   # Knowledge graph relations (SQLite)
+│   ├── graph_export.py      # Graph visualization + community detection
+│   ├── watcher.py           # File system watcher (watchdog)
+│   ├── prompt_registry.py   # YAML+Jinja2 prompt template system
+│   └── principle_checker.py # Prompt principle compliance checker
+│
 ├── extractors/              # Content extractors
-│   ├── base.py              # detect_source_type(), extract()
+│   ├── __init__.py
+│   ├── base.py              # ExtractedContent, detect_source_type(), extract()
 │   ├── text.py              # Text/HTML extraction
-│   ├── pdf.py               # PDF extraction (optional: pymupdf)
-│   ├── web.py               # Web URL extraction (optional: trafilatura)
-│   └── youtube.py           # YouTube extraction (optional: youtube-transcript-api)
+│   ├── pdf.py               # PDF extraction (pymupdf)
+│   ├── web.py               # Web URL extraction (trafilatura)
+│   ├── youtube.py           # YouTube transcript extraction
+│   └── markitdown_extractor.py  # MarkItDown unified extractor (Office, images, audio)
+│
 ├── cli/                     # Command-line interface
-│   └── commands.py          # WikiCLI class (15 commands)
+│   ├── __init__.py
+│   └── commands.py          # WikiCLI class (19 commands)
+│
 ├── mcp/                     # MCP server
-│   └── server.py            # MCPServer class (13 tools)
-├── config.py                # Configuration system
-└── llm_client.py            # LLM API client (optional)
+│   ├── __init__.py
+│   └── server.py            # MCPServer class (16 tools)
+│
+├── prompts/                 # Prompt templates
+│   ├── __init__.py
+│   └── _defaults/           # 7 YAML prompt templates
+│       ├── analyze_source.yaml
+│       ├── generate_wiki_ops.yaml
+│       ├── ingest_instructions.yaml
+│       ├── investigate_lint.yaml
+│       ├── wiki_schema.yaml
+│       └── wiki_synthesize.yaml
 ```
 
 ---
@@ -51,35 +79,50 @@ src/llmwikify/
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Application Layer                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐     │
-│  │  CLI (15)   │  │  MCP (13)   │  │  Python API     │     │
-│  └──────┬──────┘  └──────┬──────┘  └────────┬────────┘     │
-└─────────┼────────────────┼──────────────────┼──────────────┘
-          │                │                  │
-          ▼                ▼                  ▼
+│                                                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐  │
+│  │  CLI (19)    │  │  MCP (16)    │  │  Python API     │  │
+│  └──────┬───────┘  └──────┬───────┘  └────────┬────────┘  │
+└─────────┼─────────────────┼──────────────────┼────────────┘
+          │                 │                  │
+          ▼                 ▼                  ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      Core Layer                              │
-│  ┌─────────────────┐  ┌─────────────────────────────┐      │
-│  │   Wiki          │◄─┤  Config (load_config)       │      │
-│  │  (wiki.py)      │  └─────────────────────────────┘      │
+│                                                             │
+│  ┌─────────────────┐  ┌─────────────────────────────────┐  │
+│  │   Wiki          │◄─┤  Config (load_config)           │  │
+│  │  (wiki.py)      │  └─────────────────────────────────┘  │
 │  └────────┬────────┘                                        │
 │           │                                                 │
 │           ▼                                                 │
-│  ┌─────────────────┐                                        │
-│  │  WikiIndex      │                                        │
-│  │  (index.py)     │                                        │
-│  └─────────────────┘                                        │
+│  ┌─────────────────┐  ┌──────────────────────────────────┐ │
+│  │  WikiIndex      │  │  RelationEngine                  │ │
+│  │  (index.py)     │  │  (relation_engine.py)            │ │
+│  └────────┬────────┘  └──────────────┬───────────────────┘ │
+│           │                          │                     │
+│           ▼                          ▼                     │
+│  ┌─────────────────┐  ┌──────────────────────────────────┐ │
+│  │  PromptRegistry │  │  GraphExport                     │ │
+│  │  (YAML+Jinja2)  │  │  (graph_export.py)               │ │
+│  └─────────────────┘  └──────────────────────────────────┘ │
+│                                                             │
+│  ┌─────────────────┐  ┌──────────────────────────────────┐ │
+│  │ PrincipleChecker│  │  FileSystemWatcher               │ │
+│  │ (7 principles)  │  │  (watcher.py)                    │ │
+│  └─────────────────┘  └──────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
           ▲
           │
 ┌─────────┴────────────────────────────────────────────────┐
 │                   Extraction Layer                        │
+│                                                          │
 │  ┌───────────┐  ┌───────────┐  ┌───────────┐            │
 │  │ text.py   │  │ pdf.py    │  │ web.py    │            │
 │  └───────────┘  └───────────┘  └───────────┘            │
-│  ┌───────────┐                                          │
-│  │ youtube.py│                                          │
-│  └───────────┘                                          │
+│  ┌───────────┐  ┌──────────────────────────────────┐    │
+│  │ youtube.py│  │ markitdown_extractor.py          │    │
+│  └───────────┘  │ (Office, images, audio, etc.)    │    │
+│                  └──────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -91,22 +134,44 @@ src/llmwikify/
 
 **Responsibility**: Main business logic orchestrator
 
-**Key Methods**:
-- `init()` — Initialize wiki directory structure (idempotent, overwrite support)
-- `ingest_source()` — Process sources; all collected into `raw/`
-- `write_page()` / `read_page()` — Page management (auto-updates index.md)
-- `search()` — FTS5 full-text search
-- `synthesize_query()` — **Save query answers as persistent wiki pages** (v0.12.6+)
-- `lint()` — Health check (broken links, orphan pages)
-- `recommend()` — Smart recommendations (missing pages, orphans)
-- `hint()` — Smart suggestions for wiki improvement
-- `build_index()` — Build reference index
-- `read_schema()` / `update_schema()` — Manage wiki.md
-- `get_inbound_links()` / `get_outbound_links()` — Reference queries
+**Key Methods** (25 public methods):
 
-**Dependencies**:
-- `core.index.WikiIndex`
-- `extractors.extract`
+| Method | Description |
+|--------|-------------|
+| `init()` | Initialize wiki directory structure (idempotent) |
+| `ingest_source()` | Process sources; all collected into `raw/` |
+| `write_page()` | Write/update page (auto-updates index.md) |
+| `read_page()` | Read page (supports sink files) |
+| `search()` | FTS5 full-text search with sink status |
+| `synthesize_query()` | Save query answers as persistent wiki pages |
+| `write_relations()` | Write LLM-extracted relations to database |
+| `get_relation_engine()` | Get RelationEngine instance |
+| `lint()` | Health check (broken links, orphans, contradictions, investigations) |
+| `recommend()` | Find missing pages and orphans |
+| `hint()` | Smart prioritized suggestions |
+| `status()` | Wiki status summary |
+| `build_index()` | Rebuild FTS5 index from all wiki files |
+| `export_index()` | Export reference index to JSON |
+| `get_inbound_links()` | Pages linking to this page |
+| `get_outbound_links()` | Pages this page links to |
+| `read_schema()` / `update_schema()` | Manage wiki.md |
+| `read_sink()` / `clear_sink()` | Delegate to QuerySink |
+| `sink_status()` | Delegate to QuerySink |
+| `close()` | Close database connections |
+
+**Dependencies**: `WikiIndex`, `extractors.extract`, `RelationEngine`, `QuerySink`
+
+### 1a. QuerySink Class (`core/query_sink.py`)
+
+**Responsibility**: Manage query sink buffers for pending wiki updates. Extracted from Wiki in v0.24.0.
+
+**Operations**:
+- `get_info_for_page()` — Check if a page has a pending sink buffer
+- `append_to_sink()` — Add a query answer to the sink buffer
+- `read()` — Read all pending entries from a sink file
+- `clear()` — Clear processed entries after merge
+- `status()` — Overview of all sinks with urgency tracking
+- `_detect_content_gaps()` / `_suggest_source_improvements()` / `_suggest_knowledge_growth()` — Sink entry quality analysis
 
 ### 2. WikiIndex Class (`core/index.py`)
 
@@ -129,22 +194,64 @@ CREATE TABLE page_links (
 CREATE TABLE pages (
     page_name, file_path, content_length, word_count, link_count
 );
+
+-- Knowledge graph relations (v0.22.0+)
+CREATE TABLE relations (
+    source, target, relation, confidence, source_file, context
+);
 ```
 
-**Key Methods**:
-- `initialize()` — Create database schema
-- `upsert_page()` — Insert/update page with link parsing (ON CONFLICT preserves created_at)
-- `search()` — FTS5 full-text search with BM25 ranking and highlighted snippets
-- `get_inbound_links()` / `get_outbound_links()` — Reference queries
-- `build_index_from_files()` — Batch index building with progress reporting
-- `export_json()` — Export for Obsidian compatibility
+**Performance**: 0.06s for 157 pages, 2,833 files/sec processing speed
 
-**Performance**:
-- 0.06s for 157 pages
-- 2,833 files/sec processing speed
-- Batch operations with executemany()
+### 3. RelationEngine (`core/relation_engine.py`)
 
-### 3. Extractors (`extractors/`)
+**Responsibility**: Manage knowledge graph relations stored in SQLite
+
+**Operations**:
+- `add_relation()` / `add_relations()` — Insert relations
+- `get_neighbors()` — Get relations for a concept (in/out/both)
+- `get_path()` — Shortest path between concepts (NetworkX)
+- `get_stats()` — Graph statistics
+- `get_context()` — Original context for a relation
+- `detect_contradictions()` — Find conflicting relations
+- `find_orphan_concepts()` — Concepts without wiki pages
+
+**Relation Types**: `is_a`, `uses`, `related_to`, `contradicts`, `supports`, `replaces`, `optimizes`, `extends`
+
+**Confidence Levels**: `EXTRACTED` (explicit), `INFERRED` (deduced), `AMBIGUOUS` (uncertain)
+
+### 4. GraphExport (`core/graph_export.py`)
+
+**Responsibility**: Graph visualization, community detection, and surprise analysis
+
+**Features**:
+- `build_graph()` — Combined graph from wikilinks + relations
+- `export_html()` — Interactive HTML (pyvis) with community colors
+- `export_graphml()` — GraphML format (Gephi/yEd)
+- `export_svg()` — SVG (graphviz)
+- `detect_communities()` — Leiden/Louvain algorithms
+- `compute_surprise_score()` — Multi-dimensional unexpected connection scoring
+- `generate_report()` — Automated surprising connections report
+
+**Surprise Score Dimensions**:
+1. Confidence weight (AMBIGUOUS=3 > INFERRED=2 > EXTRACTED=1)
+2. Cross-source-type bonus (+2)
+3. Cross-knowledge-domain bonus (+2)
+4. Cross-community bonus (+1)
+5. Peripheral-to-hub bonus (+1)
+
+### 5. FileSystemWatcher (`core/watcher.py`)
+
+**Responsibility**: Watch directory for file changes
+
+**Features**:
+- Event types: created, modified, deleted, moved
+- Debounce support (configurable seconds)
+- Auto-ingest mode or notify-only mode (default)
+- Git post-commit hook installation/removal
+- Thread-safe timer-based debouncing
+
+### 6. Extractors (`extractors/`)
 
 **Responsibility**: Content extraction from various sources
 
@@ -155,63 +262,65 @@ CREATE TABLE pages (
 | `pdf.py` | `extract_pdf()` | `pymupdf` |
 | `web.py` | `extract_url()` | `trafilatura` |
 | `youtube.py` | `extract_youtube()` | `youtube-transcript-api` |
+| `markitdown_extractor.py` | `MarkItDownExtractor` | `markitdown[all]` |
 
-**Lazy Import Pattern**:
-```python
-def extract_pdf(path):
-    try:
-        import pymupdf
-    except ImportError:
-        return ExtractedContent(
-            text="",
-            metadata={"error": "pymupdf not installed"}
-        )
+**Fallback Strategy**:
+```
+MarkItDown-enhanced format → Try MarkItDown → Fallback to legacy extractors → Fallback to text read → Return error
 ```
 
-### 4. CLI (`cli/commands.py`)
+### 7. PromptRegistry (`core/prompt_registry.py`)
+
+**Responsibility**: YAML+Jinja2 prompt template management
+
+**Features**:
+- Provider-specific overrides (OpenAI vs Ollama conditionals)
+- Context injection (dynamic wiki state into prompts)
+- Post-process validation (schema validation, required keys)
+- Retry on failure with configurable attempts
+- Custom directory support (user-defined templates)
+
+### 8. PrincipleChecker (`core/principle_checker.py`)
+
+**Responsibility**: Check prompt templates against LLM Wiki Principles
+
+**7 Principles Checked**:
+1. Contradiction detection instructions
+2. Fabrication warnings
+3. Observational language
+4. Zero domain assumption
+5. Wikilink usage conventions
+6. Log operation instructions
+7. Data gap detection
+
+### 9. CLI (`cli/commands.py`)
 
 **Responsibility**: Command-line interface
 
-**Commands** (15 total):
-- `init` — Initialize wiki
-- `ingest` — Ingest sources
-- `write_page` / `read_page` — Page operations
-- `search` — Full-text search
-- `lint` — Health check
-- `status` — Status overview
-- `log` — Record log entry
-- `references` — Show page references
-- `build-index` — Build reference index
-- `export-index` — Export JSON
-- `batch` — Batch ingest
-- `hint` — Smart suggestions
-- `recommend` — Recommendations
-- `serve` — Start MCP server
+**19 Commands**:
+| Category | Commands |
+|----------|----------|
+| Core | `init`, `ingest`, `write_page`, `read_page`, `search` |
+| Health | `lint` (with `--format=full/brief/recommendations`), `status` |
+| References | `references`, `build-index` (with `--export-only`) |
+| Query | `synthesize`, `sink-status` |
+| Watch | `watch` |
+| Graph | `graph-query`, `export-graph`, `community-detect`, `report` |
+| Batch | `batch` |
+| Server | `serve` |
+| Log | `log` |
 
-### 5. MCP Server (`mcp/server.py`)
+### 10. MCP Server (`mcp/server.py`)
 
 **Responsibility**: Model Context Protocol server
 
-**Tools** (13 total):
-| Tool | Description |
-|------|-------------|
-| `wiki_init` | Initialize wiki |
-| `wiki_ingest` | Ingest source (auto-collects to raw/) |
-| `wiki_write_page` / `wiki_read_page` | Page operations |
-| `wiki_search` | Full-text search |
-| `wiki_lint` | Health check |
-| `wiki_status` | Status overview |
-| `wiki_log` | Log entry |
-| `wiki_recommend` | Missing pages, orphans |
-| `wiki_build_index` | Build reference index |
-| `wiki_read_schema` | Read wiki.md |
-| `wiki_update_schema` | Update wiki.md |
-| `wiki_synthesize` | **Save query answer as wiki page** |
+**16 Tools**: `wiki_init`, `wiki_ingest`, `wiki_write_page`, `wiki_read_page`, `wiki_search`, `wiki_lint`, `wiki_status`, `wiki_log`, `wiki_recommend`, `wiki_build_index`, `wiki_read_schema`, `wiki_update_schema`, `wiki_synthesize`, `wiki_sink_status`, `wiki_graph`, `wiki_graph_analyze`
 
-**Configuration Priority**:
-1. Explicit `config` parameter to `MCPServer()`
-2. `wiki.config["mcp"]` (from `.wiki-config.yaml`)
-3. `DEFAULT_CONFIG` (stdio, 127.0.0.1:8765)
+**Unified Graph Tools** (replaces 7 separate tools):
+- `wiki_graph` — `action: query|path|stats|write` — All graph query and mutation operations
+- `wiki_graph_analyze` — `action: export|detect|report` — All graph analysis operations
+
+**Transports**: STDIO (default), HTTP, SSE
 
 ---
 
@@ -237,14 +346,18 @@ Wiki.ingest_source()
   ├── Returns extracted data + current index for LLM
   └── Logs to log.md
   │
-  ▼ (LLM processes via MCP tools)
-Wiki.write_page()
-  ├── Creates/updates wiki page
-  ├── Updates FTS5 index and page_links
-  └── Auto-updates index.md
+  ▼ (LLM smart mode: --smart)
+Wiki._llm_process_source()
+  ├── generate_wiki_ops → write_page operations
+  ├── Extract relations (if enabled in prompt)
+  └── Execute operations
+  │
+  ▼
+Wiki.write_relations()
+  └── Stores in SQLite relations table
 ```
 
-### Query Compounding Flow (v0.12.6+)
+### Query Compounding Flow
 
 ```
 User Question
@@ -269,19 +382,20 @@ Wiki.synthesize_query()
 Answer persists as wiki page — knowledge compounds
 ```
 
-### Search Flow
+### Watch Flow
 
 ```
-User Query
+File created in raw/
   │
   ▼
-Wiki.search(query, limit, include_content, include_sources, include_links)
+FileSystemWatcher detects event
   │
-  ▼
-WikiIndex.search() — FTS5 BM25 query with snippet highlighting
+  ├── (Default) Print notification with ingest hint
   │
-  ▼
-Ranked Results (page_name, score, snippet, [content, sources, links])
+  └── (--auto-ingest) Call wiki.ingest_source()
+        │
+        ├── (--smart) LLM processes and creates pages
+        └── Log to log.md
 ```
 
 ---
@@ -291,48 +405,40 @@ Ranked Results (page_name, score, snippet, [content, sources, links])
 ### .wiki-config.yaml
 
 ```yaml
-# Directory structure
 directories:
   raw: "raw"
   wiki: "wiki"
 
-# File names
-files:
-  index: "index.md"
-  log: "log.md"
-
-# Database
 database:
   name: ".llmwikify.db"
 
-# Orphan detection exclusions
-orphan_detection:
-  exclude_patterns:
-    - '^\d{4}-\d{2}-\d{2}$'  # Dates
-    - '^meeting-.*'          # Meeting notes
-  exclude_frontmatter:
-    - 'redirect_to'          # Redirect pages
-  archive_directories:
-    - 'archive'
-    - 'logs'
+reference_index:
+  name: "reference_index.json"
+  auto_export: true
 
-# Performance
+orphan_detection:
+  default_exclude_patterns: []
+  exclude_frontmatter: []
+  archive_directories: []
+
 performance:
   batch_size: 100
 
-# MCP server
+llm:
+  enabled: false
+  provider: "openai"
+  model: "gpt-4o"
+  base_url: "http://localhost:11434"
+  api_key: ""
+  timeout: 120
+
 mcp:
   host: "127.0.0.1"
   port: 8765
   transport: "stdio"
-```
 
-### Loading
-
-```python
-class Wiki:
-    def __init__(self, root: Path, config: dict = None):
-        self.config = config or load_config(root)
+prompts:
+  custom_dir: null
 ```
 
 ---
@@ -340,129 +446,100 @@ class Wiki:
 ## Performance Optimizations
 
 ### Database
-
 ```python
-# PRAGMA tuning
 conn.execute("PRAGMA journal_mode = MEMORY")
 conn.execute("PRAGMA synchronous = OFF")
 conn.execute("PRAGMA cache_size = -64000")
 
 # ON CONFLICT preserves created_at
-INSERT INTO pages (...) VALUES (...)
-  ON CONFLICT(page_name) DO UPDATE SET
-    updated_at = CURRENT_TIMESTAMP
-
-# Batch operations
-conn.executemany("INSERT ...", data)
-
-# Result: 10-20x faster than naive implementation
+# Batch operations with executemany()
 ```
 
 ### Index Building
-
-```python
-# Progress reporting
-for i, file in enumerate(files):
-    if i % batch_size == 0:
-        elapsed = time.time() - start
-        speed = i / elapsed
-        print(f"\r  {i}/{total} - {speed:.1f} files/sec", end='')
-```
+Progress reporting with batch size control and speed tracking.
 
 ---
 
 ## Testing Strategy
 
-### Test Structure
+### Test Structure (22 files, 522 collected, 490 passing)
 
-```
-tests/
-├── conftest.py              # Fixtures (temp_wiki, wiki_instance, sample_content)
-├── test_wiki_core.py        # Wiki class tests (36 tests)
-├── test_query_flow.py       # Query synthesis tests (27 tests)
-├── test_index.py            # WikiIndex tests (8 tests)
-├── test_recommend.py        # Recommendation tests (5 tests)
-├── test_cli.py              # CLI tests (8 tests)
-├── test_extractors.py       # Extractor tests (12 tests)
-└── test_llm_client.py       # LLM client tests (14 tests)
-```
+| Category | Files | Tests |
+|----------|-------|-------|
+| Core | `test_wiki_core.py`, `test_index.py`, `test_recommend.py` | 46 |
+| Extractors | `test_extractors.py`, `test_v020_markitdown_extractor.py` | 48 |
+| LLM/Prompts | `test_llm_client.py`, `test_prompt_registry.py`, `test_v018_*.py`, `test_v019_*.py` | 127 |
+| Query/Sink | `test_query_flow.py`, `test_sink_flow.py` | 82 |
+| Watch | `test_v021_watch.py` | 23 |
+| Relations | `test_v022_relations.py` | 26 |
+| Graph | `test_v023_graph.py` | 13 |
+| CLI | `test_cli.py` | 9 |
+| Fixes/Improvements | `test_p0_p3_fixes.py` | 21 |
+| Features | `test_v015_features.py`, `test_v016_investigations.py` | 52 |
+| Fixtures | `conftest.py`, `fixtures/` | — |
 
-### Coverage
-
-- **Total Tests**: 110
-- **All Passing**: ✅
-- **Target Coverage**: >85%
+### Coverage Target: >85%
 
 ---
 
 ## Version History
 
-### v0.12.6 (Current) — Query Knowledge Compounding
-- ✅ wiki_synthesize MCP tool
-- ✅ Auto-generated Query pages with Sources sections
-- ✅ Smart duplicate detection (Jaccard similarity)
-- ✅ Raw source references in synthesized pages
-- ✅ 27 new tests in test_query_flow.py
+### v0.24.0 — CLI Simplification + Dead Code Removal + QuerySink Extraction
+- **CLI Reduced**: 22 → 19 commands (hint, recommend, export-index merged into lint/build-index)
+- **MCP Reduced**: 21 → 16 tools (7 graph/relation tools merged into 2 unified tools)
+- **Dead Code Removed**: `ingest_source.yaml`, `_llm_process_source_single()`, `prompt_chaining.ingest` config
+- **Dead Config Removed**: `performance.cache_size` (never used), `files.*` config options (hardcoded)
+- **Dead Files Removed**: `utils/helpers.py` (duplicated in Wiki class)
+- **QuerySink Extracted**: ~480 lines of sink logic moved from Wiki to dedicated `QuerySink` class
+- **Wiki Reduced**: 2,477 → 2,021 lines
+- **Prompt Templates**: 8 → 7 (deprecated `ingest_source.yaml` removed)
+- **490 tests passing** (522 collected, 32 markitdown skipped)
 
-### v0.12.5 — Raw Source Collection
-- ✅ All ingest sources unified into raw/
-- ✅ Cross-platform safe copy (read_bytes/write_bytes)
-- ✅ Source citation conventions in wiki.md
-- ✅ MCP config auto-read from wiki.config
+### v0.23.0 — Graph Visualization + Community Detection
+- **Graph Export**: Interactive HTML (pyvis), SVG (graphviz), GraphML (Gephi)
+- **Community Detection**: Leiden/Louvain algorithms with resolution control
+- **Surprise Score**: Multi-dimensional unexpected connection analysis
+- **CLI**: `graph-query`, `export-graph`, `community-detect`, `report` commands
+- **490 tests passing** (+50 new)
 
-### v0.12.4 — Schema Management
-- ✅ wiki_read_schema / wiki_update_schema MCP tools
-- ✅ wiki.md reference in ingest instructions
+### v0.22.0 — Knowledge Graph Relations
+- **Relation Engine**: LLM auto-extracts concept relationships during ingest
+- **8 Relation Types**: is_a, uses, related_to, contradicts, supports, replaces, optimizes, extends
+- **3 Confidence Levels**: EXTRACTED, INFERRED, AMBIGUOUS
+- **Contradiction Detection**: Automatic conflict detection between relations
+- **Orphan Concepts**: Identify concepts without corresponding wiki pages
 
-### v0.12.3 — Pure-Data Ingest
-- ✅ ingest_source returns data without auto-creating pages
-- ✅ URL raw persistence
-- ✅ Unified error handling
+### v0.21.0 — File Watcher
+- **FileSystemWatcher**: Watch `raw/` for new file arrivals (watchdog)
+- **Git Post-Commit Hook**: Auto-rebuild knowledge graph on every commit
+- **Debounce Support**: Configurable, handles rapid file changes
+- **Auto-Ingest Mode**: Optional `--auto-ingest` flag (default: notify-only)
 
-### v0.12.2 — Search Improvements
-- ✅ ON CONFLICT for pages table
-- ✅ FTS5 snippet highlighting
-- ✅ LIKE fallback for syntax errors
+### v0.20.0 — MarkItDown Integration
+- Unified file extractor for Office, images, audio, EPub, ZIP
+- 20+ file types with graceful fallback
+- LLM Vision ready configuration
 
-### v0.12.1 — Init Optimization
-- ✅ Idempotent init with overwrite support
-- ✅ Structured return values
+### v0.19.0 — Prompt Harness Engineering
+- Principle Compliance Checker (7 principles)
+- Offline Prompt Evaluation (8 checks)
+- Golden Source Framework (5 test scenarios)
+- wiki_synthesize externalized
 
-### v0.12.0 — Complete CLI
-- ✅ 15 CLI commands
-- ✅ Auto-index on page write
-- ✅ wiki.md template generation
+### v0.18.0 — Prompt Externalization
+- YAML + Jinja2 templates
+- Provider overrides
+- Chaining mode
+- Validation & retry
 
-### v0.11.1 — Zero Domain Assumption
-- ✅ All exclusion patterns empty by default
-
-### v0.11.0 — Modular Architecture
-- ✅ Split into 11+ module files
-- ✅ Configuration system
-- ✅ Public API stability
-
-### v0.10.0 — Single File
-- ✅ 1,965 lines in llmwikify.py
-- ✅ All core features
-- ✅ 48 passing tests
-
----
-
-## Future Enhancements
-
-### v0.13.0 (Planned)
-- [ ] Enhanced wiki_lint: contradiction detection, stale claims, data gaps
-- [ ] Enhanced wiki_search: include_content, include_sources, include_links
-- [ ] Expose wiki_hint as MCP tool
-- [ ] Incremental index updates
-
-### v1.0.0 (Roadmap)
-- [ ] Web UI (optional)
-- [ ] Graph visualization
-- [ ] MCP server authentication
-- [ ] Stable API guarantee
-- [ ] Production hardening
+### v0.12.0–v0.17.0 — Foundation
+- Complete CLI commands
+- Auto-index on page write
+- Raw source collection
+- Query knowledge compounding
+- Query sink with urgency tracking
+- Smart investigations
 
 ---
 
-*Last updated: 2026-04-10 | Version: 0.12.6*
+*Last updated: 2026-04-13 | Version: 0.24.0*

@@ -8,9 +8,196 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Incremental index updates
 - Web UI (optional)
-- Graph visualization (graphviz/Mermaid)
+- MCP server authentication
+- Incremental index updates
+- Stable API guarantee
+- Production hardening
+
+---
+
+## [0.24.0] - 2026-04-13
+
+### Changed
+- **CLI Simplified**: Removed 3 redundant commands (22 → 19):
+  - Removed `hint` — merged into `lint --format=brief`
+  - Removed `recommend` — merged into `lint --format=recommendations`
+  - Removed `export-index` — merged into `build-index --export-only`
+- **`lint` command** now supports `--format` flag:
+  - `--format=full` (default) — Full health check (existing behavior)
+  - `--format=brief` — Quick suggestions (replaces old `hint`)
+  - `--format=recommendations` — Missing and orphan pages (replaces old `recommend`)
+- **`build-index` command** now supports `--export-only` flag to export without rebuilding (replaces old `export-index`)
+
+### Removed (Dead Code Cleanup)
+- **`ingest_source.yaml` prompt** — Deprecated single-call LLM path fully removed. LLM ingest now always uses the chained `analyze_source → generate_wiki_ops` pipeline
+- **`_llm_process_source_single()` method** — Removed. `_llm_process_source()` now always uses chained mode
+- **`prompt_chaining.ingest` config option** — Removed. Chained mode is the only mode
+- **`performance.cache_size` config option** — Removed. Was defined but never used in any code
+- **`files.*` config options** — `files.index`, `files.log`, `files.config`, `files.config_example` removed. These internal filenames are now hardcoded.
+- **`utils/helpers.py`** — `slugify()` and `now()` were duplicated as `_slugify()` and `_now()` on the `Wiki` class and never imported from `utils`.
+
+### Refactored
+- **QuerySink Extracted**: ~480 lines of sink-related logic moved from `Wiki` (2,477 lines) to a new dedicated `QuerySink` class (`core/query_sink.py`, 444 lines). Wiki is now ~2,021 lines. Public API unchanged; internal methods moved to `wiki.query_sink`.
+
+### MCP Server
+- **MCP tools simplified**: Merged 7 graph/relation tools into 2 unified tools (21 → 16):
+  - `wiki_graph` — `action: query|path|stats|write` — All graph query operations
+  - `wiki_graph_analyze` — `action: export|detect|report` — All graph analysis operations
+
+### Breaking Changes
+- `llmwikify hint` → use `llmwikify lint --format=brief`
+- `llmwikify recommend` → use `llmwikify lint --format=recommendations`
+- `llmwikify export-index` → use `llmwikify build-index --export-only`
+- MCP tools renamed: `wiki_relations_neighbors`, `wiki_relations_path`, `wiki_relations_stats`, `wiki_write_relations`, `wiki_export_graph`, `wiki_community_detect`, `wiki_report` → `wiki_graph`, `wiki_graph_analyze`
+
+---
+
+## [0.23.0] - 2026-04-12
+
+### Added
+- **Graph Visualization** — Export knowledge graph in multiple formats:
+  - Interactive HTML (pyvis) — clickable nodes, community color-coding, zoom/pan
+  - SVG (graphviz) — static, publication-ready diagrams
+  - GraphML (Gephi, yEd compatible) — for advanced analysis
+- **Community Detection** — Automatic topic clustering via Leiden/Louvain algorithms:
+  - Resolution parameter controls granularity (default 1.0)
+  - JSON output for programmatic consumption
+  - Handles edge cases: empty graphs, isolated nodes, single nodes
+- **Surprise Score Reports** — Multi-dimensional unexpected connection analysis:
+  - 5 scoring dimensions: confidence weight, cross-source-type, cross-knowledge-domain, cross-community, peripheral-to-hub
+  - Human-readable explanations for each scored connection
+  - `report --top N` for top surprising connections
+- **CLI Commands** (3 new): `export-graph`, `community-detect`, `report`
+- **Optional `[graph]` dependency**: networkx, pyvis, python-louvain
+- **13 new tests** in `test_v023_graph.py`
+
+### Principle Coverage
+- **"Obsidian's graph view"** — ✅ NetworkX + pyvis interactive HTML export
+- **"Organized by category"** — ✅ Leiden community detection
+- **"suggesting new questions"** — ✅ Surprise Score highlights unexpected connections
+- **"pick what's useful, ignore what isn't"** — ✅ `[graph]` optional dependency
+- **"The LLM writes and maintains all of it"** — ✅ No `graph_index.md` generated; community results go to stdout/JSON
+
+---
+
+## [0.22.0] - 2026-04-12
+
+### Added
+- **Knowledge Graph Relations** — LLM auto-extracts concept relationships during ingest:
+  - 8 relation types: `is_a`, `uses`, `related_to`, `contradicts`, `supports`, `replaces`, `optimizes`, `extends`
+  - 3 confidence levels: `EXTRACTED` (explicit), `INFERRED` (deduced), `AMBIGUOUS` (uncertain)
+- **RelationEngine** — SQLite-backed relationship management:
+  - `add_relation()` / `add_relations()` — Insert single or batch relations
+  - `get_neighbors()` — Bidirectional neighbor queries with confidence filtering
+  - `get_path()` — Shortest path between concepts (NetworkX BFS)
+  - `get_stats()` — Graph statistics (nodes, edges, degree distribution)
+  - `get_context()` — Original source context for a relation
+  - `detect_contradictions()` — Find conflicting relations (e.g., `supports` vs `contradicts`)
+  - `find_orphan_concepts()` — Concepts mentioned but without wiki pages
+- **`relations` SQLite table** — Stores source, target, relation, confidence, source_file, context, wiki_pages
+- **`Wiki.write_relations()` / `Wiki.get_relation_engine()`** — Public API for relation management
+- **`graph-query` CLI subcommand** — `neighbors`, `path`, `stats`, `context` queries
+- **26 new tests** in `test_v022_relations.py`
+
+### Principle Coverage
+- **"noting where new data contradicts old claims"** — ✅ Contradiction detection between relations
+- **"The cross-references are already there"** — ✅ Relation engine auto-extracts concept relationships
+
+---
+
+## [0.21.0] - 2026-04-12
+
+### Added
+- **File Watcher** — Monitor `raw/` directory for new file arrivals (watchdog):
+  - Event types: created, modified, deleted, moved
+  - Debounce support (configurable seconds, default 2)
+  - Thread-safe timer-based debouncing
+- **Two operating modes**:
+  - **Notify-only** (default) — Prints event details with ingest hint (respects "stay involved" principle)
+  - **Auto-ingest** (`--auto-ingest`) — Automatically calls `ingest_source()` on new files
+- **Git post-commit hook** — Optional installation/removal:
+  - Runs `llmwikify batch raw/ --smart` after each commit
+  - Clean uninstall restores original hook
+- **`watch` CLI command** — `--auto-ingest`, `--smart`, `--debounce`, `--dry-run`, `--git-hook`
+- **Optional `[watch]` dependency**: watchdog>=3.0.0
+- **23 new tests** in `test_v021_watch.py`
+
+### Principle Coverage
+- **"incrementally builds and maintains a persistent wiki"** — ✅ Watch mode automates ingest
+- **"stay involved"** — ✅ Default is notify-only; `--auto-ingest` is explicit opt-in
+- **"The wiki is just a git repo"** — ✅ Git post-commit hook integration
+
+---
+
+## [0.20.0] - 2026-04-12
+
+### Added
+- **MarkItDown Integration** — Unified file extractor for 20+ formats:
+  - Office: Word (`.docx`), Excel (`.xlsx`), PowerPoint (`.pptx`)
+  - Images: `.jpg`, `.png`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg`
+  - Audio: `.mp3`, `.wav`, `.m4a` (speech transcription ready)
+  - Data: `.csv`, `.json`, `.xml`
+  - E-book: `.epub`, Archive: `.zip`, Outlook: `.msg`
+- **Graceful fallback strategy**: MarkItdown → legacy extractors → text read → error
+- **32 new tests** in `test_v020_markitdown_extractor.py`
+
+### Changed
+- `ingest_source()` now uses MarkItDown as primary extractor when available
+- `extract()` auto-detection prioritizes MarkItDown for non-text/URL/YouTube sources
+
+---
+
+## [0.19.0] - 2026-04-11
+
+### Added
+- **Prompt Harness Engineering** — Systematic prompt quality evaluation:
+  - `PromptRegistry` — YAML+Jinja2 template system with provider-specific overrides
+  - `PrincipleChecker` — 7 principle compliance checks across all prompts
+  - Offline prompt evaluation — 8 automated quality checks
+  - Golden Source Framework — 5 test scenarios with mock LLM
+  - Prompt regression testing with golden source fixtures
+- **Context injection** — Dynamic wiki state injection into prompt templates
+- **Post-process validation** — Schema validation with configurable retry attempts
+- **Provider overrides** — OpenAI, Ollama, Anthropic-specific prompt variants
+- **Chaining mode** — Two-step ingest (`analyze_source` → `generate_wiki_ops`)
+- **76 new tests** across 4 test files:
+  - `test_v019_principle_checker.py` (34 tests)
+  - `test_v019_wiki_synthesize.py` (31 tests)
+  - `test_v019_eval_prompts.py` (26 tests)
+  - `test_v019_harness_regression.py` (16 tests)
+
+### Principle Coverage
+- All 7 LLM Wiki Principles checked programmatically across every prompt template
+
+---
+
+## [0.18.0] - 2026-04-11
+
+### Added
+- **Prompt Externalization** — All hardcoded prompts moved to YAML + Jinja2 templates:
+  - 8 default templates in `prompts/_defaults/`
+  - Custom prompt directory support via config
+  - Provider-specific conditional rendering in templates
+- **Validation & Retry** — JSON schema validation for LLM responses with configurable retry attempts
+- **Chaining Mode** — Two-step ingest pipeline: `analyze_source` (understand content) → `generate_wiki_ops` (plan wiki operations)
+- **27 new tests** in `test_v018_integration.py` + `test_v018_prompt_engineering.py`
+
+### Changed
+- **BREAKING**: LLM prompts no longer hardcoded in Python; loaded from YAML templates
+- `llm_client.py` updated to use `PromptRegistry` for template rendering
+
+---
+
+## [0.17.0] - 2026-04-11
+
+### Added
+- **Enhanced CLI** — Additional commands and UX improvements:
+  - Improved error messages and progress reporting
+  - Batch ingest with `--limit` support
+  - Better help text and command grouping
+- **Performance tuning** — Database PRAGMA optimizations and batch insert improvements
+- **Bug fixes** — Various stability improvements from v0.16.x
 
 ---
 

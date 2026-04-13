@@ -40,7 +40,7 @@ def _extract_url(url: str) -> ExtractedContent:
             metadata={"url": url},
         )
         
-    except Exception as e:
+    except (ConnectionError, TimeoutError, ValueError, OSError) as e:
         return ExtractedContent(
             text="",
             source_type="error",

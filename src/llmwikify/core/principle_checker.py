@@ -53,12 +53,12 @@ PRINCIPLE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "contradiction_detection": {
         "keywords": ["contradict", "conflict", "disagree", "inconsisten"],
         "description": "Prompt instructs LLM to detect contradictions with existing wiki content.",
-        "applies_to": ["analyze_source", "ingest_source", "wiki_synthesize"],
+        "applies_to": ["analyze_source", "wiki_synthesize"],
     },
     "fabrication_warning": {
         "keywords": ["fabricate", "make up", "invent", "do not assume", "only extract"],
         "description": "Prompt instructs LLM not to fabricate information not present in sources.",
-        "applies_to": ["analyze_source", "generate_wiki_ops", "ingest_source", "wiki_synthesize"],
+        "applies_to": ["analyze_source", "generate_wiki_ops", "wiki_synthesize"],
     },
     "observational_language": {
         "keywords": ["observational", "sources indicate", "according to", "source states",
@@ -74,12 +74,12 @@ PRINCIPLE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "wikilink_usage": {
         "keywords": ["[[wikilink", "[[", "cross-reference", "cross_ref"],
         "description": "Prompt instructs LLM to use wikilink syntax for cross-references.",
-        "applies_to": ["generate_wiki_ops", "ingest_source", "wiki_synthesize"],
+        "applies_to": ["generate_wiki_ops", "wiki_synthesize"],
     },
     "log_operation": {
         "keywords": ["log", "operation", "append to log"],
         "description": "Prompt instructs LLM to include log operations summarizing actions.",
-        "applies_to": ["generate_wiki_ops", "ingest_source"],
+        "applies_to": ["generate_wiki_ops"],
     },
     "data_gap_detection": {
         "keywords": ["data gap", "gap", "unclear", "vague", "unsupported", "needs more"],

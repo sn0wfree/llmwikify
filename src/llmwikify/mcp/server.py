@@ -180,6 +180,56 @@ class MCPServer:
                         description="Overview of all query sinks with entry counts. Returns topics with pending entries and their status. Use during lint to identify which sinks need review and merging.",
                         inputSchema={"type": "object", "properties": {}}
                     ),
+                    types.Tool(
+                        name="wiki_graph",
+                        description="Query and modify the knowledge graph. Supports: query (concept neighbors), path (shortest path between concepts), stats (graph statistics), write (add relations). Use action parameter to select operation.",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "action": {
+                                    "type": "string",
+                                    "enum": ["query", "path", "stats", "write"],
+                                    "description": "Operation to perform"
+                                },
+                                "concept": {"type": "string", "description": "Concept name (for query action)"},
+                                "direction": {"type": "string", "enum": ["in", "out", "both"], "default": "both", "description": "Direction of relations (query action)"},
+                                "confidence": {"type": "string", "enum": ["EXTRACTED", "INFERRED", "AMBIGUOUS"], "description": "Filter by confidence level (query action)"},
+                                "source": {"type": "string", "description": "Starting concept (for path action)"},
+                                "target": {"type": "string", "description": "Target concept (for path action)"},
+                                "max_length": {"type": "integer", "default": 5, "description": "Maximum path length (path action)"},
+                                "relations": {"type": "array", "items": {"type": "object", "properties": {
+                                    "source": {"type": "string"},
+                                    "target": {"type": "string"},
+                                    "relation": {"type": "string", "enum": ["is_a", "uses", "related_to", "contradicts", "supports", "replaces", "optimizes", "extends"]},
+                                    "confidence": {"type": "string", "enum": ["EXTRACTED", "INFERRED", "AMBIGUOUS"], "default": "EXTRACTED"},
+                                    "context": {"type": "string"}
+                                }, "required": ["source", "target", "relation"]}, "description": "List of relations to add (write action)"},
+                                "source_file": {"type": "string", "description": "Source file these relations came from (write action)"}
+                            },
+                            "required": ["action"]
+                        }
+                    ),
+                    types.Tool(
+                        name="wiki_graph_analyze",
+                        description="Analyze the knowledge graph. Supports: export (visualize as HTML/GraphML/SVG), detect (find communities with Leiden/Louvain), report (surprise score unexpected connections). Use action parameter to select operation.",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "action": {
+                                    "type": "string",
+                                    "enum": ["export", "detect", "report"],
+                                    "description": "Analysis operation to perform"
+                                },
+                                "format": {"type": "string", "enum": ["html", "graphml", "svg"], "default": "html", "description": "Output format (export action)"},
+                                "output": {"type": "string", "description": "Output file path (export action). Default: graph.html, graph.graphml, or graph.svg"},
+                                "min_degree": {"type": "integer", "default": 0, "description": "Filter nodes by minimum degree (export action, HTML only)"},
+                                "algorithm": {"type": "string", "enum": ["leiden", "louvain"], "default": "leiden", "description": "Community detection algorithm (detect action)"},
+                                "resolution": {"type": "number", "default": 1.0, "description": "Resolution parameter, higher = more granular (detect action)"},
+                                "top": {"type": "integer", "default": 10, "description": "Number of top surprising connections to report (report action)"}
+                            },
+                            "required": ["action"]
+                        }
+                    ),
                 ]
             
             @self._mcp.call_tool()
@@ -221,6 +271,73 @@ class MCPServer:
                     ))
                 elif name == "wiki_sink_status":
                     return json.dumps(self.wiki.sink_status())
+                elif name == "wiki_graph":
+                    action = arguments.get("action")
+                    if action == "query":
+                        engine = self.wiki.get_relation_engine()
+                        result = engine.get_neighbors(
+                            concept=arguments['concept'],
+                            direction=arguments.get('direction', 'both'),
+                            confidence=arguments.get('confidence'),
+                        )
+                        return json.dumps(result)
+                    elif action == "path":
+                        engine = self.wiki.get_relation_engine()
+                        result = engine.get_path(
+                            source=arguments['source'],
+                            target=arguments['target'],
+                            max_length=arguments.get('max_length', 5),
+                        )
+                        return json.dumps(result)
+                    elif action == "stats":
+                        engine = self.wiki.get_relation_engine()
+                        result = engine.get_stats()
+                        return json.dumps(result)
+                    elif action == "write":
+                        relations = arguments['relations']
+                        source_file = arguments.get('source_file')
+                        for r in relations:
+                            r.setdefault('confidence', 'EXTRACTED')
+                            if source_file and 'source_file' not in r:
+                                r['source_file'] = source_file
+                        self.wiki.write_relations(relations, source_file=source_file)
+                        return json.dumps({"status": "success", "count": len(relations)})
+                    else:
+                        return json.dumps({"status": "error", "error": f"Unknown action: {action}"})
+                elif name == "wiki_graph_analyze":
+                    action = arguments.get("action")
+                    if action == "export":
+                        from ..core.graph_export import build_graph, export_html, export_graphml, export_svg, detect_communities
+                        fmt = arguments.get('format', 'html')
+                        graph = build_graph(self.wiki.index)
+                        communities_result = detect_communities(self.wiki.index)
+                        communities = communities_result.get('communities')
+                        if fmt == 'html':
+                            output = Path(arguments.get('output', 'graph.html'))
+                            result = export_html(graph, communities, output, min_degree=arguments.get('min_degree', 0))
+                        elif fmt == 'graphml':
+                            output = Path(arguments.get('output', 'graph.graphml'))
+                            result = export_graphml(graph, output)
+                        elif fmt == 'svg':
+                            output = Path(arguments.get('output', 'graph.svg'))
+                            result = export_svg(graph, output)
+                        else:
+                            result = {"status": "error", "error": f"Unknown format: {fmt}"}
+                        return json.dumps(result)
+                    elif action == "detect":
+                        from ..core.graph_export import detect_communities
+                        result = detect_communities(
+                            self.wiki.index,
+                            algorithm=arguments.get('algorithm', 'leiden'),
+                            resolution=arguments.get('resolution', 1.0),
+                        )
+                        return json.dumps(result)
+                    elif action == "report":
+                        from ..core.graph_export import generate_report
+                        result = generate_report(self.wiki.index, top_n=arguments.get('top', 10))
+                        return result
+                    else:
+                        return json.dumps({"status": "error", "error": f"Unknown action: {action}"})
                 else:
                     raise ValueError(f"Unknown tool: {name}")
             

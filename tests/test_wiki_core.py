@@ -267,45 +267,60 @@ class TestWiki:
         wiki.close()
     
     def test_llm_process_source(self, temp_wiki, monkeypatch):
-        """Test LLM processing returns operations list."""
+        """Test LLM processing returns operations list (chained mode)."""
         wiki = Wiki(temp_wiki, config={'llm': {'enabled': True, 'api_key': 'test', 'model': 'gpt-4o'}})
         wiki.init()
-        
+
+        analysis_data = {
+            "topics": ["Test"],
+            "entities": [],
+            "key_facts": ["Test fact"],
+            "suggested_pages": [{"name": "Test Page", "summary": "Summary", "priority": "high"}],
+            "cross_refs": [],
+            "content_type": "test",
+        }
         operations_data = [
             {"action": "write_page", "page_name": "Test Page", "content": "# Test Page\n\nContent"},
             {"action": "log", "operation": "ingest", "details": "Test source"},
         ]
-        
+
+        call_count = 0
+
         class MockClient:
             @classmethod
             def from_config(cls, config):
                 return cls()
             def chat_json(self, messages, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    return analysis_data
                 return operations_data
-        
+
         import sys
         import llmwikify.llm_client as llm_module
         orig_client = llm_module.LLMClient
         llm_module.LLMClient = MockClient
         sys.modules['llmwikify.llm_client'] = llm_module
         sys.modules['llmwikify.core.llm_client'] = llm_module
-        
+
         source_data = {
             "title": "Test Source",
             "source_type": "text",
             "content": "Some content to analyze",
             "current_index": "",
         }
-        
+
         result = wiki._llm_process_source(source_data)
-        
+
         llm_module.LLMClient = orig_client
         sys.modules['llmwikify.llm_client'] = llm_module
-        
+
         assert result['status'] == 'success'
+        assert result['mode'] == 'chained'
         assert len(result['operations']) == 2
         assert result['operations'][0]['action'] == 'write_page'
-        
+
         wiki.close()
     
     def test_execute_operations(self, temp_wiki):

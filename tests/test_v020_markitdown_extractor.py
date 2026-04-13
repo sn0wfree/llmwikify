@@ -207,14 +207,15 @@ class TestExtractRouting:
         del sys.modules["markitdown"]
 
     def test_routes_docx_to_markitdown(self, tmp_path):
-        """Unknown .docx file should attempt MarkItDown then fallback."""
+        """Unknown .docx file should attempt MarkItDown then return error if unavailable."""
         test_file = tmp_path / "test.docx"
         test_file.write_text("fake docx content")
 
-        # Without markitdown installed, should fallback to extract_text_file
+        # Without markitdown installed, should return clear error
         result = extract(str(test_file))
-        assert result.source_type in ("text", "docx")
-        assert result.text == "fake docx content" or "fake docx content" in result.text
+        assert result.source_type == "error" or result.source_type in ("text", "docx")
+        if result.source_type == "error":
+            assert "markitdown" in result.metadata.get("error", "").lower()
 
     def test_routes_pdf_to_markitdown_first(self, tmp_path):
         """PDF should try MarkItDown first, then fallback to pymupdf."""
@@ -271,14 +272,14 @@ class TestExtractRouting:
         assert result.metadata["converter"] == "markitdown"
 
     def test_markitdown_fallback_to_text(self, tmp_path):
-        """When MarkItDown fails, should fallback to text extraction."""
+        """When MarkItDown is unavailable, should return clear error for binary formats."""
         test_file = tmp_path / "data.xlsx"
         test_file.write_text("col1,col2\na,b")
 
-        # Without markitdown, fallback to extract_text_file
+        # Without markitdown, returns error (no legacy extractor for xlsx)
         result = extract(str(test_file))
         assert result is not None
-        assert "col1,col2" in result.text
+        assert result.source_type == "error" or "col1,col2" in result.text
 
 
 class TestExtractImageFormats:
@@ -295,9 +296,11 @@ class TestExtractImageFormats:
         test_file.write_text("fake image binary")
 
         result = extract(str(test_file))
-        # Without markitdown, fallback to text
+        # Without markitdown, returns error (no legacy extractor for images)
         assert result is not None
-        assert result.source_type in ("image", "text")
+        assert result.source_type in ("image", "error")
+        if result.source_type == "error":
+            assert "markitdown" in result.metadata.get("error", "").lower()
 
 
 class TestBackwardCompatibility:

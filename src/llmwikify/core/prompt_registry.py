@@ -234,7 +234,7 @@ class PromptRegistry:
                         result[key] = method(**params)
                     else:
                         result[key] = str(method)
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, OSError, RuntimeError) as e:
                     result[key] = f"[context error: {method_name}: {type(e).__name__}]"
             else:
                 result[key] = ""

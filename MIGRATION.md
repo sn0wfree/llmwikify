@@ -1,5 +1,272 @@
 # Migration Guide
 
+> **Current version**: 0.24.0
+
+---
+
+## v0.23.x → v0.24.0
+
+### Removed CLI Commands
+
+The following commands have been merged into existing commands and no longer exist:
+
+| Removed | Replacement |
+|---------|-------------|
+| `llmwikify hint` | `llmwikify lint --format=brief` |
+| `llmwikify recommend` | `llmwikify lint --format=recommendations` |
+| `llmwikify export-index` | `llmwikify build-index --export-only` |
+
+### Removed MCP Tools
+
+Seven graph/relation tools have been merged into two unified tools:
+
+| Removed | Replacement |
+|---------|-------------|
+| `wiki_relations_neighbors` | `wiki_graph` with `action: query` |
+| `wiki_relations_path` | `wiki_graph` with `action: path` |
+| `wiki_relations_stats` | `wiki_graph` with `action: stats` |
+| `wiki_write_relations` | `wiki_graph` with `action: write` |
+| `wiki_export_graph` | `wiki_graph_analyze` with `action: export` |
+| `wiki_community_detect` | `wiki_graph_analyze` with `action: detect` |
+| `wiki_report` | `wiki_graph_analyze` with `action: report` |
+
+### Removed Configuration Options
+
+- `performance.cache_size` — Was defined but never read. Remove from your `.wiki-config.yaml` if present.
+- `llm.prompt_chaining.ingest` — Chained mode is now the only mode. Remove this toggle.
+- `files.index` / `files.log` / `files.config` / `files.config_example` — These config options have been removed. `index.md`, `log.md`, and `.wiki-config.yaml` are now hardcoded internal filenames.
+
+### Removed Files
+
+- `utils/helpers.py` — `slugify()` and `now()` were duplicated as `_slugify()` and `_now()` on the `Wiki` class and never imported from `utils`.
+- `prompts/_defaults/ingest_source.yaml` — Deprecated single-call LLM path removed. Chained pipeline (`analyze_source` → `generate_wiki_ops`) is now the only mode.
+
+### Refactored
+
+- **QuerySink Extracted**: ~480 lines of sink-related logic moved from `Wiki` to a new dedicated `QuerySink` class (`core/query_sink.py`). The public API (`wiki.read_sink()`, `wiki.clear_sink()`, `wiki.sink_status()`) is unchanged. Internal methods (`_get_sink_info_for_page`, `_append_to_sink`, etc.) are now on `wiki.query_sink`.
+- **Wiki Class Reduced**: 2,477 → 2,021 lines.
+
+### API Changes
+
+- `Wiki._llm_process_source_single()` removed. `_llm_process_source()` always uses chained mode.
+- `Wiki._get_sink_info_for_page()` → `wiki.query_sink.get_info_for_page()` (internal API)
+- `Wiki._append_to_sink()` → `wiki.query_sink.append_to_sink()` (internal API)
+
+---
+
+## v0.22.x → v0.23.0
+
+### New Optional Dependencies
+
+v0.23.0 adds a `[graph]` optional dependency for visualization and community detection.
+
+**Migration**: Install if you need graph features:
+
+```bash
+pip install llmwikify[graph]
+# or
+pip install llmwikify[all]
+```
+
+### New CLI Commands
+
+- `export-graph` — Export knowledge graph (HTML/SVG/GraphML)
+- `community-detect` — Run Leiden/Louvain community detection
+- `report` — Generate surprise score report
+
+### No `graph_index.md` Generated
+
+Community detection outputs to stdout/JSON only. No markdown file is written to the wiki directory. This is intentional — there is no consumer (human, LLM, or tool) that needs a persistent markdown representation of community results.
+
+### API Additions
+
+| New Method | Description |
+|------------|-------------|
+| `Wiki.get_relation_engine()` | Get RelationEngine instance |
+| `Wiki.write_relations(relations, source_file=...)` | Write extracted relations |
+
+---
+
+## v0.21.x → v0.22.0
+
+### Database Schema Change
+
+v0.22.0 adds a `relations` table to `.llmwikify.db`:
+
+```sql
+CREATE TABLE relations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    target TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    confidence TEXT NOT NULL CHECK(confidence IN ('EXTRACTED','INFERRED','AMBIGUOUS')),
+    source_file TEXT,
+    context TEXT,
+    wiki_pages TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Migration**: The table is created automatically on first use. No manual migration needed for existing wikis.
+
+### New CLI Subcommand
+
+- `graph-query` — Query knowledge graph relationships
+  - Subcommands: `neighbors`, `path`, `stats`, `context`
+
+### Prompt Changes
+
+The `generate_wiki_ops.yaml` prompt now includes relation extraction instructions. If you have custom prompts, you may want to add relation extraction to your templates.
+
+---
+
+## v0.20.x → v0.21.0
+
+### New Optional Dependency
+
+v0.21.0 adds a `[watch]` optional dependency:
+
+```bash
+pip install llmwikify[watch]
+# or
+pip install llmwikify[all]
+```
+
+### New CLI Command
+
+- `watch` — Monitor `raw/` directory for file changes
+  - Default: notify-only (no auto-ingest)
+  - `--auto-ingest` to enable automatic processing
+  - `--git-hook` to install/uninstall git post-commit hook
+
+### No Breaking Changes
+
+Existing workflows are unaffected. Watch mode is purely additive.
+
+---
+
+## v0.19.x → v0.20.0
+
+### New Optional Dependency
+
+MarkItDown is an optional dependency. Existing extractors continue to work as fallbacks.
+
+```bash
+pip install llmwikify[extractors]
+```
+
+### No Breaking Changes
+
+MarkItDown is used automatically when available. If not installed, the system falls back to legacy extractors (pymupdf, trafilatura, etc.).
+
+---
+
+## v0.18.x → v0.19.0
+
+### Prompt System Changes
+
+v0.19.0 introduces `PromptRegistry` and `PrincipleChecker`. If you have custom prompt directories configured via `prompts.custom_dir`, ensure your YAML templates follow the new structure:
+
+```yaml
+name: "template_name"
+description: "What this template does"
+provider_overrides:
+  ollama:
+    # Ollama-specific adjustments
+  openai:
+    # OpenAI-specific adjustments
+```
+
+### New Configuration
+
+No config changes required. The prompt system is backward-compatible with existing configurations.
+
+---
+
+## v0.17.x → v0.18.0
+
+### Prompts Moved to YAML
+
+All hardcoded prompts are now in `prompts/_defaults/*.yaml`. If you had custom logic that relied on prompt strings in Python code, update to use `PromptRegistry`:
+
+```python
+# Old (v0.17.x)
+prompt = "Analyze this source and..."
+
+# New (v0.18.0+)
+from llmwikify.core import PromptRegistry
+registry = PromptRegistry(wiki_root)
+prompt = registry.render("analyze_source", context={"title": "doc.pdf"})
+```
+
+### Chaining Mode
+
+Two-step ingest is now available. Enable in config:
+
+```yaml
+llm:
+  prompt_chaining:
+    ingest: true
+```
+
+---
+
+## v0.13.x → v0.14.0
+
+### BREAKING: `update_existing` Parameter Removed
+
+**v0.13.x**: `synthesize_query(update_existing=True)`  
+**v0.14.0+**: `synthesize_query(merge_or_replace="merge")`
+
+**Migration**:
+
+```python
+# Old (v0.13.x)
+wiki.synthesize_query(query="Q", answer="A", update_existing=True)
+
+# New (v0.14.0+)
+wiki.synthesize_query(query="Q", answer="A", merge_or_replace="merge")  # or "replace" or "sink"
+```
+
+The three strategies:
+- `"sink"` (default) — append to sink buffer
+- `"merge"` — consolidate with existing page
+- `"replace"` — overwrite entirely
+
+### MCP Tool Change
+
+`wiki_synthesize` MCP tool now uses `merge_or_replace` (string enum) instead of `update_existing` (boolean).
+
+---
+
+## v0.13.0 — Query Sink Feature
+
+### New Methods
+
+| Method | Description |
+|--------|-------------|
+| `Wiki.sink_status()` | Overview of all query sinks |
+| `Wiki.read_sink(page_name)` | Read pending sink entries |
+| `Wiki.clear_sink(page_name)` | Clear processed entries |
+
+### New Directory
+
+`sink/` directory is created for pending query updates. No migration needed — it's created on first use.
+
+---
+
+## v0.12.x → v0.13.0
+
+### New Return Fields
+
+`synthesize_query()` now returns `status: "sunk"` when a similar query page exists.
+
+`read_page()` and `search()` now include `has_sink` and `sink_entries` fields.
+
+**Migration**: If your code checks `result["status"]`, handle the new `"sunk"` value.
+
+---
+
 ## v0.11.x → v0.12.x
 
 ### Breaking Changes
@@ -134,4 +401,4 @@ from llmwikify.mcp import MCPServer
 
 ---
 
-*Last updated: 2026-04-10 | Current version: 0.12.6*
+*Last updated: 2026-04-13 | Current version: 0.24.0*

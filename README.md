@@ -5,7 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 443 passing](https://img.shields.io/badge/tests-443%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Tests: 490 passing](https://img.shields.io/badge/tests-490%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 
 ---
 
@@ -39,14 +39,8 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 ### 🔗 Bidirectional Reference Tracking
 - Automatic `[[wikilink]]` detection and parsing
 - Section-level granularity (`[[Page#section|display]]`)
-- Inbound/outbound link queries
+- Inbound/outbound link queries with context
 - JSON export for Obsidian compatibility
-
-### 🧠 Smart Recommendations
-- Missing page detection (frequently referenced but don't exist)
-- Orphan page identification (with intelligent exclusion)
-- Cross-reference opportunities
-- Smart hints for wiki improvement
 
 ### 🔀 Query Knowledge Compounding (v0.12.6+)
 - **wiki_synthesize** — Save query answers as persistent wiki pages
@@ -55,32 +49,54 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 - `merge_or_replace` parameter: sink, merge, or replace strategies
 - Auto-links to wiki pages and raw sources
 - Auto-logs to `log.md` with parseable format
-- Answers compound in the knowledge base just like ingested sources
 
 ### 🔄 Query Sink (v0.13.0+)
 - Compound answers without creating duplicate pages
-- Pending entries saved to sink/ for later review
+- Pending entries saved to `sink/` for later review
 - Urgency tracking: ok / attention (7d+) / aging (14d+) / stale (30d+)
-- Smart suggestions: content gaps, source quality, query patterns
 - Dedup detection flags entries with >70% text similarity
 
 ### 📥 Enhanced Ingest (v0.15.0+)
 - Rich metadata: file_type, file_size, word_count, has_images, content_preview
-- No summary returned — respects "LLM reads source" principle
-- Auto-collects all sources into raw/ directory
+- Auto-collects all sources into `raw/` directory
+- LLM smart mode (`--smart`) for automatic page creation
 
-### 🧹 Smart Lint with Clues (v0.15.0+)
+### 🧹 Smart Lint with Investigations (v0.15.0+)
 - `dated_claim` (critical): Pages referencing years ≥3 years older than latest raw source
 - `topic_overlap` (informational): Query pages with ≥85% keyword overlap
 - `missing_cross_ref` (informational): Concepts mentioned but not wikilinked
-- Two-tier hints: critical (max 3) + informational (max 5)
-
-### 🔍 Smart Investigations (v0.16.0+)
 - `contradictions`: Cross-page conflicts (value, year, negation patterns)
 - `data_gaps`: Unsourced claims and vague temporal references
-- `suggested_questions`: LLM-generated investigation questions (optional)
-- `suggested_sources`: LLM-recommended source types (optional)
-- Pure observations — LLM makes final judgments
+- `--generate-investigations`: LLM-suggested questions and sources
+
+### 🕰️ File Watcher (v0.21.0+)
+- Watch `raw/` directory for new file arrivals
+- Default: notify-only (respects "stay involved" principle)
+- Optional: auto-ingest with `--auto-ingest`
+- Git post-commit hook integration
+- Debounce support for rapid file changes
+
+### 🔗 Knowledge Graph Relations (v0.22.0+)
+- LLM auto-extracts concept relationships during ingest
+- 8 relation types: `is_a`, `uses`, `related_to`, `contradicts`, `supports`, `replaces`, `optimizes`, `extends`
+- 3 confidence levels: `EXTRACTED`, `INFERRED`, `AMBIGUOUS`
+- Graph queries: neighbors, shortest path, statistics, context lookup
+- Contradiction detection between relations
+
+### 📈 Community Detection (v0.23.0+)
+- Leiden/Louvain algorithms for automatic topic clustering
+- Resolution control for community granularity
+- JSON output for programmatic consumption
+
+### 🎯 Surprise Score Reports (v0.23.0+)
+- Multi-dimensional unexpected connection analysis
+- Scores based on: confidence, cross-source-type, cross-community, peripheral-to-hub
+- Human-readable explanations for each surprise
+
+### 📊 Graph Visualization (v0.23.0+)
+- Interactive HTML (pyvis) — click nodes, filter by community
+- SVG export (graphviz)
+- GraphML export (Gephi, yEd compatible)
 
 ### 🚀 Performance Optimized
 - Batch inserts with `executemany()`
@@ -94,17 +110,6 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 - **Configuration-driven** — You decide what to exclude via `.wiki-config.yaml`
 - **Universal patterns** — Date formats, frontmatter markers, directory structures
 
-### 📦 Zero Core Dependencies
-- Standard library only
-- Optional dependencies for extended functionality:
-  - `markitdown[all]` — Enhanced file extraction (Word, Excel, PowerPoint, images with OCR, audio, EPub, ZIP)
-  - `pymupdf` — PDF extraction (fallback)
-  - `trafilatura` — Web scraping
-  - `youtube-transcript-api` — YouTube transcripts
-  - `mcp` — MCP server support
-  - `pyyaml` — Configuration loading
-  - `jinja2` — Prompt template rendering
-
 ---
 
 ## 📦 Installation
@@ -114,7 +119,7 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 pip install llmwikify
 ```
 
-### Full Installation (All Features including MarkItDown)
+### Full Installation (All Features)
 ```bash
 pip install llmwikify[all]
 ```
@@ -126,28 +131,39 @@ cd llmwikify
 pip install -e ".[dev]"
 ```
 
+### Feature-Specific Extras
+| Extra | Purpose | Key Packages |
+|-------|---------|-------------|
+| `extractors` | Enhanced file extraction | markitdown[all], pymupdf, trafilatura |
+| `mcp` | MCP server support | mcp>=1.0.0 |
+| `watch` | File system watching | watchdog>=3.0.0 |
+| `graph` | Graph visualization + community detection | networkx, pyvis, python-louvain |
+| `all` | Everything above | All of the above |
+| `dev` | Development tools | All + pytest, black, ruff, mypy |
+
 ---
 
 ## 🔌 Enhanced File Extraction (v0.20.0+)
 
-llmwikify now supports a much wider range of file formats through **MarkItDown** integration:
+llmwikify supports a wide range of file formats through **MarkItDown** integration with graceful fallback:
 
-| Format | Support | Description |
-|--------|---------|-------------|
-| PDF (text + OCR) | ✅ | pymupdf fallback + MarkItDown OCR |
-| Word (.docx, .doc) | ✅ | Full text + structure extraction |
-| Excel (.xlsx, .xls) | ✅ | Tables and data extraction |
-| PowerPoint (.pptx, .ppt) | ✅ | Slides with image descriptions |
-| Images (.jpg, .png, etc.) | ✅ | EXIF metadata + LLM vision OCR |
-| Audio (.mp3, .wav) | ✅ | Speech transcription |
-| HTML | ✅ | Better than regex-based extraction |
-| CSV, JSON, XML | ✅ | Data format extraction |
-| EPub | ✅ | E-book extraction |
-| ZIP | ✅ | Recursive file iteration |
-| YouTube | ✅ | Transcript extraction |
-| URL | ✅ | Web article extraction |
+| Format | Extensions | Extractor |
+|--------|-----------|-----------|
+| PDF | `.pdf` | MarkItDown + pymupdf fallback |
+| Word | `.docx`, `.doc` | MarkItDown |
+| Excel | `.xlsx`, `.xls` | MarkItDown |
+| PowerPoint | `.pptx`, `.ppt` | MarkItDown |
+| Images | `.jpg`, `.png`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg` | MarkItDown (LLM vision ready) |
+| Audio | `.mp3`, `.wav`, `.m4a` | MarkItDown (speech transcription) |
+| Data | `.csv`, `.json`, `.xml` | MarkItDown |
+| E-book | `.epub` | MarkItDown |
+| Archive | `.zip` | MarkItDown |
+| Outlook | `.msg` | MarkItDown |
+| HTML | `.html`, `.htm` | MarkItDown + regex fallback |
+| Web | URL | trafilatura |
+| YouTube | youtube.com, youtu.be | youtube-transcript-api |
+| Text | `.md`, `.txt` | Built-in (no dependency) |
 
-Install the full extraction stack:
 ```bash
 pip install llmwikify[extractors]
 ```
@@ -176,16 +192,29 @@ Wiki initialized at /path/to/wiki
 # Ingest a PDF (copied to raw/)
 llmwikify ingest document.pdf
 
-# Ingest a URL (text saved to raw/)
+# LLM smart mode: auto-create wiki pages
+llmwikify ingest document.pdf --smart
+
+# Ingest a URL
 llmwikify ingest https://example.com/article
 
-# Ingest a YouTube video (transcript saved to raw/)
+# Ingest a YouTube video
 llmwikify ingest https://youtube.com/watch?v=abc123
 ```
 
-All sources are automatically collected into `raw/` for centralized management.
+### 3. Watch for New Files (v0.21.0+)
+```bash
+# Watch raw/ directory, notify only (default)
+llmwikify watch
 
-### 3. Build Index
+# Auto-ingest new files
+llmwikify watch --auto-ingest --smart
+
+# Install git post-commit hook
+llmwikify watch --git-hook
+```
+
+### 4. Build Index
 ```bash
 llmwikify build-index
 ```
@@ -199,7 +228,7 @@ Total links: 636
 Elapsed: 0.06s
 ```
 
-### 4. Search and Query
+### 5. Search and Query
 ```bash
 # Full-text search
 llmwikify search "gold mining" -l 10
@@ -207,11 +236,50 @@ llmwikify search "gold mining" -l 10
 # Query page references
 llmwikify references "Company Name"
 
-# Get smart recommendations
-llmwikify recommend
+# Get lint recommendations
+llmwikify lint --format=recommendations
 
-# Get wiki health hints
-llmwikify hint
+# Get quick health suggestions
+llmwikify lint --format=brief
+```
+
+### 6. Knowledge Graph (v0.22.0+)
+```bash
+# View concept relationships
+llmwikify graph-query neighbors "Attention"
+
+# Find shortest path between concepts
+llmwikify graph-query path "FlashAttention" "PageAttention"
+
+# View graph statistics
+llmwikify graph-query stats
+
+# View relation context
+llmwikify graph-query context 1
+```
+
+### 7. Community Detection (v0.23.0+)
+```bash
+# Detect knowledge communities
+llmwikify community-detect
+
+# Output as JSON
+llmwikify community-detect --json
+
+# Adjust resolution (higher = more granular)
+llmwikify community-detect --resolution 1.5
+```
+
+### 8. Graph Visualization (v0.23.0+)
+```bash
+# Export interactive HTML
+llmwikify export-graph --format html --output graph.html
+
+# Export for Gephi/yEd
+llmwikify export-graph --format graphml
+
+# Generate surprise report
+llmwikify report --top 10
 ```
 
 ---
@@ -232,7 +300,7 @@ wiki.init()
 result = wiki.ingest_source("document.pdf")
 print(f"Source: {result['title']}, saved to: {result['source_raw_path']}")
 
-# Write page (auto-updates index.md)
+# LLM smart processing
 wiki.write_page("Test Page", "# Test\n\nContent with [[Link]]")
 
 # Search
@@ -247,27 +315,35 @@ wiki.synthesize_query(
     source_pages=["Gold Mining", "Copper Mining"],
     raw_sources=["raw/report.pdf"],
 )
-# → Creates "Query: Compare Gold And Copper Mining" page
-# → Auto-adds Sources section with wikilinks and raw links
-# → Auto-logs to log.md
 
-# Get references
-inbound = wiki.get_inbound_links("Company Page")
-outbound = wiki.get_outbound_links("Company Page")
+# Write relations (v0.22.0+)
+relations = [
+    {"source": "Attention", "target": "Softmax", "relation": "uses", "confidence": "EXTRACTED"},
+    {"source": "FlashAttention", "target": "KV Cache", "relation": "optimizes", "confidence": "INFERRED"},
+]
+wiki.write_relations(relations, source_file="transformer_paper.pdf")
+
+# Query relations (v0.22.0+)
+engine = wiki.get_relation_engine()
+neighbors = engine.get_neighbors("Attention")
+path = engine.get_path("FlashAttention", "PageAttention")
+stats = engine.get_stats()
 
 # Get recommendations
 recs = wiki.recommend()
-print(f"Missing pages: {recs['missing_pages']}")
-print(f"Orphan pages: {recs['orphan_pages']}")
+
+# Sink management
+status = wiki.sink_status()
+entries = wiki.read_sink("topic")
+wiki.clear_sink("topic")
 
 # Get smart hints
 hints = wiki.hint()
-print(f"Total hints: {hints['summary']['total_hints']}")
 ```
 
 ---
 
-## 🗄️ MCP Server (13 Tools)
+## 🗄️ MCP Server (16 Tools)
 
 The MCP server exposes wiki operations as tools for LLMs.
 
@@ -286,6 +362,9 @@ The MCP server exposes wiki operations as tools for LLMs.
 | `wiki_read_schema` | Read wiki.md (schema/conventions) |
 | `wiki_update_schema` | Update wiki.md with new conventions |
 | `wiki_synthesize` | **Save query answer as wiki page** (knowledge compounding) |
+| `wiki_sink_status` | Overview of query sinks with entry counts |
+| `wiki_graph` | Query/modify knowledge graph (neighbors, path, stats, write relations) |
+| `wiki_graph_analyze` | Analyze graph (export visualization, detect communities, surprise report) |
 
 ### Quick Start
 ```python
@@ -318,12 +397,32 @@ orphan_detection:
     - 'archive'
     - 'logs'
 
+# LLM configuration
+llm:
+  enabled: false
+  provider: "openai"  # openai, ollama, lmstudio
+  model: "gpt-4o"
+  api_key: "env:OPENAI_API_KEY"
+
 # MCP server settings
 mcp:
   host: "127.0.0.1"
   port: 8765
-  transport: "stdio"  # or "http" or "sse"
+  transport: "stdio"  # stdio, http, sse
+
+# Custom prompt templates
+prompts:
+  custom_dir: null  # Path to custom prompt directory
 ```
+
+### Environment Variables
+| Variable | Purpose |
+|----------|---------|
+| `WIKI_ROOT` | Override default wiki root directory |
+| `LLM_API_KEY` | LLM API key (supports `env:VAR_NAME` syntax in config) |
+| `LLM_BASE_URL` | LLM API base URL |
+| `LLM_MODEL` | LLM model name |
+| `LLM_PROVIDER` | LLM provider (openai, ollama, lmstudio) |
 
 ### Design Principle: Zero Domain Assumptions
 
@@ -331,12 +430,6 @@ llmwikify does **NOT** assume:
 - ❌ "Daily summary" concept
 - ❌ "Company page" concept
 - ❌ Any domain-specific page types
-
-llmwikify provides:
-- ✅ Universal patterns (dates, quarters)
-- ✅ Frontmatter markers (redirect_to)
-- ✅ Directory structures (archive/, logs/)
-- ✅ User-configurable rules
 
 This makes llmwikify truly general-purpose:
 - **Mining News Wiki**: Dates = daily summaries
@@ -346,24 +439,28 @@ This makes llmwikify truly general-purpose:
 
 ---
 
-## 📊 CLI Commands (15 Total)
+## 📊 CLI Commands (19 Total)
 
 | Command | Description | Example |
 |---------|-------------|---------|
 | `init` | Initialize wiki | `llmwikify init` |
-| `ingest` | Ingest PDF/URL/YouTube | `llmwikify ingest doc.pdf` |
+| `ingest` | Ingest PDF/URL/YouTube | `llmwikify ingest doc.pdf --smart` |
 | `write_page` | Create/update page | `llmwikify write_page Test -c "..."` |
 | `read_page` | Read page | `llmwikify read_page Test` |
 | `search` | Full-text search | `llmwikify search "gold" -l 10` |
-| `lint` | Health check | `llmwikify lint` |
+| `lint` | Health check | `llmwikify lint --format=brief` |
 | `status` | Status overview | `llmwikify status` |
 | `log` | Record log entry | `llmwikify log ingest doc.pdf` |
-| `references` | Show references | `llmwikify references "Agnico"` |
-| `build-index` | Build reference index | `llmwikify build-index` |
-| `export-index` | Export JSON | `llmwikify export-index -o out.json` |
-| `batch` | Batch ingest | `llmwikify batch raw/pdfs/ -l 10` |
-| `hint` | Smart suggestions | `llmwikify hint` |
-| `recommend` | Recommendations | `llmwikify recommend` |
+| `references` | Show references | `llmwikify references "Agnico" --detail` |
+| `build-index` | Build/export reference index | `llmwikify build-index --export-only` |
+| `batch` | Batch ingest | `llmwikify batch raw/pdfs/ --smart` |
+| `sink-status` | Sink buffer overview | `llmwikify sink-status` |
+| `synthesize` | Save query as page | `llmwikify synthesize "Q?" -a "A..."` |
+| `watch` | Watch for new files | `llmwikify watch --auto-ingest` |
+| `graph-query` | Query knowledge graph | `llmwikify graph-query neighbors "A"` |
+| `export-graph` | Export graph visualization | `llmwikify export-graph --format html` |
+| `community-detect` | Detect communities | `llmwikify community-detect --json` |
+| `report` | Surprise connections report | `llmwikify report --top 10` |
 | `serve` | Start MCP server | `llmwikify serve` |
 
 ---
@@ -377,7 +474,7 @@ CREATE VIRTUAL TABLE pages_fts USING fts5(
     tokenize='porter unicode61'
 );
 
--- Bidirectional link tracking
+-- Bidirectional wikilink tracking
 CREATE TABLE page_links (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_page TEXT NOT NULL,
@@ -398,7 +495,41 @@ CREATE TABLE pages (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Knowledge graph relations (v0.22.0+)
+CREATE TABLE relations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    target TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    confidence TEXT NOT NULL,
+    source_file TEXT,
+    context TEXT,
+    wiki_pages TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
+
+### Relation Types
+
+| Type | Semantic | Example |
+|------|----------|---------|
+| `is_a` | Classification | FlashAttention **is_a** Attention optimization |
+| `uses` | Dependency | Attention **uses** Softmax |
+| `related_to` | Loose association | Transformer **related_to** NLP |
+| `contradicts` | Conflict | Paper A **contradicts** Paper B |
+| `supports` | Evidence | Experiment **supports** hypothesis |
+| `replaces` | Replacement | FlashAttention **replaces** Standard Attention |
+| `optimizes` | Optimization | KV Cache **optimizes** inference |
+| `extends` | Extension | LoRA **extends** fine-tuning methods |
+
+### Confidence Levels
+
+| Level | Meaning |
+|-------|---------|
+| `EXTRACTED` | Relationship explicitly stated in source |
+| `INFERRED` | Relationship deduced from context |
+| `AMBIGUOUS` | Relationship uncertain, flagged for review |
 
 ---
 
@@ -412,35 +543,40 @@ pytest
 pytest --cov=src/llmwikify
 
 # Run specific module
-pytest tests/test_query_flow.py -v
+pytest tests/test_v023_graph.py -v
 
 # Run and generate HTML report
 pytest --cov=src/llmwikify --cov-report=html
 ```
 
-**Test Coverage**: 443 tests, all passing
+**Test Coverage**: 490 tests, all passing (32 markitdown tests skipped due to heavy deps)
 
 ### Test Files
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `test_wiki_core.py` | 36 | Wiki class (init, ingest, pages, schema, lint) |
-| `test_query_flow.py` | 27 | Query synthesis (basic, sources, logging, duplicates, full flow) |
-| `test_index.py` | 8 | WikiIndex (FTS5, links, export) |
-| `test_recommend.py` | 5 | Recommendation engine |
-| `test_cli.py` | 8 | CLI commands |
-| `test_extractors.py` | 12 | Content extractors |
-| `test_llm_client.py` | 14 | LLM client config and JSON parsing |
-| `test_v015_features.py` | 15 | Enhanced ingest + lint features |
-| `test_v016_investigations.py` | 12 | Smart investigations |
+| `test_wiki_core.py` | 33 | Wiki class (init, ingest, pages, schema, lint) |
+| `test_query_flow.py` | 27 | Query synthesis (basic, sources, logging, duplicates) |
+| `test_sink_flow.py` | 55 | Query sink buffer (append, read, clear, urgency) |
 | `test_prompt_registry.py` | 34 | Prompt template loading and rendering |
-| `test_v018_prompt_engineering.py` | 26 | Phase 3 prompt engineering |
-| `test_v018_integration.py` | 28 | Phase 3 integration tests |
-| `test_v019_principle_checker.py` | 34 | Principle compliance checker |
-| `test_v019_eval_prompts.py` | 26 | Offline prompt evaluation |
+| `test_v019_principle_checker.py` | 33 | Principle compliance checker |
+| `test_v015_features.py` | 34 | Enhanced ingest + lint features |
 | `test_v019_wiki_synthesize.py` | 31 | wiki_synthesize prompt externalization |
-| `test_v019_harness_regression.py` | 16 | Prompt regression tests + golden sources |
 | `test_v020_markitdown_extractor.py` | 32 | MarkItDown extractor integration |
+| `test_v018_integration.py` | 23 | Phase 3 integration tests |
+| `test_v018_prompt_engineering.py` | 25 | Phase 3 prompt engineering |
+| `test_v019_eval_prompts.py` | 26 | Offline prompt evaluation |
+| `test_v022_relations.py` | 26 | Knowledge graph relations engine |
+| `test_v021_watch.py` | 23 | File system watcher |
+| `test_v016_investigations.py` | 18 | Smart investigations |
+| `test_v019_harness_regression.py` | 15 | Prompt regression tests + golden sources |
+| `test_extractors.py` | 16 | Content extractors |
+| `test_p0_p3_fixes.py` | 21 | Bug fixes and improvements |
+| `test_llm_client.py` | 13 | LLM client config and JSON parsing |
+| `test_index.py` | 8 | WikiIndex (FTS5, links, export) |
+| `test_cli.py` | 9 | CLI commands |
+| `test_recommend.py` | 5 | Recommendation engine |
+| `test_v023_graph.py` | 13 | Graph export and community detection |
 
 ---
 
@@ -501,29 +637,51 @@ orphan_detection:
 ┌─────────────────────────────────────────────────────────────┐
 │                     llmwikify Architecture                  │
 └─────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  1. Core Layer                                              │
-│     Wiki (wiki.py) — Business logic, synthesize_query       │
-│     WikiIndex (index.py) — FTS5 + Reference Tracking        │
-│     PromptRegistry — YAML+Jinja2 prompt management          │
-│     PrincipleChecker — LLM Wiki Principle compliance        │
+│  Core Layer                                                 │
+│  Wiki (wiki.py)             — Business logic orchestrator   │
+│  WikiIndex (index.py)       — FTS5 + Reference Tracking     │
+│  RelationEngine             — Knowledge graph relations     │
+│  GraphExport                — Visualization + communities   │
+│  FileSystemWatcher          — File change detection         │
+│  PromptRegistry             — YAML+Jinja2 prompt management │
+│  PrincipleChecker           — Prompt compliance checking    │
 └─────────────────────────────────────────────────────────────┘
-                                ▲
-                                │
-┌─────────┴────────────────────────────────────────────────┐
-│                   Extraction Layer                        │
-│  text.py │ pdf.py │ web.py │ youtube.py │               │
-│  markitdown_extractor.py (Office, images, audio, etc.)  │
-└──────────────────────────────────────────────────────────┘
-                                ▲
-                                │
-                ┌───────────────┴───────────────┐
-                ▼                               ▼
+                                 ▲
+                                 │
+┌─────────────────────────────────────────────────────────────┐
+│                   Extraction Layer                          │
+│  text.py │ pdf.py │ web.py │ youtube.py │                  │
+│  markitdown_extractor.py (Office, images, audio, etc.)     │
+└─────────────────────────────────────────────────────────────┘
+                                 ▲
+                                 │
+                 ┌───────────────┴───────────────┐
+                 ▼                               ▼
 ┌────────────────────────┐        ┌────────────────────────┐
-│  CLI (15 commands)     │        │  MCP Server (13 tools) │
+│  CLI (19 commands)     │        │  MCP Server (16 tools) │
 └────────────────────────┘        └────────────────────────┘
+```
+
+### Data Flow
+
+**Ingest Flow:**
+```
+Source (PDF/URL/YouTube/text file)
+  → extractors.extract() — Auto-detect type
+  → ExtractedContent (text, title, metadata)
+  → Wiki.ingest_source() — Collects to raw/, logs
+  → (LLM --smart) — Creates wiki pages + extracts relations
+  → Wiki.write_relations() — Stores in SQLite relations table
+```
+
+**Query Compounding Flow:**
+```
+User Question → Wiki.search() → LLM synthesizes answer
+  → Wiki.synthesize_query() → Creates "Query: {Topic}" page
+  → Answer persists as wiki page — knowledge compounds
 ```
 
 ---
@@ -537,6 +695,7 @@ orphan_detection:
 - **[MCP Setup Guide](docs/MCP_SETUP.md)** — MCP server configuration
 - **[Migration Guide](MIGRATION.md)** — Version migration notes
 - **[Architecture](ARCHITECTURE.md)** — Technical architecture
+- **[Roadmap Plan](docs/plans/v021-v023-roadmap.md)** — v0.21.0–v0.23.0 implementation plan
 
 ---
 
@@ -571,55 +730,74 @@ mypy src/llmwikify
 
 ## 📈 Roadmap
 
+### ✅ v0.23.0 (Released)
+- **Graph Visualization**: Interactive HTML (pyvis), SVG (graphviz), GraphML (Gephi)
+- **Community Detection**: Leiden/Louvain algorithms for automatic topic clustering
+- **Surprise Score Reports**: Multi-dimensional unexpected connection analysis
+- **Graph Query CLI**: `graph-query` subcommand (neighbors/path/stats/context)
+
+### ✅ v0.24.0 (Released)
+- **CLI Simplified**: 22 → 19 commands (hint, recommend, export-index merged)
+- **MCP Simplified**: 21 → 16 tools (7 graph/relation tools merged into 2)
+- **Dead Code Removed**: `ingest_source.yaml`, single-call LLM path, `prompt_chaining.ingest` config
+- **Dead Config Removed**: `performance.cache_size` (never used)
+- **490 tests passing** (522 collected, 32 markitdown skipped)
+
+### v0.25.0 (Planned)
+- **Semantic Cache** — Cache LLM responses by semantic similarity, reduce redundant API calls
+- **Incremental Index Updates** — Update FTS5 index per-page instead of full rebuild
+- **MCP Authentication** — Secure MCP server with API key authentication
+- **Web UI** (optional) — Lightweight Flask/FastAPI interface for browsing wiki
+
+### v1.0.0 (Future)
+- Stable API guarantee
+- Production hardening
+- Comprehensive error handling and recovery
+
+### ✅ v0.22.0 (Released)
+- **Knowledge Graph Relations**: LLM auto-extracts concept relationships during ingest
+- **Relation Engine**: 8 relation types, 3 confidence levels, SQLite storage
+- **Contradiction Detection**: Automatic conflict detection between relations
+- **Orphan Concept Detection**: Identify concepts without wiki pages
+- **+26 new tests**
+
+### ✅ v0.21.0 (Released)
+- **File Watcher**: Watch `raw/` for new file arrivals (watchdog)
+- **Git Post-Commit Hook**: Auto-rebuild knowledge graph on every commit
+- **Debounce Support**: Configurable, handles rapid file changes
+- **Auto-Ingest Mode**: Optional `--auto-ingest` flag (default: notify-only)
+- **+23 new tests**
+
 ### ✅ v0.20.0 (Released)
-- **MarkItDown Integration**: Unified file extractor for Word, Excel, PowerPoint, images (OCR), audio, EPub, ZIP
-- **Enhanced Format Support**: 20+ file types (pdf, docx, xlsx, pptx, jpg, png, mp3, csv, json, xml, epub, zip)
-- **Graceful Fallback**: Existing extractors preserved as fallback when MarkItDown unavailable
-- **LLM Vision Ready**: MarkItDown configured with LLM client for image OCR and descriptions
-- **443 tests passing** (+32 new)
+- **MarkItDown Integration**: Unified file extractor for Word, Excel, PowerPoint, images, audio, EPub, ZIP
+- **Enhanced Format Support**: 20+ file types with graceful fallback
+- **+32 new tests**
 
 ### ✅ v0.19.0 (Released)
 - **Prompt Harness Engineering**: Systematic prompt quality evaluation
-- **Principle Compliance Checker**: 7 principles checked across all prompt templates
-- **Offline Prompt Evaluation**: 8 automated checks (loading, rendering, context, schema, etc.)
+- **Principle Compliance Checker**: 7 principles checked across all prompts
+- **Offline Prompt Evaluation**: 8 automated checks
 - **Golden Source Framework**: 5 test scenarios with mock LLM
-- **Prompt Regression Tests**: 16 tests ensuring pipeline stability
-- **wiki_synthesize Externalized**: YAML+Jinja2 template with context injection + validation
-- **CI Workflow**: Automated prompt quality checks on push/PR
-- **411 tests passing** (+76 new)
+- **+76 new tests**
 
 ### ✅ v0.18.0 (Released)
-- **Prompt Externalization**: All hardcoded prompts extracted to YAML + Jinja2 templates
-- **Provider Overrides**: OpenAI, Ollama, Anthropic specific prompt variants
+- **Prompt Externalization**: All hardcoded prompts → YAML + Jinja2 templates
+- **Provider Overrides**: OpenAI, Ollama, Anthropic specific variants
 - **Chaining Mode**: Two-step ingest (analyze_source → generate_wiki_ops)
 - **Validation & Retry**: Schema validation with configurable retry
-- **Dynamic Context Injection**: Wiki state injected into prompts (index, log, page count)
-- **335 tests passing**
 
-### ✅ v0.16.0 (Released)
-- Smart investigations: contradiction detection (value, year, negation)
-- Data gap detection (unsourced claims, vague temporal references)
-- LLM-generated investigation suggestions (optional)
-- 217 tests passing
-
-### ✅ v0.15.0 (Released)
-- Enhanced ingest metadata (file_type, file_size, word_count, has_images, content_preview)
-- Clue-based lint detection: dated_claim, topic_overlap, missing_cross_ref
-- Two-tier hint system: critical + informational (max 8 total)
-- Query sink enhancement: merge_or_replace, suggestions, dedup, urgency tracking
-- 199 tests passing
-
-### ✅ v0.12.0 - v0.14.0 (Completed)
-- ✅ Complete CLI commands (15 total)
+### ✅ v0.12.0–v0.17.0 (Completed)
+- ✅ Complete CLI commands (19 after v0.24.0 simplification)
 - ✅ Auto-index on page write
 - ✅ Raw source collection (all sources into raw/)
-- ✅ wiki_synthesize — Query knowledge compounding cycle
-- ✅ Query sink feature with bidirectional linking
+- ✅ wiki_synthesize — Query knowledge compounding
+- ✅ Query sink feature with urgency tracking
 - ✅ Smart recommendations and hints
+- ✅ Smart investigations with LLM suggestions
+- ✅ Enhanced ingest metadata
 
 ### v1.0.0 (Roadmap)
 - [ ] Web UI (optional)
-- [ ] Graph visualization (graphviz/Mermaid)
 - [ ] MCP server authentication
 - [ ] Incremental index updates
 - [ ] Stable API guarantee
@@ -631,6 +809,7 @@ mypy src/llmwikify
 
 - **[llm-wiki-kit](https://github.com/iamsashank09/llm-wiki-kit)** — Original inspiration and foundational design by Sashank. This project extends the core concepts of LLM-maintained wikis with enhanced CLI tools, MCP server support, query knowledge compounding, and configuration-driven flexibility.
 - **Andrej Karpathy** — [LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md)
+- **graphify** — Inspiration for Surprise Score algorithm and knowledge graph analysis
 - **Obsidian** — Markdown wiki platform
 - **MCP (Model Context Protocol)** — LLM integration standard
 
