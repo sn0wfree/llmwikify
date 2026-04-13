@@ -6,5 +6,6 @@
       "command": ["llmwikify", "mcp"],
       "enabled": true
     }
-  }
+  },
+  "instructions": [".agents/skills/llmwikify/SKILL.md"]
 }

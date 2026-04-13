@@ -79,15 +79,31 @@ The wiki organizes pages into the following structure (see `wiki.md` for details
 - Start ingesting sources from `raw/`
 - Run `wiki_lint` periodically to maintain wiki health
 
-## Fallback: CLI Mode
+## Knowledge Base Management
 
-If MCP tools are unavailable, use the `llmwikify` CLI directly via Bash.
-Skill instructions are in `.agents/skills/llmwikify/SKILL.md`.
-Full CLI reference: `.agents/skills/llmwikify/resources/cli-reference.md`.
+You have two ways to operate the wiki:
 
-Example:
-```bash
-llmwikify search "gold prices"
-llmwikify write_page "New Page" --content "# Title\n\nContent"
-llmwikify status
-```
+**MCP mode** (structured JSON):
+- MCP tools are auto-configured in `opencode.json`
+- Use `wiki_search`, `wiki_ingest`, `wiki_write_page`, etc.
+- Better error handling and structured responses
+
+**CLI mode** (via Bash):
+- Use `llmwikify` CLI commands directly
+- Skill content auto-loaded via `opencode.json` instructions
+- See `.agents/skills/llmwikify/SKILL.md` for full details
+
+**Key CLI commands:**
+- `llmwikify ingest raw/file.md [--smart]` — Extract and ingest source
+- `llmwikify search "query"` — Full-text search
+- `llmwikify write_page "Name" --content "..."` — Create/edit pages
+- `llmwikify read_page "Name"` — Read page content
+- `llmwikify lint` — Health check
+- `llmwikify status` — Wiki status summary
+- `llmwikify batch raw/dir/` — Batch ingest
+- `llmwikify graph-query stats` — Graph statistics
+
+Choose whichever works best in your current context.
+See `.agents/skills/llmwikify/resources/cli-reference.md` for full CLI reference.
+
+**Workflow:** ingest → create pages → write relations → update index → review overview
