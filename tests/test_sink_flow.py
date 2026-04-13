@@ -13,29 +13,29 @@ class TestSinkDirectoryCreation:
     """Test sink directory is created during init."""
 
     def test_sink_dir_created_on_init(self, temp_wiki):
-        """sink/ directory created during wiki init."""
+        """.sink/ directory created during wiki init."""
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        assert (temp_wiki / 'sink').exists()
+        assert (temp_wiki / 'wiki' / '.sink').exists()
         wiki.close()
 
     def test_sink_dir_in_created_files(self, temp_wiki):
-        """sink/ listed in created_files during fresh init."""
+        """.sink/ listed in created_files during fresh init."""
         wiki = Wiki(temp_wiki)
         result = wiki.init()
 
-        assert 'sink/' in result['created_files']
+        assert 'wiki/.sink/' in result['created_files']
         wiki.close()
 
     def test_sink_dir_skipped_if_exists(self, temp_wiki):
-        """sink/ skipped if already exists."""
-        (temp_wiki / 'sink').mkdir()
+        """.sink/ skipped if already exists."""
+        (temp_wiki / 'wiki' / '.sink').mkdir()
 
         wiki = Wiki(temp_wiki)
         result = wiki.init()
 
-        assert 'sink/' in result['skipped_files']
+        assert 'wiki/.sink/' in result['skipped_files']
         wiki.close()
 
     def test_sink_dir_attribute_exists(self, temp_wiki):
@@ -44,7 +44,7 @@ class TestSinkDirectoryCreation:
         wiki.init()
 
         assert hasattr(wiki, 'sink_dir')
-        assert wiki.sink_dir == temp_wiki / 'sink'
+        assert wiki.sink_dir == temp_wiki / 'wiki' / '.sink'
         wiki.close()
 
 
@@ -67,7 +67,7 @@ class TestGetSinkInfoForPage:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             '# Query Sink: Gold Mining\n\n'
@@ -86,7 +86,7 @@ class TestGetSinkInfoForPage:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             '# Query Sink: Test\n\n'
@@ -124,7 +124,7 @@ class TestFindOrCreateSinkFile:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         original_content = '---\nformal_page: "Query: Test"\n---\n\nExisting content\n'
         sink_file.write_text(original_content)
 
@@ -172,7 +172,7 @@ class TestAppendToSink:
 
         assert sink_path.endswith('Query: Gold Mining.sink.md')
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         content = sink_file.read_text()
         assert '## [' in content
         assert 'Query: What is gold mining?' in content
@@ -195,7 +195,7 @@ class TestAppendToSink:
             ["raw/article.md"],
         )
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         content = sink_file.read_text()
         assert '### Sources' in content
         assert '[[Source Page]]' in content
@@ -214,7 +214,7 @@ class TestAppendToSink:
         wiki.query_sink.append_to_sink("Query: Test", "Q1", "A1", [], [])
         wiki.query_sink.append_to_sink("Query: Test", "Q2", "A2", [], [])
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         content = sink_file.read_text()
 
         assert 'Q1' in content
@@ -243,7 +243,7 @@ class TestReadSink:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             '# Query Sink: Gold Mining\n\n'
@@ -265,7 +265,7 @@ class TestReadSink:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n# Query Sink: Test\n\n'
             '---\n\n## [2026-04-10 10:00] Query: Q1\n\nA1\n'
@@ -286,7 +286,7 @@ class TestClearSink:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             '# Query Sink: Test\n\n'
@@ -320,10 +320,10 @@ class TestClearSink:
 
         formal_path = temp_wiki / 'wiki' / 'Query: Test.md'
         formal_path.write_text(
-            '---\nsink_path: sink/Query: Test.sink.md\nsink_entries: 5\n---\n\n# Query: Test\n\nContent\n'
+            '---\nsink_path: .sink/Query: Test.sink.md\nsink_entries: 5\n---\n\n# Query: Test\n\nContent\n'
         )
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             '# Query Sink: Test\n\n'
@@ -368,7 +368,7 @@ class TestSinkStatus:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             '# Query Sink: Gold Mining\n\n'
@@ -391,13 +391,13 @@ class TestSinkStatus:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink1 = temp_wiki / 'sink' / 'Query: A.sink.md'
+        sink1 = temp_wiki / 'wiki' / '.sink' / 'Query: A.sink.md'
         sink1.write_text(
             '---\nformal_page: "Query: A"\n---\n\n# Sink: A\n\n'
             '---\n\n## [2026-04-10 10:00] Query: Q1\n\nA1\n'
         )
 
-        sink2 = temp_wiki / 'sink' / 'Query: B.sink.md'
+        sink2 = temp_wiki / 'wiki' / '.sink' / 'Query: B.sink.md'
         sink2.write_text(
             '---\nformal_page: "Query: B"\n---\n\n# Sink: B\n\n'
             '---\n\n## [2026-04-10 10:00] Query: Q1\n\nA1\n'
@@ -431,7 +431,7 @@ class TestSynthesizeQueryWithSink:
         assert result['status'] == 'sunk'
         assert 'sink' in result['message'].lower()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         assert sink_file.exists()
         wiki.close()
 
@@ -447,7 +447,7 @@ class TestSynthesizeQueryWithSink:
             answer="Gold mining involves extracting gold ore.",
         )
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         content = sink_file.read_text()
         assert 'Gold mining involves extracting gold ore.' in content
         wiki.close()
@@ -571,7 +571,7 @@ class TestReadPageWithSinkInfo:
 
         wiki.write_page("Query: Test", "# Query: Test\n\nContent")
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             '# Query Sink: Test\n\n'
@@ -589,13 +589,13 @@ class TestReadPageWithSinkInfo:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             '# Query Sink: Test\n\nContent\n'
         )
 
-        result = wiki.read_page("sink/Query: Test.sink.md")
+        result = wiki.read_page(".sink/Query: Test.sink.md")
 
         assert result['is_sink'] is True
         assert 'Query Sink: Test' in result['content']
@@ -606,7 +606,7 @@ class TestReadPageWithSinkInfo:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        result = wiki.read_page("sink/Nonexistent.sink.md")
+        result = wiki.read_page(".sink/Nonexistent.sink.md")
 
         assert 'error' in result
         wiki.close()
@@ -639,7 +639,7 @@ class TestSearchWithSinkInfo:
         wiki.write_page("Query: Gold Mining", "# Query: Gold Mining\n\nGold mining info.")
         wiki.build_index()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             '# Query Sink: Gold Mining\n\n'
@@ -665,7 +665,7 @@ class TestUpdateIndexFileWithSink:
 
         wiki.write_page("Query: Gold Mining", "# Query: Gold Mining\n\nContent")
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             '# Query Sink: Gold Mining\n\n'
@@ -714,7 +714,7 @@ class TestLintWithSinkStatus:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             '# Query Sink: Test\n\n'
@@ -739,7 +739,7 @@ class TestWikiMdTemplate:
         content = wiki_md.read_text()
 
         assert 'Query Sink' in content
-        assert 'sink/' in content
+        assert '.sink/' in content
         wiki.close()
 
     def test_wiki_md_has_updated_query_section(self, temp_wiki):
@@ -768,7 +768,7 @@ class TestUpdatePageSinkMeta:
             '---\ntitle: Test\ncategory: query\n---\n\n# Query: Test\n\nContent\n'
         )
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n# Query Sink: Test\n\n'
         )
@@ -776,7 +776,7 @@ class TestUpdatePageSinkMeta:
         wiki.query_sink._update_page_sink_meta(page_path, sink_file)
 
         content = page_path.read_text()
-        assert 'sink_path: sink/Query: Test.sink.md' in content
+        assert 'sink_path: wiki/.sink/Query: Test.sink.md' in content
         assert 'title: Test' in content
         assert 'category: query' in content
         wiki.close()
@@ -789,7 +789,7 @@ class TestUpdatePageSinkMeta:
         page_path = temp_wiki / 'wiki' / 'Query: Test.md'
         page_path.write_text('# Query: Test\n\nContent\n')
 
-        sink_file = temp_wiki / 'sink' / 'Query: Test.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n# Query Sink: Test\n\n'
         )
@@ -798,7 +798,7 @@ class TestUpdatePageSinkMeta:
 
         content = page_path.read_text()
         assert content.startswith('---')
-        assert 'sink_path: sink/Query: Test.sink.md' in content
+        assert 'sink_path: wiki/.sink/Query: Test.sink.md' in content
         wiki.close()
 
 
@@ -869,7 +869,7 @@ class TestSinkSuggestions:
 
         wiki.write_page("Query: Gold Mining", "# Gold Mining\n\nContent.")
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             '# Query Sink: Gold Mining\n\n'
@@ -905,7 +905,7 @@ class TestSinkSuggestions:
 
         wiki.write_page("Query: Gold Mining", "# Gold Mining\n\nContent.")
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         sink_file.write_text('---\nformal_page: "Query: Gold Mining"\n---\n\n# Query Sink\n\n')
 
         suggestions = wiki.query_sink._suggest_knowledge_growth(
@@ -925,7 +925,7 @@ class TestSinkDedup:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             '# Query Sink: Gold Mining\n\n'
@@ -945,7 +945,7 @@ class TestSinkDedup:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / 'sink' / 'Query: Gold Mining.sink.md'
+        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Gold Mining.sink.md'
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             '# Query Sink: Gold Mining\n\n'

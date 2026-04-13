@@ -28,7 +28,7 @@ class Wiki:
         self.wiki_dir = get_directory(self.root, 'wiki', self.config)
         
         # Query sink directory (pending updates for query pages)
-        self.sink_dir = self.root / 'sink'
+        self.sink_dir = self.wiki_dir / '.sink'
 
         # Internal files (hardcoded — not user-configurable)
         self.index_file = self.wiki_dir / 'index.md'
@@ -177,9 +177,9 @@ class Wiki:
         
         if not self.sink_dir.exists():
             self.sink_dir.mkdir(parents=True, exist_ok=True)
-            created.append("sink/")
+            created.append("wiki/.sink/")
         else:
-            skipped.append("sink/")
+            skipped.append("wiki/.sink/")
         
         # Initialize database (always safe to call)
         self.index.initialize()
@@ -586,8 +586,14 @@ class Wiki:
     
     def read_page(self, page_name: str) -> dict:
         """Read a wiki page with sink status attached."""
+        # Backward compat: translate old 'sink/' path to new '.sink/' location
         if page_name.startswith('sink/'):
-            sink_file = self.root / page_name
+            page_name = page_name.replace('sink/', '.sink/', 1)
+        
+        if page_name.startswith('.sink/') or page_name.startswith('wiki/.sink/'):
+            # Extract filename from path (handle both '.sink/X.sink.md' and 'wiki/.sink/X.sink.md')
+            sink_name = page_name.rsplit('/', 1)[-1]
+            sink_file = self.sink_dir / sink_name
             if not sink_file.exists():
                 return {"error": f"Sink file not found: {page_name}"}
             # Remove .sink.md suffix properly
@@ -659,7 +665,7 @@ class Wiki:
             page_name = page.stem
             if page_name in (self._index_page_name, self._log_page_name):
                 continue
-            if page_name.startswith("sink/") or page_name.startswith("Query:"):
+            if page_name.startswith("Query:"):
                 continue
             
             content = page.read_text()
@@ -1787,7 +1793,7 @@ class Wiki:
                 ),
                 "options": [
                     f"Read the existing page: wiki_read_page('{similar_name}')",
-                    f"Read pending entries: wiki_read_page('sink/{similar_name}.sink.md')",
+                    f"Read pending entries: wiki_read_page('wiki/.sink/{similar_name}.sink.md')",
                     f"Merge and replace: wiki_synthesize(..., merge_or_replace='replace')",
                     "Or let the sink accumulate for later review during lint",
                 ],

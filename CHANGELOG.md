@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Refactored
 - **QuerySink Extracted**: ~480 lines of sink-related logic moved from `Wiki` (2,477 lines) to a new dedicated `QuerySink` class (`core/query_sink.py`, 444 lines). Wiki is now ~2,021 lines. Public API unchanged; internal methods moved to `wiki.query_sink`.
+- **Sink Location**: Moved `sink/` to `wiki/.sink/` — sink is now a hidden subdirectory of the wiki layer, matching its semantic role as wiki's operation buffer. Obsidian auto-hides it; API paths change from `sink/X.sink.md` to `wiki/.sink/X.sink.md` (old paths still work via backward compat layer).
 
 ### MCP Server
 - **MCP tools simplified**: Merged 7 graph/relation tools into 2 unified tools (21 → 16):
@@ -50,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `llmwikify recommend` → use `llmwikify lint --format=recommendations`
 - `llmwikify export-index` → use `llmwikify build-index --export-only`
 - MCP tools renamed: `wiki_relations_neighbors`, `wiki_relations_path`, `wiki_relations_stats`, `wiki_write_relations`, `wiki_export_graph`, `wiki_community_detect`, `wiki_report` → `wiki_graph`, `wiki_graph_analyze`
+- Sink path: `sink/X.sink.md` → `wiki/.sink/X.sink.md` (old paths auto-redirect for backward compat)
 
 ---
 

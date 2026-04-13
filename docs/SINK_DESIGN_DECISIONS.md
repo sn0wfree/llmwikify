@@ -80,14 +80,15 @@ Query 发生时                          Lint/整理时
 
 ### 3.1 存储位置
 
-**决策**：独立 `sink/` 目录，文件命名 `{topic}.sink.md`
+**决策**：`wiki/.sink/` 隐藏子目录，文件命名 `{topic}.sink.md`
 
 | 备选方案 | 否决原因 |
 |----------|----------|
 | 同目录 `{topic}.md` | `glob("*.md")` 会误扫描，干扰正式页面操作 |
 | 同目录 `{topic}.sink` | Obsidian 不渲染 |
 | 同文件内 HTML 注释分隔 | 搜索时索引含 sink 内容，体验混乱 |
-| **独立 `sink/` 目录 `{topic}.sink.md`** | ✅ Obsidian 可渲染，文件系统清晰，不干扰正式操作 |
+| 根目录 `sink/` | 概念上属于 wiki 层但物理位置在外，违背三层架构 |
+| **`wiki/.sink/` 隐藏目录 `{topic}.sink.md`** | ✅ Obsidian 自动隐藏不干扰，语义正确（wiki 的操作缓冲区），文件系统自包含 |
 
 ### 3.2 双向链接
 
@@ -96,13 +97,13 @@ Query 发生时                          Lint/整理时
 **正式页面** `wiki/Query: Gold Mining.md`：
 ```yaml
 ---
-sink_path: sink/Query: Gold Mining.sink.md
+sink_path: wiki/.sink/Query: Gold Mining.sink.md
 sink_entries: 5
 last_merged: 2026-04-08
 ---
 ```
 
-**Sink 文件** `sink/Query: Gold Mining.sink.md`：
+**Sink 文件** `wiki/.sink/Query: Gold Mining.sink.md`：
 ```yaml
 ---
 formal_page: "Query: Gold Mining"
@@ -141,8 +142,8 @@ created: 2026-04-08
 |------|----------|
 | 发现相似页面 | `wiki_search(topic)` |
 | 读旧页面 | `wiki_read_page("Query: Gold Mining")` |
-| 读 sink | `wiki_read_page("sink/Query: Gold Mining.sink.md")` |
-| 清空 sink | `wiki_write_page("sink/Query: Gold Mining.sink.md", content)` |
+| 读 sink | `wiki_read_page("wiki/.sink/Query: Gold Mining.sink.md")` |
+| 清空 sink | `wiki_write_page("wiki/.sink/Query: Gold Mining.sink.md", content)` |
 | 查看哪些 sink 有待处理 | `wiki_sink_status()` |
 
 ### 3.5 默认行为
@@ -160,7 +161,7 @@ created: 2026-04-08
 
 | 原则 | 符合度 | 说明 |
 |------|--------|------|
-| **三层架构** | ✅ | Sink 是 Wiki 层的操作状态（缓冲区），非独立层 |
+| **三层架构** | ✅ | Sink 是 Wiki 层的操作状态（缓冲区），物理位置在 wiki/.sink/ 与概念一致 |
 | **LLM 拥有 Wiki** | ✅ | LLM 控制所有 Sink 操作（何时读、何时合并、何时清空） |
 | **知识复利** | ✅✅ | 比原设计更好——每次查询都持久化，定期整合精炼 |
 | **LLM 自主决策** | ✅ | 提供信息和工具，不强制行动 |

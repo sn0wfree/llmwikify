@@ -45,6 +45,20 @@ Seven graph/relation tools have been merged into two unified tools:
 
 - **QuerySink Extracted**: ~480 lines of sink-related logic moved from `Wiki` to a new dedicated `QuerySink` class (`core/query_sink.py`). The public API (`wiki.read_sink()`, `wiki.clear_sink()`, `wiki.sink_status()`) is unchanged. Internal methods (`_get_sink_info_for_page`, `_append_to_sink`, etc.) are now on `wiki.query_sink`.
 - **Wiki Class Reduced**: 2,477 → 2,021 lines.
+- **Sink Location**: `sink/` → `wiki/.sink/`. Sink is now a hidden subdirectory of the wiki layer, matching its semantic role as wiki's operation buffer.
+
+### Sink Migration
+
+When upgrading an existing wiki:
+
+1. **Directory move**: On next `wiki.init()`, the old `sink/` directory will NOT be automatically moved. If you have pending sink entries, manually move them:
+   ```bash
+   mv sink/ wiki/.sink/
+   ```
+
+2. **Frontmatter `sink_path`**: Existing pages have `sink_path: sink/X.sink.md`. This is **backward compatible** — the code auto-translates `sink/` to `wiki/.sink/` when reading. No manual update needed.
+
+3. **MCP/CLI paths**: Change `wiki_read_page("sink/X.sink.md")` → `wiki_read_page("wiki/.sink/X.sink.md")`. Old `sink/` paths still work via auto-redirect.
 
 ### API Changes
 
