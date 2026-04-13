@@ -1,6 +1,7 @@
 """CLI commands for llmwikify."""
 
 import argparse
+import json
 import sys
 import os
 import re
@@ -102,34 +103,57 @@ class WikiCLI:
             print(f"Error: {result['error']}")
             return 1
         
-        # Display extraction summary
-        print(f"Ingested: {result['title']} ({result['source_type']})")
-        print(f"Content length: {result['content_length']:,} chars")
+        # Display extraction summary to stderr (for human readability)
+        print(f"Ingested: {result['title']} ({result['source_type']})", file=sys.stderr)
+        print(f"Content length: {result['content_length']:,} chars", file=sys.stderr)
         
         if result.get('saved_to_raw'):
-            print(f"Saved to raw: {result['source_name']}")
+            print(f"Saved to raw: {result['source_name']}", file=sys.stderr)
         elif result.get('already_exists'):
-            print(f"Already in raw: {result['source_name']}")
+            print(f"Already in raw: {result['source_name']}", file=sys.stderr)
+        elif result.get('source_name'):
+            print(f"Source: {result['source_raw_path']}", file=sys.stderr)
         
         if result['content_length'] > 8000:
-            print(f"Note: Content truncated to 8,000 chars for LLM processing")
+            print(f"Note: Content truncated to 8,000 chars for LLM processing", file=sys.stderr)
         
         smart = getattr(args, 'smart', False)
         dry_run = getattr(args, 'dry_run', False)
         
         if dry_run:
             if smart:
-                print("\n[DRY RUN] LLM smart mode requested.")
-                print("Remove --dry-run to execute LLM processing.")
+                print("\n[DRY RUN] LLM smart mode requested.", file=sys.stderr)
+                print("Remove --dry-run to execute LLM processing.", file=sys.stderr)
             else:
-                print("\nNo pages created. Use --smart for LLM-assisted processing.")
+                print("\nNo pages created. Use --smart for LLM-assisted processing.", file=sys.stderr)
             return 0
         
         if smart:
             return self._ingest_smart(result)
         else:
-            print("\nNo pages created automatically.")
-            print("Use --smart for LLM-assisted page creation (requires llm.enabled=true in config).")
+            # Output full structured result as JSON (same as MCP wiki_ingest response)
+            # so agent can parse and decide which pages to create
+            output = {
+                "source_name": result.get("source_name", ""),
+                "source_raw_path": result.get("source_raw_path", ""),
+                "source_type": result.get("source_type", ""),
+                "file_type": result.get("file_type", ""),
+                "title": result.get("title", ""),
+                "content": result.get("content", ""),
+                "content_length": result.get("content_length", 0),
+                "content_preview": result.get("content_preview", ""),
+                "word_count": result.get("word_count", 0),
+                "file_size": result.get("file_size", 0),
+                "has_images": result.get("has_images", False),
+                "image_count": result.get("image_count", 0),
+                "saved_to_raw": result.get("saved_to_raw", False),
+                "already_exists": result.get("already_exists", False),
+                "hint": result.get("hint", ""),
+                "current_index": result.get("current_index", ""),
+                "instructions": result.get("instructions", ""),
+                "message": "Read the content above, read wiki.md for conventions, then create/update wiki pages using write_page.",
+            }
+            print(f"\n{json.dumps(output, ensure_ascii=False, indent=2)}")
             return 0
     
     def _ingest_smart(self, result: dict) -> int:
