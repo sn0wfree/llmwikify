@@ -202,6 +202,10 @@ class Wiki:
                     skipped.append(mcp_filename)
                     warnings.append(f"{mcp_filename} already exists, skipping.")
 
+                # Generate skill files for CLI fallback
+                skill_created = self._generate_skill_files()
+                created.extend(skill_created)
+
             raw_stats = self._analyze_raw()
 
             status_msg = "already_exists" if not created else "agent_config_added"
@@ -345,6 +349,10 @@ class Wiki:
             else:
                 skipped.append(mcp_filename)
                 warnings.append(f"{mcp_filename} already exists, skipping.")
+
+            # Generate skill files for CLI fallback
+            skill_created = self._generate_skill_files()
+            created.extend(skill_created)
         
         # Generate .gitignore (always, if not exists)
         gitignore_path = self.root / '.gitignore'
@@ -353,6 +361,10 @@ class Wiki:
             if content:
                 gitignore_path.write_text(content)
                 created.append(".gitignore")
+
+        # Generate skill files for CLI fallback (always, if not exists)
+        skill_created = self._generate_skill_files()
+        created.extend(skill_created)
         
         # Analyze raw/ for report
         raw_stats = self._analyze_raw()
@@ -514,6 +526,35 @@ class Wiki:
     def _generate_gitignore(self) -> str:
         """Generate .gitignore content."""
         return self._render_template("_gitignore")
+
+    def _generate_skill_files(self) -> list:
+        """Generate skill files for CLI fallback mode.
+
+        Creates .agents/skills/llmwikify/ in the project root with:
+        - SKILL.md — main entry point with workflows and conventions
+        - resources/cli-reference.md — complete CLI command reference
+
+        Returns list of created file paths (relative to project root).
+        """
+        created = []
+        skill_dir = self.root / ".agents" / "skills" / "llmwikify"
+
+        skill_files = {
+            ".agents/skills/llmwikify/SKILL.md": "skill_llmwikify/SKILL.md",
+            ".agents/skills/llmwikify/resources/cli-reference.md": "skill_llmwikify/resources/cli-reference.md",
+        }
+
+        for rel_path, template_name in skill_files.items():
+            dest = self.root / rel_path
+            if dest.exists():
+                continue
+            content = self._render_template(template_name)
+            if content:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(content)
+                created.append(rel_path)
+
+        return created
 
     @staticmethod
     def _parse_sections(content: str) -> list:

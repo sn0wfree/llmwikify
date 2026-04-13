@@ -65,6 +65,45 @@ class TestInitAgentOpenCode:
         assert '`raw/` directory' in content
         wiki.close()
 
+    def test_creates_skill_files(self, temp_wiki):
+        """Skill files created for CLI fallback mode."""
+        wiki = Wiki(temp_wiki)
+        wiki.init(agent='opencode')
+
+        skill_md = temp_wiki / '.agents' / 'skills' / 'llmwikify' / 'SKILL.md'
+        cli_ref = temp_wiki / '.agents' / 'skills' / 'llmwikify' / 'resources' / 'cli-reference.md'
+
+        assert skill_md.exists()
+        assert cli_ref.exists()
+
+        skill_content = skill_md.read_text()
+        assert 'llmwikify' in skill_content
+        assert 'ingest' in skill_content
+        assert 'search' in skill_content
+        assert 'cli-reference.md' in skill_content
+
+        cli_content = cli_ref.read_text()
+        assert 'init' in cli_content
+        assert 'ingest' in cli_content
+        assert 'search' in cli_content
+        assert 'lint' in cli_content
+        wiki.close()
+
+    def test_skill_files_idempotent(self, temp_wiki):
+        """Skill files not overwritten on re-init."""
+        wiki = Wiki(temp_wiki)
+        wiki.init(agent='opencode')
+
+        skill_md = temp_wiki / '.agents' / 'skills' / 'llmwikify' / 'SKILL.md'
+        original = skill_md.read_text()
+
+        wiki2 = Wiki(temp_wiki)
+        result = wiki2.init(agent='opencode')
+
+        assert 'SKILL.md' not in result.get('created_files', [])
+        assert skill_md.read_text() == original
+        wiki2.close()
+
 
 class TestInitAgentClaude:
     """Test init with --agent claude."""
