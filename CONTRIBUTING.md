@@ -50,13 +50,13 @@ All three must pass before submitting a PR. CI will enforce this automatically.
 src/llmwikify/
 ├── core/              # Business logic (wiki.py, index.py, relation_engine.py, etc.)
 ├── extractors/        # Content extractors (PDF, web, YouTube, MarkItDown)
-├── cli/               # CLI commands (22 total)
-├── mcp/               # MCP server (16 tools)
+├── cli/               # CLI commands (20 total)
+├── mcp/               # MCP server (17 tools)
 ├── prompts/           # YAML+Jinja2 prompt templates
 ├── utils/             # Helper utilities
 ├── config.py          # Configuration system
 └── llm_client.py      # LLM API client
-tests/                 # Test suite (526 tests)
+tests/                 # Test suite (542 tests)
 docs/                  # Documentation
 examples/              # Example configurations
 ```

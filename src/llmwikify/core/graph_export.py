@@ -58,7 +58,10 @@ def build_graph(index: WikiIndex, include_wikilinks: bool = True, include_relati
 
 
 def export_html(graph: dict, communities: Optional[Dict[int, List[str]]], output_path: Path, min_degree: int = 0) -> dict:
-    """Export graph to interactive HTML using pyvis."""
+    """Export graph to interactive HTML using pyvis.
+
+    Nodes with corresponding entity pages are clickable.
+    """
     try:
         import networkx as nx
         from pyvis.network import Network
@@ -86,11 +89,30 @@ def export_html(graph: dict, communities: Optional[Dict[int, List[str]]], output
             for n in node_list:
                 node_community[n] = cid
 
+    # Track which nodes have entity pages
+    nodes_with_pages = set()
+
     for node, data in G.nodes(data=True):
         cid = node_community.get(node, -1)
         color = community_colors[cid % len(community_colors)] if cid >= 0 else "#888888"
         size = max(10, min(30, G.degree(node) * 3))
-        net.add_node(node, label=node, color=color, size=size, title=f"Degree: {G.degree(node)}")
+        source_type = data.get("source_type", "wiki_page")
+
+        # Check if entity page exists
+        href = None
+        if source_type == "concept":
+            entity_path = output_path.parent.parent / "wiki" / "entities" / f"{_slugify(node)}.md"
+            if entity_path.exists():
+                href = f"../wiki/entities/{_slugify(node)}.md"
+                nodes_with_pages.add(node)
+                color = "#59A14F"  # Green for entities with pages
+
+        title_parts = [f"Degree: {G.degree(node)}", f"Type: {source_type}"]
+        if href:
+            title_parts.append(f"Click to open: {href}")
+
+        title = "\n".join(title_parts)
+        net.add_node(node, label=node, color=color, size=size, title=title)
 
     for u, v, data in G.edges(data=True):
         edge_type = data.get("type", "unknown")
@@ -100,12 +122,74 @@ def export_html(graph: dict, communities: Optional[Dict[int, List[str]]], output
 
     net.show(str(output_path), notebook=False)
 
+    # Post-process HTML to add click handlers for entity nodes
+    if nodes_with_pages:
+        _add_entity_click_handlers(output_path, nodes_with_pages)
+
     return {
         "status": "success",
         "output": str(output_path),
         "nodes": G.number_of_nodes(),
         "edges": G.number_of_edges(),
+        "entity_pages_linked": len(nodes_with_pages),
     }
+
+
+def _slugify(name: str) -> str:
+    """Convert a name to a filename-safe slug."""
+    import re
+    name = name.lower().strip()
+    name = re.sub(r'[^a-z0-9\s-]', '', name)
+    name = re.sub(r'[\s]+', '-', name)
+    return name.strip('-')
+
+
+def _add_entity_click_handlers(html_path: Path, entity_nodes: set) -> None:
+    """Add JavaScript click handlers to make entity nodes clickable in the HTML graph."""
+    if not html_path.exists():
+        return
+
+    html_content = html_path.read_text()
+
+    # Build a map of node labels to their hrefs
+    entity_map = {}
+    for node in entity_nodes:
+        slug = _slugify(node)
+        entity_map[node] = f"../wiki/entities/{slug}.md"
+
+    # Inject JavaScript before </body>
+    js_code = """
+<script>
+(function() {
+    const entityMap = __ENTITY_MAP__;
+    const networkInstance = Object.values(window).find(v => v && typeof v.click === 'function' && v.body);
+
+    if (networkInstance && networkInstance.on) {
+        networkInstance.on('click', function(params) {
+            if (params.nodes && params.nodes.length > 0) {
+                const nodeId = params.nodes[0];
+                const label = this.body.nodes[nodeId]?.options.label || nodeId;
+                if (entityMap[label]) {
+                    window.open(entityMap[label], '_blank');
+                }
+            }
+        });
+    }
+
+    // Fallback: style clickable nodes with a subtle ring
+    document.querySelectorAll('div.vis-network svg g.vis-node').forEach(function(g) {
+        const text = g.querySelector('text');
+        if (text && entityMap[text.textContent]) {
+            g.style.cursor = 'pointer';
+        }
+    });
+})();
+</script>
+""".replace("__ENTITY_MAP__", json.dumps(entity_map))
+
+    if "</body>" in html_content:
+        html_content = html_content.replace("</body>", js_code + "\n</body>")
+        html_path.write_text(html_content)
 
 
 def export_graphml(graph: dict, output_path: Path) -> dict:

@@ -368,11 +368,10 @@ The MCP server exposes wiki operations as tools for LLMs.
 
 ### Quick Start
 ```python
-from llmwikify import Wiki, MCPServer
+from llmwikify import Wiki, serve_mcp
 
 wiki = Wiki("/path/to/wiki")
-server = MCPServer(wiki)  # Auto-reads config from wiki.config["mcp"]
-server.serve()            # STDIO transport (default)
+serve_mcp(wiki)  # STDIO transport (default), reads config from wiki.config["mcp"]
 ```
 
 See [MCP Setup Guide](docs/MCP_SETUP.md) for transport options and configuration.
@@ -461,7 +460,8 @@ This makes llmwikify truly general-purpose:
 | `export-graph` | Export graph visualization | `llmwikify export-graph --format html` |
 | `community-detect` | Detect communities | `llmwikify community-detect --json` |
 | `report` | Surprise connections report | `llmwikify report --top 10` |
-| `serve` | Start MCP server | `llmwikify serve` |
+| `mcp` | Start MCP server for Agent interaction | `llmwikify mcp` |
+| `serve` | Start self-hosted Agent (reserved) | `llmwikify serve` |
 
 ---
 

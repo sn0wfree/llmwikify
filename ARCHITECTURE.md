@@ -55,11 +55,11 @@ src/llmwikify/
 │
 ├── cli/                     # Command-line interface
 │   ├── __init__.py
-│   └── commands.py          # WikiCLI class (19 commands)
+│   └── commands.py          # WikiCLI class (20 commands: 19 + mcp + serve)
 │
 ├── mcp/                     # MCP server
 │   ├── __init__.py
-│   └── server.py            # MCPServer class (16 tools)
+│   └── server.py            # FastMCP server (17 tools)
 │
 ├── prompts/                 # Prompt templates
 │   ├── __init__.py
@@ -81,7 +81,7 @@ src/llmwikify/
 │                    Application Layer                        │
 │                                                             │
 │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐  │
-│  │  CLI (19)    │  │  MCP (16)    │  │  Python API     │  │
+│  │  CLI (20)    │  │  MCP (17)    │  │  Python API     │  │
 │  └──────┬───────┘  └──────┬───────┘  └────────┬────────┘  │
 └─────────┼─────────────────┼──────────────────┼────────────┘
           │                 │                  │
@@ -307,12 +307,12 @@ MarkItDown-enhanced format → Try MarkItDown → Fallback to legacy extractors 
 | Watch | `watch` |
 | Graph | `graph-query`, `export-graph`, `community-detect`, `report` |
 | Batch | `batch` |
-| Server | `serve` |
+| Server | `mcp` |
 | Log | `log` |
 
 ### 10. MCP Server (`mcp/server.py`)
 
-**Responsibility**: Model Context Protocol server
+**Framework**: FastMCP (PrefectHQ) — modern, Pythonic MCP server
 
 **16 Tools**: `wiki_init`, `wiki_ingest`, `wiki_write_page`, `wiki_read_page`, `wiki_search`, `wiki_lint`, `wiki_status`, `wiki_log`, `wiki_recommend`, `wiki_build_index`, `wiki_read_schema`, `wiki_update_schema`, `wiki_synthesize`, `wiki_sink_status`, `wiki_graph`, `wiki_graph_analyze`
 
@@ -321,6 +321,10 @@ MarkItDown-enhanced format → Try MarkItDown → Fallback to legacy extractors 
 - `wiki_graph_analyze` — `action: export|detect|report` — All graph analysis operations
 
 **Transports**: STDIO (default), HTTP, SSE
+
+**API**:
+- `create_mcp_server(wiki, config)` → returns FastMCP instance
+- `serve_mcp(wiki, transport, host, port, config)` → runs the server
 
 ---
 

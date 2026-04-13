@@ -78,12 +78,12 @@ class TestWikiContextMethods:
         (wiki.wiki_dir / "Page3.md").write_text("# Page3")
 
         result = wiki._get_page_count()
-        assert result == 3
+        assert result == 4  # 3 pages + overview
 
     def test_get_page_count_empty(self, initialized_wiki):
         wiki = initialized_wiki
         result = wiki._get_page_count()
-        assert result == 0
+        assert result == 1  # overview.md exists by default
 
     def test_get_existing_page_names(self, initialized_wiki):
         wiki = initialized_wiki

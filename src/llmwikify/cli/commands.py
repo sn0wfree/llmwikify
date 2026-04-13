@@ -37,16 +37,16 @@ class WikiCLI:
         result = self.wiki.init(overwrite=overwrite, agent=agent, force=force, merge=merge)
         
         if result['status'] == 'already_exists':
-            print(f"⚠️  Wiki already initialized at {self.root}")
+            print(f"⚠️  Wiki already initialized at {self.wiki_root}")
             print(f"   Existing files: {', '.join(result['existing_files'])}")
             if agent:
-                print(f"   Use --force to regenerate agent config.")
+                print(f"   Use --force to overwrite or --merge to regenerate agent config.")
             else:
                 print(f"   Use --overwrite to reinitialize.")
             return 0
         
         if result['status'] == 'agent_config_added':
-            print(f"✅ Agent config added to existing wiki at {self.root}")
+            print(f"✅ Agent config added to existing wiki at {self.wiki_root}")
             if result['created_files']:
                 print(f"   Added: {', '.join(result['created_files'])}")
             warnings = result.get('warnings', [])
@@ -877,15 +877,11 @@ class WikiCLI:
         return 0
     
     def serve(self, args) -> int:
-        """Start MCP server."""
-        from ..mcp.server import MCPServer
-        from ..config import get_mcp_config
+        """Start MCP server. Used by both 'mcp' and 'serve' subcommands."""
+        from ..mcp.server import serve_mcp
         
-        # Get MCP configuration
-        mcp_config = get_mcp_config(self.config)
-        
-        # Create MCP server
-        server = MCPServer(self.wiki, config=mcp_config)
+        # Get MCP configuration from wiki config
+        mcp_config = self.config.get("mcp", {})
         
         # Override with CLI args if provided
         transport = getattr(args, 'transport', None)
@@ -893,7 +889,7 @@ class WikiCLI:
         port = getattr(args, 'port', None)
         
         print(f"Starting MCP server...")
-        print(f"  Transport: {transport or mcp_config['transport']}")
+        print(f"  Transport: {transport or mcp_config.get('transport', 'stdio')}")
         if host:
             print(f"  Host: {host}")
         if port:
@@ -901,7 +897,7 @@ class WikiCLI:
         print()
         
         try:
-            server.serve(transport=transport, host=host, port=port)
+            serve_mcp(self.wiki, transport=transport, host=host, port=port, config=mcp_config)
         except KeyboardInterrupt:
             print("\nServer stopped")
         
@@ -941,7 +937,8 @@ Examples:
   llmwikify lint --format=recommendations        Missing and orphan pages
   llmwikify init                                 Initialize wiki
   llmwikify init --overwrite                     Reinitialize wiki
-  llmwikify serve                                Start MCP server
+  llmwikify mcp                                  Start MCP server for Agent interaction
+  llmwikify serve                                Start self-hosted Agent (reserved)
 """
     )
     
@@ -1073,8 +1070,14 @@ Examples:
     p.add_argument('--top', type=int, default=10, help='Number of top connections (default: 10)')
     p.add_argument('--output', '-o', default=None, help='Output file path')
     
-    # serve
-    p = subparsers.add_parser('serve', help='Start MCP server')
+    # mcp - Start MCP server for Agent interaction
+    p = subparsers.add_parser('mcp', help='Start MCP server for Agent interaction (stdio by default)')
+    p.add_argument('--transport', '-t', choices=['stdio', 'http', 'sse'], help='Transport protocol')
+    p.add_argument('--host', help='Host address')
+    p.add_argument('--port', '-p', type=int, help='Port number')
+    
+    # serve - reserved for future self-hosted Agent mode
+    p = subparsers.add_parser('serve', help='[Reserved] Start a self-hosted Agent with LLM API for knowledge base management')
     p.add_argument('--transport', '-t', choices=['stdio', 'http', 'sse'], help='Transport protocol')
     p.add_argument('--host', help='Host address')
     p.add_argument('--port', '-p', type=int, help='Port number')
@@ -1119,6 +1122,7 @@ Examples:
         'export-graph': cli.export_graph,
         'community-detect': cli.community_detect,
         'report': cli.report,
+        'mcp': cli.serve,
         'serve': cli.serve,
     }
     

@@ -1,14 +1,15 @@
 """Relation engine for knowledge graph relationships."""
 
 import json
+import re
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from .index import WikiIndex
 
 
-# Valid relation types
-RELATION_TYPES = {
+# Default relation types (overridden by wiki.md if available)
+DEFAULT_RELATION_TYPES = {
     "is_a", "uses", "related_to", "contradicts",
     "supports", "replaces", "optimizes", "extends",
 }
@@ -26,9 +27,55 @@ class RelationEngine:
         relations = engine.get_neighbors("Attention")
     """
 
-    def __init__(self, index: WikiIndex):
+    def __init__(self, index: WikiIndex, wiki_root: Optional[Path] = None):
         self.index = index
+        self.wiki_root = wiki_root
+        self._relation_types = self._load_relation_types()
         self._ensure_table()
+
+    def _load_relation_types(self) -> set:
+        """Load relation types from wiki.md schema, falling back to defaults."""
+        if self.wiki_root is None:
+            # Try to infer wiki root from index.db path
+            try:
+                db_path = Path(self.index.conn.execute("PRAGMA database_list").fetchone()["file"]).parent
+                self.wiki_root = db_path
+            except Exception:
+                return DEFAULT_RELATION_TYPES.copy()
+
+        wiki_md = self.wiki_root / "wiki.md"
+        if not wiki_md.exists():
+            return DEFAULT_RELATION_TYPES.copy()
+
+        try:
+            content = wiki_md.read_text()
+            # Look for relation types in the schema
+            # Pattern 1: bullet list under "Relation Types" section
+            types = set()
+            # Match lines like "- `is_a` — description" or "- is_a — description"
+            pattern = r'-\s*`?(\w+)`?\s*[—\-]'
+            in_relation_section = False
+            for line in content.split('\n'):
+                if 'relation type' in line.lower() or line.strip().startswith('### Relation Types'):
+                    in_relation_section = True
+                    continue
+                if in_relation_section:
+                    # Stop if we hit a new major section
+                    if line.startswith('## ') and 'relation' not in line.lower():
+                        break
+                    match = re.match(pattern, line.strip())
+                    if match:
+                        types.add(match.group(1))
+            if types:
+                return types
+        except Exception:
+            pass
+
+        return DEFAULT_RELATION_TYPES.copy()
+
+    def get_relation_types(self) -> set:
+        """Return the currently loaded relation types."""
+        return self._relation_types.copy()
 
     def _ensure_table(self) -> None:
         """Create relations table if it doesn't exist."""
@@ -65,8 +112,8 @@ class RelationEngine:
         Returns:
             Row id of the inserted relation.
         """
-        if relation not in RELATION_TYPES:
-            raise ValueError(f"Unknown relation type: {relation}. Valid: {RELATION_TYPES}")
+        if relation not in self._relation_types:
+            raise ValueError(f"Unknown relation type: {relation}. Valid: {sorted(self._relation_types)}")
         if confidence not in CONFIDENCE_LEVELS:
             raise ValueError(f"Unknown confidence: {confidence}. Valid: {CONFIDENCE_LEVELS}")
 
