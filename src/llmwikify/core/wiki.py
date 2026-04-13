@@ -1806,24 +1806,56 @@ class Wiki:
             return "0.11.0"
     
     def _update_index_file(self) -> None:
-        """Update index.md with current wiki contents and sink status."""
+        """Update index.md with current wiki contents and sink status.
+
+        Recursively scans wiki/ for pages in all subdirectories.
+        Excludes .sink/ directory files, index.md, and log.md.
+        Sink files (.sink/*.sink.md) get their own "Pending Sink Buffers" section.
+        """
         pages = []
-        
-        for page in sorted(self.wiki_dir.glob("*.md")):
-            page_name = page.stem
-            if page_name in (self._index_page_name, self._log_page_name):
+        sink_entries = []
+
+        for page in sorted(self.wiki_dir.rglob("*.md")):
+            page_path = page.relative_to(self.wiki_dir)
+
+            # Separate sink files from regular pages
+            if page_path.parts[0] == '.sink':
+                try:
+                    sink_content = page.read_text()
+                    entries = len(re.findall(
+                        r'^## \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]',
+                        sink_content, re.MULTILINE
+                    ))
+                    # Last entry timestamp
+                    last_match = re.search(
+                        r'^## \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]',
+                        sink_content, re.MULTILINE
+                    )
+                    last_entry = last_match.group(1) if last_match else "unknown"
+                    sink_name = page_path.stem.replace('.sink', '')
+                    sink_entries.append(
+                        f"- [[{sink_name}]] — {entries} pending updates\n"
+                        f"  Last entry: {last_entry}"
+                    )
+                except OSError:
+                    pass
                 continue
-            
-            content = page.read_text()
-            first_line = content.split('\n')[0].lstrip('# ').strip()
+
+            # Skip index.md and log.md
+            if page.name in ("index.md", "log.md"):
+                continue
+
+            page_name = str(page_path.with_suffix(''))
+            page_content = page.read_text()
+            first_line = page_content.split('\n')[0].lstrip('# ').strip()
 
             sink_info = self.query_sink.get_info_for_page(page_name)
             sink_marker = ""
             if sink_info['has_sink']:
                 sink_marker = f" 📥 {sink_info['sink_entries']} pending updates"
-            
+
             pages.append(f"- [[{page_name}]] - {first_line}{sink_marker}")
-        
+
         index_content = (
             f"# Wiki Index\n\n"
             f"Last updated: {self._now()}\n\n"
@@ -1831,12 +1863,17 @@ class Wiki:
             f"---\n\n"
             "## Pages\n\n"
         )
-        
+
         if pages:
             index_content += '\n'.join(pages) + '\n'
         else:
             index_content += "*(No pages yet)*\n"
-        
+
+        # Add Pending Sink Buffers section if there are any
+        if sink_entries:
+            index_content += f"\n## Pending Sink Buffers 📥\n\n"
+            index_content += '\n\n'.join(sink_entries) + '\n'
+
         self.index_file.write_text(index_content)
     
     def _get_link_context(self, source_page: str, section: str, target_page: str = "", context_chars: int = 80) -> str:
