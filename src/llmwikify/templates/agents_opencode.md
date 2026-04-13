@@ -78,3 +78,16 @@ The wiki organizes pages into the following structure (see `wiki.md` for details
 - Review `wiki.md` for detailed page conventions and templates
 - Start ingesting sources from `raw/`
 - Run `wiki_lint` periodically to maintain wiki health
+
+## Fallback: CLI Mode
+
+If MCP tools are unavailable, use the `llmwikify` CLI directly via Bash.
+Skill instructions are in `.agents/skills/llmwikify/SKILL.md`.
+Full CLI reference: `.agents/skills/llmwikify/resources/cli-reference.md`.
+
+Example:
+```bash
+llmwikify search "gold prices"
+llmwikify write_page "New Page" --content "# Title\n\nContent"
+llmwikify status
+```
