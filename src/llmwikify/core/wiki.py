@@ -470,18 +470,13 @@ class Wiki:
         
         for item in sorted(self.raw_dir.iterdir()):
             if item.is_dir():
-                count = len(list(item.glob("*.md"))) + len(list(item.glob("*.txt")))
+                count = len([f for f in item.rglob("*") if f.is_file() and f.suffix in (".md", ".txt")])
                 if count > 0:
                     result["categories"][item.name] = count
                     result["total"] += count
             elif item.suffix in (".md", ".txt", ".pdf", ".html"):
+                result["categories"]["(root)"] = result["categories"].get("(root)", 0) + 1
                 result["total"] += 1
-        
-        # Files directly in raw/ (not in subdirs)
-        direct_files = len([f for f in self.raw_dir.glob("*") if f.is_file() and f.suffix in (".md", ".txt", ".pdf", ".html")])
-        if direct_files > 0:
-            result["categories"]["(root)"] = direct_files
-            result["total"] += direct_files
         
         return result
     
@@ -1034,7 +1029,9 @@ class Wiki:
         # Find latest year mentioned in raw sources
         latest_source_year = 0
         if self.raw_dir.exists():
-            for src in self.raw_dir.glob("*"):
+            for src in self.raw_dir.rglob("*"):
+                if not src.is_file():
+                    continue
                 content = src.read_text(errors="ignore")
                 years = re.findall(r'\b(20\d{2})\b', content)
                 if years:
@@ -1636,7 +1633,7 @@ class Wiki:
             "initialized": self.is_initialized(),
             "root": str(self.root),
             "page_count": len(list(self.wiki_dir.glob("*.md"))),
-            "source_count": len(list(self.raw_dir.glob("*"))),
+            "source_count": len([f for f in self.raw_dir.rglob("*") if f.is_file()]),
             "indexed_pages": self.index.get_page_count() if self.is_initialized() else "N/A",
             "total_links": self.index.get_link_count() if self.is_initialized() else "N/A",
         }

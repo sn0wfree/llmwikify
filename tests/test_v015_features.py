@@ -246,6 +246,108 @@ class TestDetectDatedClaims:
         assert '5' in hints[0]['observation']
         
         wiki.close()
+    
+    def test_detect_dated_claims_with_subdirs(self, temp_wiki):
+        """raw/ with category subdirs does not crash."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        (temp_wiki / 'raw' / 'gold').mkdir()
+        (temp_wiki / 'raw' / 'gold' / 'article1.md').write_text("Gold news from 2024")
+        (temp_wiki / 'raw' / 'gold' / 'article2.md').write_text("Gold news from 2023")
+        (temp_wiki / 'raw' / 'copper').mkdir()
+        (temp_wiki / 'raw' / 'copper' / 'news.md').write_text("Copper news from 2024")
+        
+        wiki.write_page("Old Company", "# Old Company\n\nFounded in 2019.")
+        
+        hints = wiki._detect_dated_claims()
+        
+        assert len(hints) >= 1
+        assert hints[0]['type'] == 'dated_claim'
+        assert hints[0]['page'] == 'Old Company'
+        assert hints[0]['claim_year'] == 2019
+        assert hints[0]['latest_source_year'] == 2024
+        wiki.close()
+    
+    def test_detect_dated_claims_mixed_files_and_dirs(self, temp_wiki):
+        """raw/ has both root-level files and subdirectory files."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        (temp_wiki / 'raw' / 'root_article.md').write_text("Root article from 2024")
+        (temp_wiki / 'raw' / 'category').mkdir()
+        (temp_wiki / 'raw' / 'category' / 'sub_article.md').write_text("Sub article from 2023")
+        
+        wiki.write_page("Old Page", "# Old Page\n\nData from 2019.")
+        
+        hints = wiki._detect_dated_claims()
+        
+        assert len(hints) >= 1
+        assert hints[0]['latest_source_year'] == 2024
+        wiki.close()
+    
+    def test_detect_dated_claims_empty_subdirs(self, temp_wiki):
+        """raw/ with empty subdirs does not crash or affect scanning."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        (temp_wiki / 'raw' / 'empty_category').mkdir()
+        (temp_wiki / 'raw' / 'gold').mkdir()
+        (temp_wiki / 'raw' / 'gold' / 'article.md').write_text("Article from 2024")
+        
+        hints = wiki._detect_dated_claims()
+        assert hints == []
+        
+        wiki.write_page("Old Page", "# Old Page\n\nData from 2019.")
+        hints = wiki._detect_dated_claims()
+        assert len(hints) == 1
+        assert hints[0]['latest_source_year'] == 2024
+        wiki.close()
+    
+    def test_detect_dated_claims_finds_latest_year_in_subdir(self, temp_wiki):
+        """Latest year may be deep in a subdirectory."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        (temp_wiki / 'raw' / 'old.md').write_text("Old news from 2020")
+        (temp_wiki / 'raw' / 'gold').mkdir()
+        (temp_wiki / 'raw' / 'gold' / 'latest.md').write_text("Latest news from 2024")
+        
+        wiki.write_page("Company", "# Company\n\nFounded in 2018.")
+        
+        hints = wiki._detect_dated_claims()
+        
+        assert len(hints) >= 1
+        assert hints[0]['latest_source_year'] == 2024
+        assert hints[0]['claim_year'] == 2018
+        assert hints[0]['gap_years'] == 6
+        wiki.close()
+    
+    def test_detect_dated_claims_multi_level_nesting(self, temp_wiki):
+        """raw/ with 3+ levels of nesting: raw/gold/2024/Q1/article.md"""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        (temp_wiki / 'raw' / 'gold' / '2024' / 'Q1').mkdir(parents=True)
+        (temp_wiki / 'raw' / 'gold' / '2024' / 'Q1' / 'jan.md').write_text("Jan 2024 article")
+        (temp_wiki / 'raw' / 'gold' / '2024' / 'Q2').mkdir(parents=True)
+        (temp_wiki / 'raw' / 'gold' / '2024' / 'Q2' / 'may.md').write_text("May 2024 article")
+        (temp_wiki / 'raw' / 'gold' / '2023').mkdir(parents=True)
+        (temp_wiki / 'raw' / 'gold' / '2023' / 'annual.md').write_text("Annual report 2023")
+        (temp_wiki / 'raw' / 'copper').mkdir()
+        (temp_wiki / 'raw' / 'copper' / 'news.md').write_text("Copper news 2024")
+        (temp_wiki / 'raw' / 'archive' / 'old').mkdir(parents=True)
+        (temp_wiki / 'raw' / 'root.md').write_text("Root article 2022")
+        
+        wiki.write_page("Old Company", "# Old Company\n\nFounded in 2019.")
+        
+        hints = wiki._detect_dated_claims()
+        
+        assert len(hints) >= 1
+        assert hints[0]['latest_source_year'] == 2024
+        assert hints[0]['claim_year'] == 2019
+        assert hints[0]['gap_years'] == 5
+        wiki.close()
 
 
 class TestDetectQueryPageOverlap:
