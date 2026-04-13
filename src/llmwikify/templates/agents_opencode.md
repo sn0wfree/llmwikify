@@ -64,14 +64,20 @@ The wiki organizes pages into the following structure (see `wiki.md` for details
 
 1. Call `wiki_ingest(source="raw/{file}")` — returns full content, detected entities, and relations
 2. Review the response for `detected_entities`, `detected_relations`, and `detected_claims`
-3. Create appropriate wiki pages using `wiki_write_page`:
-   - Always: `wiki/sources/{slug}.md`
-   - If entities detected: `wiki/entities/{name}.md`
-   - If concepts detected: `wiki/concepts/{name}.md`
-   - If claims identified: `wiki/claims/{slug}.md`
-4. Write graph relations: `wiki_graph(action="write", relations=[...])`
-5. Add `[[wikilinks]]` between related pages
-6. Call `wiki_log` to record what was done
+3. Read wiki.md "Page Types" table to confirm subdirectory paths for standard and custom types
+4. Create appropriate wiki pages using `wiki_write_page`:
+   - Standard types:
+     - Source: `"sources/{slug}"`
+     - Entity: `"entities/{name}"`
+     - Concept: `"concepts/{topic}"`
+     - Comparison: `"comparisons/{a}-vs-{b}"`
+     - Synthesis: `"synthesis/{topic}"`
+     - Claim: `"claims/{slug}"`
+   - Custom types: follow the Location pattern from wiki.md Page Types table
+   - The page_name parameter should include the subdirectory path
+5. Write graph relations: `wiki_graph(action="write", relations=[...])`
+6. Add `[[wikilinks]]` between related pages
+7. Call `wiki_log` to record what was done
 
 ## Next Steps
 
@@ -94,7 +100,7 @@ You have two ways to operate the wiki:
 - See `.agents/skills/llmwikify/SKILL.md` for full details
 
 **Key CLI commands:**
-- `llmwikify ingest raw/file.md [--smart]` — Extract and ingest source
+- `llmwikify ingest raw/file.md [--self-create]` — Extract and ingest source
 - `llmwikify search "query"` — Full-text search
 - `llmwikify write_page "Name" --content "..."` — Create/edit pages
 - `llmwikify read_page "Name"` — Read page content
