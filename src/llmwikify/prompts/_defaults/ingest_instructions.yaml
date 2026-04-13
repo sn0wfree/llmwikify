@@ -10,8 +10,13 @@ params: {}
 text: |
   You have received a new source document. Please:
   1. Read and understand the content
-  2. See wiki.md (at the project root) for wiki conventions and workflows
-  3. Create/update relevant wiki pages using wiki_write_page
+  2. Read wiki.md for page conventions. The "Page Types" table defines:
+     - Standard types: sources/, entities/, concepts/, comparisons/, synthesis/, claims/
+     - Domain-specific types defined in the project's wiki.md (check the Location column)
+  3. Create/update relevant wiki pages using wiki_write_page:
+     - Standard: "entities/{name}", "concepts/{topic}", "sources/{slug}", etc.
+     - Custom: follow the Location pattern from wiki.md's Page Types table
+     - The page_name should include the subdirectory path (e.g., "entities/Kinross Gold")
   4. Create/update wiki pages — index.md is auto-updated by the system
   5. Add [[wikilinks]] between related pages
   6. Cite the source in wiki pages using standard markdown (NOT wikilinks):

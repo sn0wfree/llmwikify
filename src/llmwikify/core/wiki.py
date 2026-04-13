@@ -943,8 +943,23 @@ class Wiki:
         return RelationEngine(self.index, wiki_root=self.root)
     
     def write_page(self, page_name: str, content: str) -> str:
-        """Write a wiki page."""
+        """Write a wiki page.
+
+        page_name supports paths with subdirectories:
+        - "Page Name" -> wiki/Page Name.md
+        - "entities/Kinross Gold" -> wiki/entities/Kinross Gold.md
+        - "sources/article-slug" -> wiki/sources/article-slug.md
+        - Custom subdirs from wiki.md Page Types table are auto-created.
+        """
+        # Decode escape sequences from CLI JSON input: \n -> newline, \t -> tab
+        if '\\n' in content or '\\t' in content:
+            try:
+                content = content.encode('utf-8').decode('unicode_escape')
+            except (UnicodeDecodeError, UnicodeEncodeError):
+                pass  # Keep original if decoding fails
+
         page_path = self.wiki_dir / f"{page_name}.md"
+        page_path.parent.mkdir(parents=True, exist_ok=True)
         
         if page_path.exists():
             page_path.write_text(content)
