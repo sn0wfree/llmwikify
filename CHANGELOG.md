@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Agent-Aware Init**: `llmwikify init --agent <type>` generates a complete project setup in one command:
+  - `--agent opencode` → `opencode.json` + `AGENTS.md` + `wiki.md` + `.gitignore`
+  - `--agent claude` → `.mcp.json` + `CLAUDE.md` + `wiki.md` + `.gitignore`
+  - `--agent codex` → `.opencode.json` + `AGENTS.md` + `wiki.md` + `.gitignore`
+  - `--agent generic` → `wiki.md` + `.gitignore` only
+- **Raw Source Analysis**: Init auto-analyzes `raw/` directory structure and includes stats in generated files
+- **Schema Conflict Detection**: Warns when `wiki.md` or `WIKI.md` already exists, with `--force`/`--merge` options
+
 ### Planned
 - Web UI (optional)
 - MCP server authentication

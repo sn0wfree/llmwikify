@@ -1,0 +1,17 @@
+# llmwikify runtime files
+.llmwikify.db
+wiki/.sink/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,6 +1,47 @@
 # Migration Guide
 
-> **Current version**: 0.24.0
+> **Current version**: 0.25.0
+
+---
+
+## v0.24.x → v0.25.0
+
+### Agent-Aware Init
+
+The `init` command now requires `--agent` parameter for full project setup:
+
+```bash
+# Full setup with agent config
+llmwikify init --agent opencode   # For OpenCode
+llmwikify init --agent claude     # For Claude Code
+llmwikify init --agent codex      # For OpenAI Codex
+llmwikify init --agent generic    # No agent, just wiki structure
+```
+
+**Generated files per agent type:**
+
+| Agent | MCP Config | Agent File | Schema | Git Ignore |
+|-------|-----------|------------|--------|------------|
+| opencode | `opencode.json` | `AGENTS.md` | `wiki.md` | ✓ |
+| claude | `.mcp.json` | `CLAUDE.md` | `wiki.md` | ✓ |
+| codex | `.opencode.json` | `AGENTS.md` | `wiki.md` | ✓ |
+| generic | — | — | `wiki.md` | ✓ |
+
+**Schema conflict handling:**
+- If `wiki.md` already exists: warned, skipped by default
+- Use `--force` to overwrite existing files
+- Use `--merge` to keep existing wiki.md
+- Legacy `WIKI.md` (uppercase) is noted but not removed
+
+**Adding agent config to existing wiki:**
+```bash
+llmwikify init --agent opencode --force
+```
+This adds `AGENTS.md` and `opencode.json` to an already-initialized wiki without touching wiki pages.
+
+### Raw Source Analysis
+
+Init now auto-analyzes the `raw/` directory and includes statistics (file counts by category) in generated agent files.
 
 ---
 

@@ -21,20 +21,77 @@ class WikiCLI:
     
     def init(self, args) -> int:
         """Initialize wiki."""
+        from ..core.wiki import VALID_AGENTS
+        
         overwrite = getattr(args, 'overwrite', False)
-        result = self.wiki.init(overwrite=overwrite)
+        agent = getattr(args, 'agent', None)
+        force = getattr(args, 'force', False)
+        merge = getattr(args, 'merge', False)
+        
+        if agent and agent not in VALID_AGENTS:
+            print(f"Error: Invalid agent type '{agent}'.")
+            print(f"  Choose: {', '.join(VALID_AGENTS)}")
+            print(f"  Example: llmwikify init --agent opencode")
+            return 1
+        
+        result = self.wiki.init(overwrite=overwrite, agent=agent, force=force, merge=merge)
         
         if result['status'] == 'already_exists':
             print(f"⚠️  Wiki already initialized at {self.root}")
             print(f"   Existing files: {', '.join(result['existing_files'])}")
-            print(f"   Use --overwrite to reinitialize.")
+            if agent:
+                print(f"   Use --force to regenerate agent config.")
+            else:
+                print(f"   Use --overwrite to reinitialize.")
             return 0
+        
+        if result['status'] == 'agent_config_added':
+            print(f"✅ Agent config added to existing wiki at {self.root}")
+            if result['created_files']:
+                print(f"   Added: {', '.join(result['created_files'])}")
+            warnings = result.get('warnings', [])
+            if warnings:
+                for w in warnings:
+                    print(f"   ⚠️  {w}")
+            return 0
+        
+        print(f"✅ {result['message']}")
+        print()
+        
+        if result['created_files']:
+            print(f"  Created: {', '.join(result['created_files'])}")
+        if result['skipped_files']:
+            print(f"  Skipped: {', '.join(result['skipped_files'])}")
+        
+        warnings = result.get('warnings', [])
+        if warnings:
+            print()
+            for w in warnings:
+                print(f"  ⚠️  {w}")
+        
+        raw_stats = result.get('raw_stats', {})
+        if raw_stats and raw_stats.get('total', 0) > 0:
+            print()
+            print(f"  Source analysis:")
+            print(f"    {raw_stats['total']} files in {len(raw_stats.get('categories', {}))} categories")
+            top_cats = sorted(raw_stats.get('categories', {}).items(), key=lambda x: -x[1])[:5]
+            print(f"    Top: {', '.join(f'{k} ({v})' for k, v in top_cats)}")
+        
+        print()
+        print(f"  Next steps:")
+        if agent:
+            print(f"    1. Review wiki.md for page conventions")
+            if agent == 'opencode':
+                print(f"    2. Run: opencode")
+            elif agent == 'claude':
+                print(f"    2. Run: claude")
+            elif agent == 'codex':
+                print(f"    2. Run: opencode (codex mode)")
+            print(f"    3. Tell the agent: 'Start ingesting news from raw/'")
         else:
-            print(f"✅ {result['message']}")
-            print(f"   Created: {', '.join(result['created_files'])}")
-            if result['skipped_files']:
-                print(f"   Skipped: {', '.join(result['skipped_files'])}")
-            return 0
+            print(f"    Run: llmwikify init --agent <opencode|claude|codex|generic> for full setup")
+        
+        return 0
     
     def ingest(self, args) -> int:
         """Ingest a source file."""
@@ -893,6 +950,10 @@ Examples:
     # init
     p = subparsers.add_parser('init', help='Initialize wiki')
     p.add_argument('--overwrite', action='store_true', help='Recreate index.md and log.md if they exist')
+    p.add_argument('--agent', type=str, choices=['opencode', 'claude', 'codex', 'generic'],
+                   help='Generate agent-specific config files (required for MCP setup)')
+    p.add_argument('--force', action='store_true', help='Overwrite existing files without prompting')
+    p.add_argument('--merge', action='store_true', help='Merge into existing wiki.md instead of skipping')
     
     # ingest
     p = subparsers.add_parser('ingest', help='Ingest a source file')

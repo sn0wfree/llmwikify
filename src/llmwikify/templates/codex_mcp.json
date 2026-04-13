@@ -1,0 +1,9 @@
+{
+  "mcp": {
+    "llmwikify": {
+      "type": "local",
+      "command": ["llmwikify", "mcp"],
+      "enabled": true
+    }
+  }
+}
