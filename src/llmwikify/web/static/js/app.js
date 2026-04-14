@@ -11,9 +11,11 @@
     const state = {
         currentPage: null,
         currentContent: '',
-        viewMode: 'preview',  // 'preview' | 'edit' | 'split'
+        viewMode: 'preview',
         fileTree: {},
         searchTimeout: null,
+        hasUnsavedChanges: false,
+        livePreviewTimeout: null,
     };
 
     // ============================================================
@@ -43,7 +45,6 @@
                     throw new Error(error.message || 'MCP call failed');
                 }
                 
-                // MCP tools return JSON strings
                 if (typeof result === 'string') {
                     try {
                         return JSON.parse(result);
@@ -76,6 +77,30 @@
 
         async wiki_status() {
             return this.call('wiki_status', {});
+        },
+
+        async wiki_lint(format = 'brief') {
+            return this.call('wiki_lint', { format, generate_investigations: false });
+        },
+
+        async wiki_sink_status() {
+            return this.call('wiki_sink_status', {});
+        },
+
+        async wiki_recommend() {
+            return this.call('wiki_recommend', {});
+        },
+
+        async wiki_build_index() {
+            return this.call('wiki_build_index', { auto_export: true });
+        },
+
+        async wiki_graph_analyze(action, params = {}) {
+            return this.call('wiki_graph_analyze', { action, ...params });
+        },
+
+        async wiki_graph(action, params = {}) {
+            return this.call('wiki_graph', { action, ...params });
         },
     };
 
@@ -112,18 +137,11 @@
     // Markdown Renderer
     // ============================================================
     function renderMarkdown(content) {
-        // Configure marked
-        marked.setOptions({
-            breaks: true,
-            gfm: true,
-        });
-
+        marked.setOptions({ breaks: true, gfm: true });
         let html = marked.parse(content || '');
 
-        // Convert [[wikilinks]] to clickable elements
         html = html.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, target, display) => {
             const linkText = display || target;
-            // Remove section anchors for link text
             const cleanTarget = target.split('#')[0].trim();
             return `<a href="#" class="wikilink" data-page="${cleanTarget}">${linkText}</a>`;
         });
@@ -137,7 +155,6 @@
     function renderFileTree(status) {
         const treeEl = $('#file-tree');
         const pagesByType = status.pages_by_type || {};
-        
         const groups = Object.entries(pagesByType).filter(([type, pages]) => pages.length > 0);
         
         if (groups.length === 0) {
@@ -183,19 +200,17 @@
             const page = await api.wiki_read_page(pageName);
             state.currentPage = pageName;
             state.currentContent = page.content || '';
+            state.hasUnsavedChanges = false;
+            updateUnsavedIndicator();
+            updatePageTitle(pageName);
             
-            // Update preview
             $('#preview-content').innerHTML = renderMarkdown(state.currentContent);
-            
-            // Update editor
             $('#editor').value = state.currentContent;
             
-            // Update tree selection
             $$('.tree-item').forEach(item => {
                 item.classList.toggle('active', item.textContent === pageName);
             });
             
-            // Load backlinks
             loadBacklinks(pageName);
             
         } catch (err) {
@@ -208,11 +223,20 @@
         }
     }
 
+    function updatePageTitle(name) {
+        const el = $('#current-page-name');
+        if (el) el.textContent = name || 'Home';
+    }
+
+    function updateUnsavedIndicator() {
+        const dot = $('#unsaved-dot');
+        if (dot) dot.style.display = state.hasUnsavedChanges ? 'inline-block' : 'none';
+    }
+
     async function loadBacklinks(pageName) {
         try {
             const refs = await api.wiki_references(pageName);
             
-            // Backlinks
             const backlinksEl = $('#backlinks-list');
             const inbound = refs.inbound || [];
             
@@ -236,7 +260,6 @@
                 }
             }
             
-            // Outgoing
             const outgoingEl = $('#outgoing-list');
             const outbound = refs.outbound || [];
             
@@ -268,10 +291,7 @@
         
         input.addEventListener('input', (e) => {
             const query = e.target.value.trim();
-            
-            if (state.searchTimeout) {
-                clearTimeout(state.searchTimeout);
-            }
+            if (state.searchTimeout) clearTimeout(state.searchTimeout);
             
             if (query.length < 2) {
                 results.classList.add('hidden');
@@ -296,7 +316,6 @@
             }
         });
         
-        // Close results when clicking outside
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.search-box')) {
                 results.classList.add('hidden');
@@ -323,15 +342,8 @@
                 }
             });
             
-            const title = el('div', {
-                className: 'title',
-                textContent: result.page_name
-            });
-            
-            const snippet = el('div', {
-                className: 'snippet',
-                innerHTML: result.snippet || ''
-            });
+            const title = el('div', { className: 'title', textContent: result.page_name });
+            const snippet = el('div', { className: 'snippet', innerHTML: result.snippet || '' });
             
             item.appendChild(title);
             item.appendChild(snippet);
@@ -353,7 +365,74 @@
                 e.preventDefault();
                 savePage();
             }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+                e.preventDefault();
+                wrapSelection('**', '**');
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+                e.preventDefault();
+                wrapSelection('*', '*');
+            }
         });
+
+        // Track unsaved changes
+        editor.addEventListener('input', () => {
+            if (editor.value !== state.currentContent) {
+                state.hasUnsavedChanges = true;
+                updateUnsavedIndicator();
+            }
+
+            // Live preview in split mode
+            if (state.viewMode === 'split') {
+                if (state.livePreviewTimeout) clearTimeout(state.livePreviewTimeout);
+                state.livePreviewTimeout = setTimeout(() => {
+                    $('#preview-content').innerHTML = renderMarkdown(editor.value);
+                    rebindWikilinks();
+                }, 200);
+            }
+        });
+    }
+
+    function wrapSelection(before, after) {
+        const editor = $('#editor');
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        const text = editor.value;
+        const selected = text.substring(start, end);
+        
+        editor.value = text.substring(0, start) + before + selected + after + text.substring(end);
+        editor.focus();
+        editor.selectionStart = start + before.length;
+        editor.selectionEnd = start + before.length + selected.length;
+        
+        // Trigger input event for live preview
+        editor.dispatchEvent(new Event('input'));
+    }
+
+    function initEditorToolbar() {
+        $$('#editor-toolbar button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const cmd = btn.dataset.cmd;
+                switch (cmd) {
+                    case 'bold': wrapSelection('**', '**'); break;
+                    case 'italic': wrapSelection('*', '*'); break;
+                    case 'code': wrapSelection('`', '`'); break;
+                    case 'codeblock': wrapSelection('\n```\n', '\n```\n'); break;
+                    case 'link': wrapSelection('[[', ']]'); break;
+                    case 'heading': wrapSelection('\n# ', '\n'); break;
+                    case 'list': wrapSelection('\n- ', '\n'); break;
+                    case 'table': insertTable(); break;
+                }
+            });
+        });
+    }
+
+    function insertTable() {
+        const table = '\n| Header 1 | Header 2 | Header 3 |\n|----------|----------|----------|\n| Cell 1   | Cell 2   | Cell 3   |\n| Cell 4   | Cell 5   | Cell 6   |\n';
+        const editor = $('#editor');
+        const start = editor.selectionStart;
+        editor.value = editor.value.substring(0, start) + table + editor.value.substring(start);
+        editor.dispatchEvent(new Event('input'));
     }
 
     async function savePage() {
@@ -363,6 +442,8 @@
         try {
             await api.wiki_write_page(state.currentPage, content);
             state.currentContent = content;
+            state.hasUnsavedChanges = false;
+            updateUnsavedIndicator();
             $('#preview-content').innerHTML = renderMarkdown(content);
             showToast('Page saved');
         } catch (err) {
@@ -378,7 +459,6 @@
             tab.addEventListener('click', () => {
                 const mode = tab.dataset.view;
                 setViewMode(mode);
-                
                 $$('.tab').forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
             });
@@ -402,7 +482,14 @@
         } else if (mode === 'split') {
             preview.classList.remove('hidden');
             edit.classList.remove('hidden');
+            // Initial render for split mode
+            $('#preview-content').innerHTML = renderMarkdown($('#editor').value);
+            rebindWikilinks();
         }
+    }
+
+    function rebindWikilinks() {
+        // Wikilinks are handled by event delegation on #preview-content
     }
 
     // ============================================================
@@ -418,22 +505,13 @@
             input.focus();
         });
         
-        $('#btn-close-new').addEventListener('click', () => {
-            modal.classList.add('hidden');
-        });
-        
-        $('#btn-cancel-new').addEventListener('click', () => {
-            modal.classList.add('hidden');
-        });
-        
+        $('#btn-close-new').addEventListener('click', () => modal.classList.add('hidden'));
+        $('#btn-cancel-new').addEventListener('click', () => modal.classList.add('hidden'));
         $('#btn-create-page').addEventListener('click', createNewPage);
         
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                createNewPage();
-            } else if (e.key === 'Escape') {
-                modal.classList.add('hidden');
-            }
+            if (e.key === 'Enter') createNewPage();
+            else if (e.key === 'Escape') modal.classList.add('hidden');
         });
     }
 
@@ -453,6 +531,20 @@
     }
 
     // ============================================================
+    // Graph View
+    // ============================================================
+    function initGraphView() {
+        const graphView = new GraphView(api, loadPage);
+        
+        $('#btn-graph').addEventListener('click', () => graphView.open());
+        $('#btn-close-graph').addEventListener('click', () => graphView.close());
+        
+        document.getElementById('graph-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'graph-modal') graphView.close();
+        });
+    }
+
+    // ============================================================
     // Wikilink Navigation
     // ============================================================
     function initWikilinks() {
@@ -461,11 +553,86 @@
             if (link) {
                 e.preventDefault();
                 const pageName = link.dataset.page;
-                if (pageName) {
-                    loadPage(pageName);
-                }
+                if (pageName) loadPage(pageName);
             }
         });
+    }
+
+    // ============================================================
+    // Sidebar Panels (Health/Sink/Recommendations)
+    // ============================================================
+    async function loadSidebarPanels() {
+        // Health
+        try {
+            const lint = await api.wiki_lint('brief');
+            const hints = lint.hints || {};
+            const issues = lint.issue_count || 0;
+            
+            const brokenCount = hints.broken_links ? Object.keys(hints.broken_links).length : 0;
+            
+            $('#health-broken-dot').className = 'health-dot ' + (brokenCount > 0 ? 'dot-danger' : 'dot-ok');
+            $('#health-broken-text').textContent = brokenCount > 0 ? `${brokenCount} broken` : 'OK';
+            
+            const orphanPages = lint.orphan_pages || hints.orphan_pages || [];
+            $('#health-orphans-dot').className = 'health-dot ' + (orphanPages.length > 0 ? 'dot-warning' : 'dot-ok');
+            $('#health-orphans-text').textContent = orphanPages.length > 0 ? `${orphanPages.length} orphans` : 'OK';
+        } catch (e) {
+            $('#health-broken-text').textContent = 'N/A';
+            $('#health-orphans-text').textContent = 'N/A';
+        }
+
+        // Sink Status
+        try {
+            const sink = await api.wiki_sink_status();
+            const sinks = Array.isArray(sink) ? sink : (sink.sinks || []);
+            const totalPending = sinks.reduce((sum, s) => sum + (s.entry_count || 0), 0);
+            
+            const sinkEl = $('#sink-status');
+            if (totalPending > 0) {
+                const urgent = sinks.filter(s => s.urgency === 'urgent' || s.urgency === 'aging');
+                sinkEl.innerHTML = urgent.length > 0
+                    ? `<span class="sink-item sink-urgent">${urgent.length} urgent updates</span>`
+                    : `<span class="sink-item">${totalPending} pending</span>`;
+            } else {
+                sinkEl.innerHTML = '<span class="sink-item">No pending updates</span>';
+            }
+        } catch (e) {
+            $('#sink-status').innerHTML = '<span class="sink-item">N/A</span>';
+        }
+
+        // Recommendations
+        try {
+            const rec = await api.wiki_recommend();
+            const missing = rec.missing_pages || [];
+            
+            const recEl = $('#recommendations');
+            if (missing.length > 0) {
+                recEl.innerHTML = '';
+                for (const page of missing.slice(0, 5)) {
+                    const item = el('span', {
+                        className: 'rec-item',
+                        textContent: page,
+                        onclick: () => createNewPageByName(page)
+                    });
+                    recEl.appendChild(item);
+                }
+            } else {
+                recEl.innerHTML = '<span class="rec-item">No recommendations</span>';
+            }
+        } catch (e) {
+            $('#recommendations').innerHTML = '<span class="rec-item">N/A</span>';
+        }
+    }
+
+    async function createNewPageByName(name) {
+        try {
+            await api.wiki_write_page(name, `# ${name}\n\n`);
+            loadPage(name);
+            refreshTree();
+            showToast('Page created: ' + name);
+        } catch (err) {
+            showToast(`Failed: ${err.message}`, true);
+        }
     }
 
     // ============================================================
@@ -504,15 +671,16 @@
     async function init() {
         try {
             await refreshTree();
+            await loadSidebarPanels();
             initSearch();
             initViewTabs();
             initEditor();
+            initEditorToolbar();
             initNewPageModal();
             initWikilinks();
+            initGraphView();
             
-            // Keyboard shortcuts
             document.addEventListener('keydown', (e) => {
-                // Ctrl+K: focus search
                 if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                     e.preventDefault();
                     $('#search-input').focus();
@@ -520,7 +688,7 @@
                 }
             });
             
-            console.log('llmwikify Web UI initialized');
+            console.log('llmwikify Web UI initialized (Phase 2)');
         } catch (err) {
             console.error('Failed to initialize:', err);
             $('#preview-content').innerHTML = `
@@ -533,7 +701,6 @@
         }
     }
 
-    // Start when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

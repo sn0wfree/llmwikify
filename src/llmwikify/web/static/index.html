@@ -8,10 +8,15 @@
 </head>
 <body>
     <div id="app">
-        <!-- Top bar: logo + search -->
+        <!-- Top bar: logo + page title + search -->
         <nav id="topbar">
             <div class="topbar-left">
                 <span class="logo">llmwikify</span>
+                <span class="breadcrumb">
+                    <span class="separator">/</span>
+                    <span id="current-page-name" class="page-name">Home</span>
+                    <span id="unsaved-dot" class="unsaved-dot" title="Unsaved changes"></span>
+                </span>
             </div>
             <div class="topbar-center">
                 <div class="search-box">
@@ -28,6 +33,33 @@
         <!-- Left sidebar: file tree -->
         <aside id="sidebar">
             <div id="file-tree" class="tree"></div>
+            <div id="sidebar-footer">
+                <div class="panel-section">
+                    <h3>Wiki Health</h3>
+                    <div id="health-status" class="health-status">
+                        <span class="health-item">
+                            <span class="health-dot dot-ok" id="health-broken-dot"></span>
+                            <span id="health-broken-text">Checking...</span>
+                        </span>
+                        <span class="health-item">
+                            <span class="health-dot dot-ok" id="health-orphans-dot"></span>
+                            <span id="health-orphans-text">Checking...</span>
+                        </span>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <h3>Sink Status</h3>
+                    <div id="sink-status" class="sink-status">
+                        <span class="sink-item">Loading...</span>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <h3>Recommendations</h3>
+                    <div id="recommendations" class="recommendations">
+                        <span class="rec-item">Loading...</span>
+                    </div>
+                </div>
+            </div>
         </aside>
 
         <!-- Main content area -->
@@ -46,6 +78,16 @@
 
             <!-- Edit pane -->
             <div id="edit-pane" class="pane hidden">
+                <div id="editor-toolbar">
+                    <button data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+                    <button data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+                    <button data-cmd="code" title="Inline Code">`</button>
+                    <button data-cmd="codeblock" title="Code Block">```</button>
+                    <button data-cmd="link" title="Wikilink">[[ ]]</button>
+                    <button data-cmd="heading" title="Heading">#</button>
+                    <button data-cmd="list" title="List">•</button>
+                    <button data-cmd="table" title="Table">⊞</button>
+                </div>
                 <textarea id="editor" spellcheck="false" placeholder="Start editing..."></textarea>
             </div>
         </main>
@@ -65,13 +107,33 @@
 
     <!-- Graph view modal -->
     <div id="graph-modal" class="modal hidden">
-        <div class="modal-content">
+        <div class="modal-content modal-graph">
             <div class="modal-header">
                 <h2>Knowledge Graph</h2>
+                <div class="graph-toolbar">
+                    <button id="btn-graph-refresh" class="btn btn-small" title="Refresh graph">↻</button>
+                    <input type="text" id="graph-search" class="input-small" placeholder="Search nodes...">
+                    <button id="btn-graph-filter" class="btn btn-small" title="Filter by degree">◆</button>
+                </div>
                 <button id="btn-close-graph" class="btn-close">&times;</button>
             </div>
             <div id="graph-container">
-                <canvas id="graph-canvas"></canvas>
+                <svg id="graph-svg"></svg>
+                <div id="graph-tooltip" class="graph-tooltip hidden"></div>
+            </div>
+            <div class="graph-legend">
+                <div class="legend-item">
+                    <span class="legend-dot dot-entity"></span> Entity (has page)
+                </div>
+                <div class="legend-item">
+                    <span class="legend-dot dot-concept"></span> Concept
+                </div>
+                <div class="legend-item">
+                    <span class="legend-line line-wikilink"></span> Wikilink
+                </div>
+                <div class="legend-item">
+                    <span class="legend-line line-relation"></span> Relation
+                </div>
             </div>
         </div>
     </div>
@@ -94,6 +156,8 @@
     </div>
 
     <script src="/lib/marked.min.js"></script>
+    <script src="/lib/d3.min.js"></script>
+    <script src="/js/graph.js"></script>
     <script src="/js/app.js"></script>
 </body>
 </html>
