@@ -59,7 +59,7 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 ### 📥 Enhanced Ingest (v0.15.0+)
 - Rich metadata: file_type, file_size, word_count, has_images, content_preview
 - Auto-collects all sources into `raw/` directory
-- LLM smart mode (`--smart`) for automatic page creation
+- LLM self-create mode (`--self-create`) for automatic page creation
 
 ### 🧹 Smart Lint with Investigations (v0.15.0+)
 - `dated_claim` (critical): Pages referencing years ≥3 years older than latest raw source
@@ -193,7 +193,7 @@ Wiki initialized at /path/to/wiki
 llmwikify ingest document.pdf
 
 # LLM smart mode: auto-create wiki pages
-llmwikify ingest document.pdf --smart
+llmwikify ingest document.pdf --self-create
 
 # Ingest a URL
 llmwikify ingest https://example.com/article
@@ -208,7 +208,7 @@ llmwikify ingest https://youtube.com/watch?v=abc123
 llmwikify watch
 
 # Auto-ingest new files
-llmwikify watch --auto-ingest --smart
+llmwikify watch --auto-ingest --self-create
 
 # Install git post-commit hook
 llmwikify watch --git-hook
@@ -343,7 +343,7 @@ hints = wiki.hint()
 
 ---
 
-## 🗄️ MCP Server (16 Tools)
+## 🗄️ MCP Server (17 Tools)
 
 The MCP server exposes wiki operations as tools for LLMs.
 
@@ -363,6 +363,7 @@ The MCP server exposes wiki operations as tools for LLMs.
 | `wiki_update_schema` | Update wiki.md with new conventions |
 | `wiki_synthesize` | **Save query answer as wiki page** (knowledge compounding) |
 | `wiki_sink_status` | Overview of query sinks with entry counts |
+| `wiki_references` | Show page references (inbound/outbound wikilinks) |
 | `wiki_graph` | Query/modify knowledge graph (neighbors, path, stats, write relations) |
 | `wiki_graph_analyze` | Analyze graph (export visualization, detect communities, surprise report) |
 
@@ -443,7 +444,7 @@ This makes llmwikify truly general-purpose:
 | Command | Description | Example |
 |---------|-------------|---------|
 | `init` | Initialize wiki | `llmwikify init` |
-| `ingest` | Ingest PDF/URL/YouTube | `llmwikify ingest doc.pdf --smart` |
+| `ingest` | Ingest PDF/URL/YouTube | `llmwikify ingest doc.pdf --self-create` |
 | `write_page` | Create/update page | `llmwikify write_page Test -c "..."` |
 | `read_page` | Read page | `llmwikify read_page Test` |
 | `search` | Full-text search | `llmwikify search "gold" -l 10` |
@@ -452,7 +453,7 @@ This makes llmwikify truly general-purpose:
 | `log` | Record log entry | `llmwikify log ingest doc.pdf` |
 | `references` | Show references | `llmwikify references "Agnico" --detail` |
 | `build-index` | Build/export reference index | `llmwikify build-index --export-only` |
-| `batch` | Batch ingest | `llmwikify batch raw/pdfs/ --smart` |
+| `batch` | Batch ingest | `llmwikify batch raw/pdfs/ --self-create` |
 | `sink-status` | Sink buffer overview | `llmwikify sink-status` |
 | `synthesize` | Save query as page | `llmwikify synthesize "Q?" -a "A..."` |
 | `watch` | Watch for new files | `llmwikify watch --auto-ingest` |
@@ -661,7 +662,7 @@ orphan_detection:
                  ┌───────────────┴───────────────┐
                  ▼                               ▼
 ┌────────────────────────┐        ┌────────────────────────┐
-│  CLI (19 commands)     │        │  MCP Server (16 tools) │
+│  CLI (19 commands)     │        │  MCP Server (17 tools) │
 └────────────────────────┘        └────────────────────────┘
 ```
 
@@ -673,7 +674,7 @@ Source (PDF/URL/YouTube/text file)
   → extractors.extract() — Auto-detect type
   → ExtractedContent (text, title, metadata)
   → Wiki.ingest_source() — Collects to raw/, logs
-  → (LLM --smart) — Creates wiki pages + extracts relations
+  → (LLM --self-create) — Creates wiki pages + extracts relations
   → Wiki.write_relations() — Stores in SQLite relations table
 ```
 

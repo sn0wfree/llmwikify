@@ -9,16 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Agent-Aware Init**: `llmwikify init --agent <type>` generates a complete project setup in one command:
-  - `--agent opencode` → `opencode.json` + `AGENTS.md` + `wiki.md` + `.gitignore`
-  - `--agent claude` → `.mcp.json` + `CLAUDE.md` + `wiki.md` + `.gitignore`
-  - `--agent codex` → `.opencode.json` + `AGENTS.md` + `wiki.md` + `.gitignore`
+  - `--agent opencode` → `opencode.json` + skill files + `wiki.md` + `.gitignore`
+  - `--agent claude` → `.mcp.json` + `wiki.md` + `.gitignore`
+  - `--agent codex` → `.opencode.json` + skill files + `wiki.md` + `.gitignore`
   - `--agent generic` → `wiki.md` + `.gitignore` only
 - **Raw Source Analysis**: Init auto-analyzes `raw/` directory structure and includes stats in generated files
 - **Schema Conflict Detection**: Warns when `wiki.md` or `WIKI.md` already exists, with `--force`/`--merge` options
 - **`mcp` CLI Subcommand**: Start MCP server for Agent interaction (`llmwikify mcp`), default stdio transport
-- **`--merge` Agent Config Regeneration**: `llmwikify init --agent <type> --merge` now regenerates agent config files in addition to merging wiki.md
+- **`--merge` MCP Config Regeneration**: `llmwikify init --agent <type> --merge` now regenerates MCP config files in addition to merging wiki.md
 
 ### Changed
+- **Single Schema Source**: AGENTS.md removed. wiki.md is now the single source of truth for all conventions, page types, and workflows. LLM reads wiki.md directly via `wiki_read_schema`.
+- **Complexity Reduced**: Removed 3 agent template files, eliminated info duplication between AGENTS.md and wiki.md
 - **MCP Server → FastMCP**: Replaced low-level `mcp.server.Server` with FastMCP (`@mcp.tool` decorators). 377 lines → 180 lines. Cleaner API, automatic schema generation, and industry-standard framework.
 - **Dependency**: `mcp>=1.0.0` → `fastmcp>=3.0.0`
 - **API**: `MCPServer(wiki)` replaced by `create_mcp_server(wiki)` + `serve_mcp(wiki)`

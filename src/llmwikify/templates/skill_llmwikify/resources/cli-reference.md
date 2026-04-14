@@ -24,7 +24,7 @@ llmwikify init [OPTIONS]
 ```
 ✅ Wiki initialized at /path/to/project
 
-  Created: raw/, wiki/, wiki.md, AGENTS.md, opencode.json, .gitignore
+  Created: raw/, wiki/, wiki.md, opencode.json, .gitignore
 
   Source analysis:
     1379 files in 7 categories
@@ -48,7 +48,7 @@ llmwikify ingest <file> [OPTIONS]
 
 | Flag | Description |
 |------|-------------|
-| `--smart, -s` | Use LLM to analyze and create wiki pages |
+| `--self-create, -s` | CLI uses LLM API to analyze content and create wiki pages |
 | `--dry-run, -n` | Show extraction summary without creating pages |
 
 **Basic output:**
@@ -58,7 +58,7 @@ Content length: 4,533 chars
 Saved to raw: article.md
 
 No pages created automatically.
-Use --smart for LLM-assisted page creation.
+Use --self-create for LLM-assisted page creation.
 ```
 
 **Smart mode output:**
@@ -349,7 +349,7 @@ llmwikify batch <directory-or-glob> [OPTIONS]
 | Flag | Description |
 |------|-------------|
 | `--limit, -l <N>` | Limit number of sources |
-| `--smart, -s` | Use LLM to process content |
+| `--self-create, -s` | CLI uses LLM API to process content |
 
 **Output:**
 ```
@@ -424,7 +424,7 @@ llmwikify watch [OPTIONS]
 | Flag | Description |
 |------|-------------|
 | `--auto-ingest` | Automatically ingest new files |
-| `--smart, -s` | Use LLM to process files (requires --auto-ingest) |
+| `--self-create, -s` | CLI uses LLM API to process files (requires --auto-ingest) |
 | `--debounce <seconds>` | Debounce time (default: 2.0) |
 | `--dry-run, -n` | Print events without ingesting |
 | `--git-hook` | Install git post-commit hook |

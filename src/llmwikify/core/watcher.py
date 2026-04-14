@@ -23,8 +23,8 @@ class FileSystemWatcher:
     Usage:
         watcher = FileSystemWatcher(
             watch_dir=Path("raw"),
-            auto_ingest=False,   # default: just notify
-            smart=False,
+            auto_ingest=False,      # default: just notify
+            self_create=False,
             debounce=2.0,
         )
         watcher.start()
@@ -36,12 +36,12 @@ class FileSystemWatcher:
         self,
         watch_dir: Path,
         auto_ingest: bool = False,
-        smart: bool = False,
+        self_create: bool = False,
         debounce: float = 2.0,
     ):
         self.watch_dir = watch_dir.resolve()
         self.auto_ingest = auto_ingest
-        self.smart = smart
+        self.self_create = self_create
         self.debounce = debounce
 
         self._running = False
@@ -162,8 +162,8 @@ class FileSystemWatcher:
                 "moved": "file moved in",
             }.get(event_type, "change detected")
             print(f"  [{event_type}] {path.name} - {action}")
-            if self.smart:
-                print(f"    Tip: run 'llmwikify ingest {path.name} --smart' to process with LLM")
+            if self.self_create:
+                print(f"    Tip: run 'llmwikify ingest {path.name} --self-create' to process with LLM")
             else:
                 print(f"    Tip: run 'llmwikify ingest {path.name}' to process")
             print(f"    Or start with --auto-ingest to process automatically")

@@ -92,10 +92,12 @@ class TestWikiContextMethods:
 
         result = wiki._get_existing_page_names()
 
-        assert "Alice" in result
-        assert "Bob" in result
-        assert wiki._index_page_name not in result
-        assert wiki._log_page_name not in result
+        # Returns relative paths with .md extension (supports subdirectories)
+        assert "Alice.md" in result
+        assert "Bob.md" in result
+        assert wiki._index_page_name + ".md" not in result  # "index.md" excluded
+        assert wiki._log_page_name + ".md" not in result  # "log.md" excluded
+        assert "overview.md" in result
 
 
 class TestLLMRetryMechanism:

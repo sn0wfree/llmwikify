@@ -47,6 +47,17 @@ document: |
   | Claim | `wiki/claims/{slug}.md` | Specific factual claim with supporting and contradicting evidence |
   | Overview | `wiki/overview.md` | Top-level narrative of the entire knowledge base |
 
+  ### Custom Page Types
+
+  > Define custom page types below. The LLM will read this section during ingest
+  > and automatically create pages of these types when source content warrants it.
+  > Use the Location column pattern to determine the subdirectory and filename format.
+  >
+  > | Type | Location | Purpose |
+  > |------|----------|---------|
+  > | DailySummary | `wiki/summaries/{YYYY-MM-DD}.md` | Daily news digest |
+  > | *(add your custom types here)* | | |
+
   ### Claim Page Format
 
   Claims track specific factual statements and their evidentiary status:

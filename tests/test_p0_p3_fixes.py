@@ -11,7 +11,7 @@ Tests for:
 - P2-8: read_sink/clear_sink CLI
 - P2-9: synthesize CLI
 - P2-10: lint --generate-investigations
-- P3-11: batch --smart
+- P3-11: batch --self-create
 - P3-12: .readthedocs.yaml
 - P3-13: prompts/__init__.py exports
 - P3-14: pytest-asyncio usage
@@ -309,33 +309,29 @@ class TestLintInvestigations:
 
 
 # ============================================================
-# P3-11: batch --smart
+# P3-11: batch --self-create
 # ============================================================
 class TestBatchSmart:
-    def test_batch_has_smart_flag(self):
-        """batch command should accept --smart flag."""
+    def test_batch_has_self_create_flag(self):
+        """batch command should accept --self-create flag."""
         commands_path = Path(__file__).parent.parent / 'src/llmwikify/cli/commands.py'
         content = commands_path.read_text()
         
-        # Find the batch subparser section and check for --smart
-        # Look for the batch command argparse setup
-        has_batch_smart = False
+        has_batch_self_create = False
         
-        # Check if batch subparser has --smart
         lines = content.split('\n')
         in_batch_parser = False
         for line in lines:
             if "'batch'" in line or '"batch"' in line:
                 in_batch_parser = True
-            elif in_batch_parser and "'--smart'" in line:
-                has_batch_smart = True
+            elif in_batch_parser and "'--self-create'" in line:
+                has_batch_self_create = True
                 break
             elif in_batch_parser and ('add_parser' in line and "'batch'" not in line):
-                # Moved to next parser
                 break
         
-        assert has_batch_smart, (
-            "batch command missing --smart flag in argparse setup"
+        assert has_batch_self_create, (
+            "batch command missing --self-create flag in argparse setup"
         )
 
 

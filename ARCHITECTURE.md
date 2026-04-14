@@ -10,7 +10,7 @@
 
 ## Overview
 
-**llmwikify** is a modular Python package for building persistent, LLM-maintained knowledge bases. It has evolved from a single-file implementation (v0.10.0, 1,965 lines) into a fully modular architecture with 10+ submodules, 19 CLI commands, 16 MCP tools, and comprehensive test coverage.
+**llmwikify** is a modular Python package for building persistent, LLM-maintained knowledge bases. It has evolved from a single-file implementation (v0.10.0, 1,965 lines) into a fully modular architecture with 10+ submodules, 19 CLI commands, 17 MCP tools, and comprehensive test coverage.
 
 ### Design Principles
 
@@ -350,7 +350,7 @@ Wiki.ingest_source()
   ├── Returns extracted data + current index for LLM
   └── Logs to log.md
   │
-  ▼ (LLM smart mode: --smart)
+  ▼ (LLM self-create mode: --self-create)
 Wiki._llm_process_source()
   ├── generate_wiki_ops → write_page operations
   ├── Extract relations (if enabled in prompt)
@@ -398,7 +398,7 @@ FileSystemWatcher detects event
   │
   └── (--auto-ingest) Call wiki.ingest_source()
         │
-        ├── (--smart) LLM processes and creates pages
+        ├── (--self-create) LLM processes and creates pages
         └── Log to log.md
 ```
 
@@ -488,12 +488,19 @@ Progress reporting with batch size control and speed tracking.
 
 ## Version History
 
-### v0.25.0 — Agent-Aware Init + One-Command Setup
-- **Agent-Aware Init**: `llmwikify init --agent <type>` generates complete project setup:
-  - `opencode` → `opencode.json` + `AGENTS.md`
-  - `claude` → `.mcp.json` + `CLAUDE.md`
-  - `codex` → `.opencode.json` + `AGENTS.md`
+### v0.26.0 — Single Schema Source (AGENTS.md Removed)
+- **AGENTS.md Removed**: wiki.md is now the single source of truth for all conventions, page types, and workflows
+- **Agent-Aware Init**: `llmwikify init --agent <type>` generates MCP config only:
+  - `opencode` → `opencode.json` + skill files
+  - `claude` → `.mcp.json`
+  - `codex` → `.opencode.json`
   - `generic` → wiki structure only
+- **Complexity Reduced**: Removed 3 template files, eliminated info duplication between AGENTS.md and wiki.md
+- **Raw Source Analysis**: Auto-analyzes `raw/` directory, includes stats in generated files
+- **Schema Conflict Detection**: Warns on existing `wiki.md`/`WIKI.md`, supports `--force`/`--merge`
+
+### v0.25.0 — Agent-Aware Init + One-Command Setup
+- **Agent-Aware Init**: `llmwikify init --agent <type>` generated complete project setup with AGENTS.md (deprecated in v0.26.0)
 - **Raw Source Analysis**: Auto-analyzes `raw/` directory, includes stats in generated files
 - **Schema Conflict Detection**: Warns on existing `wiki.md`/`WIKI.md`, supports `--force`/`--merge`
 - **492 tests passing** (+18 new for init --agent)

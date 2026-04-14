@@ -1,4 +1,4 @@
-"""Tests for init --agent feature — agent-specific config generation."""
+"""Tests for init --agent feature — MCP config generation (AGENTS.md removed in v0.26.0)."""
 
 import pytest
 import json
@@ -15,15 +15,12 @@ def temp_wiki(tmp_path):
 class TestInitAgentOpenCode:
     """Test init with --agent opencode."""
 
-    def test_creates_agent_md(self, temp_wiki):
-        """AGENTS.md created for opencode."""
+    def test_no_agent_md_created(self, temp_wiki):
+        """AGENTS.md is no longer created (wiki.md is single source of truth)."""
         wiki = Wiki(temp_wiki)
         wiki.init(agent='opencode')
 
-        assert (temp_wiki / 'AGENTS.md').exists()
-        content = (temp_wiki / 'AGENTS.md').read_text()
-        assert 'Agent Instructions' in content
-        assert 'wiki.md' in content
+        assert not (temp_wiki / 'AGENTS.md').exists()
         wiki.close()
 
     def test_creates_opencode_json(self, temp_wiki):
@@ -50,8 +47,8 @@ class TestInitAgentOpenCode:
         assert 'wiki/.sink/' in content
         wiki.close()
 
-    def test_raw_analysis_in_agent_md(self, temp_wiki):
-        """Agent MD references raw/ directory."""
+    def test_wiki_md_references_raw(self, temp_wiki):
+        """wiki.md references raw/ directory."""
         (temp_wiki / 'raw').mkdir()
         (temp_wiki / 'raw' / 'gold').mkdir()
         (temp_wiki / 'raw' / 'gold' / 'article.md').write_text("# Test\nContent")
@@ -61,8 +58,8 @@ class TestInitAgentOpenCode:
         wiki = Wiki(temp_wiki)
         wiki.init(agent='opencode')
 
-        content = (temp_wiki / 'AGENTS.md').read_text()
-        assert '`raw/` directory' in content
+        content = (temp_wiki / 'wiki.md').read_text()
+        assert '`raw/` directory' in content or 'raw/' in content
         wiki.close()
 
     def test_creates_skill_files(self, temp_wiki):
@@ -115,30 +112,26 @@ class TestInitAgentOpenCode:
         assert '.agents/skills/llmwikify/SKILL.md' in config['instructions']
         wiki.close()
 
-    def test_agents_md_has_kb_management(self, temp_wiki):
-        """AGENTS.md includes Knowledge Base Management section."""
+    def test_wiki_md_has_kb_management(self, temp_wiki):
+        """wiki.md includes Knowledge Base Management and page type conventions."""
         wiki = Wiki(temp_wiki)
         wiki.init(agent='opencode')
 
-        content = (temp_wiki / 'AGENTS.md').read_text()
-        assert '## Knowledge Base Management' in content
-        assert 'MCP mode' in content
-        assert 'CLI mode' in content
-        assert 'Choose whichever works best' in content
+        content = (temp_wiki / 'wiki.md').read_text()
+        assert '## Best Practices' in content
+        assert '## Page Types' in content
         wiki.close()
 
 
 class TestInitAgentClaude:
     """Test init with --agent claude."""
 
-    def test_creates_claude_md(self, temp_wiki):
-        """CLAUDE.md created for claude."""
+    def test_no_claude_md_created(self, temp_wiki):
+        """CLAUDE.md is no longer created (wiki.md is single source of truth)."""
         wiki = Wiki(temp_wiki)
         wiki.init(agent='claude')
 
-        assert (temp_wiki / 'CLAUDE.md').exists()
-        content = (temp_wiki / 'CLAUDE.md').read_text()
-        assert 'Instructions' in content
+        assert not (temp_wiki / 'CLAUDE.md').exists()
         wiki.close()
 
     def test_creates_mcp_json(self, temp_wiki):
@@ -159,12 +152,12 @@ class TestInitAgentClaude:
 class TestInitAgentCodex:
     """Test init with --agent codex."""
 
-    def test_creates_agents_md(self, temp_wiki):
-        """AGENTS.md created for codex."""
+    def test_no_agents_md_created(self, temp_wiki):
+        """AGENTS.md is no longer created for codex."""
         wiki = Wiki(temp_wiki)
         wiki.init(agent='codex')
 
-        assert (temp_wiki / 'AGENTS.md').exists()
+        assert not (temp_wiki / 'AGENTS.md').exists()
         wiki.close()
 
     def test_creates_dot_opencode_json(self, temp_wiki):
@@ -236,35 +229,23 @@ class TestInitForceAndSkip:
         assert 'Custom content' not in content
         wiki.close()
 
-    def test_skip_existing_agent_file(self, temp_wiki):
-        """Agent file skipped when already exists."""
-        (temp_wiki / 'AGENTS.md').write_text("# Custom Agent Config")
+    def test_skip_existing_mcp_config(self, temp_wiki):
+        """MCP config skipped when already exists."""
+        (temp_wiki / 'opencode.json').write_text('{"old": true}')
         wiki = Wiki(temp_wiki)
         result = wiki.init(agent='opencode')
 
-        assert 'AGENTS.md' in result['skipped_files']
+        assert 'opencode.json' in result['skipped_files']
         wiki.close()
 
-    def test_force_overwrite_agent_file(self, temp_wiki):
-        """Agent file overwritten with --force."""
-        (temp_wiki / 'AGENTS.md').write_text("# Custom Agent Config")
+    def test_force_overwrite_mcp_config(self, temp_wiki):
+        """MCP config overwritten with --force."""
+        (temp_wiki / 'opencode.json').write_text('{"old": true}')
         wiki = Wiki(temp_wiki)
         result = wiki.init(agent='opencode', force=True)
 
-        content = (temp_wiki / 'AGENTS.md').read_text()
-        assert 'Agent Instructions' in content
-        assert 'Custom Agent Config' not in content
-        wiki.close()
-
-    def test_merge_regenerates_agent_file(self, temp_wiki):
-        """Agent file regenerated with --merge."""
-        (temp_wiki / 'AGENTS.md').write_text("# Custom Agent Config")
-        wiki = Wiki(temp_wiki)
-        result = wiki.init(agent='opencode', merge=True)
-
-        content = (temp_wiki / 'AGENTS.md').read_text()
-        assert 'Agent Instructions' in content
-        assert 'Custom Agent Config' not in content
+        config = json.loads((temp_wiki / 'opencode.json').read_text())
+        assert 'mcp' in config
         wiki.close()
 
     def test_merge_regenerates_mcp_config(self, temp_wiki):
@@ -280,10 +261,10 @@ class TestInitForceAndSkip:
 
 
 class TestInitAgentOnExistingWiki:
-    """Test adding agent config to an already-initialized wiki."""
+    """Test adding MCP config to an already-initialized wiki."""
 
-    def test_adds_agent_to_existing_wiki(self, temp_wiki):
-        """Agent config can be added to existing wiki."""
+    def test_adds_mcp_to_existing_wiki(self, temp_wiki):
+        """MCP config can be added to existing wiki."""
         wiki = Wiki(temp_wiki)
         wiki.init()  # Basic init first
         wiki.close()
@@ -291,9 +272,10 @@ class TestInitAgentOnExistingWiki:
         wiki2 = Wiki(temp_wiki)
         result = wiki2.init(agent='opencode')
 
-        assert result['status'] in ('already_exists', 'agent_config_added')
-        assert (temp_wiki / 'AGENTS.md').exists()
+        assert result['status'] in ('already_exists', 'mcp_config_added')
         assert (temp_wiki / 'opencode.json').exists()
+        # AGENTS.md should not exist
+        assert not (temp_wiki / 'AGENTS.md').exists()
         wiki2.close()
 
 

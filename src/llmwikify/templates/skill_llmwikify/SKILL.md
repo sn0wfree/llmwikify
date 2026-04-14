@@ -40,8 +40,7 @@ llmwikify init --agent opencode
 This creates:
 - `raw/` — source documents directory
 - `wiki/` — LLM-maintained pages
-- `wiki.md` — conventions and workflows
-- `AGENTS.md` — agent instructions
+- `wiki.md` — **single source of truth** for conventions, page types, and workflows
 - `opencode.json` — MCP config (optional)
 
 ### 2. Ingest sources
@@ -66,7 +65,7 @@ llmwikify search "your query"
 llmwikify ingest raw/article.md
 
 # Smart ingest (requires LLM configured)
-llmwikify ingest raw/article.md --smart
+llmwikify ingest raw/article.md --self-create
 
 # Preview without creating pages
 llmwikify ingest raw/article.md --dry-run
@@ -166,7 +165,7 @@ llmwikify community-detect --algorithm leiden --resolution 1.0
 llmwikify batch raw/gold/
 
 # With smart processing
-llmwikify batch raw/ --smart
+llmwikify batch raw/ --self-create
 
 # Limit to first N files
 llmwikify batch raw/ --limit 10

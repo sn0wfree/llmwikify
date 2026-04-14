@@ -129,8 +129,8 @@ class TestWiki:
         result = wiki.status()
         
         assert result['initialized'] == True
-        # page_count includes index.md, log.md, and overview.md
-        assert result['page_count'] == 4  # Test + index + log + overview
+        # page_count excludes index.md and log.md (only wiki content pages)
+        assert result['page_count'] == 2  # Test + overview
         
         wiki.close()
     
@@ -321,6 +321,124 @@ class TestWiki:
         assert len(result['operations']) == 2
         assert result['operations'][0]['action'] == 'write_page'
 
+        wiki.close()
+    
+    def test_llm_process_source_injects_wiki_schema(self, temp_wiki, monkeypatch):
+        """Test that wiki.md content is injected into analyze_source prompt."""
+        # Customize wiki.md with a distinctive custom page type
+        wiki = Wiki(temp_wiki, config={'llm': {'enabled': True, 'api_key': 'test', 'model': 'gpt-4o'}})
+        wiki.init()
+        
+        # Append custom content to wiki.md
+        custom_marker = "__CUSTOM_TYPE_MARKER__"
+        wiki_md = temp_wiki / 'wiki.md'
+        content = wiki_md.read_text()
+        wiki_md.write_text(content + f"\n### Custom Page Types\n| Type | Location | {custom_marker} |\n")
+        
+        captured_messages = []
+        
+        class MockClient:
+            @classmethod
+            def from_config(cls, config):
+                return cls()
+            def chat_json(self, messages, **kwargs):
+                captured_messages.extend(messages)
+                # First call: analyze_source, second: generate_wiki_ops
+                if len(captured_messages) <= 3:  # analyze_source call
+                    return {
+                        "topics": ["Test"],
+                        "entities": [],
+                        "key_facts": [],
+                        "suggested_pages": [{"name": "Test", "type": "DailySummary", "summary": "x", "priority": "high"}],
+                        "cross_refs": [],
+                        "content_type": "test",
+                    }
+                return [
+                    {"action": "write_page", "page_name": "Test", "content": "# Test\n\nContent"},
+                    {"action": "log", "operation": "ingest", "details": "Test"},
+                ]
+        
+        import sys
+        import llmwikify.llm_client as llm_module
+        orig_client = llm_module.LLMClient
+        llm_module.LLMClient = MockClient
+        sys.modules['llmwikify.llm_client'] = llm_module
+        sys.modules['llmwikify.core.llm_client'] = llm_module
+        
+        source_data = {
+            "title": "Test Source",
+            "source_type": "text",
+            "content": "Some content",
+            "current_index": "",
+        }
+        
+        result = wiki._llm_process_source(source_data)
+        
+        llm_module.LLMClient = orig_client
+        sys.modules['llmwikify.llm_client'] = llm_module
+        
+        assert result['status'] == 'success'
+        # Verify wiki_schema was injected into the first LLM call messages
+        all_text = " ".join(m.get("content", "") for m in captured_messages[:3])
+        assert custom_marker in all_text
+        assert "Custom Page Types" in all_text
+        
+        wiki.close()
+    
+    def test_llm_process_source_no_wiki_schema(self, temp_wiki, monkeypatch):
+        """Test that _llm_process_source works even if wiki.md is missing."""
+        wiki = Wiki(temp_wiki, config={'llm': {'enabled': True, 'api_key': 'test', 'model': 'gpt-4o'}})
+        wiki.init()
+        
+        # Remove wiki.md
+        wiki_md = temp_wiki / 'wiki.md'
+        wiki_md.unlink()
+        
+        call_count = 0
+        
+        class MockClient:
+            @classmethod
+            def from_config(cls, config):
+                return cls()
+            def chat_json(self, messages, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    return {
+                        "topics": ["Test"],
+                        "entities": [],
+                        "key_facts": [],
+                        "suggested_pages": [{"name": "Test", "type": "concept", "summary": "x", "priority": "high"}],
+                        "cross_refs": [],
+                        "content_type": "test",
+                    }
+                return [
+                    {"action": "write_page", "page_name": "Test", "content": "# Test\n\nContent"},
+                    {"action": "log", "operation": "ingest", "details": "Test"},
+                ]
+        
+        import sys
+        import llmwikify.llm_client as llm_module
+        orig_client = llm_module.LLMClient
+        llm_module.LLMClient = MockClient
+        sys.modules['llmwikify.llm_client'] = llm_module
+        sys.modules['llmwikify.core.llm_client'] = llm_module
+        
+        source_data = {
+            "title": "Test Source",
+            "source_type": "text",
+            "content": "Some content",
+            "current_index": "",
+        }
+        
+        # Should not raise even without wiki.md
+        result = wiki._llm_process_source(source_data)
+        
+        llm_module.LLMClient = orig_client
+        sys.modules['llmwikify.llm_client'] = llm_module
+        
+        assert result['status'] == 'success'
+        
         wiki.close()
     
     def test_execute_operations(self, temp_wiki):
