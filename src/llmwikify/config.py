@@ -36,6 +36,7 @@ DEFAULT_CONFIG = {
         "timeout": 120,
     },
     "mcp": {
+        "name": None,
         "host": "127.0.0.1",
         "port": 8765,
         "transport": "stdio",

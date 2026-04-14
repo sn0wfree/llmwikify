@@ -8,20 +8,25 @@ from fastmcp import FastMCP
 from ..core import Wiki
 
 
-def create_mcp_server(wiki: Wiki, config: Optional[Dict[str, Any]] = None) -> FastMCP:
+def create_mcp_server(wiki: Wiki, name: Optional[str] = None, config: Optional[Dict[str, Any]] = None) -> FastMCP:
     """Create a FastMCP server with all wiki tools registered.
     
     Args:
         wiki: Wiki instance to operate on
+        name: Optional server name (defaults to directory name)
         config: Optional MCP configuration dict
         
     Returns:
         Configured FastMCP server instance
     """
-    mcp = FastMCP("llmwikify")
+    service_name = name or config.get("name") if config else None
+    if not service_name:
+        service_name = wiki.root.name
+    
+    mcp = FastMCP(service_name)
 
     # Config
-    default_config = {"host": "127.0.0.1", "port": 8765, "transport": "stdio"}
+    default_config = {"name": None, "host": "127.0.0.1", "port": 8765, "transport": "stdio"}
     server_config = default_config.copy()
     if config:
         server_config.update(config)
@@ -58,9 +63,46 @@ def create_mcp_server(wiki: Wiki, config: Optional[Dict[str, Any]] = None) -> Fa
         return wiki.search(query, limit)
 
     @mcp.tool
-    def wiki_lint() -> str:
-        """Health-check the wiki (broken links, orphans, contradictions)."""
-        return wiki.lint()
+    def wiki_lint(
+        generate_investigations: bool = False,
+        format: str = "full",
+    ) -> str:
+        """Health-check the wiki (broken links, orphans, contradictions).
+        
+        Args:
+            generate_investigations: If True, use LLM to suggest investigations.
+            format: Output format - 'full', 'brief', or 'recommendations'.
+        """
+        import json
+        result = wiki.lint(generate_investigations=generate_investigations)
+        if format == "brief":
+            return json.dumps({
+                "hints": result.get("hints", {}),
+                "issue_count": result.get("issue_count", 0),
+                "total_pages": result.get("total_pages", 0),
+            }, ensure_ascii=False, indent=2)
+        elif format == "recommendations":
+            return json.dumps({
+                "missing_pages": result.get("investigations", {}).get("missing_pages", []),
+                "orphan_pages": result.get("issues", []),
+            }, ensure_ascii=False, indent=2)
+        return json.dumps(result, ensure_ascii=False, indent=2)
+
+    @mcp.tool
+    def wiki_references(
+        page_name: str,
+        detail: bool = False,
+        inbound: bool = False,
+        outbound: bool = False,
+    ) -> str:
+        """Show page references (inbound and outbound wikilinks)."""
+        import json
+        result = {"page": page_name, "inbound": [], "outbound": []}
+        if not outbound:
+            result["inbound"] = wiki.get_inbound_links(page_name, include_context=detail)
+        if not inbound:
+            result["outbound"] = wiki.get_outbound_links(page_name, include_context=detail)
+        return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_status() -> str:
@@ -205,30 +247,32 @@ def create_mcp_server(wiki: Wiki, config: Optional[Dict[str, Any]] = None) -> Fa
     return mcp
 
 
-def serve_mcp(wiki: Wiki, transport: Optional[str] = None,
+def serve_mcp(wiki: Wiki, name: Optional[str] = None, transport: Optional[str] = None,
               host: Optional[str] = None, port: Optional[int] = None,
               config: Optional[Dict[str, Any]] = None) -> None:
     """Create and run the MCP server.
     
     Args:
         wiki: Wiki instance
+        name: Optional server name (defaults to directory name)
         transport: Transport protocol ("stdio", "http", or "sse")
         host: Host address (for HTTP/SSE)
         port: Port number (for HTTP/SSE)
         config: Optional MCP config dict
     """
-    mcp = create_mcp_server(wiki, config=config)
+    mcp = create_mcp_server(wiki, name=name, config=config)
     srv_config = mcp._server_config
+    service_name = mcp.name
 
     transport = transport or srv_config.get("transport", "stdio")
     host = host or srv_config.get("host", "127.0.0.1")
     port = port or srv_config.get("port", 8765)
 
     if transport == "stdio":
-        print("Starting MCP server with STDIO transport...")
+        print(f"Starting MCP server '{service_name}' with STDIO transport...")
         mcp.run(transport="stdio")
     elif transport in ("http", "sse"):
-        print(f"Starting MCP server on {host}:{port} with {transport.upper()} transport...")
+        print(f"Starting MCP server '{service_name}' on {host}:{port} with {transport.upper()} transport...")
         mcp.run(transport=transport, host=host, port=port)
     else:
         raise ValueError(f"Unsupported transport: {transport}. Use 'stdio', 'http', or 'sse'")
