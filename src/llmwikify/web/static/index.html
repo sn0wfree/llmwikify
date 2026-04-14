@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>llmwikify</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Top bar: logo + search -->
+        <nav id="topbar">
+            <div class="topbar-left">
+                <span class="logo">llmwikify</span>
+            </div>
+            <div class="topbar-center">
+                <div class="search-box">
+                    <input type="search" id="search-input" placeholder="Search wiki... (Ctrl+K)" autocomplete="off">
+                    <div id="search-results" class="search-results hidden"></div>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <button id="btn-new" class="btn btn-icon" title="New page">+</button>
+                <button id="btn-graph" class="btn btn-icon" title="Graph view">◉</button>
+            </div>
+        </nav>
+
+        <!-- Left sidebar: file tree -->
+        <aside id="sidebar">
+            <div id="file-tree" class="tree"></div>
+        </aside>
+
+        <!-- Main content area -->
+        <main id="content">
+            <!-- View mode tabs -->
+            <div id="view-tabs">
+                <button class="tab active" data-view="preview">Preview</button>
+                <button class="tab" data-view="edit">Edit</button>
+                <button class="tab" data-view="split">Split</button>
+            </div>
+
+            <!-- Preview pane -->
+            <div id="preview-pane" class="pane">
+                <div id="preview-content"></div>
+            </div>
+
+            <!-- Edit pane -->
+            <div id="edit-pane" class="pane hidden">
+                <textarea id="editor" spellcheck="false" placeholder="Start editing..."></textarea>
+            </div>
+        </main>
+
+        <!-- Right sidebar: backlinks -->
+        <aside id="backlinks-panel">
+            <div class="panel-section">
+                <h3>Backlinks</h3>
+                <div id="backlinks-list" class="links-list"></div>
+            </div>
+            <div class="panel-section">
+                <h3>Outgoing</h3>
+                <div id="outgoing-list" class="links-list"></div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Graph view modal -->
+    <div id="graph-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Knowledge Graph</h2>
+                <button id="btn-close-graph" class="btn-close">&times;</button>
+            </div>
+            <div id="graph-container">
+                <canvas id="graph-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- New page modal -->
+    <div id="new-page-modal" class="modal hidden">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>New Page</h2>
+                <button id="btn-close-new" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="new-page-name" placeholder="Page name..." class="input-full">
+                <div class="modal-actions">
+                    <button id="btn-create-page" class="btn btn-primary">Create</button>
+                    <button id="btn-cancel-new" class="btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/lib/marked.min.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

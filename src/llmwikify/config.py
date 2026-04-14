@@ -41,6 +41,10 @@ DEFAULT_CONFIG = {
         "port": 8765,
         "transport": "stdio",
     },
+    "web": {
+        "port": 8766,
+        "host": "127.0.0.1",
+    },
     "prompts": {
         "custom_dir": None,
     },

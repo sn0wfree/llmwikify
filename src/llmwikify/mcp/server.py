@@ -249,6 +249,50 @@ def create_mcp_server(wiki: Wiki, name: Optional[str] = None, config: Optional[D
     return mcp
 
 
+def _auto_register_mcporter(service_name: str, host: str, port: int) -> None:
+    """Auto-register this MCP server with the global mcporter registry.
+
+    Writes to ~/.mcporter/mcporter.json so mcporter-bridge and opencode can
+    discover the service.  Skips silently if the name is already registered.
+    Best-effort — failures are logged but never block startup.
+    """
+    import json
+
+    config_dir = Path.home() / ".mcporter"
+    config_file = config_dir / "mcporter.json"
+
+    try:
+        config_dir.mkdir(parents=True, exist_ok=True)
+
+        # Read existing config
+        if config_file.exists():
+            config = json.loads(config_file.read_text())
+        else:
+            config = {"mcpServers": {}}
+
+        if "mcpServers" not in config:
+            config["mcpServers"] = {}
+
+        # Skip if already registered
+        if service_name in config["mcpServers"]:
+            print(f"  ⚠ Service '{service_name}' already registered in mcporter, skipping")
+            return
+
+        # Register
+        url = f"http://{host}:{port}/mcp"
+        config["mcpServers"][service_name] = {
+            "type": "remote",
+            "url": url,
+            "description": f"llmwikify MCP server ({service_name})",
+        }
+
+        config_file.write_text(json.dumps(config, indent=2) + "\n")
+        print(f"  ✓ Registered with mcporter: {service_name} -> {url}")
+
+    except Exception as e:
+        print(f"  ⚠ Auto-registration failed: {e}")
+
+
 def serve_mcp(wiki: Wiki, name: Optional[str] = None, transport: Optional[str] = None,
               host: Optional[str] = None, port: Optional[int] = None,
               config: Optional[Dict[str, Any]] = None) -> None:
@@ -274,6 +318,7 @@ def serve_mcp(wiki: Wiki, name: Optional[str] = None, transport: Optional[str] =
         print(f"Starting MCP server '{service_name}' with STDIO transport...")
         mcp.run(transport="stdio")
     elif transport in ("http", "sse"):
+        _auto_register_mcporter(service_name, host, port)
         print(f"Starting MCP server '{service_name}' on {host}:{port} with {transport.upper()} transport...")
         mcp.run(transport=transport, host=host, port=port)
     else:

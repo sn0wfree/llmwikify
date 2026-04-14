@@ -1009,7 +1009,7 @@ class WikiCLI:
         return 0
     
     def serve(self, args) -> int:
-        """Start MCP server. Used by both 'mcp' and 'serve' subcommands."""
+        """Start MCP server and optionally Web UI. Used by both 'mcp' and 'serve' subcommands."""
         from ..mcp.server import serve_mcp
         
         # Get MCP configuration from wiki config
@@ -1019,19 +1019,63 @@ class WikiCLI:
         name = getattr(args, 'name', None)
         transport = getattr(args, 'transport', None)
         host = getattr(args, 'host', None)
-        port = getattr(args, 'port', None)
+        mcp_port = getattr(args, 'mcp_port', None) or getattr(args, 'port', None)
+        web = getattr(args, 'web', False)
+        web_port = getattr(args, 'web_port', 8766)
         
         service_name = name or mcp_config.get("name") or self.wiki.root.name
         print(f"Starting MCP server '{service_name}'...")
         print(f"  Transport: {transport or mcp_config.get('transport', 'stdio')}")
         if host:
             print(f"  Host: {host}")
-        if port:
-            print(f"  Port: {port}")
+        if mcp_port:
+            print(f"  MCP Port: {mcp_port}")
+        if web:
+            print(f"  Web UI: http://{host or '127.0.0.1'}:{web_port}")
         print()
         
         try:
-            serve_mcp(self.wiki, name=name, transport=transport, host=host, port=port, config=mcp_config)
+            if web:
+                # Start MCP in background thread, then start Web UI
+                import threading
+                import time
+                
+                mcp_kwargs = {
+                    'wiki': self.wiki,
+                    'name': name,
+                    'transport': 'http',
+                    'host': host or mcp_config.get('host', '127.0.0.1'),
+                    'port': mcp_port or mcp_config.get('port', 8765),
+                    'config': mcp_config,
+                }
+                
+                mcp_thread = threading.Thread(
+                    target=serve_mcp,
+                    kwargs=mcp_kwargs,
+                    daemon=True
+                )
+                mcp_thread.start()
+                
+                # Wait for MCP to start
+                time.sleep(1)
+                
+                # Start Web UI in main thread
+                from ..web.server import create_app
+                import uvicorn
+                
+                mcp_url = f"http://{host or '127.0.0.1'}:{mcp_port or mcp_config.get('port', 8765)}/mcp"
+                app = create_app(mcp_url)
+                
+                print(f"Web UI available at http://{host or '127.0.0.1'}:{web_port}")
+                
+                uvicorn.run(
+                    app,
+                    host=host or '127.0.0.1',
+                    port=web_port,
+                    log_level="info"
+                )
+            else:
+                serve_mcp(self.wiki, name=name, transport=transport, host=host, port=mcp_port, config=mcp_config)
         except KeyboardInterrupt:
             print("\nServer stopped")
         
@@ -1072,7 +1116,9 @@ Examples:
   llmwikify init                                      Initialize wiki
   llmwikify init --overwrite                          Reinitialize wiki
   llmwikify mcp                                       Start MCP server for Agent interaction
-  llmwikify serve                                     Start self-hosted Agent (reserved)
+  llmwikify mcp --transport http --port 8765          Start MCP server on HTTP port
+  llmwikify serve --web                               Start MCP + Web UI on :8765/:8766
+  llmwikify serve --web --mcp-port 8765 --web-port 8767  Custom ports
 """
     )
     
@@ -1219,12 +1265,15 @@ Examples:
     p.add_argument('--port', '-p', type=int, help='Port number')
     p.add_argument('--name', '-n', help='Service name (defaults to directory name)')
     
-    # serve - reserved for future self-hosted Agent mode
-    p = subparsers.add_parser('serve', help='[Reserved] Start a self-hosted Agent with LLM API for knowledge base management')
+    # serve - Start MCP server with optional Web UI
+    p = subparsers.add_parser('serve', help='Start MCP server with optional Web UI')
     p.add_argument('--transport', '-t', choices=['stdio', 'http', 'sse'], help='Transport protocol')
     p.add_argument('--host', help='Host address')
-    p.add_argument('--port', '-p', type=int, help='Port number')
+    p.add_argument('--mcp-port', type=int, help='MCP server port')
+    p.add_argument('--port', '-p', type=int, help='[Deprecated] Use --mcp-port instead')
     p.add_argument('--name', '-n', help='Service name (defaults to directory name)')
+    p.add_argument('--web', action='store_true', help='Start Web UI alongside MCP server')
+    p.add_argument('--web-port', type=int, default=8766, help='Web UI port (default: 8766)')
     
     args = parser.parse_args()
     

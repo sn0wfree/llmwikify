@@ -510,3 +510,113 @@ class TestFastMCPIntegration:
         assert mcp1.name == 'instance-1'
         assert mcp2.name == 'instance-2'
         assert mcp1.name != mcp2.name
+
+
+# ============================================================
+# TestAutoRegisterMcporter — 8.1 to 8.5
+# ============================================================
+class TestAutoRegisterMcporter:
+    """Test _auto_register_mcporter() writes to ~/.mcporter/mcporter.json."""
+
+    def test_registers_new_service(self, tmp_path, monkeypatch):
+        """8.1: Should write new service to ~/.mcporter/mcporter.json."""
+        from llmwikify.mcp.server import _auto_register_mcporter
+        import json
+
+        fake_home = tmp_path / "fakehome"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+
+        _auto_register_mcporter("testwiki", "127.0.0.1", 9999)
+
+        config_file = fake_home / ".mcporter" / "mcporter.json"
+        assert config_file.exists()
+        config = json.loads(config_file.read_text())
+        assert "testwiki" in config["mcpServers"]
+        assert config["mcpServers"]["testwiki"]["url"] == "http://127.0.0.1:9999/mcp"
+        assert config["mcpServers"]["testwiki"]["type"] == "remote"
+
+    def test_skips_existing_service(self, tmp_path, monkeypatch):
+        """8.2: Should skip if service name already registered."""
+        from llmwikify.mcp.server import _auto_register_mcporter
+        import json
+
+        fake_home = tmp_path / "fakehome"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+
+        # Pre-populate config
+        config_dir = fake_home / ".mcporter"
+        config_dir.mkdir()
+        config_file = config_dir / "mcporter.json"
+        config_file.write_text(json.dumps({
+            "mcpServers": {
+                "testwiki": {"type": "remote", "url": "http://127.0.0.1:8888/mcp"}
+            }
+        }))
+
+        stdout = StringIO()
+        with patch("sys.stdout", stdout):
+            _auto_register_mcporter("testwiki", "127.0.0.1", 9999)
+
+        output = stdout.getvalue()
+        assert "already registered" in output.lower() or "skipping" in output.lower()
+
+        # Config should be unchanged
+        config = json.loads(config_file.read_text())
+        assert config["mcpServers"]["testwiki"]["url"] == "http://127.0.0.1:8888/mcp"
+
+    def test_creates_config_dir_if_missing(self, tmp_path, monkeypatch):
+        """8.3: Should create ~/.mcporter/ if it doesn't exist."""
+        from llmwikify.mcp.server import _auto_register_mcporter
+
+        fake_home = tmp_path / "fakehome"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+
+        _auto_register_mcporter("newwiki", "127.0.0.1", 7777)
+
+        config_dir = fake_home / ".mcporter"
+        assert config_dir.exists()
+        assert (config_dir / "mcporter.json").exists()
+
+    def test_prints_success_message(self, tmp_path, monkeypatch):
+        """8.4: Should print success message with URL."""
+        from llmwikify.mcp.server import _auto_register_mcporter
+
+        fake_home = tmp_path / "fakehome"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+
+        stdout = StringIO()
+        with patch("sys.stdout", stdout):
+            _auto_register_mcporter("mywiki", "127.0.0.1", 8765)
+
+        output = stdout.getvalue()
+        assert "mywiki" in output
+        assert "8765" in output
+        assert "Registered" in output or "registered" in output
+
+    def test_handles_write_error_gracefully(self, tmp_path, monkeypatch):
+        """8.5: Should not crash on write errors."""
+        from llmwikify.mcp.server import _auto_register_mcporter
+
+        fake_home = tmp_path / "fakehome"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+
+        # Make the config dir read-only to trigger an error
+        config_dir = fake_home / ".mcporter"
+        config_dir.mkdir()
+        config_dir.chmod(0o000)
+
+        stdout = StringIO()
+        with patch("sys.stdout", stdout):
+            try:
+                _auto_register_mcporter("failwiki", "127.0.0.1", 5555)
+            except Exception:
+                pass  # Should not raise
+
+        config_dir.chmod(0o755)  # Restore permissions for cleanup
+        output = stdout.getvalue()
+        assert "failed" in output.lower() or "error" in output.lower() or "⚠" in output
