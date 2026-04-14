@@ -276,10 +276,14 @@ class TestExtractRouting:
         test_file = tmp_path / "data.xlsx"
         test_file.write_text("col1,col2\na,b")
 
+        # With markitdown available, xlsx is extracted as markdown table
         # Without markitdown, returns error (no legacy extractor for xlsx)
         result = extract(str(test_file))
         assert result is not None
-        assert result.source_type == "error" or "col1,col2" in result.text
+        # Either successful extraction (markdown table) or error
+        if result.source_type != "error":
+            assert "col1" in result.text and "col2" in result.text
+            assert result.source_type == "xlsx"
 
 
 class TestExtractImageFormats:

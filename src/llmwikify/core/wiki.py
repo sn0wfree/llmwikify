@@ -4,6 +4,7 @@ import json
 import re
 import os
 import shutil
+import warnings
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
@@ -95,15 +96,51 @@ class Wiki:
         """Return number of wiki pages."""
         if not self.wiki_dir.exists():
             return 0
-        return len([p for p in self.wiki_dir.glob("*.md") 
-                    if p.stem not in (self._index_page_name, self._log_page_name)])
+        return len([p for p in self.wiki_dir.rglob("*.md")
+                    if p.stem not in (self._index_page_name, self._log_page_name)
+                    and '.sink' not in str(p)])
     
     def _get_existing_page_names(self) -> List[str]:
-        """Return list of existing wiki page names."""
+        """Return list of existing wiki page names (relative to wiki_dir)."""
         if not self.wiki_dir.exists():
             return []
-        return [p.stem for p in self.wiki_dir.glob("*.md")
-                if p.stem not in (self._index_page_name, self._log_page_name)]
+        return [str(p.relative_to(self.wiki_dir)) for p in self.wiki_dir.rglob("*.md")
+                if p.stem not in (self._index_page_name, self._log_page_name)
+                and '.sink' not in str(p)]
+    
+    def _wiki_pages(self) -> List[Path]:
+        """Return all wiki pages recursively, excluding index, log, and .sink/."""
+        if not self.wiki_dir.exists():
+            return []
+        return [p for p in self.wiki_dir.rglob("*.md")
+                if p.stem not in (self._index_page_name, self._log_page_name)
+                and '.sink' not in str(p)]
+    
+    def _page_display_name(self, page: Path) -> str:
+        """Return display name for a page (relative path without .md)."""
+        return str(page.relative_to(self.wiki_dir))[:-3]  # strip .md
+    
+    def _resolve_wikilink_target(self, target: str) -> Optional[Path]:
+        """Resolve a wikilink target to a file path.
+        
+        Checks root first, then subdirectories.
+        """
+        # Direct path (e.g. "entities/Company Name")
+        direct = self.wiki_dir / f"{target}.md"
+        if direct.exists():
+            return direct
+        
+        # Root-level page
+        root = self.wiki_dir / f"{target}.md"
+        if root.exists():
+            return root
+        
+        # Search subdirectories
+        for p in self.wiki_dir.rglob("*.md"):
+            if str(p.relative_to(self.wiki_dir))[:-3] == target:
+                return p
+        
+        return None
     
     @property
     def ref_index_path(self) -> Path:
@@ -139,8 +176,8 @@ class Wiki:
         Args:
             overwrite: If True, recreate index.md and log.md even if they exist.
                        Always skips wiki.md and config_example if they exist.
-            agent: Agent type for config generation. One of: opencode, claude, codex, generic.
-                   None = skip agent config generation.
+            agent: Agent type for MCP config generation. One of: opencode, claude, codex, generic.
+                   None = skip MCP config generation. Generic = no MCP config.
             force: If True, overwrite existing files without prompting.
             merge: If True, merge into existing wiki.md instead of skipping.
         
@@ -150,7 +187,7 @@ class Wiki:
         already_exists = self.is_initialized()
 
         # If wiki is fully initialized, handle as "already_exists" but still
-        # attempt agent config generation and wiki.md merge if requested.
+        # attempt MCP config generation and wiki.md merge if requested.
         if already_exists and not overwrite:
             created = []
             skipped = []
@@ -176,19 +213,8 @@ class Wiki:
                 else:
                     skipped.append("wiki.md (up-to-date)")
 
-            # Still attempt agent config generation
+            # Generate MCP config
             if agent and agent != "generic":
-                agent_filename = "CLAUDE.md" if agent == "claude" else "AGENTS.md"
-                agent_path = self.root / agent_filename
-                if not agent_path.exists() or force or merge:
-                    content = self._generate_agent_md(agent)
-                    if content:
-                        agent_path.write_text(content)
-                        created.append(agent_filename)
-                else:
-                    skipped.append(agent_filename)
-                    warnings.append(f"{agent_filename} already exists, skipping.")
-
                 mcp_filename = ".mcp.json" if agent == "claude" else (
                     "opencode.json" if agent == "opencode" else ".opencode.json"
                 )
@@ -208,7 +234,7 @@ class Wiki:
 
             raw_stats = self._analyze_raw()
 
-            status_msg = "already_exists" if not created else "agent_config_added"
+            status_msg = "already_exists" if not created else "mcp_config_added"
             return {
                 "status": status_msg,
                 "created_files": created,
@@ -318,22 +344,8 @@ class Wiki:
                 "Consider removing or merging WIKI.md."
             )
         
-        # Generate agent config files (only if agent is specified)
+        # Generate MCP config (only if agent is specified)
         if agent and agent != "generic":
-            # Agent entry file
-            agent_filename = "CLAUDE.md" if agent == "claude" else "AGENTS.md"
-            agent_path = self.root / agent_filename
-            if not agent_path.exists() or force or merge:
-                content = self._generate_agent_md(agent)
-                if content:
-                    agent_path.write_text(content)
-                    created.append(agent_filename)
-                else:
-                    skipped.append(agent_filename)
-            else:
-                skipped.append(agent_filename)
-                warnings.append(f"{agent_filename} already exists, skipping.")
-            
             # MCP config
             mcp_filename = ".mcp.json" if agent == "claude" else (
                 "opencode.json" if agent == "opencode" else ".opencode.json"
@@ -490,21 +502,6 @@ class Wiki:
         content = template_path.read_text()
         env = Environment(loader=BaseLoader(), trim_blocks=True, lstrip_blocks=True)
         return env.from_string(content).render(**variables)
-    
-    def _generate_agent_md(self, agent: str) -> str:
-        """Generate agent-specific AGENTS.md or CLAUDE.md content."""
-        template_map = {
-            "opencode": "agents_opencode.md",
-            "claude": "agents_claude.md",
-            "codex": "agents_codex.md",
-        }
-        template_name = template_map.get(agent, "agents_opencode.md")
-
-        return self._render_template(
-            template_name,
-            project_name=self.root.name,
-            version=self._get_version(),
-        )
     
     def _generate_mcp_config(self, agent: str) -> str:
         """Generate agent-specific MCP configuration JSON."""
@@ -767,6 +764,11 @@ class Wiki:
         content = source_data["content"][:max_content_chars]
         content_truncated = len(source_data["content"]) > max_content_chars
 
+        # Read wiki.md schema for page type conventions
+        wiki_schema = ""
+        if self.wiki_md_file.exists():
+            wiki_schema = self.wiki_md_file.read_text()
+
         analysis_messages = registry.get_messages(
             "analyze_source",
             title=source_data["title"],
@@ -775,6 +777,7 @@ class Wiki:
             current_index=source_data.get("current_index", ""),
             max_content_chars=max_content_chars,
             content_truncated=content_truncated,
+            wiki_schema=wiki_schema,
         )
         analysis_params = registry.get_api_params("analyze_source")
 
@@ -1056,10 +1059,8 @@ class Wiki:
             return hints
         
         # Scan wiki pages for dated claims
-        for page in self.wiki_dir.glob("*.md"):
-            page_name = page.stem
-            if page_name in (self._index_page_name, self._log_page_name):
-                continue
+        for page in self._wiki_pages():
+            page_name = self._page_display_name(page)
             if page_name.startswith("Query:"):
                 continue
             
@@ -1107,7 +1108,9 @@ class Wiki:
             return hints
         
         query_pages = []
-        for page in self.wiki_dir.glob("*.md"):
+        for page in self.wiki_dir.rglob("*.md"):
+            if '.sink' in str(page):
+                continue
             page_name = page.stem
             if not page_name.startswith("Query:"):
                 continue
@@ -1172,16 +1175,14 @@ class Wiki:
         
         # Collect all existing wiki page names as potential concepts
         existing_pages = set()
-        for page in self.wiki_dir.glob("*.md"):
-            existing_pages.add(page.stem)
+        for page in self._wiki_pages():
+            existing_pages.add(self._page_display_name(page))
         
         # Track concept mentions: concept -> list of pages that mention it without linking
         concept_mentions: Dict[str, List[str]] = {}
         
-        for page in self.wiki_dir.glob("*.md"):
-            page_name = page.stem
-            if page_name in (self._index_page_name, self._log_page_name):
-                continue
+        for page in self._wiki_pages():
+            page_name = self._page_display_name(page)
             
             content = page.read_text()
             
@@ -1243,10 +1244,8 @@ class Wiki:
         
         # Collect all pages content
         pages_content = {}
-        for page in self.wiki_dir.glob("*.md"):
-            page_name = page.stem
-            if page_name in (self._index_page_name, self._log_page_name):
-                continue
+        for page in self._wiki_pages():
+            page_name = self._page_display_name(page)
             pages_content[page_name] = page.read_text()
         
         # Strategy 1: Extract key-value pairs and find conflicts
@@ -1382,10 +1381,8 @@ class Wiki:
         if not self.wiki_dir.exists():
             return gaps
         
-        for page in self.wiki_dir.glob("*.md"):
-            page_name = page.stem
-            if page_name in (self._index_page_name, self._log_page_name):
-                continue
+        for page in self._wiki_pages():
+            page_name = self._page_display_name(page)
             if page_name.startswith("Query:"):
                 continue
             
@@ -1477,7 +1474,7 @@ class Wiki:
         
         registry = self._get_prompt_registry()
         
-        total_pages = len(list(self.wiki_dir.glob("*.md"))) if self.wiki_dir.exists() else 0
+        total_pages = len(self._wiki_pages()) if self.wiki_dir.exists() else 0
         
         variables = {
             "contradictions_json": json.dumps(contradictions, indent=2),
@@ -1513,26 +1510,24 @@ class Wiki:
         issues = []
         
         # Check for broken links
-        for page in self.wiki_dir.glob("*.md"):
+        for page in self._wiki_pages():
             content = page.read_text()
-            # Simple link checking logic
             links = re.findall(r'\[\[(.*?)\]\]', content)
             for link in links:
                 target = link.split('|')[0].split('#')[0].strip()
-                target_path = self.wiki_dir / f"{target}.md"
-                if not target_path.exists():
+                if target in (self._index_page_name, self._log_page_name):
+                    continue
+                if self._resolve_wikilink_target(target) is None:
                     issues.append({
                         "type": "broken_link",
-                        "page": page.stem,
+                        "page": self._page_display_name(page),
                         "link": target,
                         "file": str(page),
                     })
         
         # Check for orphan pages
-        for page in self.wiki_dir.glob("*.md"):
-            page_name = page.stem
-            if page_name in (self._index_page_name, self._log_page_name):
-                continue
+        for page in self._wiki_pages():
+            page_name = self._page_display_name(page)
             
             if self._should_exclude_orphan(page_name, page):
                 continue
@@ -1584,7 +1579,7 @@ class Wiki:
             investigations.update(llm_suggestions)
         
         return {
-            "total_pages": len(list(self.wiki_dir.glob("*.md"))),
+            "total_pages": len(self._wiki_pages()),
             "issue_count": len(issues),
             "issues": issues,
             "hints": {
@@ -1603,7 +1598,7 @@ class Wiki:
         
         # Find missing pages (referenced but don't exist)
         link_counts = {}
-        for page in self.wiki_dir.glob("*.md"):
+        for page in self._wiki_pages():
             content = page.read_text()
             links = re.findall(r'\[\[(.*?)\]\]', content)
             for link in links:
@@ -1613,18 +1608,15 @@ class Wiki:
         
         for target, count in link_counts.items():
             if count >= 2:  # Threshold for missing pages
-                target_path = self.wiki_dir / f"{target}.md"
-                if not target_path.exists():
+                if self._resolve_wikilink_target(target) is None:
                     missing_pages.append({
                         "page": target,
                         "reference_count": count,
                     })
         
         # Find orphan pages
-        for page in self.wiki_dir.glob("*.md"):
-            page_name = page.stem
-            if page_name in (self._index_page_name, self._log_page_name):
-                continue
+        for page in self._wiki_pages():
+            page_name = self._page_display_name(page)
             
             if self._should_exclude_orphan(page_name, page):
                 continue
@@ -1647,7 +1639,7 @@ class Wiki:
         result = {
             "initialized": self.is_initialized(),
             "root": str(self.root),
-            "page_count": len(list(self.wiki_dir.glob("*.md"))),
+            "page_count": len(self._wiki_pages()),
             "source_count": len([f for f in self.raw_dir.rglob("*") if f.is_file()]),
             "indexed_pages": self.index.get_page_count() if self.is_initialized() else "N/A",
             "total_links": self.index.get_link_count() if self.is_initialized() else "N/A",
@@ -1658,9 +1650,10 @@ class Wiki:
         for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
             sub_path = self.wiki_dir / subdir
             if sub_path.exists():
-                pages_by_type[subdir] = len(list(sub_path.glob("*.md")))
+                pages_by_type[subdir] = len(list(sub_path.rglob("*.md")))
         # Root-level pages (overview, index, log excluded)
-        root_pages = len([f for f in self.wiki_dir.glob("*.md") if f.stem not in ("index", "log")])
+        root_pages = len([f for f in self.wiki_dir.glob("*.md")
+                          if f.stem not in ("index", "log")])
         if root_pages > 0:
             pages_by_type["root"] = root_pages
         result["pages_by_type"] = pages_by_type
@@ -1930,15 +1923,26 @@ class Wiki:
         return ""
     
     def hint(self) -> dict:
-        """Generate smart suggestions for wiki improvement."""
+        """Generate smart suggestions for wiki improvement.
+        
+        Deprecated: Use `lint(format="brief")` instead. This method will be
+        removed in a future version.
+        """
+        warnings.warn(
+            "hint() is deprecated; use wiki.lint(format='brief') instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._generate_hints()
+    
+    def _generate_hints(self) -> dict:
+        """Internal: generate smart suggestions for wiki improvement."""
         hints = []
         
         # Check for orphan pages
         orphan_count = 0
-        for page in self.wiki_dir.glob("*.md"):
-            page_name = page.stem
-            if page_name in (self._index_page_name, self._log_page_name):
-                continue
+        for page in self._wiki_pages():
+            page_name = self._page_display_name(page)
             if self._should_exclude_orphan(page_name, page):
                 continue
             inbound = self.index.get_inbound_links(page_name)
@@ -1954,7 +1958,7 @@ class Wiki:
         
         # Check for missing pages
         link_counts = {}
-        for page in self.wiki_dir.glob("*.md"):
+        for page in self._wiki_pages():
             content = page.read_text()
             links = re.findall(r'\[\[(.*?)\]\]', content)
             for link in links:
@@ -1965,8 +1969,7 @@ class Wiki:
         missing = []
         for target, count in link_counts.items():
             if count >= 2:
-                target_path = self.wiki_dir / f"{target}.md"
-                if not target_path.exists():
+                if self._resolve_wikilink_target(target) is None:
                     missing.append(target)
         
         if missing:
@@ -1977,7 +1980,7 @@ class Wiki:
             })
         
         # Check wiki size
-        page_count = len(list(self.wiki_dir.glob("*.md"))) - 2  # Exclude index and log
+        page_count = len(self._wiki_pages())
         if page_count < 5:
             hints.append({
                 "type": "growth",
@@ -1993,13 +1996,14 @@ class Wiki:
         
         # Check for broken links
         broken_count = 0
-        for page in self.wiki_dir.glob("*.md"):
+        for page in self._wiki_pages():
             content = page.read_text()
             links = re.findall(r'\[\[(.*?)\]\]', content)
             for link in links:
                 target = link.split('|')[0].split('#')[0].strip()
-                target_path = self.wiki_dir / f"{target}.md"
-                if not target_path.exists():
+                if target in (self._index_page_name, self._log_page_name):
+                    continue
+                if self._resolve_wikilink_target(target) is None:
                     broken_count += 1
         
         if broken_count > 0:
@@ -2345,7 +2349,7 @@ class Wiki:
         best_match = None
         best_score = 0
         
-        for page in self.wiki_dir.glob("*.md"):
+        for page in self.wiki_dir.rglob("*.md"):
             page_name = page.stem
             
             if not page_name.startswith("Query:"):

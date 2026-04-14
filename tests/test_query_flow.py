@@ -333,6 +333,25 @@ class TestSynthesizeDuplicateDetection:
         
         wiki.close()
     
+    def test_find_similar_query_page_in_subdirectory(self, temp_wiki):
+        """Finds Query pages nested in subdirectories (rglob coverage)."""
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+        
+        # Create a Query page in a subdirectory
+        subdir = temp_wiki / 'wiki' / 'queries'
+        subdir.mkdir(parents=True)
+        (subdir / "Query: Gold Mining Methods.md").write_text(
+            "# Gold Mining Methods\n\nOverview of mining methods.\n\n- Keywords: gold, mining, methods"
+        )
+        
+        result = wiki._find_similar_query_page("Open pit gold mining techniques")
+        
+        assert result is not None
+        assert 'mining' in result['page_name'].lower() or 'gold' in result['page_name'].lower()
+        
+        wiki.close()
+    
     def test_synthesize_different_query_no_detection(self, temp_wiki):
         """Unrelated queries don't trigger duplicate detection."""
         wiki = Wiki(temp_wiki)

@@ -232,7 +232,7 @@ class WikiIndex:
         self.conn.execute("DELETE FROM pages")
         
         # Process all markdown files
-        md_files = list(wiki_dir.glob("*.md"))
+        md_files = list(wiki_dir.rglob("*.md"))
         total = len(md_files)
         
         for i, md_file in enumerate(md_files):

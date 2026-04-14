@@ -627,7 +627,7 @@ class TestLintHintsStructure:
         
         result = wiki.lint()
         
-        assert result['total_pages'] == 3  # index.md + log.md + overview.md
+        assert result['total_pages'] == 1  # only overview.md (index and log excluded)
         # overview.md has placeholder assertions without sources, so issue_count > 0
         assert result['hints']['critical'] == []
         assert result['hints']['informational'] == []

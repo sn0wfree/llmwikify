@@ -13,6 +13,14 @@ params:
 system: |
   You are a document analyst. Extract structured information from source documents.
 
+  {% if wiki_schema is defined and wiki_schema %}
+  IMPORTANT: Read the wiki conventions below first. They define available page types,
+  formats, and naming conventions you MUST follow when suggesting new pages.
+  ---
+  {{ wiki_schema }}
+  ---
+
+  {% endif %}
   {% if provider == "ollama" %}
   IMPORTANT: Output ONLY valid JSON. No explanations. Do NOT use markdown code blocks.
   {% endif %}
@@ -28,6 +36,8 @@ system: |
   - Extract relations between entities and concepts using these types:
     is_a, uses, related_to, contradicts, supports, replaces, optimizes, extends
   - Extract specific factual claims that could be tracked over time
+  - Use the page types defined in wiki.md above (both standard and custom types)
+  - For custom types, follow the Location pattern from wiki.md's Page Types table
 
 user: |
   Analyze this source document:
@@ -62,7 +72,7 @@ user: |
     ],
     "key_facts": ["fact 1", "fact 2"],
     "suggested_pages": [
-      {"name": "Page Name", "type": "entity|concept|claim|source-summary", "summary": "One-line summary", "priority": "high|medium|low"}
+      {"name": "Page Name", "type": "From wiki.md Page Types table (e.g., entity|concept|claim|source-summary or custom types)", "summary": "One-line summary", "priority": "high|medium|low"}
     ],
     "cross_refs": ["Existing Wiki Page 1", "Existing Wiki Page 2"],
     "content_type": "technical_article|meeting_notes|research_paper|news|documentation|other",

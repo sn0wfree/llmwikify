@@ -45,16 +45,16 @@ class TestFileSystemWatcher:
         watcher = FileSystemWatcher(watch_dir)
         assert watcher.watch_dir == watch_dir.resolve()
         assert watcher.auto_ingest is False
-        assert watcher.smart is False
+        assert watcher.self_create is False
         assert watcher.debounce == 2.0
         assert watcher.is_running is False
 
     def test_watcher_with_options(self, watch_dir):
         watcher = FileSystemWatcher(
-            watch_dir, auto_ingest=True, smart=True, debounce=5.0
+            watch_dir, auto_ingest=True, self_create=True, debounce=5.0
         )
         assert watcher.auto_ingest is True
-        assert watcher.smart is True
+        assert watcher.self_create is True
         assert watcher.debounce == 5.0
 
     def test_stats_initial(self, watch_dir):
