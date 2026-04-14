@@ -54,6 +54,11 @@ graph = [
     "pyvis>=0.3.0",
     "python-louvain>=0.16",
 ]
+web = [
+    "starlette>=0.27.0",
+    "uvicorn>=0.23.0",
+    "httpx>=0.24.0",
+]
 extractors = [
     "markitdown[all]>=0.1.0",
     "pymupdf>=1.23.0",
@@ -61,7 +66,7 @@ extractors = [
     "youtube-transcript-api>=0.6.0",
 ]
 all = [
-    "llmwikify[extractors,mcp,config,watch,graph]",
+    "llmwikify[extractors,mcp,config,watch,graph,web]",
 ]
 dev = [
     "llmwikify[all]",
