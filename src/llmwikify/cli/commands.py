@@ -41,13 +41,13 @@ class WikiCLI:
             print(f"⚠️  Wiki already initialized at {self.wiki_root}")
             print(f"   Existing files: {', '.join(result['existing_files'])}")
             if agent:
-                print(f"   Use --force to overwrite or --merge to regenerate agent config.")
+                print(f"   Use --force to overwrite or --merge to regenerate MCP config.")
             else:
                 print(f"   Use --overwrite to reinitialize.")
             return 0
         
-        if result['status'] == 'agent_config_added':
-            print(f"✅ Agent config added to existing wiki at {self.wiki_root}")
+        if result['status'] == 'mcp_config_added':
+            print(f"✅ MCP config added to existing wiki at {self.wiki_root}")
             if result['created_files']:
                 print(f"   Added: {', '.join(result['created_files'])}")
             warnings = result.get('warnings', [])
@@ -117,18 +117,21 @@ class WikiCLI:
         if result['content_length'] > 8000:
             print(f"Note: Content truncated to 8,000 chars for LLM processing", file=sys.stderr)
         
-        smart = getattr(args, 'smart', False)
+        self_create = getattr(args, 'self_create', False) or getattr(args, 'smart', False)
+        if getattr(args, 'smart', False):
+            import warnings
+            warnings.warn("--smart is deprecated, use --self-create instead", DeprecationWarning, stacklevel=2)
         dry_run = getattr(args, 'dry_run', False)
         
         if dry_run:
-            if smart:
-                print("\n[DRY RUN] LLM smart mode requested.", file=sys.stderr)
+            if self_create:
+                print("\n[DRY RUN] LLM self-create mode requested.", file=sys.stderr)
                 print("Remove --dry-run to execute LLM processing.", file=sys.stderr)
             else:
-                print("\nNo pages created. Use --smart for LLM-assisted processing.", file=sys.stderr)
+                print("\nNo pages created. Use --self-create for LLM-assisted processing.", file=sys.stderr)
             return 0
         
-        if smart:
+        if self_create:
             return self._ingest_smart(result)
         else:
             # Output full structured result as JSON (same as MCP wiki_ingest response)
@@ -386,7 +389,16 @@ class WikiCLI:
     
     def log(self, args) -> int:
         """Record log entry."""
-        result = self.wiki.append_log(args.operation, args.description)
+        operation = getattr(args, 'op_flag', None) or args.operation
+        description = getattr(args, 'details', None) or args.description
+        
+        if not operation or not description:
+            print("❌ Error: operation and description required")
+            print("Usage: llmwikify log <operation> <description>")
+            print("   or: llmwikify log --operation <op> --details <desc>")
+            return 1
+        
+        result = self.wiki.append_log(operation, description)
         print(f"✅ {result}")
         return 0
     
@@ -443,7 +455,7 @@ class WikiCLI:
             if not outbound_only:
                 inbound = self.wiki.get_inbound_links(page_name, include_context=detail)
                 
-                print(f"📥 Inbound ({len(inbound)})")
+                print(f"Inbound ({len(inbound)})")
                 if inbound:
                     for i, link in enumerate(inbound, 1):
                         section = link.get('section', '')
@@ -454,22 +466,21 @@ class WikiCLI:
                 else:
                     print("  (none)\n")
             
-            if not outbound_only or inbound_only:
-                print(f"📤 Outbound ({len(outbound)})")
-                if outbound:
-                    for i, link in enumerate(outbound, 1):
-                        section = link.get('section', '')
-                        display = link.get('display', '')
-                        display_str = f' [as "{display}"]' if display and display != link.get('target', '') else ''
-                        print(f"  {i}. {link['target']}{section}{display_str}")
-                        if detail and link.get('context'):
-                            print(f"     Context: \"{link['context']}\"")
-                    print()
-                else:
-                    print("  (none)\n")
+            print(f"Outbound ({len(outbound)})")
+            if outbound:
+                for i, link in enumerate(outbound, 1):
+                    section = link.get('section', '')
+                    display = link.get('display', '')
+                    display_str = f' [as "{display}"]' if display and display != link.get('target', '') else ''
+                    print(f"  {i}. {link['target']}{section}{display_str}")
+                    if detail and link.get('context'):
+                        print(f"     Context: \"{link['context']}\"")
+                print()
+            else:
+                print("  (none)\n")
         else:
             inbound = self.wiki.get_inbound_links(page_name, include_context=detail)
-            print(f"📥 Inbound ({len(inbound)})")
+            print(f"Inbound ({len(inbound)})")
             if inbound:
                 for i, link in enumerate(inbound, 1):
                     section = link.get('section', '')
@@ -493,10 +504,8 @@ class WikiCLI:
         outbound_counts = {}
         orphans = []
         
-        for page in self.wiki.wiki_dir.glob("*.md"):
-            page_name = page.stem
-            if page_name in (self.wiki._index_page_name, self.wiki._log_page_name):
-                continue
+        for page in self.wiki._wiki_pages():
+            page_name = self.wiki._page_display_name(page)
             
             inbound = self.wiki.index.get_inbound_links(page_name)
             outbound = self.wiki.index.get_outbound_links(page_name)
@@ -535,17 +544,16 @@ class WikiCLI:
         """Show broken references."""
         broken = []
         
-        for page in self.wiki.wiki_dir.glob("*.md"):
+        for page in self.wiki._wiki_pages():
             content = page.read_text()
             links = re.findall(r'\[\[(.*?)\]\]', content)
             for link in links:
                 target = link.split('|')[0].split('#')[0].strip()
                 if target in (self.wiki._index_page_name, self.wiki._log_page_name):
                     continue
-                target_path = self.wiki.wiki_dir / f"{target}.md"
-                if not target_path.exists():
+                if self.wiki._resolve_wikilink_target(target) is None:
                     broken.append({
-                        "source": page.stem,
+                        "source": self.wiki._page_display_name(page),
                         "target": target,
                         "file": str(page),
                     })
@@ -567,7 +575,7 @@ class WikiCLI:
         limit = getattr(args, 'limit', 0)
         
         if source_path.is_dir():
-            sources = list(source_path.glob("*"))
+            sources = list(source_path.rglob("*"))
             sources = [s for s in sources if s.is_file()]
         else:
             # Glob pattern
@@ -580,35 +588,129 @@ class WikiCLI:
             print("❌ No sources found")
             return 1
         
-        print(f"=== Batch Ingest ===")
-        print(f"Found {len(sources)} source(s)\n")
+        self_create = getattr(args, 'self_create', False) or getattr(args, 'smart', False)
+        if getattr(args, 'smart', False):
+            import warnings
+            warnings.warn("--smart is deprecated, use --self-create instead", DeprecationWarning, stacklevel=2)
+        dry_run = getattr(args, 'dry_run', False)
+        
+        if dry_run:
+            if self_create:
+                print("\n[DRY RUN] LLM self-create mode requested.", file=sys.stderr)
+                print("Remove --dry-run to execute LLM processing.", file=sys.stderr)
+            else:
+                print("\nNo pages will be created. Use --self-create for LLM-assisted processing.", file=sys.stderr)
+            batch_results = []
+            for i, source in enumerate(sources, 1):
+                batch_results.append({
+                    "source": str(source),
+                    "status": "dry_run",
+                    "title": source.stem,
+                })
+            output = {
+                "batch_summary": {
+                    "total": len(sources),
+                    "success": len(sources),
+                    "failed": 0,
+                    "dry_run": True,
+                },
+                "results": batch_results,
+            }
+            print(f"\n{json.dumps(output, ensure_ascii=False, indent=2)}")
+            return 0
+        
+        print(f"=== Batch Ingest ===", file=sys.stderr)
+        print(f"Found {len(sources)} source(s)\n", file=sys.stderr)
         
         success = 0
         failed = 0
+        batch_results = []
         
         for i, source in enumerate(sources, 1):
-            print(f"[{i}/{len(sources)}] Processing: {source.name}")
+            print(f"[{i}/{len(sources)}] Processing: {source.name}", file=sys.stderr)
             result = self.wiki.ingest_source(str(source))
             
             if "error" in result:
-                print(f"  ❌ Error: {result['error']}")
+                print(f"  ❌ Error: {result['error']}", file=sys.stderr)
                 failed += 1
+                batch_results.append({
+                    "source": str(source),
+                    "status": "error",
+                    "error": result["error"],
+                })
             else:
-                print(f"  ✅ {result['title']}")
-                smart = getattr(args, 'smart', False)
-                if smart:
+                print(f"  ✅ {result['title']}", file=sys.stderr)
+                if self_create:
                     try:
                         ops_result = self.wiki._llm_process_source(result)
                         ops = ops_result.get("operations", [])
                         if ops:
                             exec_result = self.wiki.execute_operations(ops)
-                            print(f"    → {exec_result['operations_executed']} operations executed")
+                            print(f"    → {exec_result['operations_executed']} operations executed", file=sys.stderr)
+                            batch_results.append({
+                                "source": str(source),
+                                "status": "processed",
+                                "title": result.get("title", ""),
+                                "source_name": result.get("source_name", ""),
+                                "operations_executed": exec_result.get("operations_executed", 0),
+                            })
+                        else:
+                            print(f"    → No operations planned by LLM", file=sys.stderr)
+                            batch_results.append({
+                                "source": str(source),
+                                "status": "no_operations",
+                                "title": result.get("title", ""),
+                                "source_name": result.get("source_name", ""),
+                            })
                     except (ConnectionError, TimeoutError, RuntimeError, OSError) as e:
-                        print(f"    ⚠️ LLM processing skipped: {e}")
+                        print(f"    ⚠️ LLM processing skipped: {e}", file=sys.stderr)
+                        batch_results.append({
+                            "source": str(source),
+                            "status": "llm_failed",
+                            "title": result.get("title", ""),
+                            "source_name": result.get("source_name", ""),
+                            "error": str(e),
+                        })
+                else:
+                    batch_results.append({
+                        "source_name": result.get("source_name", ""),
+                        "source_raw_path": result.get("source_raw_path", ""),
+                        "source_type": result.get("source_type", ""),
+                        "file_type": result.get("file_type", ""),
+                        "title": result.get("title", ""),
+                        "content": result.get("content", ""),
+                        "content_length": result.get("content_length", 0),
+                        "content_preview": result.get("content_preview", ""),
+                        "word_count": result.get("word_count", 0),
+                        "file_size": result.get("file_size", 0),
+                        "has_images": result.get("has_images", False),
+                        "image_count": result.get("image_count", 0),
+                        "saved_to_raw": result.get("saved_to_raw", False),
+                        "already_exists": result.get("already_exists", False),
+                        "hint": result.get("hint", ""),
+                        "instructions": result.get("instructions", ""),
+                        "status": "extracted",
+                    })
                 success += 1
         
-        print(f"\n=== Batch Complete ===")
-        print(f"Success: {success}, Failed: {failed}")
+        if not self_create:
+            output = {
+                "batch_summary": {
+                    "total": len(sources),
+                    "success": success,
+                    "failed": failed,
+                },
+                "results": batch_results,
+                "message": "Read the content above for each source, read wiki.md for conventions, then create/update wiki pages using write_page.",
+            }
+            print(f"\n{json.dumps(output, ensure_ascii=False, indent=2)}")
+        
+        print(f"\n=== Batch Complete ===", file=sys.stderr)
+        print(f"Success: {success}, Failed: {failed}", file=sys.stderr)
+        
+        if not self_create:
+            print(f"\nNote: Pages were NOT created. Use --self-create for automatic page creation,", file=sys.stderr)
+            print(f"or parse the JSON output above to create pages programmatically.", file=sys.stderr)
         
         return 0 if failed == 0 else 1
     
@@ -643,7 +745,10 @@ class WikiCLI:
             query=args.query,
             answer=answer,
             source_pages=args.sources or [],
+            raw_sources=getattr(args, 'raw_sources', None) or [],
             page_name=args.page_name,
+            auto_link=not getattr(args, 'no_auto_link', False),
+            auto_log=not getattr(args, 'no_auto_log', False),
             merge_or_replace=args.merge,
         )
         
@@ -676,14 +781,17 @@ class WikiCLI:
             return 1
         
         auto_ingest = getattr(args, 'auto_ingest', False)
-        smart = getattr(args, 'smart', False)
+        self_create = getattr(args, 'self_create', False) or getattr(args, 'smart', False)
+        if getattr(args, 'smart', False):
+            import warnings
+            warnings.warn("--smart is deprecated, use --self-create instead", DeprecationWarning, stacklevel=2)
         debounce = getattr(args, 'debounce', 2.0)
         dry_run = getattr(args, 'dry_run', False)
         
         print(f"=== File Watcher ===")
         print(f"Watching: {watch_dir}")
         print(f"Auto-ingest: {'Yes' if auto_ingest else 'No (notify only)'}")
-        print(f"Smart mode: {'Yes' if smart else 'No'}")
+        print(f"Self-create mode: {'Yes' if self_create else 'No'}")
         print(f"Debounce: {debounce}s")
         print(f"Dry run: {'Yes' if dry_run else 'No'}")
         print()
@@ -697,7 +805,7 @@ class WikiCLI:
         watcher = FileSystemWatcher(
             watch_dir=watch_dir,
             auto_ingest=auto_ingest and not dry_run,
-            smart=smart,
+            self_create=self_create,
             debounce=debounce,
         )
         
@@ -908,11 +1016,13 @@ class WikiCLI:
         mcp_config = self.config.get("mcp", {})
         
         # Override with CLI args if provided
+        name = getattr(args, 'name', None)
         transport = getattr(args, 'transport', None)
         host = getattr(args, 'host', None)
         port = getattr(args, 'port', None)
         
-        print(f"Starting MCP server...")
+        service_name = name or mcp_config.get("name") or self.wiki.root.name
+        print(f"Starting MCP server '{service_name}'...")
         print(f"  Transport: {transport or mcp_config.get('transport', 'stdio')}")
         if host:
             print(f"  Host: {host}")
@@ -921,7 +1031,7 @@ class WikiCLI:
         print()
         
         try:
-            serve_mcp(self.wiki, transport=transport, host=host, port=port, config=mcp_config)
+            serve_mcp(self.wiki, name=name, transport=transport, host=host, port=port, config=mcp_config)
         except KeyboardInterrupt:
             print("\nServer stopped")
         
@@ -950,19 +1060,19 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  llmwikify ingest document.pdf                  Show extraction summary
-  llmwikify ingest document.pdf --smart          LLM-assisted page creation
-  llmwikify ingest document.pdf --dry-run        Preview without changes
-  llmwikify search "gold mining"                 Full-text search
-  llmwikify references "Company"                 Show references
-  llmwikify build-index                          Build reference index
-  llmwikify build-index --export-only            Export index without rebuilding
-  llmwikify lint --format=brief                  Quick health suggestions
-  llmwikify lint --format=recommendations        Missing and orphan pages
-  llmwikify init                                 Initialize wiki
-  llmwikify init --overwrite                     Reinitialize wiki
-  llmwikify mcp                                  Start MCP server for Agent interaction
-  llmwikify serve                                Start self-hosted Agent (reserved)
+  llmwikify ingest document.pdf                       Show extraction summary + JSON for agent
+  llmwikify ingest document.pdf --self-create         LLM-assisted page creation (CLI calls LLM API)
+  llmwikify ingest document.pdf --dry-run             Preview without changes
+  llmwikify search "gold mining"                      Full-text search
+  llmwikify references "Company"                      Show references
+  llmwikify build-index                               Build reference index
+  llmwikify build-index --export-only                 Export index without rebuilding
+  llmwikify lint --format=brief                       Quick health suggestions
+  llmwikify lint --format=recommendations             Missing and orphan pages
+  llmwikify init                                      Initialize wiki
+  llmwikify init --overwrite                          Reinitialize wiki
+  llmwikify mcp                                       Start MCP server for Agent interaction
+  llmwikify serve                                     Start self-hosted Agent (reserved)
 """
     )
     
@@ -979,8 +1089,9 @@ Examples:
     # ingest
     p = subparsers.add_parser('ingest', help='Ingest a source file')
     p.add_argument('file', type=str, help='File path or URL')
-    p.add_argument('--smart', '-s', action='store_true',
-                   help='Use LLM to analyze content and create wiki pages (requires llm.enabled=true)')
+    p.add_argument('--self-create', '-s', action='store_true',
+                   help='CLI uses LLM API to automatically analyze content and create wiki pages (requires llm.enabled=true)')
+    p.add_argument('--smart', action='store_true', help='[Deprecated] Alias for --self-create')
     p.add_argument('--dry-run', '-n', action='store_true',
                    help='Show extraction summary without creating pages')
     
@@ -1011,8 +1122,10 @@ Examples:
     
     # log
     p = subparsers.add_parser('log', help='Record log')
-    p.add_argument('operation', help='Operation name')
-    p.add_argument('description', help='Description')
+    p.add_argument('operation', nargs='?', help='Operation name (positional)')
+    p.add_argument('description', nargs='?', help='Description (positional)')
+    p.add_argument('--operation', '-o', dest='op_flag', help='Operation name (flag)')
+    p.add_argument('--details', '-d', help='Description (flag)')
     
     # build-index
     p = subparsers.add_parser('build-index', help='Build or export reference index')
@@ -1034,8 +1147,11 @@ Examples:
     p = subparsers.add_parser('batch', help='Batch ingest sources')
     p.add_argument('source', help='Directory or glob pattern')
     p.add_argument('--limit', '-l', type=int, default=0, help='Limit number of sources')
-    p.add_argument('--smart', '-s', action='store_true',
-                   help='Use LLM to analyze content and create wiki pages')
+    p.add_argument('--self-create', '-s', action='store_true',
+                   help='CLI uses LLM API to automatically process content and create wiki pages')
+    p.add_argument('--smart', action='store_true', help='[Deprecated] Alias for --self-create')
+    p.add_argument('--dry-run', '-n', action='store_true',
+                   help='Preview extraction without creating pages')
     
     # sink-status
     subparsers.add_parser('sink-status', help='Show query sink buffer status')
@@ -1045,17 +1161,21 @@ Examples:
     p.add_argument('query', help='Original question')
     p.add_argument('--answer', '-a', help='Answer content (or read from stdin)')
     p.add_argument('--page-name', '-n', help='Custom page name')
-    p.add_argument('--sources', '-s', nargs='*', help='Source pages to link')
+    p.add_argument('--sources', nargs='*', help='Source pages to link')
+    p.add_argument('--raw-sources', nargs='*', help='Raw source files to cite')
     p.add_argument('--merge', choices=['sink', 'merge', 'replace'], default='sink',
                    help='Strategy when similar query exists')
+    p.add_argument('--no-auto-link', action='store_true', help='Disable automatic wikilink insertion')
+    p.add_argument('--no-auto-log', action='store_true', help='Disable automatic log entry')
     
     # watch
     p = subparsers.add_parser('watch', help='Watch raw/ directory for new files')
     p.add_argument('dir', nargs='?', default=None, help='Directory to watch (default: raw/)')
     p.add_argument('--auto-ingest', action='store_true',
                    help='Automatically ingest new files')
-    p.add_argument('--smart', '-s', action='store_true',
-                   help='Use LLM to process files (requires --auto-ingest)')
+    p.add_argument('--self-create', '-s', action='store_true',
+                   help='CLI uses LLM API to process files (requires --auto-ingest)')
+    p.add_argument('--smart', action='store_true', help='[Deprecated] Alias for --self-create')
     p.add_argument('--debounce', type=float, default=2.0,
                    help='Debounce time in seconds (default: 2)')
     p.add_argument('--dry-run', '-n', action='store_true',
@@ -1077,8 +1197,6 @@ Examples:
                    help='Output format (default: html)')
     p.add_argument('--output', '-o', default=None, help='Output file path')
     p.add_argument('--min-degree', type=int, default=0, help='Filter nodes below this degree')
-    p.add_argument('--confidence', choices=['EXTRACTED', 'INFERRED', 'AMBIGUOUS'],
-                   default=None, help='Minimum confidence filter')
     
     # community-detect
     p = subparsers.add_parser('community-detect', help='Detect knowledge communities')
@@ -1099,12 +1217,14 @@ Examples:
     p.add_argument('--transport', '-t', choices=['stdio', 'http', 'sse'], help='Transport protocol')
     p.add_argument('--host', help='Host address')
     p.add_argument('--port', '-p', type=int, help='Port number')
+    p.add_argument('--name', '-n', help='Service name (defaults to directory name)')
     
     # serve - reserved for future self-hosted Agent mode
     p = subparsers.add_parser('serve', help='[Reserved] Start a self-hosted Agent with LLM API for knowledge base management')
     p.add_argument('--transport', '-t', choices=['stdio', 'http', 'sse'], help='Transport protocol')
     p.add_argument('--host', help='Host address')
     p.add_argument('--port', '-p', type=int, help='Port number')
+    p.add_argument('--name', '-n', help='Service name (defaults to directory name)')
     
     args = parser.parse_args()
     
