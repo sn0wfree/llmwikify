@@ -19,7 +19,9 @@ def create_mcp_server(wiki: Wiki, name: Optional[str] = None, config: Optional[D
     Returns:
         Configured FastMCP server instance
     """
-    service_name = name or config.get("name") if config else None
+    service_name = name
+    if not service_name and config:
+        service_name = config.get("name")
     if not service_name:
         service_name = wiki.root.name
     
