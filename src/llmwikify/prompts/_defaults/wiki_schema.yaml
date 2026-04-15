@@ -164,25 +164,14 @@ document: |
 
   **Write Page:**
   ```bash
-  # New API (recommended): separate name and type
   python3 -m llmwikify write_page "Topic" --type concept --content "# Topic\n\n## Summary\n..."
   python3 -m llmwikify write_page "Company Name" --type entity --content "# Company Name\n\n..."
   python3 -m llmwikify write_page "Black-Litterman" --type model --content "# Black-Litterman\n\n..."
-
-  # Long content (from file)
-  python3 -m llmwikify write_page "Topic" --type concept --file /tmp/topic.md
-
-  # Legacy API (still supported)
-  python3 -m llmwikify write_page "concepts/Topic" --content "# Topic\n\n## Summary\n..."
   ```
 
   **Read Page:**
   ```bash
-  # New API (recommended)
   python3 -m llmwikify read_page "Topic" --type concept
-
-  # Legacy API (still supported)
-  python3 -m llmwikify read_page "concepts/Topic"
   ```
 
   **Search, Status, Lint:**
@@ -226,13 +215,6 @@ document: |
 
   # Including wiki/ prefix in page_name
   mcporter call ... --args '{"page_name": "wiki/concepts/Topic", ...}'  # WRONG
-  ```
-
-  **For complex content:**
-  ```bash
-  # Write to temp file, then use --file
-  echo "# Title\n\nContent..." > /tmp/page.md
-  python3 -m llmwikify write_page "Topic" --type concept --file /tmp/page.md
   ```
 
   ### Common Errors
