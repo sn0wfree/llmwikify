@@ -147,7 +147,7 @@ document: |
 
   ### Complete Command Syntax
 
-  **Ingest (Agent Mode):**
+  **Ingest:**
   ```bash
   # Extract content — returns JSON to stdout
   python3 -m llmwikify ingest "raw/report.pdf"
