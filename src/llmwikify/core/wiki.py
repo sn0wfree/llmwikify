@@ -184,84 +184,86 @@ class Wiki:
         """
         already_exists = self.is_initialized()
 
-        # If wiki is fully initialized, handle as "already_exists" but still
-        # attempt MCP config generation and wiki.md merge if requested.
         if already_exists and not overwrite:
-            created = []
-            skipped = []
-            warnings = []
+            return self._handle_existing_init(agent, merge, force)
 
-            existing = []
-            if self.raw_dir.exists():
-                existing.append("raw/")
-            if self.wiki_dir.exists():
-                existing.append("wiki/")
-            if self.index_file.exists():
-                existing.append("index.md")
-            if self.log_file.exists():
-                existing.append("log.md")
+        return self._create_new_init(agent, force, merge, overwrite)
 
-            # Merge wiki.md schema if requested
-            if merge:
-                merged_content = self._merge_wiki_md()
-                original_content = self.wiki_md_file.read_text()
-                if merged_content != original_content:
-                    self.wiki_md_file.write_text(merged_content)
-                    created.append("wiki.md (merged)")
-                else:
-                    skipped.append("wiki.md (up-to-date)")
-
-            # Generate MCP config
-            if agent and agent != "generic":
-                mcp_filename = ".mcp.json" if agent == "claude" else (
-                    "opencode.json" if agent == "opencode" else ".opencode.json"
-                )
-                mcp_path = self.root / mcp_filename
-                if not mcp_path.exists() or force or merge:
-                    content = self._generate_mcp_config(agent)
-                    if content:
-                        mcp_path.write_text(content)
-                        created.append(mcp_filename)
-                else:
-                    skipped.append(mcp_filename)
-                    warnings.append(f"{mcp_filename} already exists, skipping.")
-
-                # Generate skill files for CLI fallback
-                skill_created = self._generate_skill_files()
-                created.extend(skill_created)
-
-            raw_stats = self._analyze_raw()
-
-            status_msg = "already_exists" if not created else "mcp_config_added"
-            return {
-                "status": status_msg,
-                "created_files": created,
-                "existing_files": existing,
-                "skipped_files": skipped,
-                "warnings": warnings,
-                "raw_stats": raw_stats,
-                "agent": agent,
-                "message": f"Wiki already initialized at {self.root}",
-            }
-
+    def _handle_existing_init(self, agent: str | None, merge: bool, force: bool) -> dict:
+        """Handle initialization when wiki already exists."""
         created = []
         skipped = []
         warnings = []
 
-        # Create directories
-        if not self.raw_dir.exists():
-            self.raw_dir.mkdir(parents=True, exist_ok=True)
-            created.append("raw/")
-        else:
-            skipped.append("raw/")
+        existing = []
+        if self.raw_dir.exists():
+            existing.append("raw/")
+        if self.wiki_dir.exists():
+            existing.append("wiki/")
+        if self.index_file.exists():
+            existing.append("index.md")
+        if self.log_file.exists():
+            existing.append("log.md")
 
-        if not self.wiki_dir.exists():
-            self.wiki_dir.mkdir(parents=True, exist_ok=True)
-            created.append("wiki/")
-        else:
-            skipped.append("wiki/")
+        if merge:
+            merged_content = self._merge_wiki_md()
+            original_content = self.wiki_md_file.read_text()
+            if merged_content != original_content:
+                self.wiki_md_file.write_text(merged_content)
+                created.append("wiki.md (merged)")
+            else:
+                skipped.append("wiki.md (up-to-date)")
 
-        # Create wiki subdirectories for page types
+        self._generate_mcp_config_if_needed(agent, force, merge, created, skipped, warnings)
+
+        raw_stats = self._analyze_raw()
+        status_msg = "already_exists" if not created else "mcp_config_added"
+        return {
+            "status": status_msg,
+            "created_files": created,
+            "existing_files": existing,
+            "skipped_files": skipped,
+            "warnings": warnings,
+            "raw_stats": raw_stats,
+            "agent": agent,
+            "message": f"Wiki already initialized at {self.root}",
+        }
+
+    def _create_new_init(self, agent: str | None, force: bool, merge: bool, overwrite: bool = False) -> dict:
+        """Handle initialization for new wiki."""
+        created = []
+        skipped = []
+        warnings = []
+
+        self._create_directories(created, skipped)
+        self.index.initialize()
+        self._create_core_files(created, skipped, overwrite)
+        self._handle_wiki_md_schema(created, skipped, warnings, force, merge)
+        self._generate_mcp_config_if_needed(agent, force, merge, created, skipped, warnings)
+        self._generate_gitignore_if_needed(created)
+        self._generate_skill_files_if_needed(created)
+
+        raw_stats = self._analyze_raw()
+        return {
+            "status": "created",
+            "created_files": created,
+            "existing_files": [],
+            "skipped_files": skipped,
+            "warnings": warnings,
+            "raw_stats": raw_stats,
+            "agent": agent,
+            "message": f"Wiki initialized at {self.root}",
+        }
+
+    def _create_directories(self, created: list, skipped: list) -> None:
+        """Create wiki directory structure."""
+        for dir_path, name in [(self.raw_dir, "raw/"), (self.wiki_dir, "wiki/")]:
+            if not dir_path.exists():
+                dir_path.mkdir(parents=True, exist_ok=True)
+                created.append(name)
+            else:
+                skipped.append(name)
+
         for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
             sub_path = self.wiki_dir / subdir
             if not sub_path.exists():
@@ -276,32 +278,19 @@ class Wiki:
         else:
             skipped.append("wiki/.sink/")
 
-        # Initialize database (always safe to call)
-        self.index.initialize()
+    def _create_core_files(self, created: list, skipped: list, overwrite: bool = False) -> None:
+        """Create index.md, log.md, overview.md, and config example."""
+        for file_path, name, generator in [
+            (self.index_file, "index.md", self._generate_index_content),
+            (self.log_file, "log.md", self._generate_log_content),
+            (self.wiki_dir / "overview.md", "overview.md", self._generate_overview_content),
+        ]:
+            if not file_path.exists() or overwrite:
+                file_path.write_text(generator())
+                created.append(name)
+            else:
+                skipped.append(name)
 
-        # Create index.md
-        if not self.index_file.exists() or overwrite:
-            self.index_file.write_text(self._generate_index_content())
-            created.append("index.md")
-        else:
-            skipped.append("index.md")
-
-        # Create log.md
-        if not self.log_file.exists() or overwrite:
-            self.log_file.write_text(self._generate_log_content())
-            created.append("log.md")
-        else:
-            skipped.append("log.md")
-
-        # Create overview.md (default synthesis page)
-        overview_path = self.wiki_dir / "overview.md"
-        if not overview_path.exists() or overwrite:
-            overview_path.write_text(self._generate_overview_content())
-            created.append("overview.md")
-        else:
-            skipped.append("overview.md")
-
-        # Create config example (always skip if exists)
         config_example = self.root / '.wiki-config.yaml.example'
         if not config_example.exists():
             config_example.write_text(self._generate_config_example())
@@ -309,7 +298,9 @@ class Wiki:
         else:
             skipped.append(".wiki-config.yaml.example")
 
-        # Schema conflict detection and handling
+    def _handle_wiki_md_schema(self, created: list, skipped: list, warnings: list,
+                                force: bool, merge: bool) -> None:
+        """Handle wiki.md schema creation, merging, or skipping."""
         legacy_wiki = self.root / 'WIKI.md'
         has_wiki = self.wiki_md_file.exists()
         has_WIKI = legacy_wiki.exists()
@@ -335,36 +326,37 @@ class Wiki:
             self.wiki_md_file.write_text(self._generate_wiki_md())
             created.append("wiki.md")
 
-        # Handle legacy WIKI.md
         if has_WIKI and not has_wiki:
             warnings.append(
                 "Legacy WIKI.md found. The new schema will be generated as wiki.md (lowercase). "
                 "Consider removing or merging WIKI.md."
             )
 
-        # Generate MCP config (only if agent is specified)
-        if agent and agent != "generic":
-            # MCP config
-            mcp_filename = ".mcp.json" if agent == "claude" else (
-                "opencode.json" if agent == "opencode" else ".opencode.json"
-            )
-            mcp_path = self.root / mcp_filename
-            if not mcp_path.exists() or force or merge:
-                content = self._generate_mcp_config(agent)
-                if content:
-                    mcp_path.write_text(content)
-                    created.append(mcp_filename)
-                else:
-                    skipped.append(mcp_filename)
+    def _generate_mcp_config_if_needed(self, agent: str | None, force: bool, merge: bool,
+                                        created: list, skipped: list, warnings: list) -> None:
+        """Generate MCP config and skill files if agent is specified."""
+        if not agent or agent == "generic":
+            return
+
+        mcp_filename = ".mcp.json" if agent == "claude" else (
+            "opencode.json" if agent == "opencode" else ".opencode.json"
+        )
+        mcp_path = self.root / mcp_filename
+        if not mcp_path.exists() or force or merge:
+            content = self._generate_mcp_config(agent)
+            if content:
+                mcp_path.write_text(content)
+                created.append(mcp_filename)
             else:
                 skipped.append(mcp_filename)
-                warnings.append(f"{mcp_filename} already exists, skipping.")
+        else:
+            skipped.append(mcp_filename)
+            warnings.append(f"{mcp_filename} already exists, skipping.")
 
-            # Generate skill files for CLI fallback
-            skill_created = self._generate_skill_files()
-            created.extend(skill_created)
+        self._generate_skill_files_if_needed(created)
 
-        # Generate .gitignore (always, if not exists)
+    def _generate_gitignore_if_needed(self, created: list) -> None:
+        """Generate .gitignore if it doesn't exist."""
         gitignore_path = self.root / '.gitignore'
         if not gitignore_path.exists():
             content = self._generate_gitignore()
@@ -372,23 +364,10 @@ class Wiki:
                 gitignore_path.write_text(content)
                 created.append(".gitignore")
 
-        # Generate skill files for CLI fallback (always, if not exists)
+    def _generate_skill_files_if_needed(self, created: list) -> None:
+        """Generate skill files for CLI fallback if they don't exist."""
         skill_created = self._generate_skill_files()
         created.extend(skill_created)
-
-        # Analyze raw/ for report
-        raw_stats = self._analyze_raw()
-
-        return {
-            "status": "created",
-            "created_files": created,
-            "existing_files": [],
-            "skipped_files": skipped,
-            "warnings": warnings,
-            "raw_stats": raw_stats,
-            "agent": agent,
-            "message": f"Wiki initialized at {self.root}",
-        }
 
     def _generate_index_content(self) -> str:
         """Generate initial index.md content."""

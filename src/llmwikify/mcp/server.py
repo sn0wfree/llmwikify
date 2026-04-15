@@ -27,7 +27,6 @@ def create_mcp_server(wiki: Wiki, name: str | None = None, config: dict[str, Any
 
     mcp = FastMCP(service_name)
 
-    # Config
     default_config = {"name": None, "host": "127.0.0.1", "port": 8765, "transport": "stdio"}
     server_config = default_config.copy()
     if config:
@@ -36,7 +35,14 @@ def create_mcp_server(wiki: Wiki, name: str | None = None, config: dict[str, Any
         user_mcp = wiki.config.get("mcp", {})
         if user_mcp:
             server_config.update(user_mcp)
-    mcp._server_config = server_config  # Store for run() access
+    mcp._server_config = server_config
+
+    _register_wiki_tools(mcp, wiki)
+    return mcp
+
+
+def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
+    """Register all wiki tools on the MCP server."""
 
     @mcp.tool
     def wiki_init(overwrite: bool = False) -> str:
@@ -250,8 +256,6 @@ def create_mcp_server(wiki: Wiki, name: str | None = None, config: dict[str, Any
             return json.dumps(result)
         else:
             return json.dumps({"status": "error", "error": f"Unknown action: {action}"})
-
-    return mcp
 
 
 def _auto_register_mcporter(service_name: str, host: str, port: int) -> None:

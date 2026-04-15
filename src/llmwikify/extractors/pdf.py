@@ -19,8 +19,9 @@ def _extract_pdf(path: Path) -> ExtractedContent:
 
     doc = pymupdf.open(path)
     pages = []
+    page_count = len(doc)
 
-    for page_num in range(len(doc)):
+    for page_num in range(page_count):
         page = doc[page_num]
         text = page.get_text()
         pages.append(f"--- Page {page_num + 1} ---\n{text}")
@@ -44,7 +45,7 @@ def _extract_pdf(path: Path) -> ExtractedContent:
         title=first_page_title or path.stem,
         metadata={
             "file_path": str(path),
-            "page_count": len(doc),
+            "page_count": page_count,
         },
     )
 
