@@ -43,6 +43,7 @@ classifiers = [
 dependencies = [
     "jinja2>=3.1.0",
     "pyyaml>=6.0",
+    "requests>=2.28.0",
 ]
 
 [project.optional-dependencies]

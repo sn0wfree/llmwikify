@@ -1,13 +1,18 @@
 """Tests for v0.22.0 Relation Engine."""
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from llmwikify.core.index import WikiIndex
-from llmwikify.core.relation_engine import RelationEngine, DEFAULT_RELATION_TYPES, CONFIDENCE_LEVELS
+from llmwikify.core.relation_engine import (
+    CONFIDENCE_LEVELS,
+    DEFAULT_RELATION_TYPES,
+    RelationEngine,
+)
 
 
 @pytest.fixture

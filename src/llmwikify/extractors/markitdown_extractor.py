@@ -17,13 +17,12 @@ Supported formats (when markitdown[all] is installed):
 """
 
 from pathlib import Path
-from typing import Optional, Dict, Any, Set
+from typing import Any
 
 from .base import ExtractedContent
 
-
 # All file extensions handled by MarkItDown
-MARKITDOWN_FORMATS: Set[str] = {
+MARKITDOWN_FORMATS: set[str] = {
     ".pdf",
     ".docx", ".doc",
     ".xlsx", ".xls",
@@ -50,8 +49,8 @@ class MarkItDownExtractor:
             pass
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
-        self._md: Optional[Any] = None
+    def __init__(self, config: dict[str, Any] | None = None):
+        self._md: Any | None = None
         self._available: bool = False
         self._config = config
         self._init_markitdown()
@@ -92,7 +91,7 @@ class MarkItDownExtractor:
         except (ImportError, RuntimeError, OSError):
             self._available = False
 
-    def convert(self, path: Path) -> Optional[ExtractedContent]:
+    def convert(self, path: Path) -> ExtractedContent | None:
         """Convert a file to Markdown using MarkItDown.
 
         Args:

@@ -1,9 +1,8 @@
 """Query Sink management — handles pending query answers for later review."""
 
 import re
-from pathlib import Path
-from typing import Optional, List, Dict
 from datetime import datetime, timezone
+from pathlib import Path
 
 
 class QuerySink:
@@ -109,8 +108,8 @@ class QuerySink:
             if w.lower() not in stop_words
         }
 
-    def _detect_content_gaps(self, answer: str, page_name: str) -> List[str]:
-        suggestions: List[str] = []
+    def _detect_content_gaps(self, answer: str, page_name: str) -> list[str]:
+        suggestions: list[str] = []
         formal_path = self.wiki_dir / f"{page_name}.md"
         if not formal_path.exists():
             return suggestions
@@ -132,9 +131,9 @@ class QuerySink:
         return suggestions
 
     def _suggest_source_improvements(
-        self, source_pages: List[str], raw_sources: List[str], page_name: str,
-    ) -> List[str]:
-        suggestions: List[str] = []
+        self, source_pages: list[str], raw_sources: list[str], page_name: str,
+    ) -> list[str]:
+        suggestions: list[str] = []
         formal_path = self.wiki_dir / f"{page_name}.md"
         formal_sources_wiki: set = set()
         formal_sources_raw: set = set()
@@ -177,8 +176,8 @@ class QuerySink:
             return 0.0
         return len(words1 & words2) / len(words1 | words2)
 
-    def _analyze_query_patterns(self, query: str, page_name: str) -> List[str]:
-        suggestions: List[str] = []
+    def _analyze_query_patterns(self, query: str, page_name: str) -> list[str]:
+        suggestions: list[str] = []
         sink_file = self.sink_dir / f"{page_name}.sink.md"
         if not sink_file.exists():
             return suggestions
@@ -204,8 +203,8 @@ class QuerySink:
                 )
         return suggestions
 
-    def _suggest_knowledge_growth(self, answer: str, page_name: str) -> List[str]:
-        suggestions: List[str] = []
+    def _suggest_knowledge_growth(self, answer: str, page_name: str) -> list[str]:
+        suggestions: list[str] = []
         formal_path = self.wiki_dir / f"{page_name}.md"
         if formal_path.exists():
             formal_content = formal_path.read_text()
@@ -240,9 +239,9 @@ class QuerySink:
 
     def _generate_sink_suggestions(
         self, query: str, answer: str,
-        source_pages: List[str], raw_sources: List[str], page_name: str,
-    ) -> List[str]:
-        suggestions: List[str] = []
+        source_pages: list[str], raw_sources: list[str], page_name: str,
+    ) -> list[str]:
+        suggestions: list[str] = []
         suggestions.extend(self._detect_content_gaps(answer, page_name))
         suggestions.extend(
             self._suggest_source_improvements(source_pages, raw_sources, page_name)
@@ -253,7 +252,7 @@ class QuerySink:
 
     def _check_sink_duplicate(
         self, sink_file: Path, new_answer: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         if not sink_file.exists():
             return None
         content = sink_file.read_text()
@@ -279,7 +278,7 @@ class QuerySink:
 
     def append_to_sink(
         self, page_name: str, query: str, answer: str,
-        source_pages: List[str], raw_sources: List[str],
+        source_pages: list[str], raw_sources: list[str],
     ) -> str:
         """Append a query answer to the sink file. Returns path relative to root."""
         sink_file = self._find_or_create_sink_file(page_name)

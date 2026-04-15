@@ -1,14 +1,13 @@
 """Tests for offline prompt evaluation script (Phase 4b)."""
 
-import pytest
-import yaml
-import json
+import sys
 from pathlib import Path
 
-import sys
+import yaml
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from eval_prompts import PromptEvaluator, CheckResult
+from eval_prompts import CheckResult, PromptEvaluator
 
 
 class TestCheckResult:

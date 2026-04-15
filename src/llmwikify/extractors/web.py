@@ -1,6 +1,5 @@
 """Web URL extractor."""
 
-from typing import Optional
 from .base import ExtractedContent
 
 
@@ -15,7 +14,7 @@ def _extract_url(url: str) -> ExtractedContent:
             title=url,
             metadata={"error": "trafilatura not installed. Install with: pip install trafilatura"}
         )
-    
+
     try:
         downloaded = trafilatura.fetch_url(url)
         if not downloaded:
@@ -25,21 +24,21 @@ def _extract_url(url: str) -> ExtractedContent:
                 title=url,
                 metadata={"error": f"Failed to download {url}"}
             )
-        
+
         text = trafilatura.extract(downloaded)
-        
+
         # Try to get title from HTML
         import re
         title_match = re.search(r'<title[^>]*>([^<]+)</title>', downloaded, re.IGNORECASE)
         title = title_match.group(1).strip() if title_match else url
-        
+
         return ExtractedContent(
             text=text or "",
             source_type="url",
             title=title,
             metadata={"url": url},
         )
-        
+
     except (ConnectionError, TimeoutError, ValueError, OSError) as e:
         return ExtractedContent(
             text="",

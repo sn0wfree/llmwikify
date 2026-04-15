@@ -1,8 +1,9 @@
 """Unit tests for v0.25 web UI module."""
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
@@ -94,7 +95,7 @@ class TestWebServer:
 
         resp = client.get('/')
         html = resp.text
-        
+
         assert 'search-input' in html
         assert 'file-tree' in html
         assert 'preview-content' in html
@@ -109,9 +110,10 @@ class TestCLIWebArgs:
 
     def test_serve_help_contains_web(self):
         """serve --help should mention --web."""
-        from llmwikify.cli.commands import main
         import io
         from unittest.mock import patch
+
+        from llmwikify.cli.commands import main
 
         help_output = io.StringIO()
         with patch('sys.argv', ['llmwikify', 'serve', '--help']):

@@ -1,13 +1,11 @@
 """Integration tests for Phase 3: chaining, retry, context methods, full flows."""
 
-import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llmwikify.core.wiki import Wiki
 from llmwikify.core.prompt_registry import PromptRegistry
+from llmwikify.core.wiki import Wiki
 
 
 class TestWikiContextMethods:

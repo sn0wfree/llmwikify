@@ -1,8 +1,8 @@
 """Tests for CLI commands."""
 
-import pytest
-from pathlib import Path
 import sys
+from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from llmwikify.cli import WikiCLI
