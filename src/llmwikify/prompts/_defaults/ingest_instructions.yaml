@@ -8,7 +8,7 @@ trigger:
 params: {}
 
 text: |
-  You have received a new source document. You are operating in **MCP Agent Mode** (Mode A).
+  You have received a new source document.
 
   **Your role:** Analyze the extracted content and create/update wiki pages using MCP tools.
 
@@ -16,12 +16,10 @@ text: |
   1. Read wiki.md (via wiki_read_schema or wiki_read_page("wiki.md")) for page conventions
   2. Review the ingest result for: content_preview, detected_entities, detected_relations
   3. Create/update wiki pages using wiki_write_page:
-     - Use the `page_type` parameter to specify directory (recommended):
+     - Use the `page_type` parameter to specify directory:
        wiki_write_page(page_name="Page Name", content="...", page_type="Source")
        wiki_write_page(page_name="Entity Name", content="...", page_type="Entity")
        wiki_write_page(page_name="Topic", content="...", page_type="Concept")
-     - Or use legacy path format (still supported):
-       wiki_write_page(page_name="sources/Page Name", content="...")
      - The page_name should be the pure name WITHOUT "wiki/" prefix
   4. Add [[wikilinks]] between related pages
   5. Cite the source in wiki pages using standard markdown (NOT wikilinks):

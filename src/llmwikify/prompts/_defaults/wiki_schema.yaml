@@ -28,11 +28,8 @@ document: |
   2. Run `wiki_read_page("wiki/index.md")` or `python3 -m llmwikify read_page "wiki/index.md"` to see the content catalog
   3. Read this document fully to understand conventions
 
-  ## Operation Modes
+  ## How to Operate
 
-  You operate in **one of two modes**, determined by how you are invoked:
-
-  ### Mode A: MCP Agent Mode (recommended)
   **You are invoked via MCP tools** (e.g., opencode + mcporter-bridge, or any MCP client)
 
   **Your workflow:**
@@ -42,26 +39,7 @@ document: |
   4. Call `wiki_graph(action="write", relations=[...])` for relationships
   5. Call `wiki_log(operation="ingest", details="...")`
 
-  **Key point:** YOU (the LLM agent) write the page content. The CLI does NOT auto-create pages.
-
-  ### Mode B: CLI Self-Create Mode
-  **User runs `python3 -m llmwikify ingest --self-create raw/file.pdf`**
-
-  **What happens:**
-  1. CLI extracts content from source
-  2. CLI calls LLM API directly (configured in `.wiki-config.yaml`)
-  3. LLM analyzes content and creates wiki pages automatically
-  4. **You (the agent) are NOT involved** — the CLI handles everything
-
-  **Requirements:**
-  - `llm.enabled: true` in `.wiki-config.yaml`
-  - Valid `api_key` or `LLM_API_KEY` environment variable
-  - `base_url` pointing to OpenAI-compatible endpoint (or Ollama at `http://localhost:11434`)
-
-  ### How to tell which mode you're in:
-  - If you have access to MCP tools (`wiki_ingest`, `wiki_write_page`, etc.) → **Mode A**
-  - If you are running as a CLI subprocess → check for `--self-create` flag
-  - When in doubt → assume Mode A (the MCP tools will work if available)
+  **Key point:** YOU (the agent) write the page content. The CLI extracts content but does NOT auto-create pages.
 
   ## Directory Structure
 
@@ -184,20 +162,6 @@ document: |
   }
   ```
 
-  **Ingest (Self-Create Mode):**
-  ```bash
-  # Requires LLM configured in .wiki-config.yaml
-  python3 -m llmwikify ingest --self-create "raw/report.pdf"
-
-  # LLM config example in .wiki-config.yaml:
-  # llm:
-  #   enabled: true
-  #   provider: openai
-  #   base_url: http://localhost:11434  # Ollama
-  #   api_key: ""                       # or env:LLM_API_KEY
-  #   model: qwen3:32b
-  ```
-
   **Write Page:**
   ```bash
   # New API (recommended): separate name and type
@@ -275,8 +239,6 @@ document: |
 
   | Error | Cause | Fix |
   |-------|-------|-----|
-  | `LLM is not enabled` | `llm.enabled` not true | Set `llm.enabled: true` in `.wiki-config.yaml` |
-  | `LLM API key not configured` | No API key | Set `api_key` or `LLM_API_KEY` env var |
   | `mcporter: command not found` | mcporter not installed | `pip install mcporter-bridge` |
   | JSON parse error on `--args` | Shell escaping issue | Use single quotes around JSON |
   | `Page not found` on read | Page doesn't exist yet | Create it — it's a broken link |
@@ -748,15 +710,6 @@ document: |
   - **Query flow**: Read `index.md` first for overview → Use `wiki_search` to drill down → Use `wiki_read_page` for full content
 
   ## Troubleshooting
-
-  ### Mode & Configuration Issues
-
-  | Problem | Check | Fix |
-  |---------|-------|-----|
-  | "I don't know what mode I'm in" | MCP tools available? | If yes → Mode A. If no → Mode B (--self-create) |
-  | `LLM is not enabled` | `.wiki-config.yaml` | Set `llm.enabled: true` |
-  | `LLM API key not configured` | Env vars or config | Set `api_key` or `LLM_API_KEY` env var |
-  | `--self-create` does nothing | LLM config | Verify `base_url`, `api_key`, `model` are correct |
 
   ### Content Processing Issues
 
