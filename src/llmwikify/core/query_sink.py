@@ -1,17 +1,23 @@
-"""Query Sink management — handles pending query answers for later review."""
+"""Query Sink management — content-addressable storage with deduplication."""
 
+import hashlib
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 
 class QuerySink:
-    """Manages query sink buffers for pending wiki updates.
+    """Manages query sink buffers with content-addressable storage.
 
-    When a query answer is similar to an existing page, it goes to a sink
-    file instead of creating a duplicate. The sink accumulates entries
-    for later review and merging during lint.
+    Sink files use a two-section format:
+    - Content Store: unique answers stored once, keyed by hash
+    - Entry Log: all entries referencing Content Store by hash
+
+    Duplicate and near-duplicate answers are compressed automatically.
     """
+
+    HASH_LEN = 8               # SHA-256 前 8 位 (42.9 亿空间)
+    SIMILARITY_THRESHOLD = 0.92  # near-duplicate 阈值
 
     def __init__(self, root: Path, wiki_dir: Path) -> None:
         self.root = root.resolve()
@@ -22,6 +28,81 @@ class QuerySink:
     def _now() -> str:
         return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
+    @staticmethod
+    def _normalize_for_hash(text: str) -> str:
+        """Normalize text to eliminate format differences."""
+        text = text.strip()
+        text = re.sub(r'\s+', ' ', text)       # collapse whitespace
+        text = re.sub(r'[""\u201c\u201d\u300c\u300d]', '"', text)
+        text = re.sub(r"[''\u2018\u2019]", "'", text)
+        text = re.sub(r'[\u2014\u2013\u2212]', '-', text)
+        return text
+
+    def _content_hash(self, text: str) -> str:
+        """Compute normalized SHA-256 hash (first HASH_LEN hex chars)."""
+        normalized = self._normalize_for_hash(text)
+        return hashlib.sha256(normalized.encode()).hexdigest()[:self.HASH_LEN]
+
+    @staticmethod
+    def _jaccard_similarity(text1: str, text2: str) -> float:
+        """Compute Jaccard similarity of word sets."""
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+        if not words1 or not words2:
+            return 0.0
+        return len(words1 & words2) / len(words1 | words2)
+
+    def _find_similar_hash(self, content_store: dict, new_answer: str) -> str | None:
+        """Find a hash in content_store with similarity >= threshold."""
+        new_clean = self._normalize_for_hash(new_answer).strip()
+        for hash_val, existing in content_store.items():
+            existing_clean = self._normalize_for_hash(existing).strip()
+            sim = self._jaccard_similarity(new_clean, existing_clean)
+            if sim >= self.SIMILARITY_THRESHOLD:
+                return hash_val
+        return None
+
+    # -- Parsing methods --
+
+    def _parse_content_store(self, content: str) -> dict[str, str]:
+        """Parse Content Store section → {hash: text}."""
+        store = {}
+        pattern = (
+            r'### ([a-f0-9]{8}) — (\d{4}-\d{2}-\d{2})\n'
+            r'(.*?)(?=\n### [a-f0-9]{8} — |\n+---\n+## Entry Log|\Z)'
+        )
+        for match in re.finditer(pattern, content, re.DOTALL):
+            store[match.group(1)] = match.group(3).strip()
+        return store
+
+    def _parse_entry_log(self, content: str) -> list[dict]:
+        """Parse Entry Log table → [{num, timestamp, query, hash, note}]."""
+        entries = []
+        pattern = (
+            r'\| (\d+) \| (.+?) \| (.+?) \| `([a-f0-9]{8})` \| (.+?) \|'
+        )
+        for match in re.finditer(pattern, content):
+            entries.append({
+                "num": int(match.group(1)),
+                "timestamp": match.group(2).strip(),
+                "query": match.group(3).strip(),
+                "hash": match.group(4),
+                "note": match.group(5).strip().rstrip('`').strip(),
+            })
+        return entries
+
+    def _count_entries(self, content: str) -> int:
+        """Count Entry Log rows (handles both new and old format)."""
+        if "## Entry Log" in content:
+            return len(self._parse_entry_log(content))
+        # Fallback for legacy format
+        return len(re.findall(
+            r'^## \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]',
+            content, re.MULTILINE
+        ))
+
+    # -- Public interface --
+
     def get_info_for_page(self, page_name: str) -> dict:
         """Get sink status for a wiki page."""
         sink_file = self.sink_dir / f"{page_name}.sink.md"
@@ -29,10 +110,8 @@ class QuerySink:
             return {"has_sink": False, "sink_entries": 0}
         try:
             content = sink_file.read_text()
-            entries = len(re.findall(
-                r'^## \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]', content, re.MULTILINE
-            ))
-            return {"has_sink": True, "sink_entries": entries}
+            count = self._count_entries(content)
+            return {"has_sink": True, "sink_entries": count}
         except OSError:
             return {"has_sink": False, "sink_entries": 0}
 
@@ -44,17 +123,30 @@ class QuerySink:
                 f"formal_page: \"{page_name}\"\n"
                 f"formal_path: wiki/{page_name}.md\n"
                 f"created: {self._now()}\n"
+                f"unique_count: 0\n"
+                f"entry_count: 0\n"
+                f"last_updated: {self._now()}\n"
                 f"---\n\n"
                 f"# Query Sink: {page_name.replace('Query: ', '')}\n\n"
-                f"> Pending entries for [[{page_name}]] — review during lint\n\n"
+                f"> Pending entries for [[{page_name}]]\n\n"
+                f"---\n\n"
+                f"## Content Store\n\n"
+                f"*(No unique answers stored yet)*\n\n"
+                f"---\n\n"
+                f"## Entry Log\n\n"
+                f"*(No entries yet)*\n"
             )
             sink_file.write_text(content)
             formal_path = self.wiki_dir / f"{page_name}.md"
             if formal_path.exists():
                 self._update_page_sink_meta(formal_path, sink_file)
+        else:
+            # Migrate legacy format if needed
+            self._migrate_legacy_sink(sink_file)
         return sink_file
 
     def _update_page_sink_meta(self, page_path: Path, sink_file: Path) -> None:
+        """Update formal page frontmatter with sink_path."""
         try:
             content = page_path.read_text()
             if content.startswith('---'):
@@ -94,6 +186,124 @@ class QuerySink:
                 page_path.write_text(new_content)
         except OSError:
             pass
+
+    def _migrate_legacy_sink(self, sink_file: Path) -> None:
+        """Migrate old format sink file to new Content Store + Entry Log format."""
+        content = sink_file.read_text()
+        if "## Content Store" in content:
+            return  # Already in new format
+
+        # Parse old format entries
+        old_entries = re.findall(
+            r'## \[(\d{4}-\d{2}-\d{2}[^]]*)\] Query: (.+?)\n\n(.+?)'
+            r'(?=\n> ⚠️|\n### 💡|\n### Sources\n|'
+            r'\n---\n\n## \[|$)',
+            content, re.DOTALL,
+        )
+
+        if not old_entries:
+            # No entries, just rewrite header
+            header_match = re.match(r'(---\n.*?---)', content, re.DOTALL)
+            if header_match:
+                header = header_match.group(1)
+                # Parse existing frontmatter
+                fm_content = header[3:-3].strip()
+                fm_dict = {}
+                for line in fm_content.split('\n'):
+                    if ':' in line:
+                        key, _, val = line.partition(':')
+                        fm_dict[key.strip()] = val.strip().strip('"')
+
+                new_content = (
+                    f"{header}\n\n"
+                    f"# Query Sink: {fm_dict.get('formal_page', 'Unknown').replace('Query: ', '')}\n\n"
+                    f"> Pending entries for [[{fm_dict.get('formal_page', 'Unknown')}]]\n\n"
+                    f"---\n\n"
+                    f"## Content Store\n\n"
+                    f"*(No unique answers stored yet)*\n\n"
+                    f"---\n\n"
+                    f"## Entry Log\n\n"
+                    f"*(No entries yet)*\n"
+                )
+                sink_file.write_text(new_content)
+            return
+
+        content_store = {}
+        entry_log = []
+
+        for i, (ts, query, answer) in enumerate(old_entries):
+            # Clean answer: remove suggestions and source sections
+            answer_clean = re.sub(
+                r'\n### 💡 Suggestions.*', '', answer, flags=re.DOTALL
+            )
+            answer_clean = re.sub(
+                r'\n### Sources.*', '', answer_clean, flags=re.DOTALL
+            )
+            answer_clean = answer_clean.strip()
+
+            h = self._content_hash(answer_clean)
+
+            if h not in content_store:
+                date_short = ts[:10] if len(ts) >= 10 else "unknown"
+                content_store[h] = answer_clean
+                content_store[f"_date_{h}"] = date_short
+
+            note = "—"
+            entry_log.append({
+                "num": i + 1,
+                "timestamp": ts.strip(),
+                "query": query.strip(),
+                "hash": h,
+                "note": note,
+            })
+
+        # Parse existing frontmatter
+        header_match = re.match(r'(---\n.*?---)', content, re.DOTALL)
+        if header_match:
+            header = header_match.group(1)
+            fm_content = header[3:-3].strip()
+            fm_dict = {}
+            for line in fm_content.split('\n'):
+                if ':' in line:
+                    key, _, val = line.partition(':')
+                    fm_dict[key.strip()] = val.strip().strip('"')
+
+            formal_page = fm_dict.get('formal_page', 'Unknown')
+
+            # Build new format
+            lines = [header, ""]
+            lines.append(f"# Query Sink: {formal_page.replace('Query: ', '')}")
+            lines.append("")
+            lines.append(f"> Pending entries for [[{formal_page}]]")
+            lines.append("")
+            lines.append("---")
+            lines.append("")
+            lines.append("## Content Store")
+            lines.append("")
+
+            for h, text in content_store.items():
+                if h.startswith("_date_"):
+                    continue
+                date = content_store.get(f"_date_{h}", "unknown")
+                lines.append(f"### {h} — {date}")
+                lines.append(text)
+                lines.append("")
+
+            lines.append("---")
+            lines.append("")
+            lines.append("## Entry Log")
+            lines.append("")
+            lines.append("| # | Timestamp | Query | Answer Hash | Note |")
+            lines.append("|---|-----------|-------|-------------|------|")
+
+            for entry in entry_log:
+                lines.append(
+                    f"| {entry['num']} | {entry['timestamp']} | {entry['query']} | "
+                    f"`{entry['hash']}` | {entry['note']} |"
+                )
+
+            lines.append("")
+            sink_file.write_text("\n".join(lines))
 
     @staticmethod
     def _extract_topics(text: str) -> set:
@@ -182,9 +392,8 @@ class QuerySink:
         if not sink_file.exists():
             return suggestions
         content = sink_file.read_text()
-        entries = re.findall(
-            r'## \[\d{4}-\d{2}-\d{2}[^]]*\] Query: (.+?)\n', content
-        )
+        entry_log = self._parse_entry_log(content)
+        entries = [e['query'] for e in entry_log]
         similar_count = 0
         for old_query in entries:
             if self._query_similarity(query, old_query) > 0.7:
@@ -233,7 +442,7 @@ class QuerySink:
             if negation_words:
                 suggestions.append(
                     "Possible Contradiction: This answer contains negation words. "
-                    "Review against previous entries before merging."
+                    "Review against previous entries before updating."
                 )
         return suggestions
 
@@ -250,138 +459,190 @@ class QuerySink:
         suggestions.extend(self._suggest_knowledge_growth(answer, page_name))
         return suggestions
 
-    def _check_sink_duplicate(
-        self, sink_file: Path, new_answer: str,
-    ) -> str | None:
-        if not sink_file.exists():
-            return None
-        content = sink_file.read_text()
-        entries = re.findall(
-            r'## \[\d{4}-\d{2}-\d{2}[^]]*\] Query: .+?\n\n(.+?)'
-            r'(?:\n###|\n>|\n---\n\n## \[|$)',
-            content, re.DOTALL,
-        )
-        new_answer_clean = new_answer.strip()
-        for entry in entries:
-            entry_clean = entry.strip()
-            if not entry_clean:
-                continue
-            similarity = self._query_similarity(
-                new_answer_clean[:200], entry_clean[:200]
-            )
-            if similarity > 0.7:
-                return (
-                    f"High similarity ({similarity:.0%}) with a previous sink entry. "
-                    f"Consider using merge_or_replace='replace' to consolidate."
-                )
-        return None
-
     def append_to_sink(
         self, page_name: str, query: str, answer: str,
         source_pages: list[str], raw_sources: list[str],
     ) -> str:
-        """Append a query answer to the sink file. Returns path relative to root."""
+        """Append a query answer to the sink file with content-addressable dedup."""
         sink_file = self._find_or_create_sink_file(page_name)
-        suggestions = self._generate_sink_suggestions(
-            query, answer, source_pages, raw_sources, page_name,
-        )
-        dup_warning = self._check_sink_duplicate(sink_file, answer)
+        content = sink_file.read_text()
+
+        content_store = self._parse_content_store(content)
+        entry_log = self._parse_entry_log(content)
+
+        answer_clean = answer.strip()
+        answer_hash = self._content_hash(answer_clean)
+
+        note = "—"
+
+        if answer_hash in content_store:
+            note = "duplicate"
+        else:
+            similar_hash = self._find_similar_hash(content_store, answer_clean)
+            if similar_hash:
+                answer_hash = similar_hash
+                ref_num = next(
+                    (e['num'] for e in entry_log if e['hash'] == similar_hash),
+                    0
+                )
+                note = f"near-dup of #{ref_num}" if ref_num else "near-dup"
+            else:
+                content_store[answer_hash] = answer_clean
+
+        entry_num = len(entry_log) + 1
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
-        entry = f"---\n\n## [{timestamp}] Query: {query}\n\n{answer}\n"
-        if dup_warning:
-            entry += f"\n> ⚠️ {dup_warning}\n"
-        if suggestions:
-            entry += "\n### 💡 Suggestions for Improvement\n"
-            for s in suggestions:
-                entry += f"- {s}\n"
-        if source_pages or raw_sources:
-            entry += "\n### Sources\n"
-            for page in source_pages:
-                entry += f"- [[{page}]]\n"
-            for raw_path in raw_sources:
-                filename = Path(raw_path).name
-                entry += f"- [Source: {filename}]({raw_path})\n"
-        existing = sink_file.read_text()
-        sink_file.write_text(existing + entry)
+        entry_log.append({
+            "num": entry_num,
+            "timestamp": timestamp,
+            "query": query,
+            "hash": answer_hash,
+            "note": note,
+        })
+
+        # Rebuild entire file from parsed data
+        new_content = self._rebuild_sink_file(content, content_store, entry_log, page_name)
+        sink_file.write_text(new_content)
+
         formal_path = self.wiki_dir / f"{page_name}.md"
         if formal_path.exists():
             self._update_page_sink_meta(formal_path, sink_file)
+
         return str(sink_file.relative_to(self.root))
 
+    def _rebuild_sink_file(
+        self, original: str, content_store: dict, entry_log: list, page_name: str,
+    ) -> str:
+        """Rebuild sink file from parsed data, preserving original header/metadata."""
+        # Extract original frontmatter
+        fm_match = re.match(r'(---\n.*?---\n)', original, re.DOTALL)
+        if fm_match:
+            header = fm_match.group(1)
+        else:
+            header = f"---\nformal_page: \"{page_name}\"\n---\n"
+
+        # Update frontmatter counts
+        unique_count = len(content_store)
+        entry_count = len(entry_log)
+        now_str = self._now()
+
+        def update_fm(m):
+            fm = m.group(1)
+            lines = fm.split('\n')
+            new_lines = []
+            seen_unique = seen_entry = seen_updated = False
+            for line in lines:
+                if line.startswith('unique_count:'):
+                    new_lines.append(f"unique_count: {unique_count}")
+                    seen_unique = True
+                elif line.startswith('entry_count:'):
+                    new_lines.append(f"entry_count: {entry_count}")
+                    seen_entry = True
+                elif line.startswith('last_updated:'):
+                    new_lines.append(f"last_updated: {now_str}")
+                    seen_updated = True
+                else:
+                    new_lines.append(line)
+            if not seen_unique:
+                new_lines.insert(1, f"unique_count: {unique_count}")
+            if not seen_entry:
+                new_lines.insert(1, f"entry_count: {entry_count}")
+            if not seen_updated:
+                new_lines.insert(1, f"last_updated: {now_str}")
+            return '---\n' + '\n'.join(new_lines) + '\n---\n'
+
+        header = re.sub(r'^(---\n.*?---\n)', update_fm, header, count=1, flags=re.DOTALL)
+
+        # Extract title line (preserve original if possible)
+        title_match = re.search(r'^# Query Sink: (.+)$', original, re.MULTILINE)
+        title = title_match.group(1) if title_match else page_name.replace('Query: ', '')
+
+        # Extract description line
+        desc_match = re.search(r'^> (.+)$', original, re.MULTILINE)
+        desc = desc_match.group(1) if desc_match else f"Pending entries for [[{page_name}]]"
+
+        # Build body
+        lines = [""]
+        lines.append(f"# Query Sink: {title}")
+        lines.append("")
+        lines.append(f"> {desc}")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append("## Content Store")
+        lines.append("")
+
+        if content_store:
+            for h, text in content_store.items():
+                # Try to find date from original content
+                date_match = re.search(
+                    rf'### {h} — (\d{{4}}-\d{{2}}-\d{{2}})', original
+                )
+                date = date_match.group(1) if date_match else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                lines.append(f"### {h} — {date}")
+                lines.append(text)
+                lines.append("")
+        else:
+            lines.append("*(No unique answers stored yet)*")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("")
+        lines.append("## Entry Log")
+        lines.append("")
+
+        if entry_log:
+            lines.append("| # | Timestamp | Query | Answer Hash | Note |")
+            lines.append("|---|-----------|-------|-------------|------|")
+            for entry in entry_log:
+                lines.append(
+                    f"| {entry['num']} | {entry['timestamp']} | {entry['query']} | "
+                    f"`{entry['hash']}` | {entry['note']} |"
+                )
+            lines.append("")
+        else:
+            lines.append("*(No entries yet)*")
+            lines.append("")
+
+        return header + "\n".join(lines)
+
     def read(self, page_name: str) -> dict:
-        """Read all pending entries from a query sink file."""
+        """Read all entries from a query sink file, resolving hash references."""
         sink_file = self.sink_dir / f"{page_name}.sink.md"
         if not sink_file.exists():
             return {
                 "status": "empty", "page_name": page_name,
                 "entries": [], "message": "No sink file found",
             }
+
         content = sink_file.read_text()
+
+        # Migrate legacy format if needed
+        if "## Content Store" not in content:
+            self._migrate_legacy_sink(sink_file)
+            content = sink_file.read_text()
+
+        content_store = self._parse_content_store(content)
+        entry_log = self._parse_entry_log(content)
+
         entries = []
-        parts = re.split(r'^---\n\n## \[', content, flags=re.MULTILINE)
-        for part in parts[1:]:
-            match = re.match(
-                r'(\d{4}-\d{2}-\d{2}[^]]*)\] Query: (.+?)\n\n(.+)',
-                part, re.DOTALL,
-            )
-            if match:
-                entries.append({
-                    "timestamp": match.group(1).strip(),
-                    "query": match.group(2).strip(),
-                    "answer": match.group(3).strip(),
-                })
+        for entry in entry_log:
+            answer_text = content_store.get(entry["hash"], "[content not found]")
+            entries.append({
+                "timestamp": entry["timestamp"],
+                "query": entry["query"],
+                "answer": answer_text,
+                "hash": entry["hash"],
+                "note": entry["note"],
+            })
+
         return {
             "status": "ok",
             "page_name": page_name,
             "file": str(sink_file.relative_to(self.root)),
             "entries": entries,
             "total_entries": len(entries),
+            "unique_count": len(content_store),
         }
-
-    def clear(self, page_name: str) -> dict:
-        """Clear processed entries from a query sink file."""
-        sink_file = self.sink_dir / f"{page_name}.sink.md"
-        if not sink_file.exists():
-            return {"status": "empty", "message": "No sink file found"}
-        sink_file.write_text(
-            f"---\n"
-            f"formal_page: \"{page_name}\"\n"
-            f"formal_path: wiki/{page_name}.md\n"
-            f"---\n\n"
-            f"# Query Sink: {page_name.replace('Query: ', '')}\n\n"
-            f"> All entries processed. Sink cleared on {self._now()}\n"
-        )
-        formal_path = self.wiki_dir / f"{page_name}.md"
-        if formal_path.exists():
-            try:
-                content = formal_path.read_text()
-                if content.startswith('---'):
-                    fm_end = content.find('---', 3)
-                    if fm_end > 0:
-                        fm_end += 3
-                        frontmatter = content[3:fm_end].strip()
-                        body = content[fm_end:]
-                        lines = frontmatter.split('\n')
-                        new_lines = []
-                        has_last_merged = False
-                        for line in lines:
-                            if line.startswith('sink_entries:'):
-                                new_lines.append('sink_entries: 0')
-                            elif line.startswith('last_merged:'):
-                                now_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                                new_lines.append(f'last_merged: {now_date}')
-                                has_last_merged = True
-                            else:
-                                new_lines.append(line)
-                        if not has_last_merged:
-                            now_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                            new_lines.append(f'last_merged: {now_date}')
-                        formal_path.write_text(
-                            f'---\n{chr(10).join(new_lines)}\n---{body}'
-                        )
-            except OSError:
-                pass
-        return {"status": "cleared", "page_name": page_name}
 
     def status(self) -> dict:
         """Overview of all query sinks with entry counts and urgency."""
@@ -397,16 +658,35 @@ class QuerySink:
         for sink_file in sorted(self.sink_dir.glob("*.sink.md")):
             page_name = sink_file.stem.replace('.sink', '')
             content = sink_file.read_text()
-            entries = len(re.findall(
-                r'^## \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]',
-                content, re.MULTILINE,
-            ))
-            dates = re.findall(
-                r'^## \[(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}\]',
-                content, re.MULTILINE,
-            )
-            oldest = min(dates) if dates else None
-            newest = max(dates) if dates else None
+
+            # Handle both old and new format
+            if "## Entry Log" in content:
+                entry_log = self._parse_entry_log(content)
+                entry_count = len(entry_log)
+                # Get newest entry timestamp
+                newest_ts = None
+                oldest_ts = None
+                for entry in entry_log:
+                    ts = entry['timestamp']
+                    # Extract date portion
+                    date_part = ts[:10] if len(ts) >= 10 else None
+                    if date_part:
+                        if newest_ts is None or ts > newest_ts:
+                            newest_ts = ts
+                        if oldest_ts is None or ts < oldest_ts:
+                            oldest_ts = ts
+                newest = newest_ts[:10] if newest_ts else None
+                oldest = oldest_ts[:10] if oldest_ts else None
+            else:
+                # Legacy format
+                entry_count = self._count_entries(content)
+                dates = re.findall(
+                    r'^## \[(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}\]',
+                    content, re.MULTILINE,
+                )
+                oldest = min(dates) if dates else None
+                newest = max(dates) if dates else None
+
             days_old = 0
             urgency = "ok"
             if newest:
@@ -423,16 +703,17 @@ class QuerySink:
                     urgency = "aging"
                 elif days_old > 7:
                     urgency = "attention"
+
             sinks.append({
                 "page_name": page_name,
                 "file": str(sink_file.relative_to(self.root)),
-                "entry_count": entries,
+                "entry_count": entry_count,
                 "oldest_entry": oldest,
                 "newest_entry": newest,
                 "days_since_last_entry": days_old,
                 "urgency": urgency,
             })
-            total_entries += entries
+            total_entries += entry_count
         sinks.sort(key=lambda x: x['entry_count'], reverse=True)
         urgent_count = sum(1 for s in sinks if s['urgency'] != 'ok')
         return {

@@ -2356,7 +2356,8 @@ class Wiki:
         page_name: str | None = None,
         auto_link: bool = True,
         auto_log: bool = True,
-        merge_or_replace: str = "sink",
+        mode: str = "sink",
+        merge_or_replace: str | None = None,
     ) -> dict:
         """Save a query answer as a new wiki page.
         
@@ -2371,10 +2372,11 @@ class Wiki:
             page_name: Custom page name. Auto-generated as 'Query: {topic}' if omitted.
             auto_link: Automatically add source_pages as [[wikilinks]] in Sources section.
             auto_log: Automatically append to log.md.
-            merge_or_replace: Strategy when similar page exists:
-                "sink" (default) — append to sink buffer for later review
-                "merge" — read old content, consolidate, replace formal page
-                "replace" — overwrite the formal page entirely
+            mode: Strategy when similar page exists:
+                "sink" (default) — append to sink buffer (duplicates auto-compressed)
+                "update" — overwrite the formal page with comprehensive answer
+            merge_or_replace: Deprecated. Use `mode` instead.
+                Maps: "sink"→"sink", "merge"/"replace"→"update".
         
         Returns:
             Dict with status, page_name, page_path, sources info, hint about duplicates.
@@ -2382,10 +2384,14 @@ class Wiki:
         source_pages = source_pages or []
         raw_sources = raw_sources or []
 
+        # Backward compatibility: merge_or_replace → mode
+        if merge_or_replace is not None:
+            mode = "update" if merge_or_replace in ("merge", "replace") else "sink"
+
         similar_page = self._find_similar_query_page(query)
         hint = ""
 
-        if similar_page and merge_or_replace in ("merge", "replace"):
+        if similar_page and mode == "update":
             similar_name = similar_page['page_name']
             page_name = similar_name
             page_path = self.wiki_dir / f"{page_name}.md"
@@ -2401,8 +2407,8 @@ class Wiki:
             self.index.upsert_page(page_name, answer, rel_path)
             self._update_index_file()
 
-            status = "merged" if merge_or_replace == "merge" else "replaced"
-            message = f"Merged answer into: {page_name}" if merge_or_replace == "merge" else f"Replaced existing query page: {page_name}"
+            status = "updated"
+            message = f"Updated query page: {page_name}"
 
         elif similar_page:
             similar_name = similar_page['page_name']
@@ -2429,7 +2435,7 @@ class Wiki:
                 "options": [
                     f"Read the existing page: wiki_read_page('{similar_name}')",
                     f"Read pending entries: wiki_read_page('wiki/.sink/{similar_name}.sink.md')",
-                    "Merge and replace: wiki_synthesize(..., merge_or_replace='replace')",
+                    "Update formal page: wiki_synthesize(..., mode='update')",
                     "Or let the sink accumulate for later review during lint",
                 ],
             }
@@ -2461,8 +2467,8 @@ class Wiki:
         logged = False
         if auto_log:
             if status == "sunk":
-                log_detail = f"{query} → [sink] (pending merge into {similar_page['page_name']})"
-            elif status in ("merged", "replaced"):
+                log_detail = f"{query} → [sink] (see wiki/.sink/{similar_page['page_name']}.sink.md)"
+            elif status == "updated":
                 log_detail = f"{query} → [[{page_name}]] ({status})"
             else:
                 log_detail = f"{query} → [[{page_name}]]"
@@ -2644,14 +2650,8 @@ class Wiki:
     # -- QuerySink delegation --
 
     def read_sink(self, page_name: str) -> dict:
-        """Read all pending entries from a query sink file."""
+        """Read all entries from a query sink file (hash references resolved)."""
         return self.query_sink.read(page_name)
-
-    def clear_sink(self, page_name: str) -> dict:
-        """Clear processed entries from a query sink file."""
-        result = self.query_sink.clear(page_name)
-        self._update_index_file()
-        return result
 
     def sink_status(self) -> dict:
         """Overview of all query sinks with entry counts and urgency."""

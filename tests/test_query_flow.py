@@ -299,7 +299,7 @@ class TestSynthesizeDuplicateDetection:
             merge_or_replace="replace",
         )
 
-        assert result2['status'] == 'replaced'
+        assert result2['status'] == 'updated'
         assert result2['page_name'] == result1['page_name']
 
         # Page should have updated content

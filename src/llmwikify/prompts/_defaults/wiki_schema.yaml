@@ -301,12 +301,14 @@ document: |
 
   **Decision flow:**
   - If search returns results → read pages → synthesize → save
-  - If "Query: Topic" page already exists → answer goes to sink (status: "sunk")
-  - If sink has pending entries → read → merge → use `update_existing=True`
+  - If "Query: Topic" page already exists → use mode="sink" or mode="update"
+  - mode="sink" → answer goes to sink (duplicates auto-compressed)
+  - mode="update" → update the formal page with comprehensive answer
 
   **Troubleshooting:**
   - **No search results:** topic may not be covered yet, create new page and mark as tentative
-  - **Sink has many entries:** periodically merge into formal query page, then clear sink
+  - **Sink grows:** duplicate answers are auto-compressed via content hashing
+  - Periodically: read sink + formal page → synthesize → mode="update"
 
   ### 3. Create or Edit a Page
 
@@ -338,7 +340,7 @@ document: |
   1. **Run health check** → `wiki_lint` returns missing pages, orphan pages, broken links
   2. **Fix broken links** → create missing pages or remove wikilinks
   3. **Connect orphans** → add wikilinks from overview, synthesis pages, or related entities
-  4. **Check sink status** → merge pending entries, clear sink files
+   4. **Check sink status** → review pending entries, update formal pages with mode="update"
   5. **Check recommendations** → `wiki_recommend` suggests missing pages
 
   **CLI example:**
