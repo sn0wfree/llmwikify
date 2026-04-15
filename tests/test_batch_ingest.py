@@ -395,8 +395,8 @@ class TestBatchSelfCreate:
 # Test 8: User guidance message
 # ============================================================
 class TestBatchUserGuidance:
-    def test_user_guidance_shown_without_self_create(self, temp_wiki):
-        """stderr should contain guidance message when pages not created."""
+    def test_batch_complete_message_shown(self, temp_wiki):
+        """stderr should contain batch complete message."""
         (temp_wiki / 'raw').mkdir(exist_ok=True)
         test_file = temp_wiki / 'raw' / 'test.md'
         test_file.write_text("# Test Document")
@@ -416,9 +416,8 @@ class TestBatchUserGuidance:
             cli.batch(args)
 
         stderr_content = stderr.getvalue()
-        assert 'Pages were NOT created' in stderr_content
-        assert '--self-create' in stderr_content
-        assert 'parse the JSON output' in stderr_content
+        assert 'Batch Complete' in stderr_content
+        assert 'Success:' in stderr_content
 
 
 # ============================================================

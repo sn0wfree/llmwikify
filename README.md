@@ -437,6 +437,16 @@ This makes llmwikify truly general-purpose:
 - **Project Docs**: Dates = release notes
 - **Research Wiki**: Dates = experiment logs
 
+### Design Principle: Less is More — Reduce Cognitive Load
+
+llmwikify exposes only what agents need, hiding unnecessary implementation details:
+- ✅ Clean MCP tool interfaces with clear return formats
+- ✅ Prompt templates focused on workflow, not configuration anxiety
+- ✅ No mode comparisons or LLM setup noise in agent-facing documentation
+- ✅ CLI features like `--self-create` exist but don't distract from the primary agent workflow
+
+Agents should spend their cognitive budget on knowledge synthesis, not on figuring out which mode they're in or whether their LLM is configured correctly.
+
 ---
 
 ## 📊 CLI Commands (19 Total)

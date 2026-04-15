@@ -164,11 +164,6 @@ class WikiCLI:
             operations_result = self.wiki._llm_process_source(result)
         except ValueError as e:
             print(f"\nLLM not configured: {e}")
-            print("Enable LLM in .wiki-config.yaml:")
-            print("  llm:")
-            print("    enabled: true")
-            print("    api_key: your-key-here")
-            print("    model: gpt-4o")
             return 1
         except (ConnectionError, TimeoutError, RuntimeError, OSError) as e:
             print(f"\nLLM processing failed: {e}")
@@ -709,10 +704,6 @@ class WikiCLI:
         print("\n=== Batch Complete ===", file=sys.stderr)
         print(f"Success: {success}, Failed: {failed}", file=sys.stderr)
 
-        if not self_create:
-            print("\nNote: Pages were NOT created. Use --self-create for automatic page creation,", file=sys.stderr)
-            print("or parse the JSON output above to create pages programmatically.", file=sys.stderr)
-
         return 0 if failed == 0 else 1
 
     def sink_status(self, args) -> int:
@@ -796,7 +787,6 @@ class WikiCLI:
         print("=== File Watcher ===")
         print(f"Watching: {watch_dir}")
         print(f"Auto-ingest: {'Yes' if auto_ingest else 'No (notify only)'}")
-        print(f"Self-create mode: {'Yes' if self_create else 'No'}")
         print(f"Debounce: {debounce}s")
         print(f"Dry run: {'Yes' if dry_run else 'No'}")
         print()
@@ -1115,7 +1105,6 @@ def main() -> int:
         epilog="""
 Examples:
   llmwikify ingest document.pdf                       Show extraction summary + JSON for agent
-  llmwikify ingest document.pdf --self-create         LLM-assisted page creation (CLI calls LLM API)
   llmwikify ingest document.pdf --dry-run             Preview without changes
   llmwikify search "gold mining"                      Full-text search
   llmwikify references "Company"                      Show references
@@ -1146,7 +1135,7 @@ Examples:
     p = subparsers.add_parser('ingest', help='Ingest a source file')
     p.add_argument('file', type=str, help='File path or URL')
     p.add_argument('--self-create', '-s', action='store_true',
-                   help='CLI uses LLM API to automatically analyze content and create wiki pages (requires llm.enabled=true)')
+                   help='CLI uses LLM API to automatically analyze content and create wiki pages')
     p.add_argument('--smart', action='store_true', help='[Deprecated] Alias for --self-create')
     p.add_argument('--dry-run', '-n', action='store_true',
                    help='Show extraction summary without creating pages')
