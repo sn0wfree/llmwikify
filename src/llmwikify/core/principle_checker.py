@@ -12,9 +12,9 @@ known contradictions/data gaps, checks whether the expected LLM output
 would satisfy principle requirements.
 """
 
-from pathlib import Path
-from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -31,7 +31,7 @@ class PrincipleViolation:
 class PrincipleCheckResult:
     """Result of checking all principles for a prompt."""
     prompt_name: str
-    violations: List[PrincipleViolation] = field(default_factory=list)
+    violations: list[PrincipleViolation] = field(default_factory=list)
     passed_checks: int = 0
     total_checks: int = 0
 
@@ -49,7 +49,7 @@ class PrincipleCheckResult:
 # Principle definitions with keyword indicators.
 # A prompt is considered to "pass" a principle if at least one
 # keyword from the list appears in the combined system+user text.
-PRINCIPLE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
+PRINCIPLE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "contradiction_detection": {
         "keywords": ["contradict", "conflict", "disagree", "inconsisten"],
         "description": "Prompt instructs LLM to detect contradictions with existing wiki content.",
@@ -92,12 +92,12 @@ PRINCIPLE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
 class PrincipleChecker:
     """Checks prompt templates against LLM Wiki Principles."""
 
-    def __init__(self, defaults_dir: Optional[Path] = None):
+    def __init__(self, defaults_dir: Path | None = None):
         if defaults_dir is None:
             defaults_dir = Path(__file__).parent.parent / "prompts" / "_defaults"
         self.defaults_dir = defaults_dir
 
-    def check_all_templates(self) -> Dict[str, PrincipleCheckResult]:
+    def check_all_templates(self) -> dict[str, PrincipleCheckResult]:
         """Check all prompt templates against all applicable principles."""
         import yaml
 
@@ -113,11 +113,11 @@ class PrincipleChecker:
 
         return results
 
-    def check_template(self, prompt_name: str, data: Dict[str, Any]) -> PrincipleCheckResult:
+    def check_template(self, prompt_name: str, data: dict[str, Any]) -> PrincipleCheckResult:
         """Check a single loaded template against applicable principles."""
         return self._check_single_template(prompt_name, data)
 
-    def _check_single_template(self, prompt_name: str, data: Dict[str, Any]) -> PrincipleCheckResult:
+    def _check_single_template(self, prompt_name: str, data: dict[str, Any]) -> PrincipleCheckResult:
         result = PrincipleCheckResult(prompt_name=prompt_name)
         combined_text = (
             (data.get("system", "") or "") + "\n" +
@@ -156,7 +156,7 @@ class PrincipleChecker:
     def _check_structural_integrity(
         self,
         prompt_name: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         result: PrincipleCheckResult,
     ) -> None:
         """Check structural requirements common to all prompts."""
@@ -235,7 +235,7 @@ class PrincipleChecker:
                 suggestion="Add validate_schema to post_process for output validation",
             ))
 
-    def check_context_injection(self) -> List[Dict[str, str]]:
+    def check_context_injection(self) -> list[dict[str, str]]:
         """Check that all context_injection references resolve to Wiki methods."""
         import yaml
 
@@ -266,7 +266,7 @@ class PrincipleChecker:
 
         return issues
 
-    def check_schema_coverage(self) -> List[Dict[str, str]]:
+    def check_schema_coverage(self) -> list[dict[str, str]]:
         """Check that all validate_schema values have corresponding validation logic."""
         import yaml
 
@@ -292,7 +292,7 @@ class PrincipleChecker:
 
         return issues
 
-    def generate_report(self, results: Optional[Dict[str, PrincipleCheckResult]] = None) -> str:
+    def generate_report(self, results: dict[str, PrincipleCheckResult] | None = None) -> str:
         """Generate a human-readable markdown report."""
         if results is None:
             results = self.check_all_templates()
@@ -348,7 +348,7 @@ class PrincipleChecker:
 
         return "\n".join(lines)
 
-    def generate_json_report(self, results: Optional[Dict[str, PrincipleCheckResult]] = None) -> Dict[str, Any]:
+    def generate_json_report(self, results: dict[str, PrincipleCheckResult] | None = None) -> dict[str, Any]:
         """Generate a machine-readable JSON report."""
         if results is None:
             results = self.check_all_templates()

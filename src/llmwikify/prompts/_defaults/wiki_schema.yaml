@@ -28,6 +28,41 @@ document: |
   2. Run `wiki_read_page("wiki/index.md")` or `python3 -m llmwikify read_page "wiki/index.md"` to see the content catalog
   3. Read this document fully to understand conventions
 
+  ## Operation Modes
+
+  You operate in **one of two modes**, determined by how you are invoked:
+
+  ### Mode A: MCP Agent Mode (recommended)
+  **You are invoked via MCP tools** (e.g., opencode + mcporter-bridge, or any MCP client)
+
+  **Your workflow:**
+  1. Call `wiki_ingest(source="raw/file.pdf")` → returns JSON with content, entities, relations
+  2. **Analyze the response** → decide which pages to create/update
+  3. Call `wiki_write_page(page_name="...", content="...")` for each page
+  4. Call `wiki_graph(action="write", relations=[...])` for relationships
+  5. Call `wiki_log(operation="ingest", details="...")`
+
+  **Key point:** YOU (the LLM agent) write the page content. The CLI does NOT auto-create pages.
+
+  ### Mode B: CLI Self-Create Mode
+  **User runs `python3 -m llmwikify ingest --self-create raw/file.pdf`**
+
+  **What happens:**
+  1. CLI extracts content from source
+  2. CLI calls LLM API directly (configured in `.wiki-config.yaml`)
+  3. LLM analyzes content and creates wiki pages automatically
+  4. **You (the agent) are NOT involved** — the CLI handles everything
+
+  **Requirements:**
+  - `llm.enabled: true` in `.wiki-config.yaml`
+  - Valid `api_key` or `LLM_API_KEY` environment variable
+  - `base_url` pointing to OpenAI-compatible endpoint (or Ollama at `http://localhost:11434`)
+
+  ### How to tell which mode you're in:
+  - If you have access to MCP tools (`wiki_ingest`, `wiki_write_page`, etc.) → **Mode A**
+  - If you are running as a CLI subprocess → check for `--self-create` flag
+  - When in doubt → assume Mode A (the MCP tools will work if available)
+
   ## Directory Structure
 
   ```
@@ -130,6 +165,90 @@ document: |
   }
   ```
 
+  ## CLI Command Reference
+
+  ### Complete Command Syntax
+
+  **Ingest (Agent Mode):**
+  ```bash
+  # Extract content — returns JSON to stdout
+  python3 -m llmwikify ingest "raw/report.pdf"
+
+  # Output format (parse this JSON):
+  {
+    "status": "success",
+    "source_name": "report.pdf",
+    "content_preview": "...",
+    "detected_entities": ["Entity1"],
+    "detected_relations": [{"source": "A", "target": "B", "relation": "uses"}]
+  }
+  ```
+
+  **Ingest (Self-Create Mode):**
+  ```bash
+  # Requires LLM configured in .wiki-config.yaml
+  python3 -m llmwikify ingest --self-create "raw/report.pdf"
+
+  # LLM config example in .wiki-config.yaml:
+  # llm:
+  #   enabled: true
+  #   provider: openai
+  #   base_url: http://localhost:11434  # Ollama
+  #   api_key: ""                       # or env:LLM_API_KEY
+  #   model: qwen3:32b
+  ```
+
+  **Write Page:**
+  ```bash
+  # Short content (inline)
+  python3 -m llmwikify write_page "wiki/concepts/Topic" --content "# Topic\n\n## Summary\n..."
+
+  # Long content (from file)
+  python3 -m llmwikify write_page "wiki/concepts/Topic" --content-file /tmp/topic.md
+  ```
+
+  **Search, Read, Status:**
+  ```bash
+  python3 -m llmwikify search "keyword" --limit 10
+  python3 -m llmwikify read_page "wiki/concepts/Topic"
+  python3 -m llmwikify status
+  python3 -m llmwikify lint --format recommendations
+  ```
+
+  ### JSON Escaping Guide (for mcporter call)
+
+  **Correct:**
+  ```bash
+  mcporter call service wiki_write_page --args '{"page_name": "wiki/concepts/Topic", "content": "# Topic\n\nContent"}'
+  ```
+
+  **Wrong (common mistakes):**
+  ```bash
+  # Double quotes not escaped — shell may interpret
+  mcporter call ... --args "{\"page_name\": \"Topic\"}"
+
+  # Using double quotes for outer wrapper — shell may expand $variables
+  mcporter call ... --args "{...}"
+  ```
+
+  **For complex content:**
+  ```bash
+  # Write to temp file, then use --content-file
+  echo "# Title\n\nContent..." > /tmp/page.md
+  python3 -m llmwikify write_page "wiki/concepts/Topic" --content-file /tmp/page.md
+  ```
+
+  ### Common Errors
+
+  | Error | Cause | Fix |
+  |-------|-------|-----|
+  | `LLM is not enabled` | `llm.enabled` not true | Set `llm.enabled: true` in `.wiki-config.yaml` |
+  | `LLM API key not configured` | No API key | Set `api_key` or `LLM_API_KEY` env var |
+  | `mcporter: command not found` | mcporter not installed | `pip install mcporter-bridge` |
+  | JSON parse error on `--args` | Shell escaping issue | Use single quotes around JSON |
+  | `Page not found` on read | Page doesn't exist yet | Create it — it's a broken link |
+  | Write fails with error | Subdirectory doesn't exist | Use `wiki/` prefix in page_name |
+
   ## Page Conventions
 
   ### Page Format
@@ -174,6 +293,25 @@ document: |
   - Link to entities, concepts, and related topics
   - Update links when creating or modifying pages
   - **NEVER** use `[[raw/filename]]` — raw files are NOT wiki pages
+
+  ### Page Naming Conventions
+
+  **Language:**
+  - **Use English** for page names and titles (enables consistent searching and linking)
+  - **Keep original language** in page content (quotes, data, examples)
+  - Example: `Huatai Asset Allocation Framework` (not `华泰大类资产配置策略体系`)
+
+  **Format:**
+  - Use Title Case with spaces: `Asset Allocation`, `Market Regime`
+  - Use hyphens for slugs in paths: `wiki/models/risk-parity.md`
+  - Avoid special characters: no `&`, `/`, `#`, `?`, etc.
+  - Maximum length: 80 characters
+
+  **Uniqueness:**
+  - **Before creating a page, always search first:** `wiki_search("page name")`
+  - If similar page exists → **update it**, don't create duplicate
+  - Use `wiki_read_page("Page Name")` first to see existing content
+  - If page name is ambiguous, add context: `Gold Pricing (Macro)` vs `Gold Pricing (Mining)`
 
   ### Source Citations
 
@@ -365,6 +503,78 @@ document: |
   - **Sinks not merging:** Read each sink, synthesize into formal query page, then clear sink file
   - **Lint takes too long:** Run with `--format brief` for quick check, full for detailed report
 
+  ### 5. Batch Ingest Strategy
+
+  When processing many sources (>10 files), follow this strategy:
+
+  **Optimal batch size: 3-5 files per session**
+  - Too small (<3): Overhead of context switching dominates
+  - Too large (>5): Error accumulation, hard to rollback, LLM context limits
+
+  **Priority Decision Framework:**
+
+  | Priority | Criteria | Action |
+  |----------|----------|--------|
+  | 🔴 Critical | Core framework + no existing coverage | Process first, create foundational pages |
+  | 🟡 High | Core framework + some coverage OR macro drivers | Process second, enhance existing pages |
+  | 🟢 Medium | Asset-specific or tactical strategies | Process third, add specialized knowledge |
+  | 🔵 Low | Specialized strategies, risk management | Process after core concepts |
+  | ⚪ Optional | Academic papers, historical data | Process last or skip if time-constrained |
+
+  **Auto-Theme Classification Rules:**
+
+  | Filename Pattern | Theme | Target Directory |
+  |------------------|-------|------------------|
+  | Institution + framework name | Core methodology | `methodology/` or `models/` |
+  | Series name (e.g., "系列(3)") | Sequential content | Process in order (1→2→3) |
+  | Model/framework name | Theoretical concept | `models/` or `concepts/` |
+  | Asset name | Asset analysis | `assets/` or `entities/` |
+  | Hash/UUID filename | Unknown | Read content, classify by topic |
+
+  **Progress Checkpoints (after each batch):**
+  1. Run `wiki_lint` → check for broken links, orphans
+  2. Run `wiki_status` → verify page count increased correctly
+  3. If lint errors > 0 → fix before proceeding
+  4. If page count unchanged → check if files were duplicates
+
+  **When to stop a batch:**
+  - Encountered 2+ files that require deep analysis (>10k content chars)
+  - Lint errors that can't be auto-fixed
+  - User indicates priority shift
+
+  **When to continue:**
+  - Files are short (<5k chars) and similar theme
+  - Lint passes cleanly
+  - No user interruptions
+
+  **Batch Execution Template:**
+  ```
+  📦 Batch N: [Theme Name]
+     Files: [file1.pdf, file2.pdf, file3.pdf]
+     Priority: [🔴/🟡/🟢/🔵/⚪]
+
+     For each file:
+     1. wiki_ingest(source="raw/filename.pdf")
+     2. Analyze response:
+        - detected_entities → create entity pages if new
+        - detected_relations → note for graph writing
+        - content_preview → determine page type and theme
+     3. wiki_write_page for each new/updated page
+     4. wiki_graph(action="write", relations=[...])
+     5. wiki_log(operation="ingest", details="Processed: filename.pdf")
+
+     After batch:
+     1. wiki_lint → verify no broken links
+     2. wiki_status → confirm pages added
+     3. If errors: fix before next batch
+     4. If clean: proceed to next batch
+  ```
+
+  **Unclassifiable Files:**
+  - If filename is hash/UUID or contains no keywords → run `wiki_ingest` first
+  - Determine theme from `content_preview`, not filename
+  - Log: `wiki_log(operation="ingest", details="Categorized by content as: {theme}")`
+
   ## Page Format Examples
 
   ### Claim Page
@@ -503,6 +713,44 @@ document: |
   - **build_index**: Technical operation — rebuilds SQLite FTS5 full-text index and exports `reference_index.json`. Used by `wiki_search` under the hood.
   - **Query flow**: Read `index.md` first for overview → Use `wiki_search` to drill down → Use `wiki_read_page` for full content
 
+  ## Troubleshooting
+
+  ### Mode & Configuration Issues
+
+  | Problem | Check | Fix |
+  |---------|-------|-----|
+  | "I don't know what mode I'm in" | MCP tools available? | If yes → Mode A. If no → Mode B (--self-create) |
+  | `LLM is not enabled` | `.wiki-config.yaml` | Set `llm.enabled: true` |
+  | `LLM API key not configured` | Env vars or config | Set `api_key` or `LLM_API_KEY` env var |
+  | `--self-create` does nothing | LLM config | Verify `base_url`, `api_key`, `model` are correct |
+
+  ### Content Processing Issues
+
+  | Problem | Check | Fix |
+  |---------|-------|-----|
+  | "Ingest JSON is too long" | Content truncated to 8,000 chars | Use `content_preview` + source knowledge |
+  | "No entities detected" | Conceptual document | Review content manually, create pages for key topics |
+  | "Too many files to process" | File count > 10 | Use batch strategy (3-5 files per session) |
+  | "Page already exists" | Search before create | Read existing page, update instead of creating |
+
+  ### Tool Call Issues
+
+  | Problem | Check | Fix |
+  |---------|-------|-----|
+  | `mcporter call --args` JSON error | Shell escaping | Use single quotes: `--args '{"key": "value"}'` |
+  | `wiki_write_page` fails | Subdirectory exists | Use `wiki/` prefix in page_name |
+  | `wiki_read_page` returns nothing | Page doesn't exist | Create it — it's a broken link |
+  | `wiki_search` returns nothing | Topic not covered | Create new page, mark as tentative |
+
+  ### Health & Quality Issues
+
+  | Problem | Check | Fix |
+  |---------|-------|-----|
+  | Many broken links | Lint results | Create missing pages as stubs |
+  | Many orphan pages | Lint results | Add wikilinks from overview or related pages |
+  | Sinks not merging | Sink status | Read sink, synthesize, clear: `wiki_write_page("wiki/.sink/...", content="")` |
+  | Wiki disorganized | Graph analysis | Run `wiki_graph_analyze(action="detect")` to see structure |
+
   ## Best Practices
 
   1. **Cross-reference heavily** — The value is in the connections between pages
@@ -515,6 +763,10 @@ document: |
   8. **Write graph relations** — Maintain the knowledge graph alongside pages
   9. **Cite sources** — Every claim should be traceable to a file in `raw/`
   10. **Log operations** — Append to `log.md` after significant changes
+  11. **Batch process large sources** — Use 3-5 files per session with lint checkpoints
+  12. **Start with core frameworks** — Process foundational concepts before specialized topics
+  13. **English for page names** — Use English titles, keep original language in content
+  14. **Search before creating** — Always check if page exists to avoid duplicates
 
   ## Configuration
 

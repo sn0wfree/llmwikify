@@ -1,10 +1,8 @@
 """Configuration management for llmwikify."""
 
-import os
-from pathlib import Path
-from typing import Optional, Dict, Any
 import copy
-
+from pathlib import Path
+from typing import Any
 
 # Default configuration (embedded for zero-dependency)
 DEFAULT_CONFIG = {
@@ -51,12 +49,12 @@ DEFAULT_CONFIG = {
 }
 
 
-def get_default_config() -> Dict[str, Any]:
+def get_default_config() -> dict[str, Any]:
     """Get a deep copy of the default configuration."""
     return copy.deepcopy(DEFAULT_CONFIG)
 
 
-def load_config(wiki_root: Path, config_file: Optional[str] = None) -> Dict[str, Any]:
+def load_config(wiki_root: Path, config_file: str | None = None) -> dict[str, Any]:
     """Load configuration from .wiki-config.yaml, falling back to defaults.
     
     Args:
@@ -67,18 +65,18 @@ def load_config(wiki_root: Path, config_file: Optional[str] = None) -> Dict[str,
         Merged configuration dict (user config overrides defaults)
     """
     config = get_default_config()
-    
+
     # Determine config file path
     if config_file:
         config_path = wiki_root / config_file
     else:
         config_path = wiki_root / '.wiki-config.yaml'
-    
+
     # Try to load user configuration
     if config_path.exists():
         try:
             import yaml
-            
+
             user_config = yaml.safe_load(config_path.read_text())
             if user_config:
                 # Deep merge user config into defaults
@@ -89,11 +87,11 @@ def load_config(wiki_root: Path, config_file: Optional[str] = None) -> Dict[str,
         except Exception:
             # Config file has errors, use defaults
             pass
-    
+
     return config
 
 
-def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Deep merge two dictionaries, with override taking precedence.
     
     Args:
@@ -104,17 +102,17 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
         Merged dictionary
     """
     result = copy.deepcopy(base)
-    
+
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = _deep_merge(result[key], value)
         else:
             result[key] = copy.deepcopy(value)
-    
+
     return result
 
 
-def get_db_path(wiki_root: Path, config: Optional[Dict[str, Any]] = None) -> Path:
+def get_db_path(wiki_root: Path, config: dict[str, Any] | None = None) -> Path:
     """Get the database path based on configuration.
     
     Args:
@@ -126,12 +124,12 @@ def get_db_path(wiki_root: Path, config: Optional[Dict[str, Any]] = None) -> Pat
     """
     if config is None:
         config = get_default_config()
-    
+
     db_name = config.get("database", {}).get("name", DEFAULT_CONFIG["database"]["name"])
     return wiki_root / db_name
 
 
-def get_directory(wiki_root: Path, dir_type: str, config: Optional[Dict[str, Any]] = None) -> Path:
+def get_directory(wiki_root: Path, dir_type: str, config: dict[str, Any] | None = None) -> Path:
     """Get a directory path based on configuration.
     
     Args:
@@ -144,12 +142,12 @@ def get_directory(wiki_root: Path, dir_type: str, config: Optional[Dict[str, Any
     """
     if config is None:
         config = get_default_config()
-    
+
     dir_name = config.get("directories", {}).get(dir_type, DEFAULT_CONFIG["directories"][dir_type])
     return wiki_root / dir_name
 
 
-def get_mcp_config(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def get_mcp_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
     """Get MCP server configuration.
     
     Args:
@@ -160,11 +158,11 @@ def get_mcp_config(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     if config is None:
         config = get_default_config()
-    
+
     mcp_config = DEFAULT_CONFIG["mcp"].copy()
     user_mcp = config.get("mcp", {})
-    
+
     if user_mcp:
         mcp_config.update(user_mcp)
-    
+
     return mcp_config

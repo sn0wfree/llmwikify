@@ -10,17 +10,15 @@ Tests for:
 - --self-create integration
 """
 
-import pytest
 import json
 import sys
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 from io import StringIO
+from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from llmwikify.cli import WikiCLI
-from llmwikify.extractors import ExtractedContent
 
 
 class Args:

@@ -1,9 +1,9 @@
 """Tests for query sink feature — compound answers without duplicate pages."""
 
-import pytest
-from pathlib import Path
-import sys
 import json
+import sys
+from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from llmwikify.core import Wiki
@@ -750,7 +750,8 @@ class TestWikiMdTemplate:
         wiki_md = temp_wiki / 'wiki.md'
         content = wiki_md.read_text()
 
-        assert 'saved to the sink' in content
+        # v2.0 schema: "goes to wiki/.sink/" instead of "saved to the sink"
+        assert ('saved to the sink' in content or '.sink/' in content)
         assert 'has_sink' in content
         wiki.close()
 

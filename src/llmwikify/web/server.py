@@ -5,18 +5,14 @@ Run with: python -m llmwikify.web.server --mcp-url http://127.0.0.1:8765/mcp --p
 """
 
 import argparse
-import asyncio
 import json
-import os
-import sys
 from pathlib import Path
-from typing import Any, Dict
 
-from starlette.applications import Starlette
-from starlette.staticfiles import StaticFiles
-from starlette.responses import JSONResponse, Response
-from starlette.routing import Route, Mount
 import httpx
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse
+from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 
 # Global MCP URL, set at startup
 MCP_URL: str = ""
@@ -28,13 +24,13 @@ def get_static_dir() -> Path:
     static_dir = Path(__file__).parent / "static"
     if static_dir.exists():
         return static_dir
-    
+
     # Try project root (development)
     project_root = Path(__file__).parent.parent.parent.parent
     static_dir = project_root / "src" / "llmwikify" / "web" / "static"
     if static_dir.exists():
         return static_dir
-    
+
     raise FileNotFoundError("Static files directory not found")
 
 
@@ -49,18 +45,18 @@ async def rpc_proxy(request) -> JSONResponse:
         return JSONResponse(
             {"error": "Invalid JSON"}, status_code=400
         )
-    
+
     # Support both single and batch requests
     is_batch = isinstance(body, list)
     requests = body if is_batch else [body]
-    
+
     results = []
     async with httpx.AsyncClient(timeout=30.0) as client:
         for req in requests:
             try:
                 resp = await client.post(MCP_URL, json=req)
                 result = resp.json()
-                
+
                 # MCP tools return JSON strings, we parse and re-stringify
                 if "result" in result and isinstance(result["result"], dict):
                     pass  # Already parsed
@@ -69,7 +65,7 @@ async def rpc_proxy(request) -> JSONResponse:
                         result["result"] = json.loads(result["result"])
                     except (json.JSONDecodeError, TypeError):
                         pass  # Keep as string
-                
+
                 results.append(result)
             except httpx.ConnectError:
                 results.append({
@@ -80,7 +76,7 @@ async def rpc_proxy(request) -> JSONResponse:
                         "message": f"Cannot connect to MCP server at {MCP_URL}"
                     }
                 })
-    
+
     if is_batch:
         return JSONResponse(results)
     return JSONResponse(results[0])
@@ -105,7 +101,7 @@ async def health_check(request) -> JSONResponse:
                 })
     except Exception:
         pass
-    
+
     return JSONResponse(
         {
             "status": "degraded",
@@ -120,9 +116,9 @@ def create_app(mcp_url: str) -> Starlette:
     """Create the Starlette application."""
     global MCP_URL
     MCP_URL = mcp_url
-    
+
     static_dir = get_static_dir()
-    
+
     app = Starlette(
         debug=False,
         routes=[
@@ -131,7 +127,7 @@ def create_app(mcp_url: str) -> Starlette:
             Mount("/", StaticFiles(directory=str(static_dir), html=True), name="static"),
         ]
     )
-    
+
     return app
 
 
@@ -154,16 +150,16 @@ def main():
         default="127.0.0.1",
         help="Bind address (default: 127.0.0.1)"
     )
-    
+
     args = parser.parse_args()
-    
+
     import uvicorn
-    
+
     app = create_app(args.mcp_url)
-    
+
     print(f"Starting Web UI on http://{args.host}:{args.port}")
     print(f"MCP server: {args.mcp_url}")
-    
+
     uvicorn.run(
         app,
         host=args.host,

@@ -1,15 +1,14 @@
 """Tests for Principle Compliance Checker (Phase 4c)."""
 
+
 import pytest
 import yaml
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from llmwikify.core.principle_checker import (
-    PrincipleChecker,
-    PrincipleViolation,
-    PrincipleCheckResult,
     PRINCIPLE_DEFINITIONS,
+    PrincipleChecker,
+    PrincipleCheckResult,
+    PrincipleViolation,
 )
 
 

@@ -16,18 +16,18 @@ Usage:
         assert result.passed
 """
 
-import json
-import yaml
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import yaml
 
 
 @dataclass
 class MockLLMConfig:
     """Configuration for mock LLM responses."""
     prompt_name: str
-    response: Dict[str, Any]
+    response: dict[str, Any]
     call_count: int = 0
     max_calls: int = 1
 
@@ -39,8 +39,8 @@ class GoldenTestResult:
     passed: bool
     checks_passed: int
     checks_total: int
-    details: List[str] = field(default_factory=list)
-    failures: List[str] = field(default_factory=list)
+    details: list[str] = field(default_factory=list)
+    failures: list[str] = field(default_factory=list)
 
     def add_pass(self, detail: str):
         self.checks_passed += 1
@@ -55,7 +55,7 @@ class GoldenTestResult:
 class GoldenTestRunner:
     """Runs golden tests using mock LLM responses."""
 
-    def run_golden_test(self, golden_spec: Dict[str, Any], wiki: Any) -> GoldenTestResult:
+    def run_golden_test(self, golden_spec: dict[str, Any], wiki: Any) -> GoldenTestResult:
         """Run a single golden test with mock LLM.
 
         Args:
@@ -86,10 +86,10 @@ class GoldenTestRunner:
             result.passed = False
             return result
 
-    def _test_analyze_source(self, golden_spec: Dict[str, Any], result: GoldenTestResult) -> GoldenTestResult:
+    def _test_analyze_source(self, golden_spec: dict[str, Any], result: GoldenTestResult) -> GoldenTestResult:
         """Test analyze_source pipeline with mock LLM."""
-        from unittest.mock import patch, MagicMock
-        from llmwikify.core.wiki import Wiki
+        from unittest.mock import MagicMock, patch
+
 
         source = golden_spec.get("source", {})
         expected = golden_spec.get("expected", {})
@@ -185,7 +185,7 @@ class GoldenTestRunner:
         result.passed = len(result.failures) == 0
         return result
 
-    def _test_generate_wiki_ops(self, golden_spec: Dict[str, Any], result: GoldenTestResult) -> GoldenTestResult:
+    def _test_generate_wiki_ops(self, golden_spec: dict[str, Any], result: GoldenTestResult) -> GoldenTestResult:
         """Test generate_wiki_ops pipeline with mock LLM."""
         analysis = golden_spec.get("analysis", {})
         expected = golden_spec.get("expected", {})
@@ -229,7 +229,7 @@ class GoldenTestRunner:
         result.passed = len(result.failures) == 0
         return result
 
-    def _test_synthesize(self, golden_spec: Dict[str, Any], result: GoldenTestResult) -> GoldenTestResult:
+    def _test_synthesize(self, golden_spec: dict[str, Any], result: GoldenTestResult) -> GoldenTestResult:
         """Test wiki_synthesize pipeline with mock LLM."""
         expected = golden_spec.get("expected", {})
 
@@ -262,7 +262,7 @@ class GoldenTestRunner:
         result.passed = len(result.failures) == 0
         return result
 
-    def _build_mock_analysis(self, source: Dict[str, Any], expected: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_mock_analysis(self, source: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:
         """Build a mock analyze_source response that satisfies expected output."""
         content = source.get("content", "")
         wiki_index = source.get("wiki_index", "")
@@ -295,7 +295,7 @@ class GoldenTestRunner:
         # Add contradictions if expected
         if expected.get("must_detect_contradictions"):
             response["potential_contradictions"] = [
-                f"Source claims X, but wiki index suggests Y"
+                "Source claims X, but wiki index suggests Y"
             ]
 
         # Add data gaps if expected
@@ -307,7 +307,7 @@ class GoldenTestRunner:
 
         return response
 
-    def _build_mock_operations(self, analysis: Dict[str, Any], expected: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _build_mock_operations(self, analysis: dict[str, Any], expected: dict[str, Any]) -> list[dict[str, Any]]:
         """Build mock write_page operations from analysis."""
         ops = []
         suggested_pages = analysis.get("suggested_pages", [])
@@ -333,7 +333,7 @@ class GoldenTestRunner:
 
         return ops
 
-    def _build_mock_synthesize(self, golden_spec: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_mock_synthesize(self, golden_spec: dict[str, Any]) -> dict[str, Any]:
         """Build a mock wiki_synthesize response."""
         query = golden_spec.get("query", "Test query")
         source_pages = golden_spec.get("source_pages", [])
@@ -350,9 +350,10 @@ class GoldenTestRunner:
 
         return {"answer": answer}
 
-    def _create_temp_wiki(self, golden_spec: Dict[str, Any]) -> "Wiki":
+    def _create_temp_wiki(self, golden_spec: dict[str, Any]) -> "Wiki":
         """Create a temporary Wiki instance for testing."""
         import tempfile
+
         from llmwikify.core.wiki import Wiki
 
         tmp_dir = Path(tempfile.mkdtemp())
@@ -370,7 +371,7 @@ class GoldenTestRunner:
         return wiki
 
 
-def load_golden_sources(golden_dir: str) -> List[Dict[str, Any]]:
+def load_golden_sources(golden_dir: str) -> list[dict[str, Any]]:
     """Load all golden source YAML files from a directory."""
     sources = []
     golden_path = Path(golden_dir)

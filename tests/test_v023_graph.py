@@ -1,20 +1,20 @@
 """Tests for v0.23.0 Graph export and community detection."""
 
-import pytest
 import sys
-import json
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from llmwikify.core.index import WikiIndex
 from llmwikify.core.graph_export import (
-    build_graph,
-    detect_communities,
-    compute_surprise_score,
-    generate_report,
     _build_networkx,
+    build_graph,
+    compute_surprise_score,
+    detect_communities,
+    generate_report,
 )
+from llmwikify.core.index import WikiIndex
 
 
 @pytest.fixture

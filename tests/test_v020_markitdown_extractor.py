@@ -1,14 +1,15 @@
 """Tests for Phase 5: MarkItDown enhanced extractor integration."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
-from llmwikify.extractors.base import (
-    detect_source_type, extract, ExtractedContent
-)
+import pytest
+
+from llmwikify.extractors.base import detect_source_type, extract
 from llmwikify.extractors.markitdown_extractor import (
-    MarkItDownExtractor, MARKITDOWN_FORMATS, _ext_to_source_type
+    MARKITDOWN_FORMATS,
+    MarkItDownExtractor,
+    _ext_to_source_type,
 )
 
 

@@ -14,19 +14,15 @@ Covers all CLI commands including:
 - report
 """
 
-import pytest
 import json
 import sys
-import tempfile
-import shutil
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 from io import StringIO
+from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from llmwikify.cli import WikiCLI
-from llmwikify.core import Wiki
 
 
 class Args:

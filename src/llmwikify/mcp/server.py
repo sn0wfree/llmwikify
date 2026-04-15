@@ -1,14 +1,14 @@
 """MCP server for llmwikify using FastMCP."""
 
-from typing import Optional, Dict, Any, List
 from pathlib import Path
+from typing import Any
 
 from fastmcp import FastMCP
 
 from ..core import Wiki
 
 
-def create_mcp_server(wiki: Wiki, name: Optional[str] = None, config: Optional[Dict[str, Any]] = None) -> FastMCP:
+def create_mcp_server(wiki: Wiki, name: str | None = None, config: dict[str, Any] | None = None) -> FastMCP:
     """Create a FastMCP server with all wiki tools registered.
     
     Args:
@@ -24,7 +24,7 @@ def create_mcp_server(wiki: Wiki, name: Optional[str] = None, config: Optional[D
         service_name = config.get("name")
     if not service_name:
         service_name = wiki.root.name
-    
+
     mcp = FastMCP(service_name)
 
     # Config
@@ -140,9 +140,9 @@ def create_mcp_server(wiki: Wiki, name: Optional[str] = None, config: Optional[D
     def wiki_synthesize(
         query: str,
         answer: str,
-        source_pages: Optional[List[str]] = None,
-        raw_sources: Optional[List[str]] = None,
-        page_name: Optional[str] = None,
+        source_pages: list[str] | None = None,
+        raw_sources: list[str] | None = None,
+        page_name: str | None = None,
         auto_link: bool = True,
         auto_log: bool = True,
         merge_or_replace: str = "sink",
@@ -169,14 +169,14 @@ def create_mcp_server(wiki: Wiki, name: Optional[str] = None, config: Optional[D
     @mcp.tool
     def wiki_graph(
         action: str,
-        concept: Optional[str] = None,
+        concept: str | None = None,
         direction: str = "both",
-        confidence: Optional[str] = None,
-        source: Optional[str] = None,
-        target: Optional[str] = None,
+        confidence: str | None = None,
+        source: str | None = None,
+        target: str | None = None,
         max_length: int = 5,
-        relations: Optional[List[dict]] = None,
-        source_file: Optional[str] = None,
+        relations: list[dict] | None = None,
+        source_file: str | None = None,
     ) -> str:
         """Query and modify the knowledge graph. Actions: query, path, stats, write."""
         import json
@@ -207,7 +207,7 @@ def create_mcp_server(wiki: Wiki, name: Optional[str] = None, config: Optional[D
     def wiki_graph_analyze(
         action: str,
         format: str = "html",
-        output: Optional[str] = None,
+        output: str | None = None,
         min_degree: int = 0,
         algorithm: str = "leiden",
         resolution: float = 1.0,
@@ -215,9 +215,14 @@ def create_mcp_server(wiki: Wiki, name: Optional[str] = None, config: Optional[D
     ) -> str:
         """Analyze the knowledge graph. Actions: export, detect, report."""
         import json
+
         from ..core.graph_export import (
-            build_graph, export_html, export_graphml, export_svg,
-            detect_communities, generate_report,
+            build_graph,
+            detect_communities,
+            export_graphml,
+            export_html,
+            export_svg,
+            generate_report,
         )
         if action == "export":
             graph = build_graph(wiki.index)
@@ -293,9 +298,9 @@ def _auto_register_mcporter(service_name: str, host: str, port: int) -> None:
         print(f"  ⚠ Auto-registration failed: {e}")
 
 
-def serve_mcp(wiki: Wiki, name: Optional[str] = None, transport: Optional[str] = None,
-              host: Optional[str] = None, port: Optional[int] = None,
-              config: Optional[Dict[str, Any]] = None) -> None:
+def serve_mcp(wiki: Wiki, name: str | None = None, transport: str | None = None,
+              host: str | None = None, port: int | None = None,
+              config: dict[str, Any] | None = None) -> None:
     """Create and run the MCP server.
     
     Args:

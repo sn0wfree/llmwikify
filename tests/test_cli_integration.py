@@ -7,19 +7,15 @@ Tests simulate end-to-end workflows:
 4. Status accuracy with mixed page locations
 """
 
-import pytest
 import json
 import sys
-import tempfile
-import shutil
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
-from io import StringIO
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from llmwikify.cli import WikiCLI
-from llmwikify.core import Wiki
 
 
 class Args:

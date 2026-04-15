@@ -1,10 +1,8 @@
 """Tests for Phase 4f: wiki_synthesize prompt externalization."""
 
-import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-import yaml
-from unittest.mock import patch, MagicMock
-from pathlib import Path
 
 from llmwikify.core.prompt_registry import PromptRegistry
 from llmwikify.core.wiki import Wiki

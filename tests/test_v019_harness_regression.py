@@ -5,16 +5,16 @@ Uses golden sources and mock LLM to verify pipeline outputs satisfy
 property-level assertions.
 """
 
-import json
-import pytest
-import yaml
 import importlib.util
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from llmwikify.core.wiki import Wiki
-from llmwikify.core.prompt_registry import PromptRegistry
+import pytest
+import yaml
+
 from llmwikify.core.principle_checker import PrincipleChecker
+from llmwikify.core.prompt_registry import PromptRegistry
+from llmwikify.core.wiki import Wiki
 
 # Load mock_llm_framework directly
 _framework_path = Path(__file__).parent / "fixtures" / "golden_sources" / "mock_llm_framework.py"

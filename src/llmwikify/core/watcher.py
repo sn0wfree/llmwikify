@@ -1,12 +1,10 @@
 """File system watcher for automatic source ingestion."""
 
-import time
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Optional, Callable, Dict, Set
 
-
-SUPPORTED_EXTENSIONS: Set[str] = {
+SUPPORTED_EXTENSIONS: set[str] = {
     ".pdf", ".md", ".txt", ".html", ".htm",
     ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt",
     ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".svg",
@@ -45,11 +43,11 @@ class FileSystemWatcher:
         self.debounce = debounce
 
         self._running = False
-        self._observer: Optional[object] = None
-        self._debounce_timers: Dict[str, threading.Timer] = {}
+        self._observer: object | None = None
+        self._debounce_timers: dict[str, threading.Timer] = {}
         self._event_count = 0
         self._ingest_count = 0
-        self._on_event: Optional[Callable] = None
+        self._on_event: Callable | None = None
 
     @property
     def is_running(self) -> bool:
@@ -63,15 +61,15 @@ class FileSystemWatcher:
             "watch_dir": str(self.watch_dir),
         }
 
-    def start(self, on_event: Optional[Callable] = None) -> None:
+    def start(self, on_event: Callable | None = None) -> None:
         """Start watching the directory.
 
         Args:
             on_event: Optional callback(event_type, path) for each event.
         """
         try:
-            from watchdog.observers import Observer
             from watchdog.events import FileSystemEventHandler
+            from watchdog.observers import Observer
         except ImportError:
             raise ImportError(
                 "watchdog package is required. "
@@ -166,9 +164,9 @@ class FileSystemWatcher:
                 print(f"    Tip: run 'llmwikify ingest {path.name} --self-create' to process with LLM")
             else:
                 print(f"    Tip: run 'llmwikify ingest {path.name}' to process")
-            print(f"    Or start with --auto-ingest to process automatically")
+            print("    Or start with --auto-ingest to process automatically")
 
-    def trigger_ingest(self, path: Path, wiki=None) -> Optional[dict]:
+    def trigger_ingest(self, path: Path, wiki=None) -> dict | None:
         """Manually trigger ingest for a specific file.
 
         Args:
@@ -240,7 +238,7 @@ def uninstall_git_hook(wiki_root: Path) -> bool:
             print(f"Git post-commit hook removed: {hook_path}")
             return True
         else:
-            print(f"Hook exists but was not created by llmwikify. Not removing.")
+            print("Hook exists but was not created by llmwikify. Not removing.")
             return False
     else:
         print(f"No llmwikify git hook found at: {hook_path}")

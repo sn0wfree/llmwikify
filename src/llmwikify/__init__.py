@@ -15,21 +15,23 @@ __email__ = "linlu1234567@sina.com"
 __license__ = "MIT"
 
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict, Optional
+
+from .cli import WikiCLI
+from .config import (
+    get_default_config,
+    get_mcp_config,
+    load_config,
+)
 
 # Import main components from modules
 from .core import Wiki, WikiIndex
-from .cli import WikiCLI
-from .mcp import create_mcp_server, serve_mcp
 from .extractors import ExtractedContent, Link
-from .config import (
-    load_config,
-    get_default_config,
-    get_mcp_config,
-)
+from .mcp import create_mcp_server, serve_mcp
+
 
 # Convenience functions
-def create_wiki(path: str | Path, config: Optional[Dict] = None) -> Wiki:
+def create_wiki(path: str | Path, config: dict | None = None) -> Wiki:
     """Create or open a wiki at the given path.
     
     Args:
@@ -45,23 +47,23 @@ def create_wiki(path: str | Path, config: Optional[Dict] = None) -> Wiki:
 __all__ = [
     # Version
     "__version__",
-    
+
     # Main classes
     "Wiki",
-    "WikiIndex", 
+    "WikiIndex",
     "WikiCLI",
     "create_mcp_server",
     "serve_mcp",
-    
+
     # Data classes
     "ExtractedContent",
     "Link",
-    
+
     # Configuration
     "load_config",
     "get_default_config",
     "get_mcp_config",
-    
+
     # Convenience functions
     "create_wiki",
 ]

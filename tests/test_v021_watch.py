@@ -1,20 +1,19 @@
 """Tests for v0.21.0 Watch mode."""
 
-import pytest
 import sys
 import time
-import tempfile
-import shutil
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from llmwikify.core.watcher import (
+    SUPPORTED_EXTENSIONS,
     FileSystemWatcher,
     install_git_hook,
     uninstall_git_hook,
-    SUPPORTED_EXTENSIONS,
 )
 
 

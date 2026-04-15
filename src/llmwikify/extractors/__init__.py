@@ -1,16 +1,16 @@
 """Content extractors for various source types."""
 
 from .base import (
-    detect_source_type,
-    extract,
     ExtractedContent,
     Link,
+    detect_source_type,
+    extract,
 )
-from .text import extract_text_file, extract_html_file
+from .markitdown_extractor import MARKITDOWN_FORMATS, MarkItDownExtractor
 from .pdf import extract_pdf
+from .text import extract_html_file, extract_text_file
 from .web import extract_url
 from .youtube import extract_youtube
-from .markitdown_extractor import MarkItDownExtractor, MARKITDOWN_FORMATS
 
 __all__ = [
     "detect_source_type",

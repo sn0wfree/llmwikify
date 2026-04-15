@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-from typing import Optional, Dict, List, Any
 
 from .index import WikiIndex
 
@@ -57,7 +56,7 @@ def build_graph(index: WikiIndex, include_wikilinks: bool = True, include_relati
     return {"nodes": list(nodes.values()), "edges": edges}
 
 
-def export_html(graph: dict, communities: Optional[Dict[int, List[str]]], output_path: Path, min_degree: int = 0) -> dict:
+def export_html(graph: dict, communities: dict[int, list[str]] | None, output_path: Path, min_degree: int = 0) -> dict:
     """Export graph to interactive HTML using pyvis.
 
     Nodes with corresponding entity pages are clickable.
@@ -222,8 +221,9 @@ def export_svg(graph: dict, output_path: Path) -> dict:
         raise ImportError("networkx is required for SVG export")
 
     try:
-        from networkx.drawing.nx_agraph import write_dot
         import subprocess
+
+        from networkx.drawing.nx_agraph import write_dot
     except ImportError:
         raise ImportError("pygraphviz is required for SVG export. Install with: pip install pygraphviz")
 
@@ -333,7 +333,7 @@ def compute_surprise_score(
     source: str,
     target: str,
     edge_data: dict,
-    communities: Dict[int, List[str]],
+    communities: dict[int, list[str]],
 ) -> tuple:
     """Compute surprise score for an edge (borrowed from graphify, adapted for llmwikify).
 
@@ -390,12 +390,12 @@ def compute_surprise_score(
         score += 1
         peripheral = source if deg_a <= 2 else target
         hub = target if deg_a <= 2 else source
-        reasons.append(f"peripheral node reaches hub")
+        reasons.append("peripheral node reaches hub")
 
     return score, reasons
 
 
-def generate_report(index: WikiIndex, communities: Optional[Dict] = None, top_n: int = 10) -> str:
+def generate_report(index: WikiIndex, communities: dict | None = None, top_n: int = 10) -> str:
     """Generate a surprising connections report."""
     try:
         import networkx as nx
@@ -473,7 +473,6 @@ def _build_networkx(graph: dict):
 
 def _greedy_modularity_communities(G):
     """Simple greedy modularity communities using networkx."""
-    import networkx as nx
     from networkx.algorithms.community import greedy_modularity_communities
 
     communities = greedy_modularity_communities(G.to_undirected(), weight="weight")

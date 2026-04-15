@@ -3,10 +3,8 @@
 import json
 import re
 from pathlib import Path
-from typing import Optional, List, Dict, Any
 
 from .index import WikiIndex
-
 
 # Default relation types (overridden by wiki.md if available)
 DEFAULT_RELATION_TYPES = {
@@ -27,7 +25,7 @@ class RelationEngine:
         relations = engine.get_neighbors("Attention")
     """
 
-    def __init__(self, index: WikiIndex, wiki_root: Optional[Path] = None):
+    def __init__(self, index: WikiIndex, wiki_root: Path | None = None):
         self.index = index
         self.wiki_root = wiki_root
         self._relation_types = self._load_relation_types()
@@ -103,9 +101,9 @@ class RelationEngine:
         target: str,
         relation: str,
         confidence: str = "EXTRACTED",
-        source_file: Optional[str] = None,
-        context: Optional[str] = None,
-        wiki_pages: Optional[List[str]] = None,
+        source_file: str | None = None,
+        context: str | None = None,
+        wiki_pages: list[str] | None = None,
     ) -> int:
         """Add a single relation.
 
@@ -129,7 +127,7 @@ class RelationEngine:
         self.index.conn.commit()
         return cursor.lastrowid
 
-    def add_relations(self, relations: List[dict]) -> int:
+    def add_relations(self, relations: list[dict]) -> int:
         """Batch add relations.
 
         Args:
@@ -152,7 +150,7 @@ class RelationEngine:
                     wiki_pages=r.get("wiki_pages"),
                 )
                 count += 1
-            except (ValueError, KeyError) as e:
+            except (ValueError, KeyError):
                 # Skip invalid relations, log warning
                 pass
         return count
@@ -161,8 +159,8 @@ class RelationEngine:
         self,
         concept: str,
         direction: str = "both",
-        confidence: Optional[str] = None,
-    ) -> List[dict]:
+        confidence: str | None = None,
+    ) -> list[dict]:
         """Get all relations for a concept.
 
         Args:
@@ -196,7 +194,7 @@ class RelationEngine:
         cursor = self.index.conn.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
 
-    def get_path(self, source: str, target: str, max_length: int = 5) -> Optional[dict]:
+    def get_path(self, source: str, target: str, max_length: int = 5) -> dict | None:
         """Find shortest path between two concepts.
 
         Args:
@@ -273,7 +271,7 @@ class RelationEngine:
             "by_relation": by_relation,
         }
 
-    def get_context(self, relation_id: int) -> Optional[dict]:
+    def get_context(self, relation_id: int) -> dict | None:
         """Get the original context for a relation."""
         cursor = self.index.conn.execute(
             "SELECT * FROM relations WHERE id = ?", (relation_id,)
@@ -283,7 +281,7 @@ class RelationEngine:
             return None
         return dict(row)
 
-    def detect_contradictions(self) -> List[dict]:
+    def detect_contradictions(self) -> list[dict]:
         """Find contradictory relations between same source/target pairs."""
         cursor = self.index.conn.execute(
             """SELECT r1.source, r1.target,
@@ -303,7 +301,7 @@ class RelationEngine:
         )
         return [dict(row) for row in cursor.fetchall()]
 
-    def find_orphan_concepts(self) -> List[str]:
+    def find_orphan_concepts(self) -> list[str]:
         """Find concepts in relations that have no corresponding wiki page."""
         cursor = self.index.conn.execute(
             """SELECT DISTINCT concept FROM (

@@ -10,19 +10,19 @@ Covers:
 - FastMCP integration (mcp.name attribute)
 """
 
-import pytest
 import sys
 import tempfile
-import shutil
-from pathlib import Path
-from unittest.mock import patch, MagicMock, call
 from io import StringIO
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
+from llmwikify.cli import WikiCLI
 from llmwikify.core import Wiki
 from llmwikify.mcp.server import create_mcp_server, serve_mcp
-from llmwikify.cli import WikiCLI
 
 
 class Args:
@@ -520,8 +520,9 @@ class TestAutoRegisterMcporter:
 
     def test_registers_new_service(self, tmp_path, monkeypatch):
         """8.1: Should write new service to ~/.mcporter/mcporter.json."""
-        from llmwikify.mcp.server import _auto_register_mcporter
         import json
+
+        from llmwikify.mcp.server import _auto_register_mcporter
 
         fake_home = tmp_path / "fakehome"
         fake_home.mkdir()
@@ -538,8 +539,9 @@ class TestAutoRegisterMcporter:
 
     def test_skips_existing_service(self, tmp_path, monkeypatch):
         """8.2: Should skip if service name already registered."""
-        from llmwikify.mcp.server import _auto_register_mcporter
         import json
+
+        from llmwikify.mcp.server import _auto_register_mcporter
 
         fake_home = tmp_path / "fakehome"
         fake_home.mkdir()
