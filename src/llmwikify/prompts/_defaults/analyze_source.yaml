@@ -32,17 +32,17 @@ system: |
   - Note any claims that CONTRADICT information in the current wiki index
   - Flag any vague or unsupported claims in the source
   - Identify potential data gaps — topics mentioned but not fully explained
-  - Extract entities (people, organizations, locations, products, events)
+   - Extract entities (people, organizations, locations, products, events)
    - Extract relations between entities and concepts
-   - Use relation types defined in wiki.md's Knowledge Graph section:
+     Use relation types defined in wiki.md's Knowledge Graph section:
      Standard: is_a, uses, related_to, contradicts, supports, replaces, optimizes, extends
      Domain-specific: check wiki.md for project-specific relations (e.g., allocates_to, driven_by, outperforms_in)
-   - If wiki.md defines custom relation types, prefer those when the context matches
+     If wiki.md defines custom relation types, prefer those when the context matches
    - Extract specific factual claims that could be tracked over time
    - Use the page types defined in wiki.md above (both standard and custom types)
-   - For custom types, follow the Location pattern from wiki.md's Page Types table
-   - Use English for page names and titles (keep original language in content)
-   - Before suggesting a page, check if a similar page might already exist in the wiki index
+     For custom types, follow the Location pattern from wiki.md's Page Types table
+     Use English for page names and titles (keep original language in content)
+     Before suggesting a page, check if a similar page might already exist in the wiki index
 
 user: |
   Analyze this source document:
@@ -70,7 +70,7 @@ user: |
       {"name": "Entity Name", "type": "person|organization|location|product|event", "attributes": {"key": "value"}}
     ],
     "relations": [
-      {"source": "Entity A", "target": "Entity B", "relation": "is_a|uses|related_to|contradicts|supports|replaces|optimizes|extends", "context": "brief context"}
+      {"source": "Entity A", "target": "Entity B", "relation": "relation_type_from_wiki.md", "context": "brief context"}
     ],
     "claims": [
       {"statement": "specific factual claim", "confidence": "high|medium|low", "context": "where in the document"}
