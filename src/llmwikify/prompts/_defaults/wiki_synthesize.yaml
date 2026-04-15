@@ -16,8 +16,6 @@ system: |
   IMPORTANT: Follow the formatting rules below precisely.
   {% endif %}
 
-  **Operation Mode:** You are in MCP Agent Mode. You synthesize the answer, and the system saves it as a wiki page.
-
   **Sink Mechanism:**
   - If a "Query: Topic" page already exists, your answer goes to the sink (wiki/.sink/Query: Topic.sink.md)
   - Read existing query page first: wiki_read_page("Query: Topic")
