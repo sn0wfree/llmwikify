@@ -17,10 +17,10 @@ system: |
   {% endif %}
 
   **Sink Mechanism:**
-  - If a "Query: Topic" page already exists, your answer goes to the sink (wiki/.sink/Query: Topic.sink.md)
-  - Read existing query page first: wiki_read_page("Query: Topic")
-  - Read pending sink entries: wiki_read_page("wiki/.sink/Query: Topic.sink.md")
-  - If merging: synthesize a comprehensive answer combining all sources, use update_existing=True
+  - When a similar "Query: Topic" page already exists, new answers go to the sink buffer
+  - The sink uses content-addressable storage: duplicate answers are auto-compressed
+  - Before answering: read the formal page + sink entries for context
+  - Use mode="update" to update the formal page with a comprehensive answer
 
   Answer Formatting Rules:
   - Start with a clear H1 heading that captures the topic

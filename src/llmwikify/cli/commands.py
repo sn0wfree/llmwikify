@@ -741,7 +741,7 @@ class WikiCLI:
             page_name=args.page_name,
             auto_link=not getattr(args, 'no_auto_link', False),
             auto_log=not getattr(args, 'no_auto_log', False),
-            merge_or_replace=args.merge,
+            mode=args.mode,
         )
 
         if "error" in result:
@@ -1210,7 +1210,7 @@ Examples:
     p.add_argument('--page-name', '-n', help='Custom page name')
     p.add_argument('--sources', nargs='*', help='Source pages to link')
     p.add_argument('--raw-sources', nargs='*', help='Raw source files to cite')
-    p.add_argument('--merge', choices=['sink', 'merge', 'replace'], default='sink',
+    p.add_argument('--mode', choices=['sink', 'update'], default='sink',
                    help='Strategy when similar query exists')
     p.add_argument('--no-auto-link', action='store_true', help='Disable automatic wikilink insertion')
     p.add_argument('--no-auto-log', action='store_true', help='Disable automatic log entry')

@@ -151,9 +151,9 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         page_name: str | None = None,
         auto_link: bool = True,
         auto_log: bool = True,
-        merge_or_replace: str = "sink",
+        mode: str = "sink",
     ) -> str:
-        """Save a query answer as a new wiki page. Answers compound in the knowledge base."""
+        """Save a query answer as a wiki page. mode="sink" buffers, mode="update" overwrites."""
         import json
         return json.dumps(wiki.synthesize_query(
             query=query,
@@ -163,7 +163,7 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             page_name=page_name,
             auto_link=auto_link,
             auto_log=auto_log,
-            merge_or_replace=merge_or_replace,
+            mode=mode,
         ))
 
     @mcp.tool

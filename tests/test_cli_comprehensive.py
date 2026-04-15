@@ -309,7 +309,7 @@ class TestSynthesizeCommand:
         args.raw_sources = []
         args.no_auto_link = False
         args.no_auto_log = False
-        args.merge = 'sink'
+        args.mode = 'sink'
 
         stdout = StringIO()
         with patch('sys.stdout', stdout):
