@@ -19,27 +19,25 @@ document: |
   extracted from source documents (PDFs, articles, reports) and query answers.
 
   **How to interact:**
-  - **Preferred**: MCP tools (`wiki_read_page`, `wiki_write_page`, `wiki_search`, etc.)
-  - **Fallback CLI**: `python3 -m llmwikify <command>` (use when MCP is unavailable)
+  - Use CLI commands (`llmwikify ...`) or MCP tools (`wiki_read_page`, `wiki_write_page`, etc.)
+  - Both access the same underlying wiki — pick whichever interface you have
   - **NEVER edit wiki/ files directly** — always use the tools
 
   **Your first steps:**
-  1. Run `wiki_status()` or `python3 -m llmwikify status` to see what exists
-  2. Run `wiki_read_page("wiki/index.md")` or `python3 -m llmwikify read_page "wiki/index.md"` to see the content catalog
-  3. Read this document fully to understand conventions
+  1. Check status → see what exists
+  2. Read `wiki/index.md` → see the content catalog
+  3. Read this document fully → understand conventions
 
   ## How to Operate
 
-  **You are invoked via MCP tools** (e.g., opencode + mcporter-bridge, or any MCP client)
-
   **Your workflow:**
-  1. Call `wiki_ingest(source="raw/file.pdf")` → returns JSON with content, entities, relations
+  1. Ingest source → returns JSON with content, entities, relations
   2. **Analyze the response** → decide which pages to create/update
-  3. Call `wiki_write_page(page_name="...", content="...")` for each page
-  4. Call `wiki_graph(action="write", relations=[...])` for relationships
-  5. Call `wiki_log(operation="ingest", details="...")`
+  3. Create/update pages via `write_page` or `wiki_write_page`
+  4. Write graph relations for relationships
+  5. Log the operation
 
-  **Key point:** YOU (the agent) write the page content. The CLI extracts content but does NOT auto-create pages.
+  **Key point:** YOU (the agent) write the page content. The CLI/MCP extracts content but does NOT auto-create pages.
 
   ## Directory Structure
 
@@ -89,24 +87,39 @@ document: |
   |------|----------|---------|
   | *(add your custom types here)* | `wiki/{subdir}/{pattern}.md` | *(describe purpose)* |
 
-  ## Core MCP Tools
+  ## Core Tools
 
   These are the 8 core tools you will use most. Full tool list available via `wiki_status()`.
 
-  | Tool | CLI Equivalent | Purpose |
-  |------|---------------|---------|
-  | `wiki_read_page(page_name)` | `python3 -m llmwikify read_page "Page"` | Read a wiki page |
-  | `wiki_write_page(page_name, content)` | `python3 -m llmwikify write_page "Page" --content "..."` | Write/create a wiki page |
-  | `wiki_search(query, limit)` | `python3 -m llmwikify search "query" --limit 10` | Full-text search wiki pages |
-  | `wiki_ingest(source)` | `python3 -m llmwikify ingest raw/file.pdf` | Ingest a source, extract entities/relations |
-  | `wiki_lint(format)` | `python3 -m llmwikify lint --format recommendations` | Health check: broken links, orphans |
-  | `wiki_status()` | `python3 -m llmwikify status` | Get wiki status summary |
-  | `wiki_references(page_name)` | `python3 -m llmwikify references "Page"` | Show inbound/outbound wikilinks |
-  | `wiki_synthesize(query, answer)` | `python3 -m llmwikify synthesize --query "Q" --answer "A"` | Save query answer as wiki page |
+  | Operation | CLI Command | MCP Tool |
+  |-----------|-------------|----------|
+  | Read page | `llmwikify read_page "Name" --type concept` | `wiki_read_page(page_name)` |
+  | Write page | `llmwikify write_page "Name" --type concept --content "..."` | `wiki_write_page(page_name, content)` |
+  | Search | `llmwikify search "query" --limit 10` | `wiki_search(query, limit)` |
+  | Ingest | `llmwikify ingest raw/file.pdf` | `wiki_ingest(source)` |
+  | Lint | `llmwikify lint --format recommendations` | `wiki_lint(format)` |
+  | Status | `llmwikify status` | `wiki_status()` |
+  | References | `llmwikify references "Page" --detail` | `wiki_references(page_name)` |
+  | Synthesize | `llmwikify synthesize --query "Q" --answer "A"` | `wiki_synthesize(query, answer)` |
 
   **Additional tools:** `wiki_graph`, `wiki_graph_analyze`, `wiki_sink_status`,
   `wiki_build_index`, `wiki_recommend`, `wiki_log`, `wiki_read_schema`,
   `wiki_update_schema`
+
+  ## CLI ↔ MCP Parameter Mapping
+
+  CLI arguments and MCP parameters map to the same underlying function.
+
+  | Function | CLI | MCP | Notes |
+  |----------|-----|-----|-------|
+  | Write page | `write_page "Name" --type concept --content "..."` | `wiki_write_page(page_name="Name", content="...")` | MCP: page_type not exposed |
+  | Read page | `read_page "Name" --type concept` | `wiki_read_page(page_name="Name")` | MCP: page_type not exposed |
+  | Synthesize | `synthesize --query "Q" --answer "A" --sources "A" "B"` | `wiki_synthesize(query="Q", answer="A", source_pages=["A", "B"])` | CLI: `--sources`, MCP: `source_pages` |
+  | Synthesize (auto-link) | `synthesize --no-auto-link` | `wiki_synthesize(..., auto_link=False)` | CLI uses negation flags |
+  | Graph query | `graph-query neighbors "Concept"` | `wiki_graph(action="query", concept="Concept")` | CLI subcommand → action param |
+  | Graph path | `graph-query path "A" "B"` | `wiki_graph(action="path", source="A", target="B")` | CLI positional → named params |
+  | Community detect | `community-detect --algorithm leiden` | `wiki_graph_analyze(action="detect", algorithm="leiden")` | CLI command → action param |
+  | Build index | `build-index --no-export` | `wiki_build_index(auto_export=False)` | Negation vs positive bool |
 
   ### Tool Return Formats
 
@@ -143,88 +156,12 @@ document: |
   }
   ```
 
-  ## CLI Command Reference
-
-  ### Complete Command Syntax
-
-  **Ingest:**
-  ```bash
-  # Extract content — returns JSON to stdout
-  python3 -m llmwikify ingest "raw/report.pdf"
-
-  # Output format (parse this JSON):
-  {
-    "status": "success",
-    "source_name": "report.pdf",
-    "content_preview": "...",
-    "detected_entities": ["Entity1"],
-    "detected_relations": [{"source": "A", "target": "B", "relation": "uses"}]
-  }
-  ```
-
-  **Write Page:**
-  ```bash
-  python3 -m llmwikify write_page "Topic" --type concept --content "# Topic\n\n## Summary\n..."
-  python3 -m llmwikify write_page "Company Name" --type entity --content "# Company Name\n\n..."
-  python3 -m llmwikify write_page "Black-Litterman" --type model --content "# Black-Litterman\n\n..."
-  ```
-
-  **Read Page:**
-  ```bash
-  python3 -m llmwikify read_page "Topic" --type concept
-  ```
-
-  **Search, Status, Lint:**
-  ```bash
-  python3 -m llmwikify search "keyword" --limit 10
-  python3 -m llmwikify status
-  python3 -m llmwikify lint --format recommendations
-  ```
-
-  ### Page Type → Directory Mapping
-
-  The `--type` parameter maps to a directory based on wiki.md's **Page Types** table:
-
-  | Type Parameter | Directory | Example |
-  |---------------|-----------|---------|
-  | `Source` | `sources/` | `write_page("report-slug", type="Source")` |
-  | `Entity` | `entities/` | `write_page("Company Name", type="Entity")` |
-  | `Concept` | `concepts/` | `write_page("Risk Parity", type="Concept")` |
-  | Custom types | from wiki.md | Check Page Types table for your project |
-
-  **How it works:**
-  1. Code reads wiki.md's Page Types table
-  2. Extracts directory from Location column (e.g., `wiki/concepts/{name}.md` → `concepts`)
-  3. Maps type name → directory dynamically
-  4. If type not found, uses lowercased type name as directory
-
-  ### JSON Escaping Guide (for mcporter call)
-
-  **Correct:**
-  ```bash
-  mcporter call service wiki_write_page --args '{"page_name": "Topic", "content": "# Topic\n\nContent", "page_type": "concept"}'
-  ```
-
-  **Wrong (common mistakes):**
-  ```bash
-  # Double quotes not escaped — shell may interpret
-  mcporter call ... --args "{\"page_name\": \"Topic\"}"
-
-  # Using double quotes for outer wrapper — shell may expand $variables
-  mcporter call ... --args "{...}"
-
-  # Including wiki/ prefix in page_name
-  mcporter call ... --args '{"page_name": "wiki/concepts/Topic", ...}'  # WRONG
-  ```
-
   ### Common Errors
 
   | Error | Cause | Fix |
   |-------|-------|-----|
-  | `mcporter: command not found` | mcporter not installed | `pip install mcporter-bridge` |
-  | JSON parse error on `--args` | Shell escaping issue | Use single quotes around JSON |
   | `Page not found` on read | Page doesn't exist yet | Create it — it's a broken link |
-  | `page_name should NOT include 'wiki/'` | Used `wiki/` prefix | Remove prefix: use `"concepts/Topic"` not `"wiki/concepts/Topic"` |
+  | `page_name should NOT include 'wiki/'` | Used `wiki/` prefix | Remove prefix: use `"Page Name"` not `"wiki/Page Name"` |
   | Unknown page_type | Typo in type name | Check wiki.md Page Types table for valid types |
 
   ## Page Conventions
@@ -326,232 +263,113 @@ document: |
 
   ### 1. Ingest a Source
 
+  1. **Ingest source** → returns JSON with content_preview, detected_entities, detected_relations
+  2. **Create source summary** → type: Source, cite raw file in Sources section
+  3. **Create entity pages** → for each new detected entity, type: Entity
+  4. **Create concept pages** → for each new concept, type: Concept
+  5. **Write graph relations** → if relations detected, write to knowledge graph
+  6. **Update overview** → if the big picture changed significantly
+  7. **Log operation** → append to log.md
+
+  **CLI example:**
   ```bash
-  # Step 1: Ingest the source file
-  python3 -m llmwikify ingest raw/article.pdf
-  # Output: JSON with content_preview, detected_entities, detected_relations
-
-  # Step 2: Create source summary page (new API)
-  python3 -m llmwikify write_page "article-title" --type source --content "# Article Title\n\n## Summary\n..."
-
-  # Step 3: Create entity pages for new detected entities
-  python3 -m llmwikify write_page "Company Name" --type entity --content "# Company Name\n\n## Description\n..."
-
-  # Step 4: Create concept pages for new concepts
-  python3 -m llmwikify write_page "Gold Royalty" --type concept --content "# Gold Royalty\n\n## Description\n..."
-
-  # Step 5: Write graph relations (if any detected)
-  python3 -m llmwikify graph write --relations '[{"source":"Company Name","target":"Gold Royalty","relation":"uses","confidence":"EXTRACTED"}]' --source-file raw/article.pdf
-
-  # Step 6: Update overview if the big picture changed
-  python3 -m llmwikify write_page "overview" --content "# Knowledge Base Overview\n\n..."
-
-  # Step 7: Log the operation
-  python3 -m llmwikify log --operation ingest --details "article.pdf"
-  ```
-
-  **MCP equivalent:**
-  ```python
-  wiki_ingest(source="raw/article.pdf")
-  wiki_write_page(page_name="article-title", content="# Article Title\n\n...", page_type="Source")
-  wiki_write_page(page_name="Company Name", content="# Company Name\n\n...", page_type="Entity")
-  wiki_graph(action="write", relations=[{"source":"Company Name","target":"Gold Royalty","relation":"uses","confidence":"EXTRACTED"}], source_file="raw/article.pdf")
+  llmwikify ingest raw/article.pdf
+  llmwikify write_page "article-title" --type source --content "..."
+  llmwikify graph write --relations '[...]' --source-file raw/article.pdf
+  llmwikify log ingest article.pdf
   ```
 
   **Troubleshooting:**
-  - **No entities detected:** Review content manually, create pages for key topics you identify
-  - **Page already exists:** Read existing page first, then update (append new info, don't overwrite)
-  - **Source is URL:** Save URL content to `raw/` first, then ingest the local file
+  - **No entities detected:** review content manually, create pages for key topics you identify
+  - **Page already exists:** read existing page first, then update (append new info, don't overwrite)
+  - **Source is URL:** save URL content to `raw/` first, then ingest the local file
 
   ### 2. Answer a Query
 
+  1. **Search** for relevant pages → returns ranked results with snippets
+  2. **Read** full content of relevant pages
+  3. **Check sink** → if has_sink, read pending entries from `wiki/.sink/`
+  4. **Synthesize** answer → save via `wiki_synthesize` with source_pages and raw_sources
+  5. **Merge sinks** → if pending entries exist, combine into comprehensive answer
+
+  **CLI example:**
   ```bash
-  # Step 1: Search for relevant pages
-  python3 -m llmwikify search "gold royalty Ghana" --limit 10
-  # Output: JSON array of {page_name, score, snippet, has_sink}
-
-  # Step 2: Read full content of relevant pages (new API)
-  python3 -m llmwikify read_page "ghana-royalty" --type source
-  # Output: JSON with {page_name, content, has_sink}
-
-  # Step 3: If has_sink is true, read pending sink entries
-  python3 -m llmwikify read_page "wiki/.sink/Query: Gold Royalty.sink.md"
-  # Output: Pending answer entries from previous queries
-
-  # Step 4: Synthesize answer and save
-  python3 -m llmwikify synthesize \
-    --query "What is Ghana's gold royalty policy?" \
-    --answer "Ghana plans to implement a sliding scale royalty of 5%-12%..." \
-    --source-pages "sources/ghana-royalty" \
-    --raw-sources "raw/article.pdf" \
-    --auto-link true \
-    --auto-log true
-  # Output: {page_created: "Query: Gold Royalty", status: "created" or "sunk"}
-  ```
-
-  **MCP equivalent:**
-  ```python
-  results = wiki_search(query="gold royalty Ghana", limit=10)
-  page = wiki_read_page(page_name="ghana-royalty", page_type="Source")
-  if page.get("has_sink"):
-      sink = wiki_read_page(page_name="wiki/.sink/Query: Gold Royalty.sink.md")
-  wiki_synthesize(query="What is Ghana's gold royalty policy?", answer="...", source_pages=["sources/ghana-royalty"], raw_sources=["raw/article.pdf"], auto_link=True, auto_log=True)
+  llmwikify search "gold royalty Ghana" --limit 10
+  llmwikify read_page "ghana-royalty" --type source
+  llmwikify synthesize --query "Q" --answer "A" --sources "A" "B" --auto-link
   ```
 
   **Decision flow:**
-  - If search returns results → Read pages → Synthesize → Save with `wiki_synthesize`
-  - If a "Query: Topic" page already exists → Your answer goes to `wiki/.sink/Query: Topic.sink.md` (status: "sunk")
-  - If sink has pending entries → Read them → Merge into your answer → Use `update_existing=True`
+  - If search returns results → read pages → synthesize → save
+  - If "Query: Topic" page already exists → answer goes to sink (status: "sunk")
+  - If sink has pending entries → read → merge → use `update_existing=True`
 
   **Troubleshooting:**
-  - **No search results:** The topic may not be covered yet. Create a new page with what you know, mark it as tentative
-  - **Sink has many entries:** Periodically merge sink entries into the formal query page, then clear the sink:
-    ```bash
-    python3 -m llmwikify write_page "wiki/.sink/Query: Topic.sink.md" --content ""
-    ```
-  - **Similar query exists with different name:** Read both, merge into one, use `update_existing=True`
+  - **No search results:** topic may not be covered yet, create new page and mark as tentative
+  - **Sink has many entries:** periodically merge into formal query page, then clear sink
 
   ### 3. Create or Edit a Page
 
+  1. **Search first** → check if page already exists (`wiki_search`)
+  2. **Read existing** → if found, read current content to understand what's there
+  3. **Write** → create new or update existing with full content
+  4. **Add wikilinks** → connect to related pages
+  5. **Cite sources** → add `[Source: Title](raw/filename)` in Sources section
+
+  **CLI example:**
   ```bash
-  # Create a new page (new API)
-  python3 -m llmwikify write_page "New Entity" --type entity --content "# New Entity\n\n## Description\n...\n\n## Sources\n- [Source](raw/source.md)"
-
-  # Edit an existing page
-  # 1. Read current content (new API)
-  python3 -m llmwikify read_page "Existing Entity" --type entity
-  # 2. Modify content (append/update)
-  # 3. Write back
-  python3 -m llmwikify write_page "Existing Entity" --type entity --content "# Existing Entity\n\n## Description\n...updated...\n\n## New Section\n..."
-  ```
-
-  **MCP equivalent:**
-  ```python
-  wiki_write_page(page_name="New Entity", content="# New Entity\n\n...", page_type="Entity")
+  llmwikify write_page "New Entity" --type entity --content "# New Entity\n\n..."
   ```
 
   **Rules:**
-  - **NEVER create duplicate pages** — always search first with `wiki_search`
+  - **NEVER create duplicate pages** — always search first
   - **Update existing pages** rather than creating new ones for same topic
   - **Use consistent naming** — same entity = same page name everywhere
   - **Add wikilinks** to connect to related pages
   - **Cite sources** in every page you create or update
 
   **Troubleshooting:**
-  - **Page not found on read:** Create it — it's a broken link that needs fixing
-  - **Write fails with error:** Check page_type is valid in wiki.md Page Types table
-  - **Content looks wrong:** Read the page first, verify what exists, then write the full corrected content
+  - **Page not found on read:** create it — it's a broken link that needs fixing
+  - **Write fails:** check page_type is valid in wiki.md Page Types table
+  - **Content looks wrong:** read the page first, verify what exists, then write full corrected content
 
   ### 4. Maintain Wiki Health
 
+  1. **Run health check** → `wiki_lint` returns missing pages, orphan pages, broken links
+  2. **Fix broken links** → create missing pages or remove wikilinks
+  3. **Connect orphans** → add wikilinks from overview, synthesis pages, or related entities
+  4. **Check sink status** → merge pending entries, clear sink files
+  5. **Check recommendations** → `wiki_recommend` suggests missing pages
+
+  **CLI example:**
   ```bash
-  # Step 1: Run health check
-  python3 -m llmwikify lint --format recommendations
-  # Output: {missing_pages: ["Page A"], orphan_pages: ["Page B"]}
-
-  # Step 2: Fix broken links (create missing pages or remove links)
-  python3 -m llmwikify write_page "Missing Page" --type entity --content "# Missing Page\n\n## Description\n..."
-
-  # Step 3: Connect orphan pages (add wikilinks from other pages)
-  python3 -m llmwikify read_page "Related Page" --type entity
-  # Edit to add [[Orphan Page]] link
-  python3 -m llmwikify write_page "Related Page" --type entity --content "...[[Orphan Page]]..."
-
-  # Step 4: Check sink status
-  python3 -m llmwikify sink-status
-  # Output: JSON with pending entry counts per topic
-
-  # Step 5: Check for recommendations (missing pages)
-  python3 -m llmwikify search "" --limit 10
-  # Or use wiki_recommend() via MCP
-  ```
-
-  **MCP equivalent:**
-  ```python
-  lint_result = wiki_lint(format="recommendations")
-  missing = lint_result.get("missing_pages", [])
-  orphans = lint_result.get("orphan_pages", [])
-  wiki_sink_status()  # Check pending sinks
-  wiki_recommend()    # Get missing page recommendations
+  llmwikify lint --format recommendations
+  llmwikify write_page "Missing Page" --type entity --content "..."
+  llmwikify sink-status
   ```
 
   **Troubleshooting:**
-  - **Many broken links:** Create the missing pages as stubs, then fill in content later
-  - **Many orphans:** Add wikilinks from overview.md, synthesis pages, or related entities
-  - **Sinks not merging:** Read each sink, synthesize into formal query page, then clear sink file
-  - **Lint takes too long:** Run with `--format brief` for quick check, full for detailed report
+  - **Many broken links:** create missing pages as stubs, fill in content later
+  - **Many orphans:** add wikilinks from overview.md, synthesis pages, or related entities
+  - **Sinks not merging:** read each sink, synthesize into formal query page, then clear
 
   ### 5. Batch Ingest Strategy
 
-  When processing many sources (>10 files), follow this strategy:
+  When processing many sources (>10 files):
 
-  **Optimal batch size: 3-5 files per session**
-  - Too small (<3): Overhead of context switching dominates
-  - Too large (>5): Error accumulation, hard to rollback, LLM context limits
+  **Batch size:** 3-5 files per session
+  - Too small (<3): overhead dominates
+  - Too large (>5): error accumulation, hard to rollback
 
-  **Priority Decision Framework:**
+  **Workflow:**
+  1. Process batch → `llmwikify batch raw/ --limit 5`
+  2. After batch → `llmwikify lint --format recommendations`
+  3. If errors > 0 → fix before next batch
+  4. Prioritize core frameworks before specialized topics
 
-  | Priority | Criteria | Action |
-  |----------|----------|--------|
-  | 🔴 Critical | Core framework + no existing coverage | Process first, create foundational pages |
-  | 🟡 High | Core framework + some coverage OR macro drivers | Process second, enhance existing pages |
-  | 🟢 Medium | Asset-specific or tactical strategies | Process third, add specialized knowledge |
-  | 🔵 Low | Specialized strategies, risk management | Process after core concepts |
-  | ⚪ Optional | Academic papers, historical data | Process last or skip if time-constrained |
-
-  **Auto-Theme Classification Rules:**
-
-  | Filename Pattern | Theme | Target Directory |
-  |------------------|-------|------------------|
-  | Institution + framework name | Core methodology | `methodology/` or `models/` |
-  | Series name (e.g., "系列(3)") | Sequential content | Process in order (1→2→3) |
-  | Model/framework name | Theoretical concept | `models/` or `concepts/` |
-  | Asset name | Asset analysis | `assets/` or `entities/` |
-  | Hash/UUID filename | Unknown | Read content, classify by topic |
-
-  **Progress Checkpoints (after each batch):**
-  1. Run `wiki_lint` → check for broken links, orphans
-  2. Run `wiki_status` → verify page count increased correctly
-  3. If lint errors > 0 → fix before proceeding
-  4. If page count unchanged → check if files were duplicates
-
-  **When to stop a batch:**
-  - Encountered 2+ files that require deep analysis (>10k content chars)
-  - Lint errors that can't be auto-fixed
-  - User indicates priority shift
-
-  **When to continue:**
-  - Files are short (<5k chars) and similar theme
-  - Lint passes cleanly
-  - No user interruptions
-
-  **Batch Execution Template:**
-  ```
-  📦 Batch N: [Theme Name]
-     Files: [file1.pdf, file2.pdf, file3.pdf]
-     Priority: [🔴/🟡/🟢/🔵/⚪]
-
-     For each file:
-     1. wiki_ingest(source="raw/filename.pdf")
-     2. Analyze response:
-        - detected_entities → create entity pages if new
-        - detected_relations → note for graph writing
-        - content_preview → determine page type and theme
-     3. wiki_write_page for each new/updated page
-     4. wiki_graph(action="write", relations=[...])
-     5. wiki_log(operation="ingest", details="Processed: filename.pdf")
-
-     After batch:
-     1. wiki_lint → verify no broken links
-     2. wiki_status → confirm pages added
-     3. If errors: fix before next batch
-     4. If clean: proceed to next batch
-  ```
-
-  **Unclassifiable Files:**
-  - If filename is hash/UUID or contains no keywords → run `wiki_ingest` first
-  - Determine theme from `content_preview`, not filename
-  - Log: `wiki_log(operation="ingest", details="Categorized by content as: {theme}")`
+  **Progress check:**
+  - `llmwikify status` → verify page count increased
+  - `llmwikify lint` → check for broken links, orphans
 
   ## Page Format Examples
 
@@ -623,33 +441,15 @@ document: |
 
   ### Graph Operations
 
+  **CLI examples:**
   ```bash
-  # Query relations for a concept
-  python3 -m llmwikify graph-query --concept "Gold Mining" --direction both
-  # Output: {neighbors: {outgoing: [...], incoming: [...]}}
-
-  # Write new relations
-  python3 -m llmwikify graph write --relations '[{"source":"A","target":"B","relation":"uses","confidence":"EXTRACTED"}]' --source-file raw/article.pdf
-
-  # Export graph visualization
-  python3 -m llmwikify export-graph --format html --output graph.html
-  # Opens interactive D3.js visualization in browser
-
-  # Detect communities
-  python3 -m llmwikify community-detect --algorithm leiden --resolution 1.0
-  # Output: {communities: [{name: "Community 1", members: [...], score: 0.85}]}
-
-  # Generate report of unexpected connections
-  python3 -m llmwikify report --top 10
-  ```
-
-  **MCP equivalent:**
-  ```python
-  wiki_graph(action="query", concept="Gold Mining", direction="both")
-  wiki_graph(action="write", relations=[{"source":"A","target":"B","relation":"uses","confidence":"EXTRACTED"}], source_file="raw/article.pdf")
-  wiki_graph_analyze(action="export", format="html", output="graph.html")
-  wiki_graph_analyze(action="detect", algorithm="leiden", resolution=1.0)
-  wiki_graph_analyze(action="report", top=10)
+  llmwikify graph-query neighbors "Gold Mining" --direction both
+  llmwikify graph-query path "FlashAttention" "KV Cache"
+  llmwikify graph-query stats
+  llmwikify graph write --relations '[{"source":"A","target":"B","relation":"uses","confidence":"EXTRACTED"}]' --source-file raw/article.pdf
+  llmwikify export-graph --format html --output graph.html
+  llmwikify community-detect --algorithm leiden --resolution 1.0
+  llmwikify report --top 10
   ```
 
   ## Query Page Naming
@@ -706,8 +506,7 @@ document: |
 
   | Problem | Check | Fix |
   |---------|-------|-----|
-  | `mcporter call --args` JSON error | Shell escaping | Use single quotes: `--args '{"key": "value"}'` |
-  | `wiki_write_page` fails | Subdirectory exists | Use `wiki/` prefix in page_name |
+  | `wiki_write_page` fails | Invalid page_type | Check wiki.md Page Types table for valid types |
   | `wiki_read_page` returns nothing | Page doesn't exist | Create it — it's a broken link |
   | `wiki_search` returns nothing | Topic not covered | Create new page, mark as tentative |
 
@@ -718,7 +517,7 @@ document: |
   | Many broken links | Lint results | Create missing pages as stubs |
   | Many orphan pages | Lint results | Add wikilinks from overview or related pages |
   | Sinks not merging | Sink status | Read sink, synthesize, clear: `wiki_write_page("wiki/.sink/...", content="")` |
-  | Wiki disorganized | Graph analysis | Run `wiki_graph_analyze(action="detect")` to see structure |
+  | Wiki disorganized | Graph analysis | Run graph analysis to see structure |
 
   ## Best Practices
 
