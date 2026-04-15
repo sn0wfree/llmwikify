@@ -245,7 +245,13 @@ class WikiCLI:
         """Health check."""
         generate_inv = getattr(args, 'generate_investigations', False)
         fmt = getattr(args, 'format', 'full')
-        result = self.wiki.lint(generate_investigations=generate_inv)
+        mode = getattr(args, 'mode', 'check')
+        limit = getattr(args, 'limit', 10)
+        force = getattr(args, 'force', False)
+        result = self.wiki.lint(
+            mode=mode, limit=limit, force=force,
+            generate_investigations=generate_inv,
+        )
 
         if fmt == 'brief':
             return self._lint_brief(result)
@@ -1163,6 +1169,12 @@ Examples:
                    default='full', help='Output format (default: full)')
     p.add_argument('--generate-investigations', '-g', action='store_true',
                    help='Use LLM to generate investigation suggestions')
+    p.add_argument('--mode', choices=['check', 'fix'], default='check',
+                   help='Lint mode: check (default) or fix')
+    p.add_argument('--limit', '-l', type=int, default=10,
+                   help='Max LLM-detected issues to return (default: 10)')
+    p.add_argument('--force', action='store_true',
+                   help='Force re-detection (ignore cache)')
 
     # status
     subparsers.add_parser('status', help='Show status')

@@ -1677,10 +1677,109 @@ class Wiki:
             "warning": "LLM investigation generation failed",
         }
 
-    def lint(self, generate_investigations: bool = False) -> dict:
-        """Health check the wiki.
-        
+    def _build_lint_context(self, limit: int = 20) -> str:
+        """Build minimal context for LLM lint analysis.
+
+        Components:
+        - wiki.md full text
+        - existing page names list
+        - source file summary
+        - orphan concepts from relation engine
+        """
+        parts = []
+
+        if self.wiki_md_file.exists():
+            parts.append(f"=== WIKI SCHEMA (wiki.md) ===\n{self.wiki_md_file.read_text()}")
+
+        pages = self._get_existing_page_names()
+        pages_section = f"\n=== EXISTING PAGES ({len(pages)} total) ===\n"
+        for p in sorted(pages)[:100]:
+            pages_section += f"  - {p}\n"
+        if len(pages) > 100:
+            pages_section += f"  ... and {len(pages) - 100} more\n"
+        parts.append(pages_section)
+
+        raw_files = list(self.raw_dir.rglob("*")) if self.raw_dir.exists() else []
+        raw_files = [f for f in raw_files if f.is_file()]
+        if raw_files:
+            src_section = f"\n=== SOURCE FILES ({len(raw_files)} total) ===\n"
+            for f in sorted(raw_files)[:limit]:
+                src_section += f"  - {f.relative_to(self.root)}\n"
+            if len(raw_files) > limit:
+                src_section += f"  ... and {len(raw_files) - limit} more\n"
+            parts.append(src_section)
+
+        try:
+            engine = self.get_relation_engine()
+            orphans = engine.find_orphan_concepts()
+            if orphans:
+                orphan_section = "\n=== ORPHAN CONCEPTS (in relations but no wiki page) ===\n"
+                for c in orphans[:20]:
+                    orphan_section += f"  - {c}\n"
+                if len(orphans) > 20:
+                    orphan_section += f"  ... and {len(orphans) - 20} more\n"
+                parts.append(orphan_section)
+        except Exception:
+            pass
+
+        return "\n\n".join(parts)
+
+    def _llm_detect_gaps(self, context: str) -> list[dict]:
+        """Call LLM to detect gaps between wiki schema and current state."""
+        try:
+            from ..llm_client import LLMClient
+            client = LLMClient.from_config(self.config)
+        except (ImportError, ValueError, OSError):
+            return self._fallback_detect_gaps()
+
+        registry = self._get_prompt_registry()
+
+        try:
+            messages = registry.get_messages("direct_lint", lint_context=context)
+            params = registry.get_api_params("direct_lint")
+            result = client.chat_json(messages, **params)
+
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict) and "gaps" in result:
+                return result["gaps"]
+        except (ConnectionError, TimeoutError, ValueError, OSError):
+            pass
+
+        return self._fallback_detect_gaps()
+
+    def _fallback_detect_gaps(self) -> list[dict]:
+        """Basic gap detection without LLM."""
+        gaps = []
+
+        try:
+            engine = self.get_relation_engine()
+            for concept in engine.find_orphan_concepts():
+                gaps.append({
+                    "type": "orphan_concept",
+                    "concept": concept,
+                    "note": "Detected without LLM",
+                })
+        except Exception:
+            pass
+
+        gaps.extend(self._detect_missing_cross_refs())
+
+        return gaps
+
+    def lint(
+        self,
+        mode: str = "check",
+        limit: int = 10,
+        force: bool = False,
+        generate_investigations: bool = False,
+    ) -> dict:
+        """Health check the wiki with schema-aware gap detection.
+
         Args:
+            mode: "check" (detect only) or "fix" (detect + suggest repairs).
+            limit: Max LLM-detected issues to return.
+            force: Force re-detection (ignore any cached results).
             generate_investigations: If True, use LLM to suggest investigations.
         """
         issues = []
@@ -1731,6 +1830,14 @@ class Wiki:
                         "suggestion": f"Review and merge {sink['entry_count']} pending entries",
                     })
 
+        # LLM-enhanced gap detection
+        context = self._build_lint_context()
+        llm_gaps = self._llm_detect_gaps(context)
+        llm_gaps = llm_gaps[:limit]
+
+        # Merge LLM gaps with rule-based issues
+        all_issues = issues + llm_gaps
+
         # Generate hints (clue-based, non-mandatory)
         critical_hints = self._detect_dated_claims()
         informational_hints = []
@@ -1756,8 +1863,10 @@ class Wiki:
 
         return {
             "total_pages": len(self._wiki_pages()),
-            "issue_count": len(issues),
-            "issues": issues,
+            "issue_count": len(all_issues),
+            "issues": all_issues,
+            "mode": mode,
+            "schema_source": "wiki.md (direct)",
             "hints": {
                 "critical": critical_hints,
                 "informational": informational_hints,

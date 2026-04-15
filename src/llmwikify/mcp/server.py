@@ -74,15 +74,24 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
     def wiki_lint(
         generate_investigations: bool = False,
         format: str = "full",
+        mode: str = "check",
+        limit: int = 10,
+        force: bool = False,
     ) -> str:
-        """Health-check the wiki (broken links, orphans, contradictions).
-        
+        """Health-check the wiki (broken links, orphans, schema gaps).
+
         Args:
             generate_investigations: If True, use LLM to suggest investigations.
             format: Output format - 'full', 'brief', or 'recommendations'.
+            mode: Lint mode - 'check' (detect only) or 'fix' (suggest repairs).
+            limit: Max LLM-detected issues to return (default: 10).
+            force: Force re-detection (ignore cache).
         """
         import json
-        result = wiki.lint(generate_investigations=generate_investigations)
+        result = wiki.lint(
+            mode=mode, limit=limit, force=force,
+            generate_investigations=generate_investigations,
+        )
         if format == "brief":
             return json.dumps({
                 "hints": result.get("hints", {}),
