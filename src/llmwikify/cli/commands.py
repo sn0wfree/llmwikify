@@ -213,13 +213,15 @@ class WikiCLI:
             print("❌ Error: No content provided")
             return 1
 
-        result = self.wiki.write_page(args.name, content)
+        page_type = getattr(args, 'type', None)
+        result = self.wiki.write_page(args.name, content, page_type=page_type)
         print(f"✅ {result}")
         return 0
 
     def read_page(self, args) -> int:
         """Read a wiki page."""
-        result = self.wiki.read_page(args.name)
+        page_type = getattr(args, 'type', None)
+        result = self.wiki.read_page(args.name, page_type=page_type)
 
         if "error" in result:
             print(f"❌ {result['error']}")
@@ -1152,12 +1154,14 @@ Examples:
     # write_page
     p = subparsers.add_parser('write_page', help='Write page')
     p.add_argument('name', help='Page name')
+    p.add_argument('--type', '-t', help='Page type from wiki.md Page Types table (e.g., concept, model, source)')
     p.add_argument('--file', '-f', help='Read content from file')
     p.add_argument('--content', '-c', help='Content as string')
 
     # read_page
     p = subparsers.add_parser('read_page', help='Read page')
     p.add_argument('name', help='Page name')
+    p.add_argument('--type', '-t', help='Page type from wiki.md Page Types table')
 
     # search
     p = subparsers.add_parser('search', help='Full-text search')

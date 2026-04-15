@@ -200,26 +200,56 @@ document: |
 
   **Write Page:**
   ```bash
-  # Short content (inline)
-  python3 -m llmwikify write_page "wiki/concepts/Topic" --content "# Topic\n\n## Summary\n..."
+  # New API (recommended): separate name and type
+  python3 -m llmwikify write_page "Topic" --type concept --content "# Topic\n\n## Summary\n..."
+  python3 -m llmwikify write_page "Company Name" --type entity --content "# Company Name\n\n..."
+  python3 -m llmwikify write_page "Black-Litterman" --type model --content "# Black-Litterman\n\n..."
 
   # Long content (from file)
-  python3 -m llmwikify write_page "wiki/concepts/Topic" --content-file /tmp/topic.md
+  python3 -m llmwikify write_page "Topic" --type concept --file /tmp/topic.md
+
+  # Legacy API (still supported)
+  python3 -m llmwikify write_page "concepts/Topic" --content "# Topic\n\n## Summary\n..."
   ```
 
-  **Search, Read, Status:**
+  **Read Page:**
+  ```bash
+  # New API (recommended)
+  python3 -m llmwikify read_page "Topic" --type concept
+
+  # Legacy API (still supported)
+  python3 -m llmwikify read_page "concepts/Topic"
+  ```
+
+  **Search, Status, Lint:**
   ```bash
   python3 -m llmwikify search "keyword" --limit 10
-  python3 -m llmwikify read_page "wiki/concepts/Topic"
   python3 -m llmwikify status
   python3 -m llmwikify lint --format recommendations
   ```
+
+  ### Page Type → Directory Mapping
+
+  The `--type` parameter maps to a directory based on wiki.md's **Page Types** table:
+
+  | Type Parameter | Directory | Example |
+  |---------------|-----------|---------|
+  | `Source` | `sources/` | `write_page("report-slug", type="Source")` |
+  | `Entity` | `entities/` | `write_page("Company Name", type="Entity")` |
+  | `Concept` | `concepts/` | `write_page("Risk Parity", type="Concept")` |
+  | Custom types | from wiki.md | Check Page Types table for your project |
+
+  **How it works:**
+  1. Code reads wiki.md's Page Types table
+  2. Extracts directory from Location column (e.g., `wiki/concepts/{name}.md` → `concepts`)
+  3. Maps type name → directory dynamically
+  4. If type not found, uses lowercased type name as directory
 
   ### JSON Escaping Guide (for mcporter call)
 
   **Correct:**
   ```bash
-  mcporter call service wiki_write_page --args '{"page_name": "wiki/concepts/Topic", "content": "# Topic\n\nContent"}'
+  mcporter call service wiki_write_page --args '{"page_name": "Topic", "content": "# Topic\n\nContent", "page_type": "concept"}'
   ```
 
   **Wrong (common mistakes):**
@@ -229,13 +259,16 @@ document: |
 
   # Using double quotes for outer wrapper — shell may expand $variables
   mcporter call ... --args "{...}"
+
+  # Including wiki/ prefix in page_name
+  mcporter call ... --args '{"page_name": "wiki/concepts/Topic", ...}'  # WRONG
   ```
 
   **For complex content:**
   ```bash
-  # Write to temp file, then use --content-file
+  # Write to temp file, then use --file
   echo "# Title\n\nContent..." > /tmp/page.md
-  python3 -m llmwikify write_page "wiki/concepts/Topic" --content-file /tmp/page.md
+  python3 -m llmwikify write_page "Topic" --type concept --file /tmp/page.md
   ```
 
   ### Common Errors
@@ -247,7 +280,8 @@ document: |
   | `mcporter: command not found` | mcporter not installed | `pip install mcporter-bridge` |
   | JSON parse error on `--args` | Shell escaping issue | Use single quotes around JSON |
   | `Page not found` on read | Page doesn't exist yet | Create it — it's a broken link |
-  | Write fails with error | Subdirectory doesn't exist | Use `wiki/` prefix in page_name |
+  | `page_name should NOT include 'wiki/'` | Used `wiki/` prefix | Remove prefix: use `"concepts/Topic"` not `"wiki/concepts/Topic"` |
+  | Unknown page_type | Typo in type name | Check wiki.md Page Types table for valid types |
 
   ## Page Conventions
 
@@ -353,20 +387,20 @@ document: |
   python3 -m llmwikify ingest raw/article.pdf
   # Output: JSON with content_preview, detected_entities, detected_relations
 
-  # Step 2: Create source summary page
-  python3 -m llmwikify write_page "wiki/sources/article-title" --content "# Article Title\n\n## Summary\n..."
+  # Step 2: Create source summary page (new API)
+  python3 -m llmwikify write_page "article-title" --type source --content "# Article Title\n\n## Summary\n..."
 
   # Step 3: Create entity pages for new detected entities
-  python3 -m llmwikify write_page "wiki/entities/Company Name" --content "# Company Name\n\n## Description\n..."
+  python3 -m llmwikify write_page "Company Name" --type entity --content "# Company Name\n\n## Description\n..."
 
   # Step 4: Create concept pages for new concepts
-  python3 -m llmwikify write_page "wiki/concepts/Gold Royalty" --content "# Gold Royalty\n\n## Description\n..."
+  python3 -m llmwikify write_page "Gold Royalty" --type concept --content "# Gold Royalty\n\n## Description\n..."
 
   # Step 5: Write graph relations (if any detected)
   python3 -m llmwikify graph write --relations '[{"source":"Company Name","target":"Gold Royalty","relation":"uses","confidence":"EXTRACTED"}]' --source-file raw/article.pdf
 
   # Step 6: Update overview if the big picture changed
-  python3 -m llmwikify write_page "wiki/overview" --content "# Knowledge Base Overview\n\n..."
+  python3 -m llmwikify write_page "overview" --content "# Knowledge Base Overview\n\n..."
 
   # Step 7: Log the operation
   python3 -m llmwikify log --operation ingest --details "article.pdf"
@@ -375,8 +409,8 @@ document: |
   **MCP equivalent:**
   ```python
   wiki_ingest(source="raw/article.pdf")
-  wiki_write_page(page_name="wiki/sources/article-title", content="# Article Title\n\n...")
-  wiki_write_page(page_name="wiki/entities/Company Name", content="# Company Name\n\n...")
+  wiki_write_page(page_name="article-title", content="# Article Title\n\n...", page_type="Source")
+  wiki_write_page(page_name="Company Name", content="# Company Name\n\n...", page_type="Entity")
   wiki_graph(action="write", relations=[{"source":"Company Name","target":"Gold Royalty","relation":"uses","confidence":"EXTRACTED"}], source_file="raw/article.pdf")
   ```
 
@@ -392,8 +426,8 @@ document: |
   python3 -m llmwikify search "gold royalty Ghana" --limit 10
   # Output: JSON array of {page_name, score, snippet, has_sink}
 
-  # Step 2: Read full content of relevant pages
-  python3 -m llmwikify read_page "wiki/sources/ghana-royalty"
+  # Step 2: Read full content of relevant pages (new API)
+  python3 -m llmwikify read_page "ghana-royalty" --type source
   # Output: JSON with {page_name, content, has_sink}
 
   # Step 3: If has_sink is true, read pending sink entries
@@ -404,7 +438,7 @@ document: |
   python3 -m llmwikify synthesize \
     --query "What is Ghana's gold royalty policy?" \
     --answer "Ghana plans to implement a sliding scale royalty of 5%-12%..." \
-    --source-pages "wiki/sources/ghana-royalty" \
+    --source-pages "sources/ghana-royalty" \
     --raw-sources "raw/article.pdf" \
     --auto-link true \
     --auto-log true
@@ -414,10 +448,10 @@ document: |
   **MCP equivalent:**
   ```python
   results = wiki_search(query="gold royalty Ghana", limit=10)
-  page = wiki_read_page(page_name="wiki/sources/ghana-royalty")
+  page = wiki_read_page(page_name="ghana-royalty", page_type="Source")
   if page.get("has_sink"):
       sink = wiki_read_page(page_name="wiki/.sink/Query: Gold Royalty.sink.md")
-  wiki_synthesize(query="What is Ghana's gold royalty policy?", answer="...", source_pages=["wiki/sources/ghana-royalty"], raw_sources=["raw/article.pdf"], auto_link=True, auto_log=True)
+  wiki_synthesize(query="What is Ghana's gold royalty policy?", answer="...", source_pages=["sources/ghana-royalty"], raw_sources=["raw/article.pdf"], auto_link=True, auto_log=True)
   ```
 
   **Decision flow:**
@@ -436,20 +470,20 @@ document: |
   ### 3. Create or Edit a Page
 
   ```bash
-  # Create a new page
-  python3 -m llmwikify write_page "wiki/entities/New Entity" --content "# New Entity\n\n## Description\n...\n\n## Sources\n- [Source](raw/source.md)"
+  # Create a new page (new API)
+  python3 -m llmwikify write_page "New Entity" --type entity --content "# New Entity\n\n## Description\n...\n\n## Sources\n- [Source](raw/source.md)"
 
   # Edit an existing page
-  # 1. Read current content
-  python3 -m llmwikify read_page "wiki/entities/Existing Entity"
+  # 1. Read current content (new API)
+  python3 -m llmwikify read_page "Existing Entity" --type entity
   # 2. Modify content (append/update)
   # 3. Write back
-  python3 -m llmwikify write_page "wiki/entities/Existing Entity" --content "# Existing Entity\n\n## Description\n...updated...\n\n## New Section\n..."
+  python3 -m llmwikify write_page "Existing Entity" --type entity --content "# Existing Entity\n\n## Description\n...updated...\n\n## New Section\n..."
   ```
 
   **MCP equivalent:**
   ```python
-  wiki_write_page(page_name="wiki/entities/New Entity", content="# New Entity\n\n...")
+  wiki_write_page(page_name="New Entity", content="# New Entity\n\n...", page_type="Entity")
   ```
 
   **Rules:**
@@ -461,7 +495,7 @@ document: |
 
   **Troubleshooting:**
   - **Page not found on read:** Create it — it's a broken link that needs fixing
-  - **Write fails with error:** Check if subdirectory exists. Create subdirectory pages (e.g., `wiki/sources/X`) use auto-created paths
+  - **Write fails with error:** Check page_type is valid in wiki.md Page Types table
   - **Content looks wrong:** Read the page first, verify what exists, then write the full corrected content
 
   ### 4. Maintain Wiki Health
@@ -472,12 +506,12 @@ document: |
   # Output: {missing_pages: ["Page A"], orphan_pages: ["Page B"]}
 
   # Step 2: Fix broken links (create missing pages or remove links)
-  python3 -m llmwikify write_page "wiki/entities/Missing Page" --content "# Missing Page\n\n## Description\n..."
+  python3 -m llmwikify write_page "Missing Page" --type entity --content "# Missing Page\n\n## Description\n..."
 
   # Step 3: Connect orphan pages (add wikilinks from other pages)
-  python3 -m llmwikify read_page "wiki/entities/Related Page"
+  python3 -m llmwikify read_page "Related Page" --type entity
   # Edit to add [[Orphan Page]] link
-  python3 -m llmwikify write_page "wiki/entities/Related Page" --content "...[[Orphan Page]]..."
+  python3 -m llmwikify write_page "Related Page" --type entity --content "...[[Orphan Page]]..."
 
   # Step 4: Check sink status
   python3 -m llmwikify sink-status

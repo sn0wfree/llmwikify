@@ -1,6 +1,6 @@
 name: ingest_instructions
 description: "Workflow instructions returned to LLM after source ingestion. Guides LLM on what to do with a new source."
-version: "2.0"
+version: "2.1"
 trigger:
   type: "api_call"
   when: "ingest_instructions"
@@ -16,10 +16,13 @@ text: |
   1. Read wiki.md (via wiki_read_schema or wiki_read_page("wiki.md")) for page conventions
   2. Review the ingest result for: content_preview, detected_entities, detected_relations
   3. Create/update wiki pages using wiki_write_page:
-     - Follow the Location pattern from wiki.md's Page Types table
-     - Standard: "wiki/sources/{slug}", "wiki/entities/{name}", "wiki/concepts/{topic}"
-     - Custom: follow wiki.md's custom types (e.g., "wiki/models/{name}", "wiki/factors/{name}")
-     - The page_name MUST include the subdirectory path
+     - Use the `page_type` parameter to specify directory (recommended):
+       wiki_write_page(page_name="Page Name", content="...", page_type="Source")
+       wiki_write_page(page_name="Entity Name", content="...", page_type="Entity")
+       wiki_write_page(page_name="Topic", content="...", page_type="Concept")
+     - Or use legacy path format (still supported):
+       wiki_write_page(page_name="sources/Page Name", content="...")
+     - The page_name should be the pure name WITHOUT "wiki/" prefix
   4. Add [[wikilinks]] between related pages
   5. Cite the source in wiki pages using standard markdown (NOT wikilinks):
      - Page-level: add '## Sources' section with [Source: Title](raw/filename)

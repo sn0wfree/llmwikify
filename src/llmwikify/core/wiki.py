@@ -1013,18 +1013,57 @@ class Wiki:
         from .relation_engine import RelationEngine
         return RelationEngine(self.index, wiki_root=self.root)
 
-    def write_page(self, page_name: str, content: str) -> str:
+    def write_page(self, page_name: str, content: str, page_type: str = None) -> str:
         """Write a wiki page.
 
-        page_name supports paths with subdirectories:
-        - "Page Name" -> wiki/Page Name.md
-        - "entities/Kinross Gold" -> wiki/entities/Kinross Gold.md
-        - "sources/article-slug" -> wiki/sources/article-slug.md
-        - Custom subdirs from wiki.md Page Types table are auto-created.
+        Args:
+            page_name: Page name. Can be:
+                - Pure name: "Risk Parity" (use with page_type)
+                - Path: "concepts/Risk Parity" (legacy, still supported)
+            content: Page content markdown.
+            page_type: Page type from wiki.md Page Types table.
+                Dynamically resolved to directory via _load_page_type_mapping().
+                If None and page_name has no '/', writes to wiki/ root.
+
+        Examples:
+            write_page("Risk Parity", content, page_type="Concept")
+            write_page("concepts/Risk Parity", content)  # legacy
         """
         # Security: prevent path traversal
         if ".." in page_name or page_name.startswith("/"):
             raise ValueError(f"Invalid page name: {page_name!r} — path traversal not allowed")
+
+        # If page_name starts with "wiki/", give clear error
+        if page_name.startswith("wiki/"):
+            raise ValueError(
+                f"page_name should NOT include 'wiki/' prefix. "
+                f"Use '{page_name[5:]}' instead of '{page_name}'. "
+                f"The 'wiki/' directory is added automatically."
+            )
+
+        # Resolve directory from page_type or page_name
+        if page_type:
+            # New API: page_type → directory mapping from wiki.md
+            type_to_dir = self._load_page_type_mapping()
+            
+            # Try exact match first, then case-insensitive
+            directory = type_to_dir.get(page_type)
+            if directory is None:
+                # Case-insensitive fallback
+                lower_map = {k.lower(): v for k, v in type_to_dir.items()}
+                directory = lower_map.get(page_type.lower())
+            
+            if directory is None:
+                # Ultimate fallback: use page_type lowercased as directory
+                directory = page_type.lower()
+            
+            full_path = f"{directory}/{page_name}"
+        elif '/' in page_name:
+            # Legacy API: page_name contains directory
+            full_path = page_name
+        else:
+            # No type, no directory → root
+            full_path = page_name
 
         # Decode escape sequences from CLI JSON input: \n -> newline, \t -> tab
         if '\\n' in content or '\\t' in content:
@@ -1033,13 +1072,13 @@ class Wiki:
             except (UnicodeDecodeError, UnicodeEncodeError):
                 pass  # Keep original if decoding fails
 
-        page_path = (self.wiki_dir / f"{page_name}.md").resolve()
+        page_path = (self.wiki_dir / f"{full_path}.md").resolve()
 
         # Security: verify resolved path is within wiki/ directory
         try:
             page_path.relative_to(self.wiki_dir.resolve())
         except ValueError:
-            raise ValueError(f"Page path escapes wiki/ directory: {page_name!r}")
+            raise ValueError(f"Page path escapes wiki/ directory: {full_path!r}")
 
         page_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1050,17 +1089,28 @@ class Wiki:
             page_path.write_text(content)
             action = "Created"
 
-        # Update index
+        # Update index (use display name without directory for page_name)
+        display_name = page_name
+        if '/' in page_name:
+            display_name = page_name.split('/')[-1]
+        elif page_type:
+            display_name = page_name
+
         rel_path = str(page_path.relative_to(self.wiki_dir))
-        self.index.upsert_page(page_name, content, rel_path)
+        self.index.upsert_page(display_name, content, rel_path)
 
         # Auto-update index.md
         self._update_index_file()
 
-        return f"{action} page: {page_name}"
+        return f"{action} page: {full_path}"
 
-    def read_page(self, page_name: str) -> dict:
-        """Read a wiki page with sink status attached."""
+    def read_page(self, page_name: str, page_type: str = None) -> dict:
+        """Read a wiki page with sink status attached.
+
+        Args:
+            page_name: Page name. Can be pure name or path.
+            page_type: Page type to resolve directory (same as write_page).
+        """
         # Backward compat: translate old 'sink/' path to new '.sink/' location
         if page_name.startswith('sink/'):
             page_name = page_name.replace('sink/', '.sink/', 1)
@@ -1085,19 +1135,32 @@ class Wiki:
                 "is_sink": True,
             }
 
-        page_path = self.wiki_dir / f"{page_name}.md"
+        # Resolve directory from page_type if provided
+        if page_type and '/' not in page_name:
+            type_to_dir = self._load_page_type_mapping()
+            directory = type_to_dir.get(page_type)
+            if directory is None:
+                lower_map = {k.lower(): v for k, v in type_to_dir.items()}
+                directory = lower_map.get(page_type.lower())
+            if directory is None:
+                directory = page_type.lower()
+            full_path = f"{directory}/{page_name}"
+        else:
+            full_path = page_name
+
+        page_path = self.wiki_dir / f"{full_path}.md"
 
         if not page_path.exists():
-            return {"error": f"Page not found: {page_name}"}
+            return {"error": f"Page not found: {full_path}"}
 
         result = {
-            "page_name": page_name,
+            "page_name": full_path,
             "content": page_path.read_text(),
             "file": str(page_path),
             "is_sink": False,
         }
 
-        sink_info = self.query_sink.get_info_for_page(page_name)
+        sink_info = self.query_sink.get_info_for_page(full_path)
         result['has_sink'] = sink_info['has_sink']
         result['sink_entries'] = sink_info['sink_entries']
 
@@ -1113,6 +1176,61 @@ class Wiki:
             result['sink_entries'] = sink_info['sink_entries']
 
         return results
+
+    def _load_page_type_mapping(self) -> dict[str, str]:
+        """Load page type → directory mapping from wiki.md Page Types table.
+
+        Parses wiki.md for tables like:
+        | Type | Location | Purpose |
+        |------|----------|---------|
+        | Source | wiki/sources/{slug}.md | ... |
+        | MacroFactor | wiki/factors/{name}.md | ... |
+
+        Returns dict mapping type name → directory name, e.g.:
+        {"Source": "sources", "MacroFactor": "factors", ...}
+        """
+        if not self.wiki_md_file.exists():
+            return {}
+
+        content = self.wiki_md_file.read_text()
+        type_to_dir: dict[str, str] = {}
+        in_page_types = False
+        in_table = False
+
+        for line in content.split('\n'):
+            # Detect Page Types section headers
+            if '## Page Types' in line or '### Custom Page Types' in line:
+                in_page_types = True
+                in_table = False
+                continue
+
+            # Exit when we hit another top-level section
+            if in_page_types and line.startswith('## ') and 'Page Types' not in line:
+                in_page_types = False
+                continue
+
+            if not in_page_types:
+                continue
+
+            # Detect table start (separator line)
+            if '|' in line and line.strip().startswith('|---') or line.strip().startswith('| -'):
+                in_table = True
+                continue
+
+            # Parse table rows
+            if in_table and '|' in line:
+                parts = [p.strip() for p in line.split('|') if p.strip()]
+                if len(parts) >= 3:
+                    page_type = parts[0]
+                    location = parts[1]
+
+                    # Extract directory from Location pattern like wiki/sources/{slug}.md
+                    match = re.search(r'wiki/([^/\{]+)/', location)
+                    if match:
+                        directory = match.group(1)
+                        type_to_dir[page_type] = directory
+
+        return type_to_dir
 
     def _detect_dated_claims(self) -> list[dict]:
         """Find year mentions in pages that predate latest raw source by 3+ years.
