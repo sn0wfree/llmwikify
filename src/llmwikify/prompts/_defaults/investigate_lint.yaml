@@ -17,6 +17,7 @@ system: |
   {%- endif %}
   
   Be concrete and actionable. Do NOT make judgments about what is correct.
+  Consider the wiki conventions defined in wiki.md when suggesting investigations.
   Return only valid JSON.
 
 user: |

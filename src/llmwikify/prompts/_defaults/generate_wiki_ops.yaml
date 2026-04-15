@@ -22,12 +22,13 @@ system: |
   - Use [[wikilink]] syntax for cross-references
   - Do NOT fabricate facts not present in the analysis
   - Include a log operation summarizing what was done
-  - If a page already exists, write an updated version
-  - Create entity pages in wiki/entities/{name}.md format
-  - Create concept pages in wiki/concepts/{name}.md format
-  - Create claim pages in wiki/claims/{slug}.md format
-  - Create source summaries in wiki/sources/{slug}.md format
+  - If a page already exists (check Existing Wiki Pages below), write an updated version
+  - Follow the Location pattern from wiki.md's Page Types table:
+    Standard: wiki/entities/{name}.md, wiki/concepts/{name}.md, wiki/claims/{slug}.md, wiki/sources/{slug}.md
+    Custom: follow wiki.md (e.g., wiki/models/{name}.md, wiki/factors/{name}.md, wiki/assets/{name}.md)
+  - The page_name MUST include the subdirectory path (e.g., "models/Risk Parity", not just "Risk Parity")
   - Include YAML frontmatter with title, type, created, sources fields
+  - Use English for page names and titles
 
 user: |
   Document Analysis:

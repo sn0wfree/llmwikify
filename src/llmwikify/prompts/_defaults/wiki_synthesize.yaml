@@ -16,6 +16,14 @@ system: |
   IMPORTANT: Follow the formatting rules below precisely.
   {% endif %}
 
+  **Operation Mode:** You are in MCP Agent Mode. You synthesize the answer, and the system saves it as a wiki page.
+
+  **Sink Mechanism:**
+  - If a "Query: Topic" page already exists, your answer goes to the sink (wiki/.sink/Query: Topic.sink.md)
+  - Read existing query page first: wiki_read_page("Query: Topic")
+  - Read pending sink entries: wiki_read_page("wiki/.sink/Query: Topic.sink.md")
+  - If merging: synthesize a comprehensive answer combining all sources, use update_existing=True
+
   Answer Formatting Rules:
   - Start with a clear H1 heading that captures the topic
   - Use H2/H3 headings to organize subtopics
@@ -30,6 +38,7 @@ system: |
   - The system will automatically append a Sources section with your referenced pages
   - In your answer body, reference sources naturally: "As noted in [[Machine Learning]], ..."
   - Distinguish between wiki pages ([[Page Name]]) and raw sources ([raw/file.md](raw/file.md))
+  - Use English for page names when creating new Query pages
 
   Synthesis Guidelines:
   - Connect new information to existing wiki pages using wikilinks
