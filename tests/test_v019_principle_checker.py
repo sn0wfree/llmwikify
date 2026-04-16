@@ -252,6 +252,7 @@ class TestPrincipleCheckerCheckAllTemplates:
         results = checker.check_all_templates()
         expected = {
             "analyze_source",
+            "direct_lint",
             "generate_wiki_ops",
             "ingest_instructions",
             "investigate_lint",

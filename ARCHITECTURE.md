@@ -4,7 +4,7 @@
 
 **Version**: 0.25.0  
 **Last Updated**: 2026-04-13  
-**Tests**: 492 passing (524 collected, 32 markitdown skipped)
+**Tests**: 674 passing (706 collected, 32 markitdown skipped)
 
 ---
 
@@ -297,10 +297,10 @@ MarkItDown-enhanced format → Try MarkItDown → Fallback to legacy extractors 
 
 **Responsibility**: Command-line interface
 
-**19 Commands**:
+**20 Commands**:
 | Category | Commands |
 |----------|----------|
-| Core | `init`, `ingest`, `write_page`, `read_page`, `search` |
+| Core | `init`, `ingest`, `analyze-source`, `write_page`, `read_page`, `search` |
 | Health | `lint` (with `--format=full/brief/recommendations`), `status` |
 | References | `references`, `build-index` (with `--export-only`) |
 | Query | `synthesize`, `sink-status` |
@@ -314,7 +314,7 @@ MarkItDown-enhanced format → Try MarkItDown → Fallback to legacy extractors 
 
 **Framework**: FastMCP (PrefectHQ) — modern, Pythonic MCP server
 
-**16 Tools**: `wiki_init`, `wiki_ingest`, `wiki_write_page`, `wiki_read_page`, `wiki_search`, `wiki_lint`, `wiki_status`, `wiki_log`, `wiki_recommend`, `wiki_build_index`, `wiki_read_schema`, `wiki_update_schema`, `wiki_synthesize`, `wiki_sink_status`, `wiki_graph`, `wiki_graph_analyze`
+**17 Tools**: `wiki_init`, `wiki_ingest`, `wiki_write_page`, `wiki_read_page`, `wiki_search`, `wiki_lint`, `wiki_status`, `wiki_log`, `wiki_recommend`, `wiki_build_index`, `wiki_read_schema`, `wiki_update_schema`, `wiki_synthesize`, `wiki_sink_status`, `wiki_references`, `wiki_graph`, `wiki_graph_analyze`, `wiki_analyze_source`
 
 **Unified Graph Tools** (replaces 7 separate tools):
 - `wiki_graph` — `action: query|path|stats|write` — All graph query and mutation operations

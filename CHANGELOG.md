@@ -5,9 +5,21 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.26.0] - 2026-04-16
 
 ### Added
+- **Source Analysis & Caching**: `analyze-source` CLI command and `wiki_analyze_source` MCP tool:
+  - Analyzes raw source files and caches LLM extraction results (entities, suggested pages, relations)
+  - Cache embedded as HTML comments in source summary pages, keyed by content hash
+  - Supports `--all` (analyze all sources) and `--force` (re-analyze changed sources)
+- **Schema-Aware Lint Gap Detection**: `lint()` now reads source analysis cache to detect:
+  - Missing custom type pages (e.g., Model, MacroFactor) defined in wiki.md
+  - Orphan concepts in relations table without wiki pages
+  - Missing cross-references and schema non-compliance
+- **Ingest Analysis Integration**: `ingest_source()` now returns `analysis` and `lint_hint` fields:
+  - `analysis`: LLM-extracted entities, suggested pages, topics, and relations
+  - `lint_hint`: Auto-detected gaps (missing suggested pages) with fix suggestions
+- **Relations Deduplication**: `add_relation()` in RelationEngine now deduplicates based on (source, target, relation, source_file)
 - **Agent-Aware Init**: `llmwikify init --agent <type>` generates a complete project setup in one command:
   - `--agent opencode` → `opencode.json` + skill files + `wiki.md` + `.gitignore`
   - `--agent claude` → `.mcp.json` + `wiki.md` + `.gitignore`

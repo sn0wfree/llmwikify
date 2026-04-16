@@ -14,19 +14,22 @@ text: |
 
   **Workflow:**
   1. Read wiki.md (via wiki_read_schema or wiki_read_page("wiki.md")) for page conventions
-  2. Review the ingest result for: content_preview, detected_entities, detected_relations
-  3. Create/update wiki pages using wiki_write_page:
+  2. Review the ingest result for: content_preview, analysis (entities, suggested_pages), lint_hint
+  3. If analysis is available, review entities and suggested_pages for page creation guidance
+  4. Create/update wiki pages using wiki_write_page:
      - Use the `page_type` parameter to specify directory:
        wiki_write_page(page_name="Page Name", content="...", page_type="Source")
        wiki_write_page(page_name="Entity Name", content="...", page_type="Entity")
        wiki_write_page(page_name="Topic", content="...", page_type="Concept")
      - The page_name should be the pure name WITHOUT "wiki/" prefix
-  4. Add [[wikilinks]] between related pages
-  5. Cite the source in wiki pages using standard markdown (NOT wikilinks):
+  5. Add [[wikilinks]] between related pages
+  6. Cite the source in wiki pages using standard markdown (NOT wikilinks):
      - Page-level: add '## Sources' section with [Source: Title](raw/filename)
      - Inline: cite after key claims like [Source](raw/filename)
-  6. Write graph relations: wiki_graph(action="write", relations=[...])
-  7. Log the operation: wiki_log(operation="ingest", details="filename.pdf")
+  7. Write graph relations: wiki_graph(action="write", relations=[...])
+  8. Run wiki_lint(mode="check") to detect gaps (missing custom pages, orphan concepts)
+  9. If lint finds issues, run wiki_lint(mode="fix") to repair them
+  10. Log the operation: wiki_log(operation="ingest", details="filename.pdf")
 
   **Naming Rules:**
   - Use English for page names and titles

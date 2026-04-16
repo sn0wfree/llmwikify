@@ -1927,10 +1927,15 @@ class Wiki:
         """Health check the wiki with schema-aware gap detection.
 
         Args:
-            mode: "check" (detect only) or "fix" (detect + suggest repairs).
+            mode: "check" (detect only) or "fix" (reserved for future auto-repair).
             limit: Max LLM-detected issues to return.
-            force: Force re-detection (ignore any cached results).
+            force: Force re-detection (reserved for future cache bypass).
             generate_investigations: If True, use LLM to suggest investigations.
+
+        Note:
+            mode="fix" and force=True are reserved for future implementation.
+            Currently both modes are accepted but have no additional effect beyond
+            their reflection in the returned "mode" field.
         """
         issues = []
 
