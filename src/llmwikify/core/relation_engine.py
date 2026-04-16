@@ -105,15 +105,24 @@ class RelationEngine:
         context: str | None = None,
         wiki_pages: list[str] | None = None,
     ) -> int:
-        """Add a single relation.
+        """Add a single relation. Skip if duplicate exists.
 
         Returns:
-            Row id of the inserted relation.
+            Row id of the inserted relation, or existing id if duplicate.
         """
         if relation not in self._relation_types:
             raise ValueError(f"Unknown relation type: {relation}. Valid: {sorted(self._relation_types)}")
         if confidence not in CONFIDENCE_LEVELS:
             raise ValueError(f"Unknown confidence: {confidence}. Valid: {CONFIDENCE_LEVELS}")
+
+        # Check for duplicate (same source, target, relation, source_file)
+        existing = self.index.conn.execute(
+            "SELECT id FROM relations WHERE source=? AND target=? AND relation=? AND source_file=?",
+            (source, target, relation, source_file),
+        ).fetchone()
+
+        if existing:
+            return existing[0]
 
         cursor = self.index.conn.execute(
             """INSERT INTO relations (source, target, relation, confidence, source_file, context, wiki_pages)

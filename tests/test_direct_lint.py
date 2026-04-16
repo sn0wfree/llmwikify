@@ -48,7 +48,7 @@ class TestBuildLintContext:
 
         context = wiki._build_lint_context()
 
-        assert "=== SOURCE FILES" in context
+        assert "=== SOURCE ANALYSIS" in context
         assert "test1.md" in context
         assert "test2.md" in context
 
@@ -63,7 +63,21 @@ class TestBuildLintContext:
 
         context = wiki._build_lint_context(limit=20)
 
-        assert "=== SOURCE FILES" in context
+        assert "=== SOURCE ANALYSIS" in context
+        assert "and 5 more" in context
+
+        wiki.close()
+
+    def test_context_limits_source_files(self, temp_wiki):
+        wiki = Wiki(temp_wiki)
+        wiki.init()
+
+        for i in range(25):
+            (temp_wiki / "raw" / f"source_{i}.md").write_text(f"# Source {i}\n")
+
+        context = wiki._build_lint_context(limit=20)
+
+        assert "=== SOURCE ANALYSIS" in context
         assert "and 5 more" in context
 
         wiki.close()

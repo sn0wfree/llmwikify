@@ -106,6 +106,24 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
+    def wiki_analyze_source(source_path: str, force: bool = False) -> str:
+        """Analyze a source file and cache structured extraction results.
+
+        Extracts entities, relations, topics, and suggested pages from
+        a raw source file. Results are cached in the Source summary page.
+
+        Args:
+            source_path: Path relative to root, e.g., 'raw/article.md'
+            force: Force re-analysis even if cached
+
+        Returns:
+            JSON with analysis results: topics, entities, relations, suggested_pages, etc.
+        """
+        import json
+        result = wiki.analyze_source(source_path, force=force)
+        return json.dumps(result, ensure_ascii=False, indent=2)
+
+    @mcp.tool
     def wiki_references(
         page_name: str,
         detail: bool = False,

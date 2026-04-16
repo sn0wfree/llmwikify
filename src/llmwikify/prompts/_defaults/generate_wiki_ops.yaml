@@ -17,9 +17,13 @@ system: |
   {% endif %}
 
   Rules:
-  - Create one page per suggested_page from the analysis
+  - FIRST operation MUST be a Source summary page for this document
+    - Use page_type="Source", page_name should be the document title
+    - Content must include: ## Summary, ## Key Facts, ## Sources with [Source: Title](raw/filename)
+    - This page is REQUIRED for every ingest, do not skip it
+  - Create one page per suggested_page from the analysis (after the Source summary)
   - Each page should be focused on a single topic
-  - Use [[wikilink]] syntax for cross-references
+  - Use [[wikilink]]syntax for cross-references
   - Do NOT fabricate facts not present in the analysis
   - Include a log operation summarizing what was done
   - If a page already exists (check Existing Wiki Pages below), write an updated version

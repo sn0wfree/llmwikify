@@ -213,6 +213,57 @@ class WikiCLI:
         print(f"✅ {result}")
         return 0
 
+    def analyze_source(self, args) -> int:
+        """Analyze source files and cache extraction results."""
+        if getattr(args, 'all', False):
+            # Batch analyze all sources
+            sources = list(self.wiki.raw_dir.rglob("*")) if self.wiki.raw_dir.exists() else []
+            sources = [f for f in sources if f.is_file()]
+
+            if not sources:
+                print("No source files found in raw/")
+                return 0
+
+            analyzed = 0
+            failed = 0
+            skipped = 0
+            force = getattr(args, 'force', False)
+
+            for i, f in enumerate(sources, 1):
+                rel = str(f.relative_to(self.wiki.root))
+                print(f"[{i}/{len(sources)}] Analyzing: {rel}...", end=" ")
+
+                try:
+                    result = self.wiki.analyze_source(rel, force=force)
+                    status = result.get("status", "success")
+                    if status == "skipped":
+                        print(f"skipped ({result.get('reason', 'unknown')})")
+                        skipped += 1
+                    elif status == "error":
+                        print(f"failed ({result.get('reason', 'unknown')})")
+                        failed += 1
+                    else:
+                        entities = len(result.get("entities", []))
+                        suggested = len(result.get("suggested_pages", []))
+                        print(f"done (entities: {entities}, suggested: {suggested})")
+                        analyzed += 1
+                except Exception as e:
+                    print(f"error: {e}")
+                    failed += 1
+
+            print(f"\nSummary: {analyzed} analyzed, {skipped} skipped, {failed} failed")
+            return 0 if failed == 0 else 1
+        else:
+            # Single source
+            source_path = getattr(args, 'source')
+            if not source_path:
+                print("Error: specify a source path or use --all")
+                return 1
+
+            result = self.wiki.analyze_source(source_path, force=getattr(args, 'force', False))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0 if result.get("status") not in ("error", "skipped") else 1
+
     def read_page(self, args) -> int:
         """Read a wiki page."""
         page_type = getattr(args, 'type', None)
@@ -1146,6 +1197,12 @@ Examples:
     p.add_argument('--dry-run', '-n', action='store_true',
                    help='Show extraction summary without creating pages')
 
+    # analyze-source
+    p = subparsers.add_parser('analyze-source', help='Analyze source and cache extraction results')
+    p.add_argument('source', nargs='?', help='Source path (e.g., raw/article.md)')
+    p.add_argument('--all', '-a', action='store_true', help='Analyze all sources')
+    p.add_argument('--force', '-f', action='store_true', help='Force re-analysis')
+
     # write_page
     p = subparsers.add_parser('write_page', help='Write page')
     p.add_argument('name', help='Page name')
@@ -1312,6 +1369,7 @@ Examples:
     commands = {
         'init': cli.init,
         'ingest': cli.ingest,
+        'analyze-source': cli.analyze_source,
         'write_page': cli.write_page,
         'read_page': cli.read_page,
         'search': cli.search,
