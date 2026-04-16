@@ -30,12 +30,14 @@ document: |
 
   ## How to Operate
 
-  **Your workflow:**
-  1. Ingest source → returns JSON with content, entities, relations
-  2. **Analyze the response** → decide which pages to create/update
-  3. Create/update pages via `write_page` or `wiki_write_page`
-  4. Write graph relations for relationships
-  5. Log the operation
+   **Your workflow:**
+  1. Ingest source → returns JSON with content, analysis (entities, suggested_pages), lint_hint
+  2. **Analyze the response** → review analysis for page creation guidance
+  3. If lint_hint shows issues → run wiki_lint(mode="check") to detect gaps
+  4. Create/update pages via `write_page` or `wiki_write_page`
+  5. Write graph relations for relationships
+  6. Run wiki_lint(mode="fix") if gaps found
+  7. Log the operation
 
   **Key point:** YOU (the agent) write the page content. The CLI/MCP extracts content but does NOT auto-create pages.
 
@@ -102,9 +104,9 @@ document: |
   | References | `llmwikify references "Page" --detail` | `wiki_references(page_name)` |
   | Synthesize | `llmwikify synthesize --query "Q" --answer "A"` | `wiki_synthesize(query, answer)` |
 
-  **Additional tools:** `wiki_graph`, `wiki_graph_analyze`, `wiki_sink_status`,
-  `wiki_build_index`, `wiki_recommend`, `wiki_log`, `wiki_read_schema`,
-  `wiki_update_schema`
+   **Additional tools:** `wiki_graph`, `wiki_graph_analyze`, `wiki_analyze_source`,
+  `wiki_sink_status`, `wiki_build_index`, `wiki_recommend`, `wiki_log`,
+  `wiki_read_schema`, `wiki_update_schema`
 
   ## CLI ↔ MCP Parameter Mapping
 
@@ -139,9 +141,18 @@ document: |
   ```json
   {
     "status": "success",
+    "source_name": "article.md",
     "content_preview": "...",
-    "detected_entities": ["Entity1", "Entity2"],
-    "detected_relations": [{"source": "A", "target": "B", "relation": "uses"}]
+    "analysis": {
+      "topics": ["AI", "GPU"],
+      "entities": [{"name": "NVIDIA", "type": "Organization"}],
+      "suggested_pages": [{"name": "CUDA", "type": "Concept"}]
+    },
+    "lint_hint": {
+      "issues_found": 1,
+      "suggestion": "Call wiki_lint(mode='check') to detect gaps",
+      "top_issues": [{"type": "suggested_page_missing", "page_name": "CUDA"}]
+    }
   }
   ```
 
@@ -261,15 +272,18 @@ document: |
 
   ## Workflows
 
-  ### 1. Ingest a Source
+   ### 1. Ingest a Source
 
-  1. **Ingest source** → returns JSON with content_preview, detected_entities, detected_relations
-  2. **Create source summary** → type: Source, cite raw file in Sources section
-  3. **Create entity pages** → for each new detected entity, type: Entity
-  4. **Create concept pages** → for each new concept, type: Concept
-  5. **Write graph relations** → if relations detected, write to knowledge graph
-  6. **Update overview** → if the big picture changed significantly
-  7. **Log operation** → append to log.md
+  1. **Ingest source** → returns JSON with content_preview, analysis, lint_hint
+  2. **Review analysis** → entities, suggested_pages from LLM extraction
+  3. **Check lint_hint** → if present, run wiki_lint(mode="check") to detect gaps
+  4. **Create source summary** → type: Source, cite raw file in Sources section
+  5. **Create entity pages** → for each new detected entity, type: Entity
+  6. **Create concept pages** → for each new concept, type: Concept
+  7. **Write graph relations** → if relations detected, write to knowledge graph
+  8. **Run wiki_lint(mode="fix")** → if gaps found in step 3
+  9. **Update overview** → if the big picture changed significantly
+  10. **Log operation** → append to log.md
 
   **CLI example:**
   ```bash
@@ -503,6 +517,8 @@ document: |
   | "No entities detected" | Conceptual document | Review content manually, create pages for key topics |
   | "Too many files to process" | File count > 10 | Use batch strategy (3-5 files per session) |
   | "Page already exists" | Search before create | Read existing page, update instead of creating |
+  | "No analysis returned" | LLM not configured | Run `llmwikify analyze-source raw/file.md` manually |
+  | "lint_hint shows gaps" | Missing custom type pages | Run `wiki_lint(mode="check")` then `wiki_lint(mode="fix")` |
 
   ### Tool Call Issues
 

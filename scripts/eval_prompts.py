@@ -212,6 +212,7 @@ class PromptEvaluator:
                 "data_gaps_json": "[]",
                 "total_pages": 0,
                 "version": "0.18.0",
+                "lint_context": "",
             }
 
             for field_name in ["system", "user", "document", "text"]:
@@ -385,6 +386,7 @@ class PromptEvaluator:
                     "data_gaps_json": "[]",
                     "total_pages": 0,
                     "version": "0.18.0",
+                    "lint_context": "",
                 }
 
                 try:

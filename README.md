@@ -5,7 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 490 passing](https://img.shields.io/badge/tests-490%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Tests: 674 passing](https://img.shields.io/badge/tests-674%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 
 ---
 
@@ -68,6 +68,11 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 - `contradictions`: Cross-page conflicts (value, year, negation patterns)
 - `data_gaps`: Unsourced claims and vague temporal references
 - `--generate-investigations`: LLM-suggested questions and sources
+
+### 🔍 Source Analysis (v0.26.0+)
+- `analyze-source` CLI command with `--all` and `--force` support
+- Caches LLM extraction results (entities, suggested pages, relations) in source summary pages
+- Powers schema-aware lint gap detection for missing custom type pages
 
 ### 🕰️ File Watcher (v0.21.0+)
 - Watch `raw/` directory for new file arrivals
@@ -343,7 +348,7 @@ hints = wiki.hint()
 
 ---
 
-## 🗄️ MCP Server (17 Tools)
+## 🗄️ MCP Server (18 Tools)
 
 The MCP server exposes wiki operations as tools for LLMs.
 
@@ -354,7 +359,7 @@ The MCP server exposes wiki operations as tools for LLMs.
 | `wiki_write_page` | Write/update a wiki page |
 | `wiki_read_page` | Read a wiki page |
 | `wiki_search` | Full-text search with snippets |
-| `wiki_lint` | Health check (broken links, orphan pages) |
+| `wiki_lint` | Health check (broken links, orphan pages, schema gaps) |
 | `wiki_status` | Get wiki status overview |
 | `wiki_log` | Append entry to wiki log |
 | `wiki_recommend` | Get recommendations (missing pages, orphans) |
@@ -366,6 +371,7 @@ The MCP server exposes wiki operations as tools for LLMs.
 | `wiki_references` | Show page references (inbound/outbound wikilinks) |
 | `wiki_graph` | Query/modify knowledge graph (neighbors, path, stats, write relations) |
 | `wiki_graph_analyze` | Analyze graph (export visualization, detect communities, surprise report) |
+| `wiki_analyze_source` | Analyze a raw source file and cache extraction results |
 
 ### Quick Start
 ```python

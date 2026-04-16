@@ -1,6 +1,7 @@
 # llmwikify Project Summary
 
-> Complete overview of the llmwikify package — Current: v0.12.6
+> **DEPRECATED**: This file is outdated. See `ARCHITECTURE.md` for current documentation.
+> Last known state: v0.25.0
 
 ---
 
