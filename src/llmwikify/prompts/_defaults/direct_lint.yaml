@@ -18,8 +18,11 @@ system: |
   {% endif %}
 
   DETECTION TASKS:
-  1. MISSING CUSTOM PAGES — wiki.md may define custom page types (look for "Custom Page Types" section).
-     If sources mention entities that should have pages of these types but no page exists, flag it.
+  1. MISSING CUSTOM PAGES — Look at the SOURCE ANALYSIS section below.
+     If "Suggested pages" mention types defined in wiki.md's Custom Page Types section
+     (e.g., "Model", "MacroFactor") and no corresponding page exists in EXISTING PAGES,
+     flag as missing_custom_page.
+     Also check ORPHAN CONCEPTS — these may need pages of custom types.
   2. ORPHAN CONCEPTS — concepts listed under "ORPHAN CONCEPTS" are in the knowledge graph
      (relations table) but have no corresponding wiki page. These should be created.
   3. MISSING CROSS-REFERENCES — existing wiki pages may mention other page names (from the
