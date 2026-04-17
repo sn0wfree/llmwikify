@@ -27,7 +27,7 @@ pytest --cov=src/llmwikify --cov-report=html
 open htmlcov/index.html
 ```
 
-**Target**: 526 tests passing, >85% code coverage.
+**Target**: 760 tests passing, >85% code coverage.
 
 ## Code Quality
 
@@ -48,15 +48,15 @@ All three must pass before submitting a PR. CI will enforce this automatically.
 
 ```
 src/llmwikify/
-├── core/              # Business logic (wiki.py, index.py, relation_engine.py, etc.)
+├── core/              # Business logic (wiki.py, index.py, relation_engine.py, graph_analyzer.py, synthesis_engine.py)
 ├── extractors/        # Content extractors (PDF, web, YouTube, MarkItDown)
-├── cli/               # CLI commands (20 total)
-├── mcp/               # MCP server (17 tools)
+├── cli/               # CLI commands (22 total)
+├── mcp/               # MCP server (18 tools)
 ├── prompts/           # YAML+Jinja2 prompt templates
-├── utils/             # Helper utilities
+├── web/               # Web UI (optional)
 ├── config.py          # Configuration system
 └── llm_client.py      # LLM API client
-tests/                 # Test suite (542 tests)
+tests/                 # Test suite (760 tests)
 docs/                  # Documentation
 examples/              # Example configurations
 ```
