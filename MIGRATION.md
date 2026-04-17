@@ -1,6 +1,38 @@
 # Migration Guide
 
-> **Current version**: 0.25.0
+> **Current version**: 0.28.0
+
+---
+
+## v0.27.x → v0.28.0
+
+### Enhanced Source Pages (P0)
+
+Source pages now use a 6-section format instead of 3:
+1. `## Summary` — Document overview
+2. `## Key Entities & Relations` — Entity list + relation graph
+3. `## Key Claims & Facts` — Claims with confidence + key facts
+4. `## Contradictions & Gaps` — Only if detected (optional)
+5. `## Cross-References` — `[[wikilink]]` references
+6. `## Sources` — Citation with `[Source: Title](raw/filename)`
+
+**Migration**: No action needed for existing wikis. New source pages will use the enhanced format automatically.
+
+### New CLI Commands (P1)
+
+| Command | Description |
+|---------|-------------|
+| `suggest-synthesis` | Analyze sources and generate cross-source synthesis suggestions |
+| `knowledge-gaps` | Detect knowledge gaps, outdated pages, and redundancy |
+| `graph-analyze` | Analyze knowledge graph (PageRank, communities, suggested pages) |
+
+**Migration**: No breaking changes. All existing commands work as before.
+
+### AGENTS.md Removed
+
+`AGENTS.md` has been deleted. It was supposed to be removed in v0.26.0 but persisted. All agent instructions now live exclusively in `wiki.md`.
+
+**Migration**: If you have a custom `AGENTS.md`, migrate any unique content to `wiki.md` and delete the file.
 
 ---
 
@@ -20,12 +52,12 @@ llmwikify init --agent generic    # No agent, just wiki structure
 
 **Generated files per agent type:**
 
-| Agent | MCP Config | Agent File | Schema | Git Ignore |
-|-------|-----------|------------|--------|------------|
-| opencode | `opencode.json` | `AGENTS.md` | `wiki.md` | ✓ |
-| claude | `.mcp.json` | `CLAUDE.md` | `wiki.md` | ✓ |
-| codex | `.opencode.json` | `AGENTS.md` | `wiki.md` | ✓ |
-| generic | — | — | `wiki.md` | ✓ |
+| Agent | MCP Config | Schema | Git Ignore |
+|-------|-----------|--------|------------|
+| opencode | `opencode.json` | `wiki.md` | ✓ |
+| claude | `.mcp.json` | `wiki.md` | ✓ |
+| codex | `.opencode.json` | `wiki.md` | ✓ |
+| generic | — | `wiki.md` | ✓ |
 
 **Schema conflict handling:**
 - If `wiki.md` already exists: warned, skipped by default
@@ -37,7 +69,7 @@ llmwikify init --agent generic    # No agent, just wiki structure
 ```bash
 llmwikify init --agent opencode --force
 ```
-This adds `AGENTS.md` and `opencode.json` to an already-initialized wiki without touching wiki pages.
+This adds `opencode.json` or `.mcp.json` to an already-initialized wiki without touching wiki pages.
 
 ### Raw Source Analysis
 
@@ -456,4 +488,4 @@ from llmwikify.mcp import MCPServer
 
 ---
 
-*Last updated: 2026-04-13 | Current version: 0.24.0*
+*Last updated: 2026-04-17 | Current version: 0.28.0*
