@@ -263,7 +263,7 @@ See [Configuration Guide](docs/CONFIGURATION_GUIDE.md) for full options.
 - **[LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md)** — Karpathy's original vision
 - **[Migration Guide](MIGRATION.md)** — Version migration notes
 - **[Contributing](CONTRIBUTING.md)** — Development workflow
-- **[Known Issues](KNOWN_ISSUES.md)** — Known issues and planned fixes
+- **[Known Issues](docs/KNOWN_ISSUES.md)** — Known issues and planned fixes
 
 ---
 
