@@ -384,3 +384,87 @@ class TestIndexPageNameConsistency:
         row = cursor.fetchone()
         assert row['page_name'] == "concepts/Risk Parity"
         wiki.close()
+
+
+class TestMissingCrossRefDetection:
+    """Test that _detect_missing_cross_refs does not produce false positives
+    from wikilink substring matches."""
+
+    def test_no_false_positive_from_wikilink_substring(self, temp_wiki):
+        """[[concepts/Volatility Surface]] should NOT trigger missing ref for
+        concepts/Volatility."""
+        wiki = Wiki(temp_wiki)
+        wiki.init(overwrite=True)
+
+        concepts = wiki.wiki_dir / "concepts"
+        concepts.mkdir(parents=True, exist_ok=True)
+        (concepts / "Volatility.md").write_text("# Volatility\n\nContent.")
+        (concepts / "Volatility Surface.md").write_text(
+            "# Volatility Surface\n\nRelated: [[concepts/Volatility]]."
+        )
+        # Trend Following mentions Volatility Surface via wikilink only
+        (concepts / "Trend Following.md").write_text(
+            "# Trend Following\n\nUses [[concepts/Volatility Surface]]."
+        )
+
+        hints = wiki._detect_missing_cross_refs()
+
+        # concepts/Volatility should NOT be reported as missing
+        missing_concepts = [
+            h["concept"]
+            for h in hints
+            if h["type"] == "missing_cross_ref"
+        ]
+        assert "concepts/Volatility" not in missing_concepts
+        wiki.close()
+
+    def test_detects_actual_plain_text_mention(self, temp_wiki):
+        """Plain text mention of page name (not in wikilink) IS reported."""
+        wiki = Wiki(temp_wiki)
+        wiki.init(overwrite=True)
+
+        concepts = wiki.wiki_dir / "concepts"
+        concepts.mkdir(parents=True, exist_ok=True)
+        (concepts / "Risk Parity.md").write_text("# Risk Parity\n\nContent.")
+        # Two pages mention "concepts/Risk Parity" in plain text without linking
+        (concepts / "Portfolio A.md").write_text(
+            "# Portfolio A\n\nSee concepts/Risk Parity for details."
+        )
+        (concepts / "Portfolio B.md").write_text(
+            "# Portfolio B\n\nAlso check concepts/Risk Parity."
+        )
+
+        hints = wiki._detect_missing_cross_refs()
+
+        missing_concepts = [
+            h["concept"]
+            for h in hints
+            if h["type"] == "missing_cross_ref"
+        ]
+        assert "concepts/Risk Parity" in missing_concepts
+        wiki.close()
+
+    def test_linked_page_not_reported(self, temp_wiki):
+        """A page that already links to the candidate is not reported."""
+        wiki = Wiki(temp_wiki)
+        wiki.init(overwrite=True)
+
+        concepts = wiki.wiki_dir / "concepts"
+        concepts.mkdir(parents=True, exist_ok=True)
+        (concepts / "Gold.md").write_text("# Gold\n\nContent.")
+        (concepts / "Silver.md").write_text(
+            "# Silver\n\nSee [[concepts/Gold]] for details."
+        )
+        (concepts / "Copper.md").write_text(
+            "# Copper\n\nAlso see [[concepts/Gold]]."
+        )
+
+        hints = wiki._detect_missing_cross_refs()
+
+        missing_concepts = [
+            h["concept"]
+            for h in hints
+            if h["type"] == "missing_cross_ref"
+        ]
+        assert "concepts/Gold" not in missing_concepts
+        wiki.close()

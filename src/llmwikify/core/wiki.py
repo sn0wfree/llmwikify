@@ -1447,6 +1447,11 @@ class Wiki:
                 target = link.split('|')[0].split('#')[0].strip()
                 wikilinks.add(target)
 
+            # Strip all wikilinks before searching for plain-text mentions
+            # This prevents false positives like [[concepts/Volatility Surface]]
+            # being matched as a mention of "concepts/Volatility"
+            content_text = re.sub(r'\[\[.*?\]\]', '', content)
+
             # Check if other page names are mentioned in text (case-insensitive)
             for candidate in existing_pages:
                 if candidate == page_name:
@@ -1454,10 +1459,9 @@ class Wiki:
                 if candidate in wikilinks:
                     continue  # Already linked
 
-                # Check if candidate name appears in content (word boundary match)
-                # Split candidate into words and check if they appear together
+                # Check if candidate name appears in plain text (word boundary match)
                 pattern = r'\b' + re.escape(candidate) + r'\b'
-                if re.search(pattern, content, re.IGNORECASE):
+                if re.search(pattern, content_text, re.IGNORECASE):
                     if candidate not in concept_mentions:
                         concept_mentions[candidate] = []
                     concept_mentions[candidate].append(page_name)
