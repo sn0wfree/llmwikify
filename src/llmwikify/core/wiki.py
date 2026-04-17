@@ -1077,6 +1077,31 @@ class Wiki:
         from .relation_engine import RelationEngine
         return RelationEngine(self.index, wiki_root=self.root)
 
+    def graph_analyze(self) -> dict:
+        """Run full knowledge graph analysis.
+
+        Returns suggestions only — never auto-creates pages.
+        Respects "stay involved" principle.
+
+        Returns:
+            Dict with:
+            - centrality: PageRank scores, hubs, authorities
+            - communities: Community detection with labels
+            - suggestions: Pages to create, links to add
+            - stats: Graph statistics
+        """
+        from .graph_analyzer import GraphAnalyzer
+
+        analyzer = GraphAnalyzer(self)
+        return analyzer.analyze()
+
+    def graph_suggested_pages_report(self) -> str:
+        """Generate human-readable report of suggested pages."""
+        from .graph_analyzer import GraphAnalyzer
+
+        analyzer = GraphAnalyzer(self)
+        return analyzer.get_suggested_pages_report()
+
     def write_page(self, page_name: str, content: str, page_type: str = None) -> str:
         """Write a wiki page.
 
