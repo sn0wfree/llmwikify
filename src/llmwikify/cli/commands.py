@@ -338,6 +338,42 @@ class WikiCLI:
                 message = issue.get('message', '')
                 print(f"  ❌ [{issue_type}] {page}: {message}")
 
+        # P1.2: Show investigations
+        inv = result.get('investigations', {})
+        if inv:
+            print("\n=== Investigations ===")
+
+            contradictions = inv.get('contradictions', [])
+            if contradictions:
+                print(f"\n❌ Contradictions ({len(contradictions)}):")
+                for c in contradictions[:3]:
+                    print(f"  • {c.get('observation', c.get('type', 'unknown'))[:100]}")
+
+            data_gaps = inv.get('data_gaps', [])
+            if data_gaps:
+                print(f"\n🔍 Data Gaps ({len(data_gaps)}):")
+                for g in data_gaps[:3]:
+                    print(f"  • {g.get('observation', g.get('type', 'unknown'))[:100]}")
+
+            outdated = inv.get('outdated_pages', [])
+            if outdated:
+                print(f"\n📅 Outdated Pages ({len(outdated)}):")
+                for o in outdated[:3]:
+                    print(f"  • {o.get('observation', o.get('page', 'unknown'))[:100]}")
+
+            gaps = inv.get('knowledge_gaps', [])
+            if gaps:
+                print(f"\n🔍 Knowledge Gaps ({len(gaps)}):")
+                for g in gaps[:3]:
+                    print(f"  • {g.get('observation', g.get('type', 'unknown'))[:100]}")
+
+            redundancy = inv.get('redundancy_alerts', [])
+            if redundancy:
+                print(f"\n⚠️ Redundancy ({len(redundancy)}):")
+                for r in redundancy[:3]:
+                    print(f"  • {r.get('observation', r.get('type', 'unknown'))[:100]}")
+
+        if result['issues']:
             return 1
         else:
             print("\n✅ All healthy!")
