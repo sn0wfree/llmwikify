@@ -1710,6 +1710,135 @@ class Wiki:
 
         return gaps[:3]
 
+    def _detect_outdated_pages(self) -> list[dict]:
+        """Detect pages that may be outdated based on source dates.
+
+        Returns observational hints (max 3) for LLM to evaluate.
+        Detection strategies:
+        - old_source_only: Page only cites sources older than 1 year
+        - superseded_claim: Page contains claims superseded by newer sources
+        """
+        outdated = []
+        current_year = datetime.now(timezone.utc).year
+
+        if not self.wiki_dir.exists():
+            return outdated
+
+        for page in self._wiki_pages():
+            page_name = self._page_display_name(page)
+            if page_name.startswith("Query:"):
+                continue
+
+            content = page.read_text()
+
+            # Strategy 1: Check source dates
+            source_refs = re.findall(r'\(raw/([^)]+)\)', content)
+            if source_refs:
+                # Look for year mentions in page
+                years_in_page = re.findall(r'\b(20\d{2})\b', content)
+                if years_in_page:
+                    latest_year = max(int(y) for y in years_in_page)
+                    if current_year - latest_year >= 2:
+                        outdated.append({
+                            "type": "potentially_outdated",
+                            "page": page_name,
+                            "latest_year_mentioned": latest_year,
+                            "current_year": current_year,
+                            "observation": (
+                                f"'{page_name}' references {latest_year} as latest date. "
+                                f"May need review with newer sources."
+                            ),
+                        })
+
+            if len(outdated) >= 3:
+                break
+
+        return outdated[:3]
+
+    def _detect_knowledge_gaps(self) -> list[dict]:
+        """Detect knowledge gaps across the wiki.
+
+        Returns observational hints (max 3) for LLM to evaluate.
+        Detection strategies:
+        - unreferenced_entity: Entity in relations but no wiki page
+        - topic_without_sources: Topic page with no cited sources
+        - missing_cross_source: Topic mentioned in multiple sources but no synthesis page
+        """
+        gaps = []
+
+        if not self.wiki_dir.exists():
+            return gaps
+
+        # Strategy 1: Unreferenced entities from relation engine
+        try:
+            engine = self.get_relation_engine()
+            orphan_concepts = engine.find_orphan_concepts()
+            for concept in orphan_concepts[:3]:
+                gaps.append({
+                    "type": "unreferenced_entity",
+                    "concept": concept,
+                    "observation": f"'{concept}' is in the knowledge graph but has no wiki page",
+                    "suggestion": f"Consider creating a page for '{concept}'",
+                })
+        except Exception:
+            pass
+
+        # Strategy 2: Source pages with no outbound links
+        sources_dir = self.wiki_dir / "sources"
+        if sources_dir.exists():
+            for source_page in sources_dir.rglob("*.md"):
+                page_name = self._page_display_name(source_page)
+                content = source_page.read_text()
+                wikilinks = re.findall(r'\[\[(.*?)\]\]', content)
+                if not wikilinks:
+                    gaps.append({
+                        "type": "isolated_source",
+                        "page": page_name,
+                        "observation": f"Source page '{page_name}' has no wikilinks to other pages",
+                        "suggestion": "Consider adding cross-references to related concepts/entities",
+                    })
+
+                if len(gaps) >= 3:
+                    break
+
+        return gaps[:3]
+
+    def _detect_redundancy(self) -> list[dict]:
+        """Detect potentially redundant or overlapping content.
+
+        Returns observational hints (max 2) for LLM to evaluate.
+        Detection strategies:
+        - similar_pages: Pages with very similar names or content
+        - duplicate_sources: Multiple source pages citing the same raw file
+        """
+        redundancy = []
+        pages = self._wiki_pages()
+
+        if not pages:
+            return redundancy
+
+        # Strategy 1: Similar page names (simple heuristic)
+        page_names = [self._page_display_name(p) for p in pages]
+        for i, name1 in enumerate(page_names):
+            for name2 in page_names[i+1:]:
+                # Check if one name contains the other
+                if (name1.lower() in name2.lower() or name2.lower() in name1.lower()):
+                    if len(name1) > 5 and len(name2) > 5:  # Ignore short names
+                        redundancy.append({
+                            "type": "similar_page_names",
+                            "page_a": name1,
+                            "page_b": name2,
+                            "observation": (
+                                f"Pages '{name1}' and '{name2}' have similar names. "
+                                f"Consider merging if they cover the same topic."
+                            ),
+                        })
+
+            if len(redundancy) >= 2:
+                break
+
+        return redundancy[:2]
+
     def _llm_generate_investigations(
         self,
         contradictions: list[dict],
@@ -2090,9 +2219,17 @@ class Wiki:
         contradictions = self._detect_potential_contradictions()
         data_gaps = self._detect_data_gaps()
 
+        # P1.2: Smart Lint 2.0 — additional detections
+        outdated_pages = self._detect_outdated_pages()
+        knowledge_gaps = self._detect_knowledge_gaps()
+        redundancy_alerts = self._detect_redundancy()
+
         investigations = {
             "contradictions": contradictions,
             "data_gaps": data_gaps,
+            "outdated_pages": outdated_pages,
+            "knowledge_gaps": knowledge_gaps,
+            "redundancy_alerts": redundancy_alerts,
         }
 
         if generate_investigations:
@@ -3021,6 +3158,78 @@ class Wiki:
     def sink_status(self) -> dict:
         """Overview of all query sinks with entry counts and urgency."""
         return self.query_sink.status()
+
+    def suggest_synthesis(self, source_name: str | None = None) -> dict:
+        """Analyze sources and generate cross-source synthesis suggestions.
+
+        This method compares new or existing sources against the wiki
+        and returns suggestions (not auto-executed). Respects the
+        "stay involved" principle — human decides what to do with suggestions.
+
+        Args:
+            source_name: Specific source to analyze, or None for all unanalyzed sources.
+
+        Returns:
+            Dict with synthesis suggestions:
+            - suggestions: list of synthesis suggestions
+            - summary: human-readable summary
+            - sources_analyzed: number of sources analyzed
+        """
+        from .synthesis_engine import SynthesisEngine
+
+        engine = SynthesisEngine(self)
+        all_suggestions = []
+
+        if source_name:
+            # Analyze specific source
+            analysis = self.analyze_source(source_name)
+            if analysis.get("status") in ("error", "skipped"):
+                return {
+                    "error": f"Failed to analyze {source_name}: {analysis.get('reason')}",
+                    "suggestions": [],
+                    "sources_analyzed": 0,
+                }
+
+            suggestion = engine.analyze_new_source(analysis, source_name)
+            all_suggestions.append(suggestion)
+        else:
+            # Analyze all sources that haven't been synthesized
+            sources_dir = self.raw_dir
+            if not sources_dir.exists():
+                return {
+                    "suggestions": [],
+                    "sources_analyzed": 0,
+                    "summary": "No raw sources found",
+                }
+
+            sources = [f for f in sources_dir.rglob("*") if f.is_file()]
+            analyzed_count = 0
+
+            for source_file in sources:
+                rel_path = str(source_file.relative_to(self.root))
+                try:
+                    analysis = self.analyze_source(rel_path)
+                    if analysis.get("status") not in ("error", "skipped"):
+                        suggestion = engine.analyze_new_source(analysis, rel_path)
+                        all_suggestions.append(suggestion)
+                        analyzed_count += 1
+                except Exception:
+                    pass  # Skip sources that fail analysis
+
+        # Generate summary
+        total_suggestions = sum(
+            len(s.get("suggested_updates", [])) +
+            len(s.get("new_contradictions", [])) +
+            len(s.get("knowledge_gaps", []))
+            for s in all_suggestions
+        )
+
+        return {
+            "suggestions": all_suggestions,
+            "sources_analyzed": len(all_suggestions),
+            "total_suggestions": total_suggestions,
+            "summary": f"Analyzed {len(all_suggestions)} source(s), generated {total_suggestions} suggestion(s)",
+        }
 
     def close(self):
         """Close database connections."""

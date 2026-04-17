@@ -1123,6 +1123,121 @@ class WikiCLI:
 
         return 0
 
+    def suggest_synthesis(self, args) -> int:
+        """Analyze sources and generate cross-source synthesis suggestions."""
+        source = getattr(args, 'source', None)
+        as_json = getattr(args, 'json', False)
+
+        result = self.wiki.suggest_synthesis(source_name=source)
+
+        if "error" in result:
+            print(f"Error: {result['error']}")
+            return 1
+
+        if as_json:
+            import json
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+
+        print("=== Cross-Source Synthesis Suggestions ===\n")
+        print(f"Sources analyzed: {result['sources_analyzed']}")
+        print(f"Total suggestions: {result['total_suggestions']}")
+        print()
+
+        for i, suggestion in enumerate(result['suggestions'], 1):
+            print(f"--- Source {i}: {suggestion['source_name']} ---")
+
+            if suggestion.get('reinforced_claims'):
+                print(f"\n  ✅ Reinforced Claims ({len(suggestion['reinforced_claims'])})")
+                for claim in suggestion['reinforced_claims'][:3]:
+                    print(f"    • {claim['claim'][:80]}... (confirmed by {claim['confirmed_by_count']} source(s))")
+
+            if suggestion.get('new_contradictions'):
+                print(f"\n  ⚠️ Potential Contradictions ({len(suggestion['new_contradictions'])})")
+                for contra in suggestion['new_contradictions'][:3]:
+                    print(f"    • {contra.get('contradiction', contra.get('new_claim', 'unknown'))[:80]}...")
+
+            if suggestion.get('knowledge_gaps'):
+                print(f"\n  🔍 Knowledge Gaps ({len(suggestion['knowledge_gaps'])})")
+                for gap in suggestion['knowledge_gaps'][:3]:
+                    print(f"    • {gap['gap'][:80]}...")
+
+            if suggestion.get('suggested_updates'):
+                print(f"\n  📝 Suggested Updates ({len(suggestion['suggested_updates'])})")
+                for update in suggestion['suggested_updates'][:3]:
+                    print(f"    • {update['page']}: {update['reason'][:60]}...")
+
+            if suggestion.get('new_entities'):
+                print(f"\n  🆕 New Entities ({len(suggestion['new_entities'])})")
+                for entity in suggestion['new_entities'][:3]:
+                    print(f"    • {entity['name']} ({entity['type']})")
+
+            print()
+
+        print(f"\n{result['summary']}")
+        return 0
+
+    def knowledge_gaps(self, args) -> int:
+        """Detect knowledge gaps, outdated pages, and redundancy."""
+        as_json = getattr(args, 'json', False)
+
+        result = self.wiki.lint(generate_investigations=True)
+
+        if as_json:
+            import json
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+
+        investigations = result.get('investigations', {})
+
+        print("=== Knowledge Gap Analysis ===\n")
+        print(f"Total pages: {result['total_pages']}")
+        print(f"Total issues: {result['issue_count']}")
+        print()
+
+        # Outdated pages
+        outdated = investigations.get('outdated_pages', [])
+        if outdated:
+            print(f"📅 Potentially Outdated Pages ({len(outdated)})")
+            for page in outdated:
+                print(f"  • {page['page']} (latest: {page.get('latest_year_mentioned', 'unknown')})")
+            print()
+        else:
+            print("✅ No outdated pages detected")
+            print()
+
+        # Knowledge gaps
+        gaps = investigations.get('knowledge_gaps', [])
+        if gaps:
+            print(f"🔍 Knowledge Gaps ({len(gaps)})")
+            for gap in gaps:
+                print(f"  • {gap['observation']}")
+            print()
+        else:
+            print("✅ No knowledge gaps detected")
+            print()
+
+        # Redundancy alerts
+        redundancy = investigations.get('redundancy_alerts', [])
+        if redundancy:
+            print(f"⚠️ Redundancy Alerts ({len(redundancy)})")
+            for alert in redundancy:
+                print(f"  • {alert['observation']}")
+            print()
+        else:
+            print("✅ No redundancy detected")
+            print()
+
+        # Contradictions
+        contradictions = investigations.get('contradictions', [])
+        if contradictions:
+            print(f"❌ Contradictions ({len(contradictions)})")
+            for contra in contradictions:
+                print(f"  • {contra.get('observation', contra.get('type', 'unknown'))}")
+            print()
+
+        return 0
+
     def serve(self, args) -> int:
         """Start MCP server and optionally Web UI. Used by both 'mcp' and 'serve' subcommands."""
         from ..mcp.server import serve_mcp
@@ -1393,14 +1508,51 @@ Examples:
     p.add_argument('--top', type=int, default=10, help='Number of top connections (default: 10)')
     p.add_argument('--output', '-o', default=None, help='Output file path')
 
-    # mcp - Start MCP server for Agent interaction
+    # suggest-synthesis (P1.1)
+    p = subparsers.add_parser('suggest-synthesis', help='Analyze sources and generate cross-source synthesis suggestions')
+    p.add_argument('source', nargs='?', default=None, help='Specific source to analyze (default: all unanalyzed sources)')
+    p.add_argument('--json', action='store_true', help='Output as JSON')
+
+    # knowledge-gaps (P1.2)
+    p = subparsers.add_parser('knowledge-gaps', help='Detect knowledge gaps, outdated pages, and redundancy')
+    p.add_argument('--json', action='store_true', help='Output as JSON')
+    p.add_argument('--include-suggestions', '-s', action='store_true', help='Include suggested sources to fill gaps')
+
+    # graph-query
+    p = subparsers.add_parser('graph-query', help='Query the knowledge graph')
+    p.add_argument('subcommand', choices=['neighbors', 'path', 'stats', 'context'],
+                   help='Query type')
+    p.add_argument('args', nargs='*', help='Arguments (concept name, path endpoints, relation id)')
+
+    # export-graph
+    p = subparsers.add_parser('export-graph', help='Export knowledge graph visualization')
+    p.add_argument('--format', choices=['html', 'svg', 'graphml'], default='html',
+                   help='Output format (default: html)')
+    p.add_argument('--output', '-o', default=None, help='Output file path')
+    p.add_argument('--min-degree', type=int, default=0, help='Filter nodes below this degree')
+
+    # community-detect
+    p = subparsers.add_parser('community-detect', help='Detect knowledge communities')
+    p.add_argument('--algorithm', choices=['leiden', 'louvain'], default='leiden',
+                   help='Detection algorithm (default: leiden)')
+    p.add_argument('--resolution', type=float, default=1.0,
+                   help='Resolution parameter (default: 1.0)')
+    p.add_argument('--json', action='store_true', help='Output as JSON')
+    p.add_argument('--dry-run', '-n', action='store_true', help='Only print stats')
+
+    # report
+    p = subparsers.add_parser('report', help='Generate unexpected connections report')
+    p.add_argument('--top', type=int, default=10, help='Number of top connections (default: 10)')
+    p.add_argument('--output', '-o', default=None, help='Output file path')
+
+    # mcp
     p = subparsers.add_parser('mcp', help='Start MCP server for Agent interaction (stdio by default)')
     p.add_argument('--transport', '-t', choices=['stdio', 'http', 'sse'], help='Transport protocol')
     p.add_argument('--host', help='Host address')
     p.add_argument('--port', '-p', type=int, help='Port number')
     p.add_argument('--name', '-n', help='Service name (defaults to directory name)')
 
-    # serve - Start MCP server with optional Web UI
+    # serve
     p = subparsers.add_parser('serve', help='Start MCP server with optional Web UI')
     p.add_argument('--transport', '-t', choices=['stdio', 'http', 'sse'], help='Transport protocol')
     p.add_argument('--host', help='Host address')
@@ -1452,6 +1604,8 @@ Examples:
         'export-graph': cli.export_graph,
         'community-detect': cli.community_detect,
         'report': cli.report,
+        'suggest-synthesis': cli.suggest_synthesis,
+        'knowledge-gaps': cli.knowledge_gaps,
         'mcp': cli.serve,
         'serve': cli.serve,
     }
