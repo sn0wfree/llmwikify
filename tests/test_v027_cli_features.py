@@ -174,8 +174,8 @@ class TestBuildIndexForce:
         assert cli._detect_old_index_format() is False
         cli.wiki.close()
 
-    def test_build_index_blocks_on_old_format(self, temp_wiki):
-        """build-index returns 1 when old format detected without --force."""
+    def test_build_index_auto_migrates_old_format(self, temp_wiki):
+        """build-index auto-migrates old format without --force."""
         cli = _make_cli(temp_wiki)
 
         # Create old-format page
@@ -191,11 +191,15 @@ class TestBuildIndexForce:
         sys.stdout = old_stdout
         output = captured.getvalue()
 
-        assert ret == 1
+        # Should succeed with migration message
+        assert ret == 0
         assert 'Old index format detected' in output
+        assert 'Migrating' in output
+        assert 'Index Built' in output
+        cli.wiki.close()
 
     def test_build_index_force_rebuild(self, temp_wiki):
-        """build-index --force succeeds even with old format."""
+        """build-index --force succeeds and rebuilds."""
         cli = _make_cli(temp_wiki)
 
         # Create old-format page
