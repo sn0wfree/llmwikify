@@ -304,7 +304,11 @@ class WikiCLI:
             generate_investigations=generate_inv,
         )
 
-        if fmt == 'brief':
+        if fmt == 'json':
+            import json
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        elif fmt == 'brief':
             return self._lint_brief(result)
         elif fmt == 'recommendations':
             return self._lint_recommendations(result)
@@ -440,6 +444,30 @@ class WikiCLI:
 
         return 0
 
+    def fix_wikilinks(self, args) -> int:
+        """Fix broken wikilinks by adding directory prefix."""
+        dry_run = getattr(args, 'dry_run', False)
+        result = self.wiki.fix_wikilinks(dry_run=dry_run)
+
+        mode = "DRY RUN" if dry_run else "FIXED"
+        print(f"=== Wikilink Fix Summary ({mode}) ===")
+        print(f"  Fixed:     {result['fixed']}")
+        print(f"  Skipped:   {result['skipped']}")
+        print(f"  Ambiguous: {result['ambiguous']}")
+
+        if result['changes']:
+            print(f"\nChanges ({len(result['changes'])} total):")
+            for c in result['changes'][:50]:
+                if c['status'] == 'fixed':
+                    print(f"  ✅ {c['page']}: {c['old']} → {c['new']}")
+                elif c['status'] == 'ambiguous':
+                    print(f"  ⚠️  {c['page']}: [[{c['link']}]] matches {len(c['matches'])} pages: {', '.join(c['matches'])}")
+
+        if result['ambiguous'] > 0:
+            print(f"\n⚠️  {result['ambiguous']} ambiguous link(s) require manual resolution.")
+            return 1
+        return 0
+
     def log(self, args) -> int:
         """Record log entry."""
         operation = getattr(args, 'op_flag', None) or args.operation
@@ -460,6 +488,7 @@ class WikiCLI:
         no_export = getattr(args, 'no_export', False)
         output = getattr(args, 'output', None)
         export_only = getattr(args, 'export_only', False)
+        force = getattr(args, 'force', False)
         output_path = Path(output) if output else None
 
         if export_only:
@@ -470,6 +499,12 @@ class WikiCLI:
             print(f"Links: {result['total_links']}")
             print(f"Output: {output_path or self.wiki.ref_index_path}")
             return 0
+
+        # Auto-detect old index format
+        if not force and self._detect_old_index_format():
+            print("⚠️  Old index format detected (page names without directory prefix).")
+            print("    Run 'llmwikify build-index --force' to rebuild with new format.")
+            return 1
 
         print("=== Building Reference Index ===")
         print(f"Scanning: {self.wiki.wiki_dir}")
@@ -485,6 +520,29 @@ class WikiCLI:
         print(f"📈 Speed: {result.get('files_per_second', 'N/A')} files/sec")
 
         return 0
+
+    def _detect_old_index_format(self) -> bool:
+        """Check if index contains pages with old-format page_names.
+
+        Old format: page_name is bare name (e.g., "Risk Parity") while
+        file_path has directory prefix (e.g., "concepts/Risk Parity.md").
+        New format: page_name == file_path[:-3] (e.g., both are "concepts/Risk Parity").
+        """
+        if not self.wiki.is_initialized():
+            return False
+        try:
+            cursor = self.wiki.index.conn.execute(
+                "SELECT page_name, file_path FROM pages"
+            )
+            for row in cursor.fetchall():
+                name = row['page_name']
+                fpath = row['file_path']
+                # New format: page_name == file_path without .md
+                if name != fpath[:-3]:
+                    return True
+        except Exception:
+            return False
+        return False
 
     def references(self, args) -> int:
         """Show page references."""
@@ -1222,7 +1280,7 @@ Examples:
 
     # lint
     p = subparsers.add_parser('lint', help='Health check')
-    p.add_argument('--format', '-f', choices=['full', 'brief', 'recommendations'],
+    p.add_argument('--format', '-f', choices=['full', 'brief', 'recommendations', 'json'],
                    default='full', help='Output format (default: full)')
     p.add_argument('--generate-investigations', '-g', action='store_true',
                    help='Use LLM to generate investigation suggestions')
@@ -1248,6 +1306,12 @@ Examples:
     p.add_argument('--no-export', action='store_true', help='Skip JSON export')
     p.add_argument('--output', '-o', help='JSON output path')
     p.add_argument('--export-only', action='store_true', help='Export existing index without rebuilding')
+    p.add_argument('--force', action='store_true', help='Force rebuild even if old format detected')
+
+    # fix-wikilinks
+    p = subparsers.add_parser('fix-wikilinks', help='Fix broken wikilinks by adding directory prefix')
+    p.add_argument('--dry-run', '-n', action='store_true',
+                   help='Preview changes without modifying files')
 
     # references
     p = subparsers.add_parser('references', help='Show page references')
@@ -1377,6 +1441,7 @@ Examples:
         'status': cli.status,
         'log': cli.log,
         'build-index': cli.build_index,
+        'fix-wikilinks': cli.fix_wikilinks,
         'references': cli.references,
         'batch': cli.batch,
         'sink-status': cli.sink_status,
