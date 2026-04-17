@@ -120,25 +120,110 @@ class Wiki:
 
     def _resolve_wikilink_target(self, target: str) -> Path | None:
         """Resolve a wikilink target to a file path.
-        
-        Checks root first, then subdirectories.
+
+        Resolution order:
+        1. Direct path (e.g., "concepts/Factor Investing")
+        2. SQLite index lookup (authoritative, supports all formats)
         """
-        # Direct path (e.g. "entities/Company Name")
+        # Layer 1: Direct path match (e.g., "concepts/Factor Investing")
         direct = self.wiki_dir / f"{target}.md"
         if direct.exists():
             return direct
 
-        # Root-level page
-        root = self.wiki_dir / f"{target}.md"
-        if root.exists():
-            return root
-
-        # Search subdirectories
-        for p in self.wiki_dir.rglob("*.md"):
-            if str(p.relative_to(self.wiki_dir))[:-3] == target:
-                return p
+        # Layer 2: SQLite index lookup
+        try:
+            file_path = self.index.resolve_by_name(target)
+            if file_path:
+                return self.wiki_dir / file_path
+        except Exception:
+            pass
 
         return None
+
+    def fix_wikilinks(self, dry_run: bool = True) -> dict:
+        """Scan all wiki pages and fix broken wikilinks by adding directory prefix.
+
+        When a wikilink [[X]] is broken but a page with base name X exists in a
+        subdirectory, this method adds the directory prefix to the link.
+
+        Args:
+            dry_run: If True, only report what would be changed.
+
+        Returns:
+            {"fixed": N, "skipped": M, "ambiguous": K, "changes": [...]}
+        """
+        changes = []
+        stats: dict[str, int] = {"fixed": 0, "skipped": 0, "ambiguous": 0}
+
+        for page in self._wiki_pages():
+            content = page.read_text()
+            links = re.findall(r'\[\[(.*?)\]\]', content)
+            new_content = content
+            page_modified = False
+
+            for link in links:
+                target = link.split('|')[0].split('#')[0].strip()
+                if target in (self._index_page_name, self._log_page_name):
+                    continue
+
+                # Already has directory prefix or is a root-level page — skip
+                if '/' in target:
+                    continue
+                if (self.wiki_dir / f"{target}.md").exists():
+                    continue
+
+                # Find pages matching the base name
+                matches = [p for p in self.wiki_dir.rglob(f"{target}.md")]
+
+                if len(matches) == 0:
+                    stats["skipped"] += 1
+                    continue
+
+                if len(matches) > 1:
+                    stats["ambiguous"] += 1
+                    changes.append({
+                        "page": self._page_display_name(page),
+                        "link": target,
+                        "status": "ambiguous",
+                        "matches": [str(m.relative_to(self.wiki_dir)) for m in matches],
+                    })
+                    continue
+
+                # Single match: add directory prefix
+                rel_path = str(matches[0].relative_to(self.wiki_dir))[:-3]
+
+                # Build replacement wikilink
+                if '#' in link:
+                    section = link.split('#', 1)[1]
+                    if '|' in section:
+                        sec, disp = section.split('|', 1)
+                        new_wikilink = f"[[{rel_path}#{sec}|{disp}]]"
+                    else:
+                        new_wikilink = f"[[{rel_path}#{section}]]"
+                elif '|' in link:
+                    display = link.split('|', 1)[1]
+                    new_wikilink = f"[[{rel_path}|{display}]]"
+                else:
+                    new_wikilink = f"[[{rel_path}]]"
+
+                old_wikilink = f"[[{link}]]"
+                new_content = new_content.replace(old_wikilink, new_wikilink, 1)
+                page_modified = True
+                stats["fixed"] += 1
+                changes.append({
+                    "page": self._page_display_name(page),
+                    "old": old_wikilink,
+                    "new": new_wikilink,
+                    "status": "fixed",
+                })
+
+            if page_modified and not dry_run:
+                page.write_text(new_content)
+                # Re-index the page
+                rel_path = str(page.relative_to(self.wiki_dir))
+                self.index.upsert_page(rel_path[:-3], new_content, rel_path)
+
+        return {**stats, "changes": changes}
 
     @property
     def ref_index_path(self) -> Path:
@@ -1068,15 +1153,9 @@ class Wiki:
             page_path.write_text(content)
             action = "Created"
 
-        # Update index (use display name without directory for page_name)
-        display_name = page_name
-        if '/' in page_name:
-            display_name = page_name.split('/')[-1]
-        elif page_type:
-            display_name = page_name
-
+        # Update index (use full relative path as page_name for consistency)
         rel_path = str(page_path.relative_to(self.wiki_dir))
-        self.index.upsert_page(display_name, content, rel_path)
+        self.index.upsert_page(rel_path[:-3], content, rel_path)  # strip .md
 
         # Auto-update index.md
         self._update_index_file()
@@ -2016,7 +2095,7 @@ class Wiki:
             llm_suggestions = self._llm_generate_investigations(contradictions, data_gaps)
             investigations.update(llm_suggestions)
 
-        return {
+        result = {
             "total_pages": len(self._wiki_pages()),
             "issue_count": len(all_issues),
             "issues": all_issues,
@@ -2030,6 +2109,18 @@ class Wiki:
             "sink_status": sink_status,
             "sink_warnings": sink_warnings,
         }
+
+        # Auto-fix broken wikilinks when mode="fix"
+        if mode == "fix":
+            fix_result = self.fix_wikilinks(dry_run=False)
+            result["auto_fix"] = {
+                "fixed": fix_result["fixed"],
+                "skipped": fix_result["skipped"],
+                "ambiguous": fix_result["ambiguous"],
+                "changes": fix_result["changes"][:20],
+            }
+
+        return result
 
     def recommend(self) -> dict:
         """Generate smart recommendations."""
@@ -2668,7 +2759,7 @@ class Wiki:
             page_path.write_text(answer)
 
             rel_path = str(page_path.relative_to(self.wiki_dir))
-            self.index.upsert_page(page_name, answer, rel_path)
+            self.index.upsert_page(rel_path[:-3], answer, rel_path)
             self._update_index_file()
 
             status = "updated"
@@ -2877,7 +2968,7 @@ class Wiki:
 
         # Index the page
         rel_path = str(page_path.relative_to(self.wiki_dir))
-        self.index.upsert_page(page_name, content, rel_path)
+        self.index.upsert_page(rel_path[:-3], content, rel_path)
         self._update_index_file()
 
     def _append_sources_section(

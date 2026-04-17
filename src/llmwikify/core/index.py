@@ -258,8 +258,8 @@ class WikiIndex:
                 print(f"\r  Processing: {i+1}/{total} ({(i+1)/total*100:.1f}%) - {speed:.1f} files/sec", end='', flush=True)
 
             content = md_file.read_text()
-            page_name = md_file.stem
             rel_path = str(md_file.relative_to(wiki_dir))
+            page_name = rel_path[:-3]  # e.g., "concepts/Factor Investing"
 
             self.upsert_page(page_name, content, rel_path)
 
@@ -317,6 +317,24 @@ class WikiIndex:
 
         data["json_export"] = str(output_path)
         return data
+
+    def resolve_by_name(self, page_name: str) -> str | None:
+        """Resolve page name to file_path via exact match in SQLite index.
+
+        Args:
+            page_name: Full relative path (e.g., "concepts/Factor Investing").
+                       Bare names (e.g., "Factor Investing") will NOT match
+                       pages stored with directory prefix.
+
+        Returns:
+            Relative file path (e.g., "concepts/Factor Investing.md") or None.
+        """
+        cursor = self.conn.execute(
+            "SELECT file_path FROM pages WHERE page_name = ? LIMIT 1",
+            (page_name,)
+        )
+        row = cursor.fetchone()
+        return row['file_path'] if row else None
 
     def close(self) -> None:
         """Close database connection."""

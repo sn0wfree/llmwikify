@@ -5,6 +5,22 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0] - 2026-04-16
+
+### Changed
+- **Wikilink Resolution**: `_resolve_wikilink_target` now uses two-layer strategy (direct path → SQLite index), no longer performs filesystem rglob scans.
+- **Index Page Names**: `page_name` in SQLite index now stores full relative paths (e.g., `concepts/Factor Investing` instead of `Factor Investing`), ensuring consistent resolution across all operations.
+- **Wikilink Convention**: `wiki_schema.yaml` now requires directory prefix in wikilinks (e.g., `[[concepts/Factor Investing]]` instead of `[[Factor Investing]]`).
+
+### Added
+- **`resolve_by_name` Method**: New `WikiIndex.resolve_by_name()` for efficient page resolution via SQL lookup with basename fallback.
+- **`fix_wikilinks` Method**: Auto-repair broken wikilinks by adding directory prefix. Supports `dry_run` mode, handles section links and aliases, reports ambiguous matches.
+- **`lint(mode="fix")` Auto-Fix**: Running lint with `mode="fix"` now automatically repairs broken wikilinks and reports changes.
+
+### Fixed
+- **Graph Export**: Hardcoded entity paths in `graph_export.py` now strip directory prefix before slugifying, fixing clickable entity nodes in HTML export.
+- **Orphan Detection Consistency**: Index now uses full paths, matching the format used by `get_inbound_links()` and `get_outbound_links()`.
+
 ## [0.26.0] - 2026-04-16
 
 ### Added
