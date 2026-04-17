@@ -5,6 +5,65 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 2026-04-17
+
+### Added — P0: Enhanced Source Page Format
+- **Source pages now include 6 structured sections** (was 3):
+  1. `## Summary` — Document overview and analytical perspective
+  2. `## Key Entities & Relations` — Entity list with types/attributes + relation graph
+  3. `## Key Claims & Facts` — Claims with confidence levels + key facts
+  4. `## Contradictions & Gaps` — Potential contradictions and data gaps (optional, only if detected)
+  5. `## Cross-References` — `[[wikilink]]` references to related wiki pages
+  6. `## Sources` — Citation with `[Source: Title](raw/filename)` format
+- All 9 `analyze_source` extraction fields now mapped to Source page sections
+- `wiki_schema.yaml` updated with complete Source page template example
+
+### Added — P1.1: Cross-Source Synthesis Engine
+- **`SynthesisEngine` class** (`core/synthesis_engine.py`) — compares new sources against existing wiki
+  - `_find_reinforced_claims()` — detects claims confirmed by multiple sources
+  - `_find_new_contradictions()` — finds conflicts between new and existing content
+  - `_find_knowledge_gaps()` — identifies topics needing more information
+  - `_find_new_entities()` — suggests creating pages for new entities
+  - `_find_topic_overlap()` — detects redundant topic coverage
+- **`Wiki.suggest_synthesis()` method** — analyze sources and return suggestions (not auto-executed)
+  - Respects "stay involved" principle — human decides what to do with suggestions
+  - Returns: reinforced claims, contradictions, knowledge gaps, suggested updates, new entities
+- **CLI: `llmwikify suggest-synthesis [source]`** — generate cross-source synthesis suggestions
+  - `--json` flag for programmatic consumption
+
+### Added — P1.2: Smart Lint 2.0
+- **`_detect_outdated_pages()`** — pages referencing years ≥2 years old
+- **`_detect_knowledge_gaps()`** — unreferenced entities, isolated source pages without wikilinks
+- **`_detect_redundancy()`** — similar page names, potentially duplicate content
+- **Lint output enhanced** — investigations now include Contradictions, Data Gaps, Outdated Pages, Knowledge Gaps, Redundancy sections
+- **CLI: `llmwikify knowledge-gaps`** — focused knowledge gap analysis command
+
+### Added — P1.3: Knowledge Graph Analyzer
+- **`GraphAnalyzer` class** (`core/graph_analyzer.py`) — comprehensive graph analysis
+  - PageRank centrality scoring to identify core concepts
+  - Hub/Authority node identification (high out-degree / in-degree)
+  - Community detection with automatic labeling
+  - Bridge node detection (nodes connecting multiple communities)
+  - Suggested page generation for orphan concepts and under-connected pages
+- **`Wiki.graph_analyze()` method** — run full graph analysis
+- **`Wiki.graph_suggested_pages_report()` method** — generate human-readable report
+- **CLI: `llmwikify graph-analyze`** — analyze knowledge graph structure
+  - `--json` for programmatic output
+  - `--report` for detailed suggested pages report
+
+### Changed
+- Source page format significantly enriched — from 3 sections to 6 sections
+- Lint investigations expanded from 2 to 5 categories
+- All new features respect "stay involved" principle — suggestions only, no auto-execution
+
+### Fixed
+- Test infrastructure updated for new graph analyzer methods
+- CLI command registration for all new P1 features
+
+### Tests
+- **24 new tests** across 2 files: `test_p1_features.py` (12) + `test_p1_3_graph_analyzer.py` (12)
+- All tests passing: 760 total (was 736)
+
 ## [0.27.0] - 2026-04-16
 
 ### Changed

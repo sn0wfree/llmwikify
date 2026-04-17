@@ -5,7 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 674 passing](https://img.shields.io/badge/tests-674%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Tests: 760 passing](https://img.shields.io/badge/tests-760%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 
 ---
 
@@ -61,6 +61,30 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 - Auto-collects all sources into `raw/` directory
 - LLM self-create mode (`--self-create`) for automatic page creation
 
+### 📋 Enhanced Source Pages (v0.28.0+)
+- **6-section structured format** (was 3): Summary, Entities & Relations, Claims & Facts, Contradictions & Gaps, Cross-References, Sources
+- All 9 `analyze_source` extraction fields now mapped to page sections
+- Optional Contradictions & Gaps section — only shown when detected
+
+### 🔄 Cross-Source Synthesis (v0.28.0+)
+- `suggest-synthesis` CLI command — analyze new sources against existing wiki
+- Detects reinforced claims, contradictions, knowledge gaps, new entities
+- Returns suggestions only — human decides what to do with them
+- Respects "stay involved" principle from Karpathy's LLM Wiki Principles
+
+### 🧹 Smart Lint 2.0 (v0.28.0+)
+- `dated_claim` (critical): Pages referencing years ≥3 years older than latest raw source
+- `topic_overlap` (informational): Query pages with ≥85% keyword overlap
+- `missing_cross_ref` (informational): Concepts mentioned but not wikilinked
+- `contradictions`: Cross-page conflicts (value, year, negation patterns)
+- `data_gaps`: Unsourced claims and vague temporal references
+- `--generate-investigations`: LLM-suggested questions and sources
+- **New detections (v0.28.0)**:
+  - `outdated_pages`: Pages with old source dates needing review
+  - `knowledge_gaps`: Unreferenced entities, isolated source pages
+  - `redundancy_alerts`: Similar page names, potential duplicates
+- **New CLI**: `llmwikify knowledge-gaps` — focused gap analysis
+
 ### 🧹 Smart Lint with Investigations (v0.15.0+)
 - `dated_claim` (critical): Pages referencing years ≥3 years older than latest raw source
 - `topic_overlap` (informational): Query pages with ≥85% keyword overlap
@@ -92,6 +116,14 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 - Leiden/Louvain algorithms for automatic topic clustering
 - Resolution control for community granularity
 - JSON output for programmatic consumption
+
+### 🧠 Knowledge Graph Analyzer (v0.28.0+)
+- PageRank centrality scoring — identify core concepts in your wiki
+- Hub/Authority analysis — find pages that connect to many or are connected by many
+- Community auto-labeling — communities labeled by dominant topic prefix
+- Bridge node detection — find nodes connecting multiple communities
+- Suggested page generation — recommend creating pages for orphan concepts
+- **CLI**: `llmwikify graph-analyze [--json] [--report]`
 
 ### 🎯 Surprise Score Reports (v0.23.0+)
 - Multi-dimensional unexpected connection analysis
