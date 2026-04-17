@@ -2180,17 +2180,23 @@ class Wiki:
             "total_links": self.index.get_link_count() if self.is_initialized() else "N/A",
         }
 
-        # Count pages by type
+        # Pages by type — return lists of page names (not counts) for Web UI file tree
         pages_by_type = {}
         for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
             sub_path = self.wiki_dir / subdir
             if sub_path.exists():
-                pages_by_type[subdir] = len(list(sub_path.rglob("*.md")))
+                pages_by_type[subdir] = sorted(
+                    str(p.relative_to(self.wiki_dir))[:-3]
+                    for p in sub_path.rglob("*.md")
+                )
         # Root-level pages (overview, index, log excluded)
-        root_pages = len([f for f in self.wiki_dir.glob("*.md")
-                          if f.stem not in ("index", "log")])
-        if root_pages > 0:
-            pages_by_type["root"] = root_pages
+        root_pages = [
+            str(p.relative_to(self.wiki_dir))[:-3]
+            for p in self.wiki_dir.glob("*.md")
+            if p.stem not in ("index", "log")
+        ]
+        if root_pages:
+            pages_by_type["root"] = sorted(root_pages)
         result["pages_by_type"] = pages_by_type
 
         # Graph stats

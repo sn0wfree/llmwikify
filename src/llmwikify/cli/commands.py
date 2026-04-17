@@ -500,11 +500,12 @@ class WikiCLI:
             print(f"Output: {output_path or self.wiki.ref_index_path}")
             return 0
 
-        # Auto-detect old index format
-        if not force and self._detect_old_index_format():
-            print("⚠️  Old index format detected (page names without directory prefix).")
-            print("    Run 'llmwikify build-index --force' to rebuild with new format.")
-            return 1
+        # Auto-detect and migrate old index format
+        if self._detect_old_index_format():
+            if not force:
+                print("⚠️  Old index format detected. Migrating to new format automatically.")
+                print("    (Use --force to skip this message in the future)")
+            print()
 
         print("=== Building Reference Index ===")
         print(f"Scanning: {self.wiki.wiki_dir}")
