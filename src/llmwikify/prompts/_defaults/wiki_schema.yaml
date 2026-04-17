@@ -211,11 +211,12 @@ document: |
 
   | Syntax | Example | Result |
   |--------|---------|--------|
-  | Basic | `[[Gold Mining]]` | Link to "Gold Mining" page |
-  | Section | `[[Gold Mining#Types]]` | Link to "Types" section |
-  | Alias | `[[Gold Mining|Gold Extraction]]` | Shows "Gold Extraction", links to "Gold Mining" |
+  | Basic | `[[concepts/Gold Mining]]` | Link to "Gold Mining" in concepts/ |
+  | Section | `[[concepts/Gold Mining#Types]]` | Link to "Types" section |
+  | Alias | `[[concepts/Gold Mining|Gold Extraction]]` | Shows "Gold Extraction", links to "Gold Mining" |
 
   **Rules:**
+  - **ALWAYS include the directory prefix** matching the page type (e.g., `concepts/`, `entities/`, `sources/`). Use `wiki_status()` to see existing pages and their paths.
   - Link to entities, concepts, and related topics
   - Update links when creating or modifying pages
   - **NEVER** use `[[raw/filename]]` — raw files are NOT wiki pages
@@ -532,7 +533,7 @@ document: |
 
   | Problem | Check | Fix |
   |---------|-------|-----|
-  | Many broken links | Lint results | Create missing pages as stubs |
+  | Many broken links | Lint results | Run `wiki_lint(mode="fix")` to auto-resolve, or add directory prefix to wikilinks |
   | Many orphan pages | Lint results | Add wikilinks from overview or related pages |
   | Sinks not merging | Sink status | Read sink, synthesize, clear: `wiki_write_page("wiki/.sink/...", content="")` |
   | Wiki disorganized | Graph analysis | Run graph analysis to see structure |

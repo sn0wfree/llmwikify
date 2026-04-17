@@ -99,10 +99,12 @@ def export_html(graph: dict, communities: dict[int, list[str]] | None, output_pa
 
         # Check if entity page exists
         href = None
-        if source_type == "concept":
-            entity_path = output_path.parent.parent / "wiki" / "entities" / f"{_slugify(node)}.md"
+        if source_type == "wiki_page":
+            # Strip directory prefix before slugifying (e.g., "entities/Gold" → "Gold")
+            base_name = node.rsplit('/', 1)[-1] if '/' in node else node
+            entity_path = output_path.parent.parent / "wiki" / "entities" / f"{_slugify(base_name)}.md"
             if entity_path.exists():
-                href = f"../wiki/entities/{_slugify(node)}.md"
+                href = f"../wiki/entities/{_slugify(base_name)}.md"
                 nodes_with_pages.add(node)
                 color = "#59A14F"  # Green for entities with pages
 
@@ -153,7 +155,8 @@ def _add_entity_click_handlers(html_path: Path, entity_nodes: set) -> None:
     # Build a map of node labels to their hrefs
     entity_map = {}
     for node in entity_nodes:
-        slug = _slugify(node)
+        base_name = node.rsplit('/', 1)[-1] if '/' in node else node
+        slug = _slugify(base_name)
         entity_map[node] = f"../wiki/entities/{slug}.md"
 
     # Inject JavaScript before </body>
