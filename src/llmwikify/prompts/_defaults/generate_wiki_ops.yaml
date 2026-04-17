@@ -19,7 +19,19 @@ system: |
   Rules:
   - FIRST operation MUST be a Source summary page for this document
     - Use page_type="Source", page_name should be the document title
-    - Content must include: ## Summary, ## Key Facts, ## Sources with [Source: Title](raw/filename)
+    - Content MUST include these sections:
+      1. ## Summary — document overview and analytical perspective (REQUIRED)
+      2. ## Key Entities & Relations — entity list with types/attributes + relation graph (REQUIRED)
+         - Entities: list with format "**Name** (type): description"
+         - Relations: format "Entity A → relation_type → Entity B"
+      3. ## Key Claims & Facts — claims with confidence levels + key facts (REQUIRED)
+         - Claims: format "- claim statement (confidence: high|medium|low)"
+         - Facts: bullet list of key facts
+      4. ## Contradictions & Gaps — potential contradictions and data gaps (IF ANY, omit if none)
+         - Contradictions: conflicts with existing wiki knowledge
+         - Data Gaps: topics or claims needing more information
+      5. ## Cross-References — [[wikilink]] references to related wiki pages (REQUIRED)
+      6. ## Sources — citation with [Source: Title](raw/filename) format (REQUIRED)
     - This page is REQUIRED for every ingest, do not skip it
   - Create one page per suggested_page from the analysis (after the Source summary)
   - Each page should be focused on a single topic

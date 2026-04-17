@@ -390,6 +390,59 @@ document: |
 
   ## Page Format Examples
 
+  ### Source Summary Page
+
+  ```markdown
+  ---
+  title: Document Title
+  type: source
+  created: YYYY-MM-DD
+  sources: [raw/filename.md]
+  ---
+
+  # Document Title
+
+  ## Summary
+  Document overview and analytical perspective. What is this source about?
+  What are the main arguments or findings?
+
+  ## Key Entities & Relations
+
+  ### Entities
+  - **Entity1** (organization): brief description and role
+  - **Entity2** (person): brief description and role
+
+  ### Key Relations
+  - Entity1 → uses → Entity2
+  - Entity3 → related_to → Entity4
+
+  ## Key Claims & Facts
+
+  ### Claims
+  - specific claim statement (confidence: high)
+  - specific claim statement (confidence: medium)
+
+  ### Key Facts
+  - fact 1
+  - fact 2
+
+  ## Contradictions & Gaps
+  *(Only include this section if contradictions or gaps are detected)*
+
+  ### Potential Contradictions
+  - claim that may conflict with existing wiki knowledge
+
+  ### Data Gaps
+  - topic or claim needing more information or verification
+
+  ## Cross-References
+  - [[concepts/Related Topic]]
+  - [[entities/Related Entity]]
+
+  ## Sources
+  - [Source: Document Title](raw/filename.md)
+  ```
+
   ### Claim Page
 
   ```markdown
@@ -432,9 +485,9 @@ document: |
   - [Source: Ghana's New Royalty Policy](raw/ghana-royalty.md)
 
   ## Knowledge Graph Relations
-  - **implements** → [[Gold Royalty Regime]]
-  - **located_in** ← [[Africa]]
-  - **top_producer** → [[Gold Mining]]
+  - **implements** → [[concepts/Gold Royalty Regime]]
+  - **located_in** ← [[entities/Africa]]
+  - **top_producer** → [[concepts/Gold Mining]]
   ```
 
   ## Knowledge Graph
