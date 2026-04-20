@@ -1,13 +1,13 @@
 # llmwikify Architecture
 
 > Technical architecture document for developers
-> **Version**: 0.28.0 | **Last Updated**: 2026-04-17 | **Tests**: 760 passing
+> **Version**: 0.29.0 | **Last Updated**: 2026-04-17 | **Tests**: 760 passing
 
 ---
 
 ## Overview
 
-**llmwikify** is a modular Python package for building persistent, LLM-maintained knowledge bases. It evolved from a single-file implementation (v0.10.0, 1,965 lines) into a fully modular architecture with 22 CLI commands, 18 MCP tools, and 760+ tests.
+**llmwikify** is a modular Python package for building persistent, LLM-maintained knowledge bases. It evolved from a single-file implementation (v0.10.0, 1,965 lines) into a fully modular architecture with 22 CLI commands, 20 MCP tools, and 760+ tests.
 
 ### Design Principles
 
@@ -53,7 +53,7 @@ src/llmwikify/
 │   └── commands.py          # WikiCLI class (22 commands)
 │
 ├── mcp/                     # MCP server
-│   └── server.py            # FastMCP server (18 tools)
+│   └── server.py            # FastMCP server (20 tools)
 │
 ├── prompts/                 # Prompt templates
 │   └── _defaults/           # 7 YAML prompt templates
@@ -69,7 +69,7 @@ src/llmwikify/
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Application Layer                        │
-│  CLI (22 commands) │ MCP (18 tools) │ Python API           │
+│  CLI (22 commands) │ MCP (20 tools) │ Python API           │
 └────────────────────────┬────────────────────────────────────┘
                          │
 ┌────────────────────────┴────────────────────────────────────┐

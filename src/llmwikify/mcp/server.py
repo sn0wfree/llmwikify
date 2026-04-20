@@ -251,20 +251,15 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
-    def wiki_knowledge_gaps(
-        limit: int = 20,
-        include_outdated: bool = True,
-        include_redundancy: bool = True,
-    ) -> str:
+    def wiki_knowledge_gaps(limit: int = 20) -> str:
         """Detect knowledge gaps, outdated pages, and redundancy across the wiki.
 
         Args:
             limit: Max LLM-detected issues to return (default: 20).
-            include_outdated: Include outdated page detection.
-            include_redundancy: Include redundancy/similarity detection.
 
         Returns:
-            JSON with knowledge gap analysis results.
+            JSON with knowledge gap analysis results including:
+            outdated_pages, knowledge_gaps, redundant_pages, contradictions, data_gaps.
         """
         import json
         result = wiki.lint(
@@ -308,7 +303,7 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         if action == "export":
             graph = build_graph(wiki.index)
             communities_result = detect_communities(wiki.index)
-            communities = communities_result.get('communities')
+            communities = communities_result.get('communities') if communities_result else None
             if format == 'html':
                 out = Path(output or 'graph.html')
                 result = export_html(graph, communities, out, min_degree=min_degree)

@@ -1378,6 +1378,7 @@ class WikiCLI:
                 # Start MCP in background thread, then start Web UI
                 import threading
                 import time
+                import httpx
 
                 mcp_kwargs = {
                     'wiki': self.wiki,
@@ -1395,15 +1396,31 @@ class WikiCLI:
                 )
                 mcp_thread.start()
 
-                # Wait for MCP to start
-                time.sleep(1)
+                # Wait for MCP server to be ready (with timeout)
+                mcp_url = f"http://{host or '127.0.0.1'}:{mcp_port or mcp_config.get('port', 8765)}/mcp"
+                ready = False
+                for _ in range(20):
+                    time.sleep(0.25)
+                    try:
+                        with httpx.Client(timeout=2.0) as client:
+                            resp = client.post(mcp_url, json={
+                                "jsonrpc": "2.0", "id": 0,
+                                "method": "tools/list", "params": {}
+                            })
+                            if resp.status_code == 200:
+                                ready = True
+                                break
+                    except Exception:
+                        pass
+
+                if not ready:
+                    print(f"  ⚠ MCP server may not be ready yet, starting Web UI anyway")
 
                 # Start Web UI in main thread
                 import uvicorn
 
                 from ..web.server import create_app
 
-                mcp_url = f"http://{host or '127.0.0.1'}:{mcp_port or mcp_config.get('port', 8765)}/mcp"
                 app = create_app(mcp_url)
 
                 print(f"Web UI available at http://{host or '127.0.0.1'}:{web_port}")
@@ -1631,33 +1648,6 @@ Examples:
     p = subparsers.add_parser('graph-analyze', help='Analyze knowledge graph structure (PageRank, communities, suggestions)')
     p.add_argument('--json', action='store_true', help='Output as JSON')
     p.add_argument('--report', action='store_true', help='Generate detailed suggested pages report')
-
-    # graph-query
-    p = subparsers.add_parser('graph-query', help='Query the knowledge graph')
-    p.add_argument('subcommand', choices=['neighbors', 'path', 'stats', 'context'],
-                   help='Query type')
-    p.add_argument('args', nargs='*', help='Arguments (concept name, path endpoints, relation id)')
-
-    # export-graph
-    p = subparsers.add_parser('export-graph', help='Export knowledge graph visualization')
-    p.add_argument('--format', choices=['html', 'svg', 'graphml'], default='html',
-                   help='Output format (default: html)')
-    p.add_argument('--output', '-o', default=None, help='Output file path')
-    p.add_argument('--min-degree', type=int, default=0, help='Filter nodes below this degree')
-
-    # community-detect
-    p = subparsers.add_parser('community-detect', help='Detect knowledge communities')
-    p.add_argument('--algorithm', choices=['leiden', 'louvain'], default='leiden',
-                   help='Detection algorithm (default: leiden)')
-    p.add_argument('--resolution', type=float, default=1.0,
-                   help='Resolution parameter (default: 1.0)')
-    p.add_argument('--json', action='store_true', help='Output as JSON')
-    p.add_argument('--dry-run', '-n', action='store_true', help='Only print stats')
-
-    # report
-    p = subparsers.add_parser('report', help='Generate unexpected connections report')
-    p.add_argument('--top', type=int, default=10, help='Number of top connections (default: 10)')
-    p.add_argument('--output', '-o', default=None, help='Output file path')
 
     # mcp
     p = subparsers.add_parser('mcp', help='Start MCP server for Agent interaction (stdio by default)')
