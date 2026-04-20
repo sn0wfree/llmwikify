@@ -377,7 +377,24 @@ class WikiCLI:
             return 1
         else:
             print("\n✅ All healthy!")
-            return 0
+
+        # Show auto-fix results
+        auto_fix = result.get('auto_fix', {})
+        if auto_fix:
+            print("\n=== Auto-Fix Results ===")
+            wl_fixed = auto_fix.get('wikilinks_fixed', 0)
+            wl_skipped = auto_fix.get('wikilinks_skipped', 0)
+            wl_ambig = auto_fix.get('wikilinks_ambiguous', 0)
+            idx_updated = auto_fix.get('index_updated', False)
+            print(f"  Wikilinks fixed: {wl_fixed}")
+            if wl_skipped:
+                print(f"  Wikilinks skipped: {wl_skipped}")
+            if wl_ambig:
+                print(f"  Ambiguous matches: {wl_ambig}")
+            if idx_updated:
+                print(f"  Index updated: ✅ (summaries refreshed, pages grouped)")
+
+        return 0
 
     def _lint_brief(self, result: dict) -> int:
         """Brief suggestions output (replaces old `hint` command)."""
