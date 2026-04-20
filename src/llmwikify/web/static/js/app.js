@@ -110,10 +110,6 @@
         async wiki_knowledge_gaps(limit = 20) {
             return this.call('wiki_knowledge_gaps', { limit });
         },
-
-        async wiki_graph_analyze(action, params = {}) {
-            return this.call('wiki_graph_analyze', { action, ...params });
-        },
     };
 
     // ============================================================

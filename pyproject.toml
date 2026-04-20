@@ -48,7 +48,7 @@ dependencies = [
 
 [project.optional-dependencies]
 mcp = ["fastmcp>=3.0.0"]
-config = ["pyyaml>=6.0"]
+config = []
 watch = ["watchdog>=3.0.0"]
 graph = [
     "networkx>=3.0",

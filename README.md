@@ -71,7 +71,7 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 ### Additional
 - **File extraction** — PDF, Word, Excel, PowerPoint, images, audio, YouTube, web URLs via MarkItDown
 - **File watcher** — Watch `raw/` for new files, optional auto-ingest
-- **MCP server** — 18 tools for LLM/Agent integration
+- **MCP server** — 20 tools for LLM/Agent integration
 - **Performance** — Batch inserts, PRAGMA optimizations, 10-20x faster than naive implementation
 
 ---
