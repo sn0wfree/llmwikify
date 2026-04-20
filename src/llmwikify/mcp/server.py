@@ -237,6 +237,43 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             return json.dumps({"status": "error", "error": f"Unknown action: {action}"})
 
     @mcp.tool
+    def wiki_suggest_synthesis(source_name: str | None = None) -> str:
+        """Cross-source synthesis suggestions — detects contradictions, gaps, reinforced claims.
+
+        Args:
+            source_name: Specific source to analyze (relative path), or None for all unanalyzed sources.
+
+        Returns:
+            JSON with synthesis suggestions per source.
+        """
+        import json
+        result = wiki.suggest_synthesis(source_name=source_name)
+        return json.dumps(result, ensure_ascii=False, indent=2)
+
+    @mcp.tool
+    def wiki_knowledge_gaps(
+        limit: int = 20,
+        include_outdated: bool = True,
+        include_redundancy: bool = True,
+    ) -> str:
+        """Detect knowledge gaps, outdated pages, and redundancy across the wiki.
+
+        Args:
+            limit: Max LLM-detected issues to return (default: 20).
+            include_outdated: Include outdated page detection.
+            include_redundancy: Include redundancy/similarity detection.
+
+        Returns:
+            JSON with knowledge gap analysis results.
+        """
+        import json
+        result = wiki.lint(
+            generate_investigations=True,
+            limit=limit,
+        )
+        return json.dumps(result, ensure_ascii=False, indent=2)
+
+    @mcp.tool
     def wiki_graph_analyze(
         action: str,
         format: str = "html",
@@ -246,8 +283,19 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         resolution: float = 1.0,
         top: int = 10,
     ) -> str:
-        """Analyze the knowledge graph. Actions: export, detect, report."""
+        """Analyze the knowledge graph. Actions: export, detect, report, analyze.
+
+        Actions:
+            export: Export graph visualization (html/svg/graphml).
+            detect: Detect communities in the graph.
+            report: Generate surprise score report.
+            analyze: Run PageRank, community analysis, and generate page suggestions (P1.3).
+        """
         import json
+
+        if action == "analyze":
+            result = wiki.graph_analyze()
+            return json.dumps(result, ensure_ascii=False, indent=2)
 
         from ..core.graph_export import (
             build_graph,

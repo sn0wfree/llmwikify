@@ -45,6 +45,10 @@
                             <span class="health-dot dot-ok" id="health-orphans-dot"></span>
                             <span id="health-orphans-text">Checking...</span>
                         </span>
+                        <span class="health-item">
+                            <span class="health-dot dot-ok" id="health-stale-dot"></span>
+                            <span id="health-stale-text">Checking...</span>
+                        </span>
                     </div>
                 </div>
                 <div class="panel-section">
@@ -57,6 +61,28 @@
                     <h3>Recommendations</h3>
                     <div id="recommendations" class="recommendations">
                         <span class="rec-item">Loading...</span>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <h3>
+                        Insights
+                        <button id="btn-refresh-insights" class="btn-insight-refresh" title="Refresh insights">↻</button>
+                    </h3>
+                    <div id="insights-panel" class="insights-panel">
+                        <div class="insight-tabs">
+                            <button class="insight-tab active" data-tab="synthesis">Synthesis</button>
+                            <button class="insight-tab" data-tab="gaps">Gaps</button>
+                            <button class="insight-tab" data-tab="graph">Graph</button>
+                        </div>
+                        <div id="insight-synthesis" class="insight-content">
+                            <div class="insight-loading">Click to analyze</div>
+                        </div>
+                        <div id="insight-gaps" class="insight-content hidden">
+                            <div class="insight-loading">Click to analyze</div>
+                        </div>
+                        <div id="insight-graph" class="insight-content hidden">
+                            <div class="insight-loading">Click to analyze</div>
+                        </div>
                     </div>
                 </div>
             </div>

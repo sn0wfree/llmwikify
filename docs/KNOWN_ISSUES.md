@@ -28,58 +28,37 @@
 
 ---
 
-## 4. MCP Server Missing P1 Tools
+## ~~4. MCP Server Missing P1 Tools~~ ✅ Resolved
 
-**Priority**: High | **Impact**: Agent cannot use new P1 features via MCP
+**Resolved in**: v0.29.0
 
-Three new P1 CLI commands lack corresponding MCP tools:
-
-| Missing MCP Tool | Feature | CLI Equivalent |
-|-----------------|---------|----------------|
-| `wiki_suggest_synthesis` | Cross-source synthesis (P1.1) | `suggest-synthesis` |
-| `wiki_knowledge_gaps` | Knowledge gap analysis (P1.2) | `knowledge-gaps` |
-| `wiki_graph_analyze` (new action) | Graph PageRank/communities/suggestions (P1.3) | `graph-analyze` |
-
-**Fix**: Add `action="suggest_synthesis"`, `action="knowledge_gaps"`, `action="analyze"` to existing MCP tools or create new tools.
-
-**Workaround**: Use CLI commands directly while MCP tools are being added.
+Three new MCP tools added:
+- `wiki_suggest_synthesis` — cross-source synthesis suggestions
+- `wiki_knowledge_gaps` — knowledge gap, outdated page, and redundancy analysis
+- `wiki_graph_analyze(action="analyze")` — PageRank, community analysis, page suggestions
 
 ---
 
-## 5. MIGRATION.md References Deleted AGENTS.md
+## ~~5. MIGRATION.md References Deleted AGENTS.md~~ ✅ Resolved
 
-**Priority**: Medium | **Impact**: Documentation inconsistency
+**Resolved in**: v0.28.0
 
-`MIGRATION.md` still references `AGENTS.md` in multiple places (lines 25, 27, 40), but AGENTS.md was removed in v0.28.0. All agent instructions now live in `wiki.md`.
-
-**Fix**: Update MIGRATION.md to remove AGENTS.md references, replace with wiki.md only.
+All AGENTS.md references in MIGRATION.md have been updated to reference wiki.md.
 
 ---
 
-## 6. CHANGELOG Planned Section Outdated
+## ~~6. CHANGELOG Planned Section Outdated~~ ✅ Resolved
 
-**Priority**: Low | **Impact**: Roadmap clarity
+**Resolved in**: v0.29.0
 
-The Planned section in CHANGELOG.md still lists:
-- Web UI (optional) — exists but minimal
-- Self-hosted Agent mode (`serve`) — still planned
-- Incremental index updates — still planned
-- Stable API guarantee — still planned
-- Production hardening — still planned
-
-**Fix**: Consider updating status, removing abandoned items, or moving to a separate ROADMAP.md file.
+CHANGELOG.md now has a v0.29.0 section documenting Web UI P1 integration.
 
 ---
 
-## 7. Web UI Not Integrated with P1 Features
+## ~~7. Web UI Not Integrated with P1 Features~~ ✅ Resolved
 
-**Priority**: Low | **Impact**: User experience
+**Resolved in**: v0.29.0
 
-The Web UI (`src/llmwikify/web/server.py`) does not integrate with any P1 features:
-- Cross-source synthesis
-- Knowledge gap analysis
-- Graph analysis (PageRank, community labels, suggestions)
+Web UI now includes an Insights Panel with three tabs (Synthesis, Gaps, Graph) that integrate all P1 features. The graph visualization has been upgraded to use `wiki_graph_analyze('analyze')` for PageRank-based node sizing, community-based coloring, bridge node highlighting, and suggested page display.
 
-**Fix**: Add API endpoints and UI components for P1 features.
-
-**Workaround**: Use CLI commands or MCP tools (once added) for P1 features.
+---

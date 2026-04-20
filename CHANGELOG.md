@@ -5,6 +5,32 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] - 2026-04-17
+
+### Added — Web UI P1 Integration
+- **3 new MCP tools**: `wiki_suggest_synthesis`, `wiki_knowledge_gaps`, `wiki_graph_analyze(action="analyze")`
+- **Insights Panel** in Web UI sidebar with 3 tabs:
+  - **Synthesis** — cross-source reinforced claims, contradictions, knowledge gaps
+  - **Gaps** — outdated pages, knowledge gaps, redundant pages detection
+  - **Graph** — PageRank hubs, bridge nodes, suggested pages from graph analysis
+- **Graph view upgraded** — uses `wiki_graph_analyze('analyze')` instead of per-page fetch:
+  - Node sizing based on PageRank centrality score
+  - Node coloring by detected community (Leiden/Louvain)
+  - Bridge nodes highlighted with orange stroke + indicator
+  - Suggested pages shown as dashed-outline ghost nodes
+  - Analysis summary overlay showing community count, bridge count, top hubs
+- **Health panel expanded** — added "stale pages" indicator alongside broken links and orphans
+- **Click-to-load insights** — panels load on demand, refreshable via ↻ button
+
+### Changed
+- `wiki_graph_analyze` MCP tool now supports `action="analyze"` for P1.3 graph analysis
+- Graph visualization now renders from single API call instead of N sequential requests
+- `graph.js` refactored with `buildFromAnalysis()` primary path + `buildFromReferences()` fallback
+
+### Fixed
+- Web UI no longer limited to v0.27.0 feature set — all P1 features now accessible
+- `heightlightedNodes` typo fixed to `highlightedNodes` in GraphView class
+
 ## [0.28.0] - 2026-04-17
 
 ### Added — P0: Enhanced Source Page Format

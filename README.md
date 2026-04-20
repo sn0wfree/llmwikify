@@ -184,7 +184,7 @@ graph_result = wiki.graph_analyze()
 
 ---
 
-## 🗄️ MCP Server (18 Tools)
+## 🗄️ MCP Server (20 Tools)
 
 | Tool | Description |
 |------|-------------|
@@ -204,8 +204,10 @@ graph_result = wiki.graph_analyze()
 | `wiki_sink_status` | Sink buffer overview |
 | `wiki_references` | Page references |
 | `wiki_graph` | Graph query/modify |
-| `wiki_graph_analyze` | Graph export/detect/report |
+| `wiki_graph_analyze` | Graph export/detect/report/analyze |
 | `wiki_analyze_source` | Analyze raw source file |
+| `wiki_suggest_synthesis` | Cross-source synthesis suggestions |
+| `wiki_knowledge_gaps` | Knowledge gap + outdated + redundancy |
 
 ---
 
