@@ -102,6 +102,18 @@
         async wiki_graph(action, params = {}) {
             return this.call('wiki_graph', { action, ...params });
         },
+
+        async wiki_suggest_synthesis(source_name = null) {
+            return this.call('wiki_suggest_synthesis', { source_name });
+        },
+
+        async wiki_knowledge_gaps(limit = 20) {
+            return this.call('wiki_knowledge_gaps', { limit });
+        },
+
+        async wiki_graph_analyze(action, params = {}) {
+            return this.call('wiki_graph_analyze', { action, ...params });
+        },
     };
 
     // ============================================================
@@ -567,18 +579,32 @@
             const lint = await api.wiki_lint('brief');
             const hints = lint.hints || {};
             const issues = lint.issue_count || 0;
-            
+
             const brokenCount = hints.broken_links ? Object.keys(hints.broken_links).length : 0;
-            
+
             $('#health-broken-dot').className = 'health-dot ' + (brokenCount > 0 ? 'dot-danger' : 'dot-ok');
             $('#health-broken-text').textContent = brokenCount > 0 ? `${brokenCount} broken` : 'OK';
-            
+
             const orphanPages = lint.orphan_pages || hints.orphan_pages || [];
             $('#health-orphans-dot').className = 'health-dot ' + (orphanPages.length > 0 ? 'dot-warning' : 'dot-ok');
             $('#health-orphans-text').textContent = orphanPages.length > 0 ? `${orphanPages.length} orphans` : 'OK';
         } catch (e) {
             $('#health-broken-text').textContent = 'N/A';
             $('#health-orphans-text').textContent = 'N/A';
+        }
+
+        // Stale pages + Knowledge gaps (light check)
+        try {
+            const fullLint = await api.wiki_knowledge_gaps(5);
+            const investigations = fullLint.investigations || {};
+
+            const outdated = investigations.outdated_pages || [];
+            const gaps = investigations.knowledge_gaps || [];
+
+            $('#health-stale-dot').className = 'health-dot ' + (outdated.length > 0 ? 'dot-warning' : 'dot-ok');
+            $('#health-stale-text').textContent = outdated.length > 0 ? `${outdated.length} stale` : 'OK';
+        } catch (e) {
+            $('#health-stale-text').textContent = 'N/A';
         }
 
         // Sink Status
@@ -636,6 +662,262 @@
     }
 
     // ============================================================
+    // Insights Panel (P1: Synthesis, Gaps, Graph Analysis)
+    // ============================================================
+    function initInsightsPanel() {
+        // Tab switching
+        $$('.insight-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                $$('.insight-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                $$('.insight-content').forEach(c => c.classList.add('hidden'));
+                const content = document.getElementById(`insight-${tabName}`);
+                if (content) content.classList.remove('hidden');
+            });
+        });
+
+        // Load synthesis
+        $('#insight-synthesis').addEventListener('click', async function handler() {
+            if (this.dataset.loaded) return;
+            await loadSynthesisInsights();
+            this.dataset.loaded = 'true';
+            this.removeEventListener('click', handler);
+        });
+
+        // Load gaps
+        $('#insight-gaps').addEventListener('click', async function handler() {
+            if (this.dataset.loaded) return;
+            await loadGapsInsights();
+            this.dataset.loaded = 'true';
+            this.removeEventListener('click', handler);
+        });
+
+        // Load graph analysis
+        $('#insight-graph').addEventListener('click', async function handler() {
+            if (this.dataset.loaded) return;
+            await loadGraphInsights();
+            this.dataset.loaded = 'true';
+            this.removeEventListener('click', handler);
+        });
+
+        // Refresh button
+        const refreshBtn = $('#btn-refresh-insights');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                ['insight-synthesis', 'insight-gaps', 'insight-graph'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.dataset.loaded = '';
+                        el.innerHTML = '<div class="insight-loading">Click to analyze</div>';
+                    }
+                });
+            });
+        }
+    }
+
+    async function loadSynthesisInsights() {
+        const container = $('#insight-synthesis');
+        container.innerHTML = '<div class="insight-loading">Analyzing sources...</div>';
+
+        try {
+            const result = await api.wiki_suggest_synthesis();
+            const suggestions = result.suggestions || [];
+
+            if (suggestions.length === 0) {
+                container.innerHTML = '<div class="insight-empty">No sources to analyze</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            for (const sugg of suggestions) {
+                const reinforced = sugg.reinforced_claims || [];
+                const gaps = sugg.knowledge_gaps || [];
+                const updates = sugg.suggested_updates || [];
+
+                if (reinforced.length === 0 && gaps.length === 0 && updates.length === 0) continue;
+
+                const item = el('div', { className: 'insight-item' });
+                const title = el('div', {
+                    className: 'insight-title',
+                    textContent: `${reinforced.length} reinforced, ${gaps.length} gaps, ${updates.length} updates`
+                });
+                item.appendChild(title);
+
+                for (const claim of reinforced.slice(0, 2)) {
+                    const desc = el('div', {
+                        className: 'insight-desc',
+                        innerHTML: `<span class="insight-badge badge-reinforced">reinforced</span> ${claim.claim || claim.text || ''}`.substring(0, 100)
+                    });
+                    item.appendChild(desc);
+                }
+
+                for (const gap of gaps.slice(0, 2)) {
+                    const desc = el('div', {
+                        className: 'insight-desc',
+                        innerHTML: `<span class="insight-badge badge-gap">gap</span> ${gap.gap || ''}`.substring(0, 100)
+                    });
+                    item.appendChild(desc);
+                }
+
+                container.appendChild(item);
+            }
+
+            if (container.children.length === 0) {
+                container.innerHTML = '<div class="insight-empty">No synthesis suggestions</div>';
+            }
+        } catch (e) {
+            container.innerHTML = `<div class="insight-empty">Failed: ${e.message}</div>`;
+        }
+    }
+
+    async function loadGapsInsights() {
+        const container = $('#insight-gaps');
+        container.innerHTML = '<div class="insight-loading">Detecting gaps...</div>';
+
+        try {
+            const result = await api.wiki_knowledge_gaps(10);
+            const investigations = result.investigations || {};
+
+            const outdated = investigations.outdated_pages || [];
+            const gaps = investigations.knowledge_gaps || [];
+            const redundant = investigations.redundant_pages || [];
+
+            container.innerHTML = '';
+
+            if (outdated.length > 0) {
+                const item = el('div', { className: 'insight-item' });
+                item.appendChild(el('div', {
+                    className: 'insight-title',
+                    textContent: `${outdated.length} outdated page(s)`
+                }));
+                for (const page of outdated.slice(0, 3)) {
+                    item.appendChild(el('div', {
+                        className: 'insight-desc',
+                        innerHTML: `<span class="insight-badge badge-medium">outdated</span> ${page.page}`
+                    }));
+                }
+                container.appendChild(item);
+            }
+
+            if (gaps.length > 0) {
+                const item = el('div', { className: 'insight-item' });
+                item.appendChild(el('div', {
+                    className: 'insight-title',
+                    textContent: `${gaps.length} knowledge gap(s)`
+                }));
+                for (const gap of gaps.slice(0, 3)) {
+                    item.appendChild(el('div', {
+                        className: 'insight-desc',
+                        innerHTML: `<span class="insight-badge badge-info">gap</span> ${gap.gap || gap}`.substring(0, 80)
+                    }));
+                }
+                container.appendChild(item);
+            }
+
+            if (redundant.length > 0) {
+                const item = el('div', { className: 'insight-item' });
+                item.appendChild(el('div', {
+                    className: 'insight-title',
+                    textContent: `${redundant.length} potentially redundant page(s)`
+                }));
+                for (const pair of redundant.slice(0, 2)) {
+                    const pages = pair.pages || pair;
+                    const desc = Array.isArray(pages) ? pages.join(' ↔ ') : pages;
+                    item.appendChild(el('div', {
+                        className: 'insight-desc',
+                        innerHTML: `<span class="insight-badge badge-low">redundant</span> ${desc}`
+                    }));
+                }
+                container.appendChild(item);
+            }
+
+            if (container.children.length === 0) {
+                container.innerHTML = '<div class="insight-empty">No gaps detected</div>';
+            }
+        } catch (e) {
+            container.innerHTML = `<div class="insight-empty">Failed: ${e.message}</div>`;
+        }
+    }
+
+    async function loadGraphInsights() {
+        const container = $('#insight-graph');
+        container.innerHTML = '<div class="insight-loading">Analyzing graph...</div>';
+
+        try {
+            const result = await api.wiki_graph_analyze('analyze');
+            const suggestions = result.suggestions || {};
+            const centrality = result.centrality || {};
+            const communities = result.communities || {};
+
+            container.innerHTML = '';
+
+            // Suggested pages
+            const suggestedPages = suggestions.suggested_pages || [];
+            if (suggestedPages.length > 0) {
+                const item = el('div', { className: 'insight-item' });
+                item.appendChild(el('div', {
+                    className: 'insight-title',
+                    textContent: `${suggestedPages.length} suggested page(s)`
+                }));
+                for (const sugg of suggestedPages.slice(0, 4)) {
+                    const reason = sugg.reason || 'Orphan concept';
+                    item.appendChild(el('div', {
+                        className: 'insight-desc',
+                        innerHTML: `<span class="insight-badge badge-medium">suggest</span> ${sugg.page_name || sugg.page}`
+                    }));
+                    item.appendChild(el('div', {
+                        className: 'insight-meta',
+                        textContent: reason.substring(0, 70)
+                    }));
+                }
+                container.appendChild(item);
+            }
+
+            // Bridge nodes
+            const bridges = communities.bridge_nodes || [];
+            if (bridges.length > 0) {
+                const item = el('div', { className: 'insight-item' });
+                item.appendChild(el('div', {
+                    className: 'insight-title',
+                    textContent: `${bridges.length} bridge node(s)`
+                }));
+                for (const bridge of bridges.slice(0, 3)) {
+                    const nodeName = bridge.node || bridge;
+                    item.appendChild(el('div', {
+                        className: 'insight-desc',
+                        innerHTML: `<span class="insight-badge badge-info">bridge</span> ${nodeName}`
+                    }));
+                }
+                container.appendChild(item);
+            }
+
+            // Top hubs
+            const topPages = centrality.top_pages || [];
+            if (topPages.length > 0) {
+                const item = el('div', { className: 'insight-item' });
+                item.appendChild(el('div', {
+                    className: 'insight-title',
+                    textContent: 'Top hubs (PageRank)'
+                }));
+                for (const entry of topPages.slice(0, 3)) {
+                    item.appendChild(el('div', {
+                        className: 'insight-desc',
+                        innerHTML: `<span class="insight-badge badge-low">hub</span> ${entry.page} (${entry.score.toFixed(3)})`
+                    }));
+                }
+                container.appendChild(item);
+            }
+
+            if (container.children.length === 0) {
+                container.innerHTML = '<div class="insight-empty">No graph insights</div>';
+            }
+        } catch (e) {
+            container.innerHTML = `<div class="insight-empty">Failed: ${e.message}</div>`;
+        }
+    }
+
+    // ============================================================
     // Utilities
     // ============================================================
     function showLoading() {
@@ -679,6 +961,7 @@
             initNewPageModal();
             initWikilinks();
             initGraphView();
+            initInsightsPanel();
             
             document.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
