@@ -234,7 +234,8 @@ class TestLintModeFix:
         result = wiki.lint(mode="fix")
 
         assert "auto_fix" in result
-        assert result["auto_fix"]["fixed"] == 1
+        assert result["auto_fix"]["wikilinks_fixed"] == 1
+        assert result["auto_fix"]["index_updated"] is True
 
         # Verify file was modified
         content = broken_page.read_text()

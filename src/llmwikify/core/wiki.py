@@ -2276,14 +2276,19 @@ class Wiki:
             "sink_warnings": sink_warnings,
         }
 
-        # Auto-fix broken wikilinks when mode="fix"
+        # Auto-fix when mode="fix"
         if mode == "fix":
             fix_result = self.fix_wikilinks(dry_run=False)
+
+            # Update index with summaries and grouping
+            self._update_index_file()
+
             result["auto_fix"] = {
-                "fixed": fix_result["fixed"],
-                "skipped": fix_result["skipped"],
-                "ambiguous": fix_result["ambiguous"],
-                "changes": fix_result["changes"][:20],
+                "wikilinks_fixed": fix_result["fixed"],
+                "wikilinks_skipped": fix_result["skipped"],
+                "wikilinks_ambiguous": fix_result["ambiguous"],
+                "wikilink_changes": fix_result["changes"][:20],
+                "index_updated": True,
             }
 
         return result
@@ -2501,20 +2506,120 @@ class Wiki:
         except ImportError:
             return "0.11.0"
 
-    def _update_index_file(self) -> None:
-        """Update index.md with current wiki contents and sink status.
+    def _extract_page_summary(self, page_path: Path, max_len: int = 120) -> str:
+        """Extract a one-line summary from a wiki page.
 
-        Recursively scans wiki/ for pages in all subdirectories.
-        Excludes .sink/ directory files, index.md, and log.md.
-        Sink files (.sink/*.sink.md) get their own "Pending Sink Buffers" section.
+        Priority:
+        1. YAML frontmatter 'summary' field
+        2. First paragraph under ## Summary section (Source pages)
+        3. First paragraph after title/frontmatter
+        4. Fallback: page title
         """
-        pages = []
+        try:
+            content = page_path.read_text()
+        except OSError:
+            return ""
+
+        # Priority 1: YAML frontmatter summary
+        fm_match = re.match(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
+        if fm_match:
+            fm_text = fm_match.group(1)
+            for line in fm_text.split('\n'):
+                if line.startswith('summary:'):
+                    val = line.split(':', 1)[1].strip().strip('"').strip("'")
+                    if val:
+                        return val if len(val) <= max_len else val[:max_len - 3] + '...'
+
+        # Priority 2: ## Summary section first paragraph
+        summary_match = re.search(r'^## Summary\s*\n(.*?)(?:\n## |\Z)', content, re.MULTILINE | re.DOTALL)
+        if summary_match:
+            section_text = summary_match.group(1).strip()
+            # Take first non-empty line (first paragraph)
+            for line in section_text.split('\n'):
+                line = line.strip()
+                if line and not line.startswith('<!--'):
+                    return line if len(line) <= max_len else line[:max_len - 3] + '...'
+
+        # Strip frontmatter for remaining priorities
+        body = content
+        if fm_match:
+            body = content[fm_match.end():]
+
+        # Priority 3: First non-title, non-empty paragraph
+        lines = body.split('\n')
+        in_title = True
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if in_title and stripped.startswith('#'):
+                continue
+            if in_title:
+                in_title = False
+            if stripped.startswith('<!--'):
+                continue
+            # Clean markdown artifacts
+            clean = re.sub(r'\*\*|\*|`', '', stripped).strip()
+            if clean:
+                return clean if len(clean) <= max_len else clean[:max_len - 3] + '...'
+
+        # Priority 4: Fallback to title
+        title_match = re.match(r'^#\s*(.+)', content)
+        if title_match:
+            return title_match.group(1).strip()
+
+        return page_path.stem
+
+    def _get_source_analysis_summary(self, page_path: Path) -> dict | None:
+        """Extract topics and entities from cached Source analysis.
+
+        Returns dict with:
+        - topics: list of topic strings
+        - entities: list of entity name strings
+        Or None if no cached analysis exists.
+        """
+        cached = self._get_cached_source_analysis(page_path)
+        if not cached:
+            return None
+
+        data = cached.get('data', {})
+        topics = [t for t in data.get('topics', []) if isinstance(t, str)][:5]
+        entities = [e['name'] for e in data.get('entities', []) if isinstance(e, dict) and 'name' in e][:5]
+
+        if not topics and not entities:
+            return None
+
+        return {'topics': topics, 'entities': entities}
+
+    def _update_index_file(self) -> None:
+        """Update index.md with current wiki contents, summaries, and sink status.
+
+        Groups pages by type (Sources, Concepts, Entities, etc.).
+        Each page entry includes:
+        - Summary extracted from page content
+        - For Source pages: topics and entities from cached analysis
+        - Word count and link statistics from SQLite index
+        - Sink status if applicable
+        """
+        # Directory label mapping
+        dir_labels = {
+            'sources': 'Sources',
+            'concepts': 'Concepts',
+            'entities': 'Entities',
+            'comparisons': 'Comparisons',
+            'synthesis': 'Synthesis',
+            'claims': 'Claims',
+        }
+
+        # Group pages by directory
+        groups: dict[str, list[str]] = {}
         sink_entries = []
+        type_counts: dict[str, int] = {}
 
         for page in sorted(self.wiki_dir.rglob("*.md")):
             page_path = page.relative_to(self.wiki_dir)
 
-            # Separate sink files from regular pages
+            # Separate sink files
             if page_path.parts[0] == '.sink':
                 try:
                     sink_content = page.read_text()
@@ -2522,7 +2627,6 @@ class Wiki:
                         r'^## \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]',
                         sink_content, re.MULTILINE
                     ))
-                    # Last entry timestamp
                     last_match = re.search(
                         r'^## \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]',
                         sink_content, re.MULTILINE
@@ -2542,32 +2646,109 @@ class Wiki:
                 continue
 
             page_name = str(page_path.with_suffix(''))
-            page_content = page.read_text()
-            first_line = page_content.split('\n')[0].lstrip('# ').strip()
 
-            sink_info = self.query_sink.get_info_for_page(page_name)
+            # Determine group
+            subdir = page_path.parts[0] if len(page_path.parts) > 1 else ''
+            if len(page_path.parts) > 1:
+                label = dir_labels.get(subdir, subdir.capitalize())
+            else:
+                label = 'Overview'
+
+            if label not in groups:
+                groups[label] = []
+                type_counts[label] = 0
+            type_counts[label] += 1
+
+            # Build page entry
+            summary = self._extract_page_summary(page)
+
+            # For Source pages, add topics/entities from cached analysis
+            analysis_extra = ""
+            if subdir == 'sources':
+                analysis = self._get_source_analysis_summary(page)
+                if analysis:
+                    parts = []
+                    if analysis['topics']:
+                        parts.append(f"📊 Topics: {', '.join(analysis['topics'])}")
+                    if analysis['entities']:
+                        parts.append(f"👤 Entities: {', '.join(analysis['entities'])}")
+                    if parts:
+                        analysis_extra = "\n  " + " | ".join(parts)
+
+            # Get stats from SQLite index
+            stats_extra = ""
+            try:
+                cursor = self.index.conn.execute(
+                    "SELECT word_count FROM pages WHERE page_name = ?",
+                    (page_name,)
+                )
+                row = cursor.fetchone()
+                if row and row['word_count']:
+                    wc = row['word_count']
+                    wc_str = f"{wc / 1000:.1f}k" if wc >= 1000 else str(wc)
+                    stats_extra = f" | 📝 {wc_str} words"
+            except Exception:
+                pass
+
+            # Link counts
+            try:
+                in_count = len(self.index.get_inbound_links(page_name))
+                out_count = len(self.index.get_outbound_links(page_name))
+                if in_count > 0 or out_count > 0:
+                    link_str = f"🔗 {out_count} out"
+                    if in_count > 0:
+                        link_str += f" | {in_count} in"
+                    stats_extra = f" | {link_str}" + stats_extra
+            except Exception:
+                pass
+
+            # Sink status
             sink_marker = ""
-            if sink_info['has_sink']:
-                sink_marker = f" 📥 {sink_info['sink_entries']} pending updates"
+            try:
+                sink_info = self.query_sink.get_info_for_page(page_name)
+                if sink_info['has_sink']:
+                    sink_marker = f" 📥 {sink_info['sink_entries']} pending"
+            except Exception:
+                pass
 
-            pages.append(f"- [[{page_name}]] - {first_line}{sink_marker}")
+            entry = f"- [[{page_name}]] - {summary}{sink_marker}"
+            if analysis_extra or stats_extra:
+                entry += f"\n  {analysis_extra}{stats_extra}".lstrip()
+
+            groups[label].append(entry)
+
+        # Build index content
+        total = sum(type_counts.values())
+        type_summary = " | ".join(f"{label}: {count}" for label, count in type_counts.items() if count > 0)
 
         index_content = (
             f"# Wiki Index\n\n"
             f"Last updated: {self._now()}\n\n"
-            f"Total pages: {len(pages)}\n\n"
-            f"---\n\n"
-            "## Pages\n\n"
+            f"Total pages: {total}"
+            + (f" — {type_summary}" if type_summary else "")
+            + f"\n\n---\n\n"
         )
 
-        if pages:
-            index_content += '\n'.join(pages) + '\n'
-        else:
-            index_content += "*(No pages yet)*\n"
+        # Ordered section headers
+        section_order = ['Sources', 'Concepts', 'Entities', 'Comparisons', 'Synthesis', 'Claims', 'Overview']
+        remaining = [k for k in groups if k not in section_order]
+        ordered_sections = section_order + sorted(remaining)
 
-        # Add Pending Sink Buffers section if there are any
+        has_content = False
+        for section in ordered_sections:
+            if section not in groups or not groups[section]:
+                continue
+            has_content = True
+            count = type_counts.get(section, len(groups[section]))
+            index_content += f"## {section} ({count})\n\n"
+            index_content += '\n\n'.join(groups[section]) + '\n\n'
+
+        if not has_content:
+            index_content += "*(No pages yet)*\n\n"
+
+        # Pending Sink Buffers
         if sink_entries:
-            index_content += "\n## Pending Sink Buffers 📥\n\n"
+            index_content += "## Pending Sink Buffers 📥\n\n"
             index_content += '\n\n'.join(sink_entries) + '\n'
 
         self.index_file.write_text(index_content)
