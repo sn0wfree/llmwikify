@@ -1,11 +1,20 @@
 """MCP server for llmwikify using FastMCP."""
 
+import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 
 from ..core import Wiki
+
+logger = logging.getLogger(__name__)
 
 
 def create_mcp_server(wiki: Wiki, name: str | None = None, config: dict[str, Any] | None = None) -> FastMCP:
@@ -402,3 +411,353 @@ def serve_mcp(wiki: Wiki, name: str | None = None, transport: str | None = None,
         mcp.run(transport=transport, host=host, port=port)
     else:
         raise ValueError(f"Unsupported transport: {transport}. Use 'stdio', 'http', or 'sse'")
+
+
+# ============================================================================
+# Unified Server (Single-process: MCP + REST API + WebUI)
+# ============================================================================
+
+EXCLUDED_AUTH_PATHS = ["/", "/mcp", "/api/health", "/favicon.ico"]
+EXCLUDED_AUTH_PREFIXES = ["/assets/"]
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Simple API Key authentication middleware.
+
+    验证方式（优先级）:
+    1. Header: Authorization: Bearer <token>
+    2. Query param: ?token=<token> (fallback)
+
+    排除路径（无需鉴权）:
+    - / (首页)
+    - /mcp (MCP 端点)
+    - /api/health (健康检查)
+    - /assets/ (静态资源)
+    - /favicon.ico
+    """
+
+    def __init__(self, app, api_key: str):
+        super().__init__(app)
+        self.api_key = api_key
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        path = request.url.path
+
+        # Check if path is excluded from auth
+        if path in EXCLUDED_AUTH_PATHS:
+            return await call_next(request)
+        for prefix in EXCLUDED_AUTH_PREFIXES:
+            if path.startswith(prefix):
+                return await call_next(request)
+
+        # Extract token
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
+        if not token:
+            token = request.query_params.get("token", "")
+
+        if token != self.api_key:
+            return JSONResponse({"error": "Unauthorized", "status_code": 401}, status_code=401)
+
+        return await call_next(request)
+
+
+def _register_rest_routes(mcp: FastMCP, wiki: Wiki, agent: Any | None = None) -> None:
+    """Register all REST API routes to FastMCP's _additional_http_routes."""
+
+    # -- Wiki endpoints --
+
+    async def wiki_status(request: Request) -> JSONResponse:
+        return JSONResponse(wiki.status())
+
+    async def wiki_search(request: Request) -> JSONResponse:
+        q = request.query_params.get("q", "")
+        limit = int(request.query_params.get("limit", "10"))
+        return JSONResponse(wiki.search(q, limit))
+
+    async def wiki_read_page(request: Request) -> JSONResponse:
+        page_name = request.path_params.get("page_name", "")
+        try:
+            content = wiki.read_page(page_name)
+            sink_info = wiki.query_sink.get_info_for_page(page_name)
+            return JSONResponse({
+                "page_name": page_name,
+                "content": content,
+                "file": f"wiki/{page_name}.md",
+                **sink_info,
+            })
+        except Exception as e:
+            return JSONResponse({"error": str(e), "status_code": 404}, status_code=404)
+
+    async def wiki_write_page(request: Request) -> JSONResponse:
+        body = await request.json()
+        page_name = body.get("page_name", "")
+        content = body.get("content", "")
+        if not page_name:
+            return JSONResponse({"error": "page_name required", "status_code": 400}, status_code=400)
+        result = wiki.write_page(page_name, content)
+        return JSONResponse({"message": result, "page_name": page_name})
+
+    async def wiki_sink_status(request: Request) -> JSONResponse:
+        return JSONResponse(wiki.sink_status())
+
+    async def wiki_lint(request: Request) -> JSONResponse:
+        mode = request.query_params.get("mode", "check")
+        limit = int(request.query_params.get("limit", "10"))
+        force = request.query_params.get("force", "false").lower() == "true"
+        result = wiki.lint(mode=mode, limit=limit, force=force)
+        return JSONResponse(result)
+
+    async def wiki_recommend(request: Request) -> JSONResponse:
+        return JSONResponse(wiki.recommend())
+
+    # -- Agent endpoints --
+
+    async def agent_chat(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        body = await request.json()
+        message = body.get("message", "")
+        try:
+            result = await agent.chat(message)
+            return JSONResponse(result)
+        except Exception as e:
+            return JSONResponse({"error": str(e), "status_code": 500}, status_code=500)
+
+    async def agent_status(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        return JSONResponse(agent.get_status())
+
+    async def agent_tools(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        return JSONResponse(agent.get_tools())
+
+    async def agent_notifications(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        return JSONResponse(agent.notifications.list_all())
+
+    async def notification_mark_read(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        notif_id = request.path_params.get("id", "")
+        result = agent.notifications.mark_read(notif_id)
+        return JSONResponse({"success": result, "id": notif_id})
+
+    # -- Confirmation endpoints --
+
+    async def confirmations_list(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        return JSONResponse(agent.get_pending_confirmations())
+
+    async def confirmation_approve(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        conf_id = request.path_params.get("id", "")
+        result = await agent.confirm_action(conf_id)
+        return JSONResponse(result)
+
+    async def confirmation_reject(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        conf_id = request.path_params.get("id", "")
+        result = agent.tool_registry.reject_execution(conf_id)
+        return JSONResponse(result)
+
+    async def confirmations_batch(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        body = await request.json()
+        ids = body.get("ids", [])
+        results = await agent.confirm_batch(ids)
+        return JSONResponse(results)
+
+    # -- Dream endpoints --
+
+    async def dream_log(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        limit = int(request.query_params.get("limit", "20"))
+        return JSONResponse(agent.dream_editor.get_edit_log(limit))
+
+    async def dream_run(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        result = agent.dream_editor.run_dream()
+        return JSONResponse(result)
+
+    async def dream_proposals(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        return JSONResponse(agent.get_dream_proposals())
+
+    async def dream_proposal_approve(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        prop_id = request.path_params.get("id", "")
+        result = agent.dream_editor.proposal_manager.approve(prop_id)
+        if result:
+            return JSONResponse(result)
+        return JSONResponse({"error": "Proposal not found", "status_code": 404}, status_code=404)
+
+    async def dream_proposal_reject(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        prop_id = request.path_params.get("id", "")
+        result = agent.dream_editor.proposal_manager.reject(prop_id)
+        if result:
+            return JSONResponse(result)
+        return JSONResponse({"error": "Proposal not found", "status_code": 404}, status_code=404)
+
+    async def dream_proposals_batch_approve(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        body = await request.json()
+        ids = body.get("ids", [])
+        results = agent.dream_editor.proposal_manager.batch_approve(ids)
+        return JSONResponse({"approved": len(results), "results": results})
+
+    async def dream_proposals_apply(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        body = await request.json()
+        ids = body.get("ids", None)
+        result = await agent.apply_dream_proposals(ids)
+        return JSONResponse(result)
+
+    # -- Ingest log endpoints --
+
+    async def ingest_log_list(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        limit = int(request.query_params.get("limit", "20"))
+        return JSONResponse(agent.get_ingest_log(limit))
+
+    async def ingest_log_detail(request: Request) -> JSONResponse:
+        if agent is None:
+            return JSONResponse({"error": "Agent not enabled", "status_code": 503}, status_code=503)
+        ingest_id = request.path_params.get("id", "")
+        result = agent.tool_registry.get_ingest_changes(ingest_id)
+        if result:
+            return JSONResponse(result)
+        return JSONResponse({"error": "Ingest not found", "status_code": 404}, status_code=404)
+
+    async def ingest_log_revert(request: Request) -> JSONResponse:
+        return JSONResponse({"error": "Revert not implemented yet (requires git integration)", "status_code": 501}, status_code=501)
+
+    # -- Health endpoint --
+
+    async def health_check(request: Request) -> JSONResponse:
+        return JSONResponse({"status": "healthy", "wiki": str(wiki.root)})
+
+    # Register routes
+    routes = [
+        Route("/api/health", health_check, methods=["GET"]),
+        Route("/api/wiki/status", wiki_status, methods=["GET"]),
+        Route("/api/wiki/search", wiki_search, methods=["GET"]),
+        Route("/api/wiki/page/{page_name:path}", wiki_read_page, methods=["GET"]),
+        Route("/api/wiki/page", wiki_write_page, methods=["POST"]),
+        Route("/api/wiki/sink/status", wiki_sink_status, methods=["GET"]),
+        Route("/api/wiki/lint", wiki_lint, methods=["GET"]),
+        Route("/api/wiki/recommend", wiki_recommend, methods=["GET"]),
+        Route("/api/agent/chat", agent_chat, methods=["POST"]),
+        Route("/api/agent/status", agent_status, methods=["GET"]),
+        Route("/api/agent/tools", agent_tools, methods=["GET"]),
+        Route("/api/agent/notifications", agent_notifications, methods=["GET"]),
+        Route("/api/agent/notifications/{id}/read", notification_mark_read, methods=["POST"]),
+        Route("/api/agent/confirmations", confirmations_list, methods=["GET"]),
+        Route("/api/agent/confirmations/{id}", confirmation_approve, methods=["POST"]),
+        Route("/api/agent/confirmations/{id}", confirmation_reject, methods=["DELETE"]),
+        Route("/api/agent/confirmations/batch", confirmations_batch, methods=["POST"]),
+        Route("/api/agent/dream/log", dream_log, methods=["GET"]),
+        Route("/api/agent/dream/run", dream_run, methods=["POST"]),
+        Route("/api/agent/dream/proposals", dream_proposals, methods=["GET"]),
+        Route("/api/agent/dream/proposals/{id}/approve", dream_proposal_approve, methods=["POST"]),
+        Route("/api/agent/dream/proposals/{id}/reject", dream_proposal_reject, methods=["POST"]),
+        Route("/api/agent/dream/proposals/batch-approve", dream_proposals_batch_approve, methods=["POST"]),
+        Route("/api/agent/dream/proposals/apply", dream_proposals_apply, methods=["POST"]),
+        Route("/api/agent/ingest/log", ingest_log_list, methods=["GET"]),
+        Route("/api/agent/ingest/log/{id}", ingest_log_detail, methods=["GET"]),
+        Route("/api/agent/ingest/log/{id}/revert", ingest_log_revert, methods=["POST"]),
+    ]
+
+    mcp._additional_http_routes.extend(routes)
+
+
+def _mount_webui(mcp: FastMCP) -> None:
+    """Mount React static files with multi-level fallback."""
+    import os
+
+    # Try multiple locations for the webui dist
+    candidates = []
+
+    # 1. Installed mode: <package>/web/webui/dist/
+    pkg_dir = Path(__file__).parent.parent
+    candidates.append(pkg_dir / "web" / "webui" / "dist")
+
+    # 2. Dev mode: <repo>/src/llmwikify/web/webui/dist/
+    candidates.append(pkg_dir.parent.parent / "web" / "webui" / "dist")
+
+    # 3. Legacy static directory
+    candidates.append(pkg_dir / "web" / "static")
+
+    dist_dir = None
+    for candidate in candidates:
+        if candidate.exists() and (candidate / "index.html").exists():
+            dist_dir = candidate
+            break
+
+    if dist_dir is None:
+        logger.warning("No WebUI dist found, serving without static files")
+        return
+
+    async def spa_fallback(request: Request) -> Response:
+        """Serve index.html for SPA fallback."""
+        index_file = dist_dir / "index.html"
+        if index_file.exists():
+            return Response(
+                content=index_file.read_bytes(),
+                media_type="text/html",
+            )
+        return JSONResponse({"error": "Not found", "status_code": 404}, status_code=404)
+
+    # Mount static files
+    static_route = Mount(
+        "/",
+        app=StaticFiles(directory=str(dist_dir), html=True),
+        name="static",
+    )
+    mcp._additional_http_routes.append(static_route)
+
+
+def create_unified_server(
+    wiki: Wiki,
+    agent: Any | None = None,
+    api_key: str | None = None,
+    mcp_name: str | None = None,
+) -> Any:
+    """Create a unified Starlette server with MCP, REST API, and WebUI.
+
+    Args:
+        wiki: Wiki instance
+        agent: Optional WikiAgent instance
+        api_key: Optional API key for authentication
+        mcp_name: Optional MCP server name
+
+    Returns:
+        Starlette application
+    """
+    mcp = create_mcp_server(wiki, name=mcp_name)
+    _register_rest_routes(mcp, wiki, agent=agent)
+    _mount_webui(mcp)
+
+    app = mcp.http_app()
+
+    if api_key:
+        from starlette.middleware.base import BaseHTTPMiddleware
+        app = AuthMiddleware(app, api_key=api_key)
+
+    return app

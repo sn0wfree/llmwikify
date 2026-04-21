@@ -1,6 +1,7 @@
 """Agent Runner - Execution loop with context injection and tool orchestration.
 
 Adapted from Nanobot Runner concepts, customized for Wiki workflows.
+Supports confirmation flow for write operations.
 """
 
 from __future__ import annotations
@@ -48,6 +49,7 @@ class ActionResult:
     success: bool
     result: Any = None
     error: str | None = None
+    confirmation_id: str | None = None
     timestamp: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
 
@@ -159,26 +161,33 @@ class AgentRunner:
     async def execute_tool(self, tool_call: ToolCall) -> ActionResult:
         self._fire_hooks("pre_tool", tool_call=tool_call)
 
-        if tool_call.requires_confirmation:
-            self.state = RunState.WAITING_CONFIRMATION
-            self._fire_hooks("on_confirmation", tool_call=tool_call)
-            return ActionResult(
-                tool_name=tool_call.name,
-                success=False,
-                error="Confirmation required",
-            )
-
         try:
             if self.tool_registry:
                 result = await self.tool_registry.execute(tool_call.name, tool_call.arguments)
+
+                # Check if confirmation is required
+                if isinstance(result, dict) and result.get("status") == "confirmation_required":
+                    self.state = RunState.WAITING_CONFIRMATION
+                    action_result = ActionResult(
+                        tool_name=tool_call.name,
+                        success=False,
+                        result=result,
+                        confirmation_id=result.get("confirmation_id"),
+                    )
+                    self._fire_hooks("on_confirmation", tool_call=tool_call, result=action_result)
+                else:
+                    action_result = ActionResult(
+                        tool_name=tool_call.name,
+                        success=True,
+                        result=result,
+                    )
             else:
                 result = self._execute_local_tool(tool_call)
-
-            action_result = ActionResult(
-                tool_name=tool_call.name,
-                success=True,
-                result=result,
-            )
+                action_result = ActionResult(
+                    tool_name=tool_call.name,
+                    success=True,
+                    result=result,
+                )
         except Exception as e:
             action_result = ActionResult(
                 tool_name=tool_call.name,
@@ -205,11 +214,55 @@ class AgentRunner:
             raise ValueError(f"Unknown tool: {tool_call.name}")
         return handler(tool_call.arguments)
 
-    async def confirm_action(self, tool_call: ToolCall) -> ActionResult:
+    async def confirm_action(self, confirmation_id: str) -> ActionResult:
+        """Confirm and execute a pending action by confirmation ID."""
         if self.state != RunState.WAITING_CONFIRMATION:
-            raise RuntimeError("No action pending confirmation")
+            logger.warning(f"Confirming action while not in WAITING_CONFIRMATION state (state={self.state})")
+
         self.state = RunState.EXECUTING
-        return await self.execute_tool(tool_call)
+
+        if self.tool_registry:
+            result = self.tool_registry.confirm_execution(confirmation_id)
+            return ActionResult(
+                tool_name=result.get("confirmation_id", "unknown"),
+                success=result.get("status") == "executed",
+                result=result.get("result"),
+                error=result.get("error"),
+            )
+        else:
+            return ActionResult(
+                tool_name="unknown",
+                success=False,
+                error="No tool registry available for confirmation",
+            )
+
+    async def confirm_batch(self, confirmation_ids: list[str]) -> list[ActionResult]:
+        """Confirm and execute multiple pending actions."""
+        self.state = RunState.EXECUTING
+
+        results = []
+        if self.tool_registry:
+            batch_results = self.tool_registry.confirm_batch(confirmation_ids)
+            for r in batch_results:
+                results.append(ActionResult(
+                    tool_name=r.get("confirmation_id", "unknown"),
+                    success=r.get("status") == "executed",
+                    result=r.get("result"),
+                    error=r.get("error"),
+                ))
+        return results
+
+    def get_pending_confirmations(self) -> list[dict]:
+        """Get all pending confirmations from tool registry."""
+        if self.tool_registry:
+            return self.tool_registry.get_pending_confirmations()
+        return []
+
+    def get_pending_by_group(self) -> dict[str, list[dict]]:
+        """Get pending confirmations grouped by page type."""
+        if self.tool_registry:
+            return self.tool_registry.get_pending_by_group()
+        return {}
 
     async def run(self, messages: list[dict[str, str]]) -> RunResult:
         self.state = RunState.RUNNING
@@ -238,6 +291,7 @@ class AgentRunner:
                 "tool": a.tool_name,
                 "success": a.success,
                 "error": a.error,
+                "confirmation_id": a.confirmation_id,
                 "timestamp": a.timestamp,
             }
             for a in self.action_log

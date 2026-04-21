@@ -123,6 +123,64 @@ class TestWikiToolRegistry:
         )
         assert result is not None
 
+    def test_confirmation_required_for_write(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        result = asyncio.get_event_loop().run_until_complete(
+            registry.execute("wiki_write_page", {"page_name": "Test", "content": "Hello"})
+        )
+        assert isinstance(result, dict)
+        assert result["status"] == "confirmation_required"
+        assert "confirmation_id" in result
+
+    def test_confirmation_approve(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        result = asyncio.get_event_loop().run_until_complete(
+            registry.execute("wiki_write_page", {"page_name": "TestConfirm", "content": "Hello"})
+        )
+        conf_id = result["confirmation_id"]
+        exec_result = registry.confirm_execution(conf_id)
+        assert exec_result["status"] == "executed"
+
+    def test_confirmation_reject(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        result = asyncio.get_event_loop().run_until_complete(
+            registry.execute("wiki_write_page", {"page_name": "TestReject", "content": "Hello"})
+        )
+        conf_id = result["confirmation_id"]
+        reject_result = registry.reject_execution(conf_id)
+        assert reject_result["status"] == "rejected"
+
+    def test_confirmation_batch(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        ids = []
+        for i in range(3):
+            result = asyncio.get_event_loop().run_until_complete(
+                registry.execute("wiki_write_page", {"page_name": f"Batch{i}", "content": f"Content{i}"})
+            )
+            ids.append(result["confirmation_id"])
+        batch_results = registry.confirm_batch(ids)
+        assert len(batch_results) == 3
+        assert all(r["status"] == "executed" for r in batch_results)
+
+    def test_get_pending_by_group(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        asyncio.get_event_loop().run_until_complete(
+            registry.execute("wiki_write_page", {"page_name": "concepts/Test", "content": "Hello"})
+        )
+        groups = registry.get_pending_by_group()
+        assert "concept_pages" in groups
+
+    def test_ingest_log(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        log = registry.get_ingest_log()
+        assert isinstance(log, list)
+
 
 # --- Hooks Tests ---
 
@@ -389,14 +447,32 @@ class TestDreamEditor:
             {"query": "Q1", "answer": "A1", "note": "unique"},
             {"query": "Q2", "answer": "A2", "note": "unique"},
         ]
-        result = editor._create_page_from_sink("NewPage", entries)
-        assert result["status"] == "created"
-        assert result["edit_count"] == 2
-        page_path = wiki_root.wiki_dir / "NewPage.md"
-        assert page_path.exists()
-        content = page_path.read_text()
-        assert "Q1" in content
-        assert "Q2" in content
+        # New behavior: generates proposal instead of creating page directly
+        editor._propose_create_page_from_sink("NewPage", entries)
+        proposals = editor.proposal_manager.get_pending()
+        assert len(proposals) == 1
+        assert proposals[0]["page_name"] == "NewPage"
+        assert "Q1" in proposals[0]["content"]
+        assert "Q2" in proposals[0]["content"]
+
+    def test_proposal_auto_approve_small(self, wiki_root, tmp_path):
+        from llmwikify.agent.dream_editor import DreamEditor, ProposalManager
+        pm = ProposalManager()
+        # Small append should be auto-approved
+        pm.create_proposal("TestPage", "append", "Short content", "test", [])
+        auto = pm.auto_approve_pending()
+        assert len(auto) == 1
+        assert auto[0]["status"] == "auto_approved"
+
+    def test_proposal_no_auto_approve_large(self, wiki_root, tmp_path):
+        from llmwikify.agent.dream_editor import ProposalManager
+        pm = ProposalManager()
+        # Large content should NOT be auto-approved
+        pm.create_proposal("TestPage", "append", "x" * 200, "test", [])
+        auto = pm.auto_approve_pending()
+        assert len(auto) == 0
+        pending = pm.get_pending()
+        assert len(pending) == 1
 
 
 # --- Notifications Tests ---

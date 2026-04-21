@@ -76,7 +76,7 @@ class WikiAgent:
         self._scheduler_task: asyncio.Task | None = None
         self._notification_callbacks: list[Callable] = []
 
-        self.scheduler.register_system_tasks(self.wiki, self.dream_editor)
+        self.scheduler.register_system_tasks(self.wiki, self.dream_editor, self.notifications)
         self.scheduler.load_state()
 
     def _register_runner_hooks(self) -> None:
@@ -132,24 +132,67 @@ class WikiAgent:
             "error": result.error,
         }
 
-    async def confirm_action(self, tool_name: str, arguments: dict) -> dict:
-        """Confirm a pending action and execute it.
+    async def confirm_action(self, confirmation_id: str) -> dict:
+        """Confirm a pending action by confirmation ID and execute it.
 
         Args:
-            tool_name: Tool name
-            arguments: Tool arguments
+            confirmation_id: The confirmation ID to approve
 
         Returns:
             Execution result
         """
-        tool_call = ToolCall(name=tool_name, arguments=arguments)
-        result = await self.runner.confirm_action(tool_call)
+        result = await self.runner.confirm_action(confirmation_id)
         return {
             "tool": result.tool_name,
             "success": result.success,
             "result": result.result,
             "error": result.error,
         }
+
+    async def confirm_batch(self, confirmation_ids: list[str]) -> list[dict]:
+        """Confirm and execute multiple pending actions.
+
+        Args:
+            confirmation_ids: List of confirmation IDs to approve
+
+        Returns:
+            List of execution results
+        """
+        results = await self.runner.confirm_batch(confirmation_ids)
+        return [
+            {
+                "tool": r.tool_name,
+                "success": r.success,
+                "result": r.result,
+                "error": r.error,
+            }
+            for r in results
+        ]
+
+    def get_pending_confirmations(self) -> dict:
+        """Get all pending confirmations grouped by page type."""
+        return {
+            "confirmations": self.runner.get_pending_by_group(),
+            "total": len(self.runner.get_pending_confirmations()),
+        }
+
+    def get_dream_proposals(self) -> dict:
+        """Get all pending Dream proposals grouped by page."""
+        return {
+            "proposals": self.dream_editor.get_proposals_by_page(),
+            "stats": self.dream_editor.proposal_manager.get_stats(),
+        }
+
+    async def apply_dream_proposals(self, proposal_ids: list[str] | None = None) -> dict:
+        """Apply approved Dream proposals to wiki files.
+
+        Args:
+            proposal_ids: List of proposal IDs to apply. None = apply all approved.
+
+        Returns:
+            Apply results
+        """
+        return self.dream_editor.apply_proposals(proposal_ids)
 
     async def start(self, tick_interval: int = 60) -> None:
         """Start the background scheduler loop.
@@ -236,7 +279,14 @@ class WikiAgent:
             "action_log": self.runner.get_action_log(),
             "recent_history": self.memory.get_context(),
             "recent_edits": self.dream_editor.get_edit_log(),
+            "pending_confirmations": len(self.runner.get_pending_confirmations()),
+            "dream_proposals": self.dream_editor.proposal_manager.get_stats(),
+            "unread_notifications": self.notifications.unread_count(),
         }
 
     def get_tools(self) -> list[dict]:
         return self.tool_registry.list_tools()
+
+    def get_ingest_log(self, limit: int = 20) -> list[dict]:
+        """Get recent ingest log entries."""
+        return self.tool_registry.get_ingest_log(limit)

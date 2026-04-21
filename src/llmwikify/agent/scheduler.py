@@ -35,12 +35,14 @@ class ScheduledTask:
         handler: Callable,
         description: str = "",
         enabled: bool = True,
+        is_write: bool = False,
     ):
         self.name = name
         self.cron_expr = cron_expr
         self.handler = handler
         self.description = description
         self.enabled = enabled
+        self.is_write = is_write
         self.last_run: datetime | None = None
         self.next_run: datetime | None = None
         self.run_count = 0
@@ -81,6 +83,7 @@ class ScheduledTask:
             "cron_expr": self.cron_expr,
             "description": self.description,
             "enabled": self.enabled,
+            "is_write": self.is_write,
             "last_run": self.last_run.isoformat() if self.last_run else None,
             "next_run": self.next_run.isoformat() if self.next_run else None,
             "run_count": self.run_count,
@@ -102,8 +105,9 @@ class WikiScheduler:
         handler: Callable,
         description: str = "",
         enabled: bool = True,
+        is_write: bool = False,
     ) -> ScheduledTask:
-        task = ScheduledTask(name, cron_expr, handler, description, enabled)
+        task = ScheduledTask(name, cron_expr, handler, description, enabled, is_write)
         self._tasks[name] = task
         return task
 
@@ -140,12 +144,14 @@ class WikiScheduler:
                         "task": task.name,
                         "success": True,
                         "result": result,
+                        "is_write": task.is_write,
                     })
                 except Exception as e:
                     results.append({
                         "task": task.name,
                         "success": False,
                         "error": str(e),
+                        "is_write": task.is_write,
                     })
         return results
 
@@ -173,12 +179,29 @@ class WikiScheduler:
             except Exception as e:
                 logger.warning(f"Failed to load scheduler state: {e}")
 
-    def register_system_tasks(self, wiki: Any, dream_editor: Any | None = None) -> None:
-        """Register default wiki system tasks."""
+    def register_system_tasks(
+        self,
+        wiki: Any,
+        dream_editor: Any | None = None,
+        notification_manager: Any | None = None,
+    ) -> None:
+        """Register default wiki system tasks.
+
+        Task classification:
+        - Auto tasks (is_write=False): read-only or safe operations
+        - Manual tasks (is_write=True): write operations, generate proposals
+        """
 
         def dream_task():
             if dream_editor:
-                return dream_editor.run_dream()
+                result = dream_editor.run_dream()
+                if notification_manager and result.get("pending_review", 0) > 0:
+                    notification_manager.add(
+                        "info",
+                        f"Dream generated {result.get('pending_review', 0)} proposals for review",
+                        data=result,
+                    )
+                return result
             return {"status": "skipped", "reason": "no dream editor"}
 
         def check_raw_task():
@@ -193,27 +216,34 @@ class WikiScheduler:
         def weekly_gaps():
             return wiki.lint(generate_investigations=True, limit=20)
 
-        self.add_task(
-            "dream_update",
-            "0 */2 * * *",
-            dream_task,
-            "Analyze QuerySink and perform Dream edits",
-        )
+        # Auto tasks (read-only, safe to execute automatically)
         self.add_task(
             "check_raw",
             "*/30 * * * *",
             check_raw_task,
             "Monitor raw/ directory for new files",
+            is_write=False,
         )
         self.add_task(
             "daily_lint",
             "0 22 * * *",
             daily_lint,
             "Daily wiki health check",
+            is_write=False,
         )
         self.add_task(
             "weekly_gaps",
             "0 9 * * 1",
             weekly_gaps,
             "Weekly knowledge gap analysis",
+            is_write=False,
+        )
+
+        # Manual tasks (write operations, generate proposals for review)
+        self.add_task(
+            "dream_update",
+            "0 */2 * * *",
+            dream_task,
+            "Analyze QuerySink and generate Dream proposals",
+            is_write=True,
         )

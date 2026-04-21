@@ -11,8 +11,12 @@ const KnowledgeGrowth = lazy(() => import('./components/KnowledgeGrowth').then(m
 const AgentChat = lazy(() => import('./components/AgentChat').then(m => ({ default: m.AgentChat })));
 const TaskMonitor = lazy(() => import('./components/TaskMonitor').then(m => ({ default: m.TaskMonitor })));
 const DreamLog = lazy(() => import('./components/DreamLog').then(m => ({ default: m.DreamLog })));
+const Confirmations = lazy(() => import('./components/Confirmations').then(m => ({ default: m.Confirmations })));
+const DreamProposals = lazy(() => import('./components/DreamProposals').then(m => ({ default: m.DreamProposals })));
+const IngestLog = lazy(() => import('./components/IngestLog').then(m => ({ default: m.IngestLog })));
+const EditHistory = lazy(() => import('./components/EditHistory').then(m => ({ default: m.EditHistory })));
 
-type ViewMode = 'edit' | 'search' | 'health' | 'insights' | 'growth' | 'chat' | 'tasks' | 'dream';
+type ViewMode = 'edit' | 'search' | 'health' | 'insights' | 'growth' | 'chat' | 'tasks' | 'dream' | 'confirmations' | 'proposals' | 'ingest' | 'history';
 
 function LazyWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -89,8 +93,21 @@ function App() {
               <NavButton active={view === 'tasks'} onClick={() => setView('tasks')}>
                 Tasks
               </NavButton>
+              <div className="border-t border-slate-700 my-2" />
+              <NavButton active={view === 'confirmations'} onClick={() => setView('confirmations')}>
+                Confirmations
+              </NavButton>
+              <NavButton active={view === 'proposals'} onClick={() => setView('proposals')}>
+                Dream Proposals
+              </NavButton>
               <NavButton active={view === 'dream'} onClick={() => setView('dream')}>
                 Dream Log
+              </NavButton>
+              <NavButton active={view === 'ingest'} onClick={() => setView('ingest')}>
+                Ingest Log
+              </NavButton>
+              <NavButton active={view === 'history'} onClick={() => setView('history')}>
+                Edit History
               </NavButton>
             </>
           )}
@@ -147,7 +164,11 @@ function App() {
           {view === 'growth' && <LazyWrapper><KnowledgeGrowth /></LazyWrapper>}
           {view === 'chat' && agentEnabled && <LazyWrapper><AgentChat /></LazyWrapper>}
           {view === 'tasks' && agentEnabled && <LazyWrapper><TaskMonitor /></LazyWrapper>}
+          {view === 'confirmations' && agentEnabled && <LazyWrapper><Confirmations /></LazyWrapper>}
+          {view === 'proposals' && agentEnabled && <LazyWrapper><DreamProposals /></LazyWrapper>}
           {view === 'dream' && agentEnabled && <LazyWrapper><DreamLog /></LazyWrapper>}
+          {view === 'ingest' && agentEnabled && <LazyWrapper><IngestLog /></LazyWrapper>}
+          {view === 'history' && agentEnabled && <LazyWrapper><EditHistory /></LazyWrapper>}
         </div>
       </main>
     </div>
