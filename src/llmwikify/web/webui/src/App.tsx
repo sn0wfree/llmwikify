@@ -17,7 +17,7 @@ const DreamProposals = lazy(() => import('./components/DreamProposals').then(m =
 const IngestLog = lazy(() => import('./components/IngestLog').then(m => ({ default: m.IngestLog })));
 const EditHistory = lazy(() => import('./components/EditHistory').then(m => ({ default: m.EditHistory })));
 
-type ViewMode = 'edit' | 'search' | 'health' | 'insights' | 'growth' | 'chat' | 'tasks' | 'dream' | 'confirmations' | 'proposals' | 'ingest' | 'history';
+type ViewMode = 'edit' | 'health' | 'insights' | 'growth' | 'chat' | 'tasks' | 'dream' | 'confirmations' | 'proposals' | 'ingest' | 'history';
 
 function LazyWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -73,9 +73,6 @@ function App() {
         <nav className="p-2 space-y-1">
           <NavButton active={view === 'edit'} onClick={() => setView('edit')}>
             Editor
-          </NavButton>
-          <NavButton active={view === 'search'} onClick={() => setView('search')}>
-            Search
           </NavButton>
           <NavButton active={view === 'health'} onClick={() => setView('health')}>
             Health
@@ -160,7 +157,6 @@ function App() {
               onPageSelect={setSelectedPage}
             />
           )}
-          {view === 'search' && <SearchBar standalone />}
           {view === 'health' && <HealthStatus status={status} sinkStatus={sinkStatus} full />}
           {view === 'insights' && <Insights />}
           {view === 'growth' && <LazyWrapper><KnowledgeGrowth /></LazyWrapper>}
