@@ -3,16 +3,53 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, WikiPage } from '../api';
 import { useToast } from './Toast';
+import { FrontMatterPanel, FrontMatterData } from './FrontMatterPanel';
 
 interface EditorProps {
   selectedPage: string | null;
   onPageSelect: (page: string) => void;
 }
 
+function parseFrontMatter(content: string): { metadata: FrontMatterData; body: string } {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) return { metadata: {}, body: content };
+
+  const metadata: FrontMatterData = {};
+  match[1].split('\n').forEach((line) => {
+    const colonIndex = line.indexOf(':');
+    if (colonIndex === -1) return;
+    const key = line.slice(0, colonIndex).trim();
+    let value: string | string[] = line.slice(colonIndex + 1).trim();
+    if (value.startsWith('[') && value.endsWith(']')) {
+      value = value.slice(1, -1).split(',').map((s) => s.trim());
+    }
+    metadata[key] = value;
+  });
+
+  return { metadata, body: match[2].trim() };
+}
+
+function buildFrontMatter(metadata: FrontMatterData, body: string): string {
+  if (Object.keys(metadata).length === 0) return body;
+
+  const yaml = Object.entries(metadata)
+    .map(([key, value]) => {
+      if (Array.isArray(value)) {
+        return `${key}: [${value.join(', ')}]`;
+      }
+      return `${key}: ${value}`;
+    })
+    .join('\n');
+
+  return `---\n${yaml}\n---\n\n${body}`;
+}
+
 export function Editor({ selectedPage, onPageSelect }: EditorProps) {
   const { addToast } = useToast();
   const [page, setPage] = useState<WikiPage | null>(null);
   const [content, setContent] = useState('');
+  const [metadata, setMetadata] = useState<FrontMatterData>({});
+  const [body, setBody] = useState('');
   const [mode, setMode] = useState<'edit' | 'preview' | 'split'>('split');
   const [saving, setSaving] = useState(false);
   const [fileTree, setFileTree] = useState<Array<{ name: string; path: string }>>([]);
@@ -45,13 +82,23 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
       const data = await api.wiki.readPage(name);
       setPage(data);
       setContent(data.content);
+      const { metadata: fm, body: b } = parseFrontMatter(data.content);
+      setMetadata(fm);
+      setBody(b);
     } catch (e) {
       const msg = e instanceof Error ? e.message : '未知错误';
       addToast('error', `页面加载失败: ${msg}`);
       setPage(null);
       setContent('');
+      setMetadata({});
+      setBody('');
     }
   }, []);
+
+  const handleBodyChange = useCallback((newBody: string) => {
+    setBody(newBody);
+    setContent(buildFrontMatter(metadata, newBody));
+  }, [metadata]);
 
   const savePage = useCallback(async () => {
     if (!page) return;
@@ -66,6 +113,8 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
       setSaving(false);
     }
   }, [page, content, addToast]);
+
+  const hasMetadata = Object.keys(metadata).length > 0;
 
   return (
     <div className="flex h-full">
@@ -114,12 +163,15 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
           </div>
         </div>
 
+        {/* Front Matter Panel */}
+        {hasMetadata && <FrontMatterPanel metadata={metadata} />}
+
         {/* Content */}
         <div className="flex-1 overflow-hidden">
           {mode === 'edit' && (
             <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
+              value={body}
+              onChange={(e) => handleBodyChange(e.target.value)}
               className="w-full h-full bg-slate-900 text-slate-100 p-4 font-mono text-sm resize-none focus:outline-none"
               placeholder="Select a page or start writing..."
             />
@@ -134,8 +186,8 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
           {mode === 'split' && (
             <div className="flex h-full">
               <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
+                value={body}
+                onChange={(e) => handleBodyChange(e.target.value)}
                 className="w-1/2 h-full bg-slate-900 text-slate-100 p-4 font-mono text-sm resize-none focus:outline-none border-r border-slate-700"
               />
               <div className="w-1/2 h-full overflow-y-auto p-4 markdown-body">
