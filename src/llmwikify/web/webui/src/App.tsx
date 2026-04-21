@@ -17,7 +17,7 @@ const DreamProposals = lazy(() => import('./components/DreamProposals').then(m =
 const IngestLog = lazy(() => import('./components/IngestLog').then(m => ({ default: m.IngestLog })));
 const EditHistory = lazy(() => import('./components/EditHistory').then(m => ({ default: m.EditHistory })));
 
-type ViewMode = 'edit' | 'health' | 'insights' | 'growth' | 'chat' | 'tasks' | 'dream' | 'confirmations' | 'proposals' | 'ingest' | 'history';
+type ViewMode = 'edit' | 'dashboard' | 'insights' | 'chat' | 'tasks' | 'dream' | 'confirmations' | 'proposals' | 'ingest' | 'history';
 
 function LazyWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -74,14 +74,11 @@ function App() {
           <NavButton active={view === 'edit'} onClick={() => setView('edit')}>
             Editor
           </NavButton>
-          <NavButton active={view === 'health'} onClick={() => setView('health')}>
-            Health
+          <NavButton active={view === 'dashboard'} onClick={() => setView('dashboard')}>
+            Dashboard
           </NavButton>
           <NavButton active={view === 'insights'} onClick={() => setView('insights')}>
             Insights
-          </NavButton>
-          <NavButton active={view === 'growth'} onClick={() => setView('growth')}>
-            Growth
           </NavButton>
           {agentEnabled && (
             <>
@@ -157,9 +154,8 @@ function App() {
               onPageSelect={setSelectedPage}
             />
           )}
-          {view === 'health' && <HealthStatus status={status} sinkStatus={sinkStatus} full />}
+          {view === 'dashboard' && <LazyWrapper><KnowledgeGrowth /></LazyWrapper>}
           {view === 'insights' && <Insights />}
-          {view === 'growth' && <LazyWrapper><KnowledgeGrowth /></LazyWrapper>}
           {view === 'chat' && agentEnabled && <LazyWrapper><AgentChat /></LazyWrapper>}
           {view === 'tasks' && agentEnabled && <LazyWrapper><TaskMonitor /></LazyWrapper>}
           {view === 'confirmations' && agentEnabled && <LazyWrapper><Confirmations /></LazyWrapper>}
