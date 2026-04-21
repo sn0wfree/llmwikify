@@ -478,14 +478,11 @@ def _register_rest_routes(mcp: FastMCP, wiki: Wiki, agent: Any | None = None) ->
     async def wiki_read_page(request: Request) -> JSONResponse:
         page_name = request.path_params.get("page_name", "")
         try:
-            content = wiki.read_page(page_name)
+            page_data = wiki.read_page(page_name)
+            if "error" in page_data:
+                return JSONResponse(page_data, status_code=404)
             sink_info = wiki.query_sink.get_info_for_page(page_name)
-            return JSONResponse({
-                "page_name": page_name,
-                "content": content,
-                "file": f"wiki/{page_name}.md",
-                **sink_info,
-            })
+            return JSONResponse({**page_data, **sink_info})
         except Exception as e:
             return JSONResponse({"error": str(e), "status_code": 404}, status_code=404)
 
