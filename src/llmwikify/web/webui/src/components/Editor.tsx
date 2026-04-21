@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, WikiPage } from '../api';
+import { useToast } from './Toast';
 
 interface EditorProps {
   selectedPage: string | null;
@@ -9,6 +10,7 @@ interface EditorProps {
 }
 
 export function Editor({ selectedPage, onPageSelect }: EditorProps) {
+  const { addToast } = useToast();
   const [page, setPage] = useState<WikiPage | null>(null);
   const [content, setContent] = useState('');
   const [mode, setMode] = useState<'edit' | 'preview' | 'split'>('split');
@@ -34,7 +36,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
       }));
       setFileTree(tree);
     } catch {
-      // Fallback: empty tree
+      addToast('warning', '无法加载文件树');
     }
   }, []);
 
@@ -43,7 +45,9 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
       const data = await api.wiki.readPage(name);
       setPage(data);
       setContent(data.content);
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '未知错误';
+      addToast('error', `页面加载失败: ${msg}`);
       setPage(null);
       setContent('');
     }
@@ -55,7 +59,8 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
     try {
       await api.wiki.writePage(page.page_name, content);
     } catch (e) {
-      console.error('Save failed:', e);
+      const msg = e instanceof Error ? e.message : '未知错误';
+      addToast('error', `保存失败: ${msg}`);
     } finally {
       setSaving(false);
     }

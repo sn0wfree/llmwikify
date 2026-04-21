@@ -7,11 +7,14 @@ Design principle: "LLM does grunt work, human makes decisions"
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from .graph_export import build_graph, detect_communities
 from .index import WikiIndex
+
+logger = logging.getLogger(__name__)
 
 
 class GraphAnalyzer:
@@ -66,6 +69,7 @@ class GraphAnalyzer:
                 include_relations=True,
             )
         except Exception:
+            logger.warning("Graph build failed")
             return {"nodes": [], "edges": []}
 
     def _build_graph(self, graph_data: dict):
@@ -103,6 +107,7 @@ class GraphAnalyzer:
         try:
             pagerank = nx.pagerank(G.to_undirected(), weight="weight")
         except Exception:
+            logger.debug("PageRank computation failed")
             pagerank = {}
 
         # Degree centrality
@@ -110,6 +115,7 @@ class GraphAnalyzer:
             in_degree = dict(G.in_degree())
             out_degree = dict(G.out_degree())
         except Exception:
+            logger.debug("Degree computation failed")
             in_degree = {}
             out_degree = {}
 
@@ -145,6 +151,7 @@ class GraphAnalyzer:
         try:
             comm_result = detect_communities(self.wiki.index, algorithm="leiden")
         except Exception:
+            logger.warning("Community detection failed")
             return {"error": "Community detection failed"}
 
         communities = comm_result.get("communities", {})
@@ -228,7 +235,7 @@ class GraphAnalyzer:
                     if neighbor in node_community:
                         neighbor_communities.add(node_community[neighbor])
             except Exception:
-                pass
+                logger.debug("Neighbor iteration failed for node %s", node)
 
             if len(neighbor_communities) > 1:
                 bridges.append({
@@ -308,7 +315,7 @@ class GraphAnalyzer:
                     "suggestion": f"Consider creating entities/{concept}.md or concepts/{concept}.md",
                 })
         except Exception:
-            pass
+            logger.debug("Orphan concept lookup failed")
 
         return suggestions
 

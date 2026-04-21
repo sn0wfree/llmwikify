@@ -3,12 +3,15 @@
 import argparse
 import glob as glob_module
 import json
+import logging
 import os
 import re
 import sys
 from pathlib import Path
 
 from ..core import Wiki
+
+logger = logging.getLogger(__name__)
 
 
 class WikiCLI:
@@ -595,6 +598,7 @@ class WikiCLI:
                 if name != fpath[:-3]:
                     return True
         except Exception:
+            logger.warning("Index format check failed")
             return False
         return False
 
@@ -1675,8 +1679,7 @@ Examples:
             import yaml
             config = yaml.safe_load(config_file.read_text()) or {}
         except Exception:
-            # YAML parse error or import error, use defaults
-            pass
+            logger.warning("Failed to load config from %s", config_file)
 
     cli = WikiCLI(wiki_root, config=config)
 

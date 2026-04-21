@@ -1,8 +1,11 @@
 """Configuration management for llmwikify."""
 
 import copy
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Default configuration (embedded for zero-dependency)
 DEFAULT_CONFIG = {
@@ -85,8 +88,7 @@ def load_config(wiki_root: Path, config_file: str | None = None) -> dict[str, An
             # PyYAML not installed, use defaults
             pass
         except Exception:
-            # Config file has errors, use defaults
-            pass
+            logger.warning("Config file parse error, using defaults")
 
     return config
 
