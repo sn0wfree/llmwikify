@@ -217,13 +217,13 @@ class TestWiki:
             title="Test Article",
             metadata={"url": "https://example.com/article"}
         )
-        from llmwikify.core import wiki as wiki_module
-        orig_extract = wiki_module.extract
-        wiki_module.extract = lambda *a, **k: mock_result
+        from llmwikify.core import wiki_mixin_ingest as ingest_module
+        orig_extract = ingest_module.extract
+        ingest_module.extract = lambda *a, **k: mock_result
 
         result = wiki.ingest_source("https://example.com/article")
 
-        wiki_module.extract = orig_extract
+        ingest_module.extract = orig_extract
 
         assert 'error' not in result
         assert result['saved_to_raw'] == True
@@ -251,13 +251,13 @@ class TestWiki:
             title="Test Article",
             metadata={"url": "https://example.com/article"}
         )
-        from llmwikify.core import wiki as wiki_module
-        orig_extract = wiki_module.extract
-        wiki_module.extract = lambda *a, **k: mock_result
+        from llmwikify.core import wiki_mixin_ingest as ingest_module
+        orig_extract = ingest_module.extract
+        ingest_module.extract = lambda *a, **k: mock_result
 
         result = wiki.ingest_source("https://example.com/article")
 
-        wiki_module.extract = orig_extract
+        ingest_module.extract = orig_extract
 
         assert 'error' not in result
         assert result['already_exists'] == True
