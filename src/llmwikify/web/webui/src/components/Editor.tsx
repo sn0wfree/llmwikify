@@ -179,7 +179,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
           {mode === 'preview' && (
             <div className="w-full h-full overflow-y-auto p-4 markdown-body">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {content || '*No content*'}
+                {body || '*No content*'}
               </ReactMarkdown>
             </div>
           )}
@@ -192,7 +192,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
               />
               <div className="w-1/2 h-full overflow-y-auto p-4 markdown-body">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {content || '*No content*'}
+                  {body || '*No content*'}
                 </ReactMarkdown>
               </div>
             </div>
