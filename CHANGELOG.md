@@ -5,6 +5,38 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0] - 2026-04-21
+
+### Added — Phase 2: Wiki Mixin Refactoring
+- **12 new Mixin classes** extracted from `wiki.py` (2724 → 135 lines, -95%):
+  - `WikiUtilityMixin` — slug generation, timestamps, templates, page iteration
+  - `WikiLinkMixin` — wikilink resolution, fixing, inbound/outbound links
+  - `WikiSchemaMixin` — wiki.md read/update, page type mapping
+  - `WikiInitMixin` — directory setup, core files, MCP config, skill files
+  - `WikiPageIOMixin` — page CRUD, search, log, index file update
+  - `WikiSourceAnalysisMixin` — source analysis, caching, summary pages
+  - `WikiLLMMixin` — LLM calls with retry, source processing, synthesis
+  - `WikiRelationMixin` — relation engine, graph analysis, operations
+  - `WikiIngestMixin` — source ingestion, extraction, raw collection
+  - `WikiQueryMixin` — query pages, similarity matching, sink integration
+  - `WikiSynthesisMixin` — cross-source synthesis suggestions
+  - `WikiStatusMixin` — status reporting, recommendations, hints
+  - `WikiLintMixin` — health check (delegates to WikiAnalyzer)
+- **Public API unchanged** — all 879 Python tests + 38 frontend tests pass without modification
+- **Mixin composition** — `Wiki` class inherits from all 12 mixins in dependency order
+- **WikiAnalyzer preserved** — `WikiLintMixin` delegates to `WikiAnalyzer` (Phase 1 extraction)
+
+### Changed
+- `wiki.py` reduced from 2724 lines to 135 lines (only `__init__` + lazy properties)
+- `core/__init__.py` exports all 12 mixin classes alongside `Wiki`, `WikiIndex`, `QuerySink`, `WikiAnalyzer`
+- Test mock path updated for `extract` function (now in `wiki_mixin_ingest.py`)
+
+### Architecture
+- Mixin files total: 2603 lines across 12 files
+- Clear separation of concerns: each mixin has single responsibility
+- Independently testable: each mixin can be tested in isolation
+- Future-proof: easy to add/replace functionality without touching core
+
 ## [0.29.0] - 2026-04-17
 
 ### Added — Web UI P1 Integration

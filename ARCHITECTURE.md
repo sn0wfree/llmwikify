@@ -1,13 +1,13 @@
 # llmwikify Architecture
 
 > Technical architecture document for developers
-> **Version**: 0.29.0 | **Last Updated**: 2026-04-17 | **Tests**: 760 passing
+> **Version**: 0.30.0 | **Last Updated**: 2026-04-21 | **Tests**: 879+ passing
 
 ---
 
 ## Overview
 
-**llmwikify** is a modular Python package for building persistent, LLM-maintained knowledge bases. It evolved from a single-file implementation (v0.10.0, 1,965 lines) into a fully modular architecture with 22 CLI commands, 20 MCP tools, and 760+ tests.
+**llmwikify** is a modular Python package for building persistent, LLM-maintained knowledge bases. It evolved from a single-file implementation (v0.10.0, 1,965 lines) into a fully modular architecture with 22 CLI commands, 20 MCP tools, and 879+ tests.
 
 ### Design Principles
 
@@ -23,6 +23,57 @@
 
 ## Module Structure
 
+```
+src/llmwikify/
+├── __init__.py              # Package entry, __version__
+├── config.py                # Configuration system
+├── llm_client.py            # LLM API client (OpenAI-compatible)
+│
+├── core/                    # Core business logic
+│   ├── wiki.py              # Wiki Class (~135 lines) — orchestrator, inherits 12 mixins
+│   ├── wiki_mixin_utility.py      # Utility methods (slug, timestamps, templates)
+│   ├── wiki_mixin_link.py         # Wikilink resolution, fixing, inbound/outbound
+│   ├── wiki_mixin_schema.py       # wiki.md schema reading, updating, page types
+│   ├── wiki_mixin_init.py         # Initialization, directories, MCP config
+│   ├── wiki_mixin_page_io.py      # Page read/write, search, log, index update
+│   ├── wiki_mixin_source_analysis.py  # Source analysis, caching, summary pages
+│   ├── wiki_mixin_llm.py          # LLM calls with retry, source processing
+│   ├── wiki_mixin_relation.py     # Relation engine, graph analysis, operations
+│   ├── wiki_mixin_ingest.py       # Source ingestion, extraction, raw collection
+│   ├── wiki_mixin_query.py        # Query page creation, similarity, sink
+│   ├── wiki_mixin_synthesis.py    # Cross-source synthesis suggestions
+│   ├── wiki_mixin_status.py       # Status reporting, recommendations, hints
+│   ├── wiki_mixin_lint.py         # Health check (delegates to WikiAnalyzer)
+│   ├── wiki_analyzer.py           # WikiAnalyzer — standalone lint/recommend engine
+│   ├── index.py             # WikiIndex (FTS5 + references + relations)
+│   ├── query_sink.py        # QuerySink — sink buffer management
+│   ├── relation_engine.py   # Knowledge graph relations (SQLite)
+│   ├── graph_export.py      # Graph visualization + community detection
+│   ├── graph_analyzer.py    # GraphAnalyzer — PageRank, communities, suggestions
+│   ├── synthesis_engine.py  # SynthesisEngine — cross-source analysis
+│   ├── watcher.py           # File system watcher (watchdog)
+│   ├── prompt_registry.py   # YAML+Jinja2 prompt template system
+│   └── principle_checker.py # Prompt principle compliance checker
+│
+├── extractors/              # Content extractors
+│   ├── base.py              # ExtractedContent, detect_source_type(), extract()
+│   ├── text.py              # Text/HTML extraction
+│   ├── pdf.py               # PDF extraction (pymupdf)
+│   ├── web.py               # Web URL extraction (trafilatura)
+│   ├── youtube.py           # YouTube transcript extraction
+│   └── markitdown_extractor.py  # MarkItDown unified extractor
+│
+├── cli/                     # Command-line interface
+│   └── commands.py          # WikiCLI class (22 commands)
+│
+├── mcp/                     # MCP server
+│   └── server.py            # FastMCP server (20 tools)
+│
+├── prompts/                 # Prompt templates
+│   └── _defaults/           # 7 YAML prompt templates
+│
+└── web/                     # Web UI (optional)
+    └── server.py            # Starlette + Uvicorn
 ```
 src/llmwikify/
 ├── __init__.py              # Package entry, __version__
@@ -75,7 +126,22 @@ src/llmwikify/
 ┌────────────────────────┴────────────────────────────────────┐
 │                      Core Layer                              │
 │                                                              │
-│  Wiki (wiki.py) ── main orchestrator                        │
+│  Wiki (13 mixins) ── main orchestrator                      │
+│  ├── WikiUtilityMixin    (slug, timestamps, templates)      │
+│  ├── WikiLinkMixin       (wikilink resolution, fixing)      │
+│  ├── WikiSchemaMixin     (wiki.md read/update)              │
+│  ├── WikiInitMixin       (directories, MCP config)          │
+│  ├── WikiPageIOMixin     (page CRUD, search, index)         │
+│  ├── WikiSourceAnalysisMixin (source analysis, caching)     │
+│  ├── WikiLLMMixin        (LLM calls, retry)                 │
+│  ├── WikiRelationMixin   (relations, graph analysis)        │
+│  ├── WikiIngestMixin     (source ingestion, extraction)     │
+│  ├── WikiQueryMixin      (query pages, sink)                │
+│  ├── WikiSynthesisMixin  (cross-source synthesis)           │
+│  ├── WikiStatusMixin     (status, recommendations, hints)   │
+│  └── WikiLintMixin       (health check → WikiAnalyzer)      │
+│                                                              │
+│  WikiAnalyzer (composition) — read-only lint/recommend      │
 │  ├── WikiIndex (FTS5 + references + relations)              │
 │  ├── RelationEngine (knowledge graph)                       │
 │  ├── GraphAnalyzer (PageRank, communities, suggestions)     │
@@ -97,9 +163,31 @@ src/llmwikify/
 
 ## Core Components
 
-### 1. Wiki Class (`core/wiki.py`)
+### 1. Wiki Class (`core/wiki.py` + 12 Mixins)
 
-Main business logic orchestrator. Public API:
+Main business logic orchestrator. The `Wiki` class inherits from 12 specialized mixins:
+
+| Mixin | File | Responsibility |
+|-------|------|----------------|
+| `WikiUtilityMixin` | `wiki_mixin_utility.py` | Slug generation, timestamps, templates, page iteration |
+| `WikiLinkMixin` | `wiki_mixin_link.py` | Wikilink resolution, fixing, inbound/outbound links |
+| `WikiSchemaMixin` | `wiki_mixin_schema.py` | wiki.md read/update, page type mapping |
+| `WikiInitMixin` | `wiki_mixin_init.py` | Directory setup, core files, MCP config, skill files |
+| `WikiPageIOMixin` | `wiki_mixin_page_io.py` | Page CRUD, search, log, index file update |
+| `WikiSourceAnalysisMixin` | `wiki_mixin_source_analysis.py` | Source analysis, caching, summary pages |
+| `WikiLLMMixin` | `wiki_mixin_llm.py` | LLM calls with retry, source processing, synthesis |
+| `WikiRelationMixin` | `wiki_mixin_relation.py` | Relation engine, graph analysis, operations |
+| `WikiIngestMixin` | `wiki_mixin_ingest.py` | Source ingestion, extraction, raw collection |
+| `WikiQueryMixin` | `wiki_mixin_query.py` | Query pages, similarity matching, sink integration |
+| `WikiSynthesisMixin` | `wiki_mixin_synthesis.py` | Cross-source synthesis suggestions |
+| `WikiStatusMixin` | `wiki_mixin_status.py` | Status reporting, recommendations, hints |
+| `WikiLintMixin` | `wiki_mixin_lint.py` | Health check (delegates to WikiAnalyzer) |
+
+**Design**: Wiki class itself is ~135 lines (`__init__` + lazy properties). All business logic lives in mixins, enabling independent testing and clear separation of concerns. Public API unchanged.
+
+### 1b. WikiAnalyzer (`core/wiki_analyzer.py`)
+
+Standalone health check and recommendation engine. Uses composition (`WikiAnalyzer(wiki)`) rather than inheritance. Read-only analysis — never modifies wiki state.
 
 | Category | Key Methods |
 |----------|-------------|
@@ -237,11 +325,12 @@ conn.execute("PRAGMA cache_size = -64000")
 
 ## Testing
 
-- **760 tests** across 26+ test files, all passing
+- **879 Python tests** across 39+ test files, all passing
+- **38 frontend tests** across 8 test files (Vitest + React Testing Library)
 - pytest with coverage target >85%
 - Test isolation via temp directories
 - Optional dependency tests skipped gracefully (markitdown, graph)
 
 ---
 
-*Last updated: 2026-04-17 | Version: 0.28.0*
+*Last updated: 2026-04-21 | Version: 0.30.0*

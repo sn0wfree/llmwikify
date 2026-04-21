@@ -27,7 +27,7 @@ pytest --cov=src/llmwikify --cov-report=html
 open htmlcov/index.html
 ```
 
-**Target**: 760 tests passing, >85% code coverage.
+**Target**: 879+ Python tests + 38 frontend tests passing, >85% code coverage.
 
 ## Code Quality
 
@@ -48,15 +48,23 @@ All three must pass before submitting a PR. CI will enforce this automatically.
 
 ```
 src/llmwikify/
-├── core/              # Business logic (wiki.py, index.py, relation_engine.py, graph_analyzer.py, synthesis_engine.py)
+├── core/              # Business logic
+│   ├── wiki.py              # Wiki class (135 lines, inherits 12 mixins)
+│   ├── wiki_mixin_*.py      # 12 mixin files (2603 lines total)
+│   ├── wiki_analyzer.py     # Standalone lint/recommend engine
+│   ├── index.py             # WikiIndex (FTS5 + references)
+│   ├── relation_engine.py   # Knowledge graph
+│   ├── graph_analyzer.py    # PageRank, communities
+│   ├── synthesis_engine.py  # Cross-source analysis
+│   └── query_sink.py        # Sink buffer management
 ├── extractors/        # Content extractors (PDF, web, YouTube, MarkItDown)
 ├── cli/               # CLI commands (22 total)
-├── mcp/               # MCP server (18 tools)
+├── mcp/               # MCP server (20 tools)
 ├── prompts/           # YAML+Jinja2 prompt templates
 ├── web/               # Web UI (optional)
 ├── config.py          # Configuration system
 └── llm_client.py      # LLM API client
-tests/                 # Test suite (760 tests)
+tests/                 # Test suite (879+ Python tests + 38 frontend tests)
 docs/                  # Documentation
 examples/              # Example configurations
 ```

@@ -5,7 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 760 passing](https://img.shields.io/badge/tests-760%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Tests: 879+ passing](https://img.shields.io/badge/tests-879%2B%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 
 ---
 
@@ -272,7 +272,7 @@ See [Configuration Guide](docs/CONFIGURATION_GUIDE.md) for full options.
 ## 🧪 Testing
 
 ```bash
-pytest                           # All 760 tests
+pytest                           # All 879 Python tests
 pytest --cov=src/llmwikify       # With coverage
 pytest tests/test_p1_features.py # Specific module
 ```
