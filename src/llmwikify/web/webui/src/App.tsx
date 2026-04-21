@@ -5,6 +5,7 @@ import { SearchBar } from './components/SearchBar';
 import { HealthStatus } from './components/HealthStatus';
 import { Insights } from './components/Insights';
 import { Notifications } from './components/Notifications';
+import { ToastProvider } from './components/Toast';
 import { api, WikiStatus, SinkStatus } from './api';
 
 const KnowledgeGrowth = lazy(() => import('./components/KnowledgeGrowth').then(m => ({ default: m.KnowledgeGrowth })));
@@ -52,6 +53,7 @@ function App() {
   }, [loadStatus]);
 
   return (
+    <ToastProvider>
     <div className="flex h-screen bg-slate-900 text-slate-100">
       {/* Sidebar */}
       <aside
@@ -172,6 +174,7 @@ function App() {
         </div>
       </main>
     </div>
+    </ToastProvider>
   );
 }
 

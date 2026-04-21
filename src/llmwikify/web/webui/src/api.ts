@@ -110,7 +110,17 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     headers['Authorization'] = `Bearer ${API_TOKEN}`;
   }
   const res = await fetch(`${API_BASE}${endpoint}`, { headers, ...options });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    let errorMessage = `API error: ${res.status}`;
+    try {
+      const body = await res.json();
+      errorMessage = body.error || body.message || body.detail || errorMessage;
+    } catch {
+      // Response body is not JSON, use status message
+    }
+    throw new Error(errorMessage);
+  }
+  if (res.status === 204) return undefined as unknown as T;
   return res.json();
 }
 

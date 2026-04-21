@@ -1,6 +1,7 @@
 """Wiki core business logic."""
 
 import json
+import logging
 import re
 import warnings
 from datetime import datetime, timezone
@@ -11,6 +12,8 @@ from ..config import get_db_path, get_directory, load_config
 from ..extractors import extract
 from .index import WikiIndex
 from .query_sink import QuerySink
+
+logger = logging.getLogger(__name__)
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 VALID_AGENTS = ("opencode", "claude", "codex", "generic")
@@ -136,7 +139,7 @@ class Wiki:
             if file_path:
                 return self.wiki_dir / file_path
         except Exception:
-            pass
+            logger.debug("Index lookup failed for wikilink: %s", target)
 
         return None
 
@@ -1316,603 +1319,53 @@ class Wiki:
         return type_to_dir
 
     def _detect_dated_claims(self) -> list[dict]:
-        """Find year mentions in pages that predate latest raw source by 3+ years.
-        
-        Returns critical hints (max 3) for LLM to evaluate.
-        """
-        hints = []
-        now = datetime.now(timezone.utc)
-        current_year = now.year
-
-        # Find latest year mentioned in raw sources
-        latest_source_year = 0
-        if self.raw_dir.exists():
-            for src in self.raw_dir.rglob("*"):
-                if not src.is_file():
-                    continue
-                content = src.read_text(errors="ignore")
-                years = re.findall(r'\b(20\d{2})\b', content)
-                if years:
-                    latest_source_year = max(latest_source_year, max(int(y) for y in years))
-
-        if latest_source_year == 0:
-            return hints
-
-        # Scan wiki pages for dated claims
-        for page in self._wiki_pages():
-            page_name = self._page_display_name(page)
-            if page_name.startswith("Query:"):
-                continue
-
-            content = page.read_text()
-            years_in_page = re.findall(r'\b(20\d{2})\b', content)
-
-            for year_str in years_in_page:
-                year = int(year_str)
-                # Check if year is between 2018 and current_year-3
-                if 2018 <= year <= current_year - 3:
-                    if latest_source_year - year >= 3:
-                        hints.append({
-                            "type": "dated_claim",
-                            "page": page_name,
-                            "file": str(page),
-                            "claim_year": year,
-                            "latest_source_year": latest_source_year,
-                            "gap_years": latest_source_year - year,
-                            "observation": (
-                                f"'{page_name}' references {year}, but the latest raw source is from {latest_source_year}. "
-                                f"The gap is {latest_source_year - year} years. "
-                                f"Content may be outdated."
-                            ),
-                        })
-                        break  # One hint per page
-
-            if len(hints) >= 3:
-                break
-
-        return hints[:3]
+        """Find year mentions in pages that predate latest raw source by 3+ years."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._detect_dated_claims()
 
     def _detect_query_page_overlap(self) -> list[dict]:
-        """Find Query: pages with >=85% keyword Jaccard overlap.
-        
-        Returns informational hints (max 2) for LLM to evaluate.
-        """
-        hints = []
-        stop_words = {"what", "is", "the", "a", "an", "how", "do", "does", "why",
-                       "can", "could", "would", "should", "will", "did", "are", "was",
-                       "were", "be", "been", "being", "have", "has", "had", "of", "to",
-                       "in", "for", "on", "with", "at", "by", "from", "and", "or", "not",
-                       "but", "if", "then", "than", "so", "as", "about", "compare"}
-
-        if not self.wiki_dir.exists():
-            return hints
-
-        query_pages = []
-        for page in self.wiki_dir.rglob("*.md"):
-            if '.sink' in str(page):
-                continue
-            page_name = page.stem
-            if not page_name.startswith("Query:"):
-                continue
-
-            keywords = set(
-                w.lower().strip(".,;:!?\"'()[]{}")
-                for w in page_name.replace("Query:", "").split()
-                if w.lower() not in stop_words and len(w) > 2
-            )
-
-            if keywords:
-                query_pages.append({
-                    "page_name": page_name,
-                    "keywords": keywords,
-                    "file": str(page),
-                })
-
-        # Compare all pairs
-        seen_pairs = set()
-        for i in range(len(query_pages)):
-            for j in range(i + 1, len(query_pages)):
-                p1 = query_pages[i]
-                p2 = query_pages[j]
-
-                union = len(p1["keywords"] | p2["keywords"])
-                if union == 0:
-                    continue
-
-                overlap = len(p1["keywords"] & p2["keywords"])
-                jaccard = overlap / union
-
-                if jaccard >= 0.85:
-                    pair_key = tuple(sorted([p1["page_name"], p2["page_name"]]))
-                    if pair_key not in seen_pairs:
-                        seen_pairs.add(pair_key)
-                        hints.append({
-                            "type": "topic_overlap",
-                            "page_a": p1["page_name"],
-                            "page_b": p2["page_name"],
-                            "jaccard_score": round(jaccard, 3),
-                            "shared_keywords": sorted(p1["keywords"] & p2["keywords"]),
-                            "observation": (
-                                f"'{p1['page_name']}' and '{p2['page_name']}' share {len(p1['keywords'] & p2['keywords'])} keywords "
-                                f"(Jaccard: {jaccard:.0%}). They may cover overlapping topics."
-                            ),
-                        })
-
-            if len(hints) >= 2:
-                break
-
-        return hints[:2]
+        """Find Query: pages with >=85% keyword Jaccard overlap."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._detect_query_page_overlap()
 
     def _detect_missing_cross_refs(self) -> list[dict]:
-        """Find concepts mentioned in 2+ pages but not wikilinked.
-        
-        Returns informational hints (max 3) for LLM to evaluate.
-        """
-        hints = []
-
-        if not self.wiki_dir.exists():
-            return hints
-
-        # Collect all existing wiki page names as potential concepts
-        existing_pages = set()
-        for page in self._wiki_pages():
-            existing_pages.add(self._page_display_name(page))
-
-        # Track concept mentions: concept -> list of pages that mention it without linking
-        concept_mentions: dict[str, list[str]] = {}
-
-        for page in self._wiki_pages():
-            page_name = self._page_display_name(page)
-
-            content = page.read_text()
-
-            # Find existing wikilinks in this page
-            wikilinks = set()
-            for link in re.findall(r'\[\[(.*?)\]\]', content):
-                target = link.split('|')[0].split('#')[0].strip()
-                wikilinks.add(target)
-
-            # Strip all wikilinks before searching for plain-text mentions
-            # This prevents false positives like [[concepts/Volatility Surface]]
-            # being matched as a mention of "concepts/Volatility"
-            content_text = re.sub(r'\[\[.*?\]\]', '', content)
-
-            # Check if other page names are mentioned in text (case-insensitive)
-            for candidate in existing_pages:
-                if candidate == page_name:
-                    continue
-                if candidate in wikilinks:
-                    continue  # Already linked
-
-                # Check if candidate name appears in plain text (word boundary match)
-                pattern = r'\b' + re.escape(candidate) + r'\b'
-                if re.search(pattern, content_text, re.IGNORECASE):
-                    if candidate not in concept_mentions:
-                        concept_mentions[candidate] = []
-                    concept_mentions[candidate].append(page_name)
-
-        # Filter to concepts mentioned in 2+ pages
-        for concept, pages in sorted(concept_mentions.items(), key=lambda x: -len(x[1])):
-            if len(pages) >= 2:
-                hints.append({
-                    "type": "missing_cross_ref",
-                    "concept": concept,
-                    "mentioning_pages": pages[:5],  # Max 5 pages listed
-                    "mention_count": len(pages),
-                    "observation": (
-                        f"'{concept}' is mentioned in {len(pages)} pages ({', '.join(pages[:3])}"
-                        f"{'...' if len(pages) > 3 else ''}) but not linked. "
-                        f"Consider adding [[{concept}]] wikilinks."
-                    ),
-                })
-
-            if len(hints) >= 3:
-                break
-
-        return hints[:3]
+        """Find concepts mentioned in 2+ pages but not wikilinked."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._detect_missing_cross_refs()
 
     def _detect_potential_contradictions(self) -> list[dict]:
-        """Scan wiki pages for potential contradictions.
-        
-        Returns observational hints (max 3) for LLM to evaluate.
-        Detection strategies:
-        - value_conflict: Same entity has different values (e.g., revenue: $10M vs $15M)
-        - year_conflict: Same event has different years
-        - negation_pattern: One page asserts X, another asserts not X
-        """
-        contradictions = []
-        seen_pairs = set()
-
-        if not self.wiki_dir.exists():
-            return contradictions
-
-        # Collect all pages content
-        pages_content = {}
-        for page in self._wiki_pages():
-            page_name = self._page_display_name(page)
-            pages_content[page_name] = page.read_text()
-
-        # Strategy 1: Extract key-value pairs and find conflicts
-        entity_facts: dict[str, dict[str, list[tuple]]] = {}
-        for page_name, content in pages_content.items():
-            # Match simple key: value patterns (one per line)
-            for line in content.split('\n'):
-                line = line.strip().lstrip('- ').strip()
-                if ':' in line and not line.startswith('#') and not line.startswith('http'):
-                    parts = line.split(':', 1)
-                    if len(parts) == 2:
-                        key = parts[0].strip().lower()
-                        value = parts[1].strip()
-                        if len(key) >= 2 and len(key) <= 30 and len(value) >= 2 and len(value) <= 50:
-                            if key not in entity_facts:
-                                entity_facts[key] = {}
-                            if page_name not in entity_facts[key]:
-                                entity_facts[key][page_name] = []
-                            entity_facts[key][page_name].append(value)
-
-        # Find conflicting values across pages
-        for attr, page_values in entity_facts.items():
-            if len(page_values) < 2:
-                continue
-            all_values = []
-            for page_name, values in page_values.items():
-                for v in values:
-                    all_values.append((page_name, v))
-
-            # Check if values differ significantly
-            unique_values = set(v.lower() for _, v in all_values)
-            if len(unique_values) >= 2:
-                pair_key = tuple(sorted([p for p, _ in all_values]))
-                if pair_key not in seen_pairs:
-                    seen_pairs.add(pair_key)
-                    values_str = ", ".join(f"{p}={v}" for p, v in all_values[:3])
-                    contradictions.append({
-                        "type": "value_conflict",
-                        "attribute": attr,
-                        "pages": [{"page": p, "value": v} for p, v in all_values[:4]],
-                        "observation": f"Pages reference different values for '{attr}': {values_str}",
-                    })
-
-            if len(contradictions) >= 3:
-                break
-
-        # Strategy 2: Year conflicts (e.g., "launched in 2020" vs "launched in 2022")
-        year_claims: dict[str, list[dict]] = {}
-        year_pattern = re.compile(
-            r'([^\n]{3,30}?)\s+(?:launched|founded|started|established|created|born|died|closed|shutdown|ended)\s+(?:in\s+)?(20\d{2}|19\d{2})',
-            re.IGNORECASE
-        )
-        for page_name, content in pages_content.items():
-            for line in content.split('\n'):
-                for match in year_pattern.finditer(line):
-                    entity = match.group(1).strip()
-                    year = match.group(2)
-                    if entity and len(entity) <= 30:
-                        if entity not in year_claims:
-                            year_claims[entity] = []
-                        year_claims[entity].append({"page": page_name, "year": year})
-
-        for entity, claims in year_claims.items():
-            years = set(c["year"] for c in claims)
-            if len(years) >= 2:
-                claims_str = ", ".join(f"{c['page']}={c['year']}" for c in claims[:3])
-                contradictions.append({
-                    "type": "year_conflict",
-                    "entity": entity,
-                    "claims": claims,
-                    "observation": f"'{entity}' has conflicting year claims: {claims_str}",
-                })
-
-            if len(contradictions) >= 3:
-                break
-
-        # Strategy 3: Negation patterns (X is Y vs X is not Y)
-        negation_claims: dict[str, list[dict]] = {}
-        for page_name, content in pages_content.items():
-            for line in content.split('\n'):
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                # Find assertions with and without negation
-                assertion_pattern = re.compile(
-                    r'([\w\s]{3,25}?)\s+(?:is|are|was|were)\s+(?:not\s+|no\s+longer\s+)?([\w\s]{3,30}?)(?:\.|,|;|$)',
-                    re.IGNORECASE
-                )
-                for match in assertion_pattern.finditer(line):
-                    subject = match.group(1).strip()
-                    predicate = match.group(2).strip()
-                    full_match = match.group(0).lower()
-                    is_negated = bool(re.search(r'\b(?:is|are|was|were)\s+(?:not|no longer)', full_match))
-
-                    key = subject.lower()
-                    if key not in negation_claims:
-                        negation_claims[key] = []
-                    negation_claims[key].append({
-                        "page": page_name,
-                        "predicate": predicate,
-                        "negated": is_negated,
-                    })
-
-        for subject, claims in negation_claims.items():
-            has_positive = any(not c["negated"] for c in claims)
-            has_negative = any(c["negated"] for c in claims)
-            if has_positive and has_negative:
-                contradictions.append({
-                    "type": "negation_pattern",
-                    "subject": subject,
-                    "claims": claims,
-                    "observation": (
-                        f"'{subject}' has both affirmative and negative claims across pages"
-                    ),
-                })
-
-            if len(contradictions) >= 3:
-                break
-
-        return contradictions[:3]
+        """Scan wiki pages for potential contradictions."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._detect_potential_contradictions()
 
     def _detect_data_gaps(self) -> list[dict]:
-        """Detect potential data gaps in wiki pages.
-        
-        Returns observational hints (max 3) for LLM to evaluate.
-        Detection strategies:
-        - unsourced_claim: Page has assertions but no ## Sources section
-        - vague_temporal: Page uses vague time references (recently, soon, etc.)
-        - incomplete_entity: Page mentions entity but lacks key attributes
-        """
-        gaps = []
-
-        if not self.wiki_dir.exists():
-            return gaps
-
-        for page in self._wiki_pages():
-            page_name = self._page_display_name(page)
-            if page_name.startswith("Query:"):
-                continue
-
-            content = page.read_text()
-
-            # Strategy 1: Unsourced claims - page has assertions but no sources section
-            has_sources_section = bool(re.search(r'^#{1,3}\s+Sources', content, re.MULTILINE | re.IGNORECASE))
-            has_inline_citations = bool(re.search(r'\[Source[^\]]*\]\(', content))
-
-            # Check for assertion-like content (non-empty, non-header lines)
-            lines = content.split('\n')
-            assertion_lines = [
-                line.strip() for line in lines
-                if line.strip()
-                and not line.startswith('#')
-                and not line.startswith('---')
-                and not line.startswith('[')
-                and len(line.strip()) > 20
-            ]
-
-            if len(assertion_lines) >= 3 and not has_sources_section and not has_inline_citations:
-                gaps.append({
-                    "type": "unsourced_claims",
-                    "page": page_name,
-                    "assertion_count": len(assertion_lines),
-                    "observation": (
-                        f"'{page_name}' contains {len(assertion_lines)} assertion(s) "
-                        f"without cited sources"
-                    ),
-                })
-
-            if len(gaps) >= 3:
-                break
-
-            # Strategy 2: Vague temporal references
-            vague_time_words = re.findall(
-                r'\b(recently|soon|upcoming|former|previous|last year|next year|in the past|currently|nowadays|these days)\b',
-                content, re.IGNORECASE
-            )
-            if vague_time_words:
-                gaps.append({
-                    "type": "vague_temporal",
-                    "page": page_name,
-                    "vague_references": list(set(w.lower() for w in vague_time_words))[:5],
-                    "observation": (
-                        f"'{page_name}' uses vague temporal references: "
-                        f"{', '.join(set(w.lower() for w in vague_time_words[:3]))}"
-                    ),
-                })
-
-            if len(gaps) >= 3:
-                break
-
-            # Strategy 3: Incomplete entity - mentions entities without details
-            # Look for entity names mentioned but no follow-up details
-            entity_mentions = re.findall(r'\[\[([^\]|#]+)\]\]', content)
-            for mentioned in entity_mentions:
-                mentioned_clean = mentioned.strip()
-                if not mentioned_clean:
-                    continue
-                # Check if there's a dedicated page for this entity
-                mentioned_path = self.wiki_dir / f"{mentioned_clean}.md"
-                if not mentioned_path.exists():
-                    # Entity mentioned but no page exists - could be a gap
-                    pass  # This is already covered by missing_cross_ref
-
-        return gaps[:3]
+        """Detect potential data gaps in wiki pages."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._detect_data_gaps()
 
     def _detect_outdated_pages(self) -> list[dict]:
-        """Detect pages that may be outdated based on source dates.
-
-        Returns observational hints (max 3) for LLM to evaluate.
-        Detection strategies:
-        - old_source_only: Page only cites sources older than 1 year
-        - superseded_claim: Page contains claims superseded by newer sources
-        """
-        outdated = []
-        current_year = datetime.now(timezone.utc).year
-
-        if not self.wiki_dir.exists():
-            return outdated
-
-        for page in self._wiki_pages():
-            page_name = self._page_display_name(page)
-            if page_name.startswith("Query:"):
-                continue
-
-            content = page.read_text()
-
-            # Strategy 1: Check source dates
-            source_refs = re.findall(r'\(raw/([^)]+)\)', content)
-            if source_refs:
-                # Look for year mentions in page
-                years_in_page = re.findall(r'\b(20\d{2})\b', content)
-                if years_in_page:
-                    latest_year = max(int(y) for y in years_in_page)
-                    if current_year - latest_year >= 2:
-                        outdated.append({
-                            "type": "potentially_outdated",
-                            "page": page_name,
-                            "latest_year_mentioned": latest_year,
-                            "current_year": current_year,
-                            "observation": (
-                                f"'{page_name}' references {latest_year} as latest date. "
-                                f"May need review with newer sources."
-                            ),
-                        })
-
-            if len(outdated) >= 3:
-                break
-
-        return outdated[:3]
+        """Detect pages that may be outdated based on source dates."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._detect_outdated_pages()
 
     def _detect_knowledge_gaps(self) -> list[dict]:
-        """Detect knowledge gaps across the wiki.
-
-        Returns observational hints (max 3) for LLM to evaluate.
-        Detection strategies:
-        - unreferenced_entity: Entity in relations but no wiki page
-        - topic_without_sources: Topic page with no cited sources
-        - missing_cross_source: Topic mentioned in multiple sources but no synthesis page
-        """
-        gaps = []
-
-        if not self.wiki_dir.exists():
-            return gaps
-
-        # Strategy 1: Unreferenced entities from relation engine
-        try:
-            engine = self.get_relation_engine()
-            orphan_concepts = engine.find_orphan_concepts()
-            for concept in orphan_concepts[:3]:
-                gaps.append({
-                    "type": "unreferenced_entity",
-                    "concept": concept,
-                    "observation": f"'{concept}' is in the knowledge graph but has no wiki page",
-                    "suggestion": f"Consider creating a page for '{concept}'",
-                })
-        except Exception:
-            pass
-
-        # Strategy 2: Source pages with no outbound links
-        sources_dir = self.wiki_dir / "sources"
-        if sources_dir.exists():
-            for source_page in sources_dir.rglob("*.md"):
-                page_name = self._page_display_name(source_page)
-                content = source_page.read_text()
-                wikilinks = re.findall(r'\[\[(.*?)\]\]', content)
-                if not wikilinks:
-                    gaps.append({
-                        "type": "isolated_source",
-                        "page": page_name,
-                        "observation": f"Source page '{page_name}' has no wikilinks to other pages",
-                        "suggestion": "Consider adding cross-references to related concepts/entities",
-                    })
-
-                if len(gaps) >= 3:
-                    break
-
-        return gaps[:3]
+        """Detect knowledge gaps across the wiki."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._detect_knowledge_gaps()
 
     def _detect_redundancy(self) -> list[dict]:
-        """Detect potentially redundant or overlapping content.
-
-        Returns observational hints (max 2) for LLM to evaluate.
-        Detection strategies:
-        - similar_pages: Pages with very similar names or content
-        - duplicate_sources: Multiple source pages citing the same raw file
-        """
-        redundancy = []
-        pages = self._wiki_pages()
-
-        if not pages:
-            return redundancy
-
-        # Strategy 1: Similar page names (simple heuristic)
-        page_names = [self._page_display_name(p) for p in pages]
-        for i, name1 in enumerate(page_names):
-            for name2 in page_names[i+1:]:
-                # Check if one name contains the other
-                if (name1.lower() in name2.lower() or name2.lower() in name1.lower()):
-                    if len(name1) > 5 and len(name2) > 5:  # Ignore short names
-                        redundancy.append({
-                            "type": "similar_page_names",
-                            "page_a": name1,
-                            "page_b": name2,
-                            "observation": (
-                                f"Pages '{name1}' and '{name2}' have similar names. "
-                                f"Consider merging if they cover the same topic."
-                            ),
-                        })
-
-            if len(redundancy) >= 2:
-                break
-
-        return redundancy[:2]
+        """Detect potentially redundant or overlapping content."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._detect_redundancy()
 
     def _llm_generate_investigations(
         self,
         contradictions: list[dict],
         data_gaps: list[dict],
     ) -> dict:
-        """Use LLM to generate investigation suggestions.
-        
-        Returns dict with suggested_questions and suggested_sources.
-        Only called when lint(generate_investigations=True).
-        """
-        try:
-            from ..llm_client import LLMClient
-
-            client = LLMClient.from_config(self.config)
-        except (ImportError, ValueError, OSError):
-            return {
-                "suggested_questions": [],
-                "suggested_sources": [],
-                "warning": "LLM client not available",
-            }
-
-        registry = self._get_prompt_registry()
-
-        total_pages = len(self._wiki_pages()) if self.wiki_dir.exists() else 0
-
-        variables = {
-            "contradictions_json": json.dumps(contradictions, indent=2),
-            "data_gaps_json": json.dumps(data_gaps, indent=2),
-            "total_pages": total_pages,
-        }
-
-        messages = registry.get_messages("investigate_lint", **variables)
-        params = registry.get_params("investigate_lint")
-
-        try:
-            result = client.chat_json(messages, **params)
-            if isinstance(result, dict):
-                return {
-                    "suggested_questions": result.get("suggested_questions", []),
-                    "suggested_sources": result.get("suggested_sources", []),
-                }
-        except (ConnectionError, TimeoutError, ValueError, OSError):
-            pass
-
-        return {
-            "suggested_questions": [],
-            "suggested_sources": [],
-            "warning": "LLM investigation generation failed",
-        }
+        """Use LLM to generate investigation suggestions."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._llm_generate_investigations(contradictions, data_gaps)
 
     def _compute_content_hash(self, source_path: str) -> str:
         """Compute SHA-256 hash of a source file's content."""
@@ -1961,7 +1414,7 @@ class Wiki:
 
             page_path.write_text(content)
         except Exception:
-            pass  # Non-critical: cache failure should not break ingest
+            logger.warning("Failed to cache source analysis for %s", page_path)
 
     def _get_cached_source_analysis(self, page_path: Path) -> dict | None:
         """Extract cached analysis from Source summary page."""
@@ -1971,7 +1424,7 @@ class Wiki:
             if match:
                 return json.loads(match.group(1))
         except Exception:
-            pass
+            logger.debug("Failed to parse cached analysis for %s", page_path)
         return None
 
     def analyze_source(self, source_path: str, force: bool = False) -> dict:
@@ -2038,121 +1491,19 @@ class Wiki:
         return analysis
 
     def _build_lint_context(self, limit: int = 20) -> str:
-        """Build minimal context for LLM lint analysis.
-
-        Components:
-        - wiki.md full text
-        - existing page names list
-        - source file summary with analysis cache
-        - orphan concepts from relation engine
-        """
-        parts = []
-
-        if self.wiki_md_file.exists():
-            parts.append(f"=== WIKI SCHEMA (wiki.md) ===\n{self.wiki_md_file.read_text()}")
-
-        pages = self._get_existing_page_names()
-        pages_section = f"\n=== EXISTING PAGES ({len(pages)} total) ===\n"
-        for p in sorted(pages)[:100]:
-            pages_section += f"  - {p}\n"
-        if len(pages) > 100:
-            pages_section += f"  ... and {len(pages) - 100} more\n"
-        parts.append(pages_section)
-
-        raw_files = list(self.raw_dir.rglob("*")) if self.raw_dir.exists() else []
-        raw_files = [f for f in raw_files if f.is_file()]
-        if raw_files:
-            src_section = f"\n=== SOURCE ANALYSIS ({len(raw_files)} total) ===\n"
-            not_analyzed = []
-
-            for f in sorted(raw_files)[:limit]:
-                rel = str(f.relative_to(self.root))
-                source_page = self._find_source_summary_page(rel)
-
-                if source_page and source_page.exists():
-                    cached = self._get_cached_source_analysis(source_page)
-                    if cached:
-                        data = cached.get('data', {})
-                        entities = [e["name"] for e in data.get("entities", [])[:5]]
-                        suggested = [f'{s["name"]}({s["type"]})' for s in data.get("suggested_pages", [])[:3]]
-                        src_section += f"  - {rel}\n"
-                        if entities:
-                            src_section += f"    Entities: {', '.join(entities)}\n"
-                        if suggested:
-                            src_section += f"    Suggested pages: {', '.join(suggested)}\n"
-                    else:
-                        src_section += f"  - {rel} [NOT ANALYZED]\n"
-                        not_analyzed.append(rel)
-                else:
-                    src_section += f"  - {rel} [NO SOURCE PAGE]\n"
-                    not_analyzed.append(rel)
-
-            if len(raw_files) > limit:
-                src_section += f"  ... and {len(raw_files) - limit} more\n"
-
-            if not_analyzed:
-                src_section += f"\n=== UNANALYZED SOURCES ({len(not_analyzed)}) ===\n"
-                src_section += f"Run: wiki_analyze_source(source_path) or CLI: llmwikify analyze-source --all\n"
-
-            parts.append(src_section)
-
-        try:
-            engine = self.get_relation_engine()
-            orphans = engine.find_orphan_concepts()
-            if orphans:
-                orphan_section = "\n=== ORPHAN CONCEPTS (in relations but no wiki page) ===\n"
-                for c in orphans[:20]:
-                    orphan_section += f"  - {c}\n"
-                if len(orphans) > 20:
-                    orphan_section += f"  ... and {len(orphans) - 20} more\n"
-                parts.append(orphan_section)
-        except Exception:
-            pass
-
-        return "\n\n".join(parts)
+        """Build minimal context for LLM lint analysis."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._build_lint_context(limit)
 
     def _llm_detect_gaps(self, context: str) -> list[dict]:
         """Call LLM to detect gaps between wiki schema and current state."""
-        try:
-            from ..llm_client import LLMClient
-            client = LLMClient.from_config(self.config)
-        except (ImportError, ValueError, OSError):
-            return self._fallback_detect_gaps()
-
-        registry = self._get_prompt_registry()
-
-        try:
-            messages = registry.get_messages("direct_lint", lint_context=context)
-            params = registry.get_api_params("direct_lint")
-            result = client.chat_json(messages, **params)
-
-            if isinstance(result, list):
-                return result
-            elif isinstance(result, dict) and "gaps" in result:
-                return result["gaps"]
-        except (ConnectionError, TimeoutError, ValueError, OSError):
-            pass
-
-        return self._fallback_detect_gaps()
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._llm_detect_gaps(context)
 
     def _fallback_detect_gaps(self) -> list[dict]:
         """Basic gap detection without LLM."""
-        gaps = []
-
-        try:
-            engine = self.get_relation_engine()
-            for concept in engine.find_orphan_concepts():
-                gaps.append({
-                    "type": "orphan_concept",
-                    "concept": concept,
-                    "note": "Detected without LLM",
-                })
-        except Exception:
-            pass
-
-        gaps.extend(self._detect_missing_cross_refs())
-
-        return gaps
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._fallback_detect_gaps()
 
     def lint(
         self,
@@ -2161,101 +1512,30 @@ class Wiki:
         force: bool = False,
         generate_investigations: bool = False,
     ) -> dict:
-        """Health check the wiki with schema-aware gap detection.
+        """Health check the wiki with schema-aware gap detection."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self).lint(
+            mode=mode, limit=limit, force=force,
+            generate_investigations=generate_investigations,
+        )
 
-        Args:
-            mode: "check" (detect only) or "fix" (reserved for future auto-repair).
-            limit: Max LLM-detected issues to return.
-            force: Force re-detection (reserved for future cache bypass).
-            generate_investigations: If True, use LLM to suggest investigations.
+    def recommend(self) -> dict:
+        """Generate smart recommendations."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self).recommend()
 
-        Note:
-            mode="fix" and force=True are reserved for future implementation.
-            Currently both modes are accepted but have no additional effect beyond
-            their reflection in the returned "mode" field.
+    def hint(self) -> dict:
+        """Generate smart suggestions for wiki improvement.
+
+        Deprecated: Use `lint(format="brief")` instead.
         """
-        issues = []
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self).hint()
 
-        # Check for broken links
-        for page in self._wiki_pages():
-            content = page.read_text()
-            links = re.findall(r'\[\[(.*?)\]\]', content)
-            for link in links:
-                target = link.split('|')[0].split('#')[0].strip()
-                if target in (self._index_page_name, self._log_page_name):
-                    continue
-                if self._resolve_wikilink_target(target) is None:
-                    issues.append({
-                        "type": "broken_link",
-                        "page": self._page_display_name(page),
-                        "link": target,
-                        "file": str(page),
-                    })
-
-        # Check for orphan pages
-        for page in self._wiki_pages():
-            page_name = self._page_display_name(page)
-
-            if self._should_exclude_orphan(page_name, page):
-                continue
-
-            inbound = self.index.get_inbound_links(page_name)
-            if not inbound:
-                issues.append({
-                    "type": "orphan_page",
-                    "page": page_name,
-                    "file": str(page),
-                })
-
-        sink_status = self.query_sink.status()
-        sink_warnings = []
-
-        if isinstance(sink_status, dict) and 'sinks' in sink_status:
-            for sink in sink_status['sinks']:
-                if sink.get('urgency') in ('stale', 'aging'):
-                    sink_warnings.append({
-                        "type": "stale_sink",
-                        "page_name": sink['page_name'],
-                        "entry_count": sink['entry_count'],
-                        "days_old": sink.get('days_since_last_entry', 0),
-                        "urgency": sink['urgency'],
-                        "suggestion": f"Review and merge {sink['entry_count']} pending entries",
-                    })
-
-        # LLM-enhanced gap detection
-        context = self._build_lint_context()
-        llm_gaps = self._llm_detect_gaps(context)
-        llm_gaps = llm_gaps[:limit]
-
-        # Merge LLM gaps with rule-based issues
-        all_issues = issues + llm_gaps
-
-        # Generate hints (clue-based, non-mandatory)
-        critical_hints = self._detect_dated_claims()
-        informational_hints = []
-        informational_hints.extend(self._detect_query_page_overlap())
-        informational_hints.extend(self._detect_missing_cross_refs())
-
-        # Enforce limits: critical max 3, informational max 5
-        critical_hints = critical_hints[:3]
-        informational_hints = informational_hints[:5]
-
-        # Generate investigations (v0.16.0)
-        contradictions = self._detect_potential_contradictions()
-        data_gaps = self._detect_data_gaps()
-
-        # P1.2: Smart Lint 2.0 — additional detections
-        outdated_pages = self._detect_outdated_pages()
-        knowledge_gaps = self._detect_knowledge_gaps()
-        redundancy_alerts = self._detect_redundancy()
-
-        investigations = {
-            "contradictions": contradictions,
-            "data_gaps": data_gaps,
-            "outdated_pages": outdated_pages,
-            "knowledge_gaps": knowledge_gaps,
-            "redundancy_alerts": redundancy_alerts,
-        }
+    def _generate_hints(self) -> dict:
+        """Internal: generate smart suggestions for wiki improvement."""
+        from .wiki_analyzer import WikiAnalyzer
+        return WikiAnalyzer(self)._generate_hints()
 
         if generate_investigations:
             llm_suggestions = self._llm_generate_investigations(contradictions, data_gaps)
@@ -2373,6 +1653,7 @@ class Wiki:
                 stats = engine.get_stats()
                 result["graph_stats"] = stats
             except Exception:
+                logger.debug("Failed to load graph stats")
                 result["graph_stats"] = {"total_relations": 0, "unique_concepts": 0}
 
         return result
@@ -2688,7 +1969,7 @@ class Wiki:
                     wc_str = f"{wc / 1000:.1f}k" if wc >= 1000 else str(wc)
                     stats_extra = f" | 📝 {wc_str} words"
             except Exception:
-                pass
+                logger.debug("Failed to get word count for %s", page_name)
 
             # Link counts
             try:
@@ -2700,7 +1981,7 @@ class Wiki:
                         link_str += f" | {in_count} in"
                     stats_extra = f" | {link_str}" + stats_extra
             except Exception:
-                pass
+                logger.debug("Failed to get link counts for %s", page_name)
 
             # Sink status
             sink_marker = ""
@@ -2709,7 +1990,7 @@ class Wiki:
                 if sink_info['has_sink']:
                     sink_marker = f" 📥 {sink_info['sink_entries']} pending"
             except Exception:
-                pass
+                logger.debug("Failed to get sink info for %s", page_name)
 
             entry = f"- [[{page_name}]] - {summary}{sink_marker}"
             if analysis_extra or stats_extra:
@@ -3420,7 +2701,7 @@ class Wiki:
                         all_suggestions.append(suggestion)
                         analyzed_count += 1
                 except Exception:
-                    pass  # Skip sources that fail analysis
+                    logger.warning("Source analysis failed for %s", source_file)
 
         # Generate summary
         total_suggestions = sum(

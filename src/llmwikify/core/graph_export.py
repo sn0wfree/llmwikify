@@ -1,9 +1,12 @@
 """Graph export and community detection for knowledge visualization."""
 
 import json
+import logging
 from pathlib import Path
 
 from .index import WikiIndex
+
+logger = logging.getLogger(__name__)
 
 
 def build_graph(index: WikiIndex, include_wikilinks: bool = True, include_relations: bool = True) -> dict:
@@ -50,8 +53,7 @@ def build_graph(index: WikiIndex, include_wikilinks: bool = True, include_relati
                     "weight": {"EXTRACTED": 3, "INFERRED": 2, "AMBIGUOUS": 1}.get(row["confidence"], 1),
                 })
         except Exception:
-            # relations table may not exist or database error
-            pass
+            logger.debug("Relations table query failed")
 
     return {"nodes": list(nodes.values()), "edges": edges}
 
