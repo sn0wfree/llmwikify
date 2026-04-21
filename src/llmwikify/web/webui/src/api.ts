@@ -13,6 +13,7 @@ export interface WikiPage {
 export interface SearchResult {
   page_name: string;
   content: string;
+  snippet?: string;
   score: number;
   has_sink?: boolean;
   sink_entries?: number;
@@ -139,6 +140,9 @@ export const api = {
     sinkStatus: () => request<SinkStatus>('/wiki/sink/status'),
     lint: () => request<Record<string, unknown>>('/wiki/lint'),
     recommend: () => request<Array<Record<string, unknown>>>('/wiki/recommend'),
+    suggestSynthesis: (sourceName?: string) =>
+      request<Record<string, unknown>>(`/wiki/suggest_synthesis${sourceName ? `?source_name=${encodeURIComponent(sourceName)}` : ''}`),
+    graphAnalyze: () => request<Record<string, unknown>>('/wiki/graph_analyze'),
   },
 
   agent: {
