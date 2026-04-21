@@ -517,6 +517,122 @@ def _register_rest_routes(mcp: FastMCP, wiki: Wiki, agent: Any | None = None) ->
         result = wiki.graph_analyze()
         return JSONResponse(result)
 
+    async def wiki_graph(request: Request) -> JSONResponse:
+        """Return graph data optimized for visualization."""
+        current_page = request.query_params.get("current_page")
+        mode = request.query_params.get("mode", "auto")
+
+        try:
+            graph_data = wiki.graph_export.build_graph(
+                wiki.index, include_wikilinks=True, include_relations=False
+            )
+        except Exception:
+            return JSONResponse({"nodes": [], "edges": [], "stats": {"total_nodes": 0, "displayed_nodes": 0, "mode": "empty"}})
+
+        nodes = graph_data.get("nodes", [])
+        edges = graph_data.get("edges", [])
+        total_nodes = len(nodes)
+
+        # Determine display strategy based on wiki size
+        if total_nodes < 50 or mode == "full":
+            display_nodes = nodes
+            display_mode = "full"
+        elif total_nodes < 200 or mode == "focused":
+            # Current page + 1-degree neighbors + hub nodes
+            if current_page:
+                neighbors = set()
+                neighbors.add(current_page)
+                for e in edges:
+                    if e["source"] == current_page:
+                        neighbors.add(e["target"])
+                    if e["target"] == current_page:
+                        neighbors.add(e["source"])
+                # Add hub nodes (nodes with high degree)
+                degree_count = {}
+                for e in edges:
+                    degree_count[e["source"]] = degree_count.get(e["source"], 0) + 1
+                    degree_count[e["target"]] = degree_count.get(e["target"], 0) + 1
+                hubs = sorted(degree_count.keys(), key=lambda x: -degree_count[x])[:10]
+                for h in hubs:
+                    neighbors.add(h)
+                display_nodes = [n for n in nodes if n["id"] in neighbors]
+                display_edges = [e for e in edges if e["source"] in neighbors and e["target"] in neighbors]
+            else:
+                display_nodes = nodes[:50]
+                display_edges = edges
+            display_mode = "focused"
+        else:
+            # Large wiki: current page + 1-degree neighbors only
+            if current_page:
+                neighbors = set()
+                neighbors.add(current_page)
+                for e in edges:
+                    if e["source"] == current_page:
+                        neighbors.add(e["target"])
+                    if e["target"] == current_page:
+                        neighbors.add(e["source"])
+                display_nodes = [n for n in nodes if n["id"] in neighbors]
+                display_edges = [e for e in edges if e["source"] in neighbors and e["target"] in neighbors]
+            else:
+                display_nodes = nodes[:30]
+                display_edges = edges
+            display_mode = "minimal"
+
+        if mode == "full":
+            display_nodes = nodes
+            display_edges = edges
+            display_mode = "full"
+
+        node_ids = {n["id"] for n in display_nodes}
+        display_edges = [e for e in edges if e["source"] in node_ids and e["target"] in node_ids]
+
+        # Calculate degree for each node
+        degree_count = {}
+        for e in display_edges:
+            degree_count[e["source"]] = degree_count.get(e["source"], 0) + 1
+            degree_count[e["target"]] = degree_count.get(e["target"], 0) + 1
+
+        # Get page types for coloring
+        page_types = {}
+        try:
+            type_map = wiki._load_page_type_mapping()
+            page_types = type_map
+        except Exception:
+            pass
+
+        # Build response
+        result_nodes = []
+        for n in display_nodes:
+            nid = n["id"]
+            in_deg = sum(1 for e in display_edges if e["target"] == nid)
+            out_deg = sum(1 for e in display_edges if e["source"] == nid)
+
+            # Determine page type for coloring
+            page_type = n.get("source_type", "wiki_page")
+            for type_name, type_dir in page_types.items():
+                if nid.startswith(type_dir + "/") or nid == type_dir:
+                    page_type = type_name
+                    break
+
+            result_nodes.append({
+                "id": nid,
+                "label": n.get("label", nid),
+                "in_degree": in_deg,
+                "out_degree": out_deg,
+                "is_current": nid == current_page,
+                "page_type": page_type,
+            })
+
+        return JSONResponse({
+            "nodes": result_nodes,
+            "edges": display_edges,
+            "stats": {
+                "total_nodes": total_nodes,
+                "displayed_nodes": len(result_nodes),
+                "mode": display_mode,
+            },
+        })
+
     # -- Agent endpoints --
 
     async def agent_chat(request: Request) -> JSONResponse:
@@ -671,6 +787,7 @@ def _register_rest_routes(mcp: FastMCP, wiki: Wiki, agent: Any | None = None) ->
         Route("/api/wiki/recommend", wiki_recommend, methods=["GET"]),
         Route("/api/wiki/suggest_synthesis", wiki_suggest_synthesis, methods=["GET"]),
         Route("/api/wiki/graph_analyze", wiki_graph_analyze, methods=["GET"]),
+        Route("/api/wiki/graph", wiki_graph, methods=["GET"]),
         Route("/api/agent/chat", agent_chat, methods=["POST"]),
         Route("/api/agent/status", agent_status, methods=["GET"]),
         Route("/api/agent/tools", agent_tools, methods=["GET"]),

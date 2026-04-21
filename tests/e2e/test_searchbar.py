@@ -72,8 +72,14 @@ def test_searchbar_click_result_navigates(page, wiki_server):
         results.first.click()
         page.wait_for_timeout(500)
 
-        # Should navigate to Editor view
-        editor = page.locator('textarea')
+        # Switch to Edit mode (default is Graph)
+        # Edit button is at index 12 in the button list
+        edit_btn = page.locator('button').nth(12)
+        edit_btn.click()
+        page.wait_for_timeout(1000)
+
+        # Should navigate to Editor view with textarea visible
+        editor = page.locator('textarea').first
         expect(editor).to_be_visible()
 
     assert len(errors) == 0, f"JavaScript errors found: {errors}"

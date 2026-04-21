@@ -17,10 +17,16 @@ def test_editor_loads_page_content(page, wiki_server):
     file_tree = page.locator('main .w-48 button').first
     expect(file_tree).to_be_visible()
     file_tree.click()
-    page.wait_for_timeout(500)
+    page.wait_for_timeout(1000)
+
+    # Default mode is Graph, switch to Edit
+    # Edit button is at index 12 in the button list
+    edit_btn = page.locator('button').nth(12)
+    edit_btn.click()
+    page.wait_for_timeout(1000)
 
     # Verify content is loaded and visible (not [object Object])
-    textarea = page.locator('textarea')
+    textarea = page.locator('textarea').first
     expect(textarea).to_be_visible()
 
     # Get the content value
