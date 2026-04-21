@@ -1,28 +1,32 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { api, SearchResult } from '../api';
 
 interface SearchBarProps {
-  standalone?: boolean;
   onResult?: (page: string) => void;
 }
 
-export function SearchBar({ standalone, onResult }: SearchBarProps) {
+export function SearchBar({ onResult }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
       setResults([]);
+      setShowDropdown(false);
       return;
     }
     setLoading(true);
     try {
-      const r = await api.wiki.search(q);
+      const r = await api.wiki.search(q, 10);
       setResults(r);
+      setShowDropdown(r.length > 0);
     } catch {
       setResults([]);
+      setShowDropdown(false);
     } finally {
       setLoading(false);
     }
@@ -41,18 +45,33 @@ export function SearchBar({ standalone, onResult }: SearchBarProps) {
     debounceRef.current = setTimeout(() => doSearch(val), 300);
   };
 
-  const containerClass = standalone
-    ? 'flex-1 overflow-y-auto p-4'
-    : 'flex-1';
+  const handleSelect = (pageName: string) => {
+    setQuery('');
+    setResults([]);
+    setShowDropdown(false);
+    onResult?.(pageName);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
-    <div className={containerClass}>
-      <form onSubmit={handleSearch} className={`${standalone ? 'max-w-2xl mx-auto mb-4' : ''}`}>
+    <div ref={wrapperRef} className="relative flex-1">
+      <form onSubmit={handleSearch}>
         <div className="flex gap-2">
           <input
             type="text"
             value={query}
             onChange={handleChange}
+            onFocus={() => results.length > 0 && setShowDropdown(true)}
             placeholder="Search wiki..."
             className="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
           />
@@ -66,13 +85,14 @@ export function SearchBar({ standalone, onResult }: SearchBarProps) {
         </div>
       </form>
 
-      {results.length > 0 && (
-        <div className="space-y-2">
+      {/* Dropdown results */}
+      {showDropdown && results.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded shadow-xl z-50 max-h-80 overflow-y-auto">
           {results.map((r, i) => (
             <div
               key={i}
-              onClick={() => onResult?.(r.page_name)}
-              className="p-3 bg-slate-800 rounded border border-slate-700 hover:border-blue-500 cursor-pointer transition-colors"
+              onClick={() => handleSelect(r.page_name)}
+              className="p-3 border-b border-slate-700 last:border-b-0 hover:bg-slate-700 cursor-pointer transition-colors"
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-blue-400">{r.page_name}</span>
@@ -91,8 +111,11 @@ export function SearchBar({ standalone, onResult }: SearchBarProps) {
         </div>
       )}
 
-      {results.length === 0 && query && !loading && (
-        <p className="text-center text-slate-500 text-sm mt-8">No results found</p>
+      {/* No results */}
+      {showDropdown && results.length === 0 && query && !loading && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded shadow-xl z-50 p-4 text-center text-slate-500 text-sm">
+          No results found
+        </div>
       )}
     </div>
   );
