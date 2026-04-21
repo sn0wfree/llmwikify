@@ -11,6 +11,12 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .constants import (
+    CLAIM_OVERLAP_THRESHOLD,
+    CONTRADICTION_OVERLAP_THRESHOLD,
+    MAX_SUGGESTED_UPDATES,
+)
+
 
 class SynthesisEngine:
     """Analyze new sources against existing wiki content and generate suggestions.
@@ -181,7 +187,7 @@ class SynthesisEngine:
 
                     if new_words and existing_words:
                         overlap = len(new_words & existing_words) / max(len(new_words | existing_words), 1)
-                        if overlap >= 0.4:  # 40% keyword overlap
+                        if overlap >= CLAIM_OVERLAP_THRESHOLD:  # keyword overlap threshold
                             match_count += 1
                             matching_sources.append(existing.get("_source_file", "unknown"))
                             break
@@ -237,7 +243,7 @@ class SynthesisEngine:
                     existing_words = set(existing_statement.split()) - {"not", "no", "never"}
                     overlap = len(new_words & existing_words) / max(len(new_words | existing_words), 1)
 
-                    if overlap >= 0.5 and is_negated != existing_is_negated:
+                    if overlap >= CONTRADICTION_OVERLAP_THRESHOLD and is_negated != existing_is_negated:
                         contradictions.append({
                             "new_claim": new_claim.get("statement"),
                             "existing_claim": existing_claim.get("statement"),
@@ -317,7 +323,7 @@ class SynthesisEngine:
                     "type": "claim_addition",
                 })
 
-        return updates[:10]  # Limit to 10 suggestions
+        return updates[:MAX_SUGGESTED_UPDATES]  # Limit suggestions
 
     def _find_new_entities(
         self,

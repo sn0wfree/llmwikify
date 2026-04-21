@@ -66,7 +66,7 @@ class WikiSourceAnalysisMixin:
             if match:
                 return json.loads(match.group(1))
         except Exception:
-            logger.debug("Failed to parse cached analysis for %s", page_path)
+            logger.warning("Failed to parse cached analysis for %s", page_path)
         return None
 
     def analyze_source(self, source_path: str, force: bool = False) -> dict:

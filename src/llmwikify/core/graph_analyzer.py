@@ -107,7 +107,7 @@ class GraphAnalyzer:
         try:
             pagerank = nx.pagerank(G.to_undirected(), weight="weight")
         except Exception:
-            logger.debug("PageRank computation failed")
+            logger.warning("PageRank computation failed")
             pagerank = {}
 
         # Degree centrality
@@ -115,7 +115,7 @@ class GraphAnalyzer:
             in_degree = dict(G.in_degree())
             out_degree = dict(G.out_degree())
         except Exception:
-            logger.debug("Degree computation failed")
+            logger.warning("Degree computation failed")
             in_degree = {}
             out_degree = {}
 
@@ -235,7 +235,7 @@ class GraphAnalyzer:
                     if neighbor in node_community:
                         neighbor_communities.add(node_community[neighbor])
             except Exception:
-                logger.debug("Neighbor iteration failed for node %s", node)
+                logger.warning("Neighbor iteration failed for node %s", node)
 
             if len(neighbor_communities) > 1:
                 bridges.append({
@@ -315,7 +315,7 @@ class GraphAnalyzer:
                     "suggestion": f"Consider creating entities/{concept}.md or concepts/{concept}.md",
                 })
         except Exception:
-            logger.debug("Orphan concept lookup failed")
+            logger.warning("Orphan concept lookup failed")
 
         return suggestions
 

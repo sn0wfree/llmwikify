@@ -717,7 +717,7 @@ class WikiCLI:
             content = page.read_text()
             links = re.findall(r'\[\[(.*?)\]\]', content)
             for link in links:
-                target = link.split('|')[0].split('#')[0].strip()
+                target = self.wiki._parse_wikilink_target(link)
                 if target in (self.wiki._index_page_name, self.wiki._log_page_name):
                     continue
                 if self.wiki._resolve_wikilink_target(target) is None:

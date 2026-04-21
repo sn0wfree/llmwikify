@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class WikiPageIOMixin:
     """Page read/write, search, log, and index file update."""
 
-    def write_page(self, page_name: str, content: str, page_type: str = None) -> str:
+    def write_page(self, page_name: str, content: str, page_type: str | None = None) -> str:
         """Write a wiki page.
 
         Args:
@@ -82,7 +82,7 @@ class WikiPageIOMixin:
 
         return f"{action} page: {full_path}"
 
-    def read_page(self, page_name: str, page_type: str = None) -> dict:
+    def read_page(self, page_name: str, page_type: str | None = None) -> dict:
         """Read a wiki page with sink status attached.
 
         Args:
@@ -340,7 +340,7 @@ class WikiPageIOMixin:
                     wc_str = f"{wc / 1000:.1f}k" if wc >= 1000 else str(wc)
                     stats_extra = f" | 📝 {wc_str} words"
             except Exception:
-                logger.debug("Failed to get word count for %s", page_name)
+                logger.warning("Failed to get word count for %s", page_name)
 
             try:
                 in_count = len(self.index.get_inbound_links(page_name))
@@ -351,7 +351,7 @@ class WikiPageIOMixin:
                         link_str += f" | {in_count} in"
                     stats_extra = f" | {link_str}" + stats_extra
             except Exception:
-                logger.debug("Failed to get link counts for %s", page_name)
+                logger.warning("Failed to get link counts for %s", page_name)
 
             sink_marker = ""
             try:
@@ -359,7 +359,7 @@ class WikiPageIOMixin:
                 if sink_info['has_sink']:
                     sink_marker = f" 📥 {sink_info['sink_entries']} pending"
             except Exception:
-                logger.debug("Failed to get sink info for %s", page_name)
+                logger.warning("Failed to get sink info for %s", page_name)
 
             entry = f"- [[{page_name}]] - {summary}{sink_marker}"
             if analysis_extra or stats_extra:

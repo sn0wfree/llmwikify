@@ -26,7 +26,7 @@ class WikiLinkMixin:
             if file_path:
                 return self.wiki_dir / file_path
         except Exception:
-            logger.debug("Index lookup failed for wikilink: %s", target)
+            logger.warning("Index lookup failed for wikilink: %s", target)
 
         return None
 
@@ -52,7 +52,7 @@ class WikiLinkMixin:
             page_modified = False
 
             for link in links:
-                target = link.split('|')[0].split('#')[0].strip()
+                target = self._parse_wikilink_target(link)
                 if target in (self._index_page_name, self._log_page_name):
                     continue
 
