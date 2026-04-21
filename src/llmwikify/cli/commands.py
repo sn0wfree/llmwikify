@@ -1377,78 +1377,52 @@ class WikiCLI:
         host = getattr(args, 'host', None)
         mcp_port = getattr(args, 'mcp_port', None) or getattr(args, 'port', None)
         web = getattr(args, 'web', False)
-        web_port = getattr(args, 'web_port', 8766)
+        agent = getattr(args, 'agent', False)
+        auth_token = getattr(args, 'auth_token', None)
 
         service_name = name or mcp_config.get("name") or self.wiki.root.name
-        print(f"Starting MCP server '{service_name}'...")
-        print(f"  Transport: {transport or mcp_config.get('transport', 'stdio')}")
-        if host:
-            print(f"  Host: {host}")
-        if mcp_port:
-            print(f"  MCP Port: {mcp_port}")
-        if web:
-            print(f"  Web UI: http://{host or '127.0.0.1'}:{web_port}")
-        print()
 
         try:
             if web:
-                # Start MCP in background thread, then start Web UI
-                import threading
-                import time
-                import httpx
-
-                mcp_kwargs = {
-                    'wiki': self.wiki,
-                    'name': name,
-                    'transport': 'http',
-                    'host': host or mcp_config.get('host', '127.0.0.1'),
-                    'port': mcp_port or mcp_config.get('port', 8765),
-                    'config': mcp_config,
-                }
-
-                mcp_thread = threading.Thread(
-                    target=serve_mcp,
-                    kwargs=mcp_kwargs,
-                    daemon=True
-                )
-                mcp_thread.start()
-
-                # Wait for MCP server to be ready (with timeout)
-                mcp_url = f"http://{host or '127.0.0.1'}:{mcp_port or mcp_config.get('port', 8765)}/mcp"
-                ready = False
-                for _ in range(20):
-                    time.sleep(0.25)
-                    try:
-                        with httpx.Client(timeout=2.0) as client:
-                            resp = client.post(mcp_url, json={
-                                "jsonrpc": "2.0", "id": 0,
-                                "method": "tools/list", "params": {}
-                            })
-                            if resp.status_code == 200:
-                                ready = True
-                                break
-                    except Exception:
-                        pass
-
-                if not ready:
-                    print(f"  ⚠ MCP server may not be ready yet, starting Web UI anyway")
-
-                # Start Web UI in main thread
+                # Unified server: single process with MCP + REST API + WebUI
                 import uvicorn
 
-                from ..web.server import create_app
+                from ..mcp.server import create_unified_server
 
-                app = create_app(mcp_url)
+                agent_instance = None
+                if agent:
+                    from ..agent import WikiAgent
+                    agent_instance = WikiAgent(wiki=self.wiki)
 
-                print(f"Web UI available at http://{host or '127.0.0.1'}:{web_port}")
+                app = create_unified_server(
+                    self.wiki,
+                    agent=agent_instance,
+                    api_key=auth_token,
+                    mcp_name=service_name,
+                )
+
+                port = mcp_port or mcp_config.get('port', 8765)
+                print(f"Starting Unified Server '{service_name}' on {host or '127.0.0.1'}:{port}")
+                print(f"  Transport: http")
+                print(f"  Agent: {'enabled' if agent else 'disabled'}")
+                print(f"  Auth: {'enabled' if auth_token else 'disabled'}")
+                print(f"  Web UI: http://{host or '127.0.0.1'}:{port}")
+                print()
 
                 uvicorn.run(
                     app,
                     host=host or '127.0.0.1',
-                    port=web_port,
+                    port=port,
                     log_level="info"
                 )
             else:
+                print(f"Starting MCP server '{service_name}'...")
+                print(f"  Transport: {transport or mcp_config.get('transport', 'stdio')}")
+                if host:
+                    print(f"  Host: {host}")
+                if mcp_port:
+                    print(f"  MCP Port: {mcp_port}")
+                print()
                 serve_mcp(self.wiki, name=name, transport=transport, host=host, port=mcp_port, config=mcp_config)
         except KeyboardInterrupt:
             print("\nServer stopped")
@@ -1490,8 +1464,9 @@ Examples:
   llmwikify init --overwrite                          Reinitialize wiki
   llmwikify mcp                                       Start MCP server for Agent interaction
   llmwikify mcp --transport http --port 8765          Start MCP server on HTTP port
-  llmwikify serve --web                               Start MCP + Web UI on :8765/:8766
-  llmwikify serve --web --mcp-port 8765 --web-port 8767  Custom ports
+  llmwikify serve --web                               Start unified server (MCP + WebUI) on :8765
+  llmwikify serve --web --agent                       Start unified server with Agent
+  llmwikify serve --web --agent --auth-token mysecret Start unified server with auth
 """
     )
 
@@ -1680,8 +1655,9 @@ Examples:
     p.add_argument('--mcp-port', type=int, help='MCP server port')
     p.add_argument('--port', '-p', type=int, help='[Deprecated] Use --mcp-port instead')
     p.add_argument('--name', '-n', help='Service name (defaults to directory name)')
-    p.add_argument('--web', action='store_true', help='Start Web UI alongside MCP server')
-    p.add_argument('--web-port', type=int, default=8766, help='Web UI port (default: 8766)')
+    p.add_argument('--web', action='store_true', help='Start unified Web UI (single process)')
+    p.add_argument('--agent', action='store_true', help='Enable Agent features')
+    p.add_argument('--auth-token', help='API Key for authentication')
 
     args = parser.parse_args()
 
