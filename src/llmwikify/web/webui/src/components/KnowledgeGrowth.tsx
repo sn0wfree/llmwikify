@@ -102,7 +102,7 @@ export function KnowledgeGrowth() {
   return (
     <div className="p-6 max-w-6xl mx-auto overflow-y-auto h-full">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold">Knowledge Growth</h2>
+        <h2 className="text-xl font-bold">Dashboard</h2>
         <button
           onClick={loadData}
           className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded"
