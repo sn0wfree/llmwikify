@@ -79,7 +79,7 @@ export function SearchBar({ standalone, onResult }: SearchBarProps) {
                 <span className="text-xs text-slate-500">score: {r.score?.toFixed(2)}</span>
               </div>
               <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                {r.content?.substring(0, 150)}...
+                {r.snippet || r.content?.substring(0, 150) || ''}
               </p>
               {r.has_sink && (
                 <span className="inline-block mt-1 px-1.5 py-0.5 text-xs bg-amber-500/20 text-amber-400 rounded">

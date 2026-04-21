@@ -511,6 +511,15 @@ def _register_rest_routes(mcp: FastMCP, wiki: Wiki, agent: Any | None = None) ->
     async def wiki_recommend(request: Request) -> JSONResponse:
         return JSONResponse(wiki.recommend())
 
+    async def wiki_suggest_synthesis(request: Request) -> JSONResponse:
+        source_name = request.query_params.get("source_name")
+        result = wiki.suggest_synthesis(source_name=source_name if source_name else None)
+        return JSONResponse(result)
+
+    async def wiki_graph_analyze(request: Request) -> JSONResponse:
+        result = wiki.graph_analyze()
+        return JSONResponse(result)
+
     # -- Agent endpoints --
 
     async def agent_chat(request: Request) -> JSONResponse:
@@ -663,6 +672,8 @@ def _register_rest_routes(mcp: FastMCP, wiki: Wiki, agent: Any | None = None) ->
         Route("/api/wiki/sink/status", wiki_sink_status, methods=["GET"]),
         Route("/api/wiki/lint", wiki_lint, methods=["GET"]),
         Route("/api/wiki/recommend", wiki_recommend, methods=["GET"]),
+        Route("/api/wiki/suggest_synthesis", wiki_suggest_synthesis, methods=["GET"]),
+        Route("/api/wiki/graph_analyze", wiki_graph_analyze, methods=["GET"]),
         Route("/api/agent/chat", agent_chat, methods=["POST"]),
         Route("/api/agent/status", agent_status, methods=["GET"]),
         Route("/api/agent/tools", agent_tools, methods=["GET"]),

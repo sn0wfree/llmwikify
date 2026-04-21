@@ -58,13 +58,14 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
     setSaving(true);
     try {
       await api.wiki.writePage(page.page_name, content);
+      addToast('success', '页面已保存');
     } catch (e) {
       const msg = e instanceof Error ? e.message : '未知错误';
       addToast('error', `保存失败: ${msg}`);
     } finally {
       setSaving(false);
     }
-  }, [page, content]);
+  }, [page, content, addToast]);
 
   return (
     <div className="flex h-full">
