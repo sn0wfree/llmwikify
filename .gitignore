@@ -74,3 +74,7 @@ raw/**/*.pdf
 
 # macOS
 .DS_Store
+
+# React WebUI build output
+src/llmwikify/web/webui/dist/
+src/llmwikify/web/webui/node_modules/
