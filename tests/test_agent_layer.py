@@ -576,3 +576,270 @@ class TestWikiAgent:
         agent._notify("test_event", {"data": "value"})
         assert len(notifications) == 1
         assert notifications[0] == ("test_event", {"data": "value"})
+
+
+# --- Confirmation Mechanism Tests ---
+
+class TestConfirmationMechanism:
+    def test_confirmation_created_for_write(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        result = asyncio.get_event_loop().run_until_complete(
+            registry.execute("wiki_write_page", {"page_name": "Test", "content": "Hello"})
+        )
+        assert isinstance(result, dict)
+        assert result["status"] == "confirmation_required"
+        assert "confirmation_id" in result
+        assert "impact" in result
+        assert "group" in result
+
+    def test_confirmation_approve_executes(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        result = asyncio.get_event_loop().run_until_complete(
+            registry.execute("wiki_write_page", {"page_name": "TestConfirm", "content": "Hello"})
+        )
+        conf_id = result["confirmation_id"]
+        exec_result = registry.confirm_execution(conf_id)
+        assert exec_result["status"] == "executed"
+        page_content = wiki_root.read_page("TestConfirm")
+        assert "Hello" in page_content["content"]
+
+    def test_confirmation_reject_discards(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        result = asyncio.get_event_loop().run_until_complete(
+            registry.execute("wiki_write_page", {"page_name": "TestReject", "content": "Hello"})
+        )
+        conf_id = result["confirmation_id"]
+        reject_result = registry.reject_execution(conf_id)
+        assert reject_result["status"] == "rejected"
+        pending = registry.get_pending_confirmations()
+        assert not any(c["id"] == conf_id for c in pending)
+
+    def test_confirmation_batch_approve(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        ids = []
+        for i in range(3):
+            result = asyncio.get_event_loop().run_until_complete(
+                registry.execute("wiki_write_page", {"page_name": f"Batch{i}", "content": f"Content{i}"})
+            )
+            ids.append(result["confirmation_id"])
+        batch_results = registry.confirm_batch(ids)
+        assert len(batch_results) == 3
+        assert all(r["status"] == "executed" for r in batch_results)
+
+    def test_confirmation_batch_reject(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        ids = []
+        for i in range(3):
+            result = asyncio.get_event_loop().run_until_complete(
+                registry.execute("wiki_write_page", {"page_name": f"RejectBatch{i}", "content": f"Content{i}"})
+            )
+            ids.append(result["confirmation_id"])
+        batch_results = registry.reject_batch(ids)
+        assert len(batch_results) == 3
+        assert all(r["status"] == "rejected" for r in batch_results)
+
+    def test_get_pending_by_group(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        asyncio.get_event_loop().run_until_complete(
+            registry.execute("wiki_write_page", {"page_name": "concepts/Test", "content": "Hello"})
+        )
+        asyncio.get_event_loop().run_until_complete(
+            registry.execute("wiki_write_page", {"page_name": "entities/Test2", "content": "World"})
+        )
+        groups = registry.get_pending_by_group()
+        assert "concept_pages" in groups
+        assert "entity_pages" in groups
+
+    def test_confirmation_invalid_id(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        result = registry.confirm_execution("invalid-id")
+        assert result["status"] == "error"
+
+    def test_read_tool_no_confirmation(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        result = asyncio.get_event_loop().run_until_complete(
+            registry.execute("wiki_status", {})
+        )
+        assert not isinstance(result, dict) or result.get("status") != "confirmation_required"
+
+    def test_ingest_posthoc_logging(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        log = registry.get_ingest_log()
+        assert isinstance(log, list)
+
+    def test_ingest_log_detail(self, wiki_root):
+        from llmwikify.agent.tools import WikiToolRegistry
+        registry = WikiToolRegistry(wiki_root)
+        result = registry.get_ingest_changes("nonexistent")
+        assert result is None
+
+
+# --- Dream Proposal Tests ---
+
+class TestDreamProposals:
+    def test_proposal_creation(self, wiki_root):
+        from llmwikify.agent.dream_editor import ProposalManager
+        pm = ProposalManager()
+        proposal = pm.create_proposal("TestPage", "append", "Content", "reason", [])
+        assert proposal["id"].startswith("prop-")
+        assert proposal["status"] == "pending"
+        assert proposal["content_length"] == 7
+
+    def test_proposal_auto_approve_small(self, wiki_root):
+        from llmwikify.agent.dream_editor import ProposalManager
+        pm = ProposalManager()
+        pm.create_proposal("TestPage", "append", "Short content", "test", [])
+        auto = pm.auto_approve_pending()
+        assert len(auto) == 1
+        assert auto[0]["status"] == "auto_approved"
+
+    def test_proposal_no_auto_approve_large(self, wiki_root):
+        from llmwikify.agent.dream_editor import ProposalManager
+        pm = ProposalManager()
+        pm.create_proposal("TestPage", "append", "x" * 200, "test", [])
+        auto = pm.auto_approve_pending()
+        assert len(auto) == 0
+        pending = pm.get_pending()
+        assert len(pending) == 1
+
+    def test_proposal_no_auto_approve_replace(self, wiki_root):
+        from llmwikify.agent.dream_editor import ProposalManager
+        pm = ProposalManager()
+        pm.create_proposal("TestPage", "replace", "Short", "test", [])
+        auto = pm.auto_approve_pending()
+        assert len(auto) == 0
+
+    def test_proposal_approve_reject(self, wiki_root):
+        from llmwikify.agent.dream_editor import ProposalManager
+        pm = ProposalManager()
+        p = pm.create_proposal("TestPage", "append", "Content", "test", [])
+        approved = pm.approve(p["id"])
+        assert approved["status"] == "approved"
+        assert approved["reviewed_at"] is not None
+
+        p2 = pm.create_proposal("TestPage2", "append", "Content2", "test", [])
+        rejected = pm.reject(p2["id"])
+        assert rejected["status"] == "rejected"
+
+    def test_proposal_batch_approve(self, wiki_root):
+        from llmwikify.agent.dream_editor import ProposalManager
+        pm = ProposalManager()
+        ids = []
+        for i in range(3):
+            p = pm.create_proposal(f"Page{i}", "append", f"Content{i}", "test", [])
+            ids.append(p["id"])
+        results = pm.batch_approve(ids)
+        assert len(results) == 3
+        assert all(r["status"] == "approved" for r in results)
+
+    def test_proposal_get_by_page(self, wiki_root):
+        from llmwikify.agent.dream_editor import ProposalManager
+        pm = ProposalManager()
+        pm.create_proposal("PageA", "append", "Content", "test", [])
+        pm.create_proposal("PageA", "append", "Content2", "test", [])
+        pm.create_proposal("PageB", "append", "Content3", "test", [])
+        groups = pm.get_pending_by_page()
+        assert len(groups["PageA"]) == 2
+        assert len(groups["PageB"]) == 1
+
+    def test_proposal_stats(self, wiki_root):
+        from llmwikify.agent.dream_editor import ProposalManager
+        pm = ProposalManager()
+        pm.create_proposal("PageA", "append", "Short", "test", [])
+        pm.create_proposal("PageB", "append", "x" * 200, "test", [])
+        pm.auto_approve_pending()
+        stats = pm.get_stats()
+        assert stats["auto_approved"] == 1
+        assert stats["pending"] == 1
+
+    def test_dream_editor_generates_proposals(self, wiki_root):
+        from llmwikify.agent.dream_editor import DreamEditor
+        editor = DreamEditor(wiki_root, wiki_root.root / ".llmwikify" / "agent")
+        result = editor.run_dream()
+        assert "proposals_generated" in result
+        assert "auto_approved" in result
+        assert "pending_review" in result
+
+    def test_dream_editor_proposal_from_sink(self, wiki_root):
+        from llmwikify.agent.dream_editor import DreamEditor
+        editor = DreamEditor(wiki_root, wiki_root.root / ".llmwikify" / "agent")
+        page_path = wiki_root.wiki_dir / "TestPage.md"
+        page_path.write_text("# TestPage\n\nExisting content.\n")
+        entries = [
+            {"query": "Q1", "answer": "A1", "note": "unique"},
+        ]
+        editor._propose_update_existing_page("TestPage", page_path, entries)
+        proposals = editor.proposal_manager.get_pending()
+        assert len(proposals) == 1
+        assert proposals[0]["page_name"] == "TestPage"
+        assert "Q1" in proposals[0]["content"]
+
+
+# --- Scheduler Task Classification Tests ---
+
+class TestSchedulerTaskClassification:
+    def test_task_is_write_flag(self, wiki_root):
+        from llmwikify.agent.scheduler import WikiScheduler
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler = WikiScheduler(Path(tmp))
+            scheduler.register_system_tasks(wiki_root, notification_manager=None)
+            tasks = scheduler.list_tasks()
+            task_map = {t["name"]: t for t in tasks}
+            assert task_map["dream_update"]["is_write"] is True
+            assert task_map["daily_lint"]["is_write"] is False
+            assert task_map["weekly_gaps"]["is_write"] is False
+            assert task_map["check_raw"]["is_write"] is False
+
+    def test_tick_result_includes_is_write(self, wiki_root):
+        from llmwikify.agent.scheduler import WikiScheduler
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler = WikiScheduler(Path(tmp))
+            scheduler.add_task("test_task", "0 * * * *", lambda: {"ok": True}, is_write=True)
+            from datetime import datetime, timezone, timedelta
+            now = datetime.now(timezone.utc) + timedelta(hours=1)
+            results = scheduler.tick(now)
+            assert len(results) == 1
+            assert results[0]["is_write"] is True
+
+
+# --- WikiAgent Confirmation Integration Tests ---
+
+class TestWikiAgentConfirmation:
+    def test_get_pending_confirmations(self, wiki_root):
+        from llmwikify.agent import WikiAgent
+        agent = WikiAgent(wiki=wiki_root)
+        result = agent.get_pending_confirmations()
+        assert "confirmations" in result
+        assert "total" in result
+
+    def test_get_dream_proposals(self, wiki_root):
+        from llmwikify.agent import WikiAgent
+        agent = WikiAgent(wiki=wiki_root)
+        result = agent.get_dream_proposals()
+        assert "proposals" in result
+        assert "stats" in result
+
+    def test_get_ingest_log(self, wiki_root):
+        from llmwikify.agent import WikiAgent
+        agent = WikiAgent(wiki=wiki_root)
+        log = agent.get_ingest_log()
+        assert isinstance(log, list)
+
+    def test_status_includes_confirmation_count(self, wiki_root):
+        from llmwikify.agent import WikiAgent
+        agent = WikiAgent(wiki=wiki_root)
+        status = agent.get_status()
+        assert "pending_confirmations" in status
+        assert "dream_proposals" in status
+        assert "unread_notifications" in status
