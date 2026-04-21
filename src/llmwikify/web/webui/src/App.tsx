@@ -1,16 +1,26 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { FileTree } from './components/FileTree';
 import { Editor } from './components/Editor';
 import { SearchBar } from './components/SearchBar';
 import { HealthStatus } from './components/HealthStatus';
 import { Insights } from './components/Insights';
-import { AgentChat } from './components/AgentChat';
-import { TaskMonitor } from './components/TaskMonitor';
 import { Notifications } from './components/Notifications';
-import { DreamLog } from './components/DreamLog';
 import { api, WikiStatus, SinkStatus } from './api';
 
-type ViewMode = 'edit' | 'search' | 'health' | 'insights' | 'chat' | 'tasks' | 'dream';
+const KnowledgeGrowth = lazy(() => import('./components/KnowledgeGrowth').then(m => ({ default: m.KnowledgeGrowth })));
+const AgentChat = lazy(() => import('./components/AgentChat').then(m => ({ default: m.AgentChat })));
+const TaskMonitor = lazy(() => import('./components/TaskMonitor').then(m => ({ default: m.TaskMonitor })));
+const DreamLog = lazy(() => import('./components/DreamLog').then(m => ({ default: m.DreamLog })));
+
+type ViewMode = 'edit' | 'search' | 'health' | 'insights' | 'growth' | 'chat' | 'tasks' | 'dream';
+
+function LazyWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-full text-slate-500">Loading...</div>}>
+      {children}
+    </Suspense>
+  );
+}
 
 function App() {
   const [status, setStatus] = useState<WikiStatus | null>(null);
@@ -66,6 +76,9 @@ function App() {
           </NavButton>
           <NavButton active={view === 'insights'} onClick={() => setView('insights')}>
             Insights
+          </NavButton>
+          <NavButton active={view === 'growth'} onClick={() => setView('growth')}>
+            Growth
           </NavButton>
           {agentEnabled && (
             <>
@@ -131,9 +144,10 @@ function App() {
           {view === 'search' && <SearchBar standalone />}
           {view === 'health' && <HealthStatus status={status} sinkStatus={sinkStatus} full />}
           {view === 'insights' && <Insights />}
-          {view === 'chat' && agentEnabled && <AgentChat />}
-          {view === 'tasks' && agentEnabled && <TaskMonitor />}
-          {view === 'dream' && agentEnabled && <DreamLog />}
+          {view === 'growth' && <LazyWrapper><KnowledgeGrowth /></LazyWrapper>}
+          {view === 'chat' && agentEnabled && <LazyWrapper><AgentChat /></LazyWrapper>}
+          {view === 'tasks' && agentEnabled && <LazyWrapper><TaskMonitor /></LazyWrapper>}
+          {view === 'dream' && agentEnabled && <LazyWrapper><DreamLog /></LazyWrapper>}
         </div>
       </main>
     </div>

@@ -19,6 +19,7 @@ from ..core import Wiki
 from .dream_editor import DreamEditor
 from .hooks import AutoIngestHook, CompositeHook, DreamSyncHook, WikiHook
 from .memory import MemoryManager
+from .notifications import NotificationManager
 from .runner import AgentRunner, RunState, ToolCall
 from .scheduler import WikiScheduler
 from .tools import WikiToolRegistry
@@ -62,6 +63,7 @@ class WikiAgent:
         self.scheduler = WikiScheduler(self.data_dir)
         self.dream_editor = DreamEditor(self.wiki, self.data_dir)
         self.memory = MemoryManager(self.wiki, self.data_dir)
+        self.notifications = NotificationManager()
 
         self.hooks = CompositeHook()
         self.hooks.add(WikiHook(self.wiki))
@@ -209,6 +211,17 @@ class WikiAgent:
         self._notification_callbacks.append(callback)
 
     def _notify(self, event: str, data: dict) -> None:
+        type_map = {
+            "task_completed": "success",
+            "task_failed": "error",
+            "new_files_detected": "info",
+            "dream_completed": "success",
+        }
+        self.notifications.add(
+            event_type=type_map.get(event, "info"),
+            message=f"{event}: {data}",
+            data=data,
+        )
         for callback in self._notification_callbacks:
             try:
                 callback(event, data)

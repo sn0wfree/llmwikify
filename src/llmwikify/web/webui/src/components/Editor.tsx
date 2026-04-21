@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, WikiPage } from '../api';
@@ -25,7 +25,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
     }
   }, [selectedPage]);
 
-  const loadTree = async () => {
+  const loadTree = useCallback(async () => {
     try {
       const results = await api.wiki.search('', 100);
       const tree = results.map((r) => ({
@@ -36,9 +36,9 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
     } catch {
       // Fallback: empty tree
     }
-  };
+  }, []);
 
-  const loadPage = async (name: string) => {
+  const loadPage = useCallback(async (name: string) => {
     try {
       const data = await api.wiki.readPage(name);
       setPage(data);
@@ -47,9 +47,9 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
       setPage(null);
       setContent('');
     }
-  };
+  }, []);
 
-  const savePage = async () => {
+  const savePage = useCallback(async () => {
     if (!page) return;
     setSaving(true);
     try {
@@ -59,7 +59,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
     } finally {
       setSaving(false);
     }
-  };
+  }, [page, content]);
 
   return (
     <div className="flex h-full">
