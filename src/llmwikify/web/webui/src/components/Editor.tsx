@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { api, WikiPage } from '../api';
+import { api, WikiPage, GraphNode, GraphEdge } from '../api';
 import { useToast } from './Toast';
 import { FrontMatterPanel, FrontMatterData } from './FrontMatterPanel';
+import { GraphView } from './GraphView';
 
 interface EditorProps {
   selectedPage: string | null;
@@ -50,9 +51,13 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
   const [content, setContent] = useState('');
   const [metadata, setMetadata] = useState<FrontMatterData>({});
   const [body, setBody] = useState('');
-  const [mode, setMode] = useState<'edit' | 'preview' | 'split'>('split');
+  const [mode, setMode] = useState<'edit' | 'graph'>('graph');
   const [saving, setSaving] = useState(false);
   const [fileTree, setFileTree] = useState<Array<{ name: string; path: string }>>([]);
+  const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
+  const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
 
   useEffect(() => {
     loadTree();
@@ -61,8 +66,23 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
   useEffect(() => {
     if (selectedPage) {
       loadPage(selectedPage);
+      loadGraphData(selectedPage);
     }
   }, [selectedPage]);
+
+  const loadGraphData = useCallback(async (currentPage: string) => {
+    setGraphLoading(true);
+    try {
+      const data = await api.wiki.graph(currentPage);
+      setGraphNodes(data.nodes);
+      setGraphEdges(data.edges);
+    } catch {
+      setGraphNodes([]);
+      setGraphEdges([]);
+    } finally {
+      setGraphLoading(false);
+    }
+  }, []);
 
   const loadTree = useCallback(async () => {
     try {
@@ -142,7 +162,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
         <div className="h-10 bg-slate-800 border-b border-slate-700 flex items-center px-4 gap-2">
           {page && <span className="text-sm text-slate-300">{page.page_name}</span>}
           <div className="ml-auto flex gap-1">
-            {(['edit', 'split', 'preview'] as const).map((m) => (
+            {(['edit', 'graph'] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
@@ -150,9 +170,17 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
                   mode === m ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700'
                 }`}
               >
-                {m.charAt(0).toUpperCase() + m.slice(1)}
+                {m === 'graph' ? 'Graph' : m.charAt(0).toUpperCase() + m.slice(1)}
               </button>
             ))}
+            {mode === 'graph' && (
+              <button
+                onClick={() => setShowLabels(!showLabels)}
+                className={`px-2 py-1 text-xs rounded ${showLabels ? 'bg-slate-600 text-white' : 'text-slate-400 hover:bg-slate-700'}`}
+              >
+                Labels
+              </button>
+            )}
             <button
               onClick={savePage}
               disabled={saving || !page}
@@ -169,27 +197,38 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
         {/* Content */}
         <div className="flex-1 overflow-hidden">
           {mode === 'edit' && (
-            <textarea
-              value={body}
-              onChange={(e) => handleBodyChange(e.target.value)}
-              className="w-full h-full bg-slate-900 text-slate-100 p-4 font-mono text-sm resize-none focus:outline-none"
-              placeholder="Select a page or start writing..."
-            />
-          )}
-          {mode === 'preview' && (
-            <div className="w-full h-full overflow-y-auto p-4 markdown-body">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {body || '*No content*'}
-              </ReactMarkdown>
-            </div>
-          )}
-          {mode === 'split' && (
             <div className="flex h-full">
               <textarea
                 value={body}
                 onChange={(e) => handleBodyChange(e.target.value)}
                 className="w-1/2 h-full bg-slate-900 text-slate-100 p-4 font-mono text-sm resize-none focus:outline-none border-r border-slate-700"
+                placeholder="Select a page or start writing..."
               />
+              <div className="w-1/2 h-full overflow-y-auto p-4 markdown-body">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {body || '*No content*'}
+                </ReactMarkdown>
+              </div>
+            </div>
+          )}
+          {mode === 'graph' && (
+            <div className="flex h-full">
+              {/* Graph area */}
+              <div className="w-1/2 h-full relative border-r border-slate-700">
+                {graphLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 z-10">
+                    <span className="text-slate-400">Loading graph...</span>
+                  </div>
+                )}
+                <GraphView
+                  nodes={graphNodes}
+                  edges={graphEdges}
+                  currentNode={page?.page_name || null}
+                  onNodeClick={(nodeId) => onPageSelect(nodeId)}
+                  showLabels={showLabels}
+                />
+              </div>
+              {/* Preview area */}
               <div className="w-1/2 h-full overflow-y-auto p-4 markdown-body">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {body || '*No content*'}

@@ -105,6 +105,32 @@ export interface IngestLogEntry {
   status: string;
 }
 
+export interface GraphNode {
+  id: string;
+  label: string;
+  in_degree: number;
+  out_degree: number;
+  is_current: boolean;
+  page_type: string;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: string;
+  weight: number;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  stats: {
+    total_nodes: number;
+    displayed_nodes: number;
+    mode: string;
+  };
+}
+
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (API_TOKEN) {
@@ -143,6 +169,8 @@ export const api = {
     suggestSynthesis: (sourceName?: string) =>
       request<Record<string, unknown>>(`/wiki/suggest_synthesis${sourceName ? `?source_name=${encodeURIComponent(sourceName)}` : ''}`),
     graphAnalyze: () => request<Record<string, unknown>>('/wiki/graph_analyze'),
+    graph: (currentPage?: string, mode?: string) =>
+      request<GraphData>(`/wiki/graph${currentPage ? `?current_page=${encodeURIComponent(currentPage)}${mode ? `&mode=${mode}` : ''}` : mode ? `?mode=${mode}` : ''}`),
   },
 
   agent: {
