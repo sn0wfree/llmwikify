@@ -1,6 +1,52 @@
 # Migration Guide
 
-> **Current version**: 0.28.0
+> **Current version**: 0.30.0
+
+---
+
+## v0.29.x → v0.30.0
+
+### Wiki Class Refactored into Mixins
+
+The `Wiki` class has been split from a single 2,724-line file into 13 files:
+
+| Before | After |
+|--------|-------|
+| `core/wiki.py` (2,724 lines) | `core/wiki.py` (135 lines) + 12 mixin files (2,603 lines) |
+
+**Migration**: **No action needed.** The public API is completely unchanged. All methods available on `Wiki` instances work exactly as before:
+
+```python
+from llmwikify import Wiki  # Still works
+from llmwikify.core import Wiki  # Still works
+
+wiki = Wiki(Path("/path/to/wiki"))
+wiki.init()
+wiki.write_page("Test", "content")
+wiki.lint()
+wiki.graph_analyze()
+# All methods work identically
+```
+
+**New exports** (optional, for advanced use):
+
+```python
+from llmwikify.core import (
+    WikiUtilityMixin, WikiLinkMixin, WikiSchemaMixin, WikiInitMixin,
+    WikiPageIOMixin, WikiSourceAnalysisMixin, WikiLLMMixin,
+    WikiRelationMixin, WikiIngestMixin, WikiQueryMixin,
+    WikiSynthesisMixin, WikiStatusMixin, WikiLintMixin,
+)
+```
+
+**Import compatibility**: `from llmwikify.core.wiki import extract` still works (re-exported for test compatibility).
+
+### What Changed Internally
+
+- `wiki.py` now only contains `__init__`, lazy properties (`index`, `query_sink`, `ref_index_path`), and `close()`
+- All business logic moved to 12 mixin classes, each with a single responsibility
+- `WikiLintMixin` delegates to `WikiAnalyzer` (extracted in Phase 1, v0.30.0)
+- All 879 Python tests + 38 frontend tests pass without modification
 
 ---
 
@@ -488,4 +534,4 @@ from llmwikify.mcp import MCPServer
 
 ---
 
-*Last updated: 2026-04-17 | Current version: 0.28.0*
+*Last updated: 2026-04-21 | Current version: 0.30.0*
