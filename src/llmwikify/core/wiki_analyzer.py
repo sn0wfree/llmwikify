@@ -14,6 +14,24 @@ import warnings
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from .constants import (
+    JACCARD_OVERLAP_THRESHOLD,
+    MAX_CONTRADICTIONS,
+    MAX_CROSS_REF_HINTS,
+    MAX_DATED_CLAIM_HINTS,
+    MAX_MISSING_DISPLAY,
+    MAX_QUERY_OVERLAP_HINTS,
+    MAX_SUMMARY_ITEMS,
+    MIN_ASSERTION_LENGTH,
+    MIN_ASSERTIONS_FOR_GAP,
+    MIN_KEYWORD_LENGTH,
+    MIN_MISSING_REF_COUNT,
+    MIN_YEAR_THRESHOLD,
+    OUTDATED_YEAR_GAP,
+    STOP_WORDS,
+    YEAR_GAP_THRESHOLD,
+)
+
 if TYPE_CHECKING:
     from .wiki import Wiki
 
@@ -63,8 +81,8 @@ class WikiAnalyzer:
 
             for year_str in years_in_page:
                 year = int(year_str)
-                if 2018 <= year <= current_year - 3:
-                    if latest_source_year - year >= 3:
+                if MIN_YEAR_THRESHOLD <= year <= current_year - YEAR_GAP_THRESHOLD:
+                    if latest_source_year - year >= YEAR_GAP_THRESHOLD:
                         hints.append({
                             "type": "dated_claim",
                             "page": page_name,
@@ -80,20 +98,14 @@ class WikiAnalyzer:
                         })
                         break
 
-            if len(hints) >= 3:
+            if len(hints) >= MAX_DATED_CLAIM_HINTS:
                 break
 
-        return hints[:3]
+        return hints[:MAX_DATED_CLAIM_HINTS]
 
     def _detect_query_page_overlap(self) -> list[dict]:
         """Find Query: pages with >=85% keyword Jaccard overlap."""
         hints = []
-        stop_words = {"what", "is", "the", "a", "an", "how", "do", "does", "why",
-                       "can", "could", "would", "should", "will", "did", "are", "was",
-                       "were", "be", "been", "being", "have", "has", "had", "of", "to",
-                       "in", "for", "on", "with", "at", "by", "from", "and", "or", "not",
-                       "but", "if", "then", "than", "so", "as", "about", "compare"}
-
         if not self.wiki.wiki_dir.exists():
             return hints
 
@@ -108,7 +120,7 @@ class WikiAnalyzer:
             keywords = set(
                 w.lower().strip(".,;:!?\"'()[]{}")
                 for w in page_name.replace("Query:", "").split()
-                if w.lower() not in stop_words and len(w) > 2
+                if w.lower() not in STOP_WORDS and len(w) > MIN_KEYWORD_LENGTH
             )
 
             if keywords:
@@ -131,7 +143,7 @@ class WikiAnalyzer:
                 overlap = len(p1["keywords"] & p2["keywords"])
                 jaccard = overlap / union
 
-                if jaccard >= 0.85:
+                if jaccard >= JACCARD_OVERLAP_THRESHOLD:
                     pair_key = tuple(sorted([p1["page_name"], p2["page_name"]]))
                     if pair_key not in seen_pairs:
                         seen_pairs.add(pair_key)
@@ -147,10 +159,10 @@ class WikiAnalyzer:
                             ),
                         })
 
-            if len(hints) >= 2:
+            if len(hints) >= MAX_QUERY_OVERLAP_HINTS:
                 break
 
-        return hints[:2]
+        return hints[:MAX_QUERY_OVERLAP_HINTS]
 
     def _detect_missing_cross_refs(self) -> list[dict]:
         """Find concepts mentioned in 2+ pages but not wikilinked."""
@@ -172,7 +184,7 @@ class WikiAnalyzer:
 
             wikilinks = set()
             for link in re.findall(r'\[\[(.*?)\]\]', content):
-                target = link.split('|')[0].split('#')[0].strip()
+                target = self.wiki._parse_wikilink_target(link)
                 wikilinks.add(target)
 
             content_text = re.sub(r'\[\[.*?\]\]', '', content)
@@ -190,11 +202,11 @@ class WikiAnalyzer:
                     concept_mentions[candidate].append(page_name)
 
         for concept, pages in sorted(concept_mentions.items(), key=lambda x: -len(x[1])):
-            if len(pages) >= 2:
+            if len(pages) >= MIN_MISSING_REF_COUNT:
                 hints.append({
                     "type": "missing_cross_ref",
                     "concept": concept,
-                    "mentioning_pages": pages[:5],
+                    "mentioning_pages": pages[:MAX_MISSING_DISPLAY],
                     "mention_count": len(pages),
                     "observation": (
                         f"'{concept}' is mentioned in {len(pages)} pages ({', '.join(pages[:3])}"
@@ -203,10 +215,10 @@ class WikiAnalyzer:
                     ),
                 })
 
-            if len(hints) >= 3:
+            if len(hints) >= MAX_CROSS_REF_HINTS:
                 break
 
-        return hints[:3]
+        return hints[:MAX_CROSS_REF_HINTS]
 
     def _detect_potential_contradictions(self) -> list[dict]:
         """Scan wiki pages for potential contradictions."""
@@ -258,7 +270,7 @@ class WikiAnalyzer:
                         "observation": f"Pages reference different values for '{attr}': {values_str}",
                     })
 
-            if len(contradictions) >= 3:
+            if len(contradictions) >= MAX_CONTRADICTIONS:
                 break
 
         year_claims: dict[str, list[dict]] = {}
@@ -287,7 +299,7 @@ class WikiAnalyzer:
                     "observation": f"'{entity}' has conflicting year claims: {claims_str}",
                 })
 
-            if len(contradictions) >= 3:
+            if len(contradictions) >= MAX_CONTRADICTIONS:
                 break
 
         negation_claims: dict[str, list[dict]] = {}
@@ -326,10 +338,10 @@ class WikiAnalyzer:
                     "observation": f"'{subject}' has both affirmative and negative claims across pages",
                 })
 
-            if len(contradictions) >= 3:
+            if len(contradictions) >= MAX_CONTRADICTIONS:
                 break
 
-        return contradictions[:3]
+        return contradictions[:MAX_CONTRADICTIONS]
 
     def _detect_data_gaps(self) -> list[dict]:
         """Detect potential data gaps in wiki pages."""
@@ -355,10 +367,10 @@ class WikiAnalyzer:
                 and not line.startswith('#')
                 and not line.startswith('---')
                 and not line.startswith('[')
-                and len(line.strip()) > 20
+                and len(line.strip()) > MIN_ASSERTION_LENGTH
             ]
 
-            if len(assertion_lines) >= 3 and not has_sources_section and not has_inline_citations:
+            if len(assertion_lines) >= MIN_ASSERTIONS_FOR_GAP and not has_sources_section and not has_inline_citations:
                 gaps.append({
                     "type": "unsourced_claims",
                     "page": page_name,
@@ -369,7 +381,7 @@ class WikiAnalyzer:
                     ),
                 })
 
-            if len(gaps) >= 3:
+            if len(gaps) >= MAX_CONTRADICTIONS:
                 break
 
             vague_time_words = re.findall(
@@ -380,17 +392,17 @@ class WikiAnalyzer:
                 gaps.append({
                     "type": "vague_temporal",
                     "page": page_name,
-                    "vague_references": list(set(w.lower() for w in vague_time_words))[:5],
+                    "vague_references": list(set(w.lower() for w in vague_time_words))[:MAX_SUMMARY_ITEMS],
                     "observation": (
                         f"'{page_name}' uses vague temporal references: "
                         f"{', '.join(set(w.lower() for w in vague_time_words[:3]))}"
                     ),
                 })
 
-            if len(gaps) >= 3:
+            if len(gaps) >= MAX_CONTRADICTIONS:
                 break
 
-        return gaps[:3]
+        return gaps[:MAX_CONTRADICTIONS]
 
     def _detect_outdated_pages(self) -> list[dict]:
         """Detect pages that may be outdated based on source dates."""
@@ -412,7 +424,7 @@ class WikiAnalyzer:
                 years_in_page = re.findall(r'\b(20\d{2})\b', content)
                 if years_in_page:
                     latest_year = max(int(y) for y in years_in_page)
-                    if current_year - latest_year >= 2:
+                    if current_year - latest_year >= OUTDATED_YEAR_GAP:
                         outdated.append({
                             "type": "potentially_outdated",
                             "page": page_name,
@@ -424,10 +436,10 @@ class WikiAnalyzer:
                             ),
                         })
 
-            if len(outdated) >= 3:
+            if len(outdated) >= MAX_CONTRADICTIONS:
                 break
 
-        return outdated[:3]
+        return outdated[:MAX_CONTRADICTIONS]
 
     def _detect_knowledge_gaps(self) -> list[dict]:
         """Detect knowledge gaps across the wiki."""
@@ -447,7 +459,7 @@ class WikiAnalyzer:
                     "suggestion": f"Consider creating a page for '{concept}'",
                 })
         except Exception:
-            logger.debug("Relation engine orphan detection failed")
+            logger.warning("Relation engine orphan detection failed")
 
         sources_dir = self.wiki.wiki_dir / "sources"
         if sources_dir.exists():
@@ -606,7 +618,7 @@ class WikiAnalyzer:
                     orphan_section += f"  ... and {len(orphans) - 20} more\n"
                 parts.append(orphan_section)
         except Exception:
-            logger.debug("Failed to load orphan concepts for lint context")
+            logger.warning("Failed to load orphan concepts for lint context")
 
         return "\n\n".join(parts)
 
@@ -647,7 +659,7 @@ class WikiAnalyzer:
                     "note": "Detected without LLM",
                 })
         except Exception:
-            logger.debug("Fallback gap detection failed")
+            logger.warning("Fallback gap detection failed")
 
         gaps.extend(self._detect_missing_cross_refs())
 
@@ -679,7 +691,7 @@ class WikiAnalyzer:
             content = page.read_text()
             links = re.findall(r'\[\[(.*?)\]\]', content)
             for link in links:
-                target = link.split('|')[0].split('#')[0].strip()
+                target = self.wiki._parse_wikilink_target(link)
                 if target in (self.wiki._index_page_name, self.wiki._log_page_name):
                     continue
                 if self.wiki._resolve_wikilink_target(target) is None:
@@ -791,7 +803,7 @@ class WikiAnalyzer:
             content = page.read_text()
             links = re.findall(r'\[\[(.*?)\]\]', content)
             for link in links:
-                target = link.split('|')[0].split('#')[0].strip()
+                target = self.wiki._parse_wikilink_target(link)
                 if target not in (self.wiki._index_page_name, self.wiki._log_page_name):
                     link_counts[target] = link_counts.get(target, 0) + 1
 
@@ -859,7 +871,7 @@ class WikiAnalyzer:
             content = page.read_text()
             links = re.findall(r'\[\[(.*?)\]\]', content)
             for link in links:
-                target = link.split('|')[0].split('#')[0].strip()
+                target = self.wiki._parse_wikilink_target(link)
                 if target not in (self.wiki._index_page_name, self.wiki._log_page_name):
                     link_counts[target] = link_counts.get(target, 0) + 1
 
@@ -895,7 +907,7 @@ class WikiAnalyzer:
             content = page.read_text()
             links = re.findall(r'\[\[(.*?)\]\]', content)
             for link in links:
-                target = link.split('|')[0].split('#')[0].strip()
+                target = self.wiki._parse_wikilink_target(link)
                 if target in (self.wiki._index_page_name, self.wiki._log_page_name):
                     continue
                 if self.wiki._resolve_wikilink_target(target) is None:

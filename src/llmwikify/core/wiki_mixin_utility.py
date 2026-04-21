@@ -15,6 +15,15 @@ class WikiUtilityMixin:
     """Utility methods shared across Wiki operations."""
 
     @staticmethod
+    def _parse_wikilink_target(link: str) -> str:
+        """Extract the target page name from a wikilink string.
+
+        Handles aliases ([[Target|Display]]) and sections ([[Target#Section]]).
+        Returns the clean target page name.
+        """
+        return link.split('|')[0].split('#')[0].strip()
+
+    @staticmethod
     def _slugify(text: str) -> str:
         """Convert text to URL-friendly slug."""
         text = text.lower().strip()

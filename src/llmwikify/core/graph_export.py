@@ -53,7 +53,7 @@ def build_graph(index: WikiIndex, include_wikilinks: bool = True, include_relati
                     "weight": {"EXTRACTED": 3, "INFERRED": 2, "AMBIGUOUS": 1}.get(row["confidence"], 1),
                 })
         except Exception:
-            logger.debug("Relations table query failed")
+            logger.warning("Relations table query failed")
 
     return {"nodes": list(nodes.values()), "edges": edges}
 

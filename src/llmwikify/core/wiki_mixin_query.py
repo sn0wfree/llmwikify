@@ -6,6 +6,14 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .constants import (
+    MAX_KEY_TOPICS,
+    MAX_QUERY_TOPIC_LENGTH,
+    MIN_KEYWORD_LENGTH,
+    SIMILARITY_THRESHOLD,
+    STOP_WORDS,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -154,7 +162,7 @@ class WikiQueryMixin:
         
         Extracts topic (first 50 chars, slugified) and prefixes with 'Query: '.
         """
-        topic = query.strip()[:50].strip()
+        topic = query.strip()[:MAX_QUERY_TOPIC_LENGTH].strip()
         topic = topic.title()
         topic = topic.rstrip(".,;:!?")
         return f"Query: {topic}"
@@ -172,16 +180,10 @@ class WikiQueryMixin:
         if not self.wiki_dir.exists():
             return None
 
-        stop_words = {"what", "is", "the", "a", "an", "how", "do", "does", "why",
-                       "can", "could", "would", "should", "will", "did", "are", "was",
-                       "were", "be", "been", "being", "have", "has", "had", "of", "to",
-                       "in", "for", "on", "with", "at", "by", "from", "and", "or", "not",
-                       "but", "if", "then", "than", "so", "as", "about", "compare",
-                       "what's", "how's", "tell", "me", "explain"}
         keywords = set(
             w.lower().strip(".,;:!?\"'()[]{}")
             for w in query.split()
-            if w.lower() not in stop_words and len(w) > 2
+            if w.lower() not in STOP_WORDS and len(w) > MIN_KEYWORD_LENGTH
         )
 
         if not keywords:
@@ -199,7 +201,7 @@ class WikiQueryMixin:
             page_keywords = set(
                 w.lower().strip(".,;:!?\"'()[]{}")
                 for w in page_name.replace("Query:", "").split()
-                if w.lower() not in stop_words and len(w) > 2
+                if w.lower() not in STOP_WORDS and len(w) > MIN_KEYWORD_LENGTH
             )
 
             if not page_keywords:
@@ -213,7 +215,7 @@ class WikiQueryMixin:
                 content = page.read_text()
                 content_keywords = set(
                     w.lower() for w in re.findall(r'\b\w{4,}\b', content)
-                    if w.lower() not in stop_words
+                    if w.lower() not in STOP_WORDS
                 )
                 content_overlap = len(keywords & content_keywords)
                 content_score = content_overlap / len(keywords) if keywords else 0
@@ -221,7 +223,7 @@ class WikiQueryMixin:
             except OSError:
                 pass
 
-            if score > best_score and score >= 0.3:
+            if score > best_score and score >= SIMILARITY_THRESHOLD:
                 best_score = score
 
                 preview = content.split('\n')[-1] if '\n' in content else content
@@ -231,7 +233,7 @@ class WikiQueryMixin:
                         preview = stripped[:200]
                         break
 
-                key_topics = list(page_keywords)[:5]
+                key_topics = list(page_keywords)[:MAX_KEY_TOPICS]
                 word_count = len(content.split())
 
                 try:

@@ -2,6 +2,8 @@
 
 import logging
 
+from .wiki_analyzer import WikiAnalyzer
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,52 +73,17 @@ class WikiStatusMixin:
                 stats = engine.get_stats()
                 result["graph_stats"] = stats
             except Exception:
-                logger.debug("Failed to load graph stats")
+                logger.warning("Failed to load graph stats")
                 result["graph_stats"] = {"total_relations": 0, "unique_concepts": 0}
 
         return result
 
     def recommend(self) -> dict:
-        """Generate smart recommendations."""
-        import re
-        missing_pages = []
-        orphan_pages = []
+        """Generate smart recommendations.
 
-        link_counts = {}
-        for page in self._wiki_pages():
-            content = page.read_text()
-            links = re.findall(r'\[\[(.*?)\]\]', content)
-            for link in links:
-                target = link.split('|')[0].split('#')[0].strip()
-                if target not in (self._index_page_name, self._log_page_name):
-                    link_counts[target] = link_counts.get(target, 0) + 1
-
-        for target, count in link_counts.items():
-            if count >= 2:
-                if self._resolve_wikilink_target(target) is None:
-                    missing_pages.append({
-                        "page": target,
-                        "reference_count": count,
-                    })
-
-        for page in self._wiki_pages():
-            page_name = self._page_display_name(page)
-
-            if self._should_exclude_orphan(page_name, page):
-                continue
-
-            inbound = self.index.get_inbound_links(page_name)
-            if not inbound:
-                orphan_pages.append({"page": page_name})
-
-        return {
-            "missing_pages": missing_pages,
-            "orphan_pages": orphan_pages,
-            "summary": {
-                "total_missing_pages": len(missing_pages),
-                "total_orphans": len(orphan_pages),
-            },
-        }
+        Delegates to WikiAnalyzer — single source of truth.
+        """
+        return WikiAnalyzer(self).recommend()
 
     def hint(self) -> dict:
         """Generate smart suggestions for wiki improvement.
@@ -129,87 +96,4 @@ class WikiStatusMixin:
             DeprecationWarning,
             stacklevel=2,
         )
-        return self._generate_hints()
-
-    def _generate_hints(self) -> dict:
-        """Internal: generate smart suggestions for wiki improvement."""
-        import re
-        hints = []
-
-        orphan_count = 0
-        for page in self._wiki_pages():
-            page_name = self._page_display_name(page)
-            if self._should_exclude_orphan(page_name, page):
-                continue
-            inbound = self.index.get_inbound_links(page_name)
-            if not inbound:
-                orphan_count += 1
-
-        if orphan_count > 0:
-            hints.append({
-                "type": "orphan",
-                "priority": "medium",
-                "message": f"You have {orphan_count} orphan page(s). Consider adding cross-references to connect them.",
-            })
-
-        link_counts = {}
-        for page in self._wiki_pages():
-            content = page.read_text()
-            links = re.findall(r'\[\[(.*?)\]\]', content)
-            for link in links:
-                target = link.split('|')[0].split('#')[0].strip()
-                if target not in (self._index_page_name, self._log_page_name):
-                    link_counts[target] = link_counts.get(target, 0) + 1
-
-        missing = []
-        for target, count in link_counts.items():
-            if count >= 2:
-                if self._resolve_wikilink_target(target) is None:
-                    missing.append(target)
-
-        if missing:
-            hints.append({
-                "type": "missing",
-                "priority": "high",
-                "message": f"Pages referenced but don't exist: {', '.join(missing[:5])}",
-            })
-
-        page_count = len(self._wiki_pages())
-        if page_count < 5:
-            hints.append({
-                "type": "growth",
-                "priority": "low",
-                "message": "Wiki is small. Consider ingesting more sources to build knowledge.",
-            })
-        elif page_count < 20:
-            hints.append({
-                "type": "growth",
-                "priority": "low",
-                "message": "Wiki is growing well. Consider running lint to check health.",
-            })
-
-        broken_count = 0
-        for page in self._wiki_pages():
-            content = page.read_text()
-            links = re.findall(r'\[\[(.*?)\]\]', content)
-            for link in links:
-                target = link.split('|')[0].split('#')[0].strip()
-                if target in (self._index_page_name, self._log_page_name):
-                    continue
-                if self._resolve_wikilink_target(target) is None:
-                    broken_count += 1
-
-        if broken_count > 0:
-            hints.append({
-                "type": "broken_links",
-                "priority": "high",
-                "message": f"Found {broken_count} broken link(s). Consider fixing or removing them.",
-            })
-
-        return {
-            "hints": hints,
-            "summary": {
-                "total_hints": len(hints),
-                "high_priority": sum(1 for h in hints if h['priority'] == 'high'),
-            }
-        }
+        return WikiAnalyzer(self)._generate_hints()
