@@ -223,11 +223,6 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
             <div className="flex h-full">
               {/* Graph area */}
               <div className="w-1/2 h-full relative border-r border-slate-700">
-                {graphLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 z-10">
-                    <span className="text-slate-400">Loading graph...</span>
-                  </div>
-                )}
                 <GraphView
                   nodes={graphNodes}
                   edges={graphEdges}
@@ -235,6 +230,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
                   currentNode={page?.page_name || null}
                   onNodeClick={(nodeId) => onPageSelect(nodeId)}
                   showLabels={showLabels}
+                  isLoading={graphLoading}
                 />
               </div>
               {/* Preview area */}

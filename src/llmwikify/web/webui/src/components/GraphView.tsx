@@ -9,6 +9,7 @@ interface GraphViewProps {
   currentNode: string | null;
   onNodeClick: (nodeId: string) => void;
   showLabels?: boolean;
+  isLoading?: boolean;
 }
 
 interface SimNode extends GraphNode, d3.SimulationNodeDatum {}
@@ -47,10 +48,11 @@ interface TooltipData {
   y: number;
 }
 
-export function GraphView({ nodes, edges, allTypes, currentNode, onNodeClick, showLabels = true }: GraphViewProps) {
+export function GraphView({ nodes, edges, allTypes, currentNode, onNodeClick, showLabels = true, isLoading = false }: GraphViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<SimNode, undefined> | null>(null);
+  const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
 
@@ -91,7 +93,15 @@ export function GraphView({ nodes, edges, allTypes, currentNode, onNodeClick, sh
 
     svg.call(zoom);
 
-    const simNodes: SimNode[] = nodes.map(n => ({ ...n }));
+    // 使用保存的位置初始化节点，避免从随机位置开始
+    const simNodes: SimNode[] = nodes.map(n => {
+      const savedPos = nodePositionsRef.current.get(n.id);
+      return {
+        ...n,
+        x: savedPos?.x ?? width / 2 + (Math.random() - 0.5) * 100,
+        y: savedPos?.y ?? height / 2 + (Math.random() - 0.5) * 100,
+      };
+    });
     const simEdges: SimLink[] = edges.map(e => ({ ...e }));
 
     const simulation = d3.forceSimulation<SimNode>(simNodes)
@@ -99,7 +109,8 @@ export function GraphView({ nodes, edges, allTypes, currentNode, onNodeClick, sh
       .force('charge', d3.forceManyBody().strength(-500))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide().radius(d => getNodeRadius(d as SimNode) + 10))
-      .alphaDecay(0.02);
+      .alphaDecay(0.01)  // 更慢的衰减，保持更稳定
+      .alphaMin(0.05);   // 最小 alpha，防止过早停止
 
     simulationRef.current = simulation;
 
@@ -204,8 +215,16 @@ export function GraphView({ nodes, edges, allTypes, currentNode, onNodeClick, sh
         .attr('y', d => (((d.source as SimNode).y || 0) + ((d.target as SimNode).y || 0)) / 2);
 
       node.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
+
+      // 保存节点位置，供下次渲染使用
+      simNodes.forEach(n => {
+        if (n.x !== undefined && n.y !== undefined) {
+          nodePositionsRef.current.set(n.id, { x: n.x, y: n.y });
+        }
+      });
     });
 
+    // 等待 simulation 稳定后再缩放，避免跳动
     setTimeout(() => {
       const bounds = (g.node() as SVGGElement)?.getBBox();
       if (bounds && bounds.width > 0 && bounds.height > 0) {
@@ -217,12 +236,16 @@ export function GraphView({ nodes, edges, allTypes, currentNode, onNodeClick, sh
         );
         const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
         const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
-        svg.transition().duration(500).call(
-          zoom.transform,
-          d3.zoomIdentity.translate(tx, ty).scale(scale)
-        );
+        // 使用 ease-in-out 缓动函数，使缩放更平滑
+        svg.transition()
+          .duration(750)
+          .ease(d3.easeCubicInOut)
+          .call(
+            zoom.transform,
+            d3.zoomIdentity.translate(tx, ty).scale(scale)
+          );
       }
-    }, 300);
+    }, 800);
 
   }, [nodes, edges, allTypes, dimensions, currentNode, onNodeClick, showLabels]);
 
@@ -234,6 +257,19 @@ export function GraphView({ nodes, edges, allTypes, currentNode, onNodeClick, sh
       }
     };
   }, [renderGraph]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full bg-slate-900">
+        <div className="text-center">
+          <div className="flex justify-center mb-4">
+            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+          <p className="text-slate-400">Loading graph...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (nodes.length === 0) {
     return (
