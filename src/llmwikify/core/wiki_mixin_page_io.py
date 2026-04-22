@@ -141,13 +141,27 @@ class WikiPageIOMixin:
         return result
 
     def search(self, query: str, limit: int = 10) -> list:
-        """Full-text search with sink status attached."""
+        """Full-text search with sink status and page_type attached."""
         results = self.index.search(query, limit)
 
+        page_types = {}
+        try:
+            page_types = self._load_page_type_mapping()
+        except Exception:
+            pass
+
         for result in results:
-            sink_info = self.query_sink.get_info_for_page(result['page_name'])
+            page_name = result['page_name']
+            sink_info = self.query_sink.get_info_for_page(page_name)
             result['has_sink'] = sink_info['has_sink']
             result['sink_entries'] = sink_info['sink_entries']
+
+            page_type = 'wiki_page'
+            for type_name, type_dir in page_types.items():
+                if page_name.startswith(type_dir + '/') or page_name == type_dir:
+                    page_type = type_name
+                    break
+            result['page_type'] = page_type
 
         return results
 
