@@ -5,6 +5,7 @@ import { GraphNode, GraphEdge } from '../api';
 interface GraphViewProps {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  allTypes: string[];
   currentNode: string | null;
   onNodeClick: (nodeId: string) => void;
   showLabels?: boolean;
@@ -18,20 +19,40 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
   weight: number;
 }
 
-const PAGE_TYPE_COLORS: Record<string, string> = {
-  paper: '#a78bfa',
-  entity: '#60a5fa',
-  concept: '#34d399',
-  overview: '#fbbf24',
-  wiki_page: '#94a3b8',
-  default: '#94a3b8',
-};
+const DEFAULT_COLORS = ['#a855f7', '#3b82f6', '#14b8a6', '#f97316', '#ec4899', '#ef4444', '#fbbf24', '#22c55e', '#8b5cf6', '#06b6d4'];
 
-export function GraphView({ nodes, edges, currentNode, onNodeClick, showLabels = true }: GraphViewProps) {
+function getDynamicColor(pageType: string, allTypes: string[]): string {
+  if (!allTypes || allTypes.length === 0) {
+    return DEFAULT_COLORS[0];
+  }
+  const idx = allTypes.indexOf(pageType);
+  if (idx === -1) return '#94a3b8';
+  const hue = (idx / allTypes.length) * 360;
+  const sat = 65 + (idx % 3) * 10;
+  const light = 50 + (idx % 2) * 10;
+  return `hsl(${hue}, ${sat}%, ${light}%)`;
+}
+
+function getNodeRadius(d: SimNode): number {
+  if (d.is_current) return 40;
+  const degree = d.in_degree + d.out_degree;
+  if (degree >= 5) return 30;
+  if (degree >= 2) return 20;
+  return 12;
+}
+
+interface TooltipData {
+  node: SimNode;
+  x: number;
+  y: number;
+}
+
+export function GraphView({ nodes, edges, allTypes, currentNode, onNodeClick, showLabels = true }: GraphViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<SimNode, undefined> | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [tooltip, setTooltip] = useState<TooltipData | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -53,18 +74,15 @@ export function GraphView({ nodes, edges, currentNode, onNodeClick, showLabels =
 
     const { width, height } = dimensions;
 
-    // Define glow filter
     const defs = svg.append('defs');
-    const filter = defs.append('filter').attr('id', 'glow');
-    filter.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'coloredBlur');
+    const filter = defs.append('filter').attr('id', 'glow').attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%');
+    filter.append('feGaussianBlur').attr('stdDeviation', '4').attr('result', 'coloredBlur');
     const feMerge = filter.append('feMerge');
     feMerge.append('feMergeNode').attr('in', 'coloredBlur');
     feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
 
-    // Create groups
     const g = svg.append('g');
 
-    // Zoom behavior
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 4])
       .on('zoom', (event) => {
@@ -73,41 +91,36 @@ export function GraphView({ nodes, edges, currentNode, onNodeClick, showLabels =
 
     svg.call(zoom);
 
-    // Prepare simulation data
     const simNodes: SimNode[] = nodes.map(n => ({ ...n }));
     const simEdges: SimLink[] = edges.map(e => ({ ...e }));
 
-    // Create force simulation
     const simulation = d3.forceSimulation<SimNode>(simNodes)
-      .force('link', d3.forceLink<SimNode, SimLink>(simEdges).id(d => d.id).distance(120).strength(0.4))
-      .force('charge', d3.forceManyBody().strength(-400))
+      .force('link', d3.forceLink<SimNode, SimLink>(simEdges).id(d => (d as SimNode).id).distance(100).strength(0.5))
+      .force('charge', d3.forceManyBody().strength(-500))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(30))
+      .force('collision', d3.forceCollide().radius(d => getNodeRadius(d as SimNode) + 10))
       .alphaDecay(0.02);
 
     simulationRef.current = simulation;
 
-    // Draw edges
     const link = g.append('g')
       .selectAll<SVGLineElement, SimLink>('line')
       .data(simEdges)
       .join('line')
       .attr('stroke', '#475569')
-      .attr('stroke-opacity', 0.6)
-      .attr('stroke-width', d => Math.max(1, Math.min(3, d.weight)));
+      .attr('stroke-opacity', d => 0.2 + Math.min(0.4, d.weight * 0.15))
+      .attr('stroke-width', d => Math.max(0.5, Math.min(2.5, d.weight * 0.8)));
 
-    // Edge labels
     const edgeLabels = g.append('g')
       .selectAll<SVGTextElement, SimLink>('text')
       .data(simEdges)
       .join('text')
       .text(d => d.type === 'wikilink' ? '' : d.type)
-      .attr('font-size', '8px')
+      .attr('font-size', '7px')
       .attr('fill', '#64748b')
       .attr('text-anchor', 'middle')
-      .attr('dy', -4);
+      .attr('dy', -3);
 
-    // Draw nodes
     const node = g.append('g')
       .selectAll<SVGGElement, SimNode>('g')
       .data(simNodes)
@@ -129,45 +142,56 @@ export function GraphView({ nodes, edges, currentNode, onNodeClick, showLabels =
           d.fy = null;
         }));
 
-    // Node circles
     node.append('circle')
-      .attr('r', d => {
-        const degree = d.in_degree + d.out_degree;
-        return Math.max(8, Math.min(20, 8 + degree * 2));
-      })
+      .attr('r', d => getNodeRadius(d))
       .attr('fill', d => {
-        const color = PAGE_TYPE_COLORS[d.page_type] || PAGE_TYPE_COLORS.default;
-        return d.is_current ? '#f59e0b' : color;
+        if (d.is_current) return '#fbbf24';
+        return getDynamicColor(d.page_type, allTypes);
       })
-      .attr('stroke', d => d.is_current ? '#fbbf24' : '#1e293b')
-      .attr('stroke-width', d => d.is_current ? 3 : 1.5)
+      .attr('stroke', d => d.is_current ? '#fef08a' : 'rgba(30, 41, 59, 0.6)')
+      .attr('stroke-width', d => d.is_current ? 3 : 1)
       .attr('filter', d => d.is_current ? 'url(#glow)' : null);
 
-    // Node labels
     if (showLabels) {
       node.append('text')
         .text(d => {
+          const r = getNodeRadius(d);
+          if (r <= 12) return '';
           const label = d.label || d.id;
-          return label.length > 20 ? label.slice(0, 18) + '...' : label;
+          if (r <= 20 && label.length > 12) return label.slice(0, 10) + '..';
+          if (r <= 30 && label.length > 16) return label.slice(0, 14) + '...';
+          return label;
         })
-        .attr('font-size', '10px')
-        .attr('fill', '#cbd5e1')
+        .attr('font-size', d => getNodeRadius(d) <= 20 ? '9px' : '11px')
+        .attr('fill', '#e2e8f0')
         .attr('text-anchor', 'middle')
-        .attr('dy', d => {
-          const degree = d.in_degree + d.out_degree;
-          return Math.max(8, Math.min(20, 8 + degree * 2)) + 14;
-        })
+        .attr('dy', d => getNodeRadius(d) + 14)
         .attr('pointer-events', 'none')
-        .style('text-shadow', '0 1px 3px rgba(0,0,0,0.8)');
+        .style('text-shadow', '0 1px 4px rgba(0,0,0,0.9)');
     }
 
-    // Node click handler
     node.on('click', (event, d) => {
       event.stopPropagation();
       onNodeClick(d.id);
     });
 
-    // Simulation tick
+    node.on('mouseenter', (event, d) => {
+      const r = getNodeRadius(d);
+      const degree = d.in_degree + d.out_degree;
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect && d.x !== undefined && d.y !== undefined) {
+        setTooltip({
+          node: d,
+          x: d.x + rect.width / 2,
+          y: d.y + rect.height / 2 - r - 35,
+        });
+      }
+    });
+
+    node.on('mouseleave', () => {
+      setTooltip(null);
+    });
+
     simulation.on('tick', () => {
       link
         .attr('x1', d => (d.source as SimNode).x || 0)
@@ -182,15 +206,14 @@ export function GraphView({ nodes, edges, currentNode, onNodeClick, showLabels =
       node.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
     });
 
-    // Initial zoom to fit
     setTimeout(() => {
       const bounds = (g.node() as SVGGElement)?.getBBox();
       if (bounds && bounds.width > 0 && bounds.height > 0) {
-        const padding = 60;
+        const padding = 80;
         const scale = Math.min(
           width / (bounds.width + padding * 2),
           height / (bounds.height + padding * 2),
-          1.5
+          1.2
         );
         const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
         const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
@@ -201,7 +224,7 @@ export function GraphView({ nodes, edges, currentNode, onNodeClick, showLabels =
       }
     }, 300);
 
-  }, [nodes, edges, dimensions, currentNode, onNodeClick, showLabels]);
+  }, [nodes, edges, allTypes, dimensions, currentNode, onNodeClick, showLabels]);
 
   useEffect(() => {
     renderGraph();
@@ -224,13 +247,27 @@ export function GraphView({ nodes, edges, currentNode, onNodeClick, showLabels =
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-slate-900">
+    <div ref={containerRef} className="w-full h-full bg-slate-900 relative">
       <svg
         ref={svgRef}
         width={dimensions.width}
         height={dimensions.height}
         className="w-full h-full"
       />
+      {tooltip && (
+        <div
+          className="absolute z-20 pointer-events-none bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 shadow-xl"
+          style={{
+            left: Math.max(10, Math.min(dimensions.width - 150, tooltip.x)),
+            top: Math.max(10, tooltip.y),
+          }}
+        >
+          <p className="text-sm font-medium text-slate-100">{tooltip.node.label || tooltip.node.id}</p>
+          <p className="text-xs text-slate-400 mt-1">
+            {tooltip.node.page_type} • in: {tooltip.node.in_degree} / out: {tooltip.node.out_degree}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -57,6 +57,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
   const [pages, setPages] = useState<SearchResult[]>([]);
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
+  const [graphAllTypes, setGraphAllTypes] = useState<string[]>([]);
   const [graphLoading, setGraphLoading] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
 
@@ -77,9 +78,11 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
       const data = await api.wiki.graph(currentPage);
       setGraphNodes(data.nodes);
       setGraphEdges(data.edges);
+      setGraphAllTypes(data.all_types || []);
     } catch {
       setGraphNodes([]);
       setGraphEdges([]);
+      setGraphAllTypes([]);
     } finally {
       setGraphLoading(false);
     }
@@ -212,6 +215,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
                 <GraphView
                   nodes={graphNodes}
                   edges={graphEdges}
+                  allTypes={graphAllTypes}
                   currentNode={page?.page_name || null}
                   onNodeClick={(nodeId) => onPageSelect(nodeId)}
                   showLabels={showLabels}

@@ -129,6 +129,7 @@ export interface GraphData {
     displayed_nodes: number;
     mode: string;
   };
+  all_types: string[];
 }
 
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {

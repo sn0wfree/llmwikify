@@ -621,6 +621,7 @@ def _register_rest_routes(mcp: FastMCP, wiki: Wiki, agent: Any | None = None) ->
                 "displayed_nodes": len(result_nodes),
                 "mode": display_mode,
             },
+            "all_types": list(page_types.keys()),
         })
 
     # -- Agent endpoints --
