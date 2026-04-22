@@ -13,18 +13,19 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from ..core import Wiki
+from ..core.graph_export import build_graph
 
 logger = logging.getLogger(__name__)
 
 
 def create_mcp_server(wiki: Wiki, name: str | None = None, config: dict[str, Any] | None = None) -> FastMCP:
     """Create a FastMCP server with all wiki tools registered.
-    
+
     Args:
         wiki: Wiki instance to operate on
         name: Optional server name (defaults to directory name)
         config: Optional MCP configuration dict
-        
+
     Returns:
         Configured FastMCP server instance
     """
@@ -56,7 +57,6 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
     @mcp.tool
     def wiki_init(overwrite: bool = False) -> str:
         """Initialize a wiki."""
-        import json
         return json.dumps(wiki.init(overwrite=overwrite))
 
     @mcp.tool
@@ -96,7 +96,6 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             limit: Max LLM-detected issues to return (default: 10).
             force: Force re-detection (ignore cache).
         """
-        import json
         result = wiki.lint(
             mode=mode, limit=limit, force=force,
             generate_investigations=generate_investigations,
@@ -128,7 +127,6 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         Returns:
             JSON with analysis results: topics, entities, relations, suggested_pages, etc.
         """
-        import json
         result = wiki.analyze_source(source_path, force=force)
         return json.dumps(result, ensure_ascii=False, indent=2)
 
@@ -140,7 +138,6 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         outbound: bool = False,
     ) -> str:
         """Show page references (inbound and outbound wikilinks)."""
-        import json
         result = {"page": page_name, "inbound": [], "outbound": []}
         if not outbound:
             result["inbound"] = wiki.get_inbound_links(page_name, include_context=detail)
@@ -190,7 +187,6 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         mode: str = "sink",
     ) -> str:
         """Save a query answer as a wiki page. mode="sink" buffers, mode="update" overwrites."""
-        import json
         return json.dumps(wiki.synthesize_query(
             query=query,
             answer=answer,
@@ -205,7 +201,6 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
     @mcp.tool
     def wiki_sink_status() -> str:
         """Overview of all query sinks with entry counts."""
-        import json
         return json.dumps(wiki.sink_status())
 
     @mcp.tool
@@ -221,7 +216,6 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         source_file: str | None = None,
     ) -> str:
         """Query and modify the knowledge graph. Actions: query, path, stats, write."""
-        import json
         engine = wiki.get_relation_engine()
         if action == "query":
             return json.dumps(engine.get_neighbors(
@@ -255,7 +249,6 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         Returns:
             JSON with synthesis suggestions per source.
         """
-        import json
         result = wiki.suggest_synthesis(source_name=source_name)
         return json.dumps(result, ensure_ascii=False, indent=2)
 
@@ -270,7 +263,6 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             JSON with knowledge gap analysis results including:
             outdated_pages, knowledge_gaps, redundant_pages, contradictions, data_gaps.
         """
-        import json
         result = wiki.lint(
             generate_investigations=True,
             limit=limit,
@@ -295,7 +287,6 @@ def _register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             report: Generate surprise score report.
             analyze: Run PageRank, community analysis, and generate page suggestions (P1.3).
         """
-        import json
 
         if action == "analyze":
             result = wiki.graph_analyze()
@@ -344,7 +335,6 @@ def _auto_register_mcporter(service_name: str, host: str, port: int) -> None:
     discover the service.  Skips silently if the name is already registered.
     Best-effort — failures are logged but never block startup.
     """
-    import json
 
     config_dir = Path.home() / ".mcporter"
     config_file = config_dir / "mcporter.json"
@@ -385,7 +375,7 @@ def serve_mcp(wiki: Wiki, name: str | None = None, transport: str | None = None,
               host: str | None = None, port: int | None = None,
               config: dict[str, Any] | None = None) -> None:
     """Create and run the MCP server.
-    
+
     Args:
         wiki: Wiki instance
         name: Optional server name (defaults to directory name)
@@ -523,7 +513,7 @@ def _register_rest_routes(mcp: FastMCP, wiki: Wiki, agent: Any | None = None) ->
         mode = request.query_params.get("mode", "auto")
 
         try:
-            graph_data = wiki.graph_export.build_graph(
+            graph_data = build_graph(
                 wiki.index, include_wikilinks=True, include_relations=False
             )
         except Exception:
@@ -814,7 +804,6 @@ def _register_rest_routes(mcp: FastMCP, wiki: Wiki, agent: Any | None = None) ->
 
 def _mount_webui(mcp: FastMCP) -> None:
     """Mount React static files with multi-level fallback."""
-    import os
 
     # Try multiple locations for the webui dist
     candidates = []
@@ -882,7 +871,6 @@ def create_unified_server(
     app = mcp.http_app()
 
     if api_key:
-        from starlette.middleware.base import BaseHTTPMiddleware
         app = AuthMiddleware(app, api_key=api_key)
 
     return app

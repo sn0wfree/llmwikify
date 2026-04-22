@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { api, WikiPage, GraphNode, GraphEdge } from '../api';
+import { api, WikiPage, GraphNode, GraphEdge, SearchResult } from '../api';
 import { useToast } from './Toast';
 import { FrontMatterPanel, FrontMatterData } from './FrontMatterPanel';
 import { GraphView } from './GraphView';
+import { PageTree } from './PageTree';
 
 interface EditorProps {
   selectedPage: string | null;
@@ -53,7 +54,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
   const [body, setBody] = useState('');
   const [mode, setMode] = useState<'edit' | 'graph'>('graph');
   const [saving, setSaving] = useState(false);
-  const [fileTree, setFileTree] = useState<Array<{ name: string; path: string }>>([]);
+  const [pages, setPages] = useState<SearchResult[]>([]);
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
   const [graphLoading, setGraphLoading] = useState(false);
@@ -87,11 +88,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
   const loadTree = useCallback(async () => {
     try {
       const results = await api.wiki.search('', 100);
-      const tree = results.map((r) => ({
-        name: r.page_name.split('/').pop() || r.page_name,
-        path: r.page_name,
-      }));
-      setFileTree(tree);
+      setPages(results);
     } catch {
       addToast('warning', '无法加载文件树');
     }
@@ -138,22 +135,14 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
 
   return (
     <div className="flex h-full">
-      {/* File Tree */}
+      {/* Page Tree */}
       <div className="w-48 bg-slate-800/50 border-r border-slate-700 overflow-y-auto">
         <div className="p-2 text-xs font-semibold text-slate-400 uppercase">Pages</div>
-        {fileTree.map((f) => (
-          <button
-            key={f.path}
-            onClick={() => onPageSelect(f.path)}
-            className={`w-full text-left px-3 py-1.5 text-sm truncate transition-colors ${
-              page?.page_name === f.path
-                ? 'bg-blue-600/20 text-blue-400'
-                : 'text-slate-300 hover:bg-slate-700'
-            }`}
-          >
-            {f.name.replace('.md', '')}
-          </button>
-        ))}
+        <PageTree
+          pages={pages}
+          selectedPage={page?.page_name || null}
+          onSelect={onPageSelect}
+        />
       </div>
 
       {/* Editor Area */}

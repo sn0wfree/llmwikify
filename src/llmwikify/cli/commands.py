@@ -258,12 +258,12 @@ class WikiCLI:
             return 0 if failed == 0 else 1
         else:
             # Single source
-            source_path = getattr(args, 'source')
+            source_path = args.source
             if not source_path:
                 print("Error: specify a source path or use --all")
                 return 1
 
-            result = self.wiki.analyze_source(source_path, force=getattr(args, 'force', False))
+            result = self.wiki.analyze_source(source_path, force=getattr(args, 'force', False) if hasattr(args, 'force') else False)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0 if result.get("status") not in ("error", "skipped") else 1
 
@@ -770,7 +770,7 @@ class WikiCLI:
             else:
                 print("\nNo pages will be created. Use --self-create for LLM-assisted processing.", file=sys.stderr)
             batch_results = []
-            for i, source in enumerate(sources, 1):
+            for source in sources:
                 batch_results.append({
                     "source": str(source),
                     "status": "dry_run",
@@ -1100,7 +1100,7 @@ class WikiCLI:
         except ImportError as e:
             print(f"❌ Missing dependency: {e}")
             return 1
-        except (ImportError, RuntimeError, OSError, ValueError) as e:
+        except (RuntimeError, OSError, ValueError) as e:
             print(f"❌ Export failed: {e}")
             return 1
 
@@ -1346,7 +1346,7 @@ class WikiCLI:
         communities = result.get("communities", {})
         if communities.get("communities"):
             print(f"\n=== Communities ({communities.get('num_communities', 0)}) ===")
-            for cid, comm in list(communities["communities"].items())[:5]:
+            for comm in list(communities["communities"].values())[:5]:
                 print(f"  • {comm['label']}: {comm['size']} nodes")
 
             if communities.get("bridges"):
