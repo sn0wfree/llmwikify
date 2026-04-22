@@ -53,6 +53,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
   const [metadata, setMetadata] = useState<FrontMatterData>({});
   const [body, setBody] = useState('');
   const [mode, setMode] = useState<'edit' | 'graph'>('graph');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pages, setPages] = useState<SearchResult[]>([]);
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
@@ -142,20 +143,31 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
   return (
     <div className="flex h-full">
       {/* Page Tree */}
-      <div className="w-48 bg-slate-800/50 border-r border-slate-700 overflow-y-auto">
-        <div className="p-2 text-xs font-semibold text-slate-400 uppercase">Pages</div>
-        <PageTree
-          pages={pages}
-          allTypes={allTypes}
-          selectedPage={page?.page_name || null}
-          onSelect={onPageSelect}
-        />
+      <div className={`${sidebarCollapsed ? 'w-10' : 'w-40'} bg-slate-800/50 border-r border-slate-700 overflow-y-auto transition-all duration-200`}>
+        {!sidebarCollapsed && (
+          <>
+            <div className="p-2 text-xs font-semibold text-slate-400 uppercase">Pages</div>
+            <PageTree
+              pages={pages}
+              allTypes={allTypes}
+              selectedPage={page?.page_name || null}
+              onSelect={onPageSelect}
+            />
+          </>
+        )}
       </div>
 
       {/* Editor Area */}
       <div className="flex-1 flex flex-col">
         {/* Toolbar */}
         <div className="h-10 bg-slate-800 border-b border-slate-700 flex items-center px-4 gap-2">
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="text-slate-400 hover:text-slate-200 text-sm"
+            title={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+          >
+            {sidebarCollapsed ? '▶' : '◀'}
+          </button>
           {page && <span className="text-sm text-slate-300">{page.page_name}</span>}
           <div className="ml-auto flex gap-1">
             {(['edit', 'graph'] as const).map((m) => (

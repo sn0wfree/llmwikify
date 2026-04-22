@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { SearchResult } from '../api';
 
 interface PageTreeProps {
@@ -41,19 +41,39 @@ export function PageTree({ pages, allTypes, selectedPage, onSelect }: PageTreePr
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const filteredPages = useMemo(() => {
-    if (!search) return pages;
+  useEffect(() => {
+    if (!selectedPage) return;
+    const pageType = pages.find((p) => p.page_name === selectedPage)?.page_type || 'other';
+    setExpanded((prev) => {
+      if (prev.has(pageType)) return prev;
+      const next = new Set(prev);
+      next.add(pageType);
+      return next;
+    });
+  }, [selectedPage, pages]);
+
+const filteredPages = useMemo(() => {
+    const base = pages.filter((p) => p.page_name !== 'log');
+    if (!search) return base;
     const q = search.toLowerCase();
-    return pages.filter(
+    return base.filter(
       (p) => p.page_name.toLowerCase().includes(q) ||
-             p.page_type?.toLowerCase().includes(q)
+              p.page_type?.toLowerCase().includes(q)
     );
   }, [pages, search]);
 
   const groups = useMemo(() => {
     const groupMap = new Map<string, PageGroup>();
+    const pinnedPages: Array<{ path: string; displayName: string }> = [];
 
     filteredPages.forEach((p) => {
+      if (p.page_name === 'index' || p.page_name === 'overview') {
+        pinnedPages.push({
+          path: p.page_name,
+          displayName: p.page_name,
+        });
+        return;
+      }
       const pageType = p.page_type || 'other';
       if (!groupMap.has(pageType)) {
         groupMap.set(pageType, { pageType, pages: [] });
@@ -73,6 +93,9 @@ export function PageTree({ pages, allTypes, selectedPage, onSelect }: PageTreePr
       return a.pageType.localeCompare(b.pageType);
     });
 
+    if (pinnedPages.length > 0) {
+      return [{ pageType: 'pinned', pages: pinnedPages }, ...sorted];
+    }
     return sorted;
   }, [filteredPages, allTypes]);
 
@@ -98,10 +121,33 @@ export function PageTree({ pages, allTypes, selectedPage, onSelect }: PageTreePr
       </div>
 
       {groups.map((group) => {
+        const isPinned = group.pageType === 'pinned';
         const isExpanded = expanded.has(group.pageType);
         const isSelectedInGroup = group.pages.some((p) => p.path === selectedPage);
         const color = getTypeColor(group.pageType, allTypes);
-        const icon = TYPE_ICONS[group.pageType] || TYPE_ICONS.other;
+        const icon = isPinned ? '⭐' : (TYPE_ICONS[group.pageType] || TYPE_ICONS.other);
+
+        if (isPinned) {
+          return (
+            <div key="pinned" className="mb-1">
+              <div className="px-2 py-1 text-xs text-slate-400 uppercase font-semibold">Pinned</div>
+              {group.pages.map((p) => (
+                <button
+                  key={p.path}
+                  onClick={() => onSelect(p.path)}
+                  className={`w-full text-left px-3 py-1.5 pl-6 text-sm truncate transition-colors ${
+                    selectedPage === p.path
+                      ? 'bg-blue-600/30 text-blue-300'
+                      : 'text-slate-300 hover:bg-slate-700'
+                  }`}
+                  title={p.path}
+                >
+                  {p.displayName}
+                </button>
+              ))}
+            </div>
+          );
+        }
 
         return (
           <div key={group.pageType}>
