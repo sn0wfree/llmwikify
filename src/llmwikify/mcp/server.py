@@ -458,7 +458,10 @@ def _register_rest_routes(mcp: FastMCP, wiki: Wiki, agent: Any | None = None) ->
     # -- Wiki endpoints --
 
     async def wiki_status(request: Request) -> JSONResponse:
-        return JSONResponse(wiki.status())
+        status = wiki.status()
+        if 'pages_by_type' in status:
+            status['all_types'] = list(status['pages_by_type'].keys())
+        return JSONResponse(status)
 
     async def wiki_search(request: Request) -> JSONResponse:
         q = request.query_params.get("q", "")

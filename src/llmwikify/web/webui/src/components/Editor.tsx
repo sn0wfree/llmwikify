@@ -57,7 +57,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
   const [pages, setPages] = useState<SearchResult[]>([]);
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
-  const [graphAllTypes, setGraphAllTypes] = useState<string[]>([]);
+  const [allTypes, setAllTypes] = useState<string[]>([]);
   const [graphLoading, setGraphLoading] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
 
@@ -78,11 +78,10 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
       const data = await api.wiki.graph(currentPage);
       setGraphNodes(data.nodes);
       setGraphEdges(data.edges);
-      setGraphAllTypes(data.all_types || []);
+      if (data.all_types) setAllTypes(data.all_types);
     } catch {
       setGraphNodes([]);
       setGraphEdges([]);
-      setGraphAllTypes([]);
     } finally {
       setGraphLoading(false);
     }
@@ -90,8 +89,12 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
 
   const loadTree = useCallback(async () => {
     try {
-      const results = await api.wiki.search('', 100);
+      const [results, status] = await Promise.all([
+        api.wiki.search('', 100),
+        api.wiki.status(),
+      ]);
       setPages(results);
+      setAllTypes(status.all_types || []);
     } catch {
       addToast('warning', '无法加载文件树');
     }
@@ -143,6 +146,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
         <div className="p-2 text-xs font-semibold text-slate-400 uppercase">Pages</div>
         <PageTree
           pages={pages}
+          allTypes={allTypes}
           selectedPage={page?.page_name || null}
           onSelect={onPageSelect}
         />
@@ -215,7 +219,7 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
                 <GraphView
                   nodes={graphNodes}
                   edges={graphEdges}
-                  allTypes={graphAllTypes}
+                  allTypes={allTypes}
                   currentNode={page?.page_name || null}
                   onNodeClick={(nodeId) => onPageSelect(nodeId)}
                   showLabels={showLabels}

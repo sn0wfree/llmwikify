@@ -17,6 +17,7 @@ export interface SearchResult {
   score: number;
   has_sink?: boolean;
   sink_entries?: number;
+  page_type?: string;
 }
 
 export interface WikiStatus {
@@ -24,6 +25,8 @@ export interface WikiStatus {
   sink_entries: number;
   db_path: string;
   is_initialized: boolean;
+  all_types?: string[];
+  pages_by_type?: Record<string, string[]>;
 }
 
 export interface SinkStatus {
