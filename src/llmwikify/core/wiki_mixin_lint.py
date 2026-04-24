@@ -2,10 +2,12 @@
 
 import logging
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 
-class WikiLintMixin:
+class WikiLintMixin(WikiProtocol):
     """Lint/health check methods — thin delegation layer to WikiAnalyzer."""
 
     def _detect_dated_claims(self) -> list[dict]:

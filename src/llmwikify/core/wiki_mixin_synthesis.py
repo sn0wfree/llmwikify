@@ -2,10 +2,12 @@
 
 import logging
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 
-class WikiSynthesisMixin:
+class WikiSynthesisMixin(WikiProtocol):
     """Cross-source synthesis: compare sources, generate update suggestions."""
 
     def suggest_synthesis(self, source_name: str | None = None) -> dict:

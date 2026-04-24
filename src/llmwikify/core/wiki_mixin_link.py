@@ -4,10 +4,12 @@ import logging
 import re
 from pathlib import Path
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 
-class WikiLinkMixin:
+class WikiLinkMixin(WikiProtocol):
     """Wikilink resolution, fixing, and link context methods."""
 
     def _resolve_wikilink_target(self, target: str) -> Path | None:

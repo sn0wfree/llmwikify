@@ -11,12 +11,14 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .prompt_registry import PromptRegistry
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
 
-class WikiUtilityMixin:
+class WikiUtilityMixin(WikiProtocol):
     """Utility methods shared across Wiki operations."""
 
     @staticmethod

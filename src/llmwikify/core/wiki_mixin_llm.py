@@ -4,10 +4,12 @@ import json
 import logging
 from typing import Any
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 
-class WikiLLMMixin:
+class WikiLLMMixin(WikiProtocol):
     """LLM interaction: chained source processing, retry logic, investigation generation."""
 
     def _llm_process_source(self, source_data: dict) -> dict:

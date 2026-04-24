@@ -6,10 +6,12 @@ from pathlib import Path
 
 from ..extractors import extract
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 
-class WikiIngestMixin:
+class WikiIngestMixin(WikiProtocol):
     """Source ingestion: extract, save to raw/, return data for LLM processing."""
 
     def ingest_source(self, source: str) -> dict:

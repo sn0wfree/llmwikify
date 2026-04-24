@@ -3,10 +3,12 @@
 import logging
 import re
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 
-class WikiSchemaMixin:
+class WikiSchemaMixin(WikiProtocol):
     """Schema (wiki.md) reading, updating, and page type mapping."""
 
     def _load_page_type_mapping(self) -> dict[str, str]:

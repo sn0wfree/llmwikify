@@ -2,10 +2,12 @@
 
 import logging
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 
-class WikiInitMixin:
+class WikiInitMixin(WikiProtocol):
     """Wiki initialization: directories, core files, MCP config, skill files."""
 
     def is_initialized(self) -> bool:
