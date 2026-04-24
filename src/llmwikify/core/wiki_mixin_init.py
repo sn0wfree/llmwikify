@@ -300,7 +300,7 @@ class WikiInitMixin(WikiProtocol):
         Returns:
             {"total": int, "categories": {name: count, ...}}
         """
-        result = {"total": 0, "categories": {}}
+        result: dict[str, Any] = {"total": 0, "categories": {}}
         if not self.raw_dir.exists():
             return result
 

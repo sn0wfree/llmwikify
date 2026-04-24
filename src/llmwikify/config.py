@@ -161,7 +161,7 @@ def get_mcp_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
     if config is None:
         config = get_default_config()
 
-    mcp_config = DEFAULT_CONFIG["mcp"].copy()
+    mcp_config: dict = DEFAULT_CONFIG["mcp"].copy()  # type: ignore[attr-defined]
     user_mcp = config.get("mcp", {})
 
     if user_mcp:

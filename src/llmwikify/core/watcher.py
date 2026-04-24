@@ -3,6 +3,7 @@
 import threading
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 SUPPORTED_EXTENSIONS: set[str] = {
     ".pdf", ".md", ".txt", ".html", ".htm",
@@ -43,7 +44,7 @@ class FileSystemWatcher:
         self.debounce = debounce
 
         self._running = False
-        self._observer: object | None = None
+        self._observer: Any = None
         self._debounce_timers: dict[str, threading.Timer] = {}
         self._event_count = 0
         self._ingest_count = 0
