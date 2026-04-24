@@ -14,14 +14,14 @@ def test_editor_loads_page_content(page, wiki_server):
     page.wait_for_timeout(1000)
 
     # Click first file in the Editor's file tree (inside main content, not sidebar)
-    file_tree = page.locator('main .w-48 button').first
+    file_tree = page.locator('main .w-40 button').first
     expect(file_tree).to_be_visible()
     file_tree.click()
     page.wait_for_timeout(1000)
 
     # Default mode is Graph, switch to Edit
-    # Edit button is at index 12 in the button list
-    edit_btn = page.locator('button').nth(12)
+    edit_btn = page.locator('button:text-is("Edit")')
+    expect(edit_btn).to_be_visible()
     edit_btn.click()
     page.wait_for_timeout(1000)
 
@@ -47,7 +47,7 @@ def test_editor_file_tree_shows_pages(page, wiki_server):
     page.wait_for_timeout(1000)
 
     # File tree should have multiple buttons (inside main content)
-    file_buttons = page.locator('main .w-48 button')
+    file_buttons = page.locator('main .w-40 button')
     expect(file_buttons.first).to_be_visible()
 
     count = file_buttons.count()
@@ -61,7 +61,7 @@ def test_editor_save_button_visible(page, wiki_server):
     page.wait_for_timeout(1000)
 
     # Click first file
-    file_tree = page.locator('main .w-48 button').first
+    file_tree = page.locator('main .w-40 button').first
     file_tree.click()
     page.wait_for_timeout(500)
 
