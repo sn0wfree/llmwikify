@@ -27,6 +27,8 @@ export interface WikiStatus {
   is_initialized: boolean;
   all_types?: string[];
   pages_by_type?: Record<string, string[]>;
+  root?: string;
+  version?: string;
 }
 
 export interface SinkStatus {
