@@ -45,7 +45,7 @@ def create_mcp_server(wiki: Wiki, name: str | None = None, config: dict[str, Any
         user_mcp = wiki.config.get("mcp", {})
         if user_mcp:
             server_config.update(user_mcp)
-    mcp._server_config = server_config
+    mcp._server_config = server_config  # type: ignore[attr-defined]
 
     _register_wiki_tools(mcp, wiki)
     return mcp
@@ -385,7 +385,7 @@ def serve_mcp(wiki: Wiki, name: str | None = None, transport: str | None = None,
         config: Optional MCP config dict
     """
     mcp = create_mcp_server(wiki, name=name, config=config)
-    srv_config = mcp._server_config
+    srv_config = mcp._server_config  # type: ignore[attr-defined]
     service_name = mcp.name
 
     transport = transport or srv_config.get("transport", "stdio")
@@ -875,6 +875,6 @@ def create_unified_server(
     app = mcp.http_app()
 
     if api_key:
-        app = AuthMiddleware(app, api_key=api_key)
+        app = AuthMiddleware(app, api_key=api_key)  # type: ignore[assignment]
 
     return app

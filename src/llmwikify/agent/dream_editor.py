@@ -175,7 +175,7 @@ class DreamEditor:
         sink_status = self.wiki.query_sink.status()
         sinks = sink_status.get("sinks", [])
 
-        results = {
+        results: dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "sinks_processed": 0,
             "proposals_generated": 0,
@@ -302,7 +302,7 @@ class DreamEditor:
         Returns:
             Dict with applied count and errors.
         """
-        results = {
+        results: dict[str, Any] = {
             "applied": 0,
             "errors": [],
         }

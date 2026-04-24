@@ -257,7 +257,7 @@ class WikiAnalyzer:
                 for v in values:
                     all_values.append((page_name, v))
 
-            unique_values = {v.lower() for _, v in all_values}
+            unique_values = {str(v).lower() for _, v in all_values}
             if len(unique_values) >= 2:
                 pair_key = tuple(sorted([p for p, _ in all_values]))
                 if pair_key not in seen_pairs:
