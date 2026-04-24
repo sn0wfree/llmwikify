@@ -2,6 +2,8 @@
 
 import logging
 
+from llmwikify import __version__
+
 from .wiki_analyzer import WikiAnalyzer
 
 from .protocols import WikiProtocol
@@ -46,6 +48,7 @@ class WikiStatusMixin(WikiProtocol):
         result = {
             "initialized": self.is_initialized(),
             "root": str(self.root),
+            "version": __version__,
             "page_count": len(self._wiki_pages()),
             "source_count": len([f for f in self.raw_dir.rglob("*") if f.is_file()]),
             "indexed_pages": self.index.get_page_count() if self.is_initialized() else "N/A",

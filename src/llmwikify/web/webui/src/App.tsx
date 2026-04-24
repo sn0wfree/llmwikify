@@ -19,6 +19,15 @@ const EditHistory = lazy(() => import('./components/EditHistory').then(m => ({ d
 
 type ViewMode = 'edit' | 'dashboard' | 'insights' | 'chat' | 'tasks' | 'dream' | 'confirmations' | 'proposals' | 'ingest' | 'history';
 
+function projectNameFromPath(path: string): string {
+  try {
+    const parts = path.split(/[/\\]/);
+    return parts.filter(Boolean).pop() || path;
+  } catch {
+    return path;
+  }
+}
+
 function LazyWrapper({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={<div className="flex items-center justify-center h-full text-slate-500">Loading...</div>}>
@@ -62,11 +71,21 @@ function App() {
         } transition-all duration-200 bg-slate-800 border-r border-slate-700 flex flex-col overflow-hidden`}
       >
         <div className="p-4 border-b border-slate-700">
-          <h1 className="text-lg font-bold text-blue-400">llmwikify</h1>
+          <div className="flex items-baseline gap-2">
+            <h1 className="text-lg font-bold text-blue-400">llmwikify</h1>
+            {status?.root && (
+              <span className="text-sm text-slate-400">· {projectNameFromPath(status.root)}</span>
+            )}
+          </div>
           {status && (
-            <p className="text-xs text-slate-400 mt-1">
-              {status.page_count} pages
-            </p>
+            <div className="flex justify-between items-center mt-1">
+              <p className="text-xs text-slate-500">
+                {status.page_count} pages
+              </p>
+              {status.version && (
+                <p className="text-xs text-slate-600">v{status.version}</p>
+              )}
+            </div>
           )}
         </div>
 

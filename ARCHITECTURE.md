@@ -333,4 +333,14 @@ conn.execute("PRAGMA cache_size = -64000")
 
 ---
 
-*Last updated: 2026-04-21 | Version: 0.30.0*
+## Project Status
+
+See [docs/plans/PROJECT_STATUS_0.30.0.md](docs/plans/PROJECT_STATUS_0.30.0.md) for:
+- Capability maturity levels by module
+- Test coverage analysis
+- Outstanding work priorities
+- Code quality status
+
+---
+
+*Last updated: 2026-04-24 | Version: 0.30.0*
