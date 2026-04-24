@@ -5,6 +5,7 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 
 class WikiIndex:
@@ -194,12 +195,14 @@ class WikiIndex:
     def get_page_count(self) -> int:
         """Get total number of indexed pages."""
         cursor = self.conn.execute("SELECT COUNT(*) FROM pages")
-        return cursor.fetchone()[0]
+        result = cursor.fetchone()
+        return int(result[0]) if result else 0
 
     def get_link_count(self) -> int:
         """Get total number of links."""
         cursor = self.conn.execute("SELECT COUNT(*) FROM page_links")
-        return cursor.fetchone()[0]
+        result = cursor.fetchone()
+        return int(result[0]) if result else 0
 
     def _parse_links(self, content: str, source_page: str, file_path: str = "") -> list[dict]:
         """Parse [[wikilinks]] from content."""
@@ -277,10 +280,10 @@ class WikiIndex:
             "files_per_second": round(speed, 1),
         }
 
-    def export_json(self, output_path: Path) -> dict:
+    def export_json(self, output_path: Path) -> dict[str, Any]:
         """Export reference index to JSON."""
         # Build data structure
-        data = {
+        data: dict[str, Any] = {
             "built_at": datetime.now(timezone.utc).isoformat(),
             "total_pages": self.get_page_count(),
             "total_links": self.get_link_count(),

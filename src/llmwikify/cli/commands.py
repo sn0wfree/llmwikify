@@ -8,6 +8,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 from ..core import Wiki
 
@@ -17,12 +18,12 @@ logger = logging.getLogger(__name__)
 class WikiCLI:
     """CLI command handler."""
 
-    def __init__(self, wiki_root: Path, config: dict | None = None):
+    def __init__(self, wiki_root: Path, config: dict[str, Any] | None = None):
         self.wiki_root = wiki_root
         self.config = config or {}
         self.wiki = Wiki(wiki_root, config=self.config)
 
-    def init(self, args) -> int:
+    def init(self, args: Any) -> int:
         """Initialize wiki."""
         from ..core.wiki import VALID_AGENTS
 
@@ -96,7 +97,7 @@ class WikiCLI:
 
         return 0
 
-    def ingest(self, args) -> int:
+    def ingest(self, args: Any) -> int:
         """Ingest a source file."""
         source = args.file
         result = self.wiki.ingest_source(source)
@@ -204,7 +205,7 @@ class WikiCLI:
         print(f"\nCompleted: {execution['operations_executed']} operations")
         return 0
 
-    def write_page(self, args) -> int:
+    def write_page(self, args: Any) -> int:
         """Write a wiki page."""
         content = self._get_content(args)
         if not content:
@@ -216,7 +217,7 @@ class WikiCLI:
         print(f"✅ {result}")
         return 0
 
-    def analyze_source(self, args) -> int:
+    def analyze_source(self, args: Any) -> int:
         """Analyze source files and cache extraction results."""
         if getattr(args, 'all', False):
             # Batch analyze all sources
@@ -267,7 +268,7 @@ class WikiCLI:
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0 if result.get("status") not in ("error", "skipped") else 1
 
-    def read_page(self, args) -> int:
+    def read_page(self, args: Any) -> int:
         """Read a wiki page."""
         page_type = getattr(args, 'type', None)
         result = self.wiki.read_page(args.name, page_type=page_type)
@@ -279,7 +280,7 @@ class WikiCLI:
         print(result['content'])
         return 0
 
-    def search(self, args) -> int:
+    def search(self, args: Any) -> int:
         """Search wiki."""
         results = self.wiki.search(args.query, getattr(args, 'limit', 10))
 
@@ -295,7 +296,7 @@ class WikiCLI:
 
         return 0
 
-    def lint(self, args) -> int:
+    def lint(self, args: Any) -> int:
         """Health check."""
         generate_inv = getattr(args, 'generate_investigations', False)
         fmt = getattr(args, 'format', 'full')
@@ -325,7 +326,7 @@ class WikiCLI:
         print(f"Issues found: {result['issue_count']}")
 
         if result['issues']:
-            by_type = {}
+            by_type: dict[str, int] = {}
             for issue in result['issues']:
                 t = issue.get('type') or issue.get('issue_type', 'unknown')
                 by_type[t] = by_type.get(t, 0) + 1
@@ -483,7 +484,7 @@ class WikiCLI:
 
         return 0
 
-    def status(self, args) -> int:
+    def status(self, args: Any) -> int:
         """Show wiki status."""
         result = self.wiki.status()
 
@@ -500,7 +501,7 @@ class WikiCLI:
 
         return 0
 
-    def fix_wikilinks(self, args) -> int:
+    def fix_wikilinks(self, args: Any) -> int:
         """Fix broken wikilinks by adding directory prefix."""
         dry_run = getattr(args, 'dry_run', False)
         result = self.wiki.fix_wikilinks(dry_run=dry_run)
@@ -524,7 +525,7 @@ class WikiCLI:
             return 1
         return 0
 
-    def log(self, args) -> int:
+    def log(self, args: Any) -> int:
         """Record log entry."""
         operation = getattr(args, 'op_flag', None) or args.operation
         description = getattr(args, 'details', None) or args.description
@@ -539,7 +540,7 @@ class WikiCLI:
         print(f"✅ {result}")
         return 0
 
-    def build_index(self, args) -> int:
+    def build_index(self, args: Any) -> int:
         """Build reference index."""
         no_export = getattr(args, 'no_export', False)
         output = getattr(args, 'output', None)
@@ -602,7 +603,7 @@ class WikiCLI:
             return False
         return False
 
-    def references(self, args) -> int:
+    def references(self, args: Any) -> int:
         """Show page references."""
         page_name = args.page
         detail = getattr(args, 'detail', False)
@@ -665,16 +666,16 @@ class WikiCLI:
 
         return 0
 
-    def _show_reference_stats(self, args) -> int:
+    def _show_reference_stats(self, args: Any) -> int:
         """Show reference statistics."""
         top = getattr(args, 'top', 10)
 
-        inbound_counts = {}
-        outbound_counts = {}
-        orphans = []
+        inbound_counts: dict[str, int] = {}
+        outbound_counts: dict[str, int] = {}
+        orphans: list[str] = []
 
-        for page in self.wiki._wiki_pages():
-            page_name = self.wiki._page_display_name(page)
+        for page_path in self.wiki._wiki_pages():
+            page_name = self.wiki._page_display_name(page_path)
 
             inbound = self.wiki.index.get_inbound_links(page_name)
             outbound = self.wiki.index.get_outbound_links(page_name)
@@ -682,7 +683,7 @@ class WikiCLI:
             inbound_counts[page_name] = len(inbound)
             outbound_counts[page_name] = len(outbound)
 
-            if not inbound and not self.wiki._should_exclude_orphan(page_name, page):
+            if not inbound and not self.wiki._should_exclude_orphan(page_name, page_path):
                 orphans.append(page_name)
 
         top_inbound = sorted(inbound_counts.items(), key=lambda x: -x[1])[:top]
@@ -691,25 +692,25 @@ class WikiCLI:
         print("=== Reference Statistics ===\n")
 
         print(f"📈 Most Linked-To Pages (Top {top}):")
-        for page, count in top_inbound:
-            print(f"  {page}: {count} inbound")
+        for page_name, count in top_inbound:
+            print(f"  {page_name}: {count} inbound")
         print()
 
         print(f"📊 Most Active Pages (Top {top}):")
-        for page, count in top_outbound:
-            print(f"  {page}: {count} outbound")
+        for page_name, count in top_outbound:
+            print(f"  {page_name}: {count} outbound")
         print()
 
         if orphans:
             print(f"🟠 Orphan Pages ({len(orphans)}):")
-            for page in orphans[:top]:
-                print(f"  {page}")
+            for page_name in orphans[:top]:
+                print(f"  {page_name}")
         else:
             print("✅ No orphan pages")
 
         return 0
 
-    def _show_broken_references(self, args) -> int:
+    def _show_broken_references(self, args: Any) -> int:
         """Show broken references."""
         broken = []
 
@@ -738,7 +739,7 @@ class WikiCLI:
 
         return 0
 
-    def batch(self, args) -> int:
+    def batch(self, args: Any) -> int:
         """Batch ingest sources."""
         source_path = Path(args.source)
         limit = getattr(args, 'limit', 0)
@@ -879,7 +880,7 @@ class WikiCLI:
 
         return 0 if failed == 0 else 1
 
-    def sink_status(self, args) -> int:
+    def sink_status(self, args: Any) -> int:
         """Show query sink buffer status."""
         result = self.wiki.sink_status()
 
@@ -896,7 +897,7 @@ class WikiCLI:
 
         return 0
 
-    def synthesize(self, args) -> int:
+    def synthesize(self, args: Any) -> int:
         """Save query answer as wiki page."""
         answer = args.answer
         if not answer:
@@ -924,7 +925,7 @@ class WikiCLI:
         print(f"✅ Synthesized: {result.get('page_name', args.query)}")
         return 0
 
-    def watch(self, args) -> int:
+    def watch(self, args: Any) -> int:
         """Watch raw/ directory for new files."""
         from ..core.watcher import (
             FileSystemWatcher,
@@ -977,7 +978,7 @@ class WikiCLI:
             debounce=debounce,
         )
 
-        def on_event(event_type, path):
+        def on_event(event_type: str, path: Path) -> None:
             icon = {"created": "📄", "modified": "✏️", "deleted": "🗑️", "moved": "📥"}.get(event_type, "❓")
             print(f"{icon} [{event_type}] {path.name}")
 
@@ -995,7 +996,7 @@ class WikiCLI:
 
         return 0
 
-    def graph_query(self, args) -> int:
+    def graph_query(self, args: Any) -> int:
         """Query the knowledge graph."""
 
         engine = self.wiki.get_relation_engine()
@@ -1061,7 +1062,7 @@ class WikiCLI:
 
         return 0
 
-    def export_graph(self, args) -> int:
+    def export_graph(self, args: Any) -> int:
         """Export knowledge graph visualization."""
         from ..core.graph_export import (
             build_graph,
@@ -1106,7 +1107,7 @@ class WikiCLI:
 
         return 0
 
-    def community_detect(self, args) -> int:
+    def community_detect(self, args: Any) -> int:
         """Detect knowledge communities."""
         from ..core.graph_export import detect_communities
 
@@ -1162,7 +1163,7 @@ class WikiCLI:
 
         return 0
 
-    def report(self, args) -> int:
+    def report(self, args: Any) -> int:
         """Generate unexpected connections report."""
         from ..core.graph_export import detect_communities, generate_report
 
@@ -1180,7 +1181,7 @@ class WikiCLI:
 
         return 0
 
-    def suggest_synthesis(self, args) -> int:
+    def suggest_synthesis(self, args: Any) -> int:
         """Analyze sources and generate cross-source synthesis suggestions."""
         source = getattr(args, 'source', None)
         as_json = getattr(args, 'json', False)
@@ -1234,7 +1235,7 @@ class WikiCLI:
         print(f"\n{result['summary']}")
         return 0
 
-    def knowledge_gaps(self, args) -> int:
+    def knowledge_gaps(self, args: Any) -> int:
         """Detect knowledge gaps, outdated pages, and redundancy."""
         as_json = getattr(args, 'json', False)
 
@@ -1295,7 +1296,7 @@ class WikiCLI:
 
         return 0
 
-    def graph_analyze(self, args) -> int:
+    def graph_analyze(self, args: Any) -> int:
         """Analyze knowledge graph structure."""
         as_json = getattr(args, 'json', False)
         detailed_report = getattr(args, 'report', False)
@@ -1368,7 +1369,7 @@ class WikiCLI:
         print()
         return 0
 
-    def serve(self, args) -> int:
+    def serve(self, args: Any) -> int:
         """Start MCP server and optionally Web UI. Used by both 'mcp' and 'serve' subcommands."""
         from ..mcp.server import serve_mcp
 
@@ -1433,7 +1434,7 @@ class WikiCLI:
 
         return 0
 
-    def _get_content(self, args) -> str | None:
+    def _get_content(self, args: Any) -> str | None:
         """Get content from file, argument, or stdin."""
         if getattr(args, 'file', None):
             try:
@@ -1443,7 +1444,7 @@ class WikiCLI:
                 print(f"❌ Error reading file: {e}")
                 return None
         elif getattr(args, 'content', None):
-            return args.content
+            return str(args.content)
         else:
             return sys.stdin.read()
 
@@ -1672,7 +1673,7 @@ Examples:
     wiki_root = Path(os.environ.get('WIKI_ROOT', Path.cwd()))
 
     # Load configuration
-    config = {}
+    config: dict[str, Any] = {}
     config_file = wiki_root / '.wiki-config.yaml'
     if config_file.exists():
         try:
