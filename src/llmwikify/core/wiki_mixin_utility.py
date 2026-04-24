@@ -1,10 +1,15 @@
 """Wiki utility mixin — path resolution, slug generation, timestamps, templates."""
 
+from __future__ import annotations
+
 import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .prompt_registry import PromptRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +80,7 @@ class WikiUtilityMixin:
         env = Environment(loader=BaseLoader(), trim_blocks=True, lstrip_blocks=True)
         return env.from_string(content).render(**variables)
 
-    def _get_prompt_registry(self) -> "PromptRegistry":
+    def _get_prompt_registry(self) -> PromptRegistry:
         """Create a PromptRegistry instance with current provider and custom dir."""
         from .prompt_registry import PromptRegistry
         provider = self.config.get("llm", {}).get("provider", "openai")

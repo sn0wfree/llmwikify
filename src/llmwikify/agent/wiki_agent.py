@@ -12,15 +12,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from ..core import Wiki
 from .dream_editor import DreamEditor
 from .hooks import AutoIngestHook, CompositeHook, DreamSyncHook, WikiHook
 from .memory import MemoryManager
 from .notifications import NotificationManager
-from .runner import AgentRunner, RunState, ToolCall
+from .runner import AgentRunner, ToolCall
 from .scheduler import WikiScheduler
 from .tools import WikiToolRegistry
 

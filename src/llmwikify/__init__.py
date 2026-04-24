@@ -15,7 +15,6 @@ __email__ = "linlu1234567@sina.com"
 __license__ = "MIT"
 
 from pathlib import Path
-from typing import Dict, Optional
 
 from .cli import WikiCLI
 from .config import (
@@ -33,11 +32,11 @@ from .mcp import create_mcp_server, serve_mcp
 # Convenience functions
 def create_wiki(path: str | Path, config: dict | None = None) -> Wiki:
     """Create or open a wiki at the given path.
-    
+
     Args:
         path: Path to wiki root directory
         config: Optional configuration dict
-        
+
     Returns:
         Wiki instance
     """

@@ -117,11 +117,11 @@ class WikiAnalyzer:
             if not page_name.startswith("Query:"):
                 continue
 
-            keywords = set(
+            keywords = {
                 w.lower().strip(".,;:!?\"'()[]{}")
                 for w in page_name.replace("Query:", "").split()
                 if w.lower() not in STOP_WORDS and len(w) > MIN_KEYWORD_LENGTH
-            )
+            }
 
             if keywords:
                 query_pages.append({
@@ -257,7 +257,7 @@ class WikiAnalyzer:
                 for v in values:
                     all_values.append((page_name, v))
 
-            unique_values = set(v.lower() for _, v in all_values)
+            unique_values = {v.lower() for _, v in all_values}
             if len(unique_values) >= 2:
                 pair_key = tuple(sorted([p for p, _ in all_values]))
                 if pair_key not in seen_pairs:
@@ -289,7 +289,7 @@ class WikiAnalyzer:
                         year_claims[entity].append({"page": page_name, "year": year})
 
         for entity, claims in year_claims.items():
-            years = set(c["year"] for c in claims)
+            years = {c["year"] for c in claims}
             if len(years) >= 2:
                 claims_str = ", ".join(f"{c['page']}={c['year']}" for c in claims[:3])
                 contradictions.append({
@@ -392,10 +392,10 @@ class WikiAnalyzer:
                 gaps.append({
                     "type": "vague_temporal",
                     "page": page_name,
-                    "vague_references": list(set(w.lower() for w in vague_time_words))[:MAX_SUMMARY_ITEMS],
+                    "vague_references": list({w.lower() for w in vague_time_words})[:MAX_SUMMARY_ITEMS],
                     "observation": (
                         f"'{page_name}' uses vague temporal references: "
-                        f"{', '.join(set(w.lower() for w in vague_time_words[:3]))}"
+                        f"{', '.join({w.lower() for w in vague_time_words[:3]})}"
                     ),
                 })
 
@@ -603,7 +603,7 @@ class WikiAnalyzer:
 
             if not_analyzed:
                 src_section += f"\n=== UNANALYZED SOURCES ({len(not_analyzed)}) ===\n"
-                src_section += f"Run: wiki_analyze_source(source_path) or CLI: llmwikify analyze-source --all\n"
+                src_section += "Run: wiki_analyze_source(source_path) or CLI: llmwikify analyze-source --all\n"
 
             parts.append(src_section)
 

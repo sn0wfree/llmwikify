@@ -14,7 +14,7 @@ class WikiLLMMixin:
         """Process source with LLM using chained mode: analyze_source → generate_wiki_ops."""
         from ..llm_client import LLMClient
 
-        client = LLMClient.from_config(self.config)
+        LLMClient.from_config(self.config)
         registry = self._get_prompt_registry()
 
         max_content_chars = registry.get_params("analyze_source").get("max_content_chars", 8000)
@@ -152,16 +152,16 @@ class WikiLLMMixin:
         raw_sources: list[str] | None = None,
     ) -> dict:
         """Use LLM to generate a structured answer for a query.
-        
+
         This method reads the provided source pages and raw sources,
         injects wiki context, and calls the LLM to produce a well-structured
         answer suitable for wiki synthesis.
-        
+
         Args:
             query: The question to answer.
             source_pages: Wiki page names to use as context.
             raw_sources: Raw source file paths to use as context.
-        
+
         Returns:
             Dict with 'answer' (str), 'suggested_page_name' (optional str),
             and 'source_citations' (list of page names referenced).

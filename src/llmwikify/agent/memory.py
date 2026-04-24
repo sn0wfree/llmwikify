@@ -37,7 +37,7 @@ class ConversationMemory:
         if not self.history_file.exists():
             return []
         entries = []
-        with open(self.history_file, "r", encoding="utf-8") as f:
+        with open(self.history_file, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -48,7 +48,7 @@ class ConversationMemory:
         if not self.history_file.exists():
             return []
         entries = []
-        with open(self.history_file, "r", encoding="utf-8") as f:
+        with open(self.history_file, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:

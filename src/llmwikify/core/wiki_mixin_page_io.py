@@ -38,15 +38,15 @@ class WikiPageIOMixin:
 
         if page_type:
             type_to_dir = self._load_page_type_mapping()
-            
+
             directory = type_to_dir.get(page_type)
             if directory is None:
                 lower_map = {k.lower(): v for k, v in type_to_dir.items()}
                 directory = lower_map.get(page_type.lower())
-            
+
             if directory is None:
                 directory = page_type.lower()
-            
+
             full_path = f"{directory}/{page_name}"
         elif '/' in page_name:
             full_path = page_name
@@ -389,7 +389,7 @@ class WikiPageIOMixin:
             f"Last updated: {self._now()}\n\n"
             f"Total pages: {total}"
             + (f" — {type_summary}" if type_summary else "")
-            + f"\n\n---\n\n"
+            + "\n\n---\n\n"
         )
 
         section_order = ['Sources', 'Concepts', 'Entities', 'Comparisons', 'Synthesis', 'Claims', 'Overview']

@@ -31,7 +31,7 @@ class WikiIndex:
                 page_name, content,
                 tokenize='porter unicode61'
             );
-            
+
             -- Reference links
             CREATE TABLE IF NOT EXISTS page_links (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +44,7 @@ class WikiIndex:
             );
             CREATE INDEX IF NOT EXISTS idx_links_source ON page_links(source_page);
             CREATE INDEX IF NOT EXISTS idx_links_target ON page_links(target_page);
-            
+
             -- Page metadata
             CREATE TABLE IF NOT EXISTS pages (
                 page_name TEXT PRIMARY KEY,
@@ -91,7 +91,7 @@ class WikiIndex:
             self._executemany(
                 """INSERT INTO page_links (source_page, target_page, section, display_text, file_path)
                    VALUES (?, ?, ?, ?, ?)""",
-                [(l['source_page'], l['target'], l['section'], l['display'], l['file_path']) for l in links]
+                [(link['source_page'], link['target'], link['section'], link['display'], link['file_path']) for link in links]
             )
 
         # 4. Update metadata (ON CONFLICT preserves created_at)
@@ -296,7 +296,7 @@ class WikiIndex:
         cursor = self.conn.execute(
             """SELECT DISTINCT source_page FROM page_links"""
         )
-        pages_with_outbound = set(row[0] for row in cursor.fetchall())
+        pages_with_outbound = {row[0] for row in cursor.fetchall()}
         data["summary"]["pages_with_outbound"] = len(pages_with_outbound)
 
         for page in pages_with_outbound:
@@ -306,7 +306,7 @@ class WikiIndex:
         cursor = self.conn.execute(
             """SELECT DISTINCT target_page FROM page_links"""
         )
-        pages_with_inbound = set(row[0] for row in cursor.fetchall())
+        pages_with_inbound = {row[0] for row in cursor.fetchall()}
         data["summary"]["pages_with_inbound"] = len(pages_with_inbound)
 
         for page in pages_with_inbound:

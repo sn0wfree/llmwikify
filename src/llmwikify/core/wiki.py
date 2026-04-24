@@ -4,13 +4,12 @@ import logging
 from pathlib import Path
 
 from ..config import get_db_path, get_directory, load_config
-from ..extractors import extract  # re-exported for test compatibility
 from .index import WikiIndex
 from .query_sink import QuerySink
 from .wiki_mixin_ingest import WikiIngestMixin
 from .wiki_mixin_init import WikiInitMixin
-from .wiki_mixin_lint import WikiLintMixin
 from .wiki_mixin_link import WikiLinkMixin
+from .wiki_mixin_lint import WikiLintMixin
 from .wiki_mixin_llm import WikiLLMMixin
 from .wiki_mixin_page_io import WikiPageIOMixin
 from .wiki_mixin_query import WikiQueryMixin

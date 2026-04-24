@@ -28,7 +28,6 @@ def build_graph(index: WikiIndex, include_wikilinks: bool = True, include_relati
             nodes[src] = {"id": src, "label": src, "source_type": "wiki_page"}
             nodes[tgt] = {"id": tgt, "label": tgt, "source_type": "wiki_page"}
 
-            edge_key = (src, tgt, "wikilink")
             existing = next((e for e in edges if e["source"] == src and e["target"] == tgt and e["type"] == "wikilink"), None)
             if existing:
                 existing["weight"] += 1
@@ -393,8 +392,6 @@ def compute_surprise_score(
             deg_b = len(list(G.neighbors(target)))
     if min(deg_a, deg_b) <= 2 and max(deg_a, deg_b) >= 5:
         score += 1
-        peripheral = source if deg_a <= 2 else target
-        hub = target if deg_a <= 2 else source
         reasons.append("peripheral node reaches hub")
 
     return score, reasons

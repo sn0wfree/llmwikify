@@ -1,6 +1,12 @@
 """Wiki relation mixin — relation engine integration, graph analysis."""
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .relation_engine import RelationEngine
 
 logger = logging.getLogger(__name__)
 
@@ -10,11 +16,11 @@ class WikiRelationMixin:
 
     def write_relations(self, relations: list, source_file: str | None = None) -> dict:
         """Write extracted relations to the database.
-        
+
         Args:
             relations: List of {source, target, relation, confidence, context} dicts.
             source_file: Original source file name.
-        
+
         Returns:
             Dict with count of relations added.
         """
@@ -45,7 +51,7 @@ class WikiRelationMixin:
             "source_file": source_file,
         }
 
-    def get_relation_engine(self) -> "RelationEngine":
+    def get_relation_engine(self) -> RelationEngine:
         """Get the relation engine instance."""
         from .relation_engine import RelationEngine
         return RelationEngine(self.index, wiki_root=self.root)
@@ -77,10 +83,10 @@ class WikiRelationMixin:
 
     def execute_operations(self, operations: list) -> dict:
         """Execute a list of wiki operations from LLM processing.
-        
+
         Args:
             operations: List of {action, ...} dicts from _llm_process_source().
-        
+
         Returns:
             Dict with results of each operation.
         """

@@ -59,11 +59,11 @@ def get_default_config() -> dict[str, Any]:
 
 def load_config(wiki_root: Path, config_file: str | None = None) -> dict[str, Any]:
     """Load configuration from .wiki-config.yaml, falling back to defaults.
-    
+
     Args:
         wiki_root: Root directory of the wiki
         config_file: Optional custom config file path (relative to wiki_root)
-    
+
     Returns:
         Merged configuration dict (user config overrides defaults)
     """
@@ -95,11 +95,11 @@ def load_config(wiki_root: Path, config_file: str | None = None) -> dict[str, An
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Deep merge two dictionaries, with override taking precedence.
-    
+
     Args:
         base: Base dictionary
         override: Dictionary with values to override
-    
+
     Returns:
         Merged dictionary
     """
@@ -116,11 +116,11 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 def get_db_path(wiki_root: Path, config: dict[str, Any] | None = None) -> Path:
     """Get the database path based on configuration.
-    
+
     Args:
         wiki_root: Wiki root directory
         config: Optional configuration dict
-    
+
     Returns:
         Path to database file
     """
@@ -133,12 +133,12 @@ def get_db_path(wiki_root: Path, config: dict[str, Any] | None = None) -> Path:
 
 def get_directory(wiki_root: Path, dir_type: str, config: dict[str, Any] | None = None) -> Path:
     """Get a directory path based on configuration.
-    
+
     Args:
         wiki_root: Wiki root directory
         dir_type: Type of directory ('raw' or 'wiki')
         config: Optional configuration dict
-    
+
     Returns:
         Path to directory
     """
@@ -151,10 +151,10 @@ def get_directory(wiki_root: Path, dir_type: str, config: dict[str, Any] | None 
 
 def get_mcp_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
     """Get MCP server configuration.
-    
+
     Args:
         config: Optional configuration dict
-    
+
     Returns:
         MCP configuration dict with host, port, and transport
     """

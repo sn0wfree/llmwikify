@@ -395,7 +395,7 @@ class WikiCLI:
             if wl_ambig:
                 print(f"  Ambiguous matches: {wl_ambig}")
             if idx_updated:
-                print(f"  Index updated: ✅ (summaries refreshed, pages grouped)")
+                print("  Index updated: ✅ (summaries refreshed, pages grouped)")
 
         return 0
 
@@ -1407,7 +1407,7 @@ class WikiCLI:
 
                 port = mcp_port or mcp_config.get('port', 8765)
                 print(f"Starting Unified Server '{service_name}' on {host or '127.0.0.1'}:{port}")
-                print(f"  Transport: http")
+                print("  Transport: http")
                 print(f"  Agent: {'enabled' if agent else 'disabled'}")
                 print(f"  Auth: {'enabled' if auth_token else 'disabled'}")
                 print(f"  Web UI: http://{host or '127.0.0.1'}:{port}")

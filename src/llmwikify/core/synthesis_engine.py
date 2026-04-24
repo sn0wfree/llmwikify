@@ -6,10 +6,8 @@ Design principle: "LLM does analysis, human makes decisions"
 - Respects "stay involved" principle from LLM Wiki Principles
 """
 
-import json
 import re
 from pathlib import Path
-from typing import Any
 
 from .constants import (
     CLAIM_OVERLAP_THRESHOLD,

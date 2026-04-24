@@ -61,7 +61,7 @@ class WikiSchemaMixin:
 
     def read_schema(self) -> dict:
         """Read wiki.md (schema/conventions file).
-        
+
         Returns:
             Dict with 'content', 'file', and a 'hint' reminding the LLM
             to save a copy before making changes.
@@ -77,13 +77,13 @@ class WikiSchemaMixin:
 
     def update_schema(self, content: str) -> dict:
         """Update wiki.md with new conventions/workflows.
-        
+
         Validates format but does not block writing. Returns warnings
         for issues and suggestions for post-update actions.
-        
+
         Args:
             content: New wiki.md content.
-        
+
         Returns:
             Dict with 'status', 'file', optional 'warnings' and 'suggestions'.
         """

@@ -1,7 +1,6 @@
-import re
-
 """Text and HTML file extractors."""
 
+import re
 from pathlib import Path
 
 from .base import ExtractedContent

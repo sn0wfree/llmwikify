@@ -33,10 +33,10 @@ class WikiQueryMixin:
         merge_or_replace: str | None = None,
     ) -> dict:
         """Save a query answer as a new wiki page.
-        
+
         Implements the Query compounding cycle: answers filed back into the wiki
         as persistent pages, just like ingested sources.
-        
+
         Args:
             query: Original question that was asked.
             answer: LLM-generated answer content (markdown).
@@ -50,7 +50,7 @@ class WikiQueryMixin:
                 "update" — overwrite the formal page with comprehensive answer
             merge_or_replace: Deprecated. Use `mode` instead.
                 Maps: "sink"→"sink", "merge"/"replace"→"update".
-        
+
         Returns:
             Dict with status, page_name, page_path, sources info, hint about duplicates.
         """
@@ -159,7 +159,7 @@ class WikiQueryMixin:
 
     def _generate_query_page_name(self, query: str) -> str:
         """Generate a page name from a query string.
-        
+
         Extracts topic (first 50 chars, slugified) and prefixes with 'Query: '.
         """
         topic = query.strip()[:MAX_QUERY_TOPIC_LENGTH].strip()
@@ -169,10 +169,10 @@ class WikiQueryMixin:
 
     def _find_similar_query_page(self, query: str) -> dict | None:
         """Find an existing query page with similar topic.
-        
+
         Searches for pages starting with 'Query: ' that share significant
         keywords with the given query.
-        
+
         Returns:
             Dict with page_name, preview, key_topics, word_count, created, score.
             None if no similar page found.
@@ -180,11 +180,11 @@ class WikiQueryMixin:
         if not self.wiki_dir.exists():
             return None
 
-        keywords = set(
+        keywords = {
             w.lower().strip(".,;:!?\"'()[]{}")
             for w in query.split()
             if w.lower() not in STOP_WORDS and len(w) > MIN_KEYWORD_LENGTH
-        )
+        }
 
         if not keywords:
             return None
@@ -198,11 +198,11 @@ class WikiQueryMixin:
             if not page_name.startswith("Query:"):
                 continue
 
-            page_keywords = set(
+            page_keywords = {
                 w.lower().strip(".,;:!?\"'()[]{}")
                 for w in page_name.replace("Query:", "").split()
                 if w.lower() not in STOP_WORDS and len(w) > MIN_KEYWORD_LENGTH
-            )
+            }
 
             if not page_keywords:
                 continue
@@ -213,10 +213,10 @@ class WikiQueryMixin:
 
             try:
                 content = page.read_text()
-                content_keywords = set(
+                content_keywords = {
                     w.lower() for w in re.findall(r'\b\w{4,}\b', content)
                     if w.lower() not in STOP_WORDS
-                )
+                }
                 content_overlap = len(keywords & content_keywords)
                 content_score = content_overlap / len(keywords) if keywords else 0
                 score = max(score, content_score * 0.8)

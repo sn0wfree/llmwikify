@@ -17,13 +17,13 @@ class WikiInitMixin:
     def init(self, overwrite: bool = False, agent: str | None = None,
              force: bool = False, merge: bool = False) -> dict:
         """Initialize wiki directory structure.
-        
+
         Args:
             overwrite: If True, recreate index.md and log.md even if they exist.
             agent: Agent type for MCP config generation. One of: opencode, claude, codex, generic.
             force: If True, overwrite existing files without prompting.
             merge: If True, merge into existing wiki.md instead of skipping.
-        
+
         Returns:
             Structured result with status, created_files, and message.
         """
@@ -294,7 +294,7 @@ class WikiInitMixin:
 
     def _analyze_raw(self) -> dict:
         """Analyze raw/ directory structure for init report.
-        
+
         Returns:
             {"total": int, "categories": {name: count, ...}}
         """
@@ -340,7 +340,7 @@ class WikiInitMixin:
         Returns list of created file paths (relative to project root).
         """
         created = []
-        skill_dir = self.root / ".agents" / "skills" / "llmwikify"
+        self.root / ".agents" / "skills" / "llmwikify"
 
         skill_files = {
             ".agents/skills/llmwikify/SKILL.md": "skill_llmwikify/SKILL.md",
