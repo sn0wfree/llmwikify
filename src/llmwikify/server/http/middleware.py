@@ -6,17 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-
-EXCLUDED_AUTH_PATHS = [
-    "/",
-    "/mcp",
-    "/api/health",
-    "/favicon.ico",
-    "/docs",
-    "/redoc",
-    "/openapi.json",
-]
-EXCLUDED_AUTH_PREFIXES = ["/assets/"]
+from llmwikify.server.constants import EXCLUDED_AUTH_PATHS, EXCLUDED_AUTH_PREFIXES
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

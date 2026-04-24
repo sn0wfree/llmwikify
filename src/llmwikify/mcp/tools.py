@@ -7,6 +7,7 @@ import json
 from fastmcp import FastMCP
 
 from llmwikify.core import Wiki
+from llmwikify.core.graph_visualizer import build_visualization_data
 
 
 def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
@@ -33,9 +34,9 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         return wiki.read_page(page_name)
 
     @mcp.tool
-    def wiki_search(query: str, limit: int = 10) -> list:
+    def wiki_search(query: str, limit: int = 10) -> str:
         """Full-text search across wiki pages."""
-        return wiki.search(query, limit)
+        return json.dumps(wiki.search(query, limit), ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_lint(
@@ -109,9 +110,14 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         return json.dumps(wiki.status(), ensure_ascii=False, indent=2)
 
     @mcp.tool
-    def wiki_log(message: str) -> str:
-        """Append a log entry to the wiki."""
-        return wiki.log(message)
+    def wiki_log(operation: str, details: str) -> str:
+        """Append entry to wiki log.
+
+        Args:
+            operation: Operation name (e.g., 'ingest', 'edit', 'lint')
+            details: Human-readable description of what happened
+        """
+        return wiki.append_log(operation, details)
 
     @mcp.tool
     def wiki_recommend() -> str:
@@ -139,11 +145,37 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
-    def wiki_knowledge_gaps() -> str:
-        """Detect knowledge gaps, outdated pages, and redundancy."""
-        return json.dumps(wiki.knowledge_gaps(), ensure_ascii=False, indent=2)
+    def wiki_knowledge_gaps(limit: int = 20) -> str:
+        """Detect knowledge gaps, outdated pages, and redundancy across the wiki.
+
+        Args:
+            limit: Max LLM-detected issues to return (default: 20).
+
+        Returns:
+            JSON with knowledge gap analysis results including:
+            outdated_pages, knowledge_gaps, redundant_pages, contradictions, data_gaps.
+        """
+        result = wiki.lint(
+            generate_investigations=True,
+            limit=limit,
+        )
+        return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_graph_analyze() -> str:
         """Analyze knowledge graph structure (PageRank, communities, suggestions)."""
         return json.dumps(wiki.graph_analyze(), ensure_ascii=False, indent=2)
+
+    @mcp.tool
+    def wiki_graph(
+        current_page: str | None = None,
+        mode: str = "auto",
+    ) -> str:
+        """Return graph data optimized for visualization.
+
+        Args:
+            current_page: Optional page name to center around
+            mode: Display mode: 'auto', 'full', 'focused', or 'minimal'
+        """
+        result = build_visualization_data(wiki.index, wiki, current_page, mode)
+        return json.dumps(result, ensure_ascii=False, indent=2)

@@ -7,18 +7,18 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from llmwikify.core import Wiki
+from llmwikify.server.constants import DEFAULT_HOST, DEFAULT_PORT
 
 from ..mcp.adapter import MCPAdapter
 from .http.middleware import AuthMiddleware
 from .http.routes import register_routes
+from .utils.webui import mount_webui
 
 
 logger = logging.getLogger(__name__)
@@ -139,36 +139,10 @@ class WikiServer:
         return app
 
     def _mount_webui(self) -> None:
-        """Mount React SPA static files with multi-path fallback."""
-        dist_dir = self._find_webui_dist()
-        if not dist_dir:
-            logger.warning("No WebUI dist found, serving without static files")
-            return
+        """Mount React SPA static files (single source of truth)."""
+        mount_webui(self.app)
 
-        logger.info(f"Mounting WebUI from {dist_dir}")
-        self.app.mount(
-            "/",
-            StaticFiles(directory=str(dist_dir), html=True),
-            name="static",
-        )
-
-    def _find_webui_dist(self) -> Path | None:
-        """Find WebUI dist directory (supports multiple deployment modes)."""
-        pkg_dir = Path(__file__).parent.parent
-        candidates = [
-            # 1. Installed mode: <package>/web/webui/dist/
-            pkg_dir / "web" / "webui" / "dist",
-            # 2. Dev mode: <repo>/src/llmwikify/web/webui/dist/
-            pkg_dir.parent.parent / "web" / "webui" / "dist",
-            # 3. Legacy mode: <package>/web/static/
-            pkg_dir / "web" / "static",
-        ]
-        for candidate in candidates:
-            if candidate.exists() and (candidate / "index.html").exists():
-                return candidate
-        return None
-
-    def run(self, host: str = "127.0.0.1", port: int = 8765) -> None:
+    def run(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
         """Run unified HTTP server."""
         import uvicorn
         uvicorn.run(self.app, host=host, port=port, log_level="info")

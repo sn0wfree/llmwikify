@@ -100,7 +100,20 @@ wiki = "llmwikify.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["llmwikify", "llmwikify.cli", "llmwikify.core", "llmwikify.extractors", "llmwikify.mcp", "llmwikify.prompts", "llmwikify.prompts._defaults", "llmwikify.agent", "llmwikify.server", "llmwikify.server.http", "llmwikify.web"]
+packages = [
+    "llmwikify",
+    "llmwikify.cli",
+    "llmwikify.core",
+    "llmwikify.extractors",
+    "llmwikify.mcp",
+    "llmwikify.prompts",
+    "llmwikify.prompts._defaults",
+    "llmwikify.agent",
+    "llmwikify.server",
+    "llmwikify.server.http",
+    "llmwikify.server.utils",
+    "llmwikify.web",
+]
 
 [tool.setuptools.package-data]
 llmwikify = ["py.typed"]
