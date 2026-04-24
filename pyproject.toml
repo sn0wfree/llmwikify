@@ -56,6 +56,7 @@ graph = [
     "python-louvain>=0.16",
 ]
 web = [
+    "fastapi>=0.104.0",
     "starlette>=0.27.0",
     "uvicorn>=0.23.0",
     "httpx>=0.24.0",
@@ -99,7 +100,7 @@ wiki = "llmwikify.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["llmwikify", "llmwikify.cli", "llmwikify.core", "llmwikify.extractors", "llmwikify.mcp", "llmwikify.prompts", "llmwikify.prompts._defaults", "llmwikify.agent", "llmwikify.web"]
+packages = ["llmwikify", "llmwikify.cli", "llmwikify.core", "llmwikify.extractors", "llmwikify.mcp", "llmwikify.prompts", "llmwikify.prompts._defaults", "llmwikify.agent", "llmwikify.server", "llmwikify.server.http", "llmwikify.web"]
 
 [tool.setuptools.package-data]
 llmwikify = ["py.typed"]

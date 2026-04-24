@@ -1371,12 +1371,10 @@ class WikiCLI:
 
     def serve(self, args: Any) -> int:
         """Start MCP server and optionally Web UI. Used by both 'mcp' and 'serve' subcommands."""
-        from ..mcp.server import serve_mcp
+        from ..server import WikiServer
 
-        # Get MCP configuration from wiki config
         mcp_config = self.config.get("mcp", {})
 
-        # Override with CLI args if provided
         name = getattr(args, 'name', None)
         transport = getattr(args, 'transport', None)
         host = getattr(args, 'host', None)
@@ -1386,48 +1384,47 @@ class WikiCLI:
         auth_token = getattr(args, 'auth_token', None)
 
         service_name = name or mcp_config.get("name") or self.wiki.root.name
+        port = mcp_port or mcp_config.get('port', 8765)
+        final_host = host or mcp_config.get('host', '127.0.0.1')
+        final_transport = transport or mcp_config.get('transport', 'stdio')
 
         try:
             if web:
-                # Unified server: single process with MCP + REST API + WebUI
-                import uvicorn
-
-                from ..mcp.server import create_unified_server
-
                 agent_instance = None
                 if agent:
                     from ..agent import WikiAgent
                     agent_instance = WikiAgent(wiki=self.wiki)
 
-                app = create_unified_server(
+                server = WikiServer(
                     self.wiki,
                     agent=agent_instance,
                     api_key=auth_token,
                     mcp_name=service_name,
+                    enable_mcp=True,
+                    enable_rest=True,
+                    enable_webui=True,
                 )
 
-                port = mcp_port or mcp_config.get('port', 8765)
-                print(f"Starting Unified Server '{service_name}' on {host or '127.0.0.1'}:{port}")
+                print(f"Starting Unified Server '{service_name}' on {final_host}:{port}")
                 print("  Transport: http")
                 print(f"  Agent: {'enabled' if agent else 'disabled'}")
                 print(f"  Auth: {'enabled' if auth_token else 'disabled'}")
-                print(f"  Web UI: http://{host or '127.0.0.1'}:{port}")
+                print(f"  Web UI: http://{final_host}:{port}")
+                print(f"  API Docs: http://{final_host}:{port}/docs")
                 print()
 
-                uvicorn.run(
-                    app,
-                    host=host or '127.0.0.1',
-                    port=port,
-                    log_level="info"
-                )
+                server.run(host=final_host, port=port)
             else:
                 print(f"Starting MCP server '{service_name}'...")
-                print(f"  Transport: {transport or mcp_config.get('transport', 'stdio')}")
-                if host:
-                    print(f"  Host: {host}")
-                if mcp_port:
-                    print(f"  MCP Port: {mcp_port}")
+                print(f"  Transport: {final_transport}")
+                if final_host != '127.0.0.1':
+                    print(f"  Host: {final_host}")
+                if port != 8765:
+                    print(f"  Port: {port}")
                 print()
+
+                # Use original serve_mcp for pure MCP mode (backward compatible)
+                from ..mcp.server import serve_mcp
                 serve_mcp(self.wiki, name=name, transport=transport, host=host, port=mcp_port, config=mcp_config)
         except KeyboardInterrupt:
             print("\nServer stopped")

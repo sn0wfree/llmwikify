@@ -857,7 +857,10 @@ def create_unified_server(
     api_key: str | None = None,
     mcp_name: str | None = None,
 ) -> Any:
-    """Create a unified Starlette server with MCP, REST API, and WebUI.
+    """Create a unified FastAPI server with MCP, REST API, and WebUI.
+
+    DEPRECATED: Use llmwikify.server.WikiServer instead. This wrapper
+    is maintained for backward compatibility.
 
     Args:
         wiki: Wiki instance
@@ -866,15 +869,17 @@ def create_unified_server(
         mcp_name: Optional MCP server name
 
     Returns:
-        Starlette application
+        FastAPI application
     """
-    mcp = create_mcp_server(wiki, name=mcp_name)
-    _register_rest_routes(mcp, wiki, agent=agent)
-    _mount_webui(mcp)
+    from llmwikify.server import WikiServer
 
-    app = mcp.http_app()
-
-    if api_key:
-        app = AuthMiddleware(app, api_key=api_key)  # type: ignore[assignment]
-
-    return app
+    server = WikiServer(
+        wiki,
+        agent=agent,
+        api_key=api_key,
+        mcp_name=mcp_name,
+        enable_mcp=True,
+        enable_rest=True,
+        enable_webui=True,
+    )
+    return server.app
