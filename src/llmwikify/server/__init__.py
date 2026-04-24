@@ -2,9 +2,12 @@
 
 from .core import WikiServer
 
-# Backward compatibility - create_unified_server now uses new core
+
 def create_unified_server(wiki, agent=None, api_key=None, mcp_name=None):
-    """Backward compatible wrapper for WikiServer."""
+    """Backward compatible wrapper for WikiServer.
+    
+    DEPRECATED: Use WikiServer class directly instead.
+    """
     server = WikiServer(
         wiki,
         agent=agent,
@@ -15,5 +18,6 @@ def create_unified_server(wiki, agent=None, api_key=None, mcp_name=None):
         enable_webui=True,
     )
     return server.app
+
 
 __all__ = ["WikiServer", "create_unified_server"]

@@ -27,8 +27,8 @@ class WikiLinkMixin(WikiProtocol):
             file_path = self.index.resolve_by_name(target)
             if file_path:
                 return self.wiki_dir / file_path
-        except Exception:
-            logger.warning("Index lookup failed for wikilink: %s", target)
+        except Exception as e:
+            logger.warning("Index lookup failed for wikilink: %s: %s", target, e)
 
         return None
 

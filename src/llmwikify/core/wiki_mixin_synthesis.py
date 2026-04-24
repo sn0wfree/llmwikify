@@ -62,8 +62,8 @@ class WikiSynthesisMixin(WikiProtocol):
                         suggestion = engine.analyze_new_source(analysis, rel_path)
                         all_suggestions.append(suggestion)
                         analyzed_count += 1
-                except Exception:
-                    logger.warning("Source analysis failed for %s", source_file)
+                except Exception as e:
+                    logger.warning("Source analysis failed for %s: %s", source_file, e)
 
         total_suggestions = sum(
             len(s.get("suggested_updates", [])) +

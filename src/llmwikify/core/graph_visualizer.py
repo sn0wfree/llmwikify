@@ -107,7 +107,8 @@ def build_visualization_data(
     # Load page type mapping for coloring
     try:
         type_map = wiki._load_page_type_mapping()
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to load page type mapping: %s", e)
         type_map = {}
 
     # Build result nodes with type info

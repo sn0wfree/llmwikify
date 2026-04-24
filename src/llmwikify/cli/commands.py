@@ -309,7 +309,6 @@ class WikiCLI:
         )
 
         if fmt == 'json':
-            import json
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         elif fmt == 'brief':
@@ -598,8 +597,8 @@ class WikiCLI:
                 # New format: page_name == file_path without .md
                 if name != fpath[:-3]:
                     return True
-        except Exception:
-            logger.warning("Index format check failed")
+        except Exception as e:
+            logger.warning("Index format check failed: %s", e)
             return False
         return False
 
@@ -1676,8 +1675,8 @@ Examples:
         try:
             import yaml
             config = yaml.safe_load(config_file.read_text()) or {}
-        except Exception:
-            logger.warning("Failed to load config from %s", config_file)
+        except Exception as e:
+            logger.warning("Failed to load config from %s: %s", config_file, e)
 
     cli = WikiCLI(wiki_root, config=config)
 

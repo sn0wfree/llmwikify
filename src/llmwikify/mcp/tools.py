@@ -21,17 +21,26 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
     @mcp.tool
     def wiki_ingest(source: str) -> str:
         """Ingest a source file, extract content."""
-        return wiki.ingest_source(source)
+        result = wiki.ingest_source(source)
+        if isinstance(result, str):
+            return result
+        return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_write_page(page_name: str, content: str) -> str:
         """Write a wiki page."""
-        return wiki.write_page(page_name, content)
+        result = wiki.write_page(page_name, content)
+        if isinstance(result, str):
+            return result
+        return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_read_page(page_name: str) -> str:
         """Read a wiki page (supports wiki/.sink/ files)."""
-        return wiki.read_page(page_name)
+        result = wiki.read_page(page_name)
+        if isinstance(result, str):
+            return result
+        return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_search(query: str, limit: int = 10) -> str:

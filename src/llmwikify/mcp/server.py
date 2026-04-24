@@ -14,7 +14,6 @@ from typing import Any
 from fastmcp import FastMCP
 
 from llmwikify.core import Wiki
-from llmwikify.server import WikiServer
 
 from .tools import register_wiki_tools
 
@@ -126,6 +125,8 @@ def create_unified_server(
         DeprecationWarning,
         stacklevel=2,
     )
+
+    from llmwikify.server import WikiServer
 
     server = WikiServer(
         wiki,

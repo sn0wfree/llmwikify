@@ -87,8 +87,8 @@ def load_config(wiki_root: Path, config_file: str | None = None) -> dict[str, An
         except ImportError:
             # PyYAML not installed, use defaults
             pass
-        except Exception:
-            logger.warning("Config file parse error, using defaults")
+        except Exception as e:
+            logger.warning("Config file parse error, using defaults: %s", e)
 
     return config
 

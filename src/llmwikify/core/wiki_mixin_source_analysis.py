@@ -57,8 +57,8 @@ class WikiSourceAnalysisMixin(WikiProtocol):
                 content += f'\n{comment}'
 
             page_path.write_text(content)
-        except Exception:
-            logger.warning("Failed to cache source analysis for %s", page_path)
+        except Exception as e:
+            logger.warning("Failed to cache source analysis for %s: %s", page_path, e)
 
     def _get_cached_source_analysis(self, page_path: Path) -> dict | None:
         """Extract cached analysis from Source summary page."""
@@ -67,8 +67,8 @@ class WikiSourceAnalysisMixin(WikiProtocol):
             match = re.search(r'<!-- llmwikify:analysis (.*?) -->', content, re.DOTALL)
             if match:
                 return json.loads(match.group(1))
-        except Exception:
-            logger.warning("Failed to parse cached analysis for %s", page_path)
+        except Exception as e:
+            logger.warning("Failed to parse cached analysis for %s: %s", page_path, e)
         return None
 
     def analyze_source(self, source_path: str, force: bool = False) -> dict:

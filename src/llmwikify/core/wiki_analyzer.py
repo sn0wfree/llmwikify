@@ -458,8 +458,8 @@ class WikiAnalyzer:
                     "observation": f"'{concept}' is in the knowledge graph but has no wiki page",
                     "suggestion": f"Consider creating a page for '{concept}'",
                 })
-        except Exception:
-            logger.warning("Relation engine orphan detection failed")
+        except Exception as e:
+            logger.warning("Relation engine orphan detection failed: %s", e)
 
         sources_dir = self.wiki.wiki_dir / "sources"
         if sources_dir.exists():
@@ -617,8 +617,8 @@ class WikiAnalyzer:
                 if len(orphans) > 20:
                     orphan_section += f"  ... and {len(orphans) - 20} more\n"
                 parts.append(orphan_section)
-        except Exception:
-            logger.warning("Failed to load orphan concepts for lint context")
+        except Exception as e:
+            logger.warning("Failed to load orphan concepts for lint context: %s", e)
 
         return "\n\n".join(parts)
 
@@ -658,8 +658,8 @@ class WikiAnalyzer:
                     "concept": concept,
                     "note": "Detected without LLM",
                 })
-        except Exception:
-            logger.warning("Fallback gap detection failed")
+        except Exception as e:
+            logger.warning("Fallback gap detection failed: %s", e)
 
         gaps.extend(self._detect_missing_cross_refs())
 
