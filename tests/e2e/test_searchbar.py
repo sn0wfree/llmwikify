@@ -73,8 +73,8 @@ def test_searchbar_click_result_navigates(page, wiki_server):
         page.wait_for_timeout(500)
 
         # Switch to Edit mode (default is Graph)
-        # Edit button is at index 12 in the button list
-        edit_btn = page.locator('button').nth(12)
+        edit_btn = page.locator('button:text-is("Edit")')
+        expect(edit_btn).to_be_visible()
         edit_btn.click()
         page.wait_for_timeout(1000)
 
