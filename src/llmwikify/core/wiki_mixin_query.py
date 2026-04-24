@@ -13,11 +13,12 @@ from .constants import (
     SIMILARITY_THRESHOLD,
     STOP_WORDS,
 )
+from .protocols import WikiProtocol
 
 logger = logging.getLogger(__name__)
 
 
-class WikiQueryMixin:
+class WikiQueryMixin(WikiProtocol):
     """Query handling: page creation, similarity matching, sink integration."""
 
     def synthesize_query(

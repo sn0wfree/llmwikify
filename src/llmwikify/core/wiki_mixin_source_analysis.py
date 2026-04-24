@@ -6,10 +6,12 @@ import logging
 import re
 from pathlib import Path
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 
-class WikiSourceAnalysisMixin:
+class WikiSourceAnalysisMixin(WikiProtocol):
     """Source analysis: caching, finding summary pages, content hashing."""
 
     def _compute_content_hash(self, source_path: str) -> str:

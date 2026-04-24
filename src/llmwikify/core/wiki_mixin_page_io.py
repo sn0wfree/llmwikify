@@ -4,10 +4,12 @@ import logging
 import re
 from pathlib import Path
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 
-class WikiPageIOMixin:
+class WikiPageIOMixin(WikiProtocol):
     """Page read/write, search, log, and index file update."""
 
     def write_page(self, page_name: str, content: str, page_type: str | None = None) -> str:

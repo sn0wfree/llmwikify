@@ -44,6 +44,7 @@ from .wiki_mixin_source_analysis import WikiSourceAnalysisMixin
 from .wiki_mixin_status import WikiStatusMixin
 from .wiki_mixin_synthesis import WikiSynthesisMixin
 from .wiki_mixin_utility import WikiUtilityMixin
+from .protocols import WikiProtocol
 
 __all__ = [
     "Wiki",
@@ -63,6 +64,7 @@ __all__ = [
     "WikiStatusMixin",
     "WikiSynthesisMixin",
     "WikiUtilityMixin",
+    "WikiProtocol",
     "STOP_WORDS",
     "SIMILARITY_THRESHOLD",
     "MIN_KEYWORD_LENGTH",

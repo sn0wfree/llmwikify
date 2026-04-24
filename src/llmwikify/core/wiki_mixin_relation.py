@@ -8,10 +8,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .relation_engine import RelationEngine
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 
-class WikiRelationMixin:
+class WikiRelationMixin(WikiProtocol):
     """Relation engine and graph analysis integration."""
 
     def write_relations(self, relations: list, source_file: str | None = None) -> dict:

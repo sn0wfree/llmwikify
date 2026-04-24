@@ -4,10 +4,12 @@ import logging
 
 from .wiki_analyzer import WikiAnalyzer
 
+from .protocols import WikiProtocol
+
 logger = logging.getLogger(__name__)
 
 
-class WikiStatusMixin:
+class WikiStatusMixin(WikiProtocol):
     """Wiki status reporting and orphan detection configuration."""
 
     def _should_exclude_orphan(self, page_name: str, page_path) -> bool:
