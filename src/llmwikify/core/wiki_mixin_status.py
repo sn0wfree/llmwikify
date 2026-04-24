@@ -77,8 +77,8 @@ class WikiStatusMixin(WikiProtocol):
                 engine = self.get_relation_engine()
                 stats = engine.get_stats()
                 result["graph_stats"] = stats
-            except Exception:
-                logger.warning("Failed to load graph stats")
+            except Exception as e:
+                logger.warning("Failed to load graph stats: %s", e)
                 result["graph_stats"] = {"total_relations": 0, "unique_concepts": 0}
 
         return result

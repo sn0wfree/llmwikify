@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from ..config import get_db_path, get_directory, load_config
 from .index import WikiIndex
@@ -58,7 +59,7 @@ class Wiki(
     - WikiLintMixin: health check, lint detection (delegates to WikiAnalyzer)
     """
 
-    def __init__(self, root: Path, config: dict | None = None):
+    def __init__(self, root: Path, config: dict[str, Any] | None = None) -> None:
         self.root = root.resolve()
 
         # Load configuration (external file or built-in defaults)
@@ -128,7 +129,7 @@ class Wiki(
             self._query_sink = QuerySink(self.root, self.wiki_dir)
         return self._query_sink
 
-    def close(self):
+    def close(self) -> None:
         """Close database connections."""
         if self._index:
             self._index.close()

@@ -61,6 +61,7 @@ class WikiServer:
         self.enable_mcp = enable_mcp
         self.enable_rest = enable_rest
         self.enable_webui = enable_webui
+        self.mcp: MCPAdapter | None = None
 
         # 1. Build MCP adapter
         if enable_mcp:
@@ -102,7 +103,7 @@ class WikiServer:
             app.add_middleware(AuthMiddleware, api_key=self.api_key)
 
         # Mount MCP endpoint
-        if self.enable_mcp and hasattr(self, "mcp"):
+        if self.mcp is not None:
             app.mount("/mcp", self.mcp.asgi_app)
 
         # Health check endpoint
@@ -114,7 +115,7 @@ class WikiServer:
                 "status": "ok",
                 "version": "0.30.0",
                 "wiki": {
-                    "initialized": self.wiki.initialized,
+                    "initialized": self.wiki.is_initialized(),
                     "root": str(self.wiki.root),
                     "page_count": page_count,
                 },
@@ -149,10 +150,10 @@ class WikiServer:
 
     async def run_mcp_stdio(self) -> None:
         """Run MCP server in stdio mode (pure MCP, no HTTP)."""
-        if hasattr(self, "mcp"):
+        if self.mcp is not None:
             await self.mcp.run_stdio()
 
     async def run_mcp_http(self, host: str = "127.0.0.1", port: int = 8765) -> None:
         """Run standalone MCP HTTP server (without WebUI/REST)."""
-        if hasattr(self, "mcp"):
+        if self.mcp is not None:
             await self.mcp.run_http(host, port)

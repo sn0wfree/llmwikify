@@ -149,8 +149,8 @@ class WikiPageIOMixin(WikiProtocol):
         page_types = {}
         try:
             page_types = self._load_page_type_mapping()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to load page type mapping: %s", e)
 
         for result in results:
             page_name = result['page_name']
@@ -355,8 +355,8 @@ class WikiPageIOMixin(WikiProtocol):
                     wc = row['word_count']
                     wc_str = f"{wc / 1000:.1f}k" if wc >= 1000 else str(wc)
                     stats_extra = f" | 📝 {wc_str} words"
-            except Exception:
-                logger.warning("Failed to get word count for %s", page_name)
+            except Exception as e:
+                logger.warning("Failed to get word count for %s: %s", page_name, e)
 
             try:
                 in_count = len(self.index.get_inbound_links(page_name))
@@ -366,16 +366,16 @@ class WikiPageIOMixin(WikiProtocol):
                     if in_count > 0:
                         link_str += f" | {in_count} in"
                     stats_extra = f" | {link_str}" + stats_extra
-            except Exception:
-                logger.warning("Failed to get link counts for %s", page_name)
+            except Exception as e:
+                logger.warning("Failed to get link counts for %s: %s", page_name, e)
 
             sink_marker = ""
             try:
                 sink_info = self.query_sink.get_info_for_page(page_name)
                 if sink_info['has_sink']:
                     sink_marker = f" 📥 {sink_info['sink_entries']} pending"
-            except Exception:
-                logger.warning("Failed to get sink info for %s", page_name)
+            except Exception as e:
+                logger.warning("Failed to get sink info for %s: %s", page_name, e)
 
             entry = f"- [[{page_name}]] - {summary}{sink_marker}"
             if analysis_extra or stats_extra:
