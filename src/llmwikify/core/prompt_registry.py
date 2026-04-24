@@ -184,7 +184,7 @@ class PromptRegistry:
 
     def should_trigger(self, prompt_name: str, event_name: str) -> bool:
         """Check if this prompt should activate for the given event.
-        
+
         trigger.type:
           - "api_call": Always available. Activated by explicit code call.
           - "auto": Auto-triggered when event_name matches trigger.when.
@@ -214,7 +214,7 @@ class PromptRegistry:
         wiki: Any,
     ) -> dict[str, Any]:
         """Resolve context injection spec into actual values.
-        
+
         context_spec format:
           - Simple: {"wiki_index": "_get_index_summary"}
           - With params: {"recent_ops": {"method": "_get_recent_log", "limit": 5}}
@@ -243,7 +243,7 @@ class PromptRegistry:
 
     def validate_output(self, prompt_name: str, output: Any) -> list[str]:
         """Validate LLM output against post_process rules.
-        
+
         Returns list of error messages. Empty list means valid.
         """
         template = self._load_template(prompt_name)

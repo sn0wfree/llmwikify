@@ -6,16 +6,16 @@ from .constants import (
     GROWING_WIKI_THRESHOLD,
     HASH_TRUNCATE_LENGTH,
     JACCARD_OVERLAP_THRESHOLD,
-    MAX_CONTRADICTIONS,
     MAX_CONTENT_CHARS,
+    MAX_CONTRADICTIONS,
     MAX_CROSS_REF_HINTS,
     MAX_DATED_CLAIM_HINTS,
     MAX_KEY_TOPICS,
     MAX_MISSING_DISPLAY,
     MAX_QUERY_OVERLAP_HINTS,
     MAX_QUERY_TOPIC_LENGTH,
-    MAX_SUMMARY_ITEMS,
     MAX_SUGGESTED_UPDATES,
+    MAX_SUMMARY_ITEMS,
     MIN_ASSERTION_LENGTH,
     MIN_ASSERTIONS_FOR_GAP,
     MIN_KEYWORD_LENGTH,
@@ -33,8 +33,8 @@ from .wiki import Wiki
 from .wiki_analyzer import WikiAnalyzer
 from .wiki_mixin_ingest import WikiIngestMixin
 from .wiki_mixin_init import WikiInitMixin
-from .wiki_mixin_lint import WikiLintMixin
 from .wiki_mixin_link import WikiLinkMixin
+from .wiki_mixin_lint import WikiLintMixin
 from .wiki_mixin_llm import WikiLLMMixin
 from .wiki_mixin_page_io import WikiPageIOMixin
 from .wiki_mixin_query import WikiQueryMixin

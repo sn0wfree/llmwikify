@@ -28,7 +28,7 @@ class WikiSourceAnalysisMixin:
             return None
 
         slug = self._slugify(Path(source_path).stem)
-        
+
         candidate = sources_dir / f"{slug}.md"
         if candidate.exists():
             return candidate

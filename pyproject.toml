@@ -110,6 +110,8 @@ include = '\.pyi?$'
 [tool.ruff]
 line-length = 88
 target-version = "py310"
+
+[tool.ruff.lint]
 select = [
     "E",  # pycodestyle errors
     "F",  # pyflakes
@@ -121,6 +123,8 @@ select = [
 ]
 ignore = [
     "E501",  # line too long (handled by black)
+    "B904",  # raise from err (stylistic, would add noise to exception handling)
+    "F401",  # unused imports (networkx imported in try/except for availability checks)
 ]
 
 [tool.mypy]

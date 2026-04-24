@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -260,18 +259,18 @@ class DreamEditor:
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         content_parts = [
-            f"---",
+            "---",
             f"title: {page_name}",
             f"created: {now}",
             f"updated: {now}",
-            f"sources: []",
-            f"tags: []",
-            f"---",
-            f"",
+            "sources: []",
+            "tags: []",
+            "---",
+            "",
             f"# {page_name}",
-            f"",
-            f"> Auto-generated from QuerySink entries",
-            f"",
+            "",
+            "> Auto-generated from QuerySink entries",
+            "",
         ]
 
         for entry in non_dup_entries:
@@ -280,9 +279,9 @@ class DreamEditor:
             if query and answer:
                 content_parts.extend([
                     f"## {query}",
-                    f"",
+                    "",
                     f"{answer}",
-                    f"",
+                    "",
                 ])
 
         content = "\n".join(content_parts)
@@ -469,7 +468,7 @@ class DreamEditor:
         if not self.edits_file.exists():
             return []
         entries = []
-        with open(self.edits_file, "r", encoding="utf-8") as f:
+        with open(self.edits_file, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:

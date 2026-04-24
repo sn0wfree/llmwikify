@@ -8,7 +8,7 @@ from typing import Any
 
 class LLMClient:
     """Minimal client for OpenAI-compatible APIs.
-    
+
     Supports any provider with a /v1/chat/completions endpoint:
     OpenAI, Ollama, LocalAI, vLLM, LM Studio, etc.
     """
@@ -72,12 +72,12 @@ class LLMClient:
         **generation_params: Any,
     ) -> str:
         """Send chat completion request.
-        
+
         Args:
             messages: List of {role, content} dicts
             json_mode: If True, request JSON response format
             **generation_params: Optional params like temperature, max_tokens, top_p
-            
+
         Returns:
             Assistant response text
         """
@@ -121,7 +121,7 @@ class LLMClient:
         **generation_params: Any,
     ) -> Any:
         """Send chat completion and parse JSON response.
-        
+
         Handles markdown code blocks: ```json\n{...}\n```
         """
         raw = self.chat(messages, json_mode=True, **generation_params)

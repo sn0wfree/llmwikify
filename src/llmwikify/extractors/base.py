@@ -66,11 +66,11 @@ def detect_source_type(source: str) -> str:
 
 def extract(source: str, wiki_root: Path | None = None) -> ExtractedContent:
     """Extract content from any supported source. Auto-detects type.
-    
+
     Args:
         source: File path (absolute or relative) or URL.
         wiki_root: Wiki root directory for resolving relative paths.
-    
+
     Returns:
         ExtractedContent with the extracted text and metadata.
     """
@@ -115,12 +115,6 @@ def extract(source: str, wiki_root: Path | None = None) -> ExtractedContent:
         # MarkItDown unavailable or failed — fall through to legacy extractors
 
     # Legacy extractors with known file types
-    legacy_types = {
-        "pdf": ("pdf",),
-        "markdown": ("markdown", "text"),
-        "text": ("markdown", "text"),
-        "html": ("html",),
-    }
 
     if source_type in ("pdf", "markdown", "text", "html"):
         if source_type == "pdf":

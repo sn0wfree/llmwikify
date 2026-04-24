@@ -6,13 +6,9 @@ Design principle: "LLM does grunt work, human makes decisions"
 - Respects "stay involved" principle from LLM Wiki Principles
 """
 
-import json
 import logging
-from pathlib import Path
-from typing import Any
 
 from .graph_export import build_graph, detect_communities
-from .index import WikiIndex
 
 logger = logging.getLogger(__name__)
 
@@ -394,7 +390,7 @@ class GraphAnalyzer:
             "",
         ])
 
-        for cid, comm in analysis["communities"].get("communities", {}).items():
+        for _cid, comm in analysis["communities"].get("communities", {}).items():
             lines.append(f"- **{comm['label']}**: {comm['size']} nodes")
 
         lines.extend([

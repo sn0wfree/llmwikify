@@ -14,11 +14,11 @@ class WikiIngestMixin:
 
     def ingest_source(self, source: str) -> dict:
         """Ingest a source file and return extracted data for LLM processing.
-        
+
         Does NOT automatically write wiki pages. Returns extracted content
         along with current wiki index so the LLM can decide which pages
         to create/update and how to cross-reference.
-        
+
         All source files are collected into raw/ for centralized management.
         - URL/YouTube: extracted text is saved to raw/
         - Local files outside raw/: copied to raw/

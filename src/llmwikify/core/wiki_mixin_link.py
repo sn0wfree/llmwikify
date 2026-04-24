@@ -61,7 +61,7 @@ class WikiLinkMixin:
                 if (self.wiki_dir / f"{target}.md").exists():
                     continue
 
-                matches = [p for p in self.wiki_dir.rglob(f"{target}.md")]
+                matches = list(self.wiki_dir.rglob(f"{target}.md"))
 
                 if len(matches) == 0:
                     stats["skipped"] += 1
@@ -112,7 +112,7 @@ class WikiLinkMixin:
 
     def get_inbound_links(self, page_name: str, include_context: bool = False) -> list:
         """Get pages that link to this page.
-        
+
         Args:
             page_name: Target page name
             include_context: If True, read source files for context around links
@@ -129,7 +129,7 @@ class WikiLinkMixin:
 
     def get_outbound_links(self, page_name: str, include_context: bool = False) -> list:
         """Get pages that this page links to.
-        
+
         Args:
             page_name: Source page name
             include_context: If True, read source files for context around links
@@ -146,13 +146,13 @@ class WikiLinkMixin:
 
     def _get_link_context(self, source_page: str, section: str, target_page: str = "", context_chars: int = 80) -> str:
         """Extract context around a wikilink in source file.
-        
+
         Args:
             source_page: Source page name
             section: Section header (e.g., '#Overview')
             target_page: Target page name (for outbound links)
             context_chars: Characters to show before/after link
-        
+
         Returns:
             Context string or empty if not found
         """
