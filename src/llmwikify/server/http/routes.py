@@ -7,7 +7,6 @@ from typing import Any
 from fastapi import APIRouter, FastAPI, Request, HTTPException, Depends
 
 from llmwikify.core import Wiki
-from llmwikify.core.graph_export import build_graph
 
 
 def register_routes(app: FastAPI, wiki: Wiki, agent: Any | None = None) -> None:
@@ -97,100 +96,12 @@ def register_routes(app: FastAPI, wiki: Wiki, agent: Any | None = None) -> None:
         mode: str = "auto",
         wiki: Wiki = Depends(get_wiki),
     ):
-        """Return graph data optimized for visualization."""
-        try:
-            graph_data = build_graph(
-                wiki.index, include_wikilinks=True, include_relations=False
-            )
-        except Exception:
-            return {"nodes": [], "edges": [], "stats": {"total_nodes": 0, "displayed_nodes": 0, "mode": "empty"}}
+        """Return graph data optimized for visualization.
 
-        nodes = graph_data.get("nodes", [])
-        edges = graph_data.get("edges", [])
-        total_nodes = len(nodes)
-
-        if total_nodes < 50 or mode == "full":
-            display_nodes = nodes
-            display_edges = edges
-            display_mode = "full"
-        elif total_nodes < 200 or mode == "focused":
-            if current_page:
-                neighbors = set()
-                neighbors.add(current_page)
-                for e in edges:
-                    if e["source"] == current_page:
-                        neighbors.add(e["target"])
-                    if e["target"] == current_page:
-                        neighbors.add(e["source"])
-                degree_count = {}
-                for e in edges:
-                    degree_count[e["source"]] = degree_count.get(e["source"], 0) + 1
-                    degree_count[e["target"]] = degree_count.get(e["target"], 0) + 1
-                hubs = sorted(degree_count.keys(), key=lambda x: -degree_count[x])[:10]
-                for h in hubs:
-                    neighbors.add(h)
-                display_nodes = [n for n in nodes if n["id"] in neighbors]
-                display_edges = [e for e in edges if e["source"] in neighbors and e["target"] in neighbors]
-            else:
-                display_nodes = nodes[:50]
-                display_edges = edges
-            display_mode = "focused"
-        else:
-            if current_page:
-                neighbors = set()
-                neighbors.add(current_page)
-                for e in edges:
-                    if e["source"] == current_page:
-                        neighbors.add(e["target"])
-                    if e["target"] == current_page:
-                        neighbors.add(e["source"])
-                display_nodes = [n for n in nodes if n["id"] in neighbors]
-                display_edges = [e for e in edges if e["source"] in neighbors and e["target"] in neighbors]
-            else:
-                display_nodes = nodes[:30]
-                display_edges = edges
-            display_mode = "minimal"
-
-        if mode == "full":
-            display_nodes = nodes
-            display_edges = edges
-            display_mode = "full"
-
-        node_ids = {n["id"] for n in display_nodes}
-        display_edges = [e for e in edges if e["source"] in node_ids and e["target"] in node_ids]
-
-        page_types = {}
-        try:
-            type_map = wiki._load_page_type_mapping()
-            page_types = type_map
-        except Exception:
-            pass
-
-        result_nodes = []
-        for n in display_nodes:
-            nid = n["id"]
-            page_type = n.get("source_type", "wiki_page")
-            for type_name, type_dir in page_types.items():
-                if nid.startswith(type_dir + "/") or nid == type_dir:
-                    page_type = type_name
-                    break
-
-            result_nodes.append({
-                "id": nid,
-                "label": n.get("label", nid),
-                "page_type": page_type,
-            })
-
-        return {
-            "nodes": result_nodes,
-            "edges": display_edges,
-            "stats": {
-                "total_nodes": total_nodes,
-                "displayed_nodes": len(result_nodes),
-                "mode": display_mode,
-            },
-            "all_types": list(page_types.keys()),
-        }
+        Uses shared graph_visualizer module - single source of truth.
+        """
+        from llmwikify.core.graph_visualizer import build_visualization_data
+        return build_visualization_data(wiki.index, wiki, current_page, mode)
 
     app.include_router(wiki_router)
 

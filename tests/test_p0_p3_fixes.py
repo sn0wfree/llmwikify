@@ -220,9 +220,9 @@ class TestFallbackBehavior:
 class TestMCPToolCount:
     def test_mcp_tool_count_matches_readme(self):
         """MCP tool count in README should match actual implementation."""
-        # Count tools in server.py (FastMCP uses @mcp.tool decorators)
-        server_path = Path(__file__).parent.parent / 'src/llmwikify/mcp/server.py'
-        content = server_path.read_text()
+        # Count tools in tools.py (single source of truth)
+        tools_path = Path(__file__).parent.parent / 'src/llmwikify/mcp/tools.py'
+        content = tools_path.read_text()
         actual_count = content.count('@mcp.tool')
 
         # Count tools in README
