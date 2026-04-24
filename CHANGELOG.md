@@ -5,9 +5,9 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.30.0] - 2026-04-21
+## [0.30.0] - 2026-04-24
 
-### Added — Phase 2: Wiki Mixin Refactoring
+### Added — Phase 2: Wiki Mixin Refactoring (2026-04-21)
 - **12 new Mixin classes** extracted from `wiki.py` (2724 → 135 lines, -95%):
   - `WikiUtilityMixin` — slug generation, timestamps, templates, page iteration
   - `WikiLinkMixin` — wikilink resolution, fixing, inbound/outbound links
@@ -26,16 +26,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mixin composition** — `Wiki` class inherits from all 12 mixins in dependency order
 - **WikiAnalyzer preserved** — `WikiLintMixin` delegates to `WikiAnalyzer` (Phase 1 extraction)
 
+### Added — Web UI Enhancements (2026-04-22 ~ 2026-04-24)
+- **Collapsible Sidebar** — Toggle sidebar visibility, auto-expand groups
+- **Pinned Pages** — Quick access to frequently used pages
+- **Page Tree Enhancement** — Dynamic colors by page type, type icons, search filtering, sorting options
+- **Graph Visualization Upgrade** — D3.js with PageRank-based node sizing, community coloring, bridge node highlighting, suggested pages as dashed nodes
+- **Project Metadata Display** — `llmwikify · project-name` format using wiki root directory name
+- **Version Display** — `v0.30.0` version number right-aligned in sidebar header
+- **Status API Enhancement** — Backend `status()` endpoint returns `version` and `root` fields
+
+### Added — Agent Layer (Completed v0.30.0)
+- **8 Agent sub-systems fully implemented**:
+  - `WikiAgent` — Main orchestrator class
+  - `AgentRunner` — Execution loop and state management
+  - `TaskScheduler` — Cron-based scheduled task execution (croniter)
+  - `AgentMemory` — Short/long-term memory management
+  - `AgentTools` — Wiki tool bindings and MCP integration
+  - `HooksSystem` — Event hooks with pre/post operation callbacks
+  - `NotificationManager` — User notification system
+  - `DreamEditor` — Asynchronous proposal generation with human confirmation flow
+- **All 85+ Agent tests passing**
+- **Dream Confirmation Flow**: Agent proposes changes → Human reviews/confirms → Changes applied
+
+### Fixed — Code Quality (2026-04-22 ~ 2026-04-24)
+- **Mypy Type Checking**: Resolved all core CLI, index, and protocol type errors. Configured optional dependencies.
+- **Ruff Lint**: Resolved all lint issues, updated config format.
+- **E2E Tests**: Fixed selector issues, added type stubs.
+- **Graph Stability**: Improved node position persistence, smooth transitions.
+
 ### Changed
 - `wiki.py` reduced from 2724 lines to 135 lines (only `__init__` + lazy properties)
 - `core/__init__.py` exports all 12 mixin classes alongside `Wiki`, `WikiIndex`, `QuerySink`, `WikiAnalyzer`
-- Test mock path updated for `extract` function (now in `wiki_mixin_ingest.py`)
+- TypeScript API interfaces updated with new optional `version` and `root` fields
+- Frontend built and bundled with latest changes
 
 ### Architecture
 - Mixin files total: 2603 lines across 12 files
 - Clear separation of concerns: each mixin has single responsibility
 - Independently testable: each mixin can be tested in isolation
-- Future-proof: easy to add/replace functionality without touching core
+- Agent layer fully decoupled from core via MCP protocol
+- Web UI fully integrated with MCP REST API
+
+### Tests
+- **879+ Python tests passing** (all)
+- **38+ Frontend tests passing** (Vitest + React Testing Library)
+- **85+ Agent layer tests passing**
 
 ## [0.29.0] - 2026-04-17
 

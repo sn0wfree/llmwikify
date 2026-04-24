@@ -68,6 +68,20 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 ### Graph Visualization (v0.23.0+)
 - Interactive HTML (pyvis), SVG (graphviz), GraphML (Gephi)
 
+### Agent Layer (v0.30.0+)
+- **Autonomous Wiki Maintenance** — 8 sub-systems: WikiAgent, AgentRunner, TaskScheduler, MemoryManager, NotificationManager, HooksSystem, ToolsRegistry, DreamEditor
+- **Dream Confirmation Flow** — Agent proposes changes, human confirms (respects "stay involved" principle)
+- **Scheduled Tasks** — Cron-based periodic lint, source analysis, knowledge gap detection
+- **Hook System** — Pre/post operation callbacks for custom workflows
+
+### Web UI (v0.30.0+)
+- **React + TypeScript SPA** — 18 components, Vitest tested
+- **Markdown Editor** — Real-time preview, front matter panel
+- **Interactive Graph View** — D3.js visualization with PageRank sizing, community coloring, bridge node highlighting
+- **Insights Dashboard** — Cross-source synthesis, knowledge gaps, graph analysis
+- **Agent Interface** — Chat interface, task monitor, dream proposals, confirmations
+- **Project Metadata** — `llmwikify · project-name` display, version number indicator
+
 ### Additional
 - **File extraction** — PDF, Word, Excel, PowerPoint, images, audio, YouTube, web URLs via MarkItDown
 - **File watcher** — Watch `raw/` for new files, optional auto-ingest
@@ -211,6 +225,24 @@ graph_result = wiki.graph_analyze()
 
 ---
 
+## 🖥️ Web UI
+
+Start the unified web server:
+
+```bash
+llmwikify serve --web          # Starts MCP + Web UI on http://localhost:8765
+```
+
+**Features**:
+- 📝 **Markdown Editor** — Live preview, front matter support, wikilink autocomplete
+- 🌐 **Graph View** — D3.js interactive visualization, PageRank sizing, community colors
+- 📊 **Insights Panel** — Cross-source synthesis, knowledge gaps, graph analysis
+- 🤖 **Agent Console** — Chat interface, scheduled tasks, dream proposals & confirmations
+- 📈 **Health Dashboard** — Broken links, orphans, stale pages, knowledge growth
+- 🔍 **Full-text Search** — FTS5-powered search with snippets
+
+---
+
 ## ⚙️ Configuration
 
 Create `.wiki-config.yaml` in your wiki root:
@@ -272,9 +304,12 @@ See [Configuration Guide](docs/CONFIGURATION_GUIDE.md) for full options.
 ## 🧪 Testing
 
 ```bash
-pytest                           # All 879 Python tests
+pytest                           # All 879+ Python tests
 pytest --cov=src/llmwikify       # With coverage
 pytest tests/test_p1_features.py # Specific module
+
+# Frontend tests
+cd src/llmwikify/web/webui && npm test
 ```
 
 ---
