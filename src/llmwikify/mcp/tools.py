@@ -145,6 +145,55 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         return json.dumps(wiki.build_index(), ensure_ascii=False, indent=2)
 
     @mcp.tool
+    def wiki_read_schema() -> str:
+        """Read the wiki.md schema file."""
+        return json.dumps(wiki.read_schema(), ensure_ascii=False, indent=2)
+
+    @mcp.tool
+    def wiki_update_schema(content: str) -> str:
+        """Update the wiki.md schema file.
+
+        Args:
+            content: Full markdown content for wiki.md
+        """
+        return json.dumps(wiki.update_schema(content), ensure_ascii=False, indent=2)
+
+    @mcp.tool
+    def wiki_synthesize(
+        query: str,
+        answer: str,
+        source_pages: list[str] | None = None,
+        raw_sources: list[str] | None = None,
+        page_name: str | None = None,
+        auto_link: bool = True,
+        auto_log: bool = True,
+        merge_or_replace: str = "sink",
+    ) -> str:
+        """Save a query answer as a persistent wiki page.
+
+        Args:
+            query: The original question/query
+            answer: The LLM-generated answer
+            source_pages: List of wiki page names used as context
+            raw_sources: List of raw file paths
+            page_name: Optional custom page name (otherwise auto-generated)
+            auto_link: Automatically wikilink content (default: True)
+            auto_log: Log this operation to wiki log (default: True)
+            merge_or_replace: Strategy - "sink", "merge", or "replace" (default: "sink")
+        """
+        result = wiki.synthesize_query(
+            query=query,
+            answer=answer,
+            source_pages=source_pages,
+            raw_sources=raw_sources,
+            page_name=page_name,
+            auto_link=auto_link,
+            auto_log=auto_log,
+            merge_or_replace=merge_or_replace,
+        )
+        return json.dumps(result, ensure_ascii=False, indent=2)
+
+    @mcp.tool
     def wiki_sink_status() -> str:
         """Query the sink buffer status."""
         return json.dumps(wiki.sink_status(), ensure_ascii=False, indent=2)

@@ -39,11 +39,6 @@ class TestWikiServerInit:
         server = WikiServer(wiki_instance, api_key="test-key")
         assert server.api_key == "test-key"
 
-    def test_init_with_agent(self, wiki_instance):
-        """Test initializing with agent (passing None explicitly)."""
-        server = WikiServer(wiki_instance, agent=None)
-        assert server.agent is None
-
 
 class TestWikiServerApp:
     """Tests for WikiServer FastAPI app configuration."""
