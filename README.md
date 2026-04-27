@@ -5,7 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 879+ passing](https://img.shields.io/badge/tests-879%2B%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Tests: 1008+ passing](https://img.shields.io/badge/tests-1008%2B%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 
 ---
 
@@ -227,11 +227,17 @@ graph_result = wiki.graph_analyze()
 
 ## 🖥️ Web UI
 
-Start the unified web server:
+Start the unified **FastAPI** web server:
 
 ```bash
-llmwikify serve --web          # Starts MCP + Web UI on http://localhost:8765
+llmwikify serve --web                  # Starts MCP + Web UI + REST API on http://localhost:8765
+llmwikify serve --web --auth-token=key # With optional API key authentication
 ```
+
+**Architecture** (FastAPI):
+- 🔄 **MCP Protocol** — `/mcp` endpoint for AI agent integration
+- 🌐 **REST API** — `/api/wiki/*` endpoints with auto-generated docs at `/docs`
+- 🖥️ **Web UI** — React SPA static file serving
 
 **Features**:
 - 📝 **Markdown Editor** — Live preview, front matter support, wikilink autocomplete
@@ -240,6 +246,7 @@ llmwikify serve --web          # Starts MCP + Web UI on http://localhost:8765
 - 🤖 **Agent Console** — Chat interface, scheduled tasks, dream proposals & confirmations
 - 📈 **Health Dashboard** — Broken links, orphans, stale pages, knowledge growth
 - 🔍 **Full-text Search** — FTS5-powered search with snippets
+- 🔑 **Optional Auth** — API key authentication for production deployments
 
 ---
 

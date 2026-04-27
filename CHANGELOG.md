@@ -5,6 +5,31 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.1] - 2026-04-27
+
+### Added — Unified FastAPI Server
+- **New `server/` module** — Unified FastAPI-based server architecture:
+  - `server/core.py` — `WikiServer` class orchestrates MCP + REST + WebUI
+  - `server/http/routes.py` — REST API endpoint registrations
+  - `server/http/middleware.py` — CORS + optional API key authentication
+  - `server/utils/webui.py` — React SPA static file mounting
+  - `server/constants.py` — Shared configuration constants
+- **129 new unit tests**:
+  - 26 tests for `RelationEngine` (neighbors, paths, statistics, contradictions)
+  - 24 tests for FastAPI routes (all `/api/wiki/*` endpoints, auth middleware)
+  - 15 tests for `WikiServer` core (configuration, setup, MCP mounting)
+  - 64 existing tests updated/refactored
+
+### Fixed — Code Quality & Bugs
+- **27+ silent exception catches fixed** — All `except Exception:` now capture exception objects and log details with warning level
+- **Health check AttributeError** — Fixed `wiki.initialized` reference → correct `wiki.is_initialized()` method call
+- **Type annotations** — Added missing type hints for `Wiki.__init__`, `Wiki.close()`, `MCPAdapter.asgi_app`
+- **Circular imports** — Fixed import cycles in `mcp/__init__.py` and `server/__init__.py`
+
+### Changed
+- **Starlette → FastAPI migration**: Server now uses FastAPI with auto-generated OpenAPI docs at `/docs`
+- **Test coverage**: 879 → 1008+ Python tests passing
+
 ## [0.30.0] - 2026-04-24
 
 ### Added — Phase 2: Wiki Mixin Refactoring (2026-04-21)
