@@ -103,17 +103,18 @@ def serve_mcp(
 
 def create_unified_server(
     wiki: Wiki,
-    agent: Any | None = None,
+    agent: Any | None = None,  # noqa: ARG001 - Kept for backward compat
     api_key: str | None = None,
     mcp_name: str | None = None,
 ) -> Any:
     """Create a unified FastAPI server with MCP, REST API, and WebUI.
 
     DEPRECATED: Use llmwikify.server.WikiServer directly.
+    Note: Agent parameter is also deprecated and ignored.
 
     Args:
         wiki: Wiki instance
-        agent: Optional WikiAgent instance
+        agent: Ignored - kept for backward compatibility
         api_key: Optional API key for authentication
         mcp_name: Optional MCP server name
 
@@ -130,7 +131,6 @@ def create_unified_server(
 
     server = WikiServer(
         wiki,
-        agent=agent,
         api_key=api_key,
         mcp_name=mcp_name,
         enable_mcp=True,

@@ -117,7 +117,6 @@ class WikiServer:
                 },
                 "features": {
                     "mcp": self.enable_mcp,
-                    "agent": self.agent is not None,
                     "webui": self.enable_webui,
                     "auth": self.api_key is not None,
                 },
@@ -129,9 +128,6 @@ class WikiServer:
         async def shutdown_event():
             logger.info("llmwikify server shutting down")
             self.wiki.close()
-            if self.agent:
-                if hasattr(self.agent, "shutdown"):
-                    await self.agent.shutdown()
 
         return app
 

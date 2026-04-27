@@ -207,20 +207,21 @@ class TestHealthEndpoint:
         assert "mcp" in data["features"]
         assert "webui" in data["features"]
         assert "auth" in data["features"]
+        # Agent feature is deprecated and removed
+        assert "agent" not in data["features"]
 
 
 class TestWikiServerConfiguration:
     """Tests for WikiServer configuration options."""
 
     def test_server_without_agent(self, wiki_instance):
-        """Test server without agent does not expose agent routes."""
+        """Test server does not expose agent routes (agent feature deprecated)."""
         server = WikiServer(wiki_instance, enable_webui=False)
         client = TestClient(server.app)
 
-        # Agent routes should not be available or return 503
+        # Agent routes should be 404 - they are no longer registered
         response = client.get("/api/agent/status")
-        # Either 404 (not registered) or 503 (agent not enabled)
-        assert response.status_code in (404, 503)
+        assert response.status_code == 404
 
     def test_server_with_api_key(self, wiki_instance):
         """Test server with API key authentication."""

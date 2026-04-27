@@ -36,8 +36,8 @@ class TestUnifiedServer:
 class TestCLIWebArgs:
     """Test CLI web arguments."""
 
-    def test_serve_help_contains_agent(self):
-        """serve --help should mention --agent."""
+    def test_serve_help_not_contains_agent(self):
+        """serve --help should NOT mention --agent (deprecated)."""
         import io
         from unittest.mock import patch
 
@@ -50,4 +50,4 @@ class TestCLIWebArgs:
                     main()
 
         output = help_output.getvalue()
-        assert '--agent' in output
+        assert '--agent' not in output
