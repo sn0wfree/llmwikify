@@ -2,7 +2,7 @@
 
 **llmwikify** provides an MCP (Model Context Protocol) server that exposes wiki operations as tools for LLMs.
 
-**Current**: 13 tools available (v0.12.6)
+**Current**: 20 tools available (v0.30.1)
 
 ---
 
@@ -182,7 +182,7 @@ mcp:
 
 ---
 
-## 📋 Available Tools (13 Total)
+## 📋 Available Tools (20 Total)
 
 | Tool | Description | Added |
 |------|-------------|-------|
@@ -198,7 +198,14 @@ mcp:
 | `wiki_build_index` | Build reference index from all pages | v0.12.0 |
 | `wiki_read_schema` | Read wiki.md (schema/conventions) | v0.12.4 |
 | `wiki_update_schema` | Update wiki.md with new conventions | v0.12.4 |
-| `wiki_synthesize` | **Save query answer as wiki page** | **v0.12.6** |
+| `wiki_synthesize` | Save query answer as wiki page | v0.12.6 |
+| `wiki_sink_status` | Query sink buffer overview | v0.22.0 |
+| `wiki_references` | Page backlink/forward references | v0.22.0 |
+| `wiki_graph` | Graph query: neighbors, path, stats, write | v0.22.0 |
+| `wiki_graph_analyze` | Export, community detect, report, analyze | v0.28.0 |
+| `wiki_analyze_source` | Analyze raw source file (entities, relations) | v0.28.0 |
+| `wiki_suggest_synthesis` | Cross-source synthesis suggestions | v0.28.0 |
+| `wiki_knowledge_gaps` | Knowledge gap + outdated + redundancy detection | v0.28.0 |
 
 ### wiki_synthesize (v0.12.6+)
 
@@ -361,4 +368,4 @@ curl http://your-server-ip:8765
 
 ---
 
-*Last updated: 2026-04-10 | Version: 0.12.6 | 13 tools*
+*Last updated: 2026-04-27 | Version: 0.30.1 | 20 tools*

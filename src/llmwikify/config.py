@@ -49,6 +49,14 @@ DEFAULT_CONFIG = {
     "prompts": {
         "custom_dir": None,
     },
+    "search": {
+        "backend": "fts5",  # "fts5" (default) or "qmd"
+        "qmd": {
+            "host": "127.0.0.1",
+            "port": 8181,
+            "auto_start": False,
+        },
+    },
 }
 
 
@@ -87,8 +95,8 @@ def load_config(wiki_root: Path, config_file: str | None = None) -> dict[str, An
         except ImportError:
             # PyYAML not installed, use defaults
             pass
-        except Exception:
-            logger.warning("Config file parse error, using defaults")
+        except Exception as e:
+            logger.warning("Config file parse error, using defaults: %s", e)
 
     return config
 
@@ -168,3 +176,24 @@ def get_mcp_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
         mcp_config.update(user_mcp)
 
     return mcp_config
+
+
+def get_search_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Get search engine configuration.
+
+    Args:
+        config: Optional configuration dict
+
+    Returns:
+        Search configuration dict with backend and QMD settings
+    """
+    if config is None:
+        config = get_default_config()
+
+    search_config: dict = DEFAULT_CONFIG["search"].copy()  # type: ignore[attr-defined]
+    user_search = config.get("search", {})
+
+    if user_search:
+        search_config.update(user_search)
+
+    return search_config

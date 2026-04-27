@@ -27,7 +27,7 @@ pytest --cov=src/llmwikify --cov-report=html
 open htmlcov/index.html
 ```
 
-**Target**: 879+ Python tests + 38 frontend tests passing, >85% code coverage.
+**Target**: 1008+ Python tests + 38 frontend tests passing, >85% code coverage.
 
 ## Code Quality
 
@@ -59,12 +59,16 @@ src/llmwikify/
 │   └── query_sink.py        # Sink buffer management
 ├── extractors/        # Content extractors (PDF, web, YouTube, MarkItDown)
 ├── cli/               # CLI commands (22 total)
-├── mcp/               # MCP server (20 tools)
+├── mcp/               # MCP protocol adapter
+├── server/            # Unified FastAPI server (MCP + REST + WebUI)
+│   ├── core.py              # WikiServer orchestrator
+│   ├── http/routes.py       # REST API endpoints
+│   └── http/middleware.py   # Auth + CORS middleware
 ├── prompts/           # YAML+Jinja2 prompt templates
-├── web/               # Web UI (optional)
+├── web/               # Web UI (optional, React SPA)
 ├── config.py          # Configuration system
 └── llm_client.py      # LLM API client
-tests/                 # Test suite (879+ Python tests + 38 frontend tests)
+tests/                 # Test suite (1008+ Python tests + 38 frontend tests)
 docs/                  # Documentation
 examples/              # Example configurations
 ```
