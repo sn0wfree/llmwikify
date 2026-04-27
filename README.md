@@ -165,44 +165,6 @@ llmwikify serve --web                # MCP + Web UI
 
 ---
 
-## 💻 Python API
-
-```python
-from llmwikify import Wiki
-from pathlib import Path
-
-wiki = Wiki(Path("/path/to/wiki"))
-wiki.init()
-
-# Ingest source
-result = wiki.ingest_source("document.pdf")
-
-# Create pages
-wiki.write_page("Test Page", "# Title\n\nContent with [[Link]]", page_type="Concept")
-
-# Search
-results = wiki.search("topic", limit=10)
-
-# Synthesize query answers (knowledge compounding)
-wiki.synthesize_query(query="Q?", answer="A...", source_pages=["Page1", "Page2"])
-
-# Knowledge graph
-engine = wiki.get_relation_engine()
-engine.get_neighbors("Concept")
-engine.get_path("A", "B")
-
-# Health check
-lint_result = wiki.lint(generate_investigations=True)
-
-# Cross-source synthesis
-wiki.suggest_synthesis()
-
-# Graph analysis
-graph_result = wiki.graph_analyze()
-```
-
----
-
 ## 🗄️ MCP Server (20 Tools)
 
 | Tool | Description |
@@ -252,6 +214,124 @@ llmwikify qmd search "your query"
 ```
 
 See [QMD Setup Guide](docs/QMD_SETUP.md) for installation instructions.
+
+---
+
+## 🐍 Python Usage
+
+Use llmwikify as a library in your Python projects:
+
+```python
+from llmwikify import Wiki, create_wiki
+
+# Create or open a wiki
+wiki = create_wiki("./my-wiki")
+
+# Write a page
+wiki.write_page("Python/Patterns/Singleton", """
+# Singleton Pattern
+
+Ensures a class has only one instance...
+""")
+
+# Read a page
+content = wiki.read_page("Python/Patterns/Singleton")
+
+# Search (supports FTS5 and QMD backends)
+results = wiki.search("singleton", limit=10, backend="fts5")
+
+# Get inbound/outbound links
+inbound_links = wiki.get_inbound_links("Python/Patterns/Singleton")
+
+# Get wiki status
+status = wiki.status()
+
+# Health check
+lint_result = wiki.lint(format="brief")
+
+# Cleanup
+wiki.close()
+```
+
+### Running Web Server Programmatically
+
+```python
+from llmwikify import Wiki
+from llmwikify.server import WikiServer
+
+wiki = Wiki("./my-wiki")
+server = WikiServer(
+    wiki,
+    api_key="optional-secret",  # Optional: enable auth
+    enable_mcp=True,            # Enable MCP protocol
+    enable_rest=True,           # Enable REST API
+    enable_webui=True,          # Enable React Web UI
+)
+server.run(host="0.0.0.0", port=8765)
+```
+
+### MCP Integration (for AI Agents)
+
+```python
+from llmwikify import Wiki
+from llmwikify.mcp import create_mcp_server
+
+wiki = Wiki("./knowledge-base")
+mcp = create_mcp_server(wiki, name="my-wiki")
+mcp.run(transport="stdio")  # Connects to Claude Desktop, etc.
+```
+
+**Full examples:** See [examples/](examples/) directory for Django, Flask, Docker, and more.
+
+---
+
+## 🔌 Integration Guide
+
+### Django Integration
+
+```python
+# settings.py
+LLMWIKIFY_ROOT = BASE_DIR / "data" / "wiki"
+
+# views.py
+from llmwikify import create_wiki
+
+wiki = create_wiki(settings.LLMWIKIFY_ROOT)
+
+def search(request):
+    results = wiki.search(request.GET["q"])
+    return JsonResponse({"results": results})
+```
+
+See full example: [examples/integrate_with_django.py](examples/integrate_with_django.py)
+
+### Flask Integration
+
+```python
+from flask import Flask
+from llmwikify import create_wiki
+
+app = Flask(__name__)
+wiki = create_wiki("./data/wiki")
+
+@app.route("/search")
+def search():
+    return jsonify(wiki.search(request.args["q"]))
+```
+
+See full example: [examples/integrate_with_flask.py](examples/integrate_with_flask.py)
+
+### Docker Deployment
+
+```dockerfile
+FROM python:3.11-slim
+RUN pip install llmwikify[web]
+VOLUME /data
+EXPOSE 8765
+CMD ["llmwikify", "serve", "--web", "--host", "0.0.0.0"]
+```
+
+See Docker Compose: [examples/docker-compose.yml.example](examples/docker-compose.yml.example)
 
 ---
 
