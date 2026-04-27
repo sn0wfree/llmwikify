@@ -56,10 +56,14 @@ graph = [
     "python-louvain>=0.16",
 ]
 web = [
+    "fastapi>=0.104.0",
     "starlette>=0.27.0",
     "uvicorn>=0.23.0",
     "httpx>=0.24.0",
 ]
+# ⚠️ DEPRECATED ⚠️
+# Agent functionality has moved to an independent project.
+# Kept here for backward compatibility only. Will be removed in future version.
 agent = [
     "croniter>=2.0.0",
     "filelock>=3.13.0",
@@ -99,7 +103,20 @@ wiki = "llmwikify.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["llmwikify", "llmwikify.cli", "llmwikify.core", "llmwikify.extractors", "llmwikify.mcp", "llmwikify.prompts", "llmwikify.prompts._defaults", "llmwikify.agent", "llmwikify.web"]
+packages = [
+    "llmwikify",
+    "llmwikify.cli",
+    "llmwikify.core",
+    "llmwikify.extractors",
+    "llmwikify.mcp",
+    "llmwikify.prompts",
+    "llmwikify.prompts._defaults",
+    "llmwikify.agent",
+    "llmwikify.server",
+    "llmwikify.server.http",
+    "llmwikify.server.utils",
+    "llmwikify.web",
+]
 
 [tool.setuptools.package-data]
 llmwikify = ["py.typed"]

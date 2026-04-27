@@ -64,8 +64,8 @@ class GraphAnalyzer:
                 include_wikilinks=True,
                 include_relations=True,
             )
-        except Exception:
-            logger.warning("Graph build failed")
+        except Exception as e:
+            logger.warning("Graph build failed: %s", e)
             return {"nodes": [], "edges": []}
 
     def _build_graph(self, graph_data: dict):
@@ -102,16 +102,16 @@ class GraphAnalyzer:
         # PageRank
         try:
             pagerank = nx.pagerank(G.to_undirected(), weight="weight")
-        except Exception:
-            logger.warning("PageRank computation failed")
+        except Exception as e:
+            logger.warning("PageRank computation failed: %s", e)
             pagerank = {}
 
         # Degree centrality
         try:
             in_degree = dict(G.in_degree())
             out_degree = dict(G.out_degree())
-        except Exception:
-            logger.warning("Degree computation failed")
+        except Exception as e:
+            logger.warning("Degree computation failed: %s", e)
             in_degree = {}
             out_degree = {}
 
@@ -146,8 +146,8 @@ class GraphAnalyzer:
         """
         try:
             comm_result = detect_communities(self.wiki.index, algorithm="leiden")
-        except Exception:
-            logger.warning("Community detection failed")
+        except Exception as e:
+            logger.warning("Community detection failed: %s", e)
             return {"error": "Community detection failed"}
 
         communities = comm_result.get("communities", {})
@@ -230,8 +230,8 @@ class GraphAnalyzer:
                 for neighbor in G.neighbors(node):
                     if neighbor in node_community:
                         neighbor_communities.add(node_community[neighbor])
-            except Exception:
-                logger.warning("Neighbor iteration failed for node %s", node)
+            except Exception as e:
+                logger.warning("Neighbor iteration failed for node %s: %s", node, e)
 
             if len(neighbor_communities) > 1:
                 bridges.append({
@@ -310,8 +310,8 @@ class GraphAnalyzer:
                     "observation": f"'{concept}' is in the knowledge graph but has no wiki page",
                     "suggestion": f"Consider creating entities/{concept}.md or concepts/{concept}.md",
                 })
-        except Exception:
-            logger.warning("Orphan concept lookup failed")
+        except Exception as e:
+            logger.warning("Orphan concept lookup failed: %s", e)
 
         return suggestions
 

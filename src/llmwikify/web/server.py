@@ -28,11 +28,6 @@ def main():
         help="Bind address (default: 127.0.0.1)"
     )
     parser.add_argument(
-        "--agent",
-        action="store_true",
-        help="Enable Agent features"
-    )
-    parser.add_argument(
         "--api-key",
         default=None,
         help="API Key for authentication"
@@ -40,32 +35,26 @@ def main():
 
     args = parser.parse_args()
 
-    import uvicorn
-
     from ..core import Wiki
-    from ..mcp.server import create_unified_server
+    from ..server import WikiServer
 
     wiki_root = Path(args.wiki_root).resolve()
     wiki = Wiki(wiki_root)
 
-    agent = None
-    if args.agent:
-        from ..agent import WikiAgent
-        agent = WikiAgent(wiki=wiki)
-
-    app = create_unified_server(wiki, agent=agent, api_key=args.api_key)
+    server = WikiServer(
+        wiki,
+        api_key=args.api_key,
+        enable_mcp=True,
+        enable_rest=True,
+        enable_webui=True,
+    )
 
     print(f"Starting Unified Server on http://{args.host}:{args.port}")
     print(f"  Wiki root: {wiki_root}")
-    print(f"  Agent: {'enabled' if agent else 'disabled'}")
     print(f"  Auth: {'enabled' if args.api_key else 'disabled'}")
+    print(f"  API Docs: http://{args.host}:{args.port}/docs")
 
-    uvicorn.run(
-        app,
-        host=args.host,
-        port=args.port,
-        log_level="info"
-    )
+    server.run(host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

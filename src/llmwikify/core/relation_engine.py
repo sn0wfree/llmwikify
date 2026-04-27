@@ -41,8 +41,8 @@ class RelationEngine:
             try:
                 db_path = Path(self.index.conn.execute("PRAGMA database_list").fetchone()["file"]).parent
                 self.wiki_root = db_path
-            except Exception:
-                logger.warning("Failed to infer wiki root from index.db")
+            except Exception as e:
+                logger.warning("Failed to infer wiki root from index.db: %s", e)
                 return DEFAULT_RELATION_TYPES.copy()
 
         wiki_md = self.wiki_root / "wiki.md"
@@ -70,8 +70,8 @@ class RelationEngine:
                         types.add(match.group(1))
             if types:
                 return types
-        except Exception:
-            logger.warning("Failed to parse relation types from wiki.md")
+        except Exception as e:
+            logger.warning("Failed to parse relation types from wiki.md: %s", e)
 
         return DEFAULT_RELATION_TYPES.copy()
 

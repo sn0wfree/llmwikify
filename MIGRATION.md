@@ -1,6 +1,52 @@
 # Migration Guide
 
-> **Current version**: 0.30.0
+> **Current version**: 0.30.1
+
+---
+
+## v0.30.0 → v0.30.1
+
+### Unified FastAPI Server
+
+The web server has been refactored from Starlette-based `web/server.py` into a new `server/` module with proper FastAPI integration.
+
+| Before | After |
+|--------|-------|
+| `web/server.py` (Starlette) | `server/core.py` (FastAPI + `WikiServer`) |
+| MCP + Web UI separate threads | Single-process: MCP adapter + REST API + WebUI |
+| No built-in auth | Optional API key authentication (`--auth-token`) |
+| No auto-docs | OpenAPI docs at `/docs`, ReDoc at `/redoc` |
+
+**Migration**: **No action needed for CLI users.**
+
+```bash
+# Old (still works via backward compatibility shim)
+llmwikify serve --web
+
+# New (explicit - optional)
+from llmwikify.server import WikiServer
+server = WikiServer(wiki, api_key="secret")
+server.run(host="127.0.0.1", port=8765)
+```
+
+### New `server/` Module Structure
+
+```
+src/llmwikify/server/
+├── core.py              # WikiServer — main orchestrator
+├── constants.py         # DEFAULT_HOST, DEFAULT_PORT
+├── http/
+│   ├── routes.py        # /api/wiki/* REST API endpoints
+│   └── middleware.py    # AuthMiddleware + CORS
+└── utils/
+    └── webui.py         # React SPA static file mounting
+```
+
+### API Import Changes
+
+| Old Import | New Import |
+|------------|------------|
+| `from llmwikify.web.server import create_server` | `from llmwikify.server import WikiServer` |
 
 ---
 

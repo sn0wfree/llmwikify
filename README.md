@@ -5,7 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 879+ passing](https://img.shields.io/badge/tests-879%2B%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Tests: 1008+ passing](https://img.shields.io/badge/tests-1008%2B%20passing-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 
 ---
 
@@ -68,7 +68,12 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 ### Graph Visualization (v0.23.0+)
 - Interactive HTML (pyvis), SVG (graphviz), GraphML (Gephi)
 
-### Agent Layer (v0.30.0+)
+### Agent Layer (v0.30.0+) ⚠️ DEPRECATED
+**Built-in Agent has moved to an independent project.** Use external AI agents with the MCP protocol:
+- `llmwikify mcp` — Start MCP server for Agent integration
+- All 20+ wiki tools are available via standard MCP protocol
+
+*Legacy Agent is kept for backward compatibility only and will be removed in a future version.*
 - **Autonomous Wiki Maintenance** — 8 sub-systems: WikiAgent, AgentRunner, TaskScheduler, MemoryManager, NotificationManager, HooksSystem, ToolsRegistry, DreamEditor
 - **Dream Confirmation Flow** — Agent proposes changes, human confirms (respects "stay involved" principle)
 - **Scheduled Tasks** — Cron-based periodic lint, source analysis, knowledge gap detection
@@ -79,7 +84,7 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 - **Markdown Editor** — Real-time preview, front matter panel
 - **Interactive Graph View** — D3.js visualization with PageRank sizing, community coloring, bridge node highlighting
 - **Insights Dashboard** — Cross-source synthesis, knowledge gaps, graph analysis
-- **Agent Interface** — Chat interface, task monitor, dream proposals, confirmations
+- **Agent Interface** ⚠️ DEPRECATED — Legacy agent UI (removed, use external agents via MCP)
 - **Project Metadata** — `llmwikify · project-name` display, version number indicator
 
 ### Additional
@@ -225,13 +230,44 @@ graph_result = wiki.graph_analyze()
 
 ---
 
-## 🖥️ Web UI
+## 🔍 QMD Hybrid Search (Optional)
 
-Start the unified web server:
+For larger wikis (1000+ pages), enable QMD for semantic search with LLM reranking:
+
+- **Hybrid**: BM25 keyword + vector embeddings
+- **Query Expansion**: LLM generates semantic variants
+- **LLM Reranking**: Cross-encoder reorders results
+- **Auto Recommendation**: Prompts to enable at scale
 
 ```bash
-llmwikify serve --web          # Starts MCP + Web UI on http://localhost:8765
+# Check status and recommendations
+llmwikify qmd status
+
+# Start QMD MCP server (separate process)
+qmd mcp --http --port 8181
+
+# Use QMD backend
+llmwikify search "your query" --backend qmd
+llmwikify qmd search "your query"
 ```
+
+See [QMD Setup Guide](docs/QMD_SETUP.md) for installation instructions.
+
+---
+
+## 🖥️ Web UI
+
+Start the unified **FastAPI** web server:
+
+```bash
+llmwikify serve --web                  # Starts MCP + Web UI + REST API on http://localhost:8765
+llmwikify serve --web --auth-token=key # With optional API key authentication
+```
+
+**Architecture** (FastAPI):
+- 🔄 **MCP Protocol** — `/mcp` endpoint for AI agent integration
+- 🌐 **REST API** — `/api/wiki/*` endpoints with auto-generated docs at `/docs`
+- 🖥️ **Web UI** — React SPA static file serving
 
 **Features**:
 - 📝 **Markdown Editor** — Live preview, front matter support, wikilink autocomplete
@@ -240,6 +276,7 @@ llmwikify serve --web          # Starts MCP + Web UI on http://localhost:8765
 - 🤖 **Agent Console** — Chat interface, scheduled tasks, dream proposals & confirmations
 - 📈 **Health Dashboard** — Broken links, orphans, stale pages, knowledge growth
 - 🔍 **Full-text Search** — FTS5-powered search with snippets
+- 🔑 **Optional Auth** — API key authentication for production deployments
 
 ---
 

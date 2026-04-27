@@ -282,13 +282,16 @@ class WikiCLI:
 
     def search(self, args: Any) -> int:
         """Search wiki."""
-        results = self.wiki.search(args.query, getattr(args, 'limit', 10))
+        backend = getattr(args, 'backend', 'fts5')
+        results = self.wiki.search(args.query, getattr(args, 'limit', 10), backend=backend)
 
         if not results:
             print(f"No results found for: {args.query}")
             return 0
 
         print(f"Search results for: {args.query}")
+        mode = results[0].get('mode', 'fts5') if results else 'fts5'
+        print(f"Using backend: {mode}")
         for i, r in enumerate(results, 1):
             print(f"\n{i}. {r['page_name']}")
             print(f"   Score: {r['score']}")
@@ -309,7 +312,6 @@ class WikiCLI:
         )
 
         if fmt == 'json':
-            import json
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         elif fmt == 'brief':
@@ -598,8 +600,8 @@ class WikiCLI:
                 # New format: page_name == file_path without .md
                 if name != fpath[:-3]:
                     return True
-        except Exception:
-            logger.warning("Index format check failed")
+        except Exception as e:
+            logger.warning("Index format check failed: %s", e)
             return False
         return False
 
@@ -1371,63 +1373,52 @@ class WikiCLI:
 
     def serve(self, args: Any) -> int:
         """Start MCP server and optionally Web UI. Used by both 'mcp' and 'serve' subcommands."""
-        from ..mcp.server import serve_mcp
+        from ..server import WikiServer
 
-        # Get MCP configuration from wiki config
         mcp_config = self.config.get("mcp", {})
 
-        # Override with CLI args if provided
         name = getattr(args, 'name', None)
         transport = getattr(args, 'transport', None)
         host = getattr(args, 'host', None)
         mcp_port = getattr(args, 'mcp_port', None) or getattr(args, 'port', None)
         web = getattr(args, 'web', False)
-        agent = getattr(args, 'agent', False)
         auth_token = getattr(args, 'auth_token', None)
 
         service_name = name or mcp_config.get("name") or self.wiki.root.name
+        port = mcp_port or mcp_config.get('port', 8765)
+        final_host = host or mcp_config.get('host', '127.0.0.1')
+        final_transport = transport or mcp_config.get('transport', 'stdio')
 
         try:
             if web:
-                # Unified server: single process with MCP + REST API + WebUI
-                import uvicorn
-
-                from ..mcp.server import create_unified_server
-
-                agent_instance = None
-                if agent:
-                    from ..agent import WikiAgent
-                    agent_instance = WikiAgent(wiki=self.wiki)
-
-                app = create_unified_server(
+                server = WikiServer(
                     self.wiki,
-                    agent=agent_instance,
                     api_key=auth_token,
                     mcp_name=service_name,
+                    enable_mcp=True,
+                    enable_rest=True,
+                    enable_webui=True,
                 )
 
-                port = mcp_port or mcp_config.get('port', 8765)
-                print(f"Starting Unified Server '{service_name}' on {host or '127.0.0.1'}:{port}")
+                print(f"Starting Unified Server '{service_name}' on {final_host}:{port}")
                 print("  Transport: http")
-                print(f"  Agent: {'enabled' if agent else 'disabled'}")
                 print(f"  Auth: {'enabled' if auth_token else 'disabled'}")
-                print(f"  Web UI: http://{host or '127.0.0.1'}:{port}")
+                print(f"  Web UI: http://{final_host}:{port}")
+                print(f"  API Docs: http://{final_host}:{port}/docs")
                 print()
 
-                uvicorn.run(
-                    app,
-                    host=host or '127.0.0.1',
-                    port=port,
-                    log_level="info"
-                )
+                server.run(host=final_host, port=port)
             else:
                 print(f"Starting MCP server '{service_name}'...")
-                print(f"  Transport: {transport or mcp_config.get('transport', 'stdio')}")
-                if host:
-                    print(f"  Host: {host}")
-                if mcp_port:
-                    print(f"  MCP Port: {mcp_port}")
+                print(f"  Transport: {final_transport}")
+                if final_host != '127.0.0.1':
+                    print(f"  Host: {final_host}")
+                if port != 8765:
+                    print(f"  Port: {port}")
                 print()
+
+                # Use original serve_mcp for pure MCP mode (backward compatible)
+                from ..mcp.server import serve_mcp
                 serve_mcp(self.wiki, name=name, transport=transport, host=host, port=mcp_port, config=mcp_config)
         except KeyboardInterrupt:
             print("\nServer stopped")
@@ -1447,6 +1438,113 @@ class WikiCLI:
             return str(args.content)
         else:
             return sys.stdin.read()
+
+    # ============================================================
+    # QMD - Hybrid Search Engine Commands
+    # ============================================================
+
+    def qmd(self, args: Any) -> int:
+        """QMD hybrid search commands (status, search, install, embed, start)."""
+        subcommand = getattr(args, 'qmd_subcommand', 'status')
+
+        if subcommand == 'status':
+            return self._qmd_status(args)
+        elif subcommand == 'search':
+            return self._qmd_search(args)
+        elif subcommand == 'install':
+            return self._qmd_install(args)
+        elif subcommand == 'embed':
+            return self._qmd_embed(args)
+        elif subcommand == 'mcp':
+            return self._qmd_mcp(args)
+        else:
+            print(f"Unknown qmd subcommand: {subcommand}")
+            return 1
+
+    def _qmd_status(self, args: Any) -> int:
+        """Display QMD status and recommendations."""
+        status = self.wiki.qmd_status()
+
+        print("📊 QMD Hybrid Search Status")
+        print(f"   Pages in wiki: {status['page_count']}")
+        print(f"   QMD threshold: {status.get('threshold', 1000)} pages")
+        print(f"   Configured backend: {status.get('backend', 'fts5')}")
+        print(f"   QMD available: {'✅ Yes' if status['available'] else '❌ No'}")
+        print(f"   QMD recommended: {'✅ Yes' if status['recommended'] else 'ℹ️ No'}")
+
+        if status.get('message'):
+            print(f"\n💡 {status['message']}")
+
+        return 0
+
+    def _qmd_search(self, args: Any) -> int:
+        """Search using QMD hybrid engine."""
+        results = self.wiki.search(args.query, getattr(args, 'limit', 10), backend="qmd")
+
+        if not results:
+            print("No results found from QMD.")
+            print("Make sure QMD MCP server is running: `qmd mcp --http --port 8181`")
+            return 1
+
+        print(f"🔍 QMD Hybrid Search results for: {args.query}")
+        for i, r in enumerate(results, 1):
+            print(f"\n{i}. {r['page_name']}")
+            print(f"   Score: {r['score']:.4f}")
+            print(f"   {r['snippet']}")
+
+        return 0
+
+    def _qmd_install(self, args: Any) -> int:
+        """Display QMD installation instructions."""
+        qmd = self.wiki.qmd
+        if qmd:
+            print(qmd.get_install_guide())
+        else:
+            # Fallback if QmdIndex not loaded
+            from ..core.qmd_client import QmdClient
+            client = QmdClient()
+            print(client.get_install_guide())
+        return 0
+
+    def _qmd_embed(self, args: Any) -> int:
+        """Trigger QMD embedding generation."""
+        qmd = self.wiki.qmd
+        if not qmd or not qmd.is_available():
+            print("❌ QMD server not available.")
+            print("Start the server first: `qmd mcp --http --port 8181`")
+            return 1
+
+        print("🔄 Starting embedding generation...")
+        print("(This may take several minutes on first run)")
+        result = qmd.embed()
+        print(f"\nResult: {result.get('status', 'unknown')}")
+        return 0
+
+    def _qmd_mcp(self, args: Any) -> int:
+        """Start QMD MCP server (delegates to external qmd command)."""
+        import subprocess
+
+        port = getattr(args, 'port', 8181)
+        host = getattr(args, 'host', '127.0.0.1')
+
+        cmd = ['qmd', 'mcp', '--http', '--port', str(port), '--host', host]
+
+        if getattr(args, 'collection', None):
+            cmd.extend(['--collection', args.collection])
+
+        print(f"Starting QMD MCP server: {' '.join(cmd)}")
+        print("Press Ctrl+C to stop")
+
+        try:
+            subprocess.run(cmd, cwd=self.wiki.root)
+        except KeyboardInterrupt:
+            print("\nServer stopped")
+        except FileNotFoundError:
+            print("❌ 'qmd' command not found. Install QMD first:")
+            print("   npm install -g @tobilu/qmd")
+            return 1
+
+        return 0
 
 
 def main() -> int:
@@ -1470,8 +1568,7 @@ Examples:
   llmwikify mcp                                       Start MCP server for Agent interaction
   llmwikify mcp --transport http --port 8765          Start MCP server on HTTP port
   llmwikify serve --web                               Start unified server (MCP + WebUI) on :8765
-  llmwikify serve --web --agent                       Start unified server with Agent
-  llmwikify serve --web --agent --auth-token mysecret Start unified server with auth
+  llmwikify serve --web --auth-token mysecret         Start unified server with API key auth
 """
     )
 
@@ -1516,6 +1613,8 @@ Examples:
     p = subparsers.add_parser('search', help='Full-text search')
     p.add_argument('query', help='Search query')
     p.add_argument('--limit', '-l', type=int, default=10)
+    p.add_argument('--backend', '-b', choices=['fts5', 'qmd'], default='fts5',
+                   help='Search backend: fts5 (default, fast) or qmd (hybrid semantic)')
 
     # lint
     p = subparsers.add_parser('lint', help='Health check')
@@ -1661,8 +1760,32 @@ Examples:
     p.add_argument('--port', '-p', type=int, help='[Deprecated] Use --mcp-port instead')
     p.add_argument('--name', '-n', help='Service name (defaults to directory name)')
     p.add_argument('--web', action='store_true', help='Start unified Web UI (single process)')
-    p.add_argument('--agent', action='store_true', help='Enable Agent features')
     p.add_argument('--auth-token', help='API Key for authentication')
+
+    # qmd - QMD Hybrid Search Engine
+    qmd_parsers = subparsers.add_parser('qmd', help='QMD hybrid search engine commands')
+    qmd_sub = qmd_parsers.add_subparsers(dest='qmd_subcommand',
+                                          help='QMD subcommands: status, search, install, embed, mcp')
+
+    # qmd status
+    p = qmd_sub.add_parser('status', help='Show QMD status and recommendations')
+
+    # qmd search
+    p = qmd_sub.add_parser('search', help='QMD hybrid search')
+    p.add_argument('query', help='Search query')
+    p.add_argument('--limit', '-l', type=int, default=10)
+
+    # qmd install
+    p = qmd_sub.add_parser('install', help='Show QMD installation guide')
+
+    # qmd embed
+    p = qmd_sub.add_parser('embed', help='Trigger QMD embedding generation')
+
+    # qmd mcp
+    p = qmd_sub.add_parser('mcp', help='Start QMD MCP server')
+    p.add_argument('--port', '-p', type=int, default=8181, help='Port (default: 8181)')
+    p.add_argument('--host', default='127.0.0.1', help='Bind address')
+    p.add_argument('--collection', help='Collection name')
 
     args = parser.parse_args()
 
@@ -1679,8 +1802,8 @@ Examples:
         try:
             import yaml
             config = yaml.safe_load(config_file.read_text()) or {}
-        except Exception:
-            logger.warning("Failed to load config from %s", config_file)
+        except Exception as e:
+            logger.warning("Failed to load config from %s: %s", config_file, e)
 
     cli = WikiCLI(wiki_root, config=config)
 
@@ -1710,6 +1833,7 @@ Examples:
         'graph-analyze': cli.graph_analyze,
         'mcp': cli.serve,
         'serve': cli.serve,
+        'qmd': cli.qmd,
     }
 
     try:
