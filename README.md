@@ -68,7 +68,12 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 ### Graph Visualization (v0.23.0+)
 - Interactive HTML (pyvis), SVG (graphviz), GraphML (Gephi)
 
-### Agent Layer (v0.30.0+)
+### Agent Layer (v0.30.0+) ⚠️ DEPRECATED
+**Built-in Agent has moved to an independent project.** Use external AI agents with the MCP protocol:
+- `llmwikify mcp` — Start MCP server for Agent integration
+- All 20+ wiki tools are available via standard MCP protocol
+
+*Legacy Agent is kept for backward compatibility only and will be removed in a future version.*
 - **Autonomous Wiki Maintenance** — 8 sub-systems: WikiAgent, AgentRunner, TaskScheduler, MemoryManager, NotificationManager, HooksSystem, ToolsRegistry, DreamEditor
 - **Dream Confirmation Flow** — Agent proposes changes, human confirms (respects "stay involved" principle)
 - **Scheduled Tasks** — Cron-based periodic lint, source analysis, knowledge gap detection
@@ -79,7 +84,7 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 - **Markdown Editor** — Real-time preview, front matter panel
 - **Interactive Graph View** — D3.js visualization with PageRank sizing, community coloring, bridge node highlighting
 - **Insights Dashboard** — Cross-source synthesis, knowledge gaps, graph analysis
-- **Agent Interface** — Chat interface, task monitor, dream proposals, confirmations
+- **Agent Interface** ⚠️ DEPRECATED — Legacy agent UI (removed, use external agents via MCP)
 - **Project Metadata** — `llmwikify · project-name` display, version number indicator
 
 ### Additional
@@ -222,6 +227,31 @@ graph_result = wiki.graph_analyze()
 | `wiki_analyze_source` | Analyze raw source file |
 | `wiki_suggest_synthesis` | Cross-source synthesis suggestions |
 | `wiki_knowledge_gaps` | Knowledge gap + outdated + redundancy |
+
+---
+
+## 🔍 QMD Hybrid Search (Optional)
+
+For larger wikis (1000+ pages), enable QMD for semantic search with LLM reranking:
+
+- **Hybrid**: BM25 keyword + vector embeddings
+- **Query Expansion**: LLM generates semantic variants
+- **LLM Reranking**: Cross-encoder reorders results
+- **Auto Recommendation**: Prompts to enable at scale
+
+```bash
+# Check status and recommendations
+llmwikify qmd status
+
+# Start QMD MCP server (separate process)
+qmd mcp --http --port 8181
+
+# Use QMD backend
+llmwikify search "your query" --backend qmd
+llmwikify qmd search "your query"
+```
+
+See [QMD Setup Guide](docs/QMD_SETUP.md) for installation instructions.
 
 ---
 

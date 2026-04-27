@@ -43,9 +43,15 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
-    def wiki_search(query: str, limit: int = 10) -> str:
-        """Full-text search across wiki pages."""
-        return json.dumps(wiki.search(query, limit), ensure_ascii=False, indent=2)
+    def wiki_search(query: str, limit: int = 10, backend: str = "fts5") -> str:
+        """Full-text search across wiki pages.
+
+        Args:
+            query: Search query string
+            limit: Maximum number of results (default: 10)
+            backend: Search backend - "fts5" (fast, default) or "qmd" (semantic)
+        """
+        return json.dumps(wiki.search(query, limit, backend=backend), ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_lint(

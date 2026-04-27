@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,11 +31,10 @@ class WikiServer:
     - REST API with FastAPI (auto docs at /docs)
     - WebUI static file serving (React SPA)
     - Optional API key authentication
-    - Optional Agent features
 
     Usage:
         # HTTP mode (full features)
-        server = WikiServer(wiki, agent=agent, enable_webui=True)
+        server = WikiServer(wiki, enable_webui=True)
         server.run(host="127.0.0.1", port=8765)
 
         # Pure MCP mode (stdio)
@@ -47,7 +45,6 @@ class WikiServer:
     def __init__(
         self,
         wiki: Wiki,
-        agent: Any | None = None,
         api_key: str | None = None,
         mcp_name: str | None = None,
         enable_mcp: bool = True,
@@ -56,7 +53,6 @@ class WikiServer:
         cors_enabled: bool = True,
     ):
         self.wiki = wiki
-        self.agent = agent
         self.api_key = api_key
         self.enable_mcp = enable_mcp
         self.enable_rest = enable_rest
@@ -72,7 +68,7 @@ class WikiServer:
 
         # 3. Register REST API routes
         if enable_rest:
-            register_routes(self.app, wiki, agent)
+            register_routes(self.app, wiki)
 
         # 4. Mount WebUI static files
         if enable_webui:
