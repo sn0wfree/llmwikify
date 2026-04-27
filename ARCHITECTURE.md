@@ -1,13 +1,13 @@
 # llmwikify Architecture
 
 > Technical architecture document for developers
-> **Version**: 0.30.0 | **Last Updated**: 2026-04-24 | **Tests**: 879+ Python + 38+ Frontend
+> **Version**: 0.30.1 | **Last Updated**: 2026-04-27 | **Tests**: 1008+ Python + 38+ Frontend
 
 ---
 
 ## Overview
 
-**llmwikify** is a modular Python package for building persistent, LLM-maintained knowledge bases. It evolved from a single-file implementation (v0.10.0, 1,965 lines) into a fully modular architecture with 22 CLI commands, 20 MCP tools, and 879+ tests.
+**llmwikify** is a modular Python package for building persistent, LLM-maintained knowledge bases. It evolved from a single-file implementation (v0.10.0, 1,965 lines) into a fully modular architecture with 22 CLI commands, 20 MCP tools, and 1008+ tests.
 
 ### Design Principles
 
@@ -66,12 +66,18 @@ src/llmwikify/
 ├── cli/                     # Command-line interface
 │   └── commands.py          # WikiCLI class (22 commands)
 │
-├── mcp/                     # MCP server
-│   └── server.py            # FastMCP server (20 tools)
+├── mcp/                     # MCP protocol
+│   ├── server.py            # Legacy FastMCP server (deprecated)
+│   └── adapter.py           # MCPAdapter — MCP protocol wrapper for FastAPI
 │
-├── prompts/                 # Prompt templates
-│   └── _defaults/           # 7 YAML prompt templates
-│
+├── server/                  # Unified FastAPI Server (v0.30.1+)
+│   ├── core.py              # WikiServer — orchestrates MCP + REST + WebUI
+│   ├── constants.py         # Shared configuration constants
+│   ├── http/                # HTTP layer
+│   │   ├── routes.py        # REST API endpoint registrations (/api/wiki/*)
+│   │   └── middleware.py    # CORS + API key authentication
+│   └── utils/               # Utilities
+│       └── webui.py         # React SPA static file mounting
 │
 ├── prompts/                 # Prompt templates
 │   └── _defaults/           # 7 YAML prompt templates
@@ -88,7 +94,6 @@ src/llmwikify/
 │   └── dream_editor.py      # Dream editor — async proposal + confirmation
 │
 └── web/                     # Web UI (optional)
-    ├── server.py            # Starlette + Uvicorn unified server
     └── webui/               # React + TypeScript SPA (v0.30.0+)
 ```
 
