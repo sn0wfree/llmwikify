@@ -61,6 +61,9 @@ web = [
     "uvicorn>=0.23.0",
     "httpx>=0.24.0",
 ]
+# ⚠️ DEPRECATED ⚠️
+# Agent functionality has moved to an independent project.
+# Kept here for backward compatibility only. Will be removed in future version.
 agent = [
     "croniter>=2.0.0",
     "filelock>=3.13.0",

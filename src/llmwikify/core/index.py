@@ -117,8 +117,24 @@ class WikiIndex:
         self._execute("DELETE FROM pages WHERE page_name = ?", (page_name,))
         self._commit()
 
-    def search(self, query: str, limit: int = 10) -> list[dict]:
-        """Full-text search with ranking and highlighted snippets."""
+    def search(self, query: str, limit: int = 10, backend: str = "fts5") -> list[dict]:
+        """Full-text search with ranking and highlighted snippets.
+
+        Args:
+            query: Search query string
+            limit: Maximum number of results
+            backend: Search backend - "fts5" (default) or "qmd"
+
+        Returns:
+            List of search results with page_name, score, and snippet
+        """
+        # Try QMD if requested and available
+        if backend == "qmd":
+            qmd_results = self._try_qmd_search(query, limit)
+            if qmd_results:
+                return qmd_results
+
+        # Default FTS5 search
         try:
             cursor = self.conn.execute(
                 """SELECT page_name,
@@ -149,9 +165,43 @@ class WikiIndex:
                 "page_name": row['page_name'],
                 "score": abs(row['score']),
                 "snippet": snippet,
+                "mode": "fts5",
             })
 
         return results
+
+    def _try_qmd_search(self, query: str, limit: int, mode: str = "hybrid") -> list[dict]:
+        """Attempt QMD search if the QMD module is available.
+
+        Returns:
+            List of results if QMD is available, empty list otherwise
+        """
+        try:
+            from .qmd_index import QmdIndex
+            qmd = QmdIndex(self.db_path.parent, config=None)
+            if qmd.is_available():
+                return qmd.search(query, limit=limit, mode=mode)
+        except Exception:
+            pass
+        return []
+
+    def get_qmd_recommendation(self) -> dict:
+        """Check if QMD should be recommended based on wiki size.
+
+        Returns:
+            Dict with recommendation status and message
+        """
+        page_count = self.get_page_count()
+        try:
+            from .qmd_index import QmdIndex, QMD_THRESHOLD
+            qmd = QmdIndex(self.db_path.parent, config=None)
+            return qmd.get_recommendation(page_count)
+        except Exception:
+            return {
+                "recommended": page_count >= 1000,
+                "page_count": page_count,
+                "threshold": 1000,
+            }
 
     def get_inbound_links(self, page_name: str) -> list[dict]:
         """Get pages that link to this page."""

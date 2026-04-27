@@ -142,9 +142,15 @@ class WikiPageIOMixin(WikiProtocol):
 
         return result
 
-    def search(self, query: str, limit: int = 10) -> list:
-        """Full-text search with sink status and page_type attached."""
-        results = self.index.search(query, limit)
+    def search(self, query: str, limit: int = 10, backend: str = "fts5") -> list:
+        """Full-text search with sink status and page_type attached.
+
+        Args:
+            query: Search query string
+            limit: Maximum number of results
+            backend: Search backend - "fts5" (default) or "qmd"
+        """
+        results = self.index.search(query, limit, backend=backend)
 
         page_types = {}
         try:

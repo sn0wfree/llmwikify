@@ -129,6 +129,43 @@ class Wiki(
             self._query_sink = QuerySink(self.root, self.wiki_dir)
         return self._query_sink
 
+    @property
+    def qmd(self) -> Any:
+        """Lazy-load QMD hybrid search index (optional feature).
+
+        Returns QmdIndex instance if available, None otherwise.
+        """
+        try:
+            from .qmd_index import QmdIndex
+            return QmdIndex(self.root, config=self.config)
+        except Exception:
+            return None
+
+    def qmd_status(self) -> dict[str, Any]:
+        """Get QMD hybrid search engine status and recommendation info.
+
+        Returns:
+            Dict with availability, recommendation, and config info
+        """
+        qmd = self.qmd
+        page_count = self.index.get_page_count() if self._index else 0
+
+        result = {
+            "available": False,
+            "recommended": False,
+            "page_count": page_count,
+            "backend": self.config.get("search", {}).get("backend", "fts5"),
+        }
+
+        if qmd is not None:
+            result["available"] = qmd.is_available()
+            recommendation = qmd.get_recommendation(page_count)
+            result["recommended"] = recommendation.get("recommended", False)
+            result["threshold"] = recommendation.get("threshold", 1000)
+            result["message"] = recommendation.get("message", "")
+
+        return result
+
     def close(self) -> None:
         """Close database connections."""
         if self._index:

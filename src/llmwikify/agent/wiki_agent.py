@@ -1,5 +1,10 @@
 """WikiAgent - Main Agent class that orchestrates all Agent components.
 
+⚠️ DEPRECATED ⚠️
+
+This agent module has been moved to an independent project.
+Use external AI agents with MCP protocol instead.
+
 Usage:
     from llmwikify.agent import WikiAgent
 
@@ -12,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -48,6 +54,13 @@ class WikiAgent:
         data_dir: str | Path | None = None,
         llm_client: Any | None = None,
     ):
+        warnings.warn(
+            "WikiAgent is DEPRECATED and moved to an independent project. "
+            "Use external AI agents with MCP protocol instead: `llmwikify mcp`",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         if wiki is not None:
             self.wiki = wiki
         elif root is not None:
