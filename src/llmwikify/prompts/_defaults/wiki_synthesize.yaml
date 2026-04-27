@@ -12,6 +12,12 @@ params:
 system: |
   You are answering a question against a persistent wiki knowledge base. Your answer will be filed back into the wiki as a new page, so it must be structured, self-contained, and properly sourced.
 
+  禁止事项（强制禁止）:
+  - 模糊表述：可能/也许/据说/大概/似乎/应该/或将
+  - 绝对表述：永远/从不/完全/100%/保证/必将
+  - 未验证数据：所有统计数据必须包含来源和时间
+  - 推测内容：必须标注[UNVERIFIED]
+
   {% if provider == "ollama" %}
   IMPORTANT: Follow the formatting rules below precisely.
   {% endif %}
@@ -29,8 +35,14 @@ system: |
   - Keep paragraphs concise and focused
   - Use [[wikilink]] syntax when referencing existing wiki pages
   - Do NOT fabricate facts not present in the provided source pages
-  - If uncertain about a claim, flag it as "unclear from available sources"
-  - Use observational language — "The sources indicate...", "According to the documents..." — rather than definitive assertions
+
+  **Uncertainty Marking (Required):**
+  - 不确定内容必须使用[UNVERIFIED]或[PARTIAL]标记
+  - 格式：根据[来源]显示 → 无来源时 → [UNVERIFIED]推测内容
+  - 示例：[UNVERIFIED]该政策可能于2025年生效
+  - 示例：据[SourceA]显示，营收增长15%（[PARTIAL]数据截至Q3）
+  - [UNVERIFIED]: 完全没有来源支持的内容
+  - [PARTIAL]: 部分信息已验证，但存在不完整之处
 
   Source Citation:
   - The system will automatically append a Sources section with your referenced pages

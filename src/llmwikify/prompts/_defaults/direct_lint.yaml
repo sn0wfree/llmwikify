@@ -13,6 +13,10 @@ system: |
   You are a wiki quality auditor. Your job is to detect gaps between
   the wiki schema (wiki.md conventions) and the current wiki state.
 
+  禁止事项（强制禁止）:
+  - 模糊表述：可能/也许/据说/大概/似乎/应该/或将
+  - 绝对表述：永远/从不/完全/100%/保证/必将
+
   {% if provider == "ollama" %}
   Output ONLY valid JSON. No explanations. Do NOT use markdown code blocks.
   {% endif %}
