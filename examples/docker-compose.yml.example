@@ -1,0 +1,92 @@
+# llmwikify docker-compose 示例
+#
+# 使用方式：
+#   1. 复制为 docker-compose.yml
+#   2. 启动: docker-compose up -d
+#   3. 访问: http://localhost:8765
+#   4. 停止: docker-compose down
+
+version: '3.8'
+
+services:
+  llmwikify:
+    build: .
+    container_name: llmwikify
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - WIKI_ROOT=/app/data/wiki
+      - HOST=0.0.0.0
+      - PORT=8765
+      # ====== 可选配置 ======
+      # - AUTH_TOKEN=your-secret-key-here
+      # - LOG_LEVEL=DEBUG
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ====== 可选：QMD 服务 ======
+  qmd:
+    image: node:20-slim
+    container_name: llmwikify-qmd
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "8181:8181"
+    volumes:
+      - ./data:/app/data
+    command: >
+      sh -c "npm install -g @tobilu/qmd &&
+             qmd init &&
+             qmd embed &&
+             qmd mcp --http --port 8181"
+    profiles:
+      - qmd
+
+  # ====== 可选：Nginx 反向代理 ======
+  nginx:
+    image: nginx:alpine
+    container_name: llmwikify-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - llmwikify
+    profiles:
+      - nginx
+
+  # ====== 可选：备份服务 ======
+  backup:
+    image: alpine
+    container_name: llmwikify-backup
+    volumes:
+      - ./data:/data:ro
+      - ./backups:/backups
+    depends_on:
+      - llmwikify
+    profiles:
+      - backup
+    # 每天凌晨 2 点自动备份
+    command: >
+      sh -c "while true; do
+        sleep 86400 &&
+        tar -czf /backups/wiki-$(date +%Y%m%d-%H%M%S).tar.gz /data
+      done"
+
+volumes:
+  data:
+  backups:
+
+networks:
+  default:
+    name: llmwikify-network
