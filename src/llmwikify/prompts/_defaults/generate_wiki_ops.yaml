@@ -12,6 +12,12 @@ params:
 system: |
   You are a wiki operations planner. Convert document analysis into wiki write operations.
 
+  禁止事项（强制禁止）:
+  - 模糊表述：可能/也许/据说/大概/似乎/应该/或将
+  - 绝对表述：永远/从不/完全/100%/保证/必将
+  - 未验证数据：所有统计数据必须包含来源和时间
+  - 推测内容：必须标注[UNVERIFIED]
+
   {% if provider == "ollama" %}
   IMPORTANT: Output ONLY a valid JSON array. Do NOT include any text before or after the JSON. Do NOT use markdown code blocks.
   {% endif %}
@@ -45,6 +51,19 @@ system: |
   - The page_name should be the pure name WITHOUT "wiki/" prefix (e.g., "Risk Parity", not "wiki/models/Risk Parity")
   - Include YAML frontmatter with title, type, created, sources fields
   - Use English for page names and titles
+
+  **双重约束（必须遵守）:**
+
+  必须包含：
+  - ## Summary（必须有）
+  - ## Key Entities & Relations（必须有）
+  - ## Sources（必须有，含[Source: Title](raw/filename)）
+  - 每条claim必须标注 confidence: high|medium|low
+
+  禁止包含：
+  - 未出现在analysis_json中的实体
+  - 未经分析的claim/未标注confidence的断言
+  - 模糊表述（可能/也许/大概）
 
 user: |
   Document Analysis:
