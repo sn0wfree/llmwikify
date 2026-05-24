@@ -170,6 +170,56 @@ performance:
 #     - 'papers'
 
 # ============================================================================
+# Multi-Wiki Configuration (v0.31.0+)
+# ============================================================================
+# Configure multiple knowledge bases to manage from a single server.
+# When no wikis section exists, llmwikify operates in single-wiki mode.
+
+# wikis:
+#   # Default wiki ID (used when no wiki_id specified in API calls)
+#   default: "project-a"
+#
+#   # Local wiki definitions (discovered via directory scan)
+#   local:
+#     - id: "project-a"
+#       name: "Project A"
+#       path: "."                           # relative to config file or absolute
+#
+#     - id: "project-b"
+#       name: "Project B"
+#       path: "/path/to/project-b"
+#
+#   # Remote wiki definitions
+#   remote:
+#     - id: "remote-docs"
+#       name: "Remote Documentation"
+#       url: "http://wiki-server:8765"
+#       api_key: "${WIKI_DOCS_API_KEY}"     # env var expansion
+#       timeout: 30                         # seconds
+#       cache_ttl: 300                      # seconds (for read caching)
+#
+#     - id: "team-wiki"
+#       name: "Team Wiki"
+#       url: "https://wiki.example.com:8765"
+#       api_key: "sk-..."
+#       verify_ssl: true
+#
+#   # Discovery settings (auto-scan directories for wikis)
+#   discovery:
+#     enabled: true
+#     scan_paths:                           # directories to scan for wikis
+#       - "."
+#       - "../"
+#       - "~/wikis"
+#     scan_depth: 2                         # max depth for recursive scan
+#     exclude_patterns:                     # directories to skip
+#       - "node_modules"
+#       - ".git"
+#       - "__pycache__"
+#     auto_register: false                  # auto-register discovered wikis
+#     scan_interval: 3600                   # re-scan interval (seconds), 0 = manual only
+
+# ============================================================================
 # MCP Server Configuration
 # ============================================================================
 
