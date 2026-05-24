@@ -57,6 +57,19 @@ DEFAULT_CONFIG = {
             "auto_start": False,
         },
     },
+    "wikis": {
+        "default": None,
+        "local": [],
+        "remote": [],
+        "discovery": {
+            "enabled": False,
+            "scan_paths": ["."],
+            "scan_depth": 2,
+            "exclude_patterns": ["node_modules", ".git", "__pycache__", ".venv", "venv"],
+            "auto_register": False,
+            "scan_interval": 3600,
+        },
+    },
 }
 
 
@@ -197,3 +210,45 @@ def get_search_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
         search_config.update(user_search)
 
     return search_config
+
+
+def get_wikis_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Get multi-wiki configuration.
+
+    Args:
+        config: Optional configuration dict
+
+    Returns:
+        Wikis configuration dict with default, local, remote, and discovery settings
+    """
+    if config is None:
+        config = get_default_config()
+
+    wikis_config: dict = copy.deepcopy(DEFAULT_CONFIG["wikis"])
+    user_wikis = config.get("wikis", {})
+
+    if user_wikis:
+        wikis_config = _deep_merge(wikis_config, user_wikis)
+
+    return wikis_config
+
+
+def expand_env_vars(value: str) -> str:
+    """Expand environment variables in string values.
+
+    Supports ${VAR_NAME} syntax.
+
+    Args:
+        value: String value potentially containing env var references
+
+    Returns:
+        Expanded string
+    """
+    import os
+    import re
+
+    def replace_env(match: re.Match) -> str:
+        var_name = match.group(1)
+        return os.environ.get(var_name, match.group(0))
+
+    return re.sub(r"\$\{(\w+)\}", replace_env, value)
