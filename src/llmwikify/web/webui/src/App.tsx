@@ -198,7 +198,7 @@ function App() {
               currentWikiId={currentWikiId}
             />
           )}
-          {view === 'dashboard' && <LazyWrapper><KnowledgeGrowth /></LazyWrapper>}
+          {view === 'dashboard' && <LazyWrapper><KnowledgeGrowth currentWikiId={currentWikiId} isMultiWikiMode={isMultiWikiMode} /></LazyWrapper>}
           {view === 'insights' && <Insights />}
           {view === 'chat' && agentEnabled && <LazyWrapper><AgentChat /></LazyWrapper>}
           {view === 'tasks' && agentEnabled && <LazyWrapper><TaskMonitor /></LazyWrapper>}
