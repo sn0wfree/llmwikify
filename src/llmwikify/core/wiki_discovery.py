@@ -6,18 +6,19 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 logger = logging.getLogger(__name__)
 
-CONFIG_FILENAME = ".wiki-config.yaml"
+DB_FILENAME = ".llmwikify.db"
 
 
 class WikiDiscovery:
     """Scans directories for llmwikify wikis.
 
-    Looks for .wiki-config.yaml files in specified paths to discover
+    Looks for .llmwikify.db files in specified paths to discover
     wiki instances that can be registered in the WikiRegistry.
+
+    A directory containing .llmwikify.db is considered a wiki root.
+    Subdirectories of a wiki root are NOT scanned for additional wikis.
     """
 
     def __init__(self, exclude_patterns: list[str] | None = None):
@@ -59,30 +60,29 @@ class WikiDiscovery:
                 logger.warning(f"Scan path does not exist: {root}")
                 continue
 
-            config_files = self._find_config_files(root, depth, exclude_list)
+            db_files = self._find_db_files(root, depth, exclude_list)
 
-            for config_file in config_files:
-                wiki_root = config_file.parent
+            for db_file in db_files:
+                wiki_root = db_file.parent
                 try:
-                    config = self._load_config(config_file)
-                    wiki_id = self._extract_wiki_id(config, wiki_root)
+                    wiki_id = wiki_root.name
                     found_wikis.append(
                         {
                             "root": wiki_root,
-                            "config": config,
+                            "config": {},
                             "wiki_id": wiki_id,
                         }
                     )
                     logger.info(f"Discovered wiki: {wiki_id} at {wiki_root}")
                 except Exception as e:
-                    logger.error(f"Failed to load config from {config_file}: {e}")
+                    logger.error(f"Failed to process wiki at {db_file}: {e}")
 
         return found_wikis
 
-    def _find_config_files(
+    def _find_db_files(
         self, root: Path, depth: int, exclude: list[str]
     ) -> list[Path]:
-        """Recursively find .wiki-config.yaml files.
+        """Recursively find .llmwikify.db files.
 
         Args:
             root: Starting directory
@@ -90,63 +90,32 @@ class WikiDiscovery:
             exclude: Directory names to skip
 
         Returns:
-            List of config file paths
+            List of .llmwikify.db file paths
         """
-        config_files: list[Path] = []
+        db_files: list[Path] = []
 
         if depth < 0:
-            return config_files
+            return db_files
 
         try:
             for item in root.iterdir():
                 if not item.is_dir():
                     continue
 
-                # Skip excluded directories
                 if item.name in exclude:
                     continue
 
-                # Check for config file
-                config_file = item / CONFIG_FILENAME
-                if config_file.exists():
-                    config_files.append(config_file)
+                db_file = item / DB_FILENAME
+                if db_file.exists():
+                    db_files.append(db_file)
+                    continue
 
-                # Recurse into subdirectory
-                config_files.extend(
-                    self._find_config_files(item, depth - 1, exclude)
+                db_files.extend(
+                    self._find_db_files(item, depth - 1, exclude)
                 )
         except PermissionError:
             logger.warning(f"Permission denied: {root}")
         except OSError as e:
             logger.error(f"Error scanning {root}: {e}")
 
-        return config_files
-
-    def _load_config(self, config_file: Path) -> dict[str, Any]:
-        """Load and parse wiki config file.
-
-        Args:
-            config_file: Path to .wiki-config.yaml
-
-        Returns:
-            Parsed config dict
-        """
-        with open(config_file, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-
-    def _extract_wiki_id(self, config: dict[str, Any], root: Path) -> str:
-        """Generate wiki_id from config or directory name.
-
-        Args:
-            config: Wiki configuration dict
-            root: Wiki root directory
-
-        Returns:
-            Wiki ID string
-        """
-        # Try to get ID from config
-        if "wiki" in config and "id" in config["wiki"]:
-            return config["wiki"]["id"]
-
-        # Fall back to directory name
-        return root.name
+        return db_files

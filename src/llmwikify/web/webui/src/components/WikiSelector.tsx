@@ -16,8 +16,26 @@ export function WikiSelector({ onOpenManager }: WikiSelectorProps) {
 
   const current = currentWiki();
 
+  // No wikis - show prompt to add one
+  if (wikis.length === 0) {
+    return (
+      <div className="px-3 py-2">
+        <div className="text-sm font-medium text-slate-200">No Wiki</div>
+        <button
+          onClick={onOpenManager}
+          className="mt-1 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Wiki
+        </button>
+      </div>
+    );
+  }
+
   if (wikis.length <= 1) {
-    // Single wiki mode - just show the name
+    const current = currentWiki();
     return (
       <div className="px-3 py-2">
         <div className="text-sm font-medium text-slate-200">
@@ -28,6 +46,15 @@ export function WikiSelector({ onOpenManager }: WikiSelectorProps) {
             {current.page_count} pages
           </div>
         )}
+        <button
+          onClick={onOpenManager}
+          className="mt-1 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Wiki
+        </button>
       </div>
     );
   }

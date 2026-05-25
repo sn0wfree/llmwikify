@@ -32,7 +32,7 @@ interface WikiState {
   switchWiki: (wikiId: string) => void;
   registerWiki: (wiki: Partial<WikiInfo> & { root?: string; url?: string; api_key?: string }) => Promise<void>;
   unregisterWiki: (wikiId: string) => Promise<void>;
-  scanWikis: () => Promise<void>;
+  scanWikis: (scanPath?: string) => Promise<void>;
   setDefaultWiki: (wikiId: string) => Promise<void>;
 
   // Derived getters
@@ -139,10 +139,10 @@ export const useWikiStore = create<WikiState>((set, get) => ({
     }
   },
 
-  scanWikis: async () => {
+  scanWikis: async (scanPath?: string) => {
     set({ loading: true, error: null });
     try {
-      await api.wikis.scan();
+      await api.wikis.scan(scanPath ? [scanPath] : undefined);
       await get().loadWikis();
     } catch (err) {
       set({

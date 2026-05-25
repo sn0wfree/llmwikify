@@ -93,11 +93,10 @@ class TestWikiDiscovery:
 
     def test_scan_single_wiki(self, tmp_path):
         """Discover a single wiki in directory."""
-        # Create wiki directory with config
         wiki_dir = tmp_path / "my-wiki"
         wiki_dir.mkdir()
-        config_file = wiki_dir / ".wiki-config.yaml"
-        config_file.write_text("directories:\n  wiki: wiki\n")
+        db_file = wiki_dir / ".llmwikify.db"
+        db_file.write_text("")
 
         scanner = WikiDiscovery()
         results = scanner.scan([str(tmp_path)], depth=1)
@@ -107,15 +106,14 @@ class TestWikiDiscovery:
         assert results[0]["root"] == wiki_dir
 
     def test_scan_nested_wikis(self, tmp_path):
-        """Discover wikis at different depths."""
-        # Create nested wiki directories
+        """Discover wikis at different depths, but not nested within a wiki."""
         wiki_a = tmp_path / "wiki-a"
         wiki_a.mkdir()
-        (wiki_a / ".wiki-config.yaml").write_text("")
+        (wiki_a / ".llmwikify.db").write_text("")
 
         wiki_b = tmp_path / "subdir" / "wiki-b"
         wiki_b.mkdir(parents=True)
-        (wiki_b / ".wiki-config.yaml").write_text("")
+        (wiki_b / ".llmwikify.db").write_text("")
 
         scanner = WikiDiscovery()
         results = scanner.scan([str(tmp_path)], depth=2)
@@ -124,17 +122,32 @@ class TestWikiDiscovery:
         assert "wiki-a" in wiki_ids
         assert "wiki-b" in wiki_ids
 
+    def test_scan_nested_within_wiki_skipped(self, tmp_path):
+        """When a wiki is found, its subdirectories are not scanned."""
+        outer_wiki = tmp_path / "outer-wiki"
+        outer_wiki.mkdir()
+        (outer_wiki / ".llmwikify.db").write_text("")
+
+        inner_wiki = outer_wiki / "inner-wiki"
+        inner_wiki.mkdir()
+        (inner_wiki / ".llmwikify.db").write_text("")
+
+        scanner = WikiDiscovery()
+        results = scanner.scan([str(tmp_path)], depth=5)
+
+        wiki_ids = [r["wiki_id"] for r in results]
+        assert "outer-wiki" in wiki_ids
+        assert "inner-wiki" not in wiki_ids
+
     def test_exclude_patterns(self, tmp_path):
         """Respect exclude patterns."""
-        # Create wiki in excluded directory
         node_modules = tmp_path / "node_modules" / "my-wiki"
         node_modules.mkdir(parents=True)
-        (node_modules / ".wiki-config.yaml").write_text("")
+        (node_modules / ".llmwikify.db").write_text("")
 
-        # Create wiki in normal directory
         normal = tmp_path / "my-wiki"
         normal.mkdir()
-        (normal / ".wiki-config.yaml").write_text("")
+        (normal / ".llmwikify.db").write_text("")
 
         scanner = WikiDiscovery()
         results = scanner.scan([str(tmp_path)], depth=3)
@@ -142,21 +155,6 @@ class TestWikiDiscovery:
         wiki_ids = [r["wiki_id"] for r in results]
         assert "my-wiki" in wiki_ids
         assert "node_modules" not in [str(r["root"]) for r in results]
-
-    def test_extract_wiki_id(self, tmp_path):
-        """Generate wiki_id from config or dir name."""
-        scanner = WikiDiscovery()
-
-        # From directory name
-        config = {}
-        root = Path("/path/to/my-project")
-        wiki_id = scanner._extract_wiki_id(config, root)
-        assert wiki_id == "my-project"
-
-        # From config
-        config = {"wiki": {"id": "custom-id"}}
-        wiki_id = scanner._extract_wiki_id(config, root)
-        assert wiki_id == "custom-id"
 
     def test_nonexistent_path(self):
         """Handle non-existent scan path gracefully."""
@@ -321,11 +319,11 @@ class TestWikiRegistry:
         # Create wiki directories
         wiki_a = tmp_path / "wiki-a"
         wiki_a.mkdir()
-        (wiki_a / ".wiki-config.yaml").write_text("")
+        (wiki_a / ".llmwikify.db").write_text("")
 
         wiki_b = tmp_path / "wiki-b"
         wiki_b.mkdir()
-        (wiki_b / ".wiki-config.yaml").write_text("")
+        (wiki_b / ".llmwikify.db").write_text("")
 
         config = {"wikis": {}}
         registry = WikiRegistry(config)
@@ -342,7 +340,7 @@ class TestWikiRegistry:
         # Create wiki directory
         wiki_dir = tmp_path / "my-wiki"
         wiki_dir.mkdir()
-        (wiki_dir / ".wiki-config.yaml").write_text("")
+        (wiki_dir / ".llmwikify.db").write_text("")
 
         config = {"wikis": {}}
         registry = WikiRegistry(config)
