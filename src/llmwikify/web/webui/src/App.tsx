@@ -189,6 +189,7 @@ function App() {
             <Editor
               selectedPage={selectedPage}
               onPageSelect={setSelectedPage}
+              currentWikiId={currentWikiId}
             />
           )}
           {view === 'dashboard' && <LazyWrapper><KnowledgeGrowth /></LazyWrapper>}

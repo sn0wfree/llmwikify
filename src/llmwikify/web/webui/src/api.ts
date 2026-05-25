@@ -217,6 +217,8 @@ export const api = {
     // Wiki-scoped endpoints (for multi-wiki mode)
     scoped: {
       status: (wikiId: string) => request<WikiStatus>(`/wiki/${wikiId}/status`),
+      pages: (wikiId: string) =>
+        request<{ pages: string[]; count: number }>(`/wiki/${wikiId}/pages`),
       search: (wikiId: string, query: string, limit = 10) =>
         request<SearchResult[]>(`/wiki/${wikiId}/search?q=${encodeURIComponent(query)}&limit=${limit}`),
       readPage: (wikiId: string, pageName: string) =>
