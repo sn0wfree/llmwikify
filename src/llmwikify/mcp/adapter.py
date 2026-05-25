@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Union
 
 from fastmcp import FastMCP
 
 from llmwikify.core import Wiki
+from llmwikify.core.wiki_registry import WikiRegistry
 
-from .tools import register_wiki_tools
+from .tools import register_wiki_tools, register_multi_wiki_tools
 
 
 logger = logging.getLogger(__name__)
@@ -23,13 +24,33 @@ class MCPAdapter:
     - stdio: for integration with Claude Desktop, Cursor, etc.
     - http/sse: for network access and service discovery
     - asgi_app: for embedding in unified server
+
+    Supports both single-wiki and multi-wiki modes.
     """
 
-    def __init__(self, wiki: Wiki, name: str | None = None, config: dict[str, Any] | None = None):
-        self.wiki = wiki
-        self.name = name or (config.get("name") if config else None) or wiki.root.name
+    def __init__(
+        self,
+        wiki: Wiki | WikiRegistry,
+        name: str | None = None,
+        config: dict[str, Any] | None = None,
+    ):
+        # Support both single Wiki and WikiRegistry
+        if isinstance(wiki, WikiRegistry):
+            self.registry = wiki
+            self.wiki = wiki.get_default_wiki() if wiki.get_default_wiki_id() else None
+            self.name = name or (config.get("name") if config else None) or "llmwikify-multi"
+        else:
+            self.registry = None
+            self.wiki = wiki
+            self.name = name or (config.get("name") if config else None) or wiki.root.name
+
         self._mcp = FastMCP(self.name)
-        register_wiki_tools(self._mcp, wiki)
+
+        # Register tools based on mode
+        if self.registry:
+            register_multi_wiki_tools(self._mcp, self.registry)
+        elif self.wiki:
+            register_wiki_tools(self._mcp, self.wiki)
 
     @property
     def asgi_app(self) -> Any:
