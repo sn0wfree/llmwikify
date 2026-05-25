@@ -62,7 +62,6 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
   const [allTypes, setAllTypes] = useState<string[]>([]);
   const [graphLoading, setGraphLoading] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
-  const [currentWiki, setCurrentWiki] = useState<string | null>(null);
 
   useEffect(() => {
     loadTree();
@@ -70,15 +69,14 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
 
   useEffect(() => {
     if (selectedPage) {
-      loadPage(selectedPage);
-      loadGraphData(selectedPage);
+      loadPage(selectedPage, currentWikiId || undefined);
+      loadGraphData(selectedPage, currentWikiId || undefined);
     }
-  }, [selectedPage]);
+  }, [selectedPage, currentWikiId]);
 
   useEffect(() => {
     if (currentWikiId) {
-      setCurrentWiki(currentWikiId);
-      loadTree();
+      loadTree(currentWikiId);
     }
   }, [currentWikiId]);
 
@@ -102,13 +100,13 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
     }
   }, []);
 
-  const loadTree = useCallback(async () => {
+  const loadTree = useCallback(async (wikiId?: string) => {
     try {
       let results, status;
-      if (currentWiki) {
+      if (wikiId) {
         [results, status] = await Promise.all([
-          api.wiki.scoped.search(currentWiki, '', 100),
-          api.wiki.scoped.status(currentWiki),
+          api.wiki.scoped.search(wikiId, '', 100),
+          api.wiki.scoped.status(wikiId),
         ]);
       } else {
         [results, status] = await Promise.all([
@@ -121,13 +119,13 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
     } catch {
       addToast('warning', '无法加载文件树');
     }
-  }, [currentWiki]);
+  }, []);
 
-  const loadPage = useCallback(async (name: string) => {
+  const loadPage = useCallback(async (name: string, wikiId?: string) => {
     try {
       let data;
-      if (currentWiki) {
-        data = await api.wiki.scoped.readPage(currentWiki, name);
+      if (wikiId) {
+        data = await api.wiki.scoped.readPage(wikiId, name);
       } else {
         data = await api.wiki.readPage(name);
       }
@@ -144,7 +142,7 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
       setMetadata({});
       setBody('');
     }
-  }, [currentWiki]);
+  }, []);
 
   const handleBodyChange = useCallback((newBody: string) => {
     setBody(newBody);
@@ -155,8 +153,8 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
     if (!page) return;
     setSaving(true);
     try {
-      if (currentWiki) {
-        await api.wiki.scoped.writePage(currentWiki, page.page_name, content);
+      if (currentWikiId) {
+        await api.wiki.scoped.writePage(currentWikiId, page.page_name, content);
       } else {
         await api.wiki.writePage(page.page_name, content);
       }

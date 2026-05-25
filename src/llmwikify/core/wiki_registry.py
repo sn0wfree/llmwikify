@@ -318,8 +318,15 @@ class WikiRegistry:
         """List all registered wikis.
 
         Returns:
-            List of WikiInstance objects
+            List of WikiInstance objects with fresh page_count
         """
+        for instance in self._instances.values():
+            if instance.wiki_type == WikiType.LOCAL:
+                try:
+                    status = self.get_wiki_status(instance.wiki_id)
+                    instance.page_count = status.get("page_count", 0)
+                except Exception:
+                    pass
         return list(self._instances.values())
 
     def get_default_wiki(self) -> Any:

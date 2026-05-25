@@ -30,6 +30,7 @@ interface WikiState {
   // Actions
   loadWikis: () => Promise<void>;
   switchWiki: (wikiId: string) => void;
+  updateWikiPageCount: (wikiId: string, pageCount: number) => void;
   registerWiki: (wiki: Partial<WikiInfo> & { root?: string; url?: string; api_key?: string }) => Promise<void>;
   unregisterWiki: (wikiId: string) => Promise<void>;
   scanWikis: (scanPath?: string) => Promise<void>;
@@ -111,6 +112,14 @@ export const useWikiStore = create<WikiState>((set, get) => ({
     if (wiki) {
       set({ currentWikiId: wikiId });
     }
+  },
+
+  updateWikiPageCount: (wikiId: string, pageCount: number) => {
+    set(state => ({
+      wikis: state.wikis.map(w =>
+        w.wiki_id === wikiId ? { ...w, page_count: pageCount } : w
+      )
+    }));
   },
 
   registerWiki: async (wikiData) => {

@@ -49,7 +49,7 @@ function App() {
   const [showWikiManager, setShowWikiManager] = useState(false);
 
   // Multi-wiki store
-  const { loadWikis, currentWikiId, isMultiWikiMode, switchWiki } = useWikiStore();
+  const { loadWikis, currentWikiId, isMultiWikiMode, switchWiki, updateWikiPageCount } = useWikiStore();
 
   // Load wikis on mount
   useEffect(() => {
@@ -61,17 +61,23 @@ function App() {
     try {
       let s: WikiStatus;
       if (isMultiWikiMode && currentWikiId) {
-        // Use scoped endpoint for multi-wiki mode
         s = await api.wiki.scoped.status(currentWikiId);
       } else {
         s = await api.wiki.status();
       }
       setStatus(s);
+      if (currentWikiId) {
+        updateWikiPageCount(currentWikiId, s.page_count);
+      }
+    } catch {
+      // API not available
+    }
 
+    try {
       const sk = await api.wiki.sinkStatus();
       setSinkStatus(sk);
     } catch {
-      // API not available
+      setSinkStatus(null);
     }
   }, [currentWikiId, isMultiWikiMode]);
 
