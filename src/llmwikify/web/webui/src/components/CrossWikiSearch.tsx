@@ -81,7 +81,7 @@ export function CrossWikiSearch({ onResult }: CrossWikiSearchProps) {
       } else {
         // Single wiki search
         if (!currentWikiId) return;
-        const wikiResults = await api.wiki.search(searchQuery, 15);
+        const wikiResults = await api.wiki.scoped.search(currentWikiId, searchQuery, 15);
         const wiki = wikis.find(w => w.wiki_id === currentWikiId);
         searchResults = wikiResults.map(r => ({
           ...r,
