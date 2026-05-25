@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { FileTree } from './components/FileTree';
 import { Editor } from './components/Editor';
-import { SearchBar } from './components/SearchBar';
 import { HealthStatus } from './components/HealthStatus';
 import { Insights } from './components/Insights';
 import { Notifications } from './components/Notifications';
 import { ToastProvider } from './components/Toast';
+import { WikiSelector } from './components/WikiSelector';
+import { CrossWikiSearch } from './components/CrossWikiSearch';
+import { WikiManager } from './components/WikiManager';
+import { useWikiStore } from './stores/wikiStore';
 import { api, WikiStatus, SinkStatus } from './api';
 
 const KnowledgeGrowth = lazy(() => import('./components/KnowledgeGrowth').then(m => ({ default: m.KnowledgeGrowth })));
@@ -43,23 +46,55 @@ function App() {
   const [selectedPage, setSelectedPage] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [agentEnabled, setAgentEnabled] = useState(false);
+  const [showWikiManager, setShowWikiManager] = useState(false);
 
+  // Multi-wiki store
+  const { loadWikis, currentWikiId, isMultiWikiMode, switchWiki, updateWikiPageCount } = useWikiStore();
+
+  // Load wikis on mount
+  useEffect(() => {
+    loadWikis();
+  }, [loadWikis]);
+
+  // Load status when wiki changes
   const loadStatus = useCallback(async () => {
     try {
-      const s = await api.wiki.status();
+      let s: WikiStatus;
+      if (isMultiWikiMode && currentWikiId) {
+        s = await api.wiki.scoped.status(currentWikiId);
+      } else {
+        s = await api.wiki.status();
+      }
       setStatus(s);
-      const sk = await api.wiki.sinkStatus();
-      setSinkStatus(sk);
+      if (currentWikiId) {
+        updateWikiPageCount(currentWikiId, s.page_count);
+      }
     } catch {
       // API not available
     }
-  }, []);
+
+    try {
+      const sk = await api.wiki.sinkStatus();
+      setSinkStatus(sk);
+    } catch {
+      setSinkStatus(null);
+    }
+  }, [currentWikiId, isMultiWikiMode]);
 
   useEffect(() => {
     loadStatus();
     const interval = setInterval(loadStatus, 30000);
     return () => clearInterval(interval);
   }, [loadStatus]);
+
+  // Handle search result with wiki switch
+  const handleSearchResult = useCallback((pageName: string, wikiId: string) => {
+    if (wikiId !== currentWikiId) {
+      switchWiki(wikiId);
+    }
+    setSelectedPage(pageName);
+    setView('edit');
+  }, [currentWikiId, switchWiki]);
 
   return (
     <ToastProvider>
@@ -70,23 +105,17 @@ function App() {
           sidebarOpen ? 'w-64' : 'w-0'
         } transition-all duration-200 bg-slate-800 border-r border-slate-700 flex flex-col overflow-hidden`}
       >
-        <div className="p-4 border-b border-slate-700">
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-lg font-bold text-blue-400">llmwikify</h1>
-            {status?.root && (
-              <span className="text-sm text-slate-400">· {projectNameFromPath(status.root)}</span>
-            )}
-          </div>
-          {status && (
-            <div className="flex justify-between items-center mt-1">
-              <p className="text-xs text-slate-500">
-                {status.page_count} pages
-              </p>
-              {status.version && (
-                <p className="text-xs text-slate-600">v{status.version}</p>
+        <div className="border-b border-slate-700">
+          <div className="p-4">
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-lg font-bold text-blue-400">llmwikify</h1>
+              {status?.version && (
+                <span className="text-xs text-slate-600">v{status.version}</span>
               )}
             </div>
-          )}
+          </div>
+          {/* Wiki Selector */}
+          <WikiSelector onOpenManager={() => setShowWikiManager(true)} />
         </div>
 
         <nav className="p-2 space-y-1">
@@ -156,12 +185,7 @@ function App() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <SearchBar
-            onResult={(page) => {
-              setSelectedPage(page);
-              setView('edit');
-            }}
-          />
+          <CrossWikiSearch onResult={handleSearchResult} />
           <Notifications />
         </header>
 
@@ -171,9 +195,10 @@ function App() {
             <Editor
               selectedPage={selectedPage}
               onPageSelect={setSelectedPage}
+              currentWikiId={currentWikiId}
             />
           )}
-          {view === 'dashboard' && <LazyWrapper><KnowledgeGrowth /></LazyWrapper>}
+          {view === 'dashboard' && <LazyWrapper><KnowledgeGrowth currentWikiId={currentWikiId} isMultiWikiMode={isMultiWikiMode} /></LazyWrapper>}
           {view === 'insights' && <Insights />}
           {view === 'chat' && agentEnabled && <LazyWrapper><AgentChat /></LazyWrapper>}
           {view === 'tasks' && agentEnabled && <LazyWrapper><TaskMonitor /></LazyWrapper>}
@@ -184,6 +209,11 @@ function App() {
           {view === 'history' && agentEnabled && <LazyWrapper><EditHistory /></LazyWrapper>}
         </div>
       </main>
+
+      {/* Wiki Manager Modal */}
+      {showWikiManager && (
+        <WikiManager onClose={() => setShowWikiManager(false)} />
+      )}
     </div>
     </ToastProvider>
   );

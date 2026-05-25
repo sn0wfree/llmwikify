@@ -3,9 +3,11 @@ import { api, SearchResult } from '../api';
 
 interface SearchBarProps {
   onResult?: (page: string) => void;
+  currentWikiId?: string | null;
+  isMultiWikiMode?: boolean;
 }
 
-export function SearchBar({ onResult }: SearchBarProps) {
+export function SearchBar({ onResult, currentWikiId, isMultiWikiMode }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -21,7 +23,12 @@ export function SearchBar({ onResult }: SearchBarProps) {
     }
     setLoading(true);
     try {
-      const r = await api.wiki.search(q, 10);
+      let r: SearchResult[];
+      if (isMultiWikiMode && currentWikiId) {
+        r = await api.wiki.scoped.search(currentWikiId, q, 10);
+      } else {
+        r = await api.wiki.search(q, 10);
+      }
       setResults(r);
       setShowDropdown(r.length > 0);
     } catch {
@@ -30,7 +37,7 @@ export function SearchBar({ onResult }: SearchBarProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentWikiId, isMultiWikiMode]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

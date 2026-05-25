@@ -10,6 +10,7 @@ import { PageTree } from './PageTree';
 interface EditorProps {
   selectedPage: string | null;
   onPageSelect: (page: string) => void;
+  currentWikiId?: string | null;
 }
 
 function parseFrontMatter(content: string): { metadata: FrontMatterData; body: string } {
@@ -46,7 +47,7 @@ function buildFrontMatter(metadata: FrontMatterData, body: string): string {
   return `---\n${yaml}\n---\n\n${body}`;
 }
 
-export function Editor({ selectedPage, onPageSelect }: EditorProps) {
+export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProps) {
   const { addToast } = useToast();
   const [page, setPage] = useState<WikiPage | null>(null);
   const [content, setContent] = useState('');
@@ -68,15 +69,26 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
 
   useEffect(() => {
     if (selectedPage) {
-      loadPage(selectedPage);
-      loadGraphData(selectedPage);
+      loadPage(selectedPage, currentWikiId || undefined);
+      loadGraphData(selectedPage, currentWikiId || undefined);
     }
-  }, [selectedPage]);
+  }, [selectedPage, currentWikiId]);
 
-  const loadGraphData = useCallback(async (currentPage: string) => {
+  useEffect(() => {
+    if (currentWikiId) {
+      loadTree(currentWikiId);
+    }
+  }, [currentWikiId]);
+
+  const loadGraphData = useCallback(async (currentPage: string, wikiId?: string) => {
     setGraphLoading(true);
     try {
-      const data = await api.wiki.graph(currentPage);
+      let data;
+      if (wikiId) {
+        data = await api.wiki.scoped.graph(wikiId, currentPage);
+      } else {
+        data = await api.wiki.graph(currentPage);
+      }
       setGraphNodes(data.nodes);
       setGraphEdges(data.edges);
       if (data.all_types) setAllTypes(data.all_types);
@@ -88,12 +100,20 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
     }
   }, []);
 
-  const loadTree = useCallback(async () => {
+  const loadTree = useCallback(async (wikiId?: string) => {
     try {
-      const [results, status] = await Promise.all([
-        api.wiki.search('', 100),
-        api.wiki.status(),
-      ]);
+      let results, status;
+      if (wikiId) {
+        [results, status] = await Promise.all([
+          api.wiki.scoped.search(wikiId, '', 100),
+          api.wiki.scoped.status(wikiId),
+        ]);
+      } else {
+        [results, status] = await Promise.all([
+          api.wiki.search('', 100),
+          api.wiki.status(),
+        ]);
+      }
       setPages(results);
       setAllTypes(status.all_types || []);
     } catch {
@@ -101,9 +121,14 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
     }
   }, []);
 
-  const loadPage = useCallback(async (name: string) => {
+  const loadPage = useCallback(async (name: string, wikiId?: string) => {
     try {
-      const data = await api.wiki.readPage(name);
+      let data;
+      if (wikiId) {
+        data = await api.wiki.scoped.readPage(wikiId, name);
+      } else {
+        data = await api.wiki.readPage(name);
+      }
       setPage(data);
       setContent(data.content);
       const { metadata: fm, body: b } = parseFrontMatter(data.content);
@@ -128,7 +153,11 @@ export function Editor({ selectedPage, onPageSelect }: EditorProps) {
     if (!page) return;
     setSaving(true);
     try {
-      await api.wiki.writePage(page.page_name, content);
+      if (currentWikiId) {
+        await api.wiki.scoped.writePage(currentWikiId, page.page_name, content);
+      } else {
+        await api.wiki.writePage(page.page_name, content);
+      }
       addToast('success', '页面已保存');
     } catch (e) {
       const msg = e instanceof Error ? e.message : '未知错误';

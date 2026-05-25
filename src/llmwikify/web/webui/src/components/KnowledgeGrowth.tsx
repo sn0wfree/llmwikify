@@ -16,7 +16,12 @@ interface ActivityEntry {
   description: string;
 }
 
-export function KnowledgeGrowth() {
+interface KnowledgeGrowthProps {
+  currentWikiId: string | null;
+  isMultiWikiMode: boolean;
+}
+
+export function KnowledgeGrowth({ currentWikiId, isMultiWikiMode }: KnowledgeGrowthProps) {
   const [wikiStatus, setWikiStatus] = useState<WikiStatus | null>(null);
   const [sinkStatus, setSinkStatus] = useState<SinkStatus | null>(null);
   const [dreamLog, setDreamLog] = useState<DreamEdit[]>([]);
@@ -24,13 +29,17 @@ export function KnowledgeGrowth() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentWikiId, isMultiWikiMode]);
 
   const loadData = async () => {
     try {
       const [status, sink, dream] = await Promise.all([
-        api.wiki.status().catch(() => null),
-        api.wiki.sinkStatus().catch(() => null),
+        isMultiWikiMode && currentWikiId
+          ? api.wiki.scoped.status(currentWikiId).catch(() => null)
+          : api.wiki.status().catch(() => null),
+        isMultiWikiMode && currentWikiId
+          ? api.wiki.scoped.sinkStatus(currentWikiId).catch(() => null)
+          : api.wiki.sinkStatus().catch(() => null),
         api.dream.log(50).catch(() => []),
       ]);
       setWikiStatus(status);

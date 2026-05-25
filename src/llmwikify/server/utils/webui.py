@@ -21,16 +21,18 @@ def find_webui_dist() -> Path | None:
     Supports multiple deployment modes:
     1. Installed mode: package/web/webui/dist/
     2. Dev mode: repo/src/llmwikify/web/webui/dist/
-    3. Legacy: package/web/static/
+
+    Note: Legacy Vanilla JS WebUI (static/) has been archived to static-legacy-deprecated/.
 
     Returns:
         Path to dist directory, or None if not found
     """
-    pkg_dir = Path(__file__).parent.parent.parent.parent
+    # webui.py is at: src/llmwikify/server/utils/webui.py
+    # Go up 3 levels to get to llmwikify package root
+    pkg_dir = Path(__file__).parent.parent.parent
     candidates = [
-        pkg_dir / "web" / "webui" / "dist",
-        pkg_dir.parent.parent / "web" / "webui" / "dist",
-        pkg_dir / "web" / "static",
+        pkg_dir / "web" / "webui" / "dist",           # src/llmwikify/web/webui/dist (dev mode)
+        pkg_dir.parent.parent / "web" / "webui" / "dist",  # installed package mode
     ]
 
     for candidate in candidates:
