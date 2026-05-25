@@ -297,6 +297,92 @@ conn.execute("PRAGMA cache_size = -64000")
 
 ---
 
+## Multi-Wiki Management (v0.31.0+)
+
+### Overview
+
+支持在单个服务器实例中管理多个知识库（本地目录 + 远程服务器），提供统一的 Web UI 和 API 进行跨 Wiki 操作。
+
+### Architecture
+
+```
+User → WikiServer → WikiRegistry
+                    ├── WikiInstance("project-a", Wiki("/path/a"))
+                    ├── WikiInstance("project-b", Wiki("/path/b"))
+                    └── WikiInstance("remote-x", RemoteWiki("http://..."))
+```
+
+**核心组件**:
+
+| 组件 | 职责 |
+|------|------|
+| `WikiRegistry` | 管理多个 Wiki 实例，提供发现、注册、生命周期管理 |
+| `WikiInstance` | 包装 Wiki + 元数据（ID、名称、类型、状态） |
+| `RemoteWiki` | HTTP 客户端，连接远程 llmwikify 服务器 |
+| `WikiDiscovery` | 目录扫描器，自动发现 `.wiki-config.yaml` |
+| `CrossWikiSearch` | 跨 Wiki 搜索，合并和排序结果 |
+
+### Configuration
+
+`.wiki-config.yaml` 扩展：
+
+```yaml
+wikis:
+  default: "project-a"
+  local:
+    - id: "project-a"
+      name: "Project A"
+      path: "."
+    - id: "project-b"
+      name: "Project B"
+      path: "/path/to/project-b"
+  remote:
+    - id: "remote-docs"
+      name: "Remote Docs"
+      url: "http://wiki-server:8765"
+      api_key: "${WIKI_DOCS_API_KEY}"
+  discovery:
+    enabled: true
+    scan_paths: [".", "../", "~/wikis"]
+    scan_depth: 2
+```
+
+### API Endpoints
+
+**新增端点**:
+```
+GET    /api/wikis                    # Wiki 列表
+POST   /api/wikis                    # 注册 Wiki
+GET    /api/wikis/{wiki_id}          # Wiki 详情
+PUT    /api/wikis/{wiki_id}          # 更新配置
+DELETE /api/wikis/{wiki_id}          # 删除 Wiki
+POST   /api/wikis/{wiki_id}/reload   # 重新索引
+GET    /api/search/cross             # 跨 Wiki 搜索
+POST   /api/wikis/scan               # 触发目录扫描
+```
+
+**现有端点扩展** (添加 `wiki_id` 参数):
+```
+GET    /api/wiki/{wiki_id}/status
+GET    /api/wiki/{wiki_id}/search?q=...
+GET    /api/wiki/{wiki_id}/page/{name}
+POST   /api/wiki/{wiki_id}/page
+```
+
+### Implementation Phases
+
+| 阶段 | 时间 | 范围 |
+|------|------|------|
+| Phase 1 | Week 1-2 | 核心 Registry (WikiRegistry, 发现, 远程客户端) |
+| Phase 2 | Week 2-3 | API 层 (多 Wiki 端点, 向后兼容) |
+| Phase 3 | Week 3-4 | 前端 (WikiSelector, 跨 Wiki 搜索, WikiManager) |
+| Phase 4 | Week 4-5 | MCP 集成 (工具添加 `wiki_id`) |
+| Phase 5 | Week 5-6 | CLI + 文档 + 优化 |
+
+详细设计见: [docs/plans/MULTI_WIKI_PLAN.md](docs/plans/MULTI_WIKI_PLAN.md)
+
+---
+
 ## Project Status
 
 See [docs/plans/PROJECT_STATUS_0.30.0.md](docs/plans/PROJECT_STATUS_0.30.0.md) for:
@@ -307,4 +393,4 @@ See [docs/plans/PROJECT_STATUS_0.30.0.md](docs/plans/PROJECT_STATUS_0.30.0.md) f
 
 ---
 
-*Last updated: 2026-04-24 | Version: 0.30.0*
+*Last updated: 2026-05-24 | Version: 0.31.0*

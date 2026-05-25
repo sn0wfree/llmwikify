@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from typing import Union
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from llmwikify.core import Wiki
+from llmwikify.core.wiki_registry import WikiRegistry
 from llmwikify.server.constants import DEFAULT_HOST, DEFAULT_PORT
 
 from ..mcp.adapter import MCPAdapter
@@ -31,10 +33,17 @@ class WikiServer:
     - REST API with FastAPI (auto docs at /docs)
     - WebUI static file serving (React SPA)
     - Optional API key authentication
+    - Multi-wiki support via WikiRegistry
 
     Usage:
-        # HTTP mode (full features)
+        # Single wiki mode (backward compatible)
         server = WikiServer(wiki, enable_webui=True)
+        server.run(host="127.0.0.1", port=8765)
+
+        # Multi-wiki mode
+        registry = WikiRegistry(config)
+        registry.initialize()
+        server = WikiServer(registry, enable_webui=True)
         server.run(host="127.0.0.1", port=8765)
 
         # Pure MCP mode (stdio)
@@ -44,7 +53,7 @@ class WikiServer:
 
     def __init__(
         self,
-        wiki: Wiki,
+        wiki: Wiki | WikiRegistry,
         api_key: str | None = None,
         mcp_name: str | None = None,
         enable_mcp: bool = True,
@@ -52,7 +61,15 @@ class WikiServer:
         enable_webui: bool = True,
         cors_enabled: bool = True,
     ):
-        self.wiki = wiki
+        # Support both single Wiki and WikiRegistry
+        if isinstance(wiki, WikiRegistry):
+            self.registry = wiki
+            self.wiki = wiki.get_default_wiki() if wiki.get_default_wiki_id() else None
+        else:
+            # Single wiki mode: create a registry with one wiki
+            self.wiki = wiki
+            self.registry = None  # Will be created if needed
+
         self.api_key = api_key
         self.enable_mcp = enable_mcp
         self.enable_rest = enable_rest
@@ -61,14 +78,18 @@ class WikiServer:
 
         # 1. Build MCP adapter
         if enable_mcp:
-            self.mcp = MCPAdapter(wiki, name=mcp_name)
+            if self.registry:
+                # Multi-wiki mode: use default wiki for MCP
+                self.mcp = MCPAdapter(self.wiki, name=mcp_name)
+            else:
+                self.mcp = MCPAdapter(wiki, name=mcp_name)
 
         # 2. Build FastAPI application
         self.app = self._build_app(cors_enabled=cors_enabled)
 
         # 3. Register REST API routes
         if enable_rest:
-            register_routes(self.app, wiki)
+            register_routes(self.app, wiki, self.registry)
 
         # 4. Mount WebUI static files
         if enable_webui:
@@ -106,28 +127,52 @@ class WikiServer:
         @app.get("/api/health", tags=["system"])
         async def health_check():
             """Get server health status."""
-            page_count = len(list(self.wiki.wiki_dir.glob("**/*.md"))) if self.wiki.wiki_dir.exists() else 0
-            return {
-                "status": "ok",
-                "version": "0.30.0",
-                "wiki": {
-                    "initialized": self.wiki.is_initialized(),
-                    "root": str(self.wiki.root),
-                    "page_count": page_count,
-                },
-                "features": {
-                    "mcp": self.enable_mcp,
-                    "webui": self.enable_webui,
-                    "auth": self.api_key is not None,
-                },
-                "timestamp": datetime.utcnow().isoformat(),
-            }
+            if self.registry:
+                # Multi-wiki mode
+                wikis = self.registry.list_wikis()
+                return {
+                    "status": "ok",
+                    "version": "0.31.0",
+                    "mode": "multi-wiki",
+                    "wiki_count": len(wikis),
+                    "default_wiki_id": self.registry.get_default_wiki_id(),
+                    "features": {
+                        "mcp": self.enable_mcp,
+                        "webui": self.enable_webui,
+                        "auth": self.api_key is not None,
+                        "multi_wiki": True,
+                    },
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            else:
+                # Single wiki mode
+                page_count = len(list(self.wiki.wiki_dir.glob("**/*.md"))) if self.wiki.wiki_dir.exists() else 0
+                return {
+                    "status": "ok",
+                    "version": "0.31.0",
+                    "mode": "single-wiki",
+                    "wiki": {
+                        "initialized": self.wiki.is_initialized(),
+                        "root": str(self.wiki.root),
+                        "page_count": page_count,
+                    },
+                    "features": {
+                        "mcp": self.enable_mcp,
+                        "webui": self.enable_webui,
+                        "auth": self.api_key is not None,
+                        "multi_wiki": False,
+                    },
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
 
         # Lifecycle hooks
         @app.on_event("shutdown")
         async def shutdown_event():
             logger.info("llmwikify server shutting down")
-            self.wiki.close()
+            if self.registry:
+                self.registry.close()
+            elif self.wiki:
+                self.wiki.close()
 
         return app
 

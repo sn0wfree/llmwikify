@@ -9,7 +9,7 @@ Based on Karpathy's LLM Wiki Principles:
 - Bidirectional reference tracking
 """
 
-__version__ = "0.30.1"
+__version__ = "0.31.0"
 __author__ = "sn0wfree"
 __email__ = "linlu1234567@sina.com"
 __license__ = "MIT"
@@ -20,11 +20,16 @@ from .cli import WikiCLI
 from .config import (
     get_default_config,
     get_mcp_config,
+    get_wikis_config,
     load_config,
 )
 
 # Import main components from modules
 from .core import Wiki, WikiIndex
+from .core.remote_wiki import RemoteWiki
+from .core.wiki_discovery import WikiDiscovery
+from .core.wiki_instance import WikiInstance, WikiStatus, WikiType
+from .core.wiki_registry import WikiRegistry
 from .extractors import ExtractedContent, Link
 from .mcp import create_mcp_server, serve_mcp
 
@@ -43,6 +48,26 @@ def create_wiki(path: str | Path, config: dict | None = None) -> Wiki:
     return Wiki(Path(path), config=config)
 
 
+def create_multi_wiki(config: dict | None = None, wiki_root: str | Path | None = None) -> WikiRegistry:
+    """Create a WikiRegistry with multiple wikis.
+
+    Args:
+        config: Optional configuration dict (or None to load from wiki_root)
+        wiki_root: Optional wiki root path for config loading
+
+    Returns:
+        WikiRegistry instance
+    """
+    if config is None:
+        if wiki_root is None:
+            wiki_root = Path.cwd()
+        config = load_config(Path(wiki_root))
+
+    registry = WikiRegistry(config)
+    registry.initialize()
+    return registry
+
+
 __all__ = [
     # Version
     "__version__",
@@ -51,6 +76,12 @@ __all__ = [
     "Wiki",
     "WikiIndex",
     "WikiCLI",
+    "WikiRegistry",
+    "WikiInstance",
+    "WikiType",
+    "WikiStatus",
+    "RemoteWiki",
+    "WikiDiscovery",
     "create_mcp_server",
     "serve_mcp",
 
@@ -62,7 +93,9 @@ __all__ = [
     "load_config",
     "get_default_config",
     "get_mcp_config",
+    "get_wikis_config",
 
     # Convenience functions
     "create_wiki",
+    "create_multi_wiki",
 ]
