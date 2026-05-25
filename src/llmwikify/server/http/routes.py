@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request, HTTPException, Depends
@@ -120,8 +121,29 @@ def _register_single_wiki_routes(app: FastAPI, wiki: Wiki) -> None:
 
     app.include_router(wiki_router)
 
+    # --- Agent Routes (single-wiki mode) ---
+    _register_agent_routes_single(app, wiki)
 
-def _register_multi_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
+
+def _register_agent_routes_single(app: FastAPI, wiki: Wiki) -> None:
+    """Register Agent backend routes for single-wiki mode."""
+    from llmwikify.agent.backend.service import AgentService
+    from llmwikify.agent.backend.routes.agent import set_agent_service
+
+    data_dir = wiki.root / ".llmwikify" / "agent"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    from llmwikify.core.wiki_registry import WikiRegistry
+    registry = WikiRegistry.get_instance()
+    registry.register_wiki(wiki_id="default", name="default", root=wiki.root)
+
+    agent_service = AgentService(registry, data_dir)
+    set_agent_service(agent_service)
+
+    from llmwikify.agent.backend.routes import agent_router
+    app.include_router(agent_router)
+
+    _mount_agent_spa(app)
     """Register multi-wiki routes with wiki_id parameter."""
 
     # Helper to get wiki by ID
@@ -392,3 +414,34 @@ def _register_multi_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
         }
 
     app.include_router(search_router)
+
+    # --- Agent Routes ---
+    _register_agent_routes(app, registry)
+
+
+def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
+    """Register Agent backend routes (Phase 1)."""
+    from llmwikify.agent.backend.service import AgentService
+    from llmwikify.agent.backend.routes.agent import set_agent_service
+
+    data_dir = Path.home() / ".llmwikify" / "agent"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    agent_service = AgentService(registry, data_dir)
+    set_agent_service(agent_service)
+
+    from llmwikify.agent.backend.routes import agent_router
+    app.include_router(agent_router)
+
+    _mount_agent_spa(app)
+
+
+def _mount_agent_spa(app: FastAPI) -> None:
+    """Mount Agent SPA to /agent path."""
+    from fastapi.staticfiles import StaticFiles
+
+    pkg_dir = Path(__file__).parent.parent.parent.parent
+    agent_dist = pkg_dir / "web" / "webui-agent" / "dist"
+
+    if agent_dist.exists():
+        app.mount("/agent", StaticFiles(directory=str(agent_dist), html=True), name="agent_static")
