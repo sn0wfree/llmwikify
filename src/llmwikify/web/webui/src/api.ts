@@ -158,7 +158,43 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // Wiki management (multi-wiki)
+  wikis: {
+    list: () => request<{ wikis: Array<Record<string, unknown>>; default_wiki_id: string | null }>('/wikis'),
+    get: (wikiId: string) => request<Record<string, unknown>>(`/wikis/${wikiId}`),
+    register: (data: Record<string, unknown>) =>
+      request<Record<string, unknown>>('/wikis', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (wikiId: string, data: Record<string, unknown>) =>
+      request<Record<string, unknown>>(`/wikis/${wikiId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    unregister: (wikiId: string) =>
+      request<void>(`/wikis/${wikiId}`, { method: 'DELETE' }),
+    reload: (wikiId: string) =>
+      request<Record<string, unknown>>(`/wikis/${wikiId}/reload`, { method: 'POST' }),
+    health: (wikiId: string) => request<Record<string, unknown>>(`/wikis/${wikiId}/health`),
+    scan: (scanPaths?: string[], scanDepth?: number) =>
+      request<{ new_wikis: Array<Record<string, unknown>>; count: number }>('/wikis/scan', {
+        method: 'POST',
+        body: JSON.stringify({ scan_paths: scanPaths, scan_depth: scanDepth }),
+      }),
+  },
+
+  // Cross-wiki search
+  search: {
+    cross: (query: string, limit = 10, wikis?: string[]) =>
+      request<{ results: Array<Record<string, unknown>>; total_results: number; searched_wikis: string[] }>(
+        `/search/cross?q=${encodeURIComponent(query)}&limit=${limit}${wikis ? `&wikis=${wikis.join(',')}` : ''}`
+      ),
+  },
+
+  // Wiki-scoped operations (backward compatible)
   wiki: {
+    // Legacy endpoints (use default wiki)
     status: () => request<WikiStatus>('/wiki/status'),
     search: (query: string, limit = 10) =>
       request<SearchResult[]>(`/wiki/search?q=${encodeURIComponent(query)}&limit=${limit}`),
@@ -177,6 +213,24 @@ export const api = {
     graphAnalyze: () => request<Record<string, unknown>>('/wiki/graph_analyze'),
     graph: (currentPage?: string, mode?: string) =>
       request<GraphData>(`/wiki/graph${currentPage ? `?current_page=${encodeURIComponent(currentPage)}${mode ? `&mode=${mode}` : ''}` : mode ? `?mode=${mode}` : ''}`),
+
+    // Wiki-scoped endpoints (for multi-wiki mode)
+    scoped: {
+      status: (wikiId: string) => request<WikiStatus>(`/wiki/${wikiId}/status`),
+      search: (wikiId: string, query: string, limit = 10) =>
+        request<SearchResult[]>(`/wiki/${wikiId}/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+      readPage: (wikiId: string, pageName: string) =>
+        request<WikiPage>(`/wiki/${wikiId}/page/${encodeURIComponent(pageName)}`),
+      writePage: (wikiId: string, pageName: string, content: string) =>
+        request<{ message: string; confirmation_id?: string; status?: string }>(
+          `/wiki/${wikiId}/page`,
+          { method: 'POST', body: JSON.stringify({ page_name: pageName, content }) }
+        ),
+      lint: (wikiId: string) => request<Record<string, unknown>>(`/wiki/${wikiId}/lint`),
+      recommend: (wikiId: string) => request<Array<Record<string, unknown>>>(`/wiki/${wikiId}/recommend`),
+      graph: (wikiId: string, currentPage?: string, mode?: string) =>
+        request<GraphData>(`/wiki/${wikiId}/graph${currentPage ? `?current_page=${encodeURIComponent(currentPage)}${mode ? `&mode=${mode}` : ''}` : mode ? `?mode=${mode}` : ''}`),
+    },
   },
 
   agent: {
