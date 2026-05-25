@@ -243,3 +243,178 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         """
         result = build_visualization_data(wiki.index, wiki, current_page, mode)
         return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
+    """Register multi-wiki tools on the MCP server.
+
+    Args:
+        mcp: FastMCP server instance
+        registry: WikiRegistry instance
+    """
+    from llmwikify.core.wiki_instance import WikiType
+
+    @mcp.tool
+    def wiki_list() -> str:
+        """List all registered wikis."""
+        wikis = registry.list_wikis()
+        return json.dumps({
+            "wikis": [w.to_dict() for w in wikis],
+            "default_wiki_id": registry.get_default_wiki_id(),
+        }, ensure_ascii=False, indent=2)
+
+    @mcp.tool
+    def wiki_switch(wiki_id: str) -> str:
+        """Switch to a different wiki.
+
+        Args:
+            wiki_id: ID of the wiki to switch to
+        """
+        try:
+            instance = registry.get_wiki_instance(wiki_id)
+            return json.dumps({
+                "message": f"Switched to wiki: {instance.name}",
+                "wiki": instance.to_dict(),
+            }, ensure_ascii=False, indent=2)
+        except KeyError:
+            return json.dumps({"error": f"Wiki not found: {wiki_id}"})
+
+    @mcp.tool
+    def wiki_register(
+        wiki_id: str,
+        name: str,
+        wiki_type: str = "local",
+        root: str | None = None,
+        url: str | None = None,
+        api_key: str | None = None,
+    ) -> str:
+        """Register a new wiki.
+
+        Args:
+            wiki_id: Unique identifier for the wiki
+            name: Display name
+            wiki_type: Type of wiki - "local" or "remote"
+            root: Root directory path (for local wikis)
+            url: Server URL (for remote wikis)
+            api_key: Optional API key (for remote wikis)
+        """
+        from pathlib import Path
+
+        if wiki_type == "remote":
+            if not url:
+                return json.dumps({"error": "url required for remote wiki"})
+            instance = registry.register_remote(
+                wiki_id=wiki_id,
+                name=name,
+                url=url,
+                api_key=api_key,
+            )
+        else:
+            if not root:
+                return json.dumps({"error": "root required for local wiki"})
+            instance = registry.register_wiki(
+                wiki_id=wiki_id,
+                name=name,
+                root=Path(root),
+            )
+
+        return json.dumps({
+            "message": f"Registered wiki: {wiki_id}",
+            "wiki": instance.to_dict(),
+        }, ensure_ascii=False, indent=2)
+
+    @mcp.tool
+    def wiki_unregister(wiki_id: str) -> str:
+        """Unregister a wiki.
+
+        Args:
+            wiki_id: ID of the wiki to remove
+        """
+        try:
+            registry.unregister_wiki(wiki_id)
+            return json.dumps({"message": f"Unregistered wiki: {wiki_id}"})
+        except KeyError:
+            return json.dumps({"error": f"Wiki not found: {wiki_id}"})
+
+    @mcp.tool
+    def wiki_status(wiki_id: str | None = None) -> str:
+        """Get wiki status.
+
+        Args:
+            wiki_id: Optional wiki ID (uses default if not specified)
+        """
+        if wiki_id:
+            try:
+                status = registry.get_wiki_status(wiki_id)
+                return json.dumps(status, ensure_ascii=False, indent=2)
+            except KeyError:
+                return json.dumps({"error": f"Wiki not found: {wiki_id}"})
+        else:
+            # Default wiki status
+            default_id = registry.get_default_wiki_id()
+            if not default_id:
+                return json.dumps({"error": "No default wiki configured"})
+            status = registry.get_wiki_status(default_id)
+            return json.dumps(status, ensure_ascii=False, indent=2)
+
+    @mcp.tool
+    def wiki_search(query: str, limit: int = 10, wiki_id: str | None = None) -> str:
+        """Search wiki pages.
+
+        Args:
+            query: Search query string
+            limit: Maximum number of results (default: 10)
+            wiki_id: Optional wiki ID (uses default if not specified)
+        """
+        if wiki_id:
+            try:
+                from llmwikify.core.wiki_instance import WikiType
+                instance = registry.get_wiki_instance(wiki_id)
+                if instance.wiki_type == WikiType.REMOTE:
+                    client = registry._remote_clients.get(wiki_id)
+                    if client:
+                        results = client.search(query, limit)
+                        return json.dumps(results, ensure_ascii=False, indent=2)
+                    return json.dumps({"error": "Remote wiki client not available"})
+                else:
+                    wiki = registry.get_wiki(wiki_id)
+                    results = wiki.search(query, limit)
+                    return json.dumps(results, ensure_ascii=False, indent=2)
+            except KeyError:
+                return json.dumps({"error": f"Wiki not found: {wiki_id}"})
+        else:
+            # Cross-wiki search
+            results = registry.cross_wiki_search(query, limit=limit)
+            return json.dumps(results, ensure_ascii=False, indent=2)
+
+    @mcp.tool
+    def wiki_search_cross(query: str, limit: int = 10, wiki_ids: str | None = None) -> str:
+        """Search across multiple wikis.
+
+        Args:
+            query: Search query string
+            limit: Results per wiki (default: 10)
+            wiki_ids: Comma-separated wiki IDs (empty = all wikis)
+        """
+        ids = wiki_ids.split(",") if wiki_ids else None
+        results = registry.cross_wiki_search(query, ids, limit)
+        return json.dumps({
+            "results": results,
+            "total_results": len(results),
+            "searched_wikis": ids or [w.wiki_id for w in registry.list_wikis()],
+        }, ensure_ascii=False, indent=2)
+
+    @mcp.tool
+    def wiki_scan(scan_paths: str = ".", scan_depth: int = 2) -> str:
+        """Scan directories for wikis.
+
+        Args:
+            scan_paths: Comma-separated directory paths to scan
+            scan_depth: Maximum recursion depth (default: 2)
+        """
+        paths = [p.strip() for p in scan_paths.split(",")]
+        new_wikis = registry.scan_directories(paths, scan_depth)
+        return json.dumps({
+            "new_wikis": [w.to_dict() for w in new_wikis],
+            "count": len(new_wikis),
+        }, ensure_ascii=False, indent=2)
