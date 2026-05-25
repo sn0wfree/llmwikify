@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:agent": "cd ../webui-agent && npm run build",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
