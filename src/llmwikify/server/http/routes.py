@@ -259,6 +259,16 @@ def _register_multi_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
 
+    @wiki_router.get("/{wiki_id}/pages")
+    async def wiki_pages_by_id(wiki_id: str):
+        """Get list of all pages in a specific wiki."""
+        try:
+            wiki = get_wiki_by_id(wiki_id)
+            page_names = wiki._get_existing_page_names()
+            return {"pages": page_names, "count": len(page_names)}
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+
     @wiki_router.get("/{wiki_id}/search")
     async def wiki_search_by_id(wiki_id: str, q: str, limit: int = 10, backend: str = "fts5"):
         """Search within a specific wiki."""
