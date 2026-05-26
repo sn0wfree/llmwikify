@@ -154,6 +154,7 @@ class AgentService:
     def _get_or_create_context(self, session_id: str, wiki_id: str | None = None) -> AgentContext:
         if session_id not in self._contexts:
             self._contexts[session_id] = AgentContext(wiki_id)
+            self._contexts[session_id]._tool_calls = {}
         return self._contexts[session_id]
 
     def _parse_wiki_prefix(self, message: str) -> tuple[str | None, str]:
@@ -221,6 +222,7 @@ class AgentService:
             self.db.update_session_jwt(session_id, jwt_token)
 
         ctx.add_user_message(message)
+        self._save_message(session_id, "user", message)
 
         wiki = self._get_wiki_for_context(ctx)
         if wiki is None:
@@ -256,7 +258,10 @@ class AgentService:
                         args = raw_args
 
                     yield ChatEvent.tool_call_start(tool_name, args)
+                    ctx._tool_calls[tool_name] = {"tool": tool_name, "args": args, "status": "pending"}
                     result = await self._execute_tool(tool_name, args, tool_registry, session_id, ctx)
+                    ctx._tool_calls[tool_name]["result"] = result
+                    ctx._tool_calls[tool_name]["status"] = "done"
                     yield ChatEvent.tool_call_end(tool_name, result)
 
                     if result.get("status") == "confirmation_required":
@@ -271,6 +276,7 @@ class AgentService:
                 elif event_type == "done":
                     final = event.get("content", accumulated)
                     ctx.add_assistant_message(final)
+                    self._save_message(session_id, "assistant", final, tool_calls=list(ctx._tool_calls.values()) if hasattr(ctx, "_tool_calls") else None)
                     yield ChatEvent.done(final)
 
         except Exception as e:
@@ -316,6 +322,20 @@ class AgentService:
         except Exception as e:
             self.db.update_tool_call(call_id, {"error": str(e)}, "error")
             return {"status": "error", "error": str(e)}
+
+    def _save_message(self, session_id: str, role: str, content: str, tool_calls: list | None = None) -> None:
+        import uuid
+        try:
+            self.db.save_message({
+                "id": str(uuid.uuid4())[:8],
+                "session_id": session_id,
+                "role": role,
+                "content": content,
+                "tool_calls": tool_calls,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception:
+            pass
 
     def _get_wiki_for_context(self, ctx: AgentContext):
         wiki_id = ctx.recent_wiki_id or ctx.wiki_id

@@ -88,6 +88,13 @@ async def get_session(session_id: str):
     return session
 
 
+@router.get("/sessions/{session_id}/messages")
+async def get_session_messages(session_id: str, limit: int = 50, before: str | None = None):
+    service = get_agent_service()
+    messages = service.db.get_messages(session_id, limit=limit, before=before)
+    return {"messages": messages, "session_id": session_id}
+
+
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
     service = get_agent_service()
