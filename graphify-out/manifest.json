@@ -1,0 +1,1058 @@
+{
+  "/home/ll/llmwikify/lib/vis-9.1.2/vis-network.min.js": {
+    "mtime": 1776180932.7764049,
+    "hash": "bdb40cde0de5d06838f81e5889f8bd35"
+  },
+  "/home/ll/llmwikify/lib/bindings/utils.js": {
+    "mtime": 1776180932.771405,
+    "hash": "5ba47ef4a0a2adb11d05951545e12e89"
+  },
+  "/home/ll/llmwikify/lib/tom-select/tom-select.complete.min.js": {
+    "mtime": 1776180932.771405,
+    "hash": "16a287f52ebf7f159b49b30a74c0a3ae"
+  },
+  "/home/ll/llmwikify/src/llmwikify/__main__.py": {
+    "mtime": 1776833561.8085074,
+    "hash": "986d395fb01d67a1b781c172098c10ff"
+  },
+  "/home/ll/llmwikify/src/llmwikify/config.py": {
+    "mtime": 1779616886.126842,
+    "hash": "11fe2324088c8b14acdda2eb182ffa55"
+  },
+  "/home/ll/llmwikify/src/llmwikify/__init__.py": {
+    "mtime": 1779616906.8924026,
+    "hash": "3b3b4b098e71ff3deefa6c483b5f5bd9"
+  },
+  "/home/ll/llmwikify/src/llmwikify/llm_client.py": {
+    "mtime": 1777007823.939291,
+    "hash": "4af97314dafadb5b37b55882a8049752"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/qmd_client.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "137c4a052c5ebfef19634628604ff212"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_relation.py": {
+    "mtime": 1777017676.790107,
+    "hash": "63fd7863a70b91a802ec94506ec2ae15"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/relation_engine.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "e8122c4d5400842dd04026d226482215"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/principle_checker.py": {
+    "mtime": 1776833561.8095074,
+    "hash": "3947409ebd5929f438aad7946289866a"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_analyzer.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "28c9201d1d02c340902e47660b03ce39"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_ingest.py": {
+    "mtime": 1777017719.1204438,
+    "hash": "f23f30256104c0be38b76d13a3a48481"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_lint.py": {
+    "mtime": 1777017835.3795724,
+    "hash": "97d19be39567234d958d3be90552b913"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_link.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "0b0b45084bd01bbba1d643e4ed80d04e"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/qmd_index.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "ee267dab6cd700ceb3b0259714a36af7"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/watcher.py": {
+    "mtime": 1777018315.005325,
+    "hash": "11b1bcf2d614535782f2830f1a1b5936"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_query.py": {
+    "mtime": 1777017629.1368403,
+    "hash": "870da2a04bab875f220d332cf9f0f50f"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/graph_analyzer.py": {
+    "mtime": 1777257342.8657837,
+    "hash": "e3865084cdbf49d12d574b45dec81aa1"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_registry.py": {
+    "mtime": 1779681416.409767,
+    "hash": "ff0bce4f5655a7290eb29570cec0e7ff"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/synthesis_engine.py": {
+    "mtime": 1777007782.3463101,
+    "hash": "f982bff33eb5f8a63f5e92a92bf31759"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_synthesis.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "eea3178cded98c2b24c188de55ce7286"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_schema.py": {
+    "mtime": 1777017601.5072584,
+    "hash": "aa4faee61dc61967e13eedb6ac8bc4b7"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_llm.py": {
+    "mtime": 1777017807.1300333,
+    "hash": "d669665e0443a27a5f7af2e9dba4b971"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/remote_wiki.py": {
+    "mtime": 1779616792.7958078,
+    "hash": "755f6f0b01926792874fd864d91d5f1f"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "48cde997c10eb1699457ab5af7d986bb"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/constants.py": {
+    "mtime": 1776833561.8085074,
+    "hash": "663c1b3145ab6bf81539c8d35b4062ee"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_source_analysis.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "f497bf40c1778809234e7420797ed118"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/prompt_registry.py": {
+    "mtime": 1777007823.9412909,
+    "hash": "f43870199c1145254bbb7f389d3e70c7"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/index.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "1be4cb655f57f38c9bcad1edf9799169"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_utility.py": {
+    "mtime": 1777017653.8754613,
+    "hash": "572e3bf734262b77cbb4a2ac78e15ed7"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/graph_visualizer.py": {
+    "mtime": 1777257342.8657837,
+    "hash": "750e3fac1a4f4f7668a36ad04d295441"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_page_io.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "022db62e39a68e10835ca4e9dfd27155"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/__init__.py": {
+    "mtime": 1777017920.341165,
+    "hash": "267df2393879f3e89db2e3a3923d8cef"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/query_sink.py": {
+    "mtime": 1776833561.8095074,
+    "hash": "8727a1bc5bcb78f851a2b75d912ee8d1"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_instance.py": {
+    "mtime": 1779616768.3453202,
+    "hash": "ac805719eef1a74b88803eb0dd1176ef"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_init.py": {
+    "mtime": 1777018328.2630892,
+    "hash": "a4a09675d4ea873b11cabf0daa344873"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/graph_export.py": {
+    "mtime": 1777257342.8657837,
+    "hash": "8de01c61ca895743595874e539842f9e"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/protocols.py": {
+    "mtime": 1777020328.0831826,
+    "hash": "73c6f9a709e944dc7bd538d9669a5727"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_status.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "5d5b21c85860d27ceaa05c74c967a31a"
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_discovery.py": {
+    "mtime": 1779677493.5204554,
+    "hash": "aea12e18c3268843ef537e9b907b09b0"
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands.py": {
+    "mtime": 1779761622.2878664,
+    "hash": "d1817c65e4f1068f25b9f4dc099d6af3"
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/__init__.py": {
+    "mtime": 1776833561.8085074,
+    "hash": "caca454040f51c055ce4429955023197"
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/__init__.py": {
+    "mtime": 1776833561.816507,
+    "hash": "c4c6f7a0c82f6ad081eeb2e6bf8b8140"
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/__init__.py": {
+    "mtime": 1776833561.816507,
+    "hash": "a73ed0a8d06528c1a4f0bd04885db176"
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/core.py": {
+    "mtime": 1779668468.1862643,
+    "hash": "20e6bd8fc81e8098f1bf367f75bbcb78"
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/constants.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "61fc75e1f0ffa2585cf19e6e6da1cd9f"
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/__init__.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "f444cb38e2884a4a2efd03128b296220"
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/http/routes.py": {
+    "mtime": 1779761366.7139049,
+    "hash": "b6918760658dfdf7094184f8c0dc5c36"
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/http/middleware.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "87ad4307805616b936e9059c56d68210"
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/http/__init__.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "f70a774601be331226bfd8b6317c04b3"
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/utils/__init__.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "45224b8fd6859a842404d33d55f9d4c8"
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/utils/webui.py": {
+    "mtime": 1779435370.16389,
+    "hash": "b333f12629e6e81bc869cd148c4d3bc2"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/__init__.py": {
+    "mtime": 1776833561.8175073,
+    "hash": "92ee022964bfd8d6f65fbfbe08a50752"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/server.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "d1694f1db5d453d32e08bda47c17b3ca"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/postcss.config.js": {
+    "mtime": 1776833561.9595044,
+    "hash": "ef3ba2a81ba19f8ea5ddf625521e96f0"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/vitest.config.ts": {
+    "mtime": 1776833561.9605045,
+    "hash": "e5cb98c1a13fe33e5ea1071957bb4b9d"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/tailwind.config.js": {
+    "mtime": 1776833561.9605045,
+    "hash": "3346df3fd0a1ea3f84440703bf8fd2cb"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/vite.config.ts": {
+    "mtime": 1776833561.9605045,
+    "hash": "d7252f389ef697e257a5f528ad3c663c"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/api.ts": {
+    "mtime": 1779761887.4480844,
+    "hash": "af0e2c2194b18d857bd7cf23eee521a6"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/App.tsx": {
+    "mtime": 1779712425.964712,
+    "hash": "1310457c740d29e6360b047546078555"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/test-setup.ts": {
+    "mtime": 1776833561.9605045,
+    "hash": "00e47f7b9836e8f731101981fa2bb2de"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/main.tsx": {
+    "mtime": 1776833561.9605045,
+    "hash": "1e967b11e550fb2f03ecbb961aa01481"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/vite-env.d.ts": {
+    "mtime": 1776833561.9605045,
+    "hash": "0352474ba2918efe13895edbc3780d94"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/IngestLog.tsx": {
+    "mtime": 1779760627.7695415,
+    "hash": "e4c3b7fa4e76d96dd77f8b8b6b3c6bf7"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/PageTree.tsx": {
+    "mtime": 1776833561.9605045,
+    "hash": "70e2e4c1cb35f46977711d185501b76a"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/FrontMatterPanel.tsx": {
+    "mtime": 1776833561.9605045,
+    "hash": "366c07b88428c4b25af40fd6d49a8a0c"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/DreamLog.tsx": {
+    "mtime": 1779712390.2502902,
+    "hash": "f2fea136002ed82f2260b23942dffd56"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/GraphView.tsx": {
+    "mtime": 1776833561.9605045,
+    "hash": "d2fd8ab6a6de1dfdf9031c09a8e79d20"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/FileTree.tsx": {
+    "mtime": 1779678112.5569494,
+    "hash": "e87566c7068f0b2c20d336008c8ff60a"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/Toast.tsx": {
+    "mtime": 1776833561.9605045,
+    "hash": "9d081b619df075ecbb292bdfaa31bf77"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/HealthStatus.tsx": {
+    "mtime": 1776833561.9605045,
+    "hash": "f98d9892bf0c10e15f25347094632d82"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/SearchBar.tsx": {
+    "mtime": 1779682014.7307487,
+    "hash": "2bbfeb0457c23d61baa02dc79902523c"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/TaskMonitor.tsx": {
+    "mtime": 1779712390.2502902,
+    "hash": "1efb887b23657b20f30c8dda8d6f61d9"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/Confirmations.tsx": {
+    "mtime": 1779712390.2502902,
+    "hash": "65f4d0a36113cb2869b941681fbaf5ea"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/Notifications.tsx": {
+    "mtime": 1779712390.2502902,
+    "hash": "b90527ff7827d0339f86ce59b9c61bad"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/KnowledgeGrowth.tsx": {
+    "mtime": 1779712425.964712,
+    "hash": "4f4d8c5723b5bbbb48ca4a8d353accf4"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/WikiManager.tsx": {
+    "mtime": 1779676413.0555408,
+    "hash": "2c1889cb2edfbbdd6f7e8483e9c3a2d0"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/EditHistory.tsx": {
+    "mtime": 1779712390.2502902,
+    "hash": "4b4d574e65dc3c9946c2d017f5560a7c"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/Insights.tsx": {
+    "mtime": 1776833561.9605045,
+    "hash": "32c2cfaeba1f70d21fb9f6984ddbb308"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/Editor.tsx": {
+    "mtime": 1779678862.5994792,
+    "hash": "171dc249eaab0c8329c45f42dd815e4a"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/CrossWikiSearch.tsx": {
+    "mtime": 1779682026.6655211,
+    "hash": "7707a79624f2dbcbbcc2857f694b0d03"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/DreamProposals.tsx": {
+    "mtime": 1779712390.2502902,
+    "hash": "a255d63f9019697cfaac70d938a56fd2"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/AgentChat.tsx": {
+    "mtime": 1779712390.2492902,
+    "hash": "6bf53bb6ac6bf3c0a459fda798e05e65"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/WikiSelector.tsx": {
+    "mtime": 1779673413.1473582,
+    "hash": "f9723eface6fd16e985060ba34aa89f6"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/stores/wikiStore.ts": {
+    "mtime": 1779681383.2623434,
+    "hash": "1f0eb20093dbffa60a74921f3b217137"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/Toast.test.tsx": {
+    "mtime": 1776833561.9595044,
+    "hash": "3b06d64454d5099b2be13f9ec5116ac3"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/Editor.test.tsx": {
+    "mtime": 1776833561.9595044,
+    "hash": "acf5cd3301c037b66e0136d9a6b1159d"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/EditHistory.test.tsx": {
+    "mtime": 1776833561.9595044,
+    "hash": "060fbee549f9020548878febc7583512"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/api.test.ts": {
+    "mtime": 1776833561.9595044,
+    "hash": "d6c327e0513828aff7353ceb78bb6585"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/DreamProposals.test.tsx": {
+    "mtime": 1776833561.9595044,
+    "hash": "39008f19ce13672b579498213af90647"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/App.test.tsx": {
+    "mtime": 1776833561.9595044,
+    "hash": "aca3bb2ce49e23115da3dff409dc164a"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/Confirmations.test.tsx": {
+    "mtime": 1776833561.9595044,
+    "hash": "2e04c3f08f58902a506f23386a80ccd8"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/IngestLog.test.tsx": {
+    "mtime": 1776833561.9595044,
+    "hash": "19c91098332532595d08dfed653d014e"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/lib/marked.min.js": {
+    "mtime": 1776153457.4351213,
+    "hash": "e04ae0bf88da292e65e1e677394f6058"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/lib/d3.min.js": {
+    "mtime": 1776157929.9911418,
+    "hash": "69faba9d2fffc70c04f5620e7076efb0"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/js/graph.js": {
+    "mtime": 1776833561.8175073,
+    "hash": "2e49e989559d4ae64c0f5ad2d4ae2601"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/js/app.js": {
+    "mtime": 1776833561.8175073,
+    "hash": "81b7c56804d7bd6e7c4418df6606939d"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/vite.config.ts": {
+    "mtime": 1779698774.2509072,
+    "hash": "eba2564965387b3fe2c685c8a0a742bb"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/api.ts": {
+    "mtime": 1779761888.1460671,
+    "hash": "b728db9730ee27daba6830e658dc09a7"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/App.tsx": {
+    "mtime": 1779698774.2509072,
+    "hash": "3d983f12bbcd9c688137dc0c80db76fd"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/main.tsx": {
+    "mtime": 1779698774.2509072,
+    "hash": "79613b9708952fef3c87c0acf4f00274"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/IngestLog.tsx": {
+    "mtime": 1779698774.2509072,
+    "hash": "b386b3a242a8fd290654b5d4075ad5cc"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/DreamLog.tsx": {
+    "mtime": 1779698774.2509072,
+    "hash": "f2fea136002ed82f2260b23942dffd56"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/TaskMonitor.tsx": {
+    "mtime": 1779698774.2509072,
+    "hash": "1efb887b23657b20f30c8dda8d6f61d9"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/Confirmations.tsx": {
+    "mtime": 1779698774.2509072,
+    "hash": "65f4d0a36113cb2869b941681fbaf5ea"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/EditHistory.tsx": {
+    "mtime": 1779698774.2509072,
+    "hash": "4b4d574e65dc3c9946c2d017f5560a7c"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/DreamProposals.tsx": {
+    "mtime": 1779698774.2509072,
+    "hash": "a255d63f9019697cfaac70d938a56fd2"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/AgentChat.tsx": {
+    "mtime": 1779698774.2509072,
+    "hash": "6bf53bb6ac6bf3c0a459fda798e05e65"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/runner.py": {
+    "mtime": 1777007782.3463101,
+    "hash": "7cb56c769cd0bcaa5299ef2cd11e0b5c"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/hooks.py": {
+    "mtime": 1777007782.3463101,
+    "hash": "1d29dd781f572a36589aa695644cc8c7"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/wiki_agent.py": {
+    "mtime": 1777257342.8657837,
+    "hash": "f0df719c8d8e9e5d6673ffe931934b6d"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/dream_editor.py": {
+    "mtime": 1779760627.7685416,
+    "hash": "e466c1ae695e1ee954cc90a3e59047b8"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/tools.py": {
+    "mtime": 1779760627.7685416,
+    "hash": "4d3c8c8479a3cb8be77b676b8624e178"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/__init__.py": {
+    "mtime": 1777257342.8657837,
+    "hash": "f9447b59bef3ef8c421c1aaf227d4471"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/memory.py": {
+    "mtime": 1777007782.3463101,
+    "hash": "675442571a0c6b39e1d85da7a491388f"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/notifications.py": {
+    "mtime": 1779760627.7685416,
+    "hash": "54ee753779dbc05489ec5f452b5aea1f"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/scheduler.py": {
+    "mtime": 1777007782.3463101,
+    "hash": "12802bd6a1380704cb203fb8d8833e93"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/db.py": {
+    "mtime": 1779760627.7675416,
+    "hash": "63e17a3dfada6ec6083aef830cc433c8"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/adapters.py": {
+    "mtime": 1779698773.9769137,
+    "hash": "f472c618d7b3e1a3a9616afbe1d7be83"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/service.py": {
+    "mtime": 1779760627.7685416,
+    "hash": "0ee5ca5b1c6129f83fa18bc1344d7d64"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/__init__.py": {
+    "mtime": 1779698773.9769137,
+    "hash": "e888a15619b22886543cebe811a271ba"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/routes/agent.py": {
+    "mtime": 1779760627.7685416,
+    "hash": "7acd84e0e789a3c900cc0fa979b10d9c"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/routes/research.py": {
+    "mtime": 1779698773.9769137,
+    "hash": "ce0ef5a9b53bb3268c8d28b5fa6a3c8d"
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/routes/__init__.py": {
+    "mtime": 1779698773.9769137,
+    "hash": "38ea02a362fbe29d434bfbec4a95d959"
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/youtube.py": {
+    "mtime": 1776833561.816507,
+    "hash": "dcff97b90ef6ef7dcba4d7e2e97d1df7"
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/pdf.py": {
+    "mtime": 1776833561.816507,
+    "hash": "27150358515eb0eefc1d6ee9f4e5e672"
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/web.py": {
+    "mtime": 1776833561.816507,
+    "hash": "40f6263c6dae4e47cb71cae2f127a7d5"
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/text.py": {
+    "mtime": 1777007844.9877765,
+    "hash": "148ebbc233d3686fb1abb1a3d64b07b3"
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/__init__.py": {
+    "mtime": 1776833561.816507,
+    "hash": "b68352ea742dba57699a2752e0a6332e"
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/base.py": {
+    "mtime": 1777007823.939291,
+    "hash": "86f0f6396bbcdda390f401a1893deb58"
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/markitdown_extractor.py": {
+    "mtime": 1776833561.816507,
+    "hash": "bf212d0b7bf8cb63b7dfc761f320e6c2"
+  },
+  "/home/ll/llmwikify/src/llmwikify/mcp/tools.py": {
+    "mtime": 1779668723.0880723,
+    "hash": "e14009c9086449ffa38db8577a2268dc"
+  },
+  "/home/ll/llmwikify/src/llmwikify/mcp/__init__.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "509b14c364aa8c7acb7aadd39268103b"
+  },
+  "/home/ll/llmwikify/src/llmwikify/mcp/adapter.py": {
+    "mtime": 1779668702.7891579,
+    "hash": "fcf67780a334e1ff795dba63d65d0796"
+  },
+  "/home/ll/llmwikify/src/llmwikify/mcp/server.py": {
+    "mtime": 1777257342.8667836,
+    "hash": "409a1bc6d82dfca3e6a842e4c6250567"
+  },
+  "/home/ll/llmwikify/scripts/check_prompt_principles.py": {
+    "mtime": 1776833561.8085074,
+    "hash": "9250c2b01e6df5d03454f038c2bd0509"
+  },
+  "/home/ll/llmwikify/scripts/eval_prompts.py": {
+    "mtime": 1776833561.8085074,
+    "hash": "a5f3adc2aaf58163d9e98cfd8c0a2bd4"
+  },
+  "/home/ll/llmwikify/archive/llmwikify_original.py": {
+    "mtime": 1776833561.8065073,
+    "hash": "c532ea57e4f747b2033efc565c476fbf"
+  },
+  "/home/ll/llmwikify/examples/basic_usage.py": {
+    "mtime": 1777258313.2483125,
+    "hash": "6be84c3774d12d7b02a79f23a70005c9"
+  },
+  "/home/ll/llmwikify/examples/mcp_agent.py": {
+    "mtime": 1777258208.498354,
+    "hash": "3a474b1ffdcfd8d6f2b0971577df5484"
+  },
+  "/home/ll/llmwikify/examples/integrate_with_flask.py": {
+    "mtime": 1777257941.249283,
+    "hash": "c73bc99c21c6ffcc74b90e2966847b68"
+  },
+  "/home/ll/llmwikify/examples/integrate_with_django.py": {
+    "mtime": 1777257916.1380444,
+    "hash": "9e34861bcb7503d44f213683aa531973"
+  },
+  "/home/ll/llmwikify/examples/run_server.py": {
+    "mtime": 1777257860.2017522,
+    "hash": "73c007435009364f104183e81affeb8a"
+  },
+  "/home/ll/llmwikify/tests/test_wiki_analyzer.py": {
+    "mtime": 1776833561.9645045,
+    "hash": "6b5417b2657c0ef066ae51b8ab31acc5"
+  },
+  "/home/ll/llmwikify/tests/test_init_agent.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "553634187a74cb8ef24622023999d0ac"
+  },
+  "/home/ll/llmwikify/tests/test_relation_engine.py": {
+    "mtime": 1777257342.8677835,
+    "hash": "479700bec9ae7ac6eb0d3fb469acd29b"
+  },
+  "/home/ll/llmwikify/tests/test_direct_lint.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "00c2de2561f12bde05863d77c8de1250"
+  },
+  "/home/ll/llmwikify/tests/test_v019_harness_regression.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "884e8c1b872ea7a4c4d19591656b467d"
+  },
+  "/home/ll/llmwikify/tests/test_cli_comprehensive.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "eb172e6181bb26f492774a29ccf10385"
+  },
+  "/home/ll/llmwikify/tests/test_v018_prompt_engineering.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "f7fbea00b585891179456bf53b82a163"
+  },
+  "/home/ll/llmwikify/tests/test_v018_integration.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "7c718e2a3038f4d73170a8c56da0ef4c"
+  },
+  "/home/ll/llmwikify/tests/test_v016_investigations.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "83dd6313d130c74f10d513e310de0106"
+  },
+  "/home/ll/llmwikify/tests/test_mcp_integration.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "d5951e05bb59058412839e7d38778891"
+  },
+  "/home/ll/llmwikify/tests/test_recommend.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "0b99263236aff1f3f7353b4245203cf4"
+  },
+  "/home/ll/llmwikify/tests/test_v020_markitdown_extractor.py": {
+    "mtime": 1776833561.9645045,
+    "hash": "8f98c9124983d77fd3dea67c7f0c436b"
+  },
+  "/home/ll/llmwikify/tests/test_cli_integration.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "b9a6b4994e53033ff198c6f1e2316c09"
+  },
+  "/home/ll/llmwikify/tests/test_api_multi_wiki.py": {
+    "mtime": 1779668487.7537317,
+    "hash": "51ffe74554a4c03848836316e8f3b057"
+  },
+  "/home/ll/llmwikify/tests/test_index.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "8b50a01eed85de26327c3e16f7b063f8"
+  },
+  "/home/ll/llmwikify/tests/test_agent_layer.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "eb963d8062c0078790995348671a0209"
+  },
+  "/home/ll/llmwikify/tests/test_v022_relations.py": {
+    "mtime": 1776833561.9645045,
+    "hash": "355adc1a37bac81bcb30066a6f442e80"
+  },
+  "/home/ll/llmwikify/tests/test_v015_features.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "2389d9a26196229bde899ed687938616"
+  },
+  "/home/ll/llmwikify/tests/test_v029_index_enhancement.py": {
+    "mtime": 1776833561.9645045,
+    "hash": "d685b639594943a35978e9e11a2d3e8a"
+  },
+  "/home/ll/llmwikify/tests/test_p0_p3_fixes.py": {
+    "mtime": 1777257342.8677835,
+    "hash": "c16f1d59d9eb8f382df1b98b52de759d"
+  },
+  "/home/ll/llmwikify/tests/test_batch_ingest.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "149f0355f13f51d3dc63120671d03e9e"
+  },
+  "/home/ll/llmwikify/tests/test_v025_web_ui.py": {
+    "mtime": 1777257342.8677835,
+    "hash": "3279f6d0e2577953228496d5a2b7e584"
+  },
+  "/home/ll/llmwikify/tests/test_source_analysis.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "25511dadcdd594c087efc4ab288e57a1"
+  },
+  "/home/ll/llmwikify/tests/test_v019_principle_checker.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "16f47cbf5cab7dabd3b63dba07c184e1"
+  },
+  "/home/ll/llmwikify/tests/test_multi_wiki.py": {
+    "mtime": 1779677513.634993,
+    "hash": "fb97da5354a412e63ccd7a9cec798578"
+  },
+  "/home/ll/llmwikify/tests/test_p1_features.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "c4c5d0263dcaa1c45b3895d21fcf9484"
+  },
+  "/home/ll/llmwikify/tests/test_qmd.py": {
+    "mtime": 1777257342.8677835,
+    "hash": "947e541e178a1010899bab356e93e1b1"
+  },
+  "/home/ll/llmwikify/tests/test_cli.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "c528064db81f338163f81e0173caa4c1"
+  },
+  "/home/ll/llmwikify/tests/test_api_routes.py": {
+    "mtime": 1779760627.7695415,
+    "hash": "4ebb6fe7cfd1f71d37b2c2ca7c9b8971"
+  },
+  "/home/ll/llmwikify/tests/test_sink_dedup.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "48e3417168213a8d9a73fdb8248d2649"
+  },
+  "/home/ll/llmwikify/tests/test_prompt_registry.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "990fcc6207bdf40c71f32b0f7e935e76"
+  },
+  "/home/ll/llmwikify/tests/test_wiki_server.py": {
+    "mtime": 1777257342.8677835,
+    "hash": "d4a0f200d674cab74b037697ec93f5c0"
+  },
+  "/home/ll/llmwikify/tests/test_v019_eval_prompts.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "9ecae718941465fe59268bb0ab8a7d27"
+  },
+  "/home/ll/llmwikify/tests/test_p1_3_graph_analyzer.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "f7ffae0ebb273ed93e69d119d11d8b64"
+  },
+  "/home/ll/llmwikify/tests/test_extractors.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "3df7cc04e9d357864b5c7c8439f06bfd"
+  },
+  "/home/ll/llmwikify/tests/test_v021_watch.py": {
+    "mtime": 1776833561.9645045,
+    "hash": "76d0a58dc3804119f84fc715394e2a33"
+  },
+  "/home/ll/llmwikify/tests/test_query_flow.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "3ab8cd632d033d8f60e67b23fbcab568"
+  },
+  "/home/ll/llmwikify/tests/test_v026_wikilink_fix.py": {
+    "mtime": 1776833561.9645045,
+    "hash": "67bf34bbce65270da155884676513e39"
+  },
+  "/home/ll/llmwikify/tests/test_llm_client.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "543007437d5970523d48d0f431fbd6a2"
+  },
+  "/home/ll/llmwikify/tests/test_v025_service_name.py": {
+    "mtime": 1776833561.9645045,
+    "hash": "0d1248fa70860de4bf07910e9c23dca7"
+  },
+  "/home/ll/llmwikify/tests/test_sink_flow.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "5f6aa31fd3a609737fd4bf69dd5c3484"
+  },
+  "/home/ll/llmwikify/tests/test_v023_graph.py": {
+    "mtime": 1776833561.9645045,
+    "hash": "00813e044b7974515601b16114bece68"
+  },
+  "/home/ll/llmwikify/tests/test_v027_cli_features.py": {
+    "mtime": 1776833561.9645045,
+    "hash": "b069a215897835cb96911162dee2654f"
+  },
+  "/home/ll/llmwikify/tests/test_v019_wiki_synthesize.py": {
+    "mtime": 1776833561.9635043,
+    "hash": "f973304bd294e4d8c5cd2d8018e4e1a7"
+  },
+  "/home/ll/llmwikify/tests/test_wiki_core.py": {
+    "mtime": 1776833561.9645045,
+    "hash": "8d6eee3b969efc72dce0343774631655"
+  },
+  "/home/ll/llmwikify/tests/conftest.py": {
+    "mtime": 1776833561.9605045,
+    "hash": "e2bab59b811da9e20e3daf60e90edde7"
+  },
+  "/home/ll/llmwikify/tests/e2e/test_debug.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "fa47c1a141accc2063a9edce4742411a"
+  },
+  "/home/ll/llmwikify/tests/e2e/test_insights.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "522877121e4ba936612880e9a8a776bd"
+  },
+  "/home/ll/llmwikify/tests/e2e/__init__.py": {
+    "mtime": 1776833561.9605045,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/home/ll/llmwikify/tests/e2e/test_editor.py": {
+    "mtime": 1777015433.9237297,
+    "hash": "e349f9e79ad5e4345c964b054b2de2db"
+  },
+  "/home/ll/llmwikify/tests/e2e/test_searchbar.py": {
+    "mtime": 1777015441.7265925,
+    "hash": "f4ea5d184466c933235f8f40ea558f98"
+  },
+  "/home/ll/llmwikify/tests/e2e/conftest.py": {
+    "mtime": 1776833561.9605045,
+    "hash": "ab8ce9d4a354a7269dad6ceda3efa733"
+  },
+  "/home/ll/llmwikify/tests/fixtures/__init__.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/mock_llm_framework.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "ebb29de0d2005e176d33f414dbe6aaa8"
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/__init__.py": {
+    "mtime": 1776833561.9625044,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/home/ll/llmwikify/CONTRIBUTING.md": {
+    "mtime": 1777257342.8647838,
+    "hash": "c5df95eaefbcb277ed9e45994439f293"
+  },
+  "/home/ll/llmwikify/CHANGELOG.md": {
+    "mtime": 1777257342.8647838,
+    "hash": "38e9518097f63da329ba53c33b2ba8f5"
+  },
+  "/home/ll/llmwikify/MIGRATION.md": {
+    "mtime": 1777257342.8647838,
+    "hash": "a1cc34f37945351741361bb1905f8378"
+  },
+  "/home/ll/llmwikify/README.md": {
+    "mtime": 1777258181.4781437,
+    "hash": "89df14eadd996125f99cf22b09fa2315"
+  },
+  "/home/ll/llmwikify/ARCHITECTURE.md": {
+    "mtime": 1779616737.0929732,
+    "hash": "ef081ddfa6bfb82de8dea161fef17203"
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/generate_wiki_ops.yaml": {
+    "mtime": 1779684887.286961,
+    "hash": "b302e8bc99ef1ab764a580da044c7eec"
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/direct_lint.yaml": {
+    "mtime": 1779684887.2859612,
+    "hash": "31efefaa654db7ba2e3264db91631508"
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/investigate_lint.yaml": {
+    "mtime": 1779684887.286961,
+    "hash": "3956e1682caf37b4047814bae95e1ca1"
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/ingest_instructions.yaml": {
+    "mtime": 1776833561.816507,
+    "hash": "6a2f6c9ed9298fc69ee1d58b8bf18b06"
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/wiki_synthesize.yaml": {
+    "mtime": 1779684887.286961,
+    "hash": "6ed751dbaf9358decee0c333bc4bbfa7"
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/wiki_schema.yaml": {
+    "mtime": 1776833561.816507,
+    "hash": "db2eb01a7fe75dce789ec6f7dff133c8"
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/analyze_source.yaml": {
+    "mtime": 1779684887.2859612,
+    "hash": "e1203ee864772ae29b2c84eac8547aab"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/index.html": {
+    "mtime": 1776833561.8175073,
+    "hash": "112fdb0c6b500e6a69ae2ded869d2a3d"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/index.html": {
+    "mtime": 1776833561.8175073,
+    "hash": "8e07f1bda270ef55de37a0a8d6870f2a"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/README.md": {
+    "mtime": 1779434493.4660327,
+    "hash": "1b96a4b0522ba6dd8179d4b2616cc1f0"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/index.html": {
+    "mtime": 1779698773.9779136,
+    "hash": "4089489aa9a0d334509fff12897c01e8"
+  },
+  "/home/ll/llmwikify/src/llmwikify/templates/skill_llmwikify/SKILL.md": {
+    "mtime": 1776833561.8175073,
+    "hash": "7de2ab9eeffc18843fd84cccd17e75d9"
+  },
+  "/home/ll/llmwikify/src/llmwikify/templates/skill_llmwikify/resources/cli-reference.md": {
+    "mtime": 1776833561.8175073,
+    "hash": "40d7723a88c190d2d83c0a52f758bc31"
+  },
+  "/home/ll/llmwikify/archive/reports/FINAL_SUMMARY.md": {
+    "mtime": 1776833561.8065073,
+    "hash": "2dc8d138c47ac13e39d07e9471b9999f"
+  },
+  "/home/ll/llmwikify/archive/reports/MODULARIZATION_REPORT.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "254a0c3d07a61c20dca0afda8c0d5385"
+  },
+  "/home/ll/llmwikify/archive/reports/README_UPDATE_REPORT.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "6375577b0bcf5df6dc452a0b3f052443"
+  },
+  "/home/ll/llmwikify/archive/reports/PROJECT_CLEANUP_REPORT.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "d0a7bd36742deab6700ad161a2b13d05"
+  },
+  "/home/ll/llmwikify/archive/reports/REFACTORING_REPORT.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "9d8ce09c4ce5a6cda2ef41c46f3de1c3"
+  },
+  "/home/ll/llmwikify/archive/reports/REFERENCE_TRACING_DISCUSSION.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "f84d6bd9fa9c0b303bdcd8adacbbed91"
+  },
+  "/home/ll/llmwikify/archive/reports/MCP_CONFIGURATION_REPORT.md": {
+    "mtime": 1776833561.8065073,
+    "hash": "290fa789800301e6e41c5aa865ca8b2c"
+  },
+  "/home/ll/llmwikify/docs/KNOWN_ISSUES.md": {
+    "mtime": 1777257342.8657837,
+    "hash": "6f802c3ffe43540f7d2fffe74831f7c6"
+  },
+  "/home/ll/llmwikify/docs/MCP_SETUP.md": {
+    "mtime": 1777257342.8657837,
+    "hash": "25d098c08c061e401d5fca4f5c6b450f"
+  },
+  "/home/ll/llmwikify/docs/CONFIGURATION_GUIDE.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "954d3ba95f75b01eab751e81293db32d"
+  },
+  "/home/ll/llmwikify/docs/P3_INGEST_LINT_DESIGN.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "91caf2f4fe434cfc326cdd3861b81595"
+  },
+  "/home/ll/llmwikify/docs/QMD_SETUP.md": {
+    "mtime": 1777257342.8657837,
+    "hash": "da68d73f8a28e6e4600d565767d719f1"
+  },
+  "/home/ll/llmwikify/docs/CONFIG_GUIDE.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "c66ff00b7611a4df6d0ac78b82ea2b0e"
+  },
+  "/home/ll/llmwikify/docs/REFERENCE_TRACKING_GUIDE.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "a53a8a11e1b7c96f42cc8686cce44cf5"
+  },
+  "/home/ll/llmwikify/docs/WIKI_LLM_PROMPT_ARCHITECTURE.md": {
+    "mtime": 1779684887.2749615,
+    "hash": "4ab0808ea194f91ba3193109c8e43f96"
+  },
+  "/home/ll/llmwikify/docs/agent-framework-design.md": {
+    "mtime": 1779684887.2749615,
+    "hash": "64c33d3998e7e1a0e6472bd413063231"
+  },
+  "/home/ll/llmwikify/docs/AGENT_INTEGRATION_PLAN.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "f7cf5fd9526af3eff7dd0593ae6238f1"
+  },
+  "/home/ll/llmwikify/docs/SINK_DESIGN_DECISIONS.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "e2765a50346d5f48b034acc07e16924f"
+  },
+  "/home/ll/llmwikify/docs/agent-backend-implementation-plan.md": {
+    "mtime": 1779756025.5698078,
+    "hash": "2ea3ba52b79fe6105762d637a914e968"
+  },
+  "/home/ll/llmwikify/docs/WEBUI_UNIFIED_SERVER.md": {
+    "mtime": 1777257342.8657837,
+    "hash": "8b2014b7c4e27d09914f07aa387f7d8e"
+  },
+  "/home/ll/llmwikify/docs/LLM_WIKI_PRINCIPLES.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "26829b76ecf6d56df04a1de3e45d4afd"
+  },
+  "/home/ll/llmwikify/docs/MCPORTER_DEPLOYMENT.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "4c0941ac95c48d3fc8c53ff1f8234225"
+  },
+  "/home/ll/llmwikify/docs/plans/auto-research-v0.24.0.md": {
+    "mtime": 1776959741.219694,
+    "hash": "09daf990845dd3eb1d5c1398c756e567"
+  },
+  "/home/ll/llmwikify/docs/plans/PROJECT_STATUS_0.30.0.md": {
+    "mtime": 1777021376.0723188,
+    "hash": "851fbcb738704a5bcc6a822a8624df47"
+  },
+  "/home/ll/llmwikify/docs/plans/v021-v023-roadmap.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "afafeb4954e8d64de2c765414757fe80"
+  },
+  "/home/ll/llmwikify/docs/plans/v0.15.0.md": {
+    "mtime": 1776833561.8075073,
+    "hash": "1562f7f634b0dda675e667d9d3a6edc0"
+  },
+  "/home/ll/llmwikify/docs/plans/MULTI_WIKI_PLAN.md": {
+    "mtime": 1779616547.6218836,
+    "hash": "97bbece29aae4bdce35aa3cee8268be2"
+  },
+  "/home/ll/llmwikify/examples/personal-kb.yaml": {
+    "mtime": 1776833561.8085074,
+    "hash": "3411d0b5234b39b02f1f8c8a740ba7a0"
+  },
+  "/home/ll/llmwikify/examples/research-wiki.yaml": {
+    "mtime": 1776833561.8085074,
+    "hash": "ca8976009ac77b5a2fe0cf195b54b3a9"
+  },
+  "/home/ll/llmwikify/examples/mining-news-wiki.yaml": {
+    "mtime": 1776833561.8085074,
+    "hash": "77560665483caaf27a36d5ff9b8618e0"
+  },
+  "/home/ll/llmwikify/examples/README.md": {
+    "mtime": 1777258006.1533303,
+    "hash": "8261fdb096866a02d344b28bfa019f35"
+  },
+  "/home/ll/llmwikify/examples/project-docs.yaml": {
+    "mtime": 1776833561.8085074,
+    "hash": "f5eac831c0e1cafea39f29a0e6cc12e7"
+  },
+  "/home/ll/llmwikify/wiki/log.md": {
+    "mtime": 1776833561.9645045,
+    "hash": "9919013cf5f26f3c00ef41ab9f7042e6"
+  },
+  "/home/ll/llmwikify/wiki/index.md": {
+    "mtime": 1776833561.9645045,
+    "hash": "eabb2a9dd7d85ace2dff892ea9d34a6c"
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/insights-debug.html": {
+    "mtime": 1779760627.7695415,
+    "hash": "71607388ad0d814e046786e6c26d2fde"
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/04_wiki_ops_generation.yaml": {
+    "mtime": 1776833561.9625044,
+    "hash": "c527e9736a34951db0a53537bb12b076"
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/01_entity_extraction.yaml": {
+    "mtime": 1776833561.9625044,
+    "hash": "f748722574a366f7b03073a42f4190a3"
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/05_synthesize_answer.yaml": {
+    "mtime": 1776833561.9625044,
+    "hash": "6f29560c69fd30121511d9cf66caaabd"
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/03_data_gap_detection.yaml": {
+    "mtime": 1776833561.9625044,
+    "hash": "88f2199342cce34cdf4cc9a3b573b620"
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/02_contradiction_detection.yaml": {
+    "mtime": 1776833561.9625044,
+    "hash": "dbc5320154327c6f39fb212b3e150962"
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/editor-debug.png": {
+    "mtime": 1776833561.9615045,
+    "hash": "9142bc2561091e209f962d51a3886198"
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/editor-content.png": {
+    "mtime": 1777018548.3561318,
+    "hash": "f0cb3d5817c72d5e215da0c726714df3"
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/graph-analysis.png": {
+    "mtime": 1777013633.5155416,
+    "hash": "b384e70ec544919ad0fb49810326113a"
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/synthesis-analyze.png": {
+    "mtime": 1777013630.3486238,
+    "hash": "c2469b456909bf195947f0b3fc6bc2cb"
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/insights-debug.png": {
+    "mtime": 1779760627.7695415,
+    "hash": "a7ea9642c4f6323177fed7e412fd3905"
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/insights-loaded.png": {
+    "mtime": 1777013627.180706,
+    "hash": "13e58acc42d5327ea51bdf780e619af3"
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/search-results.png": {
+    "mtime": 1777015464.694186,
+    "hash": "30f8064d682c7392222fcce34362ec65"
+  }
+}

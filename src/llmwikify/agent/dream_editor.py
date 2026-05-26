@@ -21,16 +21,26 @@ class ProposalManager:
 
     Reuses NotificationManager pattern: in-memory list with UUID IDs,
     timestamps, status tracking, and max size limit.
+
+    When db and wiki_id are provided, proposals are persisted to SQLite.
     """
 
-    AUTO_APPROVE_THRESHOLD = 100  # Character count threshold for auto-approve
+    AUTO_APPROVE_THRESHOLD = 100
 
-    def __init__(self, max_size: int = 200):
+    def __init__(self, max_size: int = 200, db: Any = None, wiki_id: str | None = None):
         self._proposals: list[dict[str, Any]] = []
         self._max_size = max_size
+        self.db = db
+        self.wiki_id = wiki_id
+        if db and wiki_id:
+            self._proposals = db.get_proposals(wiki_id, status=None)
+
+    def _sync_to_db(self, proposal: dict) -> None:
+        if self.db and self.wiki_id:
+            proposal["wiki_id"] = self.wiki_id
+            self.db.save_proposal(proposal)
 
     def _add_proposal(self, proposal: dict) -> dict:
-        """Add a proposal with LRU eviction (reuses NotificationManager pattern)."""
         self._proposals.append(proposal)
         if len(self._proposals) > self._max_size:
             self._proposals = self._proposals[-self._max_size:]
@@ -44,7 +54,6 @@ class ProposalManager:
         reason: str,
         source_entries: list[dict] | None = None,
     ) -> dict:
-        """Create a new edit proposal."""
         proposal = {
             "id": f"prop-{uuid.uuid4().hex[:6]}",
             "page_name": page_name,
@@ -57,14 +66,11 @@ class ProposalManager:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "reviewed_at": None,
         }
-        return self._add_proposal(proposal)
+        self._add_proposal(proposal)
+        self._sync_to_db(proposal)
+        return proposal
 
     def auto_approve_pending(self) -> list[dict]:
-        """Auto-approve proposals that meet the small-edit threshold.
-
-        Criteria: append edit type AND content_length < AUTO_APPROVE_THRESHOLD.
-        Returns list of auto-approved proposals.
-        """
         auto_approved = []
         for p in self._proposals:
             if p["status"] != "pending":
@@ -73,29 +79,29 @@ class ProposalManager:
                     and p["content_length"] < self.AUTO_APPROVE_THRESHOLD):
                 p["status"] = "auto_approved"
                 p["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+                self._sync_to_db(p)
                 auto_approved.append(p)
         return auto_approved
 
     def approve(self, proposal_id: str) -> dict | None:
-        """Approve a proposal."""
         for p in self._proposals:
             if p["id"] == proposal_id:
                 p["status"] = "approved"
                 p["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+                self._sync_to_db(p)
                 return p
         return None
 
     def reject(self, proposal_id: str) -> dict | None:
-        """Reject a proposal."""
         for p in self._proposals:
             if p["id"] == proposal_id:
                 p["status"] = "rejected"
                 p["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+                self._sync_to_db(p)
                 return p
         return None
 
     def batch_approve(self, proposal_ids: list[str]) -> list[dict]:
-        """Approve multiple proposals."""
         results = []
         for pid in proposal_ids:
             result = self.approve(pid)
@@ -104,11 +110,9 @@ class ProposalManager:
         return results
 
     def get_pending(self) -> list[dict]:
-        """Get all pending proposals."""
         return [p for p in self._proposals if p["status"] == "pending"]
 
     def get_pending_by_page(self) -> dict[str, list[dict]]:
-        """Get pending proposals grouped by page name."""
         groups: dict[str, list[dict]] = {}
         for p in self._proposals:
             if p["status"] != "pending":
@@ -120,7 +124,8 @@ class ProposalManager:
         return groups
 
     def get_stats(self) -> dict:
-        """Get proposal statistics."""
+        if self.db and self.wiki_id:
+            return self.db.get_proposal_stats(self.wiki_id)
         stats = {"pending": 0, "approved": 0, "rejected": 0, "auto_approved": 0, "applied": 0}
         for p in self._proposals:
             status = p.get("status", "pending")
@@ -129,14 +134,12 @@ class ProposalManager:
         return stats
 
     def get_proposal(self, proposal_id: str) -> dict | None:
-        """Get a specific proposal by ID."""
         for p in self._proposals:
             if p["id"] == proposal_id:
                 return p
         return None
 
     def clear_applied(self) -> int:
-        """Clear applied proposals to free memory. Returns count cleared."""
         before = len(self._proposals)
         self._proposals = [p for p in self._proposals if p["status"] != "applied"]
         return before - len(self._proposals)
@@ -159,12 +162,12 @@ class DreamEditor:
     4. Log all edits for reversibility
     """
 
-    def __init__(self, wiki: Any, data_dir: Path | None = None):
+    def __init__(self, wiki: Any, data_dir: Path | None = None, db: Any = None, wiki_id: str | None = None):
         self.wiki = wiki
         self.data_dir = data_dir or wiki.root / ".llmwikify" / "agent"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.edits_file = self.data_dir / "edits.jsonl"
-        self.proposal_manager = ProposalManager()
+        self.proposal_manager = ProposalManager(db=db, wiki_id=wiki_id)
 
     def run_dream(self) -> dict:
         """Execute a Dream cycle: generate proposals from sinks, auto-approve small edits.
@@ -324,6 +327,7 @@ class DreamEditor:
             try:
                 self._apply_single_proposal(proposal)
                 proposal["status"] = "applied"
+                self.proposal_manager._sync_to_db(proposal)
                 results["applied"] += 1
             except Exception as e:
                 logger.error(f"Failed to apply proposal {proposal['id']}: {e}")

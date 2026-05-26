@@ -134,8 +134,8 @@ def _register_agent_routes_single(app: FastAPI, wiki: Wiki) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
 
     from llmwikify.core.wiki_registry import WikiRegistry
-    registry = WikiRegistry.get_instance()
-    registry.register_wiki(wiki_id="default", name="default", root=wiki.root)
+    registry = WikiRegistry(config={})
+    registry.register_wiki(wiki_id="default", name="default", root=wiki.root, is_default=True)
 
     agent_service = AgentService(registry, data_dir)
     set_agent_service(agent_service)
@@ -144,6 +144,9 @@ def _register_agent_routes_single(app: FastAPI, wiki: Wiki) -> None:
     app.include_router(agent_router)
 
     _mount_agent_spa(app)
+
+
+def _register_multi_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
     """Register multi-wiki routes with wiki_id parameter."""
 
     # Helper to get wiki by ID
@@ -369,6 +372,15 @@ def _register_agent_routes_single(app: FastAPI, wiki: Wiki) -> None:
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
 
+    @wiki_router.get("/{wiki_id}/sink/status")
+    async def wiki_sink_status_by_id(wiki_id: str):
+        """Get sink buffer status for a specific wiki."""
+        try:
+            wiki = get_wiki_by_id(wiki_id)
+            return wiki.sink_status()
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+
     # Legacy fallback routes (backward compatible - use default wiki)
     @wiki_router.get("/status")
     async def wiki_status_legacy():
@@ -440,8 +452,14 @@ def _mount_agent_spa(app: FastAPI) -> None:
     """Mount Agent SPA to /agent path."""
     from fastapi.staticfiles import StaticFiles
 
-    pkg_dir = Path(__file__).parent.parent.parent.parent
-    agent_dist = pkg_dir / "web" / "webui-agent" / "dist"
+    pkg_dir = Path(__file__).parent.parent.parent.parent.parent
+    agent_dist = pkg_dir / "src" / "llmwikify" / "web" / "webui-agent" / "dist"
 
     if agent_dist.exists():
         app.mount("/agent", StaticFiles(directory=str(agent_dist), html=True), name="agent_static")
+
+        from starlette.responses import RedirectResponse
+
+        @app.get("/agent", include_in_schema=False)
+        async def agent_root_redirect():
+            return RedirectResponse(url="/agent/")

@@ -97,6 +97,9 @@ class WikiDiscovery:
         if depth < 0:
             return db_files
 
+        if (root / DB_FILENAME).exists():
+            db_files.append(root / DB_FILENAME)
+
         try:
             for item in root.iterdir():
                 if not item.is_dir():

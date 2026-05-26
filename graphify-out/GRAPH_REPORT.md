@@ -1,0 +1,2082 @@
+# Graph Report - llmwikify  (2026-05-26)
+
+## Corpus Check
+- 237 files · ~219,612 words
+- Verdict: corpus is large enough that graph structure adds value.
+
+## Summary
+- 6759 nodes · 10364 edges · 481 communities (400 shown, 81 thin omitted)
+- Extraction: 86% EXTRACTED · 14% INFERRED · 0% AMBIGUOUS · INFERRED: 1415 edges (avg confidence: 0.66)
+- Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `0954e5d2`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
+
+## Community Hubs (Navigation)
+- [[_COMMUNITY_Community 0|Community 0]]
+- [[_COMMUNITY_Community 1|Community 1]]
+- [[_COMMUNITY_Community 2|Community 2]]
+- [[_COMMUNITY_Community 3|Community 3]]
+- [[_COMMUNITY_Community 4|Community 4]]
+- [[_COMMUNITY_Community 5|Community 5]]
+- [[_COMMUNITY_Community 6|Community 6]]
+- [[_COMMUNITY_Community 7|Community 7]]
+- [[_COMMUNITY_Community 8|Community 8]]
+- [[_COMMUNITY_Community 9|Community 9]]
+- [[_COMMUNITY_Community 10|Community 10]]
+- [[_COMMUNITY_Community 11|Community 11]]
+- [[_COMMUNITY_Community 12|Community 12]]
+- [[_COMMUNITY_Community 13|Community 13]]
+- [[_COMMUNITY_Community 14|Community 14]]
+- [[_COMMUNITY_Community 15|Community 15]]
+- [[_COMMUNITY_Community 16|Community 16]]
+- [[_COMMUNITY_Community 17|Community 17]]
+- [[_COMMUNITY_Community 18|Community 18]]
+- [[_COMMUNITY_Community 19|Community 19]]
+- [[_COMMUNITY_Community 20|Community 20]]
+- [[_COMMUNITY_Community 21|Community 21]]
+- [[_COMMUNITY_Community 22|Community 22]]
+- [[_COMMUNITY_Community 23|Community 23]]
+- [[_COMMUNITY_Community 24|Community 24]]
+- [[_COMMUNITY_Community 25|Community 25]]
+- [[_COMMUNITY_Community 26|Community 26]]
+- [[_COMMUNITY_Community 27|Community 27]]
+- [[_COMMUNITY_Community 28|Community 28]]
+- [[_COMMUNITY_Community 29|Community 29]]
+- [[_COMMUNITY_Community 30|Community 30]]
+- [[_COMMUNITY_Community 31|Community 31]]
+- [[_COMMUNITY_Community 32|Community 32]]
+- [[_COMMUNITY_Community 33|Community 33]]
+- [[_COMMUNITY_Community 34|Community 34]]
+- [[_COMMUNITY_Community 35|Community 35]]
+- [[_COMMUNITY_Community 36|Community 36]]
+- [[_COMMUNITY_Community 37|Community 37]]
+- [[_COMMUNITY_Community 38|Community 38]]
+- [[_COMMUNITY_Community 39|Community 39]]
+- [[_COMMUNITY_Community 40|Community 40]]
+- [[_COMMUNITY_Community 41|Community 41]]
+- [[_COMMUNITY_Community 42|Community 42]]
+- [[_COMMUNITY_Community 43|Community 43]]
+- [[_COMMUNITY_Community 44|Community 44]]
+- [[_COMMUNITY_Community 45|Community 45]]
+- [[_COMMUNITY_Community 46|Community 46]]
+- [[_COMMUNITY_Community 47|Community 47]]
+- [[_COMMUNITY_Community 48|Community 48]]
+- [[_COMMUNITY_Community 49|Community 49]]
+- [[_COMMUNITY_Community 50|Community 50]]
+- [[_COMMUNITY_Community 51|Community 51]]
+- [[_COMMUNITY_Community 52|Community 52]]
+- [[_COMMUNITY_Community 53|Community 53]]
+- [[_COMMUNITY_Community 54|Community 54]]
+- [[_COMMUNITY_Community 55|Community 55]]
+- [[_COMMUNITY_Community 56|Community 56]]
+- [[_COMMUNITY_Community 57|Community 57]]
+- [[_COMMUNITY_Community 58|Community 58]]
+- [[_COMMUNITY_Community 59|Community 59]]
+- [[_COMMUNITY_Community 60|Community 60]]
+- [[_COMMUNITY_Community 61|Community 61]]
+- [[_COMMUNITY_Community 62|Community 62]]
+- [[_COMMUNITY_Community 63|Community 63]]
+- [[_COMMUNITY_Community 64|Community 64]]
+- [[_COMMUNITY_Community 65|Community 65]]
+- [[_COMMUNITY_Community 66|Community 66]]
+- [[_COMMUNITY_Community 67|Community 67]]
+- [[_COMMUNITY_Community 68|Community 68]]
+- [[_COMMUNITY_Community 69|Community 69]]
+- [[_COMMUNITY_Community 70|Community 70]]
+- [[_COMMUNITY_Community 71|Community 71]]
+- [[_COMMUNITY_Community 72|Community 72]]
+- [[_COMMUNITY_Community 73|Community 73]]
+- [[_COMMUNITY_Community 74|Community 74]]
+- [[_COMMUNITY_Community 75|Community 75]]
+- [[_COMMUNITY_Community 76|Community 76]]
+- [[_COMMUNITY_Community 77|Community 77]]
+- [[_COMMUNITY_Community 78|Community 78]]
+- [[_COMMUNITY_Community 79|Community 79]]
+- [[_COMMUNITY_Community 80|Community 80]]
+- [[_COMMUNITY_Community 81|Community 81]]
+- [[_COMMUNITY_Community 82|Community 82]]
+- [[_COMMUNITY_Community 83|Community 83]]
+- [[_COMMUNITY_Community 84|Community 84]]
+- [[_COMMUNITY_Community 85|Community 85]]
+- [[_COMMUNITY_Community 86|Community 86]]
+- [[_COMMUNITY_Community 87|Community 87]]
+- [[_COMMUNITY_Community 88|Community 88]]
+- [[_COMMUNITY_Community 89|Community 89]]
+- [[_COMMUNITY_Community 90|Community 90]]
+- [[_COMMUNITY_Community 91|Community 91]]
+- [[_COMMUNITY_Community 92|Community 92]]
+- [[_COMMUNITY_Community 93|Community 93]]
+- [[_COMMUNITY_Community 94|Community 94]]
+- [[_COMMUNITY_Community 95|Community 95]]
+- [[_COMMUNITY_Community 96|Community 96]]
+- [[_COMMUNITY_Community 97|Community 97]]
+- [[_COMMUNITY_Community 98|Community 98]]
+- [[_COMMUNITY_Community 99|Community 99]]
+- [[_COMMUNITY_Community 100|Community 100]]
+- [[_COMMUNITY_Community 101|Community 101]]
+- [[_COMMUNITY_Community 102|Community 102]]
+- [[_COMMUNITY_Community 103|Community 103]]
+- [[_COMMUNITY_Community 104|Community 104]]
+- [[_COMMUNITY_Community 105|Community 105]]
+- [[_COMMUNITY_Community 106|Community 106]]
+- [[_COMMUNITY_Community 107|Community 107]]
+- [[_COMMUNITY_Community 108|Community 108]]
+- [[_COMMUNITY_Community 109|Community 109]]
+- [[_COMMUNITY_Community 110|Community 110]]
+- [[_COMMUNITY_Community 111|Community 111]]
+- [[_COMMUNITY_Community 112|Community 112]]
+- [[_COMMUNITY_Community 113|Community 113]]
+- [[_COMMUNITY_Community 114|Community 114]]
+- [[_COMMUNITY_Community 115|Community 115]]
+- [[_COMMUNITY_Community 116|Community 116]]
+- [[_COMMUNITY_Community 117|Community 117]]
+- [[_COMMUNITY_Community 118|Community 118]]
+- [[_COMMUNITY_Community 120|Community 120]]
+- [[_COMMUNITY_Community 121|Community 121]]
+- [[_COMMUNITY_Community 122|Community 122]]
+- [[_COMMUNITY_Community 123|Community 123]]
+- [[_COMMUNITY_Community 124|Community 124]]
+- [[_COMMUNITY_Community 125|Community 125]]
+- [[_COMMUNITY_Community 126|Community 126]]
+- [[_COMMUNITY_Community 127|Community 127]]
+- [[_COMMUNITY_Community 128|Community 128]]
+- [[_COMMUNITY_Community 129|Community 129]]
+- [[_COMMUNITY_Community 130|Community 130]]
+- [[_COMMUNITY_Community 131|Community 131]]
+- [[_COMMUNITY_Community 132|Community 132]]
+- [[_COMMUNITY_Community 133|Community 133]]
+- [[_COMMUNITY_Community 134|Community 134]]
+- [[_COMMUNITY_Community 135|Community 135]]
+- [[_COMMUNITY_Community 136|Community 136]]
+- [[_COMMUNITY_Community 137|Community 137]]
+- [[_COMMUNITY_Community 138|Community 138]]
+- [[_COMMUNITY_Community 139|Community 139]]
+- [[_COMMUNITY_Community 140|Community 140]]
+- [[_COMMUNITY_Community 141|Community 141]]
+- [[_COMMUNITY_Community 142|Community 142]]
+- [[_COMMUNITY_Community 143|Community 143]]
+- [[_COMMUNITY_Community 144|Community 144]]
+- [[_COMMUNITY_Community 145|Community 145]]
+- [[_COMMUNITY_Community 146|Community 146]]
+- [[_COMMUNITY_Community 147|Community 147]]
+- [[_COMMUNITY_Community 148|Community 148]]
+- [[_COMMUNITY_Community 149|Community 149]]
+- [[_COMMUNITY_Community 150|Community 150]]
+- [[_COMMUNITY_Community 151|Community 151]]
+- [[_COMMUNITY_Community 152|Community 152]]
+- [[_COMMUNITY_Community 153|Community 153]]
+- [[_COMMUNITY_Community 154|Community 154]]
+- [[_COMMUNITY_Community 155|Community 155]]
+- [[_COMMUNITY_Community 156|Community 156]]
+- [[_COMMUNITY_Community 157|Community 157]]
+- [[_COMMUNITY_Community 158|Community 158]]
+- [[_COMMUNITY_Community 159|Community 159]]
+- [[_COMMUNITY_Community 160|Community 160]]
+- [[_COMMUNITY_Community 161|Community 161]]
+- [[_COMMUNITY_Community 162|Community 162]]
+- [[_COMMUNITY_Community 163|Community 163]]
+- [[_COMMUNITY_Community 164|Community 164]]
+- [[_COMMUNITY_Community 165|Community 165]]
+- [[_COMMUNITY_Community 166|Community 166]]
+- [[_COMMUNITY_Community 167|Community 167]]
+- [[_COMMUNITY_Community 168|Community 168]]
+- [[_COMMUNITY_Community 169|Community 169]]
+- [[_COMMUNITY_Community 170|Community 170]]
+- [[_COMMUNITY_Community 171|Community 171]]
+- [[_COMMUNITY_Community 172|Community 172]]
+- [[_COMMUNITY_Community 173|Community 173]]
+- [[_COMMUNITY_Community 174|Community 174]]
+- [[_COMMUNITY_Community 175|Community 175]]
+- [[_COMMUNITY_Community 176|Community 176]]
+- [[_COMMUNITY_Community 177|Community 177]]
+- [[_COMMUNITY_Community 178|Community 178]]
+- [[_COMMUNITY_Community 179|Community 179]]
+- [[_COMMUNITY_Community 180|Community 180]]
+- [[_COMMUNITY_Community 181|Community 181]]
+- [[_COMMUNITY_Community 182|Community 182]]
+- [[_COMMUNITY_Community 183|Community 183]]
+- [[_COMMUNITY_Community 184|Community 184]]
+- [[_COMMUNITY_Community 185|Community 185]]
+- [[_COMMUNITY_Community 186|Community 186]]
+- [[_COMMUNITY_Community 187|Community 187]]
+- [[_COMMUNITY_Community 188|Community 188]]
+- [[_COMMUNITY_Community 189|Community 189]]
+- [[_COMMUNITY_Community 190|Community 190]]
+- [[_COMMUNITY_Community 191|Community 191]]
+- [[_COMMUNITY_Community 192|Community 192]]
+- [[_COMMUNITY_Community 193|Community 193]]
+- [[_COMMUNITY_Community 194|Community 194]]
+- [[_COMMUNITY_Community 195|Community 195]]
+- [[_COMMUNITY_Community 196|Community 196]]
+- [[_COMMUNITY_Community 197|Community 197]]
+- [[_COMMUNITY_Community 198|Community 198]]
+- [[_COMMUNITY_Community 199|Community 199]]
+- [[_COMMUNITY_Community 200|Community 200]]
+- [[_COMMUNITY_Community 201|Community 201]]
+- [[_COMMUNITY_Community 202|Community 202]]
+- [[_COMMUNITY_Community 203|Community 203]]
+- [[_COMMUNITY_Community 204|Community 204]]
+- [[_COMMUNITY_Community 205|Community 205]]
+- [[_COMMUNITY_Community 206|Community 206]]
+- [[_COMMUNITY_Community 207|Community 207]]
+- [[_COMMUNITY_Community 208|Community 208]]
+- [[_COMMUNITY_Community 209|Community 209]]
+- [[_COMMUNITY_Community 210|Community 210]]
+- [[_COMMUNITY_Community 211|Community 211]]
+- [[_COMMUNITY_Community 212|Community 212]]
+- [[_COMMUNITY_Community 213|Community 213]]
+- [[_COMMUNITY_Community 214|Community 214]]
+- [[_COMMUNITY_Community 215|Community 215]]
+- [[_COMMUNITY_Community 216|Community 216]]
+- [[_COMMUNITY_Community 217|Community 217]]
+- [[_COMMUNITY_Community 218|Community 218]]
+- [[_COMMUNITY_Community 219|Community 219]]
+- [[_COMMUNITY_Community 220|Community 220]]
+- [[_COMMUNITY_Community 221|Community 221]]
+- [[_COMMUNITY_Community 222|Community 222]]
+- [[_COMMUNITY_Community 223|Community 223]]
+- [[_COMMUNITY_Community 224|Community 224]]
+- [[_COMMUNITY_Community 225|Community 225]]
+- [[_COMMUNITY_Community 226|Community 226]]
+- [[_COMMUNITY_Community 227|Community 227]]
+- [[_COMMUNITY_Community 228|Community 228]]
+- [[_COMMUNITY_Community 229|Community 229]]
+- [[_COMMUNITY_Community 230|Community 230]]
+- [[_COMMUNITY_Community 231|Community 231]]
+- [[_COMMUNITY_Community 232|Community 232]]
+- [[_COMMUNITY_Community 233|Community 233]]
+- [[_COMMUNITY_Community 234|Community 234]]
+- [[_COMMUNITY_Community 235|Community 235]]
+- [[_COMMUNITY_Community 236|Community 236]]
+- [[_COMMUNITY_Community 237|Community 237]]
+- [[_COMMUNITY_Community 238|Community 238]]
+- [[_COMMUNITY_Community 239|Community 239]]
+- [[_COMMUNITY_Community 240|Community 240]]
+- [[_COMMUNITY_Community 241|Community 241]]
+- [[_COMMUNITY_Community 242|Community 242]]
+- [[_COMMUNITY_Community 243|Community 243]]
+- [[_COMMUNITY_Community 244|Community 244]]
+- [[_COMMUNITY_Community 245|Community 245]]
+- [[_COMMUNITY_Community 246|Community 246]]
+- [[_COMMUNITY_Community 247|Community 247]]
+- [[_COMMUNITY_Community 248|Community 248]]
+- [[_COMMUNITY_Community 249|Community 249]]
+- [[_COMMUNITY_Community 250|Community 250]]
+- [[_COMMUNITY_Community 251|Community 251]]
+- [[_COMMUNITY_Community 252|Community 252]]
+- [[_COMMUNITY_Community 253|Community 253]]
+- [[_COMMUNITY_Community 254|Community 254]]
+- [[_COMMUNITY_Community 255|Community 255]]
+- [[_COMMUNITY_Community 256|Community 256]]
+- [[_COMMUNITY_Community 257|Community 257]]
+- [[_COMMUNITY_Community 258|Community 258]]
+- [[_COMMUNITY_Community 259|Community 259]]
+- [[_COMMUNITY_Community 260|Community 260]]
+- [[_COMMUNITY_Community 261|Community 261]]
+- [[_COMMUNITY_Community 262|Community 262]]
+- [[_COMMUNITY_Community 263|Community 263]]
+- [[_COMMUNITY_Community 264|Community 264]]
+- [[_COMMUNITY_Community 265|Community 265]]
+- [[_COMMUNITY_Community 266|Community 266]]
+- [[_COMMUNITY_Community 267|Community 267]]
+- [[_COMMUNITY_Community 268|Community 268]]
+- [[_COMMUNITY_Community 269|Community 269]]
+- [[_COMMUNITY_Community 270|Community 270]]
+- [[_COMMUNITY_Community 271|Community 271]]
+- [[_COMMUNITY_Community 272|Community 272]]
+- [[_COMMUNITY_Community 273|Community 273]]
+- [[_COMMUNITY_Community 274|Community 274]]
+- [[_COMMUNITY_Community 275|Community 275]]
+- [[_COMMUNITY_Community 276|Community 276]]
+- [[_COMMUNITY_Community 277|Community 277]]
+- [[_COMMUNITY_Community 278|Community 278]]
+- [[_COMMUNITY_Community 279|Community 279]]
+- [[_COMMUNITY_Community 280|Community 280]]
+- [[_COMMUNITY_Community 281|Community 281]]
+- [[_COMMUNITY_Community 282|Community 282]]
+- [[_COMMUNITY_Community 283|Community 283]]
+- [[_COMMUNITY_Community 284|Community 284]]
+- [[_COMMUNITY_Community 285|Community 285]]
+- [[_COMMUNITY_Community 286|Community 286]]
+- [[_COMMUNITY_Community 287|Community 287]]
+- [[_COMMUNITY_Community 288|Community 288]]
+- [[_COMMUNITY_Community 289|Community 289]]
+- [[_COMMUNITY_Community 290|Community 290]]
+- [[_COMMUNITY_Community 291|Community 291]]
+- [[_COMMUNITY_Community 292|Community 292]]
+- [[_COMMUNITY_Community 293|Community 293]]
+- [[_COMMUNITY_Community 294|Community 294]]
+- [[_COMMUNITY_Community 295|Community 295]]
+- [[_COMMUNITY_Community 296|Community 296]]
+- [[_COMMUNITY_Community 297|Community 297]]
+- [[_COMMUNITY_Community 298|Community 298]]
+- [[_COMMUNITY_Community 299|Community 299]]
+- [[_COMMUNITY_Community 300|Community 300]]
+- [[_COMMUNITY_Community 301|Community 301]]
+- [[_COMMUNITY_Community 302|Community 302]]
+- [[_COMMUNITY_Community 303|Community 303]]
+- [[_COMMUNITY_Community 304|Community 304]]
+- [[_COMMUNITY_Community 305|Community 305]]
+- [[_COMMUNITY_Community 306|Community 306]]
+- [[_COMMUNITY_Community 307|Community 307]]
+- [[_COMMUNITY_Community 308|Community 308]]
+- [[_COMMUNITY_Community 309|Community 309]]
+- [[_COMMUNITY_Community 310|Community 310]]
+- [[_COMMUNITY_Community 311|Community 311]]
+- [[_COMMUNITY_Community 312|Community 312]]
+- [[_COMMUNITY_Community 313|Community 313]]
+- [[_COMMUNITY_Community 314|Community 314]]
+- [[_COMMUNITY_Community 315|Community 315]]
+- [[_COMMUNITY_Community 316|Community 316]]
+- [[_COMMUNITY_Community 317|Community 317]]
+- [[_COMMUNITY_Community 318|Community 318]]
+- [[_COMMUNITY_Community 319|Community 319]]
+- [[_COMMUNITY_Community 320|Community 320]]
+- [[_COMMUNITY_Community 321|Community 321]]
+- [[_COMMUNITY_Community 322|Community 322]]
+- [[_COMMUNITY_Community 323|Community 323]]
+- [[_COMMUNITY_Community 324|Community 324]]
+- [[_COMMUNITY_Community 325|Community 325]]
+- [[_COMMUNITY_Community 326|Community 326]]
+- [[_COMMUNITY_Community 327|Community 327]]
+- [[_COMMUNITY_Community 328|Community 328]]
+- [[_COMMUNITY_Community 329|Community 329]]
+- [[_COMMUNITY_Community 330|Community 330]]
+- [[_COMMUNITY_Community 331|Community 331]]
+- [[_COMMUNITY_Community 332|Community 332]]
+- [[_COMMUNITY_Community 333|Community 333]]
+- [[_COMMUNITY_Community 334|Community 334]]
+- [[_COMMUNITY_Community 335|Community 335]]
+- [[_COMMUNITY_Community 336|Community 336]]
+- [[_COMMUNITY_Community 337|Community 337]]
+- [[_COMMUNITY_Community 338|Community 338]]
+- [[_COMMUNITY_Community 339|Community 339]]
+- [[_COMMUNITY_Community 340|Community 340]]
+- [[_COMMUNITY_Community 341|Community 341]]
+- [[_COMMUNITY_Community 342|Community 342]]
+- [[_COMMUNITY_Community 343|Community 343]]
+- [[_COMMUNITY_Community 344|Community 344]]
+- [[_COMMUNITY_Community 345|Community 345]]
+- [[_COMMUNITY_Community 346|Community 346]]
+- [[_COMMUNITY_Community 347|Community 347]]
+- [[_COMMUNITY_Community 348|Community 348]]
+- [[_COMMUNITY_Community 349|Community 349]]
+- [[_COMMUNITY_Community 350|Community 350]]
+- [[_COMMUNITY_Community 351|Community 351]]
+- [[_COMMUNITY_Community 352|Community 352]]
+- [[_COMMUNITY_Community 353|Community 353]]
+- [[_COMMUNITY_Community 354|Community 354]]
+- [[_COMMUNITY_Community 355|Community 355]]
+- [[_COMMUNITY_Community 356|Community 356]]
+- [[_COMMUNITY_Community 357|Community 357]]
+- [[_COMMUNITY_Community 358|Community 358]]
+- [[_COMMUNITY_Community 359|Community 359]]
+- [[_COMMUNITY_Community 360|Community 360]]
+- [[_COMMUNITY_Community 361|Community 361]]
+- [[_COMMUNITY_Community 362|Community 362]]
+- [[_COMMUNITY_Community 363|Community 363]]
+- [[_COMMUNITY_Community 364|Community 364]]
+- [[_COMMUNITY_Community 365|Community 365]]
+- [[_COMMUNITY_Community 366|Community 366]]
+- [[_COMMUNITY_Community 367|Community 367]]
+- [[_COMMUNITY_Community 368|Community 368]]
+- [[_COMMUNITY_Community 369|Community 369]]
+- [[_COMMUNITY_Community 370|Community 370]]
+- [[_COMMUNITY_Community 371|Community 371]]
+- [[_COMMUNITY_Community 372|Community 372]]
+- [[_COMMUNITY_Community 373|Community 373]]
+- [[_COMMUNITY_Community 374|Community 374]]
+- [[_COMMUNITY_Community 375|Community 375]]
+- [[_COMMUNITY_Community 376|Community 376]]
+- [[_COMMUNITY_Community 377|Community 377]]
+- [[_COMMUNITY_Community 378|Community 378]]
+- [[_COMMUNITY_Community 379|Community 379]]
+- [[_COMMUNITY_Community 380|Community 380]]
+- [[_COMMUNITY_Community 381|Community 381]]
+- [[_COMMUNITY_Community 382|Community 382]]
+- [[_COMMUNITY_Community 383|Community 383]]
+- [[_COMMUNITY_Community 384|Community 384]]
+- [[_COMMUNITY_Community 385|Community 385]]
+- [[_COMMUNITY_Community 386|Community 386]]
+- [[_COMMUNITY_Community 387|Community 387]]
+- [[_COMMUNITY_Community 388|Community 388]]
+- [[_COMMUNITY_Community 389|Community 389]]
+- [[_COMMUNITY_Community 390|Community 390]]
+- [[_COMMUNITY_Community 391|Community 391]]
+- [[_COMMUNITY_Community 392|Community 392]]
+- [[_COMMUNITY_Community 393|Community 393]]
+- [[_COMMUNITY_Community 394|Community 394]]
+- [[_COMMUNITY_Community 395|Community 395]]
+- [[_COMMUNITY_Community 396|Community 396]]
+- [[_COMMUNITY_Community 397|Community 397]]
+- [[_COMMUNITY_Community 398|Community 398]]
+- [[_COMMUNITY_Community 399|Community 399]]
+- [[_COMMUNITY_Community 400|Community 400]]
+- [[_COMMUNITY_Community 401|Community 401]]
+- [[_COMMUNITY_Community 402|Community 402]]
+- [[_COMMUNITY_Community 403|Community 403]]
+- [[_COMMUNITY_Community 404|Community 404]]
+- [[_COMMUNITY_Community 405|Community 405]]
+- [[_COMMUNITY_Community 406|Community 406]]
+- [[_COMMUNITY_Community 407|Community 407]]
+- [[_COMMUNITY_Community 408|Community 408]]
+- [[_COMMUNITY_Community 409|Community 409]]
+- [[_COMMUNITY_Community 410|Community 410]]
+- [[_COMMUNITY_Community 411|Community 411]]
+- [[_COMMUNITY_Community 412|Community 412]]
+- [[_COMMUNITY_Community 413|Community 413]]
+- [[_COMMUNITY_Community 414|Community 414]]
+- [[_COMMUNITY_Community 415|Community 415]]
+- [[_COMMUNITY_Community 416|Community 416]]
+- [[_COMMUNITY_Community 417|Community 417]]
+- [[_COMMUNITY_Community 418|Community 418]]
+- [[_COMMUNITY_Community 419|Community 419]]
+- [[_COMMUNITY_Community 420|Community 420]]
+- [[_COMMUNITY_Community 421|Community 421]]
+- [[_COMMUNITY_Community 422|Community 422]]
+- [[_COMMUNITY_Community 423|Community 423]]
+- [[_COMMUNITY_Community 424|Community 424]]
+- [[_COMMUNITY_Community 425|Community 425]]
+- [[_COMMUNITY_Community 426|Community 426]]
+- [[_COMMUNITY_Community 427|Community 427]]
+- [[_COMMUNITY_Community 428|Community 428]]
+- [[_COMMUNITY_Community 429|Community 429]]
+- [[_COMMUNITY_Community 430|Community 430]]
+- [[_COMMUNITY_Community 431|Community 431]]
+- [[_COMMUNITY_Community 432|Community 432]]
+- [[_COMMUNITY_Community 433|Community 433]]
+- [[_COMMUNITY_Community 434|Community 434]]
+- [[_COMMUNITY_Community 435|Community 435]]
+- [[_COMMUNITY_Community 436|Community 436]]
+- [[_COMMUNITY_Community 437|Community 437]]
+- [[_COMMUNITY_Community 438|Community 438]]
+- [[_COMMUNITY_Community 439|Community 439]]
+- [[_COMMUNITY_Community 440|Community 440]]
+- [[_COMMUNITY_Community 441|Community 441]]
+- [[_COMMUNITY_Community 442|Community 442]]
+- [[_COMMUNITY_Community 443|Community 443]]
+- [[_COMMUNITY_Community 444|Community 444]]
+- [[_COMMUNITY_Community 445|Community 445]]
+- [[_COMMUNITY_Community 446|Community 446]]
+- [[_COMMUNITY_Community 447|Community 447]]
+- [[_COMMUNITY_Community 448|Community 448]]
+- [[_COMMUNITY_Community 449|Community 449]]
+- [[_COMMUNITY_Community 450|Community 450]]
+- [[_COMMUNITY_Community 451|Community 451]]
+- [[_COMMUNITY_Community 452|Community 452]]
+- [[_COMMUNITY_Community 453|Community 453]]
+- [[_COMMUNITY_Community 454|Community 454]]
+- [[_COMMUNITY_Community 455|Community 455]]
+- [[_COMMUNITY_Community 456|Community 456]]
+- [[_COMMUNITY_Community 457|Community 457]]
+- [[_COMMUNITY_Community 458|Community 458]]
+- [[_COMMUNITY_Community 468|Community 468]]
+- [[_COMMUNITY_Community 469|Community 469]]
+- [[_COMMUNITY_Community 470|Community 470]]
+- [[_COMMUNITY_Community 471|Community 471]]
+- [[_COMMUNITY_Community 472|Community 472]]
+- [[_COMMUNITY_Community 473|Community 473]]
+- [[_COMMUNITY_Community 474|Community 474]]
+- [[_COMMUNITY_Community 475|Community 475]]
+- [[_COMMUNITY_Community 476|Community 476]]
+- [[_COMMUNITY_Community 477|Community 477]]
+
+## God Nodes (most connected - your core abstractions)
+1. `PromptRegistry` - 138 edges
+2. `J` - 89 edges
+3. `Wiki` - 76 edges
+4. `path` - 74 edges
+5. `WikiAnalyzer` - 69 edges
+6. `WikiToolRegistry` - 66 edges
+7. `WikiCLI` - 59 edges
+8. `RelationEngine` - 57 edges
+9. `WikiRegistry` - 53 edges
+10. `WikiIndex` - 50 edges
+
+## Surprising Connections (you probably didn't know these)
+- `main()` --calls--> `path`  [INFERRED]
+  scripts/eval_prompts.py → src/llmwikify/templates/skill_llmwikify/resources/cli-reference.md
+- `detect_source_type()` --calls--> `path`  [INFERRED]
+  archive/llmwikify_original.py → src/llmwikify/templates/skill_llmwikify/resources/cli-reference.md
+- `extract()` --calls--> `path`  [INFERRED]
+  archive/llmwikify_original.py → src/llmwikify/templates/skill_llmwikify/resources/cli-reference.md
+- `main()` --calls--> `path`  [INFERRED]
+  archive/llmwikify_original.py → src/llmwikify/templates/skill_llmwikify/resources/cli-reference.md
+- `example_1_create_and_open()` --calls--> `path`  [INFERRED]
+  examples/basic_usage.py → src/llmwikify/templates/skill_llmwikify/resources/cli-reference.md
+
+## Communities (481 total, 81 thin omitted)
+
+### Community 0 - "Community 0"
+Cohesion: 0.01
+Nodes (75): Ai(), an(), ao(), bezierCurveTo(), Bx(), By, ch(), Ci() (+67 more)
+
+### Community 1 - "Community 1"
+Cohesion: 0.05
+Nodes (27): _(), a, b, c(), d(), e(), f(), g() (+19 more)
+
+### Community 2 - "Community 2"
+Cohesion: 0.06
+Nodes (80): _(), a, Ag(), ap(), aw(), ax(), ay, b() (+72 more)
+
+### Community 3 - "Community 3"
+Cohesion: 0.06
+Nodes (31): CheckResult, main(), PromptEvaluator, Offline prompt evaluation engine., Run all evaluation checks and return results., Load all prompt YAML files., Check 1: All templates load and have required fields., Check 2: All templates render without Jinja2 errors. (+23 more)
+
+### Community 4 - "Community 4"
+Cohesion: 0.05
+Nodes (60): build_visualization_data(), Graph visualization utilities for llmwikify.  Shared between MCP tools and REST, Build knowledge graph data optimized for visualization.      This is the single, Debug tests to diagnose blank Insights page issue., Debug: Check API responses directly., Debug: Inspect DOM structure of Insights page., Debug: Monitor network requests., test_debug_api_responses() (+52 more)
+
+### Community 5 - "Community 5"
+Cohesion: 0.05
+Nodes (16): PromptRegistry, Resolve context injection spec into actual values.          context_spec format:, Manages prompt templates with provider-specific overrides., TestBuiltInTemplates, TestPromptRegistryLoading, TestPromptRegistryRendering, full_template_dir(), Tests for Phase 3: metadata, chaining, validation, context injection. (+8 more)
+
+### Community 6 - "Community 6"
+Cohesion: 0.05
+Nodes (20): DreamEditor, ProposalManager, Performs surgical edits to wiki pages based on QuerySink analysis.      Workflow, Execute a Dream cycle: generate proposals from sinks, auto-approve small edits., Manages Dream edit proposals with auto-approve for small changes.      Reuses No, Generate edit proposals from a single sink (no file writes)., Generate proposals for updating an existing wiki page., Generate proposal for creating a new wiki page from sink entries. (+12 more)
+
+### Community 7 - "Community 7"
+Cohesion: 0.08
+Nodes (60): ad(), bd(), bl(), bs(), bu, cf(), cl(), Df() (+52 more)
+
+### Community 8 - "Community 8"
+Cohesion: 0.06
+Nodes (25): PrincipleChecker, PrincipleCheckResult, PrincipleViolation, Principle Compliance Checker for prompt templates.  Checks that all prompt templ, Check all prompt templates against all applicable principles., Check a single loaded template against applicable principles., Check structural requirements common to all prompts., A single principle violation found in a prompt template. (+17 more)
+
+### Community 9 - "Community 9"
+Cohesion: 0.05
+Nodes (37): Args, Comprehensive CLI unit tests.  Covers all CLI commands including: - init (with -, ingest --dry-run should not create pages., search should return 0 when no results found., search should find content., references --inbound should show only inbound links., references --outbound should show only outbound links., references --stats should show reference statistics. (+29 more)
+
+### Community 10 - "Community 10"
+Cohesion: 0.08
+Nodes (38): aC(), Ak(), aO(), Ax(), bC(), bE(), BO(), Bx() (+30 more)
+
+### Community 11 - "Community 11"
+Cohesion: 0.06
+Nodes (13): Registry of wiki tools that the Agent can call.      Wraps existing MCP tools an, Classify a tool call into a confirmation group., Analyze the impact of a tool call for confirmation preview., Log a post-hoc confirmation for ingest operations., Execute multiple confirmed tool calls at once., Reject multiple pending confirmations at once., Get all pending confirmations., Get pending confirmations grouped by page type. (+5 more)
+
+### Community 12 - "Community 12"
+Cohesion: 0.05
+Nodes (33): Get all relations for a concept.          Args:             concept: Concept nam, Manage knowledge graph relations stored in SQLite.      Usage:         engine =, Get relation statistics., Get the original context for a relation., Find contradictory relations between same source/target pairs., Find concepts in relations that have no corresponding wiki page., Load relation types from wiki.md schema, falling back to defaults., Return the currently loaded relation types. (+25 more)
+
+### Community 13 - "Community 13"
+Cohesion: 0.06
+Nodes (17): Watch raw/ directory for new files., FileSystemWatcher, install_git_hook(), File system watcher for automatic source ingestion., Handle a file system event with debouncing., Process a file after debounce period., Manually trigger ingest for a specific file.          Args:             path: Fi, Install a git post-commit hook that runs batch ingest.      Args:         wiki_r (+9 more)
+
+### Community 14 - "Community 14"
+Cohesion: 0.07
+Nodes (46): agent_status(), apply_proposals(), approve_confirmation(), approve_proposal(), batch_approve(), batch_approve_proposals(), chat(), create_session() (+38 more)
+
+### Community 15 - "Community 15"
+Cohesion: 0.05
+Nodes (21): Query the knowledge graph., Detect knowledge communities., Generate unexpected connections report., Multi-wiki management commands., List all registered wikis., Scan directories for wikis., Analyze sources and generate cross-source synthesis suggestions., Analyze knowledge graph structure. (+13 more)
+
+### Community 16 - "Community 16"
+Cohesion: 0.05
+Nodes (30): Get QMD hybrid search engine status and recommendation info.          Returns:, Close database connections., Main Wiki manager.      Inherits functionality from specialized mixins:     - Wi, Wiki, Integration tests for Phase 3: chaining, retry, context methods, full flows., Tests for _call_llm_with_retry., Tests for LLM ingest chaining (only mode after single-call removal)., Tests for validation in the full pipeline. (+22 more)
+
+### Community 17 - "Community 17"
+Cohesion: 0.04
+Nodes (47): 背景, 当前问题, 设计目标, 最终实施决策（2026-04-15 更新）, 缓存失效逻辑, 核心设计决策, 完整上下文示例, 降级策略 (+39 more)
+
+### Community 18 - "Community 18"
+Cohesion: 0.04
+Nodes (29): Tests for v0.29.0 index enhancement: summaries, grouping, lint integration., Test _get_source_analysis_summary method., Returns None when no cached analysis exists., Returns topics and entities from cached analysis., Test _update_index_file method., Index should group pages by directory type., Create a temporary wiki with various page types., Each page entry should include a summary. (+21 more)
+
+### Community 19 - "Community 19"
+Cohesion: 0.04
+Nodes (47): 📊 当前状态, 1. 链接解析逻辑, 测试失败分析, 1. 链接解析增强, 1. 增量构建, 1. 引用格式支持, 2. 入站/出站链接查询, 当前实现 (+39 more)
+
+### Community 20 - "Community 20"
+Cohesion: 0.07
+Nodes (25): Health check, lint detection, and recommendation engine for Wiki.      Usage:, Generate smart recommendations., WikiAnalyzer, mock_wiki(), Unit tests for WikiAnalyzer — the standalone health check engine., Test _detect_redundancy., Test lint orchestration., Create a minimal mock Wiki instance. (+17 more)
+
+### Community 21 - "Community 21"
+Cohesion: 0.04
+Nodes (46): 一、核心发现, 约束规则体系, 禁止事项（强制）, 二、幻觉抑制关键技术, 必须遵守, 三层验证流程, 长文档处理指令, 七、关键技术组合方案 (+38 more)
+
+### Community 22 - "Community 22"
+Cohesion: 0.04
+Nodes (27): Tests for v0.16.0 — Smart Investigations (contradictions + data gaps + LLM sugge, Test no false positives when sources are cited., Test that max 3 gaps are returned., Test with no wiki pages (overview.md exists by default)., Create a temporary wiki for testing., Test _llm_generate_investigations method., Test graceful fallback when LLM not available., Test lint() integration with investigations. (+19 more)
+
+### Community 23 - "Community 23"
+Cohesion: 0.04
+Nodes (45): 📋 配置方式, 1. 最小化配置, 🎯 使用场景示例, 场景 1：矿业新闻 Wiki, 方式 1：`.wiki-config.yaml`（推荐）, 场景 2：个人知识库, 🔍 验证配置, 查看当前孤立页面 (+37 more)
+
+### Community 24 - "Community 24"
+Cohesion: 0.04
+Nodes (45): 注意事项, 1. 问题起源, 10. 参考, 1.1 原始问题, 1.2 核心矛盾, 2. 方案演进, 2.1 方案 A：auto_merge（系统自动追加）, 2.2 方案 B：LLM 辅助合并（仅增强 hint） (+37 more)
+
+### Community 25 - "Community 25"
+Cohesion: 0.07
+Nodes (18): Shared constants for llmwikify core modules., Core wiki functionality., Protocol definitions for mixin type resolution., Wiki health check, lint detection, and recommendation engine.  This module extra, Wiki ingest mixin — source file ingestion, extraction, raw collection., Wiki init mixin — directory structure, core files, MCP config, skill files., Wiki link mixin — wikilink resolution, fixing, inbound/outbound links., Wiki lint mixin — health check, lint detection, delegating to WikiAnalyzer. (+10 more)
+
+### Community 26 - "Community 26"
+Cohesion: 0.05
+Nodes (43): 项目重构完成报告, 清理目录 (1 个), 📋 执行摘要, 📊 最终统计, 文件统计, 目录结构, ✅ 验证结果, 📦 打包就绪 (+35 more)
+
+### Community 27 - "Community 27"
+Cohesion: 0.07
+Nodes (17): ActionResult, ActionType, AgentMessage, AgentRunner, Agent Runner - Execution loop with context injection and tool orchestration.  Ad, Core agent execution loop.      Manages:     - Context preparation with wiki sta, Confirm and execute a pending action by confirmation ID., Confirm and execute multiple pending actions. (+9 more)
+
+### Community 28 - "Community 28"
+Cohesion: 0.07
+Nodes (22): Create wiki directory structure., Wiki initialization: directories, core files, MCP config, skill files., Create index.md, log.md, overview.md, and config example., Check if wiki is initialized., Handle wiki.md schema creation, merging, or skipping., Generate MCP config and skill files if agent is specified., Generate .gitignore if it doesn't exist., Initialize wiki directory structure.          Args:             overwrite: If Tr (+14 more)
+
+### Community 29 - "Community 29"
+Cohesion: 0.05
+Nodes (26): Tests for query sink deduplication — content-addressable storage., Different content is stored separately., Test content hashing with normalization., Test Content Store + Entry Log format., Content Store section is correctly parsed., Identical text produces identical hash., Entry Log table is correctly parsed., read() resolves hash references to actual content. (+18 more)
+
+### Community 30 - "Community 30"
+Cohesion: 0.05
+Nodes (41): 🎯 完成的工作, 📈 性能指标, 搜索性能, 启动时间, 🔧 使用方式, 📝 下一步, 必须完成, 1. 全文搜索 (FTS5) (+33 more)
+
+### Community 31 - "Community 31"
+Cohesion: 0.05
+Nodes (41): 1. directories, 2. files, 3. database, 4. reference_index, 5. orphan_detection, 6. performance, 7. mcp, Changes not taking effect? (+33 more)
+
+### Community 32 - "Community 32"
+Cohesion: 0.08
+Nodes (41): ae(), ba(), Be(), ca(), clamp(), d(), formatHsl(), g() (+33 more)
+
+### Community 33 - "Community 33"
+Cohesion: 0.09
+Nodes (7): Bm(), draw(), jm(), lu(), Ru, Yu(), Mm()
+
+### Community 34 - "Community 34"
+Cohesion: 0.07
+Nodes (11): AutoIngestHook, CompositeHook, DreamSyncHook, Hook, Hooks System - Lifecycle callbacks for Agent events.  Provides hook points for:, Manages multiple hooks and dispatches events., Hook that logs wiki state changes., Hook that triggers Dream analysis after Sink updates. (+3 more)
+
+### Community 35 - "Community 35"
+Cohesion: 0.09
+Nodes (20): _extract_topics(), _jaccard_similarity(), _normalize_for_hash(), _now(), _query_similarity(), QuerySink, Query Sink management — content-addressable storage with deduplication., Manages query sink buffers with content-addressable storage.      Sink files use (+12 more)
+
+### Community 36 - "Community 36"
+Cohesion: 0.09
+Nodes (40): gu(), kp(), qv(), un(), a(), Ay(), BS(), C() (+32 more)
+
+### Community 37 - "Community 37"
+Cohesion: 0.07
+Nodes (24): GoldenTestResult, GoldenTestRunner, load_golden_sources(), MockLLMConfig, Mock LLM Framework for Golden Tests.  Provides deterministic LLM responses for t, Test generate_wiki_ops pipeline with mock LLM., Test wiki_synthesize pipeline with mock LLM., Build a mock analyze_source response that satisfies expected output. (+16 more)
+
+### Community 38 - "Community 38"
+Cohesion: 0.07
+Nodes (13): Process a chat message and return agent response.          Args:             mes, Confirm a pending action by confirmation ID and execute it.          Args:, Confirm and execute multiple pending actions.          Args:             confirm, Get all pending confirmations grouped by page type., Get all pending Dream proposals grouped by page., Apply approved Dream proposals to wiki files.          Args:             proposa, Start the background scheduler loop.          Args:             tick_interval: S, Stop the background scheduler. (+5 more)
+
+### Community 39 - "Community 39"
+Cohesion: 0.09
+Nodes (27): Args, _build_index_args(), _init_args(), CLI integration tests with real project simulation.  Tests simulate end-to-end w, Create wiki with pages in subdirectories., status should include subdirectory pages in count., lint should check subdirectory pages for broken links., search should find content in subdirectory pages. (+19 more)
+
+### Community 40 - "Community 40"
+Cohesion: 0.08
+Nodes (21): Cross-source synthesis engine — compares new sources against existing wiki knowl, Get all entity names from existing wiki pages., Get all topics covered in existing wiki pages., Find claims in the new source that are confirmed by existing sources., Analyze new sources against existing wiki content and generate suggestions., Find contradictions between new source and existing wiki., Identify knowledge gaps that need more information., Suggest existing wiki pages that should be updated. (+13 more)
+
+### Community 41 - "Community 41"
+Cohesion: 0.09
+Nodes (11): ConversationMemory, MemoryManager, Memory Layers - QuerySink integration + conversation memory.  Integrates existin, Unified memory manager combining conversation and sink memory., Stores agent conversation history in JSONL format., Agent-aware wrapper around QuerySink., SinkMemory, Tests for Agent layer components. (+3 more)
+
+### Community 42 - "Community 42"
+Cohesion: 0.05
+Nodes (37): 10. Web UI (`web/webui/`) — v0.30.0+, 3. RelationEngine (`core/relation_engine.py`), 4. GraphAnalyzer (`core/graph_analyzer.py`) — v0.28.0+, 5. SynthesisEngine (`core/synthesis_engine.py`) — v0.28.0+, 6. GraphExport (`core/graph_export.py`), 7. QuerySink (`core/query_sink.py`), 8. PromptRegistry (`core/prompt_registry.py`), 9. Agent Layer (`agent/`) — v0.30.0+ (+29 more)
+
+### Community 43 - "Community 43"
+Cohesion: 0.05
+Nodes (37): 📋 更新摘要, 1. 版本号更新, 🎯 更新前后对比, 更新前, ✅ 已完成的更新, 更新后, 📦 相关文件, ✅ 质量检查 (+29 more)
+
+### Community 44 - "Community 44"
+Cohesion: 0.05
+Nodes (37): 1. Install QMD CLI, 2. Initialize in your wiki root, 3. Index your wiki pages, 4. Generate embeddings, 5. Start MCP server, Automatic Recommendation, CLI, code:bash (npm install -g @tobilu/qmd) (+29 more)
+
+### Community 45 - "Community 45"
+Cohesion: 0.08
+Nodes (20): Get remote wiki status.          Returns:             Wiki status dict, Search remote wiki.          Args:             query: Search query             l, Read a page from remote wiki.          Args:             page_name: Name of the, Write a page to remote wiki.          Args:             page_name: Name of the p, HTTP client for remote llmwikify server.      Provides methods to interact with, Get page references.          Args:             page_name: Name of the page, Get graph data from remote wiki.          Returns:             Graph visualizati, Run health check on remote wiki.          Args:             format: Output forma (+12 more)
+
+### Community 46 - "Community 46"
+Cohesion: 0.08
+Nodes (20): Close all Wiki instances and registry DB., Manages multiple Wiki instances with discovery and lifecycle.      This registry, Remove wiki from registry.          Args:             wiki_id: Wiki to remove, Get the default wiki ID.          Returns:             Default wiki ID or None, Set the default wiki.          Args:             wiki_id: Wiki to set as default, WikiRegistry, Tests for WikiRegistry., Initialize WikiRegistry. (+12 more)
+
+### Community 47 - "Community 47"
+Cohesion: 0.07
+Nodes (24): Args, Tests for batch ingest command fix.  Tests for: - Batch JSON output structure (a, Human-readable summary should go to stderr, not stdout., Batch should recursively scan subdirectories., --dry-run should output JSON preview without calling ingest_source., --dry-run --self-create should show LLM preview message., Some sources fail, others succeed; JSON reflects per-source status., With --self-create, LLM processing should execute. (+16 more)
+
+### Community 48 - "Community 48"
+Cohesion: 0.07
+Nodes (17): PromptTemplate, Prompt template registry with provider-specific overrides.  Uses YAML + Jinja2 f, A loaded prompt template with metadata., Prompt templates for LLM interactions., custom_prompts_dir(), Tests for PromptRegistry., Create a temporary prompts directory with test templates., Create a custom prompts directory with override template. (+9 more)
+
+### Community 50 - "Community 50"
+Cohesion: 0.08
+Nodes (18): Remove a page from all indexes., Unified index manager for full-text search and reference tracking., Full-text search with ranking and highlighted snippets.          Args:, Attempt QMD search if the QMD module is available.          Returns:, Check if QMD should be recommended based on wiki size.          Returns:, Get pages that link to this page., Get pages that this page links to., Get total number of indexed pages. (+10 more)
+
+### Community 51 - "Community 51"
+Cohesion: 0.11
+Nodes (23): al(), Bf(), cd(), dd(), ed, fd(), ft(), gl() (+15 more)
+
+### Community 52 - "Community 52"
+Cohesion: 0.16
+Nodes (34): $(), api, createNewPage(), createNewPageByName(), el(), init(), initEditor(), initEditorToolbar() (+26 more)
+
+### Community 53 - "Community 53"
+Cohesion: 0.09
+Nodes (9): Scheduler - Cron-based task scheduler for Agent system tasks.  Uses croniter for, Check and run all due tasks. Returns list of results., Register default wiki system tasks.          Task classification:         - Auto, Represents a scheduled task., Cron scheduler for wiki system tasks., ScheduledTask, WikiScheduler, TestScheduler (+1 more)
+
+### Community 54 - "Community 54"
+Cohesion: 0.06
+Nodes (34): 1. Initialize a wiki, 2. Ingest sources, 3. Search the wiki, Batch Ingest, code:bash (pip install llmwikify), code:bash (# Full health check), code:bash (# Find neighbors of a concept), code:bash (# Interactive HTML (pyvis)) (+26 more)
+
+### Community 55 - "Community 55"
+Cohesion: 0.06
+Nodes (34): 项目整理报告, 1. 邮箱地址更新, 文件统计, 🔍 验证结果, 📁 归档说明, 归档政策, 🎯 清理成果, 删除/归档文件 (+26 more)
+
+### Community 56 - "Community 56"
+Cohesion: 0.06
+Nodes (18): POST /api/wikis returns 400 for missing required fields., DELETE /api/wikis/{wiki_id} removes a wiki., DELETE /api/wikis/{wiki_id} returns 404 for unknown wiki., GET /api/wiki/{wiki_id}/status returns wiki status., GET /api/wiki/{wiki_id}/status returns 404 for unknown wiki., GET /api/wiki/{wiki_id}/search searches within a wiki., GET /api/wiki/{wiki_id}/lint health-checks a wiki., GET /api/wiki/{wiki_id}/recommend gets recommendations. (+10 more)
+
+### Community 57 - "Community 57"
+Cohesion: 0.07
+Nodes (22): code:bash (llmwikify graph-query path "Ghana" "Gold Royalty"), code:block41 (=== Graph Query: path(Ghana → Gold Royalty) ===), path, main(), Tests for P0-P3 bug fixes and improvements.  Tests for: - P0-1: Version consiste, extractors/__init__.py should not import the orphan html module., MCP tool count in README should match actual implementation., CLI should have a synthesize command. (+14 more)
+
+### Community 58 - "Community 58"
+Cohesion: 0.07
+Nodes (16): ExtractedContent, Result of extracting content from a source., Tests for content extractors., Test ExtractedContent data class., Test extractor error handling., Test source type detection., PDF extractor returns error type when pymupdf not available., Test text file extraction. (+8 more)
+
+### Community 59 - "Community 59"
+Cohesion: 0.06
+Nodes (31): 📋 概述, 场景 1：追踪公司新闻来源, 🛠️ 命令, 📝 页面标注, 重定向页面, 公司页面, 🔍 使用场景, 1. `wiki build-index` - 构建引用索引 (+23 more)
+
+### Community 60 - "Community 60"
+Cohesion: 0.06
+Nodes (31): 📋 示例列表, 1. 知识库路径管理, 💡 最佳实践, ❓ 常见问题, 📚 相关文档, 场景 1：作为 Python 库使用, 🚀 快速开始, 运行基础示例 (+23 more)
+
+### Community 61 - "Community 61"
+Cohesion: 0.08
+Nodes (22): detect_source_type(), extract(), Link, Base extractor functions and data classes., Detect whether a source is a URL, YouTube link, or file (by extension)., Extract content from any supported source. Auto-detects type.      Args:, Content extractors for various source types., MarkItDown unified extractor for Office documents, images, and more.  Wraps Micr (+14 more)
+
+### Community 62 - "Community 62"
+Cohesion: 0.1
+Nodes (20): Args, _make_cli(), Tests for CLI features added in v0.27.0: json format, fix-wikilinks, build-index, Without --dry-run, fixes links., Simple args namespace for testing., Test build-index --force and old format detection., _detect_old_index_format returns True when page_name != file_path[:-3]., Root pages (overview, log, index) are NOT flagged as old format. (+12 more)
+
+### Community 63 - "Community 63"
+Cohesion: 0.08
+Nodes (19): EditorProps, DISPLAY_ORDER, FIELD_LABELS, FrontMatterData, FrontMatterPanel(), FrontMatterPanelProps, DEFAULT_COLORS, GraphView() (+11 more)
+
+### Community 64 - "Community 64"
+Cohesion: 0.07
+Nodes (28): 📋 执行摘要, 1. 模块文件创建, 📝 后续工作, 必须修复, 可选优化, 🎯 性能影响, 📐 新模块结构, 📚 迁移指南 (+20 more)
+
+### Community 65 - "Community 65"
+Cohesion: 0.09
+Nodes (27): at(), bp(), cp(), ct(), dp(), et(), gp(), gt() (+19 more)
+
+### Community 66 - "Community 66"
+Cohesion: 0.11
+Nodes (23): detect_source_type(), extract(), _extract_html_file(), _extract_pdf(), _extract_text_file(), _extract_url(), _extract_youtube(), _extract_youtube_id() (+15 more)
+
+### Community 67 - "Community 67"
+Cohesion: 0.07
+Nodes (9): engine(), Tests for v0.22.0 Relation Engine., TestContext, TestContradictions, TestIngestRelations, TestOrphanConcepts, TestPathQuery, TestRelationSchema (+1 more)
+
+### Community 68 - "Community 68"
+Cohesion: 0.1
+Nodes (20): Start MCP server and optionally Web UI. Used by both 'mcp' and 'serve' subcomman, _deep_merge(), expand_env_vars(), get_db_path(), get_default_config(), get_directory(), get_mcp_config(), get_wikis_config() (+12 more)
+
+### Community 69 - "Community 69"
+Cohesion: 0.15
+Nodes (16): AgentChat(), DreamLog(), formatTime(), StatusBadge(), formatTime(), TaskMonitor(), AgentMessage, api (+8 more)
+
+### Community 70 - "Community 70"
+Cohesion: 0.08
+Nodes (10): Tests for direct lint (schema-aware gap detection)., Test lint() method new signature., Test _build_lint_context method., Test that old signature still works., Test _llm_detect_gaps method., Test _fallback_detect_gaps method., TestBuildLintContext, TestFallbackDetectGaps (+2 more)
+
+### Community 71 - "Community 71"
+Cohesion: 0.08
+Nodes (11): Tests for source analysis caching., Test _compute_content_hash method., Test analyze_source method., Test _build_lint_context with source analysis., Test _find_source_summary_page method., Test _cache_source_analysis and _get_cached_source_analysis methods., TestAnalyzeSource, TestBuildLintContext (+3 more)
+
+### Community 72 - "Community 72"
+Cohesion: 0.08
+Nodes (17): Tests for wikilink resolution and auto-fix (v0.26.0)., Test WikiIndex.resolve_by_name method., Exact match returns file_path., Test lint with mode=fix., mode=fix runs fix_wikilinks and reports results., Non-existent page returns None. Bare names do NOT match prefixed pages., Test that page_name in index is full relative path., build_index_from_files stores full relative path as page_name. (+9 more)
+
+### Community 73 - "Community 73"
+Cohesion: 0.08
+Nodes (13): Find Query: pages with >=85% keyword Jaccard overlap., Find concepts mentioned in 2+ pages but not wikilinked., Scan wiki pages for potential contradictions., Detect potential data gaps in wiki pages., Detect pages that may be outdated based on source dates., Detect knowledge gaps across the wiki., Detect potentially redundant or overlapping content., Use LLM to generate investigation suggestions. (+5 more)
+
+### Community 74 - "Community 74"
+Cohesion: 0.08
+Nodes (13): Render a text-type template (e.g., ingest instructions)., Load and cache a prompt template from file., Find prompt YAML file, checking custom dir first., Apply provider-specific overrides from YAML data., Render a Jinja2 template string with variables., Check if this prompt should activate for the given event.          trigger.type:, Validate LLM output against post_process rules.          Returns list of error m, Lightweight schema validation without jsonschema library. (+5 more)
+
+### Community 75 - "Community 75"
+Cohesion: 0.09
+Nodes (25): ar(), Ce(), cr(), de(), displayable(), dr(), Er(), fr() (+17 more)
+
+### Community 76 - "Community 76"
+Cohesion: 0.14
+Nodes (25): au(), Ih(), ja(), aT(), Dy(), em(), eT(), hT() (+17 more)
+
+### Community 77 - "Community 77"
+Cohesion: 0.1
+Nodes (14): Mount React SPA static files (single source of truth)., Run unified HTTP server., Run MCP server in stdio mode (pure MCP, no HTTP)., Run standalone MCP HTTP server (without WebUI/REST)., llmwikify Unified Server - combines all service layers.      Features:     - MCP, Build and configure FastAPI application., WikiServer, Tests for WikiServer initialization. (+6 more)
+
+### Community 78 - "Community 78"
+Cohesion: 0.11
+Nodes (14): MarkItDownExtractor, Wrapper around MarkItDown with graceful fallback support.      Usage:         ex, Initialize MarkItDown with optional LLM client for image OCR., MarkItDown should enable plugins when LLM client is available., MarkItDown should disable plugins when LLM is not configured., TestMarkItDownPlugins, Extractor should work even when MarkItDown is not installed., When MarkItDown is not installed, convert returns None. (+6 more)
+
+### Community 79 - "Community 79"
+Cohesion: 0.08
+Nodes (6): Tests for Phase 4f: wiki_synthesize prompt externalization., Tests for synthesize_output schema validation., Tests for Wiki._llm_generate_synthesize_answer., registry(), TestLLMGenerateSynthesizeAnswer, TestSynthesizeOutputValidation
+
+### Community 80 - "Community 80"
+Cohesion: 0.15
+Nodes (15): CrossWikiResult, CrossWikiSearch(), CrossWikiSearchProps, FileTree(), FileTreeProps, WikiManager(), WikiManagerProps, WikiSelector() (+7 more)
+
+### Community 81 - "Community 81"
+Cohesion: 0.09
+Nodes (13): index(), Get wiki status overview., Export reference index to JSON., Unified index manager for full-text search and reference tracking., Remove a page from all indexes., Search for pages matching the query., Get all pages that link to the given page., Get all pages that the given page links to. (+5 more)
+
+### Community 82 - "Community 82"
+Cohesion: 0.08
+Nodes (13): Test --merge flag for wiki.md schema updates., New sections from schema are appended to existing wiki.md., User-customized sections are not overwritten., When all sections already exist, returns up-to-date., New sections inserted before ## Best Practices., Version number updated even when no new sections., Domain-specific custom content (e.g., mining templates) preserved., _parse_sections correctly extracts H2 sections. (+5 more)
+
+### Community 83 - "Community 83"
+Cohesion: 0.08
+Nodes (23): [0.11.1] - 2026-04-10, [0.12.0] - 2026-04-10, [0.12.1] - 2026-04-10, [0.12.2] - 2026-04-10, [0.12.3] - 2026-04-10, [0.12.6] - 2026-04-10, [0.13.0] - 2026-04-10, [0.17.0] - 2026-04-11 (+15 more)
+
+### Community 84 - "Community 84"
+Cohesion: 0.12
+Nodes (13): GraphAnalyzer, Analyze knowledge graph structure and generate suggestions.      Usage:, Test orphan page suggestions., Test link improvement suggestions., Test full suggestion generation., Test page existence checking., Test community labeling., Test bridge node detection. (+5 more)
+
+### Community 85 - "Community 85"
+Cohesion: 0.09
+Nodes (22): 项目基线, 三、未完成功能优先级, 🔴 高优先级（稳定性风险）, ❌ 完全无测试的模块（~15%）, 🟡 中优先级（功能完整性）, 🟢 低优先级（代码质量）, 四、代码质量状态, 已完成 (+14 more)
+
+### Community 86 - "Community 86"
+Cohesion: 0.12
+Nodes (13): Scans directories for llmwikify wikis.      Looks for .llmwikify.db files in spe, Initialize WikiDiscovery.          Args:             exclude_patterns: Directory, Scan paths for wiki roots.          Args:             scan_paths: List of direct, Recursively find .llmwikify.db files.          Args:             root: Starting, WikiDiscovery, Initialize WikiRegistry.          Args:             config: Configuration dict (, Discover wikis at different depths, but not nested within a wiki., When a wiki is found, its subdirectories are not scanned. (+5 more)
+
+### Community 87 - "Community 87"
+Cohesion: 0.09
+Nodes (12): Test _detect_dated_claims() method (v0.15.0)., Test basic dated claim detection., Test that recent claims are not flagged., Test that critical hints are capped at 3., Test that no hints are returned when there are no sources., Test that dated claim includes observation field., raw/ with category subdirs does not crash., raw/ has both root-level files and subdirectory files. (+4 more)
+
+### Community 88 - "Community 88"
+Cohesion: 0.13
+Nodes (16): Export knowledge graph visualization., Knowledge graph analysis tools — PageRank, community labeling, page suggestions., _add_entity_click_handlers(), build_graph(), export_graphml(), export_html(), export_svg(), Graph export and community detection for knowledge visualization. (+8 more)
+
+### Community 89 - "Community 89"
+Cohesion: 0.09
+Nodes (12): Lint/health check methods — thin delegation layer to WikiAnalyzer., Find year mentions in pages that predate latest raw source by 3+ years., Find Query: pages with >=85% keyword Jaccard overlap., Find concepts mentioned in 2+ pages but not wikilinked., Scan wiki pages for potential contradictions., Detect potential data gaps in wiki pages., Detect pages that may be outdated based on source dates., Detect knowledge gaps across the wiki. (+4 more)
+
+### Community 91 - "Community 91"
+Cohesion: 0.19
+Nodes (21): ff(), ab(), _b(), bb(), cb(), db(), Eb(), fb() (+13 more)
+
+### Community 93 - "Community 93"
+Cohesion: 0.12
+Nodes (9): _default_base_url(), LLMClient, _parse_json_response(), Lightweight LLM client for OpenAI-compatible APIs., Minimal client for OpenAI-compatible APIs.      Supports any provider with a /v1, Send chat completion and parse JSON response.          Handles markdown code blo, Send chat completion request.          Args:             messages: List of {role, Test LLM client configuration. (+1 more)
+
+### Community 94 - "Community 94"
+Cohesion: 0.13
+Nodes (11): Page read/write, search, log, and index file update., Full-text search with sink status and page_type attached.          Args:, Write a wiki page.          Args:             page_name: Page name. Can be:, Append entry to wiki log., Build reference index., Export reference index to JSON., Extract a one-line summary from a wiki page.          Priority:         1. YAML, Extract topics and entities from cached Source analysis.          Returns dict w (+3 more)
+
+### Community 95 - "Community 95"
+Cohesion: 0.1
+Nodes (11): Test that ingest returns text_extracted flag., Test enhanced ingest metadata (v0.15.0)., Test that ingest does NOT return a summary (LLM's job)., Test that message instructs LLM to read the file., Test that ingest returns file_type., Test that ingest returns file_size., Test that ingest returns word_count., Test that ingest returns has_images when no images. (+3 more)
+
+### Community 96 - "Community 96"
+Cohesion: 0.11
+Nodes (11): QmdClient, QMD (Query Markdown Documents) MCP HTTP Client.  Provides access to QMD hybrid s, Normalize QMD results to match WikiIndex format., Trigger embedding generation for the collection.          Returns:             S, Return installation instructions for QMD., Client for QMD MCP HTTP server.      Connects to a running QMD MCP server to per, Check if QMD server is running and accessible., Get QMD server health status. (+3 more)
+
+### Community 97 - "Community 97"
+Cohesion: 0.1
+Nodes (10): Tests for CLI commands., Test build-index command., Test CLI command handlers., Test build-index --export-only (replaces old export-index command)., Test lint command with healthy wiki., Test lint --format=brief (replaces old hint command)., Test lint --format=recommendations (replaces old recommend command)., Test write_page command. (+2 more)
+
+### Community 98 - "Community 98"
+Cohesion: 0.1
+Nodes (19): 1.1 Principle Gaps (from `docs/LLM_WIKI_PRINCIPLES.md`), 1.2 Design Philosophy, 1. Background, 2.1 Ingest Metadata Enhancement, 2.2 Lint Clue-Based Detection, 2.3 Hint Fatigue Prevention, 2. Design Decisions, 3.1 File Changes (+11 more)
+
+### Community 100 - "Community 100"
+Cohesion: 0.13
+Nodes (9): Issue, Health-check the wiki., Generate smart recommendations for wiki improvements.                  Analyzes, Get inbound links for a page., Get outbound links for a page., Show page references., Represents a wiki health issue., Determine if a page should be excluded from orphan detection.                  P (+1 more)
+
+### Community 101 - "Community 101"
+Cohesion: 0.11
+Nodes (13): BaseHTTPMiddleware, AuthMiddleware, HTTP middleware components., Simple API Key authentication middleware.      Verifies requests using either:, Unified server core for llmwikify.  Combines MCP protocol, REST API, and WebUI i, create_unified_server(), llmwikify unified server module., Backward compatible wrapper for WikiServer.          DEPRECATED: Use WikiServer (+5 more)
+
+### Community 102 - "Community 102"
+Cohesion: 0.11
+Nodes (18): Adding a New CLI Command, Adding a New Feature, Adding a New MCP Tool, Code Quality, code:bash (git clone https://github.com/sn0wfree/llmwikify.git), code:bash (# Run all tests), code:bash (# Format code), code:block4 (src/llmwikify/) (+10 more)
+
+### Community 103 - "Community 103"
+Cohesion: 0.13
+Nodes (11): Wraps a Wiki with registry metadata.      This dataclass holds metadata about a, Convert to dictionary for API responses., WikiInstance, Tests for multi-wiki management system (Phase 1)., Tests for WikiInstance dataclass., Create a local wiki instance., Create a remote wiki instance., Convert instance to dictionary. (+3 more)
+
+### Community 104 - "Community 104"
+Cohesion: 0.14
+Nodes (12): Editor(), ToastContext, ToastContextValue, ToastItem, ToastProvider(), ToastType, useToast(), mockReadPage (+4 more)
+
+### Community 105 - "Community 105"
+Cohesion: 0.11
+Nodes (10): Test that extract() correctly routes to MarkItDown for new formats., Unknown .docx file should attempt MarkItDown then return error if unavailable., PDF should try MarkItDown first, then fallback to pymupdf., Markdown files should still use direct text extraction., YouTube URLs should still route to youtube extractor., HTTP URLs should still route to web extractor., Non-existent file should return error., Test full extraction pipeline with mocked MarkItDown. (+2 more)
+
+### Community 106 - "Community 106"
+Cohesion: 0.15
+Nodes (11): create_mcp_server(), Create a FastMCP server with all wiki tools registered.      DEPRECATED: Use MCP, Test service name resolution in create_mcp_server()., 1.1: Without name or config, should use directory name., 1.2: name parameter should override directory name., 1.3: config['name'] should override directory name., 1.4: name parameter wins over config['name']., 1.5: config['name'] wins over directory name. (+3 more)
+
+### Community 107 - "Community 107"
+Cohesion: 0.11
+Nodes (10): Test synthesize_query sink behavior., Status is 'sunk' when similar query page exists., Answer appended to sink file., Result includes hint with sink suggestion., mode='update' updates the formal page directly., merge_or_replace='merge' maps to mode='update'., merge_or_replace='replace' maps to mode='update'., Creates new page when no similar page exists. (+2 more)
+
+### Community 108 - "Community 108"
+Cohesion: 0.19
+Nodes (15): from_dict(), WikiInstance - wraps Wiki with registry metadata for multi-wiki support., Type of wiki instance., Status of wiki instance., WikiStatus, WikiType, Enum, GraphMode (+7 more)
+
+### Community 109 - "Community 109"
+Cohesion: 0.12
+Nodes (12): Source ingestion: extract, save to raw/, return data for LLM processing., Ingest a source file and return extracted data for LLM processing.          Does, WikiIngestMixin, Schema (wiki.md) reading, updating, and page type mapping., Load page type → directory mapping from wiki.md Page Types table.          Parse, Read wiki.md (schema/conventions file).          Returns:             Dict with, Update wiki.md with new conventions/workflows.          Validates format but doe, WikiSchemaMixin (+4 more)
+
+### Community 110 - "Community 110"
+Cohesion: 0.17
+Nodes (11): eu(), ku(), nu(), su(), tu(), Yc(), By(), Gc() (+3 more)
+
+### Community 111 - "Community 111"
+Cohesion: 0.17
+Nodes (3): NotificationManager, Manages agent notifications in memory with optional SQLite persistence.      Fea, TestNotificationManager
+
+### Community 112 - "Community 112"
+Cohesion: 0.15
+Nodes (6): Ingest a source file., Build reference index., Export reference index to JSON., Generate smart recommendations for wiki improvements., Get content from file, argument, or stdin., WikiCLI
+
+### Community 113 - "Community 113"
+Cohesion: 0.12
+Nodes (9): opencode.json includes instructions field for skill auto-load., wiki.md includes Knowledge Base Management and page type conventions., Test init with --agent opencode., AGENTS.md is no longer created (wiki.md is single source of truth)., opencode.json created with correct MCP config., wiki.md references raw/ directory., Skill files created for CLI fallback mode., Skill files not overwritten on re-init. (+1 more)
+
+### Community 114 - "Community 114"
+Cohesion: 0.12
+Nodes (6): Tests for Phase 5: MarkItDown enhanced extractor integration., Test format detection for MarkItDown-supported files., Test image format detection and routing., Image files should attempt MarkItDown first., TestExtractImageFormats, TestMarkItDownFormats
+
+### Community 115 - "Community 115"
+Cohesion: 0.12
+Nodes (16): 🙏 Acknowledgments, 📊 CLI Commands, code:bash (llmwikify serve --web                  # Starts MCP + Web UI), code:yaml (orphan_detection:), code:bash (# Check status and recommendations), ⚙️ Configuration, 📬 Contact, 🤝 Contributing (+8 more)
+
+### Community 116 - "Community 116"
+Cohesion: 0.12
+Nodes (17): 6.1 新增属性, 6.2 Per-wiki 工厂方法, 6.3 Dream 方法, 6.4 Notifications 方法, 6.5 Confirmations 方法 (改造后的路由直接调用 registry), 6.6 Ingest 方法, 6.7 /agent/status, 6.8 聊天流程中的 Ingest 拦截 (+9 more)
+
+### Community 117 - "Community 117"
+Cohesion: 0.17
+Nodes (9): Generate a page name from a query string.          Extracts topic (first 50 char, Find an existing query page with similar topic.          Searches for pages star, Query handling: page creation, similarity matching, sink integration., Create a new query page with sources section., Append structured Sources section to answer content., Read all entries from a query sink file (hash references resolved)., Overview of all query sinks with entry counts and urgency., Save a query answer as a new wiki page.          Implements the Query compoundin (+1 more)
+
+### Community 118 - "Community 118"
+Cohesion: 0.12
+Nodes (9): Return recent log entries., Return number of wiki pages., Return list of existing wiki page names (relative to wiki_dir)., Return all wiki pages recursively, excluding index, log, and .sink/., Return display name for a page (relative path without .md)., Utility methods shared across Wiki operations., Create a PromptRegistry instance with current provider and custom dir., Return a condensed wiki index (max 500 chars). (+1 more)
+
+### Community 120 - "Community 120"
+Cohesion: 0.12
+Nodes (13): multi_wiki_client(), Tests for multi-wiki API routes (Phase 2)., Create test wiki directories., Tests for /api/health endpoint., Health check in single-wiki mode., Health check in multi-wiki mode., Create a test WikiRegistry with two wikis., Create a test client with multi-wiki support. (+5 more)
+
+### Community 121 - "Community 121"
+Cohesion: 0.15
+Nodes (10): MCP protocol adapter for llmwikify., MCP server for llmwikify., create_unified_server(), MCP server for llmwikify using FastMCP.  DEPRECATED: Use llmwikify.server.WikiSe, Create a unified FastAPI server with MCP, REST API, and WebUI.      DEPRECATED:, MCP tool definitions for wiki operations., Register all wiki tools on the MCP server., Register multi-wiki tools on the MCP server.      Args:         mcp: FastMCP ser (+2 more)
+
+### Community 122 - "Community 122"
+Cohesion: 0.17
+Nodes (13): example_1_create_and_open(), example_2_page_operations(), example_3_search(), example_4_links(), example_5_health_check(), llmwikify 基础使用示例  演示： 1. 创建/打开知识库 2. 写入和读取页面 3. 全文搜索 4. 获取引用关系 5. 知识库健康检查, example_1_basic_server(), example_2_with_auth() (+5 more)
+
+### Community 123 - "Community 123"
+Cohesion: 0.12
+Nodes (10): Unit tests for WikiServer core class., Tests for MCP name configuration., Test custom MCP name is used., Test default MCP name uses wiki root., Tests for WikiServer feature flags., Test that feature flags are correctly stored., Test health endpoint reflects MCP being enabled., Test health endpoint reflects MCP being disabled. (+2 more)
+
+### Community 124 - "Community 124"
+Cohesion: 0.12
+Nodes (9): Test raw/ directory analysis., Empty raw/ returns zero counts., Counts files per category subdirectory., No raw/ directory returns empty stats., Flat raw/ with files at root level., Multi-level nested subdirectories: raw/gold/2024/Q1/article.md, Mixed: root-level files + multi-level subdirectories., Only empty subdirectories, no files. (+1 more)
+
+### Community 125 - "Community 125"
+Cohesion: 0.12
+Nodes (10): Unit tests for unified web UI server module., Test unified server module., Unified server module should import without errors., Web server wrapper should import without errors., React WebUI build files should exist., Legacy static directory should exist., Test CLI web arguments., serve --help should NOT mention --agent (deprecated). (+2 more)
+
+### Community 126 - "Community 126"
+Cohesion: 0.12
+Nodes (7): Tests for WikiIndex class - FTS5 search and reference tracking., Test WikiIndex class., Test database initialization., Test full-text search., Test inbound links query., Test outbound links query., TestWikiIndex
+
+### Community 127 - "Community 127"
+Cohesion: 0.12
+Nodes (11): Tests for P1 features: cross-source synthesis, smart lint, knowledge graph enhan, Create a temporary wiki with multiple source pages for testing., Test Wiki.suggest_synthesis method., Test that suggest_synthesis returns a dict., Test suggest_synthesis with a specific source., Test P1 CLI commands., Test that suggest-synthesis command is registered., Test that knowledge-gaps command is registered. (+3 more)
+
+### Community 128 - "Community 128"
+Cohesion: 0.16
+Nodes (9): QmdIndex, Trigger embedding generation for the wiki., Return QMD installation instructions., QMD hybrid search index wrapper.      Provides the same interface as WikiIndex f, Check if QMD is available and running., Determine if QMD should be recommended to the user., Get recommendation message if QMD is recommended., Perform hybrid search via QMD.          Args:             query: Search query (+1 more)
+
+### Community 129 - "Community 129"
+Cohesion: 0.12
+Nodes (9): Test duplicate query detection and handling., Similar queries go to sink instead of creating duplicate pages., Duplicate detection returns hint about existing page and sink., merge_or_replace='replace' revises the existing page., Detects semantically similar queries (keyword overlap)., Finds Query pages nested in subdirectories (rglob coverage)., Unrelated queries don't trigger duplicate detection., Multiple duplicates on same day append to same sink file. (+1 more)
+
+### Community 130 - "Community 130"
+Cohesion: 0.13
+Nodes (9): LLM interaction: chained source processing, retry logic, investigation generatio, Use LLM to generate investigation suggestions., Call LLM to detect gaps between wiki schema and current state., Basic gap detection without LLM., Build minimal context for LLM lint analysis., Use LLM to generate a structured answer for a query.          This method reads, Process source with LLM using chained mode: analyze_source → generate_wiki_ops., Call LLM with retry on validation failure. (+1 more)
+
+### Community 131 - "Community 131"
+Cohesion: 0.12
+Nodes (9): Test sink suggestion generation., Detects topics in formal page missing from new answer., Detects new topics in answer not in formal page., Flags when answer has no sources., Flags when answer misses sources from formal page., Detects repeated similar queries in sink., Detects new concepts mentioned in answer., Detects possible contradiction via negation words. (+1 more)
+
+### Community 132 - "Community 132"
+Cohesion: 0.12
+Nodes (15): AGENTS.md Removed, code:python (# Old (v0.10.0)), Enhanced Source Pages (P0), Migration Guide, Modular Architecture, Module Rename, New CLI Commands (P1), New Directory (+7 more)
+
+### Community 133 - "Community 133"
+Cohesion: 0.17
+Nodes (8): HealthStatus(), HealthStatusProps, Notifications(), SearchBarProps, Notification, SearchResult, SinkStatus, WikiStatus
+
+### Community 134 - "Community 134"
+Cohesion: 0.2
+Nodes (14): _mount_agent_spa(), FastAPI route definitions for single-wiki and multi-wiki modes., Register Agent backend routes for single-wiki mode., Register multi-wiki routes with wiki_id parameter., Register all API routes.      Args:         app: FastAPI application         wik, Register single-wiki routes (backward compatible)., Register Agent backend routes (Phase 1)., Mount Agent SPA to /agent path. (+6 more)
+
+### Community 135 - "Community 135"
+Cohesion: 0.13
+Nodes (10): Tests for init --agent feature — MCP config generation (AGENTS.md removed in v0., Test init with --agent generic (no agent files)., Generic mode creates wiki.md but no agent/MCP files., Test init without --agent (backward compat)., Init without agent param works as before., Test adding MCP config to an already-initialized wiki., MCP config can be added to existing wiki., TestInitAgentGeneric (+2 more)
+
+### Community 136 - "Community 136"
+Cohesion: 0.18
+Nodes (9): Test edge cases for service name., 6.1: Directory with special chars should work., 6.2: Directory with spaces should work., 6.3: Very long directory name should not error., 6.4: Unicode directory name should work., 6.5: config['name']=None should fall back to directory name., 6.6: config['name']='' should fall back to directory name., TestEdgeCases (+1 more)
+
+### Community 137 - "Community 137"
+Cohesion: 0.13
+Nodes (14): 一、项目背景与目标, 二、整体架构, 三、数据库设计, 表结构, 八、文件变更清单, 新增文件, 修改文件, 九、依赖变更 (+6 more)
+
+### Community 138 - "Community 138"
+Cohesion: 0.15
+Nodes (7): Get Wiki object by ID (lazy-loaded).          Args:             wiki_id: Wiki id, Get WikiInstance metadata.          Args:             wiki_id: Wiki identifier, List all registered wikis.          Returns:             List of WikiInstance ob, Get the default wiki instance.          Returns:             Default Wiki object, Search across multiple wikis, merge and rank results.          Args:, Get detailed status for a wiki.          Args:             wiki_id: Wiki identif, Re-index a wiki (rebuild FTS5).          Args:             wiki_id: Wiki identif
+
+### Community 139 - "Community 139"
+Cohesion: 0.15
+Nodes (10): Agent Backend - Database management for chat sessions and tool calls., Agent Backend Package., ChatEvent, confirmation_required(), done(), error(), message_delta(), Agent Service - Core agent logic with tool execution and context management. (+2 more)
+
+### Community 140 - "Community 140"
+Cohesion: 0.14
+Nodes (8): Tests for Wiki recommend functionality., Test Wiki recommendation engine., Test detection of missing pages., Test detection of orphan pages., Test cross-reference opportunities., Test recommendation summary structure., Test that recommendations don't include false positives., TestRecommend
+
+### Community 141 - "Community 141"
+Cohesion: 0.14
+Nodes (8): Test lint() return structure with hints (v0.15.0)., Test that lint() returns hints structure., Test that critical hints are capped at 3., Test that informational hints are capped at 5., Test that lint() still returns issues alongside hints., Test that lint() still returns sink_status., Test lint() on empty wiki., TestLintHintsStructure
+
+### Community 142 - "Community 142"
+Cohesion: 0.14
+Nodes (8): QmdClient should initialize with default host/port., QmdClient should accept custom host/port., QmdClient.is_available() should return False when QMD not running., QmdClient.health() should return dict even when not available., QmdClient should provide installation instructions., Tests for QmdClient class (QMD not available in test env)., QmdClient should be importable., TestQmdClient
+
+### Community 143 - "Community 143"
+Cohesion: 0.14
+Nodes (10): graph_wiki(), Tests for P1.3: Graph analyzer features., Create a wiki with some relations for graph testing., Test Wiki.graph_analyze method., Test that graph_analyze returns a dict., Test suggested pages report., Test that graph-analyze CLI command exists., Test that graph_analyze method exists on CLI. (+2 more)
+
+### Community 144 - "Community 144"
+Cohesion: 0.16
+Nodes (8): Dry run reports changes without modifying files., Actual fix modifies files and adds directory prefix., Section links are preserved during fix., Alias links are preserved during fix., Ambiguous matches (multiple pages with same basename) are reported., Test fix_wikilinks auto-repair method., Create a wiki with broken wikilinks that have matching pages., TestFixWikilinks
+
+### Community 145 - "Community 145"
+Cohesion: 0.19
+Nodes (8): Args, Unit tests for v0.25 service name auto-detection feature.  Covers: - create_mcp_, Test CLI serve() method integration., 4.1: --name should be passed to serve_mcp., 4.2: Without --name, serve_mcp receives name=None., 4.3: Startup log should print service name., 4.4: CLI --name wins over config mcp.name., TestCLIServeMethod
+
+### Community 146 - "Community 146"
+Cohesion: 0.14
+Nodes (8): Given contradictory source and wiki index, must mark contradiction., Given analysis result, must generate at least 1 write_page operation., Generated operations must include at least 1 log operation., synthesize must produce an answer with heading structure., Core regression tests for prompt behavior., analyze_source must extract at least 1 topic., Given a source with entities, must extract at least 1 entity., TestPromptRegression
+
+### Community 147 - "Community 147"
+Cohesion: 0.14
+Nodes (7): Prompt Regression Tests (Phase 4d).  Ensures that prompt template modifications, Verify all prompt templates load without error., Verify all context_injection references resolve to Wiki methods., Regression test for principle compliance across all prompts., TestAllPromptsLoadable, TestContextInjectionMethodsExist, TestPromptPrincipleCompliance
+
+### Community 148 - "Community 148"
+Cohesion: 0.14
+Nodes (14): 5.1 核心定位, 5.2 六阶段研究流程, 5.3 支持的来源类型, 5.4 跨源综合类型, 5.5 异步执行与进度追踪, 5.6 研究会话状态, 5.7 研究限制与边界, 5.8 错误处理与重试策略 (+6 more)
+
+### Community 149 - "Community 149"
+Cohesion: 0.14
+Nodes (14): 核心功能 (100% 保留), 数据格式 (100% 兼容), 原有功能保留清单, 新增功能 (Agent 增强):, CLI 命令 (100% 保留), code:python (from llmwikify.agent import WikiAgent), code:block11 (wiki/), code:block12 (.llmwikify/) (+6 more)
+
+### Community 150 - "Community 150"
+Cohesion: 0.14
+Nodes (13): 核心特性, 关系类型体系, 测试用例 (20), 文件变更, 关系使用场景, 新增 CLI 命令, code:bash (llmwikify graph-query <subcommand> [args]), code:block8 (原始: extract() → LLM 生成 wiki pages → execute_operations()) (+5 more)
+
+### Community 151 - "Community 151"
+Cohesion: 0.17
+Nodes (7): _default_base_url(), LLM Adapter Layer - Supports streaming + function calling for Agent., LLM client with streaming and function calling support.      Wraps existing LLMC, Chat with function calling support.          Returns:             {"content": st, Streaming chat completion (yield chunks).          Yields:             dict: {"t, Non-streaming chat completion., StreamableLLMClient
+
+### Community 152 - "Community 152"
+Cohesion: 0.23
+Nodes (8): _build_networkx(), compute_surprise_score(), generate_report(), Compute surprise score for an edge (borrowed from graphify, adapted for llmwikif, Generate a surprising connections report., Build a NetworkX MultiDiGraph from graph dict., TestBuildNetworkX, TestSurpriseScore
+
+### Community 153 - "Community 153"
+Cohesion: 0.18
+Nodes (7): mcp(), Integration tests for MCP server tools using FastMCP., Tests for dynamic relation types from wiki.md., Test that wiki init creates subdirectories and overview.md., TestRelationEngine, TestWikiInitSubdirs, wiki()
+
+### Community 154 - "Community 154"
+Cohesion: 0.15
+Nodes (13): 1. Zero Domain Assumption Enforcement (v0.11.1), 2. wiki.init() API Changes (v0.12.1), 3. ingest_source() Return Format (v0.12.3+), 4. Raw Source Collection (v0.12.5+), 5. New Required Fields in ingest_source() Result (v0.12.5+), Breaking Changes, code:yaml (orphan_detection:), code:python (# Old (v0.11.x)) (+5 more)
+
+### Community 155 - "Community 155"
+Cohesion: 0.15
+Nodes (13): 决策 1: 解耦架构, 决策 2: Memory Layers 设计, 决策 3: 半自主边界, 决策 4: WebUI 框架统一, 决策 5: 自主场景, 核心设计决策, code:block1 (llmwikify/), code:block2 (用户提问 → Agent 回答) (+5 more)
+
+### Community 156 - "Community 156"
+Cohesion: 0.15
+Nodes (13): 五、组件改造, 5.1 DreamEditor (agent/dream_editor.py), 5.2 NotificationManager (agent/notifications.py), 5.3 WikiToolRegistry (agent/tools.py), code:python (def _load_confirmations_from_db(self) -> None:), code:python (async def execute(self, name: str, arguments: dict[str, Any]), code:python (def confirm_execution(self, confirmation_id: str) -> Any:), code:python (# 当前) (+5 more)
+
+### Community 157 - "Community 157"
+Cohesion: 0.15
+Nodes (12): 实现摘要, 目录, 背景, 文件变更清单, 启动方式, 访问地址, 向后兼容, 变更日志 (+4 more)
+
+### Community 158 - "Community 158"
+Cohesion: 0.15
+Nodes (13): 测试用例 (15), 核心特性, 报告输出示例, 社区检测空图处理, 文件变更, 依赖, 新增 CLI 命令, code:bash (llmwikify export-graph [options]) (+5 more)
+
+### Community 159 - "Community 159"
+Cohesion: 0.23
+Nodes (7): Source analysis: caching, finding summary pages, content hashing., Compute SHA-256 hash of a source file's content., Find the Source summary page for a given raw source.          Looks in wiki/sour, Embed analysis results as HTML comment in Source summary page., Extract cached analysis from Source summary page., Analyze a source file and cache structured extraction.          Args:, WikiSourceAnalysisMixin
+
+### Community 160 - "Community 160"
+Cohesion: 0.2
+Nodes (7): Get pages that link to this page.          Args:             page_name: Target p, Wikilink resolution, fixing, and link context methods., Get pages that this page links to.          Args:             page_name: Source, Extract context around a wikilink in source file.          Args:             sou, Resolve a wikilink target to a file path.          Resolution order:         1., Scan all wiki pages and fix broken wikilinks by adding directory prefix., WikiLinkMixin
+
+### Community 161 - "Community 161"
+Cohesion: 0.2
+Nodes (12): ep(), fp(), fm(), gE(), gm(), km(), _m(), pm() (+4 more)
+
+### Community 163 - "Community 163"
+Cohesion: 0.18
+Nodes (7): MCPAdapter, MCP protocol adapter - wraps wiki services as MCP tools.      Provides a clean i, Run MCP server in stdio mode (for desktop integration)., Run MCP server in HTTP mode (for network access)., Run MCP server in SSE mode., Call an MCP tool programmatically (for MCP protocol use only)., Parse FastMCP result content to native Python types.
+
+### Community 164 - "Community 164"
+Cohesion: 0.21
+Nodes (8): Start MCP server.      DEPRECATED: Use MCPAdapter.run_stdio() / run_http()., serve_mcp(), 2.2: stdio mode log should include service name., 2.3: http mode log should include service name., 2.4: When no name provided, log should show directory name., Test serve_mcp() name passthrough and logging., 2.1: serve_mcp should pass name to create_mcp_server., TestServeMCPPassthrough
+
+### Community 165 - "Community 165"
+Cohesion: 0.17
+Nodes (7): Test force overwrite and skip behavior., wiki.md skipped when already exists., wiki.md overwritten with --force., MCP config skipped when already exists., MCP config overwritten with --force., MCP config regenerated with --merge., TestInitForceAndSkip
+
+### Community 166 - "Community 166"
+Cohesion: 0.23
+Nodes (6): _ext_to_source_type(), _extract_title(), Map file extension to source_type string., Convert a file to Markdown using MarkItDown.          Args:             path: Pa, Test _ext_to_source_type mapping., TestExtToSourceType
+
+### Community 167 - "Community 167"
+Cohesion: 0.17
+Nodes (7): Tests for v0.15.0 features: ingest metadata and lint clue-based detection., Test _detect_file_type() helper., Test markdown file type detection., Test PDF file type detection., Test text file type detection., Test unknown file type detection., TestDetectFileTypes
+
+### Community 168 - "Community 168"
+Cohesion: 0.17
+Nodes (7): Test _detect_query_page_overlap() method (v0.15.0)., Test basic query page overlap detection., Test detection when keywords are identical., Test that informational hints are capped at 2 for this detector., Test that no hints are returned when there are no query pages., Test that overlap hint includes observation field., TestDetectQueryPageOverlap
+
+### Community 169 - "Community 169"
+Cohesion: 0.17
+Nodes (7): Test _detect_missing_cross_refs() method (v0.15.0)., Test basic missing cross-reference detection., Test that already-linked pages are not flagged., Test that single mentions are not flagged (need 2+)., Test that missing cross-ref hints are capped at 3., Test that missing cross-ref hint includes observation field., TestDetectMissingCrossRefs
+
+### Community 170 - "Community 170"
+Cohesion: 0.18
+Nodes (7): get_search_config(), Get search engine configuration.      Args:         config: Optional configurati, Unit tests for QMD hybrid search integration., Tests for QMD configuration handling., Default search backend should be 'fts5'., QMD default configuration should be set., TestQmdConfig
+
+### Community 171 - "Community 171"
+Cohesion: 0.17
+Nodes (7): Tests for QMD backend support in WikiIndex., Search method should accept backend parameter., QMD backend should fall back to FTS5 when QMD not available., Search results should include mode indicator., Should not recommend QMD for small wikis (< 1000 pages)., Wiki qmd_status() should return proper structure., TestWikiIndexQmdSupport
+
+### Community 172 - "Community 172"
+Cohesion: 0.17
+Nodes (7): Test writing page with empty content still works., Tests for /api/wiki/page endpoints., Test reading an existing page., Test reading a non-existent page returns 404., Test writing a new page., Test writing page without page_name returns 400., TestWikiRoutesPage
+
+### Community 173 - "Community 173"
+Cohesion: 0.17
+Nodes (7): Relation engine and graph analysis integration., Write extracted relations to the database.          Args:             relations:, Get the relation engine instance., Run full knowledge graph analysis.          Returns suggestions only — never aut, Generate human-readable report of suggested pages., Execute a list of wiki operations from LLM processing.          Args:, WikiRelationMixin
+
+### Community 174 - "Community 174"
+Cohesion: 0.17
+Nodes (6): Run full graph analysis.          Returns:             Dict with:             -, Compute graph statistics., Generate a human-readable report of suggested pages., Build graph data from wiki index., Build NetworkX graph from graph data., Compute PageRank and identify hub/authority nodes.          Returns:
+
+### Community 175 - "Community 175"
+Cohesion: 0.17
+Nodes (7): Both wiki pages and raw sources in Sources section., auto_link=False does not add Sources section., No sources provided — Sources section not added., Test source citation in synthesize_query., Auto-adds [[wikilinks]] for source_pages in Sources section., Auto-adds markdown links for raw_sources in Sources section., TestSynthesizeWithSources
+
+### Community 176 - "Community 176"
+Cohesion: 0.17
+Nodes (7): Tests for get_path method., Test finding direct path., Test finding indirect path., Test finding path between disconnected nodes returns None., Test path exceeding max_length returns None., Test path from node to itself., TestRelationEnginePath
+
+### Community 177 - "Community 177"
+Cohesion: 0.17
+Nodes (7): Test getting neighbors in both directions., Test getting outgoing neighbors., Test getting incoming neighbors., Test getting neighbors filtered by confidence., Test getting neighbors for non-existent concept., Tests for get_neighbors method., TestRelationEngineNeighbors
+
+### Community 178 - "Community 178"
+Cohesion: 0.17
+Nodes (7): Test CLI argument parsing for --name., 3.1: --name long parameter should be parsed., 3.2: -n short parameter should be parsed., 3.3: mcp --help should mention --name., 3.4: serve --help should mention --name., 3.5: Without --name, args.name should be None., TestCLIArgParsing
+
+### Community 179 - "Community 179"
+Cohesion: 0.17
+Nodes (7): Test _auto_register_mcporter() writes to ~/.mcporter/mcporter.json., 8.1: Should write new service to ~/.mcporter/mcporter.json., 8.2: Should skip if service name already registered., 8.3: Should create ~/.mcporter/ if it doesn't exist., 8.4: Should print success message with URL., 8.5: Should not crash on write errors., TestAutoRegisterMcporter
+
+### Community 180 - "Community 180"
+Cohesion: 0.17
+Nodes (7): Test that status returns graph_stats., End-to-end tests for MCP tool calls (sync wrappers for async FastMCP)., Test ingest → write page → read page cycle., Test search and status tools., Test lint and log tools., Test that status returns pages_by_type., TestMCPIntegration
+
+### Community 181 - "Community 181"
+Cohesion: 0.17
+Nodes (11): 一、决策确认, 二、架构设计, 八、实施顺序, 7.1 保留现有端点 (无需修改), 7.2 新增端点, 十一、文件变更清单, 十二、测试计划, Agent 功能完整实现计划 (+3 more)
+
+### Community 182 - "Community 182"
+Cohesion: 0.17
+Nodes (12): 测试用例 (15), 核心特性, 设计原则, 文件变更, 依赖, code:bash (llmwikify watch [raw/] [options]), code:toml ([project.optional-dependencies]), code:python (class FileSystemWatcher:) (+4 more)
+
+### Community 184 - "Community 184"
+Cohesion: 0.22
+Nodes (11): Eg(), hf(), Jc(), jl(), lf(), ol(), ql(), sf() (+3 more)
+
+### Community 185 - "Community 185"
+Cohesion: 0.27
+Nodes (11): Gv(), xv(), Yv(), bg(), Cg(), Eg(), _g(), kg() (+3 more)
+
+### Community 188 - "Community 188"
+Cohesion: 0.18
+Nodes (11): 1. Initialize, 2. Ingest Sources, 3. Search and Query, 4. Analyze Knowledge Graph, 5. MCP Server for Agents, code:bash (llmwikify init), code:bash (llmwikify ingest document.pdf           # Extract content), code:bash (llmwikify search "topic" -l 10) (+3 more)
+
+### Community 189 - "Community 189"
+Cohesion: 0.18
+Nodes (11): Additional, Agent Layer (v0.30.0+) ⚠️ DEPRECATED, Core, Cross-Source Synthesis (v0.28.0+), ✨ Features, Graph Analyzer (v0.28.0+), Graph Visualization (v0.23.0+), Knowledge Graph (v0.22.0+) (+3 more)
+
+### Community 190 - "Community 190"
+Cohesion: 0.18
+Nodes (11): code:bash (llmwikify graph-query <subcommand> [args]), code:bash (llmwikify graph-query neighbors "Ghana"), code:block39 (=== Graph Query: neighbors(Ghana) ===), code:bash (llmwikify graph-query stats), code:block43 (=== Graph Stats ===), code:bash (llmwikify graph-query context <relation-id>), code:block45 (=== Graph Context: Relation #42 ===), context (+3 more)
+
+### Community 191 - "Community 191"
+Cohesion: 0.18
+Nodes (11): code:python (from llmwikify import Wiki, MCPServer), code:python (from llmwikify import Wiki, MCPServer), code:block5 (Starting MCP server on 0.0.0.0:8765 with HTTP transport...), code:python (server = MCPServer(wiki)), code:yaml (mcp:), code:python (from llmwikify import Wiki, MCPServer), ⚙️ Configuration, Option 1: Auto-Read from Wiki Config (Recommended) (+3 more)
+
+### Community 192 - "Community 192"
+Cohesion: 0.18
+Nodes (11): 5.10 Save to Wiki — 研究报告保存流程, 5.7.1 三阶段保存流程, 5.7.2 Sink 文件格式（复用 QuerySink 设计）, 5.7.3 来源数据存储（raw/research_{topic}/）, 5.7.4 重复研究追加逻辑, 5.7.5 引用格式, 5.7.6 审批后行为, code:block10 (研究报告生成完成) (+3 more)
+
+### Community 193 - "Community 193"
+Cohesion: 0.18
+Nodes (11): 10.1 DreamEditor 调用点 (已确认), 10.2 croniter 依赖 (已确认), 10.3 agent_router 导出 (已确认), 10.4 前端 /agent/status 字段匹配 (已确认), 10.5 关键风险缓解, 10.6 未解决问题, 十、需要确认/检查的事项, code:block22 (agent/wiki_agent.py:78  — DreamEditor(self.wiki, self.data_d) (+3 more)
+
+### Community 194 - "Community 194"
+Cohesion: 0.18
+Nodes (11): 风险 1: WikiToolRegistry.execute() 改为 async, 风险 2: DreamEditor 构造函数签名变更, 风险 3: 循环依赖, 风险 4: 多 wiki 下的 confirmations 查找, 风险 5: WikiScheduler 依赖 croniter, 九、风险评估, 风险 6: API 路径不一致 — 前端 `/agent/*` vs 后端 `/api/agent/*`, 风险 7: confirmations 重启后丢失，无法找到 (+3 more)
+
+### Community 195 - "Community 195"
+Cohesion: 0.18
+Nodes (11): 7.1 State Management (Zustand), 7.2 Component Architecture, 7.3 Key Components, 7.4 API Client Changes, 7. Frontend Architecture Design, code:typescript (// src/llmwikify/web/webui/src/stores/wikiStore.ts), code:block17 (App), code:tsx (// Shows current wiki name, click to switch) (+3 more)
+
+### Community 196 - "Community 196"
+Cohesion: 0.24
+Nodes (6): RemoteWiki - HTTP client for remote llmwikify servers., WikiDiscovery - scans directories for llmwikify wikis., WikiRegistry - manages multiple Wiki instances with discovery and lifecycle., create_multi_wiki(), llmwikify - General-purpose LLM-Wiki CLI and Python Library  Based on Karpathy's, Create a WikiRegistry with multiple wikis.      Args:         config: Optional c
+
+### Community 197 - "Community 197"
+Cohesion: 0.2
+Nodes (3): ActivityEntry, GrowthMetrics, KnowledgeGrowthProps
+
+### Community 198 - "Community 198"
+Cohesion: 0.2
+Nodes (5): Dream Editor - Surgical wiki page editing engine with proposal mode.  Analyzes Q, llmwikify Agent - Autonomous wiki maintenance layer.  ⚠️ DEPRECATED ⚠️  This age, In-memory notification queue for Agent events with optional DB persistence., Tool Registry - Wraps MCP tools for Agent internal use.  Registers all 20+ MCP t, WikiAgent - Main Agent class that orchestrates all Agent components.  ⚠️ DEPRECA
+
+### Community 199 - "Community 199"
+Cohesion: 0.2
+Nodes (5): Create or update a wiki page., Build reference index from all wiki files., Insert or update a page in all indexes., Parse [[wikilinks]] from content., Build index by scanning all wiki markdown files.                  Optimized for
+
+### Community 200 - "Community 200"
+Cohesion: 0.2
+Nodes (6): Tests for single-wiki API endpoints (backward compatible)., GET /api/wiki/status returns wiki status., GET /api/wiki/search searches the wiki., GET /api/wiki/lint health-checks the wiki., GET /api/wiki/recommend gets recommendations., TestSingleWikiAPI
+
+### Community 201 - "Community 201"
+Cohesion: 0.2
+Nodes (6): Tests for WikiServer FastAPI app configuration., Test that server.app is a FastAPI instance., Test that FastAPI app has correct title., Test that MCP ASGI app is mounted when enabled., Test that MCP ASGI app is not mounted when disabled., TestWikiServerApp
+
+### Community 202 - "Community 202"
+Cohesion: 0.2
+Nodes (9): Playwright E2E test fixtures for llmwikify Web UI., Create temporary wiki with test data., Find an available port., Start Unified Server for all tests., Return the server URL for tests., server_port(), start_server(), test_wiki() (+1 more)
+
+### Community 203 - "Community 203"
+Cohesion: 0.2
+Nodes (9): Pytest configuration and fixtures for llmwikify.py tests., Create a temporary wiki directory for testing., Create a Wiki instance with clean initialization., Sample wiki page content with links., Sample extracted PDF content., sample_content(), sample_pdf_content(), temp_wiki() (+1 more)
+
+### Community 204 - "Community 204"
+Cohesion: 0.2
+Nodes (6): Test enhanced lint (P1.2)., Test that lint returns new investigation fields., Test outdated page detection., Test knowledge gap detection., Test redundancy detection., TestSmartLint
+
+### Community 205 - "Community 205"
+Cohesion: 0.2
+Nodes (6): Tests for QmdIndex wrapper class., QmdIndex should initialize correctly., QmdIndex should use custom config values., QmdIndex.search() should return empty list when QMD not available., QmdIndex.embed() should return dict even when not available., TestQmdIndex
+
+### Community 206 - "Community 206"
+Cohesion: 0.2
+Nodes (5): Generate suggestions for improving the knowledge graph.          Types of sugges, Suggest creating pages for high-degree concepts that lack wiki pages., Suggest creating pages for orphan concepts in the relation engine., Suggest improving wikilinks for under-connected pages., Check if a wiki page exists for the given node name.
+
+### Community 207 - "Community 207"
+Cohesion: 0.24
+Nodes (7): _compute_modularity(), detect_communities(), _greedy_modularity_communities(), Detect communities in the knowledge graph.      Args:         index: WikiIndex i, Simple greedy modularity communities using networkx., Compute modularity of a partition., TestCommunityDetection
+
+### Community 208 - "Community 208"
+Cohesion: 0.2
+Nodes (6): Test edge cases and error handling., Empty source lists handled gracefully., None source lists treated as empty., Query with special characters handled safely., Multi-line markdown answer preserved correctly., TestSynthesizeEdgeCases
+
+### Community 209 - "Community 209"
+Cohesion: 0.2
+Nodes (6): Tests for wiki_synthesize — Query knowledge compounding cycle., Test basic synthesize_query functionality., Basic: creates a query answer page., Custom page name overrides auto-generation., Result includes relative page path., TestSynthesizeQueryBasic
+
+### Community 210 - "Community 210"
+Cohesion: 0.2
+Nodes (6): Tests for RelationEngine initialization., Test initializing RelationEngine with explicit wiki_root., Test initializing RelationEngine without wiki_root (infers from DB)., Test get_relation_types returns a copy to prevent mutation., Test that relations table is created on init., TestRelationEngineInit
+
+### Community 211 - "Community 211"
+Cohesion: 0.2
+Nodes (3): Tests for LLM client., Test JSON response parsing., TestJSONParsing
+
+### Community 212 - "Community 212"
+Cohesion: 0.2
+Nodes (6): Test sink_status method., Returns empty when no sink directory., Returns zero sinks when directory is empty., Returns correct status for single sink., Sinks sorted by entry count descending., TestSinkStatus
+
+### Community 213 - "Community 213"
+Cohesion: 0.2
+Nodes (6): Test sink directory is created during init., .sink/ directory created during wiki init., .sink/ listed in created_files during fresh init., .sink/ skipped if already exists., Wiki instance has sink_dir attribute., TestSinkDirectoryCreation
+
+### Community 214 - "Community 214"
+Cohesion: 0.2
+Nodes (6): Test read_page includes sink information., Returns has_sink=False for pages without sink., Returns has_sink=True and entry count., Can read sink files via sink/ prefix., Returns error for nonexistent sink file., TestReadPageWithSinkInfo
+
+### Community 215 - "Community 215"
+Cohesion: 0.2
+Nodes (9): E2E tests for Insights page., Verify no JavaScript errors on Insights page., Verify Synthesis Analyze button works., Verify Graph Analysis button works and shows stats., Verify Insights page loads with all three sections visible., test_graph_analysis_button(), test_insights_no_js_errors(), test_insights_page_loads() (+1 more)
+
+### Community 216 - "Community 216"
+Cohesion: 0.2
+Nodes (9): E2E tests for SearchBar component., Verify Search navigation button is removed from sidebar., Verify clicking search result navigates to editor., Verify SearchBar shows dropdown results when searching., Verify SearchBar handles empty query., test_searchbar_click_result_navigates(), test_searchbar_empty_query(), test_searchbar_no_search_nav_button() (+1 more)
+
+### Community 217 - "Community 217"
+Cohesion: 0.2
+Nodes (9): 📋 执行摘要, 📚 文档, 用户文档, 配置文件, 🎉 总结, 📊 代码变更, 修改的文件, 新增文件 (+1 more)
+
+### Community 218 - "Community 218"
+Cohesion: 0.2
+Nodes (10): 七、前端组件设计, 7.1 视图结构, 7.2 Chat 视图布局, 7.3 Research 面板布局, 7.4 Chat 会话管理, 7.5 研究评分 UI, code:typescript (type ViewMode =), code:block17 (┌───────────────────────────────────────────────────────────) (+2 more)
+
+### Community 219 - "Community 219"
+Cohesion: 0.2
+Nodes (10): 实施步骤, Phase 10: 测试 + 文档, Phase 1: 扩展 `tools.py` 添加确认机制, Phase 2: 扩展 `dream_editor.py` 添加提议模式, Phase 3: 激活 `runner.py` 确认流程, Phase 4: 修改 `scheduler.py` 任务分类, Phase 5: 修改 `wiki_agent.py` 集成, Phase 6: 统一服务器 `mcp/server.py` (+2 more)
+
+### Community 220 - "Community 220"
+Cohesion: 0.2
+Nodes (9): Architecture, Indexing and logging, LLM Wiki, Note, Operations, Optional: CLI tools, The core idea, Tips and tricks (+1 more)
+
+### Community 221 - "Community 221"
+Cohesion: 0.31
+Nodes (6): DreamProposals(), StatusBadge(), DreamProposal, mockApprove, mockProposals, mockReject
+
+### Community 222 - "Community 222"
+Cohesion: 0.31
+Nodes (9): Ig(), jg(), mg(), pg(), qg(), Rg(), Sg(), Tg() (+1 more)
+
+### Community 223 - "Community 223"
+Cohesion: 0.22
+Nodes (6): conn(), _now(), Get current timestamp., Create all tables if they don't exist., Load configuration from multiple sources.                  Priority (high to low, Initialize wiki directory structure.
+
+### Community 224 - "Community 224"
+Cohesion: 0.22
+Nodes (4): Detect knowledge gaps, outdated pages, and redundancy., Full health check output., Brief suggestions output (replaces old `hint` command)., Missing pages and orphan pages output (replaces old `recommend` command).
+
+### Community 225 - "Community 225"
+Cohesion: 0.22
+Nodes (5): Wiki status reporting and orphan detection configuration., Check if a page should be excluded from orphan detection., Generate smart recommendations.          Delegates to WikiAnalyzer — single sour, Generate smart suggestions for wiki improvement.          Deprecated: Use `lint(, WikiStatusMixin
+
+### Community 226 - "Community 226"
+Cohesion: 0.22
+Nodes (3): Test Wiki core class., Test that ingest instructions include source citation guidance., TestWiki
+
+### Community 227 - "Community 227"
+Cohesion: 0.22
+Nodes (9): API Changes, code:bash (mv sink/ wiki/.sink/), Refactored, Removed CLI Commands, Removed Configuration Options, Removed Files, Removed MCP Tools, Sink Migration (+1 more)
+
+### Community 228 - "Community 228"
+Cohesion: 0.22
+Nodes (8): code:bash (llmwikify mcp [OPTIONS]), code:bash (llmwikify serve [OPTIONS]), code:bash (llmwikify read_page "Page Name"), code:block9 (# Page Name), llmwikify CLI Reference, mcp, read_page, serve
+
+### Community 229 - "Community 229"
+Cohesion: 0.22
+Nodes (9): code:yaml (# .wiki-config.yaml), code:python (# claude_wiki.py), code:bash (claude --mcp-file claude_wiki.py), code:yaml (# .wiki-config.yaml), code:python (# web_wiki.py), code:bash (curl http://your-server-ip:8765), Example 1: Claude Code Integration, Example 2: Web API (+1 more)
+
+### Community 230 - "Community 230"
+Cohesion: 0.22
+Nodes (9): 10.7 风险 6-9 详细修复, 风险 6 修复 — 前端路径修正, 风险 7 修复 — confirm_execution() 先查 DB, 风险 8 修复 — Notifications 读写都走 DB, 风险 9 修复 — apply_proposals 同步到 DB, code:typescript (// webui/src/api.ts 和 webui-agent/src/api.ts), code:python (def confirm_execution(self, confirmation_id: str) -> Any:), code:python (class NotificationManager:) (+1 more)
+
+### Community 231 - "Community 231"
+Cohesion: 0.22
+Nodes (9): 功能 2：来源可信度评分系统, 五、详细功能设计, 评分因素, 功能 2：research-analyze 命令 - 深度分析（Phase 2）, 功能 3-5：后续版本, 功能 3：research 命令 - 完整研究（Phase 2，主命令）, 功能 5：定期研究机会扫描, code:bash (llmwikify research-analyze <sources.json>             # 分析来源) (+1 more)
+
+### Community 232 - "Community 232"
+Cohesion: 0.22
+Nodes (9): 6.1 WikiInstance Dataclass, 6.2 WikiRegistry, 6.3 RemoteWiki Client, 6.4 WikiDiscovery Scanner, 6. Backend Implementation Details, code:python (# src/llmwikify/core/wiki_instance.py), code:python (# src/llmwikify/core/wiki_registry.py), code:python (# src/llmwikify/core/remote_wiki.py) (+1 more)
+
+### Community 233 - "Community 233"
+Cohesion: 0.22
+Nodes (9): 10.1 Unit Tests, 10.2 Integration Tests, 10.3 Frontend Tests, 10.4 Test Configuration, 10. Test Strategy, code:python (class TestWikiRegistry:), code:python (class TestMultiWikiAPI:), code:typescript (// WikiSelector.test.tsx) (+1 more)
+
+### Community 234 - "Community 234"
+Cohesion: 0.22
+Nodes (9): 3.1 New Endpoints (Multi-Wiki), 3.2 Modified Endpoints (Add `wiki_id`), 3.3 Response Schemas, 3. API Design, code:block3 (GET    /api/wikis                           # List all regis), code:block4 (# Before:), code:json ({), code:json (// Request) (+1 more)
+
+### Community 235 - "Community 235"
+Cohesion: 0.29
+Nodes (4): Register a new wiki.          Args:             wiki_id: Unique identifier for t, Register a remote wiki.          Args:             wiki_id: Unique identifier fo, Scan directories for .wiki-config.yaml files.          Args:             scan_pa, Initialize registry: load from config, discover local wikis, connect remote.
+
+### Community 236 - "Community 236"
+Cohesion: 0.25
+Nodes (5): Tests for WikiServer configuration options., Test server exposes agent routes returning idle state., Test server with API key authentication., Test server with CORS disabled., TestWikiServerConfiguration
+
+### Community 237 - "Community 237"
+Cohesion: 0.25
+Nodes (5): Ensure existing functionality is not broken., PDF extraction should still work via pymupdf fallback., HTML files should still be extracted., Markdown files should still use direct extraction., TestBackwardCompatibility
+
+### Community 238 - "Community 238"
+Cohesion: 0.25
+Nodes (5): Tests for /api/wiki/search endpoint., Test search endpoint returns results., Test search with limit parameter., Test search for non-existent term returns empty list., TestWikiRoutesSearch
+
+### Community 239 - "Community 239"
+Cohesion: 0.25
+Nodes (5): Tests for /api/wiki/lint endpoint., Test lint endpoint returns expected structure., Test lint with different mode parameter., Test lint with limit parameter., TestWikiRoutesLint
+
+### Community 240 - "Community 240"
+Cohesion: 0.25
+Nodes (5): Tests for /api/wiki/graph endpoint., Test graph endpoint returns expected structure., Test graph with current_page parameter., Test graph with mode parameter., TestWikiRoutesGraph
+
+### Community 241 - "Community 241"
+Cohesion: 0.25
+Nodes (6): api_client(), Unit tests for FastAPI routes., Create a TestClient for the WikiServer., Tests for /api/wiki/recommend endpoint., Test recommend endpoint returns expected structure., TestWikiRoutesRecommend
+
+### Community 242 - "Community 242"
+Cohesion: 0.25
+Nodes (4): populated_index(), Tests for v0.23.0 Graph export and community detection., Create an index with some pages and links., TestReport
+
+### Community 243 - "Community 243"
+Cohesion: 0.25
+Nodes (5): Test page name generation logic., Generates readable page name from query., Long queries are truncated to 50 chars., Collision with existing Query: page sinks instead of creating duplicate., TestQueryPageNaming
+
+### Community 244 - "Community 244"
+Cohesion: 0.25
+Nodes (5): Test log.md integration., auto_log=True appends to log.md., auto_log=False does not modify log.md., Log entry follows parseable format with page link., TestSynthesizeLogging
+
+### Community 245 - "Community 245"
+Cohesion: 0.25
+Nodes (5): Test complete Query compounding cycle: search → read → synthesize → log., End-to-end query flow with real search and synthesis., Query flow including raw source references., Synthesized query page is indexed and searchable., TestFullQueryFlow
+
+### Community 246 - "Community 246"
+Cohesion: 0.25
+Nodes (5): Test that _detect_missing_cross_refs does not produce false positives     from w, [[concepts/Volatility Surface]] should NOT trigger missing ref for         conce, Plain text mention of page name (not in wikilink) IS reported., A page that already links to the candidate is not reported., TestMissingCrossRefDetection
+
+### Community 247 - "Community 247"
+Cohesion: 0.25
+Nodes (5): Test FastMCP integration with service name., 7.1: MCP instance .name should match expected., 7.2: MCP should have wiki_init tool registered., 7.3: Two instances with different names should be independent., TestFastMCPIntegration
+
+### Community 248 - "Community 248"
+Cohesion: 0.25
+Nodes (5): Test config file integration with mcp.name., 5.1: .wiki-config.yaml mcp.name should be used., 5.2: Without mcp.name in config, CLI should fall back to directory name., 5.3: CLI --name should override config mcp.name., TestConfigFileIntegration
+
+### Community 249 - "Community 249"
+Cohesion: 0.25
+Nodes (5): Test read_sink method., Returns empty status when no sink file exists., Parses entries from sink file with hash resolution., Returns relative file path in result., TestReadSink
+
+### Community 250 - "Community 250"
+Cohesion: 0.25
+Nodes (5): Test query_sink._find_or_create_sink_file method., Creates sink file with proper frontmatter and sections., Returns existing sink file without overwriting., Updates formal page frontmatter when creating sink., TestFindOrCreateSinkFile
+
+### Community 251 - "Community 251"
+Cohesion: 0.25
+Nodes (5): Tests for query sink feature — compound answers without duplicate pages., Test lint includes sink_status., lint() result includes sink_status., lint() reflects pending sink entries., TestLintWithSinkStatus
+
+### Community 252 - "Community 252"
+Cohesion: 0.25
+Nodes (5): Test query_sink.get_info_for_page method., Returns has_sink=False when no sink file exists., Returns correct entry count for sink file., Returns has_sink=True but 0 entries for empty sink., TestGetSinkInfoForPage
+
+### Community 253 - "Community 253"
+Cohesion: 0.25
+Nodes (5): Test query_sink.append_to_sink method., Appends query answer to sink file., Includes source pages and raw sources in suggestions., Multiple appends create multiple entries in same sink file., TestAppendToSink
+
+### Community 254 - "Community 254"
+Cohesion: 0.25
+Nodes (7): E2E tests for Editor component., Verify Editor file tree shows page names., Verify Save button is visible in Editor., Verify Editor shows page content as text, not [object Object]., test_editor_file_tree_shows_pages(), test_editor_loads_page_content(), test_editor_save_button_visible()
+
+### Community 255 - "Community 255"
+Cohesion: 0.25
+Nodes (8): [0.30.0] - 2026-04-24, Added — Agent Layer (Completed v0.30.0), Added — Phase 2: Wiki Mixin Refactoring (2026-04-21), Added — Web UI Enhancements (2026-04-22 ~ 2026-04-24), Architecture, Changed, Fixed — Code Quality (2026-04-22 ~ 2026-04-24), Tests
+
+### Community 256 - "Community 256"
+Cohesion: 0.25
+Nodes (8): [0.28.0] - 2026-04-17, Added — P0: Enhanced Source Page Format, Added — P1.1: Cross-Source Synthesis Engine, Added — P1.2: Smart Lint 2.0, Added — P1.3: Knowledge Graph Analyzer, Changed, Fixed, Tests
+
+### Community 257 - "Community 257"
+Cohesion: 0.25
+Nodes (7): code:bash (llmwikify serve --web), Files, Legacy WebUI (Deprecated), Migration, Status, Usage, Why Archived
+
+### Community 258 - "Community 258"
+Cohesion: 0.25
+Nodes (8): 📝 使用示例, 示例 1: Claude Code 集成, 示例 2: Web API 服务, 示例 3: 开发环境, code:python (from llmwikify import Wiki, MCPServer, load_config), code:python (server = MCPServer(wiki, config={), code:python (from llmwikify import Wiki, MCPServer), code:yaml (# .wiki-config.yaml)
+
+### Community 259 - "Community 259"
+Cohesion: 0.25
+Nodes (7): 1. Basic Usage (Default Configuration), 🎯 Best Practices, code:python (from llmwikify import Wiki, MCPServer), code:block2 (Starting MCP server with STDIO transport...), MCP Server Setup Guide, 🚀 Quick Start, 📖 Related
+
+### Community 260 - "Community 260"
+Cohesion: 0.25
+Nodes (6): 6.1 Agent 路由, 6.2 Research 路由, 6.3 SSE 流式事件类型, 6.4 SSE 连接管理, 6.5 JWT 认证, 六、API 端点设计
+
+### Community 261 - "Community 261"
+Cohesion: 0.25
+Nodes (7): 📋 目录, 风险评估, 技术风险, 进度风险, 变更日志, 参考文档, llmwikify Agent 集成规划文档
+
+### Community 262 - "Community 262"
+Cohesion: 0.25
+Nodes (8): 技术架构, 架构分层, 目录结构, 依赖管理, code:block13 (┌─────────────────────────────────────────────────────────┐), code:block14 (llmwikify/), code:toml (# pyproject.toml), code:bash (# 仅原有功能 (不受影响))
+
+### Community 263 - "Community 263"
+Cohesion: 0.25
+Nodes (8): 鉴权设计, 鉴权使用方式, 预留扩展点, 前端适配, 当前实现：Bearer Token (API Key), code:typescript (// api.ts), code:python (class AuthMiddleware(BaseHTTPMiddleware):), code:bash (# 启动带鉴权的服务器)
+
+### Community 264 - "Community 264"
+Cohesion: 0.25
+Nodes (8): 确认机制设计, 核心原则, 确认策略矩阵, 确认粒度, 确认超时, 核心组件, 确认流程, code:block5 (用户/Agent 触发操作)
+
+### Community 265 - "Community 265"
+Cohesion: 0.25
+Nodes (8): 问题 1：mcporter 找不到, 故障排除, 问题 2：MCP 服务离线, 问题 3：systemd 服务启动失败, 问题 4：opencode 无法连接, code:bash (# 检查是否全局安装), code:bash (journalctl --user -u mcporter-bridge -n 50 --no-pager), code:bash (# 手动测试启动)
+
+### Community 266 - "Community 266"
+Cohesion: 0.29
+Nodes (4): conn(), WikiIndex - SQLite FTS5 full-text search and reference tracking., Create all tables if they don't exist., Relation engine for knowledge graph relationships.
+
+### Community 267 - "Community 267"
+Cohesion: 0.43
+Nodes (4): EditEntry, EditHistory(), formatTime(), mockStatus
+
+### Community 268 - "Community 268"
+Cohesion: 0.43
+Nodes (4): formatTime(), IngestLog(), IngestLogEntry, mockLog
+
+### Community 269 - "Community 269"
+Cohesion: 0.38
+Nodes (3): MCPServer, MCP server for wiki operations., Register all wiki tools with MCP.
+
+### Community 271 - "Community 271"
+Cohesion: 0.29
+Nodes (4): example_1_mcp_server(), example_4_claude_config(), llmwikify MCP 集成示例  演示： 1. 启动 MCP 服务器 2. MCP 工具列表 3. 与外部 Agent 集成的模式, 示例 4：Claude Desktop MCP 配置
+
+### Community 272 - "Community 272"
+Cohesion: 0.29
+Nodes (7): code:python (# settings.py), code:python (from flask import Flask), code:dockerfile (FROM python:3.11-slim), Django Integration, Docker Deployment, Flask Integration, 🔌 Integration Guide
+
+### Community 273 - "Community 273"
+Cohesion: 0.29
+Nodes (7): ⚠️ 注意事项, 依赖要求, 端口冲突, 网络访问, code:bash (pip install mcp), code:python (server.serve(port=8766)  # 使用其他端口), code:bash (# Linux example)
+
+### Community 274 - "Community 274"
+Cohesion: 0.29
+Nodes (6): 1. 配置选项, ✅ 完成的功能, 2. 支持的传输协议, 3. 配置方式, code:python (server = MCPServer(wiki, config={), code:yaml (# .wiki-config.yaml)
+
+### Community 275 - "Community 275"
+Cohesion: 0.29
+Nodes (7): 🔧 技术实现, 配置优先级, 配置合并逻辑, 服务器启动流程, code:block15 (1. serve() 方法参数 (最高)), code:python (# config.py), code:python (def serve(self, transport=None, host=None, port=None):)
+
+### Community 276 - "Community 276"
+Cohesion: 0.29
+Nodes (5): code:python (server.serve(transport="stdio")), HTTP, SSE (Server-Sent Events), STDIO (Default), 🔌 Transport Protocols
+
+### Community 277 - "Community 277"
+Cohesion: 0.29
+Nodes (7): 四、核心组件设计, 4.1 AgentService（新）, 4.2 LLMClient 增强, 4.3 ResearchEngine, code:python (class AgentService:), code:python (class LLMClient:), code:python (@dataclass)
+
+### Community 278 - "Community 278"
+Cohesion: 0.29
+Nodes (7): 实施计划, 总时间估算, Phase 1: Agent 核心基础 (6 天), Phase 2: Memory Layers (3 天), Phase 3: WebUI 迁移 + Agent 功能 (12 天), Phase 4: 增强功能 (5 天), Phase 5: Docker + 测试 (3 天)
+
+### Community 279 - "Community 279"
+Cohesion: 0.29
+Nodes (7): 附录：技术细节, Agent Runner 抽取, code:python (class WikiAgentRunner(AgentRunner):), code:python (class DreamEditor:), code:tsx (// src/App.tsx), Dream Editor 设计, WebUI 组件结构
+
+### Community 280 - "Community 280"
+Cohesion: 0.29
+Nodes (7): 9a. 修改 `api.ts`, 9b. 新建 `Confirmations.tsx`, 9c. 新建 `DreamProposals.tsx`, 9d. 新建 `IngestLog.tsx`, 9e. 新建 `EditHistory.tsx`, 9f. 修改现有组件, Phase 9: 前端适配
+
+### Community 281 - "Community 281"
+Cohesion: 0.29
+Nodes (6): 客户端配置, 相关文件, code:json ({), code:json ({), MCPorter Bridge 部署指南, opencode
+
+### Community 282 - "Community 282"
+Cohesion: 0.29
+Nodes (7): 1. 安装 mcporter（Node.js，全局安装）, 2. 安装 mcporter-bridge（Python）, 安装, code:bash (# 全局安装（推荐，所有项目可用）), code:bash (mcporter --version), code:bash (pip install mcporter-bridge), code:bash (python3 -m mcporter_bridge --help)
+
+### Community 283 - "Community 283"
+Cohesion: 0.29
+Nodes (7): 1. 创建 mcporter 注册表, 2. 注册表配置说明, 3. 添加新 MCP 服务, 配置, code:json ({), code:json ({), code:json ({)
+
+### Community 284 - "Community 284"
+Cohesion: 0.29
+Nodes (7): 功能 1：research-search 命令 - 外部搜索资料（Phase 1）, 交互流程, arXiv ID 精确查询, CLI 接口, code:bash (llmwikify research-search <topic> [options]), code:bash (llmwikify research-search 2401.12345              # 通过 arXiv), code:block7 ($ llmwikify research-search "transformer attention")
+
+### Community 285 - "Community 285"
+Cohesion: 0.29
+Nodes (6): 八、配置设计, 九、与现有系统的集成点, 二、四模块协同架构（最终版）, code:block1 (llmwikify research "topic"), code:yaml (search:), llmwikify v0.31.0 自动研究功能设计
+
+### Community 286 - "Community 286"
+Cohesion: 0.29
+Nodes (6): 当前基线, 预期测试总数, 关键设计决策, 从 graphify 借鉴的内容, 与 LLM Wiki Principles 的对齐, llmwikify v0.21.0–v0.23.0 实施规划
+
+### Community 287 - "Community 287"
+Cohesion: 0.29
+Nodes (7): 5.1 Extended `.wiki-config.yaml`, 5.2 Config File Location Priority, 5.3 Environment Variable Expansion, 5. Configuration System Design, code:block10 (1. CLI flag: --config /path/to/config), code:yaml (remote:), code:yaml (# ==========================================================)
+
+### Community 288 - "Community 288"
+Cohesion: 0.29
+Nodes (6): 11. Risk Mitigation, 12. Dependencies, 13. Versioning, Backend, Frontend, Multi-Wiki Management System - Implementation Plan
+
+### Community 289 - "Community 289"
+Cohesion: 0.6
+Nodes (5): filterHighlight(), highlightFilter(), neighbourhoodHighlight(), selectNode(), selectNodes()
+
+### Community 290 - "Community 290"
+Cohesion: 0.4
+Nodes (4): Confirmations(), mockApprove, mockList, mockReject
+
+### Community 291 - "Community 291"
+Cohesion: 0.33
+Nodes (3): Ingest a source and return extracted content., Append entry to wiki log., _slugify()
+
+### Community 292 - "Community 292"
+Cohesion: 0.33
+Nodes (4): Test init with --agent claude., CLAUDE.md is no longer created (wiki.md is single source of truth)., .mcp.json created with Claude format., TestInitAgentClaude
+
+### Community 293 - "Community 293"
+Cohesion: 0.33
+Nodes (4): Test init with --agent codex., AGENTS.md is no longer created for codex., .opencode.json created., TestInitAgentCodex
+
+### Community 294 - "Community 294"
+Cohesion: 0.33
+Nodes (3): Show page references., Show reference statistics., Show broken references.
+
+### Community 295 - "Community 295"
+Cohesion: 0.33
+Nodes (4): main(), CLI commands for llmwikify., Main CLI entry point., Command-line interface for llmwikify.
+
+### Community 296 - "Community 296"
+Cohesion: 0.33
+Nodes (4): Tests for /api/wiki/status endpoint., Test status endpoint returns expected structure., Test status with pages in the wiki., TestWikiRoutesStatus
+
+### Community 297 - "Community 297"
+Cohesion: 0.33
+Nodes (4): Tests for /api/health endpoint., Test health check endpoint returns expected structure., Test health check features information., TestHealthEndpoint
+
+### Community 298 - "Community 298"
+Cohesion: 0.33
+Nodes (3): Run community detection and label communities.          Returns:             Dic, Generate a label for a community based on member names.          Strategy:, Find nodes that connect multiple communities.          Returns:             List
+
+### Community 299 - "Community 299"
+Cohesion: 0.33
+Nodes (4): Test that fix_wikilinks correctly updates page_links after re-indexing., After fix + re-index, page_links.target_page uses full path format., Fixing a page with multiple broken links updates all targets., TestFixWikilinksReindex
+
+### Community 300 - "Community 300"
+Cohesion: 0.33
+Nodes (4): Test sink urgency tracking., sink_status returns urgency field for each sink., lint() returns sink_warnings for stale sinks., TestSinkUrgency
+
+### Community 301 - "Community 301"
+Cohesion: 0.33
+Nodes (4): Test search attaches sink information., Search results include has_sink and sink_entries., Search shows has_sink=True when sink exists., TestSearchWithSinkInfo
+
+### Community 302 - "Community 302"
+Cohesion: 0.33
+Nodes (4): Test query_sink._update_page_sink_meta method., Adds sink_path to existing frontmatter., Adds frontmatter to page that has none., TestUpdatePageSinkMeta
+
+### Community 303 - "Community 303"
+Cohesion: 0.33
+Nodes (4): Test wiki.md includes sink documentation., wiki.md includes Query Sink section., wiki.md Answer a Query section mentions sink behavior., TestWikiMdTemplate
+
+### Community 304 - "Community 304"
+Cohesion: 0.33
+Nodes (4): Test _update_index_file shows sink markers., index.md includes sink entry count., index.md has no sink marker for pages without sink., TestUpdateIndexFileWithSink
+
+### Community 305 - "Community 305"
+Cohesion: 0.33
+Nodes (6): [0.24.0] - 2026-04-13, Breaking Changes, Changed, MCP Server, Refactored, Removed (Dead Code Cleanup)
+
+### Community 306 - "Community 306"
+Cohesion: 0.33
+Nodes (6): API Additions, code:bash (pip install llmwikify[graph]), New CLI Commands, New Optional Dependencies, No `graph_index.md` Generated, v0.22.x → v0.23.0
+
+### Community 307 - "Community 307"
+Cohesion: 0.33
+Nodes (6): API Import Changes, code:bash (# Old (still works via backward compatibility shim)), code:block2 (src/llmwikify/server/), New `server/` Module Structure, Unified FastAPI Server, v0.30.0 → v0.30.1
+
+### Community 308 - "Community 308"
+Cohesion: 0.33
+Nodes (6): code:python (from llmwikify import Wiki), code:python (from llmwikify import Wiki, create_wiki), code:python (from llmwikify import Wiki), MCP Integration (for AI Agents), 🐍 Python Usage, Running Web Server Programmatically
+
+### Community 309 - "Community 309"
+Cohesion: 0.33
+Nodes (5): Current Issues (v0.30.1), Known Issues, Resolved Issues, v0.28.0–v0.29.0 (Archived), v0.30.0–v0.30.1
+
+### Community 310 - "Community 310"
+Cohesion: 0.33
+Nodes (6): code:python (server.serve(port=8766)), code:bash (pip install mcp), Connection Refused, Import Error, Port Already in Use, 🔧 Troubleshooting
+
+### Community 311 - "Community 311"
+Cohesion: 0.33
+Nodes (6): 验收标准, 解耦验证, 自主场景验证, 半自主边界验证, Agent 功能验证, WebUI 验证
+
+### Community 312 - "Community 312"
+Cohesion: 0.33
+Nodes (6): 确认相关请求示例, 通用请求示例, API 设计, code:bash (# 获取待确认列表（按分组）), code:bash (# 获取 Wiki 状态), REST API 规范
+
+### Community 313 - "Community 313"
+Cohesion: 0.33
+Nodes (6): 1. 检查 mcporter 发现, 验证, 2. 检查 mcporter-bridge 端点, 3. 端到端测试, code:bash (# 设置 PATH 包含 mcporter), code:bash (# HTTP 模式（systemd 服务）)
+
+### Community 314 - "Community 314"
+Cohesion: 0.33
+Nodes (6): 服务文件位置, 服务配置, 常用命令, code:bash (# 设置环境变量（用户级 systemd 需要）), code:ini ([Unit]), systemd 服务管理
+
+### Community 315 - "Community 315"
+Cohesion: 0.33
+Nodes (6): 七、文件变更清单（最终版）, 修改文件, 存储目录结构, code:block12 (wiki/), Phase 1 新增文件, Phase 2 新增文件（后续）
+
+### Community 316 - "Community 316"
+Cohesion: 0.33
+Nodes (6): 8.1 Single Wiki Mode (Zero Config), 8.2 Legacy API Routes, 8.3 Migration Path, 8. Backward Compatibility Strategy, code:python (# In routes.py:), code:block23 (Phase 1: Single wiki, no config changes needed)
+
+### Community 317 - "Community 317"
+Cohesion: 0.33
+Nodes (6): 9. Implementation Phases, Phase 1: Core Registry (Week 1-2), Phase 2: API Layer (Week 2-3), Phase 3: Frontend Multi-Wiki (Week 3-4), Phase 4: MCP Integration (Week 4-5), Phase 5: CLI & Polish (Week 5-6)
+
+### Community 318 - "Community 318"
+Cohesion: 0.4
+Nodes (3): GraphAnalysis, Insights(), SynthesisResult
+
+### Community 319 - "Community 319"
+Cohesion: 0.5
+Nodes (5): xd(), Bk(), Gd(), Kd(), zk()
+
+### Community 320 - "Community 320"
+Cohesion: 0.4
+Nodes (3): main(), Main CLI entry point., Close database connection.
+
+### Community 321 - "Community 321"
+Cohesion: 0.4
+Nodes (3): __init__.py version should match pyproject.toml version., Version should follow semver-like format., TestVersionConsistency
+
+### Community 322 - "Community 322"
+Cohesion: 0.4
+Nodes (3): CLI should have a sink-related command., Wiki class should have read_sink method., TestSinkCLI
+
+### Community 323 - "Community 323"
+Cohesion: 0.4
+Nodes (3): prompts/__init__.py should export PromptRegistry or related symbols., prompts/_defaults/__init__.py should have meaningful content., TestPromptsInit
+
+### Community 324 - "Community 324"
+Cohesion: 0.4
+Nodes (3): Unknown formats should fall back to text extraction, not fail silently., Extract should handle missing files gracefully., TestFallbackBehavior
+
+### Community 325 - "Community 325"
+Cohesion: 0.4
+Nodes (3): CLI should not hardcode developer path /home/ll/mining_news., WIKI_ROOT env var should be respected., TestCLIDefaultWikiRoot
+
+### Community 327 - "Community 327"
+Cohesion: 0.4
+Nodes (5): Agent-Aware Init, code:bash (# Full setup with agent config), code:bash (llmwikify init --agent opencode --force), Raw Source Analysis, v0.24.x → v0.25.0
+
+### Community 328 - "Community 328"
+Cohesion: 0.4
+Nodes (4): code:python (from llmwikify import Wiki  # Still works), v0.29.x → v0.30.0, What Changed Internally, Wiki Class Refactored into Mixins
+
+### Community 329 - "Community 329"
+Cohesion: 0.4
+Nodes (4): Database Schema Change, New CLI Subcommand, Prompt Changes, v0.21.x → v0.22.0
+
+### Community 330 - "Community 330"
+Cohesion: 0.4
+Nodes (5): code:bash (pip install llmwikify[watch]), New CLI Command, New Optional Dependency, No Breaking Changes, v0.20.x → v0.21.0
+
+### Community 331 - "Community 331"
+Cohesion: 0.4
+Nodes (5): Chaining Mode, code:python (# Old (v0.17.x)), code:yaml (llm:), Prompts Moved to YAML, v0.17.x → v0.18.0
+
+### Community 332 - "Community 332"
+Cohesion: 0.4
+Nodes (5): code:bash (llmwikify lint [OPTIONS]), code:block14 (=== Wiki Health Check ===), code:block15 (=== Wiki Suggestions ===), code:block16 (=== Wiki Recommendations ===), lint
+
+### Community 333 - "Community 333"
+Cohesion: 0.4
+Nodes (5): code:bash (llmwikify references "Page Name" [OPTIONS]), code:block24 (=== References: Page Name ===), code:block25 (=== Reference Statistics ===), code:block26 (=== Broken References ===), references
+
+### Community 334 - "Community 334"
+Cohesion: 0.4
+Nodes (5): 🎯 向后兼容性, API 变更, code:python (server = MCPServer(wiki)), code:python (server = MCPServer(wiki)), code:python (server = MCPServer(wiki, config={"port": 9999}))
+
+### Community 335 - "Community 335"
+Cohesion: 0.4
+Nodes (5): 🧪 测试结果, 配置测试, 功能测试, code:block4 (✅ Default MCP Configuration), code:block5 (✅ MCPServer instantiation with default config)
+
+### Community 336 - "Community 336"
+Cohesion: 0.4
+Nodes (5): 🔒 安全考虑, 推荐配置（本地使用）, 网络暴露配置（谨慎使用）, code:yaml (mcp:), code:yaml (mcp:)
+
+### Community 337 - "Community 337"
+Cohesion: 0.4
+Nodes (5): code:bash (python3 -c "), code:bash (python3 -c "), Test HTTP Transport, Test STDIO Transport, 🧪 Testing
+
+### Community 338 - "Community 338"
+Cohesion: 0.4
+Nodes (5): code:yaml (# .wiki-config.yaml), code:yaml (# .wiki-config.yaml), Expose to Network, Local Only (Recommended), 🔒 Security Considerations
+
+### Community 339 - "Community 339"
+Cohesion: 0.4
+Nodes (5): 十、实施计划, Phase 1: 基础设施（1-2 天）, Phase 2: Chat 界面（1-2 天）, Phase 3: Deep Research（2-3 天）, Phase 4: 完善与集成（1-2 天）
+
+### Community 340 - "Community 340"
+Cohesion: 0.4
+Nodes (5): 1. Agent 核心系统, 2. Memory Layers, 3. WebUI - Agent 功能, 4. 自主任务系统, 新增 Agent 功能
+
+### Community 341 - "Community 341"
+Cohesion: 0.4
+Nodes (5): 4.1 Proposals, 4.2 Notifications, 4.3 Confirmations, 4.4 Ingest, 四、AgentDatabase 新增方法
+
+### Community 342 - "Community 342"
+Cohesion: 0.4
+Nodes (5): 3.1 现有表 (db.py), 3.2 新增表, code:sql (-- 已存在: chat_sessions, tool_calls, research_sessions), code:sql (-- dream_proposals (持久化 + wiki 隔离)), 三、数据库 Schema
+
+### Community 343 - "Community 343"
+Cohesion: 0.4
+Nodes (5): 代码复用策略, 可复用的基础设施, 精简后的文件变更, code:python (# NotificationManager 模式（现有）), 复用示例：NotificationManager → ConfirmationManager
+
+### Community 344 - "Community 344"
+Cohesion: 0.4
+Nodes (5): 架构演进, 方案 A：双 Server（初始想法，已废弃）, 方案 B：单 Server（最终方案）, code:block1 (MCP Server (8765)  ← 提供 wiki 工具), code:block2 (┌─────────────────────────────────────────────────────────┐)
+
+### Community 345 - "Community 345"
+Cohesion: 0.4
+Nodes (5): 高级用法, 自定义环境变量, code:bash (# 创建 heavy MCP 目录), code:bash (# 覆盖 mcporter 二进制路径), 懒加载（按需加载大型 MCP）
+
+### Community 346 - "Community 346"
+Cohesion: 0.4
+Nodes (5): 一、功能定位与边界, 1.1 核心价值, 1.2 绝对红线（永远不能突破）, 1.3 关键设计决策确认, 1.4 与现有原则的对齐矩阵
+
+### Community 347 - "Community 347"
+Cohesion: 0.4
+Nodes (5): 六、核心数据结构, 5.2 ResearchReport（新增）, 6.1 SearchResult, code:python (class ResultType(Enum):), code:python (@dataclass)
+
+### Community 348 - "Community 348"
+Cohesion: 0.4
+Nodes (5): 十、实施检查清单, Phase 1 (research-search 命令 - 纯搜索，3 周), Phase 2 Part 1 (research-analyze 命令 - 单次分析，2 周), Phase 2 Part 2 (research 主命令 - 多轮迭代，2 周), Phase 3 (高级功能，后续)
+
+### Community 349 - "Community 349"
+Cohesion: 0.4
+Nodes (5): 三、研究报告格式设计, 3.1 报告模板（Phase 1）, 3.2 文件命名规范, code:markdown (# 研究报告：{主题}), code:block3 (wiki/Research/)
+
+### Community 350 - "Community 350"
+Cohesion: 0.4
+Nodes (5): 2.1 New Files (Backend), 2.2 Modified Files (Backend), 2.3 New Files (Frontend), 2.4 Modified Files (Frontend), 2. File Change List
+
+### Community 351 - "Community 351"
+Cohesion: 0.4
+Nodes (5): 1. Architecture Overview, code:block1 (User → WikiServer → Wiki(root) → WikiIndex(db_path)), code:block2 (User → WikiServer → WikiRegistry), Current State (Single Wiki), Target State (Multi-Wiki)
+
+### Community 352 - "Community 352"
+Cohesion: 0.5
+Nodes (3): main(), Standalone Web UI server for llmwikify.  Thin wrapper around the unified server, CLI entry point for standalone unified server.
+
+### Community 355 - "Community 355"
+Cohesion: 0.5
+Nodes (3): Tests for /api/wiki/sink/status endpoint., Test sink status endpoint returns expected structure., TestWikiRoutesSink
+
+### Community 356 - "Community 356"
+Cohesion: 0.5
+Nodes (3): Tests for /api/wiki/graph_analyze endpoint., Test graph analyze endpoint returns expected structure., TestWikiRoutesGraphAnalyze
+
+### Community 360 - "Community 360"
+Cohesion: 0.5
+Nodes (4): [0.12.5] - 2026-04-10, Added, Changed, Testing
+
+### Community 361 - "Community 361"
+Cohesion: 0.5
+Nodes (4): [0.29.0] - 2026-04-17, Added — Web UI P1 Integration, Changed, Fixed
+
+### Community 362 - "Community 362"
+Cohesion: 0.5
+Nodes (4): [0.15.0] - 2026-04-10, Added, Changed, Principle Coverage
+
+### Community 363 - "Community 363"
+Cohesion: 0.5
+Nodes (4): [0.27.0] - 2026-04-16, Added, Changed, Fixed
+
+### Community 364 - "Community 364"
+Cohesion: 0.5
+Nodes (4): [0.16.0] - 2026-04-11, Added, Changed, Principle Coverage
+
+### Community 365 - "Community 365"
+Cohesion: 0.5
+Nodes (4): [0.30.1] - 2026-04-27, Added — Unified FastAPI Server, Changed, Fixed — Code Quality & Bugs
+
+### Community 366 - "Community 366"
+Cohesion: 0.5
+Nodes (4): [0.26.0] - 2026-04-16, Added, Changed, Planned
+
+### Community 367 - "Community 367"
+Cohesion: 0.5
+Nodes (4): BREAKING: `update_existing` Parameter Removed, code:python (# Old (v0.13.x)), MCP Tool Change, v0.13.x → v0.14.0
+
+### Community 368 - "Community 368"
+Cohesion: 0.5
+Nodes (4): code:yaml (name: "template_name"), New Configuration, Prompt System Changes, v0.18.x → v0.19.0
+
+### Community 369 - "Community 369"
+Cohesion: 0.5
+Nodes (4): code:bash (pip install llmwikify[extractors]), New Optional Dependency, No Breaking Changes, v0.19.x → v0.20.0
+
+### Community 370 - "Community 370"
+Cohesion: 0.5
+Nodes (4): code:bash (llmwikify synthesize "<query>" [OPTIONS]), code:bash (echo "Gold prices rose 15% in Q1 2026." | llmwikify synthesi), code:block33 (✅ Synthesized: Query: What happened to gold prices?), synthesize
+
+### Community 371 - "Community 371"
+Cohesion: 0.5
+Nodes (4): code:bash (llmwikify ingest <file> [OPTIONS]), code:block4 (Ingested: Article Title (markdown)), code:block5 (LLM Plan (5 operations):), ingest
+
+### Community 372 - "Community 372"
+Cohesion: 0.5
+Nodes (4): code:bash (llmwikify search "<query>" [OPTIONS]), code:block11 (Search results for: gold mining), code:block12 (No results found for: nonexistent query), search
+
+### Community 373 - "Community 373"
+Cohesion: 0.5
+Nodes (4): code:bash (llmwikify watch [OPTIONS]), code:block35 (=== File Watcher ===), code:block36 (=== File Watcher ===), watch
+
+### Community 374 - "Community 374"
+Cohesion: 0.5
+Nodes (4): 📋 Available Tools (20 Total), code:json ({), code:json ({), wiki_synthesize (v0.12.6+)
+
+### Community 375 - "Community 375"
+Cohesion: 0.5
+Nodes (4): 共用组件, 新增交互, code:block21 (Deep Research), 十二、与现有 llmwikify 的关系
+
+### Community 376 - "Community 376"
+Cohesion: 0.5
+Nodes (4): 项目概述, 项目目标, 核心原则, 项目范围
+
+### Community 377 - "Community 377"
+Cohesion: 0.5
+Nodes (4): 路由表, 最终架构, 前端 API 端点（`api.ts` 已定义 + 新增）, code:typescript (// Wiki 端点)
+
+### Community 378 - "Community 378"
+Cohesion: 0.5
+Nodes (4): 概述, 核心优势, 架构, code:block1 (┌───────────────────────────────────────────────────────────)
+
+### Community 379 - "Community 379"
+Cohesion: 0.5
+Nodes (4): 四、命令体系设计, 4.1 职责边界矩阵, 4.2 完整控制流, code:block4 (第 1 轮: plan → 任务拆解 + 生成关键词)
+
+### Community 380 - "Community 380"
+Cohesion: 0.5
+Nodes (4): 版本路线图, 依赖关系, code:block1 (v0.21.0  Watch 模式 + Git Hook), code:block2 (v0.21.0 (独立)              v0.22.0 (独立))
+
+### Community 381 - "Community 381"
+Cohesion: 0.5
+Nodes (4): 实施检查清单, v0.21.0, v0.22.0, v0.23.0
+
+### Community 382 - "Community 382"
+Cohesion: 0.5
+Nodes (4): 4.1 Registry Database (New), 4.2 Per-Wiki Database (Unchanged), 4. Database Schema, code:sql (-- Registered wikis)
+
+### Community 383 - "Community 383"
+Cohesion: 0.67
+Nodes (3): [0.11.0] - 2026-04-10, Added, Changed
+
+### Community 384 - "Community 384"
+Cohesion: 0.67
+Nodes (3): [0.18.0] - 2026-04-11, Added, Changed
+
+### Community 385 - "Community 385"
+Cohesion: 0.67
+Nodes (3): [0.23.0] - 2026-04-12, Added, Principle Coverage
+
+### Community 386 - "Community 386"
+Cohesion: 0.67
+Nodes (3): [0.21.0] - 2026-04-12, Added, Principle Coverage
+
+### Community 387 - "Community 387"
+Cohesion: 0.67
+Nodes (3): [0.22.0] - 2026-04-12, Added, Principle Coverage
+
+### Community 388 - "Community 388"
+Cohesion: 0.67
+Nodes (3): [0.14.0] - 2026-04-10, Added, Changed
+
+### Community 389 - "Community 389"
+Cohesion: 0.67
+Nodes (3): [0.10.0] - 2026-04-10, Changed, Fixed
+
+### Community 390 - "Community 390"
+Cohesion: 0.67
+Nodes (3): [0.12.4] - 2026-04-10, Added, Changed
+
+### Community 391 - "Community 391"
+Cohesion: 0.67
+Nodes (3): [0.9.0] - 2026-04-09, Added, Features
+
+### Community 392 - "Community 392"
+Cohesion: 0.67
+Nodes (3): code:bash (# Basic (zero dependencies)), 📦 Installation, Optional Extras
+
+### Community 393 - "Community 393"
+Cohesion: 0.67
+Nodes (3): code:bash (llmwikify write_page "Page Name" [OPTIONS]), code:block7 (✅ Wiki page written: wiki/Page Name.md), write_page
+
+### Community 394 - "Community 394"
+Cohesion: 0.67
+Nodes (3): code:bash (llmwikify log <operation> <description>), code:block20 (✅ Log entry appended: operation | description), log
+
+### Community 395 - "Community 395"
+Cohesion: 0.67
+Nodes (3): batch, code:bash (llmwikify batch <directory-or-glob> [OPTIONS]), code:block28 (=== Batch Ingest ===)
+
+### Community 396 - "Community 396"
+Cohesion: 0.67
+Nodes (3): code:bash (llmwikify status), code:block18 (=== Wiki Status ===), status
+
+### Community 397 - "Community 397"
+Cohesion: 0.67
+Nodes (3): build-index, code:bash (llmwikify build-index [OPTIONS]), code:block22 (=== Building Reference Index ===)
+
+### Community 398 - "Community 398"
+Cohesion: 0.67
+Nodes (3): code:bash (llmwikify community-detect [OPTIONS]), code:block49 (=== Community Detection ===), community-detect
+
+### Community 399 - "Community 399"
+Cohesion: 0.67
+Nodes (3): code:bash (llmwikify init [OPTIONS]), code:block2 (✅ Wiki initialized at /path/to/project), init
+
+### Community 400 - "Community 400"
+Cohesion: 0.67
+Nodes (3): code:bash (llmwikify export-graph [OPTIONS]), code:block47 (=== Exporting Graph ===), export-graph
+
+### Community 401 - "Community 401"
+Cohesion: 0.67
+Nodes (3): code:bash (llmwikify report [OPTIONS]), code:block51 (=== Surprise Report ===), report
+
+### Community 402 - "Community 402"
+Cohesion: 0.67
+Nodes (3): code:bash (llmwikify sink-status), code:block30 (=== Query Sink Status ===), sink-status
+
+## Knowledge Gaps
+- **2527 isolated node(s):** `n`, `Allow running llmwikify as a module: python3 -m llmwikify`, `Configuration management for llmwikify.`, `Get a deep copy of the default configuration.`, `Load configuration from .wiki-config.yaml, falling back to defaults.      Args:` (+2522 more)
+  These have ≤1 connection - possible missing edges or undocumented components.
+- **81 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+
+## Suggested Questions
+_Questions this graph is uniquely positioned to answer:_
+
+- **Why does `Wiki` connect `Community 16` to `Community 128`, `Community 130`, `Community 5`, `Community 143`, `Community 144`, `Community 146`, `Community 147`, `Community 20`, `Community 18`, `Community 25`, `Community 28`, `Community 159`, `Community 160`, `Community 35`, `Community 37`, `Community 40`, `Community 299`, `Community 173`, `Community 46`, `Community 50`, `Community 187`, `Community 62`, `Community 68`, `Community 72`, `Community 204`, `Community 79`, `Community 84`, `Community 89`, `Community 94`, `Community 225`, `Community 109`, `Community 117`, `Community 118`, `Community 246`, `Community 127`?**
+  _High betweenness centrality (0.097) - this node is a cross-community bridge._
+- **Why does `path` connect `Community 57` to `Community 3`, `Community 134`, `Community 8`, `Community 136`, `Community 12`, `Community 13`, `Community 15`, `Community 143`, `Community 18`, `Community 147`, `Community 22`, `Community 159`, `Community 34`, `Community 291`, `Community 37`, `Community 295`, `Community 40`, `Community 53`, `Community 183`, `Community 61`, `Community 190`, `Community 320`, `Community 321`, `Community 66`, `Community 322`, `Community 196`, `Community 325`, `Community 323`, `Community 202`, `Community 203`, `Community 78`, `Community 86`, `Community 88`, `Community 352`, `Community 354`, `Community 101`, `Community 235`, `Community 108`, `Community 109`, `Community 112`, `Community 117`, `Community 122`, `Community 125`, `Community 127`?**
+  _High betweenness centrality (0.075) - this node is a cross-community bridge._
+- **Why does `RelationEngine` connect `Community 12` to `Community 67`, `Community 357`, `Community 358`, `Community 326`, `Community 266`, `Community 11`, `Community 173`, `Community 270`, `Community 176`, `Community 177`, `Community 50`, `Community 210`, `Community 90`?**
+  _High betweenness centrality (0.054) - this node is a cross-community bridge._
+- **Are the 120 inferred relationships involving `PromptRegistry` (e.g. with `WikiUtilityMixin` and `TestPromptRegression`) actually correct?**
+  _`PromptRegistry` has 120 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 58 inferred relationships involving `Wiki` (e.g. with `WikiAnalyzer` and `WikiRegistry`) actually correct?**
+  _`Wiki` has 58 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 71 inferred relationships involving `path` (e.g. with `create_wiki()` and `create_multi_wiki()`) actually correct?**
+  _`path` has 71 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 48 inferred relationships involving `WikiAnalyzer` (e.g. with `Wiki` and `LLMClient`) actually correct?**
+  _`WikiAnalyzer` has 48 INFERRED edges - model-reasoned connections that need verification._

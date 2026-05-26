@@ -6,9 +6,13 @@ import json
 import logging
 import re
 from collections.abc import AsyncIterator
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ..dream_editor import DreamEditor
+from ..notifications import NotificationManager
+from ..scheduler import WikiScheduler
 from ..tools import WikiToolRegistry
 from .adapters import StreamableLLMClient
 from .db import AgentDatabase
@@ -17,8 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 class ChatEvent:
-    """SSE event types for chat streaming."""
-
     @staticmethod
     def message_delta(content: str) -> dict:
         return {"type": "message_delta", "content": content}
@@ -45,8 +47,6 @@ class ChatEvent:
 
 
 class AgentContext:
-    """Maintains conversation history and wiki context for a session."""
-
     def __init__(self, wiki_id: str | None = None):
         self.wiki_id = wiki_id
         self.messages: list[dict[str, str]] = []
@@ -67,14 +67,6 @@ class AgentContext:
 
 
 class AgentService:
-    """Core agent service handling chat, tool execution, and context.
-
-    Phase 1 focus:
-    - Streaming chat response via SSE
-    - Tool call execution (read operations)
-    - Basic context management
-    """
-
     def __init__(self, wiki_registry: Any, data_dir: Path):
         self.wiki_registry = wiki_registry
         self.data_dir = data_dir
@@ -82,6 +74,69 @@ class AgentService:
         self.db = AgentDatabase(data_dir / ".llmwiki_agent.db")
         self._contexts: dict[str, AgentContext] = {}
         self._llm: StreamableLLMClient | None = None
+        self._dream_editors: dict[str, DreamEditor] = {}
+        self._notification_managers: dict[str, NotificationManager] = {}
+        self._schedulers: dict[str, WikiScheduler] = {}
+        self._tool_registries: dict[str, WikiToolRegistry] = {}
+
+    def _get_default_wiki_id(self) -> str | None:
+        return self.wiki_registry.get_default_wiki_id()
+
+    def _get_wiki(self, wiki_id: str | None) -> Any:
+        if wiki_id:
+            return self.wiki_registry.get_wiki(wiki_id)
+        return self.wiki_registry.get_default_wiki()
+
+    def _get_dream_editor(self, wiki_id: str | None = None) -> DreamEditor:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            raise ValueError("No wiki_id available")
+        if wiki_id not in self._dream_editors:
+            wiki = self._get_wiki(wiki_id)
+            self._dream_editors[wiki_id] = DreamEditor(
+                wiki=wiki,
+                data_dir=self.data_dir / wiki_id,
+                db=self.db,
+                wiki_id=wiki_id,
+            )
+        return self._dream_editors[wiki_id]
+
+    def _get_notification_manager(self, wiki_id: str | None = None) -> NotificationManager:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            raise ValueError("No wiki_id available")
+        if wiki_id not in self._notification_managers:
+            self._notification_managers[wiki_id] = NotificationManager(
+                max_size=100,
+                db=self.db,
+                wiki_id=wiki_id,
+            )
+        return self._notification_managers[wiki_id]
+
+    def _get_scheduler(self, wiki_id: str | None = None) -> WikiScheduler:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            raise ValueError("No wiki_id available")
+        if wiki_id not in self._schedulers:
+            wiki = self._get_wiki(wiki_id)
+            scheduler_dir = self.data_dir / wiki_id / "scheduler"
+            scheduler_dir.mkdir(parents=True, exist_ok=True)
+            scheduler = WikiScheduler(scheduler_dir)
+            dream_editor = self._get_dream_editor(wiki_id)
+            nm = self._get_notification_manager(wiki_id)
+            scheduler.register_system_tasks(wiki, dream_editor, nm)
+            scheduler.load_state()
+            self._schedulers[wiki_id] = scheduler
+        return self._schedulers[wiki_id]
+
+    def _get_tool_registry(self, wiki_id: str | None = None) -> WikiToolRegistry:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            raise ValueError("No wiki_id available")
+        if wiki_id not in self._tool_registries:
+            wiki = self._get_wiki(wiki_id)
+            self._tool_registries[wiki_id] = WikiToolRegistry(wiki, self.db, wiki_id)
+        return self._tool_registries[wiki_id]
 
     def _get_llm(self) -> StreamableLLMClient:
         if self._llm is None:
@@ -136,17 +191,6 @@ class AgentService:
         wiki_id: str | None = None,
         jwt_token: str | None = None,
     ) -> AsyncIterator[dict]:
-        """Process a chat message and yield SSE events.
-
-        Args:
-            message: User message (may contain @wiki_id prefix)
-            session_id: Chat session ID (creates new if None)
-            wiki_id: Wiki ID hint (overrides @ prefix detection)
-            jwt_token: JWT token from URL param
-
-        Yields:
-            SSE event dicts
-        """
         if session_id is None:
             session_id = self.db.create_session(wiki_id, jwt_token)
             yield {"type": "session_created", "session_id": session_id}
@@ -177,7 +221,7 @@ class AgentService:
             yield ChatEvent.error("No wiki available")
             return
 
-        tool_registry = WikiToolRegistry(wiki)
+        tool_registry = WikiToolRegistry(wiki, self.db, ctx.wiki_id or self._get_default_wiki_id())
 
         system_prompt = self._build_system_prompt(ctx.wiki_id)
         messages_for_llm = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
@@ -206,7 +250,7 @@ class AgentService:
                         args = raw_args
 
                     yield ChatEvent.tool_call_start(tool_name, args)
-                    result = await self._execute_tool(tool_name, args, tool_registry, session_id)
+                    result = await self._execute_tool(tool_name, args, tool_registry, session_id, ctx)
                     yield ChatEvent.tool_call_end(tool_name, result)
 
                     if result.get("status") == "confirmation_required":
@@ -242,12 +286,26 @@ class AgentService:
         args: dict,
         tool_registry: WikiToolRegistry,
         session_id: str,
+        ctx: AgentContext,
     ) -> dict:
         call_id = self.db.log_tool_call(session_id, tool_name, args, "pending")
         try:
             result = await tool_registry.execute(tool_name, args)
             status = "confirmation_required" if isinstance(result, dict) and result.get("status") == "confirmation_required" else "executed"
             self.db.update_tool_call(call_id, result, status)
+
+            tool_def = tool_registry._tools.get(tool_name, {})
+            if tool_def.get("requires_confirmation") == "posthoc":
+                entry_id = f"ingest-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+                self.db.log_ingest({
+                    "id": entry_id,
+                    "wiki_id": ctx.wiki_id or "default",
+                    "tool": tool_name,
+                    "arguments": args,
+                    "result_summary": str(result)[:500] if result else "",
+                    "status": "executed",
+                })
+
             return result
         except Exception as e:
             self.db.update_tool_call(call_id, {"error": str(e)}, "error")
@@ -259,59 +317,142 @@ class AgentService:
             return self.wiki_registry.get_wiki(wiki_id)
         return self.wiki_registry.get_default_wiki()
 
-    async def get_confirmation(self, confirmation_id: str) -> dict | None:
-        from ..tools import WikiToolRegistry
-        for ctx in self._contexts.values():
-            wiki = self._get_wiki_for_context(ctx)
-            if wiki:
-                registry = WikiToolRegistry(wiki)
-                for conf in registry.get_pending_confirmations():
-                    if conf["id"] == confirmation_id:
-                        return conf
-        return None
+    async def run_dream(self, wiki_id: str | None = None) -> dict:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            return {"status": "error", "error": "No wiki_id available"}
+        editor = self._get_dream_editor(wiki_id)
+        result = editor.run_dream()
+        if result.get("pending_review", 0) > 0:
+            nm = self._get_notification_manager(wiki_id)
+            nm.add("info", f"Dream generated {result['pending_review']} proposals for review", data=result)
+        return result
 
-    async def approve_confirmation(self, confirmation_id: str) -> dict:
-        from ..tools import WikiToolRegistry
-        for ctx in self._contexts.values():
-            wiki = self._get_wiki_for_context(ctx)
-            if wiki:
-                registry = WikiToolRegistry(wiki)
-                result = registry.confirm_execution(confirmation_id)
-                if result.get("status") != "error":
-                    return result
-        return {"status": "error", "error": "Confirmation not found"}
+    def get_dream_log(self, wiki_id: str | None = None, limit: int = 20) -> list[dict]:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            return []
+        editor = self._get_dream_editor(wiki_id)
+        return editor.get_edit_log(limit)
 
-    async def reject_confirmation(self, confirmation_id: str) -> dict:
-        from ..tools import WikiToolRegistry
-        for ctx in self._contexts.values():
-            wiki = self._get_wiki_for_context(ctx)
-            if wiki:
-                registry = WikiToolRegistry(wiki)
-                result = registry.reject_execution(confirmation_id)
-                if result.get("status") != "error":
-                    return result
-        return {"status": "error", "error": "Confirmation not found"}
+    def get_dream_proposals(self, wiki_id: str | None = None) -> dict:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            return {"proposals": {}, "stats": {}}
+        editor = self._get_dream_editor(wiki_id)
+        return {
+            "proposals": editor.proposal_manager.get_pending_by_page(),
+            "stats": editor.proposal_manager.get_stats(),
+        }
 
-    def get_pending_confirmations(self) -> list[dict]:
-        from ..tools import WikiToolRegistry
-        all_confirmations = []
-        for ctx in self._contexts.values():
-            wiki = self._get_wiki_for_context(ctx)
-            if wiki:
-                registry = WikiToolRegistry(wiki)
-                all_confirmations.extend(registry.get_pending_confirmations())
-        return all_confirmations
+    def approve_proposal(self, proposal_id: str) -> dict:
+        for editor in self._dream_editors.values():
+            p = editor.proposal_manager.approve(proposal_id)
+            if p:
+                return p
+        return {"status": "error", "error": "Proposal not found"}
 
-    def get_pending_by_group(self) -> dict[str, list[dict]]:
-        from ..tools import WikiToolRegistry
-        groups: dict[str, list[dict]] = {}
-        for ctx in self._contexts.values():
-            wiki = self._get_wiki_for_context(ctx)
-            if wiki:
-                registry = WikiToolRegistry(wiki)
-                for conf in registry.get_pending_confirmations():
-                    group = conf.get("group", "other_pages")
-                    if group not in groups:
-                        groups[group] = []
-                    groups[group].append(conf)
-        return groups
+    def reject_proposal(self, proposal_id: str) -> dict:
+        for editor in self._dream_editors.values():
+            p = editor.proposal_manager.reject(proposal_id)
+            if p:
+                return p
+        return {"status": "error", "error": "Proposal not found"}
+
+    def batch_approve_proposals(self, proposal_ids: list[str]) -> dict:
+        results = []
+        for pid in proposal_ids:
+            r = self.approve_proposal(pid)
+            results.append(r)
+        return {"approved": len(results), "results": results}
+
+    async def apply_proposals(self, wiki_id: str | None = None, proposal_ids: list[str] | None = None) -> dict:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            return {"status": "error", "error": "No wiki_id available"}
+        editor = self._get_dream_editor(wiki_id)
+        result = editor.apply_proposals(proposal_ids)
+        if result.get("applied", 0) > 0:
+            nm = self._get_notification_manager(wiki_id)
+            nm.add("success", f"Applied {result['applied']} dream proposals", data=result)
+        return result
+
+    def list_notifications(self, wiki_id: str | None = None, unread_only: bool = False) -> list[dict]:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            return []
+        nm = self._get_notification_manager(wiki_id)
+        if unread_only:
+            return nm.list_unread()
+        return nm.list_all()
+
+    def mark_notification_read(self, notification_id: str) -> dict:
+        for nm in self._notification_managers.values():
+            if nm.mark_read(notification_id):
+                return {"status": "ok", "notification_id": notification_id}
+        return {"status": "error", "error": "Notification not found"}
+
+    def list_confirmations(self, wiki_id: str | None = None) -> dict[str, list[dict]]:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            return {}
+        registry = self._get_tool_registry(wiki_id)
+        return registry.get_pending_by_group()
+
+    async def approve_confirmation(self, confirmation_id: str, wiki_id: str | None = None) -> dict:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            return {"status": "error", "error": "No wiki_id available"}
+        registry = self._get_tool_registry(wiki_id)
+        return registry.confirm_execution(confirmation_id)
+
+    async def reject_confirmation(self, confirmation_id: str, wiki_id: str | None = None) -> dict:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            return {"status": "error", "error": "No wiki_id available"}
+        registry = self._get_tool_registry(wiki_id)
+        return registry.reject_execution(confirmation_id)
+
+    async def batch_approve_confirmations(self, confirmation_ids: list[str], wiki_id: str | None = None) -> dict:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        results = []
+        for cid in confirmation_ids:
+            r = await self.approve_confirmation(cid, wiki_id)
+            results.append(r)
+        return {"approved": len(results), "results": results}
+
+    def get_ingest_log(self, wiki_id: str | None = None, limit: int = 20) -> list[dict]:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            return []
+        return self.db.get_ingest_log(wiki_id, limit)
+
+    def get_ingest_entry(self, ingest_id: str) -> dict | None:
+        return self.db.get_ingest_entry(ingest_id)
+
+    def get_agent_status(self, wiki_id: str | None = None) -> dict:
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            return {"state": "idle", "scheduler_tasks": [], "pending_confirmations": 0, "dream_proposals": {}, "unread_notifications": 0}
+
+        scheduler = self._get_scheduler(wiki_id)
+        tasks = scheduler.list_tasks()
+
+        editor = self._get_dream_editor(wiki_id)
+        dream_stats = editor.proposal_manager.get_stats()
+
+        nm = self._get_notification_manager(wiki_id)
+        unread = nm.unread_count()
+
+        registry = self._get_tool_registry(wiki_id)
+        pending_confs = len(registry.get_pending_confirmations())
+
+        return {
+            "state": "idle",
+            "scheduler_tasks": tasks,
+            "pending_work": {},
+            "action_log": [],
+            "pending_confirmations": pending_confs,
+            "dream_proposals": dream_stats,
+            "unread_notifications": unread,
+        }
