@@ -1,7 +1,8 @@
 # Agent UI 优化讨论记录
 
 > 创建时间：2025-05-26
-> 状态：进行中
+> 最后更新：2025-05-26（Phase 1 完成）
+> 状态：Phase 1 完成，待 Phase 2
 
 ---
 
@@ -205,13 +206,23 @@ AgentService
 | 提交 | 内容 |
 |------|-------|
 | `3f4dcce` | fix(agent): pass wiki_root to load_config in _get_llm |
+| `95f6c80` | feat(agent-ui): add Toast system and fix SSE chat streaming |
+
+### Phase 1 产物（已实施）
+
+| 文件 | 变更 |
+|------|------|
+| `webui-agent/src/api.ts` | ✅ `chatStream()` SSE 客户端 |
+| `webui-agent/src/components/AgentChat.tsx` | ✅ 重构流式消费 + ToolCallCard + 键盘支持 |
+| `webui-agent/src/components/Toast.tsx` | ✅ 从 webui 复制 |
+| `webui-agent/src/main.tsx` | ✅ + ToastProvider |
 
 ### 待实施
 
 | 文件 | 变更 |
 |------|------|
-| `webui-agent/src/api.ts` | + `chatStream()` SSE 客户端 |
-| `webui-agent/src/components/AgentChat.tsx` | 重构流式消费 |
-| `webui-agent/src/components/Toast.tsx` | 从 webui 复制 |
-| `webui-agent/src/hooks/useToast.ts` | 从 webui 复制 |
-| `webui-agent/src/main.tsx` | + ToastProvider |
+| `Confirmations.tsx` | + Toast on approve/reject |
+| `DreamProposals.tsx` | + Toast on approve/apply + 二次确认 |
+| `stores/agentStore.ts` | Zustand store，管理 `currentWikiId` |
+| `components/WikiSelector.tsx` | 从 webui 复制或重写 |
+| `api.ts` | 所有方法自动注入 `wikiId` |
