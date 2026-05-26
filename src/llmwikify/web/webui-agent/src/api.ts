@@ -1,6 +1,81 @@
 const API_BASE = '/api';
 const API_TOKEN = import.meta.env.VITE_API_TOKEN;
 
+export type ChatStreamEvent =
+  | { type: 'message_delta'; content: string }
+  | { type: 'tool_call_start'; tool: string; args: Record<string, unknown> }
+  | { type: 'tool_call_end'; tool: string; result: unknown }
+  | { type: 'tool_call_error'; tool: string; error: string }
+  | { type: 'done'; final_response: string; actions: unknown[] }
+  | { type: 'confirmation_required'; confirmation_id: string; details: Record<string, unknown> };
+
+export function chatStream(
+  message: string,
+  sessionId?: string,
+  wikiId?: string
+): ReadableStream<ChatStreamEvent> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (API_TOKEN) {
+    headers['Authorization'] = `Bearer ${API_TOKEN}`;
+  }
+
+  return new ReadableStream<ChatStreamEvent>({
+    async start(controller) {
+      try {
+        const res = await fetch(`${API_BASE}/agent/chat`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ message, session_id: sessionId, wiki_id: wikiId }),
+        });
+
+        if (!res.ok) {
+          let errorMessage = `API error: ${res.status}`;
+          try {
+            const body = await res.json();
+            errorMessage = body.error || body.message || body.detail || errorMessage;
+          } catch { /* ignore */ }
+          controller.error(new Error(errorMessage));
+          return;
+        }
+
+        if (!res.body) {
+          controller.error(new Error('No response body'));
+          return;
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('event: message')) continue;
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data.trim()) {
+                try {
+                  const event = JSON.parse(data) as ChatStreamEvent;
+                  controller.enqueue(event);
+                } catch { /* ignore parse errors */ }
+              }
+            }
+          }
+        }
+        controller.close();
+      } catch (e) {
+        controller.error(e instanceof Error ? e : new Error(String(e)));
+      }
+    },
+  });
+}
+
 export interface WikiPage {
   page_name: string;
   content: string;
