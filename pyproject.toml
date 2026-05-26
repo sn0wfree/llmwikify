@@ -67,6 +67,7 @@ web = [
 agent = [
     "croniter>=2.0.0",
     "filelock>=3.13.0",
+    "duckduckgo-search>=4.0",
 ]
 extractors = [
     "markitdown[all]>=0.1.0",

@@ -55,10 +55,13 @@ class AgentDatabase:
                     id TEXT PRIMARY KEY,
                     wiki_id TEXT NOT NULL,
                     query TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'running',
+                    status TEXT NOT NULL DEFAULT 'planning',
+                    current_step TEXT DEFAULT 'planning',
                     progress REAL DEFAULT 0.0,
+                    result TEXT,
                     wiki_page_name TEXT,
-                    created_at TEXT DEFAULT (datetime('now'))
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT DEFAULT (datetime('now'))
                 )
             """)
             conn.commit()
@@ -240,8 +243,139 @@ class AgentDatabase:
                 ).fetchall()
             return [dict(row) for row in rows]
 
+    def update_research_status(self, session_id: str, status: str, step: str | None = None) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            if step:
+                conn.execute(
+                    "UPDATE research_sessions SET status = ?, current_step = ?, updated_at = datetime('now') WHERE id = ?",
+                    (status, step, session_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE research_sessions SET status = ?, updated_at = datetime('now') WHERE id = ?",
+                    (status, session_id),
+                )
+            conn.commit()
+
+    def finalize_research(self, session_id: str, result: str | None = None, wiki_page_name: str | None = None) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE research_sessions SET status = 'done', result = ?, wiki_page_name = ?, updated_at = datetime('now') WHERE id = ?",
+                (result, wiki_page_name, session_id),
+            )
+            conn.commit()
+
+    def save_sub_query(self, session_id: str, query: str, source_type: str, url: str | None = None) -> str:
+        sq_id = str(uuid.uuid4())[:8]
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO research_sub_queries (id, session_id, query, source_type, url) VALUES (?, ?, ?, ?, ?)",
+                (sq_id, session_id, query, source_type, url),
+            )
+            conn.commit()
+        return sq_id
+
+    def get_sub_queries(self, session_id: str) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM research_sub_queries WHERE session_id = ? ORDER BY created_at",
+                (session_id,),
+            ).fetchall()
+            results = []
+            for row in rows:
+                d = dict(row)
+                if d.get("result"):
+                    d["result"] = json.loads(d["result"])
+                results.append(d)
+            return results
+
+    def update_sub_query(self, sq_id: str, status: str, result: dict | None = None, error: str | None = None) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            if status == "done":
+                conn.execute(
+                    "UPDATE research_sub_queries SET status = ?, result = ?, completed_at = datetime('now') WHERE id = ?",
+                    (status, json.dumps(result) if result else None, sq_id),
+                )
+            elif status == "failed":
+                conn.execute(
+                    "UPDATE research_sub_queries SET status = ?, error = ?, completed_at = datetime('now') WHERE id = ?",
+                    (status, error, sq_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE research_sub_queries SET status = ? WHERE id = ?",
+                    (status, sq_id),
+                )
+            conn.commit()
+
+    def save_source(self, session_id: str, sub_query_id: str, source_type: str, url: str, title: str, content_length: int, content_preview: str | None = None) -> str:
+        source_id = str(uuid.uuid4())[:8]
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO research_sources (id, session_id, sub_query_id, source_type, url, title, content_length, content_preview) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (source_id, session_id, sub_query_id, source_type, url, title, content_length, content_preview),
+            )
+            conn.commit()
+        return source_id
+
+    def get_sources(self, session_id: str) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM research_sources WHERE session_id = ? ORDER BY created_at",
+                (session_id,),
+            ).fetchall()
+            results = []
+            for row in rows:
+                d = dict(row)
+                if d.get("analysis"):
+                    d["analysis"] = json.loads(d["analysis"])
+                results.append(d)
+            return results
+
+    def update_source_analysis(self, source_id: str, analysis: dict) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE research_sources SET analysis = ? WHERE id = ?",
+                (json.dumps(analysis), source_id),
+            )
+            conn.commit()
+
+    def rate_source(self, source_id: str, rating: int) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE research_sources SET rating = ? WHERE id = ?",
+                (rating, source_id),
+            )
+            conn.commit()
+
+    def get_source_count(self, session_id: str) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) as count FROM research_sources WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+            return row[0] if row else 0
+
     def _init_tables(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
+            # Migrate research_sessions: add columns if missing
+            for col, col_type, default in [
+                ("current_step", "TEXT", "'planning'"),
+                ("result", "TEXT", "NULL"),
+                ("updated_at", "TEXT", "datetime('now')"),
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE research_sessions ADD COLUMN {col} {col_type} DEFAULT {default}")
+                except sqlite3.OperationalError:
+                    pass  # column already exists
+            # Migrate status default
+            try:
+                conn.execute("UPDATE research_sessions SET status = 'planning' WHERE status = 'running'")
+            except sqlite3.OperationalError:
+                pass
+
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS chat_messages (
                     id TEXT PRIMARY KEY,
@@ -322,6 +456,46 @@ class AgentDatabase:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_ingest_log_wiki
                 ON ingest_log(wiki_id, timestamp DESC)
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS research_sub_queries (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    query TEXT NOT NULL,
+                    source_type TEXT NOT NULL,
+                    url TEXT,
+                    status TEXT DEFAULT 'pending',
+                    result TEXT,
+                    error TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    completed_at TEXT,
+                    FOREIGN KEY (session_id) REFERENCES research_sessions(id)
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sub_queries_session
+                ON research_sub_queries(session_id, status)
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS research_sources (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    sub_query_id TEXT,
+                    source_type TEXT NOT NULL,
+                    url TEXT,
+                    title TEXT,
+                    content_length INTEGER,
+                    content_preview TEXT,
+                    analysis TEXT,
+                    rating INTEGER,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (session_id) REFERENCES research_sessions(id),
+                    FOREIGN KEY (sub_query_id) REFERENCES research_sub_queries(id)
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sources_session
+                ON research_sources(session_id)
             """)
             conn.commit()
 
