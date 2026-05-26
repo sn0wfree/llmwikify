@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, DreamProposal } from '../api';
 import { useToast } from './Toast';
+import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { EmptyState } from './StateViews';
 
 export function DreamProposals() {
@@ -11,10 +12,11 @@ export function DreamProposals() {
   const [actionLoading, setActionLoading] = useState(false);
   const [showApplyConfirm, setShowApplyConfirm] = useState(false);
   const { addToast } = useToast();
+  const { currentWikiId } = useAgentWikiStore();
 
   const loadProposals = useCallback(async () => {
     try {
-      const data = await api.dream.proposals();
+      const data = await api.dream.proposals(currentWikiId || undefined);
       setGroups(data.proposals);
       setStats(data.stats);
     } catch {

@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, IngestLogEntry } from '../api';
+import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { EmptyState } from './StateViews';
 
 export function IngestLog() {
   const [entries, setEntries] = useState<IngestLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const { currentWikiId } = useAgentWikiStore();
 
   const loadLog = useCallback(async () => {
     try {
-      const data = await api.ingest.log();
+      const data = await api.ingest.log(undefined, currentWikiId || undefined);
       setEntries(data);
     } catch {
       setEntries([]);

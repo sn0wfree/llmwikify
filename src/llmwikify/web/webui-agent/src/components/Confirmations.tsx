@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, Confirmation } from '../api';
 import { useToast } from './Toast';
+import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { EmptyState } from './StateViews';
 
 export function Confirmations() {
@@ -9,10 +10,11 @@ export function Confirmations() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const { addToast } = useToast();
+  const { currentWikiId } = useAgentWikiStore();
 
   const loadConfirmations = useCallback(async () => {
     try {
-      const data = await api.confirmations.list();
+      const data = await api.confirmations.list(currentWikiId || undefined);
       setGroups(data);
     } catch {
       setGroups({});
