@@ -1,4 +1,4 @@
-"""FastAPI route definitions for single-wiki and multi-wiki modes."""
+"""FastAPI route definitions - unified single and multi-wiki mode."""
 
 from __future__ import annotations
 
@@ -14,31 +14,43 @@ from llmwikify.core.wiki_registry import WikiRegistry
 
 def register_routes(
     app: FastAPI,
-    wiki: Wiki | None = None,
-    registry: WikiRegistry | None = None,
+    registry: WikiRegistry,
 ) -> None:
-    """Register all API routes.
+    """Register all API routes (unified architecture).
 
     Args:
         app: FastAPI application
-        wiki: Single Wiki instance (for backward compatibility)
-        registry: WikiRegistry for multi-wiki mode
+        registry: WikiRegistry (always created, even for single wiki)
     """
-    # Determine mode
-    is_multi_wiki = registry is not None
-
-    if is_multi_wiki:
-        _register_multi_wiki_routes(app, registry)
-    else:
-        _register_single_wiki_routes(app, wiki)
+    _register_wiki_routes(app, registry)
 
 
-def _register_single_wiki_routes(app: FastAPI, wiki: Wiki) -> None:
-    """Register single-wiki routes (backward compatible)."""
+def _register_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
+    """Register unified wiki routes with WikiRegistry."""
 
-    def get_wiki() -> Wiki:
-        return wiki
+    def _get_default_or_first_wiki_id() -> str:
+        """Get default wiki_id or first registered wiki if only one exists."""
+        default_id = registry.get_default_wiki_id()
+        if default_id:
+            return default_id
+        wikis = registry.list_wikis()
+        if len(wikis) == 1:
+            return wikis[0].wiki_id
+        elif len(wikis) == 0:
+            raise HTTPException(status_code=400, detail="No wiki registered")
+        raise HTTPException(status_code=400, detail="No default wiki configured")
 
+    def get_wiki_by_id(wiki_id: str) -> Wiki:
+        instance = registry.get_wiki_instance(wiki_id)
+        if instance.wiki_type == WikiType.REMOTE:
+            raise HTTPException(status_code=400, detail="Cannot access remote wiki directly")
+        return registry.get_wiki(wiki_id)
+
+    def get_default_wiki() -> Wiki:
+        wiki_id = _get_default_or_first_wiki_id()
+        return registry.get_wiki(wiki_id)
+
+    # --- Wiki Management Routes ---
     wiki_router = APIRouter(prefix="/api/wiki", tags=["wiki"])
 
     @wiki_router.get("/status")
@@ -121,43 +133,7 @@ def _register_single_wiki_routes(app: FastAPI, wiki: Wiki) -> None:
 
     app.include_router(wiki_router)
 
-    # --- Agent Routes (single-wiki mode) ---
-    _register_agent_routes_single(app, wiki)
-
-
-def _register_agent_routes_single(app: FastAPI, wiki: Wiki) -> None:
-    """Register Agent backend routes for single-wiki mode."""
-    from llmwikify.agent.backend.service import AgentService
-    from llmwikify.agent.backend.routes.agent import set_agent_service
-
-    data_dir = wiki.root / ".llmwikify" / "agent"
-    data_dir.mkdir(parents=True, exist_ok=True)
-
-    from llmwikify.core.wiki_registry import WikiRegistry
-    registry = WikiRegistry(config={})
-    registry.register_wiki(wiki_id="default", name="default", root=wiki.root, is_default=True)
-
-    agent_service = AgentService(registry, data_dir)
-    set_agent_service(agent_service)
-
-    from llmwikify.agent.backend.routes import agent_router
-    app.include_router(agent_router)
-
-    _mount_agent_spa(app)
-
-
-def _register_multi_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
-    """Register multi-wiki routes with wiki_id parameter."""
-
-    # Helper to get wiki by ID
-    def get_wiki_by_id(wiki_id: str) -> Wiki:
-        instance = registry.get_wiki_instance(wiki_id)
-        if instance.wiki_type == WikiType.REMOTE:
-            raise HTTPException(status_code=400, detail="Cannot access remote wiki directly")
-        return registry.get_wiki(wiki_id)
-
     # --- Wiki Management Routes ---
-
     wikis_router = APIRouter(prefix="/api/wikis", tags=["wikis"])
 
     @wikis_router.get("")

@@ -61,14 +61,22 @@ class WikiServer:
         enable_webui: bool = True,
         cors_enabled: bool = True,
     ):
-        # Support both single Wiki and WikiRegistry
+        # Unified architecture: always use WikiRegistry
         if isinstance(wiki, WikiRegistry):
             self.registry = wiki
-            self.wiki = wiki.get_default_wiki() if wiki.get_default_wiki_id() else None
         else:
-            # Single wiki mode: create a registry with one wiki
-            self.wiki = wiki
-            self.registry = None  # Will be created if needed
+            # Single wiki mode: create a registry and auto-register the wiki
+            from llmwikify.core.wiki_instance import WikiType
+            self.registry = WikiRegistry(config={})
+            wiki_id = str(wiki.root).split('/')[-1] or 'default'
+            self.registry.register_wiki(
+                wiki_id=wiki_id,
+                name=wiki_id.replace('-', ' ').replace('_', ' ').title(),
+                root=wiki.root,
+                wiki_type=WikiType.LOCAL,
+                is_default=True,
+            )
+        self.wiki = self.registry.get_default_wiki()
 
         self.api_key = api_key
         self.enable_mcp = enable_mcp
@@ -78,18 +86,14 @@ class WikiServer:
 
         # 1. Build MCP adapter
         if enable_mcp:
-            if self.registry:
-                # Multi-wiki mode: use default wiki for MCP
-                self.mcp = MCPAdapter(self.wiki, name=mcp_name)
-            else:
-                self.mcp = MCPAdapter(wiki, name=mcp_name)
+            self.mcp = MCPAdapter(self.wiki, name=mcp_name)
 
         # 2. Build FastAPI application
         self.app = self._build_app(cors_enabled=cors_enabled)
 
         # 3. Register REST API routes
         if enable_rest:
-            register_routes(self.app, wiki, self.registry)
+            register_routes(self.app, self.registry)
 
         # 4. Mount WebUI static files
         if enable_webui:

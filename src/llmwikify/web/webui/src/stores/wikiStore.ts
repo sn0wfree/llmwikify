@@ -93,7 +93,7 @@ export const useWikiStore = create<WikiState>((set, get) => ({
         };
         set({
           wikis: [singleWiki],
-          currentWikiId: singleWiki.wiki_id,
+          currentWikiId: null,
           isMultiWikiMode: false,
           loading: false,
         });

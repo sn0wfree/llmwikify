@@ -80,14 +80,24 @@ export function CrossWikiSearch({ onResult }: CrossWikiSearchProps) {
         }));
       } else {
         // Single wiki search
-        if (!currentWikiId) return;
-        const wikiResults = await api.wiki.scoped.search(currentWikiId, searchQuery, 15);
-        const wiki = wikis.find(w => w.wiki_id === currentWikiId);
-        searchResults = wikiResults.map(r => ({
-          ...r,
-          wiki_id: currentWikiId,
-          wiki_name: wiki?.name || currentWikiId,
-        }));
+        if (isMultiWikiMode && currentWikiId) {
+          const wikiResults = await api.wiki.scoped.search(currentWikiId, searchQuery, 15);
+          const wiki = wikis.find(w => w.wiki_id === currentWikiId);
+          searchResults = wikiResults.map(r => ({
+            ...r,
+            wiki_id: currentWikiId,
+            wiki_name: wiki?.name || currentWikiId,
+          }));
+        } else {
+          const wikiResults = await api.wiki.search(searchQuery, 15);
+          const wiki = wikis.find(w => w.is_default);
+          const wikiId = wiki?.wiki_id || 'default';
+          searchResults = wikiResults.map(r => ({
+            ...r,
+            wiki_id: wikiId,
+            wiki_name: wiki?.name || wikiId,
+          }));
+        }
       }
 
       setResults(searchResults);
