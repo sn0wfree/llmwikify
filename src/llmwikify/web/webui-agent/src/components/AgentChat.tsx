@@ -8,6 +8,7 @@ import { ToolCard } from './ui/ToolCard';
 import { Input } from './ui/Input';
 import { Panel } from './ui/Panel';
 import { SessionSidebar } from './SessionSidebar';
+import { ConfirmationModal } from './ConfirmationModal';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -24,9 +25,12 @@ interface ToolCall {
   status: 'pending' | 'streaming' | 'done' | 'error';
 }
 
-interface AgentChatProps {
-  initialSessionId?: string | null;
-  onSessionChange?: (sessionId: string | null) => void;
+interface PendingConfirmation {
+  confirmationId: string;
+  tool: string;
+  args: Record<string, unknown>;
+  impact: Record<string, unknown>;
+  group?: string;
 }
 
 interface DbMessage {
@@ -38,7 +42,7 @@ interface DbMessage {
   created_at: string;
 }
 
-export function AgentChat({ initialSessionId, onSessionChange }: AgentChatProps) {
+export function AgentChat() {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: "Hello! I'm your wiki assistant. How can I help?", timestamp: new Date().toISOString() },
   ]);
@@ -46,8 +50,10 @@ export function AgentChat({ initialSessionId, onSessionChange }: AgentChatProps)
   const [loading, setLoading] = useState(false);
   const [currentAssistantMsg, setCurrentAssistantMsg] = useState('');
   const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(initialSessionId || null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
+  const [confirmingLoading, setConfirmingLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { addToast } = useToast();
   const { currentWikiId } = useAgentWikiStore();
@@ -74,16 +80,42 @@ export function AgentChat({ initialSessionId, onSessionChange }: AgentChatProps)
 
   const handleSelectSession = useCallback(async (sessionId: string) => {
     setCurrentSessionId(sessionId);
-    onSessionChange?.(sessionId);
     await loadMessages(sessionId);
-  }, [loadMessages, onSessionChange]);
+  }, [loadMessages]);
 
   const handleNewChat = useCallback(() => {
     setCurrentSessionId(null);
-    onSessionChange?.(null);
     setMessages([{ role: 'assistant', content: "Hello! I'm your wiki assistant. How can I help?", timestamp: new Date().toISOString() }]);
     setInput('');
-  }, [onSessionChange]);
+  }, []);
+
+  const handleApproveConfirmation = useCallback(async () => {
+    if (!pendingConfirmation) return;
+    setConfirmingLoading(true);
+    try {
+      await api.confirmations.approve(pendingConfirmation.confirmationId, currentWikiId || undefined);
+      addToast('success', 'Action approved');
+      setPendingConfirmation(null);
+    } catch (e) {
+      addToast('error', `Failed to approve: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setConfirmingLoading(false);
+    }
+  }, [pendingConfirmation, currentWikiId, addToast]);
+
+  const handleRejectConfirmation = useCallback(async () => {
+    if (!pendingConfirmation) return;
+    setConfirmingLoading(true);
+    try {
+      await api.confirmations.reject(pendingConfirmation.confirmationId, currentWikiId || undefined);
+      addToast('info', 'Action rejected');
+      setPendingConfirmation(null);
+    } catch (e) {
+      addToast('error', `Failed to reject: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setConfirmingLoading(false);
+    }
+  }, [pendingConfirmation, currentWikiId, addToast]);
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || loading) return;
@@ -107,7 +139,6 @@ export function AgentChat({ initialSessionId, onSessionChange }: AgentChatProps)
         switch (event.type) {
           case 'session_created':
             setCurrentSessionId(event.session_id);
-            onSessionChange?.(event.session_id);
             break;
 
           case 'message_delta':
@@ -138,15 +169,18 @@ export function AgentChat({ initialSessionId, onSessionChange }: AgentChatProps)
             break;
 
           case 'confirmation_required':
-            setCurrentToolCalls((prev) => [
-              ...prev,
-              {
-                tool: 'confirmation_required',
-                args: { confirmation_id: event.confirmation_id },
-                result: event.details,
-                status: 'done',
-              },
-            ]);
+            setCurrentToolCalls((prev) =>
+              prev.map((tc) =>
+                tc.tool === 'confirmation_required' ? { ...tc, status: 'done' } : tc
+              )
+            );
+            setPendingConfirmation({
+              confirmationId: event.confirmation_id,
+              tool: 'confirmation_required',
+              args: {},
+              impact: (event.details || {}) as Record<string, unknown>,
+              group: undefined,
+            });
             break;
 
           case 'done':
@@ -171,7 +205,7 @@ export function AgentChat({ initialSessionId, onSessionChange }: AgentChatProps)
     } finally {
       setLoading(false);
     }
-  }, [input, loading, addToast, currentToolCalls, currentWikiId, currentSessionId, onSessionChange]);
+  }, [input, loading, addToast, currentToolCalls, currentWikiId, currentSessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -193,6 +227,19 @@ export function AgentChat({ initialSessionId, onSessionChange }: AgentChatProps)
 
   return (
     <div className="flex flex-col h-full">
+      {pendingConfirmation && (
+        <ConfirmationModal
+          confirmationId={pendingConfirmation.confirmationId}
+          tool={pendingConfirmation.tool}
+          args={pendingConfirmation.args}
+          impact={pendingConfirmation.impact}
+          group={pendingConfirmation.group}
+          onApprove={handleApproveConfirmation}
+          onReject={handleRejectConfirmation}
+          loading={confirmingLoading}
+        />
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         {showSidebar && (
           <div className="w-48 flex-shrink-0 border-r border-[var(--border)] overflow-y-auto">
