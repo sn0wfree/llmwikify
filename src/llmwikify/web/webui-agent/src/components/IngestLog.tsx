@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, IngestLogEntry } from '../api';
+import { EmptyState } from './StateViews';
 
 export function IngestLog() {
   const [entries, setEntries] = useState<IngestLogEntry[]>([]);
@@ -21,7 +22,7 @@ export function IngestLog() {
   }, [loadLog]);
 
   if (loading) return <div className="flex items-center justify-center h-full text-slate-500">Loading ingest log...</div>;
-  if (entries.length === 0) return <div className="p-6 text-slate-500">No ingest records.</div>;
+  if (entries.length === 0) return <EmptyState icon="↓" title="No ingest records" description="Content ingestion history will appear here" />;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">

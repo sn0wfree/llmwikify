@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, DreamEdit } from '../api';
+import { EmptyState } from './StateViews';
 
 export function DreamLog() {
   const [edits, setEdits] = useState<DreamEdit[]>([]);
@@ -28,6 +29,10 @@ export function DreamLog() {
     );
   }
 
+  if (edits.length === 0) {
+    return <EmptyState icon="✦" title="No dream edits recorded" description="Dream mode edits will appear here" />;
+  }
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
@@ -40,9 +45,7 @@ export function DreamLog() {
         </button>
       </div>
 
-      {edits.length === 0 ? (
-        <p className="text-slate-500 text-sm">No dream edits recorded yet.</p>
-      ) : (
+      {edits.length === 0 ? null : (
         <div className="space-y-4">
           {edits.map((edit, i) => (
             <div key={i} className="bg-slate-800 rounded border border-slate-700">

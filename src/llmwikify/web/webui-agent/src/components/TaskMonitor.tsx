@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, TaskInfo } from '../api';
+import { EmptyState } from './StateViews';
 
 export function TaskMonitor() {
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
@@ -30,9 +31,21 @@ export function TaskMonitor() {
     );
   }
 
+  if (tasks.length === 0) {
+    return <EmptyState icon="◷" title="No tasks configured" description="Scheduled tasks will appear here" />;
+  }
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <h2 className="text-xl font-bold mb-4">Task Monitor</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold">Task Monitor</h2>
+        <button
+          onClick={loadTasks}
+          className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded"
+        >
+          Refresh
+        </button>
+      </div>
 
       <div className="space-y-3">
         {tasks.map((task) => (
@@ -59,10 +72,6 @@ export function TaskMonitor() {
             </div>
           </div>
         ))}
-
-        {tasks.length === 0 && (
-          <p className="text-center text-slate-500 text-sm">No tasks configured</p>
-        )}
       </div>
     </div>
   );
