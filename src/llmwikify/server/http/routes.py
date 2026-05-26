@@ -418,8 +418,17 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     agent_service = AgentService(registry, data_dir)
     set_agent_service(agent_service)
 
-    from llmwikify.agent.backend.routes import agent_router
+    from llmwikify.agent.backend.routes import agent_router, research_router
+    from llmwikify.agent.backend.routes.research import set_research_deps
+
+    set_research_deps(
+        db=agent_service.db,
+        wiki_registry=registry,
+        llm_client=None,
+        config=None,
+    )
     app.include_router(agent_router)
+    app.include_router(research_router)
 
     _mount_agent_spa(app)
 

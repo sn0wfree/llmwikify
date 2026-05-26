@@ -66,6 +66,18 @@ class SourceGatherer:
         try:
             content: str = ""
 
+            # For web/youtube without URL, search first
+            if source_type in ("web", "youtube") and not url:
+                from .web_search import WebSearch
+                searcher = WebSearch(self.config)
+                if source_type == "youtube":
+                    results = await searcher.search(f"site:youtube.com {query}", num_results=1)
+                else:
+                    results = await searcher.search(query, num_results=1)
+                if results:
+                    url = results[0].url
+                    sub_query["url"] = url
+
             if source_type == "wiki":
                 pages = self.wiki.search(query, limit=3)
                 if pages:
@@ -75,7 +87,7 @@ class SourceGatherer:
                     else:
                         content = str(page_content) if page_content else ""
             elif source_type == "youtube" and url:
-                result = extract_url(url) if "youtube.com" in url or "youtu.be" in url else extract_youtube(url)
+                result = extract_youtube(url)
                 if result.source_type == "error":
                     raise ValueError(result.metadata.get("error", "YouTube extraction failed"))
                 content = result.text

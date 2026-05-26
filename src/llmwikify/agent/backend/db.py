@@ -361,13 +361,13 @@ class AgentDatabase:
     def _init_tables(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
             # Migrate research_sessions: add columns if missing
-            for col, col_type, default in [
-                ("current_step", "TEXT", "'planning'"),
-                ("result", "TEXT", "NULL"),
-                ("updated_at", "TEXT", "datetime('now')"),
+            for col, col_type in [
+                ("current_step", "TEXT"),
+                ("result", "TEXT"),
+                ("updated_at", "TEXT"),
             ]:
                 try:
-                    conn.execute(f"ALTER TABLE research_sessions ADD COLUMN {col} {col_type} DEFAULT {default}")
+                    conn.execute(f"ALTER TABLE research_sessions ADD COLUMN {col} {col_type}")
                 except sqlite3.OperationalError:
                     pass  # column already exists
             # Migrate status default

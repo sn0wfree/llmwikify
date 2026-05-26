@@ -200,7 +200,7 @@ class ResearchEngine:
         system = """You are a research planning assistant. Given a research topic, decompose it into focused sub-queries for gathering information from multiple sources.
 
 Rules:
-- Generate 5-15 sub-queries covering different aspects of the topic
+- Generate 3-10 sub-queries covering different aspects of the topic
 - Each sub-query should be specific and searchable
 - Assign source_type: "web" for general knowledge, "youtube" for video content, "wiki" for internal wiki knowledge
 - Use "web" as default source_type
@@ -209,13 +209,13 @@ Rules:
 - Consider existing wiki content to avoid redundant queries
 - Use English for queries
 
-Return JSON array:
-[{"query": "...", "source_type": "web|youtube|wiki", "url": ""}]"""
+Return a JSON array of objects, each with "query", "source_type", and "url" fields.
+Example: [{"query": "Python programming basics", "source_type": "web", "url": ""}]"""
 
         user = f"Research topic: {query}\n\n"
         if wiki_index:
             user += f"Existing wiki content (avoid redundancy):\n{wiki_index[:2000]}\n\n"
-        user += "Generate sub-queries now. Return JSON array only."
+        user += "Generate sub-queries now. Return ONLY a JSON array."
 
         messages = [
             {"role": "system", "content": system},
@@ -223,7 +223,22 @@ Return JSON array:
         ]
 
         try:
-            result = await self._planning_llm.acall_json(messages, max_tokens=2048, temperature=0.3)
+            import asyncio
+            import json as json_mod
+
+            def _call_llm():
+                raw = self._planning_llm.chat(messages, json_mode=True, max_tokens=2048, temperature=0.3)
+                return raw
+
+            raw = await asyncio.to_thread(_call_llm)
+            # Parse JSON response
+            raw = raw.strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+                if raw.endswith("```"):
+                    raw = raw[:-3]
+                raw = raw.strip()
+            result = json_mod.loads(raw)
             if not isinstance(result, list):
                 result = []
         except Exception as e:
