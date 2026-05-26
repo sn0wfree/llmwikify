@@ -66,7 +66,20 @@ Evaluate this report. Return JSON only."""
         ]
 
         try:
-            result = await self.llm_client.acall_json(messages, max_tokens=2048, temperature=0.1)
+            import asyncio
+            import json as json_mod
+
+            def _call():
+                raw = self.llm_client.chat(messages, json_mode=True, max_tokens=2048, temperature=0.1)
+                raw = raw.strip()
+                if raw.startswith("```"):
+                    raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+                    if raw.endswith("```"):
+                        raw = raw[:-3]
+                    raw = raw.strip()
+                return json_mod.loads(raw)
+
+            result = await asyncio.to_thread(_call)
             result.setdefault("approved", result.get("score", 0) >= self.min_score)
             result.setdefault("feedback", "")
             result.setdefault("issues", [])
@@ -132,5 +145,8 @@ Produce the revised report now."""
             {"role": "user", "content": user},
         ]
 
-        revised = await self.llm_client.acall(messages, max_tokens=8192, temperature=0.3)
+        import asyncio
+        revised = await asyncio.to_thread(
+            self.llm_client.chat, messages, max_tokens=8192, temperature=0.3
+        )
         return revised

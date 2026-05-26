@@ -42,15 +42,25 @@ def _get_db() -> AgentDatabase:
 def _get_wiki(wiki_id: str | None = None) -> Any:
     if _WIKI_REGISTRY is None:
         raise RuntimeError("Wiki registry not initialized")
-    if wiki_id:
-        return _WIKI_REGISTRY.get_wiki(wiki_id)
-    return _WIKI_REGISTRY.get_default_wiki()
+    try:
+        if wiki_id:
+            return _WIKI_REGISTRY.get_wiki(wiki_id)
+        return _WIKI_REGISTRY.get_default_wiki()
+    except (ValueError, KeyError) as e:
+        raise ValueError(f"No wiki available: {e}. Configure a wiki in ~/.llmwikify/llmwikify.json or pass wiki_id.") from e
 
 
 def _get_engine(wiki_id: str | None = None) -> ResearchEngine:
     db = _get_db()
     wiki = _get_wiki(wiki_id)
-    return ResearchEngine(wiki=wiki, db=db, llm_client=_LLM_CLIENT, config=_RESEARCH_CONFIG)
+    llm = _LLM_CLIENT
+    if llm is None:
+        from ..service import AgentService
+        # Get LLM from agent service (lazy init)
+        from .agent import get_agent_service
+        svc = get_agent_service()
+        llm = svc._get_llm()
+    return ResearchEngine(wiki=wiki, db=db, llm_client=llm, config=_RESEARCH_CONFIG)
 
 
 @router.post("/start")
@@ -66,8 +76,12 @@ async def start_research(request: Request):
     if not query:
         return JSONResponse({"error": "query is required"}, status_code=400)
 
+    try:
+        engine = _get_engine(wiki_id)
+    except (ValueError, RuntimeError) as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
     db = _get_db()
-    engine = _get_engine(wiki_id)
     wiki = _get_wiki(wiki_id)
 
     # Create session

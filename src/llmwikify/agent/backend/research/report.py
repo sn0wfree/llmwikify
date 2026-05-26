@@ -111,8 +111,11 @@ Rules:
             {"role": "user", "content": user_msg},
         ]
 
-        # Call LLM
-        report_md = await self.llm_client.acall(messages, max_tokens=8192, temperature=0.3)
+        # Call LLM (sync wrapped in async)
+        import asyncio
+        report_md = await asyncio.to_thread(
+            self.llm_client.chat, messages, max_tokens=8192, temperature=0.3
+        )
         return report_md
 
 
