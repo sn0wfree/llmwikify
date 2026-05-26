@@ -141,7 +141,13 @@ class AgentService:
     def _get_llm(self) -> StreamableLLMClient:
         if self._llm is None:
             from llmwikify.config import load_config
-            config = load_config()
+            default_id = self._get_default_wiki_id()
+            if not default_id:
+                raise ValueError("No default wiki available")
+            wiki_instance = self.wiki_registry.get_wiki_instance(default_id)
+            if not wiki_instance or not wiki_instance.root:
+                raise ValueError("No wiki root available")
+            config = load_config(wiki_instance.root)
             self._llm = StreamableLLMClient.from_config(config)
         return self._llm
 
