@@ -138,15 +138,20 @@ class WikiServer:
         @app.get("/api/health", tags=["system"])
         async def health_check():
             """Get server health status."""
-            if self.registry:
-                # Multi-wiki mode
-                wikis = self.registry.list_wikis()
+            wikis = self.registry.list_wikis()
+            wiki_count = len(wikis)
+
+            # Determine mode: multi-wiki only if multiple wikis actually exist
+            # (even with is_default set, single wiki = single-wiki mode)
+            is_multi = wiki_count > 1
+
+            if is_multi:
                 return {
                     "status": "ok",
                     "version": "0.31.0",
                     "mode": "multi-wiki",
-                    "wiki_count": len(wikis),
-                    "default_wiki_id": self.registry.get_default_wiki_id(),
+                    "wiki_count": wiki_count,
+                    "default_wiki_id": default_id,
                     "features": {
                         "mcp": self.enable_mcp,
                         "webui": self.enable_webui,
@@ -156,7 +161,7 @@ class WikiServer:
                     "timestamp": datetime.utcnow().isoformat(),
                 }
             else:
-                # Single wiki mode
+                # Single wiki mode (1 wiki, no explicit default)
                 page_count = len(list(self.wiki.wiki_dir.glob("**/*.md"))) if self.wiki.wiki_dir.exists() else 0
                 return {
                     "status": "ok",
