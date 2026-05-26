@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, DreamProposal } from '../api';
+import { useToast } from './Toast';
 
 export function DreamProposals() {
   const [groups, setGroups] = useState<Record<string, DreamProposal[]>>({});
   const [stats, setStats] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [showApplyConfirm, setShowApplyConfirm] = useState(false);
+  const { addToast } = useToast();
 
   const loadProposals = useCallback(async () => {
     try {
@@ -44,14 +48,51 @@ export function DreamProposals() {
 
   const approveSelected = async () => {
     if (selected.size === 0) return;
-    await api.dream.batchApprove(Array.from(selected));
-    setSelected(new Set());
-    loadProposals();
+    setActionLoading(true);
+    try {
+      await api.dream.batchApprove(Array.from(selected));
+      setSelected(new Set());
+      loadProposals();
+      addToast('success', `Approved ${selected.size} proposal${selected.size > 1 ? 's' : ''}`);
+    } catch (e) {
+      addToast('error', `Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const applyApproved = async () => {
-    await api.dream.apply();
-    loadProposals();
+  const handleApply = async () => {
+    setShowApplyConfirm(false);
+    setActionLoading(true);
+    try {
+      const result = await api.dream.apply();
+      loadProposals();
+      addToast('success', `Applied ${result.applied} proposal${result.applied !== 1 ? 's' : ''}`);
+    } catch (e) {
+      addToast('error', `Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    try {
+      await api.dream.approve(id);
+      loadProposals();
+      addToast('success', 'Approved');
+    } catch (e) {
+      addToast('error', `Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      await api.dream.reject(id);
+      loadProposals();
+      addToast('success', 'Rejected');
+    } catch (e) {
+      addToast('error', `Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
   };
 
   const totalPending = stats.pending || 0;
@@ -62,6 +103,27 @@ export function DreamProposals() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      {showApplyConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-bold mb-2">Apply All Approved?</h3>
+            <p className="text-sm text-slate-400 mb-4">
+              This will apply all approved proposals to the wiki. This action cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowApplyConfirm(false)}
+                className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded">
+                Cancel
+              </button>
+              <button onClick={handleApply}
+                className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 rounded text-white">
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">Dream Proposals</h2>
         <div className="flex gap-2 text-xs">
@@ -71,16 +133,16 @@ export function DreamProposals() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        <button onClick={approveSelected} disabled={selected.size === 0}
+        <button onClick={approveSelected} disabled={selected.size === 0 || actionLoading}
           className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded text-white">
           Approve Selected ({selected.size})
         </button>
-        <button onClick={applyApproved}
-          className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 rounded text-white">
+        <button onClick={() => setShowApplyConfirm(true)} disabled={actionLoading}
+          className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded text-white">
           Apply All Approved
         </button>
-        <button onClick={loadProposals}
-          className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded">
+        <button onClick={loadProposals} disabled={actionLoading}
+          className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded disabled:opacity-50">
           Refresh
         </button>
       </div>
@@ -115,11 +177,11 @@ export function DreamProposals() {
                   </details>
                   {p.status === 'pending' && (
                     <div className="flex gap-2 mt-2">
-                      <button onClick={() => api.dream.approve(p.id).then(loadProposals)}
+                      <button onClick={() => handleApprove(p.id)}
                         className="px-2 py-1 text-xs bg-green-600/20 text-green-400 rounded hover:bg-green-600/30">
                         Approve
                       </button>
-                      <button onClick={() => api.dream.reject(p.id).then(loadProposals)}
+                      <button onClick={() => handleReject(p.id)}
                         className="px-2 py-1 text-xs bg-red-600/20 text-red-400 rounded hover:bg-red-600/30">
                         Reject
                       </button>
