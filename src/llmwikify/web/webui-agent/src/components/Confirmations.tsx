@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, Confirmation } from '../api';
+import { useToast } from './Toast';
 
 export function Confirmations() {
   const [groups, setGroups] = useState<Record<string, Confirmation[]>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const { addToast } = useToast();
 
   const loadConfirmations = useCallback(async () => {
     try {
@@ -41,18 +44,56 @@ export function Confirmations() {
 
   const approveSelected = async () => {
     if (selected.size === 0) return;
-    await api.confirmations.batchApprove(Array.from(selected));
-    setSelected(new Set());
-    loadConfirmations();
+    setActionLoading(true);
+    try {
+      const count = selected.size;
+      await api.confirmations.batchApprove(Array.from(selected));
+      setSelected(new Set());
+      loadConfirmations();
+      addToast('success', `Approved ${count} confirmation${count > 1 ? 's' : ''}`);
+    } catch (e) {
+      addToast('error', `Failed to approve: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const rejectSelected = async () => {
     if (selected.size === 0) return;
-    for (const id of selected) {
-      await api.confirmations.reject(id);
+    setActionLoading(true);
+    try {
+      const ids = Array.from(selected);
+      for (const id of ids) {
+        await api.confirmations.reject(id);
+      }
+      setSelected(new Set());
+      loadConfirmations();
+      addToast('success', `Rejected ${ids.length} confirmation${ids.length > 1 ? 's' : ''}`);
+    } catch (e) {
+      addToast('error', `Failed to reject: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setActionLoading(false);
     }
-    setSelected(new Set());
-    loadConfirmations();
+  };
+
+  const handleApprove = async (id: string) => {
+    try {
+      await api.confirmations.approve(id);
+      loadConfirmations();
+      addToast('success', 'Approved');
+    } catch (e) {
+      addToast('error', `Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      await api.confirmations.reject(id);
+      loadConfirmations();
+      addToast('success', 'Rejected');
+    } catch (e) {
+      addToast('error', `Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
   };
 
   const totalPending = Object.values(groups).reduce((sum, arr) => sum + arr.length, 0);
@@ -65,16 +106,16 @@ export function Confirmations() {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">Pending Confirmations ({totalPending})</h2>
         <div className="flex gap-2">
-          <button onClick={approveSelected} disabled={selected.size === 0}
+          <button onClick={approveSelected} disabled={selected.size === 0 || actionLoading}
             className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded text-white">
             Approve Selected ({selected.size})
           </button>
-          <button onClick={rejectSelected} disabled={selected.size === 0}
+          <button onClick={rejectSelected} disabled={selected.size === 0 || actionLoading}
             className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded text-white">
             Reject Selected
           </button>
-          <button onClick={loadConfirmations}
-            className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded">
+          <button onClick={loadConfirmations} disabled={actionLoading}
+            className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded disabled:opacity-50">
             Refresh
           </button>
         </div>
@@ -107,11 +148,11 @@ export function Confirmations() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => api.confirmations.approve(c.id).then(loadConfirmations)}
+                    <button onClick={() => handleApprove(c.id)}
                       className="px-2 py-1 text-xs bg-green-600/20 text-green-400 rounded hover:bg-green-600/30">
                       Approve
                     </button>
-                    <button onClick={() => api.confirmations.reject(c.id).then(loadConfirmations)}
+                    <button onClick={() => handleReject(c.id)}
                       className="px-2 py-1 text-xs bg-red-600/20 text-red-400 rounded hover:bg-red-600/30">
                       Reject
                     </button>
