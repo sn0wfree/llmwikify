@@ -1,8 +1,8 @@
 # Agent UI 优化讨论记录
 
 > 创建时间：2025-05-26
-> 最后更新：2025-05-26（Phase 1, 2 完成）
-> 状态：Phase 2 完成，待 Phase 3
+> 最后更新：2025-05-26（Phase 1, 2, 3 完成）
+> 状态：Phase 3 完成
 
 ---
 
@@ -104,13 +104,15 @@ data: {"type": "done", "final_response": "...", "actions": []}
 | Confirmations.tsx | ✅ Toast on approve/reject individual and batch, actionLoading state |
 | DreamProposals.tsx | ✅ Toast on approve/apply, "Apply All Approved" now shows confirmation dialog |
 
-### Phase 3：WikiSelector（多 wiki 环境需要）
+### Phase 3：WikiSelector（多 wiki 环境需要）✅ 已完成
 
 | 文件 | 改动 |
 |------|------|
-| `stores/agentStore.ts` | Zustand store，管理 `currentWikiId` |
-| `components/WikiSelector.tsx` | 从 webui 复制或重写 |
-| `api.ts` | 所有方法自动注入 `wikiId` |
+| `agentWikiStore.ts` | ✅ Zustand store，`WikiInfo` 接口，`loadWikis()`, `switchWiki()` |
+| `WikiSelector.tsx` | ✅ 从 webui 简化复制，支持单 wiki 只读 / 多 wiki 下拉切换 |
+| `App.tsx` | ✅ 渲染 WikiSelector，`loadWikis()` on mount |
+| `AgentChat.tsx` | ✅ `chatStream()` 传入 `currentWikiId` |
+| `package.json` | ✅ 添加 `zustand` 依赖 |
 
 ### Phase 4：Sidebar 增强
 
@@ -208,6 +210,7 @@ AgentService
 | `3f4dcce` | fix(agent): pass wiki_root to load_config in _get_llm |
 | `95f6c80` | feat(agent-ui): add Toast system and fix SSE chat streaming |
 | `6c7b146` | feat(agent-ui): add Toast feedback to Confirmations and DreamProposals |
+| `9d311a5` | feat(agent-ui): add WikiSelector and agentWikiStore for multi-wiki support |
 
 ### Phase 1 产物（已实施）
 
