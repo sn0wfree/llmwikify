@@ -46,7 +46,7 @@ def _register_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
             raise HTTPException(status_code=400, detail="Cannot access remote wiki directly")
         return registry.get_wiki(wiki_id)
 
-    def get_default_wiki() -> Wiki:
+    def get_wiki() -> Wiki:
         wiki_id = _get_default_or_first_wiki_id()
         return registry.get_wiki(wiki_id)
 
