@@ -20,11 +20,14 @@ class StreamableLLMClient:
         base_url: str = "",
         api_key: str = "",
         model: str = "gpt-4o",
+        reasoning_split: bool = False,
     ):
         self.provider = provider
-        self.base_url = base_url.rstrip("/") if base_url else self._default_base_url(provider)
+        raw_base = base_url if base_url else self._default_base_url(provider)
+        self.base_url = raw_base.rstrip("/").removesuffix("/v1")
         self.api_key = api_key
         self.model = model
+        self.reasoning_split = reasoning_split
 
     @staticmethod
     def _default_base_url(provider: str) -> str:
@@ -32,33 +35,15 @@ class StreamableLLMClient:
             "openai": "https://api.openai.com",
             "ollama": "http://localhost:11434/v1",
             "lmstudio": "http://localhost:1234/v1",
+            "minimax": "https://api.minimaxi.com/v1",
         }
         return defaults.get(provider, "https://api.openai.com")
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> "StreamableLLMClient":
-        llm_cfg = config.get("llm", {})
-        if not llm_cfg.get("enabled", False):
-            raise ValueError("LLM is not enabled. Set llm.enabled=true in config.")
+        from .providers.registry import create_llm
 
-        api_key = llm_cfg.get("api_key", "")
-        if isinstance(api_key, str) and api_key.startswith("env:"):
-            api_key = os.environ.get(api_key[4:], "")
-
-        api_key = os.environ.get("LLM_API_KEY", api_key)
-        base_url = os.environ.get("LLM_BASE_URL", llm_cfg.get("base_url", ""))
-        model = os.environ.get("LLM_MODEL", llm_cfg.get("model", "gpt-4o"))
-        provider = os.environ.get("LLM_PROVIDER", llm_cfg.get("provider", "openai"))
-
-        if not api_key:
-            raise ValueError("LLM API key not configured.")
-
-        return cls(
-            provider=provider,
-            base_url=base_url,
-            api_key=api_key,
-            model=model,
-        )
+        return create_llm(config)
 
     def chat(
         self,
@@ -77,12 +62,14 @@ class StreamableLLMClient:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
         }
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+        if self.reasoning_split:
+            payload["reasoning_split"] = True
         for key in ("temperature", "max_tokens", "top_p"):
             if key in generation_params:
                 payload[key] = generation_params[key]
@@ -119,7 +106,8 @@ class StreamableLLMClient:
         }
         if tools:
             payload["tools"] = tools
-
+        if self.reasoning_split:
+            payload["reasoning_split"] = True
         for key in ("temperature", "max_tokens", "top_p"):
             if key in generation_params:
                 payload[key] = generation_params[key]
@@ -170,7 +158,8 @@ class StreamableLLMClient:
         }
         if tools:
             payload["tools"] = tools
-
+        if self.reasoning_split:
+            payload["reasoning_split"] = True
         for key in ("temperature", "max_tokens", "top_p"):
             if key in generation_params:
                 payload[key] = generation_params[key]

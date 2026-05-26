@@ -233,6 +233,15 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+export interface LLMConfig {
+  enabled: boolean;
+  provider: string;
+  model: string;
+  base_url: string;
+  api_key: string;
+  timeout: number;
+}
+
 export const api = {
   wikis: {
     list: () => request<{ wikis: Array<Record<string, unknown>>; default_wiki_id: string | null }>('/wikis'),
@@ -274,6 +283,14 @@ export const api = {
       request<{ messages: unknown[]; session_id: string }>(
         `/agent/sessions/${sessionId}/messages?limit=${limit}${before ? `&before=${before}` : ''}`
       ),
+    getConfig: () => request<LLMConfig>('/agent/config'),
+    saveConfig: (cfg: LLMConfig) =>
+      request<{ saved: boolean }>('/agent/config', {
+        method: 'PUT',
+        body: JSON.stringify(cfg),
+      }),
+    reloadConfig: () =>
+      request<{ reloaded: boolean }>('/agent/config/reload', { method: 'POST' }),
   },
 
   dream: {

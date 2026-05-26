@@ -5,6 +5,7 @@ import { DreamLog } from './components/DreamLog';
 import { DreamProposals } from './components/DreamProposals';
 import { EditHistory } from './components/EditHistory';
 import { IngestLog } from './components/IngestLog';
+import { LLMSettings } from './components/LLMSettings';
 import { TaskMonitor } from './components/TaskMonitor';
 import { WikiSelector } from './components/WikiSelector';
 import { useAgentWikiStore } from './stores/agentWikiStore';
@@ -12,7 +13,7 @@ import { api } from './api';
 import { Card } from './components/ui/Card';
 import { Badge } from './components/ui/Badge';
 
-type ViewMode = 'chat' | 'tasks' | 'confirmations' | 'proposals' | 'dream' | 'ingest' | 'history';
+type ViewMode = 'chat' | 'tasks' | 'confirmations' | 'proposals' | 'dream' | 'ingest' | 'history' | 'settings';
 
 interface BadgeCounts {
   confirmations: number;
@@ -86,6 +87,9 @@ function App() {
           <NavButton active={view === 'history'} onClick={() => setView('history')}>
             Edit History
           </NavButton>
+          <NavButton active={view === 'settings'} onClick={() => setView('settings')}>
+            LLM Settings
+          </NavButton>
         </nav>
 
         <div className="mt-auto p-4 border-t border-[var(--border)] text-xs text-[var(--text-secondary)]">
@@ -102,6 +106,7 @@ function App() {
           {view === 'dream' && <LazyWrapper><DreamLog /></LazyWrapper>}
           {view === 'ingest' && <LazyWrapper><IngestLog /></LazyWrapper>}
           {view === 'history' && <LazyWrapper><EditHistory /></LazyWrapper>}
+          {view === 'settings' && <LazyWrapper><LLMSettings /></LazyWrapper>}
         </div>
       </main>
     </div>
