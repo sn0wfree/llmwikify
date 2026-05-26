@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { chatStream, ChatStreamEvent } from '../api';
 import { useToast } from './Toast';
+import { useAgentWikiStore } from '../stores/agentWikiStore';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -26,6 +27,7 @@ export function AgentChat() {
   const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { addToast } = useToast();
+  const { currentWikiId } = useAgentWikiStore();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -41,7 +43,7 @@ export function AgentChat() {
     setCurrentAssistantMsg('');
     setCurrentToolCalls([]);
 
-    const reader = chatStream(input).getReader();
+    const reader = chatStream(input, undefined, currentWikiId || undefined).getReader();
 
     try {
       while (true) {
@@ -112,7 +114,7 @@ export function AgentChat() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, addToast, currentToolCalls]);
+  }, [input, loading, addToast, currentToolCalls, currentWikiId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
