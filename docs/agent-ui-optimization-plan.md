@@ -1,8 +1,8 @@
 # Agent UI 优化讨论记录
 
 > 创建时间：2025-05-26
-> 最后更新：2025-05-26（Phase 1, 2, 3 完成）
-> 状态：Phase 3 完成
+> 最后更新：2025-05-26（Phase 1, 2, 3, 4 完成）
+> 状态：Phase 4 完成
 
 ---
 
@@ -114,12 +114,13 @@ data: {"type": "done", "final_response": "...", "actions": []}
 | `AgentChat.tsx` | ✅ `chatStream()` 传入 `currentWikiId` |
 | `package.json` | ✅ 添加 `zustand` 依赖 |
 
-### Phase 4：Sidebar 增强
+### Phase 4：Sidebar 增强 ✅ 已完成
 
 | 改动 | 说明 |
 |------|------|
-| Badge 徽章 | 每项导航显示 pending count |
-| 活跃指示器 | 左侧竖条动画 |
+| Badge 徽章 | NavButton 显示红色徽章，confirmations/proposals 有 pending 数量 |
+| 活跃指示器 | 左侧 `w-0.5` 蓝色竖条 |
+| 自动刷新 | 每 30s 轮询 `/agent/status` 更新 badge 数量 |
 
 ### Phase 5：空状态 + 视觉统一
 
@@ -211,6 +212,7 @@ AgentService
 | `95f6c80` | feat(agent-ui): add Toast system and fix SSE chat streaming |
 | `6c7b146` | feat(agent-ui): add Toast feedback to Confirmations and DreamProposals |
 | `9d311a5` | feat(agent-ui): add WikiSelector and agentWikiStore for multi-wiki support |
+| `f96594f` | feat(agent-ui): add sidebar badges and active indicator |
 
 ### Phase 1 产物（已实施）
 
