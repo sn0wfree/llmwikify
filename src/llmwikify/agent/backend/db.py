@@ -110,9 +110,54 @@ class AgentDatabase:
 
     def delete_session(self, session_id: str) -> bool:
         with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
             cur = conn.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
             conn.commit()
             return cur.rowcount > 0
+
+    def get_session_title(self, session_id: str) -> str:
+        messages = self.get_messages(session_id, limit=1)
+        for msg in messages:
+            if msg["role"] == "user":
+                content = msg["content"][:50]
+                return content + ("..." if len(msg["content"]) > 50 else "")
+        return "New Chat"
+
+    def save_message(self, message: dict) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT INTO chat_messages (id, session_id, role, content, tool_calls, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                message["id"],
+                message["session_id"],
+                message["role"],
+                message["content"],
+                json.dumps(message.get("tool_calls")) if message.get("tool_calls") else None,
+                message.get("created_at"),
+            ))
+            conn.commit()
+
+    def get_messages(self, session_id: str, limit: int = 50, before: str | None = None) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if before:
+                rows = conn.execute(
+                    "SELECT * FROM chat_messages WHERE session_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT ?",
+                    (session_id, before, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
+                    (session_id, limit),
+                ).fetchall()
+            results = []
+            for row in rows:
+                d = dict(row)
+                if d.get("tool_calls"):
+                    d["tool_calls"] = json.loads(d["tool_calls"])
+                results.append(d)
+            return list(reversed(results))
 
     def log_tool_call(
         self,
@@ -197,6 +242,21 @@ class AgentDatabase:
 
     def _init_tables(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    tool_calls TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_chat_messages_session
+                ON chat_messages(session_id, created_at DESC)
+            """)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS dream_proposals (
                     id TEXT PRIMARY KEY,
