@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { chatStream, ChatStreamEvent } from '../api';
 import { useToast } from './Toast';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
-import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { MessageBubble } from './ui/MessageBubble';
 import { ToolCard } from './ui/ToolCard';
@@ -170,16 +169,11 @@ export function AgentChat() {
 
         {loading && currentAssistantMsg && (
           <div className="flex justify-start">
-            <div className="flex items-start gap-2">
-              <span className="text-base leading-none mt-0.5">🤖</span>
-              <div>
-                <MessageBubble
-                  role="assistant"
-                  content={currentAssistantMsg}
-                  streaming
-                />
-              </div>
-            </div>
+            <MessageBubble
+              role="assistant"
+              content={currentAssistantMsg}
+              streaming
+            />
           </div>
         )}
 
@@ -193,14 +187,12 @@ export function AgentChat() {
 
         {loading && !currentAssistantMsg && currentToolCalls.length === 0 && (
           <div className="flex justify-start">
-            <Card padding="md">
-              <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-                <span className="text-base">🤖</span>
-                <div className="thinking-dots">
-                  <span>·</span><span>·</span><span>·</span>
-                </div>
+            <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+              <span className="text-base">🤖</span>
+              <div className="thinking-dots">
+                <span>·</span><span>·</span><span>·</span>
               </div>
-            </Card>
+            </div>
           </div>
         )}
 
