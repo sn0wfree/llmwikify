@@ -8,8 +8,15 @@ import { IngestLog } from './components/IngestLog';
 import { TaskMonitor } from './components/TaskMonitor';
 import { WikiSelector } from './components/WikiSelector';
 import { useAgentWikiStore } from './stores/agentWikiStore';
+import { api } from './api';
 
 type ViewMode = 'chat' | 'tasks' | 'confirmations' | 'proposals' | 'dream' | 'ingest' | 'history';
+
+interface BadgeCounts {
+  confirmations: number;
+  proposals: number;
+  notifications: number;
+}
 
 function LazyWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -21,11 +28,29 @@ function LazyWrapper({ children }: { children: React.ReactNode }) {
 
 function App() {
   const [view, setView] = useState<ViewMode>('chat');
-  const { loadWikis } = useAgentWikiStore();
+  const [badges, setBadges] = useState<BadgeCounts>({ confirmations: 0, proposals: 0, notifications: 0 });
+  const { loadWikis, currentWikiId } = useAgentWikiStore();
 
   useEffect(() => {
     loadWikis();
   }, [loadWikis]);
+
+  useEffect(() => {
+    const fetchBadges = async () => {
+      try {
+        const status = await api.agent.status(currentWikiId || undefined);
+        const proposalsCount = Object.values(status.dream_proposals || {}).reduce((a: number, b) => a + (Number(b) || 0), 0) as number;
+        setBadges({
+          confirmations: status.pending_confirmations || 0,
+          proposals: proposalsCount || 0,
+          notifications: status.unread_notifications || 0,
+        });
+      } catch { /* silent */ }
+    };
+    fetchBadges();
+    const interval = setInterval(fetchBadges, 30000);
+    return () => clearInterval(interval);
+  }, [currentWikiId]);
 
   return (
     <div className="flex h-screen bg-slate-900 text-slate-100">
@@ -45,10 +70,10 @@ function App() {
             Tasks
           </NavButton>
           <div className="border-t border-slate-700 my-2" />
-          <NavButton active={view === 'confirmations'} onClick={() => setView('confirmations')}>
+          <NavButton active={view === 'confirmations'} onClick={() => setView('confirmations')} badge={badges.confirmations}>
             Confirmations
           </NavButton>
-          <NavButton active={view === 'proposals'} onClick={() => setView('proposals')}>
+          <NavButton active={view === 'proposals'} onClick={() => setView('proposals')} badge={badges.proposals}>
             Dream Proposals
           </NavButton>
           <NavButton active={view === 'dream'} onClick={() => setView('dream')}>
@@ -87,21 +112,31 @@ function NavButton({
   active,
   onClick,
   children,
+  badge,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  badge?: number;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+      className={`w-full text-left px-3 py-2 rounded text-sm transition-colors relative ${
         active
           ? 'bg-blue-600/20 text-blue-400'
           : 'text-slate-300 hover:bg-slate-700'
       }`}
     >
-      {children}
+      {active && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-400 rounded-r" />}
+      <div className="flex items-center justify-between">
+        <span>{children}</span>
+        {badge !== undefined && badge > 0 && (
+          <span className="px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full min-w-[20px] text-center">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </div>
     </button>
   );
 }
