@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, WikiPage, GraphNode, GraphEdge, SearchResult } from '../api';
+import { useWikiStore } from '../stores/wikiStore';
 import { useToast } from './Toast';
 import { FrontMatterPanel, FrontMatterData } from './FrontMatterPanel';
 import { GraphView } from './GraphView';
@@ -49,6 +50,7 @@ function buildFrontMatter(metadata: FrontMatterData, body: string): string {
 
 export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProps) {
   const { addToast } = useToast();
+  const { isMultiWikiMode } = useWikiStore();
   const [page, setPage] = useState<WikiPage | null>(null);
   const [content, setContent] = useState('');
   const [metadata, setMetadata] = useState<FrontMatterData>({});
@@ -84,7 +86,7 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
     setGraphLoading(true);
     try {
       let data;
-      if (wikiId) {
+      if (isMultiWikiMode && wikiId) {
         data = await api.wiki.scoped.graph(wikiId, currentPage);
       } else {
         data = await api.wiki.graph(currentPage);
@@ -103,7 +105,7 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
   const loadTree = useCallback(async (wikiId?: string) => {
     try {
       let results, status;
-      if (wikiId) {
+      if (isMultiWikiMode && wikiId) {
         [results, status] = await Promise.all([
           api.wiki.scoped.search(wikiId, '', 100),
           api.wiki.scoped.status(wikiId),
@@ -124,7 +126,7 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
   const loadPage = useCallback(async (name: string, wikiId?: string) => {
     try {
       let data;
-      if (wikiId) {
+      if (isMultiWikiMode && wikiId) {
         data = await api.wiki.scoped.readPage(wikiId, name);
       } else {
         data = await api.wiki.readPage(name);
@@ -153,7 +155,7 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
     if (!page) return;
     setSaving(true);
     try {
-      if (currentWikiId) {
+      if (isMultiWikiMode && currentWikiId) {
         await api.wiki.scoped.writePage(currentWikiId, page.page_name, content);
       } else {
         await api.wiki.writePage(page.page_name, content);
