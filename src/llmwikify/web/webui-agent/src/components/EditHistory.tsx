@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api';
+import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { EmptyState } from './StateViews';
 
 interface EditEntry {
@@ -13,10 +14,11 @@ interface EditEntry {
 export function EditHistory() {
   const [edits, setEdits] = useState<EditEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const { currentWikiId } = useAgentWikiStore();
 
   const loadHistory = useCallback(async () => {
     try {
-      const status = await api.agent.status();
+      const status = await api.agent.status(currentWikiId || undefined);
       setEdits((status.action_log || []) as EditEntry[]);
     } catch {
       setEdits([]);

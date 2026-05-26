@@ -248,11 +248,6 @@ export const api = {
   },
 
   agent: {
-    chat: (message: string, sessionId?: string, wikiId?: string) =>
-      request<{ response: string; actions: unknown[] }>('/agent/chat', {
-        method: 'POST',
-        body: JSON.stringify({ message, session_id: sessionId, wiki_id: wikiId }),
-      }),
     status: (wikiId?: string) =>
       request<{
         state: string;

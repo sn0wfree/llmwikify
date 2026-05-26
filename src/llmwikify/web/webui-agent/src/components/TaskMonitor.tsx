@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { api, TaskInfo } from '../api';
+import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { EmptyState } from './StateViews';
 
 export function TaskMonitor() {
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const { currentWikiId } = useAgentWikiStore();
 
   useEffect(() => {
     loadTasks();
@@ -14,7 +16,7 @@ export function TaskMonitor() {
 
   const loadTasks = async () => {
     try {
-      const status = await api.agent.status();
+      const status = await api.agent.status(currentWikiId || undefined);
       setTasks(status.scheduler_tasks);
     } catch {
       setTasks([]);

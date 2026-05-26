@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { api, DreamEdit } from '../api';
+import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { EmptyState } from './StateViews';
 
 export function DreamLog() {
   const [edits, setEdits] = useState<DreamEdit[]>([]);
   const [loading, setLoading] = useState(true);
+  const { currentWikiId } = useAgentWikiStore();
 
   useEffect(() => {
     loadEdits();
@@ -12,7 +14,7 @@ export function DreamLog() {
 
   const loadEdits = async () => {
     try {
-      const log = await api.dream.log();
+      const log = await api.dream.log(undefined, currentWikiId || undefined);
       setEdits(log);
     } catch {
       setEdits([]);
