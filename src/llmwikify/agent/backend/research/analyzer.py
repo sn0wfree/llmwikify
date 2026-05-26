@@ -32,12 +32,19 @@ class SourceAnalyzer:
 
             try:
                 analysis = await asyncio.to_thread(self._analyze_one, src)
-                self.session_manager.update_source_analysis(src["id"], analysis)
-                events.append({
-                    "type": "source_analyzed",
-                    "source_id": src["id"],
-                    "title": src.get("title", ""),
-                })
+                if analysis.get("status") in ("error",):
+                    events.append({
+                        "type": "source_analysis_failed",
+                        "source_id": src["id"],
+                        "error": analysis.get("reason", "unknown"),
+                    })
+                else:
+                    self.session_manager.update_source_analysis(src["id"], analysis)
+                    events.append({
+                        "type": "source_analyzed",
+                        "source_id": src["id"],
+                        "title": src.get("title", ""),
+                    })
             except Exception as e:
                 logger.warning("Analysis failed for source %s: %s", src["id"], e)
                 events.append({
