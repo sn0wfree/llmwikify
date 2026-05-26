@@ -76,6 +76,13 @@ class WikiServer:
                 wiki_type=WikiType.LOCAL,
                 is_default=True,
             )
+        # Get default wiki - if none set but only one wiki exists, use that
+        default_id = self.registry.get_default_wiki_id()
+        if not default_id:
+            wikis = self.registry.list_wikis()
+            if len(wikis) == 1:
+                default_id = wikis[0].wiki_id
+                self.registry.set_default_wiki(default_id)
         self.wiki = self.registry.get_default_wiki()
 
         self.api_key = api_key
