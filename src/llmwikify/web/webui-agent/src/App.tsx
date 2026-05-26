@@ -6,6 +6,8 @@ import { DreamProposals } from './components/DreamProposals';
 import { EditHistory } from './components/EditHistory';
 import { IngestLog } from './components/IngestLog';
 import { TaskMonitor } from './components/TaskMonitor';
+import { WikiSelector } from './components/WikiSelector';
+import { useAgentWikiStore } from './stores/agentWikiStore';
 
 type ViewMode = 'chat' | 'tasks' | 'confirmations' | 'proposals' | 'dream' | 'ingest' | 'history';
 
@@ -19,6 +21,11 @@ function LazyWrapper({ children }: { children: React.ReactNode }) {
 
 function App() {
   const [view, setView] = useState<ViewMode>('chat');
+  const { loadWikis } = useAgentWikiStore();
+
+  useEffect(() => {
+    loadWikis();
+  }, [loadWikis]);
 
   return (
     <div className="flex h-screen bg-slate-900 text-slate-100">
@@ -27,6 +34,8 @@ function App() {
         <div className="p-4 border-b border-slate-700">
           <h1 className="text-lg font-bold text-blue-400">llmwikify Agent</h1>
         </div>
+
+        <WikiSelector />
 
         <nav className="p-2 space-y-1">
           <NavButton active={view === 'chat'} onClick={() => setView('chat')}>
