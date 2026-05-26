@@ -3,6 +3,9 @@ import { api, Confirmation } from '../api';
 import { useToast } from './Toast';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { EmptyState } from './StateViews';
+import { Card } from './ui/Card';
+import { Button } from './ui/Button';
+import { Badge } from './ui/Badge';
 
 export function Confirmations() {
   const [groups, setGroups] = useState<Record<string, Confirmation[]>>({});
@@ -50,7 +53,7 @@ export function Confirmations() {
     setActionLoading(true);
     try {
       const count = selected.size;
-      await api.confirmations.batchApprove(Array.from(selected));
+      await api.confirmations.batchApprove(Array.from(selected), currentWikiId || undefined);
       setSelected(new Set());
       loadConfirmations();
       addToast('success', `Approved ${count} confirmation${count > 1 ? 's' : ''}`);
@@ -67,7 +70,7 @@ export function Confirmations() {
     try {
       const ids = Array.from(selected);
       for (const id of ids) {
-        await api.confirmations.reject(id);
+        await api.confirmations.reject(id, currentWikiId || undefined);
       }
       setSelected(new Set());
       loadConfirmations();
@@ -81,7 +84,7 @@ export function Confirmations() {
 
   const handleApprove = async (id: string) => {
     try {
-      await api.confirmations.approve(id);
+      await api.confirmations.approve(id, currentWikiId || undefined);
       loadConfirmations();
       addToast('success', 'Approved');
     } catch (e) {
@@ -91,7 +94,7 @@ export function Confirmations() {
 
   const handleReject = async (id: string) => {
     try {
-      await api.confirmations.reject(id);
+      await api.confirmations.reject(id, currentWikiId || undefined);
       loadConfirmations();
       addToast('success', 'Rejected');
     } catch (e) {
@@ -101,69 +104,64 @@ export function Confirmations() {
 
   const totalPending = Object.values(groups).reduce((sum, arr) => sum + arr.length, 0);
 
-  if (loading) return <div className="flex items-center justify-center h-full text-slate-500">Loading confirmations...</div>;
+  if (loading) return <div className="flex items-center justify-center h-full text-[var(--text-secondary)]">Loading confirmations...</div>;
   if (totalPending === 0) return <EmptyState icon="✓" title="No pending confirmations" description="Agent operations requiring approval will appear here" />;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">Pending Confirmations ({totalPending})</h2>
+        <h2 className="text-xl font-bold text-[var(--text-primary)]">Pending Confirmations ({totalPending})</h2>
         <div className="flex gap-2">
-          <button onClick={approveSelected} disabled={selected.size === 0 || actionLoading}
-            className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded text-white">
+          <Button variant="success" size="sm" onClick={approveSelected} disabled={selected.size === 0 || actionLoading}>
             Approve Selected ({selected.size})
-          </button>
-          <button onClick={rejectSelected} disabled={selected.size === 0 || actionLoading}
-            className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded text-white">
+          </Button>
+          <Button variant="danger" size="sm" onClick={rejectSelected} disabled={selected.size === 0 || actionLoading}>
             Reject Selected
-          </button>
-          <button onClick={loadConfirmations} disabled={actionLoading}
-            className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded disabled:opacity-50">
+          </Button>
+          <Button variant="secondary" size="sm" onClick={loadConfirmations} disabled={actionLoading}>
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
 
       <div className="space-y-4">
         {Object.entries(groups).map(([group, confirmations]) => (
-          <div key={group} className="bg-slate-800 rounded border border-slate-700">
-            <div className="p-3 border-b border-slate-700 flex items-center justify-between">
-              <span className="text-sm font-semibold text-slate-300 capitalize">
+          <Card key={group} variant="bordered" padding="none">
+            <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
+              <span className="text-sm font-semibold text-[var(--text-primary)] capitalize">
                 {group.replace(/_/g, ' ')} ({confirmations.length})
               </span>
               <button onClick={() => selectGroup(group)}
-                className="text-xs text-blue-400 hover:text-blue-300">
+                className="text-xs text-[var(--accent)] hover:text-[var(--accent-hover)]">
                 Select All
               </button>
             </div>
-            <div className="divide-y divide-slate-700">
+            <div className="divide-y divide-[var(--border)]">
               {confirmations.map(c => (
                 <div key={c.id} className="p-3 flex items-center gap-3">
                   <input type="checkbox" checked={selected.has(c.id)}
                     onChange={() => toggleSelect(c.id)}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-700" />
+                    className="w-4 h-4 rounded border-[var(--border)] bg-[var(--bg-secondary)]" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-blue-400">{c.tool}</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-sm text-[var(--accent)]">{c.tool}</div>
+                    <div className="text-xs text-[var(--text-secondary)]">
                       {String(c.impact?.page || c.impact?.source || 'N/A')}
                       {' · '}
                       {c.impact?.chars ? `${c.impact.chars} chars` : String(c.impact?.change_type || '')}
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => handleApprove(c.id)}
-                      className="px-2 py-1 text-xs bg-green-600/20 text-green-400 rounded hover:bg-green-600/30">
+                    <Button variant="success" size="sm" onClick={() => handleApprove(c.id)}>
                       Approve
-                    </button>
-                    <button onClick={() => handleReject(c.id)}
-                      className="px-2 py-1 text-xs bg-red-600/20 text-red-400 rounded hover:bg-red-600/30">
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => handleReject(c.id)}>
                       Reject
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         ))}
       </div>
     </div>

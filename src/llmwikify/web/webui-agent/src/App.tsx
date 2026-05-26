@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { AgentChat } from './components/AgentChat';
 import { Confirmations } from './components/Confirmations';
 import { DreamLog } from './components/DreamLog';
@@ -9,6 +9,8 @@ import { TaskMonitor } from './components/TaskMonitor';
 import { WikiSelector } from './components/WikiSelector';
 import { useAgentWikiStore } from './stores/agentWikiStore';
 import { api } from './api';
+import { Card } from './components/ui/Card';
+import { Badge } from './components/ui/Badge';
 
 type ViewMode = 'chat' | 'tasks' | 'confirmations' | 'proposals' | 'dream' | 'ingest' | 'history';
 
@@ -20,9 +22,9 @@ interface BadgeCounts {
 
 function LazyWrapper({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-full text-slate-500">Loading...</div>}>
+    <div className="flex-1 overflow-hidden">
       {children}
-    </Suspense>
+    </div>
   );
 }
 
@@ -53,11 +55,10 @@ function App() {
   }, [currentWikiId]);
 
   return (
-    <div className="flex h-screen bg-slate-900 text-slate-100">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
-        <div className="p-4 border-b border-slate-700">
-          <h1 className="text-lg font-bold text-blue-400">llmwikify Agent</h1>
+    <div className="flex h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      <aside className="w-64 bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col">
+        <div className="p-4 border-b border-[var(--border)]">
+          <h1 className="text-lg font-bold text-[var(--accent)]">llmwikify Agent</h1>
         </div>
 
         <WikiSelector />
@@ -69,7 +70,7 @@ function App() {
           <NavButton active={view === 'tasks'} onClick={() => setView('tasks')}>
             Tasks
           </NavButton>
-          <div className="border-t border-slate-700 my-2" />
+          <div className="border-t border-[var(--border)] my-2" />
           <NavButton active={view === 'confirmations'} onClick={() => setView('confirmations')} badge={badges.confirmations}>
             Confirmations
           </NavButton>
@@ -87,12 +88,11 @@ function App() {
           </NavButton>
         </nav>
 
-        <div className="mt-auto p-4 border-t border-slate-700 text-xs text-slate-500">
-          <a href="/" className="hover:text-blue-400">← Wiki UI</a>
+        <div className="mt-auto p-4 border-t border-[var(--border)] text-xs text-[var(--text-secondary)]">
+          <a href="/" className="hover:text-[var(--accent)]">← Wiki UI</a>
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-hidden">
           {view === 'chat' && <AgentChat />}
@@ -124,17 +124,15 @@ function NavButton({
       onClick={onClick}
       className={`w-full text-left px-3 py-2 rounded text-sm transition-colors relative ${
         active
-          ? 'bg-blue-600/20 text-blue-400'
-          : 'text-slate-300 hover:bg-slate-700'
+          ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
       }`}
     >
-      {active && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-400 rounded-r" />}
+      {active && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[var(--accent)] rounded-r" />}
       <div className="flex items-center justify-between">
         <span>{children}</span>
         {badge !== undefined && badge > 0 && (
-          <span className="px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full min-w-[20px] text-center">
-            {badge > 99 ? '99+' : badge}
-          </span>
+          <Badge variant="error">{badge > 99 ? '99+' : badge}</Badge>
         )}
       </div>
     </button>

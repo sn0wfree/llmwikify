@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { api, TaskInfo } from '../api';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { EmptyState } from './StateViews';
+import { Card } from './ui/Card';
+import { Button } from './ui/Button';
+import { Badge } from './ui/Badge';
 
 export function TaskMonitor() {
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
@@ -27,7 +30,7 @@ export function TaskMonitor() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-slate-500">
+      <div className="flex items-center justify-center h-full text-[var(--text-secondary)]">
         Loading tasks...
       </div>
     );
@@ -40,39 +43,33 @@ export function TaskMonitor() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">Task Monitor</h2>
-        <button
-          onClick={loadTasks}
-          className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded"
-        >
+        <h2 className="text-xl font-bold text-[var(--text-primary)]">Task Monitor</h2>
+        <Button variant="secondary" size="sm" onClick={loadTasks}>
           Refresh
-        </button>
+        </Button>
       </div>
 
       <div className="space-y-3">
         {tasks.map((task) => (
-          <div
-            key={task.name}
-            className="p-4 bg-slate-800 rounded border border-slate-700"
-          >
+          <Card key={task.name} variant="bordered" padding="md">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    task.enabled ? 'bg-green-400' : 'bg-slate-500'
+                    task.enabled ? 'bg-green-400' : 'bg-[var(--bg-tertiary)]'
                   }`}
                 />
-                <span className="font-medium">{task.name}</span>
+                <span className="font-medium text-[var(--text-primary)]">{task.name}</span>
               </div>
-              <span className="text-xs text-slate-500">{task.cron_expr}</span>
+              <span className="text-xs text-[var(--text-secondary)]">{task.cron_expr}</span>
             </div>
-            <p className="text-sm text-slate-400 mb-2">{task.description}</p>
-            <div className="flex gap-4 text-xs text-slate-500">
+            <p className="text-sm text-[var(--text-secondary)] mb-2">{task.description}</p>
+            <div className="flex gap-4 text-xs text-[var(--text-secondary)]">
               <span>Runs: {task.run_count}</span>
               {task.last_run && <span>Last: {formatTime(task.last_run)}</span>}
               {task.next_run && <span>Next: {formatTime(task.next_run)}</span>}
             </div>
-          </div>
+          </Card>
         ))}
       </div>
     </div>

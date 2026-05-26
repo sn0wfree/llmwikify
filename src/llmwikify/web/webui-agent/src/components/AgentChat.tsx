@@ -2,6 +2,12 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { chatStream, ChatStreamEvent } from '../api';
 import { useToast } from './Toast';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
+import { Card } from './ui/Card';
+import { Button } from './ui/Button';
+import { MessageBubble } from './ui/MessageBubble';
+import { ToolCard } from './ui/ToolCard';
+import { Input } from './ui/Input';
+import { Panel } from './ui/Panel';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -136,32 +142,25 @@ export function AgentChat() {
 
   return (
     <div className="flex flex-col h-full max-w-[48rem] mx-auto w-full">
-      <div className="p-3 border-b border-slate-700 bg-slate-800">
-        <h2 className="text-sm font-semibold text-blue-400">Agent Chat</h2>
-      </div>
+      <Panel border="top">
+        <h2 className="text-sm font-semibold text-[var(--accent)]">Agent Chat</h2>
+      </Panel>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, i) => (
           <div key={i}>
             <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-[82%] rounded-lg px-4 py-2.5 text-sm shadow-sm ${
-                  msg.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-700 text-slate-200'
-                }`}
-              >
-                <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
-                <div className={`text-xs mt-1 ${msg.role === 'user' ? 'text-blue-200' : 'text-slate-500'}`}>
-                  {formatTime(msg.timestamp)}
-                </div>
-              </div>
+              <MessageBubble
+                role={msg.role}
+                content={msg.content}
+                timestamp={formatTime(msg.timestamp)}
+              />
             </div>
             {msg.toolCalls && msg.toolCalls.length > 0 && (
               <div className="mt-2 space-y-2">
                 {msg.toolCalls.map((tc, j) => (
                   <div key={j} className="max-w-[82%] ml-auto mr-0">
-                    <ToolCallCard toolCall={tc} />
+                    <ToolCard tool={tc.tool} args={tc.args} status={tc.status} />
                   </div>
                 ))}
               </div>
@@ -171,13 +170,14 @@ export function AgentChat() {
 
         {loading && currentAssistantMsg && (
           <div className="flex justify-start">
-            <div className="bg-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-200 max-w-[82%]">
-              <div className="flex items-start gap-2">
-                <span className="text-base leading-none mt-0.5">🤖</span>
-                <div className="flex-1 min-w-0">
-                  <pre className="whitespace-pre-wrap font-sans">{currentAssistantMsg}</pre>
-                  <span className="streaming-cursor text-blue-400" />
-                </div>
+            <div className="flex items-start gap-2">
+              <span className="text-base leading-none mt-0.5">🤖</span>
+              <div>
+                <MessageBubble
+                  role="assistant"
+                  content={currentAssistantMsg}
+                  streaming
+                />
               </div>
             </div>
           </div>
@@ -186,82 +186,42 @@ export function AgentChat() {
         {loading && currentToolCalls.length > 0 && (
           <div className="space-y-2">
             {currentToolCalls.map((tc, j) => (
-              <ToolCallCard key={j} toolCall={tc} />
+              <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} />
             ))}
           </div>
         )}
 
         {loading && !currentAssistantMsg && currentToolCalls.length === 0 && (
           <div className="flex justify-start">
-            <div className="bg-slate-700 rounded-lg px-4 py-2.5 text-sm">
-              <div className="flex items-center gap-2 text-slate-400">
+            <Card padding="md">
+              <div className="flex items-center gap-2 text-[var(--text-secondary)]">
                 <span className="text-base">🤖</span>
                 <div className="thinking-dots">
                   <span>·</span><span>·</span><span>·</span>
                 </div>
               </div>
-            </div>
+            </Card>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-3 border-t border-slate-700 bg-slate-800">
+      <Panel border="top">
         <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
-          <div className="flex-1 relative">
-            <textarea
+          <div className="flex-1">
+            <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask me anything about your wiki..."
-              rows={1}
-              className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2.5 pr-10 text-sm text-slate-100 placeholder-slate-500 resize-none focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 transition-all duration-200"
-              style={{ minHeight: '44px', maxHeight: '120px' }}
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = 'auto';
-                target.style.height = Math.min(target.scrollHeight, 120) + 'px';
-              }}
             />
           </div>
-          <button
-            type="submit"
-            disabled={loading || !input.trim()}
-            className="px-3 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-md text-sm text-white transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
-          >
+          <Button type="submit" disabled={loading || !input.trim()}>
             ↑
-          </button>
+          </Button>
         </form>
-      </div>
-    </div>
-  );
-}
-
-function ToolCallCard({ toolCall }: { toolCall: ToolCall }) {
-  const statusColors: Record<ToolCall['status'], string> = {
-    pending: 'border-yellow-500',
-    done: 'border-green-500',
-    error: 'border-red-500',
-  };
-
-  return (
-    <div className={`bg-slate-800 rounded border-l-4 ${statusColors[toolCall.status]} p-3`}>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-sm font-medium text-blue-400">{toolCall.tool}</span>
-        {toolCall.status === 'pending' && (
-          <span className="text-xs text-yellow-400 animate-pulse">running</span>
-        )}
-        {toolCall.status === 'done' && (
-          <span className="text-xs text-green-400">done</span>
-        )}
-        {toolCall.status === 'error' && (
-          <span className="text-xs text-red-400">error</span>
-        )}
-      </div>
-      <div className="text-xs text-slate-500 font-mono">
-        {JSON.stringify(toolCall.args, null, 2)}
-      </div>
+      </Panel>
     </div>
   );
 }

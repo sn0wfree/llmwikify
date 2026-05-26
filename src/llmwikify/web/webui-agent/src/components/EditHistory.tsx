@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { EmptyState } from './StateViews';
+import { Card } from './ui/Card';
+import { Button } from './ui/Button';
 
 interface EditEntry {
   tool: string;
@@ -31,36 +33,37 @@ export function EditHistory() {
     loadHistory();
   }, [loadHistory]);
 
-  if (loading) return <div className="flex items-center justify-center h-full text-slate-500">Loading edit history...</div>;
+  if (loading) return <div className="flex items-center justify-center h-full text-[var(--text-secondary)]">Loading edit history...</div>;
   if (edits.length === 0) return <EmptyState icon="✎" title="No edit history" description="Agent edit operations will appear here" />;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">Edit History</h2>
-        <button onClick={loadHistory}
-          className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded">
+        <h2 className="text-xl font-bold text-[var(--text-primary)]">Edit History</h2>
+        <Button variant="secondary" size="sm" onClick={loadHistory}>
           Refresh
-        </button>
+        </Button>
       </div>
 
       <div className="space-y-2">
         {edits.map((edit, i) => (
-          <div key={i} className="bg-slate-800 rounded border border-slate-700 p-3 flex items-center gap-3">
-            <div className={`w-2 h-2 rounded-full ${edit.success ? 'bg-green-400' : 'bg-red-400'}`} />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm text-slate-300">{edit.tool}</div>
-              <div className="text-xs text-slate-500">
-                {formatTime(edit.timestamp)}
-                {edit.confirmation_id && ` · ID: ${edit.confirmation_id}`}
+          <Card key={i} variant="bordered" padding="md">
+            <div className="flex items-center gap-3">
+              <div className={`w-2 h-2 rounded-full ${edit.success ? 'bg-green-400' : 'bg-red-400'}`} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-[var(--text-primary)]">{edit.tool}</div>
+                <div className="text-xs text-[var(--text-secondary)]">
+                  {formatTime(edit.timestamp)}
+                  {edit.confirmation_id && ` · ID: ${edit.confirmation_id}`}
+                </div>
               </div>
+              {edit.error && (
+                <span className="text-xs text-red-400 truncate max-w-xs" title={edit.error}>
+                  {edit.error}
+                </span>
+              )}
             </div>
-            {edit.error && (
-              <span className="text-xs text-red-400 truncate max-w-xs" title={edit.error}>
-                {edit.error}
-              </span>
-            )}
-          </div>
+          </Card>
         ))}
       </div>
     </div>
