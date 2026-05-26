@@ -22,18 +22,25 @@ export function MessageBubble({
       }
       ${className}
     `}>
-      <pre className="whitespace-pre-wrap font-sans">{content}</pre>
-      {streaming && role === 'assistant' && (
-        <span className="streaming-cursor text-[var(--accent)]" />
-      )}
-      {timestamp && (
-        <div className={`
-          text-xs mt-1
-          ${role === 'user' ? 'text-blue-200' : 'text-[var(--text-secondary)]'}
-        `}>
-          {timestamp}
+      <div className="flex items-start gap-2">
+        <span className="text-base leading-none mt-0.5">
+          {role === 'user' ? '👤' : '🤖'}
+        </span>
+        <div className="flex-1 min-w-0">
+          <pre className="whitespace-pre-wrap font-sans">{content}</pre>
+          {streaming && role === 'assistant' && (
+            <span className="streaming-cursor text-[var(--accent)]" />
+          )}
+          {timestamp && (
+            <div className={`
+              text-xs mt-1
+              ${role === 'user' ? 'text-blue-200' : 'text-[var(--text-secondary)]'}
+            `}>
+              {timestamp}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
