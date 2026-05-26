@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { api, DreamEdit } from '../api';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { EmptyState } from './StateViews';
+import { Card } from './ui/Card';
+import { Button } from './ui/Button';
+import { Badge } from './ui/Badge';
 
 export function DreamLog() {
   const [edits, setEdits] = useState<DreamEdit[]>([]);
@@ -25,7 +28,7 @@ export function DreamLog() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-slate-500">
+      <div className="flex items-center justify-center h-full text-[var(--text-secondary)]">
         Loading dream log...
       </div>
     );
@@ -38,25 +41,22 @@ export function DreamLog() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">Dream Edit Log</h2>
-        <button
-          onClick={loadEdits}
-          className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded"
-        >
+        <h2 className="text-xl font-bold text-[var(--text-primary)]">Dream Edit Log</h2>
+        <Button variant="secondary" size="sm" onClick={loadEdits}>
           Refresh
-        </button>
+        </Button>
       </div>
 
       {edits.length === 0 ? null : (
         <div className="space-y-4">
           {edits.map((edit, i) => (
-            <div key={i} className="bg-slate-800 rounded border border-slate-700">
-              <div className="p-3 border-b border-slate-700 flex items-center justify-between">
-                <span className="text-sm font-medium">
+            <Card key={i} variant="bordered" padding="none">
+              <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
+                <span className="text-sm font-medium text-[var(--text-primary)]">
                   {formatTime(edit.timestamp)}
                 </span>
                 <div className="flex gap-3 text-xs">
-                  <span className="text-slate-400">
+                  <span className="text-[var(--text-secondary)]">
                     {edit.sinks_processed} sinks
                   </span>
                   <span className="text-green-400">
@@ -68,9 +68,9 @@ export function DreamLog() {
                 <div className="p-3">
                   {edit.edits.map((e, j) => (
                     <div key={j} className="flex items-center justify-between py-1">
-                      <span className="text-sm text-blue-400">{e.page}</span>
+                      <span className="text-sm text-[var(--accent)]">{e.page}</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-[var(--text-secondary)]">
                           {e.edit_count} changes
                         </span>
                         <StatusBadge status={e.status} />
@@ -88,7 +88,7 @@ export function DreamLog() {
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -97,16 +97,12 @@ export function DreamLog() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    updated: 'bg-blue-500/20 text-blue-400',
-    created: 'bg-green-500/20 text-green-400',
-    no_changes: 'bg-slate-500/20 text-slate-400',
+  const variantMap: Record<string, 'default' | 'success' | 'warning' | 'error' | 'info'> = {
+    updated: 'info',
+    created: 'success',
+    no_changes: 'default',
   };
-  return (
-    <span className={`px-1.5 py-0.5 text-xs rounded ${colors[status] || colors.no_changes}`}>
-      {status}
-    </span>
-  );
+  return <Badge variant={variantMap[status] || 'default'}>{status}</Badge>;
 }
 
 function formatTime(iso: string): string {
