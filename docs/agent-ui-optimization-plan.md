@@ -1,8 +1,8 @@
 # Agent UI 优化讨论记录
 
 > 创建时间：2025-05-26
-> 最后更新：2025-05-26（Phase 1, 2, 3, 4 完成）
-> 状态：Phase 4 完成
+> 最后更新：2025-05-26（Phase 1-5 全部完成）
+> 状态：Phase 5 完成，所有优化迭代完毕
 
 ---
 
@@ -122,13 +122,13 @@ data: {"type": "done", "final_response": "...", "actions": []}
 | 活跃指示器 | 左侧 `w-0.5` 蓝色竖条 |
 | 自动刷新 | 每 30s 轮询 `/agent/status` 更新 badge 数量 |
 
-### Phase 5：空状态 + 视觉统一
+### Phase 5：空状态 + 视觉统一 ✅ 已完成
 
 | 改动 | 说明 |
 |------|------|
-| EmptyState 组件 | 图标 + 文案 + 可选操作按钮 |
-| 统一 Padding | 各视图统一为 `p-6` 或 `p-4` |
-| Focus ring | `:focus-visible` 样式 |
+| `StateViews.tsx` | 新增 `EmptyState` + `LoadingState` 组件 |
+| 所有 7 个视图 | 统一使用 EmptyState，每个有独特图标/标题/描述 |
+| `index.css` | 添加 `:focus-visible` 全局样式（键盘导航可访问性） |
 
 ---
 
@@ -213,6 +213,7 @@ AgentService
 | `6c7b146` | feat(agent-ui): add Toast feedback to Confirmations and DreamProposals |
 | `9d311a5` | feat(agent-ui): add WikiSelector and agentWikiStore for multi-wiki support |
 | `f96594f` | feat(agent-ui): add sidebar badges and active indicator |
+| `8954b7f` | feat(agent-ui): add EmptyState component and unify all empty/loading states |
 
 ### Phase 1 产物（已实施）
 
