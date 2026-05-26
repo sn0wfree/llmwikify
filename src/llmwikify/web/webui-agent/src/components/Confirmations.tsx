@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, Confirmation } from '../api';
 import { useToast } from './Toast';
+import { EmptyState } from './StateViews';
 
 export function Confirmations() {
   const [groups, setGroups] = useState<Record<string, Confirmation[]>>({});
@@ -99,7 +100,7 @@ export function Confirmations() {
   const totalPending = Object.values(groups).reduce((sum, arr) => sum + arr.length, 0);
 
   if (loading) return <div className="flex items-center justify-center h-full text-slate-500">Loading confirmations...</div>;
-  if (totalPending === 0) return <div className="p-6 text-slate-500">No pending confirmations.</div>;
+  if (totalPending === 0) return <EmptyState icon="✓" title="No pending confirmations" description="Agent operations requiring approval will appear here" />;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">

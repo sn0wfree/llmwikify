@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, DreamProposal } from '../api';
 import { useToast } from './Toast';
+import { EmptyState } from './StateViews';
 
 export function DreamProposals() {
   const [groups, setGroups] = useState<Record<string, DreamProposal[]>>({});
@@ -99,7 +100,7 @@ export function DreamProposals() {
   const autoApproved = stats.auto_approved || 0;
 
   if (loading) return <div className="flex items-center justify-center h-full text-slate-500">Loading proposals...</div>;
-  if (totalPending === 0 && autoApproved === 0) return <div className="p-6 text-slate-500">No pending dream proposals.</div>;
+  if (totalPending === 0 && autoApproved === 0) return <EmptyState icon="✱" title="No pending dream proposals" description="AI-generated edit proposals will appear here" />;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">

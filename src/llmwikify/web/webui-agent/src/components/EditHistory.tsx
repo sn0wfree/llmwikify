@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api';
+import { EmptyState } from './StateViews';
 
 interface EditEntry {
   tool: string;
@@ -29,7 +30,7 @@ export function EditHistory() {
   }, [loadHistory]);
 
   if (loading) return <div className="flex items-center justify-center h-full text-slate-500">Loading edit history...</div>;
-  if (edits.length === 0) return <div className="p-6 text-slate-500">No edit history.</div>;
+  if (edits.length === 0) return <EmptyState icon="✎" title="No edit history" description="Agent edit operations will appear here" />;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
