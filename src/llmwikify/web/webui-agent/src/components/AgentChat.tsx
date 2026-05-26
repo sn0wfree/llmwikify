@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { chatStream, ChatStreamEvent } from '../api';
+import { chatStream, ChatStreamEvent, api } from '../api';
 import { useToast } from './Toast';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { Button } from './ui/Button';
@@ -7,6 +7,7 @@ import { MessageBubble } from './ui/MessageBubble';
 import { ToolCard } from './ui/ToolCard';
 import { Input } from './ui/Input';
 import { Panel } from './ui/Panel';
+import { SessionSidebar } from './SessionSidebar';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -23,7 +24,21 @@ interface ToolCall {
   status: 'pending' | 'streaming' | 'done' | 'error';
 }
 
-export function AgentChat() {
+interface AgentChatProps {
+  initialSessionId?: string | null;
+  onSessionChange?: (sessionId: string | null) => void;
+}
+
+interface DbMessage {
+  id: string;
+  session_id: string;
+  role: string;
+  content: string;
+  tool_calls: unknown[] | null;
+  created_at: string;
+}
+
+export function AgentChat({ initialSessionId, onSessionChange }: AgentChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: "Hello! I'm your wiki assistant. How can I help?", timestamp: new Date().toISOString() },
   ]);
@@ -31,7 +46,8 @@ export function AgentChat() {
   const [loading, setLoading] = useState(false);
   const [currentAssistantMsg, setCurrentAssistantMsg] = useState('');
   const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(initialSessionId || null);
+  const [showSidebar, setShowSidebar] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { addToast } = useToast();
   const { currentWikiId } = useAgentWikiStore();
@@ -39,6 +55,35 @@ export function AgentChat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, currentAssistantMsg]);
+
+  const loadMessages = useCallback(async (sessionId: string) => {
+    try {
+      const data = await api.agent.getSessionMessages(sessionId);
+      const dbMessages = data.messages as DbMessage[];
+      if (dbMessages.length > 0) {
+        const loaded: Message[] = dbMessages.map((m) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          timestamp: m.created_at,
+          toolCalls: m.tool_calls as ToolCall[] | undefined,
+        }));
+        setMessages(loaded);
+      }
+    } catch { /* silent */ }
+  }, []);
+
+  const handleSelectSession = useCallback(async (sessionId: string) => {
+    setCurrentSessionId(sessionId);
+    onSessionChange?.(sessionId);
+    await loadMessages(sessionId);
+  }, [loadMessages, onSessionChange]);
+
+  const handleNewChat = useCallback(() => {
+    setCurrentSessionId(null);
+    onSessionChange?.(null);
+    setMessages([{ role: 'assistant', content: "Hello! I'm your wiki assistant. How can I help?", timestamp: new Date().toISOString() }]);
+    setInput('');
+  }, [onSessionChange]);
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || loading) return;
@@ -62,6 +107,7 @@ export function AgentChat() {
         switch (event.type) {
           case 'session_created':
             setCurrentSessionId(event.session_id);
+            onSessionChange?.(event.session_id);
             break;
 
           case 'message_delta':
@@ -125,7 +171,7 @@ export function AgentChat() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, addToast, currentToolCalls, currentWikiId, currentSessionId]);
+  }, [input, loading, addToast, currentToolCalls, currentWikiId, currentSessionId, onSessionChange]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -146,87 +192,109 @@ export function AgentChat() {
   };
 
   return (
-    <div className="flex flex-col h-full max-w-[48rem] mx-auto w-full">
-      <Panel border="top">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[var(--accent)]">Agent Chat</h2>
-          {currentSessionId && (
-            <span className="text-xs text-[var(--text-secondary)]">
-              session: {currentSessionId.slice(0, 8)}
-            </span>
-          )}
-        </div>
-      </Panel>
+    <div className="flex flex-col h-full">
+      <div className="flex flex-1 overflow-hidden">
+        {showSidebar && (
+          <div className="w-48 flex-shrink-0 border-r border-[var(--border)] overflow-y-auto">
+            <SessionSidebar
+              currentSessionId={currentSessionId}
+              onSelectSession={handleSelectSession}
+              onNewChat={handleNewChat}
+            />
+          </div>
+        )}
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg, i) => (
-          <div key={i}>
-            <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <MessageBubble
-                role={msg.role}
-                content={msg.content}
-                timestamp={formatTime(msg.timestamp)}
-              />
+        <div className="flex flex-col flex-1 min-w-0">
+          <Panel border="top">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-[var(--accent)]">Agent Chat</h2>
+              <div className="flex items-center gap-2">
+                {currentSessionId && (
+                  <span className="text-xs text-[var(--text-secondary)]">
+                    session: {currentSessionId.slice(0, 8)}
+                  </span>
+                )}
+                <button
+                  onClick={() => setShowSidebar(!showSidebar)}
+                  className="text-xs text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
+                >
+                  {showSidebar ? '←' : '→'}
+                </button>
+              </div>
             </div>
-            {msg.toolCalls && msg.toolCalls.length > 0 && (
-              <div className="mt-2 space-y-2">
-                {msg.toolCalls.map((tc, j) => (
-                  <div key={j} className="max-w-[82%] ml-auto mr-0">
-                    <ToolCard tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} />
+          </Panel>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map((msg, i) => (
+              <div key={i}>
+                <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <MessageBubble
+                    role={msg.role}
+                    content={msg.content}
+                    timestamp={formatTime(msg.timestamp)}
+                  />
+                </div>
+                {msg.toolCalls && msg.toolCalls.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {msg.toolCalls.map((tc, j) => (
+                      <div key={j} className="max-w-[82%] ml-auto mr-0">
+                        <ToolCard tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} />
+                      </div>
+                    ))}
                   </div>
+                )}
+              </div>
+            ))}
+
+            {loading && currentAssistantMsg && (
+              <div className="flex justify-start">
+                <MessageBubble
+                  role="assistant"
+                  content={currentAssistantMsg}
+                  streaming
+                />
+              </div>
+            )}
+
+            {loading && currentToolCalls.length > 0 && (
+              <div className="space-y-2">
+                {currentToolCalls.map((tc, j) => (
+                  <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} />
                 ))}
               </div>
             )}
-          </div>
-        ))}
 
-        {loading && currentAssistantMsg && (
-          <div className="flex justify-start">
-            <MessageBubble
-              role="assistant"
-              content={currentAssistantMsg}
-              streaming
-            />
-          </div>
-        )}
-
-        {loading && currentToolCalls.length > 0 && (
-          <div className="space-y-2">
-            {currentToolCalls.map((tc, j) => (
-              <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} />
-            ))}
-          </div>
-        )}
-
-        {loading && !currentAssistantMsg && currentToolCalls.length === 0 && (
-          <div className="flex justify-start">
-            <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-              <span className="text-base">🤖</span>
-              <div className="thinking-dots">
-                <span>·</span><span>·</span><span>·</span>
+            {loading && !currentAssistantMsg && currentToolCalls.length === 0 && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                  <span className="text-base">🤖</span>
+                  <div className="thinking-dots">
+                    <span>·</span><span>·</span><span>·</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} />
+          </div>
+
+          <Panel border="top">
+            <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
+              <div className="flex-1">
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask me anything about your wiki..."
+                />
+              </div>
+              <Button type="submit" disabled={loading || !input.trim()}>
+                ↑
+              </Button>
+            </form>
+          </Panel>
+        </div>
       </div>
-
-      <Panel border="top">
-        <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
-          <div className="flex-1">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask me anything about your wiki..."
-            />
-          </div>
-          <Button type="submit" disabled={loading || !input.trim()}>
-            ↑
-          </Button>
-        </form>
-      </Panel>
     </div>
   );
 }

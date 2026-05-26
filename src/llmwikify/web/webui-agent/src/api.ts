@@ -268,6 +268,8 @@ export const api = {
       }),
     getSession: (sessionId: string) =>
       request<Record<string, unknown>>(`/agent/sessions/${sessionId}`),
+    deleteSession: (sessionId: string) =>
+      request<{ deleted: boolean }>(`/agent/sessions/${sessionId}`, { method: 'DELETE' }),
     getSessionMessages: (sessionId: string, limit = 50, before?: string) =>
       request<{ messages: unknown[]; session_id: string }>(
         `/agent/sessions/${sessionId}/messages?limit=${limit}${before ? `&before=${before}` : ''}`
