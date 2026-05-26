@@ -237,12 +237,12 @@ export const api = {
   },
 
   agent: {
-    chat: (message: string) =>
+    chat: (message: string, wikiId?: string) =>
       request<{ response: string; actions: unknown[] }>('/agent/chat', {
         method: 'POST',
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, wiki_id: wikiId }),
       }),
-    status: () =>
+    status: (wikiId?: string) =>
       request<{
         state: string;
         scheduler_tasks: TaskInfo[];
@@ -251,44 +251,44 @@ export const api = {
         pending_confirmations: number;
         dream_proposals: Record<string, number>;
         unread_notifications: number;
-      }>('/agent/status'),
-    tools: () => request<Array<{ name: string; description: string }>>('/agent/tools'),
+      }>(`/agent/status${wikiId ? `?wiki_id=${wikiId}` : ''}`),
+    tools: (wikiId?: string) => request<Array<{ name: string; description: string }>>(`/agent/tools${wikiId ? `?wiki_id=${wikiId}` : ''}`),
   },
 
   dream: {
-    log: (limit = 20) => request<DreamEdit[]>(`/agent/dream/log?limit=${limit}`),
-    run: () => request<Record<string, unknown>>('/agent/dream/run', { method: 'POST' }),
-    proposals: () => request<{ proposals: Record<string, DreamProposal[]>; stats: Record<string, number> }>('/agent/dream/proposals'),
+    log: (limit = 20, wikiId?: string) => request<DreamEdit[]>(`/agent/dream/log?limit=${limit}${wikiId ? `&wiki_id=${wikiId}` : ''}`),
+    run: (wikiId?: string) => request<Record<string, unknown>>(`/agent/dream/run${wikiId ? `?wiki_id=${wikiId}` : ''}`, { method: 'POST' }),
+    proposals: (wikiId?: string) => request<{ proposals: Record<string, DreamProposal[]>; stats: Record<string, number> }>(`/agent/dream/proposals${wikiId ? `?wiki_id=${wikiId}` : ''}`),
     approve: (id: string) => request<DreamProposal>(`/agent/dream/proposals/${id}/approve`, { method: 'POST' }),
     reject: (id: string) => request<DreamProposal>(`/agent/dream/proposals/${id}/reject`, { method: 'POST' }),
     batchApprove: (ids: string[]) => request<{ approved: number; results: DreamProposal[] }>('/agent/dream/proposals/batch-approve', {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),
-    apply: (ids?: string[]) => request<{ applied: number; errors: unknown[] }>('/agent/dream/proposals/apply', {
+    apply: (ids?: string[], wikiId?: string) => request<{ applied: number; errors: unknown[] }>(`/agent/dream/proposals/apply${wikiId ? `?wiki_id=${wikiId}` : ''}`, {
       method: 'POST',
       body: JSON.stringify({ ids: ids || null }),
     }),
   },
 
   notifications: {
-    list: () => request<Notification[]>('/agent/notifications'),
+    list: (wikiId?: string) => request<Notification[]>(`/agent/notifications${wikiId ? `?wiki_id=${wikiId}` : ''}`),
     markRead: (id: string) =>
       request<void>(`/agent/notifications/${id}/read`, { method: 'POST' }),
   },
 
   confirmations: {
-    list: () => request<Record<string, Confirmation[]>>('/agent/confirmations'),
-    approve: (id: string) => request<Record<string, unknown>>(`/agent/confirmations/${id}`, { method: 'POST' }),
-    reject: (id: string) => request<Record<string, unknown>>(`/agent/confirmations/${id}`, { method: 'DELETE' }),
-    batchApprove: (ids: string[]) => request<Record<string, unknown>[]>('/agent/confirmations/batch', {
+    list: (wikiId?: string) => request<Record<string, Confirmation[]>>(`/agent/confirmations${wikiId ? `?wiki_id=${wikiId}` : ''}`),
+    approve: (id: string, wikiId?: string) => request<Record<string, unknown>>(`/agent/confirmations/${id}${wikiId ? `?wiki_id=${wikiId}` : ''}`, { method: 'POST' }),
+    reject: (id: string, wikiId?: string) => request<Record<string, unknown>>(`/agent/confirmations/${id}${wikiId ? `?wiki_id=${wikiId}` : ''}`, { method: 'DELETE' }),
+    batchApprove: (ids: string[], wikiId?: string) => request<Record<string, unknown>[]>(`/agent/confirmations/batch${wikiId ? `?wiki_id=${wikiId}` : ''}`, {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),
   },
 
   ingest: {
-    log: (limit = 20) => request<IngestLogEntry[]>(`/agent/ingest/log?limit=${limit}`),
+    log: (limit = 20, wikiId?: string) => request<IngestLogEntry[]>(`/agent/ingest/log?limit=${limit}${wikiId ? `&wiki_id=${wikiId}` : ''}`),
     changes: (id: string) => request<IngestLogEntry>(`/agent/ingest/log/${id}`),
     revert: (id: string) => request<Record<string, unknown>>(`/agent/ingest/log/${id}/revert`, { method: 'POST' }),
   },

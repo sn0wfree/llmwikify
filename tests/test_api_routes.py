@@ -214,14 +214,16 @@ class TestHealthEndpoint:
 class TestWikiServerConfiguration:
     """Tests for WikiServer configuration options."""
 
-    def test_server_without_agent(self, wiki_instance):
-        """Test server does not expose agent routes (agent feature deprecated)."""
+    def test_server_with_agent(self, wiki_instance):
+        """Test server exposes agent routes returning idle state."""
         server = WikiServer(wiki_instance, enable_webui=False)
         client = TestClient(server.app)
 
-        # Agent routes should be 404 - they are no longer registered
+        # Agent routes are registered and return gracefully
         response = client.get("/api/agent/status")
-        assert response.status_code == 404
+        assert response.status_code == 200
+        data = response.json()
+        assert data.get("state") == "idle"
 
     def test_server_with_api_key(self, wiki_instance):
         """Test server with API key authentication."""

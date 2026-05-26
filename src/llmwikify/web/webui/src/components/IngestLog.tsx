@@ -33,7 +33,7 @@ export function IngestLog() {
         </button>
       </div>
 
-      <div class className="space-y-3">
+      <div className="space-y-3">
         {entries.map(entry => (
           <div key={entry.id} className="bg-slate-800 rounded border border-slate-700 p-4">
             <div className="flex items-center justify-between mb-2">

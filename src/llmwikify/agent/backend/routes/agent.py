@@ -33,16 +33,16 @@ def get_jwt_from_request(request: Request) -> str | None:
     return request.query_params.get("jwt")
 
 
+def get_wiki_id(request: Request) -> str | None:
+    return request.query_params.get("wiki_id")
+
+
 @router.post("/chat")
 async def chat(request: Request):
-    """SSE streaming chat endpoint.
-
-    Body: { "message": str, "session_id"?: str }
-    Query: ?jwt=<token>
-    """
     body = await request.json()
     message = body.get("message", "")
     session_id = body.get("session_id")
+    wiki_id = body.get("wiki_id")
 
     jwt_token = get_jwt_from_request(request)
     service = get_agent_service()
@@ -51,6 +51,7 @@ async def chat(request: Request):
         async for event in service.chat(
             message=message,
             session_id=session_id,
+            wiki_id=wiki_id,
             jwt_token=jwt_token,
         ):
             yield {
@@ -63,7 +64,6 @@ async def chat(request: Request):
 
 @router.get("/sessions")
 async def list_sessions():
-    """List all chat sessions."""
     service = get_agent_service()
     sessions = service.db.list_sessions()
     return {"sessions": sessions}
@@ -71,7 +71,6 @@ async def list_sessions():
 
 @router.post("/sessions")
 async def create_session(request: Request):
-    """Create a new chat session."""
     body = await request.json()
     wiki_id = body.get("wiki_id")
     jwt_token = get_jwt_from_request(request)
@@ -82,7 +81,6 @@ async def create_session(request: Request):
 
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str):
-    """Get a specific session."""
     service = get_agent_service()
     session = service.db.get_session(session_id)
     if session is None:
@@ -92,7 +90,6 @@ async def get_session(session_id: str):
 
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
-    """Delete a session."""
     service = get_agent_service()
     deleted = service.db.delete_session(session_id)
     return {"deleted": deleted}
@@ -100,7 +97,6 @@ async def delete_session(session_id: str):
 
 @router.get("/sessions/recent")
 async def get_recent_wiki(session_id: str | None = None):
-    """Get recent wiki for a session."""
     service = get_agent_service()
     if session_id:
         session = service.db.get_session(session_id)
@@ -111,56 +107,144 @@ async def get_recent_wiki(session_id: str | None = None):
 
 @router.post("/sessions/recent")
 async def set_recent_wiki(session_id: str, wiki_id: str):
-    """Set recent wiki for a session."""
     service = get_agent_service()
     service.db.update_session_wiki(session_id, wiki_id)
     return {"updated": True}
 
 
-@router.get("/confirmations")
-async def list_confirmations():
-    """List pending confirmations grouped by type."""
+# --- Dream endpoints ---
+
+@router.get("/dream/log")
+async def dream_log(request: Request, limit: int = 20):
+    wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    groups = service.get_pending_by_group()
-    return groups
+    return service.get_dream_log(wiki_id, limit)
+
+
+@router.post("/dream/run")
+async def dream_run(request: Request):
+    wiki_id = get_wiki_id(request)
+    service = get_agent_service()
+    return await service.run_dream(wiki_id)
+
+
+@router.get("/dream/proposals")
+async def dream_proposals(request: Request):
+    wiki_id = get_wiki_id(request)
+    service = get_agent_service()
+    return service.get_dream_proposals(wiki_id)
+
+
+@router.post("/dream/proposals/{proposal_id}/approve")
+async def approve_proposal(proposal_id: str):
+    service = get_agent_service()
+    return service.approve_proposal(proposal_id)
+
+
+@router.post("/dream/proposals/{proposal_id}/reject")
+async def reject_proposal(proposal_id: str):
+    service = get_agent_service()
+    return service.reject_proposal(proposal_id)
+
+
+@router.post("/dream/proposals/batch-approve")
+async def batch_approve_proposals(body: dict):
+    ids = body.get("ids", [])
+    service = get_agent_service()
+    return service.batch_approve_proposals(ids)
+
+
+@router.post("/dream/proposals/apply")
+async def apply_proposals(body: dict):
+    wiki_id = body.get("wiki_id")
+    ids = body.get("ids")
+    service = get_agent_service()
+    return await service.apply_proposals(wiki_id, ids)
+
+
+# --- Notifications endpoints ---
+
+@router.get("/notifications")
+async def list_notifications(request: Request, unread_only: bool = False):
+    wiki_id = get_wiki_id(request)
+    service = get_agent_service()
+    return service.list_notifications(wiki_id, unread_only)
+
+
+@router.post("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str):
+    service = get_agent_service()
+    return service.mark_notification_read(notification_id)
+
+
+# --- Ingest endpoints ---
+
+@router.get("/ingest/log")
+async def ingest_log(request: Request, limit: int = 20):
+    wiki_id = get_wiki_id(request)
+    service = get_agent_service()
+    return service.get_ingest_log(wiki_id, limit)
+
+
+@router.get("/ingest/log/{ingest_id}")
+async def ingest_changes(ingest_id: str):
+    service = get_agent_service()
+    return service.get_ingest_entry(ingest_id)
+
+
+@router.post("/ingest/log/{ingest_id}/revert")
+async def revert_ingest(ingest_id: str):
+    return {"status": "error", "error": "Revert not implemented - ingest is append-only"}
+
+
+# --- Status endpoint ---
+
+@router.get("/status")
+async def agent_status(request: Request):
+    wiki_id = get_wiki_id(request)
+    service = get_agent_service()
+    return service.get_agent_status(wiki_id)
+
+
+# --- Confirmations endpoints ---
+
+@router.get("/confirmations")
+async def list_confirmations(request: Request):
+    wiki_id = get_wiki_id(request)
+    service = get_agent_service()
+    return service.list_confirmations(wiki_id)
 
 
 @router.post("/confirmations/{confirmation_id}")
-async def approve_confirmation(confirmation_id: str):
-    """Approve a pending confirmation."""
+async def approve_confirmation(confirmation_id: str, request: Request):
+    wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    result = await service.approve_confirmation(confirmation_id)
-    return result
+    return await service.approve_confirmation(confirmation_id, wiki_id)
 
 
 @router.delete("/confirmations/{confirmation_id}")
-async def reject_confirmation(confirmation_id: str):
-    """Reject a pending confirmation."""
+async def reject_confirmation(confirmation_id: str, request: Request):
+    wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    result = await service.reject_confirmation(confirmation_id)
-    return result
+    return await service.reject_confirmation(confirmation_id, wiki_id)
 
 
 @router.post("/confirmations/batch")
-async def batch_approve(body: dict):
-    """Batch approve confirmations."""
+async def batch_approve(body: dict, request: Request):
     ids = body.get("ids", [])
+    wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    results = []
-    for cid in ids:
-        result = await service.approve_confirmation(cid)
-        results.append(result)
-    return {"approved": len(ids), "results": results}
+    return await service.batch_approve_confirmations(ids, wiki_id)
 
+
+# --- Tools endpoint ---
 
 @router.get("/tools")
-async def list_tools():
-    """List available agent tools."""
-    from ..tools import WikiToolRegistry
-    from llmwikify.core import WikiRegistry
-    registry = WikiRegistry.get_instance()
-    default_wiki = registry.get_default_wiki()
-    if default_wiki is None:
-        return {"tools": []}
-    tool_registry = WikiToolRegistry(default_wiki)
-    return {"tools": tool_registry.list_tools()}
+async def list_tools(request: Request):
+    wiki_id = get_wiki_id(request)
+    service = get_agent_service()
+    if wiki_id:
+        registry = service._get_tool_registry(wiki_id)
+    else:
+        registry = service._get_tool_registry(None)
+    return {"tools": registry.list_tools()}

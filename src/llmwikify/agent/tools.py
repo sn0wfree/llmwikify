@@ -26,13 +26,22 @@ class WikiToolRegistry:
     - requires_confirmation="pre": create confirmation, return confirmation_id
     """
 
-    def __init__(self, wiki: Any):
+    def __init__(self, wiki: Any, db: Any = None, wiki_id: str | None = None):
         self.wiki = wiki
+        self.db = db
+        self.wiki_id = wiki_id
         self._tools: dict[str, dict] = {}
         self._pending_confirmations: dict[str, dict] = {}
         self._ingest_log: list[dict] = []
         self._max_ingest_log = 100
         self._register_all_tools()
+        if db and wiki_id:
+            self._load_confirmations_from_db()
+
+    def _load_confirmations_from_db(self) -> None:
+        rows = self.db.get_confirmations(self.wiki_id, status="pending")
+        for c in rows:
+            self._pending_confirmations[c["id"]] = c
 
     def _register_all_tools(self) -> None:
         # No confirmation needed
@@ -337,7 +346,6 @@ class WikiToolRegistry:
             return result
 
         else:
-            # Pre-confirmation: create confirmation request
             impact = self._analyze_impact(name, arguments)
             group = self._classify_page_group(arguments)
             confirmation_id = str(uuid.uuid4())[:8]
@@ -352,6 +360,9 @@ class WikiToolRegistry:
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "status": "pending",
             }
+            if self.db and self.wiki_id:
+                confirmation["wiki_id"] = self.wiki_id
+                self.db.save_confirmation(confirmation)
             self._pending_confirmations[confirmation_id] = confirmation
 
             return {
@@ -376,29 +387,44 @@ class WikiToolRegistry:
             self._ingest_log = self._ingest_log[-self._max_ingest_log:]
 
     def confirm_execution(self, confirmation_id: str) -> Any:
-        """Execute a confirmed tool call."""
+        if self.db:
+            conf = self.db.get_confirmation(confirmation_id)
+            if conf and conf.get("wiki_id") == self.wiki_id:
+                if conf["status"] != "pending":
+                    return {"status": "error", "error": f"Confirmation already {conf['status']}"}
+                tool = self._tools.get(conf["tool"])
+                if tool is None:
+                    return {"status": "error", "error": f"Tool not found: {conf['tool']}"}
+                try:
+                    result = tool["handler"](json.loads(conf["arguments"]) if isinstance(conf["arguments"], str) else conf["arguments"])
+                    self.db.update_confirmation_status(confirmation_id, "approved")
+                    return {"status": "executed", "confirmation_id": confirmation_id, "result": result}
+                except Exception as e:
+                    self.db.update_confirmation_status(confirmation_id, "rejected")
+                    return {"status": "error", "error": str(e)}
+
         confirmation = self._pending_confirmations.pop(confirmation_id, None)
         if confirmation is None:
             return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
-
         tool = self._tools.get(confirmation["tool"])
         if tool is None:
             return {"status": "error", "error": f"Tool not found: {confirmation['tool']}"}
-
         try:
             result = tool["handler"](confirmation["arguments"])
             confirmation["status"] = "approved"
-            return {
-                "status": "executed",
-                "confirmation_id": confirmation_id,
-                "result": result,
-            }
+            return {"status": "executed", "confirmation_id": confirmation_id, "result": result}
         except Exception as e:
             confirmation["status"] = "rejected"
             return {"status": "error", "error": str(e)}
 
     def reject_execution(self, confirmation_id: str) -> dict:
-        """Reject a pending confirmation."""
+        if self.db:
+            conf = self.db.get_confirmation(confirmation_id)
+            if conf and conf.get("wiki_id") == self.wiki_id:
+                self.db.update_confirmation_status(confirmation_id, "rejected")
+                self._pending_confirmations.pop(confirmation_id, None)
+                return {"status": "rejected", "confirmation_id": confirmation_id}
+
         confirmation = self._pending_confirmations.pop(confirmation_id, None)
         if confirmation is None:
             return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}

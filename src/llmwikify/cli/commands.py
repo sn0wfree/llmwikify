@@ -1539,6 +1539,12 @@ class WikiCLI:
                 registry = WikiRegistry(self.config)
                 registry.initialize()
 
+                # Auto-discover wikis by scanning for .llmwikify.db files
+                if not registry.list_wikis():
+                    discovered = registry.scan_directories(["."], 3)
+                    if discovered:
+                        print(f"  Discovered: {len(discovered)} wiki(s)")
+
                 server = WikiServer(
                     registry,
                     api_key=auth_token,
