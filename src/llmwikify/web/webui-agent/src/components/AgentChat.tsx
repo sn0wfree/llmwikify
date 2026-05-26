@@ -19,7 +19,8 @@ interface ToolCall {
   tool: string;
   args: Record<string, unknown>;
   result?: unknown;
-  status: 'pending' | 'done' | 'error';
+  error?: string;
+  status: 'pending' | 'streaming' | 'done' | 'error';
 }
 
 export function AgentChat() {
@@ -30,6 +31,7 @@ export function AgentChat() {
   const [loading, setLoading] = useState(false);
   const [currentAssistantMsg, setCurrentAssistantMsg] = useState('');
   const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { addToast } = useToast();
   const { currentWikiId } = useAgentWikiStore();
@@ -48,7 +50,7 @@ export function AgentChat() {
     setCurrentAssistantMsg('');
     setCurrentToolCalls([]);
 
-    const reader = chatStream(input, undefined, currentWikiId || undefined).getReader();
+    const reader = chatStream(input, currentSessionId || undefined, currentWikiId || undefined).getReader();
 
     try {
       while (true) {
@@ -58,6 +60,10 @@ export function AgentChat() {
         const event = value as ChatStreamEvent;
 
         switch (event.type) {
+          case 'session_created':
+            setCurrentSessionId(event.session_id);
+            break;
+
           case 'message_delta':
             setCurrentAssistantMsg((prev) => prev + event.content);
             break;
@@ -65,7 +71,7 @@ export function AgentChat() {
           case 'tool_call_start':
             setCurrentToolCalls((prev) => [
               ...prev,
-              { tool: event.tool, args: event.args, status: 'pending' },
+              { tool: event.tool, args: event.args, status: 'streaming' },
             ]);
             break;
 
@@ -80,7 +86,7 @@ export function AgentChat() {
           case 'tool_call_error':
             setCurrentToolCalls((prev) =>
               prev.map((tc) =>
-                tc.tool === event.tool ? { ...tc, result: event.error, status: 'error' } : tc
+                tc.tool === event.tool ? { ...tc, error: event.error, status: 'error' } : tc
               )
             );
             break;
@@ -119,7 +125,7 @@ export function AgentChat() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, addToast, currentToolCalls, currentWikiId]);
+  }, [input, loading, addToast, currentToolCalls, currentWikiId, currentSessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -142,7 +148,14 @@ export function AgentChat() {
   return (
     <div className="flex flex-col h-full max-w-[48rem] mx-auto w-full">
       <Panel border="top">
-        <h2 className="text-sm font-semibold text-[var(--accent)]">Agent Chat</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[var(--accent)]">Agent Chat</h2>
+          {currentSessionId && (
+            <span className="text-xs text-[var(--text-secondary)]">
+              session: {currentSessionId.slice(0, 8)}
+            </span>
+          )}
+        </div>
       </Panel>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -159,7 +172,7 @@ export function AgentChat() {
               <div className="mt-2 space-y-2">
                 {msg.toolCalls.map((tc, j) => (
                   <div key={j} className="max-w-[82%] ml-auto mr-0">
-                    <ToolCard tool={tc.tool} args={tc.args} status={tc.status} />
+                    <ToolCard tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} />
                   </div>
                 ))}
               </div>
@@ -180,7 +193,7 @@ export function AgentChat() {
         {loading && currentToolCalls.length > 0 && (
           <div className="space-y-2">
             {currentToolCalls.map((tc, j) => (
-              <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} />
+              <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} />
             ))}
           </div>
         )}
