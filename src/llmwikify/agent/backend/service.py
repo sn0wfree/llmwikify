@@ -15,6 +15,7 @@ from ..notifications import NotificationManager
 from ..scheduler import WikiScheduler
 from ..tools import WikiToolRegistry
 from .adapters import StreamableLLMClient
+from .config_manager import get_global_config_manager, GlobalConfigManager
 from .db import AgentDatabase
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ class AgentService:
         self._notification_managers: dict[str, NotificationManager] = {}
         self._schedulers: dict[str, WikiScheduler] = {}
         self._tool_registries: dict[str, WikiToolRegistry] = {}
+        self._config_manager = get_global_config_manager(lambda: self)
 
     def _get_default_wiki_id(self) -> str | None:
         return self.wiki_registry.get_default_wiki_id()
@@ -140,16 +142,20 @@ class AgentService:
 
     def _get_llm(self) -> StreamableLLMClient:
         if self._llm is None:
-            from llmwikify.config import load_config
             default_id = self._get_default_wiki_id()
-            if not default_id:
-                raise ValueError("No default wiki available")
-            wiki_instance = self.wiki_registry.get_wiki_instance(default_id)
-            if not wiki_instance or not wiki_instance.root:
-                raise ValueError("No wiki root available")
-            config = load_config(wiki_instance.root)
-            self._llm = StreamableLLMClient.from_config(config)
+            wiki_root = None
+            if default_id:
+                wiki_instance = self.wiki_registry.get_wiki_instance(default_id)
+                if wiki_instance and wiki_instance.root:
+                    wiki_root = wiki_instance.root
+            config = self._config_manager.load_effective_llm_config(wiki_root)
+            from .providers.registry import create_llm
+            self._llm = create_llm(config)
         return self._llm
+
+    def reload_llm(self) -> None:
+        """Clear the cached LLM client so it gets reloaded on the next request."""
+        self._llm = None
 
     def _get_or_create_context(self, session_id: str, wiki_id: str | None = None) -> AgentContext:
         if session_id not in self._contexts:

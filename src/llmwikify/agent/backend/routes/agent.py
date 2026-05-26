@@ -244,6 +244,34 @@ async def batch_approve(body: dict, request: Request):
     return await service.batch_approve_confirmations(ids, wiki_id)
 
 
+# --- Config endpoints ---
+
+@router.get("/config")
+async def get_llm_config():
+    from ..config_manager import get_global_config_manager
+    manager = get_global_config_manager()
+    llm_cfg = manager.load_effective_llm_config()
+    return manager.mask_api_key(llm_cfg)
+
+
+@router.put("/config")
+async def save_llm_config(request: Request):
+    from ..config_manager import get_global_config_manager
+    body = await request.json()
+    manager = get_global_config_manager()
+    manager.save_global_config(body)
+    manager.reload()
+    return {"saved": True}
+
+
+@router.post("/config/reload")
+async def reload_llm_config():
+    from ..config_manager import get_global_config_manager
+    manager = get_global_config_manager()
+    manager.reload()
+    return {"reloaded": True}
+
+
 # --- Tools endpoint ---
 
 @router.get("/tools")
