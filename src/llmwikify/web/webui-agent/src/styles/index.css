@@ -31,3 +31,43 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streaming-cursor::after {
+  content: '|';
+  animation: blink 1s step-end infinite;
+  color: var(--accent);
+}
+
+@keyframes thinking-dot {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-4px); }
+}
+
+.thinking-dots span {
+  display: inline-block;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.thinking-dots span:nth-child(1) { animation: thinking-dot 1.4s ease-in-out infinite 0s; }
+.thinking-dots span:nth-child(2) { animation: thinking-dot 1.4s ease-in-out infinite 0.2s; }
+.thinking-dots span:nth-child(3) { animation: thinking-dot 1.4s ease-in-out infinite 0.4s; }
