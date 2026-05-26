@@ -6,6 +6,7 @@ import { DreamProposals } from './components/DreamProposals';
 import { EditHistory } from './components/EditHistory';
 import { IngestLog } from './components/IngestLog';
 import { LLMSettings } from './components/LLMSettings';
+import { ResearchPanel } from './components/ResearchPanel';
 import { TaskMonitor } from './components/TaskMonitor';
 import { WikiSelector } from './components/WikiSelector';
 import { useAgentWikiStore } from './stores/agentWikiStore';
@@ -13,7 +14,7 @@ import { api } from './api';
 import { Card } from './components/ui/Card';
 import { Badge } from './components/ui/Badge';
 
-type ViewMode = 'chat' | 'tasks' | 'confirmations' | 'proposals' | 'dream' | 'ingest' | 'history' | 'settings';
+type ViewMode = 'chat' | 'research' | 'tasks' | 'confirmations' | 'proposals' | 'dream' | 'ingest' | 'history' | 'settings';
 
 interface BadgeCounts {
   confirmations: number;
@@ -68,6 +69,9 @@ function App() {
           <NavButton active={view === 'chat'} onClick={() => setView('chat')}>
             Agent Chat
           </NavButton>
+          <NavButton active={view === 'research'} onClick={() => setView('research')}>
+            Deep Research
+          </NavButton>
           <NavButton active={view === 'tasks'} onClick={() => setView('tasks')}>
             Tasks
           </NavButton>
@@ -100,6 +104,7 @@ function App() {
       <main className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-hidden">
           {view === 'chat' && <AgentChat />}
+          {view === 'research' && <ResearchPanel />}
           {view === 'tasks' && <LazyWrapper><TaskMonitor /></LazyWrapper>}
           {view === 'confirmations' && <LazyWrapper><Confirmations /></LazyWrapper>}
           {view === 'proposals' && <LazyWrapper><DreamProposals /></LazyWrapper>}
