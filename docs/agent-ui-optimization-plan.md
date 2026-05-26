@@ -1,8 +1,8 @@
 # Agent UI 优化讨论记录
 
 > 创建时间：2025-05-26
-> 最后更新：2025-05-26（Phase 1 完成）
-> 状态：Phase 1 完成，待 Phase 2
+> 最后更新：2025-05-26（Phase 1, 2 完成）
+> 状态：Phase 2 完成，待 Phase 3
 
 ---
 
@@ -97,12 +97,12 @@ data: {"type": "done", "final_response": "...", "actions": []}
 - 工具调用（wiki_search 等）有卡片展示
 - 网络错误时右下角 Toast 提示
 
-### Phase 2：Confirmations/Proposals 操作反馈
+### Phase 2：Confirmations/Proposals 操作反馈 ✅ 已完成
 
 | 视图 | 改动 |
 |------|------|
-| Confirmations.tsx | approve/reject 后加 Toast |
-| DreamProposals.tsx | approve/apply 后加 Toast，"Apply All Approved" 加二次确认 |
+| Confirmations.tsx | ✅ Toast on approve/reject individual and batch, actionLoading state |
+| DreamProposals.tsx | ✅ Toast on approve/apply, "Apply All Approved" now shows confirmation dialog |
 
 ### Phase 3：WikiSelector（多 wiki 环境需要）
 
@@ -207,6 +207,7 @@ AgentService
 |------|-------|
 | `3f4dcce` | fix(agent): pass wiki_root to load_config in _get_llm |
 | `95f6c80` | feat(agent-ui): add Toast system and fix SSE chat streaming |
+| `6c7b146` | feat(agent-ui): add Toast feedback to Confirmations and DreamProposals |
 
 ### Phase 1 产物（已实施）
 
