@@ -209,7 +209,7 @@ class AgentDatabase:
         with sqlite3.connect(self.db_path) as conn:
             if wiki_page_name:
                 conn.execute(
-                    "UPDATE research_sessions SET progress = ?, wiki_page_name = ?, status = 'completed' WHERE id = ?",
+                    "UPDATE research_sessions SET progress = ?, wiki_page_name = ?, status = 'done' WHERE id = ?",
                     (progress, wiki_page_name, session_id),
                 )
             else:

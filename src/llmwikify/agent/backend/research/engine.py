@@ -106,8 +106,9 @@ class ResearchEngine:
 
         # Determine starting point
         start_stage = 0
-        existing_sub_queries: list[dict[str, Any]] = []
-        existing_sources: list[dict[str, Any]] = []
+        sub_queries: list[dict[str, Any]] = []
+        sources: list[dict[str, Any]] = []
+        synthesis: dict[str, Any] = {}
 
         if resume:
             session = self.db.get_research_session(session_id)
@@ -121,17 +122,21 @@ class ResearchEngine:
                 existing_sources = self.db.get_sources(session_id) or []
                 yield {"type": "progress", "progress": session.get("progress", 0.0), "message": f"Resuming from {current_step}"}
 
+                # Ensure variables are populated for resume from any stage
+                if existing_sub_queries:
+                    sub_queries = [
+                        {"id": sq["id"], "query": sq["query"], "source_type": sq["source_type"], "url": sq.get("url")}
+                        for sq in existing_sub_queries
+                    ]
+                if existing_sources:
+                    sources = existing_sources
+
         # 1. PLANNING
         if start_stage <= self._stage_index("planning"):
             self.session_manager.update_status(session_id, "planning", "planning", 0.0)
             yield self._step_event("planning", "Decomposing research topic...")
 
-            if resume and existing_sub_queries:
-                # Reuse existing sub-queries
-                sub_queries = [
-                    {"id": sq["id"], "query": sq["query"], "source_type": sq["source_type"], "url": sq.get("url")}
-                    for sq in existing_sub_queries
-                ]
+            if resume and sub_queries:
                 yield {"type": "progress", "progress": 0.1, "message": f"Reusing {len(sub_queries)} existing sub-queries"}
             else:
                 sub_queries = await self._plan_sub_queries(query)
@@ -150,11 +155,11 @@ class ResearchEngine:
             self.session_manager.update_status(session_id, "gathering", "gathering", 0.1)
             yield self._step_event("gathering", "Gathering sources...")
 
-            if resume and existing_sources:
+            if resume and sources:
                 # Skip gathering for sub-queries that already have sources
-                gathered_sq_ids = {s.get("sub_query_id") for s in existing_sources}
+                gathered_sq_ids = {s.get("sub_query_id") for s in sources}
                 remaining_queries = [sq for sq in sub_queries if sq["id"] not in gathered_sq_ids]
-                gathered = len(existing_sources)
+                gathered = len(sources)
                 yield {"type": "progress", "progress": 0.1 + gathered / max(len(sub_queries), 1) * 0.3, "message": f"Reusing {gathered} existing sources, {len(remaining_queries)} remaining"}
             else:
                 remaining_queries = sub_queries
@@ -176,6 +181,11 @@ class ResearchEngine:
 
             sources = self.db.get_sources(session_id)
             yield {"type": "progress", "progress": 0.4, "message": f"Gathered {len(sources)} sources total"}
+
+            if not sources:
+                self.session_manager.update_status(session_id, "error", "gathering", -1)
+                yield {"type": "error", "error": "No sources gathered. All sub-queries failed."}
+                return
 
         # 3. ANALYZING
         if start_stage <= self._stage_index("analyzing"):
@@ -199,16 +209,20 @@ class ResearchEngine:
             synthesizer = ResearchSynthesizer(self.wiki, self.config)
             synthesis = await synthesizer.synthesize(sources)
             yield {"type": "synthesis_complete", "synthesis": {
-                "reinforced_claims": len(synthesis.get("reinforced_claims", [])),
-                "contradictions": len(synthesis.get("contradictions", [])),
-                "knowledge_gaps": len(synthesis.get("knowledge_gaps", [])),
-                "new_entities": len(synthesis.get("new_entities", [])),
+                "reinforced_claims": synthesis.get("reinforced_claims", []),
+                "contradictions": synthesis.get("contradictions", []),
+                "knowledge_gaps": synthesis.get("knowledge_gaps", []),
+                "new_entities": synthesis.get("new_entities", []),
             }}
             yield {"type": "progress", "progress": 0.65, "message": "Synthesis complete"}
 
         # 5. REPORT
         if start_stage <= self._stage_index("report"):
             sources = self.db.get_sources(session_id)  # refresh
+            # Ensure synthesis is available (rebuild if resuming past synthesizing)
+            if not synthesis and sources:
+                synthesizer = ResearchSynthesizer(self.wiki, self.config)
+                synthesis = await synthesizer.synthesize(sources)
             self.session_manager.update_status(session_id, "report", "report", 0.65)
             yield self._step_event("report", "Generating research report...")
 
@@ -346,4 +360,4 @@ class ResearchEngine:
         return sub_queries
 
     def _step_event(self, step: str, message: str) -> dict[str, Any]:
-        return {"type": "step", "step": step, "message": message}
+        return {"type": "step", "step": step, "message": message, "session_id": self.session_manager.session_id}

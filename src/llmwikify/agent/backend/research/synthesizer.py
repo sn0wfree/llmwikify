@@ -77,11 +77,43 @@ class ResearchSynthesizer:
         reinforced.sort(key=lambda x: x.get("_weight", 0) if isinstance(x, dict) else 0, reverse=True)
         suggested_updates.sort(key=lambda x: x.get("_weight", 0) if isinstance(x, dict) else 0, reverse=True)
 
+        # Serialize to readable strings for prompt consumption
+        def _claim_str(item: Any) -> str:
+            if isinstance(item, dict):
+                claim = item.get("claim", item.get("statement", str(item)))
+                conf = item.get("confidence", "")
+                count = item.get("confirmed_by_count", 0)
+                parts = [claim]
+                if conf:
+                    parts.append(f"(confidence: {conf})")
+                if count:
+                    parts.append(f"(confirmed by {count} source(s))")
+                return " ".join(parts)
+            return str(item)
+
+        def _contradiction_str(item: Any) -> str:
+            if isinstance(item, dict):
+                return item.get("contradiction", item.get("observation", str(item)))
+            return str(item)
+
+        def _gap_str(item: Any) -> str:
+            if isinstance(item, dict):
+                return item.get("gap", item.get("observation", str(item)))
+            return str(item)
+
+        def _entity_str(item: Any) -> str:
+            if isinstance(item, dict):
+                name = item.get("name", "")
+                etype = item.get("type", "")
+                desc = item.get("suggestion", "")
+                return f"{name} ({etype})" + (f" — {desc}" if desc else "")
+            return str(item)
+
         return {
-            "reinforced_claims": reinforced,
-            "contradictions": contradictions,
-            "knowledge_gaps": knowledge_gaps,
-            "new_entities": new_entities,
+            "reinforced_claims": [_claim_str(c) for c in reinforced],
+            "contradictions": [_contradiction_str(c) for c in contradictions],
+            "knowledge_gaps": [_gap_str(g) for g in knowledge_gaps],
+            "new_entities": [_entity_str(e) for e in new_entities],
             "suggested_updates": suggested_updates,
             "sources_analyzed": len(sources),
             "suggestions_count": len(all_suggestions),

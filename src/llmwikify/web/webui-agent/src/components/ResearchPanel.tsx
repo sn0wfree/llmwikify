@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { api, type ResearchSession, type ResearchStreamEvent, type ResearchReport, type ResearchSubQuery } from '../api';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
 
@@ -19,7 +21,7 @@ export function ResearchPanel() {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveResearch | null>(null);
   const [loading, setLoading] = useState(false);
-  const readerRef = useState<ReadableStreamDefaultReader | null>(null);
+  const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
 
   const loadSessions = async () => {
     try {
@@ -29,6 +31,24 @@ export function ResearchPanel() {
   };
 
   useEffect(() => { loadSessions(); }, [currentWikiId]);
+
+  const consumeStream = async (stream: ReadableStream<ResearchStreamEvent>) => {
+    const reader = stream.getReader();
+    readerRef.current = reader;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        handleStreamEvent(value);
+      }
+    } catch (e) {
+      setActive(prev => prev ? { ...prev, status: 'error', events: [...prev.events, `Error: ${e}`] } : null);
+    } finally {
+      readerRef.current = null;
+      setLoading(false);
+      loadSessions();
+    }
+  };
 
   const handleStart = async () => {
     if (!query.trim() || loading) return;
@@ -45,21 +65,29 @@ export function ResearchPanel() {
     });
 
     const stream = api.research.start(query.trim(), currentWikiId || undefined);
-    const reader = stream.getReader();
+    setQuery('');
+    await consumeStream(stream);
+  };
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        handleStreamEvent(value);
-      }
-    } catch (e) {
-      setActive(prev => prev ? { ...prev, status: 'error', events: [...prev.events, `Error: ${e}`] } : null);
-    } finally {
-      setLoading(false);
-      loadSessions();
-      setQuery('');
-    }
+  const handleResume = async (id: string) => {
+    if (loading) return;
+    setLoading(true);
+
+    // Find the session to show context
+    const session = sessions.find(s => s.id === id);
+    setActive({
+      sessionId: id,
+      query: session?.query || '',
+      status: 'resuming',
+      step: '',
+      progress: session?.progress || 0,
+      subQueries: [],
+      report: null,
+      events: ['Resuming research...'],
+    });
+
+    const stream = api.research.resume(id);
+    await consumeStream(stream);
   };
 
   const handleStreamEvent = (event: ResearchStreamEvent) => {
@@ -71,6 +99,9 @@ export function ResearchPanel() {
         case 'step':
           next.step = event.step;
           next.status = event.step;
+          if (event.session_id && !next.sessionId) {
+            next.sessionId = event.session_id;
+          }
           next.events = [...next.events, `[${event.step}] ${event.message}`];
           break;
         case 'sub_query_created':
@@ -88,17 +119,31 @@ export function ResearchPanel() {
           }];
           next.events = [...next.events, `Sub-query: ${event.query} (${event.source_type})`];
           break;
+        case 'sub_query_done':
+          next.subQueries = next.subQueries.map(sq =>
+            sq.id === event.sub_query_id ? { ...sq, status: 'done' } : sq
+          );
+          break;
+        case 'sub_query_failed':
+          next.subQueries = next.subQueries.map(sq =>
+            sq.id === event.sub_query_id ? { ...sq, status: 'failed', error: event.error } : sq
+          );
+          next.events = [...next.events, `Failed: ${event.error}`];
+          break;
         case 'source_gathered':
           next.events = [...next.events, `Source: ${event.title}`];
           break;
-        case 'sub_query_failed':
-          next.events = [...next.events, `Failed: ${event.error}`];
+        case 'source_analyzed':
+          next.events = [...next.events, `Analyzed: ${event.title}`];
+          break;
+        case 'source_analysis_failed':
+          next.events = [...next.events, `Analysis failed: ${event.error}`];
           break;
         case 'progress':
           next.progress = event.progress;
           break;
         case 'synthesis_complete':
-          next.events = [...next.events, `Synthesis: ${JSON.stringify(event.synthesis)}`];
+          next.events = [...next.events, `Synthesis complete`];
           break;
         case 'review_passed':
           next.events = [...next.events, `Review passed (round ${event.round}, score ${event.score})`];
@@ -127,6 +172,9 @@ export function ResearchPanel() {
   const handlePause = async (id: string) => {
     try {
       await api.research.pause(id);
+      if (active?.sessionId === id) {
+        setActive(prev => prev ? { ...prev, status: 'paused' } : null);
+      }
       loadSessions();
     } catch { /* silent */ }
   };
@@ -199,7 +247,12 @@ export function ResearchPanel() {
         <div className="p-4 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-medium text-sm">{active.query}</h3>
-            <button onClick={dismissActive} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">Dismiss</button>
+            <div className="flex gap-2">
+              {(active.status === 'planning' || active.status === 'gathering' || active.status === 'analyzing' || active.status === 'synthesizing' || active.status === 'report' || active.status === 'reviewing') && (
+                <button onClick={() => active.sessionId && handlePause(active.sessionId)} className="text-xs text-yellow-400 hover:underline">Pause</button>
+              )}
+              <button onClick={dismissActive} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">Dismiss</button>
+            </div>
           </div>
 
           {/* Progress bar */}
@@ -220,7 +273,7 @@ export function ResearchPanel() {
               {active.subQueries.map((sq, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs">
                   <span className={sq.status === 'done' ? 'text-green-500' : sq.status === 'failed' ? 'text-red-500' : 'text-yellow-500'}>
-                    {sq.status === 'done' ? '✓' : sq.status === 'failed' ? '✗' : '⟳'}
+                    {sq.status === 'done' ? '\u2713' : sq.status === 'failed' ? '\u2717' : '\u27F3'}
                   </span>
                   <span className="text-[var(--text-secondary)]">[{sq.source_type}]</span>
                   <span>{sq.query}</span>
@@ -231,7 +284,7 @@ export function ResearchPanel() {
 
           {/* Events log */}
           <div className="max-h-40 overflow-y-auto space-y-0.5">
-            {active.events.slice(-10).map((evt, i) => (
+            {active.events.slice(-20).map((evt, i) => (
               <div key={i} className="text-xs text-[var(--text-secondary)]">{evt}</div>
             ))}
           </div>
@@ -240,8 +293,13 @@ export function ResearchPanel() {
           {active.report && (
             <div className="mt-3 p-3 bg-[var(--bg-primary)] rounded border border-[var(--border)]">
               <h4 className="text-sm font-medium mb-2">Report: {active.report.query}</h4>
-              <div className="prose prose-sm max-h-96 overflow-y-auto text-xs whitespace-pre-wrap">
-                {active.report.markdown}
+              <div className="prose prose-sm max-h-96 overflow-y-auto text-xs
+                prose-headings:mt-2 prose-headings:mb-1
+                prose-p:my-1 prose-ul:my-1 prose-ol:my-1
+                prose-li:my-0 prose-a:text-[var(--accent)] prose-a:underline
+                prose-blockquote:border-l-2 prose-blockquote:border-[var(--border)] prose-blockquote:pl-2 prose-blockquote:italic
+              ">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{active.report.markdown}</ReactMarkdown>
               </div>
               {active.report.sources && active.report.sources.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-[var(--border)]">
@@ -277,6 +335,9 @@ export function ResearchPanel() {
               <div className="flex gap-2">
                 {s.status === 'done' && (
                   <button onClick={() => handleViewReport(s)} className="text-xs text-[var(--accent)] hover:underline">View Report</button>
+                )}
+                {s.status === 'paused' && (
+                  <button onClick={() => handleResume(s.id)} className="text-xs text-green-400 hover:underline">Resume</button>
                 )}
                 {(s.status === 'planning' || s.status === 'gathering' || s.status === 'analyzing' || s.status === 'synthesizing') && (
                   <button onClick={() => handlePause(s.id)} className="text-xs text-yellow-400 hover:underline">Pause</button>
