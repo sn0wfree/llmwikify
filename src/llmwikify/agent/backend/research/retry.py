@@ -16,10 +16,11 @@ async def retry_async(
     max_attempts: int = 3,
     base_delay: float = 1.0,
     max_delay: float = 30.0,
+    call_timeout: float = 120.0,
     exceptions: tuple[type[Exception], ...] = (Exception,),
     **kwargs: Any,
 ) -> Any:
-    """Retry an async function with exponential backoff.
+    """Retry an async function with exponential backoff and per-call timeout.
 
     Args:
         func: Async function to retry.
@@ -27,6 +28,7 @@ async def retry_async(
         max_attempts: Maximum number of attempts.
         base_delay: Initial delay in seconds.
         max_delay: Maximum delay in seconds.
+        call_timeout: Per-call timeout in seconds.
         exceptions: Tuple of exception types to retry on.
         **kwargs: Keyword arguments to pass to func.
 
@@ -39,7 +41,7 @@ async def retry_async(
     last_exception: Exception | None = None
     for attempt in range(max_attempts):
         try:
-            return await func(*args, **kwargs)
+            return await asyncio.wait_for(func(*args, **kwargs), timeout=call_timeout)
         except exceptions as e:
             last_exception = e
             if attempt < max_attempts - 1:
@@ -48,6 +50,14 @@ async def retry_async(
                 await asyncio.sleep(delay)
             else:
                 logger.error("All %d attempts failed: %s", max_attempts, e)
+        except TimeoutError:
+            last_exception = TimeoutError(f"Call timed out after {call_timeout}s")
+            if attempt < max_attempts - 1:
+                delay = min(base_delay * (2 ** attempt), max_delay)
+                logger.warning("Attempt %d/%d timed out after %.0fs. Retrying in %.1fs...", attempt + 1, max_attempts, call_timeout, delay)
+                await asyncio.sleep(delay)
+            else:
+                logger.error("All %d attempts timed out", max_attempts)
     raise last_exception  # type: ignore[misc]
 
 

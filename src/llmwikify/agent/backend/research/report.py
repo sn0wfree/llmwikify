@@ -41,6 +41,9 @@ class ReportGenerator:
         Uses report_model if configured, otherwise falls back to default LLM.
         Source citations use [[Source:hash]] format.
         """
+        from ....core.prompt_registry import PromptRegistry
+        registry = PromptRegistry(provider="openai")
+
         source_map = self._build_source_map(sources)
 
         # Build source content summaries for the prompt
@@ -64,67 +67,30 @@ class ReportGenerator:
         if self.wiki.index_file.exists():
             wiki_index = self.wiki.index_file.read_text()[:5000]
 
-        # Build prompt
-        system = """You are a research report writer. Generate a comprehensive, well-structured markdown report based on multiple gathered sources and their analysis.
-
-Rules:
-- Start with a clear H1 heading that captures the research topic
-- Use H2/H3 headings to organize subtopics
-- Include an Executive Summary section
-- Use bullet points and lists where appropriate
-- Reference sources using [[Source:hash]] format (e.g., [[Source:abc123def456]])
-- End with a "References" section listing all sources with their full URLs
-- Write minimum 800 words
-- Distinguish verified facts from unverified claims
-- Note contradictions between sources when they exist
-- Use English for the report content"""
-
-        user_parts = [f"# Research Topic: {query}\n"]
-
-        if wiki_index:
-            user_parts.append(f"## Existing Wiki Context\n{wiki_index}\n")
-
-        user_parts.append("## Gathered Sources\n")
-        for sc in source_contents:
-            user_parts.append(f"### Source [{sc['hash']}] — {sc['source_type'].upper()}")
-            user_parts.append(f"Title: {sc['title']}")
-            if sc['url']:
-                user_parts.append(f"URL: {sc['url']}")
-            user_parts.append(f"Content:\n{sc['content']}\n")
-            if sc['analysis_summary']:
-                user_parts.append(f"Analysis:\n{sc['analysis_summary']}\n")
-
-        if synthesis.get("reinforced_claims"):
-            user_parts.append("## Cross-Source Synthesis")
-            user_parts.append(f"- Reinforced claims: {len(synthesis['reinforced_claims'])}")
-            user_parts.append(f"- Contradictions: {len(synthesis.get('contradictions', []))}")
-            user_parts.append(f"- Knowledge gaps: {len(synthesis.get('knowledge_gaps', []))}")
-            user_parts.append(f"- New entities: {len(synthesis.get('new_entities', []))}")
-            user_parts.append("")
-
-        user_parts.append(
-            "Generate the research report now. Use [[Source:hash]] for citations."
+        messages = registry.get_messages(
+            "research_report",
+            query=query,
+            wiki_index=wiki_index,
+            source_contents=source_contents,
+            synthesis=synthesis,
         )
-
-        user_msg = "\n".join(user_parts)
-
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_msg},
-        ]
+        api_params = registry.get_api_params("research_report")
 
         # Call LLM (sync wrapped in async) with retry
         import asyncio
         from .retry import retry_async
 
         max_attempts = self.config.get("max_retry_attempts", 3)
+        call_timeout = self.config.get("llm_call_timeout_seconds", 120)
 
         async def _call_llm() -> str:
             return await asyncio.to_thread(
-                self.llm_client.chat, messages, max_tokens=8192, temperature=0.3
+                self.llm_client.chat, messages,
+                max_tokens=api_params.get("max_tokens", 8192),
+                temperature=api_params.get("temperature", 0.3),
             )
 
-        report_md = await retry_async(_call_llm, max_attempts=max_attempts, base_delay=2.0)
+        report_md = await retry_async(_call_llm, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout)
         return report_md
 
 

@@ -7,6 +7,10 @@ Available prompts:
 - investigate_lint
 - wiki_schema
 - wiki_synthesize
+- research_plan
+- research_report
+- research_review
+- research_revise
 """
 
 from pathlib import Path
@@ -20,6 +24,10 @@ AVAILABLE_PROMPTS = [
     "investigate_lint",
     "wiki_schema",
     "wiki_synthesize",
+    "research_plan",
+    "research_report",
+    "research_review",
+    "research_revise",
 ]
 
 __all__ = ["PROMPTS_DIR", "AVAILABLE_PROMPTS"]

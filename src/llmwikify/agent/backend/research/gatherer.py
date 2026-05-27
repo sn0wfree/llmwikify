@@ -31,18 +31,37 @@ class SourceGatherer:
         self.config = config
         self._max_content = config.get("max_source_content_length", 500000)
 
+    @staticmethod
+    def _normalize_url(url: str) -> str:
+        """Normalize URL for dedup comparison."""
+        url = url.rstrip("/").lower()
+        # Remove common prefixes for consistency
+        for prefix in ("http://", "https://", "www."):
+            if url.startswith(prefix):
+                url = url[len(prefix):]
+        return url
+
     async def gather(self, sub_queries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Gather content for all sub-queries with controlled parallelism.
 
-        Returns list of SSE events to yield.
+        Returns list of SSE events to yield. Deduplicates URLs across sub-queries.
         """
         max_parallel = self.config.get("max_parallel_gathering", 5)
         semaphore = asyncio.Semaphore(max_parallel)
         events: list[dict[str, Any]] = []
 
+        # Build set of already-seen URLs from existing sources (for resume)
+        session_id = self.session_manager.session_id
+        existing_sources = self.db.get_sources(session_id) if session_id else []
+        seen_urls: set[str] = set()
+        for s in existing_sources:
+            url = s.get("url", "")
+            if url:
+                seen_urls.add(self._normalize_url(url))
+
         async def process_one(sq: dict[str, Any]) -> list[dict[str, Any]]:
             async with semaphore:
-                return await self._gather_one(sq)
+                return await self._gather_one(sq, seen_urls)
 
         tasks = [process_one(sq) for sq in sub_queries]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -55,8 +74,11 @@ class SourceGatherer:
 
         return events
 
-    async def _gather_one(self, sub_query: dict[str, Any]) -> list[dict[str, Any]]:
-        """Gather content for a single sub-query. Returns list of SSE events."""
+    async def _gather_one(self, sub_query: dict[str, Any], seen_urls: set[str]) -> list[dict[str, Any]]:
+        """Gather content for a single sub-query. Returns list of SSE events.
+
+        Skips URLs already in seen_urls for deduplication.
+        """
         sq_id = sub_query["id"]
         source_type = sub_query["source_type"]
         url = sub_query.get("url", "")
@@ -76,10 +98,15 @@ class SourceGatherer:
                     search_results = await searcher.search(f"site:youtube.com {query}", num_results=num_results)
                 else:
                     search_results = await searcher.search(query, num_results=num_results)
-                urls_to_fetch = [r.url for r in search_results if r.url]
+                # Filter out already-seen URLs
+                for r in search_results:
+                    if r.url and self._normalize_url(r.url) not in seen_urls:
+                        urls_to_fetch.append(r.url)
                 if not urls_to_fetch:
-                    raise ValueError(f"No search results for: {query}")
+                    raise ValueError(f"No new search results for: {query}")
             elif url:
+                if self._normalize_url(url) in seen_urls:
+                    raise ValueError(f"URL already gathered: {url}")
                 urls_to_fetch = [url]
 
             if source_type == "wiki":
@@ -87,16 +114,20 @@ class SourceGatherer:
                 for page in pages[:num_results]:
                     try:
                         page_name = page.get("name", query)
+                        wiki_url = f"wiki://{page_name}"
+                        if self._normalize_url(wiki_url) in seen_urls:
+                            continue
                         page_content = self.wiki.page_io.read_page(page_name)
                         content = str(page_content) if page_content else ""
                         if not content:
                             continue
                         content = content[: self._max_content]
+                        seen_urls.add(self._normalize_url(wiki_url))
                         source_id = self.session_manager.add_source(
                             session_id=session_id,
                             sub_query_id=sq_id,
                             source_type=source_type,
-                            url=f"wiki://{page_name}",
+                            url=wiki_url,
                             title=page_name,
                             content_length=len(content),
                             content_preview=content[:500],
@@ -107,7 +138,7 @@ class SourceGatherer:
                             "source_id": source_id,
                             "source_type": source_type,
                             "title": page_name,
-                            "url": f"wiki://{page_name}",
+                            "url": wiki_url,
                         })
                     except Exception as e:
                         logger.warning("Wiki page read failed for %s: %s", page.get("name"), e)
@@ -116,13 +147,14 @@ class SourceGatherer:
                 else:
                     raise ValueError(f"No wiki pages found for: {query}")
             else:
-                # Fetch each URL
+                # Fetch each URL (already deduped above)
                 for fetch_url in urls_to_fetch:
                     try:
                         content = await self._fetch_url(source_type, fetch_url)
                         if not content:
                             continue
                         content = content[: self._max_content]
+                        seen_urls.add(self._normalize_url(fetch_url))
                         source_id = self.session_manager.add_source(
                             session_id=session_id,
                             sub_query_id=sq_id,
@@ -164,6 +196,7 @@ class SourceGatherer:
         from .retry import retry_async
 
         max_attempts = self.config.get("max_retry_attempts", 3)
+        call_timeout = self.config.get("llm_call_timeout_seconds", 120)
 
         async def _do_fetch() -> str:
             if source_type == "youtube":
@@ -186,4 +219,4 @@ class SourceGatherer:
             else:
                 raise ValueError(f"Unsupported source_type: {source_type}")
 
-        return await retry_async(_do_fetch, max_attempts=max_attempts, base_delay=2.0, exceptions=(ValueError, ConnectionError, TimeoutError))
+        return await retry_async(_do_fetch, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout, exceptions=(ValueError, ConnectionError, TimeoutError))

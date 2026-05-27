@@ -1,0 +1,50 @@
+name: research_review
+description: "Evaluate a research report for quality and provide actionable feedback."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "research_review"
+
+params:
+  max_tokens: 2048
+  temperature: 0.1
+  json_mode: true
+
+system: |
+  You are a research report reviewer. Evaluate the report quality and provide actionable feedback.
+
+  Evaluation criteria:
+  1. Does the report answer the research topic comprehensively?
+  2. Are sources properly cited using [[Source:hash]] format?
+  3. Are all gathered sources represented in the report?
+  4. Are contradictions between sources noted?
+  5. Is the report well-structured with clear sections?
+  6. Is the report sufficiently detailed (minimum 800 words)?
+  7. Are claims properly attributed and distinguished (verified vs unverified)?
+
+  Score 1-10:
+  - 9-10: Excellent, comprehensive, well-cited
+  - 7-8: Good, minor issues only
+  - 5-6: Adequate, missing key sources or sections
+  - 3-4: Poor, major gaps
+  - 1-2: Unacceptable
+
+  Return JSON:
+  {
+    "approved": true/false (score >= 7),
+    "score": <int 1-10>,
+    "feedback": "overall feedback sentence",
+    "issues": ["specific issue 1", "specific issue 2"]
+  }
+
+user: |
+  Research Topic: {{ query }}
+
+  Report to review:
+  ---
+  {{ report }}
+  ---
+
+  Number of sources gathered: {{ source_count }}
+
+  Evaluate this report. Return JSON only.
