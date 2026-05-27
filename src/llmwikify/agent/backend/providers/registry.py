@@ -54,5 +54,7 @@ def create_llm(config: dict[str, Any]) -> StreamableLLMClient:
 
 # Auto-register built-in providers
 from .minimax import MiniMaxProvider
+from .xiaomi import XiaomiProvider
 
 register_provider(MiniMaxProvider)
+register_provider(XiaomiProvider)
