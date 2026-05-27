@@ -40,12 +40,14 @@ class MiniMaxProvider(BaseLLMProvider):
         base_url = self._resolve_field(config, "base_url", self.default_base_url())
         model = self._resolve_field(config, "model", self.default_model())
 
+        reasoning_split = config.get("reasoning_split", True)
+
         return StreamableLLMClient(
             provider=self.provider_name(),
             base_url=base_url,
             api_key=api_key,
             model=model,
-            reasoning_split=True,
+            reasoning_split=reasoning_split,
         )
 
     def validate_config(self, config: dict) -> list[str]:

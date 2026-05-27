@@ -185,6 +185,11 @@ class StreamableLLMClient:
                     continue
 
                 delta = chunk.get("choices", [{}])[0].get("delta", {})
+                # Handle reasoning_content (MiniMax reasoning_split mode)
+                if "reasoning_content" in delta and delta["reasoning_content"]:
+                    accumulated += delta["reasoning_content"]
+                    yield {"type": "content", "text": delta["reasoning_content"]}
+                # Handle regular content
                 if "content" in delta and delta["content"]:
                     accumulated += delta["content"]
                     yield {"type": "content", "text": delta["content"]}
@@ -233,7 +238,7 @@ class StreamableLLMClient:
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120, read=60)) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 resp.raise_for_status()
                 accumulated = ""
@@ -252,6 +257,11 @@ class StreamableLLMClient:
                         continue
 
                     delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    # Handle reasoning_content (MiniMax reasoning_split mode)
+                    if "reasoning_content" in delta and delta["reasoning_content"]:
+                        accumulated += delta["reasoning_content"]
+                        yield {"type": "content", "text": delta["reasoning_content"]}
+                    # Handle regular content
                     if "content" in delta and delta["content"]:
                         accumulated += delta["content"]
                         yield {"type": "content", "text": delta["content"]}
@@ -293,7 +303,7 @@ class StreamableLLMClient:
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120, read=60)) as client:
             resp = await client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
