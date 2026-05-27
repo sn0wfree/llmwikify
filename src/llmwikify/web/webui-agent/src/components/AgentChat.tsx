@@ -345,14 +345,12 @@ export function AgentChat() {
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((msg, i) => (
               <div key={i}>
-                <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <MessageBubble
-                    role={msg.role}
-                    content={msg.content}
-                    thinking={msg.thinking}
-                    timestamp={formatTime(msg.timestamp)}
-                  />
-                </div>
+                <MessageBubble
+                  role={msg.role}
+                  content={msg.content}
+                  thinking={msg.thinking}
+                  timestamp={formatTime(msg.timestamp)}
+                />
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
                   <div className="mt-2 space-y-2">
                     {msg.toolCalls.map((tc, j) => (
@@ -366,25 +364,21 @@ export function AgentChat() {
             ))}
 
             {loading && currentAssistantMsg && (
-              <div className="flex justify-start">
-                <MessageBubble
-                  role="assistant"
-                  content={currentAssistantMsg}
-                  thinking={currentThinking || undefined}
-                  streaming
-                />
-              </div>
+              <MessageBubble
+                role="assistant"
+                content={currentAssistantMsg}
+                thinking={currentThinking || undefined}
+                streaming
+              />
             )}
 
             {loading && !currentAssistantMsg && currentThinking && (
-              <div className="flex justify-start">
-                <MessageBubble
-                  role="assistant"
-                  content=""
-                  thinking={currentThinking}
-                  streaming
-                />
-              </div>
+              <MessageBubble
+                role="assistant"
+                content=""
+                thinking={currentThinking}
+                streaming
+              />
             )}
 
             {loading && currentToolCalls.length > 0 && (
