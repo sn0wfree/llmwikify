@@ -12,11 +12,13 @@ export type ChatStreamEvent =
   | { type: 'confirmation_required'; confirmation_id: string; details: Record<string, unknown> };
 
 export type ResearchStreamEvent =
-  | { type: 'step'; step: string; message: string }
+  | { type: 'step'; step: string; message: string; session_id?: string }
   | { type: 'sub_query_created'; sub_query_id: string; query: string; source_type: string; url?: string }
   | { type: 'sub_query_done'; sub_query_id: string; status: string }
   | { type: 'sub_query_failed'; sub_query_id: string; error: string }
   | { type: 'source_gathered'; source_id: string; source_type: string; title: string; url: string }
+  | { type: 'source_analyzed'; source_id: string; title: string }
+  | { type: 'source_analysis_failed'; source_id: string; error: string }
   | { type: 'progress'; progress: number; message: string }
   | { type: 'synthesis_complete'; synthesis: Record<string, number> }
   | { type: 'review_passed'; round: number; score: number; feedback: string }

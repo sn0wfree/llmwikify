@@ -968,9 +968,9 @@ class TestResearchEngine:
 
             asyncio.get_event_loop().run_until_complete(run())
 
-        # Should still complete with fallback query
+        # Should fail early when no sources gathered (planning failure + no search results)
         session = db.get_research_session(session_id)
-        assert session["status"] == "done"
+        assert session["status"] == "error"
 
     def test_engine_review_loop(self, mock_wiki, mock_llm, db, config):
         """Test review loop with issues then approval."""
@@ -1007,7 +1007,10 @@ class TestResearchEngine:
     def test_step_event_helper(self, mock_wiki, mock_llm, db, config):
         engine = ResearchEngine(mock_wiki, db, mock_llm, config)
         event = engine._step_event("planning", "Starting...")
-        assert event == {"type": "step", "step": "planning", "message": "Starting..."}
+        assert event["type"] == "step"
+        assert event["step"] == "planning"
+        assert event["message"] == "Starting..."
+        assert "session_id" in event
 
 
 # ==============================================================================

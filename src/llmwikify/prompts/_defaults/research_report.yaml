@@ -50,10 +50,34 @@ user: |
 
   {% if synthesis %}
   ## Cross-Source Synthesis
-  - Reinforced claims: {{ synthesis.reinforced_claims | length }}
-  - Contradictions: {{ synthesis.contradictions | length }}
-  - Knowledge gaps: {{ synthesis.knowledge_gaps | length }}
-  - New entities: {{ synthesis.new_entities | length }}
+
+  {% if synthesis.reinforced_claims %}
+  ### Reinforced Claims (confirmed by multiple sources)
+  {% for claim in synthesis.reinforced_claims[:10] %}
+  - {{ claim }}
+  {% endfor %}
+  {% endif %}
+
+  {% if synthesis.contradictions %}
+  ### Contradictions Found
+  {% for item in synthesis.contradictions[:5] %}
+  - {{ item }}
+  {% endfor %}
+  {% endif %}
+
+  {% if synthesis.knowledge_gaps %}
+  ### Knowledge Gaps
+  {% for gap in synthesis.knowledge_gaps[:5] %}
+  - {{ gap }}
+  {% endfor %}
+  {% endif %}
+
+  {% if synthesis.new_entities %}
+  ### New Entities Discovered
+  {% for entity in synthesis.new_entities[:5] %}
+  - {{ entity }}
+  {% endfor %}
+  {% endif %}
   {% endif %}
 
   Generate the research report now. Use [[Source:hash]] for citations.
