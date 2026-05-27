@@ -23,35 +23,46 @@ class SourceAnalyzer:
         self.config = config
 
     async def analyze_sources(self, sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Analyze all sources. Returns SSE events."""
-        events: list[dict[str, Any]] = []
+        """Analyze all sources in parallel. Returns SSE events."""
+        max_parallel = self.config.get("max_parallel_gathering", 5)
+        semaphore = asyncio.Semaphore(max_parallel)
 
-        for src in sources:
+        async def process_one(src: dict[str, Any]) -> dict[str, Any] | None:
             if src.get("analysis"):
-                continue  # already analyzed
-
-            try:
-                analysis = await asyncio.to_thread(self._analyze_one, src)
-                if analysis.get("status") in ("error",):
-                    events.append({
+                return None  # already analyzed
+            async with semaphore:
+                try:
+                    analysis = await asyncio.to_thread(self._analyze_one, src)
+                    if analysis.get("status") in ("error",):
+                        return {
+                            "type": "source_analysis_failed",
+                            "source_id": src["id"],
+                            "error": analysis.get("reason", "unknown"),
+                        }
+                    else:
+                        self.session_manager.update_source_analysis(src["id"], analysis)
+                        return {
+                            "type": "source_analyzed",
+                            "source_id": src["id"],
+                            "title": src.get("title", ""),
+                        }
+                except Exception as e:
+                    logger.warning("Analysis failed for source %s: %s", src["id"], e)
+                    return {
                         "type": "source_analysis_failed",
                         "source_id": src["id"],
-                        "error": analysis.get("reason", "unknown"),
-                    })
-                else:
-                    self.session_manager.update_source_analysis(src["id"], analysis)
-                    events.append({
-                        "type": "source_analyzed",
-                        "source_id": src["id"],
-                        "title": src.get("title", ""),
-                    })
-            except Exception as e:
-                logger.warning("Analysis failed for source %s: %s", src["id"], e)
-                events.append({
-                    "type": "source_analysis_failed",
-                    "source_id": src["id"],
-                    "error": str(e),
-                })
+                        "error": str(e),
+                    }
+
+        tasks = [process_one(src) for src in sources]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        events: list[dict[str, Any]] = []
+        for r in results:
+            if isinstance(r, Exception):
+                events.append({"type": "source_analysis_failed", "error": str(r)})
+            elif r is not None:
+                events.append(r)
 
         return events
 
@@ -60,7 +71,8 @@ class SourceAnalyzer:
 
         Writes content to raw/ if not already there, then calls wiki.
         """
-        content = source.get("content_preview", "") or ""
+        # Prefer full content over preview
+        content = source.get("content") or source.get("content_preview") or ""
         if not content:
             return {"status": "skipped", "reason": "No content"}
 

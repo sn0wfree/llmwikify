@@ -838,8 +838,8 @@ class TestResearchReviewer:
             reviewer.review("test", "# Report", [])
         )
 
-        # Should default to approved on failure
-        assert result["approved"] is True
+        # Should default to NOT approved on failure (safer behavior)
+        assert result["approved"] is False
         assert "failed" in result["feedback"].lower()
 
 

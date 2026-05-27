@@ -229,6 +229,25 @@ async def approve_confirmation(confirmation_id: str, request: Request):
     return await service.approve_confirmation(confirmation_id, wiki_id)
 
 
+@router.post("/confirmations/{confirmation_id}/approve-and-continue")
+async def approve_and_continue(confirmation_id: str, request: Request):
+    """Approve confirmation, execute tool, and stream LLM follow-up."""
+    body = await request.json()
+    session_id = body.get("session_id", "")
+    wiki_id = body.get("wiki_id") or get_wiki_id(request)
+    service = get_agent_service()
+
+    async def event_generator():
+        async for event in service.approve_confirmation_and_continue(
+            confirmation_id=confirmation_id,
+            session_id=session_id,
+            wiki_id=wiki_id,
+        ):
+            yield {"event": "message", "data": json.dumps(event)}
+
+    return EventSourceResponse(event_generator())
+
+
 @router.delete("/confirmations/{confirmation_id}")
 async def reject_confirmation(confirmation_id: str, request: Request):
     wiki_id = get_wiki_id(request)

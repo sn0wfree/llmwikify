@@ -18,7 +18,13 @@ class ResearchSynthesizer:
     async def synthesize(self, sources: list[dict[str, Any]]) -> dict[str, Any]:
         """Run cross-source synthesis.
 
-        High-rated sources are prioritized in synthesis.
+        High-rated sources get weighted higher in aggregation:
+        - rating 5: weight 2.0x
+        - rating 4: weight 1.5x
+        - rating 3: weight 1.0x (default)
+        - rating 2: weight 0.5x
+        - rating 1: weight 0.25x
+        - no rating: weight 1.0x
         """
         from ....core.synthesis_engine import SynthesisEngine
 
@@ -35,11 +41,16 @@ class ResearchSynthesizer:
 
             try:
                 suggestion = engine.analyze_new_source(analysis, src.get("title", ""))
+                # Weight by rating
+                rating = src.get("rating") or 3
+                weight = {5: 2.0, 4: 1.5, 3: 1.0, 2: 0.5, 1: 0.25}.get(rating, 1.0)
+                suggestion["_rating"] = rating
+                suggestion["_weight"] = weight
                 all_suggestions.append(suggestion)
             except Exception as e:
                 logger.warning("Synthesis failed for source %s: %s", src.get("id"), e)
 
-        # Aggregate results
+        # Aggregate results with rating weighting
         reinforced = []
         contradictions = []
         knowledge_gaps = []
@@ -47,11 +58,24 @@ class ResearchSynthesizer:
         suggested_updates = []
 
         for s in all_suggestions:
-            reinforced.extend(s.get("reinforced_claims", []))
+            weight = s.get("_weight", 1.0)
+            # Weight reinforced claims and suggested updates (more subjective)
+            for item in s.get("reinforced_claims", []):
+                if isinstance(item, dict):
+                    item["_weight"] = weight
+                reinforced.append(item)
+            for item in s.get("suggested_updates", []):
+                if isinstance(item, dict):
+                    item["_weight"] = weight
+                suggested_updates.append(item)
+            # Contradictions and knowledge gaps are not weighted (they are factual)
             contradictions.extend(s.get("new_contradictions", []))
             knowledge_gaps.extend(s.get("knowledge_gaps", []))
             new_entities.extend(s.get("new_entities", []))
-            suggested_updates.extend(s.get("suggested_updates", []))
+
+        # Sort reinforced claims by weight (highest-rated sources first)
+        reinforced.sort(key=lambda x: x.get("_weight", 0) if isinstance(x, dict) else 0, reverse=True)
+        suggested_updates.sort(key=lambda x: x.get("_weight", 0) if isinstance(x, dict) else 0, reverse=True)
 
         return {
             "reinforced_claims": reinforced,

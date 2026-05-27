@@ -140,7 +140,7 @@ class StreamableLLMClient:
         tools: list[dict[str, Any]] | None = None,
         **generation_params: Any,
     ):
-        """Streaming chat completion (yield chunks).
+        """Streaming chat completion (yield chunks) — sync version using requests.
 
         Yields:
             dict: {"type": "content", "text": str} or
@@ -202,3 +202,99 @@ class StreamableLLMClient:
                 if finish in ("stop", "tool_calls"):
                     yield {"type": "done", "content": accumulated}
                     return
+
+    async def astream_chat(
+        self,
+        messages: list[dict[str, str]],
+        tools: list[dict[str, Any]] | None = None,
+        **generation_params: Any,
+    ):
+        """Async streaming chat completion using httpx.
+
+        Yields:
+            dict: {"type": "content", "text": str} or
+                  {"type": "tool_call", "tool": str, "args": dict} or
+                  {"type": "done", "content": str}
+        """
+        import httpx
+
+        url = f"{self.base_url}/v1/chat/completions"
+        headers = self._build_headers()
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+        }
+        if tools:
+            payload["tools"] = tools
+        if self.reasoning_split:
+            payload["reasoning_split"] = True
+        for key in ("temperature", "max_tokens", "top_p"):
+            if key in generation_params:
+                payload[key] = generation_params[key]
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                resp.raise_for_status()
+                accumulated = ""
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+                    if line.startswith("data: "):
+                        line = line[6:]
+                    if line == "[DONE]":
+                        yield {"type": "done", "content": accumulated}
+                        return
+                    try:
+                        import json as _json
+                        chunk = _json.loads(line)
+                    except Exception:
+                        continue
+
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    if "content" in delta and delta["content"]:
+                        accumulated += delta["content"]
+                        yield {"type": "content", "text": delta["content"]}
+
+                    if "tool_calls" in delta:
+                        for tc in delta["tool_calls"]:
+                            func = tc.get("function", {})
+                            yield {
+                                "type": "tool_call",
+                                "tool": func.get("name", ""),
+                                "args": func.get("arguments", ""),
+                            }
+
+                    finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
+                    if finish in ("stop", "tool_calls"):
+                        yield {"type": "done", "content": accumulated}
+                        return
+
+    async def achat(
+        self,
+        messages: list[dict[str, str]],
+        json_mode: bool = False,
+        **generation_params: Any,
+    ) -> str:
+        """Async non-streaming chat completion using httpx."""
+        import httpx
+
+        url = f"{self.base_url}/v1/chat/completions"
+        headers = self._build_headers()
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+        if self.reasoning_split:
+            payload["reasoning_split"] = True
+        for key in ("temperature", "max_tokens", "top_p"):
+            if key in generation_params:
+                payload[key] = generation_params[key]
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]

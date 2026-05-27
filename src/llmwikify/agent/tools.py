@@ -51,6 +51,13 @@ class WikiToolRegistry:
             description="Initialize a wiki",
             action_type="write",
             requires_confirmation=False,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "overwrite": {"type": "boolean", "description": "Whether to overwrite existing wiki", "default": False},
+                },
+                "required": [],
+            },
         )
         self._register(
             "wiki_read_page",
@@ -58,6 +65,13 @@ class WikiToolRegistry:
             description="Read a wiki page",
             action_type="read",
             requires_confirmation=False,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "page_name": {"type": "string", "description": "Name or path of the page to read"},
+                },
+                "required": ["page_name"],
+            },
         )
         self._register(
             "wiki_search",
@@ -67,6 +81,14 @@ class WikiToolRegistry:
             description="Full-text search across wiki pages",
             action_type="read",
             requires_confirmation=False,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query string"},
+                    "limit": {"type": "integer", "description": "Max results to return", "default": 10},
+                },
+                "required": ["query"],
+            },
         )
         self._register(
             "wiki_lint",
@@ -81,6 +103,16 @@ class WikiToolRegistry:
             description="Health-check the wiki",
             action_type="read",
             requires_confirmation=False,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "mode": {"type": "string", "enum": ["check", "fix"], "description": "Lint mode", "default": "check"},
+                    "limit": {"type": "integer", "description": "Max issues to return", "default": 10},
+                    "force": {"type": "boolean", "description": "Force re-lint", "default": False},
+                    "generate_investigations": {"type": "boolean", "description": "Generate investigation questions", "default": False},
+                },
+                "required": [],
+            },
         )
         self._register(
             "wiki_analyze_source",
@@ -92,13 +124,31 @@ class WikiToolRegistry:
             description="Analyze a source file",
             action_type="read",
             requires_confirmation=False,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "source_path": {"type": "string", "description": "Path to the source file to analyze"},
+                    "force": {"type": "boolean", "description": "Force re-analysis", "default": False},
+                },
+                "required": ["source_path"],
+            },
         )
         self._register(
             "wiki_references",
             lambda args: json.dumps(self._get_references(args)),
-            description="Show page references",
+            description="Show page references (inbound/outbound links)",
             action_type="read",
             requires_confirmation=False,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "page_name": {"type": "string", "description": "Page to get references for"},
+                    "detail": {"type": "boolean", "description": "Include context snippets", "default": False},
+                    "inbound": {"type": "boolean", "description": "Only show inbound links", "default": False},
+                    "outbound": {"type": "boolean", "description": "Only show outbound links", "default": False},
+                },
+                "required": ["page_name"],
+            },
         )
         self._register(
             "wiki_status",
@@ -106,6 +156,7 @@ class WikiToolRegistry:
             description="Get wiki status summary",
             action_type="read",
             requires_confirmation=False,
+            parameters={"type": "object", "properties": {}, "required": []},
         )
         self._register(
             "wiki_recommend",
@@ -113,6 +164,7 @@ class WikiToolRegistry:
             description="Get wiki recommendations",
             action_type="read",
             requires_confirmation=False,
+            parameters={"type": "object", "properties": {}, "required": []},
         )
         self._register(
             "wiki_build_index",
@@ -120,6 +172,13 @@ class WikiToolRegistry:
             description="Build reference index",
             action_type="write",
             requires_confirmation=False,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "auto_export": {"type": "boolean", "description": "Auto-export after building", "default": True},
+                },
+                "required": [],
+            },
         )
         self._register(
             "wiki_read_schema",
@@ -127,6 +186,7 @@ class WikiToolRegistry:
             description="Read wiki.md schema",
             action_type="read",
             requires_confirmation=False,
+            parameters={"type": "object", "properties": {}, "required": []},
         )
         self._register(
             "wiki_sink_status",
@@ -134,6 +194,7 @@ class WikiToolRegistry:
             description="Overview of all query sinks",
             action_type="read",
             requires_confirmation=False,
+            parameters={"type": "object", "properties": {}, "required": []},
         )
         self._register(
             "wiki_suggest_synthesis",
@@ -143,6 +204,13 @@ class WikiToolRegistry:
             description="Cross-source synthesis suggestions",
             action_type="read",
             requires_confirmation=False,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "source_name": {"type": "string", "description": "Filter by source name"},
+                },
+                "required": [],
+            },
         )
         self._register(
             "wiki_knowledge_gaps",
@@ -152,6 +220,13 @@ class WikiToolRegistry:
             description="Detect knowledge gaps",
             action_type="read",
             requires_confirmation=False,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max gaps to return", "default": 20},
+                },
+                "required": [],
+            },
         )
         self._register(
             "wiki_graph_analyze",
@@ -159,6 +234,7 @@ class WikiToolRegistry:
             description="Analyze knowledge graph",
             action_type="read",
             requires_confirmation=False,
+            parameters={"type": "object", "properties": {}, "required": []},
         )
         self._register(
             "wiki_log",
@@ -168,6 +244,14 @@ class WikiToolRegistry:
             description="Append entry to wiki log",
             action_type="write",
             requires_confirmation=False,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "operation": {"type": "string", "description": "Operation name"},
+                    "details": {"type": "string", "description": "Log entry details"},
+                },
+                "required": ["operation", "details"],
+            },
         )
 
         # Post-hoc confirmation (execute and log)
@@ -177,6 +261,13 @@ class WikiToolRegistry:
             description="Ingest a source file",
             action_type="write",
             requires_confirmation="posthoc",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string", "description": "Path or URL of the source to ingest"},
+                },
+                "required": ["source"],
+            },
         )
 
         # Pre-confirmation (requires user approval before execution)
@@ -188,6 +279,14 @@ class WikiToolRegistry:
             description="Write a wiki page",
             action_type="write",
             requires_confirmation="pre",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "page_name": {"type": "string", "description": "Page path (e.g. entities/PersonName)"},
+                    "content": {"type": "string", "description": "Markdown content to write"},
+                },
+                "required": ["page_name", "content"],
+            },
         )
         self._register(
             "wiki_synthesize",
@@ -206,6 +305,20 @@ class WikiToolRegistry:
             description="Save query answer as wiki page",
             action_type="write",
             requires_confirmation="pre",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The original question"},
+                    "answer": {"type": "string", "description": "The answer to save"},
+                    "source_pages": {"type": "array", "items": {"type": "string"}, "description": "Source page names used"},
+                    "raw_sources": {"type": "array", "items": {"type": "string"}, "description": "Raw source references"},
+                    "page_name": {"type": "string", "description": "Target page name (auto-generated if omitted)"},
+                    "auto_link": {"type": "boolean", "description": "Auto-create entity links", "default": True},
+                    "auto_log": {"type": "boolean", "description": "Auto-log to wiki log", "default": True},
+                    "mode": {"type": "string", "enum": ["sink", "entity", "concept"], "description": "Synthesis mode", "default": "sink"},
+                },
+                "required": ["query", "answer"],
+            },
         )
         self._register(
             "wiki_graph",
@@ -213,6 +326,21 @@ class WikiToolRegistry:
             description="Query and modify knowledge graph",
             action_type="read",
             requires_confirmation="pre",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["query", "path", "stats", "write"], "description": "Graph action", "default": "query"},
+                    "concept": {"type": "string", "description": "Concept name (for query action)"},
+                    "direction": {"type": "string", "enum": ["inbound", "outbound", "both"], "description": "Link direction", "default": "both"},
+                    "confidence": {"type": "string", "description": "Filter by confidence level"},
+                    "source": {"type": "string", "description": "Source concept (for path action)"},
+                    "target": {"type": "string", "description": "Target concept (for path action)"},
+                    "max_length": {"type": "integer", "description": "Max path length", "default": 5},
+                    "relations": {"type": "array", "items": {"type": "object"}, "description": "Relations to write (for write action)"},
+                    "source_file": {"type": "string", "description": "Source file for relations"},
+                },
+                "required": [],
+            },
         )
 
     def _register(
@@ -222,12 +350,14 @@ class WikiToolRegistry:
         description: str = "",
         action_type: str = "read",
         requires_confirmation: bool | str = False,
+        parameters: dict | None = None,
     ) -> None:
         self._tools[name] = {
             "handler": handler,
             "description": description,
             "action_type": action_type,
             "requires_confirmation": requires_confirmation,
+            "parameters": parameters or {"type": "object", "properties": {}, "required": []},
         }
 
     def _get_references(self, args: dict) -> dict:
@@ -324,6 +454,7 @@ class WikiToolRegistry:
                 "description": info["description"],
                 "action_type": info["action_type"],
                 "requires_confirmation": info["requires_confirmation"],
+                "parameters": info.get("parameters", {"type": "object", "properties": {}, "required": []}),
             }
             for name, info in self._tools.items()
         ]

@@ -159,8 +159,23 @@ class AgentService:
 
     def _get_or_create_context(self, session_id: str, wiki_id: str | None = None) -> AgentContext:
         if session_id not in self._contexts:
-            self._contexts[session_id] = AgentContext(wiki_id)
-            self._contexts[session_id]._tool_calls = {}
+            ctx = AgentContext(wiki_id)
+            ctx._tool_calls = {}
+            # Restore conversation history from DB
+            db_messages = self.db.get_messages(session_id, limit=100)
+            for msg in db_messages:
+                role = msg.get("role", "")
+                content = msg.get("content", "")
+                if role == "user":
+                    ctx.messages.append({"role": "user", "content": content})
+                elif role == "assistant":
+                    ctx.messages.append({"role": "assistant", "content": content})
+            # Restore wiki_id from session if not provided
+            if not wiki_id:
+                session = self.db.get_session(session_id)
+                if session and session.get("wiki_id"):
+                    ctx.set_recent_wiki(session["wiki_id"])
+            self._contexts[session_id] = ctx
         return self._contexts[session_id]
 
     def _parse_wiki_prefix(self, message: str) -> tuple[str | None, str]:
@@ -179,6 +194,26 @@ class AgentService:
             parts.append(f"Current wiki context: {wiki_id}")
         return "\n".join(parts)
 
+    def _truncate_messages(self, messages: list[dict[str, str]], max_messages: int = 50) -> list[dict[str, str]]:
+        """Truncate message history to fit within context window.
+
+        Keeps system prompt (first message) and last max_messages messages.
+        """
+        if len(messages) <= max_messages + 1:  # +1 for system prompt
+            return messages
+
+        system = messages[0]
+        recent = messages[-(max_messages):]
+        dropped = len(messages) - 1 - max_messages
+        if dropped > 0:
+            # Insert a summary note where messages were dropped
+            summary_note = {
+                "role": "system",
+                "content": f"[Note: {dropped} earlier messages omitted for context window management]",
+            }
+            return [system, summary_note] + recent
+        return [system] + recent
+
     def _get_toolspec(self, tool_registry: WikiToolRegistry) -> list[dict[str, Any]]:
         tools = tool_registry.list_tools()
         return [
@@ -187,11 +222,11 @@ class AgentService:
                 "function": {
                     "name": t["name"],
                     "description": t["description"],
-                    "parameters": {
+                    "parameters": t.get("parameters", {
                         "type": "object",
                         "properties": {},
                         "required": [],
-                    },
+                    }),
                 },
             }
             for t in tools
@@ -238,7 +273,8 @@ class AgentService:
         tool_registry = WikiToolRegistry(wiki, self.db, ctx.wiki_id or self._get_default_wiki_id())
 
         system_prompt = self._build_system_prompt(ctx.wiki_id)
-        messages_for_llm = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
+        raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
+        messages_for_llm = self._truncate_messages(raw_messages)
 
         try:
             llm = self._get_llm()
@@ -295,7 +331,7 @@ class AgentService:
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict]:
-        for event in llm.stream_chat(messages, tools=tools):
+        async for event in llm.astream_chat(messages, tools=tools):
             yield event
 
     async def _execute_tool(
@@ -437,6 +473,79 @@ class AgentService:
             return {"status": "error", "error": "No wiki_id available"}
         registry = self._get_tool_registry(wiki_id)
         return registry.confirm_execution(confirmation_id)
+
+    async def approve_confirmation_and_continue(
+        self,
+        confirmation_id: str,
+        session_id: str,
+        wiki_id: str | None = None,
+    ) -> AsyncIterator[dict]:
+        """Approve a confirmation, execute the tool, and feed result back to LLM."""
+        wiki_id = wiki_id or self._get_default_wiki_id()
+        if not wiki_id:
+            yield ChatEvent.error("No wiki_id available")
+            return
+
+        registry = self._get_tool_registry(wiki_id)
+        result = registry.confirm_execution(confirmation_id)
+
+        if result.get("status") == "error":
+            yield ChatEvent.error(result.get("error", "Confirmation failed"))
+            return
+
+        yield ChatEvent.tool_call_end("confirmation_approved", result)
+
+        # Feed tool result back into context and trigger LLM follow-up
+        ctx = self._get_or_create_context(session_id, wiki_id)
+        tool_result_str = json.dumps(result.get("result", result))
+        ctx.add_assistant_message(f"[Confirmation approved] Tool result: {tool_result_str}")
+
+        wiki = self._get_wiki_for_context(ctx)
+        if wiki is None:
+            yield ChatEvent.error("No wiki available")
+            return
+
+        tool_registry = WikiToolRegistry(wiki, self.db, ctx.wiki_id or self._get_default_wiki_id())
+        system_prompt = self._build_system_prompt(ctx.wiki_id)
+        raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
+        messages_for_llm = self._truncate_messages(raw_messages)
+
+        try:
+            llm = self._get_llm()
+            tool_specs = self._get_toolspec(tool_registry)
+            accumulated = ""
+            async for event in self._stream_llm(llm, messages_for_llm, tool_specs):
+                event_type = event.get("type")
+                if event_type == "content":
+                    accumulated += event["text"]
+                    yield ChatEvent.message_delta(event["text"])
+                elif event_type == "tool_call":
+                    tool_name = event["tool"]
+                    raw_args = event.get("args", "{}")
+                    if isinstance(raw_args, str):
+                        try:
+                            args = json.loads(raw_args)
+                        except json.JSONDecodeError:
+                            args = {"raw": raw_args}
+                    else:
+                        args = raw_args
+                    yield ChatEvent.tool_call_start(tool_name, args)
+                    tool_result = await self._execute_tool(tool_name, args, tool_registry, session_id, ctx)
+                    yield ChatEvent.tool_call_end(tool_name, tool_result)
+                    if tool_result.get("status") == "confirmation_required":
+                        conf_id = tool_result.get("confirmation_id", "")
+                        yield ChatEvent.confirmation_required(conf_id, tool_result.get("impact", {}))
+                    else:
+                        trs = json.dumps(tool_result.get("result", tool_result))
+                        ctx.add_assistant_message(f"[TOOL: {tool_name}] Result: {trs}")
+                elif event_type == "done":
+                    final = event.get("content", accumulated)
+                    ctx.add_assistant_message(final)
+                    self._save_message(session_id, "assistant", final)
+                    yield ChatEvent.done(final)
+        except Exception as e:
+            logger.exception("Confirmation continue error")
+            yield ChatEvent.error(str(e))
 
     async def reject_confirmation(self, confirmation_id: str, wiki_id: str | None = None) -> dict:
         wiki_id = wiki_id or self._get_default_wiki_id()

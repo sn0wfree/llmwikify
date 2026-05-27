@@ -57,8 +57,9 @@ class ResearchSessionManager:
         title: str,
         content_length: int,
         content_preview: str | None = None,
+        content: str | None = None,
     ) -> str:
-        return self.db.save_source(session_id, sub_query_id, source_type, url, title, content_length, content_preview)
+        return self.db.save_source(session_id, sub_query_id, source_type, url, title, content_length, content_preview, content=content)
 
     def update_source_analysis(self, source_id: str, analysis: dict) -> None:
         self.db.update_source_analysis(source_id, analysis)
