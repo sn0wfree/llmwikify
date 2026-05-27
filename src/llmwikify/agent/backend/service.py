@@ -306,11 +306,11 @@ class AgentService:
                     ctx._tool_calls[tool_name]["status"] = "done"
                     yield ChatEvent.tool_call_end(tool_name, result)
 
-                    if result.get("status") == "confirmation_required":
+                    if isinstance(result, dict) and result.get("status") == "confirmation_required":
                         conf_id = result.get("confirmation_id", "")
                         yield ChatEvent.confirmation_required(conf_id, result.get("impact", {}))
                     else:
-                        tool_result_str = json.dumps(result.get("result", result))
+                        tool_result_str = json.dumps(result.get("result", result) if isinstance(result, dict) else result)
                         ctx.add_assistant_message(
                             f"[TOOL: {tool_name}] Result: {tool_result_str}"
                         )
@@ -341,7 +341,7 @@ class AgentService:
         tool_registry: WikiToolRegistry,
         session_id: str,
         ctx: AgentContext,
-    ) -> dict:
+    ) -> dict | list:
         call_id = self.db.log_tool_call(session_id, tool_name, args, "pending")
         try:
             result = await tool_registry.execute(tool_name, args)
@@ -532,11 +532,11 @@ class AgentService:
                     yield ChatEvent.tool_call_start(tool_name, args)
                     tool_result = await self._execute_tool(tool_name, args, tool_registry, session_id, ctx)
                     yield ChatEvent.tool_call_end(tool_name, tool_result)
-                    if tool_result.get("status") == "confirmation_required":
+                    if isinstance(tool_result, dict) and tool_result.get("status") == "confirmation_required":
                         conf_id = tool_result.get("confirmation_id", "")
                         yield ChatEvent.confirmation_required(conf_id, tool_result.get("impact", {}))
                     else:
-                        trs = json.dumps(tool_result.get("result", tool_result))
+                        trs = json.dumps(tool_result.get("result", tool_result) if isinstance(tool_result, dict) else tool_result)
                         ctx.add_assistant_message(f"[TOOL: {tool_name}] Result: {trs}")
                 elif event_type == "done":
                     final = event.get("content", accumulated)
