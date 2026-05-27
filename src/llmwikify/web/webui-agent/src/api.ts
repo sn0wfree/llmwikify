@@ -4,6 +4,7 @@ const API_TOKEN = import.meta.env.VITE_API_TOKEN;
 export type ChatStreamEvent =
   | { type: 'session_created'; session_id: string }
   | { type: 'message_delta'; content: string }
+  | { type: 'thinking'; content: string }
   | { type: 'tool_call_start'; tool: string; args: Record<string, unknown> }
   | { type: 'tool_call_end'; tool: string; result: unknown }
   | { type: 'tool_call_error'; tool: string; error: string }
