@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
@@ -46,6 +47,8 @@ class ResearchEngine:
         self.db = db
         self.config = merge_research_config(config)
         self.session_manager = ResearchSessionManager(db)
+        self._timeout_seconds = self.config.get("research_timeout_minutes", 30) * 60
+        self._start_time: float = 0
 
         # Model layering
         self._default_llm = llm_client
@@ -62,6 +65,13 @@ class ResearchEngine:
             logger.warning("Failed to resolve %s: %s, using default LLM", config_key, e)
             return None
 
+    def _check_timeout(self) -> None:
+        """Raise TimeoutError if pipeline has exceeded timeout."""
+        if self._start_time > 0:
+            elapsed = time.monotonic() - self._start_time
+            if elapsed > self._timeout_seconds:
+                raise TimeoutError(f"Research timed out after {elapsed:.0f}s (limit: {self._timeout_seconds}s)")
+
     # Stage order for checkpoint resume
     STAGE_ORDER = ["planning", "gathering", "analyzing", "synthesizing", "report", "reviewing", "done"]
 
@@ -75,7 +85,23 @@ class ResearchEngine:
         """Execute the 7-stage research pipeline, yielding SSE events.
 
         If resume=True, skips stages already completed based on current_step in DB.
+        Times out after research_timeout_minutes (default 30).
         """
+        self.session_manager.session_id = session_id
+        self._start_time = time.monotonic()
+
+        try:
+            async for event in self._run_stages(session_id, query, resume):
+                self._check_timeout()
+                yield event
+        except TimeoutError:
+            self.session_manager.update_status(session_id, "timeout", "timeout", -1)
+            yield {"type": "error", "error": f"Research timed out after {self._timeout_seconds}s"}
+        except Exception:
+            raise
+
+    async def _run_stages(self, session_id: str, query: str, resume: bool) -> AsyncIterator[dict[str, Any]]:
+        """Internal pipeline stages."""
         self.session_manager.session_id = session_id
 
         # Determine starting point
@@ -248,41 +274,31 @@ class ResearchEngine:
 
     async def _plan_sub_queries(self, query: str) -> list[dict[str, Any]]:
         """Decompose the research topic into sub-queries using planning_model."""
+        from ....core.prompt_registry import PromptRegistry
+        registry = PromptRegistry(provider="openai")
+
         wiki_index = ""
         if self.wiki.index_file.exists():
             wiki_index = self.wiki.index_file.read_text()[:3000]
 
-        system = """You are a research planning assistant. Given a research topic, decompose it into focused sub-queries for gathering information from multiple sources.
-
-Rules:
-- Generate 3-10 sub-queries covering different aspects of the topic
-- Each sub-query should be specific and searchable
-- Assign source_type: "web" for general knowledge, "youtube" for video content, "wiki" for internal wiki knowledge
-- Use "web" as default source_type
-- Leave url empty for web/youtube (search will find results)
-- For wiki, the query should be a wiki page name or search term
-- Consider existing wiki content to avoid redundant queries
-- Use English for queries
-
-Return a JSON array of objects, each with "query", "source_type", and "url" fields.
-Example: [{"query": "Python programming basics", "source_type": "web", "url": ""}]"""
-
-        user = f"Research topic: {query}\n\n"
-        if wiki_index:
-            user += f"Existing wiki content (avoid redundancy):\n{wiki_index[:2000]}\n\n"
-        user += "Generate sub-queries now. Return ONLY a JSON array."
-
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ]
+        messages = registry.get_messages(
+            "research_plan",
+            query=query,
+            wiki_index=wiki_index[:2000] if wiki_index else "",
+        )
+        api_params = registry.get_api_params("research_plan")
 
         try:
             import asyncio
             import json as json_mod
 
             def _call_llm():
-                raw = self._planning_llm.chat(messages, json_mode=True, max_tokens=2048, temperature=0.3)
+                raw = self._planning_llm.chat(
+                    messages,
+                    json_mode=api_params.get("json_mode", True),
+                    max_tokens=api_params.get("max_tokens", 2048),
+                    temperature=api_params.get("temperature", 0.3),
+                )
                 return raw
 
             raw = await asyncio.to_thread(_call_llm)

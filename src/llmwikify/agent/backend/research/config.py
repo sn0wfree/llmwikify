@@ -15,6 +15,7 @@ DEFAULT_RESEARCH_CONFIG: dict[str, Any] = {
     "max_review_rounds": 2,
     "planning_model": None,
     "report_model": None,
+    "llm_call_timeout_seconds": 120,
 }
 
 

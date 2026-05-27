@@ -1,0 +1,59 @@
+name: research_report
+description: "Generate a comprehensive research report from multiple gathered sources."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "research_report"
+
+params:
+  max_tokens: 8192
+  temperature: 0.3
+
+system: |
+  You are a research report writer. Generate a comprehensive, well-structured markdown report based on multiple gathered sources and their analysis.
+
+  Rules:
+  - Start with a clear H1 heading that captures the research topic
+  - Use H2/H3 headings to organize subtopics
+  - Include an Executive Summary section
+  - Use bullet points and lists where appropriate
+  - Reference sources using [[Source:hash]] format (e.g., [[Source:abc123def456]])
+  - End with a "References" section listing all sources with their full URLs
+  - Write minimum 800 words
+  - Distinguish verified facts from unverified claims
+  - Note contradictions between sources when they exist
+  - Use English for the report content
+
+user: |
+  # Research Topic: {{ query }}
+
+  {% if wiki_index %}
+  ## Existing Wiki Context
+  {{ wiki_index }}
+  {% endif %}
+
+  ## Gathered Sources
+  {% for sc in source_contents %}
+  ### Source [{{ sc.hash }}] — {{ sc.source_type | upper }}
+  Title: {{ sc.title }}
+  {% if sc.url %}
+  URL: {{ sc.url }}
+  {% endif %}
+  Content:
+  {{ sc.content }}
+
+  {% if sc.analysis_summary %}
+  Analysis:
+  {{ sc.analysis_summary }}
+  {% endif %}
+  {% endfor %}
+
+  {% if synthesis %}
+  ## Cross-Source Synthesis
+  - Reinforced claims: {{ synthesis.reinforced_claims | length }}
+  - Contradictions: {{ synthesis.contradictions | length }}
+  - Knowledge gaps: {{ synthesis.knowledge_gaps | length }}
+  - New entities: {{ synthesis.new_entities | length }}
+  {% endif %}
+
+  Generate the research report now. Use [[Source:hash]] for citations.
