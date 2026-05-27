@@ -48,12 +48,14 @@ class ReportGenerator:
         for s in sources:
             key = s.get("url") or s.get("title", "unknown")
             h = hashlib.md5(key.encode()).hexdigest()[:12]
+            # Prefer full content over preview, allow up to 8000 chars per source in report
+            full_content = s.get("content") or s.get("content_preview") or ""
             source_contents.append({
                 "hash": h,
                 "title": s.get("title", ""),
                 "source_type": s.get("source_type", ""),
                 "url": s.get("url", ""),
-                "content": (s.get("content_preview") or "")[:3000],
+                "content": full_content[:8000],
                 "analysis_summary": _summarize_analysis(s.get("analysis", {})),
             })
 
@@ -111,11 +113,18 @@ Rules:
             {"role": "user", "content": user_msg},
         ]
 
-        # Call LLM (sync wrapped in async)
+        # Call LLM (sync wrapped in async) with retry
         import asyncio
-        report_md = await asyncio.to_thread(
-            self.llm_client.chat, messages, max_tokens=8192, temperature=0.3
-        )
+        from .retry import retry_async
+
+        max_attempts = self.config.get("max_retry_attempts", 3)
+
+        async def _call_llm() -> str:
+            return await asyncio.to_thread(
+                self.llm_client.chat, messages, max_tokens=8192, temperature=0.3
+            )
+
+        report_md = await retry_async(_call_llm, max_attempts=max_attempts, base_delay=2.0)
         return report_md
 
 

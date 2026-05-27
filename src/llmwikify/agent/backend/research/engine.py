@@ -62,79 +62,133 @@ class ResearchEngine:
             logger.warning("Failed to resolve %s: %s, using default LLM", config_key, e)
             return None
 
-    async def run(self, session_id: str, query: str) -> AsyncIterator[dict[str, Any]]:
-        """Execute the 7-stage research pipeline, yielding SSE events."""
+    # Stage order for checkpoint resume
+    STAGE_ORDER = ["planning", "gathering", "analyzing", "synthesizing", "report", "reviewing", "done"]
+
+    def _stage_index(self, stage: str) -> int:
+        try:
+            return self.STAGE_ORDER.index(stage)
+        except ValueError:
+            return -1
+
+    async def run(self, session_id: str, query: str, resume: bool = False) -> AsyncIterator[dict[str, Any]]:
+        """Execute the 7-stage research pipeline, yielding SSE events.
+
+        If resume=True, skips stages already completed based on current_step in DB.
+        """
         self.session_manager.session_id = session_id
 
-        # 1. PLANNING
-        self.session_manager.update_status(session_id, "planning", "planning", 0.0)
-        yield self._step_event("planning", "Decomposing research topic...")
+        # Determine starting point
+        start_stage = 0
+        existing_sub_queries: list[dict[str, Any]] = []
+        existing_sources: list[dict[str, Any]] = []
 
-        sub_queries = await self._plan_sub_queries(query)
-        for sq in sub_queries:
-            yield {
-                "type": "sub_query_created",
-                "sub_query_id": sq["id"],
-                "query": sq["query"],
-                "source_type": sq["source_type"],
-                "url": sq.get("url"),
-            }
-        yield {"type": "progress", "progress": 0.1, "message": f"Created {len(sub_queries)} sub-queries"}
+        if resume:
+            session = self.db.get_research_session(session_id)
+            if session:
+                current_step = session.get("current_step", "planning")
+                start_stage = self._stage_index(current_step)
+                if start_stage < 0:
+                    start_stage = 0
+                # Load existing sub_queries and sources for reuse
+                existing_sub_queries = self.db.get_sub_queries(session_id) or []
+                existing_sources = self.db.get_sources(session_id) or []
+                yield {"type": "progress", "progress": session.get("progress", 0.0), "message": f"Resuming from {current_step}"}
+
+        # 1. PLANNING
+        if start_stage <= self._stage_index("planning"):
+            self.session_manager.update_status(session_id, "planning", "planning", 0.0)
+            yield self._step_event("planning", "Decomposing research topic...")
+
+            if resume and existing_sub_queries:
+                # Reuse existing sub-queries
+                sub_queries = [
+                    {"id": sq["id"], "query": sq["query"], "source_type": sq["source_type"], "url": sq.get("url")}
+                    for sq in existing_sub_queries
+                ]
+                yield {"type": "progress", "progress": 0.1, "message": f"Reusing {len(sub_queries)} existing sub-queries"}
+            else:
+                sub_queries = await self._plan_sub_queries(query)
+                for sq in sub_queries:
+                    yield {
+                        "type": "sub_query_created",
+                        "sub_query_id": sq["id"],
+                        "query": sq["query"],
+                        "source_type": sq["source_type"],
+                        "url": sq.get("url"),
+                    }
+            yield {"type": "progress", "progress": 0.1, "message": f"Planning complete: {len(sub_queries)} sub-queries"}
 
         # 2. GATHERING
-        self.session_manager.update_status(session_id, "gathering", "gathering", 0.1)
-        yield self._step_event("gathering", "Gathering sources...")
+        if start_stage <= self._stage_index("gathering"):
+            self.session_manager.update_status(session_id, "gathering", "gathering", 0.1)
+            yield self._step_event("gathering", "Gathering sources...")
 
-        gatherer = SourceGatherer(self.wiki, self.db, self.session_manager, self.config)
-        total = len(sub_queries)
-        gathered = 0
+            if resume and existing_sources:
+                # Skip gathering for sub-queries that already have sources
+                gathered_sq_ids = {s.get("sub_query_id") for s in existing_sources}
+                remaining_queries = [sq for sq in sub_queries if sq["id"] not in gathered_sq_ids]
+                gathered = len(existing_sources)
+                yield {"type": "progress", "progress": 0.1 + gathered / max(len(sub_queries), 1) * 0.3, "message": f"Reusing {gathered} existing sources, {len(remaining_queries)} remaining"}
+            else:
+                remaining_queries = sub_queries
+                gathered = 0
 
-        gather_events = await gatherer.gather(sub_queries)
-        for event in gather_events:
-            if event.get("type") == "source_gathered":
-                gathered += 1
-                yield {
-                    "type": "progress",
-                    "progress": 0.1 + gathered / total * 0.3,
-                    "message": f"Gathered {gathered}/{total} sources",
-                }
-            yield event
+            if remaining_queries:
+                gatherer = SourceGatherer(self.wiki, self.db, self.session_manager, self.config)
+                total = len(sub_queries)
+                gather_events = await gatherer.gather(remaining_queries)
+                for event in gather_events:
+                    if event.get("type") == "source_gathered":
+                        gathered += 1
+                        yield {
+                            "type": "progress",
+                            "progress": 0.1 + gathered / total * 0.3,
+                            "message": f"Gathered {gathered}/{total} sources",
+                        }
+                    yield event
 
-        sources = self.db.get_sources(session_id)
-        yield {"type": "progress", "progress": 0.4, "message": f"Gathered {len(sources)} sources total"}
+            sources = self.db.get_sources(session_id)
+            yield {"type": "progress", "progress": 0.4, "message": f"Gathered {len(sources)} sources total"}
 
         # 3. ANALYZING
-        self.session_manager.update_status(session_id, "analyzing", "analyzing", 0.4)
-        yield self._step_event("analyzing", "Analyzing sources...")
+        if start_stage <= self._stage_index("analyzing"):
+            sources = self.db.get_sources(session_id)  # refresh
+            self.session_manager.update_status(session_id, "analyzing", "analyzing", 0.4)
+            yield self._step_event("analyzing", "Analyzing sources...")
 
-        analyzer = SourceAnalyzer(self.wiki, self.session_manager, self.config)
-        analysis_events = await analyzer.analyze_sources(sources)
-        for event in analysis_events:
-            yield event
-        sources = self.db.get_sources(session_id)  # refresh with analysis
-        yield {"type": "progress", "progress": 0.55, "message": "Analysis complete"}
+            analyzer = SourceAnalyzer(self.wiki, self.session_manager, self.config)
+            analysis_events = await analyzer.analyze_sources(sources)
+            for event in analysis_events:
+                yield event
+            sources = self.db.get_sources(session_id)  # refresh with analysis
+            yield {"type": "progress", "progress": 0.55, "message": "Analysis complete"}
 
         # 4. SYNTHESIZING
-        self.session_manager.update_status(session_id, "synthesizing", "synthesizing", 0.55)
-        yield self._step_event("synthesizing", "Synthesizing cross-source findings...")
+        if start_stage <= self._stage_index("synthesizing"):
+            sources = self.db.get_sources(session_id)  # refresh
+            self.session_manager.update_status(session_id, "synthesizing", "synthesizing", 0.55)
+            yield self._step_event("synthesizing", "Synthesizing cross-source findings...")
 
-        synthesizer = ResearchSynthesizer(self.wiki, self.config)
-        synthesis = await synthesizer.synthesize(sources)
-        yield {"type": "synthesis_complete", "synthesis": {
-            "reinforced_claims": len(synthesis.get("reinforced_claims", [])),
-            "contradictions": len(synthesis.get("contradictions", [])),
-            "knowledge_gaps": len(synthesis.get("knowledge_gaps", [])),
-            "new_entities": len(synthesis.get("new_entities", [])),
-        }}
-        yield {"type": "progress", "progress": 0.65, "message": "Synthesis complete"}
+            synthesizer = ResearchSynthesizer(self.wiki, self.config)
+            synthesis = await synthesizer.synthesize(sources)
+            yield {"type": "synthesis_complete", "synthesis": {
+                "reinforced_claims": len(synthesis.get("reinforced_claims", [])),
+                "contradictions": len(synthesis.get("contradictions", [])),
+                "knowledge_gaps": len(synthesis.get("knowledge_gaps", [])),
+                "new_entities": len(synthesis.get("new_entities", [])),
+            }}
+            yield {"type": "progress", "progress": 0.65, "message": "Synthesis complete"}
 
         # 5. REPORT
-        self.session_manager.update_status(session_id, "report", "report", 0.65)
-        yield self._step_event("report", "Generating research report...")
+        if start_stage <= self._stage_index("report"):
+            sources = self.db.get_sources(session_id)  # refresh
+            self.session_manager.update_status(session_id, "report", "report", 0.65)
+            yield self._step_event("report", "Generating research report...")
 
-        generator = ReportGenerator(self.wiki, self._report_llm, self.config)
-        report_md = await generator.generate(query, sources, synthesis)
-        yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
+            generator = ReportGenerator(self.wiki, self._report_llm, self.config)
+            report_md = await generator.generate(query, sources, synthesis)
+            yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
 
         # 6. REVIEW + REVISE loop
         max_rounds = self.config.get("max_review_rounds", 2)
@@ -172,6 +226,7 @@ class ResearchEngine:
             }
 
         # 7. DONE
+        sources = self.db.get_sources(session_id)  # final refresh
         self.session_manager.update_status(session_id, "done", "done", 1.0)
         self.session_manager.finalize(session_id, {"markdown": report_md, "query": query})
         yield {

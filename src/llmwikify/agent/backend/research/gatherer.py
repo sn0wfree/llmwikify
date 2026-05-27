@@ -40,7 +40,7 @@ class SourceGatherer:
         semaphore = asyncio.Semaphore(max_parallel)
         events: list[dict[str, Any]] = []
 
-        async def process_one(sq: dict[str, Any]) -> dict[str, Any] | None:
+        async def process_one(sq: dict[str, Any]) -> list[dict[str, Any]]:
             async with semaphore:
                 return await self._gather_one(sq)
 
@@ -50,90 +50,140 @@ class SourceGatherer:
         for r in results:
             if isinstance(r, Exception):
                 events.append({"type": "sub_query_failed", "error": str(r)})
-            elif r is not None:
-                events.append(r)
+            elif isinstance(r, list):
+                events.extend(r)
 
         return events
 
-    async def _gather_one(self, sub_query: dict[str, Any]) -> dict[str, Any] | None:
-        """Gather content for a single sub-query."""
+    async def _gather_one(self, sub_query: dict[str, Any]) -> list[dict[str, Any]]:
+        """Gather content for a single sub-query. Returns list of SSE events."""
         sq_id = sub_query["id"]
         source_type = sub_query["source_type"]
         url = sub_query.get("url", "")
         query = sub_query["query"]
         session_id = self.session_manager.session_id
+        events: list[dict[str, Any]] = []
+        num_results = self.config.get("web_search_results_per_query", 5)
 
         try:
-            content: str = ""
+            urls_to_fetch: list[str] = []
 
             # For web/youtube without URL, search first
             if source_type in ("web", "youtube") and not url:
                 from .web_search import WebSearch
                 searcher = WebSearch(self.config)
                 if source_type == "youtube":
-                    results = await searcher.search(f"site:youtube.com {query}", num_results=1)
+                    search_results = await searcher.search(f"site:youtube.com {query}", num_results=num_results)
                 else:
-                    results = await searcher.search(query, num_results=1)
-                if results:
-                    url = results[0].url
-                    sub_query["url"] = url
+                    search_results = await searcher.search(query, num_results=num_results)
+                urls_to_fetch = [r.url for r in search_results if r.url]
+                if not urls_to_fetch:
+                    raise ValueError(f"No search results for: {query}")
+            elif url:
+                urls_to_fetch = [url]
 
             if source_type == "wiki":
-                pages = self.wiki.search(query, limit=3)
-                if pages:
-                    page_content = self.wiki.page_io.read_page(pages[0].get("name", query))
-                    if isinstance(page_content, str):
-                        content = page_content
-                    else:
+                pages = self.wiki.search(query, limit=min(num_results, 5))
+                for page in pages[:num_results]:
+                    try:
+                        page_name = page.get("name", query)
+                        page_content = self.wiki.page_io.read_page(page_name)
                         content = str(page_content) if page_content else ""
-            elif source_type == "youtube" and url:
+                        if not content:
+                            continue
+                        content = content[: self._max_content]
+                        source_id = self.session_manager.add_source(
+                            session_id=session_id,
+                            sub_query_id=sq_id,
+                            source_type=source_type,
+                            url=f"wiki://{page_name}",
+                            title=page_name,
+                            content_length=len(content),
+                            content_preview=content[:500],
+                            content=content,
+                        )
+                        events.append({
+                            "type": "source_gathered",
+                            "source_id": source_id,
+                            "source_type": source_type,
+                            "title": page_name,
+                            "url": f"wiki://{page_name}",
+                        })
+                    except Exception as e:
+                        logger.warning("Wiki page read failed for %s: %s", page.get("name"), e)
+                if events:
+                    self.session_manager.complete_sub_query(sq_id, {"sources_count": len(events)})
+                else:
+                    raise ValueError(f"No wiki pages found for: {query}")
+            else:
+                # Fetch each URL
+                for fetch_url in urls_to_fetch:
+                    try:
+                        content = await self._fetch_url(source_type, fetch_url)
+                        if not content:
+                            continue
+                        content = content[: self._max_content]
+                        source_id = self.session_manager.add_source(
+                            session_id=session_id,
+                            sub_query_id=sq_id,
+                            source_type=source_type,
+                            url=fetch_url,
+                            title=fetch_url,
+                            content_length=len(content),
+                            content_preview=content[:500],
+                            content=content,
+                        )
+                        events.append({
+                            "type": "source_gathered",
+                            "source_id": source_id,
+                            "source_type": source_type,
+                            "title": fetch_url,
+                            "url": fetch_url,
+                        })
+                    except Exception as e:
+                        logger.warning("Fetch failed for %s: %s", fetch_url, e)
+
+                if events:
+                    self.session_manager.complete_sub_query(sq_id, {"sources_count": len(events)})
+                else:
+                    raise ValueError(f"All fetches failed for: {query}")
+
+        except Exception as e:
+            logger.warning("Gather failed for sub_query %s (%s): %s", sq_id, source_type, e)
+            self.session_manager.fail_sub_query(sq_id, str(e))
+            events.append({
+                "type": "sub_query_failed",
+                "sub_query_id": sq_id,
+                "error": str(e),
+            })
+
+        return events
+
+    async def _fetch_url(self, source_type: str, url: str) -> str:
+        """Fetch content from a URL based on source type, with retry."""
+        from .retry import retry_async
+
+        max_attempts = self.config.get("max_retry_attempts", 3)
+
+        async def _do_fetch() -> str:
+            if source_type == "youtube":
                 result = extract_youtube(url)
                 if result.source_type == "error":
                     raise ValueError(result.metadata.get("error", "YouTube extraction failed"))
-                content = result.text
-            elif source_type == "pdf" and url:
+                return result.text
+            elif source_type == "pdf":
                 from pathlib import Path
                 from ....extractors.pdf import extract_pdf
                 result = extract_pdf(Path(url))
                 if result.source_type == "error":
                     raise ValueError(result.metadata.get("error", "PDF extraction failed"))
-                content = result.text
-            elif source_type == "web" and url:
+                return result.text
+            elif source_type == "web":
                 result = extract_url(url)
                 if result.source_type == "error":
                     raise ValueError(result.metadata.get("error", "Web extraction failed"))
-                content = result.text
+                return result.text
             else:
-                raise ValueError(f"Unsupported source_type={source_type} or missing URL")
+                raise ValueError(f"Unsupported source_type: {source_type}")
 
-            content = content[: self._max_content]
-            preview = content[:500]
-            title = url or query
-
-            source_id = self.session_manager.add_source(
-                session_id=session_id,
-                sub_query_id=sq_id,
-                source_type=source_type,
-                url=url,
-                title=title,
-                content_length=len(content),
-                content_preview=preview,
-            )
-            self.session_manager.complete_sub_query(sq_id, {"content_length": len(content)})
-
-            return {
-                "type": "source_gathered",
-                "source_id": source_id,
-                "source_type": source_type,
-                "title": title,
-                "url": url,
-            }
-
-        except Exception as e:
-            logger.warning("Gather failed for sub_query %s (%s): %s", sq_id, source_type, e)
-            self.session_manager.fail_sub_query(sq_id, str(e))
-            return {
-                "type": "sub_query_failed",
-                "sub_query_id": sq_id,
-                "error": str(e),
-            }
+        return await retry_async(_do_fetch, max_attempts=max_attempts, base_delay=2.0, exceptions=(ValueError, ConnectionError, TimeoutError))

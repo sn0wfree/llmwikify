@@ -309,12 +309,12 @@ class AgentDatabase:
                 )
             conn.commit()
 
-    def save_source(self, session_id: str, sub_query_id: str, source_type: str, url: str, title: str, content_length: int, content_preview: str | None = None) -> str:
+    def save_source(self, session_id: str, sub_query_id: str, source_type: str, url: str, title: str, content_length: int, content_preview: str | None = None, content: str | None = None) -> str:
         source_id = str(uuid.uuid4())[:8]
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                "INSERT INTO research_sources (id, session_id, sub_query_id, source_type, url, title, content_length, content_preview) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (source_id, session_id, sub_query_id, source_type, url, title, content_length, content_preview),
+                "INSERT INTO research_sources (id, session_id, sub_query_id, source_type, url, title, content_length, content_preview, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (source_id, session_id, sub_query_id, source_type, url, title, content_length, content_preview, content),
             )
             conn.commit()
         return source_id
@@ -375,6 +375,12 @@ class AgentDatabase:
                 conn.execute("UPDATE research_sessions SET status = 'planning' WHERE status = 'running'")
             except sqlite3.OperationalError:
                 pass
+
+            # Migrate research_sources: add content column if missing
+            try:
+                conn.execute("ALTER TABLE research_sources ADD COLUMN content TEXT")
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS chat_messages (
@@ -486,6 +492,7 @@ class AgentDatabase:
                     title TEXT,
                     content_length INTEGER,
                     content_preview TEXT,
+                    content TEXT,
                     analysis TEXT,
                     rating INTEGER,
                     created_at TEXT DEFAULT (datetime('now')),

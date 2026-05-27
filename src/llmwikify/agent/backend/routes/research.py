@@ -154,7 +154,7 @@ async def resume_research(research_id: str):
 
     async def event_generator():
         try:
-            async for event in engine.run(research_id, session["query"]):
+            async for event in engine.run(research_id, session["query"], resume=True):
                 yield {"event": "message", "data": json.dumps(event)}
         except Exception as e:
             logger.error("Research resume error for session %s: %s", research_id, e)

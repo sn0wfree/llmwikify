@@ -68,18 +68,23 @@ Evaluate this report. Return JSON only."""
         try:
             import asyncio
             import json as json_mod
+            from .retry import retry_async
 
-            def _call():
-                raw = self.llm_client.chat(messages, json_mode=True, max_tokens=2048, temperature=0.1)
-                raw = raw.strip()
-                if raw.startswith("```"):
-                    raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
-                    if raw.endswith("```"):
-                        raw = raw[:-3]
+            max_attempts = self.config.get("max_retry_attempts", 3)
+
+            async def _call_review() -> dict:
+                def _sync_call():
+                    raw = self.llm_client.chat(messages, json_mode=True, max_tokens=2048, temperature=0.1)
                     raw = raw.strip()
-                return json_mod.loads(raw)
+                    if raw.startswith("```"):
+                        raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+                        if raw.endswith("```"):
+                            raw = raw[:-3]
+                        raw = raw.strip()
+                    return json_mod.loads(raw)
+                return await asyncio.to_thread(_sync_call)
 
-            result = await asyncio.to_thread(_call)
+            result = await retry_async(_call_review, max_attempts=max_attempts, base_delay=2.0)
             result.setdefault("approved", result.get("score", 0) >= self.min_score)
             result.setdefault("feedback", "")
             result.setdefault("issues", [])
@@ -87,7 +92,7 @@ Evaluate this report. Return JSON only."""
             return result
         except Exception as e:
             logger.warning("Report review failed: %s", e)
-            return {"approved": True, "feedback": f"Review failed: {e}", "issues": [], "score": 7}
+            return {"approved": False, "feedback": f"Review failed: {e}", "issues": ["Review LLM call failed"], "score": 0}
 
 
 class ResearchRevisor:
@@ -146,7 +151,14 @@ Produce the revised report now."""
         ]
 
         import asyncio
-        revised = await asyncio.to_thread(
-            self.llm_client.chat, messages, max_tokens=8192, temperature=0.3
-        )
+        from .retry import retry_async
+
+        max_attempts = self.config.get("max_retry_attempts", 3)
+
+        async def _call_revise() -> str:
+            return await asyncio.to_thread(
+                self.llm_client.chat, messages, max_tokens=8192, temperature=0.3
+            )
+
+        revised = await retry_async(_call_revise, max_attempts=max_attempts, base_delay=2.0)
         return revised

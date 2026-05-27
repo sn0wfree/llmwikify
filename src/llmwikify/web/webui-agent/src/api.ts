@@ -388,6 +388,52 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),
+    approveAndContinue: (id: string, sessionId: string, wikiId?: string): ReadableStream<ChatStreamEvent> => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
+      return new ReadableStream<ChatStreamEvent>({
+        async start(controller) {
+          try {
+            const res = await fetch(`${API_BASE}/agent/confirmations/${id}/approve-and-continue${wikiId ? `?wiki_id=${wikiId}` : ''}`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ session_id: sessionId, wiki_id: wikiId }),
+            });
+            if (!res.ok || !res.body) {
+              controller.enqueue({ type: 'error', message: `HTTP ${res.status}` });
+              controller.close();
+              return;
+            }
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+              for (const line of lines) {
+                if (line.startsWith('event: message')) continue;
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data.trim()) {
+                    try {
+                      const event = JSON.parse(data) as ChatStreamEvent;
+                      controller.enqueue(event);
+                    } catch { /* ignore parse errors */ }
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            controller.enqueue({ type: 'error', message: String(e) });
+          } finally {
+            controller.close();
+          }
+        },
+      });
+    },
   },
 
   ingest: {

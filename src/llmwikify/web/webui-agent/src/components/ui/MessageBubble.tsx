@@ -1,3 +1,6 @@
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
   content: string;
@@ -24,10 +27,25 @@ export function MessageBubble({
     `}>
       <div className="flex items-start gap-2">
         <span className="text-base leading-none mt-0.5">
-          {role === 'user' ? '👤' : '🤖'}
+          {role === 'user' ? '\u{1F464}' : '\u{1F916}'}
         </span>
         <div className="flex-1 min-w-0">
-          <pre className="whitespace-pre-wrap font-sans">{content}</pre>
+          {role === 'assistant' ? (
+            <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none
+              prose-headings:mt-2 prose-headings:mb-1
+              prose-p:my-1 prose-ul:my-1 prose-ol:my-1
+              prose-li:my-0 prose-pre:my-2
+              prose-code:text-xs prose-code:bg-[var(--bg-tertiary)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded
+              prose-pre:bg-[var(--bg-tertiary)] prose-pre:rounded prose-pre:p-2
+              prose-a:text-[var(--accent)] prose-a:underline
+              prose-table:text-xs prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1
+              prose-blockquote:border-l-2 prose-blockquote:border-[var(--border)] prose-blockquote:pl-2 prose-blockquote:italic
+            ">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            </div>
+          ) : (
+            <pre className="whitespace-pre-wrap font-sans">{content}</pre>
+          )}
           {streaming && role === 'assistant' && (
             <span className="streaming-cursor text-[var(--accent)]" />
           )}

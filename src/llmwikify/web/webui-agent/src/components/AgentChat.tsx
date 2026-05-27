@@ -90,18 +90,77 @@ export function AgentChat() {
   }, []);
 
   const handleApproveConfirmation = useCallback(async () => {
-    if (!pendingConfirmation) return;
+    if (!pendingConfirmation || !currentSessionId) return;
     setConfirmingLoading(true);
     try {
-      await api.confirmations.approve(pendingConfirmation.confirmationId, currentWikiId || undefined);
-      addToast('success', 'Action approved');
       setPendingConfirmation(null);
+      setLoading(true);
+      setCurrentAssistantMsg('');
+      setCurrentToolCalls([]);
+
+      const reader = api.confirmations.approveAndContinue(
+        pendingConfirmation.confirmationId,
+        currentSessionId,
+        currentWikiId || undefined
+      ).getReader();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const event = value as ChatStreamEvent;
+        switch (event.type) {
+          case 'message_delta':
+            setCurrentAssistantMsg((prev) => prev + event.content);
+            break;
+          case 'tool_call_start':
+            setCurrentToolCalls((prev) => [
+              ...prev,
+              { tool: event.tool, args: event.args, status: 'streaming' },
+            ]);
+            break;
+          case 'tool_call_end':
+            setCurrentToolCalls((prev) =>
+              prev.map((tc) =>
+                tc.tool === event.tool ? { ...tc, result: event.result, status: 'done' } : tc
+              )
+            );
+            break;
+          case 'confirmation_required':
+            setCurrentToolCalls((prev) =>
+              prev.map((tc) =>
+                tc.tool === 'confirmation_required' ? { ...tc, status: 'done' } : tc
+              )
+            );
+            setPendingConfirmation({
+              confirmationId: event.confirmation_id,
+              tool: 'confirmation_required',
+              args: {},
+              impact: (event.details || {}) as Record<string, unknown>,
+              group: undefined,
+            });
+            break;
+          case 'done':
+            setMessages((prev) => [
+              ...prev,
+              { role: 'assistant', content: event.final_response, timestamp: new Date().toISOString(), toolCalls: currentToolCalls },
+            ]);
+            setCurrentAssistantMsg('');
+            setCurrentToolCalls([]);
+            break;
+          case 'error':
+            addToast('error', event.message || 'Confirmation error');
+            break;
+        }
+      }
+      addToast('success', 'Action approved and executed');
     } catch (e) {
       addToast('error', `Failed to approve: ${e instanceof Error ? e.message : 'Unknown error'}`);
     } finally {
       setConfirmingLoading(false);
+      setLoading(false);
     }
-  }, [pendingConfirmation, currentWikiId, addToast]);
+  }, [pendingConfirmation, currentSessionId, currentWikiId, currentToolCalls, addToast]);
 
   const handleRejectConfirmation = useCallback(async () => {
     if (!pendingConfirmation) return;
