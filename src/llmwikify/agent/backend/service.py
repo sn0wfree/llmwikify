@@ -27,6 +27,10 @@ class ChatEvent:
         return {"type": "message_delta", "content": content}
 
     @staticmethod
+    def thinking(content: str) -> dict:
+        return {"type": "thinking", "content": content}
+
+    @staticmethod
     def tool_call_start(tool: str, args: dict) -> dict:
         return {"type": "tool_call_start", "tool": tool, "args": args}
 
@@ -284,7 +288,10 @@ class AgentService:
             async for event in self._stream_llm(llm, messages_for_llm, tool_specs):
                 event_type = event.get("type")
 
-                if event_type == "content":
+                if event_type == "thinking":
+                    yield ChatEvent.thinking(event["text"])
+
+                elif event_type == "content":
                     accumulated += event["text"]
                     yield ChatEvent.message_delta(event["text"])
 
@@ -516,7 +523,9 @@ class AgentService:
             accumulated = ""
             async for event in self._stream_llm(llm, messages_for_llm, tool_specs):
                 event_type = event.get("type")
-                if event_type == "content":
+                if event_type == "thinking":
+                    yield ChatEvent.thinking(event["text"])
+                elif event_type == "content":
                     accumulated += event["text"]
                     yield ChatEvent.message_delta(event["text"])
                 elif event_type == "tool_call":

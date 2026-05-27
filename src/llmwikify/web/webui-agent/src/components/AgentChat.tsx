@@ -13,6 +13,7 @@ import { ConfirmationModal } from './ConfirmationModal';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  thinking?: string;
   timestamp: string;
   toolCalls?: ToolCall[];
 }
@@ -49,6 +50,7 @@ export function AgentChat() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentAssistantMsg, setCurrentAssistantMsg] = useState('');
+  const [currentThinking, setCurrentThinking] = useState('');
   const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
@@ -60,7 +62,7 @@ export function AgentChat() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, currentAssistantMsg]);
+  }, [messages, currentAssistantMsg, currentThinking]);
 
   const loadMessages = useCallback(async (sessionId: string) => {
     try {
@@ -113,6 +115,9 @@ export function AgentChat() {
           case 'message_delta':
             setCurrentAssistantMsg((prev) => prev + event.content);
             break;
+          case 'thinking':
+            setCurrentThinking((prev) => prev + event.content);
+            break;
           case 'tool_call_start':
             setCurrentToolCalls((prev) => [
               ...prev,
@@ -143,9 +148,10 @@ export function AgentChat() {
           case 'done':
             setMessages((prev) => [
               ...prev,
-              { role: 'assistant', content: event.final_response, timestamp: new Date().toISOString(), toolCalls: currentToolCalls },
+              { role: 'assistant', content: event.final_response, thinking: currentThinking || undefined, timestamp: new Date().toISOString(), toolCalls: currentToolCalls },
             ]);
             setCurrentAssistantMsg('');
+            setCurrentThinking('');
             setCurrentToolCalls([]);
             break;
           case 'error':
@@ -184,6 +190,7 @@ export function AgentChat() {
     setInput('');
     setLoading(true);
     setCurrentAssistantMsg('');
+    setCurrentThinking('');
     setCurrentToolCalls([]);
 
     const reader = chatStream(input, currentSessionId || undefined, currentWikiId || undefined).getReader();
@@ -202,6 +209,10 @@ export function AgentChat() {
 
           case 'message_delta':
             setCurrentAssistantMsg((prev) => prev + event.content);
+            break;
+
+          case 'thinking':
+            setCurrentThinking((prev) => prev + event.content);
             break;
 
           case 'tool_call_start':
@@ -245,9 +256,10 @@ export function AgentChat() {
           case 'done':
             setMessages((prev) => [
               ...prev,
-              { role: 'assistant', content: event.final_response, timestamp: new Date().toISOString(), toolCalls: currentToolCalls },
+              { role: 'assistant', content: event.final_response, thinking: currentThinking || undefined, timestamp: new Date().toISOString(), toolCalls: currentToolCalls },
             ]);
             setCurrentAssistantMsg('');
+            setCurrentThinking('');
             setCurrentToolCalls([]);
             break;
         }
@@ -337,6 +349,7 @@ export function AgentChat() {
                   <MessageBubble
                     role={msg.role}
                     content={msg.content}
+                    thinking={msg.thinking}
                     timestamp={formatTime(msg.timestamp)}
                   />
                 </div>
@@ -357,6 +370,18 @@ export function AgentChat() {
                 <MessageBubble
                   role="assistant"
                   content={currentAssistantMsg}
+                  thinking={currentThinking || undefined}
+                  streaming
+                />
+              </div>
+            )}
+
+            {loading && !currentAssistantMsg && currentThinking && (
+              <div className="flex justify-start">
+                <MessageBubble
+                  role="assistant"
+                  content=""
+                  thinking={currentThinking}
                   streaming
                 />
               </div>

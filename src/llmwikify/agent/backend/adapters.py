@@ -188,7 +188,7 @@ class StreamableLLMClient:
                 # Handle reasoning_content (MiniMax reasoning_split mode)
                 if "reasoning_content" in delta and delta["reasoning_content"]:
                     accumulated += delta["reasoning_content"]
-                    yield {"type": "content", "text": delta["reasoning_content"]}
+                    yield {"type": "thinking", "text": delta["reasoning_content"]}
                 # Handle regular content
                 if "content" in delta and delta["content"]:
                     accumulated += delta["content"]
@@ -260,7 +260,7 @@ class StreamableLLMClient:
                     # Handle reasoning_content (MiniMax reasoning_split mode)
                     if "reasoning_content" in delta and delta["reasoning_content"]:
                         accumulated += delta["reasoning_content"]
-                        yield {"type": "content", "text": delta["reasoning_content"]}
+                        yield {"type": "thinking", "text": delta["reasoning_content"]}
                     # Handle regular content
                     if "content" in delta and delta["content"]:
                         accumulated += delta["content"]
