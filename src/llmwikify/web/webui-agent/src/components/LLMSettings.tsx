@@ -9,6 +9,7 @@ import { Card } from './ui/Card';
 
 const PROVIDERS = [
   { value: 'minimax', label: 'MiniMax' },
+  { value: 'xiaomi', label: 'Xiaomi MiMo' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'ollama', label: 'Ollama' },
   { value: 'lmstudio', label: 'LM Studio' },
@@ -40,10 +41,18 @@ const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
   lmstudio: [
     { value: 'local-model', label: 'Local Model (LM Studio)' },
   ],
+  xiaomi: [
+    { value: 'mimo-v2.5-pro', label: 'MiMo-V2.5 Pro (1M context, 128K output)' },
+    { value: 'mimo-v2.5', label: 'MiMo-V2.5 Omni (1M context, multimodal)' },
+    { value: 'mimo-v2-flash', label: 'MiMo-V2 Flash (256K context, fast)' },
+    { value: 'mimo-v2-pro', label: 'MiMo-V2 Pro' },
+    { value: 'mimo-v2-omni', label: 'MiMo-V2 Omni (256K context)' },
+  ],
 };
 
 const BASE_URL_DEFAULTS: Record<string, string> = {
   minimax: 'https://api.minimaxi.com/v1',
+  xiaomi: 'https://token-plan-cn.xiaomimimo.com/v1',
   openai: 'https://api.openai.com/v1',
   ollama: 'http://localhost:11434/v1',
   lmstudio: 'http://localhost:1234/v1',

@@ -21,6 +21,7 @@ class StreamableLLMClient:
         api_key: str = "",
         model: str = "gpt-4o",
         reasoning_split: bool = False,
+        auth_header: str = "bearer",
     ):
         self.provider = provider
         raw_base = base_url if base_url else self._default_base_url(provider)
@@ -28,6 +29,7 @@ class StreamableLLMClient:
         self.api_key = api_key
         self.model = model
         self.reasoning_split = reasoning_split
+        self.auth_header = auth_header  # "bearer" or "api-key"
 
     @staticmethod
     def _default_base_url(provider: str) -> str:
@@ -36,6 +38,7 @@ class StreamableLLMClient:
             "ollama": "http://localhost:11434/v1",
             "lmstudio": "http://localhost:1234/v1",
             "minimax": "https://api.minimaxi.com/v1",
+            "xiaomi": "https://token-plan-cn.xiaomimimo.com",
         }
         return defaults.get(provider, "https://api.openai.com")
 
@@ -44,6 +47,15 @@ class StreamableLLMClient:
         from .providers.registry import create_llm
 
         return create_llm(config)
+
+    def _build_headers(self) -> dict[str, str]:
+        """Build HTTP headers with appropriate auth scheme."""
+        headers = {"Content-Type": "application/json"}
+        if self.auth_header == "api-key":
+            headers["api-key"] = self.api_key
+        else:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
     def chat(
         self,
@@ -58,10 +70,7 @@ class StreamableLLMClient:
             raise ImportError("requests is required")
 
         url = f"{self.base_url}/v1/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-        }
+        headers = self._build_headers()
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -96,10 +105,7 @@ class StreamableLLMClient:
             raise ImportError("requests is required")
 
         url = f"{self.base_url}/v1/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-        }
+        headers = self._build_headers()
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -147,10 +153,7 @@ class StreamableLLMClient:
             raise ImportError("requests is required")
 
         url = f"{self.base_url}/v1/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-        }
+        headers = self._build_headers()
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
