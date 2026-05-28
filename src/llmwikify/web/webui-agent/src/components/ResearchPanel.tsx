@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, type ResearchSession, type ResearchStreamEvent, type ResearchReport, type ResearchSubQuery } from '../api';
@@ -14,6 +14,66 @@ interface ActiveResearch {
   subQueries: ResearchSubQuery[];
   report: ResearchReport | null;
   events: string[];
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  planning: 'Planning sub-queries',
+  gathering: 'Gathering sources',
+  analyzing: 'Analyzing sources',
+  synthesizing: 'Synthesizing findings',
+  report: 'Generating report',
+  reviewing: 'Reviewing report',
+  done: 'Completed',
+  error: 'Error',
+  paused: 'Paused',
+};
+
+function formatElapsed(created: string): string {
+  const ms = Date.now() - new Date(created).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+function formatRelativeTime(updated: string): string {
+  const ms = Date.now() - new Date(updated).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 10) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
+}
+
+function getStageDescription(session: ResearchSession): string {
+  const status = session.status;
+  if (status === 'done') return 'Complete';
+  if (status === 'error') return 'Error';
+  if (status === 'paused') return `Paused at ${STAGE_LABELS[session.current_step] || session.current_step}`;
+  if (status === 'cancelled') return 'Cancelled';
+
+  const base = STAGE_LABELS[status] || status;
+
+  // For gathering, show more detail
+  if (status === 'gathering') {
+    const sqCount = session.sub_query_count || 0;
+    const srcCount = session.source_count || 0;
+    if (sqCount > 0) return `${base} — ${srcCount} sources collected`;
+    return base;
+  }
+
+  // For analyzing, show source count
+  if (status === 'analyzing') {
+    const srcCount = session.source_count || 0;
+    if (srcCount > 0) return `${base} — ${srcCount} sources`;
+    return base;
+  }
+
+  return base;
 }
 
 export function ResearchPanel() {
@@ -328,42 +388,82 @@ export function ResearchPanel() {
         {sessions.length === 0 ? (
           <div className="text-sm text-[var(--text-secondary)] text-center py-8">No research sessions yet</div>
         ) : (
-          sessions.map(s => (
-            <div
-              key={s.id}
-              onClick={() => setSelectedSessionId(s.id)}
-              className="p-3 bg-[var(--bg-secondary)] rounded border border-[var(--border)] cursor-pointer hover:border-[var(--accent)] transition-colors"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium">{s.query}</span>
-                <span className={`text-xs px-2 py-0.5 rounded ${
-                  s.status === 'done' ? 'bg-green-500/20 text-green-400' :
-                  s.status === 'error' ? 'bg-red-500/20 text-red-400' :
-                  s.status === 'paused' ? 'bg-yellow-500/20 text-yellow-400' :
-                  'bg-blue-500/20 text-blue-400'
-                }`}>
-                  {s.status}
-                </span>
+          sessions.map(s => {
+            const stageDesc = getStageDescription(s);
+            const isActive = ['planning', 'gathering', 'analyzing', 'synthesizing', 'report', 'reviewing'].includes(s.status);
+            return (
+              <div
+                key={s.id}
+                onClick={() => setSelectedSessionId(s.id)}
+                className="p-3 bg-[var(--bg-secondary)] rounded border border-[var(--border)] cursor-pointer hover:border-[var(--accent)] transition-colors"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium">{s.query}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded shrink-0 ml-2 ${
+                    s.status === 'done' ? 'bg-green-500/20 text-green-400' :
+                    s.status === 'error' ? 'bg-red-500/20 text-red-400' :
+                    s.status === 'paused' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-blue-500/20 text-blue-400'
+                  }`}>
+                    {s.status}
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                {s.progress > 0 && (
+                  <div className="h-1 bg-[var(--bg-tertiary)] rounded-full mb-1.5 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        s.status === 'error' ? 'bg-red-500' :
+                        s.status === 'done' ? 'bg-green-500' :
+                        'bg-[var(--accent)]'
+                      }`}
+                      style={{ width: `${Math.max(2, Math.round(s.progress * 100))}%` }}
+                    />
+                  </div>
+                )}
+
+                {/* Stage description */}
+                <div className="text-xs text-[var(--text-secondary)] mb-1">
+                  {stageDesc}
+                </div>
+
+                {/* Time info */}
+                <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                  {isActive && (
+                    <span title={`Created: ${new Date(s.created_at).toLocaleString()}`}>
+                      {formatElapsed(s.created_at)}
+                    </span>
+                  )}
+                  {isActive && <span className="opacity-40">|</span>}
+                  <span title={new Date(s.updated_at).toLocaleString()}>
+                    Updated {formatRelativeTime(s.updated_at)}
+                  </span>
+                  {!isActive && (
+                    <>
+                      <span className="opacity-40">|</span>
+                      <span>{new Date(s.created_at).toLocaleDateString()}</span>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex gap-2 mt-2" onClick={e => e.stopPropagation()}>
+                  {s.status === 'done' && (
+                    <button onClick={() => setSelectedSessionId(s.id)} className="text-xs text-[var(--accent)] hover:underline">View Details</button>
+                  )}
+                  {(s.status === 'paused' || s.status === 'gathering') && (
+                    <button onClick={() => handleResume(s.id)} className="text-xs text-green-400 hover:underline">Resume</button>
+                  )}
+                  {isActive && (
+                    <button onClick={() => handlePause(s.id)} className="text-xs text-yellow-400 hover:underline">Pause</button>
+                  )}
+                  {s.status !== 'done' && (
+                    <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400 hover:underline">Delete</button>
+                  )}
+                </div>
               </div>
-              <div className="text-xs text-[var(--text-secondary)] mb-2">
-                {s.sub_query_count || 0} sub-queries · {s.source_count || 0} sources · {new Date(s.created_at).toLocaleString()}
-              </div>
-              <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                {s.status === 'done' && (
-                  <button onClick={() => setSelectedSessionId(s.id)} className="text-xs text-[var(--accent)] hover:underline">View Details</button>
-                )}
-                {s.status === 'paused' && (
-                  <button onClick={() => handleResume(s.id)} className="text-xs text-green-400 hover:underline">Resume</button>
-                )}
-                {(s.status === 'planning' || s.status === 'gathering' || s.status === 'analyzing' || s.status === 'synthesizing') && (
-                  <button onClick={() => handlePause(s.id)} className="text-xs text-yellow-400 hover:underline">Pause</button>
-                )}
-                {s.status !== 'done' && (
-                  <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400 hover:underline">Delete</button>
-                )}
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
