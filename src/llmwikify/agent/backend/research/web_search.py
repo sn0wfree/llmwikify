@@ -2,8 +2,9 @@
 
 Providers (in fallback order):
 1. SearXNG — self-hosted meta search engine (free, no API key)
-2. Tavily — AI-optimized search API (free tier: 1000/month)
-3. DuckDuckGo — free, may fail in restricted networks
+2. MiniMax — Token Plan web search API (450 req/day)
+3. Tavily — AI-optimized search API (free tier: 1000/month)
+4. DuckDuckGo — free, may fail in restricted networks
 """
 
 from __future__ import annotations
@@ -110,6 +111,55 @@ class DuckDuckGoProvider:
 
 
 # ---------------------------------------------------------------------------
+# MiniMax Provider
+# ---------------------------------------------------------------------------
+
+class MiniMaxSearchProvider:
+    """MiniMax Token Plan web search API (450 req/day).
+
+    Uses the coding_plan search endpoint:
+        POST {api_host}/v1/coding_plan/search
+    """
+
+    def __init__(self, api_key: str, api_host: str = "https://api.minimaxi.com"):
+        self.api_key = api_key
+        self.api_host = api_host.rstrip("/")
+
+    async def search(self, query: str, num_results: int) -> list[SearchResult]:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(
+                f"{self.api_host}/v1/coding_plan/search",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "MM-API-Source": "Minimax-MCP",
+                },
+                json={"q": query},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        # Check API-level error
+        base_resp = data.get("base_resp", {})
+        if base_resp.get("status_code", 0) != 0:
+            raise RuntimeError(
+                f"MiniMax API error {base_resp.get('status_code')}: "
+                f"{base_resp.get('status_msg', 'unknown')}"
+            )
+
+        return [
+            SearchResult(
+                title=r.get("title", ""),
+                url=r.get("link", ""),
+                snippet=r.get("snippet", ""),
+            )
+            for r in data.get("organic", [])[:num_results]
+            if r.get("link")
+        ]
+
+
+# ---------------------------------------------------------------------------
 # Fallback Chain
 # ---------------------------------------------------------------------------
 
@@ -142,8 +192,10 @@ def create_search_provider(config: dict[str, Any]) -> FallbackSearchProvider:
     """Create search provider chain based on config.
 
     Config keys:
-        search_provider: "auto" | "searxng" | "tavily" | "duckduckgo"
+        search_provider: "auto" | "searxng" | "minimax" | "tavily" | "duckduckgo"
         searxng_url: SearXNG base URL (e.g. "http://localhost:8888")
+        minimax_api_key: MiniMax Token Plan API key
+        minimax_api_host: MiniMax API host (default: "https://api.minimaxi.com")
         tavily_api_key: Tavily API key (e.g. "tvly-xxxxx")
     """
     provider_name = config.get("search_provider", "auto")
@@ -154,6 +206,13 @@ def create_search_provider(config: dict[str, Any]) -> FallbackSearchProvider:
         if searxng_url:
             chain.append(SearXNGProvider(searxng_url))
             logger.info("Registered SearXNG provider: %s", searxng_url)
+
+    if provider_name in ("auto", "minimax"):
+        minimax_key = config.get("minimax_api_key")
+        if minimax_key:
+            minimax_host = config.get("minimax_api_host", "https://api.minimaxi.com")
+            chain.append(MiniMaxSearchProvider(minimax_key, minimax_host))
+            logger.info("Registered MiniMax provider")
 
     if provider_name in ("auto", "tavily"):
         tavily_key = config.get("tavily_api_key")
