@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, type ResearchSession, type ResearchStreamEvent, type ResearchReport, type ResearchSubQuery } from '../api';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
+import { ResearchDetail } from './ResearchDetail';
 
 interface ActiveResearch {
   sessionId: string;
@@ -20,6 +21,7 @@ export function ResearchPanel() {
   const [sessions, setSessions] = useState<ResearchSession[]>([]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveResearch | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
 
@@ -218,6 +220,16 @@ export function ResearchPanel() {
 
   const dismissActive = () => setActive(null);
 
+  // Detail view: show session details
+  if (selectedSessionId) {
+    return (
+      <ResearchDetail
+        sessionId={selectedSessionId}
+        onBack={() => setSelectedSessionId(null)}
+      />
+    );
+  }
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
@@ -317,7 +329,11 @@ export function ResearchPanel() {
           <div className="text-sm text-[var(--text-secondary)] text-center py-8">No research sessions yet</div>
         ) : (
           sessions.map(s => (
-            <div key={s.id} className="p-3 bg-[var(--bg-secondary)] rounded border border-[var(--border)]">
+            <div
+              key={s.id}
+              onClick={() => setSelectedSessionId(s.id)}
+              className="p-3 bg-[var(--bg-secondary)] rounded border border-[var(--border)] cursor-pointer hover:border-[var(--accent)] transition-colors"
+            >
               <div className="flex items-center justify-between mb-1">
                 <span className="text-sm font-medium">{s.query}</span>
                 <span className={`text-xs px-2 py-0.5 rounded ${
@@ -332,9 +348,9 @@ export function ResearchPanel() {
               <div className="text-xs text-[var(--text-secondary)] mb-2">
                 {s.sub_query_count || 0} sub-queries · {s.source_count || 0} sources · {new Date(s.created_at).toLocaleString()}
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                 {s.status === 'done' && (
-                  <button onClick={() => handleViewReport(s)} className="text-xs text-[var(--accent)] hover:underline">View Report</button>
+                  <button onClick={() => setSelectedSessionId(s.id)} className="text-xs text-[var(--accent)] hover:underline">View Details</button>
                 )}
                 {s.status === 'paused' && (
                   <button onClick={() => handleResume(s.id)} className="text-xs text-green-400 hover:underline">Resume</button>
