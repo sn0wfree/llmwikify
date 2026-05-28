@@ -1,5 +1,9 @@
 # StagePipeline UI Component Implementation Plan
 
+> **Status:** ✅ Implemented
+> **Last updated:** 2026-05-28
+> **Note:** Superseded by `deep-research-display-language.md` and `react-research-engine.md` for current design.
+
 ## Overview
 
 Replace the simple progress bar + stage description in research session cards with a

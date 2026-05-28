@@ -4,12 +4,16 @@
 
 Redesign the Deep Research UI to provide **semantic progress**, **structural event display**, and **rich source tracking**. Replaces flat event lists with layered, meaningful visual feedback.
 
+> **Status:** ✅ Implemented (Phase 1-3 complete)
+> **Last updated:** 2026-05-28
+
 ## Goal
 
 Transform the research panel from a technical debug view into an intuitive research cockpit where users can immediately understand:
 - **What is happening right now**
 - **How much progress has been made** (in human terms)
 - **Where each source stands**
+- **Which ReAct round and quality score** (after ReAct engine upgrade)
 
 ## Current vs Target
 
@@ -208,61 +212,78 @@ Hover card showing source preview.
 ## Active Panel Layout
 
 ```
-┌─ 正在研究：{query} ────────────────────────┐
-│ [gathering] · 2m 30s elapsed              │
-├───────────────────────────────────────────┤
-│                                           │
-│  ●━━━●━━━○━━━○━━━○━━━○━━━○               │
+┌─ 正在研究：{query} [gathering] ────────────────┐
+│ [Pause]  [Dismiss]                             │
+├───────────────────────────────────────────────┤
+│                                               │
+│  ●━━━●━━━○━━━○━━━○━━━○━━━○                    │ ← MiniStageBar (7-seg)
 │  Planning  Gathering  Analyzing  Report  Done │
-│                                           │
-│  Gathering ── 4/6 queries · 12 sources    │
-│                                           │
-│  ┌──┐ ┌──┐ ┌──┐ ┌──┐ +3                  │
-│  │🌐│ │📄│ │🌐│ │📄│                      │
-│  └──┘ └──┘ └──┘ └──┘                      │
-│                                           │
-│  Sub-queries:                             │
-│  ▶ risk parity definition (web)    ✓     │
-│  ✓ risk parity vs 60/40...        ✓     │
-│  ◐ implementation methods          ◐     │
-│                                           │
-│  Latest: Gathered source from aqr.com    │ ← highlighted
-│                                           │
-│  [Pause]  [Cancel]                        │
-└───────────────────────────────────────────┘
+│                                               │
+│  Round 2/5  Quality: 6/10  → gather           │ ← ReAct info
+│                                               │
+│  Gathering ── 4/6 queries · 12 sources        │ ← StageStatusLine
+│                                               │
+│  Knowledge Gaps (2)                           │ ← Yellow warning
+│  · leverage mechanism details                 │
+│  · backtest performance data                  │
+│                                               │
+│  ┌──┐ ┌──┐ ┌──┐ ┌──┐ +3                      │ ← SourceCardGrid
+│  │🌐│ │📄│ │🌐│ │📄│                          │
+│  └──┘ └──┘ └──┘ └──┘                          │
+│                                               │
+│  Sub-queries:                                 │ ← Collapsible
+│  ▶ risk parity definition (web)    ✓          │
+│  ✓ risk parity vs 60/40...        ✓          │
+│  ◐ implementation methods          ◐          │
+│                                               │
+│  ▶ Decision: gather                           │ ← Latest event
+│                                               │
+│  [Pause]  [Cancel]                            │
+└───────────────────────────────────────────────┘
 ```
 
 ## Implementation Plan
 
-### Phase 1: Core Components (this branch)
+### Phase 1: Core Components ✅
 
-1. **MiniStageBar** — compact 7-segment bar
-2. **StageStatusLine** — semantic progress text with credibility bar
-3. **SourceCard** — favicon + domain chip (no actual favicon fetch initially, just first letter)
-4. **SubQueryRow** — collapsible sub-query row
+1. **MiniStageBar** — compact 7-segment bar with pulse animation
+2. **StageStatusLine** — semantic progress text using actual source counts
+3. **SourceCard** — favicon + domain chip with hover tooltip + type badges
+4. **SubQueryRow** — collapsible with type badge colors (web/pdf/arxiv/wiki/youtube)
 5. **Active panel redesign** — integrate above into `ResearchPanel.tsx`
-6. **Session card enhancement** — mini bar + semantic lines
+6. **Session card enhancement** — mini bar + semantic lines + done summary
 
-### Phase 2: Interactions
+### Phase 2: Interactions ✅
 
-7. SourceTooltip — hover on source card shows title + credibility
-8. Citation hover in report — `[[Source:hash]]` hover card
-9. SubQueryRow expand/collapse animation
+7. SourceCard hover tooltip — full title, type badge, domain
+8. SourceCardGrid — expand "+N" button, entrance animation
+9. SubQueryRow — URL link display, type badge colors
 
-### Phase 3: Polish
+### Phase 3: Polish ✅
 
-10. Pulse animation for current stage
-11. Streaming report preview with cursor
-12. Save to Wiki button flow
+10. Pulse animation (`@keyframes stage-pulse`) for current stage
+11. Collapsible report preview in active panel
+12. Empty state with icon + example queries
+13. Error state with warning icon + retry support
+14. Knowledge gaps display (yellow warning box)
 
-## Files to Modify
+### Phase 4: ReAct Integration ✅
 
-| File | Change |
-|------|--------|
-| `src/llmwikify/web/webui-agent/src/components/ResearchPanel.tsx` | MiniStageBar, StageStatusLine, SourceCard, SubQueryRow, active panel redesign |
-| `src/llmwikify/web/webui-agent/src/components/ResearchDetail.tsx` | Use MiniStageBar, semantic status lines |
-| `src/llmwikify/web/webui-agent/src/components/ResearchRating.tsx` | Minor: source card integration |
-| `src/llmwikify/web/webui-agent/src/api.ts` | Add SourceCard types if needed |
+15. Round counter (Round 2/5)
+16. Quality score display (Quality: 6/10, color-coded)
+17. Reasoning action display (→ gather)
+18. Knowledge gaps list from synthesis
+19. New SSE events: reasoning, round_max, gap_detected
+
+## Files Modified
+
+| File | Change | Status |
+|------|--------|--------|
+| `ResearchPanel.tsx` | MiniStageBar, StageStatusLine, SourceCard, SubQueryRow, SourceCardGrid, EmptyState, ErrorState, ReAct display | ✅ |
+| `ResearchDetail.tsx` | Uses MiniStageBar, semantic status lines | ✅ |
+| `ResearchRating.tsx` | Source card integration | ✅ |
+| `api.ts` | ResearchStreamEvent types including ReAct events | ✅ |
+| `styles/index.css` | stage-pulse, source-enter animations | ✅ |
 
 ## Key Technical Decisions
 
