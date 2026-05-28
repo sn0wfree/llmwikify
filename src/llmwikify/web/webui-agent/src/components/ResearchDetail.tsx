@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, type ResearchSession, type ResearchSource } from '../api';
 import { ResearchRating } from './ResearchRating';
+import { StagePipeline } from './ResearchPanel';
 
 interface Props {
   sessionId: string;
@@ -105,25 +106,9 @@ export function ResearchDetail({ sessionId, onBack }: Props) {
           </div>
         </Section>
 
-        {/* Progress */}
+        {/* Stage Pipeline */}
         <Section title="Progress">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex-1 h-2 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{
-                  width: `${Math.round(session.progress * 100)}%`,
-                  backgroundColor: session.status === 'error' ? 'var(--color-red-500)' : 'var(--accent)',
-                }}
-              />
-            </div>
-            <span className="text-xs text-[var(--text-secondary)] w-10 text-right">
-              {Math.round(session.progress * 100)}%
-            </span>
-          </div>
-          <div className="text-xs text-[var(--text-secondary)]">
-            {STAGE_LABELS[session.current_step] || session.current_step}
-          </div>
+          <StagePipeline session={session} />
         </Section>
 
         {/* Sub-queries */}
