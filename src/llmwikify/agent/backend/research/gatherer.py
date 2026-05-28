@@ -47,6 +47,10 @@ class SourceGatherer:
         Returns list of SSE events to yield. Deduplicates URLs across sub-queries.
         """
         max_parallel = self.config.get("max_parallel_gathering", 5)
+        # Hard timeout per sub-query task: 90s
+        per_query_timeout = 90
+        # Total timeout for entire gathering: 10 minutes
+        total_timeout = 600
         semaphore = asyncio.Semaphore(max_parallel)
         events: list[dict[str, Any]] = []
 
@@ -61,10 +65,33 @@ class SourceGatherer:
 
         async def process_one(sq: dict[str, Any]) -> list[dict[str, Any]]:
             async with semaphore:
-                return await self._gather_one(sq, seen_urls)
+                try:
+                    return await asyncio.wait_for(
+                        self._gather_one(sq, seen_urls),
+                        timeout=per_query_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    sq_id = sq.get("id", "?")
+                    logger.warning("Sub-query %s timed out after %ds", sq_id, per_query_timeout)
+                    self.session_manager.fail_sub_query(sq_id, f"Gathering timed out after {per_query_timeout}s")
+                    return [{"type": "sub_query_failed", "sub_query_id": sq_id, "error": f"Gathering timed out after {per_query_timeout}s"}]
 
         tasks = [process_one(sq) for sq in sub_queries]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=total_timeout,
+            )
+        except asyncio.TimeoutError:
+            logger.error("Entire gathering stage timed out after %ds", total_timeout)
+            # Cancel remaining tasks
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
+            # Return what we have so far
+            sources = self.db.get_sources(session_id) if session_id else []
+            events.append({"type": "progress", "progress": 0.4, "message": f"Gathering timed out, {len(sources)} sources collected"})
+            return events
 
         for r in results:
             if isinstance(r, Exception):
@@ -94,10 +121,19 @@ class SourceGatherer:
             if source_type in ("web", "youtube") and not url:
                 from .web_search import WebSearch
                 searcher = WebSearch(self.config)
-                if source_type == "youtube":
-                    search_results = await searcher.search(f"site:youtube.com {query}", num_results=num_results)
-                else:
-                    search_results = await searcher.search(query, num_results=num_results)
+                try:
+                    if source_type == "youtube":
+                        search_results = await asyncio.wait_for(
+                            searcher.search(f"site:youtube.com {query}", num_results=num_results),
+                            timeout=30,
+                        )
+                    else:
+                        search_results = await asyncio.wait_for(
+                            searcher.search(query, num_results=num_results),
+                            timeout=30,
+                        )
+                except asyncio.TimeoutError:
+                    raise ValueError(f"Search timed out for: {query}")
                 # Filter out already-seen URLs
                 for r in search_results:
                     if r.url and self._normalize_url(r.url) not in seen_urls:
@@ -192,11 +228,13 @@ class SourceGatherer:
         return events
 
     async def _fetch_url(self, source_type: str, url: str) -> str:
-        """Fetch content from a URL based on source type, with retry."""
+        """Fetch content from a URL based on source type, with retry and hard timeout."""
         from .retry import retry_async
 
         max_attempts = self.config.get("max_retry_attempts", 3)
         call_timeout = self.config.get("llm_call_timeout_seconds", 120)
+        # Hard timeout per URL: max 60s (prevents indefinite blocking in gathering)
+        hard_timeout = 60
 
         async def _do_fetch() -> str:
             if source_type == "youtube":
@@ -219,4 +257,12 @@ class SourceGatherer:
             else:
                 raise ValueError(f"Unsupported source_type: {source_type}")
 
-        return await retry_async(_do_fetch, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout, exceptions=(ValueError, ConnectionError, TimeoutError))
+        try:
+            return await asyncio.wait_for(
+                retry_async(_do_fetch, max_attempts=max_attempts, base_delay=2.0,
+                           call_timeout=min(call_timeout, hard_timeout),
+                           exceptions=(ValueError, ConnectionError, TimeoutError)),
+                timeout=hard_timeout,
+            )
+        except asyncio.TimeoutError:
+            raise ValueError(f"Fetch timed out after {hard_timeout}s: {url}")
