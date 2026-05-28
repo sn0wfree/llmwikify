@@ -149,7 +149,7 @@ async def resume_research(research_id: str):
     if not session:
         return JSONResponse({"error": "Research session not found"}, status_code=404)
 
-    if session["status"] not in ("paused", "gathering"):
+    if session["status"] not in ("paused", "gathering", "planning", "analyzing", "synthesizing", "report", "reviewing"):
         return JSONResponse({"error": f"Cannot resume session in status: {session['status']}"}, status_code=400)
 
     engine = _get_engine(session.get("wiki_id"))

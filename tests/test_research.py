@@ -1476,6 +1476,7 @@ class TestResearchRoutes:
 
     def test_resume_non_paused(self, client, db):
         session_id = db.create_research_session("wiki1", "test")
+        db.update_research_status(session_id, "done")
         response = client.post(f"/api/research/{session_id}/resume")
         assert response.status_code == 400
 

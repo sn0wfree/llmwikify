@@ -365,6 +365,10 @@ class AgentDatabase:
                 ("current_step", "TEXT"),
                 ("result", "TEXT"),
                 ("updated_at", "TEXT"),
+                ("iteration_round", "INTEGER DEFAULT 1"),
+                ("max_rounds", "INTEGER DEFAULT 5"),
+                ("knowledge_gaps", "TEXT"),
+                ("quality_score", "INTEGER DEFAULT 0"),
             ]:
                 try:
                     conn.execute(f"ALTER TABLE research_sessions ADD COLUMN {col} {col_type}")
