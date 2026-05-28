@@ -94,7 +94,9 @@ class SourceGatherer:
                 if not done:
                     logger.warning("No tasks completed within timeout, cancelling %d remaining", len(pending))
                     for t in pending:
-                        t.cancel()
+                        if not t.done():
+                            t.exception()  # retrieve to suppress "never retrieved" warning
+                            t.cancel()
                     break
 
                 for t in done:
@@ -121,7 +123,9 @@ class SourceGatherer:
                     if asyncio.get_event_loop().time() >= grace_deadline:
                         logger.info("Grace expired, cancelling %d remaining tasks", len(pending))
                         for t in pending:
-                            t.cancel()
+                            if not t.done():
+                                t.exception()  # retrieve to suppress "never retrieved" warning
+                                t.cancel()
                         break
 
         except asyncio.CancelledError:

@@ -91,6 +91,8 @@ async def start_research(request: Request):
         try:
             async for event in engine.run(session_id, query):
                 yield {"event": "message", "data": json.dumps(event)}
+        except GeneratorExit:
+            logger.info("Client disconnected from research stream %s", session_id)
         except Exception as e:
             logger.error("Research engine error for session %s: %s", session_id, e)
             yield {"event": "message", "data": json.dumps({"type": "error", "error": str(e)})}
@@ -156,6 +158,8 @@ async def resume_research(research_id: str):
         try:
             async for event in engine.run(research_id, session["query"], resume=True):
                 yield {"event": "message", "data": json.dumps(event)}
+        except GeneratorExit:
+            logger.info("Client disconnected from research resume stream %s", research_id)
         except Exception as e:
             logger.error("Research resume error for session %s: %s", research_id, e)
             yield {"event": "message", "data": json.dumps({"type": "error", "error": str(e)})}
