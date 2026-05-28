@@ -42,19 +42,20 @@ class SourceGatherer:
         return url
 
     async def gather(self, sub_queries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Gather content for all sub-queries with controlled parallelism.
+        """Gather content for all sub-queries with early-exit optimization.
 
         Returns list of SSE events to yield. Deduplicates URLs across sub-queries.
+        Early exits when 50%+ sub-queries complete, cancelling remaining tasks.
         """
-        max_parallel = self.config.get("max_parallel_gathering", 5)
-        # Hard timeout per sub-query task: 90s
-        per_query_timeout = 90
-        # Total timeout for entire gathering: 10 minutes
-        total_timeout = 600
+        max_parallel = self.config.get("max_parallel_gathering", 8)
+        per_query_timeout = 45
+        # Early-exit: continue when this fraction of tasks done
+        early_exit_threshold = 0.5
+        # Grace period after threshold: wait this long for stragglers
+        early_exit_grace = 15
         semaphore = asyncio.Semaphore(max_parallel)
         events: list[dict[str, Any]] = []
 
-        # Build set of already-seen URLs from existing sources (for resume)
         session_id = self.session_manager.session_id
         existing_sources = self.db.get_sources(session_id) if session_id else []
         seen_urls: set[str] = set()
@@ -76,28 +77,67 @@ class SourceGatherer:
                     self.session_manager.fail_sub_query(sq_id, f"Gathering timed out after {per_query_timeout}s")
                     return [{"type": "sub_query_failed", "sub_query_id": sq_id, "error": f"Gathering timed out after {per_query_timeout}s"}]
 
-        tasks = [process_one(sq) for sq in sub_queries]
-        try:
-            results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=total_timeout,
-            )
-        except asyncio.TimeoutError:
-            logger.error("Entire gathering stage timed out after %ds", total_timeout)
-            # Cancel remaining tasks
-            for t in tasks:
-                if not t.done():
-                    t.cancel()
-            # Return what we have so far
-            sources = self.db.get_sources(session_id) if session_id else []
-            events.append({"type": "progress", "progress": 0.4, "message": f"Gathering timed out, {len(sources)} sources collected"})
-            return events
+        tasks = {asyncio.create_task(process_one(sq)): sq for sq in sub_queries}
+        total = len(tasks)
+        done_count = 0
+        threshold_reached = False
+        grace_deadline = None
 
-        for r in results:
-            if isinstance(r, Exception):
-                events.append({"type": "sub_query_failed", "error": str(r)})
-            elif isinstance(r, list):
-                events.extend(r)
+        try:
+            while tasks:
+                done, pending = await asyncio.wait(
+                    tasks.keys(),
+                    return_when=asyncio.FIRST_COMPLETED,
+                    timeout=per_query_timeout + 5,
+                )
+
+                if not done:
+                    logger.warning("No tasks completed within timeout, cancelling %d remaining", len(pending))
+                    for t in pending:
+                        t.cancel()
+                    break
+
+                for t in done:
+                    sq = tasks.pop(t)
+                    try:
+                        result = t.result()
+                        if isinstance(result, list):
+                            events.extend(result)
+                        done_count += 1
+                    except Exception as e:
+                        events.append({"type": "sub_query_failed", "sub_query_id": sq.get("id", "?"), "error": str(e)})
+                        done_count += 1
+
+                progress_frac = done_count / total
+                if not threshold_reached and progress_frac >= early_exit_threshold:
+                    threshold_reached = True
+                    grace_deadline = asyncio.get_event_loop().time() + early_exit_grace
+                    logger.info(
+                        "Gathering threshold reached: %d/%d done (%.0f%%), grace %ds",
+                        done_count, total, progress_frac * 100, early_exit_grace,
+                    )
+
+                if threshold_reached and pending:
+                    if asyncio.get_event_loop().time() >= grace_deadline:
+                        logger.info("Grace expired, cancelling %d remaining tasks", len(pending))
+                        for t in pending:
+                            t.cancel()
+                        break
+
+        except asyncio.CancelledError:
+            logger.warning("Gathering stage cancelled")
+
+        # Collect any remaining results briefly
+        remaining = [t for t in tasks if not t.done()]
+        if remaining:
+            done, _ = await asyncio.wait(remaining, timeout=5)
+            for t in done:
+                try:
+                    result = t.result()
+                    if isinstance(result, list):
+                        events.extend(result)
+                except Exception:
+                    pass
 
         return events
 
@@ -125,12 +165,12 @@ class SourceGatherer:
                     if source_type == "youtube":
                         search_results = await asyncio.wait_for(
                             searcher.search(f"site:youtube.com {query}", num_results=num_results),
-                            timeout=30,
+                            timeout=15,
                         )
                     else:
                         search_results = await asyncio.wait_for(
                             searcher.search(query, num_results=num_results),
-                            timeout=30,
+                            timeout=15,
                         )
                 except asyncio.TimeoutError:
                     raise ValueError(f"Search timed out for: {query}")
@@ -231,10 +271,9 @@ class SourceGatherer:
         """Fetch content from a URL based on source type, with retry and hard timeout."""
         from .retry import retry_async
 
-        max_attempts = self.config.get("max_retry_attempts", 3)
-        call_timeout = self.config.get("llm_call_timeout_seconds", 120)
-        # Hard timeout per URL: max 60s (prevents indefinite blocking in gathering)
-        hard_timeout = 60
+        max_attempts = 2
+        call_timeout = 20
+        hard_timeout = 30
 
         async def _do_fetch() -> str:
             if source_type == "youtube":
@@ -259,7 +298,7 @@ class SourceGatherer:
 
         try:
             return await asyncio.wait_for(
-                retry_async(_do_fetch, max_attempts=max_attempts, base_delay=2.0,
+                retry_async(_do_fetch, max_attempts=max_attempts, base_delay=1.0,
                            call_timeout=min(call_timeout, hard_timeout),
                            exceptions=(ValueError, ConnectionError, TimeoutError)),
                 timeout=hard_timeout,
