@@ -11,6 +11,11 @@ interface ActiveResearch {
   status: string;
   step: string;
   progress: number;
+  round: number;
+  maxRounds: number;
+  reasoning: string;
+  knowledgeGaps: string[];
+  qualityScore: number;
   subQueries: ResearchSubQuery[];
   sources: Array<{ id: string; source_type: string; title: string; url: string; status: 'pending' | 'fetching' | 'done' | 'failed' }>;
   report: ResearchReport | null;
@@ -581,6 +586,11 @@ export function ResearchPanel() {
       status: 'starting',
       step: '',
       progress: 0,
+      round: 0,
+      maxRounds: 5,
+      reasoning: '',
+      knowledgeGaps: [],
+      qualityScore: 0,
       subQueries: [],
       sources: [],
       report: null,
@@ -605,6 +615,11 @@ export function ResearchPanel() {
       status: 'resuming',
       step: '',
       progress: session?.progress || 0,
+      round: 0,
+      maxRounds: 5,
+      reasoning: '',
+      knowledgeGaps: [],
+      qualityScore: 0,
       subQueries: [],
       sources: [],
       report: null,
@@ -623,6 +638,22 @@ export function ResearchPanel() {
       const next = { ...prev };
 
       switch (event.type) {
+        case 'reasoning':
+          next.reasoning = event.action;
+          next.round = event.round;
+          next.phase = event.phase;
+          next.events = [...next.events, `[Round ${event.round}] Reasoning → ${event.action}`];
+          next.latestEvent = `Decision: ${event.action}`;
+          break;
+        case 'round_max':
+          next.events = [...next.events, `Max rounds reached (${event.round})`];
+          next.latestEvent = event.message;
+          break;
+        case 'gap_detected':
+          next.knowledgeGaps = event.gaps;
+          next.events = [...next.events, `Knowledge gaps: ${event.gaps.length} found`];
+          next.latestEvent = `Found ${event.gaps.length} knowledge gaps`;
+          break;
         case 'step':
           next.step = event.step;
           next.status = event.step;
@@ -693,10 +724,13 @@ export function ResearchPanel() {
           next.latestEvent = `Synthesis complete`;
           break;
         case 'review_passed':
+          next.qualityScore = event.score;
           next.events = [...next.events, `Review passed (round ${event.round}, score ${event.score})`];
           next.latestEvent = `Review passed · score ${event.score}`;
           break;
         case 'review_issues':
+          next.qualityScore = event.score;
+          next.issues = event.issues;
           next.events = [...next.events, `Review issues (round ${event.round}): ${event.issues.join(', ')}`];
           next.latestEvent = `Review issues: ${event.issues[0]}`;
           break;
@@ -708,6 +742,8 @@ export function ResearchPanel() {
           next.status = 'done';
           next.progress = 1;
           next.report = event.report;
+          next.qualityScore = event.report.quality_score || next.qualityScore;
+          next.round = event.report.rounds || next.round;
           next.events = [...next.events, 'Research complete!'];
           next.latestEvent = 'Research complete!';
           break;
@@ -749,6 +785,11 @@ export function ResearchPanel() {
           status: 'done',
           step: 'done',
           progress: 1,
+          round: parsed.rounds || 1,
+          maxRounds: 5,
+          reasoning: '',
+          knowledgeGaps: [],
+          qualityScore: parsed.quality_score || 0,
           subQueries: [],
           sources: [],
           report: parsed,
@@ -762,6 +803,11 @@ export function ResearchPanel() {
           status: 'done',
           step: 'done',
           progress: 1,
+          round: 1,
+          maxRounds: 5,
+          reasoning: '',
+          knowledgeGaps: [],
+          qualityScore: 0,
           subQueries: [],
           sources: [],
           report: { query: session.query, markdown: session.result, sources: [] },
@@ -838,6 +884,29 @@ export function ResearchPanel() {
             <MiniStageBar currentStep={active.step} status={active.status === 'resuming' || active.status === 'starting' ? 'planning' : active.status} />
           </div>
 
+          {/* Round + Quality + Reasoning */}
+          <div className="flex items-center gap-3 mb-2 text-xs">
+            {active.round > 0 && (
+              <span className="text-[var(--text-secondary)]">
+                Round <span className="font-medium text-[var(--text-primary)]">{active.round}</span>/{active.maxRounds}
+              </span>
+            )}
+            {active.qualityScore > 0 && (
+              <span className={`font-medium ${
+                active.qualityScore >= 7 ? 'text-green-400' :
+                active.qualityScore >= 5 ? 'text-yellow-400' :
+                'text-red-400'
+              }`}>
+                Quality: {active.qualityScore}/10
+              </span>
+            )}
+            {active.reasoning && (
+              <span className="text-[var(--accent)] opacity-70">
+                → {active.reasoning}
+              </span>
+            )}
+          </div>
+
           {/* Stage Status Line */}
           <div className="text-xs text-[var(--text-secondary)] mb-2 flex items-center gap-2">
             <StageStatusLine
@@ -852,6 +921,16 @@ export function ResearchPanel() {
               </span>
             )}
           </div>
+
+          {/* Knowledge Gaps */}
+          {active.knowledgeGaps.length > 0 && (
+            <div className="mb-2 px-2 py-1.5 bg-yellow-500/5 border border-yellow-500/20 rounded text-xs">
+              <div className="text-yellow-400 font-medium mb-0.5">Knowledge Gaps ({active.knowledgeGaps.length})</div>
+              {active.knowledgeGaps.slice(0, 3).map((gap, i) => (
+                <div key={i} className="text-yellow-400/70 text-[10px]">· {gap}</div>
+              ))}
+            </div>
+          )}
 
           {/* Source Cards */}
           <SourceCardGrid sources={active.sources} />

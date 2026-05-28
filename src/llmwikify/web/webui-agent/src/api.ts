@@ -13,6 +13,9 @@ export type ChatStreamEvent =
 
 export type ResearchStreamEvent =
   | { type: 'step'; step: string; message: string; session_id?: string }
+  | { type: 'reasoning'; action: string; round: number; phase: string }
+  | { type: 'round_max'; round: number; message: string }
+  | { type: 'gap_detected'; gaps: string[]; round: number }
   | { type: 'sub_query_created'; sub_query_id: string; query: string; source_type: string; url?: string }
   | { type: 'sub_query_done'; sub_query_id: string; status: string }
   | { type: 'sub_query_failed'; sub_query_id: string; error: string }
@@ -32,6 +35,8 @@ export interface ResearchReport {
   markdown: string;
   sources: Array<{ id: string; title: string; url: string; source_type: string }>;
   synthesis_summary?: Record<string, number>;
+  rounds?: number;
+  quality_score?: number;
 }
 
 export interface ResearchSession {
