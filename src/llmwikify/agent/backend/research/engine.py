@@ -1,4 +1,9 @@
-"""Research Engine — 7-stage orchestrator with review loop and model layering."""
+"""Research Engine — ReAct loop orchestrator with adaptive reasoning.
+
+Replaces the fixed 7-stage sequential flow with an adaptive ReAct
+(Reason → Act → Observe → loop) agent that dynamically decides what
+to do next based on intermediate results.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,7 @@ import json
 import time
 import logging
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from typing import Any
 
 from ..adapters import StreamableLLMClient
@@ -23,17 +29,46 @@ from .web_search import WebSearch
 logger = logging.getLogger(__name__)
 
 
-class ResearchEngine:
-    """Orchestrates the 7-stage Deep Research pipeline.
+@dataclass
+class ResearchState:
+    """Mutable state for the ReAct research loop."""
 
-    Stages:
-    1. PLANNING — decompose query into sub-queries (planning_model)
-    2. GATHERING — parallel source extraction
-    3. ANALYZING — content analysis via Wiki.analyze_source()
-    4. SYNTHESIZING — cross-source synthesis with rating weighting
-    5. REPORT — generate structured markdown report (report_model)
-    6. REVIEW — evaluate report quality; REVISE if issues found
-    7. DONE — finalize
+    session_id: str = ""
+    query: str = ""
+
+    # Round tracking
+    round: int = 0
+    max_rounds: int = 5
+    phase: str = ""  # planning | gathering | analyzing | synthesizing | reporting | reviewing | done
+
+    # Data accumulators
+    sub_queries: list[dict[str, Any]] = field(default_factory=list)
+    sources: list[dict[str, Any]] = field(default_factory=list)
+    synthesis: dict[str, Any] | None = None
+    report_md: str | None = None
+    review: dict[str, Any] | None = None
+
+    # Quality tracking
+    quality_score: int = 0
+    knowledge_gaps: list[str] = field(default_factory=list)
+    contradictions: list[str] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
+
+    # Budget
+    total_llm_calls: int = 0
+    total_sources: int = 0
+    total_sub_queries: int = 0
+    budget_remaining: float = 1.0
+
+
+class ResearchEngine:
+    """Orchestrates the ReAct research loop.
+
+    Instead of a fixed sequential pipeline, the agent reasons about what
+    to do next based on intermediate results, enabling:
+    - Adaptive re-planning when knowledge gaps are detected
+    - Self-correcting review loop with re-gathering
+    - Budget-aware iteration with configurable round limits
     """
 
     def __init__(
@@ -55,6 +90,11 @@ class ResearchEngine:
         self._planning_llm = self._resolve_model("planning_model") or llm_client
         self._report_llm = self._resolve_model("report_model") or llm_client
 
+        # ReAct config
+        self._max_react_rounds = self.config.get("max_react_rounds", 5)
+        self._quality_threshold = self.config.get("quality_threshold", 7)
+        self._max_replan = self.config.get("max_replan_attempts", 2)
+
     def _resolve_model(self, config_key: str) -> StreamableLLMClient | None:
         model_cfg = self.config.get(config_key)
         if not model_cfg:
@@ -66,32 +106,18 @@ class ResearchEngine:
             return None
 
     def _check_timeout(self) -> None:
-        """Raise TimeoutError if pipeline has exceeded timeout."""
         if self._start_time > 0:
             elapsed = time.monotonic() - self._start_time
             if elapsed > self._timeout_seconds:
                 raise TimeoutError(f"Research timed out after {elapsed:.0f}s (limit: {self._timeout_seconds}s)")
 
-    # Stage order for checkpoint resume
-    STAGE_ORDER = ["planning", "gathering", "analyzing", "synthesizing", "report", "reviewing", "done"]
-
-    def _stage_index(self, stage: str) -> int:
-        try:
-            return self.STAGE_ORDER.index(stage)
-        except ValueError:
-            return -1
-
     async def run(self, session_id: str, query: str, resume: bool = False) -> AsyncIterator[dict[str, Any]]:
-        """Execute the 7-stage research pipeline, yielding SSE events.
-
-        If resume=True, skips stages already completed based on current_step in DB.
-        Times out after research_timeout_minutes (default 30).
-        """
+        """Execute the ReAct research loop, yielding SSE events."""
         self.session_manager.session_id = session_id
         self._start_time = time.monotonic()
 
         try:
-            async for event in self._run_stages(session_id, query, resume):
+            async for event in self._react_loop(session_id, query, resume):
                 self._check_timeout()
                 yield event
         except TimeoutError:
@@ -100,191 +126,374 @@ class ResearchEngine:
         except Exception:
             raise
 
-    async def _run_stages(self, session_id: str, query: str, resume: bool) -> AsyncIterator[dict[str, Any]]:
-        """Internal pipeline stages."""
-        self.session_manager.session_id = session_id
+    # ─── ReAct Core Loop ───────────────────────────────────────────────
 
-        # Determine starting point
-        start_stage = 0
-        sub_queries: list[dict[str, Any]] = []
-        sources: list[dict[str, Any]] = []
-        synthesis: dict[str, Any] = {}
+    async def _react_loop(
+        self, session_id: str, query: str, resume: bool
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Main ReAct loop: Reason → Act → Observe → repeat."""
+        state = ResearchState(
+            session_id=session_id,
+            query=query,
+            max_rounds=self._max_react_rounds,
+        )
 
+        # Load existing state on resume
         if resume:
-            session = self.db.get_research_session(session_id)
-            if session:
-                current_step = session.get("current_step", "planning")
-                start_stage = self._stage_index(current_step)
-                if start_stage < 0:
-                    start_stage = 0
-                # Load existing sub_queries and sources for reuse
-                existing_sub_queries = self.db.get_sub_queries(session_id) or []
-                existing_sources = self.db.get_sources(session_id) or []
-                yield {"type": "progress", "progress": session.get("progress", 0.0), "message": f"Resuming from {current_step}"}
+            self._load_resume_state(state)
 
-                # Ensure variables are populated for resume from any stage
-                if existing_sub_queries:
-                    sub_queries = [
-                        {"id": sq["id"], "query": sq["query"], "source_type": sq["source_type"], "url": sq.get("url")}
-                        for sq in existing_sub_queries
-                    ]
-                if existing_sources:
-                    sources = existing_sources
+        while state.phase != "done":
+            self._check_timeout()
+            elapsed = time.monotonic() - self._start_time
+            state.budget_remaining = max(0, 1 - elapsed / self._timeout_seconds)
 
-        # 1. PLANNING
-        if start_stage <= self._stage_index("planning"):
-            self.session_manager.update_status(session_id, "planning", "planning", 0.0)
-            yield self._step_event("planning", "Decomposing research topic...")
+            # ── REASON: decide next action ──
+            action = await self._reason(state)
+            yield {"type": "reasoning", "action": action, "round": state.round, "phase": state.phase}
 
-            if resume and sub_queries:
-                yield {"type": "progress", "progress": 0.1, "message": f"Reusing {len(sub_queries)} existing sub-queries"}
-            else:
-                sub_queries = await self._plan_sub_queries(query)
-                for sq in sub_queries:
-                    yield {
-                        "type": "sub_query_created",
-                        "sub_query_id": sq["id"],
-                        "query": sq["query"],
-                        "source_type": sq["source_type"],
-                        "url": sq.get("url"),
-                    }
-            yield {"type": "progress", "progress": 0.1, "message": f"Planning complete: {len(sub_queries)} sub-queries"}
-
-        # 2. GATHERING
-        if start_stage <= self._stage_index("gathering"):
-            self.session_manager.update_status(session_id, "gathering", "gathering", 0.1)
-            yield self._step_event("gathering", "Gathering sources...")
-
-            if resume and sources:
-                # Skip gathering for sub-queries that already have sources
-                gathered_sq_ids = {s.get("sub_query_id") for s in sources}
-                remaining_queries = [sq for sq in sub_queries if sq["id"] not in gathered_sq_ids]
-                gathered = len(sources)
-                yield {"type": "progress", "progress": 0.1 + gathered / max(len(sub_queries), 1) * 0.3, "message": f"Reusing {gathered} existing sources, {len(remaining_queries)} remaining"}
-            else:
-                remaining_queries = sub_queries
-                gathered = 0
-
-            if remaining_queries:
-                gatherer = SourceGatherer(self.wiki, self.db, self.session_manager, self.config)
-                total = len(sub_queries)
-                gather_events = await gatherer.gather(remaining_queries)
-                for event in gather_events:
-                    if event.get("type") == "source_gathered":
-                        gathered += 1
-                        yield {
-                            "type": "progress",
-                            "progress": 0.1 + gathered / total * 0.3,
-                            "message": f"Gathered {gathered}/{total} sources",
-                        }
+            # ── ACT: execute action ──
+            if action == "plan":
+                async for event in self._action_plan(state):
                     yield event
-
-            sources = self.db.get_sources(session_id)
-            yield {"type": "progress", "progress": 0.4, "message": f"Gathered {len(sources)} sources total"}
-
-            if not sources:
-                self.session_manager.update_status(session_id, "error", "gathering", -1)
-                yield {"type": "error", "error": "No sources gathered. All sub-queries failed."}
-                return
-
-        # 3. ANALYZING
-        if start_stage <= self._stage_index("analyzing"):
-            sources = self.db.get_sources(session_id)  # refresh
-            self.session_manager.update_status(session_id, "analyzing", "analyzing", 0.4)
-            yield self._step_event("analyzing", "Analyzing sources...")
-
-            analyzer = SourceAnalyzer(self.wiki, self.session_manager, self.config)
-            analysis_events = await analyzer.analyze_sources(sources)
-            for event in analysis_events:
-                yield event
-            sources = self.db.get_sources(session_id)  # refresh with analysis
-            yield {"type": "progress", "progress": 0.55, "message": "Analysis complete"}
-
-        # 4. SYNTHESIZING
-        if start_stage <= self._stage_index("synthesizing"):
-            sources = self.db.get_sources(session_id)  # refresh
-            self.session_manager.update_status(session_id, "synthesizing", "synthesizing", 0.55)
-            yield self._step_event("synthesizing", "Synthesizing cross-source findings...")
-
-            synthesizer = ResearchSynthesizer(self.wiki, self.config)
-            synthesis = await synthesizer.synthesize(sources)
-            yield {"type": "synthesis_complete", "synthesis": {
-                "reinforced_claims": synthesis.get("reinforced_claims", []),
-                "contradictions": synthesis.get("contradictions", []),
-                "knowledge_gaps": synthesis.get("knowledge_gaps", []),
-                "new_entities": synthesis.get("new_entities", []),
-            }}
-            yield {"type": "progress", "progress": 0.65, "message": "Synthesis complete"}
-
-        # 5. REPORT
-        if start_stage <= self._stage_index("report"):
-            sources = self.db.get_sources(session_id)  # refresh
-            # Ensure synthesis is available (rebuild if resuming past synthesizing)
-            if not synthesis and sources:
-                synthesizer = ResearchSynthesizer(self.wiki, self.config)
-                synthesis = await synthesizer.synthesize(sources)
-            self.session_manager.update_status(session_id, "report", "report", 0.65)
-            yield self._step_event("report", "Generating research report...")
-
-            generator = ReportGenerator(self.wiki, self._report_llm, self.config)
-            report_md = await generator.generate(query, sources, synthesis)
-            yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
-
-        # 6. REVIEW + REVISE loop
-        max_rounds = self.config.get("max_review_rounds", 2)
-        reviewer = ResearchReviewer(self.wiki, self._default_llm, self.config)
-        revisor = ResearchRevisor(self.wiki, self._report_llm, self.config)
-
-        for round_num in range(max_rounds):
-            self.session_manager.update_status(session_id, "reviewing", "reviewing", 0.75 + round_num * 0.08)
-            yield self._step_event("review", f"Reviewing report (round {round_num + 1})...")
-
-            review = await reviewer.review(query, report_md, sources)
-
-            if review.get("approved"):
-                yield {
-                    "type": "review_passed",
-                    "round": round_num + 1,
-                    "score": review.get("score", 0),
-                    "feedback": review.get("feedback", ""),
-                }
+            elif action == "gather":
+                async for event in self._action_gather(state):
+                    yield event
+            elif action == "analyze":
+                async for event in self._action_analyze(state):
+                    yield event
+            elif action == "synthesize":
+                async for event in self._action_synthesize(state):
+                    yield event
+            elif action == "report":
+                async for event in self._action_report(state):
+                    yield event
+            elif action == "review":
+                async for event in self._action_review(state):
+                    yield event
+            elif action == "revise":
+                async for event in self._action_revise(state):
+                    yield event
+            elif action == "done":
+                async for event in self._action_done(state):
+                    yield event
                 break
             else:
-                yield {
-                    "type": "review_issues",
-                    "round": round_num + 1,
-                    "score": review.get("score", 0),
-                    "issues": review.get("issues", []),
-                }
-                yield self._step_event("revise", f"Revising report (round {round_num + 1})...")
-                report_md = await revisor.revise(report_md, review.get("issues", []), sources)
-                yield {"type": "progress", "progress": 0.75 + (round_num + 1) * 0.08, "message": "Report revised"}
+                # Unknown action → default to done
+                logger.warning("Unknown action %s, defaulting to done", action)
+                async for event in self._action_done(state):
+                    yield event
+                break
+
+            # ── OBSERVE: update state from DB ──
+            self._observe(state)
+
+            # ── Evaluate: check exit conditions ──
+            if state.round >= state.max_rounds:
+                yield {"type": "round_max", "round": state.round, "message": f"Reached max rounds ({state.max_rounds})"}
+                async for event in self._action_done(state):
+                    yield event
+                break
+
+    # ─── Reason Step ───────────────────────────────────────────────────
+
+    async def _reason(self, state: ResearchState) -> str:
+        """Decide next action based on current state.
+
+        Uses LLM if available, falls back to deterministic rules.
+        """
+        # Deterministic rules first (fast path)
+        action = self._rule_based_reason(state)
+        if action:
+            return action
+
+        # LLM-based reasoning (slow path, more adaptive)
+        try:
+            return await self._llm_reason(state)
+        except Exception as e:
+            logger.warning("LLM reasoning failed: %s, using rule-based fallback", e)
+            return self._rule_based_reason(state) or "done"
+
+    def _rule_based_reason(self, state: ResearchState) -> str | None:
+        """Deterministic decision rules as fallback."""
+        # No sub-queries yet → plan
+        if not state.sub_queries:
+            return "plan"
+
+        # Not all gathered → gather
+        gathered_ids = {s.get("sub_query_id") for s in state.sources}
+        ungathered = [sq for sq in state.sub_queries if sq["id"] not in gathered_ids]
+        if ungathered:
+            return "gather"
+
+        # Not all analyzed → analyze
+        sources = self.db.get_sources(state.session_id)
+        unanalyzed = [s for s in sources if not s.get("analysis")]
+        if unanalyzed:
+            return "analyze"
+
+        # No synthesis yet → synthesize
+        if state.synthesis is None:
+            return "synthesize"
+
+        # Knowledge gaps detected + budget allows + replan attempts left → replan
+        if (state.knowledge_gaps
+                and state.budget_remaining > 0.15
+                and state.round < state.max_replan + 1):
+            return "plan"
+
+        # No report yet → report
+        if state.report_md is None:
+            return "report"
+
+        # Report exists, not reviewed → review
+        if state.review is None:
+            return "review"
+
+        # Review passed → done
+        if state.review.get("approved"):
+            return "done"
+
+        # Review failed + rounds remaining → revise
+        if state.round < state.max_rounds:
+            return "revise"
+
+        # Default → done
+        return "done"
+
+    async def _llm_reason(self, state: ResearchState) -> str:
+        """Use LLM to decide next action."""
+        import asyncio
+
+        analyzed_count = sum(1 for s in state.sources if s.get("analysis"))
+        failed_sq = sum(1 for sq in state.sub_queries if sq.get("status") == "failed")
+
+        messages = [
+            {"role": "system", "content": (
+                "You are a research orchestrator. Based on the current state, decide the next action. "
+                "Return ONLY one of: plan, gather, analyze, synthesize, report, review, revise, done"
+            )},
+            {"role": "user", "content": (
+                f"Research topic: {state.query}\n"
+                f"Round: {state.round}/{state.max_rounds}\n"
+                f"Phase: {state.phase or 'starting'}\n\n"
+                f"Sub-queries: {len(state.sub_queries)} ({failed_sq} failed)\n"
+                f"Sources gathered: {len(state.sources)}\n"
+                f"Sources analyzed: {analyzed_count}\n"
+                f"Quality score: {state.quality_score}/10\n"
+                f"Knowledge gaps: {state.knowledge_gaps[:3] if state.knowledge_gaps else 'none'}\n"
+                f"Review issues: {state.issues[:3] if state.issues else 'none'}\n"
+                f"Budget remaining: {state.budget_remaining:.0%}\n\n"
+                "What should I do next?"
+            )},
+        ]
+
+        def _call():
+            return self._default_llm.chat(messages, max_tokens=20, temperature=0.1)
+
+        raw = await asyncio.to_thread(_call)
+        action = raw.strip().lower().split()[0] if raw.strip() else "done"
+
+        valid = {"plan", "gather", "analyze", "synthesize", "report", "review", "revise", "done"}
+        return action if action in valid else "done"
+
+    # ─── Observe Step ──────────────────────────────────────────────────
+
+    def _observe(self, state: ResearchState) -> None:
+        """Refresh state from DB after each action."""
+        state.sources = self.db.get_sources(state.session_id) or []
+        state.sub_queries_raw = self.db.get_sub_queries(state.session_id) or []
+
+        # Rebuild sub_queries list from DB
+        state.sub_queries = [
+            {"id": sq["id"], "query": sq["query"], "source_type": sq["source_type"],
+             "url": sq.get("url"), "status": sq.get("status", "pending")}
+            for sq in state.sub_queries_raw
+        ]
+
+        state.total_sources = len(state.sources)
+        state.total_sub_queries = len(state.sub_queries)
+
+        # Extract knowledge gaps from synthesis
+        if state.synthesis:
+            state.knowledge_gaps = state.synthesis.get("knowledge_gaps", [])
+            state.contradictions = state.synthesis.get("contradictions", [])
+
+    # ─── Action Implementations ────────────────────────────────────────
+
+    async def _action_plan(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
+        """Plan sub-queries (initial or replanning for gaps)."""
+        state.phase = "planning"
+        state.round += 1
+        self.session_manager.update_status(state.session_id, "planning", "planning", None)
+        yield self._step_event("planning", f"Planning sub-queries (round {state.round})...")
+
+        # Decide: initial plan or gap-focused replan
+        if state.knowledge_gaps and state.sub_queries:
+            yield {"type": "gap_detected", "gaps": state.knowledge_gaps, "round": state.round}
+            sub_queries = await self._plan_for_gaps(state.query, state.knowledge_gaps)
         else:
+            sub_queries = await self._plan_sub_queries(state.query)
+
+        # Deduplicate against existing
+        existing_queries = {sq["query"].lower().strip() for sq in state.sub_queries}
+        new_queries = [sq for sq in sub_queries if sq["query"].lower().strip() not in existing_queries]
+
+        for sq in new_queries[:5]:  # Limit per round
+            sq_id = self.session_manager.add_sub_query(
+                state.session_id, sq["query"], sq["source_type"], sq.get("url")
+            )
+            sq["id"] = sq_id
+            state.sub_queries.append(sq)
             yield {
-                "type": "review_max_rounds",
-                "message": f"Reached max review rounds ({max_rounds}), using current version",
+                "type": "sub_query_created",
+                "sub_query_id": sq_id,
+                "query": sq["query"],
+                "source_type": sq["source_type"],
+                "url": sq.get("url"),
             }
 
-        # 7. DONE
-        sources = self.db.get_sources(session_id)  # final refresh
-        self.session_manager.update_status(session_id, "done", "done", 1.0)
-        self.session_manager.finalize(session_id, {"markdown": report_md, "query": query})
+        yield {"type": "progress", "progress": 0.1, "message": f"Round {state.round}: {len(new_queries)} new sub-queries"}
+
+    async def _action_gather(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
+        """Gather sources for ungathered sub-queries."""
+        state.phase = "gathering"
+        self.session_manager.update_status(state.session_id, "gathering", "gathering", None)
+        yield self._step_event("gathering", "Gathering sources...")
+
+        gathered_ids = {s.get("sub_query_id") for s in state.sources}
+        remaining = [sq for sq in state.sub_queries if sq["id"] not in gathered_ids]
+
+        if remaining:
+            gatherer = SourceGatherer(self.wiki, self.db, self.session_manager, self.config)
+            events = await gatherer.gather(remaining)
+            for event in events:
+                yield event
+
+        sources = self.db.get_sources(state.session_id) or []
+        yield {"type": "progress", "progress": 0.4, "message": f"Gathered {len(sources)} sources total"}
+
+        if not sources:
+            self.session_manager.update_status(state.session_id, "error", "gathering", -1)
+            yield {"type": "error", "error": "No sources gathered. All sub-queries failed."}
+            state.phase = "done"
+
+    async def _action_analyze(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
+        """Analyze unanalyzed sources."""
+        state.phase = "analyzing"
+        self.session_manager.update_status(state.session_id, "analyzing", "analyzing", None)
+        yield self._step_event("analyzing", "Analyzing sources...")
+
+        sources = self.db.get_sources(state.session_id) or []
+        unanalyzed = [s for s in sources if not s.get("analysis")]
+
+        if unanalyzed:
+            analyzer = SourceAnalyzer(self.wiki, self.session_manager, self.config)
+            events = await analyzer.analyze_sources(unanalyzed)
+            for event in events:
+                yield event
+
+        yield {"type": "progress", "progress": 0.55, "message": "Analysis complete"}
+
+    async def _action_synthesize(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
+        """Synthesize findings from analyzed sources."""
+        state.phase = "synthesizing"
+        self.session_manager.update_status(state.session_id, "synthesizing", "synthesizing", None)
+        yield self._step_event("synthesizing", "Synthesizing cross-source findings...")
+
+        sources = self.db.get_sources(state.session_id) or []
+        synthesizer = ResearchSynthesizer(self.wiki, self.config)
+        state.synthesis = await synthesizer.synthesize(sources)
+        state.knowledge_gaps = state.synthesis.get("knowledge_gaps", [])
+        state.contradictions = state.synthesis.get("contradictions", [])
+
+        yield {"type": "synthesis_complete", "synthesis": {
+            "reinforced_claims": state.synthesis.get("reinforced_claims", []),
+            "contradictions": state.synthesis.get("contradictions", []),
+            "knowledge_gaps": state.synthesis.get("knowledge_gaps", []),
+            "new_entities": state.synthesis.get("new_entities", []),
+        }}
+        yield {"type": "progress", "progress": 0.65, "message": "Synthesis complete"}
+
+    async def _action_report(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
+        """Generate research report."""
+        state.phase = "reporting"
+        self.session_manager.update_status(state.session_id, "report", "report", None)
+        yield self._step_event("report", "Generating research report...")
+
+        sources = self.db.get_sources(state.session_id) or []
+        generator = ReportGenerator(self.wiki, self._report_llm, self.config)
+        state.report_md = await generator.generate(state.query, sources, state.synthesis or {})
+        yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
+
+    async def _action_review(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
+        """Review report quality."""
+        state.phase = "reviewing"
+        self.session_manager.update_status(state.session_id, "reviewing", "reviewing", None)
+        yield self._step_event("review", "Reviewing report quality...")
+
+        sources = self.db.get_sources(state.session_id) or []
+        reviewer = ResearchReviewer(self.wiki, self._default_llm, self.config)
+        state.review = await reviewer.review(state.query, state.report_md or "", sources)
+        state.quality_score = state.review.get("score", 0)
+        state.issues = state.review.get("issues", [])
+
+        if state.review.get("approved"):
+            yield {
+                "type": "review_passed",
+                "round": state.round,
+                "score": state.quality_score,
+                "feedback": state.review.get("feedback", ""),
+            }
+        else:
+            yield {
+                "type": "review_issues",
+                "round": state.round,
+                "score": state.quality_score,
+                "issues": state.issues,
+            }
+
+    async def _action_revise(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
+        """Revise report based on review feedback."""
+        yield self._step_event("revise", "Revising report...")
+
+        sources = self.db.get_sources(state.session_id) or []
+        revisor = ResearchRevisor(self.wiki, self._report_llm, self.config)
+        state.report_md = await revisor.revise(state.report_md or "", state.issues, sources)
+        # Reset review so it gets re-evaluated
+        state.review = None
+        yield {"type": "progress", "progress": 0.85, "message": "Report revised"}
+
+    async def _action_done(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
+        """Finalize research session."""
+        state.phase = "done"
+        sources = self.db.get_sources(state.session_id) or []
+
+        self.session_manager.update_status(state.session_id, "done", "done", 1.0)
+        self.session_manager.finalize(state.session_id, {
+            "markdown": state.report_md,
+            "query": state.query,
+        })
+
         yield {
             "type": "done",
             "report": {
-                "query": query,
-                "markdown": report_md,
+                "query": state.query,
+                "markdown": state.report_md,
                 "sources": [
                     {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
                     for s in sources
                 ],
                 "synthesis_summary": {
-                    "reinforced_claims": len(synthesis.get("reinforced_claims", [])),
-                    "contradictions": len(synthesis.get("contradictions", [])),
-                    "knowledge_gaps": len(synthesis.get("knowledge_gaps", [])),
+                    "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
+                    "contradictions": len((state.synthesis or {}).get("contradictions", [])),
+                    "knowledge_gaps": len(state.knowledge_gaps),
                 },
+                "rounds": state.round,
+                "quality_score": state.quality_score,
             },
         }
+
+    # ─── Planning Helpers ──────────────────────────────────────────────
 
     async def _plan_sub_queries(self, query: str) -> list[dict[str, Any]]:
         """Decompose the research topic into sub-queries using planning_model."""
@@ -316,7 +525,6 @@ class ResearchEngine:
                 return raw
 
             raw = await asyncio.to_thread(_call_llm)
-            # Parse JSON response
             raw = raw.strip()
             if raw.startswith("```"):
                 raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
@@ -330,34 +538,120 @@ class ResearchEngine:
             logger.warning("Planning LLM failed: %s, using single query", e)
             result = [{"query": query, "source_type": "web", "url": ""}]
 
-        # Limit and save to DB
         max_sq = self.config.get("max_sub_queries", 20)
         sub_queries: list[dict[str, Any]] = []
-        session_id = self.session_manager.session_id
 
         for item in result[:max_sq]:
             sq_type = item.get("source_type", "web")
             if sq_type not in ("web", "youtube", "wiki", "pdf"):
                 sq_type = "web"
-            sq_id = self.session_manager.add_sub_query(
-                session_id=session_id,
-                query=item.get("query", ""),
-                source_type=sq_type,
-                url=item.get("url"),
-            )
             sub_queries.append({
-                "id": sq_id,
                 "query": item.get("query", ""),
                 "source_type": sq_type,
                 "url": item.get("url"),
             })
 
-        # Fallback: at least one sub-query
         if not sub_queries:
-            sq_id = self.session_manager.add_sub_query(session_id, query, "web")
-            sub_queries.append({"id": sq_id, "query": query, "source_type": "web", "url": ""})
+            sub_queries.append({"query": query, "source_type": "web", "url": ""})
 
         return sub_queries
+
+    async def _plan_for_gaps(self, query: str, gaps: list[str]) -> list[dict[str, Any]]:
+        """Generate sub-queries to fill knowledge gaps."""
+        import asyncio
+        import json as json_mod
+
+        gaps_text = "\n".join(f"- {gap}" for gap in gaps[:5])
+
+        messages = [
+            {"role": "system", "content": (
+                "You are a research planner. Generate focused sub-queries to fill knowledge gaps. "
+                "Return a JSON array of objects with 'query', 'source_type', and 'url' fields. "
+                "source_type should be 'web', 'pdf', 'youtube', or 'wiki'. "
+                "Generate 1-3 sub-queries per gap, maximum 5 total."
+            )},
+            {"role": "user", "content": (
+                f"Research topic: {query}\n\n"
+                f"Knowledge gaps to fill:\n{gaps_text}\n\n"
+                "Generate sub-queries now. Return ONLY a JSON array."
+            )},
+        ]
+
+        try:
+            def _call():
+                return self._planning_llm.chat(messages, json_mode=True, max_tokens=1024, temperature=0.3)
+
+            raw = await asyncio.to_thread(_call)
+            raw = raw.strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+                if raw.endswith("```"):
+                    raw = raw[:-3]
+                raw = raw.strip()
+            result = json_mod.loads(raw)
+            if not isinstance(result, list):
+                result = []
+        except Exception as e:
+            logger.warning("Gap planning LLM failed: %s", e)
+            result = [{"query": f"{query} {gaps[0]}", "source_type": "web", "url": ""}] if gaps else []
+
+        sub_queries = []
+        for item in result[:5]:
+            sq_type = item.get("source_type", "web")
+            if sq_type not in ("web", "youtube", "wiki", "pdf"):
+                sq_type = "web"
+            sub_queries.append({
+                "query": item.get("query", ""),
+                "source_type": sq_type,
+                "url": item.get("url"),
+            })
+
+        return sub_queries
+
+    # ─── Resume Helpers ────────────────────────────────────────────────
+
+    def _load_resume_state(self, state: ResearchState) -> None:
+        """Load existing session state for resume."""
+        session = self.db.get_research_session(state.session_id)
+        if not session:
+            return
+
+        state.round = session.get("iteration_round", 1)
+        state.max_rounds = session.get("max_rounds", self._max_react_rounds)
+        state.quality_score = session.get("quality_score", 0)
+
+        gaps_raw = session.get("knowledge_gaps")
+        if gaps_raw:
+            try:
+                state.knowledge_gaps = json.loads(gaps_raw)
+            except (json.JSONDecodeError, TypeError):
+                state.knowledge_gaps = []
+
+        # Load existing sub-queries and sources
+        existing_sqs = self.db.get_sub_queries(state.session_id) or []
+        state.sub_queries = [
+            {"id": sq["id"], "query": sq["query"], "source_type": sq["source_type"],
+             "url": sq.get("url"), "status": sq.get("status", "pending")}
+            for sq in existing_sqs
+        ]
+        state.sources = self.db.get_sources(state.session_id) or []
+
+        # Determine phase from current_step
+        current_step = session.get("current_step", "planning")
+        state.phase = current_step if current_step != "done" else ""
+
+        # If we have a report, set it
+        result = session.get("result")
+        if result:
+            try:
+                parsed = json.loads(result)
+                state.report_md = parsed.get("markdown")
+            except (json.JSONDecodeError, TypeError):
+                state.report_md = result
+
+        yield {"type": "progress", "progress": session.get("progress", 0), "message": f"Resuming from {current_step} (round {state.round})"}
+
+    # ─── Utilities ─────────────────────────────────────────────────────
 
     def _step_event(self, step: str, message: str) -> dict[str, Any]:
         return {"type": "step", "step": step, "message": message, "session_id": self.session_manager.session_id}

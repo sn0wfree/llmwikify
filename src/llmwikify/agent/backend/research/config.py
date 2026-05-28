@@ -22,6 +22,10 @@ DEFAULT_RESEARCH_CONFIG: dict[str, Any] = {
     "minimax_api_key": None,         # MiniMax Token Plan API key
     "minimax_api_host": "https://api.minimaxi.com",  # 国内版
     "tavily_api_key": None,          # e.g. "tvly-xxxxx"
+    # ReAct config
+    "max_react_rounds": 5,           # Max ReAct loop iterations
+    "quality_threshold": 7,          # Score >= 7 is approved
+    "max_replan_attempts": 2,        # Max replanning for knowledge gaps
 }
 
 
