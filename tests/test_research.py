@@ -896,8 +896,10 @@ class TestSourceGatherer:
                 gatherer.gather([{"id": sq_id, "source_type": "web", "url": "", "query": "python docs"}])
             )
 
-        assert len(events) == 1
-        assert events[0]["type"] == "source_gathered"
+        # Parallel wiki search may add a wiki source alongside web
+        web_events = [e for e in events if e.get("source_type") == "web"]
+        assert len(web_events) == 1
+        assert web_events[0]["type"] == "source_gathered"
 
     def test_gather_truncates_long_content(self, mock_wiki, db, config):
         config["max_source_content_length"] = 100

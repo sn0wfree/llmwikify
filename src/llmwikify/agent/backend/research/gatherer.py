@@ -197,7 +197,7 @@ class SourceGatherer:
                         wiki_url = f"wiki://{page_name}"
                         if self._normalize_url(wiki_url) in seen_urls:
                             continue
-                        page_content = self.wiki.page_io.read_page(page_name)
+                        page_content = self.wiki.read_page(page_name)
                         content = str(page_content) if page_content else ""
                         if not content:
                             continue
@@ -226,6 +226,83 @@ class SourceGatherer:
                     self.session_manager.complete_sub_query(sq_id, {"sources_count": len(events)})
                 else:
                     raise ValueError(f"No wiki pages found for: {query}")
+            elif source_type == "web" and not url and self.config.get("parallel_wiki_search", True):
+                # Parallel: fetch web results AND search local wiki simultaneously
+                web_tasks = [self._fetch_url(source_type, u) for u in urls_to_fetch]
+                wiki_pages = []
+                try:
+                    wiki_pages = self.wiki.search(query, limit=min(3, num_results))
+                except Exception as e:
+                    logger.debug("Parallel wiki search failed: %s", e)
+
+                # Fetch web content in parallel
+                if web_tasks:
+                    web_contents = await asyncio.gather(*web_tasks, return_exceptions=True)
+                    for fetch_url, content in zip(urls_to_fetch, web_contents):
+                        if isinstance(content, Exception):
+                            logger.warning("Fetch failed for %s: %s", fetch_url, content)
+                            continue
+                        if not content:
+                            continue
+                        content = str(content)[: self._max_content]
+                        if self._normalize_url(fetch_url) in seen_urls:
+                            continue
+                        seen_urls.add(self._normalize_url(fetch_url))
+                        source_id = self.session_manager.add_source(
+                            session_id=session_id,
+                            sub_query_id=sq_id,
+                            source_type=source_type,
+                            url=fetch_url,
+                            title=fetch_url,
+                            content_length=len(content),
+                            content_preview=content[:500],
+                            content=content,
+                        )
+                        events.append({
+                            "type": "source_gathered",
+                            "source_id": source_id,
+                            "source_type": source_type,
+                            "title": fetch_url,
+                            "url": fetch_url,
+                        })
+
+                # Also gather local wiki results
+                for page in wiki_pages[:3]:
+                    try:
+                        page_name = page.get("page_name", query)
+                        wiki_url = f"wiki://{page_name}"
+                        if self._normalize_url(wiki_url) in seen_urls:
+                            continue
+                        page_content = self.wiki.read_page(page_name)
+                        content = str(page_content) if page_content else ""
+                        if not content:
+                            continue
+                        content = content[: self._max_content]
+                        seen_urls.add(self._normalize_url(wiki_url))
+                        source_id = self.session_manager.add_source(
+                            session_id=session_id,
+                            sub_query_id=sq_id,
+                            source_type="wiki",
+                            url=wiki_url,
+                            title=page_name,
+                            content_length=len(content),
+                            content_preview=content[:500],
+                            content=content,
+                        )
+                        events.append({
+                            "type": "source_gathered",
+                            "source_id": source_id,
+                            "source_type": "wiki",
+                            "title": page_name,
+                            "url": wiki_url,
+                        })
+                    except Exception as e:
+                        logger.warning("Parallel wiki page read failed for %s: %s", page.get("page_name"), e)
+
+                if events:
+                    self.session_manager.complete_sub_query(sq_id, {"sources_count": len(events)})
+                else:
+                    raise ValueError(f"No results found for: {query}")
             else:
                 # Fetch each URL (already deduped above)
                 for fetch_url in urls_to_fetch:

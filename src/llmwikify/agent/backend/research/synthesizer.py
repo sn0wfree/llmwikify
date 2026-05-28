@@ -15,7 +15,7 @@ class ResearchSynthesizer:
         self.wiki = wiki
         self.config = config
 
-    async def synthesize(self, sources: list[dict[str, Any]]) -> dict[str, Any]:
+    async def synthesize(self, sources: list[dict[str, Any]], query: str = "") -> dict[str, Any]:
         """Run cross-source synthesis.
 
         High-rated sources get weighted higher in aggregation:
@@ -49,6 +49,30 @@ class ResearchSynthesizer:
                 all_suggestions.append(suggestion)
             except Exception as e:
                 logger.warning("Synthesis failed for source %s: %s", src.get("id"), e)
+
+        # Cross-reference with existing wiki pages
+        wiki_comparisons = []
+        if query:
+            try:
+                wiki_results = self.wiki.search(query, limit=5)
+                # Only compare with wiki sources that aren't already in gathered sources
+                existing_urls = {s.get("url", "") for s in sources}
+                for r in wiki_results:
+                    page_name = r.get("page_name", "")
+                    wiki_url = f"wiki://{page_name}"
+                    if wiki_url not in existing_urls:
+                        try:
+                            page_content = self.wiki.read_page(page_name)
+                            if page_content:
+                                wiki_comparisons.append({
+                                    "page_name": page_name,
+                                    "snippet": r.get("snippet", ""),
+                                    "content_preview": str(page_content)[:2000],
+                                })
+                        except Exception:
+                            pass
+            except Exception as e:
+                logger.debug("Wiki comparison search failed: %s", e)
 
         # Aggregate results with rating weighting
         reinforced = []
@@ -117,4 +141,5 @@ class ResearchSynthesizer:
             "suggested_updates": suggested_updates,
             "sources_analyzed": len(sources),
             "suggestions_count": len(all_suggestions),
+            "wiki_comparisons": wiki_comparisons,
         }

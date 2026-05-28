@@ -408,7 +408,7 @@ class ResearchEngine:
 
         sources = self.db.get_sources(state.session_id) or []
         synthesizer = ResearchSynthesizer(self.wiki, self.config)
-        state.synthesis = await synthesizer.synthesize(sources)
+        state.synthesis = await synthesizer.synthesize(sources, query=state.query)
         state.knowledge_gaps = state.synthesis.get("knowledge_gaps", [])
         state.contradictions = state.synthesis.get("contradictions", [])
 
@@ -520,6 +520,21 @@ class ResearchEngine:
         from ....core.prompt_registry import PromptRegistry
         registry = PromptRegistry(provider="openai")
 
+        # Proactively search local wiki for relevant articles
+        local_wiki_matches = ""
+        try:
+            wiki_results = self.wiki.search(query, limit=5)
+            if wiki_results:
+                lines = []
+                for r in wiki_results:
+                    name = r.get("page_name", "")
+                    snippet = r.get("snippet", "")
+                    score = r.get("score", 0)
+                    lines.append(f"- {name} (score: {score:.2f}): {snippet}")
+                local_wiki_matches = "\n".join(lines)
+        except Exception as e:
+            logger.debug("Local wiki search failed: %s", e)
+
         wiki_index = ""
         if self.wiki.index_file.exists():
             wiki_index = self.wiki.index_file.read_text()[:3000]
@@ -528,6 +543,7 @@ class ResearchEngine:
             "research_plan",
             query=query,
             wiki_index=wiki_index[:2000] if wiki_index else "",
+            local_wiki_matches=local_wiki_matches,
         )
         api_params = registry.get_api_params("research_plan")
 
@@ -583,16 +599,37 @@ class ResearchEngine:
 
         gaps_text = "\n".join(f"- {gap}" for gap in gaps[:5])
 
+        # Proactively search local wiki for gap-related content
+        local_wiki_matches = ""
+        try:
+            gap_query = f"{query} {' '.join(gaps[:3])}"
+            wiki_results = self.wiki.search(gap_query, limit=3)
+            if wiki_results:
+                lines = []
+                for r in wiki_results:
+                    name = r.get("page_name", "")
+                    snippet = r.get("snippet", "")
+                    lines.append(f"- {name}: {snippet}")
+                local_wiki_matches = "\n".join(lines)
+        except Exception as e:
+            logger.debug("Local wiki search for gaps failed: %s", e)
+
+        wiki_context = ""
+        if local_wiki_matches:
+            wiki_context = f"\n\nExisting wiki articles that may help fill gaps:\n{local_wiki_matches}\nUse source_type \"wiki\" for these if relevant."
+
         messages = [
             {"role": "system", "content": (
                 "You are a research planner. Generate focused sub-queries to fill knowledge gaps. "
                 "Return a JSON array of objects with 'query', 'source_type', and 'url' fields. "
                 "source_type should be 'web', 'pdf', 'youtube', or 'wiki'. "
+                "Use 'wiki' when existing wiki articles are relevant (see below). "
                 "Generate 1-3 sub-queries per gap, maximum 5 total."
             )},
             {"role": "user", "content": (
                 f"Research topic: {query}\n\n"
-                f"Knowledge gaps to fill:\n{gaps_text}\n\n"
+                f"Knowledge gaps to fill:\n{gaps_text}"
+                f"{wiki_context}\n\n"
                 "Generate sub-queries now. Return ONLY a JSON array."
             )},
         ]
