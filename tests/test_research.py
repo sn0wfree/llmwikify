@@ -559,6 +559,84 @@ class TestTavilyProvider:
                 _run_async(provider.search("test", 5))
 
 
+class TestMiniMaxSearchProvider:
+    """Tests for MiniMax search provider."""
+
+    def test_search_returns_results(self):
+        from llmwikify.agent.backend.research.web_search import MiniMaxSearchProvider
+
+        provider = MiniMaxSearchProvider("test-key", "https://api.minimaxi.com")
+        mock_response = {
+            "organic": [
+                {"title": "MiniMax Result 1", "link": "https://example.com/1", "snippet": "Snippet 1", "date": "2025-01-01"},
+                {"title": "MiniMax Result 2", "link": "https://example.com/2", "snippet": "Snippet 2", "date": "2025-01-02"},
+            ],
+            "related_searches": [{"query": "related 1"}],
+            "base_resp": {"status_code": 0, "status_msg": "success"},
+        }
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = mock_response
+
+        with patch("httpx.AsyncClient") as MockClient:
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=MockClient.return_value)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value.post = AsyncMock(return_value=mock_resp)
+            results = _run_async(provider.search("test", 5))
+
+        assert len(results) == 2
+        assert results[0].title == "MiniMax Result 1"
+        assert results[0].url == "https://example.com/1"
+
+    def test_search_filters_empty_links(self):
+        from llmwikify.agent.backend.research.web_search import MiniMaxSearchProvider
+
+        provider = MiniMaxSearchProvider("test-key")
+        mock_response = {
+            "organic": [
+                {"title": "Result 1", "link": "https://example.com/1", "snippet": "S1"},
+                {"title": "Result 2", "link": "", "snippet": "S2"},
+                {"title": "Result 3", "snippet": "S3"},
+            ],
+            "base_resp": {"status_code": 0, "status_msg": "success"},
+        }
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = mock_response
+
+        with patch("httpx.AsyncClient") as MockClient:
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=MockClient.return_value)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value.post = AsyncMock(return_value=mock_resp)
+            results = _run_async(provider.search("test", 5))
+
+        assert len(results) == 1
+        assert results[0].url == "https://example.com/1"
+
+    def test_search_raises_on_api_error(self):
+        from llmwikify.agent.backend.research.web_search import MiniMaxSearchProvider
+
+        provider = MiniMaxSearchProvider("test-key")
+        mock_response = {
+            "organic": [],
+            "base_resp": {"status_code": 1004, "status_msg": "invalid api key"},
+        }
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = mock_response
+
+        with patch("httpx.AsyncClient") as MockClient:
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=MockClient.return_value)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value.post = AsyncMock(return_value=mock_resp)
+            with pytest.raises(RuntimeError, match="MiniMax API error 1004"):
+                _run_async(provider.search("test", 5))
+
+
 class TestFallbackSearchProvider:
     """Tests for FallbackSearchProvider."""
 
@@ -647,6 +725,19 @@ class TestCreateSearchProvider:
         assert isinstance(provider.providers[0], TavilyProvider)
         assert isinstance(provider.providers[1], DuckDuckGoProvider)
 
+    def test_auto_with_minimax_key(self):
+        from llmwikify.agent.backend.research.web_search import (
+            create_search_provider, FallbackSearchProvider, MiniMaxSearchProvider, DuckDuckGoProvider
+        )
+
+        config = {"search_provider": "auto", "minimax_api_key": "test-key"}
+        provider = create_search_provider(config)
+
+        assert isinstance(provider, FallbackSearchProvider)
+        assert len(provider.providers) == 2
+        assert isinstance(provider.providers[0], MiniMaxSearchProvider)
+        assert isinstance(provider.providers[1], DuckDuckGoProvider)
+
     def test_auto_with_searxng_url(self):
         from llmwikify.agent.backend.research.web_search import (
             create_search_provider, FallbackSearchProvider, SearXNGProvider
@@ -657,6 +748,38 @@ class TestCreateSearchProvider:
 
         assert isinstance(provider, FallbackSearchProvider)
         assert isinstance(provider.providers[0], SearXNGProvider)
+
+    def test_auto_full_chain(self):
+        from llmwikify.agent.backend.research.web_search import (
+            create_search_provider, FallbackSearchProvider,
+            SearXNGProvider, MiniMaxSearchProvider, TavilyProvider, DuckDuckGoProvider
+        )
+
+        config = {
+            "search_provider": "auto",
+            "searxng_url": "http://localhost:8888",
+            "minimax_api_key": "test-key",
+            "tavily_api_key": "tvly-test",
+        }
+        provider = create_search_provider(config)
+
+        assert isinstance(provider, FallbackSearchProvider)
+        assert len(provider.providers) == 4
+        assert isinstance(provider.providers[0], SearXNGProvider)
+        assert isinstance(provider.providers[1], MiniMaxSearchProvider)
+        assert isinstance(provider.providers[2], TavilyProvider)
+        assert isinstance(provider.providers[3], DuckDuckGoProvider)
+
+    def test_explicit_minimax_only(self):
+        from llmwikify.agent.backend.research.web_search import (
+            create_search_provider, MiniMaxSearchProvider
+        )
+
+        config = {"search_provider": "minimax", "minimax_api_key": "test-key"}
+        provider = create_search_provider(config)
+
+        assert len(provider.providers) == 1
+        assert isinstance(provider.providers[0], MiniMaxSearchProvider)
 
     def test_explicit_tavily_only(self):
         from llmwikify.agent.backend.research.web_search import (

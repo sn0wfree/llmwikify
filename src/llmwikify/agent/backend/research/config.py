@@ -17,8 +17,10 @@ DEFAULT_RESEARCH_CONFIG: dict[str, Any] = {
     "report_model": None,
     "llm_call_timeout_seconds": 120,
     # Search provider config
-    "search_provider": "auto",       # "auto", "searxng", "tavily", "duckduckgo"
+    "search_provider": "auto",       # "auto", "searxng", "minimax", "tavily", "duckduckgo"
     "searxng_url": None,             # e.g. "http://localhost:8888"
+    "minimax_api_key": None,         # MiniMax Token Plan API key
+    "minimax_api_host": "https://api.minimaxi.com",  # 国内版
     "tavily_api_key": None,          # e.g. "tvly-xxxxx"
 }
 
