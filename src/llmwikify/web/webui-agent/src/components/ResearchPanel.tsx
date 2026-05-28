@@ -627,12 +627,8 @@ export function ResearchPanel() {
                   <span title={new Date(s.updated_at).toLocaleString()}>
                     Updated {formatRelativeTime(s.updated_at)}
                   </span>
-                  {!isActive && (
-                    <>
-                      <span className="opacity-40">|</span>
-                      <span>{new Date(s.created_at).toLocaleDateString()}</span>
-                    </>
-                  )}
+                  <span className="opacity-40">|</span>
+                  <span className="font-mono opacity-50" title={s.id}>{s.id.slice(0, 8)}</span>
                 </div>
 
                 <div className="flex gap-2 mt-2" onClick={e => e.stopPropagation()}>
