@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, type ResearchSession, type ResearchStreamEvent, type ResearchReport, type ResearchSubQuery, type ResearchSource } from '../api';
@@ -30,6 +30,14 @@ const STAGE_LABELS: Record<string, string> = {
   done: 'Done',
 };
 
+const TYPE_BADGE_COLORS: Record<string, string> = {
+  web: 'bg-blue-500/20 text-blue-400',
+  pdf: 'bg-orange-500/20 text-orange-400',
+  arxiv: 'bg-purple-500/20 text-purple-400',
+  wiki: 'bg-gray-500/20 text-gray-400',
+  youtube: 'bg-red-500/20 text-red-400',
+};
+
 function formatElapsed(created: string): string {
   const ms = Date.now() - new Date(created).getTime();
   const s = Math.floor(ms / 1000);
@@ -51,7 +59,7 @@ function formatRelativeTime(updated: string): string {
   return `${h}h ago`;
 }
 
-/* ---- MiniStageBar: 7-segment compact pipeline bar ---- */
+/* ---- MiniStageBar: 7-segment compact pipeline bar with pulse ---- */
 
 function MiniStageBar({ currentStep, status }: { currentStep: string; status: string }) {
   const currentIdx = STAGES.indexOf(status === 'done' ? 'done' : currentStep);
@@ -62,19 +70,23 @@ function MiniStageBar({ currentStep, status }: { currentStep: string; status: st
         const stageIdx = STAGES.indexOf(stage);
         const isCompleted = stageIdx < currentIdx;
         const isCurrent = stageIdx === currentIdx;
-        const isPending = stageIdx > currentIdx;
 
         return (
           <div key={stage} className="flex items-center">
-            <div
-              className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] transition-all ${
-                isCompleted ? 'bg-[var(--accent)]/40 text-[var(--accent)]' :
-                isCurrent ? 'bg-[var(--accent)] text-white ring-2 ring-[var(--accent)]/30' :
-                'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] opacity-30 border border-[var(--border)]'
-              }`}
-              title={STAGE_LABELS[stage]}
-            >
-              {isCompleted ? '✓' : isCurrent ? '●' : '○'}
+            <div className="relative">
+              {isCurrent && status !== 'done' && (
+                <div className="absolute inset-0 rounded-full bg-[var(--accent)]/30 animate-stage-pulse" />
+              )}
+              <div
+                className={`relative w-4 h-4 rounded-full flex items-center justify-center text-[8px] transition-all ${
+                  isCompleted ? 'bg-[var(--accent)]/40 text-[var(--accent)]' :
+                  isCurrent ? 'bg-[var(--accent)] text-white ring-2 ring-[var(--accent)]/30' :
+                  'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] opacity-30 border border-[var(--border)]'
+                }`}
+                title={STAGE_LABELS[stage]}
+              >
+                {isCompleted ? '✓' : isCurrent ? '●' : '○'}
+              </div>
             </div>
             {idx < STAGES.length - 1 && (
               <div className={`w-2 h-px ${
@@ -90,15 +102,15 @@ function MiniStageBar({ currentStep, status }: { currentStep: string; status: st
 
 /* ---- StageStatusLine: semantic progress text per stage ---- */
 
-function StageStatusLine({ step, status, subQueries, progress }: {
+function StageStatusLine({ step, status, subQueries, sources }: {
   step: string;
   status: string;
   subQueries: ResearchSubQuery[];
-  progress: number;
+  sources: Array<{ status: string }>;
 }) {
   const doneSq = subQueries.filter(sq => sq.status === 'done').length;
   const totalSq = subQueries.length;
-  const totalSources = Math.round(progress * 50);
+  const totalSources = sources.length;
 
   switch (step) {
     case 'planning':
@@ -107,7 +119,7 @@ function StageStatusLine({ step, status, subQueries, progress }: {
         : <span>Planning sub-queries...</span>;
     case 'gathering':
       if (totalSq > 0) {
-        return <span>{doneSq}/{totalSq} queries done{totalSources > 0 ? ` · ${totalSources}+ sources` : ''}</span>;
+        return <span>{doneSq}/{totalSq} queries done{totalSources > 0 ? ` · ${totalSources} sources` : ''}</span>;
       }
       return <span>Gathering sources...</span>;
     case 'analyzing':
@@ -127,40 +139,56 @@ function StageStatusLine({ step, status, subQueries, progress }: {
   }
 }
 
-/* ---- SourceCard: favicon + domain chip ---- */
+/* ---- SourceCard: favicon + domain chip with hover tooltip ---- */
 
 function SourceCard({ source }: { source: { title: string; url: string; source_type: string; status: string } }) {
   let domain = source.url;
   try { domain = new URL(source.url).hostname.replace('www.', ''); } catch { /* noop */ }
   const initial = domain[0]?.toUpperCase() || '?';
+  const typeLabel = source.source_type === 'arxiv' ? 'arXiv' : source.source_type === 'pdf' ? 'PDF' : source.source_type === 'wiki' ? 'Wiki' : source.source_type;
 
   return (
-    <div className={`relative w-9 h-9 rounded border flex items-center justify-center text-[10px] font-bold shrink-0 group transition-all ${
-      source.status === 'done' ? 'border-green-500/40 bg-green-500/10 text-green-400' :
-      source.status === 'failed' ? 'border-red-500/40 bg-red-500/10 text-red-400' :
-      source.status === 'fetching' ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400 animate-pulse' :
-      'border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
-    }`} title={source.title}>
-      {source.source_type === 'arxiv' ? 'arXiv' : source.source_type === 'pdf' ? '📄' : initial}
-      <div className="absolute -bottom-5 left-0 right-0 text-[9px] text-center truncate opacity-60 font-mono pointer-events-none group-hover:opacity-100 transition-opacity">
+    <div className="relative group animate-source-enter">
+      <div className={`w-9 h-9 rounded border flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${
+        source.status === 'done' ? 'border-green-500/40 bg-green-500/10 text-green-400' :
+        source.status === 'failed' ? 'border-red-500/40 bg-red-500/10 text-red-400' :
+        source.status === 'fetching' ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400' :
+        'border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
+      }`}>
+        {source.source_type === 'arxiv' ? 'arXiv' : source.source_type === 'pdf' ? '📄' : initial}
+      </div>
+      <div className="absolute -bottom-4 left-0 right-0 text-[9px] text-center truncate opacity-60 font-mono pointer-events-none group-hover:opacity-100 transition-opacity">
         {domain.slice(0, 8)}
+      </div>
+      {/* Hover tooltip */}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50 pointer-events-none">
+        <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1.5 text-[10px] whitespace-nowrap shadow-lg max-w-[220px]">
+          <div className="font-medium truncate mb-0.5">{source.title || domain}</div>
+          <div className="flex items-center gap-1">
+            <span className={`px-1 py-px rounded text-[8px] ${TYPE_BADGE_COLORS[source.source_type] || 'bg-gray-500/20 text-gray-400'}`}>
+              {typeLabel}
+            </span>
+            <span className="opacity-50 truncate">{domain}</span>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ---- SubQueryRow: collapsible sub-query row ---- */
+/* ---- SubQueryRow: collapsible sub-query row with type badge ---- */
 
 function SubQueryRow({ subQuery }: { subQuery: ResearchSubQuery }) {
   const [expanded, setExpanded] = useState(false);
-  const isPending = subQuery.status === 'pending' || subQuery.status === 'pending';
-  const isFetching = subQuery.status === 'pending';
+  const isPending = subQuery.status === 'pending';
+
+  const typeColor = TYPE_BADGE_COLORS[subQuery.source_type] || 'bg-gray-500/20 text-gray-400';
 
   return (
     <div className="text-xs">
       <div
-        onClick={() => !isPending && setExpanded(e => !e)}
-        className={`flex items-center gap-1.5 py-0.5 px-1 rounded ${!isPending ? 'cursor-pointer hover:bg-[var(--bg-tertiary)]' : 'opacity-60'}`}
+        onClick={() => subQuery.status !== 'pending' && setExpanded(e => !e)}
+        className={`flex items-center gap-1.5 py-0.5 px-1 rounded ${subQuery.status !== 'pending' ? 'cursor-pointer hover:bg-[var(--bg-tertiary)]' : 'opacity-60'}`}
       >
         <span className={`w-3.5 text-center text-[10px] ${
           subQuery.status === 'done' ? 'text-green-400' :
@@ -169,9 +197,11 @@ function SubQueryRow({ subQuery }: { subQuery: ResearchSubQuery }) {
         }`}>
           {subQuery.status === 'done' ? '✓' :
            subQuery.status === 'failed' ? '✗' :
-           isFetching ? '◐' : '○'}
+           isPending ? '○' : '◐'}
         </span>
-        <span className="text-[var(--text-secondary)] opacity-60 text-[10px]">[{subQuery.source_type}]</span>
+        <span className={`px-1 py-px rounded text-[8px] shrink-0 ${typeColor}`}>
+          {subQuery.source_type}
+        </span>
         <span className="truncate flex-1">{subQuery.query}</span>
         {subQuery.status === 'done' && (
           <span className="text-[10px] text-green-400/60 shrink-0">done</span>
@@ -180,10 +210,15 @@ function SubQueryRow({ subQuery }: { subQuery: ResearchSubQuery }) {
           <span className="text-[10px] text-red-400/60 shrink-0">failed</span>
         )}
       </div>
-      {expanded && subQuery.result && (
+      {expanded && subQuery.result != null && (
         <div className="pl-6 pr-2 py-0.5 text-[10px] text-[var(--text-secondary)] opacity-70 border-l border-[var(--border)]">
-          {String(subQuery.result).slice(0, 200)}
-          {String(subQuery.result).length > 200 && '...'}
+          {subQuery.url ? (
+            <a href={subQuery.url} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline block truncate">
+              {subQuery.url}
+            </a>
+          ) : (
+            <div className="truncate">{String(subQuery.result).slice(0, 200)}{String(subQuery.result).length > 200 && '...'}</div>
+          )}
         </div>
       )}
     </div>
@@ -199,6 +234,80 @@ function CredibilityBar({ score }: { score: number }) {
     <span className={`font-mono text-[9px] ${color}`}>
       {'█'.repeat(filled)}{'░'.repeat(10 - filled)}
     </span>
+  );
+}
+
+/* ---- Expandable source cards grid ---- */
+
+function SourceCardGrid({ sources }: { sources: Array<{ id: string; source_type: string; title: string; url: string; status: string }> }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? sources : sources.slice(0, 8);
+  const hidden = sources.length - 8;
+
+  if (sources.length === 0) return null;
+
+  return (
+    <div className="mb-3">
+      <div className="flex flex-wrap gap-2" style={{ paddingBottom: '0.5rem' }}>
+        {visible.map(src => (
+          <SourceCard key={src.id} source={src} />
+        ))}
+        {!showAll && hidden > 0 && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowAll(true); }}
+            className="w-9 h-9 rounded border border-[var(--border)] bg-[var(--bg-tertiary)] flex items-center justify-center text-[10px] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+            title={`Show ${hidden} more sources`}
+          >
+            +{hidden}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---- Empty State ---- */
+
+function EmptyState({ onExample }: { onExample: (q: string) => void }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center">
+      <div className="text-4xl mb-4 opacity-30">🔍</div>
+      <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-2">No research sessions yet</h3>
+      <p className="text-xs text-[var(--text-secondary)] opacity-60 mb-4 max-w-xs">
+        Start a deep research to explore any topic with multi-source analysis
+      </p>
+      <div className="space-y-2">
+        <div className="text-[10px] text-[var(--text-secondary)] opacity-40 mb-1">Try:</div>
+        <button onClick={() => onExample('Risk parity investing strategies')} className="block text-xs text-[var(--accent)] hover:underline">
+          Risk parity investing strategies
+        </button>
+        <button onClick={() => onExample('LLM fine-tuning comparison 2025')} className="block text-xs text-[var(--accent)] hover:underline">
+          LLM fine-tuning comparison 2025
+        </button>
+        <button onClick={() => onExample('Quantum computing in finance')} className="block text-xs text-[var(--accent)] hover:underline">
+          Quantum computing in finance
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Error State ---- */
+
+function ErrorState({ status, error, onRetry }: { status: string; error?: string; onRetry?: () => void }) {
+  return (
+    <div className="p-4 bg-red-500/5 border border-red-500/20 rounded">
+      <div className="flex items-start gap-2">
+        <span className="text-red-400 text-sm mt-0.5">⚠</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-red-400 mb-1">Research failed</div>
+          <div className="text-xs text-red-400/70 mb-2">{error || status}</div>
+          {onRetry && (
+            <button onClick={onRetry} className="text-xs text-[var(--accent)] hover:underline">Retry</button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -352,14 +461,12 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
 
         return (
           <div key={stage}>
-            {/* Stage row */}
             <div
               onClick={() => canExpand && handleToggle(stage)}
               className={`flex items-center gap-1.5 py-0.5 px-1.5 rounded transition-colors ${
                 canExpand ? 'cursor-pointer hover:bg-[var(--bg-tertiary)]' : ''
               }`}
             >
-              {/* Icon */}
               <span className={`w-3.5 text-center text-[10px] ${
                 stageStatus === 'completed' ? 'text-green-400' :
                 stageStatus === 'current' ? 'text-[var(--accent)]' :
@@ -369,7 +476,6 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
                  stageStatus === 'current' ? '●' : '○'}
               </span>
 
-              {/* Label */}
               <span className={`text-xs ${
                 stageStatus === 'completed' ? 'text-[var(--text-secondary)]' :
                 stageStatus === 'current' ? 'text-[var(--text-primary)] font-medium' :
@@ -378,7 +484,6 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
                 {STAGE_LABELS[stage]}
               </span>
 
-              {/* Result */}
               {result && (
                 <>
                   <span className={`text-[10px] ${
@@ -396,7 +501,6 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
                 </>
               )}
 
-              {/* Expand indicator */}
               {canExpand && (
                 <span className="text-[10px] text-[var(--text-secondary)] opacity-40 ml-auto">
                   {isExpanded ? '▾' : '▸'}
@@ -404,7 +508,6 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
               )}
             </div>
 
-            {/* Expanded details */}
             <div className={`overflow-hidden transition-all duration-200 ${
               isExpanded ? 'max-h-32 opacity-100' : 'max-h-0 opacity-0'
             }`}>
@@ -418,7 +521,6 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
               </div>
             </div>
 
-            {/* Connector line (not after last) */}
             {!isLast && (
               <div className={`ml-[6px] w-px h-1.5 ${
                 stageStatus === 'completed' ? 'bg-[var(--text-secondary)] opacity-25' :
@@ -439,6 +541,8 @@ export function ResearchPanel() {
   const [active, setActive] = useState<ActiveResearch | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reportExpanded, setReportExpanded] = useState(false);
+  const [expandedSources, setExpandedSources] = useState(false);
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
 
   const loadSessions = async () => {
@@ -485,6 +589,8 @@ export function ResearchPanel() {
 
     const stream = api.research.start(query.trim(), currentWikiId || undefined);
     setQuery('');
+    setReportExpanded(false);
+    setExpandedSources(false);
     await consumeStream(stream);
   };
 
@@ -506,6 +612,8 @@ export function ResearchPanel() {
     });
 
     const stream = api.research.resume(id);
+    setReportExpanded(false);
+    setExpandedSources(false);
     await consumeStream(stream);
   };
 
@@ -666,7 +774,6 @@ export function ResearchPanel() {
 
   const dismissActive = () => setActive(null);
 
-  // Detail view: show session details
   if (selectedSessionId) {
     return (
       <ResearchDetail
@@ -675,6 +782,10 @@ export function ResearchPanel() {
       />
     );
   }
+
+  const isRunning = active && ['planning', 'gathering', 'analyzing', 'synthesizing', 'report', 'reviewing'].includes(active.status);
+  const hasError = active && active.status === 'error';
+  const isActiveSession = active && active.sessionId;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -704,8 +815,8 @@ export function ResearchPanel() {
       {active && (
         <div className="p-4 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <h3 className="font-medium text-sm">{active.query}</h3>
+            <div className="flex items-center gap-2 min-w-0">
+              <h3 className="font-medium text-sm truncate">{active.query}</h3>
               <span className={`text-xs px-2 py-0.5 rounded shrink-0 ${
                 active.status === 'done' ? 'bg-green-500/20 text-green-400' :
                 active.status === 'error' ? 'bg-red-500/20 text-red-400' :
@@ -714,8 +825,8 @@ export function ResearchPanel() {
                 {active.status}
               </span>
             </div>
-            <div className="flex gap-2">
-              {['planning', 'gathering', 'analyzing', 'synthesizing', 'report', 'reviewing'].includes(active.status) && (
+            <div className="flex gap-2 shrink-0">
+              {isRunning && (
                 <button onClick={() => active.sessionId && handlePause(active.sessionId)} className="text-xs text-yellow-400 hover:underline">Pause</button>
               )}
               <button onClick={dismissActive} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">Dismiss</button>
@@ -733,7 +844,7 @@ export function ResearchPanel() {
               step={active.step || active.status}
               status={active.status}
               subQueries={active.subQueries}
-              progress={active.progress}
+              sources={active.sources}
             />
             {active.sessionId && (
               <span className="font-mono opacity-40 text-[10px]" title={active.sessionId}>
@@ -743,18 +854,7 @@ export function ResearchPanel() {
           </div>
 
           {/* Source Cards */}
-          {active.sources.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3 pb-2" style={{ paddingBottom: '0.5rem' }}>
-              {active.sources.slice(0, 8).map(src => (
-                <SourceCard key={src.id} source={src} />
-              ))}
-              {active.sources.length > 8 && (
-                <div className="w-9 h-9 rounded border border-[var(--border)] bg-[var(--bg-tertiary)] flex items-center justify-center text-[10px] text-[var(--text-secondary)]">
-                  +{active.sources.length - 8}
-                </div>
-              )}
-            </div>
-          )}
+          <SourceCardGrid sources={active.sources} />
 
           {/* Sub-queries */}
           {active.subQueries.length > 0 && (
@@ -766,9 +866,14 @@ export function ResearchPanel() {
             </div>
           )}
 
-          {/* Latest Event (highlighted) */}
-          {active.latestEvent && ['planning', 'gathering', 'analyzing', 'synthesizing', 'report', 'reviewing'].includes(active.status) && (
-            <div className="text-xs text-[var(--accent)] font-medium mb-1 animate-pulse">
+          {/* Error state */}
+          {hasError && (
+            <ErrorState status={active.status} error={active.events[active.events.length - 1]} />
+          )}
+
+          {/* Latest Event (static highlight, not pulse) */}
+          {active.latestEvent && isRunning && !hasError && (
+            <div className="text-xs font-medium mb-1 px-2 py-1 rounded bg-[var(--accent)]/5 text-[var(--accent)]">
               ▶ {active.latestEvent}
             </div>
           )}
@@ -782,104 +887,133 @@ export function ResearchPanel() {
             </div>
           )}
 
-          {/* Report view */}
+          {/* Report view — collapsible */}
           {active.report && (
-            <div className="mt-3 p-3 bg-[var(--bg-primary)] rounded border border-[var(--border)]">
-              <h4 className="text-sm font-medium mb-2">Report: {active.report.query}</h4>
-              <div className="prose prose-sm max-h-96 overflow-y-auto text-xs
-                prose-headings:mt-2 prose-headings:mb-1
-                prose-p:my-1 prose-ul:my-1 prose-ol:my-1
-                prose-li:my-0 prose-a:text-[var(--accent)] prose-a:underline
-                prose-blockquote:border-l-2 prose-blockquote:border-[var(--border)] prose-blockquote:pl-2 prose-blockquote:italic
-              ">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{active.report.markdown}</ReactMarkdown>
-              </div>
-              {active.report.sources && active.report.sources.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-[var(--border)]">
-                  <div className="text-xs text-[var(--text-secondary)]">Sources: {active.report.sources.length}</div>
+            <div className="mt-3">
+              <button
+                onClick={() => setReportExpanded(e => !e)}
+                className="w-full flex items-center justify-between text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-1 px-2 py-1 rounded hover:bg-[var(--bg-tertiary)] transition-colors"
+              >
+                <span className="font-medium">Report: {active.report.query}</span>
+                <span className="text-[10px]">{reportExpanded ? '▾ Collapse' : '▸ Expand'}</span>
+              </button>
+              <div className={`overflow-hidden transition-all duration-200 ${reportExpanded ? 'max-h-[999px] opacity-100' : 'max-h-16 opacity-80'}`}>
+                <div className="p-3 bg-[var(--bg-primary)] rounded border border-[var(--border)]">
+                  <div className="prose prose-sm max-h-96 overflow-y-auto text-xs
+                    prose-headings:mt-2 prose-headings:mb-1
+                    prose-p:my-1 prose-ul:my-1 prose-ol:my-1
+                    prose-li:my-0 prose-a:text-[var(--accent)] prose-a:underline
+                    prose-blockquote:border-l-2 prose-blockquote:border-[var(--border)] prose-blockquote:pl-2 prose-blockquote:italic
+                  ">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{active.report.markdown}</ReactMarkdown>
+                  </div>
+                  {active.report.sources && active.report.sources.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-[var(--border)]">
+                      <div className="text-xs text-[var(--text-secondary)]">Sources: {active.report.sources.length}</div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
       )}
 
       {/* Sessions list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {sessions.length === 0 ? (
-          <div className="text-sm text-[var(--text-secondary)] text-center py-8">No research sessions yet</div>
+      <div className="flex-1 overflow-y-auto">
+        {sessions.length === 0 && !active ? (
+          <EmptyState onExample={(q) => { setQuery(q); }} />
         ) : (
-          sessions.map(s => {
-            const isActive = ['planning', 'gathering', 'analyzing', 'synthesizing', 'report', 'reviewing'].includes(s.status);
-            return (
-              <div
-                key={s.id}
-                onClick={() => setSelectedSessionId(s.id)}
-                className="p-3 bg-[var(--bg-secondary)] rounded border border-[var(--border)] cursor-pointer hover:border-[var(--accent)] transition-colors"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium truncate flex-1 mr-2">{s.query}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded shrink-0 ${
-                    s.status === 'done' ? 'bg-green-500/20 text-green-400' :
-                    s.status === 'error' ? 'bg-red-500/20 text-red-400' :
-                    s.status === 'paused' ? 'bg-yellow-500/20 text-yellow-400' :
-                    'bg-blue-500/20 text-blue-400'
-                  }`}>
-                    {s.status}
-                  </span>
-                </div>
+          <div className="p-4 space-y-2">
+            {sessions.map(s => {
+              const isActive = ['planning', 'gathering', 'analyzing', 'synthesizing', 'report', 'reviewing'].includes(s.status);
+              const isError = s.status === 'error';
 
-                {/* Mini Stage Bar */}
-                <div className="mb-2">
-                  <MiniStageBar currentStep={s.current_step} status={s.status} />
-                </div>
-
-                {/* Current Stage Status Line */}
-                {isActive && (
-                  <div className="text-xs text-[var(--text-secondary)] mb-2">
-                    <StageStatusLine step={s.current_step} status={s.status} subQueries={s.sub_queries || []} progress={s.progress} />
-                  </div>
-                )}
-                {s.status === 'done' && s.result && (
-                  <div className="text-xs text-green-400/70 mb-2">
-                    Done · {(() => {
-                      try { const r = JSON.parse(s.result!); return `${r.markdown?.length || 0} chars · ${r.sources?.length || 0} sources`; } catch { return 'Report generated'; }
-                    })()}
-                  </div>
-                )}
-
-                {/* Time + ID */}
-                <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                  {isActive && (
-                    <span title={`Created: ${new Date(s.created_at).toLocaleString()}`}>
-                      {formatElapsed(s.created_at)} elapsed
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => setSelectedSessionId(s.id)}
+                  className={`p-3 bg-[var(--bg-secondary)] rounded border cursor-pointer hover:border-[var(--accent)] transition-colors ${
+                    isError ? 'border-red-500/30' : 'border-[var(--border)]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium truncate flex-1 mr-2">{s.query}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded shrink-0 ${
+                      s.status === 'done' ? 'bg-green-500/20 text-green-400' :
+                      s.status === 'error' ? 'bg-red-500/20 text-red-400' :
+                      s.status === 'paused' ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-blue-500/20 text-blue-400'
+                    }`}>
+                      {s.status}
                     </span>
-                  )}
-                  {isActive && <span className="opacity-40">·</span>}
-                  <span title={new Date(s.updated_at).toLocaleString()}>
-                    {formatRelativeTime(s.updated_at)}
-                  </span>
-                  <span className="opacity-40">·</span>
-                  <span className="font-mono opacity-40 text-[10px]" title={s.id}>{s.id.slice(0, 8)}</span>
-                </div>
+                  </div>
 
-                <div className="flex gap-2 mt-2" onClick={e => e.stopPropagation()}>
-                  {s.status === 'done' && (
-                    <button onClick={() => setSelectedSessionId(s.id)} className="text-xs text-[var(--accent)] hover:underline">View Details</button>
-                  )}
-                  {(s.status === 'paused' || s.status === 'gathering') && (
-                    <button onClick={() => handleResume(s.id)} className="text-xs text-green-400 hover:underline">Resume</button>
-                  )}
+                  {/* Mini Stage Bar */}
+                  <div className="mb-2">
+                    <MiniStageBar currentStep={s.current_step} status={s.status} />
+                  </div>
+
+                  {/* Current Stage Status Line */}
                   {isActive && (
-                    <button onClick={() => handlePause(s.id)} className="text-xs text-yellow-400 hover:underline">Pause</button>
+                    <div className="text-xs text-[var(--text-secondary)] mb-2">
+                      <StageStatusLine step={s.current_step} status={s.status} subQueries={s.sub_queries || []} sources={[]} />
+                    </div>
                   )}
-                  {s.status !== 'done' && (
-                    <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400 hover:underline">Delete</button>
+
+                  {/* Done status: show preview + sources */}
+                  {s.status === 'done' && s.result && (
+                    <div className="text-xs mb-2">
+                      <div className="text-green-400/70">
+                        Done · {(() => {
+                          try {
+                            const r = JSON.parse(s.result!);
+                            const preview = r.markdown?.split('\n').slice(0, 2).join(' ').slice(0, 80) || '';
+                            return `${r.markdown?.length || 0} chars · ${r.sources?.length || 0} sources`;
+                          } catch { return 'Report generated'; }
+                        })()}
+                      </div>
+                    </div>
                   )}
+
+                  {/* Error state on session card */}
+                  {isError && (
+                    <div className="text-xs text-red-400/70 mb-2">Research failed — click to view details</div>
+                  )}
+
+                  {/* Time + ID */}
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                    {isActive && (
+                      <span title={`Created: ${new Date(s.created_at).toLocaleString()}`}>
+                        {formatElapsed(s.created_at)} elapsed
+                      </span>
+                    )}
+                    {isActive && <span className="opacity-40">·</span>}
+                    <span title={new Date(s.updated_at).toLocaleString()}>
+                      {formatRelativeTime(s.updated_at)}
+                    </span>
+                    <span className="opacity-40">·</span>
+                    <span className="font-mono opacity-40 text-[10px]" title={s.id}>{s.id.slice(0, 8)}</span>
+                  </div>
+
+                  <div className="flex gap-2 mt-2" onClick={e => e.stopPropagation()}>
+                    {s.status === 'done' && (
+                      <button onClick={() => setSelectedSessionId(s.id)} className="text-xs text-[var(--accent)] hover:underline">View Details</button>
+                    )}
+                    {(s.status === 'paused' || s.status === 'gathering') && (
+                      <button onClick={() => handleResume(s.id)} className="text-xs text-green-400 hover:underline">Resume</button>
+                    )}
+                    {isActive && (
+                      <button onClick={() => handlePause(s.id)} className="text-xs text-yellow-400 hover:underline">Pause</button>
+                    )}
+                    {s.status !== 'done' && (
+                      <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400 hover:underline">Delete</button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

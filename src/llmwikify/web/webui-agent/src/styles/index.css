@@ -87,3 +87,22 @@ body {
   0%, 100% { opacity: 0.3; }
   50% { opacity: 1; }
 }
+
+@keyframes stage-pulse {
+  0% { box-shadow: 0 0 0 0 var(--accent); }
+  70% { box-shadow: 0 0 0 4px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.animate-stage-pulse {
+  animation: stage-pulse 2s ease-in-out infinite;
+}
+
+@keyframes source-enter {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-source-enter {
+  animation: source-enter 0.3s ease-out;
+}
