@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { api, type ResearchSession, type ResearchStreamEvent, type ResearchReport, type ResearchSubQuery } from '../api';
+import { api, type ResearchSession, type ResearchStreamEvent, type ResearchReport, type ResearchSubQuery, type ResearchSource } from '../api';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { ResearchDetail } from './ResearchDetail';
 
@@ -16,16 +16,16 @@ interface ActiveResearch {
   events: string[];
 }
 
+const STAGES = ['planning', 'gathering', 'analyzing', 'synthesizing', 'report', 'reviewing', 'done'];
+
 const STAGE_LABELS: Record<string, string> = {
-  planning: 'Planning sub-queries',
-  gathering: 'Gathering sources',
-  analyzing: 'Analyzing sources',
-  synthesizing: 'Synthesizing findings',
-  report: 'Generating report',
-  reviewing: 'Reviewing report',
-  done: 'Completed',
-  error: 'Error',
-  paused: 'Paused',
+  planning: 'Planning',
+  gathering: 'Gathering',
+  analyzing: 'Analyzing',
+  synthesizing: 'Synthesizing',
+  report: 'Report',
+  reviewing: 'Review',
+  done: 'Done',
 };
 
 function formatElapsed(created: string): string {
@@ -49,31 +49,231 @@ function formatRelativeTime(updated: string): string {
   return `${h}h ago`;
 }
 
-function getStageDescription(session: ResearchSession): string {
-  const status = session.status;
-  if (status === 'done') return 'Complete';
-  if (status === 'error') return 'Error';
-  if (status === 'paused') return `Paused at ${STAGE_LABELS[session.current_step] || session.current_step}`;
-  if (status === 'cancelled') return 'Cancelled';
+function getStageStatus(stage: string, currentStep: string, status: string): 'completed' | 'current' | 'pending' {
+  if (status === 'done') return 'completed';
+  if (status === 'error') {
+    const sIdx = STAGES.indexOf(stage);
+    const cIdx = STAGES.indexOf(currentStep);
+    if (sIdx < cIdx) return 'completed';
+    if (sIdx === cIdx) return 'current';
+    return 'pending';
+  }
+  const sIdx = STAGES.indexOf(stage);
+  const cIdx = STAGES.indexOf(currentStep);
+  if (sIdx < cIdx) return 'completed';
+  if (sIdx === cIdx) return 'current';
+  return 'pending';
+}
 
-  const base = STAGE_LABELS[status] || status;
+function getStageResult(stage: string, session: ResearchSession): string {
+  switch (stage) {
+    case 'planning': {
+      const n = session.sub_query_count || 0;
+      return n > 0 ? `${n} sub-queries` : '';
+    }
+    case 'gathering': {
+      const n = session.source_count || 0;
+      if (session.status === 'gathering') return `${n} sources collected`;
+      if (['analyzing', 'synthesizing', 'report', 'reviewing', 'done'].includes(session.status)) return `${n} sources collected`;
+      return '';
+    }
+    case 'analyzing': {
+      const n = session.source_count || 0;
+      if (session.status === 'analyzing') return `${n} sources`;
+      if (['synthesizing', 'report', 'reviewing', 'done'].includes(session.status)) return `${n} analyzed`;
+      return '';
+    }
+    case 'synthesizing': {
+      if (['report', 'reviewing', 'done'].includes(session.status)) return 'Complete';
+      if (session.status === 'synthesizing') return 'Synthesizing...';
+      return '';
+    }
+    case 'report': {
+      if (['reviewing', 'done'].includes(session.status)) return 'Report generated';
+      if (session.status === 'report') return 'Generating...';
+      return '';
+    }
+    case 'reviewing': {
+      if (session.status === 'done') return 'Passed';
+      if (session.status === 'reviewing') return 'Reviewing...';
+      return '';
+    }
+    case 'done': {
+      if (session.status === 'done') return 'Complete';
+      return '';
+    }
+    default: return '';
+  }
+}
 
-  // For gathering, show more detail
-  if (status === 'gathering') {
-    const sqCount = session.sub_query_count || 0;
-    const srcCount = session.source_count || 0;
-    if (sqCount > 0) return `${base} — ${srcCount} sources collected`;
-    return base;
+function getStageDetails(stage: string, session: ResearchSession): string[] {
+  const details: string[] = [];
+
+  switch (stage) {
+    case 'planning': {
+      const subQueries = session.sub_queries || [];
+      subQueries.slice(0, 5).forEach(sq => {
+        details.push(`${sq.query} (${sq.source_type})`);
+      });
+      if (subQueries.length > 5) details.push(`... ${subQueries.length - 5} more`);
+      break;
+    }
+    case 'gathering': {
+      const sources = session.sources || [];
+      sources.slice(0, 5).forEach(s => {
+        const title = s.title || s.url;
+        details.push(`${title.slice(0, 60)} (${s.source_type})`);
+      });
+      if (sources.length > 5) details.push(`... ${sources.length - 5} more`);
+      break;
+    }
+    case 'analyzing': {
+      const sources = session.sources || [];
+      const analyzed = sources.filter(s => s.analysis);
+      analyzed.slice(0, 5).forEach(s => {
+        const analysis = s.analysis as Record<string, unknown> | null;
+        const score = analysis?.credibility_score || analysis?.credibility;
+        const title = s.title || s.url;
+        const scoreStr = score != null ? ` [${typeof score === 'number' ? Math.round(score * 100) + '%' : score}]` : '';
+        details.push(`${title.slice(0, 50)}${scoreStr}`);
+      });
+      if (analyzed.length > 5) details.push(`... ${analyzed.length - 5} more`);
+      break;
+    }
+    case 'synthesizing': {
+      if (session.result) {
+        try {
+          const result = JSON.parse(session.result);
+          const summary = result.synthesis_summary;
+          if (summary) {
+            if (summary.reinforced_claims) details.push(`${summary.reinforced_claims} reinforced claims`);
+            if (summary.contradictions) details.push(`${summary.contradictions} contradictions`);
+            if (summary.knowledge_gaps) details.push(`${summary.knowledge_gaps} knowledge gaps`);
+          }
+        } catch { /* parse error */ }
+      }
+      break;
+    }
+    case 'report': {
+      if (session.result) {
+        try {
+          const result = JSON.parse(session.result);
+          const md = result.markdown || '';
+          details.push(`${md.length} characters`);
+          if (result.sources) details.push(`${result.sources.length} sources cited`);
+        } catch {
+          details.push(`${session.result.length} characters`);
+        }
+      }
+      break;
+    }
+    case 'reviewing': {
+      if (session.status === 'done' && session.result) {
+        details.push('Review passed');
+      }
+      break;
+    }
   }
 
-  // For analyzing, show source count
-  if (status === 'analyzing') {
-    const srcCount = session.source_count || 0;
-    if (srcCount > 0) return `${base} — ${srcCount} sources`;
-    return base;
-  }
+  return details.slice(0, 5);
+}
 
-  return base;
+/* ---- StagePipeline Component ---- */
+
+export function StagePipeline({ session }: { session: ResearchSession }) {
+  const [expandedStage, setExpandedStage] = useState<string | null>(null);
+
+  const handleToggle = (stage: string) => {
+    setExpandedStage(prev => prev === stage ? null : stage);
+  };
+
+  return (
+    <div className="space-y-0">
+      {STAGES.map((stage, idx) => {
+        const stageStatus = getStageStatus(stage, session.current_step, session.status);
+        const result = getStageResult(stage, session);
+        const details = getStageDetails(stage, session);
+        const isExpanded = expandedStage === stage;
+        const canExpand = stageStatus === 'completed' && details.length > 0;
+        const isLast = idx === STAGES.length - 1;
+
+        return (
+          <div key={stage}>
+            {/* Stage row */}
+            <div
+              onClick={() => canExpand && handleToggle(stage)}
+              className={`flex items-center gap-2 py-1 ${
+                canExpand ? 'cursor-pointer hover:opacity-80' : ''
+              }`}
+            >
+              {/* Icon */}
+              <span className={`w-4 text-center text-xs ${
+                stageStatus === 'completed' ? 'text-[var(--text-secondary)]' :
+                stageStatus === 'current' ? 'text-[var(--accent)]' :
+                'text-[var(--text-secondary)] opacity-40'
+              }`}>
+                {stageStatus === 'completed' ? '✓' :
+                 stageStatus === 'current' ? '●' : '○'}
+              </span>
+
+              {/* Label */}
+              <span className={`text-xs ${
+                stageStatus === 'completed' ? 'text-[var(--text-secondary)]' :
+                stageStatus === 'current' ? 'text-[var(--text-primary)] font-medium' :
+                'text-[var(--text-secondary)] opacity-40'
+              }`}>
+                {STAGE_LABELS[stage]}
+              </span>
+
+              {/* Result */}
+              {result && (
+                <>
+                  <span className={`text-xs ${
+                    stageStatus === 'completed' ? 'text-[var(--text-secondary)] opacity-60' :
+                    stageStatus === 'current' ? 'text-[var(--text-secondary)]' :
+                    'text-[var(--text-secondary)] opacity-30'
+                  }`}>──</span>
+                  <span className={`text-xs ${
+                    stageStatus === 'completed' ? 'text-[var(--text-secondary)]' :
+                    stageStatus === 'current' ? 'text-[var(--text-primary)]' :
+                    'text-[var(--text-secondary)] opacity-40'
+                  }`}>
+                    {result}
+                  </span>
+                </>
+              )}
+
+              {/* Expand indicator */}
+              {canExpand && (
+                <span className="text-xs text-[var(--text-secondary)] opacity-50 ml-auto">
+                  {isExpanded ? '▾' : '▸'}
+                </span>
+              )}
+            </div>
+
+            {/* Expanded details */}
+            {isExpanded && details.length > 0 && (
+              <div className="pl-6 pb-1 space-y-0.5">
+                {details.map((detail, i) => (
+                  <div key={i} className="text-xs text-[var(--text-secondary)] opacity-70 truncate">
+                    {i === details.length - 1 && details.length === 6 ? detail : `├ ${detail}`}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Connector line (not after last) */}
+            {!isLast && (
+              <div className={`ml-[7px] w-px h-2 ${
+                stageStatus === 'completed' ? 'bg-[var(--text-secondary)] opacity-30' :
+                'bg-[var(--text-secondary)] opacity-15'
+              }`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function ResearchPanel() {
@@ -389,7 +589,6 @@ export function ResearchPanel() {
           <div className="text-sm text-[var(--text-secondary)] text-center py-8">No research sessions yet</div>
         ) : (
           sessions.map(s => {
-            const stageDesc = getStageDescription(s);
             const isActive = ['planning', 'gathering', 'analyzing', 'synthesizing', 'report', 'reviewing'].includes(s.status);
             return (
               <div
@@ -397,7 +596,7 @@ export function ResearchPanel() {
                 onClick={() => setSelectedSessionId(s.id)}
                 className="p-3 bg-[var(--bg-secondary)] rounded border border-[var(--border)] cursor-pointer hover:border-[var(--accent)] transition-colors"
               >
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">{s.query}</span>
                   <span className={`text-xs px-2 py-0.5 rounded shrink-0 ml-2 ${
                     s.status === 'done' ? 'bg-green-500/20 text-green-400' :
@@ -409,23 +608,9 @@ export function ResearchPanel() {
                   </span>
                 </div>
 
-                {/* Progress bar */}
-                {s.progress > 0 && (
-                  <div className="h-1 bg-[var(--bg-tertiary)] rounded-full mb-1.5 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        s.status === 'error' ? 'bg-red-500' :
-                        s.status === 'done' ? 'bg-green-500' :
-                        'bg-[var(--accent)]'
-                      }`}
-                      style={{ width: `${Math.max(2, Math.round(s.progress * 100))}%` }}
-                    />
-                  </div>
-                )}
-
-                {/* Stage description */}
-                <div className="text-xs text-[var(--text-secondary)] mb-1">
-                  {stageDesc}
+                {/* Stage Pipeline */}
+                <div className="mb-2">
+                  <StagePipeline session={s} />
                 </div>
 
                 {/* Time info */}
