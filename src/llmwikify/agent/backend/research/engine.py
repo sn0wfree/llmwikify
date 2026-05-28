@@ -142,57 +142,63 @@ class ResearchEngine:
         if resume:
             self._load_resume_state(state)
 
-        while state.phase != "done":
-            self._check_timeout()
-            elapsed = time.monotonic() - self._start_time
-            state.budget_remaining = max(0, 1 - elapsed / self._timeout_seconds)
+        try:
+            while state.phase != "done":
+                self._check_timeout()
+                elapsed = time.monotonic() - self._start_time
+                state.budget_remaining = max(0, 1 - elapsed / self._timeout_seconds)
 
-            # ── REASON: decide next action ──
-            action = await self._reason(state)
-            yield {"type": "reasoning", "action": action, "round": state.round, "phase": state.phase}
+                # ── REASON: decide next action ──
+                action = await self._reason(state)
+                yield {"type": "reasoning", "action": action, "round": state.round, "phase": state.phase}
 
-            # ── ACT: execute action ──
-            if action == "plan":
-                async for event in self._action_plan(state):
-                    yield event
-            elif action == "gather":
-                async for event in self._action_gather(state):
-                    yield event
-            elif action == "analyze":
-                async for event in self._action_analyze(state):
-                    yield event
-            elif action == "synthesize":
-                async for event in self._action_synthesize(state):
-                    yield event
-            elif action == "report":
-                async for event in self._action_report(state):
-                    yield event
-            elif action == "review":
-                async for event in self._action_review(state):
-                    yield event
-            elif action == "revise":
-                async for event in self._action_revise(state):
-                    yield event
-            elif action == "done":
-                async for event in self._action_done(state):
-                    yield event
-                break
-            else:
-                # Unknown action → default to done
-                logger.warning("Unknown action %s, defaulting to done", action)
-                async for event in self._action_done(state):
-                    yield event
-                break
+                # ── ACT: execute action ──
+                if action == "plan":
+                    async for event in self._action_plan(state):
+                        yield event
+                elif action == "gather":
+                    async for event in self._action_gather(state):
+                        yield event
+                elif action == "analyze":
+                    async for event in self._action_analyze(state):
+                        yield event
+                elif action == "synthesize":
+                    async for event in self._action_synthesize(state):
+                        yield event
+                elif action == "report":
+                    async for event in self._action_report(state):
+                        yield event
+                elif action == "review":
+                    async for event in self._action_review(state):
+                        yield event
+                elif action == "revise":
+                    async for event in self._action_revise(state):
+                        yield event
+                elif action == "done":
+                    async for event in self._action_done(state):
+                        yield event
+                    break
+                else:
+                    # Unknown action → default to done
+                    logger.warning("Unknown action %s, defaulting to done", action)
+                    async for event in self._action_done(state):
+                        yield event
+                    break
 
-            # ── OBSERVE: update state from DB ──
-            self._observe(state)
+                # ── OBSERVE: update state from DB ──
+                self._observe(state)
 
-            # ── Evaluate: check exit conditions ──
-            if state.round >= state.max_rounds:
-                yield {"type": "round_max", "round": state.round, "message": f"Reached max rounds ({state.max_rounds})"}
-                async for event in self._action_done(state):
-                    yield event
-                break
+                # ── Evaluate: check exit conditions ──
+                if state.round >= state.max_rounds:
+                    yield {"type": "round_max", "round": state.round, "message": f"Reached max rounds ({state.max_rounds})"}
+                    async for event in self._action_done(state):
+                        yield event
+                    break
+        except Exception as e:
+            # Catch-all: ensure DB status is always updated on unexpected errors
+            logger.error("ReAct loop error for session %s: %s", session_id, e, exc_info=True)
+            self.session_manager.update_status(session_id, "error", state.phase or "unknown", -1)
+            yield {"type": "error", "error": str(e)}
 
     # ─── Reason Step ───────────────────────────────────────────────────
 
@@ -422,8 +428,14 @@ class ResearchEngine:
 
         sources = self.db.get_sources(state.session_id) or []
         generator = ReportGenerator(self.wiki, self._report_llm, self.config)
-        state.report_md = await generator.generate(state.query, sources, state.synthesis or {})
-        yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
+        try:
+            state.report_md = await generator.generate(state.query, sources, state.synthesis or {})
+            yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
+        except Exception as e:
+            logger.error("Report generation failed: %s", e)
+            yield {"type": "error", "error": f"Report generation failed: {e}"}
+            self.session_manager.update_status(state.session_id, "error", "report", -1)
+            state.phase = "done"
 
     async def _action_review(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Review report quality."""
@@ -433,7 +445,11 @@ class ResearchEngine:
 
         sources = self.db.get_sources(state.session_id) or []
         reviewer = ResearchReviewer(self.wiki, self._default_llm, self.config)
-        state.review = await reviewer.review(state.query, state.report_md or "", sources)
+        try:
+            state.review = await reviewer.review(state.query, state.report_md or "", sources)
+        except Exception as e:
+            logger.error("Report review failed: %s", e)
+            state.review = {"approved": False, "score": 0, "issues": [f"Review failed: {e}"], "feedback": ""}
         state.quality_score = state.review.get("score", 0)
         state.issues = state.review.get("issues", [])
 
@@ -458,10 +474,14 @@ class ResearchEngine:
 
         sources = self.db.get_sources(state.session_id) or []
         revisor = ResearchRevisor(self.wiki, self._report_llm, self.config)
-        state.report_md = await revisor.revise(state.report_md or "", state.issues, sources)
-        # Reset review so it gets re-evaluated
-        state.review = None
-        yield {"type": "progress", "progress": 0.85, "message": "Report revised"}
+        try:
+            state.report_md = await revisor.revise(state.report_md or "", state.issues, sources)
+            # Reset review so it gets re-evaluated
+            state.review = None
+            yield {"type": "progress", "progress": 0.85, "message": "Report revised"}
+        except Exception as e:
+            logger.error("Report revision failed: %s", e)
+            yield {"type": "error", "error": f"Report revision failed: {e}"}
 
     async def _action_done(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Finalize research session."""
