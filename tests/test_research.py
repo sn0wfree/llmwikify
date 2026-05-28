@@ -8,6 +8,18 @@ from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 import pytest
 
+
+def _run_async(coro):
+    """Run async coroutine, handling nested event loop issues."""
+    try:
+        return asyncio.run(coro)
+    except RuntimeError as e:
+        if "cannot be called from a running event loop" in str(e):
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, coro).result()
+        raise
+
 from llmwikify.agent.backend.db import AgentDatabase
 from llmwikify.agent.backend.research.config import DEFAULT_RESEARCH_CONFIG, merge_research_config
 from llmwikify.agent.backend.research.session import ResearchSessionManager
@@ -415,7 +427,7 @@ class TestWebSearch:
             MockDDGS.return_value.__enter__ = MagicMock(return_value=mock_ddgs)
             MockDDGS.return_value.__exit__ = MagicMock(return_value=False)
 
-            results = asyncio.get_event_loop().run_until_complete(
+            results = _run_async(
                 search.search("test query")
             )
 
@@ -427,7 +439,7 @@ class TestWebSearch:
     def test_search_handles_exception(self):
         search = WebSearch({})
         with patch("duckduckgo_search.DDGS", side_effect=Exception("network error")):
-            results = asyncio.get_event_loop().run_until_complete(
+            results = _run_async(
                 search.search("test")
             )
         assert results == []
@@ -435,7 +447,7 @@ class TestWebSearch:
     def test_search_with_type_web(self):
         search = WebSearch({})
         with patch.object(search, "search", return_value=[SearchResult("T", "https://x.com", "S")]):
-            results = asyncio.get_event_loop().run_until_complete(
+            results = _run_async(
                 search.search_with_type("query", "web")
             )
         assert len(results) == 1
@@ -444,7 +456,7 @@ class TestWebSearch:
     def test_search_with_type_youtube(self):
         search = WebSearch({})
         with patch.object(search, "search", return_value=[SearchResult("T", "https://youtube.com/watch", "S")]):
-            results = asyncio.get_event_loop().run_until_complete(
+            results = _run_async(
                 search.search_with_type("query", "youtube")
             )
         assert len(results) == 1
@@ -452,7 +464,7 @@ class TestWebSearch:
 
     def test_search_with_type_wiki(self):
         search = WebSearch({})
-        results = asyncio.get_event_loop().run_until_complete(
+        results = _run_async(
             search.search_with_type("query", "wiki")
         )
         assert len(results) == 1
@@ -461,8 +473,210 @@ class TestWebSearch:
 
 
 # ==============================================================================
-# 5. SourceGatherer Tests
+# 4b. Search Provider Tests
 # ==============================================================================
+
+
+class TestSearXNGProvider:
+    """Tests for SearXNG search provider."""
+
+    def test_search_returns_results(self):
+        from llmwikify.agent.backend.research.web_search import SearXNGProvider
+
+        provider = SearXNGProvider("http://localhost:8888")
+        mock_response = {
+            "results": [
+                {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1"},
+                {"title": "Result 2", "url": "https://example.com/2", "content": "Snippet 2"},
+            ]
+        }
+
+        with patch("httpx.AsyncClient.get") as mock_get:
+            mock_get.return_value = MagicMock(status_code=200, json=MagicMock(return_value=mock_response))
+            mock_get.return_value.raise_for_status = MagicMock()
+            results = _run_async(provider.search("test", 5))
+
+        assert len(results) == 2
+        assert results[0].title == "Result 1"
+        assert results[0].url == "https://example.com/1"
+
+    def test_search_filters_empty_urls(self):
+        from llmwikify.agent.backend.research.web_search import SearXNGProvider
+
+        provider = SearXNGProvider("http://localhost:8888")
+        mock_response = {
+            "results": [
+                {"title": "Good", "url": "https://example.com", "content": "OK"},
+                {"title": "Bad", "url": "", "content": "No URL"},
+            ]
+        }
+
+        with patch("httpx.AsyncClient.get") as mock_get:
+            mock_get.return_value = MagicMock(status_code=200, json=MagicMock(return_value=mock_response))
+            mock_get.return_value.raise_for_status = MagicMock()
+            results = _run_async(provider.search("test", 5))
+
+        assert len(results) == 1
+
+    def test_search_handles_error(self):
+        from llmwikify.agent.backend.research.web_search import SearXNGProvider
+
+        provider = SearXNGProvider("http://localhost:8888")
+
+        with patch("httpx.AsyncClient.get", side_effect=Exception("connection refused")):
+            with pytest.raises(Exception, match="connection refused"):
+                _run_async(provider.search("test", 5))
+
+
+class TestTavilyProvider:
+    """Tests for Tavily search provider."""
+
+    def test_search_returns_results(self):
+        from llmwikify.agent.backend.research.web_search import TavilyProvider
+
+        provider = TavilyProvider("tvly-test-key")
+        mock_response = {
+            "results": [
+                {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1"},
+                {"title": "Result 2", "url": "https://example.com/2", "content": "Snippet 2"},
+            ]
+        }
+
+        with patch("tavily.TavilyClient") as MockClient:
+            MockClient.return_value.search.return_value = mock_response
+            results = _run_async(provider.search("test", 5))
+
+        assert len(results) == 2
+        assert results[0].title == "Result 1"
+
+    def test_search_handles_error(self):
+        from llmwikify.agent.backend.research.web_search import TavilyProvider
+
+        provider = TavilyProvider("tvly-test-key")
+
+        with patch("tavily.TavilyClient", side_effect=Exception("invalid key")):
+            with pytest.raises(Exception, match="invalid key"):
+                _run_async(provider.search("test", 5))
+
+
+class TestFallbackSearchProvider:
+    """Tests for FallbackSearchProvider."""
+
+    def test_returns_first_successful(self):
+        from llmwikify.agent.backend.research.web_search import FallbackSearchProvider, SearchResult
+
+        p1 = MagicMock()
+        p1.search = AsyncMock(return_value=[SearchResult("T1", "https://u1", "S1")])
+        p2 = MagicMock()
+        p2.search = AsyncMock(return_value=[SearchResult("T2", "https://u2", "S2")])
+
+        provider = FallbackSearchProvider([p1, p2])
+        results = _run_async(provider.search("test", 5))
+
+        assert len(results) == 1
+        assert results[0].title == "T1"
+        p2.search.assert_not_called()
+
+    def test_falls_back_on_failure(self):
+        from llmwikify.agent.backend.research.web_search import FallbackSearchProvider, SearchResult
+
+        p1 = MagicMock()
+        p1.search = AsyncMock(side_effect=Exception("p1 failed"))
+        p2 = MagicMock()
+        p2.search = AsyncMock(return_value=[SearchResult("T2", "https://u2", "S2")])
+
+        provider = FallbackSearchProvider([p1, p2])
+        results = _run_async(provider.search("test", 5))
+
+        assert len(results) == 1
+        assert results[0].title == "T2"
+
+    def test_returns_empty_if_all_fail(self):
+        from llmwikify.agent.backend.research.web_search import FallbackSearchProvider
+
+        p1 = MagicMock()
+        p1.search = AsyncMock(side_effect=Exception("p1 failed"))
+        p2 = MagicMock()
+        p2.search = AsyncMock(side_effect=Exception("p2 failed"))
+
+        provider = FallbackSearchProvider([p1, p2])
+        results = _run_async(provider.search("test", 5))
+
+        assert results == []
+
+    def test_skips_empty_results(self):
+        from llmwikify.agent.backend.research.web_search import FallbackSearchProvider, SearchResult
+
+        p1 = MagicMock()
+        p1.search = AsyncMock(return_value=[])
+        p2 = MagicMock()
+        p2.search = AsyncMock(return_value=[SearchResult("T2", "https://u2", "S2")])
+
+        provider = FallbackSearchProvider([p1, p2])
+        results = _run_async(provider.search("test", 5))
+
+        assert len(results) == 1
+        assert results[0].title == "T2"
+
+
+class TestCreateSearchProvider:
+    """Tests for create_search_provider factory."""
+
+    def test_auto_mode_creates_chain(self):
+        from llmwikify.agent.backend.research.web_search import (
+            create_search_provider, FallbackSearchProvider, DuckDuckGoProvider
+        )
+
+        config = {"search_provider": "auto"}
+        provider = create_search_provider(config)
+
+        assert isinstance(provider, FallbackSearchProvider)
+        assert len(provider.providers) == 1  # only DuckDuckGo in auto without keys
+        assert isinstance(provider.providers[0], DuckDuckGoProvider)
+
+    def test_auto_with_tavily_key(self):
+        from llmwikify.agent.backend.research.web_search import (
+            create_search_provider, FallbackSearchProvider, TavilyProvider, DuckDuckGoProvider
+        )
+
+        config = {"search_provider": "auto", "tavily_api_key": "tvly-test"}
+        provider = create_search_provider(config)
+
+        assert isinstance(provider, FallbackSearchProvider)
+        assert len(provider.providers) == 2
+        assert isinstance(provider.providers[0], TavilyProvider)
+        assert isinstance(provider.providers[1], DuckDuckGoProvider)
+
+    def test_auto_with_searxng_url(self):
+        from llmwikify.agent.backend.research.web_search import (
+            create_search_provider, FallbackSearchProvider, SearXNGProvider
+        )
+
+        config = {"search_provider": "auto", "searxng_url": "http://localhost:8888"}
+        provider = create_search_provider(config)
+
+        assert isinstance(provider, FallbackSearchProvider)
+        assert isinstance(provider.providers[0], SearXNGProvider)
+
+    def test_explicit_tavily_only(self):
+        from llmwikify.agent.backend.research.web_search import (
+            create_search_provider, TavilyProvider
+        )
+
+        config = {"search_provider": "tavily", "tavily_api_key": "tvly-test"}
+        provider = create_search_provider(config)
+
+        assert len(provider.providers) == 1
+        assert isinstance(provider.providers[0], TavilyProvider)
+
+    def test_no_config_falls_back_to_ddg(self):
+        from llmwikify.agent.backend.research.web_search import (
+            create_search_provider, DuckDuckGoProvider
+        )
+
+        provider = create_search_provider({})
+        assert len(provider.providers) == 1
+        assert isinstance(provider.providers[0], DuckDuckGoProvider)
 
 
 class TestSourceGatherer:
@@ -484,7 +698,7 @@ class TestSourceGatherer:
                 metadata={"url": "https://example.com"},
             )
 
-            events = asyncio.get_event_loop().run_until_complete(
+            events = _run_async(
                 gatherer.gather([{"id": sq_id, "source_type": "web", "url": "https://example.com", "query": "test"}])
             )
 
@@ -508,7 +722,7 @@ class TestSourceGatherer:
 
         gatherer = SourceGatherer(mock_wiki, db, session_manager, config)
 
-        events = asyncio.get_event_loop().run_until_complete(
+        events = _run_async(
             gatherer.gather([{"id": sq_id, "source_type": "wiki", "url": "", "query": "Test Page"}])
         )
 
@@ -526,7 +740,7 @@ class TestSourceGatherer:
         with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract:
             mock_extract.side_effect = Exception("connection failed")
 
-            events = asyncio.get_event_loop().run_until_complete(
+            events = _run_async(
                 gatherer.gather([{"id": sq_id, "source_type": "web", "url": "https://fail.com", "query": "bad"}])
             )
 
@@ -555,7 +769,7 @@ class TestSourceGatherer:
             ])
             MockSearch.return_value = mock_search_instance
 
-            events = asyncio.get_event_loop().run_until_complete(
+            events = _run_async(
                 gatherer.gather([{"id": sq_id, "source_type": "web", "url": "", "query": "python docs"}])
             )
 
@@ -576,7 +790,7 @@ class TestSourceGatherer:
                 text="x" * 500, source_type="url", title="Long", metadata={}
             )
 
-            asyncio.get_event_loop().run_until_complete(
+            _run_async(
                 gatherer.gather([{"id": sq_id, "source_type": "web", "url": "https://example.com", "query": "test"}])
             )
 
@@ -603,7 +817,7 @@ class TestSourceAnalyzer:
         analyzer = SourceAnalyzer(mock_wiki, session_manager, config)
         sources = db.get_sources(session_id)
 
-        events = asyncio.get_event_loop().run_until_complete(
+        events = _run_async(
             analyzer.analyze_sources(sources)
         )
 
@@ -628,7 +842,7 @@ class TestSourceAnalyzer:
         analyzer = SourceAnalyzer(mock_wiki, session_manager, config)
         sources = db.get_sources(session_id)
 
-        events = asyncio.get_event_loop().run_until_complete(
+        events = _run_async(
             analyzer.analyze_sources(sources)
         )
 
@@ -644,7 +858,7 @@ class TestSourceAnalyzer:
         analyzer = SourceAnalyzer(mock_wiki, session_manager, config)
         sources = db.get_sources(session_id)
 
-        events = asyncio.get_event_loop().run_until_complete(
+        events = _run_async(
             analyzer.analyze_sources(sources)
         )
 
@@ -693,7 +907,7 @@ class TestResearchSynthesizer:
         ]
 
         synthesizer = ResearchSynthesizer(mock_wiki, config)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             synthesizer.synthesize(sources)
         )
 
@@ -711,7 +925,7 @@ class TestResearchSynthesizer:
         ]
 
         synthesizer = ResearchSynthesizer(mock_wiki, config)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             synthesizer.synthesize(sources)
         )
 
@@ -724,7 +938,7 @@ class TestResearchSynthesizer:
         ]
 
         synthesizer = ResearchSynthesizer(mock_wiki, config)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             synthesizer.synthesize(sources)
         )
 
@@ -755,7 +969,7 @@ This is a test report about machine learning.
         ]
         synthesis = {"reinforced_claims": [], "contradictions": [], "knowledge_gaps": [], "new_entities": []}
 
-        report = asyncio.get_event_loop().run_until_complete(
+        report = _run_async(
             generator.generate("machine learning", sources, synthesis)
         )
 
@@ -767,7 +981,7 @@ This is a test report about machine learning.
         mock_llm.chat.return_value = "# Empty Report\n\nNo sources found."
 
         generator = ReportGenerator(mock_wiki, mock_llm, config)
-        report = asyncio.get_event_loop().run_until_complete(
+        report = _run_async(
             generator.generate("test", [], {})
         )
 
@@ -805,7 +1019,7 @@ class TestResearchReviewer:
         })
 
         reviewer = ResearchReviewer(mock_wiki, mock_llm, config)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             reviewer.review("test query", "# Report content", [])
         )
 
@@ -822,7 +1036,7 @@ class TestResearchReviewer:
         })
 
         reviewer = ResearchReviewer(mock_wiki, mock_llm, config)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             reviewer.review("test query", "# Short report", [])
         )
 
@@ -834,7 +1048,7 @@ class TestResearchReviewer:
         mock_llm.chat.side_effect = Exception("LLM down")
 
         reviewer = ResearchReviewer(mock_wiki, mock_llm, config)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             reviewer.review("test", "# Report", [])
         )
 
@@ -850,7 +1064,7 @@ class TestResearchRevisor:
         mock_llm.chat.return_value = "# Revised Report\n\nFixed version with citations [[Source:abc]]."
 
         revisor = ResearchRevisor(mock_wiki, mock_llm, config)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             revisor.revise(
                 "# Original Report",
                 ["Missing citations"],
@@ -926,7 +1140,7 @@ class TestResearchEngine:
                 async for event in engine.run(session_id, "test query"):
                     events.append(event)
 
-            asyncio.get_event_loop().run_until_complete(run())
+            _run_async(run())
 
         # Verify event types
         event_types = [e["type"] for e in events]
@@ -966,7 +1180,7 @@ class TestResearchEngine:
                 async for event in engine.run(session_id, "test"):
                     events.append(event)
 
-            asyncio.get_event_loop().run_until_complete(run())
+            _run_async(run())
 
         # Should fail early when no sources gathered (planning failure + no search results)
         session = db.get_research_session(session_id)
@@ -998,7 +1212,7 @@ class TestResearchEngine:
                 async for event in engine.run(session_id, "test"):
                     events.append(event)
 
-            asyncio.get_event_loop().run_until_complete(run())
+            _run_async(run())
 
         event_types = [e["type"] for e in events]
         assert "review_issues" in event_types
@@ -1189,7 +1403,7 @@ class TestResearchIntegration:
                 async for event in engine.run(session_id, "full test"):
                     events.append(event)
 
-            asyncio.get_event_loop().run_until_complete(run())
+            _run_async(run())
 
         # Verify complete pipeline
         session = db.get_research_session(session_id)

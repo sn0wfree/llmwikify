@@ -78,3 +78,4 @@ raw/**/*.pdf
 # React WebUI build output
 src/llmwikify/web/webui/dist/
 src/llmwikify/web/webui/node_modules/
+src/llmwikify/web/webui-agent/node_modules/

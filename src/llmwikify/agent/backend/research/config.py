@@ -16,6 +16,10 @@ DEFAULT_RESEARCH_CONFIG: dict[str, Any] = {
     "planning_model": None,
     "report_model": None,
     "llm_call_timeout_seconds": 120,
+    # Search provider config
+    "search_provider": "auto",       # "auto", "searxng", "tavily", "duckduckgo"
+    "searxng_url": None,             # e.g. "http://localhost:8888"
+    "tavily_api_key": None,          # e.g. "tvly-xxxxx"
 }
 
 

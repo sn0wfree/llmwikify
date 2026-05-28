@@ -13,8 +13,8 @@ def test_searchbar_shows_dropdown_results(page, wiki_server):
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(500)
 
-    # Find search input (only one now)
-    search_input = page.locator('input[placeholder="Search wiki..."]')
+    # Find search input (CrossWikiSearch uses dynamic placeholder)
+    search_input = page.locator('input[placeholder*="Search"]')
     expect(search_input).to_be_visible()
 
     # Type search query
@@ -24,11 +24,11 @@ def test_searchbar_shows_dropdown_results(page, wiki_server):
     page.wait_for_timeout(800)
 
     # Verify dropdown appears with results
-    dropdown = page.locator('.absolute.top-full')
+    dropdown = page.locator('.search-container .absolute.left-0')
     expect(dropdown).to_be_visible()
 
     # Verify results in dropdown
-    results = dropdown.locator('div[class*="hover:bg-slate-700"]')
+    results = dropdown.locator('button.hover\:bg-slate-700')
     result_count = results.count()
 
     if result_count > 0:
@@ -59,13 +59,13 @@ def test_searchbar_click_result_navigates(page, wiki_server):
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(500)
 
-    search_input = page.locator('input[placeholder="Search wiki..."]')
+    search_input = page.locator('input[placeholder*="Search"]')
     search_input.fill("Machine")
     page.wait_for_timeout(800)
 
     # Click first result in dropdown
-    dropdown = page.locator('.absolute.top-full')
-    results = dropdown.locator('div[class*="hover:bg-slate-700"]')
+    dropdown = page.locator('.search-container .absolute.left-0')
+    results = dropdown.locator('button.hover\:bg-slate-700')
     result_count = results.count()
 
     if result_count > 0:
@@ -94,12 +94,12 @@ def test_searchbar_empty_query(page, wiki_server):
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(500)
 
-    search_input = page.locator('input[placeholder="Search wiki..."]')
+    search_input = page.locator('input[placeholder*="Search"]')
     search_input.fill("")
     page.wait_for_timeout(500)
 
     # Dropdown should not appear for empty query
-    dropdown = page.locator('.absolute.top-full')
+    dropdown = page.locator('.search-container .absolute.left-0')
     expect(dropdown).not_to_be_visible()
 
     assert len(errors) == 0, f"JavaScript errors found: {errors}"

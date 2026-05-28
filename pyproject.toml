@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmwikify"
-version = "0.30.1"
+version = "0.31.0"
 description = "General-purpose LLM-Wiki CLI and Python library - Build persistent, LLM-maintained knowledge bases"
 readme = "README.md"
 license = "MIT"
@@ -68,6 +68,7 @@ agent = [
     "croniter>=2.0.0",
     "filelock>=3.13.0",
     "duckduckgo-search>=4.0",
+    "tavily-python>=0.3.0",
 ]
 extractors = [
     "markitdown[all]>=0.1.0",

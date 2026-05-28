@@ -23,12 +23,24 @@ system: |
 
 user: |
   ## Issues to fix:
+  {% if issues_text is defined and issues_text %}
   {{ issues_text }}
+  {% else %}
+  No specific issues listed.
+  {% endif %}
 
   ## Available sources:
+  {% if source_refs is defined and source_refs %}
   {{ source_refs }}
+  {% else %}
+  No source references available.
+  {% endif %}
 
   ## Current report:
+  {% if report is defined and report %}
   {{ report }}
+  {% else %}
+  No report available.
+  {% endif %}
 
   Produce the revised report now.
