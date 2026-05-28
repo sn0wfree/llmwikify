@@ -202,15 +202,15 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
             {/* Stage row */}
             <div
               onClick={() => canExpand && handleToggle(stage)}
-              className={`flex items-center gap-2 py-1 ${
-                canExpand ? 'cursor-pointer hover:opacity-80' : ''
+              className={`flex items-center gap-1.5 py-0.5 px-1.5 rounded transition-colors ${
+                canExpand ? 'cursor-pointer hover:bg-[var(--bg-tertiary)]' : ''
               }`}
             >
               {/* Icon */}
-              <span className={`w-4 text-center text-xs ${
-                stageStatus === 'completed' ? 'text-[var(--text-secondary)]' :
+              <span className={`w-3.5 text-center text-[10px] ${
+                stageStatus === 'completed' ? 'text-green-400' :
                 stageStatus === 'current' ? 'text-[var(--accent)]' :
-                'text-[var(--text-secondary)] opacity-40'
+                'text-[var(--text-secondary)] opacity-30'
               }`}>
                 {stageStatus === 'completed' ? '✓' :
                  stageStatus === 'current' ? '●' : '○'}
@@ -220,7 +220,7 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
               <span className={`text-xs ${
                 stageStatus === 'completed' ? 'text-[var(--text-secondary)]' :
                 stageStatus === 'current' ? 'text-[var(--text-primary)] font-medium' :
-                'text-[var(--text-secondary)] opacity-40'
+                'text-[var(--text-secondary)] opacity-30'
               }`}>
                 {STAGE_LABELS[stage]}
               </span>
@@ -228,15 +228,15 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
               {/* Result */}
               {result && (
                 <>
-                  <span className={`text-xs ${
-                    stageStatus === 'completed' ? 'text-[var(--text-secondary)] opacity-60' :
+                  <span className={`text-[10px] ${
+                    stageStatus === 'completed' ? 'text-[var(--text-secondary)] opacity-50' :
                     stageStatus === 'current' ? 'text-[var(--text-secondary)]' :
-                    'text-[var(--text-secondary)] opacity-30'
-                  }`}>──</span>
-                  <span className={`text-xs ${
+                    'text-[var(--text-secondary)] opacity-20'
+                  }`}>─</span>
+                  <span className={`text-[11px] ${
                     stageStatus === 'completed' ? 'text-[var(--text-secondary)]' :
                     stageStatus === 'current' ? 'text-[var(--text-primary)]' :
-                    'text-[var(--text-secondary)] opacity-40'
+                    'text-[var(--text-secondary)] opacity-30'
                   }`}>
                     {result}
                   </span>
@@ -245,28 +245,31 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
 
               {/* Expand indicator */}
               {canExpand && (
-                <span className="text-xs text-[var(--text-secondary)] opacity-50 ml-auto">
+                <span className="text-[10px] text-[var(--text-secondary)] opacity-40 ml-auto">
                   {isExpanded ? '▾' : '▸'}
                 </span>
               )}
             </div>
 
             {/* Expanded details */}
-            {isExpanded && details.length > 0 && (
-              <div className="pl-6 pb-1 space-y-0.5">
+            <div className={`overflow-hidden transition-all duration-200 ${
+              isExpanded ? 'max-h-32 opacity-100' : 'max-h-0 opacity-0'
+            }`}>
+              <div className="pl-5 pb-0.5 space-y-px">
                 {details.map((detail, i) => (
-                  <div key={i} className="text-xs text-[var(--text-secondary)] opacity-70 truncate">
-                    {i === details.length - 1 && details.length === 6 ? detail : `├ ${detail}`}
+                  <div key={i} className="flex items-center gap-1.5">
+                    <div className="w-1 h-1 rounded-full bg-[var(--text-secondary)] opacity-25 shrink-0"/>
+                    <span className="text-[11px] text-[var(--text-secondary)] opacity-60 truncate">{detail}</span>
                   </div>
                 ))}
               </div>
-            )}
+            </div>
 
             {/* Connector line (not after last) */}
             {!isLast && (
-              <div className={`ml-[7px] w-px h-2 ${
-                stageStatus === 'completed' ? 'bg-[var(--text-secondary)] opacity-30' :
-                'bg-[var(--text-secondary)] opacity-15'
+              <div className={`ml-[6px] w-px h-1.5 ${
+                stageStatus === 'completed' ? 'bg-[var(--text-secondary)] opacity-25' :
+                'bg-[var(--text-secondary)] opacity-10'
               }`} />
             )}
           </div>
