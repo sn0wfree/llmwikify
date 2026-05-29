@@ -136,17 +136,6 @@ class ResearchEngine:
             yield {"type": "error", "error": f"Research timed out after {self._timeout_seconds}s"}
         except Exception:
             raise
-        finally:
-            # Safety net: if generator is killed (e.g. client disconnect / GeneratorExit),
-            # ensure session is never left in a stale running/gathering state
-            try:
-                current = self.db.get_research_session(session_id)
-                if current and current.get("status") not in ("done", "cancelled", "paused", "timeout", "error"):
-                    logger.warning("Session %s generator exited in stale state '%s', marking as error",
-                                   session_id, current.get("status"))
-                    self.session_manager.update_status(session_id, "error", current.get("current_step", "unknown"), -1)
-            except Exception:
-                pass
 
     # ─── ReAct Core Loop ───────────────────────────────────────────────
 
@@ -262,16 +251,6 @@ class ResearchEngine:
             logger.error("ReAct loop error for session %s: %s", session_id, e, exc_info=True)
             self.session_manager.update_status(session_id, "error", state.phase or "unknown", -1)
             yield {"type": "error", "error": str(e)}
-        finally:
-            # Ensure session is never left in a stuck state (e.g. client disconnect / GeneratorExit)
-            try:
-                current = self.db.get_research_session(session_id)
-                if current and current.get("status") not in ("done", "cancelled", "paused", "timeout", "error"):
-                    logger.warning("Session %s exited loop in stale state '%s', marking as error",
-                                   session_id, current.get("status"))
-                    self.session_manager.update_status(session_id, "error", state.phase or "unknown", -1)
-            except Exception:
-                pass
 
     # ─── Reason Step ───────────────────────────────────────────────────
 
