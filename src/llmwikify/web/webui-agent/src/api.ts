@@ -328,6 +328,10 @@ export const api = {
     readPage: (pageName: string) =>
       request<WikiPage>(`/wiki/page/${encodeURIComponent(pageName)}`),
     sinkStatus: () => request<SinkStatus>('/wiki/sink/status'),
+    scoped: {
+      readPage: (wikiId: string, pageName: string) =>
+        request<WikiPage>(`/wiki/${wikiId}/page/${encodeURIComponent(pageName)}`),
+    },
   },
 
   agent: {

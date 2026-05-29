@@ -291,6 +291,15 @@ class AgentDatabase:
             )
             conn.commit()
 
+    def delete_research(self, session_id: str) -> bool:
+        """Delete a research session and its related data."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM research_sources WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM research_sub_queries WHERE session_id = ?", (session_id,))
+            cursor = conn.execute("DELETE FROM research_sessions WHERE id = ?", (session_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
     def save_sub_query(self, session_id: str, query: str, source_type: str, url: str | None = None) -> str:
         sq_id = str(uuid.uuid4())[:8]
         with sqlite3.connect(self.db_path) as conn:
@@ -413,6 +422,66 @@ class AgentDatabase:
                 conn.execute("ALTER TABLE research_sources ADD COLUMN content TEXT")
             except sqlite3.OperationalError:
                 pass  # column already exists
+
+            # Backfill result JSON for existing done sessions missing quality_score
+            try:
+                import json as _json
+                rows = conn.execute(
+                    "SELECT id, result, review_json, synthesis_json, iteration_round "
+                    "FROM research_sessions WHERE status = 'done'"
+                ).fetchall()
+                for sid, result_raw, review_raw, synth_raw, iteration_round in rows:
+                    if not result_raw:
+                        continue
+                    try:
+                        result = _json.loads(result_raw)
+                    except (_json.JSONDecodeError, TypeError):
+                        continue
+                    if "quality_score" in result:
+                        continue  # already backfilled
+                    # Extract quality_score from review_json
+                    quality_score = 0
+                    if review_raw:
+                        try:
+                            review = _json.loads(review_raw)
+                            quality_score = review.get("score", 0)
+                        except (_json.JSONDecodeError, TypeError):
+                            pass
+                    # Extract synthesis_summary from synthesis_json
+                    synthesis_summary = {
+                        "reinforced_claims": 0,
+                        "contradictions": 0,
+                        "knowledge_gaps": 0,
+                    }
+                    if synth_raw:
+                        try:
+                            synth = _json.loads(synth_raw)
+                            synthesis_summary["reinforced_claims"] = len(synth.get("reinforced_claims", []))
+                            synthesis_summary["contradictions"] = len(synth.get("contradictions", []))
+                            synthesis_summary["knowledge_gaps"] = len(synth.get("knowledge_gaps", []))
+                        except (_json.JSONDecodeError, TypeError):
+                            pass
+                    # Get sources from research_sources table
+                    source_rows = conn.execute(
+                        "SELECT id, title, url, source_type FROM research_sources WHERE session_id = ?",
+                        (sid,),
+                    ).fetchall()
+                    sources = [
+                        {"id": sr[0], "title": sr[1] or "", "url": sr[2] or "", "source_type": sr[3] or ""}
+                        for sr in source_rows
+                    ]
+                    # Merge into result
+                    result["quality_score"] = quality_score
+                    result["rounds"] = iteration_round or 1
+                    result["synthesis_summary"] = synthesis_summary
+                    result["sources"] = sources
+                    conn.execute(
+                        "UPDATE research_sessions SET result = ? WHERE id = ?",
+                        (_json.dumps(result), sid),
+                    )
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
 
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS chat_messages (

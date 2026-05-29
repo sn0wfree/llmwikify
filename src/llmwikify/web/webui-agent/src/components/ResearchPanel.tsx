@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { api, type ResearchSession, type ResearchStreamEvent, type ResearchReport, type ResearchSubQuery, type ResearchSource } from '../api';
+import { api, type ResearchSession, type ResearchStreamEvent, type ResearchSubQuery } from '../api';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { ResearchDetail } from './ResearchDetail';
+import { ReportDetail } from './ReportDetail';
 
 interface ActiveResearch {
   sessionId: string;
@@ -546,8 +545,6 @@ export function ResearchPanel() {
   const [active, setActive] = useState<ActiveResearch | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [reportExpanded, setReportExpanded] = useState(false);
-  const [expandedSources, setExpandedSources] = useState(false);
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
 
   const loadSessions = async () => {
@@ -599,8 +596,6 @@ export function ResearchPanel() {
 
     const stream = api.research.start(query.trim(), currentWikiId || undefined);
     setQuery('');
-    setReportExpanded(false);
-    setExpandedSources(false);
     await consumeStream(stream);
   };
 
@@ -627,8 +622,6 @@ export function ResearchPanel() {
     });
 
     const stream = api.research.resume(id);
-    setReportExpanded(false);
-    setExpandedSources(false);
     await consumeStream(stream);
   };
 
@@ -821,9 +814,17 @@ export function ResearchPanel() {
   const dismissActive = () => setActive(null);
 
   if (selectedSessionId) {
+    if (selectedSessionId.startsWith('report:')) {
+      return (
+        <ReportDetail
+          sessionId={selectedSessionId.replace('report:', '')}
+          onBack={() => setSelectedSessionId(null)}
+        />
+      );
+    }
     return (
       <ResearchDetail
-        sessionId={selectedSessionId}
+        sessionId={selectedSessionId.replace('detail:', '')}
         onBack={() => setSelectedSessionId(null)}
       />
     );
@@ -966,33 +967,16 @@ export function ResearchPanel() {
             </div>
           )}
 
-          {/* Report view — collapsible */}
+          {/* Report view — link to full page */}
           {active.report && (
             <div className="mt-3">
               <button
-                onClick={() => setReportExpanded(e => !e)}
-                className="w-full flex items-center justify-between text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-1 px-2 py-1 rounded hover:bg-[var(--bg-tertiary)] transition-colors"
+                onClick={() => setSelectedSessionId('report:' + active.sessionId)}
+                className="w-full flex items-center justify-between text-xs text-[var(--text-secondary)] hover:text-[var(--accent)] mb-1 px-2 py-1 rounded hover:bg-[var(--bg-tertiary)] transition-colors"
               >
                 <span className="font-medium">Report: {active.report.query}</span>
-                <span className="text-[10px]">{reportExpanded ? '▾ Collapse' : '▸ Expand'}</span>
+                <span className="text-[10px]">View Report →</span>
               </button>
-              <div className={`overflow-hidden transition-all duration-200 ${reportExpanded ? 'max-h-[999px] opacity-100' : 'max-h-16 opacity-80'}`}>
-                <div className="p-3 bg-[var(--bg-primary)] rounded border border-[var(--border)]">
-                  <div className="prose prose-sm max-h-96 overflow-y-auto text-xs
-                    prose-headings:mt-2 prose-headings:mb-1
-                    prose-p:my-1 prose-ul:my-1 prose-ol:my-1
-                    prose-li:my-0 prose-a:text-[var(--accent)] prose-a:underline
-                    prose-blockquote:border-l-2 prose-blockquote:border-[var(--border)] prose-blockquote:pl-2 prose-blockquote:italic
-                  ">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{active.report.markdown}</ReactMarkdown>
-                  </div>
-                  {active.report.sources && active.report.sources.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-[var(--border)]">
-                      <div className="text-xs text-[var(--text-secondary)]">Sources: {active.report.sources.length}</div>
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           )}
         </div>
@@ -1011,7 +995,7 @@ export function ResearchPanel() {
               return (
                 <div
                   key={s.id}
-                  onClick={() => setSelectedSessionId(s.id)}
+                  onClick={() => setSelectedSessionId(s.status === 'done' ? 'report:' + s.id : s.id)}
                   className={`p-3 bg-[var(--bg-secondary)] rounded border cursor-pointer hover:border-[var(--accent)] transition-colors ${
                     isError ? 'border-red-500/30' : 'border-[var(--border)]'
                   }`}
@@ -1077,7 +1061,10 @@ export function ResearchPanel() {
 
                   <div className="flex gap-2 mt-2" onClick={e => e.stopPropagation()}>
                     {s.status === 'done' && (
-                      <button onClick={() => setSelectedSessionId(s.id)} className="text-xs text-[var(--accent)] hover:underline">View Details</button>
+                      <>
+                        <button onClick={() => setSelectedSessionId('report:' + s.id)} className="text-xs text-[var(--accent)] hover:underline">View Report</button>
+                        <button onClick={() => setSelectedSessionId('detail:' + s.id)} className="text-xs text-[var(--text-secondary)] hover:underline">View Details</button>
+                      </>
                     )}
                     {(s.status === 'paused' || s.status === 'gathering') && (
                       <button onClick={() => handleResume(s.id)} className="text-xs text-green-400 hover:underline">Resume</button>
@@ -1085,9 +1072,7 @@ export function ResearchPanel() {
                     {isActive && (
                       <button onClick={() => handlePause(s.id)} className="text-xs text-yellow-400 hover:underline">Pause</button>
                     )}
-                    {s.status !== 'done' && (
-                      <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400 hover:underline">Delete</button>
-                    )}
+                    <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400 hover:underline">Delete</button>
                   </div>
                 </div>
               );
