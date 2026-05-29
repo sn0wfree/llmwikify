@@ -25,6 +25,7 @@ from .review import ResearchReviewer, ResearchRevisor
 from .session import ResearchSessionManager
 from .synthesizer import ResearchSynthesizer
 from .web_search import WebSearch
+from .quality_gate import QualityGate
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,9 @@ class ResearchEngine:
         self._max_react_rounds = self.config.get("max_react_rounds", 5)
         self._quality_threshold = self.config.get("quality_threshold", 7)
         self._max_replan = self.config.get("max_replan_attempts", 2)
+
+        # Quality gate
+        self._quality_gate = QualityGate(self.config)
 
     def _resolve_model(self, config_key: str) -> StreamableLLMClient | None:
         model_cfg = self.config.get(config_key)
@@ -212,6 +216,18 @@ class ResearchEngine:
 
                 # ── OBSERVE: update state from DB ──
                 self._observe(state)
+
+                # ── Quality gate check ──
+                if self.config.get("gate_enabled", True):
+                    gate_result = self._evaluate_gate(state)
+                    if gate_result:
+                        state.observations.append(
+                            f"[质量门禁] {gate_result.gate_name}: {gate_result.summary}"
+                        )
+                        if not gate_result.passed:
+                            state.observations.append(
+                                f"⚠ 门禁未通过，建议: {gate_result.suggestion}"
+                            )
 
                 # ── Track iteration count ──
                 state.round += 1
@@ -403,7 +419,7 @@ class ResearchEngine:
         # Source quality distribution
         analyzed = [s for s in state.sources if s.get("analysis")]
         if analyzed:
-            scores = [s.get("analysis", {}).get("credibility", 0) for s in analyzed]
+            scores = [s.get("analysis", {}).get("quality_assessment", {}).get("credibility", 5) for s in analyzed]
             avg = sum(scores) / len(scores) if scores else 0
             state.observations.append(
                 f"Average source credibility: {avg:.1f}/10 ({len(analyzed)}/{len(state.sources)} analyzed)"
@@ -431,6 +447,39 @@ class ResearchEngine:
             state.observations.append(
                 f"Local wiki: {wiki_count} sources, Web: {web_count} sources"
             )
+
+        # Key quality assessment
+        analyzed = [s for s in state.sources if s.get("analysis")]
+        if analyzed:
+            cred_scores = [
+                s.get("analysis", {}).get("quality_assessment", {}).get("credibility", 5)
+                for s in analyzed
+            ]
+            avg_cred = sum(cred_scores) / len(cred_scores)
+            if avg_cred < 5:
+                state.observations.append(f"⚠ 平均可信度偏低 ({avg_cred:.1f}/10)，建议获取更高质量源")
+            elif avg_cred >= 7:
+                state.observations.append(f"✓ 源质量良好 (平均 {avg_cred:.1f}/10)")
+
+        if len(state.knowledge_gaps) > 3:
+            state.observations.append(
+                f"⚠ {len(state.knowledge_gaps)} 个知识缺口，可能影响报告完整性"
+            )
+
+    # ─── Quality Gate Evaluation ────────────────────────────────────────
+
+    def _evaluate_gate(self, state: ResearchState):
+        """Evaluate quality gate based on current phase."""
+        gate = self._quality_gate
+        if state.phase == "gathering":
+            return gate.check_after_gathering(state.sources, state.sub_queries)
+        elif state.phase == "analyzing":
+            return gate.check_after_analysis(state.sources)
+        elif state.phase == "synthesizing":
+            return gate.check_after_synthesis(state.synthesis)
+        elif state.phase == "reporting":
+            return gate.check_before_report(state.synthesis, state.sources)
+        return None
 
     # ─── Action Implementations ────────────────────────────────────────
 

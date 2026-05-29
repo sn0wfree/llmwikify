@@ -27,6 +27,18 @@ DEFAULT_RESEARCH_CONFIG: dict[str, Any] = {
     "quality_threshold": 7,          # Score >= 7 is approved
     "max_replan_attempts": 2,        # Max replanning for knowledge gaps
     "parallel_wiki_search": True,    # Search local wiki alongside web results
+    # Source filter config
+    "source_filter_enabled": True,   # Enable rule-based source pre-filter
+    "source_min_content_length": 100,  # Min content length to keep
+    "source_min_quality_score": 0.3,   # Min quality score to keep
+    # Quality gate config
+    "gate_enabled": True,            # Enable quality gates
+    "gate_min_sources": 3,           # Min sources after gathering
+    "gate_min_type_diversity": 2,    # Min source type diversity
+    "gate_min_analyzed": 2,          # Min analyzed sources
+    "gate_min_avg_credibility": 5,   # Min avg credibility after analysis
+    "gate_max_knowledge_gaps": 3,    # Max knowledge gaps after synthesis
+    "gate_min_reinforced_claims": 2, # Min reinforced claims after synthesis
 }
 
 

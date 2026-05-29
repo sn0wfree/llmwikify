@@ -815,7 +815,7 @@ class TestSourceGatherer:
         with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract:
             from llmwikify.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
-                text="Article content here",
+                text="Article content here. " * 20,
                 source_type="url",
                 title="Example Article",
                 metadata={"url": "https://example.com"},
@@ -884,7 +884,10 @@ class TestSourceGatherer:
              patch("llmwikify.agent.backend.research.web_search.WebSearch") as MockSearch:
             from llmwikify.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
-                text="content", source_type="url", title="Python Docs", metadata={}
+                text="Python documentation content here. " * 10,
+                source_type="url",
+                title="Python Docs",
+                metadata={},
             )
             mock_search_instance = MagicMock()
             mock_search_instance.search = AsyncMock(return_value=[
@@ -1268,7 +1271,7 @@ class TestResearchEngine:
              }):
             from llmwikify.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
-                text="Article content", source_type="url", title="Article", metadata={}
+                text="Article content here. " * 20, source_type="url", title="Article", metadata={}
             )
 
             engine = ResearchEngine(mock_wiki, db, mock_llm, config)
@@ -1603,3 +1606,177 @@ class TestResearchIntegration:
         assert event_types.index("step") < event_types.index("sub_query_created")
         assert event_types.index("sub_query_created") < event_types.index("source_gathered")
         assert event_types.index("source_gathered") < event_types.index("done")
+
+
+# ==============================================================================
+# SourceFilter Tests
+# ==============================================================================
+
+
+class TestSourceFilter:
+    def test_filter_short_content(self):
+        """Content < 100 chars is rejected."""
+        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        sources = [{"content": "短", "url": "http://example.com", "title": "Test"}]
+        f = SourceFilter({})
+        kept, rejected = f.filter_sources(sources, "test query")
+        assert len(rejected) == 1
+        assert len(kept) == 0
+
+    def test_filter_duplicate_url(self):
+        """Duplicate URLs only keep the first."""
+        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        sources = [
+            {"content": "A" * 200, "url": "http://example.com/a", "title": "A"},
+            {"content": "B" * 200, "url": "http://example.com/a", "title": "B"},
+        ]
+        f = SourceFilter({})
+        kept, rejected = f.filter_sources(sources, "test")
+        assert len(kept) == 1
+        assert len(rejected) == 1
+
+    def test_filter_nav_page(self):
+        """Navigation pages are rejected."""
+        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        sources = [{"content": "Home | Menu | Contact", "url": "http://example.com", "title": "Home | Example"}]
+        f = SourceFilter({})
+        kept, rejected = f.filter_sources(sources, "test")
+        assert len(rejected) == 1
+
+    def test_quality_score_high_domain(self):
+        """High-quality domain gets high score."""
+        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        source = {
+            "content": "A" * 1000,
+            "url": "https://arxiv.org/abs/2301.00001",
+            "source_type": "web",
+        }
+        f = SourceFilter({})
+        score = f.compute_quality_score(source)
+        assert score >= 0.7
+
+    def test_quality_score_low_domain(self):
+        """Low-quality domain gets low score."""
+        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        source = {
+            "content": "A" * 1000,
+            "url": "https://pinterest.com/pin/123",
+            "source_type": "web",
+        }
+        f = SourceFilter({})
+        score = f.compute_quality_score(source)
+        assert score <= 0.5
+
+    def test_disabled_filter_passes_all(self):
+        """When disabled, all sources pass."""
+        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        sources = [{"content": "x", "url": "", "title": ""}]
+        f = SourceFilter({"source_filter_enabled": False})
+        kept, rejected = f.filter_sources(sources, "test")
+        assert len(kept) == 1
+        assert len(rejected) == 0
+
+    def test_normalize_url_strips_tracking(self):
+        """URL normalization strips tracking params."""
+        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        f = SourceFilter({})
+        url1 = f._normalize_url("https://example.com/page?utm_source=google&ref=home")
+        url2 = f._normalize_url("https://example.com/page")
+        assert url1 == url2
+
+    def test_wiki_type_gets_high_score(self):
+        """Wiki source type gets high score."""
+        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        source = {
+            "content": "A" * 1000,
+            "url": "wiki://SomePage",
+            "source_type": "wiki",
+        }
+        f = SourceFilter({})
+        score = f.compute_quality_score(source)
+        assert score >= 0.6
+
+
+# ==============================================================================
+# QualityGate Tests
+# ==============================================================================
+
+
+class TestQualityGate:
+    def test_after_gathering_pass(self):
+        """Gathering gate passes with enough sources."""
+        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        sources = [
+            {"id": "1", "source_type": "web", "content": "A" * 1000},
+            {"id": "2", "source_type": "wiki", "content": "B" * 1000},
+            {"id": "3", "source_type": "web", "content": "C" * 1000},
+        ]
+        sub_queries = [{"id": "1"}, {"id": "2"}]
+        gate = QualityGate({"gate_min_sources": 3})
+        result = gate.check_after_gathering(sources, sub_queries)
+        assert result.passed
+
+    def test_after_gathering_fail(self):
+        """Gathering gate fails with too few sources."""
+        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        sources = [{"id": "1", "source_type": "web"}]
+        sub_queries = [{"id": "1"}]
+        gate = QualityGate({"gate_min_sources": 3})
+        result = gate.check_after_gathering(sources, sub_queries)
+        assert not result.passed
+        assert "gather" in result.suggestion.lower() or "more" in result.suggestion.lower()
+
+    def test_after_analysis_low_credibility(self):
+        """Analysis gate fails with low credibility."""
+        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        sources = [
+            {"analysis": {"quality_assessment": {"credibility": 3}}},
+            {"analysis": {"quality_assessment": {"credibility": 4}}},
+        ]
+        gate = QualityGate({"gate_min_avg_credibility": 5})
+        result = gate.check_after_analysis(sources)
+        assert not result.passed
+
+    def test_after_analysis_pass(self):
+        """Analysis gate passes with good credibility."""
+        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        sources = [
+            {"analysis": {"quality_assessment": {"credibility": 7}}},
+            {"analysis": {"quality_assessment": {"credibility": 8}}},
+        ]
+        gate = QualityGate({"gate_min_avg_credibility": 5})
+        result = gate.check_after_analysis(sources)
+        assert result.passed
+
+    def test_after_synthesis_pass(self):
+        """Synthesis gate passes with enough reinforced claims."""
+        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        synthesis = {"reinforced_claims": ["a", "b", "c"], "knowledge_gaps": ["x"]}
+        gate = QualityGate({"gate_min_reinforced_claims": 2, "gate_max_knowledge_gaps": 3})
+        result = gate.check_after_synthesis(synthesis)
+        assert result.passed
+
+    def test_after_synthesis_fail_too_many_gaps(self):
+        """Synthesis gate fails with too many knowledge gaps."""
+        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        synthesis = {"reinforced_claims": ["a", "b"], "knowledge_gaps": ["x", "y", "z", "w"]}
+        gate = QualityGate({"gate_min_reinforced_claims": 2, "gate_max_knowledge_gaps": 3})
+        result = gate.check_after_synthesis(synthesis)
+        assert not result.passed
+
+    def test_before_report_pass(self):
+        """Report gate passes with synthesis and sources."""
+        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        synthesis = {"reinforced_claims": ["a"]}
+        sources = [{"id": "1"}, {"id": "2"}]
+        gate = QualityGate({})
+        result = gate.check_before_report(synthesis, sources)
+        assert result.passed
+
+    def test_before_report_fail_no_synthesis(self):
+        """Report gate fails without synthesis."""
+        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        sources = [{"id": "1"}]
+        gate = QualityGate({})
+        result = gate.check_before_report(None, sources)
+        assert not result.passed
