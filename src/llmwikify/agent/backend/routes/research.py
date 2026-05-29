@@ -92,7 +92,15 @@ async def start_research(request: Request):
             async for event in engine.run(session_id, query):
                 yield {"event": "message", "data": json.dumps(event)}
         except GeneratorExit:
-            logger.info("Client disconnected from research stream %s", session_id)
+            # Client disconnected — mark as paused so user can resume later
+            logger.info("Client disconnected from research stream %s, marking as paused", session_id)
+            try:
+                db = _get_db()
+                session = db.get_research_session(session_id)
+                if session and session.get("status") not in ("done", "cancelled", "paused", "timeout", "error"):
+                    db.update_research_status(session_id, "paused", session.get("current_step"))
+            except Exception:
+                pass
         except Exception as e:
             logger.error("Research engine error for session %s: %s", session_id, e)
             yield {"event": "message", "data": json.dumps({"type": "error", "error": str(e)})}
@@ -158,7 +166,14 @@ async def resume_research(research_id: str):
             async for event in engine.run(research_id, session["query"], resume=True):
                 yield {"event": "message", "data": json.dumps(event)}
         except GeneratorExit:
-            logger.info("Client disconnected from research resume stream %s", research_id)
+            logger.info("Client disconnected from research resume stream %s, marking as paused", research_id)
+            try:
+                db2 = _get_db()
+                sess = db2.get_research_session(research_id)
+                if sess and sess.get("status") not in ("done", "cancelled", "paused", "timeout", "error"):
+                    db2.update_research_status(research_id, "paused", sess.get("current_step"))
+            except Exception:
+                pass
         except Exception as e:
             logger.error("Research resume error for session %s: %s", research_id, e)
             yield {"event": "message", "data": json.dumps({"type": "error", "error": str(e)})}
