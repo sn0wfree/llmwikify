@@ -315,6 +315,45 @@ export interface LLMConfig {
   timeout: number;
 }
 
+function _openResearchStream(sessionId: string): ReadableStream<ResearchStreamEvent> {
+  const headers: Record<string, string> = {};
+  if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
+  return new ReadableStream<ResearchStreamEvent>({
+    async start(controller) {
+      try {
+        const res = await fetch(`${API_BASE}/research/${sessionId}/stream`, { headers });
+        if (!res.ok || !res.body) {
+          controller.enqueue({ type: 'error', error: `HTTP ${res.status}` });
+          controller.close();
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const event = JSON.parse(line.slice(6)) as ResearchStreamEvent;
+                controller.enqueue(event);
+              } catch { /* skip malformed */ }
+            }
+          }
+        }
+      } catch (e) {
+        controller.enqueue({ type: 'error', error: String(e) });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+}
+
 export const api = {
   wikis: {
     list: () => request<{ wikis: Array<Record<string, unknown>>; default_wiki_id: string | null }>('/wikis'),
@@ -458,88 +497,33 @@ export const api = {
   },
 
   research: {
-    start: (query: string, wikiId?: string): ReadableStream<ResearchStreamEvent> => {
+    start: async (query: string, wikiId?: string): Promise<{ sessionId: string; stream: ReadableStream<ResearchStreamEvent> }> => {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
-      return new ReadableStream<ResearchStreamEvent>({
-        async start(controller) {
-          try {
-            const res = await fetch(`${API_BASE}/research/start`, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({ query, wiki_id: wikiId }),
-            });
-            if (!res.ok || !res.body) {
-              controller.enqueue({ type: 'error', error: `HTTP ${res.status}` });
-              controller.close();
-              return;
-            }
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split('\n');
-              buffer = lines.pop() || '';
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  try {
-                    const event = JSON.parse(line.slice(6)) as ResearchStreamEvent;
-                    controller.enqueue(event);
-                  } catch { /* skip malformed */ }
-                }
-              }
-            }
-          } catch (e) {
-            controller.enqueue({ type: 'error', error: String(e) });
-          } finally {
-            controller.close();
-          }
-        },
+      const res = await fetch(`${API_BASE}/research/start`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ query, wiki_id: wikiId }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const { session_id } = await res.json();
+      return { sessionId: session_id, stream: _openResearchStream(session_id) };
     },
     list: (wikiId?: string) => request<{ research_sessions: ResearchSession[] }>(`/research/${wikiId ? `?wiki_id=${wikiId}` : ''}`),
     get: (id: string) => request<ResearchSession>(`/research/${id}`),
     pause: (id: string) => request<{ paused: boolean }>(`/research/${id}/pause`, { method: 'POST' }),
-    resume: (id: string): ReadableStream<ResearchStreamEvent> => {
-      const headers: Record<string, string> = {};
+    resume: async (id: string): Promise<{ sessionId: string; stream: ReadableStream<ResearchStreamEvent> }> => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
-      return new ReadableStream<ResearchStreamEvent>({
-        async start(controller) {
-          try {
-            const res = await fetch(`${API_BASE}/research/${id}/resume`, { method: 'POST', headers });
-            if (!res.ok || !res.body) {
-              controller.enqueue({ type: 'error', error: `HTTP ${res.status}` });
-              controller.close();
-              return;
-            }
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split('\n');
-              buffer = lines.pop() || '';
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  try {
-                    const event = JSON.parse(line.slice(6)) as ResearchStreamEvent;
-                    controller.enqueue(event);
-                  } catch { /* skip malformed */ }
-                }
-              }
-            }
-          } catch (e) {
-            controller.enqueue({ type: 'error', error: String(e) });
-          } finally {
-            controller.close();
-          }
-        },
-      });
+      const res = await fetch(`${API_BASE}/research/${id}/resume`, { method: 'POST', headers });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      return { sessionId: id, stream: _openResearchStream(id) };
     },
     delete: (id: string) => request<{ cancelled: boolean }>(`/research/${id}`, { method: 'DELETE' }),
     sources: (id: string) => request<{ sources: ResearchSource[] }>(`/research/${id}/sources`),
