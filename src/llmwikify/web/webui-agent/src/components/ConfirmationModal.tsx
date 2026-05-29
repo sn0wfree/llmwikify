@@ -38,6 +38,7 @@ interface ConfirmationModalProps {
   args: Record<string, unknown>;
   impact: Record<string, unknown>;
   group?: string;
+  createdAt?: string;
   onApprove: () => void;
   onReject: () => void;
   loading?: boolean;
@@ -49,6 +50,7 @@ export function ConfirmationModal({
   args,
   impact,
   group,
+  createdAt,
   onApprove,
   onReject,
   loading = false,
@@ -64,6 +66,11 @@ export function ConfirmationModal({
           {group && (
             <div className="text-xs text-[var(--text-secondary)] mt-1 ml-6">
               Group: {group}
+            </div>
+          )}
+          {createdAt && (
+            <div className="text-xs text-[var(--text-secondary)] mt-0.5 ml-6">
+              Created: {new Date(createdAt).toLocaleString()}
             </div>
           )}
         </div>
