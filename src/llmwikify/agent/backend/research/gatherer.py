@@ -373,14 +373,16 @@ class SourceGatherer:
         return events
 
     async def _fetch_url(self, source_type: str, url: str) -> str:
-        """Fetch content from a URL based on source type, with retry and hard timeout."""
-        from .retry import retry_async
+        """Fetch content from a URL based on source type, with retry and hard timeout.
 
+        Uses asyncio.to_thread for all blocking I/O so that asyncio.wait_for
+        can actually cancel on timeout (sync calls in a coroutine cannot be
+        cancelled otherwise).
+        """
         max_attempts = 2
-        call_timeout = 20
-        hard_timeout = 30
+        hard_timeout = 20
 
-        async def _do_fetch() -> str:
+        def _do_fetch_sync() -> str:
             if source_type == "youtube":
                 result = extract_youtube(url)
                 if result.source_type == "error":
@@ -388,7 +390,6 @@ class SourceGatherer:
                 return result.text
             elif source_type == "pdf":
                 if url.startswith(("http://", "https://")):
-                    # Remote PDF — use URL extraction
                     result = extract_url(url)
                     if result.source_type == "error":
                         raise ValueError(result.metadata.get("error", "PDF URL extraction failed"))
@@ -408,12 +409,18 @@ class SourceGatherer:
             else:
                 raise ValueError(f"Unsupported source_type: {source_type}")
 
-        try:
-            return await asyncio.wait_for(
-                retry_async(_do_fetch, max_attempts=max_attempts, base_delay=1.0,
-                           call_timeout=min(call_timeout, hard_timeout),
-                           exceptions=(ValueError, ConnectionError, TimeoutError)),
-                timeout=hard_timeout,
-            )
-        except asyncio.TimeoutError:
-            raise ValueError(f"Fetch timed out after {hard_timeout}s: {url}")
+        last_error = None
+        for attempt in range(max_attempts):
+            try:
+                return await asyncio.wait_for(
+                    asyncio.to_thread(_do_fetch_sync),
+                    timeout=hard_timeout,
+                )
+            except asyncio.TimeoutError:
+                last_error = f"Fetch timed out after {hard_timeout}s: {url}"
+                logger.debug("Attempt %d/%d timed out for %s", attempt + 1, max_attempts, url)
+            except (ValueError, ConnectionError, OSError) as e:
+                last_error = str(e)
+                logger.debug("Attempt %d/%d failed for %s: %s", attempt + 1, max_attempts, url, e)
+
+        raise ValueError(last_error or f"Fetch failed after {max_attempts} attempts: {url}")
