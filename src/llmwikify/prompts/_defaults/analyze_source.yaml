@@ -100,11 +100,17 @@ user: |
     "cross_refs": ["Existing Wiki Page 1", "Existing Wiki Page 2"],
     "content_type": "technical_article|meeting_notes|research_paper|news|documentation|other",
     "potential_contradictions": ["claim in source that may conflict with existing wiki"],
-    "data_gaps": ["topics or claims that need more information"]
+    "data_gaps": ["topics or claims that need more information"],
+    "quality_assessment": {
+      "credibility": 7,
+      "relevance": 8,
+      "completeness": 6,
+      "issues": ["source not signed", "data lacks citation"]
+    }
   }
 
 post_process:
   validate_schema: "analysis_output"
-  required_keys: ["topics", "entities", "key_facts", "suggested_pages"]
+  required_keys: ["topics", "entities", "key_facts", "suggested_pages", "quality_assessment"]
   retry_on_failure:
     max_attempts: 2
