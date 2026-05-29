@@ -226,7 +226,10 @@ async def list_confirmations(request: Request):
 async def approve_confirmation(confirmation_id: str, request: Request):
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    body = {}
+    raw = await request.body()
+    if raw:
+        body = json.loads(raw)
     arguments = body.get("arguments")
     return await service.approve_confirmation(confirmation_id, wiki_id, arguments=arguments)
 
