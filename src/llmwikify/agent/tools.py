@@ -645,9 +645,11 @@ class WikiToolRegistry:
                         self.db.update_confirmation_arguments(confirmation_id, arguments)
                     result = tool["handler"](args)
                     self.db.update_confirmation_status(confirmation_id, "approved")
+                    self._pending_confirmations.pop(confirmation_id, None)
                     return {"status": "executed", "confirmation_id": confirmation_id, "result": result}
                 except Exception as e:
                     self.db.update_confirmation_status(confirmation_id, "rejected")
+                    self._pending_confirmations.pop(confirmation_id, None)
                     return {"status": "error", "error": str(e)}
 
         confirmation = self._pending_confirmations.pop(confirmation_id, None)
