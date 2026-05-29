@@ -597,7 +597,8 @@ export function ResearchPanel() {
       events: [],
     });
 
-    const stream = api.research.start(query.trim(), currentWikiId || undefined);
+    const { sessionId, stream } = await api.research.start(query.trim(), currentWikiId || undefined);
+    setActive(prev => prev ? { ...prev, sessionId } : null);
     setQuery('');
     await consumeStream(stream);
   };
@@ -624,7 +625,7 @@ export function ResearchPanel() {
       events: ['Resuming research...'],
     });
 
-    const stream = api.research.resume(id);
+    const { stream } = await api.research.resume(id);
     await consumeStream(stream);
   };
 

@@ -13,6 +13,7 @@ from sse_starlette import EventSourceResponse
 from ..db import AgentDatabase
 from ..research.config import merge_research_config
 from ..research.engine import ResearchEngine
+from ..research.task_manager import get_task_manager
 
 logger = logging.getLogger(__name__)
 
@@ -56,18 +57,50 @@ def _get_engine(wiki_id: str | None = None) -> ResearchEngine:
     llm = _LLM_CLIENT
     if llm is None:
         from ..service import AgentService
-        # Get LLM from agent service (lazy init)
         from .agent import get_agent_service
         svc = get_agent_service()
         llm = svc._get_llm()
     return ResearchEngine(wiki=wiki, db=db, llm_client=llm, config=_RESEARCH_CONFIG)
 
 
+# ─── SSE Streaming Endpoint ────────────────────────────────────────
+
+@router.get("/{research_id}/stream")
+async def stream_research(research_id: str):
+    """SSE stream of research events for a session.
+
+    Reads from the background task's event queue. Safe to connect at any time
+    (before, during, or after the task runs). Events are buffered per-session.
+    """
+    db = _get_db()
+    session = db.get_research_session(research_id)
+    if not session:
+        return JSONResponse({"error": "Research session not found"}, status_code=404)
+
+    tm = get_task_manager()
+
+    async def event_generator():
+        try:
+            async for event in tm.get_event_stream(research_id):
+                yield {"event": "message", "data": json.dumps(event)}
+        except GeneratorExit:
+            logger.info("Client disconnected from research stream %s", research_id)
+        except Exception as e:
+            logger.error("Research stream error for session %s: %s", research_id, e)
+
+    return EventSourceResponse(event_generator())
+
+
+# ─── Start / Resume ────────────────────────────────────────────────
+
 @router.post("/start")
 async def start_research(request: Request):
-    """Start a deep research session with SSE progress.
+    """Start a deep research session as a background task.
 
     Body: { "query": str, "wiki_id"?: str }
+
+    Returns { session_id, status } immediately. Subscribe to
+    GET /api/research/{id}/stream for live SSE events.
     """
     body = await request.json()
     query = body.get("query", "").strip()
@@ -81,39 +114,46 @@ async def start_research(request: Request):
     except (ValueError, RuntimeError) as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
-    db = _get_db()
-    wiki = _get_wiki(wiki_id)
-
     # Create session
     session_id = engine.session_manager.create_session(query, wiki_id or "default")
 
-    async def event_generator():
-        try:
-            async for event in engine.run(session_id, query):
-                yield {"event": "message", "data": json.dumps(event)}
-        except GeneratorExit:
-            # Client disconnected — mark as paused so user can resume later
-            logger.info("Client disconnected from research stream %s, marking as paused", session_id)
-            try:
-                db = _get_db()
-                session = db.get_research_session(session_id)
-                if session and session.get("status") not in ("done", "cancelled", "paused", "timeout", "error"):
-                    db.update_research_status(session_id, "paused", session.get("current_step"))
-            except Exception:
-                pass
-        except Exception as e:
-            logger.error("Research engine error for session %s: %s", session_id, e)
-            yield {"event": "message", "data": json.dumps({"type": "error", "error": str(e)})}
+    # Launch background task
+    tm = get_task_manager()
+    tm.start(session_id, query, engine, resume=False)
 
-    return EventSourceResponse(event_generator())
+    return {"session_id": session_id, "status": "running"}
 
+
+@router.post("/{research_id}/resume")
+async def resume_research(research_id: str):
+    """Resume a paused research session as a background task.
+
+    Returns { session_id, status } immediately. Subscribe to
+    GET /api/research/{id}/stream for live SSE events.
+    """
+    db = _get_db()
+    session = db.get_research_session(research_id)
+    if not session:
+        return JSONResponse({"error": "Research session not found"}, status_code=404)
+
+    if session["status"] not in ("paused", "pausing", "gathering", "planning", "analyzing", "synthesizing", "report", "reviewing"):
+        return JSONResponse({"error": f"Cannot resume session in status: {session['status']}"}, status_code=400)
+
+    engine = _get_engine(session.get("wiki_id"))
+
+    tm = get_task_manager()
+    tm.start(research_id, session["query"], engine, resume=True)
+
+    return {"session_id": research_id, "status": "running"}
+
+
+# ─── Read-only Endpoints ───────────────────────────────────────────
 
 @router.get("/")
 async def list_research(wiki_id: str | None = None):
     """List all research sessions."""
     db = _get_db()
     sessions = db.list_research_sessions(wiki_id)
-    # sub_query_count and source_count are now included from batch query
     return {"research_sessions": sessions}
 
 
@@ -132,6 +172,32 @@ async def get_research(research_id: str):
     return session
 
 
+@router.get("/{research_id}/sources")
+async def get_research_sources(research_id: str):
+    """Get sources gathered for a research session."""
+    db = _get_db()
+    session = db.get_research_session(research_id)
+    if not session:
+        return JSONResponse({"error": "Research session not found"}, status_code=404)
+
+    sources = db.get_sources(research_id)
+    return {"sources": sources}
+
+
+@router.get("/{research_id}/sub-queries")
+async def get_research_sub_queries(research_id: str):
+    """Get sub-queries for a research session."""
+    db = _get_db()
+    session = db.get_research_session(research_id)
+    if not session:
+        return JSONResponse({"error": "Research session not found"}, status_code=404)
+
+    sub_queries = db.get_sub_queries(research_id)
+    return {"sub_queries": sub_queries}
+
+
+# ─── Control Endpoints ─────────────────────────────────────────────
+
 @router.post("/{research_id}/pause")
 async def pause_research(research_id: str):
     """Pause a running research session."""
@@ -143,42 +209,13 @@ async def pause_research(research_id: str):
     if session["status"] not in ("planning", "gathering", "analyzing", "synthesizing", "report", "reviewing"):
         return JSONResponse({"error": f"Cannot pause session in status: {session['status']}"}, status_code=400)
 
-    # Set "pausing" status — engine will pick it up on next control signal check
     db.update_research_status(research_id, "pausing", session.get("current_step"))
+
+    # Also cancel the background task if running
+    tm = get_task_manager()
+    tm.cancel(research_id)
+
     return {"paused": True, "research_id": research_id}
-
-
-@router.post("/{research_id}/resume")
-async def resume_research(research_id: str):
-    """Resume a paused research session (restarts from current step)."""
-    db = _get_db()
-    session = db.get_research_session(research_id)
-    if not session:
-        return JSONResponse({"error": "Research session not found"}, status_code=404)
-
-    if session["status"] not in ("paused", "pausing", "gathering", "planning", "analyzing", "synthesizing", "report", "reviewing"):
-        return JSONResponse({"error": f"Cannot resume session in status: {session['status']}"}, status_code=400)
-
-    engine = _get_engine(session.get("wiki_id"))
-
-    async def event_generator():
-        try:
-            async for event in engine.run(research_id, session["query"], resume=True):
-                yield {"event": "message", "data": json.dumps(event)}
-        except GeneratorExit:
-            logger.info("Client disconnected from research resume stream %s, marking as paused", research_id)
-            try:
-                db2 = _get_db()
-                sess = db2.get_research_session(research_id)
-                if sess and sess.get("status") not in ("done", "cancelled", "paused", "timeout", "error"):
-                    db2.update_research_status(research_id, "paused", sess.get("current_step"))
-            except Exception:
-                pass
-        except Exception as e:
-            logger.error("Research resume error for session %s: %s", research_id, e)
-            yield {"event": "message", "data": json.dumps({"type": "error", "error": str(e)})}
-
-    return EventSourceResponse(event_generator())
 
 
 @router.delete("/{research_id}")
@@ -189,6 +226,10 @@ async def cancel_research(research_id: str):
     if not session:
         return JSONResponse({"error": "Research session not found"}, status_code=404)
 
+    # Cancel background task if running
+    tm = get_task_manager()
+    tm.cancel(research_id)
+
     # For done/cancelled/error sessions, delete entirely
     if session["status"] in ("done", "cancelled", "error"):
         deleted = db.delete_research(research_id)
@@ -198,6 +239,8 @@ async def cancel_research(research_id: str):
     db.update_research_status(research_id, "cancelling", session.get("current_step"))
     return {"cancelled": True, "research_id": research_id}
 
+
+# ─── Save to Wiki ──────────────────────────────────────────────────
 
 @router.post("/{research_id}/save-to-wiki")
 async def save_to_wiki(research_id: str, request: Request):
@@ -214,7 +257,6 @@ async def save_to_wiki(research_id: str, request: Request):
     if session.get("wiki_page_name"):
         return JSONResponse({"error": f"Already saved to wiki as: {session['wiki_page_name']}"}, status_code=409)
 
-    # Get tool registry from agent service
     try:
         from ..service import AgentService
         from .agent import get_agent_service
@@ -224,7 +266,6 @@ async def save_to_wiki(research_id: str, request: Request):
     except Exception as e:
         return JSONResponse({"error": f"Cannot access tool registry: {e}"}, status_code=500)
 
-    # Execute tool — creates confirmation since requires_confirmation="pre"
     result = await registry.execute("research_save_to_wiki", {
         "session_id": research_id,
         "page_name": page_name,
@@ -233,24 +274,9 @@ async def save_to_wiki(research_id: str, request: Request):
     return result
 
 
-@router.get("/{research_id}/sources")
-async def get_research_sources(research_id: str):
-    """Get sources gathered for a research session."""
-    db = _get_db()
-    session = db.get_research_session(research_id)
-    if not session:
-        return JSONResponse({"error": "Research session not found"}, status_code=404)
-
-    sources = db.get_sources(research_id)
-    return {"sources": sources}
-
-
 @router.post("/{research_id}/rate")
 async def rate_research(research_id: str, request: Request):
-    """Rate sources from a research session.
-
-    Body: { "rating": int (1-5), "source_ratings": { "source_id": int }?, "feedback": str? }
-    """
+    """Rate sources from a research session."""
     body = await request.json()
     rating = body.get("rating", 0)
     source_ratings = body.get("source_ratings", {})
@@ -261,7 +287,6 @@ async def rate_research(research_id: str, request: Request):
     if not session:
         return JSONResponse({"error": "Research session not found"}, status_code=404)
 
-    # Rate individual sources
     for source_id, source_rating in source_ratings.items():
         try:
             db.rate_source(source_id, int(source_rating))
@@ -269,15 +294,3 @@ async def rate_research(research_id: str, request: Request):
             logger.warning("Failed to rate source %s: %s", source_id, e)
 
     return {"rated": True, "research_id": research_id, "rating": rating, "feedback": feedback}
-
-
-@router.get("/{research_id}/sub-queries")
-async def get_research_sub_queries(research_id: str):
-    """Get sub-queries for a research session."""
-    db = _get_db()
-    session = db.get_research_session(research_id)
-    if not session:
-        return JSONResponse({"error": "Research session not found"}, status_code=404)
-
-    sub_queries = db.get_sub_queries(research_id)
-    return {"sub_queries": sub_queries}
