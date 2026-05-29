@@ -396,7 +396,7 @@ export const api = {
     list: (wikiId?: string) => request<Record<string, Confirmation[]>>(`/agent/confirmations${wikiId ? `?wiki_id=${wikiId}` : ''}`),
     approve: (id: string, wikiId?: string, arguments_?: Record<string, unknown>) => request<Record<string, unknown>>(`/agent/confirmations/${id}${wikiId ? `?wiki_id=${wikiId}` : ''}`, {
       method: 'POST',
-      body: arguments_ ? JSON.stringify({ arguments: arguments_ }) : undefined,
+      body: JSON.stringify(arguments_ ? { arguments: arguments_ } : {}),
     }),
     reject: (id: string, wikiId?: string) => request<Record<string, unknown>>(`/agent/confirmations/${id}${wikiId ? `?wiki_id=${wikiId}` : ''}`, { method: 'DELETE' }),
     batchApprove: (ids: string[], wikiId?: string) => request<Record<string, unknown>[]>(`/agent/confirmations/batch${wikiId ? `?wiki_id=${wikiId}` : ''}`, {
