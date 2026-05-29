@@ -166,16 +166,18 @@ async def resume_research(research_id: str):
 
 @router.delete("/{research_id}")
 async def cancel_research(research_id: str):
-    """Cancel a research session."""
+    """Cancel or delete a research session."""
     db = _get_db()
     session = db.get_research_session(research_id)
     if not session:
         return JSONResponse({"error": "Research session not found"}, status_code=404)
 
+    # For done/cancelled/error sessions, delete entirely
     if session["status"] in ("done", "cancelled", "error"):
-        return JSONResponse({"error": f"Cannot cancel session in status: {session['status']}"}, status_code=400)
+        deleted = db.delete_research(research_id)
+        return {"cancelled": deleted, "research_id": research_id}
 
-    # Set "cancelling" status — engine will pick it up on next control signal check
+    # For running sessions, set cancelling status
     db.update_research_status(research_id, "cancelling", session.get("current_step"))
     return {"cancelled": True, "research_id": research_id}
 
