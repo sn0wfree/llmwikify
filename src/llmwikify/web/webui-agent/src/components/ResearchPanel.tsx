@@ -1067,7 +1067,9 @@ export function ResearchPanel() {
                       <>
                         <button onClick={() => setSelectedSessionId('report:' + s.id)} className="text-xs text-[var(--accent)] hover:underline">View Report</button>
                         <button onClick={() => setSelectedSessionId('detail:' + s.id)} className="text-xs text-[var(--text-secondary)] hover:underline">View Details</button>
-                        <button onClick={() => { setSaveModalSessionId(s.id); setSaveModalQuery(s.query); }} className="text-xs text-purple-400 hover:underline">Save to Wiki</button>
+                        {!s.wiki_page_name && (
+                          <button onClick={() => { setSaveModalSessionId(s.id); setSaveModalQuery(s.query); }} className="text-xs text-purple-400 hover:underline">Save to Wiki</button>
+                        )}
                       </>
                     )}
                     {(s.status === 'paused' || s.status === 'gathering') && (

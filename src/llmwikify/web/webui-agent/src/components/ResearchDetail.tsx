@@ -92,7 +92,7 @@ export function ResearchDetail({ sessionId, onBack }: Props) {
     <div className="h-full flex flex-col overflow-hidden">
       <Header
         onBack={onBack}
-        canSave={session.status === 'done'}
+        canSave={session.status === 'done' && !session.wiki_page_name}
         onSaveToWiki={() => setSaveModalOpen(true)}
       />
 

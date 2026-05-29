@@ -194,6 +194,8 @@ async def save_to_wiki(research_id: str, request: Request):
         return JSONResponse({"error": "Session not found"}, status_code=404)
     if session["status"] != "done":
         return JSONResponse({"error": "Session not done yet"}, status_code=400)
+    if session.get("wiki_page_name"):
+        return JSONResponse({"error": f"Already saved to wiki as: {session['wiki_page_name']}"}, status_code=409)
 
     # Get tool registry from agent service
     try:

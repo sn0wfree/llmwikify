@@ -349,7 +349,7 @@ export function ReportDetail({ sessionId, onBack }: Props) {
         onBack={onBack}
         query={query}
         qualityScore={qualityScore}
-        onSaveToWiki={() => setSaveModalOpen(true)}
+        onSaveToWiki={session?.wiki_page_name ? undefined : () => setSaveModalOpen(true)}
       />
 
       <div className="flex-1 overflow-y-auto">
