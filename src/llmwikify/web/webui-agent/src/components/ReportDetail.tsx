@@ -282,10 +282,38 @@ export function ReportDetail({ sessionId, onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [wikiViewer, setWikiViewer] = useState<{ pageName: string; wikiId?: string } | null>(null);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [savePageName, setSavePageName] = useState('');
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saveResult, setSaveResult] = useState<{ message: string; confirmation_id?: string } | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saved'>('idle');
 
   const openWiki = useCallback((pageName: string) => {
     setWikiViewer({ pageName, wikiId: session?.wiki_id || undefined });
   }, [session]);
+
+  const generatePageName = useCallback((q: string) => {
+    const slug = q.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+    return `research/${slug || 'untitled'}`;
+  }, []);
+
+  const handleSaveToWiki = useCallback(async () => {
+    if (!savePageName.trim()) return;
+    setSaveLoading(true);
+    setSaveError('');
+    try {
+      const result = await api.research.saveToWiki(sessionId, savePageName.trim());
+      setSaveResult(result);
+      if (result.status === 'confirmation_required') {
+        setSaveState('saved');
+      }
+    } catch (e) {
+      setSaveError(String(e));
+    } finally {
+      setSaveLoading(false);
+    }
+  }, [sessionId, savePageName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -343,7 +371,18 @@ export function ReportDetail({ sessionId, onBack }: Props) {
 
     return (
     <div className="h-full flex flex-col overflow-hidden">
-      <Header onBack={onBack} query={query} qualityScore={qualityScore} />
+      <Header
+        onBack={onBack}
+        query={query}
+        qualityScore={qualityScore}
+        onSaveToWiki={() => {
+          setSavePageName(generatePageName(query));
+          setSaveResult(null);
+          setSaveError('');
+          setSaveModalOpen(true);
+        }}
+        saveState={saveState}
+      />
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6">
@@ -415,11 +454,69 @@ export function ReportDetail({ sessionId, onBack }: Props) {
           onClose={() => setWikiViewer(null)}
         />
       )}
+
+      {saveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setSaveModalOpen(false)}>
+          <div className="w-full max-w-md mx-4 bg-[var(--bg-secondary)] rounded-lg shadow-xl border border-[var(--border)] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-[var(--border)]">
+              <h3 className="text-sm font-medium text-[var(--text-primary)]">Save to Wiki</h3>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
+                Report will be saved as a wiki page. Sources and synthesis will also be saved.
+              </p>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] mb-1 block">Page Name</label>
+                <input
+                  value={savePageName}
+                  onChange={e => setSavePageName(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-[var(--bg-tertiary)] border border-[var(--border)] rounded focus:outline-none focus:border-[var(--accent)]"
+                  placeholder="research/my-topic"
+                />
+              </div>
+              {saveError && (
+                <div className="text-xs text-red-400">{saveError}</div>
+              )}
+              {saveResult && (
+                <div className="text-xs text-green-400">
+                  {saveResult.message}
+                  {saveResult.confirmation_id && (
+                    <span className="ml-1">— Confirmation ID: {saveResult.confirmation_id}</span>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="px-4 py-3 border-t border-[var(--border)] flex gap-3 justify-end">
+              <button
+                onClick={() => setSaveModalOpen(false)}
+                className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
+                {saveResult ? 'Close' : 'Cancel'}
+              </button>
+              {!saveResult && (
+                <button
+                  onClick={handleSaveToWiki}
+                  disabled={saveLoading || !savePageName.trim()}
+                  className="px-3 py-1.5 text-xs bg-[var(--accent)] text-white rounded hover:opacity-90 disabled:opacity-50"
+                >
+                  {saveLoading ? 'Saving...' : 'Confirm & Save'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function Header({ onBack, query, qualityScore }: { onBack: () => void; query?: string; qualityScore?: number }) {
+function Header({ onBack, query, qualityScore, onSaveToWiki, saveState }: {
+  onBack: () => void;
+  query?: string;
+  qualityScore?: number;
+  onSaveToWiki?: () => void;
+  saveState?: 'idle' | 'saved';
+}) {
   return (
     <div className="px-4 py-3 border-b border-[var(--border)] flex items-center gap-3">
       <button onClick={onBack} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] shrink-0">
@@ -434,6 +531,19 @@ function Header({ onBack, query, qualityScore }: { onBack: () => void; query?: s
         <div className={`text-sm font-bold shrink-0 ${qualityScore >= 7 ? 'text-green-400' : qualityScore >= 5 ? 'text-yellow-400' : 'text-red-400'}`}>
           ★ {qualityScore}/10
         </div>
+      )}
+      {onSaveToWiki && (
+        <button
+          onClick={onSaveToWiki}
+          disabled={saveState === 'saved'}
+          className={`text-xs px-2 py-1 rounded shrink-0 ${
+            saveState === 'saved'
+              ? 'text-green-400 bg-green-500/10'
+              : 'text-[var(--accent)] hover:bg-[var(--accent)]/10'
+          }`}
+        >
+          {saveState === 'saved' ? 'Saved ✓' : 'Save to Wiki'}
+        </button>
       )}
     </div>
   );

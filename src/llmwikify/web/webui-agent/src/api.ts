@@ -546,5 +546,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ rating, source_ratings: sourceRatings, feedback }),
       }),
+    saveToWiki: (id: string, pageName?: string) =>
+      request<{ status: string; confirmation_id?: string; impact?: Record<string, unknown>; error?: string }>(
+        `/research/${id}/save-to-wiki`,
+        { method: 'POST', body: JSON.stringify({ page_name: pageName }) }
+      ),
   },
 };
