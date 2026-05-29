@@ -11,6 +11,7 @@ from ....extractors.web import extract_url
 from ....extractors.youtube import extract_youtube
 from ..db import AgentDatabase
 from .session import ResearchSessionManager
+from .source_filter import SourceFilter
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class SourceGatherer:
         self.session_manager = session_manager
         self.config = config
         self._max_content = config.get("max_source_content_length", 500000)
+        self._source_filter = SourceFilter(config)
 
     @staticmethod
     def _normalize_url(url: str) -> str:
@@ -248,6 +250,17 @@ class SourceGatherer:
                         if self._normalize_url(fetch_url) in seen_urls:
                             continue
                         seen_urls.add(self._normalize_url(fetch_url))
+                        # Apply source filter
+                        source_candidate = {
+                            "url": fetch_url,
+                            "content": content,
+                            "source_type": source_type,
+                            "title": fetch_url,
+                        }
+                        kept, _ = self._source_filter.filter_sources([source_candidate], query)
+                        if not kept:
+                            logger.debug("Source filtered out: %s", fetch_url)
+                            continue
                         source_id = self.session_manager.add_source(
                             session_id=session_id,
                             sub_query_id=sq_id,
@@ -312,6 +325,17 @@ class SourceGatherer:
                             continue
                         content = content[: self._max_content]
                         seen_urls.add(self._normalize_url(fetch_url))
+                        # Apply source filter
+                        source_candidate = {
+                            "url": fetch_url,
+                            "content": content,
+                            "source_type": source_type,
+                            "title": fetch_url,
+                        }
+                        kept, _ = self._source_filter.filter_sources([source_candidate], query)
+                        if not kept:
+                            logger.debug("Source filtered out: %s", fetch_url)
+                            continue
                         source_id = self.session_manager.add_source(
                             session_id=session_id,
                             sub_query_id=sq_id,
