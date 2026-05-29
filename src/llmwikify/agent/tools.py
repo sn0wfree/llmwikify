@@ -289,6 +289,21 @@ class WikiToolRegistry:
             },
         )
         self._register(
+            "research_save_to_wiki",
+            self._handle_research_save,
+            description="Save research results to wiki: report page + sources + synthesis",
+            action_type="write",
+            requires_confirmation="pre",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "Research session ID"},
+                    "page_name": {"type": "string", "description": "Wiki page name (auto-generated if omitted)"},
+                },
+                "required": ["session_id"],
+            },
+        )
+        self._register(
             "wiki_synthesize",
             lambda args: json.dumps(
                 self.wiki.synthesize_query(
@@ -412,8 +427,95 @@ class WikiToolRegistry:
             return "source_pages"
         elif "/models/" in page_name or page_name.startswith("models/"):
             return "model_pages"
+        elif page_name.startswith("research/"):
+            return "research_pages"
+        elif page_name.startswith("synthesis/"):
+            return "synthesis_pages"
         else:
             return "other_pages"
+
+    @staticmethod
+    def _slugify(text: str) -> str:
+        """Convert text to a URL-friendly slug."""
+        import re
+        slug = re.sub(r'[^a-z0-9\u4e00-\u9fff]+', '-', text.lower()).strip('-')
+        return slug[:60] or 'untitled'
+
+    def _handle_research_save(self, args: dict) -> str:
+        """Handle saving research results to wiki."""
+        import json
+        import sqlite3
+
+        session_id = args["session_id"]
+        page_name = args.get("page_name")
+
+        # 1. Read session from DB
+        session = self.db.get_research_session(session_id)
+        if not session or not session.get("result"):
+            return json.dumps({"error": "Session not found or no result"})
+
+        result = json.loads(session["result"])
+
+        # 2. Auto-generate page_name if not provided
+        if not page_name:
+            page_name = f"research/{self._slugify(result.get('query', ''))}"
+
+        # 3. Write report page
+        self.wiki.write_page(page_name, result.get("markdown", ""))
+
+        # 4. Save non-wiki sources to raw/ + update index
+        sources = self.db.get_sources(session_id) or []
+        sources_saved = 0
+        for src in sources:
+            if src.get("source_type") == "wiki":
+                continue
+            content = src.get("content", "")
+            if not content:
+                continue
+            slug = self._slugify(src.get("title") or src.get("url", ""))
+            raw_path = self.wiki.raw_dir / f"{slug}.md"
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
+            raw_path.write_text(content)
+            self.wiki.index.upsert_page(slug, content, f"{slug}.md")
+            sources_saved += 1
+
+        # 5. Write synthesis page
+        synthesis = result.get("synthesis_summary", {})
+        query = result.get("query", "")
+        synthesis_lines = [f"# Synthesis: {query}\n"]
+        reinforced = synthesis.get("reinforced_claims", [])
+        if reinforced:
+            synthesis_lines.append("## Reinforced Claims")
+            for c in reinforced:
+                synthesis_lines.append(f"- {c}")
+        contradictions = synthesis.get("contradictions", [])
+        if contradictions:
+            synthesis_lines.append("\n## Contradictions")
+            for c in contradictions:
+                synthesis_lines.append(f"- {c}")
+        gaps = synthesis.get("knowledge_gaps", [])
+        if gaps:
+            synthesis_lines.append("\n## Knowledge Gaps")
+            for g in gaps:
+                synthesis_lines.append(f"- {g}")
+        synthesis_md = "\n".join(synthesis_lines)
+        synthesis_page = f"synthesis/{self._slugify(query)}"
+        self.wiki.write_page(synthesis_page, synthesis_md)
+
+        # 6. Update session wiki_page_name
+        with sqlite3.connect(self.db.db_path) as conn:
+            conn.execute(
+                "UPDATE research_sessions SET wiki_page_name = ? WHERE id = ?",
+                (page_name, session_id),
+            )
+            conn.commit()
+
+        return json.dumps({
+            "page_name": page_name,
+            "sources_saved": sources_saved,
+            "synthesis_page": synthesis_page,
+            "message": f"Saved to wiki: {page_name}",
+        })
 
     def _analyze_impact(self, tool_name: str, arguments: dict) -> dict:
         """Analyze the impact of a tool call for confirmation preview."""
@@ -423,6 +525,15 @@ class WikiToolRegistry:
                 "page": arguments.get("page_name", ""),
                 "change_type": "write",
                 "chars": len(content),
+            }
+        elif tool_name == "research_save_to_wiki":
+            session_id = arguments.get("session_id", "")
+            page_name = arguments.get("page_name", "")
+            return {
+                "session_id": session_id,
+                "page": page_name or "(auto-generated)",
+                "change_type": "research_save",
+                "description": "Save research report + sources + synthesis to wiki",
             }
         elif tool_name == "wiki_synthesize":
             return {

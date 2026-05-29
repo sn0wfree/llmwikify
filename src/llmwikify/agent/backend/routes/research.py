@@ -182,6 +182,38 @@ async def cancel_research(research_id: str):
     return {"cancelled": True, "research_id": research_id}
 
 
+@router.post("/{research_id}/save-to-wiki")
+async def save_to_wiki(research_id: str, request: Request):
+    """Save research results to wiki via confirmation flow."""
+    body = await request.json()
+    page_name = body.get("page_name")
+
+    db = _get_db()
+    session = db.get_research_session(research_id)
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    if session["status"] != "done":
+        return JSONResponse({"error": "Session not done yet"}, status_code=400)
+
+    # Get tool registry from agent service
+    try:
+        from ..service import AgentService
+        from .agent import get_agent_service
+        svc = get_agent_service()
+        wiki_id = session.get("wiki_id")
+        registry = svc._get_tool_registry(wiki_id)
+    except Exception as e:
+        return JSONResponse({"error": f"Cannot access tool registry: {e}"}, status_code=500)
+
+    # Execute tool — creates confirmation since requires_confirmation="pre"
+    result = await registry.execute("research_save_to_wiki", {
+        "session_id": research_id,
+        "page_name": page_name,
+    })
+
+    return result
+
+
 @router.get("/{research_id}/sources")
 async def get_research_sources(research_id: str):
     """Get sources gathered for a research session."""
