@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { api, type ResearchSession, type ResearchSource } from '../api';
 import { ResearchRating } from './ResearchRating';
 import { StagePipeline } from './ResearchPanel';
+import { SaveToWikiModal } from './SaveToWikiModal';
 
 interface Props {
   sessionId: string;
@@ -37,6 +38,7 @@ export function ResearchDetail({ sessionId, onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showRating, setShowRating] = useState(false);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +90,11 @@ export function ResearchDetail({ sessionId, onBack }: Props) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <Header onBack={onBack} />
+      <Header
+        onBack={onBack}
+        canSave={session.status === 'done'}
+        onSaveToWiki={() => setSaveModalOpen(true)}
+      />
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Query title & status */}
@@ -189,13 +195,21 @@ export function ResearchDetail({ sessionId, onBack }: Props) {
           </Section>
         )}
       </div>
+
+      {saveModalOpen && (
+        <SaveToWikiModal
+          sessionId={sessionId}
+          query={session.query}
+          onClose={() => setSaveModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
 /* ---- Sub-components ---- */
 
-function Header({ onBack }: { onBack: () => void }) {
+function Header({ onBack, onSaveToWiki, canSave }: { onBack: () => void; onSaveToWiki?: () => void; canSave?: boolean }) {
   return (
     <div className="p-4 border-b border-[var(--border)] flex items-center gap-3">
       <button onClick={onBack} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
@@ -203,7 +217,15 @@ function Header({ onBack }: { onBack: () => void }) {
           <path d="M11 2L5 8l6 6" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </button>
-      <h2 className="text-sm font-medium">Research Details</h2>
+      <h2 className="text-sm font-medium flex-1">Research Details</h2>
+      {canSave && onSaveToWiki && (
+        <button
+          onClick={onSaveToWiki}
+          className="text-xs px-2 py-1 rounded text-[var(--accent)] hover:bg-[var(--accent)]/10"
+        >
+          Save to Wiki
+        </button>
+      )}
     </div>
   );
 }
