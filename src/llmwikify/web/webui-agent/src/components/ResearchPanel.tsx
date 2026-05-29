@@ -3,6 +3,7 @@ import { api, type ResearchSession, type ResearchStreamEvent, type ResearchSubQu
 import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { ResearchDetail } from './ResearchDetail';
 import { ReportDetail } from './ReportDetail';
+import { SaveToWikiModal } from './SaveToWikiModal';
 
 interface ActiveResearch {
   sessionId: string;
@@ -545,6 +546,8 @@ export function ResearchPanel() {
   const [active, setActive] = useState<ActiveResearch | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saveModalSessionId, setSaveModalSessionId] = useState<string | null>(null);
+  const [saveModalQuery, setSaveModalQuery] = useState('');
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
 
   const loadSessions = async () => {
@@ -1064,6 +1067,7 @@ export function ResearchPanel() {
                       <>
                         <button onClick={() => setSelectedSessionId('report:' + s.id)} className="text-xs text-[var(--accent)] hover:underline">View Report</button>
                         <button onClick={() => setSelectedSessionId('detail:' + s.id)} className="text-xs text-[var(--text-secondary)] hover:underline">View Details</button>
+                        <button onClick={() => { setSaveModalSessionId(s.id); setSaveModalQuery(s.query); }} className="text-xs text-purple-400 hover:underline">Save to Wiki</button>
                       </>
                     )}
                     {(s.status === 'paused' || s.status === 'gathering') && (
@@ -1080,6 +1084,14 @@ export function ResearchPanel() {
           </div>
         )}
       </div>
+
+      {saveModalSessionId && (
+        <SaveToWikiModal
+          sessionId={saveModalSessionId}
+          query={saveModalQuery}
+          onClose={() => { setSaveModalSessionId(null); setSaveModalQuery(''); }}
+        />
+      )}
     </div>
   );
 }
