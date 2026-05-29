@@ -677,6 +677,17 @@ class ResearchEngine:
         self.session_manager.finalize(state.session_id, {
             "markdown": state.report_md,
             "query": state.query,
+            "quality_score": state.quality_score,
+            "rounds": state.round,
+            "synthesis_summary": {
+                "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
+                "contradictions": len((state.synthesis or {}).get("contradictions", [])),
+                "knowledge_gaps": len(state.knowledge_gaps),
+            },
+            "sources": [
+                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+                for s in sources
+            ],
         })
 
         yield {
