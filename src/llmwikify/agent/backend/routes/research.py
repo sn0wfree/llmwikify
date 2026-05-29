@@ -105,11 +105,7 @@ async def list_research(wiki_id: str | None = None):
     """List all research sessions."""
     db = _get_db()
     sessions = db.list_research_sessions(wiki_id)
-    # Enrich with sub_query counts
-    for s in sessions:
-        sub_queries = db.get_sub_queries(s["id"])
-        s["sub_query_count"] = len(sub_queries)
-        s["source_count"] = db.get_source_count(s["id"])
+    # sub_query_count and source_count are now included from batch query
     return {"research_sessions": sessions}
 
 
@@ -137,7 +133,8 @@ async def pause_research(research_id: str):
     if session["status"] not in ("planning", "gathering", "analyzing", "synthesizing", "report", "reviewing"):
         return JSONResponse({"error": f"Cannot pause session in status: {session['status']}"}, status_code=400)
 
-    db.update_research_status(research_id, "paused", session.get("current_step"))
+    # Set "pausing" status — engine will pick it up on next control signal check
+    db.update_research_status(research_id, "pausing", session.get("current_step"))
     return {"paused": True, "research_id": research_id}
 
 
@@ -149,7 +146,7 @@ async def resume_research(research_id: str):
     if not session:
         return JSONResponse({"error": "Research session not found"}, status_code=404)
 
-    if session["status"] not in ("paused", "gathering", "planning", "analyzing", "synthesizing", "report", "reviewing"):
+    if session["status"] not in ("paused", "pausing", "gathering", "planning", "analyzing", "synthesizing", "report", "reviewing"):
         return JSONResponse({"error": f"Cannot resume session in status: {session['status']}"}, status_code=400)
 
     engine = _get_engine(session.get("wiki_id"))
@@ -175,7 +172,11 @@ async def cancel_research(research_id: str):
     if not session:
         return JSONResponse({"error": "Research session not found"}, status_code=404)
 
-    db.update_research_status(research_id, "cancelled")
+    if session["status"] in ("done", "cancelled", "error"):
+        return JSONResponse({"error": f"Cannot cancel session in status: {session['status']}"}, status_code=400)
+
+    # Set "cancelling" status — engine will pick it up on next control signal check
+    db.update_research_status(research_id, "cancelling", session.get("current_step"))
     return {"cancelled": True, "research_id": research_id}
 
 

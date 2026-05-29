@@ -363,9 +363,16 @@ class SourceGatherer:
                     raise ValueError(result.metadata.get("error", "YouTube extraction failed"))
                 return result.text
             elif source_type == "pdf":
-                from pathlib import Path
-                from ....extractors.pdf import extract_pdf
-                result = extract_pdf(Path(url))
+                if url.startswith(("http://", "https://")):
+                    # Remote PDF — use URL extraction
+                    result = extract_url(url)
+                    if result.source_type == "error":
+                        raise ValueError(result.metadata.get("error", "PDF URL extraction failed"))
+                    return result.text
+                else:
+                    from pathlib import Path
+                    from ....extractors.pdf import extract_pdf
+                    result = extract_pdf(Path(url))
                 if result.source_type == "error":
                     raise ValueError(result.metadata.get("error", "PDF extraction failed"))
                 return result.text
