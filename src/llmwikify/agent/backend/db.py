@@ -774,6 +774,14 @@ class AgentDatabase:
             )
             conn.commit()
 
+    def update_confirmation_arguments(self, confirmation_id: str, arguments: dict) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE confirmations SET arguments = ? WHERE id = ?",
+                (json.dumps(arguments), confirmation_id),
+            )
+            conn.commit()
+
     def get_confirmation(self, confirmation_id: str) -> dict | None:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row

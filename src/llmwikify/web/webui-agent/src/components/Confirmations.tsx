@@ -83,9 +83,9 @@ export function Confirmations() {
     }
   };
 
-  const handleApprove = async (id: string) => {
+  const handleApprove = async (id: string, editedArgs?: Record<string, unknown>) => {
     try {
-      await api.confirmations.approve(id, currentWikiId || undefined);
+      await api.confirmations.approve(id, currentWikiId || undefined, editedArgs);
       loadConfirmations();
       addToast('success', 'Approved');
     } catch (e) {
@@ -178,7 +178,7 @@ export function Confirmations() {
           impact={detailConfirmation.impact}
           group={detailConfirmation.group}
           createdAt={detailConfirmation.created_at}
-          onApprove={() => { handleApprove(detailConfirmation.id); setDetailConfirmation(null); }}
+          onApprove={(editedArgs) => { handleApprove(detailConfirmation.id, editedArgs); setDetailConfirmation(null); }}
           onReject={() => { handleReject(detailConfirmation.id); setDetailConfirmation(null); }}
           loading={actionLoading}
         />

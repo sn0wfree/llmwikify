@@ -226,7 +226,9 @@ async def list_confirmations(request: Request):
 async def approve_confirmation(confirmation_id: str, request: Request):
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    return await service.approve_confirmation(confirmation_id, wiki_id)
+    body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    arguments = body.get("arguments")
+    return await service.approve_confirmation(confirmation_id, wiki_id, arguments=arguments)
 
 
 @router.post("/confirmations/{confirmation_id}/approve-and-continue")
@@ -235,6 +237,7 @@ async def approve_and_continue(confirmation_id: str, request: Request):
     body = await request.json()
     session_id = body.get("session_id", "")
     wiki_id = body.get("wiki_id") or get_wiki_id(request)
+    arguments = body.get("arguments")
     service = get_agent_service()
 
     async def event_generator():
@@ -242,6 +245,7 @@ async def approve_and_continue(confirmation_id: str, request: Request):
             confirmation_id=confirmation_id,
             session_id=session_id,
             wiki_id=wiki_id,
+            arguments=arguments,
         ):
             yield {"event": "message", "data": json.dumps(event)}
 
