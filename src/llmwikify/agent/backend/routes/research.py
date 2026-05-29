@@ -119,6 +119,8 @@ async def get_research(research_id: str):
 
     session["sub_queries"] = db.get_sub_queries(research_id)
     session["sources"] = db.get_sources(research_id)
+    session["sub_query_count"] = len(session["sub_queries"])
+    session["source_count"] = len(session["sources"])
     return session
 
 
