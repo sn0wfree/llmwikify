@@ -5,13 +5,14 @@ import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { EmptyState } from './StateViews';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
-import { Badge } from './ui/Badge';
+import { ConfirmationModal } from './ConfirmationModal';
 
 export function Confirmations() {
   const [groups, setGroups] = useState<Record<string, Confirmation[]>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [detailConfirmation, setDetailConfirmation] = useState<Confirmation | null>(null);
   const { addToast } = useToast();
   const { currentWikiId } = useAgentWikiStore();
 
@@ -138,11 +139,15 @@ export function Confirmations() {
             </div>
             <div className="divide-y divide-[var(--border)]">
               {confirmations.map(c => (
-                <div key={c.id} className="p-3 flex items-center gap-3">
+                <div key={c.id}
+                  className="p-3 flex items-center gap-3 cursor-pointer hover:bg-[var(--bg-tertiary)]/50 transition-colors"
+                  onClick={() => setDetailConfirmation(c)}
+                >
                   <input type="checkbox" checked={selected.has(c.id)}
                     onChange={() => toggleSelect(c.id)}
+                    onClick={e => e.stopPropagation()}
                     className="w-4 h-4 rounded border-[var(--border)] bg-[var(--bg-secondary)]" />
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 confirm-row-content">
                     <div className="text-sm text-[var(--accent)]">{c.tool}</div>
                     <div className="text-xs text-[var(--text-secondary)]">
                       {String(c.impact?.page || c.impact?.source || 'N/A')}
@@ -151,10 +156,10 @@ export function Confirmations() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="success" size="sm" onClick={() => handleApprove(c.id)}>
+                    <Button variant="success" size="sm" onClick={(e) => { e.stopPropagation(); handleApprove(c.id); }}>
                       Approve
                     </Button>
-                    <Button variant="danger" size="sm" onClick={() => handleReject(c.id)}>
+                    <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); handleReject(c.id); }}>
                       Reject
                     </Button>
                   </div>
@@ -164,6 +169,20 @@ export function Confirmations() {
           </Card>
         ))}
       </div>
+
+      {detailConfirmation && (
+        <ConfirmationModal
+          confirmationId={detailConfirmation.id}
+          tool={detailConfirmation.tool}
+          args={detailConfirmation.arguments}
+          impact={detailConfirmation.impact}
+          group={detailConfirmation.group}
+          createdAt={detailConfirmation.created_at}
+          onApprove={() => { handleApprove(detailConfirmation.id); setDetailConfirmation(null); }}
+          onReject={() => { handleReject(detailConfirmation.id); setDetailConfirmation(null); }}
+          loading={actionLoading}
+        />
+      )}
     </div>
   );
 }
