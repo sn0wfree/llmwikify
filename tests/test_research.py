@@ -1487,7 +1487,7 @@ class TestResearchRoutes:
         assert data["paused"] is True
 
         session = db.get_research_session(session_id)
-        assert session["status"] == "paused"
+        assert session["status"] == "pausing"
 
     def test_pause_non_pausable(self, client, db):
         session_id = db.create_research_session("wiki1", "test")
@@ -1503,7 +1503,7 @@ class TestResearchRoutes:
         assert data["cancelled"] is True
 
         session = db.get_research_session(session_id)
-        assert session["status"] == "cancelled"
+        assert session["status"] == "cancelling"
 
     def test_rate_research(self, client, db):
         session_id = db.create_research_session("wiki1", "test")

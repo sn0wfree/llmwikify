@@ -73,10 +73,15 @@ class TavilyProvider:
         self.api_key = api_key
 
     async def search(self, query: str, num_results: int) -> list[SearchResult]:
+        import asyncio
         from tavily import TavilyClient
 
         client = TavilyClient(api_key=self.api_key)
-        response = client.search(query, max_results=num_results, include_raw_content=False)
+
+        def _search():
+            return client.search(query, max_results=num_results, include_raw_content=False)
+
+        response = await asyncio.to_thread(_search)
         return [
             SearchResult(
                 title=r.get("title", ""),
@@ -96,10 +101,14 @@ class DuckDuckGoProvider:
     """DuckDuckGo search (free, may fail in restricted networks)."""
 
     async def search(self, query: str, num_results: int) -> list[SearchResult]:
+        import asyncio
         from duckduckgo_search import DDGS
 
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=num_results))
+        def _search():
+            with DDGS() as ddgs:
+                return list(ddgs.text(query, max_results=num_results))
+
+        results = await asyncio.to_thread(_search)
         return [
             SearchResult(
                 title=r.get("title", ""),

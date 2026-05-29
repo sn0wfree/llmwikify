@@ -101,6 +101,18 @@ class ReportGenerator:
             )
 
         report_md = await retry_async(_call_llm, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout)
+
+        # Validate citations
+        import re
+        citations = re.findall(r'\[\[Source:([a-f0-9]+)\]\]', report_md)
+        source_hashes = {
+            hashlib.md5((s.get("url") or s.get("title", "")).encode()).hexdigest()[:12]
+            for s in sources
+        }
+        invalid = [c for c in citations if c not in source_hashes]
+        if invalid:
+            logger.warning("Report has %d invalid citations (out of %d total): %s", len(invalid), len(citations), invalid[:5])
+
         return report_md
 
 
