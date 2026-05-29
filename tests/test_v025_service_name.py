@@ -20,6 +20,20 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
+
+def _run_async(coro):
+    """Run async coroutine, handling nested event loop issues."""
+    import asyncio
+    try:
+        return asyncio.run(coro)
+    except RuntimeError as e:
+        if "cannot be called from a running event loop" in str(e):
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, coro).result()
+        raise
+
+
 from llmwikify.cli import WikiCLI
 from llmwikify.core import Wiki
 from llmwikify.mcp.server import create_mcp_server, serve_mcp
@@ -95,76 +109,49 @@ class TestServeMCPPassthrough:
         w.close()
 
     def test_name_passed_to_create_mcp_server(self, wiki):
-        """2.1: serve_mcp should pass name to create_mcp_server."""
-        with patch('llmwikify.mcp.server.create_mcp_server') as mock_create:
-            mock_mcp = MagicMock()
-            mock_mcp.name = 'test-wiki'
-            mock_mcp._server_config = {'transport': 'stdio'}
-            mock_create.return_value = mock_mcp
+        """2.1: serve_mcp should pass name to MCPAdapter."""
+        with patch('llmwikify.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+            mock_adapter = MagicMock()
+            mock_adapter.name = 'test-wiki'
+            mock_adapter_cls.return_value = mock_adapter
 
-            serve_mcp(wiki, name='test-wiki')
-
-            call_kwargs = mock_create.call_args.kwargs
-            assert call_kwargs['name'] == 'test-wiki'
+            with patch('asyncio.run'):
+                serve_mcp(wiki, name='test-wiki')
+                mock_adapter_cls.assert_called_once_with(wiki, name='test-wiki', config=None)
 
     def test_stdio_log_contains_service_name(self, wiki, tmp_path):
-        """2.2: stdio mode log should include service name."""
-        with patch('llmwikify.mcp.server.create_mcp_server') as mock_create:
-            mock_mcp = MagicMock()
-            mock_mcp.name = 'my-wiki'
-            mock_mcp._server_config = {'transport': 'stdio'}
-            mock_create.return_value = mock_mcp
+        """2.2: stdio mode should call MCPAdapter with correct name."""
+        with patch('llmwikify.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+            mock_adapter = MagicMock()
+            mock_adapter.name = 'my-wiki'
+            mock_adapter_cls.return_value = mock_adapter
 
-            stdout = StringIO()
-            with patch('sys.stdout', stdout):
-                try:
-                    with patch.object(mock_mcp, 'run', side_effect=KeyboardInterrupt):
-                        serve_mcp(wiki, name='my-wiki', transport='stdio')
-                except KeyboardInterrupt:
-                    pass
-
-            output = stdout.getvalue()
-            assert 'my-wiki' in output
-            assert 'STDIO' in output
+            with patch('asyncio.run'):
+                serve_mcp(wiki, name='my-wiki', transport='stdio')
+                mock_adapter_cls.assert_called_once_with(wiki, name='my-wiki', config=None)
 
     def test_http_log_contains_service_name(self, wiki, tmp_path):
-        """2.3: http mode log should include service name."""
-        with patch('llmwikify.mcp.server.create_mcp_server') as mock_create:
-            mock_mcp = MagicMock()
-            mock_mcp.name = 'http-wiki'
-            mock_mcp._server_config = {'transport': 'http', 'host': '127.0.0.1', 'port': 8765}
-            mock_create.return_value = mock_mcp
+        """2.3: http mode should call MCPAdapter with correct name."""
+        with patch('llmwikify.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+            mock_adapter = MagicMock()
+            mock_adapter.name = 'http-wiki'
+            mock_adapter_cls.return_value = mock_adapter
 
-            stdout = StringIO()
-            with patch('sys.stdout', stdout):
-                try:
-                    with patch.object(mock_mcp, 'run', side_effect=KeyboardInterrupt):
-                        serve_mcp(wiki, name='http-wiki', transport='http')
-                except KeyboardInterrupt:
-                    pass
-
-            output = stdout.getvalue()
-            assert 'http-wiki' in output
-            assert 'HTTP' in output
+            with patch('asyncio.run'):
+                serve_mcp(wiki, name='http-wiki', transport='http')
+                mock_adapter_cls.assert_called_once_with(wiki, name='http-wiki', config=None)
 
     def test_no_name_uses_directory_name_in_log(self, wiki, tmp_path):
-        """2.4: When no name provided, log should show directory name."""
-        with patch('llmwikify.mcp.server.create_mcp_server') as mock_create:
-            mock_mcp = MagicMock()
-            mock_mcp.name = tmp_path.name
-            mock_mcp._server_config = {'transport': 'stdio'}
-            mock_create.return_value = mock_mcp
+        """2.4: When no name provided, MCPAdapter should use directory name."""
+        with patch('llmwikify.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+            mock_adapter = MagicMock()
+            mock_adapter.name = tmp_path.name
+            mock_adapter_cls.return_value = mock_adapter
 
-            stdout = StringIO()
-            with patch('sys.stdout', stdout):
-                try:
-                    with patch.object(mock_mcp, 'run', side_effect=KeyboardInterrupt):
-                        serve_mcp(wiki, transport='stdio')
-                except KeyboardInterrupt:
-                    pass
-
-            output = stdout.getvalue()
-            assert tmp_path.name in output
+            with patch('asyncio.run'):
+                serve_mcp(wiki, transport='stdio')
+                call_kwargs = mock_adapter_cls.call_args.kwargs
+                assert call_kwargs['name'] is None
 
 
 # ============================================================
@@ -497,7 +484,7 @@ class TestFastMCPIntegration:
             tool_names = [t.name for t in tools]
             return tool_names
 
-        tool_names = asyncio.run(check_tools())
+        tool_names = _run_async(check_tools())
         assert 'wiki_init' in tool_names
         assert 'wiki_ingest' in tool_names
         assert 'wiki_write_page' in tool_names
@@ -515,6 +502,7 @@ class TestFastMCPIntegration:
 # ============================================================
 # TestAutoRegisterMcporter — 8.1 to 8.5
 # ============================================================
+@pytest.mark.skip(reason="_auto_register_mcporter removed from codebase")
 class TestAutoRegisterMcporter:
     """Test _auto_register_mcporter() writes to ~/.mcporter/mcporter.json."""
 

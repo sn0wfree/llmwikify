@@ -42,9 +42,15 @@ user: |
 
   Report to review:
   ---
+  {% if report is defined and report %}
   {{ report }}
+  {% else %}
+  No report available.
+  {% endif %}
   ---
 
+  {% if source_count is defined %}
   Number of sources gathered: {{ source_count }}
+  {% endif %}
 
   Evaluate this report. Return JSON only.

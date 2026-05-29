@@ -5,6 +5,19 @@ import json
 
 import pytest
 
+
+def _run_async(coro):
+    """Run async coroutine, handling nested event loop issues."""
+    try:
+        return asyncio.run(coro)
+    except RuntimeError as e:
+        if "cannot be called from a running event loop" in str(e):
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, coro).result()
+        raise
+
+
 from llmwikify.core import Wiki
 from llmwikify.mcp import create_mcp_server
 
@@ -51,7 +64,7 @@ class TestMCPIntegration:
             assert "Test Entity" in read_text
             assert "[[Concept Page]]" in read_text
 
-        asyncio.run(_run())
+        _run_async(_run())
 
     def test_search_and_status(self, mcp, wiki):
         """Test search and status tools."""
@@ -68,7 +81,7 @@ class TestMCPIntegration:
             assert "pages_by_type" in data
             assert "graph_stats" in data
 
-        asyncio.run(_run())
+        _run_async(_run())
 
     def test_lint_and_log(self, mcp, wiki):
         """Test lint and log tools."""
@@ -82,7 +95,7 @@ class TestMCPIntegration:
             log_text = log_result.content[0].text if hasattr(log_result.content[0], 'text') else str(log_result.content[0])
             assert "Logged" in log_text
 
-        asyncio.run(_run())
+        _run_async(_run())
 
     def test_status_has_pages_by_type(self, mcp, wiki):
         """Test that status returns pages_by_type."""
@@ -95,7 +108,7 @@ class TestMCPIntegration:
             for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
                 assert subdir in data["pages_by_type"]
 
-        asyncio.run(_run())
+        _run_async(_run())
 
     def test_status_has_graph_stats(self, mcp, wiki):
         """Test that status returns graph_stats."""
@@ -107,7 +120,7 @@ class TestMCPIntegration:
             assert "total_relations" in data["graph_stats"]
             assert data["graph_stats"]["total_relations"] == 0
 
-        asyncio.run(_run())
+        _run_async(_run())
 
 
 class TestRelationEngine:

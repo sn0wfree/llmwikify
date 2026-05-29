@@ -407,6 +407,23 @@ def _register_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
     _register_agent_routes(app, registry)
 
 
+def _load_research_config() -> dict[str, Any] | None:
+    """Load research config from global config file (~/.llmwikify/llmwikify.json).
+
+    Reads the "research" section if present. Returns None if file doesn't exist.
+    """
+    import json as _json
+
+    config_file = Path.home() / ".llmwikify" / "llmwikify.json"
+    if not config_file.exists():
+        return None
+    try:
+        data = _json.loads(config_file.read_text())
+        return data.get("research")
+    except Exception:
+        return None
+
+
 def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     """Register Agent backend routes (Phase 1)."""
     from llmwikify.agent.backend.service import AgentService
@@ -421,11 +438,14 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     from llmwikify.agent.backend.routes import agent_router, research_router
     from llmwikify.agent.backend.routes.research import set_research_deps
 
+    # Load research config from global config file
+    research_config = _load_research_config()
+
     set_research_deps(
         db=agent_service.db,
         wiki_registry=registry,
         llm_client=None,
-        config=None,
+        config=research_config,
     )
     app.include_router(agent_router)
     app.include_router(research_router)

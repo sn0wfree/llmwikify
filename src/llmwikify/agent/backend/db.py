@@ -234,27 +234,53 @@ class AgentDatabase:
             conn.row_factory = sqlite3.Row
             if wiki_id:
                 rows = conn.execute(
-                    "SELECT * FROM research_sessions WHERE wiki_id = ? ORDER BY created_at DESC",
+                    """SELECT rs.*,
+                       (SELECT COUNT(*) FROM research_sub_queries WHERE session_id = rs.id) as sub_query_count,
+                       (SELECT COUNT(*) FROM research_sources WHERE session_id = rs.id) as source_count
+                    FROM research_sessions rs
+                    WHERE rs.wiki_id = ?
+                    ORDER BY rs.created_at DESC""",
                     (wiki_id,),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT * FROM research_sessions ORDER BY created_at DESC"
+                    """SELECT rs.*,
+                       (SELECT COUNT(*) FROM research_sub_queries WHERE session_id = rs.id) as sub_query_count,
+                       (SELECT COUNT(*) FROM research_sources WHERE session_id = rs.id) as source_count
+                    FROM research_sessions rs
+                    ORDER BY rs.created_at DESC"""
                 ).fetchall()
             return [dict(row) for row in rows]
 
-    def update_research_status(self, session_id: str, status: str, step: str | None = None) -> None:
+    def update_research_status(
+        self,
+        session_id: str,
+        status: str,
+        step: str | None = None,
+        iteration_round: int | None = None,
+        synthesis_json: str | None = None,
+        review_json: str | None = None,
+    ) -> None:
         with sqlite3.connect(self.db_path) as conn:
+            sets = ["status = ?", "updated_at = datetime('now')"]
+            params: list = [status]
             if step:
-                conn.execute(
-                    "UPDATE research_sessions SET status = ?, current_step = ?, updated_at = datetime('now') WHERE id = ?",
-                    (status, step, session_id),
-                )
-            else:
-                conn.execute(
-                    "UPDATE research_sessions SET status = ?, updated_at = datetime('now') WHERE id = ?",
-                    (status, session_id),
-                )
+                sets.append("current_step = ?")
+                params.append(step)
+            if iteration_round is not None:
+                sets.append("iteration_round = ?")
+                params.append(iteration_round)
+            if synthesis_json is not None:
+                sets.append("synthesis_json = ?")
+                params.append(synthesis_json)
+            if review_json is not None:
+                sets.append("review_json = ?")
+                params.append(review_json)
+            params.append(session_id)
+            conn.execute(
+                f"UPDATE research_sessions SET {', '.join(sets)} WHERE id = ?",
+                params,
+            )
             conn.commit()
 
     def finalize_research(self, session_id: str, result: str | None = None, wiki_page_name: str | None = None) -> None:
@@ -365,6 +391,12 @@ class AgentDatabase:
                 ("current_step", "TEXT"),
                 ("result", "TEXT"),
                 ("updated_at", "TEXT"),
+                ("iteration_round", "INTEGER DEFAULT 1"),
+                ("max_rounds", "INTEGER DEFAULT 5"),
+                ("knowledge_gaps", "TEXT"),
+                ("quality_score", "INTEGER DEFAULT 0"),
+                ("synthesis_json", "TEXT"),
+                ("review_json", "TEXT"),
             ]:
                 try:
                     conn.execute(f"ALTER TABLE research_sessions ADD COLUMN {col} {col_type}")

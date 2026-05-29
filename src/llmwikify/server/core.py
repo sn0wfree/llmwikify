@@ -83,7 +83,10 @@ class WikiServer:
             if len(wikis) == 1:
                 default_id = wikis[0].wiki_id
                 self.registry.set_default_wiki(default_id)
-        self.wiki = self.registry.get_default_wiki()
+        if isinstance(wiki, Wiki):
+            self.wiki = wiki
+        else:
+            self.wiki = self.registry.get_default_wiki()
 
         self.api_key = api_key
         self.enable_mcp = enable_mcp
@@ -110,7 +113,7 @@ class WikiServer:
         """Build and configure FastAPI application."""
         app = FastAPI(
             title="llmwikify",
-            version="0.30.0",
+            version="0.31.0",
             description="LLM Wiki Knowledge Base API",
             docs_url="/docs",
             redoc_url="/redoc",
@@ -151,7 +154,7 @@ class WikiServer:
                     "version": "0.31.0",
                     "mode": "multi-wiki",
                     "wiki_count": wiki_count,
-                    "default_wiki_id": default_id,
+                    "default_wiki_id": self.registry.get_default_wiki_id(),
                     "features": {
                         "mcp": self.enable_mcp,
                         "webui": self.enable_webui,

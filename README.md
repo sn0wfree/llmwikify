@@ -71,7 +71,7 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 ### Agent Layer (v0.30.0+) ⚠️ DEPRECATED
 **Built-in Agent has moved to an independent project.** Use external AI agents with the MCP protocol:
 - `llmwikify mcp` — Start MCP server for Agent integration
-- All 20+ wiki tools are available via standard MCP protocol
+- All 28 wiki tools are available via standard MCP protocol
 
 *Legacy Agent is kept for backward compatibility only and will be removed in a future version.*
 - **Autonomous Wiki Maintenance** — 8 sub-systems: WikiAgent, AgentRunner, TaskScheduler, MemoryManager, NotificationManager, HooksSystem, ToolsRegistry, DreamEditor
@@ -90,7 +90,7 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 ### Additional
 - **File extraction** — PDF, Word, Excel, PowerPoint, images, audio, YouTube, web URLs via MarkItDown
 - **File watcher** — Watch `raw/` for new files, optional auto-ingest
-- **MCP server** — 20 tools for LLM/Agent integration
+- **MCP server** — 28 tools for LLM/Agent integration
 - **Performance** — Batch inserts, PRAGMA optimizations, 10-20x faster than naive implementation
 
 ---
@@ -165,7 +165,7 @@ llmwikify serve --web                # MCP + Web UI
 
 ---
 
-## 🗄️ MCP Server (20 Tools)
+## 🗄️ MCP Server (28 Tools)
 
 | Tool | Description |
 |------|-------------|
@@ -189,6 +189,14 @@ llmwikify serve --web                # MCP + Web UI
 | `wiki_analyze_source` | Analyze raw source file |
 | `wiki_suggest_synthesis` | Cross-source synthesis suggestions |
 | `wiki_knowledge_gaps` | Knowledge gap + outdated + redundancy |
+| `wiki_list` | List all registered wikis |
+| `wiki_switch` | Switch to a different wiki |
+| `wiki_register` | Register a new wiki |
+| `wiki_unregister` | Unregister a wiki |
+| `wiki_status` (scoped) | Get status for a specific wiki |
+| `wiki_search` (scoped) | Search within a specific wiki |
+| `wiki_search_cross` | Search across multiple wikis |
+| `wiki_scan` | Scan directories for wikis |
 
 ---
 

@@ -1,5 +1,6 @@
 """Playwright E2E test fixtures for llmwikify Web UI."""
 
+import asyncio
 import pytest
 import tempfile
 import subprocess
@@ -9,6 +10,20 @@ import threading
 from pathlib import Path
 
 import uvicorn
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _close_event_loop_after_e2e():
+    """Ensure event loop is closed after all E2E tests."""
+    yield
+    # Playwright may leave event loops running; force close
+    try:
+        loop = asyncio.get_event_loop()
+        if not loop.is_closed():
+            loop.close()
+    except RuntimeError:
+        pass
+    asyncio.set_event_loop(None)
 
 
 @pytest.fixture(scope="session")

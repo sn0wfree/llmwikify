@@ -33,6 +33,7 @@ user: |
   {% endif %}
 
   ## Gathered Sources
+  {% if source_contents is defined and source_contents %}
   {% for sc in source_contents %}
   ### Source [{{ sc.hash }}] — {{ sc.source_type | upper }}
   Title: {{ sc.title }}
@@ -47,8 +48,11 @@ user: |
   {{ sc.analysis_summary }}
   {% endif %}
   {% endfor %}
+  {% else %}
+  No sources available.
+  {% endif %}
 
-  {% if synthesis %}
+  {% if synthesis is defined and synthesis %}
   ## Cross-Source Synthesis
 
   {% if synthesis.reinforced_claims %}

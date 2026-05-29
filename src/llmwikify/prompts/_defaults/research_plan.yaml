@@ -16,12 +16,16 @@ system: |
   Rules:
   - Generate 3-10 sub-queries covering different aspects of the topic
   - Each sub-query should be specific and searchable
-  - Assign source_type: "web" for general knowledge, "youtube" for video content, "wiki" for internal wiki knowledge
-  - Use "web" as default source_type
-  - Leave url empty for web/youtube (search will find results)
-  - For wiki, the query should be a wiki page name or search term
-  - Consider existing wiki content to avoid redundant queries
+  - Assign source_type based on where the best information lives:
+    - "wiki" for topics that have matching content in the existing wiki (PREFERRED when wiki has relevant articles)
+    - "web" for general knowledge NOT covered by the wiki
+    - "youtube" for video content
+    - "pdf" for academic papers or documentation
+  - ALWAYS check the existing wiki content below — if a topic is already partially or fully covered, use source_type "wiki" to leverage local knowledge
+  - For wiki, use a search term that will match wiki page titles or content
+  - Leave url empty for web/youtube/wiki (search will find results)
   - Use English for queries
+  - Aim for a MIX of source types — not everything should be "web"
 
   Return a JSON array of objects, each with "query", "source_type", and "url" fields.
   Example: [{"query": "Python programming basics", "source_type": "web", "url": ""}]
@@ -29,8 +33,15 @@ system: |
 user: |
   Research topic: {{ query }}
 
+  {% if local_wiki_matches %}
+  Existing wiki articles relevant to this topic:
+  {{ local_wiki_matches }}
+
+  IMPORTANT: These wiki articles contain local knowledge. Use source_type "wiki" for sub-queries where these articles are relevant — this avoids redundant web searches and leverages existing knowledge.
+  {% endif %}
+
   {% if wiki_index %}
-  Existing wiki content (avoid redundancy):
+  Full wiki index (for reference):
   {{ wiki_index }}
   {% endif %}
 

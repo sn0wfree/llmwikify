@@ -42,15 +42,20 @@ class SourceGatherer:
         return url
 
     async def gather(self, sub_queries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Gather content for all sub-queries with controlled parallelism.
+        """Gather content for all sub-queries with early-exit optimization.
 
         Returns list of SSE events to yield. Deduplicates URLs across sub-queries.
+        Early exits when 50%+ sub-queries complete, cancelling remaining tasks.
         """
-        max_parallel = self.config.get("max_parallel_gathering", 5)
+        max_parallel = self.config.get("max_parallel_gathering", 8)
+        per_query_timeout = 45
+        # Early-exit: continue when this fraction of tasks done
+        early_exit_threshold = 0.5
+        # Grace period after threshold: wait this long for stragglers
+        early_exit_grace = 15
         semaphore = asyncio.Semaphore(max_parallel)
         events: list[dict[str, Any]] = []
 
-        # Build set of already-seen URLs from existing sources (for resume)
         session_id = self.session_manager.session_id
         existing_sources = self.db.get_sources(session_id) if session_id else []
         seen_urls: set[str] = set()
@@ -61,16 +66,82 @@ class SourceGatherer:
 
         async def process_one(sq: dict[str, Any]) -> list[dict[str, Any]]:
             async with semaphore:
-                return await self._gather_one(sq, seen_urls)
+                try:
+                    return await asyncio.wait_for(
+                        self._gather_one(sq, seen_urls),
+                        timeout=per_query_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    sq_id = sq.get("id", "?")
+                    logger.warning("Sub-query %s timed out after %ds", sq_id, per_query_timeout)
+                    self.session_manager.fail_sub_query(sq_id, f"Gathering timed out after {per_query_timeout}s")
+                    return [{"type": "sub_query_failed", "sub_query_id": sq_id, "error": f"Gathering timed out after {per_query_timeout}s"}]
 
-        tasks = [process_one(sq) for sq in sub_queries]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        tasks = {asyncio.create_task(process_one(sq)): sq for sq in sub_queries}
+        total = len(tasks)
+        done_count = 0
+        threshold_reached = False
+        grace_deadline = None
 
-        for r in results:
-            if isinstance(r, Exception):
-                events.append({"type": "sub_query_failed", "error": str(r)})
-            elif isinstance(r, list):
-                events.extend(r)
+        try:
+            while tasks:
+                done, pending = await asyncio.wait(
+                    tasks.keys(),
+                    return_when=asyncio.FIRST_COMPLETED,
+                    timeout=per_query_timeout + 5,
+                )
+
+                if not done:
+                    logger.warning("No tasks completed within timeout, cancelling %d remaining", len(pending))
+                    for t in pending:
+                        if not t.done():
+                            t.exception()  # retrieve to suppress "never retrieved" warning
+                            t.cancel()
+                    break
+
+                for t in done:
+                    sq = tasks.pop(t)
+                    try:
+                        result = t.result()
+                        if isinstance(result, list):
+                            events.extend(result)
+                        done_count += 1
+                    except Exception as e:
+                        events.append({"type": "sub_query_failed", "sub_query_id": sq.get("id", "?"), "error": str(e)})
+                        done_count += 1
+
+                progress_frac = done_count / total
+                if not threshold_reached and progress_frac >= early_exit_threshold:
+                    threshold_reached = True
+                    grace_deadline = asyncio.get_event_loop().time() + early_exit_grace
+                    logger.info(
+                        "Gathering threshold reached: %d/%d done (%.0f%%), grace %ds",
+                        done_count, total, progress_frac * 100, early_exit_grace,
+                    )
+
+                if threshold_reached and pending:
+                    if asyncio.get_event_loop().time() >= grace_deadline:
+                        logger.info("Grace expired, cancelling %d remaining tasks", len(pending))
+                        for t in pending:
+                            if not t.done():
+                                t.exception()  # retrieve to suppress "never retrieved" warning
+                                t.cancel()
+                        break
+
+        except asyncio.CancelledError:
+            logger.warning("Gathering stage cancelled")
+
+        # Collect any remaining results briefly
+        remaining = [t for t in tasks if not t.done()]
+        if remaining:
+            done, _ = await asyncio.wait(remaining, timeout=5)
+            for t in done:
+                try:
+                    result = t.result()
+                    if isinstance(result, list):
+                        events.extend(result)
+                except Exception:
+                    pass
 
         return events
 
@@ -94,10 +165,19 @@ class SourceGatherer:
             if source_type in ("web", "youtube") and not url:
                 from .web_search import WebSearch
                 searcher = WebSearch(self.config)
-                if source_type == "youtube":
-                    search_results = await searcher.search(f"site:youtube.com {query}", num_results=num_results)
-                else:
-                    search_results = await searcher.search(query, num_results=num_results)
+                try:
+                    if source_type == "youtube":
+                        search_results = await asyncio.wait_for(
+                            searcher.search(f"site:youtube.com {query}", num_results=num_results),
+                            timeout=15,
+                        )
+                    else:
+                        search_results = await asyncio.wait_for(
+                            searcher.search(query, num_results=num_results),
+                            timeout=15,
+                        )
+                except asyncio.TimeoutError:
+                    raise ValueError(f"Search timed out for: {query}")
                 # Filter out already-seen URLs
                 for r in search_results:
                     if r.url and self._normalize_url(r.url) not in seen_urls:
@@ -117,7 +197,7 @@ class SourceGatherer:
                         wiki_url = f"wiki://{page_name}"
                         if self._normalize_url(wiki_url) in seen_urls:
                             continue
-                        page_content = self.wiki.page_io.read_page(page_name)
+                        page_content = self.wiki.read_page(page_name)
                         content = str(page_content) if page_content else ""
                         if not content:
                             continue
@@ -146,6 +226,83 @@ class SourceGatherer:
                     self.session_manager.complete_sub_query(sq_id, {"sources_count": len(events)})
                 else:
                     raise ValueError(f"No wiki pages found for: {query}")
+            elif source_type == "web" and not url and self.config.get("parallel_wiki_search", True):
+                # Parallel: fetch web results AND search local wiki simultaneously
+                web_tasks = [self._fetch_url(source_type, u) for u in urls_to_fetch]
+                wiki_pages = []
+                try:
+                    wiki_pages = self.wiki.search(query, limit=min(3, num_results))
+                except Exception as e:
+                    logger.debug("Parallel wiki search failed: %s", e)
+
+                # Fetch web content in parallel
+                if web_tasks:
+                    web_contents = await asyncio.gather(*web_tasks, return_exceptions=True)
+                    for fetch_url, content in zip(urls_to_fetch, web_contents):
+                        if isinstance(content, Exception):
+                            logger.warning("Fetch failed for %s: %s", fetch_url, content)
+                            continue
+                        if not content:
+                            continue
+                        content = str(content)[: self._max_content]
+                        if self._normalize_url(fetch_url) in seen_urls:
+                            continue
+                        seen_urls.add(self._normalize_url(fetch_url))
+                        source_id = self.session_manager.add_source(
+                            session_id=session_id,
+                            sub_query_id=sq_id,
+                            source_type=source_type,
+                            url=fetch_url,
+                            title=fetch_url,
+                            content_length=len(content),
+                            content_preview=content[:500],
+                            content=content,
+                        )
+                        events.append({
+                            "type": "source_gathered",
+                            "source_id": source_id,
+                            "source_type": source_type,
+                            "title": fetch_url,
+                            "url": fetch_url,
+                        })
+
+                # Also gather local wiki results
+                for page in wiki_pages[:3]:
+                    try:
+                        page_name = page.get("page_name", query)
+                        wiki_url = f"wiki://{page_name}"
+                        if self._normalize_url(wiki_url) in seen_urls:
+                            continue
+                        page_content = self.wiki.read_page(page_name)
+                        content = str(page_content) if page_content else ""
+                        if not content:
+                            continue
+                        content = content[: self._max_content]
+                        seen_urls.add(self._normalize_url(wiki_url))
+                        source_id = self.session_manager.add_source(
+                            session_id=session_id,
+                            sub_query_id=sq_id,
+                            source_type="wiki",
+                            url=wiki_url,
+                            title=page_name,
+                            content_length=len(content),
+                            content_preview=content[:500],
+                            content=content,
+                        )
+                        events.append({
+                            "type": "source_gathered",
+                            "source_id": source_id,
+                            "source_type": "wiki",
+                            "title": page_name,
+                            "url": wiki_url,
+                        })
+                    except Exception as e:
+                        logger.warning("Parallel wiki page read failed for %s: %s", page.get("page_name"), e)
+
+                if events:
+                    self.session_manager.complete_sub_query(sq_id, {"sources_count": len(events)})
+                else:
+                    raise ValueError(f"No results found for: {query}")
             else:
                 # Fetch each URL (already deduped above)
                 for fetch_url in urls_to_fetch:
@@ -192,11 +349,12 @@ class SourceGatherer:
         return events
 
     async def _fetch_url(self, source_type: str, url: str) -> str:
-        """Fetch content from a URL based on source type, with retry."""
+        """Fetch content from a URL based on source type, with retry and hard timeout."""
         from .retry import retry_async
 
-        max_attempts = self.config.get("max_retry_attempts", 3)
-        call_timeout = self.config.get("llm_call_timeout_seconds", 120)
+        max_attempts = 2
+        call_timeout = 20
+        hard_timeout = 30
 
         async def _do_fetch() -> str:
             if source_type == "youtube":
@@ -205,9 +363,16 @@ class SourceGatherer:
                     raise ValueError(result.metadata.get("error", "YouTube extraction failed"))
                 return result.text
             elif source_type == "pdf":
-                from pathlib import Path
-                from ....extractors.pdf import extract_pdf
-                result = extract_pdf(Path(url))
+                if url.startswith(("http://", "https://")):
+                    # Remote PDF — use URL extraction
+                    result = extract_url(url)
+                    if result.source_type == "error":
+                        raise ValueError(result.metadata.get("error", "PDF URL extraction failed"))
+                    return result.text
+                else:
+                    from pathlib import Path
+                    from ....extractors.pdf import extract_pdf
+                    result = extract_pdf(Path(url))
                 if result.source_type == "error":
                     raise ValueError(result.metadata.get("error", "PDF extraction failed"))
                 return result.text
@@ -219,4 +384,12 @@ class SourceGatherer:
             else:
                 raise ValueError(f"Unsupported source_type: {source_type}")
 
-        return await retry_async(_do_fetch, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout, exceptions=(ValueError, ConnectionError, TimeoutError))
+        try:
+            return await asyncio.wait_for(
+                retry_async(_do_fetch, max_attempts=max_attempts, base_delay=1.0,
+                           call_timeout=min(call_timeout, hard_timeout),
+                           exceptions=(ValueError, ConnectionError, TimeoutError)),
+                timeout=hard_timeout,
+            )
+        except asyncio.TimeoutError:
+            raise ValueError(f"Fetch timed out after {hard_timeout}s: {url}")

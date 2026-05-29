@@ -1,0 +1,37 @@
+name: research_replan
+description: "Generate sub-queries to fill knowledge gaps detected during synthesis."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "research_replan"
+
+params:
+  max_tokens: 1024
+  temperature: 0.3
+  json_mode: true
+
+system: |
+  You are a research planner. Given a research topic and specific knowledge gaps,
+  generate focused sub-queries to fill those gaps.
+
+  Rules:
+  - Generate 1-3 sub-queries per gap (max 5 total)
+  - Each sub-query should be specific and searchable
+  - Assign source_type: "web" for general knowledge, "pdf" for academic papers,
+    "youtube" for video content, "wiki" for internal wiki knowledge
+  - Use "web" as default source_type
+  - Focus on filling the exact gaps listed, don't repeat existing coverage
+  - Use English for queries
+
+  Return a JSON array of objects, each with "query", "source_type", and "url" fields.
+  Example: [{"query": "risk parity leverage mechanism", "source_type": "web", "url": ""}]
+
+user: |
+  Research topic: {{ query }}
+
+  Knowledge gaps to fill:
+  {% for gap in gaps %}
+  - {{ gap }}
+  {% endfor %}
+
+  Generate sub-queries to fill these gaps. Return ONLY a JSON array.

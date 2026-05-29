@@ -15,7 +15,7 @@ class ResearchReviewer:
         self.wiki = wiki
         self.llm_client = llm_client
         self.config = config
-        self.min_score = 7  # score >= 7 is approved
+        self.min_score = config.get("quality_threshold", 7)
 
     async def review(self, query: str, report: str, sources: list[dict[str, Any]]) -> dict[str, Any]:
         """Review a research report for quality.

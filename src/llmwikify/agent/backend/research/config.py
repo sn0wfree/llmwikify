@@ -16,6 +16,17 @@ DEFAULT_RESEARCH_CONFIG: dict[str, Any] = {
     "planning_model": None,
     "report_model": None,
     "llm_call_timeout_seconds": 120,
+    # Search provider config
+    "search_provider": "auto",       # "auto", "searxng", "minimax", "tavily", "duckduckgo"
+    "searxng_url": None,             # e.g. "http://localhost:8888"
+    "minimax_api_key": None,         # MiniMax Token Plan API key
+    "minimax_api_host": "https://api.minimaxi.com",  # 国内版
+    "tavily_api_key": None,          # e.g. "tvly-xxxxx"
+    # ReAct config
+    "max_react_rounds": 10,          # Max ReAct loop iterations
+    "quality_threshold": 7,          # Score >= 7 is approved
+    "max_replan_attempts": 2,        # Max replanning for knowledge gaps
+    "parallel_wiki_search": True,    # Search local wiki alongside web results
 }
 
 

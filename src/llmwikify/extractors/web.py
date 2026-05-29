@@ -1,9 +1,25 @@
 """Web URL extractor."""
 
+import requests
 from .base import ExtractedContent
 
+# Default timeout for URL fetching (connect, read)
+FETCH_TIMEOUT = (10, 30)  # (connect_timeout, read_timeout)
 
-def _extract_url(url: str) -> ExtractedContent:
+
+def _fetch_with_timeout(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> str | None:
+    """Fetch URL content with explicit timeout using requests."""
+    try:
+        resp = requests.get(url, timeout=timeout, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; ResearchBot/1.0)",
+        }, allow_redirects=True)
+        resp.raise_for_status()
+        return resp.text
+    except (requests.RequestException, Exception):
+        return None
+
+
+def _extract_url(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> ExtractedContent:
     """Extract article content from a web URL using trafilatura."""
     try:
         import trafilatura
@@ -16,7 +32,13 @@ def _extract_url(url: str) -> ExtractedContent:
         )
 
     try:
+        # Try trafilatura first (better content extraction)
         downloaded = trafilatura.fetch_url(url)
+
+        # Fallback to requests with timeout if trafilatura fails
+        if not downloaded:
+            downloaded = _fetch_with_timeout(url, timeout)
+
         if not downloaded:
             return ExtractedContent(
                 text="",
