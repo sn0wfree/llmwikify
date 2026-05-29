@@ -228,6 +228,14 @@ class ResearchEngine:
                             state.observations.append(
                                 f"⚠ 门禁未通过，建议: {gate_result.suggestion}"
                             )
+                            # Force transition: if gate fails after gathering and we have sources,
+                            # override action to analyze instead of stuck in gather loop
+                            if (state.phase == "gathering"
+                                    and len(state.sources) >= self.config.get("gate_min_sources", 3)
+                                    and action == "gather"):
+                                action = "analyze"
+                                logger.info("Gate %s failed, forcing analyze (have %d sources)",
+                                            gate_result.gate_name, len(state.sources))
 
                 # ── Track iteration count ──
                 state.round += 1
@@ -268,9 +276,12 @@ class ResearchEngine:
         if not state.sub_queries:
             return "plan"
 
-        # Not all gathered → gather
+        # Not all gathered → gather (skip failed sub-queries)
         gathered_ids = {s.get("sub_query_id") for s in state.sources}
-        ungathered = [sq for sq in state.sub_queries if sq["id"] not in gathered_ids]
+        ungathered = [
+            sq for sq in state.sub_queries
+            if sq["id"] not in gathered_ids and sq.get("status") != "failed"
+        ]
         if ungathered:
             return "gather"
 

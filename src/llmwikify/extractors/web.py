@@ -1,10 +1,14 @@
 """Web URL extractor."""
 
+import concurrent.futures
 import requests
 from .base import ExtractedContent
 
 # Default timeout for URL fetching (connect, read)
 FETCH_TIMEOUT = (10, 30)  # (connect_timeout, read_timeout)
+
+# ThreadPoolExecutor for running blocking trafilatura calls with timeout
+_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
 
 def _fetch_with_timeout(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> str | None:
@@ -32,8 +36,13 @@ def _extract_url(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> Extracte
         )
 
     try:
-        # Try trafilatura first (better content extraction)
-        downloaded = trafilatura.fetch_url(url)
+        # Run trafilatura with timeout via thread pool (trafilatura.fetch_url is blocking)
+        future = _executor.submit(trafilatura.fetch_url, url)
+        try:
+            downloaded = future.result(timeout=15)
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            downloaded = None
 
         # Fallback to requests with timeout if trafilatura fails
         if not downloaded:
