@@ -8,6 +8,19 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
+def _run_async(coro):
+    """Run async coroutine, handling nested event loop issues."""
+    try:
+        return asyncio.run(coro)
+    except RuntimeError as e:
+        if "cannot be called from a running event loop" in str(e):
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, coro).result()
+        raise
+
+
 from llmwikify.core import Wiki
 from llmwikify.core.query_sink import QuerySink
 
@@ -60,7 +73,7 @@ class TestAgentRunner:
         runner.register_hook("pre_run", lambda **kw: calls.append("pre_run"))
         runner.register_hook("post_run", lambda **kw: calls.append("post_run"))
 
-        asyncio.get_event_loop().run_until_complete(runner.run([{"role": "user", "content": "test"}]))
+        _run_async(runner.run([{"role": "user", "content": "test"}]))
         assert "pre_run" in calls
         assert "post_run" in calls
 
@@ -94,7 +107,7 @@ class TestWikiToolRegistry:
         registry = WikiToolRegistry(wiki_root)
 
         wiki_root.write_page("Test Page", "# Test")
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             registry.execute("wiki_read_page", {"page_name": "Test Page"})
         )
         assert "content" in result
@@ -102,7 +115,7 @@ class TestWikiToolRegistry:
     def test_execute_search(self, wiki_root):
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             registry.execute("wiki_search", {"query": "test", "limit": 5})
         )
         assert isinstance(result, list)
@@ -111,14 +124,14 @@ class TestWikiToolRegistry:
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         with pytest.raises(ValueError, match="Unknown tool"):
-            asyncio.get_event_loop().run_until_complete(
+            _run_async(
                 registry.execute("nonexistent_tool", {})
             )
 
     def test_execute_status(self, wiki_root):
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             registry.execute("wiki_status", {})
         )
         assert result is not None
@@ -126,7 +139,7 @@ class TestWikiToolRegistry:
     def test_confirmation_required_for_write(self, wiki_root):
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "Test", "content": "Hello"})
         )
         assert isinstance(result, dict)
@@ -136,7 +149,7 @@ class TestWikiToolRegistry:
     def test_confirmation_approve(self, wiki_root):
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "TestConfirm", "content": "Hello"})
         )
         conf_id = result["confirmation_id"]
@@ -146,7 +159,7 @@ class TestWikiToolRegistry:
     def test_confirmation_reject(self, wiki_root):
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "TestReject", "content": "Hello"})
         )
         conf_id = result["confirmation_id"]
@@ -158,7 +171,7 @@ class TestWikiToolRegistry:
         registry = WikiToolRegistry(wiki_root)
         ids = []
         for i in range(3):
-            result = asyncio.get_event_loop().run_until_complete(
+            result = _run_async(
                 registry.execute("wiki_write_page", {"page_name": f"Batch{i}", "content": f"Content{i}"})
             )
             ids.append(result["confirmation_id"])
@@ -169,7 +182,7 @@ class TestWikiToolRegistry:
     def test_get_pending_by_group(self, wiki_root):
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
-        asyncio.get_event_loop().run_until_complete(
+        _run_async(
             registry.execute("wiki_write_page", {"page_name": "concepts/Test", "content": "Hello"})
         )
         groups = registry.get_pending_by_group()
@@ -584,7 +597,7 @@ class TestConfirmationMechanism:
     def test_confirmation_created_for_write(self, wiki_root):
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "Test", "content": "Hello"})
         )
         assert isinstance(result, dict)
@@ -596,7 +609,7 @@ class TestConfirmationMechanism:
     def test_confirmation_approve_executes(self, wiki_root):
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "TestConfirm", "content": "Hello"})
         )
         conf_id = result["confirmation_id"]
@@ -608,7 +621,7 @@ class TestConfirmationMechanism:
     def test_confirmation_reject_discards(self, wiki_root):
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "TestReject", "content": "Hello"})
         )
         conf_id = result["confirmation_id"]
@@ -622,7 +635,7 @@ class TestConfirmationMechanism:
         registry = WikiToolRegistry(wiki_root)
         ids = []
         for i in range(3):
-            result = asyncio.get_event_loop().run_until_complete(
+            result = _run_async(
                 registry.execute("wiki_write_page", {"page_name": f"Batch{i}", "content": f"Content{i}"})
             )
             ids.append(result["confirmation_id"])
@@ -635,7 +648,7 @@ class TestConfirmationMechanism:
         registry = WikiToolRegistry(wiki_root)
         ids = []
         for i in range(3):
-            result = asyncio.get_event_loop().run_until_complete(
+            result = _run_async(
                 registry.execute("wiki_write_page", {"page_name": f"RejectBatch{i}", "content": f"Content{i}"})
             )
             ids.append(result["confirmation_id"])
@@ -646,10 +659,10 @@ class TestConfirmationMechanism:
     def test_get_pending_by_group(self, wiki_root):
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
-        asyncio.get_event_loop().run_until_complete(
+        _run_async(
             registry.execute("wiki_write_page", {"page_name": "concepts/Test", "content": "Hello"})
         )
-        asyncio.get_event_loop().run_until_complete(
+        _run_async(
             registry.execute("wiki_write_page", {"page_name": "entities/Test2", "content": "World"})
         )
         groups = registry.get_pending_by_group()
@@ -665,7 +678,7 @@ class TestConfirmationMechanism:
     def test_read_tool_no_confirmation(self, wiki_root):
         from llmwikify.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run_async(
             registry.execute("wiki_status", {})
         )
         assert not isinstance(result, dict) or result.get("status") != "confirmation_required"

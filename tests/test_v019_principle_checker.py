@@ -256,6 +256,10 @@ class TestPrincipleCheckerCheckAllTemplates:
             "generate_wiki_ops",
             "ingest_instructions",
             "investigate_lint",
+            "research_plan",
+            "research_report",
+            "research_review",
+            "research_revise",
             "wiki_schema",
             "wiki_synthesize",
         }

@@ -34,8 +34,22 @@ class ResearchSessionManager:
             session["sources"] = self.db.get_sources(session_id)
         return session
 
-    def update_status(self, session_id: str, status: str, step: str | None = None, progress: float | None = None) -> None:
-        self.db.update_research_status(session_id, status, step)
+    def update_status(
+        self,
+        session_id: str,
+        status: str,
+        step: str | None = None,
+        progress: float | None = None,
+        iteration_round: int | None = None,
+        synthesis_json: str | None = None,
+        review_json: str | None = None,
+    ) -> None:
+        self.db.update_research_status(
+            session_id, status, step,
+            iteration_round=iteration_round,
+            synthesis_json=synthesis_json,
+            review_json=review_json,
+        )
         if progress is not None:
             self.db.update_research_progress(session_id, progress)
 

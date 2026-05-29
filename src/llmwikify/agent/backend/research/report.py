@@ -47,18 +47,28 @@ class ReportGenerator:
         source_map = self._build_source_map(sources)
 
         # Build source content summaries for the prompt
+        # Limit total content to avoid LLM context window overflow
+        max_per_source = 4000  # Reduced from 8000 to fit more sources
+        max_total_content = 60000  # Total cap across all sources
+        total_content = 0
         source_contents: list[dict[str, Any]] = []
         for s in sources:
+            if total_content >= max_total_content:
+                break
             key = s.get("url") or s.get("title", "unknown")
             h = hashlib.md5(key.encode()).hexdigest()[:12]
-            # Prefer full content over preview, allow up to 8000 chars per source in report
             full_content = s.get("content") or s.get("content_preview") or ""
+            # Truncate per-source and track total
+            remaining = max_total_content - total_content
+            content_limit = min(max_per_source, remaining)
+            truncated = full_content[:content_limit]
+            total_content += len(truncated)
             source_contents.append({
                 "hash": h,
                 "title": s.get("title", ""),
                 "source_type": s.get("source_type", ""),
                 "url": s.get("url", ""),
-                "content": full_content[:8000],
+                "content": truncated,
                 "analysis_summary": _summarize_analysis(s.get("analysis", {})),
             })
 
@@ -91,6 +101,18 @@ class ReportGenerator:
             )
 
         report_md = await retry_async(_call_llm, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout)
+
+        # Validate citations
+        import re
+        citations = re.findall(r'\[\[Source:([a-f0-9]+)\]\]', report_md)
+        source_hashes = {
+            hashlib.md5((s.get("url") or s.get("title", "")).encode()).hexdigest()[:12]
+            for s in sources
+        }
+        invalid = [c for c in citations if c not in source_hashes]
+        if invalid:
+            logger.warning("Report has %d invalid citations (out of %d total): %s", len(invalid), len(citations), invalid[:5])
+
         return report_md
 
 
