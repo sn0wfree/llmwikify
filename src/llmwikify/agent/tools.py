@@ -628,7 +628,7 @@ class WikiToolRegistry:
         if len(self._ingest_log) > self._max_ingest_log:
             self._ingest_log = self._ingest_log[-self._max_ingest_log:]
 
-    def confirm_execution(self, confirmation_id: str) -> Any:
+    def confirm_execution(self, confirmation_id: str, arguments: dict | None = None) -> Any:
         if self.db:
             conf = self.db.get_confirmation(confirmation_id)
             if conf and conf.get("wiki_id") == self.wiki_id:
@@ -638,7 +638,12 @@ class WikiToolRegistry:
                 if tool is None:
                     return {"status": "error", "error": f"Tool not found: {conf['tool']}"}
                 try:
-                    result = tool["handler"](json.loads(conf["arguments"]) if isinstance(conf["arguments"], str) else conf["arguments"])
+                    args = arguments if arguments is not None else (
+                        json.loads(conf["arguments"]) if isinstance(conf["arguments"], str) else conf["arguments"]
+                    )
+                    if arguments is not None:
+                        self.db.update_confirmation_arguments(confirmation_id, arguments)
+                    result = tool["handler"](args)
                     self.db.update_confirmation_status(confirmation_id, "approved")
                     return {"status": "executed", "confirmation_id": confirmation_id, "result": result}
                 except Exception as e:
@@ -652,7 +657,10 @@ class WikiToolRegistry:
         if tool is None:
             return {"status": "error", "error": f"Tool not found: {confirmation['tool']}"}
         try:
-            result = tool["handler"](confirmation["arguments"])
+            args = arguments if arguments is not None else confirmation["arguments"]
+            if arguments is not None:
+                confirmation["arguments"] = arguments
+            result = tool["handler"](args)
             confirmation["status"] = "approved"
             return {"status": "executed", "confirmation_id": confirmation_id, "result": result}
         except Exception as e:

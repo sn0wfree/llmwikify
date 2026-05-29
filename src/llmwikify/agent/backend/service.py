@@ -474,18 +474,19 @@ class AgentService:
         registry = self._get_tool_registry(wiki_id)
         return registry.get_pending_by_group()
 
-    async def approve_confirmation(self, confirmation_id: str, wiki_id: str | None = None) -> dict:
+    async def approve_confirmation(self, confirmation_id: str, wiki_id: str | None = None, arguments: dict | None = None) -> dict:
         wiki_id = wiki_id or self._get_default_wiki_id()
         if not wiki_id:
             return {"status": "error", "error": "No wiki_id available"}
         registry = self._get_tool_registry(wiki_id)
-        return registry.confirm_execution(confirmation_id)
+        return registry.confirm_execution(confirmation_id, arguments=arguments)
 
     async def approve_confirmation_and_continue(
         self,
         confirmation_id: str,
         session_id: str,
         wiki_id: str | None = None,
+        arguments: dict | None = None,
     ) -> AsyncIterator[dict]:
         """Approve a confirmation, execute the tool, and feed result back to LLM."""
         wiki_id = wiki_id or self._get_default_wiki_id()
@@ -494,7 +495,7 @@ class AgentService:
             return
 
         registry = self._get_tool_registry(wiki_id)
-        result = registry.confirm_execution(confirmation_id)
+        result = registry.confirm_execution(confirmation_id, arguments=arguments)
 
         if result.get("status") == "error":
             yield ChatEvent.error(result.get("error", "Confirmation failed"))
