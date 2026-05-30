@@ -45,6 +45,8 @@ class XiaomiProvider(BaseLLMProvider):
             model=model,
             reasoning_split=True,
             auth_header="api-key",
+            context_window=config.get("context_window"),
+            budget_on_exceed=config.get("budget_on_exceed", "warn"),
         )
 
     def validate_config(self, config: dict) -> list[str]:

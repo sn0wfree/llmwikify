@@ -377,3 +377,184 @@ class TestIntegration:
             usage = checker.check(messages, prompt_name="test")
             assert usage.exceeds_window is True
             assert usage.estimated_tokens > checker.budget
+
+
+# ─── Decorator integration tests ────────────────────────────────────
+
+
+class TestBudgetDecorator:
+    def test_decorator_extracts_prompt_name(self):
+        from llmwikify.llm.budget_decorator import check_token_budget
+
+        checker = MagicMock(spec=TokenBudgetChecker)
+
+        class FakeClient:
+            def __init__(self):
+                self._budget_checker = checker
+
+            @check_token_budget(lambda self: self._budget_checker)
+            def chat(self, messages, **kwargs):
+                return "ok"
+
+        client = FakeClient()
+        result = client.chat(
+            [{"role": "user", "content": "hi"}],
+            _prompt_name="test_prompt",
+            temperature=0.5,
+        )
+        assert result == "ok"
+        checker.check.assert_called_once()
+        call_args = checker.check.call_args
+        assert call_args[1]["prompt_name"] == "test_prompt"
+
+    def test_decorator_uses_function_name_as_default(self):
+        from llmwikify.llm.budget_decorator import check_token_budget
+
+        checker = MagicMock(spec=TokenBudgetChecker)
+
+        class FakeClient:
+            def __init__(self):
+                self._budget_checker = checker
+
+            @check_token_budget(lambda self: self._budget_checker)
+            def my_custom_chat(self, messages, **kwargs):
+                return "ok"
+
+        client = FakeClient()
+        client.chat = client.my_custom_chat  # alias
+        client.my_custom_chat([{"role": "user", "content": "hi"}])
+        call_args = checker.check.call_args
+        assert call_args[1]["prompt_name"] == "my_custom_chat"
+
+    def test_decorator_passes_kwargs_through(self):
+        from llmwikify.llm.budget_decorator import check_token_budget
+
+        checker = MagicMock(spec=TokenBudgetChecker)
+
+        class FakeClient:
+            def __init__(self):
+                self._budget_checker = checker
+
+            @check_token_budget(lambda self: self._budget_checker)
+            def chat(self, messages, temperature=1.0, **kwargs):
+                return temperature
+
+        client = FakeClient()
+        result = client.chat([{"role": "user", "content": "hi"}], temperature=0.7)
+        assert result == 0.7
+
+    def test_decorator_removes_prompt_name_from_kwargs(self):
+        from llmwikify.llm.budget_decorator import check_token_budget
+
+        checker = MagicMock(spec=TokenBudgetChecker)
+        received_kwargs = {}
+
+        class FakeClient:
+            def __init__(self):
+                self._budget_checker = checker
+
+            @check_token_budget(lambda self: self._budget_checker)
+            def chat(self, messages, **kwargs):
+                received_kwargs.update(kwargs)
+                return "ok"
+
+        client = FakeClient()
+        client.chat(
+            [{"role": "user", "content": "hi"}],
+            _prompt_name="test",
+            temperature=0.5,
+        )
+        assert "_prompt_name" not in received_kwargs
+        assert received_kwargs["temperature"] == 0.5
+
+
+# ─── LLMClient integration tests ────────────────────────────────────
+
+
+class TestLLMClientIntegration:
+    def test_llm_client_has_budget_checker(self):
+        from llmwikify.llm_client import LLMClient
+
+        client = LLMClient(
+            provider="openai",
+            base_url="http://localhost:8000",
+            api_key="test-key",
+            model="gpt-4o",
+        )
+        assert hasattr(client, "_budget_checker")
+        assert isinstance(client._budget_checker, TokenBudgetChecker)
+
+    def test_llm_client_custom_context_window(self):
+        from llmwikify.llm_client import LLMClient
+
+        client = LLMClient(
+            provider="openai",
+            base_url="http://localhost:8000",
+            api_key="test-key",
+            model="gpt-4o",
+            context_window=64_000,
+        )
+        assert client._budget_checker.context_window == 64_000
+
+    def test_llm_client_from_config(self):
+        from llmwikify.llm_client import LLMClient
+
+        config = {
+            "llm": {
+                "enabled": True,
+                "provider": "openai",
+                "base_url": "http://localhost:8000",
+                "api_key": "test-key",
+                "model": "gpt-4o",
+                "context_window": 50_000,
+                "budget_on_exceed": "raise",
+            }
+        }
+        client = LLMClient.from_config(config)
+        assert client._budget_checker.context_window == 50_000
+        assert client._budget_checker.on_exceed == "raise"
+
+    def test_llm_client_from_config_defaults(self):
+        from llmwikify.llm_client import LLMClient
+
+        config = {
+            "llm": {
+                "enabled": True,
+                "provider": "openai",
+                "base_url": "http://localhost:8000",
+                "api_key": "test-key",
+                "model": "gpt-4o",
+            }
+        }
+        client = LLMClient.from_config(config)
+        assert client._budget_checker.context_window == 128_000  # gpt-4o default
+        assert client._budget_checker.on_exceed == "warn"
+
+
+# ─── StreamableLLMClient integration tests ──────────────────────────
+
+
+class TestStreamableLLMClientIntegration:
+    def test_streamable_client_has_budget_checker(self):
+        from llmwikify.agent.backend.adapters import StreamableLLMClient
+
+        client = StreamableLLMClient(
+            provider="openai",
+            base_url="http://localhost:8000",
+            api_key="test-key",
+            model="gpt-4o",
+        )
+        assert hasattr(client, "_budget_checker")
+        assert isinstance(client._budget_checker, TokenBudgetChecker)
+
+    def test_streamable_client_custom_context_window(self):
+        from llmwikify.agent.backend.adapters import StreamableLLMClient
+
+        client = StreamableLLMClient(
+            provider="openai",
+            base_url="http://localhost:8000",
+            api_key="test-key",
+            model="gpt-4",
+            context_window=8_192,
+        )
+        assert client._budget_checker.context_window == 8_192

@@ -48,6 +48,8 @@ class MiniMaxProvider(BaseLLMProvider):
             api_key=api_key,
             model=model,
             reasoning_split=reasoning_split,
+            context_window=config.get("context_window"),
+            budget_on_exceed=config.get("budget_on_exceed", "warn"),
         )
 
     def validate_config(self, config: dict) -> list[str]:

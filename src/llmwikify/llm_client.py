@@ -5,12 +5,18 @@ import os
 import re
 from typing import Any
 
+from .llm.budget_decorator import check_token_budget
+from .llm.token_budget import TokenBudgetChecker, TokenBudgetConfig
+
 
 class LLMClient:
     """Minimal client for OpenAI-compatible APIs.
 
     Supports any provider with a /v1/chat/completions endpoint:
     OpenAI, Ollama, LocalAI, vLLM, LM Studio, etc.
+
+    Token budget checking is applied automatically via decorator.
+    Pass ``_prompt_name="..."`` in generation_params to label calls in logs.
     """
 
     def __init__(
@@ -19,11 +25,23 @@ class LLMClient:
         base_url: str = "",
         api_key: str = "",
         model: str = "gpt-4o",
+        context_window: int | None = None,
+        budget_on_exceed: str = "warn",
     ):
         self.provider = provider
         self.base_url = base_url.rstrip("/") if base_url else self._default_base_url(provider)
         self.api_key = api_key
         self.model = model
+
+        self._budget_checker = TokenBudgetChecker(
+            TokenBudgetConfig(
+                model=model,
+                context_window=context_window,
+                base_url=self.base_url,
+                api_key=api_key,
+                on_exceed=budget_on_exceed,
+            )
+        )
 
     @staticmethod
     def _default_base_url(provider: str) -> str:
@@ -63,8 +81,11 @@ class LLMClient:
             base_url=base_url,
             api_key=api_key,
             model=model,
+            context_window=llm_cfg.get("context_window"),
+            budget_on_exceed=llm_cfg.get("budget_on_exceed", "warn"),
         )
 
+    @check_token_budget(lambda self: self._budget_checker)
     def chat(
         self,
         messages: list[dict[str, str]],
@@ -77,6 +98,7 @@ class LLMClient:
             messages: List of {role, content} dicts
             json_mode: If True, request JSON response format
             **generation_params: Optional params like temperature, max_tokens, top_p
+                Use _prompt_name="..." to label this call in budget logs.
 
         Returns:
             Assistant response text
@@ -115,6 +137,7 @@ class LLMClient:
         except (KeyError, IndexError) as e:
             raise ValueError(f"Unexpected LLM API response format: {e}")
 
+    @check_token_budget(lambda self: self._budget_checker)
     def chat_json(
         self,
         messages: list[dict[str, str]],

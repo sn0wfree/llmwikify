@@ -35,6 +35,8 @@ DEFAULT_CONFIG = {
         "base_url": "http://localhost:11434",
         "api_key": "",
         "timeout": 120,
+        "context_window": None,
+        "budget_on_exceed": "warn",
     },
     "mcp": {
         "name": None,
