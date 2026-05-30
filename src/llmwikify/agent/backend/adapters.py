@@ -5,13 +5,21 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from llmwikify.llm.budget_decorator import check_token_budget
+from llmwikify.llm.token_budget import TokenBudgetChecker, TokenBudgetConfig
+
 
 class StreamableLLMClient:
     """LLM client with streaming and function calling support.
 
-    Wraps existing LLMClient and extends it with:
+    Extends basic LLMClient with:
     - stream_chat(): SSE-compatible streaming
     - chat_with_tools(): Function calling support
+    - astream_chat(): Async streaming
+    - achat(): Async non-streaming
+
+    Token budget checking is applied automatically via decorator.
+    Pass ``_prompt_name="..."`` in generation_params to label calls in logs.
     """
 
     def __init__(
@@ -22,6 +30,8 @@ class StreamableLLMClient:
         model: str = "gpt-4o",
         reasoning_split: bool = False,
         auth_header: str = "bearer",
+        context_window: int | None = None,
+        budget_on_exceed: str = "warn",
     ):
         self.provider = provider
         raw_base = base_url if base_url else self._default_base_url(provider)
@@ -30,6 +40,16 @@ class StreamableLLMClient:
         self.model = model
         self.reasoning_split = reasoning_split
         self.auth_header = auth_header  # "bearer" or "api-key"
+
+        self._budget_checker = TokenBudgetChecker(
+            TokenBudgetConfig(
+                model=model,
+                context_window=context_window,
+                base_url=self.base_url,
+                api_key=api_key,
+                on_exceed=budget_on_exceed,
+            )
+        )
 
     @staticmethod
     def _default_base_url(provider: str) -> str:
@@ -57,6 +77,7 @@ class StreamableLLMClient:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
+    @check_token_budget(lambda self: self._budget_checker)
     def chat(
         self,
         messages: list[dict[str, str]],
@@ -88,6 +109,7 @@ class StreamableLLMClient:
         data = resp.json()
         return data["choices"][0]["message"]["content"]
 
+    @check_token_budget(lambda self: self._budget_checker)
     def chat_with_tools(
         self,
         messages: list[dict[str, str]],
@@ -134,6 +156,7 @@ class StreamableLLMClient:
             ]
         return result
 
+    @check_token_budget(lambda self: self._budget_checker)
     def stream_chat(
         self,
         messages: list[dict[str, str]],
@@ -208,6 +231,7 @@ class StreamableLLMClient:
                     yield {"type": "done", "content": accumulated}
                     return
 
+    @check_token_budget(lambda self: self._budget_checker)
     async def astream_chat(
         self,
         messages: list[dict[str, str]],
@@ -280,6 +304,7 @@ class StreamableLLMClient:
                         yield {"type": "done", "content": accumulated}
                         return
 
+    @check_token_budget(lambda self: self._budget_checker)
     async def achat(
         self,
         messages: list[dict[str, str]],

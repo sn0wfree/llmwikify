@@ -4,6 +4,7 @@ No external dependencies required beyond tiktoken (optional, falls back to
 heuristic estimation if not installed).
 """
 
+from .budget_decorator import check_token_budget
 from .context_windows import (
     CONTEXT_WINDOWS,
     ask_llm_context_window,
@@ -19,6 +20,8 @@ from .token_budget import (
 from .token_estimator import count_messages, count_tokens
 
 __all__ = [
+    # Decorator
+    "check_token_budget",
     # Context windows
     "CONTEXT_WINDOWS",
     "resolve_context_window",
