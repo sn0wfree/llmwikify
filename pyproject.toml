@@ -70,6 +70,9 @@ agent = [
     "duckduckgo-search>=4.0",
     "tavily-python>=0.3.0",
 ]
+llm = [
+    "tiktoken>=0.7.0",
+]
 extractors = [
     "markitdown[all]>=0.1.0",
     "pymupdf>=1.23.0",
