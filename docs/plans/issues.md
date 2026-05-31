@@ -611,6 +611,7 @@ class IngestPerformanceMetrics:
 | **DR-4** | Review LLM 异常时创建假差评 | ✅ 已完成 | 跳过 review，标记 "skipped" |
 | **DR-8** | readerRef 未接 cancel | ✅ 已完成 | useEffect cleanup on unmount |
 | **DR-12** | catch 后 silent | ✅ 已完成 | 选择性添加 console.warn |
+| **DR-13** | report/review 后中断丢失报告 | ✅ 已完成 | report/review 后立即持久化到 DB |
 | **IN-2** | `wiki_ingest` 使用 posthoc 确认 | ✅ 设计合理 | 保持 posthoc（ingest 只提取到 raw/，不修改 wiki） |
 
 ### IN-2 详细分析
