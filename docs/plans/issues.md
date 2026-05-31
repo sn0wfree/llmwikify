@@ -37,7 +37,6 @@
 |------|------|------|------|------|------|------|--------|------|
 | DR-10 | Deep Research | Engine | `engine.py` 全文 | 所有 action/reasoning/observation 在一个类（930 行） | 可维护性差 | 拆分为 Reasoner/ActionDispatcher/Observer | 高 | 待处理 |
 | DR-11 | Deep Research | Frontend | `ResearchPanel.tsx:632-755` | 120+ 行 switch 处理 16 种事件 | 可维护性差 | strategy pattern 或 reducer 拆分 | 中 | 待处理 |
-| DR-12 | Deep Research | Frontend | 多处（loadSessions, handlePause, handleDelete） | catch 后 silent | 用户不知道操作是否成功 | console.warn 或 toast 提示 | 低 | 待处理 |
 | DR-13 | Deep Research | Observability | `engine.py` 全文 | 无 token 用量/耗时/成本追踪 | 无法分析优化 | 添加 metrics 收集 | 中 | 待处理 |
 | DR-14 | Deep Research | Engine | `engine.py` 各 action handler | Phase 分散赋值，无集中验证 | 状态机隐式 | 定义显式状态转移表 | 中 | 待处理 |
 | IN-5 | Ingest | Transaction | `wiki_mixin_relation.py:86-121` | 逐页写入，无原子性 | 中途失败导致部分页面丢失 | 写入前快照 + 失败回滚 | 高 | 待处理 |
@@ -632,21 +631,8 @@ class IngestPerformanceMetrics:
 
 | 编号 | 问题 | 影响 | 复杂度 | 状态 |
 |------|------|------|--------|------|
-| **DR-1** | Gather 50% 阈值过早取消 | PDF/arxiv 等慢源被丢弃 | 低 | ✅ 已完成 |
 | **DR-6** | 每轮都读 DB 检查控制信号 | 不必要 I/O 开销 | 低 | 待处理 |
-| **DR-8** | readerRef 未接 cancel | 导航离开后 fetch 继续运行 | 低 | ✅ 已完成 |
-| **DR-12** | catch 后 silent | 用户不知道操作是否成功 | 低 | ✅ 已完成 |
 | **IN-11** | 无提取/分析/建页耗时追踪 | 无法分析优化 | 低 | 待处理 |
-
-### DR-1 详细分析
-
-**位置**: `gatherer.py:55-57`
-
-**现状**: 70% 任务完成 + 15s grace 后取消剩余任务（已从 50% 调整到 70%）
-
-**修复**: 提高阈值到 70%，给予慢源更多时间完成
-
-**预估**: ~10 行代码
 
 ### DR-6 详细分析
 
@@ -657,18 +643,6 @@ class IngestPerformanceMetrics:
 **问题**: 不必要 I/O，性能开销
 
 **修复方案**: 每 N 轮检查（如每 3 轮），或用 asyncio.Event
-
-**预估**: ~5 行代码
-
-### DR-8 详细分析
-
-**位置**: `ResearchPanel.tsx:563-564`
-
-**现状**: `readerRef` 存了 reader 但没接 cancel
-
-**问题**: 导航离开后 fetch 继续运行
-
-**修复方案**: unmount 时调用 `reader.cancel()`
 
 **预估**: ~5 行代码
 
