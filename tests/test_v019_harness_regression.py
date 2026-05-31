@@ -59,6 +59,12 @@ class TestPromptRegression:
             "content_type": "article",
             "potential_contradictions": [],
             "data_gaps": [],
+            "quality_assessment": {
+                "credibility": 7,
+                "relevance": 8,
+                "completeness": 6,
+                "issues": [],
+            },
         }
         ops_response = [
             {"action": "log", "operation": "ingest", "details": "Processed"},
@@ -68,7 +74,9 @@ class TestPromptRegression:
         def side_effect(msgs, **kwargs):
             nonlocal call_count
             call_count += 1
-            return analysis_response if call_count == 1 else ops_response
+            if call_count == 1:
+                return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+            return analysis_response if call_count == 2 else ops_response
 
         with patch("llmwikify.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
@@ -101,6 +109,7 @@ class TestPromptRegression:
             "content_type": "article",
             "potential_contradictions": [],
             "data_gaps": [],
+            "quality_assessment": {"credibility": 7, "relevance": 8, "completeness": 6, "issues": []},
         }
         ops_response = [
             {"action": "log", "operation": "ingest", "details": "Processed"},
@@ -110,7 +119,9 @@ class TestPromptRegression:
         def side_effect(msgs, **kwargs):
             nonlocal call_count
             call_count += 1
-            return analysis_response if call_count == 1 else ops_response
+            if call_count == 1:
+                return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+            return analysis_response if call_count == 2 else ops_response
 
         with patch("llmwikify.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
@@ -142,6 +153,7 @@ class TestPromptRegression:
                 "Source claims AI is fully safe, wiki index says challenges remain"
             ],
             "data_gaps": [],
+            "quality_assessment": {"credibility": 7, "relevance": 8, "completeness": 6, "issues": []},
         }
         ops_response = [
             {"action": "log", "operation": "ingest", "details": "Processed"},
@@ -151,7 +163,9 @@ class TestPromptRegression:
         def side_effect(msgs, **kwargs):
             nonlocal call_count
             call_count += 1
-            return analysis_response if call_count == 1 else ops_response
+            if call_count == 1:
+                return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+            return analysis_response if call_count == 2 else ops_response
 
         with patch("llmwikify.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
@@ -183,6 +197,7 @@ class TestPromptRegression:
             "content_type": "article",
             "potential_contradictions": [],
             "data_gaps": [],
+            "quality_assessment": {"credibility": 7, "relevance": 8, "completeness": 6, "issues": []},
         }
 
         ops_result = [
@@ -196,8 +211,8 @@ class TestPromptRegression:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return analysis_result
-            return ops_result
+                return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+            return analysis_result if call_count == 2 else ops_result
 
         with patch("llmwikify.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
@@ -229,6 +244,7 @@ class TestPromptRegression:
             "content_type": "article",
             "potential_contradictions": [],
             "data_gaps": [],
+            "quality_assessment": {"credibility": 7, "relevance": 8, "completeness": 6, "issues": []},
         }
 
         ops_result = [
@@ -241,7 +257,9 @@ class TestPromptRegression:
         def side_effect(msgs, **kwargs):
             nonlocal call_count
             call_count += 1
-            return analysis_result if call_count == 1 else ops_result
+            if call_count == 1:
+                return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+            return analysis_result if call_count == 2 else ops_result
 
         with patch("llmwikify.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
