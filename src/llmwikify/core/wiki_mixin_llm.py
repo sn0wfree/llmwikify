@@ -13,15 +13,35 @@ class WikiLLMMixin(WikiProtocol):
     """LLM interaction: chained source processing, retry logic, investigation generation."""
 
     def _llm_process_source(self, source_data: dict) -> dict:
-        """Process source with LLM using chained mode: analyze_source → generate_wiki_ops."""
+        """Process source with LLM using two-phase analysis.
+
+        Phase 1: Extract section metadata (pure computation, no LLM)
+        Phase 2: LLM selects relevant sections for deep analysis
+        Phase 3: Targeted reading of selected sections
+        Phase 4: Full analysis on selected content
+        Phase 5: Generate wiki operations
+        """
         from ..llm_client import LLMClient
 
         LLMClient.from_config(self.config)
         registry = self._get_prompt_registry()
 
-        max_content_chars = registry.get_params("analyze_source").get("max_content_chars", 8000)
-        content = source_data["content"][:max_content_chars]
-        content_truncated = len(source_data["content"]) > max_content_chars
+        content = source_data.get("content", "")
+        title = source_data.get("title", "")
+
+        section_metadata = self.extract_section_metadata(content, title)
+
+        max_chars = 32000
+        selected_sections = self._select_sections(
+            section_metadata=section_metadata,
+            content_type=source_data.get("source_type", "unknown"),
+        )
+
+        targeted_content, content_truncated = self.targeted_read(
+            content=content,
+            selected_sections=selected_sections.get("selected_sections", []),
+            max_chars=max_chars,
+        )
 
         wiki_schema = ""
         if self.wiki_md_file.exists():
@@ -29,11 +49,11 @@ class WikiLLMMixin(WikiProtocol):
 
         analysis_messages = registry.get_messages(
             "analyze_source",
-            title=source_data["title"],
-            source_type=source_data["source_type"],
-            content=content,
+            title=title,
+            source_type=source_data.get("source_type", ""),
+            content=targeted_content,
             current_index=source_data.get("current_index", ""),
-            max_content_chars=max_content_chars,
+            max_content_chars=max_chars,
             content_truncated=content_truncated,
             wiki_schema=wiki_schema,
         )
@@ -74,9 +94,59 @@ class WikiLLMMixin(WikiProtocol):
             "entities": analysis.get("entities", []),
             "claims": analysis.get("claims", []),
             "analysis": analysis,
-            "source_title": source_data["title"],
+            "source_title": title,
             "mode": "chained",
         }
+
+    def _select_sections(
+        self,
+        section_metadata: dict,
+        content_type: str = "unknown",
+    ) -> dict:
+        """Select which sections to read using LLM.
+
+        Falls back to selecting first 5 sections if LLM fails.
+        """
+        registry = self._get_prompt_registry()
+
+        sections = section_metadata.get("sections", [])
+        if not sections:
+            return {"selected_sections": [1, 2, 3, 4, 5], "reasoning": "No sections detected, using fallback"}
+
+        if len(sections) <= 5:
+            return {"selected_sections": list(range(1, len(sections) + 1)), "reasoning": "Few sections, reading all"}
+
+        try:
+            messages = registry.get_messages(
+                "select_sections",
+                title=section_metadata.get("title", ""),
+                content_type=content_type,
+                total_words=section_metadata.get("total_words", 0),
+                sections=sections,
+            )
+            params = registry.get_api_params("select_sections")
+
+            result = self._call_llm_with_retry("select_sections", messages, params)
+
+            errors = registry.validate_output("select_sections", result)
+            if errors:
+                logger.warning("Section selection validation failed: %s", errors)
+                return self._fallback_section_selection(sections)
+
+            selected = result.get("selected_sections", [])
+            if not selected or len(selected) > 5:
+                selected = selected[:5] if selected else []
+
+            return result
+
+        except (ConnectionError, ValueError, OSError) as e:
+            logger.warning("Section selection failed: %s", e)
+            return self._fallback_section_selection(sections)
+
+    def _fallback_section_selection(self, sections: list[dict]) -> dict:
+        """Fallback section selection: first 5 sections."""
+        selected = [s["id"] for s in sections[:5] if "id" in s]
+        return {"selected_sections": selected, "reasoning": "Fallback: selecting first sections"}
 
     def _call_llm_with_retry(
         self,

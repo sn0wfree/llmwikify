@@ -119,7 +119,18 @@ class TestLLMRetryMechanism:
 
         with patch("llmwikify.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
-            mock_instance.chat_json.return_value = {"topics": [], "entities": [], "key_facts": [], "suggested_pages": []}
+            mock_instance.chat_json.return_value = {
+                "topics": [],
+                "entities": [],
+                "key_facts": [],
+                "suggested_pages": [],
+                "quality_assessment": {
+                    "credibility": 7,
+                    "relevance": 8,
+                    "completeness": 6,
+                    "issues": [],
+                },
+            }
             MockClient.from_config.return_value = mock_instance
 
             result = wiki._call_llm_with_retry("analyze_source", messages, params)
@@ -139,7 +150,18 @@ class TestLLMRetryMechanism:
             call_count += 1
             if call_count == 1:
                 return {"invalid": "not_an_object"}
-            return {"topics": [], "entities": [], "key_facts": [], "suggested_pages": []}
+            return {
+                "topics": [],
+                "entities": [],
+                "key_facts": [],
+                "suggested_pages": [],
+                "quality_assessment": {
+                    "credibility": 7,
+                    "relevance": 8,
+                    "completeness": 6,
+                    "issues": [],
+                },
+            }
 
         with patch("llmwikify.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
@@ -176,7 +198,18 @@ class TestLLMRetryMechanism:
             call_count += 1
             if call_count == 1:
                 raise ConnectionError("API timeout")
-            return {"topics": [], "entities": [], "key_facts": [], "suggested_pages": []}
+            return {
+                "topics": [],
+                "entities": [],
+                "key_facts": [],
+                "suggested_pages": [],
+                "quality_assessment": {
+                    "credibility": 7,
+                    "relevance": 8,
+                    "completeness": 6,
+                    "issues": [],
+                },
+            }
 
         with patch("llmwikify.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
@@ -199,7 +232,18 @@ class TestLLMRetryMechanism:
             captured_messages.append(msgs)
             if len(captured_messages) == 1:
                 return {"invalid": True}
-            return {"topics": [], "entities": [], "key_facts": [], "suggested_pages": []}
+            return {
+                "topics": [],
+                "entities": [],
+                "key_facts": [],
+                "suggested_pages": [],
+                "quality_assessment": {
+                    "credibility": 7,
+                    "relevance": 8,
+                    "completeness": 6,
+                    "issues": [],
+                },
+            }
 
         with patch("llmwikify.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
@@ -231,7 +275,20 @@ class TestChainingMode:
         source_data = {"content": "Test content", "title": "Test", "source_type": "markdown", "current_index": ""}
 
         captured_messages = []
-        analysis_result = {"topics": ["AI"], "entities": [], "key_facts": [], "suggested_pages": [], "cross_refs": [], "content_type": "test"}
+        analysis_result = {
+            "topics": ["AI"],
+            "entities": [],
+            "key_facts": [],
+            "suggested_pages": [],
+            "cross_refs": [],
+            "content_type": "test",
+            "quality_assessment": {
+                "credibility": 7,
+                "relevance": 8,
+                "completeness": 6,
+                "issues": [],
+            },
+        }
 
         call_count = 0
 
@@ -240,6 +297,8 @@ class TestChainingMode:
             call_count += 1
             captured_messages.append(msgs)
             if call_count == 1:
+                return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+            if call_count == 2:
                 return analysis_result
             return []
 
@@ -250,7 +309,7 @@ class TestChainingMode:
 
             result = wiki._llm_process_source(source_data)
 
-            assert call_count == 2
+            assert call_count == 3
             assert result["mode"] == "chained"
             assert "analysis" in result
             assert result["analysis"] == analysis_result
@@ -261,7 +320,20 @@ class TestChainingMode:
         source_data = {"content": "Test content", "title": "Test", "source_type": "markdown", "current_index": ""}
 
         captured_messages = []
-        analysis_result = {"topics": ["AI"], "entities": [], "key_facts": [], "suggested_pages": [], "cross_refs": [], "content_type": "test"}
+        analysis_result = {
+            "topics": ["AI"],
+            "entities": [],
+            "key_facts": [],
+            "suggested_pages": [],
+            "cross_refs": [],
+            "content_type": "test",
+            "quality_assessment": {
+                "credibility": 7,
+                "relevance": 8,
+                "completeness": 6,
+                "issues": [],
+            },
+        }
 
         call_count = 0
 
@@ -270,6 +342,8 @@ class TestChainingMode:
             call_count += 1
             captured_messages.append(msgs)
             if call_count == 1:
+                return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+            if call_count == 2:
                 return analysis_result
             return []
 
@@ -280,7 +354,7 @@ class TestChainingMode:
 
             wiki._llm_process_source(source_data)
 
-            ops_messages = captured_messages[1]
+            ops_messages = captured_messages[2]
             user_content = ops_messages[1]["content"]
             assert "Existing" in user_content
 
@@ -352,7 +426,22 @@ class TestConfiguration:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return {"topics": [], "entities": [], "key_facts": [], "suggested_pages": [], "cross_refs": [], "content_type": "test"}
+                return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+            if call_count == 2:
+                return {
+                    "topics": [],
+                    "entities": [],
+                    "key_facts": [],
+                    "suggested_pages": [],
+                    "cross_refs": [],
+                    "content_type": "test",
+                    "quality_assessment": {
+                        "credibility": 7,
+                        "relevance": 8,
+                        "completeness": 6,
+                        "issues": [],
+                    },
+                }
             return []
 
         with patch("llmwikify.llm_client.LLMClient") as MockClient:
@@ -363,7 +452,7 @@ class TestConfiguration:
             result = wiki._llm_process_source(source_data)
 
             assert result["mode"] == "chained"
-            assert call_count == 2
+            assert call_count == 3
 
 
 class TestProviderRendering:
@@ -409,6 +498,12 @@ class TestFullIngestFlow:
             "suggested_pages": [{"name": "Artificial Intelligence", "summary": "About AI", "priority": "high"}],
             "cross_refs": [],
             "content_type": "technical_article",
+            "quality_assessment": {
+                "credibility": 7,
+                "relevance": 8,
+                "completeness": 6,
+                "issues": [],
+            },
         }
 
         operations_data = [
@@ -423,6 +518,8 @@ class TestFullIngestFlow:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
+                return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+            if call_count == 2:
                 return analysis_result
             return operations_data
 
@@ -457,6 +554,12 @@ class TestFullIngestFlow:
             "suggested_pages": [{"name": "Artificial Intelligence", "summary": "About AI", "priority": "high"}],
             "cross_refs": [],
             "content_type": "technical_article",
+            "quality_assessment": {
+                "credibility": 7,
+                "relevance": 8,
+                "completeness": 6,
+                "issues": [],
+            },
         }
 
         operations_data = [
@@ -470,6 +573,8 @@ class TestFullIngestFlow:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
+                return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+            if call_count == 2:
                 return analysis_result
             return operations_data
 

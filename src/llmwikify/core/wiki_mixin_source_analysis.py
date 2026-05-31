@@ -74,6 +74,12 @@ class WikiSourceAnalysisMixin(WikiProtocol):
     def analyze_source(self, source_path: str, force: bool = False) -> dict:
         """Analyze a source file and cache structured extraction.
 
+        Uses two-phase analysis:
+        1. Extract section metadata (pure computation)
+        2. LLM selects relevant sections
+        3. Targeted reading of selected sections
+        4. Full analysis on selected content
+
         Args:
             source_path: Relative path, e.g., 'raw/article.md'
             force: Force re-analysis even if cached
@@ -104,6 +110,20 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         content = full_path.read_text()
         content_hash = self._compute_content_hash(source_path)
 
+        section_metadata = self.extract_section_metadata(content, source_path)
+
+        max_chars = 32000
+        selected_sections = self._select_sections(
+            section_metadata=section_metadata,
+            content_type="local",
+        )
+
+        targeted_content, content_truncated = self.targeted_read(
+            content=content,
+            selected_sections=selected_sections.get("selected_sections", []),
+            max_chars=max_chars,
+        )
+
         registry = self._get_prompt_registry()
         wiki_schema = ""
         if self.wiki_md_file.exists():
@@ -113,7 +133,7 @@ class WikiSourceAnalysisMixin(WikiProtocol):
             "analyze_source",
             title=source_path,
             source_type="local",
-            content=content[:8000],
+            content=targeted_content,
             current_index=self.index_file.read_text() if self.index_file.exists() else "",
             wiki_schema=wiki_schema,
         )
