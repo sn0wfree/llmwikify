@@ -37,8 +37,8 @@
 |------|------|------|------|------|------|------|--------|------|
 | DR-10 | Deep Research | Engine | `engine.py` 全文 | 所有 action/reasoning/observation 在一个类（930 行） | 可维护性差 | 拆分为 Reasoner/ActionDispatcher/Observer | 高 | 待处理 |
 | DR-11 | Deep Research | Frontend | `ResearchPanel.tsx:632-755` | 120+ 行 switch 处理 16 种事件 | 可维护性差 | strategy pattern 或 reducer 拆分 | 中 | 待处理 |
-| DR-13 | Deep Research | Observability | `engine.py` 全文 | 无 token 用量/耗时/成本追踪 | 无法分析优化 | 添加 metrics 收集 | 中 | 待处理 |
-| DR-14 | Deep Research | Engine | `engine.py` 各 action handler | Phase 分散赋值，无集中验证 | 状态机隐式 | 定义显式状态转移表 | 中 | 待处理 |
+| DR-13 | Deep Research | Observability | `engine.py` 全文 | 无 token 用量/耗时/成本追踪 | 无法分析优化 | 添加 metrics 收集 | 中 | ✅ 已完成 |
+| DR-14 | Deep Research | Engine | `engine.py` 各 action handler | Phase 分散赋值，无集中验证 | 状态机隐式 | 定义显式状态转移表 | 中 | ✅ 已完成 |
 | IN-5 | Ingest | Transaction | `wiki_mixin_relation.py:86-121` | 逐页写入，无原子性 | 中途失败导致部分页面丢失 | 写入前快照 + 失败回滚 | 高 | ✅ 已完成 |
 | IN-8 | Ingest | Relation | `relation_engine.py:102-141` | `add_relation()` 精确匹配去重 | 不同表述产生重复关系 | 语义去重（LLM 或 embedding） | 中 | ✅ 已完成 |
 | IN-9 | Ingest | Index | `core/index.py:77-111` | 每次 `write_page()` 重建 FTS5 条目 | 批量 ingest 性能瓶颈 | 延迟索引更新，最后一次性重建 | 中 | ⏭ 跳过（性能可接受） |
@@ -611,6 +611,7 @@ class IngestPerformanceMetrics:
 | **DR-8** | readerRef 未接 cancel | ✅ 已完成 | useEffect cleanup on unmount |
 | **DR-12** | catch 后 silent | ✅ 已完成 | 选择性添加 console.warn |
 | **DR-13** | report/review 后中断丢失报告 | ✅ 已完成 | report/review 后立即持久化到 DB |
+| **DR-14** | Phase 分散赋值，无集中验证 | ✅ 已完成 | 定义显式状态转移表 |
 | **IN-2** | `wiki_ingest` 使用 posthoc 确认 | ✅ 设计合理 | 保持 posthoc（ingest 只提取到 raw/，不修改 wiki） |
 
 ### IN-2 详细分析
@@ -631,8 +632,8 @@ class IngestPerformanceMetrics:
 
 | 编号 | 问题 | 影响 | 复杂度 | 状态 |
 |------|------|------|--------|------|
-| **DR-6** | 每轮都读 DB 检查控制信号 | 不必要 I/O 开销 | 低 | 待处理 |
-| **IN-11** | 无提取/分析/建页耗时追踪 | 无法分析优化 | 低 | 待处理 |
+| **DR-6** | 每轮都读 DB 检查控制信号 | 不必要 I/O 开销 | 低 | ⏭ 跳过（1ms 开销可忽略） |
+| **IN-11** | 无提取/分析/建页耗时追踪 | 无法分析优化 | 低 | ✅ 已完成 |
 
 ### DR-6 详细分析
 
