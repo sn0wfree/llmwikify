@@ -1,6 +1,6 @@
 # llmwikify Issues 跟踪
 
-> 更新日期: 2026-05-31 | 分支: main | 版本: 51dae84
+> 更新日期: 2026-05-31 | 分支: main | 版本: 61d8ac6
 
 ---
 
@@ -10,10 +10,10 @@
 
 | 编号 | 系统 | 功能 | 位置 | 现状 | 问题 | 建议 | 复杂度 | 状态 |
 |------|------|------|------|------|------|------|--------|------|
-| DR-2 | Deep Research | Gather | `gatherer.py:364-373` | 失败直接标记 "failed"，永不重试 | 网络抖动导致永久丢失搜索方向 | 在下一轮 ReAct 中自动重试失败 sub-query | 低 | 待处理 |
-| DR-4 | Deep Research | Review | `engine.py:626-629` | LLM 异常时创建 `{"approved":False,"score":0}` | LLM 调用失败 ≠ 报告质量差，浪费 revise 轮次 | 异常时跳过 review，标记 "review_skipped" | 低 | 待处理 |
+| DR-2 | Deep Research | Gather | `gatherer.py:364-373` | 失败直接标记 "failed"，永不重试 | 网络抖动导致永久丢失搜索方向 | 在下一轮 ReAct 中自动重试失败 sub-query | 低 | ✅ 已完成 |
+| DR-4 | Deep Research | Review | `engine.py:626-629` | LLM 异常时创建 `{"approved":False,"score":0}` | LLM 调用失败 ≠ 报告质量差，浪费 revise 轮次 | 异常时跳过 review，标记 "review_skipped" | 低 | ✅ 已完成 |
 | IN-1 | Ingest | Analyze | `wiki_mixin_ingest.py`, `wiki_mixin_llm.py`, `wiki_mixin_source_analysis.py` | 两阶段分析 + metadata + lint_hint 已实现 | — | — | — | ✅ 已完成 |
-| IN-2 | Ingest | Confirm | `agent/tools.py:263` | `requires_confirmation="posthoc"` 执行后才记录 | 与 `wiki_write_page` 的 pre 模式不一致，误操作无法回滚 | 改为 `requires_confirmation="pre"` | 低 | 待处理 |
+| IN-2 | Ingest | Confirm | `agent/tools.py:263` | `requires_confirmation="posthoc"` — 设计合理 | — | 保持 posthoc（ingest 只提取到 raw/，不修改 wiki；真正的写操作 wiki_write_page 已有 pre 确认） | — | ✅ 设计合理 |
 
 ### 🟡 P1 — 中优先级（影响性能/体验）
 
@@ -603,121 +603,77 @@ class IngestPerformanceMetrics:
 
 ## 五、最高优先级问题评估
 
-### 剩余 P0 问题（3 个）
+### P0 问题状态（全部已处理）
 
-| 编号 | 问题 | 影响 | 复杂度 | 推荐优先级 |
-|------|------|------|--------|-----------|
-| **DR-2** | Gather 失败 sub-query 永不重试 | 网络抖动导致永久丢失搜索方向 | 低 | 🔴 最高 |
-| **DR-4** | Review LLM 异常时创建假差评 | 浪费 revise 轮次，报告质量误判 | 低 | 🔴 高 |
-| **IN-2** | `wiki_ingest` 使用 posthoc 确认 | 与 `wiki_write_page` 不一致，误操作无法回滚 | 低 | 🟡 中 |
+| 编号 | 问题 | 状态 | 结论 |
+|------|------|------|------|
+| **DR-2** | Gather 失败 sub-query 永不重试 | ✅ 已完成 | 自动重试，max 1 retry per sub-query |
+| **DR-4** | Review LLM 异常时创建假差评 | ✅ 已完成 | 跳过 review，标记 "skipped" |
+| **IN-2** | `wiki_ingest` 使用 posthoc 确认 | ✅ 设计合理 | 保持 posthoc（ingest 只提取到 raw/，不修改 wiki） |
 
-### DR-2 详细分析
+### IN-2 详细分析
 
-**位置**: `gatherer.py:364-373`
+**结论**: 保持 `requires_confirmation="posthoc"`
 
-**现状**: sub-query 失败时直接标记 "failed"，永不重试
-
-```python
-# gatherer.py:364-371
-except Exception as e:
-    logger.warning("Gather failed for sub_query %s (%s): %s", sq_id, source_type, e)
-    self.session_manager.fail_sub_query(sq_id, str(e))
-    events.append({
-        "type": "sub_query_failed",
-        "sub_query_id": sq_id,
-        "error": str(e),
-    })
-```
-
-**问题**: 网络抖动（timeout、DNS 失败、临时 503）导致 sub-query 永久失败，丢失搜索方向
-
-**修复方案**: 在 `_react_loop` 的 gather 阶段，检查是否有 failed sub-queries，自动重试
-
-```python
-# engine.py _react_loop 中 gather 阶段
-failed = [sq for sq in sub_queries if sq["status"] == "failed"]
-if failed:
-    yield {"type": "retrying_failed", "count": len(failed)}
-    retry_results = await self.gatherer.gather(failed)  # 重试
-    # 合并结果...
-```
-
-**预估**: ~20 行代码
+**理由**:
+1. `wiki_ingest` 只提取内容到 `raw/`，不修改 wiki 页面
+2. 真正的 wiki 写操作 `wiki_write_page` 已经有 `pre` 确认
+3. 改为 `pre` 会阻塞 Agent 自动化流程
+4. `posthoc` 提供审计能力，满足事后审查需求
 
 ---
 
-### DR-4 详细分析
+## 六、剩余高优先级问题
 
-**位置**: `engine.py:626-629`
+### P1 问题（按影响力排序）
 
-**现状**: LLM 异常时创建 `{"approved":False,"score":0}`
+| 编号 | 问题 | 影响 | 复杂度 | 推荐优先级 |
+|------|------|------|--------|-----------|
+| **DR-1** | Gather 50% 阈值过早取消 | PDF/arxiv 等慢源被丢弃 | 低 | 🔴 高 |
+| **DR-6** | 每轮都读 DB 检查控制信号 | 不必要 I/O 开销 | 低 | 🟡 中 |
+| **DR-8** | readerRef 未接 cancel | 导航离开后 fetch 继续运行 | 低 | 🟡 中 |
+| **DR-12** | catch 后 silent | 用户不知道操作是否成功 | 低 | 🟡 中 |
+| **IN-11** | 无提取/分析/建页耗时追踪 | 无法分析优化 | 低 | 🟡 中 |
 
-```python
-# engine.py:626-629
-try:
-    state.review = await reviewer.review(state.query, state.report_md or "", sources)
-except Exception as e:
-    logger.error("Report review failed: %s", e)
-    state.review = {"approved": False, "score": 0, "issues": [f"Review failed: {e}"], "feedback": ""}
-```
+### DR-1 详细分析
 
-**问题**: LLM 调用失败 ≠ 报告质量差，浪费 revise 轮次
+**位置**: `gatherer.py:55-57`
 
-**修复方案**: 异常时跳过 review，标记 "review_skipped"
+**现状**: 50% 任务完成 + 15s grace 后取消剩余任务
 
-```python
-except Exception as e:
-    logger.error("Report review failed: %s", e)
-    state.review = {"approved": True, "score": 7, "issues": [], "feedback": "", "skipped": True}
-```
+**问题**: PDF/arxiv 等慢但有价值的源被过早取消
+
+**修复方案**: 提高阈值到 70-80%，或按源质量判断是否继续等待
+
+**预估**: ~10 行代码
+
+### DR-6 详细分析
+
+**位置**: `engine.py:392-403`
+
+**现状**: `_check_control_signals()` 每轮都读 DB
+
+**问题**: 不必要 I/O，性能开销
+
+**修复方案**: 每 N 轮检查（如每 3 轮），或用 asyncio.Event
+
+**预估**: ~5 行代码
+
+### DR-8 详细分析
+
+**位置**: `ResearchPanel.tsx:563-564`
+
+**现状**: `readerRef` 存了 reader 但没接 cancel
+
+**问题**: 导航离开后 fetch 继续运行
+
+**修复方案**: unmount 时调用 `reader.cancel()`
 
 **预估**: ~5 行代码
 
 ---
 
-### IN-2 详细分析
-
-**位置**: `agent/tools.py:263`
-
-**现状**: `requires_confirmation="posthoc"` — 执行后才记录
-
-```python
-# agent/tools.py:258-263
-self._register(
-    "wiki_ingest",
-    lambda args: self.wiki.ingest_source(args.get("source", "")),
-    description="Ingest a source file",
-    action_type="write",
-    requires_confirmation="posthoc",  # ← 问题
-    ...
-)
-```
-
-**问题**: 与 `wiki_write_page` 的 `pre` 模式不一致，误操作无法回滚
-
-**修复方案**: 改为 `requires_confirmation="pre"`
-
-```python
-requires_confirmation="pre",  # ← 修改
-```
-
-**预估**: 1 行代码
-
-**注意**: 改为 `pre` 后，Agent 每次 ingest 都需要用户确认，可能影响自动化流程。需要评估是否会影响 MCP Agent 的使用体验。
-
----
-
-### 推荐修复顺序
-
-| 顺序 | 编号 | 理由 |
-|------|------|------|
-| 1 | DR-2 | P0 + 低复杂度 + 高影响（搜索质量） |
-| 2 | DR-4 | P0 + 低复杂度 + 高影响（报告质量） |
-| 3 | IN-2 | P0 + 低复杂度 + 中影响（需评估 Agent 体验） |
-
----
-
-## 六、附录：LLM 调用点审计
+## 七、附录：LLM 调用点审计
 
 14 个调用点中，仅 4 个有截断保护。TokenBudgetChecker 提供全局安全网：
 
