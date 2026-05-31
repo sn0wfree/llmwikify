@@ -23,7 +23,7 @@
 | 编号 | 系统 | 功能 | 位置 | 现状 | 问题 | 建议 | 复杂度 | 状态 |
 |------|------|------|------|------|------|------|--------|------|
 | DR-1 | Deep Research | Gather | `gatherer.py:55-57` | 70% 任务完成 + 15s grace 后取消剩余（已从 50% 调整到 70%） | — | — | — | ✅ 已完成 |
-| DR-3 | Deep Research | Report | `report.py:89-103` | 报告生成是阻塞式 LLM 调用（120s） | 用户在最耗时阶段看不到进度 | 支持 report LLM 流式输出 | 中 | ⏭ 跳过（需重构，收益小） |
+| DR-3 | Deep Research | Report | `report.py:89-103` | 报告生成是阻塞式 LLM 调用（120s） | 用户在最耗时阶段看不到进度 | 支持 report LLM 流式输出 | 中 | ✅ 已完成 |
 | DR-5 | Deep Research | DB | `db.py:347` | 每个 source 完整内容（最大 500K chars）存 SQLite | DB 膨胀，查询变慢，resume 加载慢 | 大内容存文件系统，DB 只存 metadata | 中 | 待处理 |
 | DR-6 | Deep Research | Engine | `engine.py:392-403` | `_check_control_signals()` 每轮都读 DB | 不必要 I/O | 每 N 轮检查或用 asyncio.Event | 低 | ⏭ 跳过（1ms 开销可忽略） |
 | DR-7 | Deep Research | Frontend | `api.ts:318-355` | 流断开后用户必须手动 resume | 网络不稳定体验差 | exponential backoff 自动重连 | 中 | ✅ 已完成 |

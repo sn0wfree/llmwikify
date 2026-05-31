@@ -35,11 +35,11 @@ VALID_TRANSITIONS: dict[str | None, list[str]] = {
     None:           ["plan"],
     "planning":     ["gather"],
     "gathering":    ["analyze", "plan"],
-    "analyzing":    ["synthesize", "plan"],
-    "synthesizing": ["report", "plan"],
-    "reporting":    ["review"],
+    "analyzing":    ["synthesizing", "plan"],
+    "synthesizing": ["reporting", "plan"],
+    "reporting":    ["reviewing"],
     "reviewing":    ["revise", "done"],
-    "revise":       ["review", "done"],
+    "revise":       ["reviewing", "done"],
     "error":        ["done"],
     "done":         [],
 }
@@ -776,8 +776,25 @@ class ResearchEngine:
 
         sources = self.db.get_sources(state.session_id) or []
         generator = ReportGenerator(self.wiki, self._report_llm, self.config)
+        
+        # Use streaming report generation (DR-3)
+        import asyncio
+        report_chunks: list[str] = []
+        
+        def _generate_streaming():
+            for event in generator.generate_streaming(state.query, sources, state.synthesis or {}):
+                if event["type"] == "chunk":
+                    report_chunks.append(event["text"])
+                elif event["type"] == "done":
+                    return event["content"]
+                elif event["type"] == "error":
+                    raise Exception(event["error"])
+            return "".join(report_chunks)
+        
         try:
-            state.report_md = await generator.generate(state.query, sources, state.synthesis or {})
+            # Run streaming generator in thread pool
+            state.report_md = await asyncio.to_thread(_generate_streaming)
+            
             # Persist report immediately so it survives pause/cancel/error
             self.session_manager.finalize(state.session_id, {
                 "markdown": state.report_md,
