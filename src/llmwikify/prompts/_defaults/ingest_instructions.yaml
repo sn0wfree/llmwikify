@@ -1,6 +1,6 @@
 name: ingest_instructions
 description: "Workflow instructions returned to LLM after source ingestion. Guides LLM on what to do with a new source."
-version: "2.1"
+version: "3.0"
 trigger:
   type: "api_call"
   when: "ingest_instructions"
@@ -10,26 +10,47 @@ params: {}
 text: |
   You have received a new source document.
 
-  **Your role:** Analyze the extracted content and create/update wiki pages using MCP tools.
+  **Workflow (ReAct pattern):**
 
-  **Workflow:**
-  1. Read wiki.md (via wiki_read_schema or wiki_read_page("wiki.md")) for page conventions
-  2. Review the ingest result for: content_preview, analysis (entities, suggested_pages), lint_hint
-  3. If analysis is available, review entities and suggested_pages for page creation guidance
-  4. Create/update wiki pages using wiki_write_page:
-     - Use the `page_type` parameter to specify directory:
-       wiki_write_page(page_name="Page Name", content="...", page_type="Source")
-       wiki_write_page(page_name="Entity Name", content="...", page_type="Entity")
-       wiki_write_page(page_name="Topic", content="...", page_type="Concept")
-     - The page_name should be the pure name WITHOUT "wiki/" prefix
-  5. Add [[wikilinks]] between related pages
-  6. Cite the source in wiki pages using standard markdown (NOT wikilinks):
-     - Page-level: add '## Sources' section with [Source: Title](raw/filename)
-     - Inline: cite after key claims like [Source](raw/filename)
-  7. Write graph relations: wiki_graph(action="write", relations=[...])
-  8. Run wiki_lint(mode="check") to detect gaps (missing custom pages, orphan concepts)
-  9. If lint finds issues, run wiki_lint(mode="fix") to repair them
-  10. Log the operation: wiki_log(operation="ingest", details="filename.pdf")
+  ## Observe
+  Review the ingest result:
+  - `content_preview`: first 200 chars of the document
+  - `section_metadata`: document structure (sections, word counts, previews)
+  - `lint_hint`: pre-check issues (if any)
+
+  ## Reason → Act → Observe
+  Check `lint_hint`:
+  - If `issues_found > 0`, review the issues before proceeding
+  - `content_too_short`: may need manual review
+  - `has_images`: check for important visuals
+  - `source_already_exists`: consider updating instead of creating new
+
+  ## Reason → Act → Observe
+  Get structured analysis:
+  Call `wiki_analyze_source(source_path)` for:
+  - topics, entities, relations, claims
+  - suggested_pages with priorities
+  - quality_assessment
+
+  This uses two-phase analysis for better results on long documents.
+
+  ## Reason → Act → Observe
+  Create wiki pages based on analysis:
+  - Read wiki.md (via wiki_read_schema) for page conventions
+  - Create source summary page (type: Source)
+  - Create entity pages (type: Entity)
+  - Create concept pages (type: Concept)
+  - Add [[wikilinks]] between related pages
+  - Cite sources: [Source: Title](raw/filename)
+
+  ## Reason → Act → Observe
+  Validate:
+  - Run wiki_lint(mode="check") to detect gaps
+  - If issues found, run wiki_lint(mode="fix")
+  - Log: wiki_log(operation="ingest", details="filename.pdf")
+
+  ## Reason
+  Check if done. If issues found, repeat from step 2.
 
   **Naming Rules:**
   - Use English for page names and titles

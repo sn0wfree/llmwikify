@@ -71,7 +71,7 @@ class WikiSourceAnalysisMixin(WikiProtocol):
             logger.warning("Failed to parse cached analysis for %s: %s", page_path, e)
         return None
 
-    def analyze_source(self, source_path: str, force: bool = False) -> dict:
+    def analyze_source(self, source_path: str, force: bool = False, section_metadata: dict | None = None) -> dict:
         """Analyze a source file and cache structured extraction.
 
         Uses two-phase analysis:
@@ -83,6 +83,7 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         Args:
             source_path: Relative path, e.g., 'raw/article.md'
             force: Force re-analysis even if cached
+            section_metadata: Pre-computed section metadata (optional, extracts if not provided)
 
         Returns:
             Analysis dict with: topics, entities, relations, suggested_pages, etc.
@@ -110,7 +111,8 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         content = full_path.read_text()
         content_hash = self._compute_content_hash(source_path)
 
-        section_metadata = self.extract_section_metadata(content, source_path)
+        if section_metadata is None:
+            section_metadata = self.extract_section_metadata(content, source_path)
 
         max_chars = 32000
         selected_sections = self._select_sections(

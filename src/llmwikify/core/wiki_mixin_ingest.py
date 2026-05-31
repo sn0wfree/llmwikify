@@ -191,6 +191,40 @@ class WikiIngestMixin(WikiProtocol):
 
         return "\n\n".join(selected_text), char_budget == 0
 
+    def _generate_lint_hint(self, source_name: str, content: str, already_exists: bool) -> dict:
+        """Generate lightweight lint hints (pure computation, no LLM).
+
+        Acts as a harness pre-check layer, alerting the Agent to potential
+        issues before it starts creating pages.
+        """
+        issues = []
+
+        word_count = len(content.split()) if content else 0
+        if word_count < 50:
+            issues.append({
+                "type": "content_too_short",
+                "message": f"Content is very short ({word_count} words), may need manual review"
+            })
+
+        image_refs = re.findall(r'!\[.*?\]\((.*?)\)', content or '')
+        if image_refs:
+            issues.append({
+                "type": "has_images",
+                "message": f"Document contains {len(image_refs)} image(s), review for important visuals"
+            })
+
+        if already_exists:
+            issues.append({
+                "type": "source_already_exists",
+                "message": f"Source already exists in raw/{source_name}, consider updating"
+            })
+
+        return {
+            "issues_found": len(issues),
+            "suggestion": "Run wiki_lint(mode='check') for full analysis" if issues else None,
+            "top_issues": issues[:5]
+        }
+
     def ingest_source(self, source: str) -> dict:
         """Ingest a source file and return extracted data for LLM processing.
 
@@ -295,4 +329,6 @@ class WikiIngestMixin(WikiProtocol):
             "current_index": index_content,
             "message": "Source ingested. Read the file to extract key takeaways.",
             "instructions": self._get_prompt_registry().render_text("ingest_instructions"),
+            "section_metadata": self.extract_section_metadata(result.text or "", result.title),
+            "lint_hint": self._generate_lint_hint(source_name, result.text or "", already_exists),
         }

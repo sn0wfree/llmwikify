@@ -412,7 +412,9 @@ class TestBuiltInTemplates:
 
         assert template.name == "ingest_instructions"
         assert "source document" in template.text
-        assert "## Sources" in template.text
+        assert "wiki_analyze_source" in template.text
+        assert "section_metadata" in template.text
+        assert "lint_hint" in template.text
 
     def test_wiki_schema_raw_blocks(self):
         registry = PromptRegistry()
@@ -427,10 +429,10 @@ class TestBuiltInTemplates:
         registry = PromptRegistry()
         result = registry.render_text("ingest_instructions")
 
-        assert "## Sources" in result
-        assert "NOT wikilinks" in result
         assert "[Source" in result
         assert "raw/" in result
+        assert "wiki_analyze_source" in result
+        assert "wiki_lint" in result
 
 
 class TestProviderOverridesExtended:
