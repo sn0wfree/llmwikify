@@ -29,6 +29,76 @@ from .quality_gate import QualityGate
 
 logger = logging.getLogger(__name__)
 
+# ─── State Transition Table (DR-14) ──────────────────────────────────────
+# Explicit valid transitions: from_phase → list of allowed to_phases
+VALID_TRANSITIONS: dict[str | None, list[str]] = {
+    None:           ["plan"],
+    "planning":     ["gather"],
+    "gathering":    ["analyze", "plan"],
+    "analyzing":    ["synthesize", "plan"],
+    "synthesizing": ["report", "plan"],
+    "reporting":    ["review"],
+    "reviewing":    ["revise", "done"],
+    "revise":       ["review", "done"],
+    "error":        ["done"],
+    "done":         [],
+}
+
+
+# ─── Metrics Collection (DR-13) ──────────────────────────────────────────
+
+@dataclass
+class ActionMetrics:
+    """Metrics for a single action execution."""
+    action: str
+    start_time: float
+    end_time: float = 0.0
+    duration_ms: int = 0
+    tokens_used: int = 0
+    cost_usd: float = 0.0
+
+    def finish(self) -> None:
+        """Mark action as finished and compute duration."""
+        self.end_time = time.monotonic()
+        self.duration_ms = int((self.end_time - self.start_time) * 1000)
+
+
+@dataclass
+class SessionMetrics:
+    """Metrics for an entire research session."""
+    session_id: str
+    start_time: float = 0.0
+    end_time: float = 0.0
+    total_duration_ms: int = 0
+    total_tokens: int = 0
+    total_cost_usd: float = 0.0
+    actions: list[ActionMetrics] = field(default_factory=list)
+
+    def start(self) -> None:
+        """Mark session as started."""
+        self.start_time = time.monotonic()
+
+    def finish(self) -> None:
+        """Mark session as finished and compute totals."""
+        self.end_time = time.monotonic()
+        self.total_duration_ms = int((self.end_time - self.start_time) * 1000)
+        self.total_tokens = sum(a.tokens_used for a in self.actions)
+        self.total_cost_usd = sum(a.cost_usd for a in self.actions)
+
+    def add_action(self, action: ActionMetrics) -> None:
+        """Add an action metric."""
+        self.actions.append(action)
+
+    def summary(self) -> str:
+        """Generate human-readable summary."""
+        lines = [f"Session {self.session_id} completed in {self.total_duration_ms/1000:.1f}s"]
+        for a in self.actions:
+            token_str = f"{a.tokens_used:,} tokens" if a.tokens_used > 0 else "0 tokens"
+            cost_str = f"${a.cost_usd:.3f}" if a.cost_usd > 0 else "$0.00"
+            lines.append(f"├── {a.action}: {a.duration_ms/1000:.1f}s, {token_str}, {cost_str}")
+        lines.append(f"└── Total: {self.total_duration_ms/1000:.1f}s, {self.total_tokens:,} tokens, ${self.total_cost_usd:.3f}")
+        return "\n".join(lines)
+
 
 @dataclass
 class ResearchState:
@@ -106,6 +176,9 @@ class ResearchEngine:
         # Quality gate
         self._quality_gate = QualityGate(self.config)
 
+        # Metrics (DR-13)
+        self._metrics: SessionMetrics | None = None
+
     def _resolve_model(self, config_key: str) -> StreamableLLMClient | None:
         model_cfg = self.config.get(config_key)
         if not model_cfg:
@@ -122,10 +195,45 @@ class ResearchEngine:
             if elapsed > self._timeout_seconds:
                 raise TimeoutError(f"Research timed out after {elapsed:.0f}s (limit: {self._timeout_seconds}s)")
 
+    def _validate_transition(self, from_phase: str, to_phase: str) -> bool:
+        """Validate state transition is allowed.
+        
+        Args:
+            from_phase: Current phase
+            to_phase: Target phase
+            
+        Returns:
+            True if transition is valid, False otherwise
+        """
+        valid_targets = VALID_TRANSITIONS.get(from_phase, [])
+        if to_phase not in valid_targets:
+            logger.warning(
+                "Invalid state transition: %s → %s (valid: %s)",
+                from_phase, to_phase, valid_targets or "none"
+            )
+            return False
+        return True
+
+    def _start_action(self, action: str) -> ActionMetrics:
+        """Start tracking metrics for an action."""
+        metrics = ActionMetrics(action=action, start_time=time.monotonic())
+        return metrics
+
+    def _finish_action(self, metrics: ActionMetrics) -> None:
+        """Finish tracking metrics for an action and add to session."""
+        metrics.finish()
+        if self._metrics:
+            self._metrics.add_action(metrics)
+        logger.debug("Action %s completed in %dms", metrics.action, metrics.duration_ms)
+
     async def run(self, session_id: str, query: str, resume: bool = False) -> AsyncIterator[dict[str, Any]]:
         """Execute the ReAct research loop, yielding SSE events."""
         self.session_manager.session_id = session_id
         self._start_time = time.monotonic()
+        
+        # Initialize metrics (DR-13)
+        self._metrics = SessionMetrics(session_id=session_id)
+        self._metrics.start()
 
         try:
             async for event in self._react_loop(session_id, query, resume):
@@ -136,6 +244,11 @@ class ResearchEngine:
             yield {"type": "error", "error": f"Research timed out after {self._timeout_seconds}s"}
         except Exception:
             raise
+        finally:
+            # Finalize metrics and log summary
+            if self._metrics:
+                self._metrics.finish()
+                logger.info("Research metrics:\n%s", self._metrics.summary())
 
     # ─── ReAct Core Loop ───────────────────────────────────────────────
 
@@ -496,6 +609,13 @@ class ResearchEngine:
 
     async def _action_plan(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Plan sub-queries (initial or replanning for gaps)."""
+        # Validate state transition
+        if not self._validate_transition(state.phase, "planning"):
+            logger.warning("Invalid transition to planning from %s, continuing anyway", state.phase)
+        
+        # Track metrics (DR-13)
+        metrics = self._start_action("plan")
+        
         state.phase = "planning"
         self.session_manager.update_status(state.session_id, "planning", "planning", None)
         yield self._step_event("planning", f"Planning sub-queries (round {state.round})...")
@@ -526,9 +646,19 @@ class ResearchEngine:
             }
 
         yield {"type": "progress", "progress": 0.1, "message": f"Round {state.round}: {len(new_queries)} new sub-queries"}
+        
+        # Finish metrics tracking
+        self._finish_action(metrics)
 
     async def _action_gather(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Gather sources for ungathered or failed sub-queries."""
+        # Validate state transition
+        if not self._validate_transition(state.phase, "gathering"):
+            logger.warning("Invalid transition to gathering from %s, continuing anyway", state.phase)
+        
+        # Track metrics (DR-13)
+        metrics = self._start_action("gather")
+        
         state.phase = "gathering"
         self.session_manager.update_status(state.session_id, "gathering", "gathering", None)
         yield self._step_event("gathering", "Gathering sources...")
@@ -562,9 +692,19 @@ class ResearchEngine:
             yield {"type": "error", "error": "No sources gathered. All sub-queries failed."}
             state.phase = "error"
             state.issues.append("No sources gathered — all sub-queries failed")
+        
+        # Finish metrics tracking
+        self._finish_action(metrics)
 
     async def _action_analyze(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Analyze unanalyzed sources."""
+        # Validate state transition
+        if not self._validate_transition(state.phase, "analyzing"):
+            logger.warning("Invalid transition to analyzing from %s, continuing anyway", state.phase)
+        
+        # Track metrics (DR-13)
+        metrics = self._start_action("analyze")
+        
         state.phase = "analyzing"
         self.session_manager.update_status(state.session_id, "analyzing", "analyzing", None)
         yield self._step_event("analyzing", "Analyzing sources...")
@@ -579,9 +719,19 @@ class ResearchEngine:
                 yield event
 
         yield {"type": "progress", "progress": 0.55, "message": "Analysis complete"}
+        
+        # Finish metrics tracking
+        self._finish_action(metrics)
 
     async def _action_synthesize(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Synthesize findings from analyzed sources."""
+        # Validate state transition
+        if not self._validate_transition(state.phase, "synthesizing"):
+            logger.warning("Invalid transition to synthesizing from %s, continuing anyway", state.phase)
+        
+        # Track metrics (DR-13)
+        metrics = self._start_action("synthesize")
+        
         state.phase = "synthesizing"
         self.session_manager.update_status(state.session_id, "synthesizing", "synthesizing", None)
         yield self._step_event("synthesizing", "Synthesizing cross-source findings...")
@@ -607,9 +757,19 @@ class ResearchEngine:
             "new_entities": state.synthesis.get("new_entities", []),
         }}
         yield {"type": "progress", "progress": 0.65, "message": "Synthesis complete"}
+        
+        # Finish metrics tracking
+        self._finish_action(metrics)
 
     async def _action_report(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Generate research report."""
+        # Validate state transition
+        if not self._validate_transition(state.phase, "reporting"):
+            logger.warning("Invalid transition to reporting from %s, continuing anyway", state.phase)
+        
+        # Track metrics (DR-13)
+        metrics = self._start_action("report")
+        
         state.phase = "reporting"
         self.session_manager.update_status(state.session_id, "report", "report", None)
         yield self._step_event("report", "Generating research report...")
@@ -636,9 +796,19 @@ class ResearchEngine:
             self.session_manager.update_status(state.session_id, "error", "report", -1)
             state.phase = "error"
             state.issues.append(f"Report generation failed: {e}")
+        
+        # Finish metrics tracking
+        self._finish_action(metrics)
 
     async def _action_review(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Review report quality."""
+        # Validate state transition
+        if not self._validate_transition(state.phase, "reviewing"):
+            logger.warning("Invalid transition to reviewing from %s, continuing anyway", state.phase)
+        
+        # Track metrics (DR-13)
+        metrics = self._start_action("review")
+        
         state.phase = "reviewing"
         self.session_manager.update_status(state.session_id, "reviewing", "reviewing", None)
         yield self._step_event("review", "Reviewing report quality...")
@@ -683,9 +853,19 @@ class ResearchEngine:
                 "score": state.quality_score,
                 "issues": state.issues,
             }
+        
+        # Finish metrics tracking
+        self._finish_action(metrics)
 
     async def _action_revise(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Revise report based on review feedback."""
+        # Validate state transition
+        if not self._validate_transition(state.phase, "revise"):
+            logger.warning("Invalid transition to revise from %s, continuing anyway", state.phase)
+        
+        # Track metrics (DR-13)
+        metrics = self._start_action("revise")
+        
         yield self._step_event("revise", "Revising report...")
 
         sources = self.db.get_sources(state.session_id) or []
@@ -709,9 +889,16 @@ class ResearchEngine:
         except Exception as e:
             logger.error("Report revision failed: %s", e)
             yield {"type": "error", "error": f"Report revision failed: {e}"}
+        
+        # Finish metrics tracking
+        self._finish_action(metrics)
 
     async def _action_done(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Finalize research session."""
+        # Validate state transition
+        if not self._validate_transition(state.phase, "done"):
+            logger.warning("Invalid transition to done from %s, continuing anyway", state.phase)
+        
         state.phase = "done"
         sources = self.db.get_sources(state.session_id) or []
 
