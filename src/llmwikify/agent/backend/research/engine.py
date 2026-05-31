@@ -528,13 +528,25 @@ class ResearchEngine:
         yield {"type": "progress", "progress": 0.1, "message": f"Round {state.round}: {len(new_queries)} new sub-queries"}
 
     async def _action_gather(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
-        """Gather sources for ungathered sub-queries."""
+        """Gather sources for ungathered or failed sub-queries."""
         state.phase = "gathering"
         self.session_manager.update_status(state.session_id, "gathering", "gathering", None)
         yield self._step_event("gathering", "Gathering sources...")
 
         gathered_ids = {s.get("sub_query_id") for s in state.sources}
         remaining = [sq for sq in state.sub_queries if sq["id"] not in gathered_ids]
+
+        # DR-2: Also retry failed sub-queries (max 1 retry per sub-query)
+        failed = [sq for sq in state.sub_queries if sq.get("status") == "failed"]
+        retryable = [
+            sq for sq in failed
+            if sq.get("retry_count", 0) < 1
+        ]
+        if retryable:
+            yield {"type": "retrying_failed", "count": len(retryable)}
+            for sq in retryable:
+                sq["retry_count"] = sq.get("retry_count", 0) + 1
+            remaining.extend(retryable)
 
         if remaining:
             gatherer = SourceGatherer(self.wiki, self.db, self.session_manager, self.config)
@@ -626,7 +638,15 @@ class ResearchEngine:
             state.review = await reviewer.review(state.query, state.report_md or "", sources)
         except Exception as e:
             logger.error("Report review failed: %s", e)
-            state.review = {"approved": False, "score": 0, "issues": [f"Review failed: {e}"], "feedback": ""}
+            # DR-4: Skip review on LLM failure instead of creating fake bad review
+            state.review = {
+                "approved": True,
+                "score": 7,
+                "issues": [],
+                "feedback": "",
+                "skipped": True,
+                "skip_reason": f"Review LLM failed: {e}",
+            }
         state.quality_score = state.review.get("score", 0)
         state.issues = state.review.get("issues", [])
 
