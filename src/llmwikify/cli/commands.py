@@ -1723,6 +1723,138 @@ class WikiCLI:
 
         return 0
 
+    def db(self, args: Any) -> int:
+        """Database management commands (stats, list, clean, export)."""
+        subcommand = getattr(args, 'db_subcommand', 'stats')
+
+        if subcommand == 'stats':
+            return self._db_stats(args)
+        elif subcommand == 'list':
+            return self._db_list(args)
+        elif subcommand == 'clean':
+            return self._db_clean(args)
+        elif subcommand == 'export':
+            return self._db_export(args)
+        else:
+            print(f"Unknown db subcommand: {subcommand}")
+            return 1
+
+    def _db_stats(self, args: Any) -> int:
+        """Show database statistics."""
+        from ..agent.backend.db import AgentDatabase, get_agent_db_path
+
+        db_path = get_agent_db_path(self.wiki.root / '.llmwikify' / 'agent')
+        if not db_path.exists():
+            print("No agent database found.")
+            return 1
+
+        db = AgentDatabase(db_path)
+        stats = db.get_db_stats()
+
+        print("📊 Database Statistics")
+        print(f"   Path: {stats['db_path']}")
+        print(f"   Size: {stats['size_mb']:.2f} MB")
+        print()
+
+        wiki_id = getattr(args, 'wiki_id', None)
+        if wiki_id:
+            wiki_stats = db.get_wiki_stats(wiki_id)
+            print(f"   Wiki: {wiki_stats['wiki_id']}")
+            print(f"     Chat sessions: {wiki_stats['chat_sessions']}")
+            print(f"     Research sessions: {wiki_stats['research_sessions']}")
+            print(f"     Research sources: {wiki_stats['research_sources']}")
+        else:
+            print("   Tables:")
+            for table, count in stats['tables'].items():
+                print(f"     {table}: {count} rows")
+
+        return 0
+
+    def _db_list(self, args: Any) -> int:
+        """List all wikis."""
+        from ..agent.backend.db import AgentDatabase, get_agent_db_path
+
+        db_path = get_agent_db_path(self.wiki.root / '.llmwikify' / 'agent')
+        if not db_path.exists():
+            print("No agent database found.")
+            return 1
+
+        db = AgentDatabase(db_path)
+        wikis = db.list_all_wikis()
+
+        if not wikis:
+            print("No wikis found in database.")
+            return 0
+
+        print("📋 Wikis in Database")
+        print()
+        for wiki in wikis:
+            print(f"  {wiki['wiki_id']}")
+            print(f"    Chat sessions: {wiki['chat_sessions']}")
+            print(f"    Research sessions: {wiki['research_sessions']}")
+            print(f"    Research sources: {wiki['research_sources']}")
+            print()
+
+        return 0
+
+    def _db_clean(self, args: Any) -> int:
+        """Delete all data for a wiki."""
+        from ..agent.backend.db import AgentDatabase, get_agent_db_path
+
+        wiki_id = args.wiki_id
+        force = getattr(args, 'force', False)
+
+        if not force:
+            print(f"⚠️  This will delete all data for wiki '{wiki_id}'.")
+            confirm = input("Type 'yes' to confirm: ")
+            if confirm.lower() != 'yes':
+                print("Cancelled.")
+                return 0
+
+        db_path = get_agent_db_path(self.wiki.root / '.llmwikify' / 'agent')
+        if not db_path.exists():
+            print("No agent database found.")
+            return 1
+
+        db = AgentDatabase(db_path)
+        result = db.delete_wiki_data(wiki_id)
+
+        print(f"✅ Deleted data for wiki '{wiki_id}':")
+        print(f"   Chat sessions: {result['chat_sessions']}")
+        print(f"   Research sessions: {result['research_sessions']}")
+        print(f"   Tool calls: {result['tool_calls']}")
+        print(f"   Ingest log: {result['ingest_log']}")
+
+        return 0
+
+    def _db_export(self, args: Any) -> int:
+        """Export wiki data to JSON."""
+        from ..agent.backend.db import AgentDatabase, get_agent_db_path
+
+        wiki_id = args.wiki_id
+        output = args.output
+
+        db_path = get_agent_db_path(self.wiki.root / '.llmwikify' / 'agent')
+        if not db_path.exists():
+            print("No agent database found.")
+            return 1
+
+        db = AgentDatabase(db_path)
+        data = db.export_wiki_data(wiki_id)
+
+        with open(output, 'w') as f:
+            json.dump(data, f, indent=2, default=str)
+
+        print(f"✅ Exported data for wiki '{wiki_id}' to {output}")
+        print(f"   Chat sessions: {len(data['chat_sessions'])}")
+        print(f"   Chat messages: {len(data['chat_messages'])}")
+        print(f"   Research sessions: {len(data['research_sessions'])}")
+        print(f"   Research sources: {len(data['research_sources'])}")
+        print(f"   Research sub-queries: {len(data['research_sub_queries'])}")
+        print(f"   Tool calls: {len(data['tool_calls'])}")
+
+        return 0
+
 
 def main() -> int:
     """Main CLI entry point."""
@@ -1991,6 +2123,27 @@ Examples:
     p.add_argument('--host', default='127.0.0.1', help='Bind address')
     p.add_argument('--collection', help='Collection name')
 
+    # db - Database management
+    db_parsers = subparsers.add_parser('db', help='Database management commands')
+    db_sub = db_parsers.add_subparsers(dest='db_subcommand', help='DB subcommands')
+
+    # db stats
+    p = db_sub.add_parser('stats', help='Show database statistics')
+    p.add_argument('wiki_id', nargs='?', help='Wiki ID (optional, shows all if omitted)')
+
+    # db list
+    p = db_sub.add_parser('list', help='List all wikis')
+
+    # db clean
+    p = db_sub.add_parser('clean', help='Delete all data for a wiki')
+    p.add_argument('wiki_id', help='Wiki ID to delete')
+    p.add_argument('--force', '-f', action='store_true', help='Skip confirmation')
+
+    # db export
+    p = db_sub.add_parser('export', help='Export wiki data to JSON')
+    p.add_argument('wiki_id', help='Wiki ID to export')
+    p.add_argument('output', help='Output file path')
+
     args = parser.parse_args()
 
     if not args.command:
@@ -2038,6 +2191,7 @@ Examples:
         'mcp': cli.serve,
         'serve': cli.serve,
         'qmd': cli.qmd,
+        'db': cli.db,
     }
 
     try:
