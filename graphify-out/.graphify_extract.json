@@ -1,0 +1,3028 @@
+{
+  "nodes": [
+    {
+      "id": "api_ts",
+      "label": "api.ts",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_api_chatstreamevent",
+      "label": "ChatStreamEvent",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L4"
+    },
+    {
+      "id": "src_api_chatstream",
+      "label": "chatStream()",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L12"
+    },
+    {
+      "id": "src_api_wikipage",
+      "label": "WikiPage",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L79"
+    },
+    {
+      "id": "src_api_searchresult",
+      "label": "SearchResult",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L88"
+    },
+    {
+      "id": "src_api_wikistatus",
+      "label": "WikiStatus",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L98"
+    },
+    {
+      "id": "src_api_sinkstatus",
+      "label": "SinkStatus",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L109"
+    },
+    {
+      "id": "src_api_agentmessage",
+      "label": "AgentMessage",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L120"
+    },
+    {
+      "id": "src_api_taskinfo",
+      "label": "TaskInfo",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L126"
+    },
+    {
+      "id": "src_api_notification",
+      "label": "Notification",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L136"
+    },
+    {
+      "id": "src_api_dreamedit",
+      "label": "DreamEdit",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L144"
+    },
+    {
+      "id": "src_api_dreamproposal",
+      "label": "DreamProposal",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L156"
+    },
+    {
+      "id": "src_api_confirmation",
+      "label": "Confirmation",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L168"
+    },
+    {
+      "id": "src_api_ingestlogentry",
+      "label": "IngestLogEntry",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L179"
+    },
+    {
+      "id": "src_api_graphnode",
+      "label": "GraphNode",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L188"
+    },
+    {
+      "id": "src_api_graphedge",
+      "label": "GraphEdge",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L197"
+    },
+    {
+      "id": "src_api_graphdata",
+      "label": "GraphData",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L204"
+    },
+    {
+      "id": "src_api_request",
+      "label": "request()",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L215"
+    },
+    {
+      "id": "src_api_api",
+      "label": "api",
+      "file_type": "code",
+      "source_file": "api.ts",
+      "source_location": "L235"
+    },
+    {
+      "id": "app_tsx",
+      "label": "App.tsx",
+      "file_type": "code",
+      "source_file": "App.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_app_viewmode",
+      "label": "ViewMode",
+      "file_type": "code",
+      "source_file": "App.tsx",
+      "source_location": "L15"
+    },
+    {
+      "id": "src_app_badgecounts",
+      "label": "BadgeCounts",
+      "file_type": "code",
+      "source_file": "App.tsx",
+      "source_location": "L17"
+    },
+    {
+      "id": "src_app_lazywrapper",
+      "label": "LazyWrapper()",
+      "file_type": "code",
+      "source_file": "App.tsx",
+      "source_location": "L23"
+    },
+    {
+      "id": "src_app_app",
+      "label": "App()",
+      "file_type": "code",
+      "source_file": "App.tsx",
+      "source_location": "L31"
+    },
+    {
+      "id": "src_app_navbutton",
+      "label": "NavButton()",
+      "file_type": "code",
+      "source_file": "App.tsx",
+      "source_location": "L111"
+    },
+    {
+      "id": "main_tsx",
+      "label": "main.tsx",
+      "file_type": "code",
+      "source_file": "main.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "components_ingestlog_tsx",
+      "label": "IngestLog.tsx",
+      "file_type": "code",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "components_ingestlog_ingestlog",
+      "label": "IngestLog()",
+      "file_type": "code",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L9"
+    },
+    {
+      "id": "components_ingestlog_formattime",
+      "label": "formatTime()",
+      "file_type": "code",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L69"
+    },
+    {
+      "id": "components_dreamlog_tsx",
+      "label": "DreamLog.tsx",
+      "file_type": "code",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "components_dreamlog_dreamlog",
+      "label": "DreamLog()",
+      "file_type": "code",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L9"
+    },
+    {
+      "id": "components_dreamlog_statusbadge",
+      "label": "StatusBadge()",
+      "file_type": "code",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L99"
+    },
+    {
+      "id": "components_dreamlog_formattime",
+      "label": "formatTime()",
+      "file_type": "code",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L108"
+    },
+    {
+      "id": "components_toast_tsx",
+      "label": "Toast.tsx",
+      "file_type": "code",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "components_toast_toasttype",
+      "label": "ToastType",
+      "file_type": "code",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L3"
+    },
+    {
+      "id": "components_toast_toastitem",
+      "label": "ToastItem",
+      "file_type": "code",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L5"
+    },
+    {
+      "id": "components_toast_toastcontextvalue",
+      "label": "ToastContextValue",
+      "file_type": "code",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L12"
+    },
+    {
+      "id": "components_toast_toastcontext",
+      "label": "ToastContext",
+      "file_type": "code",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L18"
+    },
+    {
+      "id": "components_toast_usetoast",
+      "label": "useToast()",
+      "file_type": "code",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L20"
+    },
+    {
+      "id": "components_toast_toastprovider",
+      "label": "ToastProvider()",
+      "file_type": "code",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L26"
+    },
+    {
+      "id": "components_toast_toastcontainer",
+      "label": "ToastContainer()",
+      "file_type": "code",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L46"
+    },
+    {
+      "id": "components_toast_toastcard",
+      "label": "ToastCard()",
+      "file_type": "code",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L59"
+    },
+    {
+      "id": "components_taskmonitor_tsx",
+      "label": "TaskMonitor.tsx",
+      "file_type": "code",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "components_taskmonitor_taskmonitor",
+      "label": "TaskMonitor()",
+      "file_type": "code",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L9"
+    },
+    {
+      "id": "components_taskmonitor_formattime",
+      "label": "formatTime()",
+      "file_type": "code",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L79"
+    },
+    {
+      "id": "components_confirmations_tsx",
+      "label": "Confirmations.tsx",
+      "file_type": "code",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "components_confirmations_confirmations",
+      "label": "Confirmations()",
+      "file_type": "code",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L10"
+    },
+    {
+      "id": "components_stateviews_tsx",
+      "label": "StateViews.tsx",
+      "file_type": "code",
+      "source_file": "components/StateViews.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "components_stateviews_emptystateprops",
+      "label": "EmptyStateProps",
+      "file_type": "code",
+      "source_file": "components/StateViews.tsx",
+      "source_location": "L3"
+    },
+    {
+      "id": "components_stateviews_emptystate",
+      "label": "EmptyState()",
+      "file_type": "code",
+      "source_file": "components/StateViews.tsx",
+      "source_location": "L13"
+    },
+    {
+      "id": "components_stateviews_loadingstate",
+      "label": "LoadingState()",
+      "file_type": "code",
+      "source_file": "components/StateViews.tsx",
+      "source_location": "L30"
+    },
+    {
+      "id": "components_edithistory_tsx",
+      "label": "EditHistory.tsx",
+      "file_type": "code",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "components_edithistory_editentry",
+      "label": "EditEntry",
+      "file_type": "code",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L8"
+    },
+    {
+      "id": "components_edithistory_edithistory",
+      "label": "EditHistory()",
+      "file_type": "code",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L16"
+    },
+    {
+      "id": "components_edithistory_formattime",
+      "label": "formatTime()",
+      "file_type": "code",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L73"
+    },
+    {
+      "id": "components_dreamproposals_tsx",
+      "label": "DreamProposals.tsx",
+      "file_type": "code",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "components_dreamproposals_dreamproposals",
+      "label": "DreamProposals()",
+      "file_type": "code",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L10"
+    },
+    {
+      "id": "components_dreamproposals_statusbadge",
+      "label": "StatusBadge()",
+      "file_type": "code",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L199"
+    },
+    {
+      "id": "components_agentchat_tsx",
+      "label": "AgentChat.tsx",
+      "file_type": "code",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "components_agentchat_message",
+      "label": "Message",
+      "file_type": "code",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L11"
+    },
+    {
+      "id": "components_agentchat_toolcall",
+      "label": "ToolCall",
+      "file_type": "code",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L18"
+    },
+    {
+      "id": "components_agentchat_agentchat",
+      "label": "AgentChat()",
+      "file_type": "code",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L25"
+    },
+    {
+      "id": "components_wikiselector_tsx",
+      "label": "WikiSelector.tsx",
+      "file_type": "code",
+      "source_file": "components/WikiSelector.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "components_wikiselector_wikiselector",
+      "label": "WikiSelector()",
+      "file_type": "code",
+      "source_file": "components/WikiSelector.tsx",
+      "source_location": "L6"
+    },
+    {
+      "id": "components_ui_toolcard_tsx",
+      "label": "ToolCard.tsx",
+      "file_type": "code",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "ui_toolcard_toolcardprops",
+      "label": "ToolCardProps",
+      "file_type": "code",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L3"
+    },
+    {
+      "id": "ui_toolcard_statuscolormap",
+      "label": "statusColorMap",
+      "file_type": "code",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L9"
+    },
+    {
+      "id": "ui_toolcard_statusbadgevariant",
+      "label": "statusBadgeVariant",
+      "file_type": "code",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L15"
+    },
+    {
+      "id": "ui_toolcard_statustext",
+      "label": "statusText",
+      "file_type": "code",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L21"
+    },
+    {
+      "id": "ui_toolcard_toolcard",
+      "label": "ToolCard()",
+      "file_type": "code",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L27"
+    },
+    {
+      "id": "components_ui_button_tsx",
+      "label": "Button.tsx",
+      "file_type": "code",
+      "source_file": "components/ui/Button.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "ui_button_buttonprops",
+      "label": "ButtonProps",
+      "file_type": "code",
+      "source_file": "components/ui/Button.tsx",
+      "source_location": "L3"
+    },
+    {
+      "id": "ui_button_variantmap",
+      "label": "variantMap",
+      "file_type": "code",
+      "source_file": "components/ui/Button.tsx",
+      "source_location": "L13"
+    },
+    {
+      "id": "ui_button_sizemap",
+      "label": "sizeMap",
+      "file_type": "code",
+      "source_file": "components/ui/Button.tsx",
+      "source_location": "L21"
+    },
+    {
+      "id": "ui_button_button",
+      "label": "Button()",
+      "file_type": "code",
+      "source_file": "components/ui/Button.tsx",
+      "source_location": "L26"
+    },
+    {
+      "id": "components_ui_panel_tsx",
+      "label": "Panel.tsx",
+      "file_type": "code",
+      "source_file": "components/ui/Panel.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "ui_panel_panelprops",
+      "label": "PanelProps",
+      "file_type": "code",
+      "source_file": "components/ui/Panel.tsx",
+      "source_location": "L3"
+    },
+    {
+      "id": "ui_panel_bordermap",
+      "label": "borderMap",
+      "file_type": "code",
+      "source_file": "components/ui/Panel.tsx",
+      "source_location": "L9"
+    },
+    {
+      "id": "ui_panel_panel",
+      "label": "Panel()",
+      "file_type": "code",
+      "source_file": "components/ui/Panel.tsx",
+      "source_location": "L16"
+    },
+    {
+      "id": "components_ui_input_tsx",
+      "label": "Input.tsx",
+      "file_type": "code",
+      "source_file": "components/ui/Input.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "ui_input_inputprops",
+      "label": "InputProps",
+      "file_type": "code",
+      "source_file": "components/ui/Input.tsx",
+      "source_location": "L3"
+    },
+    {
+      "id": "ui_input_input",
+      "label": "Input()",
+      "file_type": "code",
+      "source_file": "components/ui/Input.tsx",
+      "source_location": "L13"
+    },
+    {
+      "id": "components_ui_messagebubble_tsx",
+      "label": "MessageBubble.tsx",
+      "file_type": "code",
+      "source_file": "components/ui/MessageBubble.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "ui_messagebubble_messagebubbleprops",
+      "label": "MessageBubbleProps",
+      "file_type": "code",
+      "source_file": "components/ui/MessageBubble.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "ui_messagebubble_messagebubble",
+      "label": "MessageBubble()",
+      "file_type": "code",
+      "source_file": "components/ui/MessageBubble.tsx",
+      "source_location": "L9"
+    },
+    {
+      "id": "components_ui_card_tsx",
+      "label": "Card.tsx",
+      "file_type": "code",
+      "source_file": "components/ui/Card.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "ui_card_cardprops",
+      "label": "CardProps",
+      "file_type": "code",
+      "source_file": "components/ui/Card.tsx",
+      "source_location": "L3"
+    },
+    {
+      "id": "ui_card_card",
+      "label": "Card()",
+      "file_type": "code",
+      "source_file": "components/ui/Card.tsx",
+      "source_location": "L10"
+    },
+    {
+      "id": "components_ui_badge_tsx",
+      "label": "Badge.tsx",
+      "file_type": "code",
+      "source_file": "components/ui/Badge.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "ui_badge_badgeprops",
+      "label": "BadgeProps",
+      "file_type": "code",
+      "source_file": "components/ui/Badge.tsx",
+      "source_location": "L3"
+    },
+    {
+      "id": "ui_badge_variantmap",
+      "label": "variantMap",
+      "file_type": "code",
+      "source_file": "components/ui/Badge.tsx",
+      "source_location": "L9"
+    },
+    {
+      "id": "ui_badge_badge",
+      "label": "Badge()",
+      "file_type": "code",
+      "source_file": "components/ui/Badge.tsx",
+      "source_location": "L17"
+    },
+    {
+      "id": "stores_agentwikistore_ts",
+      "label": "agentWikiStore.ts",
+      "file_type": "code",
+      "source_file": "stores/agentWikiStore.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "stores_agentwikistore_wikiinfo",
+      "label": "WikiInfo",
+      "file_type": "code",
+      "source_file": "stores/agentWikiStore.ts",
+      "source_location": "L4"
+    },
+    {
+      "id": "stores_agentwikistore_agentwikistate",
+      "label": "AgentWikiState",
+      "file_type": "code",
+      "source_file": "stores/agentWikiStore.ts",
+      "source_location": "L17"
+    },
+    {
+      "id": "stores_agentwikistore_useagentwikistore",
+      "label": "useAgentWikiStore",
+      "file_type": "code",
+      "source_file": "stores/agentWikiStore.ts",
+      "source_location": "L32"
+    }
+  ],
+  "edges": [
+    {
+      "source": "api_ts",
+      "target": "src_api_chatstreamevent",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_chatstream",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_wikipage",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L79",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_searchresult",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L88",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_wikistatus",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L98",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_sinkstatus",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L109",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_agentmessage",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L120",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_taskinfo",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L126",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_notification",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L136",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_dreamedit",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L144",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_dreamproposal",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L156",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_confirmation",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L168",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_ingestlogentry",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L179",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_graphnode",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L188",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_graphedge",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L197",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_graphdata",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L204",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_request",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L215",
+      "weight": 1.0
+    },
+    {
+      "source": "api_ts",
+      "target": "src_api_api",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "api.ts",
+      "source_location": "L235",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_agentchat_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_agentchat_agentchat",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_confirmations_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_confirmations_confirmations",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_dreamlog_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_dreamlog_dreamlog",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_dreamproposals_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_dreamproposals_dreamproposals",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_edithistory_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_edithistory_edithistory",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_ingestlog_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_ingestlog_ingestlog",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_taskmonitor_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_taskmonitor_taskmonitor",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_wikiselector_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_wikiselector_wikiselector",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "stores_agentwikistore_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "api_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "src_api_api",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_ui_card_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "components_ui_badge_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L13",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L13",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "src_app_viewmode",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L15",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "src_app_badgecounts",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "src_app_lazywrapper",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "src_app_app",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L31",
+      "weight": 1.0
+    },
+    {
+      "source": "app_tsx",
+      "target": "src_app_navbutton",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "App.tsx",
+      "source_location": "L111",
+      "weight": 1.0
+    },
+    {
+      "source": "main_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "main.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "main_tsx",
+      "target": "client",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "main.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "main_tsx",
+      "target": "app_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "main.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "main_tsx",
+      "target": "components_toast_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "main.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "main_tsx",
+      "target": "components_toast_toastprovider",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "main.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "main_tsx",
+      "target": "home_ll_llmwikify_src_llmwikify_web_webui_agent_src_styles_index_css",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "main.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "api_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "src_api_api",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "src_api_ingestlogentry",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "stores_agentwikistore_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "components_stateviews_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "components_stateviews_emptystate",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "components_ui_card_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "components_ui_button_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "ui_button_button",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "components_ui_badge_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "components_ingestlog_ingestlog",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_tsx",
+      "target": "components_ingestlog_formattime",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L69",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "api_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "src_api_api",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "src_api_dreamedit",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "stores_agentwikistore_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "components_stateviews_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "components_stateviews_emptystate",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "components_ui_card_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "components_ui_button_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "ui_button_button",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "components_ui_badge_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "components_dreamlog_dreamlog",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "components_dreamlog_statusbadge",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L99",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_tsx",
+      "target": "components_dreamlog_formattime",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L108",
+      "weight": 1.0
+    },
+    {
+      "source": "components_toast_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_toast_tsx",
+      "target": "components_toast_toasttype",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_toast_tsx",
+      "target": "components_toast_toastitem",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_toast_tsx",
+      "target": "components_toast_toastcontextvalue",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "components_toast_tsx",
+      "target": "components_toast_toastcontext",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "components_toast_tsx",
+      "target": "components_toast_usetoast",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L20",
+      "weight": 1.0
+    },
+    {
+      "source": "components_toast_tsx",
+      "target": "components_toast_toastprovider",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L26",
+      "weight": 1.0
+    },
+    {
+      "source": "components_toast_tsx",
+      "target": "components_toast_toastcontainer",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L46",
+      "weight": 1.0
+    },
+    {
+      "source": "components_toast_tsx",
+      "target": "components_toast_toastcard",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Toast.tsx",
+      "source_location": "L59",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "api_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "src_api_api",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "src_api_taskinfo",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "stores_agentwikistore_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "components_stateviews_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "components_stateviews_emptystate",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "components_ui_card_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "components_ui_button_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "ui_button_button",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "components_ui_badge_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "components_taskmonitor_taskmonitor",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_tsx",
+      "target": "components_taskmonitor_formattime",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L79",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "api_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "src_api_api",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "src_api_confirmation",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "components_toast_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "components_toast_usetoast",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "stores_agentwikistore_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "components_stateviews_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "components_stateviews_emptystate",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "components_ui_card_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "components_ui_button_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "ui_button_button",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "components_ui_badge_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_tsx",
+      "target": "components_confirmations_confirmations",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "components_stateviews_tsx",
+      "target": "components_ui_button_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/StateViews.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_stateviews_tsx",
+      "target": "ui_button_button",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/StateViews.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_stateviews_tsx",
+      "target": "components_stateviews_emptystateprops",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/StateViews.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_stateviews_tsx",
+      "target": "components_stateviews_emptystate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/StateViews.tsx",
+      "source_location": "L13",
+      "weight": 1.0
+    },
+    {
+      "source": "components_stateviews_tsx",
+      "target": "components_stateviews_loadingstate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/StateViews.tsx",
+      "source_location": "L30",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "api_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "src_api_api",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "stores_agentwikistore_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "components_stateviews_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "components_stateviews_emptystate",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "components_ui_card_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "components_ui_button_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "ui_button_button",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "components_edithistory_editentry",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "components_edithistory_edithistory",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_tsx",
+      "target": "components_edithistory_formattime",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L73",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "api_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "src_api_api",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "src_api_dreamproposal",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "components_toast_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "components_toast_usetoast",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "stores_agentwikistore_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "components_stateviews_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "components_stateviews_emptystate",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "components_ui_card_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "components_ui_button_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "ui_button_button",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "components_ui_badge_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "components_dreamproposals_dreamproposals",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_tsx",
+      "target": "components_dreamproposals_statusbadge",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L199",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "api_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "src_api_chatstream",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "src_api_chatstreamevent",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "components_toast_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "components_toast_usetoast",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "stores_agentwikistore_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "components_ui_button_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "ui_button_button",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "components_ui_messagebubble_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "ui_messagebubble_messagebubble",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "components_ui_toolcard_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "ui_toolcard_toolcard",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "components_ui_input_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "ui_input_input",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "components_ui_panel_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "ui_panel_panel",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "components_agentchat_message",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "components_agentchat_toolcall",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_tsx",
+      "target": "components_agentchat_agentchat",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "components_wikiselector_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/WikiSelector.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_wikiselector_tsx",
+      "target": "stores_agentwikistore_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/WikiSelector.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_wikiselector_tsx",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/WikiSelector.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "components_wikiselector_tsx",
+      "target": "components_ui_card_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/WikiSelector.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_wikiselector_tsx",
+      "target": "ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/WikiSelector.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_wikiselector_tsx",
+      "target": "components_ui_button_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/WikiSelector.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_wikiselector_tsx",
+      "target": "ui_button_button",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/WikiSelector.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "components_wikiselector_tsx",
+      "target": "components_wikiselector_wikiselector",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/WikiSelector.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_toolcard_tsx",
+      "target": "components_ui_badge_tsx",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_toolcard_tsx",
+      "target": "ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_toolcard_tsx",
+      "target": "ui_toolcard_toolcardprops",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_toolcard_tsx",
+      "target": "ui_toolcard_statuscolormap",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_toolcard_tsx",
+      "target": "ui_toolcard_statusbadgevariant",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L15",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_toolcard_tsx",
+      "target": "ui_toolcard_statustext",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L21",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_toolcard_tsx",
+      "target": "ui_toolcard_toolcard",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/ToolCard.tsx",
+      "source_location": "L27",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_button_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Button.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_button_tsx",
+      "target": "ui_button_buttonprops",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Button.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_button_tsx",
+      "target": "ui_button_variantmap",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Button.tsx",
+      "source_location": "L13",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_button_tsx",
+      "target": "ui_button_sizemap",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Button.tsx",
+      "source_location": "L21",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_button_tsx",
+      "target": "ui_button_button",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Button.tsx",
+      "source_location": "L26",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_panel_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Panel.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_panel_tsx",
+      "target": "ui_panel_panelprops",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Panel.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_panel_tsx",
+      "target": "ui_panel_bordermap",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Panel.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_panel_tsx",
+      "target": "ui_panel_panel",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Panel.tsx",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_input_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Input.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_input_tsx",
+      "target": "ui_input_inputprops",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Input.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_input_tsx",
+      "target": "ui_input_input",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Input.tsx",
+      "source_location": "L13",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_messagebubble_tsx",
+      "target": "ui_messagebubble_messagebubbleprops",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/MessageBubble.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_messagebubble_tsx",
+      "target": "ui_messagebubble_messagebubble",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/MessageBubble.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_card_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Card.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_card_tsx",
+      "target": "ui_card_cardprops",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Card.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_card_tsx",
+      "target": "ui_card_card",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Card.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_badge_tsx",
+      "target": "react",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Badge.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_badge_tsx",
+      "target": "ui_badge_badgeprops",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Badge.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_badge_tsx",
+      "target": "ui_badge_variantmap",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Badge.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ui_badge_tsx",
+      "target": "ui_badge_badge",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "components/ui/Badge.tsx",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "stores_agentwikistore_ts",
+      "target": "zustand",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "stores/agentWikiStore.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "stores_agentwikistore_ts",
+      "target": "api_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "stores/agentWikiStore.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "stores_agentwikistore_ts",
+      "target": "src_api_api",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "stores/agentWikiStore.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "stores_agentwikistore_ts",
+      "target": "stores_agentwikistore_wikiinfo",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "stores/agentWikiStore.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "stores_agentwikistore_ts",
+      "target": "stores_agentwikistore_agentwikistate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "stores/agentWikiStore.ts",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "stores_agentwikistore_ts",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "stores/agentWikiStore.ts",
+      "source_location": "L32",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_app",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "App.tsx",
+      "source_location": "L34",
+      "weight": 1.0
+    },
+    {
+      "source": "components_ingestlog_ingestlog",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/IngestLog.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamlog_dreamlog",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/DreamLog.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "components_taskmonitor_taskmonitor",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/TaskMonitor.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_confirmations",
+      "target": "components_toast_usetoast",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L15",
+      "weight": 1.0
+    },
+    {
+      "source": "components_confirmations_confirmations",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/Confirmations.tsx",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "components_edithistory_edithistory",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/EditHistory.tsx",
+      "source_location": "L19",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_dreamproposals",
+      "target": "components_toast_usetoast",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "components_dreamproposals_dreamproposals",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/DreamProposals.tsx",
+      "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_agentchat",
+      "target": "components_toast_usetoast",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L34",
+      "weight": 1.0
+    },
+    {
+      "source": "components_agentchat_agentchat",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/AgentChat.tsx",
+      "source_location": "L35",
+      "weight": 1.0
+    },
+    {
+      "source": "components_wikiselector_wikiselector",
+      "target": "stores_agentwikistore_useagentwikistore",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/WikiSelector.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

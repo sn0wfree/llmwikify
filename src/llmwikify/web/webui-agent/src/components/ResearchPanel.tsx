@@ -554,10 +554,16 @@ export function ResearchPanel() {
     try {
       const res = await api.research.list(currentWikiId || undefined);
       setSessions(res.research_sessions || []);
-    } catch { /* silent */ }
+    } catch (e) { console.warn('Failed to load research sessions:', e); }
   };
 
   useEffect(() => { loadSessions(); }, [currentWikiId]);
+
+  useEffect(() => {
+    return () => {
+      readerRef.current?.cancel();
+    };
+  }, []);
 
   const consumeStream = async (stream: ReadableStream<ResearchStreamEvent>) => {
     const reader = stream.getReader();
@@ -761,7 +767,7 @@ export function ResearchPanel() {
         setActive(prev => prev ? { ...prev, status: 'paused' } : null);
       }
       loadSessions();
-    } catch { /* silent */ }
+    } catch (e) { console.warn('Failed to pause research:', e); }
   };
 
   const handleDelete = async (id: string) => {
@@ -769,7 +775,7 @@ export function ResearchPanel() {
       await api.research.delete(id);
       if (active?.sessionId === id) setActive(null);
       loadSessions();
-    } catch { /* silent */ }
+    } catch (e) { console.warn('Failed to delete research:', e); }
   };
 
   const handleViewReport = async (session: ResearchSession) => {

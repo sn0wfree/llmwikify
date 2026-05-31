@@ -160,8 +160,8 @@
     "hash": "5d5b21c85860d27ceaa05c74c967a31a"
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki_discovery.py": {
-    "mtime": 1779677493.5204554,
-    "hash": "aea12e18c3268843ef537e9b907b09b0"
+    "mtime": 1779762809.7592628,
+    "hash": "199290aa0a7185897ed184370c327036"
   },
   "/home/ll/llmwikify/src/llmwikify/cli/commands.py": {
     "mtime": 1779761622.2878664,
@@ -180,8 +180,8 @@
     "hash": "a73ed0a8d06528c1a4f0bd04885db176"
   },
   "/home/ll/llmwikify/src/llmwikify/server/core.py": {
-    "mtime": 1779668468.1862643,
-    "hash": "20e6bd8fc81e8098f1bf367f75bbcb78"
+    "mtime": 1779765364.9809027,
+    "hash": "77969353d073f6920251d19d32fc5505"
   },
   "/home/ll/llmwikify/src/llmwikify/server/constants.py": {
     "mtime": 1777257342.8667836,
@@ -192,8 +192,8 @@
     "hash": "f444cb38e2884a4a2efd03128b296220"
   },
   "/home/ll/llmwikify/src/llmwikify/server/http/routes.py": {
-    "mtime": 1779761366.7139049,
-    "hash": "b6918760658dfdf7094184f8c0dc5c36"
+    "mtime": 1779765233.1159692,
+    "hash": "de7cfd4a7fe375eec4728351e1181123"
   },
   "/home/ll/llmwikify/src/llmwikify/server/http/middleware.py": {
     "mtime": 1777257342.8667836,
@@ -320,12 +320,12 @@
     "hash": "32c2cfaeba1f70d21fb9f6984ddbb308"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/Editor.tsx": {
-    "mtime": 1779678862.5994792,
-    "hash": "171dc249eaab0c8329c45f42dd815e4a"
+    "mtime": 1779765195.6411798,
+    "hash": "44933fbb6706d4710421ab6ed0469c5a"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/CrossWikiSearch.tsx": {
-    "mtime": 1779682026.6655211,
-    "hash": "7707a79624f2dbcbbcc2857f694b0d03"
+    "mtime": 1779765149.1353755,
+    "hash": "e36f42a3329f341fef5d1946689f25e2"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/DreamProposals.tsx": {
     "mtime": 1779712390.2502902,
@@ -340,8 +340,8 @@
     "hash": "f9723eface6fd16e985060ba34aa89f6"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui/src/stores/wikiStore.ts": {
-    "mtime": 1779681383.2623434,
-    "hash": "1f0eb20093dbffa60a74921f3b217137"
+    "mtime": 1779765111.630476,
+    "hash": "f4100913e279647f88522608975fd379"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/Toast.test.tsx": {
     "mtime": 1776833561.9595044,
@@ -391,49 +391,101 @@
     "mtime": 1776833561.8175073,
     "hash": "81b7c56804d7bd6e7c4418df6606939d"
   },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/postcss.config.js": {
+    "mtime": 1779775788.1668828,
+    "hash": "470cfd3ee10fbff840b377e769485f3e"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/tailwind.config.js": {
+    "mtime": 1779775788.9438598,
+    "hash": "f4602f20b48980ca0caeaf055febe442"
+  },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/vite.config.ts": {
     "mtime": 1779698774.2509072,
     "hash": "eba2564965387b3fe2c685c8a0a742bb"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/api.ts": {
-    "mtime": 1779761888.1460671,
-    "hash": "b728db9730ee27daba6830e658dc09a7"
+    "mtime": 1779775835.1345139,
+    "hash": "87313c7719f0701ddb727c5407f62bd8"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/App.tsx": {
-    "mtime": 1779698774.2509072,
-    "hash": "3d983f12bbcd9c688137dc0c80db76fd"
+    "mtime": 1779778912.852194,
+    "hash": "a6d482f4c250e4239f67a5c94d332bc2"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/main.tsx": {
-    "mtime": 1779698774.2509072,
-    "hash": "79613b9708952fef3c87c0acf4f00274"
+    "mtime": 1779772693.467969,
+    "hash": "4c2dd6fd2f925638e0b28b01dca1acca"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/IngestLog.tsx": {
-    "mtime": 1779698774.2509072,
-    "hash": "b386b3a242a8fd290654b5d4075ad5cc"
+    "mtime": 1779778887.211588,
+    "hash": "c184636ab68cbbc43ef2c6ce64327968"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/DreamLog.tsx": {
-    "mtime": 1779698774.2509072,
-    "hash": "f2fea136002ed82f2260b23942dffd56"
+    "mtime": 1779778868.9358675,
+    "hash": "b5f270fe6487cbe6dee3b2583d517063"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/Toast.tsx": {
+    "mtime": 1779775826.310769,
+    "hash": "4d0b8d49ecfb10d323d7f3ee05deb30f"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/TaskMonitor.tsx": {
-    "mtime": 1779698774.2509072,
-    "hash": "1efb887b23657b20f30c8dda8d6f61d9"
+    "mtime": 1779778829.2444715,
+    "hash": "34cf9d55e069856a966664d62571c6d6"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/Confirmations.tsx": {
-    "mtime": 1779698774.2509072,
-    "hash": "65f4d0a36113cb2869b941681fbaf5ea"
+    "mtime": 1779778847.0402014,
+    "hash": "809c85c7f8cf790eb0f2bfe98968fa49"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/StateViews.tsx": {
+    "mtime": 1779778907.405278,
+    "hash": "69edae47816fbbb7d97dc38d3e8f2a03"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/EditHistory.tsx": {
-    "mtime": 1779698774.2509072,
-    "hash": "4b4d574e65dc3c9946c2d017f5560a7c"
+    "mtime": 1779778875.0457742,
+    "hash": "df6ff8cfe7e1d95d6194ef16f4ef12da"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/DreamProposals.tsx": {
-    "mtime": 1779698774.2509072,
-    "hash": "a255d63f9019697cfaac70d938a56fd2"
+    "mtime": 1779778855.8970666,
+    "hash": "b1245f3095d237f2cd1e34bd8a4e845b"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/AgentChat.tsx": {
-    "mtime": 1779698774.2509072,
-    "hash": "6bf53bb6ac6bf3c0a459fda798e05e65"
+    "mtime": 1779779043.60216,
+    "hash": "a73785de8e7ca37c6f1510949c69a95a"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/WikiSelector.tsx": {
+    "mtime": 1779778905.2313113,
+    "hash": "35e83aecef747c707d701356d97b28f4"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/ToolCard.tsx": {
+    "mtime": 1779778763.4784608,
+    "hash": "2caee6be3daf6c366f2467f8992ef74f"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Button.tsx": {
+    "mtime": 1779778760.9644983,
+    "hash": "8334abc905589b20b36f348d21279e5d"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Panel.tsx": {
+    "mtime": 1779778766.0514224,
+    "hash": "110af6f8593d2cdf932c0173c7b56720"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Input.tsx": {
+    "mtime": 1779778765.409432,
+    "hash": "74c680279dfcd6fb7dd9cdf3462b3949"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/MessageBubble.tsx": {
+    "mtime": 1779779025.0994503,
+    "hash": "6a9f0437af6421e1283606ba8f096acc"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Card.tsx": {
+    "mtime": 1779778759.0665267,
+    "hash": "eb28f11bc4671d1819f335b58fbb6595"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Badge.tsx": {
+    "mtime": 1779778764.19545,
+    "hash": "70016dafe3521099cb13bb878740ca97"
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/stores/agentWikiStore.ts": {
+    "mtime": 1779773096.760082,
+    "hash": "bb3cce28ffbfa3ff1154cfdb4815791d"
   },
   "/home/ll/llmwikify/src/llmwikify/agent/runner.py": {
     "mtime": 1777007782.3463101,
@@ -480,8 +532,8 @@
     "hash": "f472c618d7b3e1a3a9616afbe1d7be83"
   },
   "/home/ll/llmwikify/src/llmwikify/agent/backend/service.py": {
-    "mtime": 1779760627.7685416,
-    "hash": "0ee5ca5b1c6129f83fa18bc1344d7d64"
+    "mtime": 1779771655.6233623,
+    "hash": "cf962dac034db571a50f37438504fb7c"
   },
   "/home/ll/llmwikify/src/llmwikify/agent/backend/__init__.py": {
     "mtime": 1779698773.9769137,
@@ -856,8 +908,8 @@
     "hash": "1b96a4b0522ba6dd8179d4b2616cc1f0"
   },
   "/home/ll/llmwikify/src/llmwikify/web/webui-agent/index.html": {
-    "mtime": 1779698773.9779136,
-    "hash": "4089489aa9a0d334509fff12897c01e8"
+    "mtime": 1779778746.7907095,
+    "hash": "41c1cf9ef7476555f7d45dc8bc2b12a6"
   },
   "/home/ll/llmwikify/src/llmwikify/templates/skill_llmwikify/SKILL.md": {
     "mtime": 1776833561.8175073,
@@ -935,6 +987,10 @@
     "mtime": 1776833561.8075073,
     "hash": "f7cf5fd9526af3eff7dd0593ae6238f1"
   },
+  "/home/ll/llmwikify/docs/agent-ui-optimization-plan.md": {
+    "mtime": 1779773393.379102,
+    "hash": "556fdaea92a0da891351907b1e1d5b04"
+  },
   "/home/ll/llmwikify/docs/SINK_DESIGN_DECISIONS.md": {
     "mtime": 1776833561.8075073,
     "hash": "e2765a50346d5f48b034acc07e16924f"
@@ -1004,8 +1060,8 @@
     "hash": "eabb2a9dd7d85ace2dff892ea9d34a6c"
   },
   "/home/ll/llmwikify/tests/e2e/screenshots/insights-debug.html": {
-    "mtime": 1779760627.7695415,
-    "hash": "71607388ad0d814e046786e6c26d2fde"
+    "mtime": 1779771672.2561603,
+    "hash": "c29860dc8ccdbb3b9a3e67770a4a27be"
   },
   "/home/ll/llmwikify/tests/fixtures/golden_sources/04_wiki_ops_generation.yaml": {
     "mtime": 1776833561.9625044,
@@ -1032,24 +1088,24 @@
     "hash": "9142bc2561091e209f962d51a3886198"
   },
   "/home/ll/llmwikify/tests/e2e/screenshots/editor-content.png": {
-    "mtime": 1777018548.3561318,
-    "hash": "f0cb3d5817c72d5e215da0c726714df3"
+    "mtime": 1779771678.6230817,
+    "hash": "accdddaa69d0b53589700bc053b5cfa2"
   },
   "/home/ll/llmwikify/tests/e2e/screenshots/graph-analysis.png": {
-    "mtime": 1777013633.5155416,
-    "hash": "b384e70ec544919ad0fb49810326113a"
+    "mtime": 1779771690.3379357,
+    "hash": "ff642a400b57964dbb2a0975a533f575"
   },
   "/home/ll/llmwikify/tests/e2e/screenshots/synthesis-analyze.png": {
-    "mtime": 1777013630.3486238,
-    "hash": "c2469b456909bf195947f0b3fc6bc2cb"
+    "mtime": 1779771687.1859753,
+    "hash": "0d2ae2bdaf7f4f82dc80699a8b8955ac"
   },
   "/home/ll/llmwikify/tests/e2e/screenshots/insights-debug.png": {
-    "mtime": 1779760627.7695415,
-    "hash": "a7ea9642c4f6323177fed7e412fd3905"
+    "mtime": 1779771672.2881598,
+    "hash": "a79a71b723b5c2193c7c998cff2b59dc"
   },
   "/home/ll/llmwikify/tests/e2e/screenshots/insights-loaded.png": {
-    "mtime": 1777013627.180706,
-    "hash": "13e58acc42d5327ea51bdf780e619af3"
+    "mtime": 1779771684.007015,
+    "hash": "a79a71b723b5c2193c7c998cff2b59dc"
   },
   "/home/ll/llmwikify/tests/e2e/screenshots/search-results.png": {
     "mtime": 1777015464.694186,
