@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+# Database size warning threshold (MB)
+DB_SIZE_WARNING_MB = 100
 
 
 def get_agent_db_path(data_dir: Path) -> Path:
@@ -21,6 +27,7 @@ class AgentDatabase:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
+        self._check_db_size()
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
@@ -66,6 +73,19 @@ class AgentDatabase:
             """)
             conn.commit()
         self._init_tables()
+
+    def _check_db_size(self) -> None:
+        """Check database size and log warning if too large."""
+        if not self.db_path.exists():
+            return
+        size_mb = self.db_path.stat().st_size / 1024 / 1024
+        logger.debug("Agent DB size: %.2f MB", size_mb)
+        if size_mb > DB_SIZE_WARNING_MB:
+            logger.warning(
+                "Agent DB is large: %.2f MB (threshold: %d MB). "
+                "Consider running 'llmwikify db clean' to remove old data.",
+                size_mb, DB_SIZE_WARNING_MB,
+            )
 
     def create_session(self, wiki_id: str | None = None, jwt_token: str | None = None) -> str:
         session_id = str(uuid.uuid4())[:8]
@@ -844,3 +864,203 @@ class AgentDatabase:
             d = dict(row)
             d["arguments"] = json.loads(d["arguments"])
             return d
+
+    # ─── Data Management Methods ───────────────────────────────────────
+
+    def get_wiki_stats(self, wiki_id: str) -> dict:
+        """Get statistics for a specific wiki.
+
+        Args:
+            wiki_id: Wiki identifier
+
+        Returns:
+            Dict with chat_sessions, research_sessions, research_sources counts
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            chat_count = conn.execute(
+                "SELECT COUNT(*) FROM chat_sessions WHERE wiki_id = ?", (wiki_id,)
+            ).fetchone()[0]
+
+            research_count = conn.execute(
+                "SELECT COUNT(*) FROM research_sessions WHERE wiki_id = ?", (wiki_id,)
+            ).fetchone()[0]
+
+            source_count = conn.execute(
+                """SELECT COUNT(*) FROM research_sources 
+                   WHERE session_id IN (SELECT id FROM research_sessions WHERE wiki_id = ?)""",
+                (wiki_id,)
+            ).fetchone()[0]
+
+            return {
+                "wiki_id": wiki_id,
+                "chat_sessions": chat_count,
+                "research_sessions": research_count,
+                "research_sources": source_count,
+            }
+
+    def list_all_wikis(self) -> list[dict]:
+        """List all wikis with their statistics.
+
+        Returns:
+            List of wiki stats dicts
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            # Get all unique wiki_ids
+            chat_wikis = conn.execute(
+                "SELECT DISTINCT wiki_id FROM chat_sessions WHERE wiki_id IS NOT NULL"
+            ).fetchall()
+            research_wikis = conn.execute(
+                "SELECT DISTINCT wiki_id FROM research_sessions WHERE wiki_id IS NOT NULL"
+            ).fetchall()
+
+            all_wikis = set()
+            for row in chat_wikis:
+                all_wikis.add(row[0])
+            for row in research_wikis:
+                all_wikis.add(row[0])
+
+            result = []
+            for wiki_id in sorted(all_wikis):
+                stats = self.get_wiki_stats(wiki_id)
+                result.append(stats)
+
+            return result
+
+    def delete_wiki_data(self, wiki_id: str) -> dict:
+        """Delete all data for a specific wiki.
+
+        Args:
+            wiki_id: Wiki identifier
+
+        Returns:
+            Dict with counts of deleted records
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            # Get chat session IDs for this wiki
+            chat_sessions = conn.execute(
+                "SELECT id FROM chat_sessions WHERE wiki_id = ?", (wiki_id,)
+            ).fetchall()
+            chat_ids = [row[0] for row in chat_sessions]
+
+            # Delete chat-related data
+            if chat_ids:
+                placeholders = ",".join("?" * len(chat_ids))
+                conn.execute(f"DELETE FROM chat_messages WHERE session_id IN ({placeholders})", chat_ids)
+                conn.execute(f"DELETE FROM tool_calls WHERE session_id IN ({placeholders})", chat_ids)
+
+            cur_chat = conn.execute("DELETE FROM chat_sessions WHERE wiki_id = ?", (wiki_id,))
+
+            # Get research session IDs for this wiki
+            research_sessions = conn.execute(
+                "SELECT id FROM research_sessions WHERE wiki_id = ?", (wiki_id,)
+            ).fetchall()
+            research_ids = [row[0] for row in research_sessions]
+
+            # Delete research-related data
+            if research_ids:
+                placeholders = ",".join("?" * len(research_ids))
+                conn.execute(f"DELETE FROM research_sources WHERE session_id IN ({placeholders})", research_ids)
+                conn.execute(f"DELETE FROM research_sub_queries WHERE session_id IN ({placeholders})", research_ids)
+
+            cur_research = conn.execute("DELETE FROM research_sessions WHERE wiki_id = ?", (wiki_id,))
+
+            # Delete ingest log
+            cur_ingest = conn.execute("DELETE FROM ingest_log WHERE wiki_id = ?", (wiki_id,))
+
+            conn.commit()
+
+            return {
+                "chat_sessions": cur_chat.rowcount,
+                "research_sessions": cur_research.rowcount,
+                "tool_calls": len(chat_ids),
+                "ingest_log": cur_ingest.rowcount,
+            }
+
+    def export_wiki_data(self, wiki_id: str) -> dict:
+        """Export all data for a specific wiki.
+
+        Args:
+            wiki_id: Wiki identifier
+
+        Returns:
+            Dict with all wiki data
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            # Export chat data
+            chat_sessions = conn.execute(
+                "SELECT * FROM chat_sessions WHERE wiki_id = ?", (wiki_id,)
+            ).fetchall()
+
+            chat_messages = []
+            for session in chat_sessions:
+                messages = conn.execute(
+                    "SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at",
+                    (session["id"],)
+                ).fetchall()
+                chat_messages.extend([dict(m) for m in messages])
+
+            # Export research data
+            research_sessions = conn.execute(
+                "SELECT * FROM research_sessions WHERE wiki_id = ?", (wiki_id,)
+            ).fetchall()
+
+            research_sources = []
+            research_sub_queries = []
+            for session in research_sessions:
+                sources = conn.execute(
+                    "SELECT * FROM research_sources WHERE session_id = ?",
+                    (session["id"],)
+                ).fetchall()
+                research_sources.extend([dict(s) for s in sources])
+
+                sub_queries = conn.execute(
+                    "SELECT * FROM research_sub_queries WHERE session_id = ?",
+                    (session["id"],)
+                ).fetchall()
+                research_sub_queries.extend([dict(sq) for sq in sub_queries])
+
+            # Export tool calls
+            tool_calls = []
+            for session in chat_sessions:
+                calls = conn.execute(
+                    "SELECT * FROM tool_calls WHERE session_id = ?",
+                    (session["id"],)
+                ).fetchall()
+                tool_calls.extend([dict(c) for c in calls])
+
+            return {
+                "wiki_id": wiki_id,
+                "chat_sessions": [dict(s) for s in chat_sessions],
+                "chat_messages": chat_messages,
+                "research_sessions": [dict(s) for s in research_sessions],
+                "research_sources": research_sources,
+                "research_sub_queries": research_sub_queries,
+                "tool_calls": tool_calls,
+            }
+
+    def get_db_stats(self) -> dict:
+        """Get overall database statistics.
+
+        Returns:
+            Dict with database size and table counts
+        """
+        size_bytes = self.db_path.stat().st_size if self.db_path.exists() else 0
+
+        with sqlite3.connect(self.db_path) as conn:
+            tables = {}
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+            for row in cursor.fetchall():
+                table_name = row[0]
+                count = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+                tables[table_name] = count
+
+            return {
+                "db_path": str(self.db_path),
+                "size_bytes": size_bytes,
+                "size_mb": size_bytes / 1024 / 1024,
+                "tables": tables,
+            }
