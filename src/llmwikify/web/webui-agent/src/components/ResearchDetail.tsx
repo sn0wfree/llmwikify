@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { api, type ResearchSession, type ResearchSource } from '../api';
+import { api, type ResearchSession, type ResearchSource, type ResearchStreamEvent } from '../api';
 import { ResearchRating } from './ResearchRating';
 import { StagePipeline } from './ResearchPanel';
 import { SaveToWikiModal } from './SaveToWikiModal';
@@ -39,6 +39,7 @@ export function ResearchDetail({ sessionId, onBack }: Props) {
   const [error, setError] = useState('');
   const [showRating, setShowRating] = useState(false);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +62,62 @@ export function ResearchDetail({ sessionId, onBack }: Props) {
     load();
     return () => { cancelled = true; };
   }, [sessionId]);
+
+  // DR-9: SSE connection for running sessions
+  useEffect(() => {
+    if (!session || !['planning', 'gathering', 'analyzing', 'synthesizing', 'report', 'reviewing'].includes(session.status)) {
+      return;
+    }
+
+    let cancelled = false;
+    const stream = api.research.stream(sessionId);
+    const reader = stream.getReader();
+    readerRef.current = reader;
+
+    const consumeStream = async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (cancelled) break;
+          
+          // Update session state based on stream events
+          setSession(prev => {
+            if (!prev) return prev;
+            const next = { ...prev };
+            
+            switch (value.type) {
+              case 'progress':
+                if ('progress' in value) next.progress = value.progress;
+                break;
+              case 'reasoning':
+                if ('phase' in value) next.current_step = value.phase;
+                break;
+              case 'done':
+                next.status = 'done';
+                break;
+              case 'error':
+                next.status = 'error';
+                break;
+            }
+            
+            next.updated_at = new Date().toISOString();
+            return next;
+          });
+        }
+      } catch (e) {
+        // Stream error - will retry via DR-7 auto-reconnect
+      }
+    };
+
+    consumeStream();
+
+    return () => {
+      cancelled = true;
+      readerRef.current?.cancel();
+      readerRef.current = null;
+    };
+  }, [sessionId, session?.status]);
 
   if (loading) {
     return (

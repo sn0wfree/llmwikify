@@ -23,12 +23,12 @@
 | 编号 | 系统 | 功能 | 位置 | 现状 | 问题 | 建议 | 复杂度 | 状态 |
 |------|------|------|------|------|------|------|--------|------|
 | DR-1 | Deep Research | Gather | `gatherer.py:55-57` | 70% 任务完成 + 15s grace 后取消剩余（已从 50% 调整到 70%） | — | — | — | ✅ 已完成 |
-| DR-3 | Deep Research | Report | `report.py:89-103` | 报告生成是阻塞式 LLM 调用（120s） | 用户在最耗时阶段看不到进度 | 支持 report LLM 流式输出 | 中 | 待处理 |
+| DR-3 | Deep Research | Report | `report.py:89-103` | 报告生成是阻塞式 LLM 调用（120s） | 用户在最耗时阶段看不到进度 | 支持 report LLM 流式输出 | 中 | ⏭ 跳过（需重构，收益小） |
 | DR-5 | Deep Research | DB | `db.py:347` | 每个 source 完整内容（最大 500K chars）存 SQLite | DB 膨胀，查询变慢，resume 加载慢 | 大内容存文件系统，DB 只存 metadata | 中 | 待处理 |
 | DR-6 | Deep Research | Engine | `engine.py:392-403` | `_check_control_signals()` 每轮都读 DB | 不必要 I/O | 每 N 轮检查或用 asyncio.Event | 低 | ⏭ 跳过（1ms 开销可忽略） |
-| DR-7 | Deep Research | Frontend | `api.ts:318-355` | 流断开后用户必须手动 resume | 网络不稳定体验差 | exponential backoff 自动重连 | 中 | 待处理 |
+| DR-7 | Deep Research | Frontend | `api.ts:318-355` | 流断开后用户必须手动 resume | 网络不稳定体验差 | exponential backoff 自动重连 | 中 | ✅ 已完成 |
 | DR-8 | Deep Research | Frontend | `ResearchPanel.tsx:563-564` | `readerRef` 存了 reader 但没接 cancel | 导航离开后 fetch 继续运行 | unmount 时 abort 流 | 低 | ✅ 已完成 |
-| DR-9 | Deep Research | Frontend | `ResearchDetail.tsx:43-63` | 用一次性 REST 加载，不用 SSE | 查看运行中 session 数据过时 | running 状态也建立 SSE 连接 | 中 | 待处理 |
+| DR-9 | Deep Research | Frontend | `ResearchDetail.tsx:43-63` | 用一次性 REST 加载，不用 SSE | 查看运行中 session 数据过时 | running 状态也建立 SSE 连接 | 中 | ✅ 已完成 |
 | IN-3 | Ingest | Pipeline | `wiki_mixin_llm.py` vs `agent/tools.py` | CLI 和 Agent 路径已统一，共享 section_metadata + lint_hint | — | — | — | ✅ 已完成 |
 | IN-4 | Ingest | Cache | `wiki_mixin_source_analysis.py:46-72` | 缓存在 wiki 页面 HTML 注释中 | 页面编辑时缓存丢失 | 缓存存 SQLite 或独立文件 | 中 | 待处理 |
 | IN-6 | Ingest | Generate | `generate_wiki_ops.yaml`, `wiki_mixin_llm.py:48-68` | 一次 LLM 调用生成所有页面内容 | 源复杂时输出截断或省略页面 | 先生成操作列表再逐操作填充 | 中 | 待处理 |
