@@ -15,7 +15,7 @@ class WikiLLMMixin(WikiProtocol):
     def _llm_process_source(self, source_data: dict) -> dict:
         """Process source with LLM using two-phase analysis.
 
-        Phase 1: Extract section metadata (pure computation, no LLM)
+        Phase 1: Use existing section metadata (or extract if missing)
         Phase 2: LLM selects relevant sections for deep analysis
         Phase 3: Targeted reading of selected sections
         Phase 4: Full analysis on selected content
@@ -29,7 +29,9 @@ class WikiLLMMixin(WikiProtocol):
         content = source_data.get("content", "")
         title = source_data.get("title", "")
 
-        section_metadata = self.extract_section_metadata(content, title)
+        section_metadata = source_data.get("section_metadata")
+        if not section_metadata:
+            section_metadata = self.extract_section_metadata(content, title)
 
         max_chars = 32000
         selected_sections = self._select_sections(
