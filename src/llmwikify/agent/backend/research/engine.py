@@ -618,6 +618,17 @@ class ResearchEngine:
         generator = ReportGenerator(self.wiki, self._report_llm, self.config)
         try:
             state.report_md = await generator.generate(state.query, sources, state.synthesis or {})
+            # Persist report immediately so it survives pause/cancel/error
+            self.session_manager.finalize(state.session_id, {
+                "markdown": state.report_md,
+                "query": state.query,
+                "quality_score": state.quality_score,
+                "rounds": state.round,
+                "sources": [
+                    {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+                    for s in sources
+                ],
+            })
             yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
         except Exception as e:
             logger.error("Report generation failed: %s", e)
@@ -683,6 +694,17 @@ class ResearchEngine:
             state.report_md = await revisor.revise(state.report_md or "", state.issues, sources)
             # Reset review so it gets re-evaluated
             state.review = None
+            # Persist revised report immediately so it survives pause/cancel/error
+            self.session_manager.finalize(state.session_id, {
+                "markdown": state.report_md,
+                "query": state.query,
+                "quality_score": state.quality_score,
+                "rounds": state.round,
+                "sources": [
+                    {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+                    for s in sources
+                ],
+            })
             yield {"type": "progress", "progress": 0.85, "message": "Report revised"}
         except Exception as e:
             logger.error("Report revision failed: %s", e)
