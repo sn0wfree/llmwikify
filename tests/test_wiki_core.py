@@ -278,6 +278,7 @@ class TestWiki:
             "suggested_pages": [{"name": "Test Page", "summary": "Summary", "priority": "high"}],
             "cross_refs": [],
             "content_type": "test",
+            "quality_assessment": {"credibility": 7, "relevance": 8, "completeness": 6, "issues": []},
         }
         operations_data = [
             {"action": "write_page", "page_name": "Test Page", "content": "# Test Page\n\nContent"},
@@ -294,6 +295,8 @@ class TestWiki:
                 nonlocal call_count
                 call_count += 1
                 if call_count == 1:
+                    return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+                if call_count == 2:
                     return analysis_data
                 return operations_data
 
@@ -344,8 +347,10 @@ class TestWiki:
                 return cls()
             def chat_json(self, messages, **kwargs):
                 captured_messages.extend(messages)
-                # First call: analyze_source, second: generate_wiki_ops
-                if len(captured_messages) <= 3:  # analyze_source call
+                # call 1: select_sections, call 2: analyze_source, call 3: generate_wiki_ops
+                if len(captured_messages) <= 2:  # select_sections call
+                    return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+                if len(captured_messages) <= 4:  # analyze_source call
                     return {
                         "topics": ["Test"],
                         "entities": [],
@@ -353,6 +358,7 @@ class TestWiki:
                         "suggested_pages": [{"name": "Test", "type": "DailySummary", "summary": "x", "priority": "high"}],
                         "cross_refs": [],
                         "content_type": "test",
+                        "quality_assessment": {"credibility": 7, "relevance": 8, "completeness": 6, "issues": []},
                     }
                 return [
                     {"action": "write_page", "page_name": "Test", "content": "# Test\n\nContent"},
@@ -380,8 +386,9 @@ class TestWiki:
         sys.modules['llmwikify.llm_client'] = llm_module
 
         assert result['status'] == 'success'
-        # Verify wiki_schema was injected into the first LLM call messages
-        all_text = " ".join(m.get("content", "") for m in captured_messages[:3])
+        # Verify wiki_schema was injected into the analyze_source LLM call messages
+        # Messages: system+user for select_sections, then system+user for analyze_source
+        all_text = " ".join(m.get("content", "") for m in captured_messages[2:5])
         assert custom_marker in all_text
         assert "Custom Page Types" in all_text
 
@@ -406,6 +413,8 @@ class TestWiki:
                 nonlocal call_count
                 call_count += 1
                 if call_count == 1:
+                    return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+                if call_count == 2:
                     return {
                         "topics": ["Test"],
                         "entities": [],
@@ -413,6 +422,7 @@ class TestWiki:
                         "suggested_pages": [{"name": "Test", "type": "concept", "summary": "x", "priority": "high"}],
                         "cross_refs": [],
                         "content_type": "test",
+                        "quality_assessment": {"credibility": 7, "relevance": 8, "completeness": 6, "issues": []},
                     }
                 return [
                     {"action": "write_page", "page_name": "Test", "content": "# Test\n\nContent"},
@@ -765,9 +775,8 @@ redirect_to: target.md
         result = wiki.ingest_source(str(test_file))
 
         instructions = result['instructions']
-        assert '## Sources' in instructions
         assert 'raw/' in instructions
-        assert 'NOT wikilinks' in instructions
         assert '[Source' in instructions
+        assert 'wiki_analyze_source' in instructions
 
         wiki.close()

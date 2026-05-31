@@ -43,7 +43,7 @@ KNOWN_WIKI_METHODS = {
 
 # Known validate_schema values
 KNOWN_SCHEMAS = {
-    "analysis_output", "operations_array", "synthesize_output",
+    "analysis_output", "operations_array", "synthesize_output", "section_selection",
 }
 
 # Valid trigger types
@@ -216,6 +216,8 @@ class PromptEvaluator:
                 "content_type": "technical_article",
                 "total_words": 1000,
                 "sections": [],
+                "local_wiki_matches": "",
+                "gaps": [],
             }
 
             for field_name in ["system", "user", "document", "text"]:

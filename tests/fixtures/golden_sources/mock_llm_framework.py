@@ -101,7 +101,7 @@ class GoldenTestRunner:
         # we need to enable chaining mode to test analyze_source properly
         with patch("llmwikify.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
-            # First call is analyze_source, second is generate_wiki_ops
+            # First call is select_sections, second is analyze_source, third is generate_wiki_ops
             ops_result = [
                 {"action": "write_page", "page_name": "Test", "content": "# Test"},
                 {"action": "log", "operation": "ingest", "details": "Test"},
@@ -112,6 +112,8 @@ class GoldenTestRunner:
                 nonlocal call_count
                 call_count += 1
                 if call_count == 1:
+                    return {"selected_sections": [1, 2, 3], "reasoning": "test"}
+                if call_count == 2:
                     return mock_response
                 return ops_result
 
@@ -290,6 +292,12 @@ class GoldenTestRunner:
             "content_type": "technical_article",
             "potential_contradictions": [],
             "data_gaps": [],
+            "quality_assessment": {
+                "credibility": 7,
+                "relevance": 8,
+                "completeness": 6,
+                "issues": [],
+            },
         }
 
         # Add contradictions if expected

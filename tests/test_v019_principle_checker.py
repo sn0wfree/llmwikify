@@ -257,9 +257,11 @@ class TestPrincipleCheckerCheckAllTemplates:
             "ingest_instructions",
             "investigate_lint",
             "research_plan",
+            "research_replan",
             "research_report",
             "research_review",
             "research_revise",
+            "select_sections",
             "wiki_schema",
             "wiki_synthesize",
         }
