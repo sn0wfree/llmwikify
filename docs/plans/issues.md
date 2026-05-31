@@ -609,6 +609,8 @@ class IngestPerformanceMetrics:
 |------|------|------|------|
 | **DR-2** | Gather 失败 sub-query 永不重试 | ✅ 已完成 | 自动重试，max 1 retry per sub-query |
 | **DR-4** | Review LLM 异常时创建假差评 | ✅ 已完成 | 跳过 review，标记 "skipped" |
+| **DR-8** | readerRef 未接 cancel | ✅ 已完成 | useEffect cleanup on unmount |
+| **DR-12** | catch 后 silent | ✅ 已完成 | 选择性添加 console.warn |
 | **IN-2** | `wiki_ingest` 使用 posthoc 确认 | ✅ 设计合理 | 保持 posthoc（ingest 只提取到 raw/，不修改 wiki） |
 
 ### IN-2 详细分析
@@ -627,13 +629,13 @@ class IngestPerformanceMetrics:
 
 ### P1 问题（按影响力排序）
 
-| 编号 | 问题 | 影响 | 复杂度 | 推荐优先级 |
-|------|------|------|--------|-----------|
-| **DR-1** | Gather 50% 阈值过早取消 | PDF/arxiv 等慢源被丢弃 | 低 | 🔴 高 |
-| **DR-6** | 每轮都读 DB 检查控制信号 | 不必要 I/O 开销 | 低 | 🟡 中 |
-| **DR-8** | readerRef 未接 cancel | 导航离开后 fetch 继续运行 | 低 | 🟡 中 |
-| **DR-12** | catch 后 silent | 用户不知道操作是否成功 | 低 | 🟡 中 |
-| **IN-11** | 无提取/分析/建页耗时追踪 | 无法分析优化 | 低 | 🟡 中 |
+| 编号 | 问题 | 影响 | 复杂度 | 状态 |
+|------|------|------|--------|------|
+| **DR-1** | Gather 50% 阈值过早取消 | PDF/arxiv 等慢源被丢弃 | 低 | 待处理 |
+| **DR-6** | 每轮都读 DB 检查控制信号 | 不必要 I/O 开销 | 低 | 待处理 |
+| **DR-8** | readerRef 未接 cancel | 导航离开后 fetch 继续运行 | 低 | ✅ 已完成 |
+| **DR-12** | catch 后 silent | 用户不知道操作是否成功 | 低 | ✅ 已完成 |
+| **IN-11** | 无提取/分析/建页耗时追踪 | 无法分析优化 | 低 | 待处理 |
 
 ### DR-1 详细分析
 
