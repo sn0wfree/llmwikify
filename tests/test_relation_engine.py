@@ -258,3 +258,133 @@ class TestRelationEngineContradictions:
 
         contradictions = engine.detect_contradictions()
         assert contradictions == []
+
+
+class TestRelationEngineEntityResolution:
+    """Tests for entity resolution methods."""
+
+    def test_resolve_entity_exact_match(self, wiki_instance):
+        """Test resolving entity to exact wiki page match."""
+        wiki_instance.write_page("Risk Parity", "# Risk Parity\n")
+        engine = RelationEngine(wiki_instance.index, wiki_root=wiki_instance.root)
+        
+        result = engine.resolve_entity("Risk Parity")
+        assert result == "Risk Parity"
+
+    def test_resolve_entity_case_insensitive(self, wiki_instance):
+        """Test resolving entity with different case."""
+        wiki_instance.write_page("Risk Parity", "# Risk Parity\n")
+        engine = RelationEngine(wiki_instance.index, wiki_root=wiki_instance.root)
+        
+        result = engine.resolve_entity("risk parity")
+        assert result == "Risk Parity"
+
+    def test_resolve_entity_alias_lookup(self, wiki_instance):
+        """Test resolving entity via alias lookup."""
+        wiki_instance.write_page("Risk Parity", "# Risk Parity\n")
+        engine = RelationEngine(wiki_instance.index, wiki_root=wiki_instance.root)
+        
+        # Add alias
+        engine.add_alias("risk parity strategy", "Risk Parity", source="manual")
+        
+        result = engine.resolve_entity("risk parity strategy")
+        assert result == "Risk Parity"
+
+    def test_resolve_entity_fuzzy_match(self, wiki_instance):
+        """Test resolving entity via fuzzy match."""
+        wiki_instance.write_page("Risk Parity", "# Risk Parity\n")
+        engine = RelationEngine(wiki_instance.index, wiki_root=wiki_instance.root)
+        
+        # Should fuzzy match to "Risk Parity"
+        result = engine.resolve_entity("Risk Par", fuzzy_threshold=0.8)
+        assert result == "Risk Parity"
+
+    def test_resolve_entity_new(self, wiki_instance):
+        """Test resolving new entity returns original name."""
+        engine = RelationEngine(wiki_instance.index, wiki_root=wiki_instance.root)
+        
+        result = engine.resolve_entity("Brand New Entity")
+        assert result == "Brand New Entity"
+
+    def test_add_alias(self, wiki_instance):
+        """Test adding alias."""
+        engine = RelationEngine(wiki_instance.index, wiki_root=wiki_instance.root)
+        
+        engine.add_alias("risk parity strategy", "Risk Parity", source="manual")
+        
+        aliases = engine.get_aliases("Risk Parity")
+        assert "risk parity strategy" in aliases
+
+    def test_get_aliases(self, wiki_instance):
+        """Test getting aliases."""
+        engine = RelationEngine(wiki_instance.index, wiki_root=wiki_instance.root)
+        
+        engine.add_alias("risk parity strategy", "Risk Parity", source="manual")
+        engine.add_alias("risk parity approach", "Risk Parity", source="manual")
+        
+        aliases = engine.get_aliases("Risk Parity")
+        assert len(aliases) == 2
+        assert "risk parity strategy" in aliases
+        assert "risk parity approach" in aliases
+
+    def test_add_relation_with_resolution(self, wiki_instance):
+        """Test adding relation with entity resolution."""
+        wiki_instance.write_page("Risk Parity", "# Risk Parity\n")
+        wiki_instance.write_page("Diversification", "# Diversification\n")
+        engine = RelationEngine(wiki_instance.index, wiki_root=wiki_instance.root)
+        
+        # Add relation with different case - should resolve
+        rel_id = engine.add_relation(
+            source="risk parity",
+            target="diversification",
+            relation="uses",
+            resolve=True,
+        )
+        assert rel_id > 0
+        
+        # Check that canonical names were used
+        neighbors = engine.get_neighbors("Risk Parity")
+        assert len(neighbors) == 1
+        assert neighbors[0]["target"] == "Diversification"
+
+    def test_add_relation_no_resolution(self, wiki_instance):
+        """Test adding relation without entity resolution."""
+        engine = RelationEngine(wiki_instance.index, wiki_root=wiki_instance.root)
+        
+        # Add relation without resolution
+        rel_id = engine.add_relation(
+            source="risk parity",
+            target="diversification",
+            relation="uses",
+            resolve=False,
+        )
+        assert rel_id > 0
+        
+        # Check that original names were used
+        neighbors = engine.get_neighbors("risk parity")
+        assert len(neighbors) == 1
+        assert neighbors[0]["target"] == "diversification"
+
+    def test_dedup_after_resolution(self, wiki_instance):
+        """Test that dedup works after entity resolution."""
+        wiki_instance.write_page("Risk Parity", "# Risk Parity\n")
+        wiki_instance.write_page("Diversification", "# Diversification\n")
+        engine = RelationEngine(wiki_instance.index, wiki_root=wiki_instance.root)
+        
+        # Add relation with different case
+        rel_id1 = engine.add_relation(
+            source="risk parity",
+            target="diversification",
+            relation="uses",
+            resolve=True,
+        )
+        
+        # Add same relation with different case - should be deduped
+        rel_id2 = engine.add_relation(
+            source="Risk Parity",
+            target="Diversification",
+            relation="uses",
+            resolve=True,
+        )
+        
+        assert rel_id1 == rel_id2
