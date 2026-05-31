@@ -52,7 +52,7 @@ class SourceGatherer:
         max_parallel = self.config.get("max_parallel_gathering", 8)
         per_query_timeout = 45
         # Early-exit: continue when this fraction of tasks done
-        early_exit_threshold = 0.5
+        early_exit_threshold = 0.7
         # Grace period after threshold: wait this long for stragglers
         early_exit_grace = 15
         semaphore = asyncio.Semaphore(max_parallel)
