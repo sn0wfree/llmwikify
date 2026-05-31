@@ -12,7 +12,7 @@
 |------|------|------|------|------|------|------|--------|------|
 | DR-2 | Deep Research | Gather | `gatherer.py:364-373` | 失败直接标记 "failed"，永不重试 | 网络抖动导致永久丢失搜索方向 | 在下一轮 ReAct 中自动重试失败 sub-query | 低 | 待处理 |
 | DR-4 | Deep Research | Review | `engine.py:626-629` | LLM 异常时创建 `{"approved":False,"score":0}` | LLM 调用失败 ≠ 报告质量差，浪费 revise 轮次 | 异常时跳过 review，标记 "review_skipped" | 低 | 待处理 |
-| IN-1 | Ingest | Analyze | `analyze_source.yaml:11`, `wiki_mixin_llm.py:22-24`, `wiki_mixin_source_analysis.py:116` | `max_content_chars=8000`，长文档只分析前 1/5 | PDF/长文核心信息在后半部分，分析不完整 | 调大阈值 + heading-aware 截取 | 低~中 | 待处理 |
+| IN-1 | Ingest | Analyze | `analyze_source.yaml:11`, `wiki_mixin_llm.py:22-24`, `wiki_mixin_source_analysis.py:116` | `max_content_chars=8000`，长文档只分析前 1/5 | PDF/长文核心信息在后半部分，分析不完整 | 两阶段分析：metadata 提取 + LLM 定向读取 | 中 | 实施中 |
 | IN-2 | Ingest | Confirm | `agent/tools.py:263` | `requires_confirmation="posthoc"` 执行后才记录 | 与 `wiki_write_page` 的 pre 模式不一致，误操作无法回滚 | 改为 `requires_confirmation="pre"` | 低 | 待处理 |
 
 ### 🟡 P1 — 中优先级（影响性能/体验）
@@ -422,7 +422,145 @@ Layer 1-4: Ingest 专用截断 (后续迭代，在 Layer 0 之上)
 
 ---
 
-## 三、附录：LLM 调用点审计
+## 三、两阶段文档分析方案（IN-1 实施）
+
+### 设计背景
+
+当前 `analyze_source` 在分析前将内容截断到 8000 chars，导致：
+1. 长文档（PDF、长文）丢失 60-90% 内容
+2. LLM 无法看到文档后半部分的关键信息
+3. 分析结果不完整，遗漏重要实体和关系
+
+业界最佳实践（OpenAI、Anthropic、Perplexity）采用 **两阶段模式**：
+- **Phase 1**: 轻量元数据提取（heading 结构 + section 预览）
+- **Phase 2**: LLM 根据元数据选择需要深入分析的 sections
+
+### 核心优势
+
+| 维度 | 当前（截断 8K） | 两阶段分析 |
+|------|----------------|-----------|
+| 信息完整性 | 丢失 60-90% 内容 | 保留关键 sections |
+| Token 效率 | 固定 8K tokens | 动态（按需读取） |
+| LLM 理解质量 | 中间信息丢失 | 重要信息在首尾 |
+| 复杂度 | 低 | 中（新增 ~100 行代码） |
+
+### 流程详解
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Phase 1: Section Metadata 提取（纯计算，无 LLM 调用）               │
+├─────────────────────────────────────────────────────────────────────┤
+│ 输入: 完整文档内容                                                   │
+│      ↓                                                             │
+│ 解析 Markdown heading（#, ##, ###）                                 │
+│ 无 heading 时 → 段落启发式切分（空行分隔）                           │
+│      ↓                                                             │
+│ 输出: section metadata                                              │
+│ {                                                                  │
+│   "title": "Article Title",                                        │
+│   "total_words": 12500,                                            │
+│   "sections": [                                                    │
+│     {"id": 1, "level": 1, "title": "Executive Summary",            │
+│      "word_count": 200, "preview": "Overview..."},                 │
+│     {"id": 2, "level": 2, "title": "Revenue Breakdown",            │
+│      "word_count": 1800, "preview": "Detailed revenue..."}         │
+│   ]                                                                │
+│ }                                                                  │
+└─────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│ Phase 2: Section Selection（LLM 选择，~500 tokens）                 │
+├─────────────────────────────────────────────────────────────────────┤
+│ 输入: section metadata + 分析任务描述                                │
+│      ↓                                                             │
+│ LLM 读取 section map → 选择需要深入分析的 sections                  │
+│      ↓                                                             │
+│ 输出: {"selected_sections": [1, 3, 5], "reasoning": "..."}         │
+│ 约束: 最多选 5 个 sections                                          │
+└─────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│ Phase 3: Targeted Reading（纯计算，无 LLM 调用）                    │
+├─────────────────────────────────────────────────────────────────────┤
+│ 输入: 完整内容 + 选中的 section IDs                                  │
+│      ↓                                                             │
+│ 按 section 边界提取选中内容                                         │
+│ 拼接后控制在 32K chars 以内                                         │
+│      ↓                                                             │
+│ 输出: targeted_content (选中 sections 的拼接)                       │
+└─────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│ Phase 4: Analysis（复用现有 prompt）                                │
+├─────────────────────────────────────────────────────────────────────┤
+│ 输入: targeted_content + wiki_schema + current_index                │
+│      ↓                                                             │
+│ analyze_source prompt → LLM 分析选中内容                            │
+│      ↓                                                             │
+│ 输出: 完整分析结果（topics, entities, relations, claims）           │
+└─────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│ Phase 5: Generate Wiki Ops（复用现有 prompt）                       │
+├─────────────────────────────────────────────────────────────────────┤
+│ 输入: 分析结果 + current_index                                       │
+│      ↓                                                             │
+│ generate_wiki_ops prompt → 生成 wiki 页面操作                      │
+│      ↓                                                             │
+│ 输出: wiki 操作列表                                                 │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 文件变更清单
+
+| 文件 | 变更类型 | 说明 |
+|------|----------|------|
+| `wiki_mixin_ingest.py` | 新增方法 | `extract_section_metadata()`, `targeted_read()` |
+| `wiki_mixin_llm.py` | 修改方法 | `_llm_process_source()` 两阶段流程 |
+| `prompts/_defaults/select_sections.yaml` | 新增文件 | Section selection prompt |
+| `prompts/_defaults/__init__.py` | 修改 | 添加 `select_sections` 到 `AVAILABLE_PROMPTS` |
+| `wiki_mixin_source_analysis.py` | 修改 | `analyze_source()` 使用新流程 |
+
+### 缓存策略
+
+**Section metadata 缓存**：
+- 存储位置：`wiki/sources/{slug}.md` 的 HTML comment（与现有 `_cache_source_analysis` 一致）
+- 缓存键：`content_hash`（与现有分析缓存一致）
+- 失效条件：源文件内容变化
+
+**好处**：
+- 重复分析同一源文件时，跳过 Phase 1（section metadata 提取）
+- Section metadata 提取是纯计算（正则解析），无需 LLM 调用
+
+### 错误处理
+
+| 场景 | 处理方式 |
+|------|----------|
+| 无 heading 结构 | 使用段落启发式切分（空行分隔） |
+| Section selection 失败 | Fallback：取前 5 个 sections |
+| Targeted content 超限 | 截断到 32K chars + 标记 `content_truncated=True` |
+| LLM 分析失败 | 复用现有 retry 逻辑（`_call_llm_with_retry`） |
+
+### Token 预算影响
+
+| 阶段 | 预估 tokens | 说明 |
+|------|-------------|------|
+| Phase 1: Metadata | 0 | 纯计算，无 LLM 调用 |
+| Phase 2: Section Selection | ~500 | 输入 ~1K tokens，输出 ~100 tokens |
+| Phase 3: Targeted Read | 0 | 纯计算，无 LLM 调用 |
+| Phase 4: Analysis | ~8K-12K | 输入 ~6K-10K tokens，输出 ~2K tokens |
+| **总计** | ~9K-13K | 比当前方案（~3K）多 3-4 倍，但分析质量显著提升 |
+
+### 与现有系统的兼容性
+
+1. **CLI 模式**：`llmwikify ingest` 命令自动使用新流程
+2. **MCP 模式**：`wiki_analyze_source` 工具自动使用新流程
+3. **Agent 模式**：Agent 调用 `wiki_ingest` → `wiki_analyze_source` 时自动使用新流程
+4. **Deep Research 模式**：`research/analyzer.py` 调用 `wiki.analyze_source()` 时自动使用新流程
+
+---
+
+## 四、附录：LLM 调用点审计
 
 14 个调用点中，仅 4 个有截断保护。TokenBudgetChecker 提供全局安全网：
 
