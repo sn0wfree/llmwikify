@@ -315,41 +315,65 @@ export interface LLMConfig {
   timeout: number;
 }
 
-function _openResearchStream(sessionId: string): ReadableStream<ResearchStreamEvent> {
+function _openResearchStream(sessionId: string, maxRetries = 3): ReadableStream<ResearchStreamEvent> {
   const headers: Record<string, string> = {};
   if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
-  return new ReadableStream<ResearchStreamEvent>({
-    async start(controller) {
-      try {
-        const res = await fetch(`${API_BASE}/research/${sessionId}/stream`, { headers });
-        if (!res.ok || !res.body) {
-          controller.enqueue({ type: 'error', error: `HTTP ${res.status}` });
-          controller.close();
-          return;
+  
+  let retryCount = 0;
+  
+  async function connectStream(controller: ReadableStreamDefaultController<ResearchStreamEvent>): Promise<void> {
+    try {
+      const res = await fetch(`${API_BASE}/research/${sessionId}/stream`, { headers });
+      if (!res.ok || !res.body) {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 10000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return connectStream(controller);
         }
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const event = JSON.parse(line.slice(6)) as ResearchStreamEvent;
-                controller.enqueue(event);
-              } catch { /* skip malformed */ }
-            }
+        controller.enqueue({ type: 'error', error: `HTTP ${res.status} after ${maxRetries} retries` });
+        controller.close();
+        return;
+      }
+      
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6)) as ResearchStreamEvent;
+              controller.enqueue(event);
+            } catch { /* skip malformed */ }
           }
         }
-      } catch (e) {
-        controller.enqueue({ type: 'error', error: String(e) });
-      } finally {
-        controller.close();
       }
+      
+      // Stream completed normally
+      controller.close();
+    } catch (e) {
+      // Network error - retry with backoff
+      if (retryCount < maxRetries) {
+        retryCount++;
+        const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 10000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return connectStream(controller);
+      }
+      controller.enqueue({ type: 'error', error: String(e) });
+      controller.close();
+    }
+  }
+
+  return new ReadableStream<ResearchStreamEvent>({
+    async start(controller) {
+      await connectStream(controller);
     },
   });
 }
