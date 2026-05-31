@@ -39,11 +39,11 @@
 | DR-11 | Deep Research | Frontend | `ResearchPanel.tsx:632-755` | 120+ 行 switch 处理 16 种事件 | 可维护性差 | strategy pattern 或 reducer 拆分 | 中 | 待处理 |
 | DR-13 | Deep Research | Observability | `engine.py` 全文 | 无 token 用量/耗时/成本追踪 | 无法分析优化 | 添加 metrics 收集 | 中 | 待处理 |
 | DR-14 | Deep Research | Engine | `engine.py` 各 action handler | Phase 分散赋值，无集中验证 | 状态机隐式 | 定义显式状态转移表 | 中 | 待处理 |
-| IN-5 | Ingest | Transaction | `wiki_mixin_relation.py:86-121` | 逐页写入，无原子性 | 中途失败导致部分页面丢失 | 写入前快照 + 失败回滚 | 高 | 待处理 |
+| IN-5 | Ingest | Transaction | `wiki_mixin_relation.py:86-121` | 逐页写入，无原子性 | 中途失败导致部分页面丢失 | 写入前快照 + 失败回滚 | 高 | ✅ 已完成 |
 | IN-8 | Ingest | Relation | `relation_engine.py:102-141` | `add_relation()` 精确匹配去重 | 不同表述产生重复关系 | 语义去重（LLM 或 embedding） | 中 | 待处理 |
 | IN-9 | Ingest | Index | `core/index.py:77-111` | 每次 `write_page()` 重建 FTS5 条目 | 批量 ingest 性能瓶颈 | 延迟索引更新，最后一次性重建 | 中 | 待处理 |
 | IN-10 | Ingest | Architecture | `core/wiki.py:29-60` | 13 个 mixin 组合，职责分散 | 跨 mixin 调用链路长 | 合并功能相近的 mixin | 高 | 待处理 |
-| IN-11 | Ingest | Observability | 全局 | 无提取/分析/建页耗时追踪 | 无法分析优化 | 添加 metrics 收集 | 低 | 待处理 |
+| IN-11 | Ingest | Observability | 全局 | 无提取/分析/建页耗时追踪 | 无法分析优化 | 添加 metrics 收集 | 低 | ✅ 已完成 |
 | IN-12 | Ingest | Index | `wiki_mixin_page_io.py:83,276-423` | 每次写入重建整个 index.md | 大 wiki 时耗时增加 | 增量更新或延迟重建 | 中 | 待处理 |
 
 ---

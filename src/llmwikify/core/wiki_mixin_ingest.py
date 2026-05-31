@@ -2,6 +2,7 @@
 
 import logging
 import re
+import time
 from pathlib import Path
 
 from ..extractors import extract
@@ -237,13 +238,17 @@ class WikiIngestMixin(WikiProtocol):
         - Local files outside raw/: copied to raw/
         - Local files already in raw/: no copy needed
         """
+        timing = {}
+        t0 = time.monotonic()
+
         result = extract(source, wiki_root=self.root)
+        timing["extract_ms"] = int((time.monotonic() - t0) * 1000)
 
         if result.source_type == "error":
-            return {"error": result.metadata.get("error", "Unknown extraction error")}
+            return {"error": result.metadata.get("error", "Unknown extraction error"), "timing": timing}
 
         if not result.text:
-            return {"error": "No content extracted"}
+            return {"error": "No content extracted", "timing": timing}
 
         saved_to_raw = False
         already_exists = False
@@ -331,4 +336,8 @@ class WikiIngestMixin(WikiProtocol):
             "instructions": self._get_prompt_registry().render_text("ingest_instructions"),
             "section_metadata": self.extract_section_metadata(result.text or "", result.title),
             "lint_hint": self._generate_lint_hint(source_name, result.text or "", already_exists),
+            "timing": {
+                "extract_ms": timing.get("extract_ms", 0),
+                "total_ms": int((time.monotonic() - t0) * 1000),
+            },
         }
