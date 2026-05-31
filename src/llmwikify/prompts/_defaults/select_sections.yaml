@@ -1,0 +1,51 @@
+name: select_sections
+description: "Select which sections to read based on document metadata and analysis task. Used in two-phase document analysis."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "select_sections"
+
+params:
+  max_tokens: 512
+  temperature: 0.1
+
+system: |
+  You are a document navigator. Given document metadata, select which sections
+  to read for a specific analysis task.
+
+  Rules:
+  - Return section IDs as a list
+  - Prioritize sections with relevant keywords
+  - Maximum 5 sections per selection
+  - Always include Introduction / Executive Summary / Abstract if available
+  - If document has no clear structure, select by position (first, middle, last)
+  - Focus on sections likely to contain: topics, entities, relations, key facts
+
+  {% if provider == "ollama" %}
+  IMPORTANT: Output ONLY valid JSON. No explanations. Do NOT use markdown code blocks.
+  {% endif %}
+
+user: |
+  Document: {{ title }}
+  Type: {{ content_type }}
+  Total Words: {{ total_words }}
+
+  Sections:
+  {% for section in sections %}
+  [{{ section.id }}] {{ section.title }} ({{ section.word_count }} words)
+      Preview: {{ section.preview }}
+  {% endfor %}
+
+  Analysis Task: Extract topics, entities, relations, and key facts from this document.
+
+  Return JSON:
+  {
+    "selected_sections": [1, 3, 5],
+    "reasoning": "brief explanation of why these sections were selected"
+  }
+
+post_process:
+  validate_schema: "section_selection"
+  required_keys: ["selected_sections", "reasoning"]
+  retry_on_failure:
+    max_attempts: 2

@@ -5,6 +5,7 @@ Available prompts:
 - generate_wiki_ops
 - ingest_instructions
 - investigate_lint
+- select_sections
 - wiki_schema
 - wiki_synthesize
 - research_plan
@@ -22,6 +23,7 @@ AVAILABLE_PROMPTS = [
     "generate_wiki_ops",
     "ingest_instructions",
     "investigate_lint",
+    "select_sections",
     "wiki_schema",
     "wiki_synthesize",
     "research_plan",

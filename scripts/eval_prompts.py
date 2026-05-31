@@ -213,6 +213,9 @@ class PromptEvaluator:
                 "total_pages": 0,
                 "version": "0.18.0",
                 "lint_context": "",
+                "content_type": "technical_article",
+                "total_words": 1000,
+                "sections": [],
             }
 
             for field_name in ["system", "user", "document", "text"]:

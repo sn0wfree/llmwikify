@@ -14,6 +14,183 @@ logger = logging.getLogger(__name__)
 class WikiIngestMixin(WikiProtocol):
     """Source ingestion: extract, save to raw/, return data for LLM processing."""
 
+    def extract_section_metadata(self, content: str, title: str = "") -> dict:
+        """Extract section-level metadata from content for LLM-based navigation.
+
+        Parses Markdown headings and falls back to paragraph-based heuristic
+        splitting when no headings are found.
+
+        Args:
+            content: Full document content
+            title: Document title (optional)
+
+        Returns:
+            Section metadata dict with sections, total_words, has_headers, etc.
+        """
+        lines = content.split("\n")
+        sections = []
+        header_lines = []
+
+        for i, line in enumerate(lines):
+            match = re.match(r'^(#{1,6})\s+(.+)', line)
+            if match:
+                level = len(match.group(1))
+                header_lines.append(i)
+                sections.append({
+                    "id": len(header_lines),
+                    "level": level,
+                    "title": match.group(2).strip(),
+                    "line": i,
+                })
+
+        if not header_lines:
+            sections = self._detect_paragraph_sections(lines)
+
+        for i, section in enumerate(sections):
+            start = section.get("line", 0)
+            end = sections[i + 1]["line"] if i + 1 < len(sections) else len(lines)
+            section_text = "\n".join(lines[start:end])
+            section["word_count"] = len(section_text.split())
+            section["preview"] = section_text[:150].strip()
+
+        return {
+            "title": title,
+            "total_words": len(content.split()),
+            "has_headers": len(header_lines) > 0,
+            "header_count": len(header_lines),
+            "sections": sections,
+        }
+
+    def _detect_paragraph_sections(self, lines: list[str]) -> list[dict]:
+        """Detect sections from paragraph structure when no headings exist.
+
+        Uses heuristics: short lines surrounded by blank lines, or lines
+        ending with colon, are treated as implicit headers.
+        """
+        sections = []
+        current_section_start = 0
+
+        for i, line in enumerate(lines):
+            is_blank = line.strip() == ""
+            if is_blank:
+                if i > current_section_start:
+                    paragraph = "\n".join(lines[current_section_start:i]).strip()
+                    if paragraph:
+                        words = paragraph.split()
+                        if len(words) < 10 and (paragraph.endswith(":") or paragraph.isupper()):
+                            sections.append({
+                                "id": len(sections) + 1,
+                                "level": 2,
+                                "title": paragraph.rstrip(":").strip(),
+                                "line": current_section_start,
+                                "heuristic": True,
+                            })
+                        elif len(words) >= 50:
+                            sections.append({
+                                "id": len(sections) + 1,
+                                "level": 2,
+                                "title": f"Section {len(sections) + 1}",
+                                "line": current_section_start,
+                                "heuristic": True,
+                            })
+                current_section_start = i + 1
+
+        remaining = "\n".join(lines[current_section_start:]).strip()
+        if remaining and len(remaining.split()) >= 10:
+            sections.append({
+                "id": len(sections) + 1,
+                "level": 2,
+                "title": f"Section {len(sections) + 1}",
+                "line": current_section_start,
+                "heuristic": True,
+            })
+
+        return sections
+
+    def targeted_read(self, content: str, selected_sections: list[int], max_chars: int = 32000) -> tuple[str, bool]:
+        """Read only selected sections, respecting char budget.
+
+        Args:
+            content: Full document content
+            selected_sections: List of section IDs to read (1-indexed)
+            max_chars: Maximum characters to return
+
+        Returns:
+            Tuple of (targeted_content, was_truncated)
+        """
+        lines = content.split("\n")
+
+        header_lines = []
+        for i, line in enumerate(lines):
+            if re.match(r'^#{1,6}\s+', line):
+                header_lines.append(i)
+
+        if not header_lines:
+            return self._targeted_read_by_paragraph(lines, selected_sections, max_chars)
+
+        selected_text = []
+        char_budget = max_chars
+
+        for section_id in selected_sections:
+            if section_id < 1 or section_id > len(header_lines):
+                continue
+
+            start = header_lines[section_id - 1]
+            end = header_lines[section_id] if section_id < len(header_lines) else len(lines)
+
+            section_text = "\n".join(lines[start:end])
+
+            if len(section_text) <= char_budget:
+                selected_text.append(section_text)
+                char_budget -= len(section_text)
+            else:
+                truncated = section_text[:char_budget]
+                selected_text.append(truncated)
+                char_budget = 0
+                break
+
+        result = "\n\n".join(selected_text)
+        was_truncated = char_budget == 0 and len(result) < sum(
+            len("\n".join(lines[header_lines[sid - 1]:header_lines[sid] if sid < len(header_lines) else len(lines)]))
+            for sid in selected_sections if 1 <= sid <= len(header_lines)
+        )
+
+        return result, was_truncated
+
+    def _targeted_read_by_paragraph(
+        self, lines: list[str], selected_sections: list[int], max_chars: int
+    ) -> tuple[str, bool]:
+        """Fallback targeted reading by paragraph when no headings exist."""
+        paragraphs = []
+        current = []
+        for line in lines:
+            if line.strip() == "" and current:
+                paragraphs.append("\n".join(current))
+                current = []
+            else:
+                current.append(line)
+        if current:
+            paragraphs.append("\n".join(current))
+
+        selected_text = []
+        char_budget = max_chars
+
+        for section_id in selected_sections:
+            if section_id < 1 or section_id > len(paragraphs):
+                continue
+
+            paragraph = paragraphs[section_id - 1]
+            if len(paragraph) <= char_budget:
+                selected_text.append(paragraph)
+                char_budget -= len(paragraph)
+            else:
+                truncated = paragraph[:char_budget]
+                selected_text.append(truncated)
+                char_budget = 0
+                break
+
+        return "\n\n".join(selected_text), char_budget == 0
+
     def ingest_source(self, source: str) -> dict:
         """Ingest a source file and return extracted data for LLM processing.
 
