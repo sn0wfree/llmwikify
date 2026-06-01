@@ -1079,7 +1079,7 @@ export function ResearchPanel() {
                         )}
                       </>
                     )}
-                    {(s.status === 'paused' || s.status === 'gathering') && (
+                    {(s.status === 'paused' || s.status === 'pausing' || s.status === 'gathering') && (
                       <button onClick={() => handleResume(s.id)} className="text-xs text-green-400 hover:underline">Resume</button>
                     )}
                     {isActive && (
