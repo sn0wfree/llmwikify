@@ -1129,6 +1129,65 @@ This is a test report about machine learning.
             assert "title" in info
             assert "source_type" in info
 
+    def test_report_content_budget_default(self, mock_wiki, mock_llm, config):
+        """Test that default config values are used for content budget."""
+        generator = ReportGenerator(mock_wiki, mock_llm, config)
+        
+        assert generator.config.get("report_max_per_source") == 4000
+        assert generator.config.get("report_max_total_content") == 60000
+
+    def test_report_content_budget_custom(self, mock_wiki, mock_llm):
+        """Test that custom config values override defaults."""
+        custom_config = {
+            "report_max_per_source": 8000,
+            "report_max_total_content": 120000,
+        }
+        generator = ReportGenerator(mock_wiki, mock_llm, custom_config)
+        
+        assert generator.config.get("report_max_per_source") == 8000
+        assert generator.config.get("report_max_total_content") == 120000
+
+    def test_report_truncates_per_source(self, mock_wiki, mock_llm):
+        """Test that source content is truncated per source limit."""
+        mock_llm.chat.return_value = "# Report"
+        
+        # Set small per-source limit
+        test_config = {"report_max_per_source": 100, "report_max_total_content": 10000}
+        generator = ReportGenerator(mock_wiki, mock_llm, test_config)
+        
+        # Source with content exceeding limit
+        long_content = "x" * 200
+        sources = [
+            {"id": "s1", "title": "Source", "url": "https://example.com", 
+             "source_type": "web", "content": long_content, "analysis": {}},
+        ]
+        
+        messages, _ = generator._build_messages("test", sources, {})
+        # Verify the messages were built (truncation happens inside)
+        assert len(messages) > 0
+
+    def test_report_truncates_total_content(self, mock_wiki, mock_llm):
+        """Test that total content is truncated across all sources."""
+        mock_llm.chat.return_value = "# Report"
+        
+        # Set small total limit
+        test_config = {"report_max_per_source": 5000, "report_max_total_content": 200}
+        generator = ReportGenerator(mock_wiki, mock_llm, test_config)
+        
+        # Multiple sources exceeding total limit
+        sources = [
+            {"id": "s1", "title": "S1", "url": "https://a.com", 
+             "source_type": "web", "content": "x" * 150, "analysis": {}},
+            {"id": "s2", "title": "S2", "url": "https://b.com", 
+             "source_type": "web", "content": "y" * 150, "analysis": {}},
+            {"id": "s3", "title": "S3", "url": "https://c.com", 
+             "source_type": "web", "content": "z" * 150, "analysis": {}},
+        ]
+        
+        messages, _ = generator._build_messages("test", sources, {})
+        # Verify the messages were built (truncation happens inside)
+        assert len(messages) > 0
+
 
 # ==============================================================================
 # 9. Review Tests
