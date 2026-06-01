@@ -796,7 +796,8 @@ class ResearchEngine:
             state.report_md = await asyncio.to_thread(_generate_streaming)
             
             # Persist report immediately so it survives pause/cancel/error
-            self.session_manager.finalize(state.session_id, {
+            # Use persist_report (not finalize) to avoid setting status='done' prematurely
+            self.session_manager.persist_report(state.session_id, {
                 "markdown": state.report_md,
                 "query": state.query,
                 "quality_score": state.quality_score,
@@ -892,7 +893,8 @@ class ResearchEngine:
             # Reset review so it gets re-evaluated
             state.review = None
             # Persist revised report immediately so it survives pause/cancel/error
-            self.session_manager.finalize(state.session_id, {
+            # Use persist_report (not finalize) to avoid setting status='done' prematurely
+            self.session_manager.persist_report(state.session_id, {
                 "markdown": state.report_md,
                 "query": state.query,
                 "quality_score": state.quality_score,

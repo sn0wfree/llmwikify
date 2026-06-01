@@ -303,6 +303,15 @@ class AgentDatabase:
             )
             conn.commit()
 
+    def persist_report(self, session_id: str, result: str | None = None) -> None:
+        """Persist report data without changing status (safe to call mid-pipeline)."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE research_sessions SET result = ?, updated_at = datetime('now') WHERE id = ?",
+                (result, session_id),
+            )
+            conn.commit()
+
     def finalize_research(self, session_id: str, result: str | None = None, wiki_page_name: str | None = None) -> None:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
