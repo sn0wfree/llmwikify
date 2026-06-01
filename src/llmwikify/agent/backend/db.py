@@ -988,9 +988,10 @@ class AgentDatabase:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
 
-            # Export chat data
+            # Export chat data (exclude jwt_token for security)
             chat_sessions = conn.execute(
-                "SELECT * FROM chat_sessions WHERE wiki_id = ?", (wiki_id,)
+                "SELECT id, wiki_id, created_at, updated_at FROM chat_sessions WHERE wiki_id = ?",
+                (wiki_id,)
             ).fetchall()
 
             chat_messages = []

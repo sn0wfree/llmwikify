@@ -31,6 +31,9 @@ DEFAULT_RESEARCH_CONFIG: dict[str, Any] = {
     "source_filter_enabled": True,   # Enable rule-based source pre-filter
     "source_min_content_length": 100,  # Min content length to keep
     "source_min_quality_score": 0.3,   # Min quality score to keep
+    # Report content budget
+    "report_max_per_source": 4000,     # Max chars per source in report prompt
+    "report_max_total_content": 60000, # Max total source chars in report prompt
     # Quality gate config
     "gate_enabled": True,            # Enable quality gates
     "gate_min_sources": 3,           # Min sources after gathering

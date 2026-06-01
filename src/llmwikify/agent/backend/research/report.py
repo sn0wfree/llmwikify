@@ -44,8 +44,8 @@ class ReportGenerator:
         source_map = self._build_source_map(sources)
 
         # Build source content summaries for the prompt
-        max_per_source = 4000
-        max_total_content = 60000
+        max_per_source = self.config.get("report_max_per_source", 4000)
+        max_total_content = self.config.get("report_max_total_content", 60000)
         total_content = 0
         source_contents: list[dict[str, Any]] = []
         for s in sources:
