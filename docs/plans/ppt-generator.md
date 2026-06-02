@@ -1,8 +1,8 @@
 # PPT Generator — 设计规划文档
 
-> 日期: 2026-06-02 | 版本: v0.6 | 状态: v0.5 已完成、v0.6 规划中
+> 日期: 2026-06-02 | 版本: v0.6.2 | 状态: v0.6.1 已完成、v0.6.2 紧凑化实施中
 >
-> **版本演进**：v0.1-v0.4（Phase 1-2 后端+前端）→ v0.5（任务持久化+侧边栏）→ **v0.6（主题与布局扩展，借力 html-ppt-skill）**
+> **版本演进**：v0.1-v0.4（Phase 1-2 后端+前端）→ v0.5（任务持久化+侧边栏）→ v0.6.1（主题 8→36）→ **v0.6.2（主题选择器紧凑化）**→ v0.6.3（布局 7→31）→ ...
 
 ## 〇、业界调研
 
@@ -1111,6 +1111,10 @@ pip install python-pptx
 | 主题归类（v0.6.1） | 按 category 分组：minimal / dark / colorful / retro / tech / brand | 36 主题需分类展示，UX 友好 | UI 设计 |
 | 视觉资产归属（v0.6.1） | README 标注 "Based on html-ppt-skill (MIT, © 2026 lewislulu)" | 遵守 MIT 许可 | 法规要求 |
 | 静态 HTML 导出（v0.6.x 暂缓） | v0.6.4 之前不做，先做 PPTX 视觉增强 | 用户当前更需要 PPT 体验 | v0.6 讨论 |
+| 主题选择器 UX（v0.6.2） | Pill 行（6 个精选）+ 抽屉（全部 36） | 节省 82-94% 垂直空间，常用主题 1 秒可达 | 36 主题空间问题讨论 |
+| 6 个默认精选主题（v0.6.2） | 硬编码 FEATURED_THEME_IDS，跨 6 category | 编辑可控、简单可靠；v0.7+ 可改算法 | UX 设计 |
+| 抽屉交互（v0.6.2） | 不点外部自动收起，需显式点 "▴ 收起" | 避免浏览中误点导致抽屉消失 | 交互模式选择 |
+| 抽屉内点主题后保持展开（v0.6.2） | 切换后不收起抽屉 | 用户可继续浏览找到更合适的主题 | 用户体验 |
 
 ---
 
@@ -1738,7 +1742,171 @@ inline style 注入 CSS variables
 - ❌ 主题用户自定义（Phase 3，color picker）
 - ❌ 主题混合 / 渐变映射（高级玩法）
 
-### 13.5 v0.6.2 布局扩展预告
+### 13.5 v0.6.2 主题选择器紧凑化（当前）
+
+#### 13.5.1 背景与问题
+
+v0.6.1 上线后，ThemeSelector 占据过多垂直空间：
+
+| 状态 | 高度 | 内容 |
+|------|------|------|
+| 默认（10 类全展开） | ~600-800px | 10 个 category 头 + 36 主题卡 (4 列网格) |
+| 用户折叠后 | ~300px | 10 个 category 头 + 滚动区 |
+| 即使折叠空 category | ~280px | 仍占 1/3 屏幕 |
+
+**用户痛点**：36 主题数量大，但用户最常用的是 6-8 个。把所有主题一次性塞进视野，喧宾夺主，且拖慢主题切换速度。
+
+#### 13.5.2 设计目标
+
+- **默认收起**：只显示一行精选主题（6 个 pill）+ 切换按钮
+- **一键展开**：抽屉式下拉面板，展示全部 36 主题（10 category 分组）
+- **空间节省**：收起态高度 ≤ 50px（vs v0.6.1 的 280-800px）
+- **响应式**：窄屏 (< 800px) pill 行横向滚动
+
+#### 13.5.3 三种方案对比
+
+| 方案 | 收起高度 | 优点 | 缺点 |
+|------|---------|------|------|
+| A. 原生 dropdown | ~40px | 最紧凑 | UI 简陌，36 项滚动累 |
+| **B. Pill 行 + 抽屉（采用）** ⭐ | ~50px | 6 个常用主题一眼可见，扩展用现有 UI | 收起后看不到其他 30 个 |
+| C. 图标按钮 + Popover | ~40px | 极致紧凑 | 多一次点击打断流程 |
+
+**选择 B** 的核心理由：6 个精选 pill 足以让用户在 1 秒内感受到"我有很多主题可选"；需要切换到具体主题时，pill 提供即时切换；探索更多主题时，下拉面板提供完整浏览体验。
+
+#### 13.5.4 UI 设计稿
+
+**收起态**（默认，高度 ~50px）：
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ [●极简白][●德古拉][●企业清洁][●赛博朋克][●小红书白][●包豪斯]    │
+│                                              [▾ 显示全部 36 个]   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**展开态**（高度 ~50 + 400px 抽屉 = 450px 总高）：
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ [●极简白][●德古拉][●企业清洁][●赛博朋克][●小红书白][●包豪斯]    │
+│                                                  [▴ 收起]         │
+├──────────────────────────────────────────────────────────────────┤
+│ 主题 · 36                       [🔍 搜索主题...]                  │
+│ 极简 / Minimal · 4                                                │
+│ [▣ 极简白] [▣ 编辑衬线] [▣ 锋利单色] [▣ 日式极简]                 │
+│ 柔和 / Soft · 2                                                    │
+│ [▣ 柔和粉彩] [▣ 小红书白]                                          │
+│ ...                                                               │
+│ 复古 / Retro · 3                                                   │
+│ [▣ Y2K 铬金] [▣ 复古电视] [▣ 蒸汽波]                              │
+│ Themes adapted from html-ppt-skill (MIT, © 2026 lewislulu)        │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+#### 13.5.5 默认 6 个精选主题
+
+按"广覆盖 + 高频用"原则，跨 6 个 category：
+
+| # | 主题 ID | 中文 | 类别 | 选择理由 |
+|---|---------|------|------|----------|
+| 1 | `minimal-white` | 极简白 | minimal | 商务通用默认 |
+| 2 | `dracula` | 德古拉 | dark | 暗色最热、开发者圈 |
+| 3 | `corporate-clean` | 企业清洁 | brand | 商务汇报标准 |
+| 4 | `cyberpunk-neon` | 赛博朋克 | tech | 科技未来感 |
+| 5 | `xiaohongshu-white` | 小红书白 | soft | 生活/营销热门 |
+| 6 | `bauhaus` | 包豪斯 | design | 视觉冲击、设计感 |
+
+#### 13.5.6 数据模型
+
+`lib/ppt-themes.ts` 新增：
+
+```ts
+export const FEATURED_THEME_IDS: string[] = [
+  'minimal-white', 'dracula', 'corporate-clean',
+  'cyberpunk-neon', 'xiaohongshu-white', 'bauhaus',
+];
+
+export function getFeaturedThemes(): Theme[];
+```
+
+**为什么用硬编码而非算法？**
+- v0.6.2 范围小，简单可靠
+- 编辑可控，主题可手动调
+- v0.7+ 可改为基于使用频率的算法 + `localStorage` 记忆
+
+#### 13.5.7 组件 API
+
+`components/ThemeSelector.tsx` 内部新增：
+
+```tsx
+function ThemePill({ theme, selected, onClick }: {...}): JSX.Element;
+// 50×24px pill：彩色圆 + 中文名
+
+function ThemeChipCard({ theme, selected, onClick }: {...}): JSX.Element;
+// 5 列网格用 chip：彩色圆 + 中文名 + 英文名
+```
+
+#### 13.5.8 状态机
+
+```ts
+type View = 'collapsed' | 'expanded' | 'searching';
+const [view, setView] = useState<View>('collapsed');
+const [query, setQuery] = useState('');
+
+// 切换规则：
+// - 点 pill：onSelect(id)，view 保持
+// - 点 "▾ 显示全部 36 个"：view = 'expanded'
+// - 点 "▴ 收起"：view = 'collapsed'
+// - 搜索框输入（query.length > 0）：view = 'searching'
+// - 搜索框清空：view = 'collapsed'（若之前是 searching）
+```
+
+**抽屉不点外部收起**：不加 `onBlur`/`useEffect` 监听外部点击，用户必须显式点 "▴ 收起"。理由：避免用户浏览过程中误点导致抽屉消失。
+
+#### 13.5.9 行为细节
+
+| 行为 | 实现 |
+|------|------|
+| 当前主题高亮 | `selected === theme.id` → pill/chip 加 `ring-1 ring-blue-500 bg-blue-50` |
+| 当前主题不在 6 个默认里 | 抽屉展开时仍能看到并高亮；pill 行无高亮 |
+| 抽屉内点主题后 | onSelect(id) → 抽屉**不收起**（用户可继续浏览） |
+| 抽屉高度溢出 | 抽屉内部 `max-h-[28rem] overflow-y-auto` |
+| 屏幕窄（< 800px） | pill 行 `overflow-x-auto` 横向滚动 |
+| 切换主题后 | pill 行立即更新高亮（无需展开抽屉） |
+
+#### 13.5.10 文件改动清单
+
+| 文件 | 改动 | 行数 |
+|------|------|------|
+| `lib/ppt-themes.ts` | 新增 `FEATURED_THEME_IDS` + `getFeaturedThemes()` | +12 |
+| `components/ThemeSelector.tsx` | 重写为 pill 行 + 抽屉 | -100 / +130 |
+
+`components/PPTGenerator.tsx` **无需改动**（ThemeSelector API 完全兼容）。
+
+#### 13.5.11 视觉空间对比
+
+| 状态 | v0.6.1 高度 | v0.6.2 高度 | 节省 |
+|------|-----------|-----------|------|
+| 默认收起 | 280-800px | 50px | **82-94%** |
+| 展开抽屉 | — | 450px | — |
+| 搜索态 | 400-600px | 60-200px | 50-67% |
+
+#### 13.5.12 风险与缓解
+
+| 风险 | 缓解 |
+|------|------|
+| 6 个默认主题不讨所有用户喜欢 | 用户展开抽屉后可换；v0.6.3+ 加 `localStorage` 记忆 |
+| 抽屉高度 400px 仍偏大 | 抽屉内部已 `max-h-28rem overflow-y-auto`，可滚动 |
+| 屏幕宽 768px 时 pill 行过密 | 横向滚动兜底 |
+| 用户预期"6 个最热门"但其实是硬编码 | 在抽屉底部标注 "Featured by editor"，未来可改为算法 |
+
+#### 13.5.13 不在 v0.6.2 范围
+
+- ❌ `localStorage` 记忆用户最近选的主题（v0.6.3+）
+- ❌ 主题预览 tooltip（hover 显示完整描述，v0.6.3+）
+- ❌ 主题推荐算法（基于使用频率，v0.7+）
+- ❌ 用户自定义 featured 列表（v0.7+）
+- ❌ 主题缩略图（用真实预览图替代色块，v0.7+）
+
+### 13.6 v0.6.3 布局扩展预告
 
 31 个布局分组：
 
@@ -1751,19 +1919,21 @@ inline style 注入 CSS variables
 | **引用** | big-quote、comparison、diff、code、terminal | 中 |
 | **创意** | mindmap、image-hero、image-grid | 低 |
 
-**v0.6.2 优先翻译**：cover、toc、section-divider、kpi-grid、stat-highlight、timeline、arch-diagram、process-steps、flow-diagram、gantt（10 个最高价值）
+**v0.6.3 优先翻译**：cover、toc、section-divider、kpi-grid、stat-highlight、timeline、arch-diagram、process-steps、flow-diagram、gantt（10 个最高价值）
 
-### 13.6 实施顺序
+### 13.7 实施顺序
 
 ```
-v0.6.1 主题（当前）
+v0.6.1 主题（8→36）          ← ✅ 已完成
   ↓ 完成 + 回归通过
-v0.6.2 布局扩展（10 个高价值 + 完整 31）
+v0.6.2 主题选择器紧凑化      ← ✅ 当前
   ↓ 完成 + 回归通过
-v0.6.3 动画注入
+v0.6.3 布局扩展（10 个高价值 + 完整 31）
   ↓ 完成 + 回归通过
-v0.6.4 静态 HTML 导出（暂停中）
-v0.6.5 PPTX 导出视觉增强
+v0.6.4 动画注入
+  ↓ 完成 + 回归通过
+v0.6.5 静态 HTML 导出（暂停中）
+v0.6.6 PPTX 导出视觉增强
 ```
 
 每个小版本独立 commit、独立测试、独立可演示。
