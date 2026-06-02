@@ -357,13 +357,11 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
 
       <div className="flex flex-1 overflow-hidden">
         {showSidebar && (
-          <div className="w-48 flex-shrink-0 border-r border-[var(--border)] overflow-y-auto">
-            <SessionSidebar
-              currentSessionId={currentSessionId}
-              onSelectSession={handleSelectSession}
-              onNewChat={handleNewChat}
-            />
-          </div>
+          <SessionSidebar
+            currentSessionId={currentSessionId}
+            onSelectSession={handleSelectSession}
+            onNewChat={handleNewChat}
+          />
         )}
 
         <div className="flex flex-col flex-1 min-w-0">
