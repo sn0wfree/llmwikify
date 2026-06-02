@@ -49,8 +49,17 @@ export function SlideRenderer({ slide, theme, isPreview = true }: SlideRendererP
         return <BulletsSlide slide={slide} />;
       case 'title_content':
         return <TitleContentSlide slide={slide} />;
-      case 'two_column':
+      case 'two_column': {
+        // v0.6.2.patch1: Defensive fallback — if both columns are empty but
+        // bullets exist, render as BulletsSlide. Covers cached tasks and
+        // edge cases where the backend rules fallback didn't apply.
+        const hasLeft = (slide.left?.items?.length ?? 0) > 0;
+        const hasRight = (slide.right?.items?.length ?? 0) > 0;
+        if (!hasLeft && !hasRight && (slide.bullets?.length ?? 0) > 0) {
+          return <BulletsSlide slide={slide} />;
+        }
         return <TwoColumnSlide slide={slide} />;
+      }
       case 'chart':
         return <ChartSlide slide={slide} />;
       case 'quote':
