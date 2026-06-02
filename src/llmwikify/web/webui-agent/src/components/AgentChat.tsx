@@ -332,6 +332,14 @@ export function AgentChat() {
                     session: {currentSessionId.slice(0, 8)}
                   </span>
                 )}
+                {currentSessionId && (
+                  <button
+                    onClick={() => window.open(`/agent/#ppt?chat=${currentSessionId}`, '_blank')}
+                    className="text-xs text-blue-400 hover:underline"
+                  >
+                    导出为 PPT
+                  </button>
+                )}
                 <button
                   onClick={() => setShowSidebar(!showSidebar)}
                   className="text-xs text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
