@@ -75,6 +75,23 @@ def validate_content_for_layout(content_type: str, layout: str, content: Dict[st
             else:
                 content[side] = {"heading": str(val), "items": []}
 
+        # v0.6.2.patch1: Fallback — LLM sometimes returns flat bullets for
+        # comparison/bullets content_type (e.g., "理论机制解析" with
+        # content_type=comparison but output uses bullets). Without this,
+        # both left.items and right.items stay empty, and the frontend
+        # TwoColumnSlide renders two empty gray boxes. Split bullets in
+        # half to recover.
+        left_items = content["left"].get("items") or []
+        right_items = content["right"].get("items") or []
+        if not left_items and not right_items:
+            bullets = content.get("bullets") or []
+            if bullets:
+                mid = (len(bullets) + 1) // 2  # odd count → left heavier
+                content["left"]["items"] = bullets[:mid]
+                content["right"]["items"] = bullets[mid:]
+                # Clear bullets to avoid double-display
+                content["bullets"] = []
+
     # Ensure chart has valid structure
     if layout == "chart":
         if content.get("chart_type") is None:
