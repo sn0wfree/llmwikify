@@ -17,9 +17,10 @@ type Step = 'input' | 'outline' | 'preview';
 interface PPTGeneratorProps {
   source?: PptSource | null;
   onSourceConsumed?: () => void;
+  onExit?: () => void;
 }
 
-export function PPTGenerator({ source, onSourceConsumed }: PPTGeneratorProps) {
+export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorProps) {
   // State
   const [step, setStep] = useState<Step>('input');
   const [topic, setTopic] = useState('');
@@ -163,13 +164,21 @@ export function PPTGenerator({ source, onSourceConsumed }: PPTGeneratorProps) {
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-4">
+          {onExit && (
+            <button
+              onClick={onExit}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              ← 退出
+            </button>
+          )}
           <h1 className="text-xl font-bold">PPT Generator</h1>
           {step !== 'input' && (
             <button
               onClick={handleReset}
               className="text-sm text-gray-500 hover:text-gray-700"
             >
-              ← New Presentation
+              New Presentation
             </button>
           )}
         </div>
