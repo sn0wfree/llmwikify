@@ -348,7 +348,7 @@ class PPTEngine:
         """Call LLM and return response text."""
         # Use sync chat in a thread to avoid blocking
         import asyncio
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             lambda: self.llm.chat(messages, json_mode=True),
@@ -400,6 +400,15 @@ class PPTEngine:
         # Limit to num_slides if specified
         if num_slides and len(pages) > num_slides:
             pages = pages[:num_slides]
+        
+        # Ensure at least one page
+        if not pages:
+            pages = [OutlinePage(
+                page=1,
+                content_type="intro",
+                title=data.get("title", "Untitled Presentation"),
+                description="Presentation title slide",
+            )]
         
         return Outline(
             title=data.get("title", "Untitled Presentation"),

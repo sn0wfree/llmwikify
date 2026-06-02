@@ -198,7 +198,7 @@ function TwoColumnSlide({ slide, theme }: { slide: SlideContent; theme: Theme })
 }
 
 function ChartSlide({ slide, theme }: { slide: SlideContent; theme: Theme }) {
-  const maxValue = Math.max(...(slide.chart_data?.values || [1]));
+  const maxValue = Math.max(...(slide.chart_data?.values || [1])) || 1;
 
   return (
     <div className="h-full flex flex-col p-8">

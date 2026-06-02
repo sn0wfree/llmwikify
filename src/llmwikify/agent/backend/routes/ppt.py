@@ -123,7 +123,7 @@ async def generate_from_research(request: FromResearchRequest):
             summary = str(result)[:500]
         
         # Get source count
-        sources = db.get_research_sources(request.research_id)
+        sources = db.get_sources(request.research_id)
         source_count = len(sources) if sources else 0
         
         engine = _get_engine()
@@ -156,7 +156,7 @@ async def generate_from_chat(request: FromChatRequest):
         db = _get_db()
         
         # Get chat session
-        session = db.get_chat_session(request.chat_session_id)
+        session = db.get_session(request.chat_session_id)
         if not session:
             return JSONResponse(
                 {"error": "Chat session not found"},
@@ -164,7 +164,7 @@ async def generate_from_chat(request: FromChatRequest):
             )
         
         # Get messages from chat
-        messages = db.get_chat_messages(request.chat_session_id)
+        messages = db.get_messages(request.chat_session_id)
         if not messages:
             return JSONResponse(
                 {"error": "No messages in chat session"},
