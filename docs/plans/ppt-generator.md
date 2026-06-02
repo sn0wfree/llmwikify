@@ -1,6 +1,6 @@
 # PPT Generator — 设计规划文档
 
-> 日期: 2026-06-02 | 版本: v0.4 | 状态: 规划中
+> 日期: 2026-06-02 | 版本: v0.5 | 状态: 规划中
 
 ## 〇、业界调研
 
@@ -1024,6 +1024,30 @@ pip install python-pptx
 
 ### 预估总工时：10-14 天
 
+### Phase 3.5：任务持久化 + 侧边栏（v0.5 增量，~1 天）
+
+**背景**：v0.4 上线后用户报告 frps 60s 断流导致 UI 死锁、刷新页面任务丢失。
+
+**后端（~2h）：**
+- [ ] `agent/backend/db.py` — `ppt_tasks` 表 + 8 个 CRUD 方法
+- [ ] `ppt/task_manager.py` — 注入 DB，状态镜像到 DB
+- [ ] `ppt/engine.py` — `slide_done` 时增量写 `presentation_json`
+- [ ] `routes/ppt.py` — 加 `GET /api/ppt/tasks`、`DELETE /api/ppt/task/{id}` 端点
+- [ ] `routes.py` + `core.py` — startup hook 标记重启前 running 任务为 error + 24h 清理循环
+
+**前端（~2.5h）：**
+- [ ] `lib/useUrlTask.ts` — URL hash hook（NEW）
+- [ ] `lib/ppt-api.ts` — 加 `listTasks`/`getTask`/`deleteTask` + `streamPresentation` 重连 + 退避
+- [ ] `components/PPTSidebar.tsx` — 侧边栏组件（NEW，仿 SessionSidebar 风格）
+- [ ] `components/PPTGenerator.tsx` — 集成 sidebar 布局 + `taskId` 恢复逻辑
+
+**测试（~30min）：**
+- [ ] curl 后端测试：create → list → get → delete
+- [ ] 浏览器端到端：刷新恢复、SSE 断流重连、清理 30 天任务
+- [ ] 跑现有 147 个测试确保不破
+
+**详细设计见第十二节。**
+
 ## 十一、技术决策记录
 
 | 决策 | 选择 | 理由 | 来源 |
@@ -1040,3 +1064,423 @@ pip install python-pptx
 | 不使用 reveal.js | — | 预览需要 PPT 效果，reveal.js 是独立演示格式 | — |
 | 不使用 Pandoc | — | 设计质量受限，无法自定义主题 | — |
 | 不使用编辑代理 | — | 复杂度高，需自研模型，留作 Phase 4 | PPTAgent |
+| 状态所有权（v0.5） | 后端 DB 是唯一真理源，前端无持久化状态 | 避免多源数据不一致，刷新天然支持 | 架构设计原则 |
+| 任务身份（v0.5） | URL hash (`#ppt/task/{id}`) | 浏览器原生支持，可分享，刷新自动恢复 | v0.5 讨论 |
+| 任务持久化时机（v0.5） | 每个 slide_done 写一次 DB | reconnect 用户能看到部分内容 | v0.5 讨论 Q1=A |
+| SSE 断流（v0.5） | 应用层指数退避重连（1→2→4→8s） | 解决 frps 60s 断流体验，无需改 frps | v0.5 讨论 Q2=C |
+| Sidebar 数据刷新（v0.5） | 5s 轮询 | 简单可靠；未来可换 SSE 推送 | v0.5 讨论 Q3=A |
+| 任务清理（v0.5） | 30 天自动清理 + server 重启标记 error | 防 DB 无限增长 | v0.5 讨论 Q2 |
+| 任务列表端点（v0.5） | `GET /api/ppt/tasks?limit=50&source_type=` | 支持 sidebar 列表和按来源过滤 | API 设计 |
+
+---
+
+## 十二、任务持久化 + 侧边栏恢复（v0.5 新增）
+
+### 12.1 背景与问题
+
+v0.4 上线后，用户报告两个关键问题：
+
+**问题 A：frps 60s 断流导致 UI 死锁**
+
+- 后端 PPT 生成 16 页深度内容耗时 70-90s
+- frps `vhost_http_timeout` 默认 60s，会切断 SSE 响应
+- 浏览器 `fetch().body.getReader()` 收到 `{done: true}`，但**没收到 done 事件**
+- `streamPresentation` 直接退出，**`onDone` 永远不调用**
+- UI 卡在 `generatingSlide=0`，无法恢复
+
+**问题 B：刷新页面 = 任务丢失**
+
+- 任务状态完全在 `PPTTaskManager` 内存中（5 个 dict）
+- 前端只有 `task_id` 在 component state
+- 刷新页面 → React 状态全清 → 用户无法回到原任务
+- 即使任务已成功完成，用户也看不到结果
+
+### 12.2 设计目标
+
+| 目标 | 优先级 | 成功标准 |
+|------|--------|----------|
+| 任务历史可查 | P0 | 用户能看到所有历史任务（done/running/error） |
+| 刷新后能恢复 | P0 | 刷新页面后能继续查看已完成任务 |
+| 进行中任务可重连 | P0 | 刷新时若任务正在生成，能看到进度 |
+| 状态所有权清晰 | P0 | 后端 DB 是唯一真理源，前端无持久化状态 |
+| 任务可清理 | P1 | 30 天前的旧任务自动清理 |
+| 任务可删除 | P1 | 用户可手动删除不再需要的任务 |
+
+### 12.3 核心设计原则
+
+> **"后端是唯一真理源，前端只是视图"**
+
+- ❌ 前端不持有 `currentTaskId` React state
+- ❌ 前端不缓存任务列表
+- ❌ 前端不用 localStorage
+- ✅ 任务身份在 **URL hash**（`#ppt/task/abc123`）
+- ✅ 任务数据全部来自 **GET /api/ppt/task/{id}**
+- ✅ 任务列表来自 **GET /api/ppt/tasks**（5s 轮询）
+
+### 12.4 DB Schema
+
+在 `~/.llmwikify/agent/.llmwiki_agent.db` 增加 `ppt_tasks` 表：
+
+```sql
+CREATE TABLE IF NOT EXISTS ppt_tasks (
+    id TEXT PRIMARY KEY,                  -- 12-char hex UUID
+    title TEXT,                           -- outline.title
+    subtitle TEXT,
+    theme TEXT,                           -- 'professional', 'modern', etc.
+    source_type TEXT,                     -- 'topic' | 'research' | 'chat'
+    source_id TEXT,                       -- 关联 research/chat ID（topic 时为 null）
+    outline_json TEXT,                    -- 完整 Outline JSON
+    presentation_json TEXT,               -- 渐进式更新（每个 slide_done 写一次）
+    status TEXT NOT NULL,                 -- 'pending'|'running'|'done'|'error'
+    error TEXT,
+    slide_count INTEGER DEFAULT 0,
+    model_used TEXT,
+    generation_time_ms INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ppt_tasks_updated ON ppt_tasks(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ppt_tasks_status ON ppt_tasks(status);
+```
+
+**关键设计**：
+- `presentation_json` **渐进式更新** — 每个 `slide_done` 写一次，让 reconnect 用户能看到部分内容
+- `status` 是核心状态机
+- `outline_json` 持久化 → 用户可重看大纲
+- 30 天后自动清理（基于 `updated_at`）
+
+### 12.5 后端 API 设计
+
+| 方法 | 路径 | 用途 | 返回 |
+|------|------|------|------|
+| POST | `/api/ppt/generate` | 启动异步生成（已存在） | `{task_id, status: "processing"}` |
+| GET | `/api/ppt/task/{id}` | 获取任务状态（已扩展读 DB） | `{task_id, status, presentation?, error?}` |
+| GET | `/api/ppt/task/{id}/stream` | SSE 事件流（已存在） | `text/event-stream` |
+| **GET** | **`/api/ppt/tasks?limit=50&source_type=research`** | **列出历史任务** | **`{tasks: [...]}`** |
+| **DELETE** | **`/api/ppt/task/{id}`** | **删除任务** | **`{ok: true}`** |
+
+**`listTasks` 响应结构**：
+
+```typescript
+interface PPTTaskSummary {
+  id: string;
+  title: string | null;
+  subtitle: string | null;
+  theme: string;
+  source_type: 'topic' | 'research' | 'chat' | null;
+  status: 'pending' | 'running' | 'done' | 'error';
+  slide_count: number;
+  model_used: string | null;
+  generation_time_ms: number | null;
+  error: string | null;
+  created_at: string;  // ISO 8601
+  updated_at: string;
+}
+```
+
+### 12.6 PPTTaskManager 重构
+
+**核心决策**：保留 asyncio.Task 在内存（必须），状态镜像到 DB。
+
+```python
+class PPTTaskManager:
+    def __init__(self, db: AgentDatabase):
+        self.db = db
+        self._tasks: dict[str, asyncio.Task] = {}        # 保留 in-memory
+        self._queues: dict[str, asyncio.Queue] = {}      # 保留 in-memory
+    
+    def create_task(self, generate_fn, *args, **kwargs) -> str:
+        # 1. 先 DB INSERT
+        task_id = self.db.create_ppt_task(...)
+        # 2. 再启动 asyncio.Task
+        task = asyncio.create_task(self._run_task(...))
+        return task_id
+    
+    async def _run_task(self, task_id, generate_fn, args, kwargs, queue):
+        self.db.update_ppt_task_status(task_id, 'running')
+        try:
+            result = await generate_fn(task_id, self.db, queue, *args, **kwargs)
+            self.db.set_ppt_task_result(task_id, result)
+            self.db.update_ppt_task_status(task_id, 'done')
+        except Exception as e:
+            self.db.update_ppt_task_status(task_id, 'error', str(e))
+        finally:
+            await queue.put(None)
+    
+    def get_status(self, task_id) -> dict:
+        # 优先 DB（覆盖已完成/已错误任务）
+        row = self.db.get_ppt_task(task_id)
+        if row:
+            return row
+        # fallback in-memory（活跃任务）
+        ...
+```
+
+**`engine.py` 增量写**：
+
+```python
+async def generate_content_stream(self, request, queue, db=None, task_id=None):
+    slides = []
+    for idx, page in enumerate(request.outline.pages):
+        slide = await self._generate_slide_content(...)
+        slides.append(slide)
+        
+        await queue.put({"type": "slide_done", "slide": slide.model_dump()})
+        
+        # 关键：每个 slide_done 写一次 DB
+        if db and task_id:
+            db.set_ppt_task_partial_presentation(
+                task_id, [s.model_dump() for s in slides]
+            )
+```
+
+### 12.7 前端架构
+
+#### 12.7.1 URL hash 作为任务身份
+
+```
+http://llmwikify.frp.tokenhub.top/agent/#ppt/task/abc123
+```
+
+- ✅ 浏览器原生支持，0 成本
+- ✅ 刷新自动保留
+- ✅ 可分享、可书签
+- ✅ 浏览器前进/后退自然工作
+
+#### 12.7.2 `useUrlTask` Hook
+
+```typescript
+// src/lib/useUrlTask.ts
+export function useUrlTask() {
+  const [taskId, setTaskId] = useState<string | null>(() => {
+    const m = window.location.hash.match(/^#\/ppt\/task\/([a-z0-9]+)$/);
+    return m ? m[1] : null;
+  });
+  
+  const setTask = useCallback((id: string | null) => {
+    if (id) {
+      window.location.hash = `#/ppt/task/${id}`;
+    } else {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    setTaskId(id);
+  }, []);
+  
+  useEffect(() => {
+    const onHashChange = () => {
+      const m = window.location.hash.match(/^#\/ppt\/task\/([a-z0-9]+)$/);
+      setTaskId(m ? m[1] : null);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+  
+  return [taskId, setTask] as const;
+}
+```
+
+#### 12.7.3 PPTSidebar 组件
+
+仿 `SessionSidebar.tsx` 风格，但**自包含**用 `useUrlTask`：
+
+```
+┌─────────────────────────────────────────────┐
+│  📊 PPT 任务                          [+]  │  ← 新建（清 URL hash）
+├─────────────────────────────────────────────┤
+│  [全部] [主题] [研究] [对话]                  │  ← filter
+├─────────────────────────────────────────────┤
+│  ┌───────────────────────────────────────┐  │
+│  │ ✓ 跨组合影响传导推理...           2h  │  │
+│  │ 16 页 · professional · 53s            │  │
+│  └───────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────┐  │
+│  │ ⟳ 正在生成 16 页...            1m   │  │  ← 旋转图标
+│  │ 进度 5/16                             │  │
+│  └───────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────┐  │
+│  │ ✗ Chat → PPT 失败              10m  │  │
+│  │ ⚠ Server restarted                   │  │
+│  └───────────────────────────────────────┘  │
+└─────────────────────────────────────────────┘
+```
+
+**轮询策略**：5s 间隔，简单可靠：
+
+```typescript
+useEffect(() => {
+  let mounted = true;
+  const fetchTasks = async () => {
+    const { tasks } = await listTasks(50, filter === 'all' ? undefined : filter);
+    if (mounted) setTasks(tasks);
+  };
+  fetchTasks();
+  const i = setInterval(fetchTasks, 5000);
+  return () => { mounted = false; clearInterval(i); };
+}, [filter]);
+```
+
+#### 12.7.4 PPTGenerator 恢复流程
+
+```typescript
+// useEffect 监听 taskId 变化（URL hash 变化触发）
+useEffect(() => {
+  if (!taskId) {
+    // 初始态：清空一切，回到 input step
+    setStep('input');
+    setPresentation(null);
+    setOutline(null);
+    return;
+  }
+  
+  setIsLoading(true);
+  getTask(taskId).then(task => {
+    if (task.status === 'done' && task.presentation) {
+      setPresentation(task.presentation);
+      setStep('preview');
+      setIsLoading(false);
+    } else if (task.status === 'running') {
+      // 重连 SSE
+      sseControllerRef.current = streamPresentation(taskId, {
+        onSlideStart, onSlideDone, onSlideError, onDone, onError
+      });
+    } else if (task.status === 'error') {
+      setError(task.error || '任务失败');
+      setIsLoading(false);
+    }
+  });
+  
+  return () => sseControllerRef.current?.abort();
+}, [taskId]);
+```
+
+**`handleGenerateContent` 改动**：
+
+```typescript
+const { task_id } = await generatePresentationAsync(outline, themeName, language);
+setTaskId(task_id);  // ← 写 URL hash，触发恢复逻辑
+// 不再本地调 streamPresentation，由 taskId useEffect 统一管理
+```
+
+**`handleExit` 改动**：
+
+```typescript
+setTaskId(null);  // 清 URL hash
+onExit();
+```
+
+### 12.8 SSE 重连策略（v0.5 新增）
+
+**问题**：frps 60s 切断后，前端需重连继续收事件。
+
+**方案**：指数退避重连，最多 5 次后转 `onError` 让用户手动重连。
+
+```typescript
+export function streamPresentation(taskId, callbacks): AbortController {
+  let controller = new AbortController();
+  let stopped = false;
+  let backoff = 1000;  // 1s
+  let receivedDone = false;
+  
+  async function connect() {
+    while (!stopped && !receivedDone) {
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const reader = response.body!.getReader();
+        // 解析循环（解析到 done 时 set receivedDone = true）
+        // ...
+        
+        backoff = 1000;  // 成功后重置
+      } catch (e) {
+        if (e.name === 'AbortError' || stopped) return;
+        
+        callbacks.onError?.({
+          type: 'error',
+          error: `连接中断，${backoff/1000}s 后重连...`
+        });
+        
+        await sleep(backoff);
+        backoff = Math.min(backoff * 2, 8000);  // 1→2→4→8s 上限
+      }
+    }
+  }
+  
+  connect();
+  return {
+    abort: () => { stopped = true; controller.abort(); }
+  };
+}
+```
+
+**用户体验**：
+- 60s 断流 → 1s 后自动重连
+- 再断 → 2s → 4s → 8s
+- 5 次后 → 显示"连接持续中断，请稍后查看结果"
+- 用户可在 sidebar 看到 task 状态，done 后点 sidebar 重新加载
+
+### 12.9 30 天清理策略
+
+**位置**：FastAPI `@app.on_event("startup")` 中启动后台任务。
+
+```python
+# routes.py
+@app.on_event("startup")
+async def _start_ppt_cleanup():
+    # 1. 标记 server 重启前的 running 任务为 error
+    for row in agent_service.db.list_ppt_tasks(limit=1000):
+        if row["status"] in ("pending", "running"):
+            agent_service.db.update_ppt_task_status(
+                row["id"], "error", "Server restarted"
+            )
+    
+    # 2. 启动 24h 周期清理
+    async def _cleanup_loop():
+        while True:
+            try:
+                await asyncio.sleep(86400)  # 24h
+                agent_service.db.cleanup_old_ppt_tasks(days=30)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"PPT cleanup error: {e}")
+    
+    asyncio.create_task(_cleanup_loop())
+```
+
+**`core.py` shutdown 中**：cancel cleanup loop task。
+
+### 12.10 文件改动清单
+
+| 文件 | 类型 | 改动 |
+|------|------|------|
+| `agent/backend/db.py` | 改 | 加 `ppt_tasks` 表 + 8 个 CRUD 方法 |
+| `ppt/task_manager.py` | 改 | 注入 DB，状态镜像 |
+| `ppt/engine.py` | 改 | 增量写 `presentation_json` |
+| `routes/ppt.py` | 改 | 加 list/delete 端点 |
+| `routes.py` + `core.py` | 改 | startup hook + 清理 |
+| `webui-agent/src/lib/useUrlTask.ts` | **NEW** | URL hash hook |
+| `webui-agent/src/lib/ppt-api.ts` | 改 | 加 listTasks/getTask/deleteTask + SSE 重连 |
+| `webui-agent/src/components/PPTSidebar.tsx` | **NEW** | 侧边栏组件 |
+| `webui-agent/src/components/PPTGenerator.tsx` | 改 | 集成 sidebar + 恢复逻辑 |
+
+**`App.tsx` 不动** — sidebar 内嵌在 PPTGenerator 中，状态通过 URL hash 通信。
+
+### 12.11 风险与权衡
+
+| 风险 | 缓解 |
+|------|------|
+| DB 写阻塞 event loop | sync sqlite3 ~5ms 可接受；>50 slide 任务再考虑异步化 |
+| SSE 重连风暴 | 退避上限 8s，最多 5 次后转 `onError` |
+| URL hash 误改 | hashchange listener 兜底；不依赖 React state 唯一性 |
+| Sidebar 轮询流量 | 5s × 50 tasks × ~1KB = 10KB/s，可接受 |
+| Server 重启丢失 in-progress 任务 | DB 标记为 `error: "Server restarted"`，sidebar 仍可见 |
+| 30 天清理误删 | 用户可手动 export `.pptx` 备份；删除只影响 DB 记录 |
+
+### 12.12 不在 v0.5 范围
+
+- ❌ frps 60s 真正修复（应用层 SSE 重连已覆盖体验）
+- ❌ SSE 推送 sidebar 增量更新（5s 轮询已够用）
+- ❌ 任务重命名 / 标签 / 全文搜索（Phase 4）
+- ❌ 任务 export 历史 / 版本管理（Phase 4）
+- ❌ 多用户协作（不在 PPT Generator 路线图）
