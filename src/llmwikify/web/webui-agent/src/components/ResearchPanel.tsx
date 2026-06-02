@@ -279,7 +279,7 @@ function EmptyState({ onExample }: { onExample: (q: string) => void }) {
       <div className="text-4xl mb-4 opacity-30">🔍</div>
       <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-2">No research sessions yet</h3>
       <p className="text-xs text-[var(--text-secondary)] opacity-60 mb-4 max-w-xs">
-        Start a deep research to explore any topic with multi-source analysis
+        Start a quick research to explore any topic with multi-source analysis
       </p>
       <div className="space-y-2">
         <div className="text-[10px] text-[var(--text-secondary)] opacity-40 mb-1">Try:</div>
