@@ -1,16 +1,16 @@
 """FastAPI route definitions - unified single and multi-wiki mode."""
 
 from __future__ import annotations
-
 import logging
 from pathlib import Path
 from typing import Any
-
 from fastapi import APIRouter, FastAPI, Request, HTTPException, Depends
-
 from llmwikify.core import Wiki
 from llmwikify.core.wiki_instance import WikiType
 from llmwikify.core.wiki_registry import WikiRegistry
+
+logger = logging.getLogger(__name__)
+
 
 
 def register_routes(
@@ -520,7 +520,60 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     app.include_router(research_router)
     app.include_router(ppt_router)
 
+    # v0.5: PPT task cleanup + recovery startup hook
+    _start_ppt_cleanup_hook(app, agent_service.db)
+
     _mount_agent_spa(app)
+
+
+def _start_ppt_cleanup_hook(app: FastAPI, db: Any) -> None:
+    """Mark orphaned running tasks as error + start 24h cleanup loop (v0.5)."""
+    import asyncio
+
+    cleanup_task: asyncio.Task | None = None
+
+    @app.on_event("startup")
+    async def _ppt_startup():
+        nonlocal cleanup_task
+        # 1. Mark server-restart-orphaned tasks as error
+        try:
+            orphaned = 0
+            for row in db.list_ppt_tasks(limit=1000):
+                if row["status"] in ("pending", "running"):
+                    db.update_ppt_task_status(
+                        row["id"], "error", "Server restarted",
+                    )
+                    orphaned += 1
+            if orphaned:
+                logger.info("Marked %d orphaned PPT tasks as error on startup", orphaned)
+        except Exception as e:
+            logger.error("Failed to mark orphaned PPT tasks: %s", e, exc_info=True)
+
+        # 2. Start periodic cleanup
+        async def _cleanup_loop():
+            while True:
+                try:
+                    await asyncio.sleep(86400)  # 24h
+                    deleted = db.cleanup_old_ppt_tasks(days=30)
+                    if deleted:
+                        logger.info("Cleaned up %d old PPT tasks (>30 days)", deleted)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error("PPT cleanup error: %s", e, exc_info=True)
+
+        cleanup_task = asyncio.create_task(_cleanup_loop())
+        logger.info("PPT cleanup loop started (30-day retention)")
+
+    @app.on_event("shutdown")
+    async def _ppt_shutdown():
+        if cleanup_task and not cleanup_task.done():
+            cleanup_task.cancel()
+            try:
+                await cleanup_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("PPT cleanup loop stopped")
 
 
 def _mount_agent_spa(app: FastAPI) -> None:

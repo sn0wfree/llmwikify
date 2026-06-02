@@ -18,7 +18,7 @@ from ..ppt.schema import (
     GenerateRequest,
     OutlineRequest,
 )
-from ..ppt.task_manager import get_ppt_task_manager
+from ..ppt.task_manager import get_ppt_task_manager, init_ppt_task_manager
 from ..ppt.themes import list_themes
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,8 @@ def set_ppt_deps(db: AgentDatabase, wiki_registry: Any, llm_client: Any, config:
     _WIKI_REGISTRY = wiki_registry
     _LLM_CLIENT = llm_client
     _PPT_CONFIG = config
+    # v0.5: Initialize DB-backed task manager singleton
+    init_ppt_task_manager(db)
 
 
 def _get_db() -> AgentDatabase:
@@ -84,12 +86,26 @@ async def generate_outline(request: OutlineRequest):
 
 async def _run_ppt_generation(
     task_id: str,
+    db: Any,
     queue: Any,
-    request: GenerateRequest,
+    outline: Any,
+    theme: str,
+    language: str = "zh",
 ) -> dict:
-    """Background task: generate PPT content, pushing events to queue."""
+    """Background task: generate PPT content, pushing events to queue.
+
+    v0.5 signature: (task_id, db, queue, outline, theme, language) — matches
+    the new task_manager._run_task contract that passes db and parsed args.
+    """
     engine = _get_engine()
-    return await engine.generate_content_stream(request, queue)
+    # Reconstruct GenerateRequest from outline + theme
+    from ..ppt.schema import GenerateRequest
+    request = GenerateRequest(
+        outline=outline,
+        theme=theme,
+        language=language,
+    )
+    return await engine.generate_content_stream(request, queue, db=db, task_id=task_id)
 
 
 @router.post("/generate")
@@ -102,7 +118,13 @@ async def generate_presentation(request: GenerateRequest):
     task_mgr = get_ppt_task_manager()
     task_id = task_mgr.create_task(
         _run_ppt_generation,
-        request,
+        title=request.outline.title,
+        theme=request.theme,
+        source_type=request.source_type or "topic",
+        source_id=request.source_id,
+        outline=request.outline,
+        language=request.language,
+        slide_count=len(request.outline.pages),
     )
     return JSONResponse(
         {"task_id": task_id, "status": "processing"},
@@ -112,7 +134,7 @@ async def generate_presentation(request: GenerateRequest):
 
 @router.get("/task/{task_id}")
 async def get_task_status(task_id: str):
-    """Poll task status (fallback if SSE not available)."""
+    """Poll task status. Reads from DB (covers past tasks)."""
     task_mgr = get_ppt_task_manager()
     return task_mgr.get_status(task_id)
 
@@ -138,6 +160,37 @@ async def stream_task_events(task_id: str):
             }
 
     return EventSourceResponse(event_generator())
+
+
+# ─── Task List / Delete (v0.5) ──────────────────────────────────────
+
+@router.get("/tasks")
+async def list_tasks(limit: int = 50, source_type: str | None = None):
+    """List past PPT tasks for the sidebar.
+
+    Args:
+        limit: Max number of tasks to return (default 50).
+        source_type: Filter by source — 'topic' | 'research' | 'chat'.
+
+    Returns:
+        {tasks: [...]} ordered by updated_at DESC.
+    """
+    task_mgr = get_ppt_task_manager()
+    tasks = task_mgr.list_tasks(limit=limit, source_type=source_type)
+    return {"tasks": tasks}
+
+
+@router.delete("/task/{task_id}")
+async def delete_task(task_id: str):
+    """Delete a PPT task (DB row + in-memory state)."""
+    task_mgr = get_ppt_task_manager()
+    ok = task_mgr.delete_task(task_id)
+    if not ok:
+        return JSONResponse(
+            {"error": "Task not found"},
+            status_code=404,
+        )
+    return {"ok": True}
 
 
 # ─── From Research ────────────────────────────────────────────────────

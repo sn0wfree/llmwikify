@@ -230,10 +230,16 @@ export type PPTStreamEvent = SlideStartEvent | SlideDoneEvent | SlideErrorEvent 
 export async function generatePresentationAsync(
   outline: Outline,
   theme: string = 'professional',
-  language: string = 'zh'
+  language: string = 'zh',
+  sourceType?: string,
+  sourceId?: string,
 ): Promise<{ task_id: string }> {
   const endpoint = `${API_BASE}/generate`;
-  const reqBody = JSON.stringify({ outline, theme, language });
+  const reqBody = JSON.stringify({
+    outline, theme, language,
+    source_type: sourceType,
+    source_id: sourceId,
+  });
   const response = await fetchWithRetry(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -245,7 +251,14 @@ export async function generatePresentationAsync(
 
 /**
  * SSE stream of PPT generation progress.
- * Calls callbacks as slides are generated. Returns final presentation.
+ *
+ * v0.5: Adds automatic reconnect with exponential backoff (1s -> 2s -> 4s -> 8s,
+ * capped at 8s) to survive transient disconnects (e.g., frps 60s timeout).
+ * Stops reconnecting after 5 failed attempts, surfacing the error to the caller.
+ * Stops immediately when:
+ *   - the 'done' event is received
+ *   - the AbortController is aborted
+ *   - 5 consecutive reconnects fail
  */
 export function streamPresentation(
   taskId: string,
@@ -255,82 +268,124 @@ export function streamPresentation(
     onSlideError?: (event: SlideErrorEvent) => void;
     onDone?: (event: DoneEvent) => void;
     onError?: (event: ErrorEvent) => void;
+    onReconnecting?: (attempt: number, nextDelayMs: number) => void;
   },
 ): AbortController {
   const controller = new AbortController();
   const url = `${API_BASE}/task/${taskId}/stream`;
+  let stopped = false;
+  let receivedDone = false;
+  let backoff = 1000;
+  const MAX_RECONNECTS = 5;
+  let reconnectAttempts = 0;
 
-  (async () => {
-    try {
-      const response = await fetch(url, { signal: controller.signal });
-      if (!response.ok) {
-        const text = await response.text();
-        callbacks.onError?.({ type: 'error', error: `SSE connection failed (${response.status}): ${text}` });
-        return;
-      }
+  function sleep(ms: number): Promise<void> {
+    return new Promise((r) => setTimeout(r, ms));
+  }
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        callbacks.onError?.({ type: 'error', error: 'No response body' });
-        return;
-      }
+  async function connect(): Promise<void> {
+    while (!stopped && !receivedDone) {
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`SSE connection failed (${response.status}): ${text}`);
+        }
 
-      const decoder = new TextDecoder();
-      let buffer = '';
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('No response body');
+        }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        // Reset backoff on successful connect
+        backoff = 1000;
+        reconnectAttempts = 0;
 
-        let eventType = '';
-        let eventData = '';
+        while (!stopped && !receivedDone) {
+          const { done, value } = await reader.read();
+          if (done) {
+            // Stream ended without 'done' event — likely a network drop
+            throw new Error('SSE stream ended unexpectedly');
+          }
 
-        for (const line of lines) {
-          if (line.startsWith('event:')) {
-            eventType = line.slice(6).trim();
-          } else if (line.startsWith('data:')) {
-            eventData = line.slice(5).trim();
-          } else if (line === '' && eventData) {
-            // Empty line = end of SSE message
-            try {
-              const parsed = JSON.parse(eventData);
-              switch (parsed.type) {
-                case 'slide_start':
-                  callbacks.onSlideStart?.(parsed as SlideStartEvent);
-                  break;
-                case 'slide_done':
-                  callbacks.onSlideDone?.(parsed as SlideDoneEvent);
-                  break;
-                case 'slide_error':
-                  callbacks.onSlideError?.(parsed as SlideErrorEvent);
-                  break;
-                case 'done':
-                  callbacks.onDone?.(parsed as DoneEvent);
-                  break;
-                case 'error':
-                  callbacks.onError?.(parsed as ErrorEvent);
-                  break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          let eventType = '';
+          let eventData = '';
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              eventType = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              eventData = line.slice(5).trim();
+            } else if (line === '' && eventData) {
+              try {
+                const parsed = JSON.parse(eventData);
+                switch (parsed.type) {
+                  case 'slide_start':
+                    callbacks.onSlideStart?.(parsed as SlideStartEvent);
+                    break;
+                  case 'slide_done':
+                    callbacks.onSlideDone?.(parsed as SlideDoneEvent);
+                    break;
+                  case 'slide_error':
+                    callbacks.onSlideError?.(parsed as SlideErrorEvent);
+                    break;
+                  case 'done':
+                    receivedDone = true;
+                    callbacks.onDone?.(parsed as DoneEvent);
+                    return; // Exit the connect loop
+                  case 'error':
+                    callbacks.onError?.(parsed as ErrorEvent);
+                    break;
+                }
+              } catch {
+                // Skip unparseable events
               }
-            } catch {
-              // Skip unparseable events
+              eventType = '';
+              eventData = '';
             }
-            eventType = '';
-            eventData = '';
           }
         }
-      }
-    } catch (e) {
-      if ((e as Error).name !== 'AbortError') {
-        callbacks.onError?.({ type: 'error', error: e instanceof Error ? e.message : String(e) });
+        return; // Normal exit (stopped or done)
+      } catch (e) {
+        if (stopped || (e as Error).name === 'AbortError') return;
+        if (receivedDone) return;
+
+        reconnectAttempts += 1;
+        if (reconnectAttempts > MAX_RECONNECTS) {
+          callbacks.onError?.({
+            type: 'error',
+            error: `Connection failed ${MAX_RECONNECTS} times. Task may still be running on the server — check the sidebar.`,
+          });
+          return;
+        }
+
+        callbacks.onReconnecting?.(reconnectAttempts, backoff);
+        await sleep(backoff);
+        backoff = Math.min(backoff * 2, 8000);
       }
     }
-  })();
+  }
 
-  return controller;
+  // Start the connect loop without blocking
+  connect().catch((e) => {
+    if (!stopped) {
+      callbacks.onError?.({ type: 'error', error: String(e) });
+    }
+  });
+
+  return {
+    abort: () => {
+      stopped = true;
+      controller.abort();
+    },
+  } as AbortController;
 }
 
 /**
@@ -378,6 +433,77 @@ export async function getThemes(): Promise<ThemesResponse> {
   return response.json();
 }
 
+// ─── Task List / Get / Delete (v0.5) ─────────────────────────────
+
+export type TaskStatus = 'pending' | 'running' | 'done' | 'error';
+export type SourceType = 'topic' | 'research' | 'chat';
+
+export interface PPTTaskSummary {
+  id: string;
+  title: string | null;
+  subtitle: string | null;
+  theme: string;
+  source_type: SourceType | null;
+  source_id: string | null;
+  status: TaskStatus;
+  error: string | null;
+  slide_count: number;
+  model_used: string | null;
+  generation_time_ms: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListTasksResponse {
+  tasks: PPTTaskSummary[];
+}
+
+export interface GetTaskResponse {
+  task_id: string;
+  status: TaskStatus;
+  presentation?: { presentation: Presentation };
+  error?: string;
+}
+
+/**
+ * List past PPT tasks for the sidebar.
+ * @param limit Max tasks to return (default 50)
+ * @param sourceType Optional filter — 'topic' | 'research' | 'chat'
+ */
+export async function listTasks(
+  limit: number = 50,
+  sourceType?: SourceType,
+): Promise<ListTasksResponse> {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  if (sourceType) params.set('source_type', sourceType);
+  const endpoint = `${API_BASE}/tasks?${params.toString()}`;
+  const response = await fetchWithRetry(endpoint, { method: 'GET' }, 'GET');
+  return response.json();
+}
+
+/**
+ * Get a single task by ID (includes presentation if done).
+ * Used for refresh recovery and for clicking a sidebar item.
+ */
+export async function getTask(taskId: string): Promise<GetTaskResponse> {
+  const endpoint = `${API_BASE}/task/${taskId}`;
+  const response = await fetchWithRetry(endpoint, { method: 'GET' }, 'GET');
+  return response.json();
+}
+
+/**
+ * Delete a task. Removes the DB row and any in-memory state.
+ * Use when user clicks the × button on a sidebar item.
+ */
+export async function deleteTask(taskId: string): Promise<{ ok: boolean }> {
+  const endpoint = `${API_BASE}/task/${taskId}`;
+  const response = await fetchWithRetry(
+    endpoint, { method: 'DELETE' }, 'DELETE',
+  );
+  return response.json();
+}
+
 export default {
   generateOutline,
   generatePresentation,
@@ -386,4 +512,7 @@ export default {
   generateFromResearch,
   generateFromChat,
   getThemes,
+  listTasks,
+  getTask,
+  deleteTask,
 };
