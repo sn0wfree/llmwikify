@@ -94,19 +94,13 @@ export interface Outline {
   pages: OutlinePage[];
 }
 
-export interface ThemeColors {
-  primary: string;
-  secondary: string;
-  background: string;
-  text: string;
-  accent: string;
-}
-
-export interface Theme {
-  name: string;
-  label: string;
-  colors: ThemeColors;
-}
+// v0.6.1: Re-export the comprehensive Theme from ppt-themes.ts so we
+// have a single source of truth for the type. The legacy Theme/ThemeColors
+// interfaces defined here are kept for backward compatibility (they're
+// structurally identical to the .colors subset of the new Theme).
+export type { Theme, ThemeCategory } from './ppt-themes';
+export { CATEGORY_LABELS, CATEGORY_ORDER, LEGACY_ALIASES, THEMES } from './ppt-themes';
+import type { Theme } from './ppt-themes';
 
 export interface SlideContent {
   id: string;
