@@ -1077,6 +1077,9 @@ export function ResearchPanel() {
                         {!s.wiki_page_name && (
                           <button onClick={() => { setSaveModalSessionId(s.id); setSaveModalQuery(s.query); }} className="text-xs text-purple-400 hover:underline">Save to Wiki</button>
                         )}
+                        {s.status === 'done' && (
+                          <button onClick={() => window.open(`/agent/#ppt?research=${s.id}`, '_blank')} className="text-xs text-blue-400 hover:underline">导出为 PPT</button>
+                        )}
                       </>
                     )}
                     {(s.status === 'paused' || s.status === 'pausing' || s.status === 'gathering') && (
