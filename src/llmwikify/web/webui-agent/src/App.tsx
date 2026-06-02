@@ -14,6 +14,7 @@ import { useAgentWikiStore } from './stores/agentWikiStore';
 import { api } from './api';
 import { Card } from './components/ui/Card';
 import { Badge } from './components/ui/Badge';
+import { Backdrop } from './components/Backdrop';
 
 type ViewMode = 'chat' | 'research' | 'ppt' | 'tasks' | 'confirmations' | 'proposals' | 'dream' | 'ingest' | 'history' | 'settings';
 
@@ -123,6 +124,7 @@ function App() {
       </aside>
 
       <main className="flex-1 flex flex-col overflow-hidden">
+        <Backdrop />
         <div className="flex-1 overflow-hidden">
           {view === 'chat' && <AgentChat onExportToPpt={handleExportToPpt} />}
           {view === 'research' && <ResearchPanel onExportToPpt={handleExportToPpt} />}
