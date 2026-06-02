@@ -541,7 +541,7 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
   );
 }
 
-export function ResearchPanel() {
+export function ResearchPanel({ onExportToPpt }: { onExportToPpt?: (type: 'research' | 'chat', id: string) => void }) {
   const { currentWikiId } = useAgentWikiStore();
   const [sessions, setSessions] = useState<ResearchSession[]>([]);
   const [query, setQuery] = useState('');
@@ -1080,7 +1080,7 @@ export function ResearchPanel() {
                           <button onClick={() => { setSaveModalSessionId(s.id); setSaveModalQuery(s.query); }} className="text-xs text-purple-400 hover:underline">Save to Wiki</button>
                         )}
                         {s.status === 'done' && (
-                          <button onClick={() => window.open(`/agent/#ppt?research=${s.id}`, '_blank')} className="text-xs text-blue-400 hover:underline">导出为 PPT</button>
+                          <button onClick={() => onExportToPpt?.('research', s.id)} className="text-xs text-blue-400 hover:underline">导出为 PPT</button>
                         )}
                       </>
                     )}
