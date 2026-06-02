@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { chatStream, ChatStreamEvent, api } from '../api';
 import { useToast } from './Toast';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
@@ -9,6 +9,7 @@ import { ToolCard } from './ui/ToolCard';
 import { Input } from './ui/Input';
 import { Panel } from './ui/Panel';
 import { SessionSidebar } from './SessionSidebar';
+import { ToolsRail } from './ToolsRail';
 import { ConfirmationModal } from './ConfirmationModal';
 
 interface Message {
@@ -75,6 +76,7 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
   const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [showRail, setShowRail] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
   const [confirmingLoading, setConfirmingLoading] = useState(false);
   const [modelName, setModelName] = useState<string>('');
@@ -415,10 +417,17 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
                 )}
                 <button
                   onClick={() => setShowSidebar(!showSidebar)}
-                  className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors p-1 rounded hover:bg-[var(--bg-tertiary)]/40"
+                  className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors p-1 rounded hover:bg-[var(--bg-tertiary)]/40 hidden md:inline-flex"
                   title={showSidebar ? 'Hide session sidebar' : 'Show session sidebar'}
                 >
                   {showSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={() => setShowRail(!showRail)}
+                  className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors p-1 rounded hover:bg-[var(--bg-tertiary)]/40 hidden lg:inline-flex"
+                  title={showRail ? 'Hide tools rail' : 'Show tools rail'}
+                >
+                  {showRail ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -501,6 +510,17 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
             </form>
           </Panel>
         </div>
+
+        {showRail && (
+          <ToolsRail
+            messages={messages}
+            currentToolCalls={currentToolCalls}
+            modelName={modelName}
+            connectionState={connectionState}
+            sessionId={currentSessionId}
+            tokenEstimate={tokenEstimate}
+          />
+        )}
       </div>
     </div>
   );
