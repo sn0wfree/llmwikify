@@ -449,11 +449,12 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
         config=research_config,
     )
     
+    # PPT config - currently no PPT-specific config, pass None
     set_ppt_deps(
         db=agent_service.db,
         wiki_registry=registry,
         llm_client=None,
-        config=research_config,
+        config=None,
     )
     app.include_router(agent_router)
     app.include_router(research_router)

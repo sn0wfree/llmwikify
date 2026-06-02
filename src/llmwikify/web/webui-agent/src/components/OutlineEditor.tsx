@@ -64,9 +64,9 @@ export function OutlineEditor({ outline, onUpdate, onGenerate, isLoading }: Outl
 
   const removePage = (index: number) => {
     if (outline.pages.length <= 1) return;
-    const newPages = outline.pages.filter((_, i) => i !== index);
-    // Re-number pages
-    newPages.forEach((p, i) => (p.page = i + 1));
+    const newPages = outline.pages
+      .filter((_, i) => i !== index)
+      .map((p, i) => ({ ...p, page: i + 1 }));
     onUpdate({ ...outline, pages: newPages });
   };
 
@@ -79,9 +79,9 @@ export function OutlineEditor({ outline, onUpdate, onGenerate, isLoading }: Outl
     newPages[index] = newPages[newIndex];
     newPages[newIndex] = temp;
     
-    // Re-number pages
-    newPages.forEach((p, i) => (p.page = i + 1));
-    onUpdate({ ...outline, pages: newPages });
+    // Re-number pages with new objects
+    const renumbered = newPages.map((p, i) => ({ ...p, page: i + 1 }));
+    onUpdate({ ...outline, pages: renumbered });
   };
 
   return (

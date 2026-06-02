@@ -3,8 +3,8 @@
  * Handles the complete workflow: input → outline → content → preview → export
  */
 
-import React, { useState } from 'react';
-import { Outline, Presentation, SlideContent, generateOutline, generatePresentation } from '../lib/ppt-api';
+import React, { useState, useEffect } from 'react';
+import { Outline, Presentation, SlideContent, generateOutline, generatePresentation, generateFromResearch, generateFromChat } from '../lib/ppt-api';
 import { getTheme, Theme } from '../lib/ppt-themes';
 import { exportToPptx } from '../lib/ppt-export';
 import { OutlineEditor } from './OutlineEditor';
@@ -27,6 +27,51 @@ export function PPTGenerator() {
   const [error, setError] = useState<string | null>(null);
 
   const theme = getTheme(themeName);
+
+  // Handle URL parameters for research/chat import
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const researchId = params.get('research');
+    const chatId = params.get('chat');
+    
+    if (researchId) {
+      handleFromResearch(researchId);
+    } else if (chatId) {
+      handleFromChat(chatId);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Generate outline from research
+  const handleFromResearch = async (researchId: string) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await generateFromResearch(researchId, themeName, language);
+      setOutline(response.outline);
+      setStep('outline');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load from research');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Generate outline from chat
+  const handleFromChat = async (chatId: string) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await generateFromChat(chatId, themeName, language);
+      setOutline(response.outline);
+      setStep('outline');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load from chat');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Step 1: Generate Outline
   const handleGenerateOutline = async () => {

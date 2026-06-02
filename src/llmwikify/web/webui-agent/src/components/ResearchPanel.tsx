@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { api, type ResearchSession, type ResearchStreamEvent, type ResearchSubQuery } from '../api';
+import { api, type ResearchSession, type ResearchStreamEvent, type ResearchSubQuery, type ResearchReport } from '../api';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { ResearchDetail } from './ResearchDetail';
 import { ReportDetail } from './ReportDetail';
@@ -21,6 +21,8 @@ interface ActiveResearch {
   report: ResearchReport | null;
   events: string[];
   latestEvent?: string;
+  phase?: string;
+  issues?: string[];
 }
 
 const STAGES = ['planning', 'gathering', 'analyzing', 'synthesizing', 'report', 'reviewing', 'done'];

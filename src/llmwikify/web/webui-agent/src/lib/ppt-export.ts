@@ -13,6 +13,22 @@ export interface PresentationData {
   slides: SlideContent[];
 }
 
+/**
+ * Lighten a hex color by mixing with white
+ */
+function lightenColor(hex: string, factor: number = 0.85): string {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+  
+  const lr = Math.round(r + (255 - r) * factor);
+  const lg = Math.round(g + (255 - g) * factor);
+  const lb = Math.round(b + (255 - b) * factor);
+  
+  return `${lr.toString(16).padStart(2, '0')}${lg.toString(16).padStart(2, '0')}${lb.toString(16).padStart(2, '0')}`;
+}
+
 export async function exportToPptx(presentation: PresentationData): Promise<void> {
   const pptx = new PptxGenJS();
   
@@ -240,7 +256,7 @@ function renderTwoColumnSlide(slide: any, data: SlideContent, theme: Theme) {
       y: 1.3,
       w: 4.2,
       h: 4.5,
-      fill: { color: theme.colors.primary.replace('#', ''), type: 'solid' },
+      fill: { color: lightenColor(theme.colors.primary), type: 'solid' },
       rectRadius: 0.1,
     });
     
@@ -251,7 +267,7 @@ function renderTwoColumnSlide(slide: any, data: SlideContent, theme: Theme) {
       h: 0.5,
       fontSize: 16,
       fontFace: 'Arial',
-      color: 'FFFFFF',
+      color: theme.colors.primary.replace('#', ''),
       bold: true,
     });
     
@@ -261,7 +277,7 @@ function renderTwoColumnSlide(slide: any, data: SlideContent, theme: Theme) {
         options: {
           fontSize: 12,
           fontFace: 'Arial',
-          color: 'FFFFFF',
+          color: theme.colors.text.replace('#', ''),
           breakType: 'none' as const,
         },
       }));
@@ -283,7 +299,7 @@ function renderTwoColumnSlide(slide: any, data: SlideContent, theme: Theme) {
       y: 1.3,
       w: 4.2,
       h: 4.5,
-      fill: { color: theme.colors.accent.replace('#', ''), type: 'solid' },
+      fill: { color: lightenColor(theme.colors.accent), type: 'solid' },
       rectRadius: 0.1,
     });
     
@@ -294,7 +310,7 @@ function renderTwoColumnSlide(slide: any, data: SlideContent, theme: Theme) {
       h: 0.5,
       fontSize: 16,
       fontFace: 'Arial',
-      color: 'FFFFFF',
+      color: theme.colors.accent.replace('#', ''),
       bold: true,
     });
     
@@ -304,7 +320,7 @@ function renderTwoColumnSlide(slide: any, data: SlideContent, theme: Theme) {
         options: {
           fontSize: 12,
           fontFace: 'Arial',
-          color: 'FFFFFF',
+          color: theme.colors.text.replace('#', ''),
           breakType: 'none' as const,
         },
       }));
