@@ -39,13 +39,19 @@ function LazyWrapper({ children }: { children: React.ReactNode }) {
 function App() {
   const [view, setView] = useState<ViewMode>('chat');
   const [pptSource, setPptSource] = useState<PptSource | null>(null);
+  const [pptReturnView, setPptReturnView] = useState<ViewMode>('research');
   const [badges, setBadges] = useState<BadgeCounts>({ confirmations: 0, proposals: 0, notifications: 0 });
   const { loadWikis, currentWikiId } = useAgentWikiStore();
 
   const handleExportToPpt = useCallback((type: 'research' | 'chat', id: string) => {
+    setPptReturnView(type === 'research' ? 'research' : 'chat');
     setPptSource({ type, id });
     setView('ppt');
   }, []);
+
+  const handlePptExit = useCallback(() => {
+    setView(pptReturnView);
+  }, [pptReturnView]);
 
   useEffect(() => {
     loadWikis();
@@ -120,7 +126,7 @@ function App() {
         <div className="flex-1 overflow-hidden">
           {view === 'chat' && <AgentChat onExportToPpt={handleExportToPpt} />}
           {view === 'research' && <ResearchPanel onExportToPpt={handleExportToPpt} />}
-          {view === 'ppt' && <PPTGenerator source={pptSource} onSourceConsumed={() => setPptSource(null)} />}
+          {view === 'ppt' && <PPTGenerator source={pptSource} onSourceConsumed={() => setPptSource(null)} onExit={handlePptExit} />}
           {view === 'tasks' && <LazyWrapper><TaskMonitor /></LazyWrapper>}
           {view === 'confirmations' && <LazyWrapper><Confirmations /></LazyWrapper>}
           {view === 'proposals' && <LazyWrapper><DreamProposals /></LazyWrapper>}
