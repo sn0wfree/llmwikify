@@ -1,4 +1,22 @@
 import { useState } from 'react';
+import {
+  Search,
+  FileText,
+  Pencil,
+  FileEdit,
+  FilePlus,
+  Trash2,
+  Brain,
+  Link2,
+  AlertTriangle,
+  Wrench,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  ChevronDown,
+  ChevronRight,
+  Hash,
+} from 'lucide-react';
 import { Badge } from './Badge';
 
 type ToolStatus = 'pending' | 'streaming' | 'done' | 'error';
@@ -11,11 +29,30 @@ interface ToolCardProps {
   error?: string;
 }
 
+const TOOL_ICONS: Record<string, typeof Wrench> = {
+  wiki_search: Search,
+  wiki_read_page: FileText,
+  wiki_write_page: Pencil,
+  wiki_edit_page: FileEdit,
+  wiki_create_page: FilePlus,
+  wiki_delete_page: Trash2,
+  wiki_analyze_source: Brain,
+  wiki_suggest_synthesis: Link2,
+  confirmation_required: AlertTriangle,
+};
+
+const STATUS_ICON: Record<ToolStatus, typeof Loader2> = {
+  pending: Loader2,
+  streaming: Loader2,
+  done: CheckCircle2,
+  error: XCircle,
+};
+
 const statusColorMap: Record<ToolStatus, string> = {
-  pending: 'border-yellow-500',
-  streaming: 'border-blue-500',
-  done: 'border-green-500',
-  error: 'border-red-500',
+  pending: 'border-yellow-500/50',
+  streaming: 'border-blue-500/50',
+  done: 'border-green-500/50',
+  error: 'border-red-500/50',
 };
 
 const statusBadgeVariant: Record<ToolStatus, 'default' | 'success' | 'warning' | 'error' | 'info'> = {
@@ -32,26 +69,14 @@ const statusText: Record<ToolStatus, string> = {
   error: 'error',
 };
 
-const TOOL_ICONS: Record<string, string> = {
-  wiki_search: '🔍',
-  wiki_read_page: '📄',
-  wiki_write_page: '✏️',
-  wiki_edit_page: '📝',
-  wiki_create_page: '🆕',
-  wiki_delete_page: '🗑️',
-  wiki_analyze_source: '🧠',
-  wiki_suggest_synthesis: '🔗',
-  confirmation_required: '⚠️',
-};
-
-function getToolIcon(tool: string): string {
-  return TOOL_ICONS[tool] || '⚙️';
+function getToolIcon(tool: string) {
+  return TOOL_ICONS[tool] ?? Wrench;
 }
 
-function truncateJson(obj: unknown, maxLen = 300): string {
+function truncateJson(obj: unknown, maxLen = 200): string {
   const str = JSON.stringify(obj, null, 2);
   if (str.length <= maxLen) return str;
-  return str.slice(0, maxLen) + '...\n}';
+  return str.slice(0, maxLen) + '…';
 }
 
 export function ToolCard({ tool, args, status, result, error }: ToolCardProps) {
@@ -59,78 +84,96 @@ export function ToolCard({ tool, args, status, result, error }: ToolCardProps) {
   const [resultExpanded, setResultExpanded] = useState(false);
 
   const argsStr = JSON.stringify(args, null, 2);
-  const argsTruncated = argsStr.length > 300;
-  const argsDisplay = argsExpanded || !argsTruncated ? argsStr : argsStr.slice(0, 300) + '\n...';
+  const argsTruncated = argsStr.length > 200;
+  const argsDisplay = argsExpanded || !argsTruncated ? argsStr : truncateJson(args, 200);
 
   const resultStr = result != null ? JSON.stringify(result, null, 2) : '';
   const resultTruncated = resultStr.length > 200;
-  const resultDisplay = resultExpanded || !resultTruncated ? resultStr : resultStr.slice(0, 200) + '\n...';
+  const resultDisplay = resultExpanded || !resultTruncated ? resultStr : truncateJson(result, 200);
+
+  const Icon = getToolIcon(tool);
+  const StatusIcon = STATUS_ICON[status];
+  const isSpinning = status === 'streaming' || status === 'pending';
 
   return (
-    <div className={`
-      bg-[var(--bg-secondary)] rounded border-l-4
-      ${statusColorMap[status]}
-      p-3 space-y-2
-    `}>
+    <div
+      className={`
+        bg-[var(--bg-secondary)]/60 rounded border-l-2
+        ${statusColorMap[status]}
+        px-3 py-2 space-y-1.5
+      `}
+    >
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-base" title={tool}>{getToolIcon(tool)}</span>
-        <span className="text-sm font-medium text-[var(--accent)]">{tool}</span>
+        <Icon className="w-3.5 h-3.5 text-[var(--text-secondary)] shrink-0" />
+        <span className="text-sm font-mono text-[var(--text-primary)]">{tool}</span>
         <Badge variant={statusBadgeVariant[status]}>
-          {status === 'streaming' ? (
-            <span className="flex items-center gap-1">
-              <span className="thinking-dots">
-                <span>·</span><span>·</span><span>·</span>
-              </span>
-              {statusText[status]}
-            </span>
-          ) : (
-            statusText[status]
-          )}
+          <span className="flex items-center gap-1">
+            <StatusIcon className={`w-3 h-3 ${isSpinning ? 'animate-spin' : ''}`} />
+            {statusText[status]}
+          </span>
         </Badge>
-        {status === 'error' && error && (
-          <span className="text-xs text-red-400 ml-auto">click to expand</span>
-        )}
       </div>
 
-      <div className="text-xs">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[var(--text-secondary)] font-medium uppercase tracking-wide text-[10px]">Args</span>
-          {argsTruncated && (
-            <button
-              onClick={() => setArgsExpanded(!argsExpanded)}
-              className="text-[var(--accent)] text-[10px] hover:underline"
-            >
-              {argsExpanded ? 'collapse' : 'expand'}
-            </button>
+      <details
+        className="text-xs group/args"
+        onToggle={(e) => setArgsExpanded((e.target as HTMLDetailsElement).open)}
+      >
+        <summary className="flex items-center gap-1.5 cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)] select-none list-none">
+          {argsExpanded ? (
+            <ChevronDown className="w-3 h-3" />
+          ) : (
+            <ChevronRight className="w-3 h-3" />
           )}
-        </div>
-        <pre className="font-mono text-[var(--text-secondary)] whitespace-pre-wrap break-all bg-[var(--bg-tertiary)] rounded p-2 max-h-48 overflow-y-auto">
+          <Hash className="w-3 h-3" />
+          <span className="font-medium uppercase tracking-wider text-[10px]">Args</span>
+          {argsTruncated && !argsExpanded && (
+            <span className="text-[10px] text-[var(--text-secondary)]/60 ml-1">
+              (truncated)
+            </span>
+          )}
+        </summary>
+        <pre className="mt-1.5 font-mono text-[11px] text-[var(--text-secondary)] whitespace-pre-wrap break-all bg-[var(--bg-tertiary)]/60 rounded p-2 max-h-48 overflow-y-auto">
           {argsDisplay}
         </pre>
-      </div>
+      </details>
 
       {(status === 'done' || status === 'error') && (
-        <div className="text-xs">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[var(--text-secondary)] font-medium uppercase tracking-wide text-[10px]">
+        <details
+          className="text-xs group/result"
+          onToggle={(e) => setResultExpanded((e.target as HTMLDetailsElement).open)}
+        >
+          <summary className="flex items-center gap-1.5 cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)] select-none list-none">
+            {resultExpanded ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
+            <span className="font-medium uppercase tracking-wider text-[10px]">
               {status === 'error' ? 'Error' : 'Result'}
             </span>
-            {resultTruncated && status !== 'error' && (
-              <button
-                onClick={() => setResultExpanded(!resultExpanded)}
-                className="text-[var(--accent)] text-[10px] hover:underline"
-              >
-                {resultExpanded ? 'collapse' : 'expand'}
-              </button>
+            {status === 'error' && error && !resultExpanded && (
+              <span className="text-[10px] text-[var(--error)] truncate ml-1 max-w-[200px]">
+                {error}
+              </span>
             )}
-          </div>
-          <pre className={`
-            font-mono whitespace-pre-wrap break-all bg-[var(--bg-tertiary)] rounded p-2 max-h-64 overflow-y-auto
-            ${status === 'error' ? 'text-red-400 border border-red-500/30' : 'text-[var(--text-secondary)]'}
-          `}>
+            {resultTruncated && !resultExpanded && status !== 'error' && (
+              <span className="text-[10px] text-[var(--text-secondary)]/60 ml-1">
+                (truncated)
+              </span>
+            )}
+          </summary>
+          <pre
+            className={`
+              mt-1.5 font-mono text-[11px] whitespace-pre-wrap break-all rounded p-2 max-h-64 overflow-y-auto
+              ${status === 'error'
+                ? 'text-[var(--error)] bg-[var(--bg-tertiary)]/60 border border-[var(--error)]/30'
+                : 'text-[var(--text-secondary)] bg-[var(--bg-tertiary)]/60'
+              }
+            `}
+          >
             {status === 'error' ? error : resultDisplay}
           </pre>
-        </div>
+        </details>
       )}
     </div>
   );
