@@ -66,7 +66,7 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
   const [topic, setTopic] = useState('');
   const [numSlides, setNumSlides] = useState(8);
   const [language, setLanguage] = useState('zh');
-  const [themeName, setThemeName] = useState('professional');
+  const [themeName, setThemeName] = useState('minimal-white');
   const [outline, setOutline] = useState<Outline | null>(null);
   const [presentation, setPresentation] = useState<Presentation | null>(null);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
