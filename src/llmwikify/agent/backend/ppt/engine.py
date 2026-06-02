@@ -26,6 +26,24 @@ from .themes import get_theme
 logger = logging.getLogger(__name__)
 
 
+def _bullet_to_str(item) -> str:
+    """Convert an LLM bullet item (string or dict) to a plain string."""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, (int, float)):
+        return str(item)
+    if isinstance(item, dict):
+        parts = []
+        for key in ("category", "title", "label"):
+            if key in item and item[key]:
+                parts.append(str(item[key]))
+        for key in ("description", "text", "content", "detail"):
+            if key in item and item[key]:
+                parts.append(str(item[key]))
+        return ": ".join(parts) if parts else str(item)
+    return str(item)
+
+
 # ─── Prompts ──────────────────────────────────────────────────────────────
 
 OUTLINE_PROMPT = """你是一个专业的演示文稿大纲生成助手。
@@ -322,16 +340,57 @@ class PPTEngine:
         response_text = await self._call_llm(messages)
         content_data = self._parse_json(response_text)
 
-        # Normalize nested structures from LLM
+        # ── Normalize all LLM response fields ──
+
+        # bullets: unwrap nested dict wrapper {"bullets": {...}} → list
         if isinstance(content_data.get("bullets"), dict):
-            content_data["bullets"] = content_data["bullets"].get("bullets", [])
+            inner = content_data["bullets"]
+            content_data["bullets"] = inner.get("bullets") or inner.get("items") or []
+
+        # bullets: convert each item to string (handles dicts like {"category":..., "description":...})
+        if isinstance(content_data.get("bullets"), list):
+            content_data["bullets"] = [_bullet_to_str(b) for b in content_data["bullets"]]
+
+        # content/text/author/image: ensure string or None
+        for field in ("content", "text", "author", "image"):
+            val = content_data.get(field)
+            if val is not None and not isinstance(val, str):
+                if isinstance(val, (dict, list)):
+                    content_data[field] = None
+                else:
+                    content_data[field] = str(val)
+
+        # left/right: ensure dict with heading+items
+        for field in ("left", "right"):
+            val = content_data.get(field)
+            if isinstance(val, dict):
+                if "items" in val and not isinstance(val["items"], list):
+                    val["items"] = [str(val["items"])]
+                if "heading" in val and not isinstance(val["heading"], str):
+                    val["heading"] = str(val["heading"])
+            elif val is not None:
+                content_data[field] = None
+
+        # chart_data: ensure dict with labels+values lists
+        chart_data = content_data.get("chart_data")
+        if chart_data is not None:
+            if not isinstance(chart_data, dict):
+                content_data["chart_data"] = None
+            else:
+                if not isinstance(chart_data.get("labels"), list):
+                    chart_data["labels"] = []
+                if not isinstance(chart_data.get("values"), list):
+                    chart_data["values"] = []
 
         # Apply rules engine to determine layout
         layout = resolve_layout(page.content_type, content_data)
-        
+
+        # Validate and fill missing fields for the chosen layout
+        content_data = validate_content_for_layout(page.content_type, layout, content_data)
+
         # Build slide content
         slide_id = f"slide_{page.page}"
-        
+
         return SlideContent(
             id=slide_id,
             layout=layout,
@@ -371,12 +430,18 @@ class PPTEngine:
             end = text.find("```", start)
             if end != -1:
                 text = text[start:end].strip()
-        
+
         try:
-            return json.loads(text)
+            result = json.loads(text)
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON: {e}\nText: {text[:500]}")
             raise ValueError(f"Invalid JSON response from LLM: {e}")
+
+        if result is None:
+            return {}
+        if isinstance(result, list):
+            return {"outline": result}
+        return result
 
     def _validate_outline(
         self,
