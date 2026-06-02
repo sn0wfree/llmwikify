@@ -106,3 +106,80 @@ body {
 .animate-source-enter {
   animation: source-enter 0.3s ease-out;
 }
+
+/* ------------------------------------------------------------------ */
+/* Backdrop layers — Hermes-inspired 4-layer stack (v0.1).            */
+/* Replicates the visual depth of <Overlays dark /> without leva/gsap.*/
+/*                                                                       */
+/*   z-1   bg-primary mix-blend-difference (deep canvas)                 */
+/*   z-2   inverted SVG noise fill (subtle texture)                       */
+/*   z-99  warm radial vignette (accent glow)                             */
+/*   z-101 fine grain noise (color-dodge, 4% opacity)                     */
+/*                                                                       */
+/* All layers pointer-events-none so they never intercept input.          */
+/* Color tokens cascade from :root so dark/light theme parity is free.    */
+/* ------------------------------------------------------------------ */
+
+@keyframes chat-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-chat-fade-in {
+  animation: chat-fade-in 200ms ease-out;
+}
+
+.backdrop-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.backdrop-layer--base {
+  z-index: 1;
+  background-color: var(--bg-primary);
+}
+
+.backdrop-layer--filler {
+  z-index: 2;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 200px 200px;
+  opacity: 0.04;
+}
+
+.backdrop-layer--vignette {
+  z-index: 99;
+  background: radial-gradient(
+    ellipse at 0% 0%,
+    transparent 55%,
+    color-mix(in srgb, var(--accent) 12%, transparent) 100%
+  );
+  mix-blend-mode: lighten;
+}
+
+.backdrop-layer--grain {
+  z-index: 101;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.6'/></svg>");
+  background-size: 256px 256px;
+  mix-blend-mode: color-dodge;
+  opacity: 0.04;
+}
+
+/* Make app content layer sit above the backdrop stack. */
+#root > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Sidebar active indicator — Hermes +lighter blend on a 1px line. */
+.nav-rail-active-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--accent);
+  mix-blend-mode: plus-lighter;
+  pointer-events: none;
+}
