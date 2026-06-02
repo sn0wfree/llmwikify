@@ -66,6 +66,36 @@ export const LEGACY_ALIASES: Record<string, string> = {
   creative:     'memphis-pop',
 };
 
+/**
+ * v0.6.2: Featured theme IDs shown in the compact pill row by default.
+ *
+ * Hard-coded for v0.6.2 simplicity. Curated to span 6 categories and
+ * cover the most common user needs (business / dark / brand / tech /
+ * soft / design). Future versions can replace this with a usage-based
+ * algorithm or per-user `localStorage` preferences.
+ */
+export const FEATURED_THEME_IDS: string[] = [
+  'minimal-white',     // minimal — business default
+  'dracula',           // dark — developer favorite
+  'corporate-clean',   // brand — business report
+  'cyberpunk-neon',    // tech — futuristic
+  'xiaohongshu-white', // soft — lifestyle / marketing
+  'bauhaus',           // design — visual impact
+];
+
+/**
+ * Return the featured themes in the curated order.
+ * Falls back to the first N themes if any ID is missing.
+ */
+export function getFeaturedThemes(): Theme[] {
+  const featured: Theme[] = [];
+  for (const id of FEATURED_THEME_IDS) {
+    const t = THEMES.find((th) => th.id === id);
+    if (t) featured.push(t);
+  }
+  return featured;
+}
+
 export const THEMES: Theme[] = [
   {
     id: 'minimal-white', name: 'Minimal White', name_zh: '极简白', name_en: 'Minimal White', label: 'Minimal White',
