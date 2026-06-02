@@ -337,7 +337,7 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
                     onClick={() => onExportToPpt?.('chat', currentSessionId)}
                     className="text-xs text-blue-400 hover:underline"
                   >
-                    导出为 PPT
+                    生成 PPT
                   </button>
                 )}
                 <button

@@ -1080,7 +1080,7 @@ export function ResearchPanel({ onExportToPpt }: { onExportToPpt?: (type: 'resea
                           <button onClick={() => { setSaveModalSessionId(s.id); setSaveModalQuery(s.query); }} className="text-xs text-purple-400 hover:underline">Save to Wiki</button>
                         )}
                         {s.status === 'done' && (
-                          <button onClick={() => onExportToPpt?.('research', s.id)} className="text-xs text-blue-400 hover:underline">导出为 PPT</button>
+                          <button onClick={() => onExportToPpt?.('research', s.id)} className="text-xs text-blue-400 hover:underline">生成 PPT</button>
                         )}
                       </>
                     )}
