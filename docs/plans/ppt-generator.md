@@ -1,6 +1,8 @@
 # PPT Generator — 设计规划文档
 
-> 日期: 2026-06-02 | 版本: v0.5 | 状态: 规划中
+> 日期: 2026-06-02 | 版本: v0.6 | 状态: v0.5 已完成、v0.6 规划中
+>
+> **版本演进**：v0.1-v0.4（Phase 1-2 后端+前端）→ v0.5（任务持久化+侧边栏）→ **v0.6（主题与布局扩展，借力 html-ppt-skill）**
 
 ## 〇、业界调研
 
@@ -1048,6 +1050,37 @@ pip install python-pptx
 
 **详细设计见第十二节。**
 
+### Phase 5：主题与布局扩展（v0.6 增量，~1 周）
+
+**背景**：v0.5 完成后视觉风格与商业产品差距大。借力 html-ppt-skill（MIT，36 主题 + 31 布局 + 47 动画 + 15 模板）提升视觉质量。
+
+**v0.6.1 主题扩展（4-5h，~1 天）：**
+- [ ] 拉取 html-ppt-skill 的 36 个 themes/*.css 到本地
+- [ ] 写 `scripts/parse_themes.py` 一次性解析 CSS tokens
+- [ ] `ppt/themes.py` — 8 → 36 主题定义 + Theme dataclass + 分类
+- [ ] `lib/ppt-themes.ts` — 36 主题元数据 + 预览 gradient
+- [ ] `components/ThemeSelector.tsx` — 分组 + 搜索
+- [ ] `components/slide-renderer.tsx` — 根元素 inline style + 内部 `var(--color-*)`
+- [ ] `README.md` — Credits 段（"Based on html-ppt-skill (MIT)"）
+- [ ] 测试：36×7=252 组合 smoke + 147 现有测试回归
+
+**v0.6.2 布局扩展（1-2 天）：**
+- [ ] 优先翻译 10 个高价值布局：cover、toc、section-divider、kpi-grid、stat-highlight、timeline、arch-diagram、process-steps、flow-diagram、gantt
+- [ ] 后续 21 个：todo、pros-cons、three-column、table、chart-*、big-quote、comparison、diff、code、terminal、roadmap、mindmap、image-hero、image-grid、cta、thanks
+- [ ] LLM prompt 增加 layout 候选清单
+- [ ] 测试：31 布局 × 1 主题 smoke
+
+**v0.6.3 动画注入（4h）：**
+- [ ] html-ppt-skill `assets/animations/animations.css` 27 个 CSS 动画
+- [ ] `slide-renderer.tsx` 在 slide 根元素附加 `data-animate="..."` 属性
+- [ ] 测试：浏览器中验证动画触发
+
+**v0.6.5 PPTX 视觉增强（0.5 天）：**
+- [ ] `lib/ppt-export.ts` 读取 theme tokens 转 PptxGenJS 颜色对象
+- [ ] 测试：36 主题导出 .pptx，PowerPoint 中视觉一致
+
+**详细设计见第十三节。**
+
 ## 十一、技术决策记录
 
 | 决策 | 选择 | 理由 | 来源 |
@@ -1071,6 +1104,13 @@ pip install python-pptx
 | Sidebar 数据刷新（v0.5） | 5s 轮询 | 简单可靠；未来可换 SSE 推送 | v0.5 讨论 Q3=A |
 | 任务清理（v0.5） | 30 天自动清理 + server 重启标记 error | 防 DB 无限增长 | v0.5 讨论 Q2 |
 | 任务列表端点（v0.5） | `GET /api/ppt/tasks?limit=50&source_type=` | 支持 sidebar 列表和按来源过滤 | API 设计 |
+| 主题系统演进（v0.6.1） | 8 → 36 主题（搬运 html-ppt-skill CSS token 体系） | 借力成熟 token 系统，主题丰富度 4.5× | 业界方案对比 |
+| 借鉴模式（v0.6.1） | 资产搬运（asset 移植到 LLM 管线）而非整包安装 | 保留 LLM 自动化核心价值 | v0.6 讨论 |
+| 主题 token 应用（v0.6.1） | slide 根元素 inline `style={CSS variables}` + 内部 `var(--color-*)` | 一次注入，全局生效，避免 7 个布局逐个改 | 实施策略 |
+| 旧主题 ID（v0.6.1） | 保留旧 8 个 ID 映射到 html-ppt-skill 同名主题，向后兼容 | 现有用户数据不破坏 | 向后兼容原则 |
+| 主题归类（v0.6.1） | 按 category 分组：minimal / dark / colorful / retro / tech / brand | 36 主题需分类展示，UX 友好 | UI 设计 |
+| 视觉资产归属（v0.6.1） | README 标注 "Based on html-ppt-skill (MIT, © 2026 lewislulu)" | 遵守 MIT 许可 | 法规要求 |
+| 静态 HTML 导出（v0.6.x 暂缓） | v0.6.4 之前不做，先做 PPTX 视觉增强 | 用户当前更需要 PPT 体验 | v0.6 讨论 |
 
 ---
 
@@ -1484,3 +1524,247 @@ async def _start_ppt_cleanup():
 - ❌ 任务重命名 / 标签 / 全文搜索（Phase 4）
 - ❌ 任务 export 历史 / 版本管理（Phase 4）
 - ❌ 多用户协作（不在 PPT Generator 路线图）
+
+---
+
+## 十三、主题与布局扩展（v0.6 新增）
+
+### 13.1 背景与动机
+
+**v0.5 现状**：8 个预设主题，7 个布局，0 动画。视觉风格与商业产品（Gamma、Kimi/AiPPT、Beautiful.ai）有显著差距。
+
+**外部参考发现**：[html-ppt-skill](https://github.com/lewislulu/html-ppt-skill)（MIT，5.4k ⭐，507 fork）提供：
+- 36 主题（CSS-token 系统）
+- 31 单页布局（含 timeline、arch-diagram、kpi-grid、gantt、mindmap、process-steps…）
+- 47 动画（27 CSS + 20 canvas FX）
+- 15 整 deck 模板
+- 演讲者模式 + 静态 HTML 导出
+
+**核心矛盾**：html-ppt-skill 是**作者工具**（人类写大纲），我们是**LLM 生成器**（LLM 写大纲）。直接照搬会失去自动化价值。
+
+### 13.2 借鉴模式选择
+
+| 方案 | 内容 | 取舍 |
+|------|------|------|
+| A. 整包安装为 AgentSkill | `npx skills add` 注册 skill | ❌ 失去 LLM 自动化核心价值 |
+| **B. 资产搬运（采用）** ⭐ | 把 `assets/themes/`、`templates/single-page/`、`assets/animations/` 移植到我们后端管线 | ✅ 保留自动化 + 视觉质量飞跃 |
+| C. 静态 HTML 导出（B 延伸） | 把生成的 deck 导出为单文件 HTML | ⏸ 暂缓（用户决定先做 PPTX 增强） |
+
+### 13.3 v0.6.x 路线图
+
+| 版本 | 范围 | 估时 | 状态 |
+|------|------|------|------|
+| **v0.6.1** ⬅ 当前 | 主题 8 → 36（搬运 html-ppt-skill CSS tokens） | 4-5h | 📋 实施中 |
+| v0.6.2 | 布局 7 → 31（HTML→React 翻译，优先 10 个） | 1-2 天 | ⏳ 排队 |
+| v0.6.3 | 动画注入 0 → 47（CSS className 附加到 slide） | 4h | ⏳ 排队 |
+| v0.6.4 | 静态 HTML 导出 + 演讲者模式 | 1 天 | ⏸ 暂停 |
+| v0.6.5 | PPTX 导出视觉增强（按 html-ppt-skill 视觉风格靠拢） | 0.5 天 | ⏳ 排队 |
+
+### 13.4 v0.6.1 主题扩展详细设计
+
+#### 13.4.1 目标
+
+- 8 → 36 主题，覆盖：
+  - **极简**（4）：minimal-white、editorial-serif、sharp-mono、japanese-minimal
+  - **柔和**（3）：soft-pastel、xiaohongshu-white、midcentury
+  - **暖色**（3）：sunset-warm、retro-tv、magazine-bold
+  - **冷色/科技**（5）：arctic-cool、cyberpunk-neon、blueprint、engineering-whiteprint、terminal-green
+  - **暗色**（5）：catppuccin-mocha、dracula、tokyo-night、gruvbox-dark、rose-pine
+  - **配色卡通风**（6）：catppuccin-latte、nord、solarized-light、memphis-pop、vaporwave、rainbow-gradient
+  - **品牌/专业**（4）：corporate-clean、academic-paper、news-broadcast、pitch-deck-vc
+  - **特殊设计**（6）：neo-brutalism、glassmorphism、bauhaus、swiss-grid、y2k-chrome、aurora
+- 保留现有 8 个主题 ID（向后兼容），映射到 html-ppt-skill 同名/最相似主题
+- 主题选择器按 category 分组，36 主题加搜索框
+
+#### 13.4.2 主题数据模型
+
+```python
+@dataclass
+class Theme:
+    id: str                              # "minimal-white"
+    name_zh: str                         # "极简白"
+    name_en: str                         # "Minimal White"
+    category: str                        # "minimal" | "dark" | "warm" | "cool" | "colorful" | "brand" | "design"
+    description: str                     # 50-100 字使用场景
+    tokens: dict[str, str]               # CSS custom properties 展开
+    attribution: str                     # "Based on html-ppt-skill (MIT)"
+```
+
+**tokens 字段示例**（minimal-white）：
+```python
+tokens = {
+    "color-primary": "#1a1a1a",
+    "color-bg": "#ffffff",
+    "color-text": "#1a1a1a",
+    "color-muted": "#6b7280",
+    "color-accent": "#f59e0b",
+    "color-surface": "#fafafa",
+    "color-border": "#e5e7eb",
+    "font-heading": "Inter, 'Noto Sans SC', sans-serif",
+    "font-body": "'Inter', 'Noto Sans SC', sans-serif",
+    "font-mono": "'JetBrains Mono', monospace",
+    "radius-sm": "4px",
+    "radius-md": "8px",
+    "radius-lg": "16px",
+    "shadow-sm": "0 1px 2px rgba(0,0,0,0.05)",
+    "shadow-md": "0 4px 6px rgba(0,0,0,0.1)",
+    "shadow-lg": "0 10px 25px rgba(0,0,0,0.15)",
+    "gradient-bg": "linear-gradient(135deg, #ffffff 0%, #fafafa 100%)",
+}
+```
+
+#### 13.4.3 主题到 ID 映射（向后兼容）
+
+| 旧 ID (v0.5) | 新 ID (v0.6.1) | 理由 |
+|--------------|----------------|------|
+| `business` | `corporate-clean` | 商务感最接近 |
+| `academic` | `academic-paper` | 学术风格最匹配 |
+| `tech` | `cyberpunk-neon` | 现代科技感 |
+| `creative` | `memphis-pop` | 创意设计风 |
+| `minimal` | `minimal-white` | 极简黑白的白底版 |
+| `dark` | `dracula` | 暗色主题最热 |
+| `gradient` | `aurora` | 渐变特效最匹配 |
+| `custom` | (保留 user-custom 入口) | 用户自定义主题，Phase 3 实现 |
+
+#### 13.4.4 主题应用机制
+
+**渲染层**（`slide-renderer.tsx`）：
+- 根元素：`<div className="slide-root" style={themeToStyleVars(theme)}>`
+- `themeToStyleVars` 把 `tokens` dict 转为 `{'--color-primary': '#1a1a1a', ...}` inline style
+- 内部元素用 `var(--color-*)`、`var(--font-*)` 等 CSS 变量引用
+
+**收益**：
+- 一次注入，全局生效
+- 避免 7 个布局 × 36 主题 = 252 个组合的硬编码
+- 与 html-ppt-skill 的 `assets/themes/*.css` 范式一致
+- 主题切换零延迟
+
+#### 13.4.5 主题选择器 UI
+
+`components/ThemeSelector.tsx` 改版：
+- 顶部搜索框（按 name_zh / name_en 过滤）
+- 6 个 category 折叠组：
+  - 极简 (4)
+  - 柔和 (3)
+  - 暖色 (3)
+  - 冷色/科技 (5)
+  - 暗色 (5)
+  - 配色卡通风 (6)
+  - 品牌/专业 (4)
+  - 特殊设计 (6)
+- 每个主题卡片：120×80 缩略图（CSS gradient 模拟）+ 名称 + category 标签
+
+#### 13.4.6 数据流
+
+```
+用户选择主题
+  ↓
+前端 PPTGenerator → theme 状态
+  ↓
+调用 /api/ppt/generate 时 theme 提交
+  ↓
+后端生成大纲、内容（不变）
+  ↓
+返回 presentation_json + theme_id
+  ↓
+前端 SlideRenderer 接收 theme_id
+  ↓
+查 PPT_THEMES_MAP[theme_id] 拿 tokens
+  ↓
+inline style 注入 CSS variables
+  ↓
+7 个布局组件用 var(--color-*) 渲染
+```
+
+#### 13.4.7 实施步骤
+
+1. **拉取 CSS（30min）** — `git clone` html-ppt-skill 或 curl 36 个 themes/*.css 到 `/tmp/`
+2. **解析 + 归一化（30min）** — 一次性脚本 `scripts/parse_themes.py` 提取所有 CSS custom properties
+3. **Theme schema（30min）** — 后端 `ppt/themes.py` 定义 Theme dataclass
+4. **后端 themes.py 扩展（1h）** — 36 主题定义；8 旧 ID 映射；分类元数据
+5. **前端 ppt-themes.ts（30min）** — 36 主题元数据 + 预览 gradient
+6. **ThemeSelector 改版（30min）** — 分组 + 搜索
+7. **slide-renderer 适配（1h）** — 根元素 inline style + 内部 `var(--color-*)`
+8. **README 归属（10min）** — "Based on html-ppt-skill (MIT)" + 主题分类总览
+9. **测试（30min）** — 36×7 组合 smoke + 147 现有测试回归
+
+**总计：4-5h**
+
+#### 13.4.8 文件改动清单
+
+| 文件 | 类型 | 改动 | 行数 |
+|------|------|------|------|
+| `agent/backend/ppt/themes.py` | 改 | 8 → 36 主题，token 化 | +220 / -50 |
+| `webui-agent/src/lib/ppt-themes.ts` | 改 | 8 → 36 主题元数据 | +120 / -20 |
+| `webui-agent/src/components/ThemeSelector.tsx` | 改 | 分组 + 搜索 | +50 / -10 |
+| `webui-agent/src/components/slide-renderer.tsx` | 改 | inline style + var(--*) | +40 / -30 |
+| `webui-agent/src/components/PPTGenerator.tsx` | 改 | 透传 theme_id | +5 |
+| `README.md` | 改 | Credits 段 | +5 |
+| `docs/plans/ppt-generator.md` | 改 | 本节 | +200 |
+
+#### 13.4.9 风险与缓解
+
+| 风险 | 影响 | 缓解 |
+|------|------|------|
+| 36 主题 CSS tokens 字段名差异大 | 中 | 写 normalize 层统一字段（`color-primary` / `color-bg` / `font-heading` 等） |
+| 现有 7 布局 hardcoded colors | 中 | 重构为 `var(--color-*)`；每个布局改 ~10 处 |
+| 字体未下载 | 低 | Noto Sans SC 已在 `index.html` 引入；Inter 等 webfont 在 CDN 加载 |
+| 主题视觉差异过大，某些布局难看 | 低 | smoke test 过滤出明显 bad cases，标记 deprecated |
+| 旧 ID 数据兼容 | 低 | 旧 8 ID 保留，重定向到新主题 |
+| Bundle 体积膨胀 | 极低 | 主题 metadata +20KB，gzip 后 +5KB |
+
+#### 13.4.10 兼容性策略
+
+- **DB 向后兼容**：`theme` 字段（v0.5 已存）继续接受旧 8 ID；后端 lookup 时映射到新 36 主题
+- **前端向后兼容**：`ppt-themes.ts` 旧 ID 仍 export，但内容指向新主题
+- **API 兼容**：`GenerateRequest.theme` 接受任意字符串；不在 36 之内的回退到 `minimal-white`
+- **PPTX 导出兼容**：theme tokens 直接转 PptxGenJS 颜色对象
+
+#### 13.4.11 成功标准
+
+- [ ] 36 主题全部定义且 ID 不重复
+- [ ] 36 主题 × 7 布局 = 252 组合全部能正确渲染（无 NaN / undefined color / missing token）
+- [ ] 旧 8 主题 ID 仍可使用（向后兼容）
+- [ ] 主题切换无闪烁（< 50ms）
+- [ ] 147 现有测试无回归
+- [ ] README 含 html-ppt-skill 归属
+
+#### 13.4.12 不在 v0.6.1 范围
+
+- ❌ 布局扩展 7→31（v0.6.2）
+- ❌ 动画注入 0→47（v0.6.3）
+- ❌ 静态 HTML 导出（v0.6.4，暂缓）
+- ❌ 模板系统 15 套 full-deck（v0.7+）
+- ❌ 主题用户自定义（Phase 3，color picker）
+- ❌ 主题混合 / 渐变映射（高级玩法）
+
+### 13.5 v0.6.2 布局扩展预告
+
+31 个布局分组：
+
+| Category | 布局 | 优先级 |
+|----------|------|--------|
+| **基础** | cover、toc、section-divider、thanks、cta | 高（5/5 优先） |
+| **列表** | bullets、todo-checklist、pros-cons、three-column | 高 |
+| **数据** | kpi-grid、stat-highlight、table、chart-bar、chart-line、chart-pie、chart-radar | 高 |
+| **流程** | flow-diagram、timeline、process-steps、gantt、roadmap、arch-diagram | 中 |
+| **引用** | big-quote、comparison、diff、code、terminal | 中 |
+| **创意** | mindmap、image-hero、image-grid | 低 |
+
+**v0.6.2 优先翻译**：cover、toc、section-divider、kpi-grid、stat-highlight、timeline、arch-diagram、process-steps、flow-diagram、gantt（10 个最高价值）
+
+### 13.6 实施顺序
+
+```
+v0.6.1 主题（当前）
+  ↓ 完成 + 回归通过
+v0.6.2 布局扩展（10 个高价值 + 完整 31）
+  ↓ 完成 + 回归通过
+v0.6.3 动画注入
+  ↓ 完成 + 回归通过
+v0.6.4 静态 HTML 导出（暂停中）
+v0.6.5 PPTX 导出视觉增强
+```
+
+每个小版本独立 commit、独立测试、独立可演示。
+
