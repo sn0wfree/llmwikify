@@ -1,4 +1,4 @@
-"""Deep Research configuration."""
+"""Quick Research configuration."""
 
 from __future__ import annotations
 

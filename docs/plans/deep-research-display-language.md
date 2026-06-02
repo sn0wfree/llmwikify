@@ -1,8 +1,8 @@
-# Deep Research Display Language — Design Document
+# Quick Research Display Language — Design Document
 
 ## Overview
 
-Redesign the Deep Research UI to provide **semantic progress**, **structural event display**, and **rich source tracking**. Replaces flat event lists with layered, meaningful visual feedback.
+Redesign the Quick Research UI to provide **semantic progress**, **structural event display**, and **rich source tracking**. Replaces flat event lists with layered, meaningful visual feedback.
 
 > **Status:** ✅ Implemented (Phase 1-3 complete)
 > **Last updated:** 2026-05-28

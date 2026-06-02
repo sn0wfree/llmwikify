@@ -1,4 +1,4 @@
-# Agent Framework & Deep Research — 设计文档
+# Agent Framework & Quick Research — 设计文档
 
 > 创建时间：2025-05-25
 > 最后更新：2025-05-25（全面更新：新增 5.7-5.10，LLM 适配层、SSE/JWT 认证、Chat 会话管理、评分机制）
@@ -7,7 +7,7 @@
 
 ## 一、项目背景与目标
 
-**总目标**：将 Agent 框架构建为独立界面和应用，深度绑定 llmwikify 项目，同时新增 Deep Research（深度研究）功能。
+**总目标**：将 Agent 框架构建为独立界面和应用，深度绑定 llmwikify 项目，同时新增 Quick Research（深度研究）功能。
 
 **约束**：
 - WebUI 不依赖 npm 环境，采用方案 D（内联到 Python 包）
@@ -17,7 +17,7 @@
 1. Agent 界面形态：混合模式（Chat 对话 + Task 面板）
 2. Autoresearch 范围：内部 + 网络 + 视频/YouTube
 3. LLM 支持：Ollama（本地主力）+ OpenAI（复杂推理）
-4. Deep Research 执行方式：同步 + 异步均支持
+4. Quick Research 执行方式：同步 + 异步均支持
 
 ---
 
@@ -248,11 +248,11 @@ class ResearchReport:
 
 ---
 
-## 五、Deep Research 核心功能详解
+## 五、Quick Research 核心功能详解
 
 ### 5.1 核心定位
 
-Deep Research 是一个**多源异步研究助手**，用户输入一个研究主题，系统自动完成：子查询分解 → 多源并行摄取 → 跨源综合分析 → 结构化报告生成 → 保存为 Wiki 页面。
+Quick Research 是一个**多源异步研究助手**，用户输入一个研究主题，系统自动完成：子查询分解 → 多源并行摄取 → 跨源综合分析 → 结构化报告生成 → 保存为 Wiki 页面。
 
 ### 5.2 六阶段研究流程
 
@@ -648,7 +648,7 @@ ResearchStreamEvent = (
 type ViewMode =
   | 'edit' | 'dashboard' | 'insights'  // 现有
   | 'chat'        // Agent Chat（主界面）
-  | 'research'    // Deep Research 面板
+  | 'research'    // Quick Research 面板
   | 'tasks'       // 研究任务列表
   | 'confirmations' | 'proposals' | 'ingest' | 'history'  // 现有 agent
 ```
@@ -682,7 +682,7 @@ type ViewMode =
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Deep Research                                              │
+│  Quick Research                                              │
 ├──────────────────────────────────────────────────────────────┤
 │  [新建研究]  输入研究主题: ________________________________   │
 │                                                              │
@@ -812,7 +812,7 @@ agent = [
 3. 实现 `ToolCallCard` 组件（展示工具调用）
 4. 集成到 App.tsx 视图系统
 
-### Phase 3: Deep Research（2-3 天）
+### Phase 3: Quick Research（2-3 天）
 1. 实现 `WebSearch` 模块（DuckDuckGo）
 2. 实现 `ResearchSession` 模型 + 数据库表
 3. 实现 `ResearchEngine` 核心流程
@@ -869,7 +869,7 @@ agent = [
 ### 新增交互
 
 ```
-Deep Research
+Quick Research
     ├──→ 调用 wiki_search（摄取的 wiki 内部来源）
     ├──→ 调用 wiki_analyze_source（分析每个来源）
     ├──→ 调用 wiki_suggest_synthesis（跨源综合）
@@ -883,9 +883,9 @@ WebUI Chat
 
 ---
 
-## 十三、Chat vs Deep Research 对比
+## 十三、Chat vs Quick Research 对比
 
-| 维度 | Chat | Deep Research |
+| 维度 | Chat | Quick Research |
 |------|------|--------------|
 | 交互模式 | 对话式，多轮上下文 | 单次主题，深度探索 |
 | 来源 | 仅内部 Wiki | 多源（Web/YouTube/PDF/Wiki） |
@@ -895,4 +895,4 @@ WebUI Chat
 
 两者**共用同一个 AgentService**：
 - Chat 调用工具时触发 confirmations
-- Deep Research 后台执行不打扰用户，但完成后可生成 Wiki 页面供 Chat 使用
+- Quick Research 后台执行不打扰用户，但完成后可生成 Wiki 页面供 Chat 使用

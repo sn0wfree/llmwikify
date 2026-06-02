@@ -70,7 +70,7 @@ function App() {
             Agent Chat
           </NavButton>
           <NavButton active={view === 'research'} onClick={() => setView('research')}>
-            Deep Research
+            Quick Research
           </NavButton>
           <NavButton active={view === 'tasks'} onClick={() => setView('tasks')}>
             Tasks

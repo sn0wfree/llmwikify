@@ -2,7 +2,7 @@
 
 > **核心架构**：四模块协同工作，形成「计划 → 搜索发现 → 分析研究 → 迭代循环」的完整研究闭环
 >
-> 基于 Deep Research 技能设计理念
+> 基于 Quick Research 技能设计理念
 > 参考 Perplexity / OpenAI Research 交互模式
 >
 > 创建日期: 2026-04-23

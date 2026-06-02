@@ -10,11 +10,11 @@
 
 | 编号 | 系统 | 功能 | 位置 | 现状 | 问题 | 建议 | 复杂度 | 状态 |
 |------|------|------|------|------|------|------|--------|------|
-| DR-2 | Deep Research | Gather | `gatherer.py:364-373` | 失败直接标记 "failed"，永不重试 | 网络抖动导致永久丢失搜索方向 | 在下一轮 ReAct 中自动重试失败 sub-query | 低 | ✅ 已完成 |
-| DR-4 | Deep Research | Review | `engine.py:626-629` | LLM 异常时创建 `{"approved":False,"score":0}` | LLM 调用失败 ≠ 报告质量差，浪费 revise 轮次 | 异常时跳过 review，标记 "review_skipped" | 低 | ✅ 已完成 |
-| DR-12 | Deep Research | Frontend | 多处 | catch 后 silent | 用户不知道操作是否成功 | 选择性添加 console.warn | 低 | ✅ 已完成 |
-| DR-13 | Deep Research | Engine | `engine.py` 全文 | report/review 后中断丢失报告 | 报告未持久化到 DB | 立即持久化到 DB | 低 | ✅ 已完成 |
-| DR-14 | Deep Research | Engine | `engine.py` 各 action handler | Phase 分散赋值，无集中验证 | 状态机隐式 | 定义显式状态转移表 | 中 | ✅ 已完成 |
+| DR-2 | Quick Research | Gather | `gatherer.py:364-373` | 失败直接标记 "failed"，永不重试 | 网络抖动导致永久丢失搜索方向 | 在下一轮 ReAct 中自动重试失败 sub-query | 低 | ✅ 已完成 |
+| DR-4 | Quick Research | Review | `engine.py:626-629` | LLM 异常时创建 `{"approved":False,"score":0}` | LLM 调用失败 ≠ 报告质量差，浪费 revise 轮次 | 异常时跳过 review，标记 "review_skipped" | 低 | ✅ 已完成 |
+| DR-12 | Quick Research | Frontend | 多处 | catch 后 silent | 用户不知道操作是否成功 | 选择性添加 console.warn | 低 | ✅ 已完成 |
+| DR-13 | Quick Research | Engine | `engine.py` 全文 | report/review 后中断丢失报告 | 报告未持久化到 DB | 立即持久化到 DB | 低 | ✅ 已完成 |
+| DR-14 | Quick Research | Engine | `engine.py` 各 action handler | Phase 分散赋值，无集中验证 | 状态机隐式 | 定义显式状态转移表 | 中 | ✅ 已完成 |
 | IN-1 | Ingest | Analyze | `wiki_mixin_ingest.py`, `wiki_mixin_llm.py`, `wiki_mixin_source_analysis.py` | 两阶段分析 + metadata + lint_hint 已实现 | — | — | — | ✅ 已完成 |
 | IN-2 | Ingest | Confirm | `agent/tools.py:263` | `requires_confirmation="posthoc"` — 设计合理 | — | 保持 posthoc（ingest 只提取到 raw/，不修改 wiki；真正的写操作 wiki_write_page 已有 pre 确认） | — | ✅ 设计合理 |
 
@@ -22,13 +22,13 @@
 
 | 编号 | 系统 | 功能 | 位置 | 现状 | 问题 | 建议 | 复杂度 | 状态 |
 |------|------|------|------|------|------|------|--------|------|
-| DR-1 | Deep Research | Gather | `gatherer.py:55-57` | 70% 任务完成 + 15s grace 后取消剩余（已从 50% 调整到 70%） | — | — | — | ✅ 已完成 |
-| DR-3 | Deep Research | Report | `report.py:89-103` | 报告生成是阻塞式 LLM 调用（120s） | 用户在最耗时阶段看不到进度 | 支持 report LLM 流式输出 | 中 | ✅ 已完成 |
-| DR-5 | Deep Research | DB | `db.py:347` | 每个 source 完整内容（最大 500K chars）存 SQLite | DB 膨胀，查询变慢，resume 加载慢 | 大内容存文件系统，DB 只存 metadata | 中 | 待处理 |
-| DR-6 | Deep Research | Engine | `engine.py:392-403` | `_check_control_signals()` 每轮都读 DB | 不必要 I/O | 每 N 轮检查或用 asyncio.Event | 低 | ⏭ 跳过（1ms 开销可忽略） |
-| DR-7 | Deep Research | Frontend | `api.ts:318-355` | 流断开后用户必须手动 resume | 网络不稳定体验差 | exponential backoff 自动重连 | 中 | ✅ 已完成 |
-| DR-8 | Deep Research | Frontend | `ResearchPanel.tsx:563-564` | `readerRef` 存了 reader 但没接 cancel | 导航离开后 fetch 继续运行 | unmount 时 abort 流 | 低 | ✅ 已完成 |
-| DR-9 | Deep Research | Frontend | `ResearchDetail.tsx:43-63` | 用一次性 REST 加载，不用 SSE | 查看运行中 session 数据过时 | running 状态也建立 SSE 连接 | 中 | ✅ 已完成 |
+| DR-1 | Quick Research | Gather | `gatherer.py:55-57` | 70% 任务完成 + 15s grace 后取消剩余（已从 50% 调整到 70%） | — | — | — | ✅ 已完成 |
+| DR-3 | Quick Research | Report | `report.py:89-103` | 报告生成是阻塞式 LLM 调用（120s） | 用户在最耗时阶段看不到进度 | 支持 report LLM 流式输出 | 中 | ✅ 已完成 |
+| DR-5 | Quick Research | DB | `db.py:347` | 每个 source 完整内容（最大 500K chars）存 SQLite | DB 膨胀，查询变慢，resume 加载慢 | 大内容存文件系统，DB 只存 metadata | 中 | 待处理 |
+| DR-6 | Quick Research | Engine | `engine.py:392-403` | `_check_control_signals()` 每轮都读 DB | 不必要 I/O | 每 N 轮检查或用 asyncio.Event | 低 | ⏭ 跳过（1ms 开销可忽略） |
+| DR-7 | Quick Research | Frontend | `api.ts:318-355` | 流断开后用户必须手动 resume | 网络不稳定体验差 | exponential backoff 自动重连 | 中 | ✅ 已完成 |
+| DR-8 | Quick Research | Frontend | `ResearchPanel.tsx:563-564` | `readerRef` 存了 reader 但没接 cancel | 导航离开后 fetch 继续运行 | unmount 时 abort 流 | 低 | ✅ 已完成 |
+| DR-9 | Quick Research | Frontend | `ResearchDetail.tsx:43-63` | 用一次性 REST 加载，不用 SSE | 查看运行中 session 数据过时 | running 状态也建立 SSE 连接 | 中 | ✅ 已完成 |
 | IN-3 | Ingest | Pipeline | `wiki_mixin_llm.py` vs `agent/tools.py` | CLI 和 Agent 路径已统一，共享 section_metadata + lint_hint | — | — | — | ✅ 已完成 |
 | IN-4 | Ingest | Cache | `wiki_mixin_source_analysis.py:46-72` | 缓存在 wiki 页面 HTML 注释中 | 页面编辑时缓存丢失 | 缓存存 SQLite 或独立文件 | 中 | 待处理 |
 | IN-6 | Ingest | Generate | `generate_wiki_ops.yaml`, `wiki_mixin_llm.py:48-68` | 一次 LLM 调用生成所有页面内容 | 源复杂时输出截断或省略页面 | 先生成操作列表再逐操作填充 | 中 | 待处理 |
@@ -38,10 +38,10 @@
 
 | 编号 | 系统 | 功能 | 位置 | 现状 | 问题 | 建议 | 复杂度 | 状态 |
 |------|------|------|------|------|------|------|--------|------|
-| DR-10 | Deep Research | Engine | `engine.py` 全文 | 所有 action/reasoning/observation 在一个类（930 行） | 可维护性差 | 拆分为 Reasoner/ActionDispatcher/Observer | 高 | 待处理 |
-| DR-11 | Deep Research | Frontend | `ResearchPanel.tsx:632-755` | 120+ 行 switch 处理 16 种事件 | 可维护性差 | strategy pattern 或 reducer 拆分 | 中 | 待处理 |
-| DR-13 | Deep Research | Observability | `engine.py` 全文 | 无 token 用量/耗时/成本追踪 | 无法分析优化 | 添加 metrics 收集 | 中 | ✅ 已完成（DR-13 已合并到 P0） |
-| DR-14 | Deep Research | Engine | `engine.py` 各 action handler | Phase 分散赋值，无集中验证 | 状态机隐式 | 定义显式状态转移表 | 中 | ✅ 已完成（DR-14 已合并到 P0） |
+| DR-10 | Quick Research | Engine | `engine.py` 全文 | 所有 action/reasoning/observation 在一个类（930 行） | 可维护性差 | 拆分为 Reasoner/ActionDispatcher/Observer | 高 | 待处理 |
+| DR-11 | Quick Research | Frontend | `ResearchPanel.tsx:632-755` | 120+ 行 switch 处理 16 种事件 | 可维护性差 | strategy pattern 或 reducer 拆分 | 中 | 待处理 |
+| DR-13 | Quick Research | Observability | `engine.py` 全文 | 无 token 用量/耗时/成本追踪 | 无法分析优化 | 添加 metrics 收集 | 中 | ✅ 已完成（DR-13 已合并到 P0） |
+| DR-14 | Quick Research | Engine | `engine.py` 各 action handler | Phase 分散赋值，无集中验证 | 状态机隐式 | 定义显式状态转移表 | 中 | ✅ 已完成（DR-14 已合并到 P0） |
 | IN-5 | Ingest | Transaction | `wiki_mixin_relation.py:86-121` | 逐页写入，无原子性 | 中途失败导致部分页面丢失 | 写入前快照 + 失败回滚 | 高 | ✅ 已完成 |
 | IN-8 | Ingest | Relation | `relation_engine.py:102-141` | `add_relation()` 精确匹配去重 | 不同表述产生重复关系 | 语义去重（LLM 或 embedding） | 中 | ✅ 已完成 |
 | IN-9 | Ingest | Index | `core/index.py:77-111` | 每次 `write_page()` 重建 FTS5 条目 | 批量 ingest 性能瓶颈 | 延迟索引更新，最后一次性重建 | 中 | ⏭ 跳过（性能可接受） |

@@ -1,4 +1,4 @@
-# Deep Research — Implementation Plan
+# Quick Research — Implementation Plan
 
 > 创建时间：2025-05-26
 > 状态：待实现
@@ -7,11 +7,11 @@
 
 ## 一、背景与目标
 
-Deep Research 是一个**多源异步研究助手**，用户输入研究主题，系统自动完成：子查询分解 → 多源并行摄取 → 跨源综合分析 → 结构化报告生成。
+Quick Research 是一个**多源异步研究助手**，用户输入研究主题，系统自动完成：子查询分解 → 多源并行摄取 → 跨源综合分析 → 结构化报告生成。
 
 **与 Chat 的区别**：
 
-| 维度 | Chat | Deep Research |
+| 维度 | Chat | Quick Research |
 |------|------|--------------|
 | 交互模式 | 对话式，多轮上下文 | 单次主题，深度探索 |
 | 来源 | 仅内部 Wiki | 多源（Web/YouTube/PDF/Wiki） |
@@ -727,7 +727,7 @@ api.research = {
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Deep Research                                              │
+│  Quick Research                                              │
 ├──────────────────────────────────────────────────────────────┤
 │  [新建研究]  输入主题: ________________________________     │
 │                                                              │
@@ -782,7 +782,7 @@ api.research = {
 type ViewMode = 'chat' | 'settings' | 'research' | 'dashboard' | ...
 ```
 
-`'research'` 视图渲染 `<ResearchPanel />`，导航栏显示 "Deep Research" 按钮。
+`'research'` 视图渲染 `<ResearchPanel />`，导航栏显示 "Quick Research" 按钮。
 
 ---
 
