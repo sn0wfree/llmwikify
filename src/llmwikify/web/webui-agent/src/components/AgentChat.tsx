@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { chatStream, ChatStreamEvent, api } from '../api';
 import { useToast } from './Toast';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
@@ -25,6 +26,26 @@ interface ToolCall {
   error?: string;
   status: 'pending' | 'streaming' | 'done' | 'error';
 }
+
+type ConnectionState = 'idle' | 'live' | 'error';
+
+const STATE_TONE: Record<ConnectionState, string> = {
+  idle: 'text-text-secondary',
+  live: 'text-[var(--success)]',
+  error: 'text-[var(--error)]',
+};
+
+const STATE_DOT: Record<ConnectionState, string> = {
+  idle: 'bg-text-secondary/40',
+  live: 'bg-[var(--success)]',
+  error: 'bg-[var(--error)]',
+};
+
+const STATE_LABEL: Record<ConnectionState, string> = {
+  idle: 'idle',
+  live: 'live',
+  error: 'error',
+};
 
 interface PendingConfirmation {
   confirmationId: string;
@@ -56,9 +77,27 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
   const [showSidebar, setShowSidebar] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
   const [confirmingLoading, setConfirmingLoading] = useState(false);
+  const [modelName, setModelName] = useState<string>('');
+  const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
+  const [tokenEstimate, setTokenEstimate] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { addToast } = useToast();
   const { currentWikiId } = useAgentWikiStore();
+
+  useEffect(() => {
+    let mounted = true;
+    api.agent
+      .getConfig()
+      .then((cfg: { model?: string }) => {
+        if (mounted && cfg?.model) setModelName(cfg.model);
+      })
+      .catch(() => {
+        /* model fetch is best-effort */
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -192,6 +231,8 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
     setCurrentAssistantMsg('');
     setCurrentThinking('');
     setCurrentToolCalls([]);
+    setConnectionState('live');
+    setTokenEstimate((t) => t + Math.ceil(input.length / 4));
 
     const reader = chatStream(input, currentSessionId || undefined, currentWikiId || undefined).getReader();
 
@@ -261,6 +302,8 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
             setCurrentAssistantMsg('');
             setCurrentThinking('');
             setCurrentToolCalls([]);
+            setTokenEstimate((t) => t + Math.ceil((event.final_response.length + currentThinking.length) / 4));
+            setConnectionState('idle');
             break;
         }
       }
@@ -273,6 +316,7 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
       ]);
       setCurrentAssistantMsg('');
       setCurrentToolCalls([]);
+      setConnectionState('error');
     } finally {
       setLoading(false);
     }
@@ -324,27 +368,59 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
 
         <div className="flex flex-col flex-1 min-w-0">
           <Panel border="top">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[var(--accent)]">Agent Chat</h2>
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <h2 className="text-sm font-semibold text-[var(--accent)] shrink-0">Agent Chat</h2>
+                {modelName && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[var(--bg-tertiary)]/40 border border-[var(--border)]/40 text-xs text-[var(--text-secondary)]">
+                    <Cpu className="w-3 h-3" />
+                    <span className="font-mono text-[11px] truncate max-w-[120px]" title={modelName}>
+                      {modelName}
+                    </span>
+                  </div>
+                )}
+                <div
+                  className={`flex items-center gap-1.5 text-xs ${STATE_TONE[connectionState]}`}
+                  title={`Connection: ${STATE_LABEL[connectionState]}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${STATE_DOT[connectionState]}`} />
+                  <Wifi className="w-3 h-3" />
+                  <span className="hidden sm:inline">{STATE_LABEL[connectionState]}</span>
+                </div>
                 {currentSessionId && (
-                  <span className="text-xs text-[var(--text-secondary)]">
-                    session: {currentSessionId.slice(0, 8)}
+                  <span className="text-xs text-[var(--text-secondary)] font-mono hidden md:inline">
+                    #{currentSessionId.slice(0, 8)}
                   </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                {tokenEstimate > 0 && (
+                  <div
+                    className="flex items-center gap-1 text-xs text-[var(--text-secondary)]"
+                    title="Approximate token usage (chars/4)"
+                  >
+                    <Coins className="w-3 h-3" />
+                    <span className="font-mono">
+                      {tokenEstimate < 1000
+                        ? tokenEstimate
+                        : `${(tokenEstimate / 1000).toFixed(1)}k`}
+                    </span>
+                  </div>
                 )}
                 {currentSessionId && (
                   <button
                     onClick={() => onExportToPpt?.('chat', currentSessionId)}
-                    className="text-xs text-blue-400 hover:underline"
+                    className="text-xs text-[var(--accent)] hover:underline"
                   >
                     生成 PPT
                   </button>
                 )}
                 <button
                   onClick={() => setShowSidebar(!showSidebar)}
-                  className="text-xs text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
+                  className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors p-1 rounded hover:bg-[var(--bg-tertiary)]/40"
+                  title={showSidebar ? 'Hide session sidebar' : 'Show session sidebar'}
                 >
-                  {showSidebar ? '←' : '→'}
+                  {showSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
                 </button>
               </div>
             </div>
