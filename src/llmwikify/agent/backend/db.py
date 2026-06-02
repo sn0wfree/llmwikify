@@ -634,6 +634,35 @@ class AgentDatabase:
                 CREATE INDEX IF NOT EXISTS idx_sources_session
                 ON research_sources(session_id)
             """)
+
+            # ─── PPT Tasks (v0.5) ─────────────────────────────────
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS ppt_tasks (
+                    id TEXT PRIMARY KEY,
+                    title TEXT,
+                    subtitle TEXT,
+                    theme TEXT,
+                    source_type TEXT,
+                    source_id TEXT,
+                    outline_json TEXT,
+                    presentation_json TEXT,
+                    status TEXT NOT NULL,
+                    error TEXT,
+                    slide_count INTEGER DEFAULT 0,
+                    model_used TEXT,
+                    generation_time_ms INTEGER,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT DEFAULT (datetime('now'))
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_ppt_tasks_updated
+                ON ppt_tasks(updated_at DESC)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_ppt_tasks_status
+                ON ppt_tasks(status)
+            """)
             conn.commit()
 
     def save_proposal(self, proposal: dict) -> None:
@@ -1074,3 +1103,149 @@ class AgentDatabase:
                 "size_mb": size_bytes / 1024 / 1024,
                 "tables": tables,
             }
+
+    # ─── PPT Tasks (v0.5) ───────────────────────────────────────
+
+    def create_ppt_task(
+        self,
+        title: str,
+        theme: str,
+        source_type: str | None,
+        source_id: str | None,
+        outline_json: str,
+        slide_count: int = 0,
+    ) -> str:
+        """Create a new PPT task. Returns task_id (12-char hex)."""
+        task_id = uuid.uuid4().hex[:12]
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO ppt_tasks
+                (id, title, theme, source_type, source_id, outline_json,
+                 status, slide_count)
+                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+                """,
+                (task_id, title, theme, source_type, source_id,
+                 outline_json, slide_count),
+            )
+            conn.commit()
+        return task_id
+
+    def update_ppt_task_status(
+        self, task_id: str, status: str, error: str | None = None,
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE ppt_tasks
+                SET status = ?, error = ?, updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (status, error, task_id),
+            )
+            conn.commit()
+
+    def set_ppt_task_partial_presentation(
+        self, task_id: str, slides: list[dict],
+    ) -> None:
+        """Persist partial slides JSON (called on each slide_done for reconnect)."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE ppt_tasks
+                SET presentation_json = ?, slide_count = ?, updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (json.dumps({"slides": slides, "partial": True},
+                            ensure_ascii=False),
+                 len(slides), task_id),
+            )
+            conn.commit()
+
+    def set_ppt_task_result(
+        self,
+        task_id: str,
+        presentation_dict: dict,
+        model_used: str,
+        generation_time_ms: int,
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE ppt_tasks
+                SET presentation_json = ?, model_used = ?,
+                    generation_time_ms = ?, status = 'done',
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (json.dumps(presentation_dict, ensure_ascii=False),
+                 model_used, generation_time_ms, task_id),
+            )
+            conn.commit()
+
+    def get_ppt_task(self, task_id: str) -> dict | None:
+        """Get full task including presentation. Returns None if not found."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM ppt_tasks WHERE id = ?", (task_id,),
+            ).fetchone()
+            if not row:
+                return None
+            d = dict(row)
+            if d.get("presentation_json"):
+                d["presentation"] = json.loads(d["presentation_json"])
+            if d.get("outline_json"):
+                d["outline"] = json.loads(d["outline_json"])
+            return d
+
+    def list_ppt_tasks(
+        self, limit: int = 50, source_type: str | None = None,
+    ) -> list[dict]:
+        """List tasks ordered by updated_at DESC."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if source_type:
+                rows = conn.execute(
+                    """
+                    SELECT id, title, subtitle, theme, source_type, source_id,
+                           status, error, slide_count, model_used,
+                           generation_time_ms, created_at, updated_at
+                    FROM ppt_tasks WHERE source_type = ?
+                    ORDER BY updated_at DESC LIMIT ?
+                    """,
+                    (source_type, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT id, title, subtitle, theme, source_type, source_id,
+                           status, error, slide_count, model_used,
+                           generation_time_ms, created_at, updated_at
+                    FROM ppt_tasks
+                    ORDER BY updated_at DESC LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+            return [dict(r) for r in rows]
+
+    def delete_ppt_task(self, task_id: str) -> bool:
+        with sqlite3.connect(self.db_path) as conn:
+            cur = conn.execute(
+                "DELETE FROM ppt_tasks WHERE id = ?", (task_id,),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def cleanup_old_ppt_tasks(self, days: int = 30) -> int:
+        """Delete tasks older than N days. Returns count deleted."""
+        with sqlite3.connect(self.db_path) as conn:
+            cur = conn.execute(
+                """
+                DELETE FROM ppt_tasks
+                WHERE updated_at < datetime('now', ?)
+                """,
+                (f"-{days} days",),
+            )
+            conn.commit()
+            return cur.rowcount

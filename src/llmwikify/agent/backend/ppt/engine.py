@@ -247,12 +247,18 @@ class PPTEngine:
         self,
         request: GenerateRequest,
         queue: Any,
+        db: Any = None,
+        task_id: str | None = None,
     ) -> dict:
         """Generate content with SSE events pushed to queue.
 
         Yields slide_start / slide_done / done / error events to *queue*
         so an SSE consumer can stream progress to the browser.
         Returns the final GenerateResponse dict.
+
+        v0.5: If db and task_id are provided, incrementally persists
+        partial slides to ppt_tasks.presentation_json after each slide_done.
+        This enables reconnecting users to see partial progress.
         """
         import asyncio as _aio
 
@@ -286,6 +292,20 @@ class PPTEngine:
                     "total": total_pages,
                     "slide": slide.model_dump(),
                 })
+
+                # v0.5: incremental DB write so reconnecting users
+                # can see partial progress
+                if db is not None and task_id is not None:
+                    try:
+                        db.set_ppt_task_partial_presentation(
+                            task_id,
+                            [s.model_dump() for s in slides],
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to persist partial slides for %s: %s",
+                            task_id, e,
+                        )
             except Exception as e:
                 logger.error("Failed to generate slide %d: %s", idx + 1, e)
                 await queue.put({

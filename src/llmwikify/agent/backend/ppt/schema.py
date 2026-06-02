@@ -36,6 +36,12 @@ class GenerateRequest(BaseModel):
     outline: Outline = Field(..., description="The outline to generate content for")
     theme: str = Field("professional", description="Theme name")
     language: str = Field("zh", description="Language: zh or en")
+    source_type: Optional[str] = Field(
+        None, description="v0.5: Source of outline — 'topic'|'research'|'chat'"
+    )
+    source_id: Optional[str] = Field(
+        None, description="v0.5: ID of source research/chat session"
+    )
 
 
 # Content types for slides
