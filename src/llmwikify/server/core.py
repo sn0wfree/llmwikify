@@ -6,10 +6,12 @@ Combines MCP protocol, REST API, and WebUI into a single FastAPI application.
 from __future__ import annotations
 
 import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime
+from pathlib import Path
 from typing import Union
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from llmwikify.core import Wiki
@@ -23,6 +25,28 @@ from .utils.webui import mount_webui
 
 
 logger = logging.getLogger(__name__)
+
+
+def setup_logging(log_dir: Path | None = None) -> None:
+    """Configure root logger with file + stream handlers."""
+    root = logging.getLogger()
+    if root.handlers:
+        return
+
+    root.setLevel(logging.INFO)
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+    if log_dir is None:
+        log_dir = Path.home() / ".llmwikify" / "agent"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    fh = RotatingFileHandler(log_dir / "server.log", maxBytes=10 * 1024 * 1024, backupCount=5)
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+    root.addHandler(sh)
 
 
 class WikiServer:
@@ -133,6 +157,15 @@ class WikiServer:
         if self.api_key:
             app.add_middleware(AuthMiddleware, api_key=self.api_key)
 
+        # Request logging middleware - logs every request for debugging
+        @app.middleware("http")
+        async def log_requests(request: Request, call_next):
+            response = await call_next(request)
+            if response.status_code >= 400 or request.url.path.startswith("/api/ppt"):
+                client = request.client.host if request.client else "?"
+                logger.info(f"[req] {request.method} {request.url.path} → {response.status_code} | client={client}")
+            return response
+
         # Mount MCP endpoint
         if self.mcp is not None:
             app.mount("/mcp", self.mcp.asgi_app)
@@ -201,7 +234,9 @@ class WikiServer:
 
     def run(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
         """Run unified HTTP server."""
+        setup_logging()
         import uvicorn
+        logger.info(f"llmwikify server starting on {host}:{port}")
         uvicorn.run(self.app, host=host, port=port, log_level="info")
 
     async def run_mcp_stdio(self) -> None:
