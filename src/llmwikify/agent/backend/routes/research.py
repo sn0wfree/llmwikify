@@ -1,4 +1,4 @@
-"""Agent Backend Routes - Deep Research API endpoints."""
+"""Agent Backend Routes - Quick Research API endpoints."""
 
 from __future__ import annotations
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Redesign the Deep Research pipeline from a **fixed 7-stage sequential flow** to an
+Redesign the Quick Research pipeline from a **fixed 7-stage sequential flow** to an
 **adaptive ReAct (Reason → Act → Observe → loop) agent** that dynamically decides
 what to do next based on intermediate results.
 

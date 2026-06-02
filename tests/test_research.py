@@ -1,4 +1,4 @@
-"""Comprehensive unit tests for Deep Research implementation."""
+"""Comprehensive unit tests for Quick Research implementation."""
 
 import asyncio
 import json

@@ -848,7 +848,7 @@ export function ResearchPanel() {
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-[var(--border)]">
-        <h2 className="text-lg font-bold mb-3">Deep Research</h2>
+        <h2 className="text-lg font-bold mb-3">Quick Research</h2>
         <div className="flex gap-2">
           <input
             value={query}

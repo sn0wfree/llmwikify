@@ -1,7 +1,7 @@
 # ReAct 范式完善 + 工程质量提升方案
 
 > 状态：设计阶段
-> 分支：`feature/deep-research-display-language`
+> 分支：`feature/quick-research-display-language`
 > 创建日期：2026-05-29
 
 ## 一、现状分析

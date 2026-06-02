@@ -1,4 +1,4 @@
-# Chat & Deep Research Workflow Optimization Plan
+# Chat & Quick Research Workflow Optimization Plan
 
 ## Chat Workflow Optimizations
 
@@ -40,7 +40,7 @@
 
 ---
 
-## Deep Research Workflow Optimizations
+## Quick Research Workflow Optimizations
 
 ### P0 — Critical Fixes
 
@@ -98,5 +98,5 @@
 
 - Run existing tests after each change: `python -m pytest tests/test_research.py tests/test_xiaomi_provider.py -x`
 - Manual test: resume old chat session → verify LLM remembers prior turns
-- Manual test: run Deep Research with multiple sub-queries → verify 5+ sources gathered
+- Manual test: run Quick Research with multiple sub-queries → verify 5+ sources gathered
 - Manual test: rate sources → verify high-rated sources influence report

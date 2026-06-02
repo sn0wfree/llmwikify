@@ -2,7 +2,7 @@
 
 > **Status:** ✅ Implemented
 > **Last updated:** 2026-05-28
-> **Note:** Superseded by `deep-research-display-language.md` and `react-research-engine.md` for current design.
+> **Note:** Superseded by `quick-research-display-language.md` and `react-research-engine.md` for current design.
 
 ## Overview
 

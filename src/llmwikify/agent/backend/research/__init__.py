@@ -1,4 +1,4 @@
-"""Deep Research engine for multi-source async research."""
+"""Quick Research engine for multi-source async research."""
 
 from .engine import ResearchEngine
 from .session import ResearchSessionManager

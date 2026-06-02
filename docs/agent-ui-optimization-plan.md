@@ -74,7 +74,7 @@ data: {"type": "done", "final_response": "...", "actions": []}
 
 | 文档 | 内容 |
 |------|------|
-| `docs/agent-framework-design.md` | 完整架构设计，含 Chat SSE、Deep Research、评分系统 |
+| `docs/agent-framework-design.md` | 完整架构设计，含 Chat SSE、Quick Research、评分系统 |
 | `docs/agent-backend-implementation-plan.md` | 后端实现计划，含 DB Schema、per-wiki 缓存 |
 
 ---
