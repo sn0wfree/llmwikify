@@ -3,6 +3,52 @@
  */
 
 const API_BASE = '/api/ppt';
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 3000;
+
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+
+function isFrpsError(response: Response, body: string): boolean {
+  return response.status === 404
+    && (response.headers.get('content-type') || '').includes('text/html')
+    && body.includes('frp');
+}
+
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  method: string,
+  reqBody?: string,
+): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    let response: Response;
+    try {
+      response = await fetch(url, init);
+    } catch (e) {
+      lastError = e;
+      if (attempt < MAX_RETRIES) { await sleep(RETRY_DELAY_MS); continue; }
+      reportFetchError(url, e, method);
+      throw e;
+    }
+
+    if (response.ok) return response;
+
+    const text = await response.text();
+
+    if (isFrpsError(response, text) && attempt < MAX_RETRIES) {
+      reportApiError(response, text, method, reqBody);
+      await sleep(RETRY_DELAY_MS);
+      continue;
+    }
+
+    reportApiError(response, text, method, reqBody);
+    let parsed: { error?: string };
+    try { parsed = JSON.parse(text); } catch { parsed = {}; }
+    throw new Error(parsed.error || `Failed (${response.status})`);
+  }
+  throw lastError instanceof Error ? lastError : new Error('Max retries exceeded');
+}
 
 function reportApiError(response: Response, body: string, method: string, requestBody?: string) {
   fetch('/api/log/error', {
@@ -116,26 +162,11 @@ export async function generateOutline(
 ): Promise<OutlineResponse> {
   const endpoint = `${API_BASE}/outline`;
   const reqBody = JSON.stringify({ topic, num_slides: numSlides, language });
-  let response: Response;
-  try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: reqBody,
-    });
-  } catch (e) {
-    reportFetchError(endpoint, e, 'POST');
-    throw e;
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    reportApiError(response, text, 'POST', reqBody);
-    let error: { error?: string };
-    try { error = JSON.parse(text); } catch { error = {}; }
-    throw new Error(error.error || `Failed to generate outline (${response.status})`);
-  }
-
+  const response = await fetchWithRetry(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: reqBody,
+  }, 'POST', reqBody);
   return response.json();
 }
 
@@ -149,26 +180,11 @@ export async function generatePresentation(
 ): Promise<GenerateResponse> {
   const endpoint = `${API_BASE}/generate`;
   const reqBody = JSON.stringify({ outline, theme, language });
-  let response: Response;
-  try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: reqBody,
-    });
-  } catch (e) {
-    reportFetchError(endpoint, e, 'POST');
-    throw e;
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    reportApiError(response, text, 'POST', reqBody);
-    let error: { error?: string };
-    try { error = JSON.parse(text); } catch { error = {}; }
-    throw new Error(error.error || `Failed to generate presentation (${response.status})`);
-  }
-
+  const response = await fetchWithRetry(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: reqBody,
+  }, 'POST', reqBody);
   return response.json();
 }
 
@@ -182,26 +198,11 @@ export async function generateFromResearch(
 ): Promise<FromSourceResponse> {
   const endpoint = `${API_BASE}/from-research`;
   const reqBody = JSON.stringify({ research_id: researchId, theme, language });
-  let response: Response;
-  try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: reqBody,
-    });
-  } catch (e) {
-    reportFetchError(endpoint, e, 'POST');
-    throw e;
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    reportApiError(response, text, 'POST', reqBody);
-    let error: { error?: string };
-    try { error = JSON.parse(text); } catch { error = {}; }
-    throw new Error(error.error || `Failed to generate from research (${response.status})`);
-  }
-
+  const response = await fetchWithRetry(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: reqBody,
+  }, 'POST', reqBody);
   return response.json();
 }
 
@@ -215,26 +216,11 @@ export async function generateFromChat(
 ): Promise<FromSourceResponse> {
   const endpoint = `${API_BASE}/from-chat`;
   const reqBody = JSON.stringify({ chat_session_id: chatSessionId, theme, language });
-  let response: Response;
-  try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: reqBody,
-    });
-  } catch (e) {
-    reportFetchError(endpoint, e, 'POST');
-    throw e;
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    reportApiError(response, text, 'POST', reqBody);
-    let error: { error?: string };
-    try { error = JSON.parse(text); } catch { error = {}; }
-    throw new Error(error.error || `Failed to generate from chat (${response.status})`);
-  }
-
+  const response = await fetchWithRetry(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: reqBody,
+  }, 'POST', reqBody);
   return response.json();
 }
 
@@ -243,22 +229,7 @@ export async function generateFromChat(
  */
 export async function getThemes(): Promise<ThemesResponse> {
   const endpoint = `${API_BASE}/themes`;
-  let response: Response;
-  try {
-    response = await fetch(endpoint);
-  } catch (e) {
-    reportFetchError(endpoint, e, 'GET');
-    throw e;
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    reportApiError(response, text, 'GET');
-    let error: { error?: string };
-    try { error = JSON.parse(text); } catch { error = {}; }
-    throw new Error(error.error || `Failed to get themes (${response.status})`);
-  }
-
+  const response = await fetchWithRetry(endpoint, { method: 'GET' }, 'GET');
   return response.json();
 }
 
