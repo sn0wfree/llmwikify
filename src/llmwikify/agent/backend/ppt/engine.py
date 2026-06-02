@@ -243,6 +243,90 @@ class PPTEngine:
             generation_time_ms=elapsed_ms,
         )
 
+    async def generate_content_stream(
+        self,
+        request: GenerateRequest,
+        queue: Any,
+    ) -> dict:
+        """Generate content with SSE events pushed to queue.
+
+        Yields slide_start / slide_done / done / error events to *queue*
+        so an SSE consumer can stream progress to the browser.
+        Returns the final GenerateResponse dict.
+        """
+        import asyncio as _aio
+
+        start_time = time.monotonic()
+        theme = get_theme(request.theme)
+        slides: List[SlideContent] = []
+        total_pages = len(request.outline.pages)
+
+        for idx, page in enumerate(request.outline.pages):
+            # Notify: slide generation starting
+            await queue.put({
+                "type": "slide_start",
+                "index": idx,
+                "total": total_pages,
+                "title": page.title,
+            })
+
+            try:
+                slide = await self._generate_slide_content(
+                    page=page,
+                    title=request.outline.title,
+                    total_pages=total_pages,
+                    language=request.language,
+                )
+                slides.append(slide)
+
+                # Notify: slide done
+                await queue.put({
+                    "type": "slide_done",
+                    "index": idx,
+                    "total": total_pages,
+                    "slide": slide.model_dump(),
+                })
+            except Exception as e:
+                logger.error("Failed to generate slide %d: %s", idx + 1, e)
+                await queue.put({
+                    "type": "slide_error",
+                    "index": idx,
+                    "total": total_pages,
+                    "error": str(e),
+                })
+                # Create a placeholder slide so presentation is still usable
+                slide = SlideContent(
+                    id=f"slide_{idx + 1}",
+                    layout="section",
+                    title=page.title,
+                    content=f"[Generation failed: {e}]",
+                )
+                slides.append(slide)
+
+        elapsed_ms = int((time.monotonic() - start_time) * 1000)
+
+        presentation = Presentation(
+            title=request.outline.title,
+            subtitle=request.outline.subtitle,
+            theme=theme,
+            slides=slides,
+            source={"type": "topic"},
+        )
+
+        result = GenerateResponse(
+            presentation=presentation,
+            model_used=self.llm.model,
+            generation_time_ms=elapsed_ms,
+        )
+
+        # Notify: all slides done
+        await queue.put({
+            "type": "done",
+            "presentation": result.model_dump(),
+        })
+
+        return result.model_dump()
+
     async def generate_from_research(
         self,
         topic: str,

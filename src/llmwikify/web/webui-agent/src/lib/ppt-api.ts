@@ -171,7 +171,7 @@ export async function generateOutline(
 }
 
 /**
- * Generate content based on outline (Step 2)
+ * Generate content based on outline (Step 2) — sync (legacy)
  */
 export async function generatePresentation(
   outline: Outline,
@@ -186,6 +186,151 @@ export async function generatePresentation(
     body: reqBody,
   }, 'POST', reqBody);
   return response.json();
+}
+
+// ─── Async Generation + SSE Streaming ───────────────────────────────
+
+export interface SlideStartEvent {
+  type: 'slide_start';
+  index: number;
+  total: number;
+  title: string;
+}
+
+export interface SlideDoneEvent {
+  type: 'slide_done';
+  index: number;
+  total: number;
+  slide: SlideContent;
+}
+
+export interface SlideErrorEvent {
+  type: 'slide_error';
+  index: number;
+  total: number;
+  error: string;
+}
+
+export interface DoneEvent {
+  type: 'done';
+  presentation: GenerateResponse;
+}
+
+export interface ErrorEvent {
+  type: 'error';
+  error: string;
+}
+
+export type PPTStreamEvent = SlideStartEvent | SlideDoneEvent | SlideErrorEvent | DoneEvent | ErrorEvent;
+
+/**
+ * Start async PPT content generation (Step 2).
+ * Returns task_id immediately (< 1s). Use streamPresentation() to get progress.
+ */
+export async function generatePresentationAsync(
+  outline: Outline,
+  theme: string = 'professional',
+  language: string = 'zh'
+): Promise<{ task_id: string }> {
+  const endpoint = `${API_BASE}/generate`;
+  const reqBody = JSON.stringify({ outline, theme, language });
+  const response = await fetchWithRetry(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: reqBody,
+  }, 'POST', reqBody);
+  const data = await response.json();
+  return { task_id: data.task_id };
+}
+
+/**
+ * SSE stream of PPT generation progress.
+ * Calls callbacks as slides are generated. Returns final presentation.
+ */
+export function streamPresentation(
+  taskId: string,
+  callbacks: {
+    onSlideStart?: (event: SlideStartEvent) => void;
+    onSlideDone?: (event: SlideDoneEvent) => void;
+    onSlideError?: (event: SlideErrorEvent) => void;
+    onDone?: (event: DoneEvent) => void;
+    onError?: (event: ErrorEvent) => void;
+  },
+): AbortController {
+  const controller = new AbortController();
+  const url = `${API_BASE}/task/${taskId}/stream`;
+
+  (async () => {
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) {
+        const text = await response.text();
+        callbacks.onError?.({ type: 'error', error: `SSE connection failed (${response.status}): ${text}` });
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        callbacks.onError?.({ type: 'error', error: 'No response body' });
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let eventType = '';
+        let eventData = '';
+
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            eventType = line.slice(6).trim();
+          } else if (line.startsWith('data:')) {
+            eventData = line.slice(5).trim();
+          } else if (line === '' && eventData) {
+            // Empty line = end of SSE message
+            try {
+              const parsed = JSON.parse(eventData);
+              switch (parsed.type) {
+                case 'slide_start':
+                  callbacks.onSlideStart?.(parsed as SlideStartEvent);
+                  break;
+                case 'slide_done':
+                  callbacks.onSlideDone?.(parsed as SlideDoneEvent);
+                  break;
+                case 'slide_error':
+                  callbacks.onSlideError?.(parsed as SlideErrorEvent);
+                  break;
+                case 'done':
+                  callbacks.onDone?.(parsed as DoneEvent);
+                  break;
+                case 'error':
+                  callbacks.onError?.(parsed as ErrorEvent);
+                  break;
+              }
+            } catch {
+              // Skip unparseable events
+            }
+            eventType = '';
+            eventData = '';
+          }
+        }
+      }
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
+        callbacks.onError?.({ type: 'error', error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+  })();
+
+  return controller;
 }
 
 /**
@@ -236,6 +381,8 @@ export async function getThemes(): Promise<ThemesResponse> {
 export default {
   generateOutline,
   generatePresentation,
+  generatePresentationAsync,
+  streamPresentation,
   generateFromResearch,
   generateFromChat,
   getThemes,

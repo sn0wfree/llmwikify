@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from sse_starlette import EventSourceResponse
 
 from ..db import AgentDatabase
 from ..ppt.engine import PPTEngine
@@ -16,6 +18,7 @@ from ..ppt.schema import (
     GenerateRequest,
     OutlineRequest,
 )
+from ..ppt.task_manager import get_ppt_task_manager
 from ..ppt.themes import list_themes
 
 logger = logging.getLogger(__name__)
@@ -77,21 +80,64 @@ async def generate_outline(request: OutlineRequest):
         )
 
 
-# ─── Content Generation ───────────────────────────────────────────────
+# ─── Content Generation (Async with SSE) ──────────────────────────────
+
+async def _run_ppt_generation(
+    task_id: str,
+    queue: Any,
+    request: GenerateRequest,
+) -> dict:
+    """Background task: generate PPT content, pushing events to queue."""
+    engine = _get_engine()
+    return await engine.generate_content_stream(request, queue)
+
 
 @router.post("/generate")
 async def generate_presentation(request: GenerateRequest):
-    """Generate presentation content based on outline (Step 2)."""
-    try:
-        engine = _get_engine()
-        response = await engine.generate_content(request)
-        return response.model_dump()
-    except Exception as e:
-        logger.error(f"PPT generation failed: {e}", exc_info=True)
-        return JSONResponse(
-            {"error": f"PPT generation failed: {str(e)}"},
-            status_code=500,
-        )
+    """Start async PPT content generation.
+
+    Returns 202 with task_id immediately (< 1s).
+    Client then connects to GET /api/ppt/task/{task_id}/stream for SSE progress.
+    """
+    task_mgr = get_ppt_task_manager()
+    task_id = task_mgr.create_task(
+        _run_ppt_generation,
+        request,
+    )
+    return JSONResponse(
+        {"task_id": task_id, "status": "processing"},
+        status_code=202,
+    )
+
+
+@router.get("/task/{task_id}")
+async def get_task_status(task_id: str):
+    """Poll task status (fallback if SSE not available)."""
+    task_mgr = get_ppt_task_manager()
+    return task_mgr.get_status(task_id)
+
+
+@router.get("/task/{task_id}/stream")
+async def stream_task_events(task_id: str):
+    """SSE stream of PPT generation progress events.
+
+    Events:
+      - slide_start: {index, total, title}
+      - slide_done:  {index, total, slide}
+      - slide_error: {index, total, error}
+      - done:        {presentation}
+      - error:       {error}
+    """
+    task_mgr = get_ppt_task_manager()
+
+    async def event_generator():
+        async for event in task_mgr.get_event_stream(task_id):
+            yield {
+                "event": event.get("type", "message"),
+                "data": json.dumps(event, ensure_ascii=False),
+            }
+
+    return EventSourceResponse(event_generator())
 
 
 # ─── From Research ────────────────────────────────────────────────────
@@ -101,7 +147,7 @@ async def generate_from_research(request: FromResearchRequest):
     """Generate outline from Quick Research results."""
     try:
         db = _get_db()
-        
+
         # Get research session
         session = db.get_research_session(request.research_id)
         if not session:
@@ -109,11 +155,11 @@ async def generate_from_research(request: FromResearchRequest):
                 {"error": "Research session not found"},
                 status_code=404,
             )
-        
+
         # Extract content from research result
         result = session.get("result", "")
         topic = session.get("query", "Research Results")
-        
+
         # Parse research result to extract key findings
         findings = []
         if isinstance(result, dict):
@@ -121,11 +167,11 @@ async def generate_from_research(request: FromResearchRequest):
             summary = result.get("summary", str(result)[:500])
         else:
             summary = str(result)[:500]
-        
+
         # Get source count
         sources = db.get_sources(request.research_id)
         source_count = len(sources) if sources else 0
-        
+
         engine = _get_engine()
         outline = await engine.generate_from_research(
             topic=topic,
@@ -133,7 +179,7 @@ async def generate_from_research(request: FromResearchRequest):
             findings=findings,
             source_count=source_count,
         )
-        
+
         return {
             "outline": outline.model_dump(),
             "source_summary": summary[:200],
@@ -154,7 +200,7 @@ async def generate_from_chat(request: FromChatRequest):
     """Generate outline from Chat conversation."""
     try:
         db = _get_db()
-        
+
         # Get chat session
         session = db.get_session(request.chat_session_id)
         if not session:
@@ -162,7 +208,7 @@ async def generate_from_chat(request: FromChatRequest):
                 {"error": "Chat session not found"},
                 status_code=404,
             )
-        
+
         # Get messages from chat
         messages = db.get_messages(request.chat_session_id)
         if not messages:
@@ -170,11 +216,11 @@ async def generate_from_chat(request: FromChatRequest):
                 {"error": "No messages in chat session"},
                 status_code=400,
             )
-        
+
         # Extract content from messages
         topic = session.get("title", "Chat Conversation")
         message_count = len(messages)
-        
+
         # Build summary from messages
         key_points = []
         summary_parts = []
@@ -184,10 +230,10 @@ async def generate_from_chat(request: FromChatRequest):
                 summary_parts.append(content[:200])
                 if len(content) > 50:
                     key_points.append(content[:100])
-        
+
         summary = "\n".join(summary_parts[:5])
         key_points = key_points[:5]
-        
+
         engine = _get_engine()
         outline = await engine.generate_from_chat(
             topic=topic,
@@ -195,7 +241,7 @@ async def generate_from_chat(request: FromChatRequest):
             key_points=key_points,
             message_count=message_count,
         )
-        
+
         return {
             "outline": outline.model_dump(),
             "source_summary": summary[:200],

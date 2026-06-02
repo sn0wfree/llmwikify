@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Outline, Presentation, SlideContent, generateOutline, generatePresentation, generateFromResearch, generateFromChat } from '../lib/ppt-api';
+import { Outline, Presentation, SlideContent, generateOutline, generatePresentationAsync, streamPresentation, generateFromResearch, generateFromChat } from '../lib/ppt-api';
 import { getTheme, Theme } from '../lib/ppt-themes';
 import { exportToPptx } from '../lib/ppt-export';
 import { OutlineEditor } from './OutlineEditor';
@@ -56,9 +56,12 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingFromSource, setIsGeneratingFromSource] = useState(false);
+  const [generatingSlide, setGeneratingSlide] = useState<number | null>(null);
+  const [totalSlides, setTotalSlides] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [cachedSource, setCachedSource] = useState<{ type: string; id: string } | null>(null);
   const lastSourceRef = useRef<string | null>(null);
+  const sseControllerRef = useRef<AbortController | null>(null);
 
   const theme = getTheme(themeName);
 
@@ -167,22 +170,48 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
     }
   };
 
-  // Step 2: Generate Content
+  // Step 2: Generate Content (Async with SSE streaming)
   const handleGenerateContent = async () => {
     if (!outline) return;
 
     setIsLoading(true);
     setError(null);
+    setGeneratingSlide(0);
+    setTotalSlides(outline.pages.length);
 
     try {
-      const response = await generatePresentation(outline, themeName, language);
-      setPresentation(response.presentation);
-      setCurrentSlideIndex(0);
-      setStep('preview');
+      // Start async generation — returns task_id immediately (< 1s)
+      const { task_id } = await generatePresentationAsync(outline, themeName, language);
+
+      // Stream progress via SSE
+      sseControllerRef.current = streamPresentation(task_id, {
+        onSlideStart: (event) => {
+          setGeneratingSlide(event.index + 1);
+        },
+        onSlideDone: (event) => {
+          // Progressive preview: show slides as they complete
+          setGeneratingSlide(event.index + 1);
+        },
+        onSlideError: (event) => {
+          console.warn(`Slide ${event.index + 1} error:`, event.error);
+        },
+        onDone: (event) => {
+          setPresentation(event.presentation.presentation);
+          setCurrentSlideIndex(0);
+          setStep('preview');
+          setIsLoading(false);
+          setGeneratingSlide(null);
+        },
+        onError: (event) => {
+          setError(event.error || 'Generation failed');
+          setIsLoading(false);
+          setGeneratingSlide(null);
+        },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate content');
-    } finally {
       setIsLoading(false);
+      setGeneratingSlide(null);
     }
   };
 
@@ -213,12 +242,18 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
 
   // Reset
   const handleReset = () => {
+    // Cancel any running SSE stream
+    sseControllerRef.current?.abort();
+    sseControllerRef.current = null;
+
     setStep('input');
     setOutline(null);
     setPresentation(null);
     setCurrentSlideIndex(0);
     setError(null);
     setCachedSource(null);
+    setGeneratingSlide(null);
+    setTotalSlides(0);
   };
 
   return (
@@ -336,6 +371,23 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
         {/* Step 2: Outline */}
         {!isGeneratingFromSource && step === 'outline' && outline && (
           <div className="max-w-3xl mx-auto">
+            {/* Progress bar when generating */}
+            {isLoading && generatingSlide !== null && (
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-5 h-5 border-2 border-blue-300 border-t-blue-500 rounded-full animate-spin" />
+                  <span className="text-sm font-medium text-blue-700">
+                    正在生成第 {generatingSlide}/{totalSlides} 页...
+                  </span>
+                </div>
+                <div className="w-full bg-blue-200 rounded-full h-2">
+                  <div
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${(generatingSlide / totalSlides) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
             <OutlineEditor
               outline={outline}
               onUpdate={setOutline}
