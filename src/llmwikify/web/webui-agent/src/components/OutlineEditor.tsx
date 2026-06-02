@@ -10,6 +10,7 @@ interface OutlineEditorProps {
   outline: Outline;
   onUpdate: (outline: Outline) => void;
   onGenerate: () => void;
+  onRegenerate?: () => void;
   isLoading?: boolean;
 }
 
@@ -33,7 +34,7 @@ const CONTENT_TYPE_COLORS: Record<string, string> = {
   summary: 'bg-gray-100 text-gray-800',
 };
 
-export function OutlineEditor({ outline, onUpdate, onGenerate, isLoading }: OutlineEditorProps) {
+export function OutlineEditor({ outline, onUpdate, onGenerate, onRegenerate, isLoading }: OutlineEditorProps) {
   const handleTitleChange = (value: string) => {
     onUpdate({ ...outline, title: value });
   };
@@ -183,6 +184,15 @@ export function OutlineEditor({ outline, onUpdate, onGenerate, isLoading }: Outl
         >
           + Add Slide
         </button>
+        {onRegenerate && (
+          <button
+            onClick={onRegenerate}
+            disabled={isLoading}
+            className="px-4 py-2 text-sm bg-yellow-100 text-yellow-700 rounded-md hover:bg-yellow-200 disabled:opacity-50"
+          >
+            重新生成大纲
+          </button>
+        )}
         <button
           onClick={onGenerate}
           disabled={isLoading || outline.pages.length === 0}

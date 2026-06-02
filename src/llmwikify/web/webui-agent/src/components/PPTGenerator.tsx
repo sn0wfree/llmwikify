@@ -20,6 +20,30 @@ interface PPTGeneratorProps {
   onExit?: () => void;
 }
 
+function getOutlineCacheKey(type: string, id: string): string {
+  return `ppt_outline_${type}_${id}`;
+}
+
+function loadCachedOutline(type: string, id: string): Outline | null {
+  try {
+    const raw = localStorage.getItem(getOutlineCacheKey(type, id));
+    if (!raw) return null;
+    return JSON.parse(raw) as Outline;
+  } catch {
+    return null;
+  }
+}
+
+function saveOutlineCache(type: string, id: string, outline: Outline): void {
+  try {
+    localStorage.setItem(getOutlineCacheKey(type, id), JSON.stringify(outline));
+  } catch { /* quota exceeded, ignore */ }
+}
+
+function clearOutlineCache(type: string, id: string): void {
+  localStorage.removeItem(getOutlineCacheKey(type, id));
+}
+
 export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorProps) {
   // State
   const [step, setStep] = useState<Step>('input');
@@ -31,7 +55,9 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
   const [presentation, setPresentation] = useState<Presentation | null>(null);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingFromSource, setIsGeneratingFromSource] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cachedSource, setCachedSource] = useState<{ type: string; id: string } | null>(null);
   const lastSourceRef = useRef<string | null>(null);
 
   const theme = getTheme(themeName);
@@ -39,49 +65,84 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
   // Handle source prop for research/chat import
   useEffect(() => {
     if (!source) return;
-    
+
     const sourceKey = `${source.type}:${source.id}`;
     if (lastSourceRef.current === sourceKey) return;
     lastSourceRef.current = sourceKey;
-    
+
+    setCachedSource({ type: source.type, id: source.id });
+
     if (source.type === 'research') {
-      handleFromResearch(source.id);
+      handleFromResearch(source.id, false);
     } else if (source.type === 'chat') {
-      handleFromChat(source.id);
+      handleFromChat(source.id, false);
     }
-    
+
     onSourceConsumed?.();
   }, [source]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Generate outline from research
-  const handleFromResearch = async (researchId: string) => {
-    setIsLoading(true);
+  const handleFromResearch = async (researchId: string, forceRegenerate: boolean) => {
+    setIsGeneratingFromSource(true);
     setError(null);
-    
+
     try {
+      if (!forceRegenerate) {
+        const cached = loadCachedOutline('research', researchId);
+        if (cached) {
+          setOutline(cached);
+          setStep('outline');
+          setIsGeneratingFromSource(false);
+          return;
+        }
+      }
+
       const response = await generateFromResearch(researchId, themeName, language);
+      saveOutlineCache('research', researchId, response.outline);
       setOutline(response.outline);
       setStep('outline');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load from research');
     } finally {
-      setIsLoading(false);
+      setIsGeneratingFromSource(false);
     }
   };
 
   // Generate outline from chat
-  const handleFromChat = async (chatId: string) => {
-    setIsLoading(true);
+  const handleFromChat = async (chatId: string, forceRegenerate: boolean) => {
+    setIsGeneratingFromSource(true);
     setError(null);
-    
+
     try {
+      if (!forceRegenerate) {
+        const cached = loadCachedOutline('chat', chatId);
+        if (cached) {
+          setOutline(cached);
+          setStep('outline');
+          setIsGeneratingFromSource(false);
+          return;
+        }
+      }
+
       const response = await generateFromChat(chatId, themeName, language);
+      saveOutlineCache('chat', chatId, response.outline);
       setOutline(response.outline);
       setStep('outline');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load from chat');
     } finally {
-      setIsLoading(false);
+      setIsGeneratingFromSource(false);
+    }
+  };
+
+  // Regenerate outline from source (bypass cache)
+  const handleRegenerateFromSource = () => {
+    if (!cachedSource) return;
+    clearOutlineCache(cachedSource.type, cachedSource.id);
+    if (cachedSource.type === 'research') {
+      handleFromResearch(cachedSource.id, true);
+    } else if (cachedSource.type === 'chat') {
+      handleFromChat(cachedSource.id, true);
     }
   };
 
@@ -157,6 +218,7 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
     setPresentation(null);
     setCurrentSlideIndex(0);
     setError(null);
+    setCachedSource(null);
   };
 
   return (
@@ -203,8 +265,18 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-4">
+        {/* Loading from source */}
+        {isGeneratingFromSource && (
+          <div className="flex flex-col items-center justify-center h-full gap-4">
+            <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
+            <p className="text-sm text-gray-500">
+              {cachedSource?.type === 'research' ? '正在从 Research 生成大纲...' : '正在从 Chat 生成大纲...'}
+            </p>
+          </div>
+        )}
+
         {/* Step 1: Input */}
-        {step === 'input' && (
+        {!isGeneratingFromSource && step === 'input' && (
           <div className="max-w-xl mx-auto">
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-lg font-semibold mb-4">Create Presentation</h2>
@@ -262,19 +334,20 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
         )}
 
         {/* Step 2: Outline */}
-        {step === 'outline' && outline && (
+        {!isGeneratingFromSource && step === 'outline' && outline && (
           <div className="max-w-3xl mx-auto">
             <OutlineEditor
               outline={outline}
               onUpdate={setOutline}
               onGenerate={handleGenerateContent}
+              onRegenerate={cachedSource ? handleRegenerateFromSource : undefined}
               isLoading={isLoading}
             />
           </div>
         )}
 
         {/* Step 3: Preview */}
-        {step === 'preview' && presentation && (
+        {!isGeneratingFromSource && step === 'preview' && presentation && (
           <div className="h-full">
             <SlidePreview
               slides={presentation.slides}
