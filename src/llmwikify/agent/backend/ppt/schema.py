@@ -69,7 +69,12 @@ class SlideContent(BaseModel):
 
 
 class ThemeColors(BaseModel):
-    """Color scheme for a theme."""
+    """Color scheme for a theme (v0.5 legacy 5-color palette).
+
+    Kept for backward compatibility — v0.6.1 themes expose full design tokens
+    via `tokens` instead. The 5 fields are still populated by `to_legacy_colors()`
+    so the .pptx exporter and any other legacy consumer continues to work.
+    """
     primary: str = Field(..., description="Primary color (hex)")
     secondary: str = Field(..., description="Secondary color (hex)")
     background: str = Field(..., description="Background color (hex)")
@@ -78,10 +83,28 @@ class ThemeColors(BaseModel):
 
 
 class Theme(BaseModel):
-    """Presentation theme."""
-    name: str = Field(..., description="Theme name")
-    label: str = Field(..., description="Display label")
-    colors: ThemeColors
+    """Presentation theme.
+
+    v0.6.1 design:
+    - `id` is the canonical theme identifier (e.g. "minimal-white")
+    - `name_zh` / `name_en` are user-facing labels
+    - `category` is one of: minimal|soft|warm|cool|dark|colorful|tech|brand|design|retro
+    - `description` is a 50-100 char usage hint
+    - `tokens` is a flat dict of CSS custom properties (color-*, font-*, radius-*, etc.)
+    - `colors` is the legacy 5-color palette derived from tokens for backward compat
+
+    Themes are adapted from https://github.com/lewislulu/html-ppt-skill (MIT, 5.4k ⭐).
+    """
+    id: str = Field(..., description="Canonical theme id (e.g. 'minimal-white')")
+    name: str = Field(..., description="Display label (English, legacy alias for name_en)")
+    name_zh: str = Field("", description="Chinese display label")
+    name_en: str = Field("", description="English display label")
+    label: str = Field("", description="Legacy display label alias")
+    category: str = Field("minimal", description="Theme category for grouping")
+    description: str = Field("", description="Usage hint (50-100 chars)")
+    tokens: dict = Field(default_factory=dict, description="Full design tokens (color-*, font-*, radius-*, shadow-*, gradient-*)")
+    colors: ThemeColors = Field(..., description="Legacy 5-color palette (auto-derived from tokens)")
+    attribution: str = Field("Based on html-ppt-skill (MIT, © 2026 lewislulu)", description="License attribution")
 
 
 class Presentation(BaseModel):
