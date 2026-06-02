@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AgentChat } from './components/AgentChat';
 import { Confirmations } from './components/Confirmations';
 import { DreamLog } from './components/DreamLog';
@@ -17,6 +17,11 @@ import { Badge } from './components/ui/Badge';
 
 type ViewMode = 'chat' | 'research' | 'ppt' | 'tasks' | 'confirmations' | 'proposals' | 'dream' | 'ingest' | 'history' | 'settings';
 
+export interface PptSource {
+  type: 'research' | 'chat';
+  id: string;
+}
+
 interface BadgeCounts {
   confirmations: number;
   proposals: number;
@@ -33,8 +38,14 @@ function LazyWrapper({ children }: { children: React.ReactNode }) {
 
 function App() {
   const [view, setView] = useState<ViewMode>('chat');
+  const [pptSource, setPptSource] = useState<PptSource | null>(null);
   const [badges, setBadges] = useState<BadgeCounts>({ confirmations: 0, proposals: 0, notifications: 0 });
   const { loadWikis, currentWikiId } = useAgentWikiStore();
+
+  const handleExportToPpt = useCallback((type: 'research' | 'chat', id: string) => {
+    setPptSource({ type, id });
+    setView('ppt');
+  }, []);
 
   useEffect(() => {
     loadWikis();
@@ -107,9 +118,9 @@ function App() {
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-hidden">
-          {view === 'chat' && <AgentChat />}
-          {view === 'research' && <ResearchPanel />}
-          {view === 'ppt' && <PPTGenerator />}
+          {view === 'chat' && <AgentChat onExportToPpt={handleExportToPpt} />}
+          {view === 'research' && <ResearchPanel onExportToPpt={handleExportToPpt} />}
+          {view === 'ppt' && <PPTGenerator source={pptSource} onSourceConsumed={() => setPptSource(null)} />}
           {view === 'tasks' && <LazyWrapper><TaskMonitor /></LazyWrapper>}
           {view === 'confirmations' && <LazyWrapper><Confirmations /></LazyWrapper>}
           {view === 'proposals' && <LazyWrapper><DreamProposals /></LazyWrapper>}

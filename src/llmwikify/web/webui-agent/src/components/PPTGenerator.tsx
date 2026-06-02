@@ -3,17 +3,23 @@
  * Handles the complete workflow: input → outline → content → preview → export
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outline, Presentation, SlideContent, generateOutline, generatePresentation, generateFromResearch, generateFromChat } from '../lib/ppt-api';
 import { getTheme, Theme } from '../lib/ppt-themes';
 import { exportToPptx } from '../lib/ppt-export';
 import { OutlineEditor } from './OutlineEditor';
 import { SlidePreview } from './SlidePreview';
 import { ThemeSelector } from './ThemeSelector';
+import { PptSource } from '../App';
 
 type Step = 'input' | 'outline' | 'preview';
 
-export function PPTGenerator() {
+interface PPTGeneratorProps {
+  source?: PptSource | null;
+  onSourceConsumed?: () => void;
+}
+
+export function PPTGenerator({ source, onSourceConsumed }: PPTGeneratorProps) {
   // State
   const [step, setStep] = useState<Step>('input');
   const [topic, setTopic] = useState('');
@@ -25,21 +31,26 @@ export function PPTGenerator() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastSourceRef = useRef<string | null>(null);
 
   const theme = getTheme(themeName);
 
-  // Handle URL parameters for research/chat import
+  // Handle source prop for research/chat import
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const researchId = params.get('research');
-    const chatId = params.get('chat');
+    if (!source) return;
     
-    if (researchId) {
-      handleFromResearch(researchId);
-    } else if (chatId) {
-      handleFromChat(chatId);
+    const sourceKey = `${source.type}:${source.id}`;
+    if (lastSourceRef.current === sourceKey) return;
+    lastSourceRef.current = sourceKey;
+    
+    if (source.type === 'research') {
+      handleFromResearch(source.id);
+    } else if (source.type === 'chat') {
+      handleFromChat(source.id);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    
+    onSourceConsumed?.();
+  }, [source]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Generate outline from research
   const handleFromResearch = async (researchId: string) => {

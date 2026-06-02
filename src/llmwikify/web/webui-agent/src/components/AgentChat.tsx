@@ -43,7 +43,7 @@ interface DbMessage {
   created_at: string;
 }
 
-export function AgentChat() {
+export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research' | 'chat', id: string) => void }) {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: "Hello! I'm your wiki assistant. How can I help?", timestamp: new Date().toISOString() },
   ]);
@@ -334,7 +334,7 @@ export function AgentChat() {
                 )}
                 {currentSessionId && (
                   <button
-                    onClick={() => window.open(`/agent/#ppt?chat=${currentSessionId}`, '_blank')}
+                    onClick={() => onExportToPpt?.('chat', currentSessionId)}
                     className="text-xs text-blue-400 hover:underline"
                   >
                     导出为 PPT
