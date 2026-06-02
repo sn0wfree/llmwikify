@@ -458,6 +458,13 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for development se
 
 MIT License — See [LICENSE](LICENSE) file.
 
+## 🙏 Credits
+
+- **PPT Generator theme system** (v0.6.1, 36 themes) is based on
+  [html-ppt-skill](https://github.com/lewislulu/html-ppt-skill) (MIT, 5.4k ⭐,
+  © 2026 lewislulu). Theme tokens, category structure, and inspiration are
+  adapted from their CSS-token design system.
+
 ## 📬 Contact
 
 - **GitHub**: [@sn0wfree](https://github.com/sn0wfree)
