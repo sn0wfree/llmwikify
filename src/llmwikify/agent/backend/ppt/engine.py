@@ -321,7 +321,11 @@ class PPTEngine:
         
         response_text = await self._call_llm(messages)
         content_data = self._parse_json(response_text)
-        
+
+        # Normalize nested structures from LLM
+        if isinstance(content_data.get("bullets"), dict):
+            content_data["bullets"] = content_data["bullets"].get("bullets", [])
+
         # Apply rules engine to determine layout
         layout = resolve_layout(page.content_type, content_data)
         
