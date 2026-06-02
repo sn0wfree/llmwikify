@@ -435,8 +435,9 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     agent_service = AgentService(registry, data_dir)
     set_agent_service(agent_service)
 
-    from llmwikify.agent.backend.routes import agent_router, research_router
+    from llmwikify.agent.backend.routes import agent_router, ppt_router, research_router
     from llmwikify.agent.backend.routes.research import set_research_deps
+    from llmwikify.agent.backend.routes.ppt import set_ppt_deps
 
     # Load research config from global config file
     research_config = _load_research_config()
@@ -447,8 +448,16 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
         llm_client=None,
         config=research_config,
     )
+    
+    set_ppt_deps(
+        db=agent_service.db,
+        wiki_registry=registry,
+        llm_client=None,
+        config=research_config,
+    )
     app.include_router(agent_router)
     app.include_router(research_router)
+    app.include_router(ppt_router)
 
     _mount_agent_spa(app)
 
