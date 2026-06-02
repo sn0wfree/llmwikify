@@ -441,13 +441,21 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
                   content={msg.content}
                   thinking={msg.thinking}
                   timestamp={formatTime(msg.timestamp)}
+                  onRegenerate={i === messages.length - 1 && msg.role === 'assistant' ? () => {
+                    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+                    if (lastUser) {
+                      setInput(lastUser.content);
+                      setMessages((prev) => prev.slice(0, prev.length - 1));
+                    }
+                  } : undefined}
+                  onQuote={msg.role === 'assistant' ? (text) => {
+                    setInput((prev) => prev ? `${prev}\n\n> ${text.split('\n').join('\n> ')}` : `> ${text.split('\n').join('\n> ')}`);
+                  } : undefined}
                 />
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-2 space-y-2 ml-9">
                     {msg.toolCalls.map((tc, j) => (
-                      <div key={j} className="max-w-[82%] ml-auto mr-0">
-                        <ToolCard tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} />
-                      </div>
+                      <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} />
                     ))}
                   </div>
                 )}
