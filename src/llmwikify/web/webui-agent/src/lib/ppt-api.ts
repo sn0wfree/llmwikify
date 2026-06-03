@@ -116,6 +116,17 @@ export interface SlideContent {
   text?: string;
   author?: string;
   image?: string;
+  // Extended layout fields (v0.7)
+  swot?: { strengths: string[]; weaknesses: string[]; opportunities: string[]; threats: string[] };
+  table_headers?: string[];
+  table_rows?: string[][];
+  events?: { date: string; title: string; description?: string }[];
+  kpi_items?: { label: string; value: string; trend?: string }[];
+  central_topic?: string;
+  branches?: { name: string; children?: { name: string }[] }[];
+  steps?: { title: string; description?: string }[];
+  images?: { url: string; caption?: string }[];
+  html?: string;
 }
 
 export interface Presentation {
