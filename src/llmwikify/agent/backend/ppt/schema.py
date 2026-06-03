@@ -66,6 +66,17 @@ class SlideContent(BaseModel):
     text: Optional[str] = Field(None, description="Quote text")
     author: Optional[str] = Field(None, description="Quote author")
     image: Optional[str] = Field(None, description="Image URL or base64")
+    # Extended layout fields (v0.7)
+    swot: Optional[dict] = Field(None, description="SWOT data: {strengths:[], weaknesses:[], opportunities:[], threats:[]}")
+    table_headers: Optional[List[str]] = Field(None, description="Table headers")
+    table_rows: Optional[List[List[str]]] = Field(None, description="Table data rows")
+    events: Optional[List[dict]] = Field(None, description="Timeline events: [{date, title, description}]")
+    kpi_items: Optional[List[dict]] = Field(None, description="KPI items: [{label, value, trend}]")
+    central_topic: Optional[str] = Field(None, description="Mindmap center topic")
+    branches: Optional[List[dict]] = Field(None, description="Mindmap branches: [{name, children:[{name}]}]")
+    steps: Optional[List[dict]] = Field(None, description="Process steps: [{title, description}]")
+    images: Optional[List[dict]] = Field(None, description="Gallery images: [{url, caption}]")
+    html: Optional[str] = Field(None, description="Custom HTML content for unknown layouts")
 
 
 class ThemeColors(BaseModel):
