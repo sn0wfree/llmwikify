@@ -125,7 +125,7 @@ function App() {
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <Backdrop />
-        <div className="flex-1 overflow-hidden relative z-[2]">
+        <div className="flex-1 overflow-hidden">
           {view === 'chat' && <AgentChat onExportToPpt={handleExportToPpt} />}
           {view === 'research' && <ResearchPanel onExportToPpt={handleExportToPpt} />}
           {view === 'ppt' && <PPTGenerator source={pptSource} onSourceConsumed={() => setPptSource(null)} onExit={handlePptExit} />}
