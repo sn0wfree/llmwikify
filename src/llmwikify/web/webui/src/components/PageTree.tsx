@@ -14,19 +14,25 @@ interface PageGroup {
 }
 
 const TYPE_ICONS: Record<string, string> = {
-  sources: '📚',
-  entities: '🏷️',
-  concepts: '💡',
-  papers: '📄',
-  claims: '🎯',
-  topics: '🏷️',
+  Source: '📚',
+  Entity: '🏷️',
+  Concept: '💡',
+  Paper: '📄',
+  Claim: '🎯',
+  Topic: '🏷️',
   root: '📝',
-  overview: '📖',
-  comparisons: '⚖️',
-  synthesis: '🔬',
-  research: '🔬',
-  factors: '📊',
-  other: '📄',
+  Overview: '📖',
+  Comparison: '⚖️',
+  Synthesis: '🔬',
+  Research: '🔬',
+  Factor: '📊',
+  Company: '🏢',
+  Industry: '🏭',
+  'Daily Summary': '📅',
+  'Weekly Summary': '📅',
+  'Monthly Summary': '📅',
+  'Quarterly Summary': '📅',
+  'Yearly Summary': '📅',
 };
 
 function getTypeColor(pageType: string, allTypes: string[]): string {
