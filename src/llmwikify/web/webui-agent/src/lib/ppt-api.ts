@@ -498,6 +498,62 @@ export async function deleteTask(taskId: string): Promise<{ ok: boolean }> {
   return response.json();
 }
 
+// ─── PPTChat SSE Streaming ─────────────────────────────────
+
+export interface PPTChatStreamEvent {
+  type: 'session_created' | 'thinking' | 'message_delta' | 'tool_start' | 'tool_end' | 'done' | 'error';
+  session_id?: string;
+  content?: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  updated_presentation?: Presentation;
+  message?: string;
+  error?: string;
+}
+
+/**
+ * Stream PPTChat messages via SSE.
+ * Returns a ReadableStreamDefaultReader for consuming events.
+ */
+export async function pptChatStream(params: {
+  message: string;
+  task_id: string;
+  current_slide_index: number;
+  session_id?: string;
+}): Promise<ReadableStreamDefaultReader<Uint8Array>> {
+  const endpoint = `${API_BASE}/chat`;
+  const reqBody = JSON.stringify(params);
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: reqBody,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`PPT Chat failed (${response.status}): ${text}`);
+  }
+
+  if (!response.body) {
+    throw new Error('No response body');
+  }
+
+  return response.body.getReader();
+}
+
+/**
+ * Get chat messages for a PPTChat session.
+ */
+export async function getPptChatMessages(
+  sessionId: string,
+  limit: number = 50,
+): Promise<{ messages: Array<{ role: string; content: string; created_at: string }> }> {
+  const endpoint = `${API_BASE}/chat/sessions/${sessionId}/messages?limit=${limit}`;
+  const response = await fetchWithRetry(endpoint, { method: 'GET' }, 'GET');
+  return response.json();
+}
+
 export default {
   generateOutline,
   generatePresentation,
@@ -509,4 +565,6 @@ export default {
   listTasks,
   getTask,
   deleteTask,
+  pptChatStream,
+  getPptChatMessages,
 };

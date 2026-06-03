@@ -663,6 +663,34 @@ class AgentDatabase:
                 CREATE INDEX IF NOT EXISTS idx_ppt_tasks_status
                 ON ppt_tasks(status)
             """)
+
+            # ─── PPTChat sessions + messages ─────────────────────
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS ppt_chat_sessions (
+                    id TEXT PRIMARY KEY,
+                    ppt_task_id TEXT NOT NULL,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT DEFAULT (datetime('now'))
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_ppt_chat_sessions_task
+                ON ppt_chat_sessions(ppt_task_id, created_at DESC)
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS ppt_chat_messages (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT DEFAULT (datetime('now'))
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_ppt_chat_messages_session
+                ON ppt_chat_messages(session_id, created_at DESC)
+            """)
+
             conn.commit()
 
     def save_proposal(self, proposal: dict) -> None:
@@ -1249,3 +1277,91 @@ class AgentDatabase:
             )
             conn.commit()
             return cur.rowcount
+
+    # ─── PPTChat CRUD ─────────────────────────────────────────────
+
+    def create_ppt_chat_session(self, ppt_task_id: str) -> str:
+        """Create a PPTChat session. Returns session_id (8-char hex)."""
+        session_id = uuid.uuid4().hex[:8]
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO ppt_chat_sessions (id, ppt_task_id) VALUES (?, ?)",
+                (session_id, ppt_task_id),
+            )
+            conn.commit()
+        return session_id
+
+    def save_ppt_chat_message(
+        self, session_id: str, role: str, content: str,
+    ) -> None:
+        """Save a chat message to the session."""
+        msg_id = uuid.uuid4().hex[:8]
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO ppt_chat_messages (id, session_id, role, content) "
+                "VALUES (?, ?, ?, ?)",
+                (msg_id, session_id, role, content),
+            )
+            conn.execute(
+                "UPDATE ppt_chat_sessions SET updated_at = datetime('now') WHERE id = ?",
+                (session_id,),
+            )
+            conn.commit()
+
+    def get_ppt_chat_messages(
+        self, session_id: str, limit: int = 50,
+    ) -> list[dict]:
+        """Get chat messages for a session, oldest first."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM ppt_chat_messages "
+                "WHERE session_id = ? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (session_id, limit),
+            ).fetchall()
+        return [dict(r) for r in reversed(rows)]
+
+    def get_ppt_chat_session(self, session_id: str) -> dict | None:
+        """Get a single PPTChat session."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM ppt_chat_sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_ppt_chat_sessions(
+        self, ppt_task_id: str | None = None,
+    ) -> list[dict]:
+        """List PPTChat sessions, optionally filtered by task."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if ppt_task_id:
+                rows = conn.execute(
+                    "SELECT * FROM ppt_chat_sessions "
+                    "WHERE ppt_task_id = ? "
+                    "ORDER BY updated_at DESC",
+                    (ppt_task_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM ppt_chat_sessions "
+                    "ORDER BY updated_at DESC"
+                ).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_ppt_chat_session(self, session_id: str) -> bool:
+        """Delete a PPTChat session and its messages."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "DELETE FROM ppt_chat_messages WHERE session_id = ?",
+                (session_id,),
+            )
+            cur = conn.execute(
+                "DELETE FROM ppt_chat_sessions WHERE id = ?",
+                (session_id,),
+            )
+            conn.commit()
+            return cur.rowcount > 0
