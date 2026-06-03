@@ -167,7 +167,7 @@ class WikiPageIOMixin(WikiProtocol):
             page_type = 'wiki_page'
             for type_name, type_dir in page_types.items():
                 if page_name.startswith(type_dir + '/') or page_name == type_dir:
-                    page_type = type_name
+                    page_type = type_dir
                     break
             result['page_type'] = page_type
 
