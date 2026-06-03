@@ -161,13 +161,30 @@ export function PageTree({ pagesByType, selectedPage, onSelect }: PageTreeProps)
     return pages;
   }, [pagesByType]);
 
-  const filteredPages = useMemo(() => {
-    if (!search) return allPages;
-    const q = search.toLowerCase();
-    return allPages.filter((p) => p.path.toLowerCase().includes(q));
-  }, [allPages, search]);
+  const { pinned, tree } = useMemo(() => {
+    const pinned: Array<{ path: string; fullPath: string }> = [];
+    const rest: Array<{ path: string; fullPath: string }> = [];
+    for (const p of allPages) {
+      const name = p.path.split('/').pop()?.replace(/\.md$/, '') || '';
+      if (name === 'index' || name === 'overview') {
+        pinned.push(p);
+      } else {
+        rest.push(p);
+      }
+    }
+    return { pinned, tree: buildTree(rest) };
+  }, [allPages]);
 
-  const tree = useMemo(() => buildTree(filteredPages), [filteredPages]);
+  const filteredTree = useMemo(() => {
+    if (!search) return tree;
+    const q = search.toLowerCase();
+    const filtered = allPages.filter((p) => {
+      const name = p.path.split('/').pop()?.replace(/\.md$/, '') || '';
+      if (name === 'index' || name === 'overview') return false;
+      return p.path.toLowerCase().includes(q);
+    });
+    return buildTree(filtered);
+  }, [tree, allPages, search]);
 
   const toggleDir = (path: string) => {
     setExpanded((prev) => {
@@ -190,7 +207,22 @@ export function PageTree({ pagesByType, selectedPage, onSelect }: PageTreeProps)
         />
       </div>
 
-      {tree.map((node) => (
+      {pinned.length > 0 && !search && pinned.map((node) => (
+        <button
+          key={node.path}
+          onClick={() => onSelect(node.fullPath || node.path)}
+          className={`w-full text-left px-2 py-1 text-sm truncate transition-colors flex items-center gap-1.5 ${
+            selectedPage === (node.fullPath || node.path) ? 'bg-blue-600/30 text-blue-300' : 'text-slate-300 hover:bg-slate-700'
+          }`}
+          style={{ paddingLeft: '8px' }}
+          title={node.fullPath || node.path}
+        >
+          <span className="text-xs">⭐</span>
+          {node.path.split('/').pop()?.replace(/\.md$/, '')}
+        </button>
+      ))}
+
+      {filteredTree.map((node) => (
         <TreeNodeComponent
           key={node.path}
           node={node}
