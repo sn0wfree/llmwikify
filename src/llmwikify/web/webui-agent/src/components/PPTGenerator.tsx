@@ -78,7 +78,7 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
   const [error, setError] = useState<string | null>(null);
   const [cachedSource, setCachedSource] = useState<{ type: string; id: string } | null>(null);
   const [reconnectAttempt, setReconnectAttempt] = useState<number>(0);
-  const [pptChatOpen, setPptChatOpen] = useState(false);
+  const [pptChatOpen, setPptChatOpen] = useState(true);
   const lastSourceRef = useRef<string | null>(null);
   const sseControllerRef = useRef<AbortController | null>(null);
   // Track which taskId we already attached SSE to (avoid double-attach)
