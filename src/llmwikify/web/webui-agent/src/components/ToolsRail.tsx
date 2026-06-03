@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState, useEffect } from 'react';
 import {
   Cpu,
   Wifi,
@@ -23,6 +23,8 @@ interface ToolCall {
   result?: unknown;
   error?: string;
   status: ToolStatus;
+  startedAt?: number;
+  finishedAt?: number;
 }
 
 interface Message {
@@ -93,6 +95,30 @@ function relativeTime(iso: string): string {
   } catch {
     return '';
   }
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  const min = Math.floor(ms / 60000);
+  const sec = ((ms % 60000) / 1000).toFixed(0);
+  return `${min}m${sec}s`;
+}
+
+function RailElapsed({ startedAt, finishedAt }: { startedAt?: number; finishedAt?: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!startedAt || finishedAt) return;
+    const t = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(t);
+  }, [startedAt, finishedAt]);
+  if (!startedAt) return null;
+  const elapsed = (finishedAt ?? now) - startedAt;
+  return (
+    <span className={`text-[10px] font-mono tabular-nums ${finishedAt ? 'text-[var(--text-secondary)]/60' : 'text-[var(--accent)]'}`}>
+      {finishedAt ? formatMs(elapsed) : `${formatMs(elapsed)}…`}
+    </span>
+  );
 }
 
 function ToolsRailImpl({
@@ -205,6 +231,7 @@ function ToolsRailImpl({
                     <span className="text-xs font-mono text-[var(--text-primary)] truncate flex-1">
                       {tc.tool}
                     </span>
+                    <RailElapsed startedAt={tc.startedAt} finishedAt={tc.finishedAt} />
                   </div>
                   {tc.error && (
                     <div className="mt-1 text-[10px] text-[var(--error)] truncate" title={tc.error}>
