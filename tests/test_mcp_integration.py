@@ -98,13 +98,14 @@ class TestMCPIntegration:
         _run_async(_run())
 
     def test_status_has_pages_by_type(self, mcp, wiki):
-        """Test that status returns pages_by_type."""
+        """Test that status returns pages_by_type with dynamically discovered directories."""
         async def _run():
             status_result = await mcp.call_tool("wiki_status", {})
             text = status_result.content[0].text if hasattr(status_result.content[0], 'text') else str(status_result.content[0])
             data = json.loads(text)
             assert "pages_by_type" in data
             assert "root" in data["pages_by_type"]
+            # init() creates these directories — they should be discovered dynamically
             for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
                 assert subdir in data["pages_by_type"]
 
