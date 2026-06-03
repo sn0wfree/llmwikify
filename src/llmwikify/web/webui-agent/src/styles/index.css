@@ -138,7 +138,7 @@ body {
 
 .backdrop-layer--base {
   z-index: 1;
-  background-color: var(--bg-primary);
+  background-color: transparent;
 }
 
 .backdrop-layer--filler {
