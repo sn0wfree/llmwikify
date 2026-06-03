@@ -498,6 +498,7 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     from llmwikify.agent.backend.routes import agent_router, ppt_router, research_router
     from llmwikify.agent.backend.routes.research import set_research_deps
     from llmwikify.agent.backend.routes.ppt import set_ppt_deps
+    from llmwikify.agent.backend.routes.ppt.chat_routes import set_ppt_chat_deps
 
     # Load research config from global config file
     research_config = _load_research_config()
@@ -516,9 +517,17 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
         llm_client=None,
         config=None,
     )
+
+    # PPTChat - uses same LLM client as agent service
+    set_ppt_chat_deps(
+        db=agent_service.db,
+        llm_client=None,  # Will fallback to agent service LLM
+    )
+
     app.include_router(agent_router)
     app.include_router(research_router)
     app.include_router(ppt_router)
+    app.include_router(ppt_chat_router)
 
     # v0.5: PPT task cleanup + recovery startup hook
     _start_ppt_cleanup_hook(app, agent_service.db)

@@ -19,6 +19,9 @@ from .schema import (
     ThemeColors,
 )
 from .themes import get_theme, list_themes
+from .harness import SlideHarness
+from .chat_engine import PPTChatEngine
+from .chat_router import PPTChatRouter
 
 __all__ = [
     "PPTEngine",
@@ -39,4 +42,7 @@ __all__ = [
     "ThemeColors",
     "get_theme",
     "list_themes",
+    "SlideHarness",
+    "PPTChatEngine",
+    "PPTChatRouter",
 ]

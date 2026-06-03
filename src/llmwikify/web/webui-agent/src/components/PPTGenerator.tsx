@@ -22,6 +22,7 @@ import { OutlineEditor } from './OutlineEditor';
 import { SlidePreview } from './SlidePreview';
 import { ThemeSelector } from './ThemeSelector';
 import { PPTSidebar } from './PPTSidebar';
+import { PPTChatPanel } from './PPTChatPanel';
 import { useUrlTask } from '../lib/useUrlTask';
 import { PptSource } from '../App';
 
@@ -77,6 +78,7 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
   const [error, setError] = useState<string | null>(null);
   const [cachedSource, setCachedSource] = useState<{ type: string; id: string } | null>(null);
   const [reconnectAttempt, setReconnectAttempt] = useState<number>(0);
+  const [pptChatOpen, setPptChatOpen] = useState(false);
   const lastSourceRef = useRef<string | null>(null);
   const sseControllerRef = useRef<AbortController | null>(null);
   // Track which taskId we already attached SSE to (avoid double-attach)
@@ -533,14 +535,25 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
 
         {/* Step 3: Preview */}
         {!isGeneratingFromSource && step === 'preview' && presentation && (
-          <div className="h-full">
-            <SlidePreview
-              slides={presentation.slides}
-              currentIndex={currentSlideIndex}
-              theme={theme}
-              onSelect={setCurrentSlideIndex}
-              onPrev={handlePrev}
-              onNext={handleNext}
+          <div className="h-full flex">
+            <div className="flex-1 min-w-0">
+              <SlidePreview
+                slides={presentation.slides}
+                currentIndex={currentSlideIndex}
+                theme={theme}
+                onSelect={setCurrentSlideIndex}
+                onPrev={handlePrev}
+                onNext={handleNext}
+              />
+            </div>
+            <PPTChatPanel
+              taskId={taskId || ''}
+              presentation={presentation}
+              currentSlideIndex={currentSlideIndex}
+              onPresentationUpdate={(pres) => setPresentation(pres)}
+              onSlideSelect={setCurrentSlideIndex}
+              isOpen={pptChatOpen}
+              onToggle={() => setPptChatOpen(!pptChatOpen)}
             />
           </div>
         )}
