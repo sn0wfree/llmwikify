@@ -26,6 +26,8 @@ interface ToolCall {
   result?: unknown;
   error?: string;
   status: 'pending' | 'streaming' | 'done' | 'error';
+  startedAt?: number;
+  finishedAt?: number;
 }
 
 type ConnectionState = 'idle' | 'live' | 'error';
@@ -162,20 +164,20 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
           case 'tool_call_start':
             setCurrentToolCalls((prev) => [
               ...prev,
-              { tool: event.tool, args: event.args, status: 'streaming' },
+              { tool: event.tool, args: event.args, status: 'streaming', startedAt: Date.now() },
             ]);
             break;
           case 'tool_call_end':
             setCurrentToolCalls((prev) =>
               prev.map((tc) =>
-                tc.tool === event.tool ? { ...tc, result: event.result, status: 'done' } : tc
+                tc.tool === event.tool ? { ...tc, result: event.result, status: 'done', finishedAt: Date.now() } : tc
               )
             );
             break;
           case 'confirmation_required':
             setCurrentToolCalls((prev) =>
               prev.map((tc) =>
-                tc.tool === 'confirmation_required' ? { ...tc, status: 'done' } : tc
+                tc.tool === 'confirmation_required' ? { ...tc, status: 'done', finishedAt: Date.now() } : tc
               )
             );
             setPendingConfirmation({
@@ -261,14 +263,14 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
           case 'tool_call_start':
             setCurrentToolCalls((prev) => [
               ...prev,
-              { tool: event.tool, args: event.args, status: 'streaming' },
+              { tool: event.tool, args: event.args, status: 'streaming', startedAt: Date.now() },
             ]);
             break;
 
           case 'tool_call_end':
             setCurrentToolCalls((prev) =>
               prev.map((tc) =>
-                tc.tool === event.tool ? { ...tc, result: event.result, status: 'done' } : tc
+                tc.tool === event.tool ? { ...tc, result: event.result, status: 'done', finishedAt: Date.now() } : tc
               )
             );
             break;
@@ -276,7 +278,7 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
           case 'tool_call_error':
             setCurrentToolCalls((prev) =>
               prev.map((tc) =>
-                tc.tool === event.tool ? { ...tc, error: event.error, status: 'error' } : tc
+                tc.tool === event.tool ? { ...tc, error: event.error, status: 'error', finishedAt: Date.now() } : tc
               )
             );
             break;
@@ -284,7 +286,7 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
           case 'confirmation_required':
             setCurrentToolCalls((prev) =>
               prev.map((tc) =>
-                tc.tool === 'confirmation_required' ? { ...tc, status: 'done' } : tc
+                tc.tool === 'confirmation_required' ? { ...tc, status: 'done', finishedAt: Date.now() } : tc
               )
             );
             setPendingConfirmation({
@@ -455,7 +457,7 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
                   <div className="mt-2 space-y-2 ml-9">
                     {msg.toolCalls.map((tc, j) => (
-                      <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} />
+                      <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} startedAt={tc.startedAt} finishedAt={tc.finishedAt} />
                     ))}
                   </div>
                 )}

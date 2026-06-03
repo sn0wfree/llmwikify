@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Search,
   FileText,
@@ -27,6 +27,8 @@ interface ToolCardProps {
   status: ToolStatus;
   result?: unknown;
   error?: string;
+  startedAt?: number;
+  finishedAt?: number;
 }
 
 const TOOL_ICONS: Record<string, typeof Wrench> = {
@@ -79,9 +81,29 @@ function truncateJson(obj: unknown, maxLen = 200): string {
   return str.slice(0, maxLen) + '…';
 }
 
-export function ToolCard({ tool, args, status, result, error }: ToolCardProps) {
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  const min = Math.floor(ms / 60000);
+  const sec = ((ms % 60000) / 1000).toFixed(0);
+  return `${min}m${sec}s`;
+}
+
+function useElapsedMs(startedAt?: number, finishedAt?: number): number {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!startedAt || finishedAt) return;
+    const t = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(t);
+  }, [startedAt, finishedAt]);
+  if (!startedAt) return 0;
+  return (finishedAt ?? now) - startedAt;
+}
+
+export function ToolCard({ tool, args, status, result, error, startedAt, finishedAt }: ToolCardProps) {
   const [argsExpanded, setArgsExpanded] = useState(false);
   const [resultExpanded, setResultExpanded] = useState(false);
+  const elapsed = useElapsedMs(startedAt, finishedAt);
 
   const argsStr = JSON.stringify(args, null, 2);
   const argsTruncated = argsStr.length > 200;
@@ -112,6 +134,11 @@ export function ToolCard({ tool, args, status, result, error }: ToolCardProps) {
             {statusText[status]}
           </span>
         </Badge>
+        {startedAt && (status === 'streaming' || status === 'done' || status === 'error') && (
+          <span className={`text-[10px] font-mono tabular-nums ${status === 'streaming' ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]/60'}`}>
+            · {formatMs(elapsed)}
+          </span>
+        )}
       </div>
 
       <details
