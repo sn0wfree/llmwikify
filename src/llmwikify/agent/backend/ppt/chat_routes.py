@@ -233,55 +233,39 @@ async def ppt_chat(request: Request):
             if event.get("type") == "tool_start":
                 has_tool_start = True
 
+            yield {
+                "event": "message",
+                "data": json.dumps(event, ensure_ascii=False),
+            }
+
             if event.get("type") == "message_delta":
                 full_response += event.get("content", "")
 
-            # Handle done event: decide whether to send updated_presentation
             if event.get("type") == "done":
+                # Save assistant message
                 msg = event.get("message", full_response)
                 _AGENT_DB.save_ppt_chat_message(session_id, "assistant", msg)
 
+                # Update task presentation if changed
                 updated = event.get("updated_presentation")
-                if updated and has_tool_start:
-                    # Deterministic tool → apply directly, send full event
-                    _AGENT_DB.update_ppt_task_presentation(task_id, updated)
-                    yield {
-                        "event": "message",
-                        "data": json.dumps(event, ensure_ascii=False),
-                    }
-                    logger.info(
-                        "PPTChat done (tool): task=%s session=%s slides=%d",
-                        task_id, session_id, len(updated.get("slides", [])),
-                    )
-                elif updated:
-                    # LLM modification → store pending, strip updated_presentation
-                    _pending_changes[session_id] = {
-                        "presentation": updated,
-                        "task_id": task_id,
-                    }
-                    yield {
-                        "event": "message",
-                        "data": json.dumps({
-                            "type": "done",
-                            "message": msg,
-                        }, ensure_ascii=False),
-                    }
-                    logger.info(
-                        "PPTChat pending confirmation: task=%s session=%s slides=%d",
-                        task_id, session_id, len(updated.get("slides", [])),
-                    )
-                else:
-                    # No presentation change → send as-is
-                    yield {
-                        "event": "message",
-                        "data": json.dumps(event, ensure_ascii=False),
-                    }
-            else:
-                # Non-done events → send as-is
-                yield {
-                    "event": "message",
-                    "data": json.dumps(event, ensure_ascii=False),
-                }
+                if updated:
+                    if has_tool_start:
+                        # Deterministic tool → apply directly
+                        _AGENT_DB.update_ppt_task_presentation(task_id, updated)
+                        logger.info(
+                            "PPTChat done (tool): task=%s session=%s slides=%d",
+                            task_id, session_id, len(updated.get("slides", [])),
+                        )
+                    else:
+                        # LLM modification → store as pending for confirmation
+                        _pending_changes[session_id] = {
+                            "presentation": updated,
+                            "task_id": task_id,
+                        }
+                        logger.info(
+                            "PPTChat pending confirmation: task=%s session=%s slides=%d",
+                            task_id, session_id, len(updated.get("slides", [])),
+                        )
 
     return EventSourceResponse(event_generator())
 
