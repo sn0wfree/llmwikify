@@ -565,6 +565,17 @@ export async function getPptChatMessages(
   return response.json();
 }
 
+/**
+ * Get the latest PPTChat session for a task (for history loading on mount).
+ */
+export async function getPptChatSessionByTask(
+  taskId: string,
+): Promise<{ session_id: string | null; created_at?: string }> {
+  const endpoint = `${API_BASE}/chat/sessions?task_id=${taskId}`;
+  const response = await fetchWithRetry(endpoint, { method: 'GET' }, 'GET');
+  return response.json();
+}
+
 export default {
   generateOutline,
   generatePresentation,

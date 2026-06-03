@@ -281,6 +281,18 @@ async def create_session(request: Request):
     return {"session_id": session_id}
 
 
+@router.get("/sessions")
+async def get_sessions(task_id: str):
+    """Get the latest PPTChat session for a task (for history loading)."""
+    if not _AGENT_DB:
+        raise HTTPException(status_code=500, detail="PPTChat not initialized")
+    sessions = _AGENT_DB.list_ppt_chat_sessions(ppt_task_id=task_id)
+    if sessions:
+        latest = sessions[0]  # Already sorted by updated_at DESC
+        return {"session_id": latest["id"], "created_at": latest["created_at"]}
+    return {"session_id": None}
+
+
 @router.get("/sessions/{session_id}/messages")
 async def get_messages(session_id: str, limit: int = 50):
     """Get chat history for a PPTChat session."""

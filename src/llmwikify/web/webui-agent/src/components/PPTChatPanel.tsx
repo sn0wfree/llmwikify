@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { MessageBubble } from './ui/MessageBubble';
 import { Presentation, SlideContent } from '../lib/ppt-themes';
-import { pptChatStream, PPTChatStreamEvent } from '../lib/ppt-api';
+import { pptChatStream, PPTChatStreamEvent, getPptChatMessages, getPptChatSessionByTask } from '../lib/ppt-api';
 
 interface PPTChatPanelProps {
   taskId: string;
@@ -108,6 +108,33 @@ export function PPTChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Load chat history on mount (for offline recovery / page refresh)
+  useEffect(() => {
+    if (!taskId || !isOpen) return;
+
+    const loadHistory = async () => {
+      const storedSessionId = localStorage.getItem(`ppt-chat-session-${taskId}`);
+      if (!storedSessionId) return;
+
+      try {
+        const { messages: history } = await getPptChatMessages(storedSessionId);
+        if (history.length > 0) {
+          setSessionId(storedSessionId);
+          setMessages(history.map(m => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+            timestamp: m.created_at,
+          })));
+        }
+      } catch {
+        // Session invalid (server restart, DB cleanup, etc.)
+        localStorage.removeItem(`ppt-chat-session-${taskId}`);
+      }
+    };
+
+    loadHistory();
+  }, [taskId, isOpen]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -185,6 +212,10 @@ export function PPTChatPanel({
     switch (event.type) {
       case 'session_created':
         setSessionId(event.session_id as string);
+        // Persist session for offline recovery
+        if (taskId) {
+          localStorage.setItem(`ppt-chat-session-${taskId}`, event.session_id as string);
+        }
         break;
       case 'thinking':
         setCurrentThinking((prev) => prev + (event.content as string));
