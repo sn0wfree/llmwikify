@@ -70,6 +70,30 @@ export async function exportToPptx(presentation: PresentationData): Promise<void
       case 'quote':
         renderQuoteSlide(pptSlide, slide, theme);
         break;
+      case 'swot':
+        renderSwotSlide(pptSlide, slide, theme);
+        break;
+      case 'table':
+        renderTableSlide(pptSlide, slide, theme);
+        break;
+      case 'timeline':
+        renderTimelineSlide(pptSlide, slide, theme);
+        break;
+      case 'kpi_grid':
+        renderKpiGridSlide(pptSlide, slide, theme);
+        break;
+      case 'mindmap':
+        renderMindmapSlide(pptSlide, slide, theme);
+        break;
+      case 'process':
+        renderProcessSlide(pptSlide, slide, theme);
+        break;
+      case 'gallery':
+        renderGallerySlide(pptSlide, slide, theme);
+        break;
+      case 'image_text':
+        renderImageTextSlide(pptSlide, slide, theme);
+        break;
       default:
         renderTitleContentSlide(pptSlide, slide, theme);
     }
@@ -437,6 +461,109 @@ function renderQuoteSlide(slide: any, data: SlideContent, theme: Theme) {
       color: theme.colors.secondary.replace('#', ''),
       align: 'center',
     });
+  }
+}
+
+function renderSwotSlide(slide: any, data: SlideContent, theme: Theme) {
+  slide.addText(data.title, { x: 0.5, y: 0.3, w: 9.0, h: 0.6, fontSize: 20, fontFace: 'Arial', color: theme.colors.primary.replace('#', ''), bold: true });
+  const swot = data.swot || { strengths: [], weaknesses: [], opportunities: [], threats: [] };
+  const cfg: Record<string, { label: string; color: string; x: number; y: number }> = {
+    strengths: { label: 'S 优势', color: '16A34A', x: 0.5, y: 1.2 },
+    weaknesses: { label: 'W 劣势', color: 'DC2626', x: 5.0, y: 1.2 },
+    opportunities: { label: 'O 机会', color: '2563EB', x: 0.5, y: 3.5 },
+    threats: { label: 'T 威胁', color: 'EA580C', x: 5.0, y: 3.5 },
+  };
+  for (const [key, c] of Object.entries(cfg)) {
+    slide.addText(c.label, { x: c.x, y: c.y, w: 4.0, h: 0.4, fontSize: 12, fontFace: 'Arial', color: c.color, bold: true });
+    const items = (swot as any)[key] || [];
+    slide.addText(items.map((i: string) => `• ${i}`).join('\n'), { x: c.x, y: c.y + 0.4, w: 4.0, h: 1.8, fontSize: 10, fontFace: 'Arial', color: theme.colors.text.replace('#', ''), valign: 'top' });
+  }
+}
+
+function renderTableSlide(slide: any, data: SlideContent, theme: Theme) {
+  slide.addText(data.title, { x: 0.5, y: 0.3, w: 9.0, h: 0.6, fontSize: 20, fontFace: 'Arial', color: theme.colors.primary.replace('#', ''), bold: true });
+  const headers = data.table_headers || [];
+  const rows = data.table_rows || [];
+  if (headers.length > 0) {
+    const tableRows = [
+      headers.map(h => ({ text: h, options: { fontSize: 10, fontFace: 'Arial', color: 'FFFFFF', bold: true, fill: { color: theme.colors.accent.replace('#', '') }, align: 'center' as const } })),
+      ...rows.map(row => row.map(cell => ({ text: cell, options: { fontSize: 9, fontFace: 'Arial', color: theme.colors.text.replace('#', '') } }))),
+    ];
+    slide.addTable(tableRows, { x: 0.5, y: 1.2, w: 9.0, colW: headers.map(() => 9.0 / headers.length), border: { pt: 0.5, color: 'CCCCCC' } });
+  }
+}
+
+function renderTimelineSlide(slide: any, data: SlideContent, theme: Theme) {
+  slide.addText(data.title, { x: 0.5, y: 0.3, w: 9.0, h: 0.6, fontSize: 20, fontFace: 'Arial', color: theme.colors.primary.replace('#', ''), bold: true });
+  const events = data.events || [];
+  slide.addShape('rect', { x: 1.5, y: 1.2, w: 0.05, h: 4.0, fill: { color: theme.colors.accent.replace('#', '') } });
+  events.forEach((ev, i) => {
+    const y = 1.3 + i * 0.8;
+    slide.addShape('ellipse', { x: 1.4, y, w: 0.25, h: 0.25, fill: { color: theme.colors.accent.replace('#', '') } });
+    slide.addText(ev.date, { x: 1.8, y, w: 1.5, h: 0.3, fontSize: 9, fontFace: 'Arial', color: theme.colors.accent.replace('#', ''), bold: true });
+    slide.addText(ev.title, { x: 3.3, y, w: 6.0, h: 0.3, fontSize: 10, fontFace: 'Arial', color: theme.colors.text.replace('#', '') });
+  });
+}
+
+function renderKpiGridSlide(slide: any, data: SlideContent, theme: Theme) {
+  slide.addText(data.title, { x: 0.5, y: 0.3, w: 9.0, h: 0.6, fontSize: 20, fontFace: 'Arial', color: theme.colors.primary.replace('#', ''), bold: true });
+  const items = data.kpi_items || [];
+  const positions = [{ x: 0.5, y: 1.3 }, { x: 5.0, y: 1.3 }, { x: 0.5, y: 3.5 }, { x: 5.0, y: 3.5 }];
+  items.slice(0, 4).forEach((kpi, i) => {
+    const pos = positions[i];
+    slide.addText(kpi.value, { x: pos.x, y: pos.y, w: 4.0, h: 1.0, fontSize: 32, fontFace: 'Arial', color: theme.colors.accent.replace('#', ''), bold: true, align: 'center' });
+    slide.addText(kpi.label, { x: pos.x, y: pos.y + 1.0, w: 4.0, h: 0.4, fontSize: 11, fontFace: 'Arial', color: theme.colors.secondary.replace('#', ''), align: 'center' });
+  });
+}
+
+function renderMindmapSlide(slide: any, data: SlideContent, theme: Theme) {
+  slide.addText(data.title, { x: 0.5, y: 0.3, w: 9.0, h: 0.6, fontSize: 20, fontFace: 'Arial', color: theme.colors.primary.replace('#', ''), bold: true });
+  slide.addShape('ellipse', { x: 3.5, y: 2.5, w: 3.0, h: 1.2, fill: { color: theme.colors.accent.replace('#', '') } });
+  slide.addText(data.central_topic || data.title, { x: 3.5, y: 2.5, w: 3.0, h: 1.2, fontSize: 14, fontFace: 'Arial', color: 'FFFFFF', align: 'center', valign: 'middle', bold: true });
+  const branches = data.branches || [];
+  branches.slice(0, 6).forEach((branch, i) => {
+    const angle = (i / branches.length) * Math.PI * 2 - Math.PI / 2;
+    const cx = 5.0, cy = 3.1, r = 2.5;
+    const bx = cx + Math.cos(angle) * r;
+    const by = cy + Math.sin(angle) * r;
+    slide.addShape('rect', { x: bx - 0.8, y: by - 0.25, w: 1.6, h: 0.5, fill: { color: theme.colors.secondary.replace('#', '') }, rectRadius: 0.1 });
+    slide.addText(branch.name, { x: bx - 0.8, y: by - 0.25, w: 1.6, h: 0.5, fontSize: 8, fontFace: 'Arial', color: 'FFFFFF', align: 'center', valign: 'middle' });
+  });
+}
+
+function renderProcessSlide(slide: any, data: SlideContent, theme: Theme) {
+  slide.addText(data.title, { x: 0.5, y: 0.3, w: 9.0, h: 0.6, fontSize: 20, fontFace: 'Arial', color: theme.colors.primary.replace('#', ''), bold: true });
+  const steps = data.steps || [];
+  const stepW = 8.0 / Math.max(steps.length, 1);
+  steps.forEach((step, i) => {
+    const x = 1.0 + i * stepW;
+    slide.addShape('ellipse', { x: x + stepW / 2 - 0.3, y: 2.5, w: 0.6, h: 0.6, fill: { color: theme.colors.accent.replace('#', '') } });
+    slide.addText(`${i + 1}`, { x: x + stepW / 2 - 0.3, y: 2.5, w: 0.6, h: 0.6, fontSize: 12, fontFace: 'Arial', color: 'FFFFFF', align: 'center', valign: 'middle', bold: true });
+    slide.addText(step.title, { x, y: 3.3, w: stepW, h: 0.4, fontSize: 10, fontFace: 'Arial', color: theme.colors.text.replace('#', ''), align: 'center', bold: true });
+    if (i < steps.length - 1) {
+      slide.addText('→', { x: x + stepW - 0.3, y: 2.5, w: 0.6, h: 0.6, fontSize: 14, fontFace: 'Arial', color: theme.colors.accent.replace('#', ''), align: 'center', valign: 'middle' });
+    }
+  });
+}
+
+function renderGallerySlide(slide: any, data: SlideContent, theme: Theme) {
+  slide.addText(data.title, { x: 0.5, y: 0.3, w: 9.0, h: 0.6, fontSize: 20, fontFace: 'Arial', color: theme.colors.primary.replace('#', ''), bold: true });
+  const images = data.images || [];
+  const positions = [{ x: 0.5, y: 1.2 }, { x: 5.0, y: 1.2 }, { x: 0.5, y: 3.5 }, { x: 5.0, y: 3.5 }];
+  images.slice(0, 4).forEach((img, i) => {
+    const pos = positions[i];
+    slide.addShape('rect', { x: pos.x, y: pos.y, w: 4.0, h: 1.8, fill: { color: 'F0F0F0' }, rectRadius: 0.1 });
+    if (img.caption) {
+      slide.addText(img.caption, { x: pos.x, y: pos.y + 1.8, w: 4.0, h: 0.3, fontSize: 8, fontFace: 'Arial', color: theme.colors.secondary.replace('#', ''), align: 'center' });
+    }
+  });
+}
+
+function renderImageTextSlide(slide: any, data: SlideContent, theme: Theme) {
+  slide.addText(data.title, { x: 0.5, y: 0.3, w: 9.0, h: 0.6, fontSize: 20, fontFace: 'Arial', color: theme.colors.primary.replace('#', ''), bold: true });
+  slide.addShape('rect', { x: 0.5, y: 1.2, w: 4.0, h: 4.0, fill: { color: 'F0F0F0' }, rectRadius: 0.1 });
+  if (data.content) {
+    slide.addText(data.content, { x: 5.0, y: 1.2, w: 4.5, h: 4.0, fontSize: 11, fontFace: 'Arial', color: theme.colors.text.replace('#', ''), valign: 'top' });
   }
 }
 
