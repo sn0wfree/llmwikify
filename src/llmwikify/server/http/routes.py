@@ -495,7 +495,7 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     agent_service = AgentService(registry, data_dir)
     set_agent_service(agent_service)
 
-    from llmwikify.agent.backend.routes import agent_router, ppt_router, research_router
+    from llmwikify.agent.backend.routes import agent_router, ppt_router, research_router, ppt_chat_router
     from llmwikify.agent.backend.routes.research import set_research_deps
     from llmwikify.agent.backend.routes.ppt import set_ppt_deps
     from llmwikify.agent.backend.routes.ppt.chat_routes import set_ppt_chat_deps

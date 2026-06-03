@@ -78,7 +78,7 @@ async def ppt_chat(request: Request):
     if not task_id:
         return {"error": "task_id is required"}, 400
 
-    if not db:
+    if not _AGENT_DB:
         return {"error": "PPTChat not initialized"}, 500
 
     try:
@@ -87,7 +87,7 @@ async def ppt_chat(request: Request):
         return {"error": str(e)}, 500
 
     # Load presentation from task
-    task = db.get_ppt_task(task_id)
+    task = _AGENT_DB.get_ppt_task(task_id)
     if not task:
         return {"error": "Task not found"}, 404
 
@@ -111,13 +111,13 @@ async def ppt_chat(request: Request):
 
     # Create/get chat session
     if not session_id:
-        session_id = db.create_ppt_chat_session(task_id)
+        session_id = _AGENT_DB.create_ppt_chat_session(task_id)
 
     # Load chat history
-    history = db.get_ppt_chat_messages(session_id, limit=10)
+    history = _AGENT_DB.get_ppt_chat_messages(session_id, limit=10)
 
     # Save user message
-    db.save_ppt_chat_message(session_id, "user", message)
+    _AGENT_DB.save_ppt_chat_message(session_id, "user", message)
 
     async def event_generator():
         # Yield session_created
@@ -146,13 +146,13 @@ async def ppt_chat(request: Request):
             if event.get("type") == "done":
                 # Save assistant message
                 msg = event.get("message", full_response)
-                db.save_ppt_chat_message(session_id, "assistant", msg)
+                _AGENT_DB.save_ppt_chat_message(session_id, "assistant", msg)
 
                 # Update task presentation if changed
                 updated = event.get("updated_presentation")
                 if updated:
                     updated_slides = updated.get("slides", [])
-                    db.set_ppt_task_partial_presentation(
+                    _AGENT_DB.set_ppt_task_partial_presentation(
                         task_id, updated_slides
                     )
 
