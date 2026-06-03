@@ -1,17 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
-import { SearchResult } from '../api';
 
 interface PageTreeProps {
-  pages: SearchResult[];
-  allTypes: string[];
+  pagesByType: Record<string, string[]>;
   selectedPage: string | null;
   onSelect: (page: string) => void;
-}
-
-interface PageGroup {
-  pageType: string;
-  tree: TreeNode[];
-  flatCount: number;
 }
 
 interface TreeNode {
@@ -22,15 +14,13 @@ interface TreeNode {
   fullPath?: string;
 }
 
-const TYPE_ICONS: Record<string, string> = {
+const DIR_ICONS: Record<string, string> = {
   sources: '📚',
   entities: '🏷️',
   concepts: '💡',
   papers: '📄',
   claims: '🎯',
-  topics: '🏷️',
   root: '📝',
-  overview: '📖',
   comparisons: '⚖️',
   synthesis: '🔬',
   research: '🔬',
@@ -43,16 +33,6 @@ const TYPE_ICONS: Record<string, string> = {
   quarterly: '📅',
   yearly: '📅',
 };
-
-function getTypeColor(pageType: string, allTypes: string[]): string {
-  if (!allTypes || allTypes.length === 0) return '#94a3b8';
-  const idx = allTypes.indexOf(pageType);
-  if (idx === -1) return '#94a3b8';
-  const hue = (idx / allTypes.length) * 360;
-  const sat = 60 + (idx % 3) * 8;
-  const light = 45 + (idx % 2) * 10;
-  return `hsl(${hue}, ${sat}%, ${light}%)`;
-}
 
 function countNodes(node: TreeNode): number {
   if (node.type === 'file') return 1;
@@ -118,11 +98,11 @@ function TreeNodeComponent({
       <div>
         <button
           onClick={() => onToggle(node.path)}
-          className={`w-full text-left px-2 py-1 flex items-center gap-1.5 transition-colors hover:bg-slate-700`}
+          className="w-full text-left px-2 py-1 flex items-center gap-1.5 transition-colors hover:bg-slate-700"
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
         >
           <span className="text-xs w-3 text-slate-500">{isExpanded ? '▼' : '▶'}</span>
-          <span className="text-xs">{isExpanded ? '📂' : '📁'}</span>
+          <span className="text-xs">{isExpanded ? '📂' : (DIR_ICONS[node.name] || '📁')}</span>
           <span className="text-xs text-slate-300 flex-1 truncate">{node.name}</span>
           <span className="text-xs text-slate-500">{childCount}</span>
         </button>
@@ -156,76 +136,38 @@ function TreeNodeComponent({
   );
 }
 
-export function PageTree({ pages, allTypes, selectedPage, onSelect }: PageTreeProps) {
+export function PageTree({ pagesByType, selectedPage, onSelect }: PageTreeProps) {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!selectedPage) return;
-    const pageType = pages.find((p) => p.page_name === selectedPage)?.page_type || 'other';
+    const dir = selectedPage.split('/')[0];
     setExpanded((prev) => {
-      if (prev.has(pageType)) return prev;
+      if (prev.has(dir)) return prev;
       const next = new Set(prev);
-      next.add(pageType);
+      next.add(dir);
       return next;
     });
-  }, [selectedPage, pages]);
+  }, [selectedPage]);
+
+  const allPages = useMemo(() => {
+    const pages: Array<{ path: string; fullPath: string }> = [];
+    for (const [dir, files] of Object.entries(pagesByType)) {
+      for (const f of files) {
+        pages.push({ path: f, fullPath: f });
+      }
+    }
+    return pages;
+  }, [pagesByType]);
 
   const filteredPages = useMemo(() => {
-    const base = pages.filter((p) => p.page_name !== 'log');
-    if (!search) return base;
+    if (!search) return allPages;
     const q = search.toLowerCase();
-    return base.filter(
-      (p) =>
-        p.page_name.toLowerCase().includes(q) || p.page_type?.toLowerCase().includes(q)
-    );
-  }, [pages, search]);
+    return allPages.filter((p) => p.path.toLowerCase().includes(q));
+  }, [allPages, search]);
 
-  const groups = useMemo(() => {
-    const groupMap = new Map<string, Array<{ path: string; fullPath: string }>>();
-    const pinnedPages: Array<{ path: string; fullPath: string }> = [];
-
-    filteredPages.forEach((p) => {
-      if (p.page_name === 'index' || p.page_name === 'overview') {
-        pinnedPages.push({ path: p.page_name, fullPath: p.page_name });
-        return;
-      }
-      const pageType = p.page_type || 'other';
-      if (!groupMap.has(pageType)) {
-        groupMap.set(pageType, []);
-      }
-      groupMap.get(pageType)!.push({ path: p.page_name, fullPath: p.page_name });
-    });
-
-    const sorted: PageGroup[] = Array.from(groupMap.entries())
-      .map(([pageType, pages]) => ({
-        pageType,
-        tree: buildTree(pages),
-        flatCount: pages.length,
-      }))
-      .sort((a, b) => {
-        const aIdx = allTypes.indexOf(a.pageType);
-        const bIdx = allTypes.indexOf(b.pageType);
-        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-        if (aIdx !== -1) return -1;
-        if (bIdx !== -1) return 1;
-        return a.pageType.localeCompare(b.pageType);
-      });
-
-    if (pinnedPages.length > 0) {
-      return [{ pageType: 'pinned', tree: buildTree(pinnedPages), flatCount: pinnedPages.length }, ...sorted];
-    }
-    return sorted;
-  }, [filteredPages, allTypes]);
-
-  const toggleGroup = (pt: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(pt)) next.delete(pt);
-      else next.add(pt);
-      return next;
-    });
-  };
+  const tree = useMemo(() => buildTree(filteredPages), [filteredPages]);
 
   const toggleDir = (path: string) => {
     setExpanded((prev) => {
@@ -248,65 +190,19 @@ export function PageTree({ pages, allTypes, selectedPage, onSelect }: PageTreePr
         />
       </div>
 
-      {groups.map((group) => {
-        const isPinned = group.pageType === 'pinned';
-        const isExpanded = expanded.has(group.pageType);
-        const color = getTypeColor(group.pageType, allTypes);
-        const icon = isPinned ? '⭐' : TYPE_ICONS[group.pageType] || '📁';
+      {tree.map((node) => (
+        <TreeNodeComponent
+          key={node.path}
+          node={node}
+          depth={0}
+          expanded={expanded}
+          onToggle={toggleDir}
+          onSelect={onSelect}
+          selectedPage={selectedPage}
+        />
+      ))}
 
-        if (isPinned) {
-          return (
-            <div key="pinned" className="mb-1">
-              <div className="px-2 py-1 text-xs text-slate-400 uppercase font-semibold">Pinned</div>
-              {group.tree.map((node) => (
-                <TreeNodeComponent
-                  key={node.path}
-                  node={node}
-                  depth={0}
-                  expanded={expanded}
-                  onToggle={toggleDir}
-                  onSelect={onSelect}
-                  selectedPage={selectedPage}
-                />
-              ))}
-            </div>
-          );
-        }
-
-        return (
-          <div key={group.pageType}>
-            <button
-              onClick={() => toggleGroup(group.pageType)}
-              className="w-full text-left px-2 py-1.5 flex items-center gap-1.5 transition-colors hover:bg-slate-700"
-            >
-              <span className="text-xs w-3 text-slate-500">{isExpanded ? '▼' : '▶'}</span>
-              <span className="text-xs">{icon}</span>
-              <span className="text-xs font-semibold flex-1 truncate" style={{ color }}>
-                {group.pageType}
-              </span>
-              <span className="text-xs text-slate-500">{group.flatCount}</span>
-            </button>
-
-            {isExpanded && (
-              <div>
-                {group.tree.map((node) => (
-                  <TreeNodeComponent
-                    key={node.path}
-                    node={node}
-                    depth={1}
-                    expanded={expanded}
-                    onToggle={toggleDir}
-                    onSelect={onSelect}
-                    selectedPage={selectedPage}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      {groups.length === 0 && (
+      {tree.length === 0 && (
         <div className="px-3 py-4 text-center text-xs text-slate-500">
           {search ? 'No matching pages' : 'No pages found'}
         </div>

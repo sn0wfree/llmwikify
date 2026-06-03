@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { api, WikiPage, GraphNode, GraphEdge, SearchResult } from '../api';
+import { api, WikiPage, GraphNode, GraphEdge } from '../api';
 import { useWikiStore } from '../stores/wikiStore';
 import { useToast } from './Toast';
 import { FrontMatterPanel, FrontMatterData } from './FrontMatterPanel';
@@ -58,7 +58,7 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
   const [mode, setMode] = useState<'edit' | 'graph'>('graph');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [pages, setPages] = useState<SearchResult[]>([]);
+  const [pagesByType, setPagesByType] = useState<Record<string, string[]>>({});
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
   const [allTypes, setAllTypes] = useState<string[]>([]);
@@ -104,20 +104,13 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
 
   const loadTree = useCallback(async (wikiId?: string) => {
     try {
-      let results, status;
+      let status;
       if (isMultiWikiMode && wikiId) {
-        [results, status] = await Promise.all([
-          api.wiki.scoped.search(wikiId, '', 100),
-          api.wiki.scoped.status(wikiId),
-        ]);
+        status = await api.wiki.scoped.status(wikiId);
       } else {
-        [results, status] = await Promise.all([
-          api.wiki.search('', 100),
-          api.wiki.status(),
-        ]);
+        status = await api.wiki.status();
       }
-      setPages(results);
-      setAllTypes(status.all_types || []);
+      setPagesByType(status.pages_by_type || {});
     } catch {
       addToast('warning', '无法加载文件树');
     }
@@ -179,8 +172,7 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
           <>
             <div className="p-2 text-xs font-semibold text-slate-400 uppercase">Pages</div>
             <PageTree
-              pages={pages}
-              allTypes={allTypes}
+              pagesByType={pagesByType}
               selectedPage={page?.page_name || null}
               onSelect={onPageSelect}
             />
