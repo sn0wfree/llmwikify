@@ -70,10 +70,14 @@ class WikiStatusMixin(WikiProtocol):
                 if d.is_dir() and not d.name.startswith('.') and d.name != '.sink':
                     known_dirs.add(d.name)
 
+        # Reverse mapping: directory name → type name (for pages_by_type keys)
+        dir_to_type = {v: k for k, v in type_mapping.items()}
+
         for subdir in sorted(known_dirs):
             sub_path = self.wiki_dir / subdir
             if sub_path.exists():
-                pages_by_type[subdir] = sorted(
+                type_name = dir_to_type.get(subdir, subdir)
+                pages_by_type[type_name] = sorted(
                     str(p.relative_to(self.wiki_dir))[:-3]
                     for p in sub_path.rglob("*.md")
                 )

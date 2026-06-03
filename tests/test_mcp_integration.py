@@ -105,9 +105,9 @@ class TestMCPIntegration:
             data = json.loads(text)
             assert "pages_by_type" in data
             assert "root" in data["pages_by_type"]
-            # init() creates these directories — they should be discovered dynamically
-            for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
-                assert subdir in data["pages_by_type"]
+            # init() creates these directories — keys should be type names from wiki.md
+            for type_name in ["Source", "Entity", "Concept", "Comparison", "Synthesis", "Claim"]:
+                assert type_name in data["pages_by_type"]
 
         _run_async(_run())
 
