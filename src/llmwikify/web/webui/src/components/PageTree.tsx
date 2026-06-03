@@ -24,6 +24,8 @@ const TYPE_ICONS: Record<string, string> = {
   overview: '📖',
   comparisons: '⚖️',
   synthesis: '🔬',
+  research: '🔬',
+  factors: '📊',
   other: '📄',
 };
 
@@ -125,7 +127,7 @@ const filteredPages = useMemo(() => {
         const isExpanded = expanded.has(group.pageType);
         const isSelectedInGroup = group.pages.some((p) => p.path === selectedPage);
         const color = getTypeColor(group.pageType, allTypes);
-        const icon = isPinned ? '⭐' : (TYPE_ICONS[group.pageType] || TYPE_ICONS.other);
+        const icon = isPinned ? '⭐' : (TYPE_ICONS[group.pageType] || '📁');
 
         if (isPinned) {
           return (

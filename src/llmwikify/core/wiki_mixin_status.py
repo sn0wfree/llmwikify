@@ -56,7 +56,21 @@ class WikiStatusMixin(WikiProtocol):
         }
 
         pages_by_type = {}
-        for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
+
+        # Discover directories: wiki.md mapping + filesystem scan
+        type_mapping = {}
+        try:
+            type_mapping = self._load_page_type_mapping()
+        except Exception:
+            pass
+        known_dirs: set[str] = set(type_mapping.values())
+
+        if self.wiki_dir.exists():
+            for d in self.wiki_dir.iterdir():
+                if d.is_dir() and not d.name.startswith('.') and d.name != '.sink':
+                    known_dirs.add(d.name)
+
+        for subdir in sorted(known_dirs):
             sub_path = self.wiki_dir / subdir
             if sub_path.exists():
                 pages_by_type[subdir] = sorted(
