@@ -57,27 +57,18 @@ class WikiStatusMixin(WikiProtocol):
 
         pages_by_type = {}
 
-        # Discover directories: wiki.md mapping + filesystem scan
-        type_mapping = {}
-        try:
-            type_mapping = self._load_page_type_mapping()
-        except Exception:
-            pass
-        known_dirs: set[str] = set(type_mapping.values())
+        # Discover directories: filesystem scan
+        known_dirs: set[str] = set()
 
         if self.wiki_dir.exists():
             for d in self.wiki_dir.iterdir():
                 if d.is_dir() and not d.name.startswith('.') and d.name != '.sink':
                     known_dirs.add(d.name)
 
-        # Reverse mapping: directory name → type name (for pages_by_type keys)
-        dir_to_type = {v: k for k, v in type_mapping.items()}
-
         for subdir in sorted(known_dirs):
             sub_path = self.wiki_dir / subdir
             if sub_path.exists():
-                type_name = dir_to_type.get(subdir, subdir)
-                pages_by_type[type_name] = sorted(
+                pages_by_type[subdir] = sorted(
                     str(p.relative_to(self.wiki_dir))[:-3]
                     for p in sub_path.rglob("*.md")
                 )

@@ -118,7 +118,7 @@ def build_visualization_data(
         page_type = n.get("source_type", "wiki_page")
         for type_name, type_dir in type_map.items():
             if nid.startswith(type_dir + "/") or nid == type_dir:
-                page_type = type_name
+                page_type = type_dir
                 break
         result_nodes.append({
             "id": nid,
