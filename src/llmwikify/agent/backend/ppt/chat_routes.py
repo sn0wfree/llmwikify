@@ -22,6 +22,19 @@ _AGENT_DB: AgentDatabase | None = None
 _ROUTER: PPTChatRouter | None = None
 _LLM_CLIENT: Any = None
 
+# ─── Confirmation state ────────────────────────────────────────
+
+# session_id → {"presentation": Presentation, "task_id": str}
+_PENDING_CHANGES: dict[str, dict] = {}
+
+CONFIRMATION_KEYWORDS = {"确认", "执行", "apply", "confirm", "好的", "可以", "确认执行", "好的执行"}
+
+
+def _is_confirmation(message: str) -> bool:
+    """Check if a user message is a confirmation instruction."""
+    msg = message.strip().lower()
+    return msg in CONFIRMATION_KEYWORDS or msg.startswith(tuple(CONFIRMATION_KEYWORDS))
+
 
 def set_ppt_chat_deps(db: AgentDatabase, llm_client: Any = None) -> None:
     """Initialize PPTChat dependencies (called at app startup)."""
@@ -81,6 +94,38 @@ async def ppt_chat(request: Request):
 
     if not _AGENT_DB:
         raise HTTPException(status_code=500, detail="PPTChat not initialized")
+
+    # ─── Confirmation handling ────────────────────────────────
+    # If user sends a confirmation and there are pending changes, apply them
+    if session_id and session_id in _pending_changes and _is_confirmation(message):
+        pending = _pending_changes.pop(session_id)
+        _AGENT_DB.save_ppt_chat_message(session_id, "user", message)
+        _AGENT_DB.update_ppt_task_presentation(pending["task_id"], pending["presentation"])
+        logger.info(
+            "PPTChat confirmed: task=%s session=%s slides=%d",
+            pending["task_id"], session_id,
+            len(pending["presentation"].get("slides", [])),
+        )
+
+        async def confirm_generator():
+            yield {
+                "event": "message",
+                "data": json.dumps(
+                    {"type": "session_created", "session_id": session_id}
+                ),
+            }
+            yield {
+                "event": "message",
+                "data": json.dumps({
+                    "type": "done",
+                    "updated_presentation": pending["presentation"],
+                    "message": "修改已应用",
+                }),
+            }
+
+        return EventSourceResponse(confirm_generator())
+
+    # ─── Normal flow ──────────────────────────────────────────
 
     try:
         chat_router = _get_router()
@@ -177,12 +222,17 @@ async def ppt_chat(request: Request):
         }
 
         full_response = ""
+        has_tool_start = False  # Track if deterministic tool was used
+
         async for event in chat_router.route(
             message=message,
             presentation=presentation,
             current_slide_index=current_slide_index,
             history=history,
         ):
+            if event.get("type") == "tool_start":
+                has_tool_start = True
+
             yield {
                 "event": "message",
                 "data": json.dumps(event, ensure_ascii=False),
@@ -197,15 +247,25 @@ async def ppt_chat(request: Request):
                 _AGENT_DB.save_ppt_chat_message(session_id, "assistant", msg)
 
                 # Update task presentation if changed
-                # Use the FULL presentation dict (from chat_engine._apply_changes),
-                # not a partial stub, so subsequent loads can re-parse it.
                 updated = event.get("updated_presentation")
                 if updated:
-                    _AGENT_DB.update_ppt_task_presentation(task_id, updated)
-                    logger.info(
-                        "PPTChat done: task=%s session=%s slides=%d",
-                        task_id, session_id, len(updated.get("slides", [])),
-                    )
+                    if has_tool_start:
+                        # Deterministic tool → apply directly
+                        _AGENT_DB.update_ppt_task_presentation(task_id, updated)
+                        logger.info(
+                            "PPTChat done (tool): task=%s session=%s slides=%d",
+                            task_id, session_id, len(updated.get("slides", [])),
+                        )
+                    else:
+                        # LLM modification → store as pending for confirmation
+                        _pending_changes[session_id] = {
+                            "presentation": updated,
+                            "task_id": task_id,
+                        }
+                        logger.info(
+                            "PPTChat pending confirmation: task=%s session=%s slides=%d",
+                            task_id, session_id, len(updated.get("slides", [])),
+                        )
 
     return EventSourceResponse(event_generator())
 
