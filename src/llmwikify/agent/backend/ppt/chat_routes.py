@@ -12,6 +12,7 @@ from sse_starlette import EventSourceResponse
 from ..db import AgentDatabase
 from .chat_router import PPTChatRouter
 from .schema import Presentation
+from .themes import get_theme
 
 logger = logging.getLogger(__name__)
 
@@ -118,10 +119,25 @@ async def ppt_chat(request: Request):
             "id": task.get("source_id"),
         },
     )
-    if "theme" not in pres_dict or not pres_dict["theme"]:
-        pres_dict["theme"] = {"id": task.get("theme", "minimal-white")}
-    elif isinstance(pres_dict["theme"], str):
-        pres_dict["theme"] = {"id": pres_dict["theme"]}
+    # Resolve theme to full Theme dict (with name, colors, etc.)
+    # Handles: missing, empty, string, or incomplete dict (e.g. {"id": "x"})
+    theme_val = pres_dict.get("theme")
+    if isinstance(theme_val, str):
+        theme_id = theme_val
+    elif isinstance(theme_val, dict):
+        theme_id = theme_val.get("id", task.get("theme", "minimal-white"))
+    else:
+        theme_id = task.get("theme", "minimal-white")
+    try:
+        full_theme = get_theme(theme_id).model_dump()
+    except Exception:
+        full_theme = {
+            "id": theme_id, "name": theme_id,
+            "colors": {"primary": "#3b82f6", "secondary": "#64748b",
+                        "background": "#ffffff", "text": "#1e293b",
+                        "accent": "#3b82f6"},
+        }
+    pres_dict["theme"] = full_theme
     pres_dict.setdefault("slides", [])
 
     try:
