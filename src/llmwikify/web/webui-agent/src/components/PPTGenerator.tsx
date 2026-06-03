@@ -107,7 +107,12 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
     setError(null);
     getTask(taskId).then((task) => {
       if (task.status === 'done' && task.presentation) {
-        setPresentation(task.presentation.presentation);
+        // Defensive: handle both full format {presentation: {...}} and
+        // flat/partial format {slides: [...]} for older tasks.
+        const pres = task.presentation?.presentation ?? task.presentation;
+        if (pres?.slides) {
+          setPresentation(pres as Presentation);
+        }
         setCurrentSlideIndex(0);
         setStep('preview');
         setIsLoading(false);
@@ -141,8 +146,9 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
   // Total slide count for SSE recovery — derive from presentation
   // length if available, otherwise from outline
   function totalSlidesForRecovery(task: any): number {
-    if (task.presentation?.presentation?.slides) {
-      return task.presentation.presentation.slides.length;
+    const pres = task.presentation?.presentation ?? task.presentation;
+    if (pres?.slides) {
+      return pres.slides.length;
     }
     return outline?.pages.length || 0;
   }
