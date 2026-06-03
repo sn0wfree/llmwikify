@@ -91,8 +91,10 @@ export function SlideRenderer({ slide, theme, isPreview = true }: SlideRendererP
         return <GallerySlide slide={slide} />;
       case 'image_text':
         return <ImageTextSlide slide={slide} />;
+      case 'html':
+        return <HtmlSlide html={slide.html || ''} theme={theme} />;
       default:
-        return <TitleContentSlide slide={slide} />;
+        return <GenericSlide slide={slide} />;
     }
   };
 
@@ -555,6 +557,75 @@ function ImageTextSlide({ slide }: { slide: SlideContent }) {
             {slide.content}
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function HtmlSlide({ html, theme }: { html: string; theme: Theme }) {
+  const themedHtml = `
+    <html>
+    <head>
+      <style>
+        :root {
+          --color-bg: ${theme.colors.background};
+          --color-text: ${theme.colors.text};
+          --color-primary: ${theme.colors.primary};
+          --color-secondary: ${theme.colors.secondary};
+          --color-accent: ${theme.colors.accent};
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: ${theme.tokens?.['font-body'] || 'Inter, sans-serif'};
+          color: var(--color-text);
+          background: var(--color-bg);
+          padding: 24px;
+          height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+      </style>
+    </head>
+    <body>${html}</body>
+    </html>
+  `;
+  return (
+    <iframe
+      srcDoc={themedHtml}
+      sandbox="allow-same-origin"
+      style={{ width: '100%', height: '100%', border: 'none' }}
+      title="Custom HTML slide"
+    />
+  );
+}
+
+function GenericSlide({ slide }: { slide: SlideContent }) {
+  const fields: { label: string; value: unknown }[] = [];
+  const skip = new Set(['id', 'layout', 'title', 'html']);
+  for (const [key, val] of Object.entries(slide)) {
+    if (skip.has(key) || val === null || val === undefined) continue;
+    if (typeof val === 'object' && Array.isArray(val) && val.length === 0) continue;
+    if (typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length === 0) continue;
+    fields.push({ label: key, value: val });
+  }
+  return (
+    <div className="h-full flex flex-col p-6">
+      <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-heading)' }}>
+        {slide.title}
+      </h2>
+      <div className="flex-1 space-y-2 overflow-auto">
+        {fields.length === 0 && (
+          <p className="text-sm" style={{ color: 'var(--color-text-2)' }}>No content available</p>
+        )}
+        {fields.map(({ label, value }) => (
+          <div key={label}>
+            <div className="text-xs font-semibold uppercase" style={{ color: 'var(--color-text-3)' }}>{label}</div>
+            <div className="text-sm" style={{ color: 'var(--color-text-1)' }}>
+              {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
