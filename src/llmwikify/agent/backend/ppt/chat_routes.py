@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from sse_starlette import EventSourceResponse
 
 from ..db import AgentDatabase
@@ -76,38 +76,64 @@ async def ppt_chat(request: Request):
     session_id = body.get("session_id")
 
     if not task_id:
-        return {"error": "task_id is required"}, 400
+        raise HTTPException(status_code=400, detail="task_id is required")
 
     if not _AGENT_DB:
-        return {"error": "PPTChat not initialized"}, 500
+        raise HTTPException(status_code=500, detail="PPTChat not initialized")
 
     try:
         chat_router = _get_router()
     except RuntimeError as e:
-        return {"error": str(e)}, 500
+        raise HTTPException(status_code=500, detail=str(e))
 
     # Load presentation from task
     task = _AGENT_DB.get_ppt_task(task_id)
     if not task:
-        return {"error": "Task not found"}, 404
+        raise HTTPException(status_code=404, detail="Task not found")
 
     presentation_data = task.get("presentation_json")
     if not presentation_data:
-        return {"error": "Task has no presentation yet"}, 400
+        raise HTTPException(
+            status_code=400, detail="Task has no presentation yet"
+        )
 
-    # Parse presentation
+    # Parse presentation (defensive: rebuild missing fields from task row)
     pres_dict = (
         json.loads(presentation_data)
         if isinstance(presentation_data, str)
         else presentation_data
     )
-    if "presentation" in pres_dict:
+    if isinstance(pres_dict, dict) and "presentation" in pres_dict:
         pres_dict = pres_dict["presentation"]
+    if not isinstance(pres_dict, dict):
+        pres_dict = {"slides": []}
+    # Defensive merge: ensure required Presentation fields are present
+    # (handles partial-format corruption from older chat turns)
+    pres_dict.setdefault("title", task.get("title") or "Untitled")
+    pres_dict.setdefault("subtitle", task.get("subtitle") or "")
+    pres_dict.setdefault(
+        "source",
+        {
+            "type": task.get("source_type") or "topic",
+            "id": task.get("source_id"),
+        },
+    )
+    if "theme" not in pres_dict or not pres_dict["theme"]:
+        pres_dict["theme"] = {"id": task.get("theme", "minimal-white")}
+    elif isinstance(pres_dict["theme"], str):
+        pres_dict["theme"] = {"id": pres_dict["theme"]}
+    pres_dict.setdefault("slides", [])
+
     try:
         presentation = Presentation(**pres_dict)
     except Exception as e:
-        logger.error(f"Failed to parse presentation: {e}")
-        return {"error": f"Invalid presentation data: {e}"}, 500
+        logger.error(
+            "Failed to parse presentation for task %s: %s (pres_dict keys=%s)",
+            task_id, e, list(pres_dict.keys()),
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Invalid presentation data: {e}"
+        )
 
     # Create/get chat session
     if not session_id:
@@ -118,6 +144,12 @@ async def ppt_chat(request: Request):
 
     # Save user message
     _AGENT_DB.save_ppt_chat_message(session_id, "user", message)
+
+    logger.info(
+        "PPTChat start: task=%s session=%s slide_idx=%d msg_len=%d slides=%d",
+        task_id, session_id, current_slide_index, len(message),
+        len(presentation.slides),
+    )
 
     async def event_generator():
         # Yield session_created
@@ -149,11 +181,14 @@ async def ppt_chat(request: Request):
                 _AGENT_DB.save_ppt_chat_message(session_id, "assistant", msg)
 
                 # Update task presentation if changed
+                # Use the FULL presentation dict (from chat_engine._apply_changes),
+                # not a partial stub, so subsequent loads can re-parse it.
                 updated = event.get("updated_presentation")
                 if updated:
-                    updated_slides = updated.get("slides", [])
-                    _AGENT_DB.set_ppt_task_partial_presentation(
-                        task_id, updated_slides
+                    _AGENT_DB.update_ppt_task_presentation(task_id, updated)
+                    logger.info(
+                        "PPTChat done: task=%s session=%s slides=%d",
+                        task_id, session_id, len(updated.get("slides", [])),
                     )
 
     return EventSourceResponse(event_generator())
@@ -165,7 +200,7 @@ async def create_session(request: Request):
     body = await request.json()
     task_id = body.get("task_id")
     if not task_id:
-        return {"error": "task_id required"}, 400
+        raise HTTPException(status_code=400, detail="task_id required")
     session_id = _AGENT_DB.create_ppt_chat_session(task_id)
     return {"session_id": session_id}
 

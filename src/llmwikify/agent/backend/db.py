@@ -1190,6 +1190,27 @@ class AgentDatabase:
             )
             conn.commit()
 
+    def update_ppt_task_presentation(
+        self, task_id: str, presentation_dict: dict,
+    ) -> None:
+        """Persist full presentation dict (used by PPTChat turn updates).
+
+        Unlike ``set_ppt_task_partial_presentation`` (which writes a partial
+        stub for incremental slide_done events during async generation), this
+        writes the complete presentation so it can be re-parsed by
+        ``Presentation(**...)`` on subsequent loads.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE ppt_tasks
+                SET presentation_json = ?, updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (json.dumps(presentation_dict, ensure_ascii=False), task_id),
+            )
+            conn.commit()
+
     def set_ppt_task_result(
         self,
         task_id: str,
