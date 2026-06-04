@@ -15,7 +15,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from llmwikify.agent.backend.adapters import StreamableLLMClient
-from llmwikify.agent.backend.db import AgentDatabase
 from llmwikify.autoresearch.db import AutoResearchDatabase
 from llmwikify.agent.backend.providers.registry import create_llm
 from llmwikify.autoresearch.analyzer import SourceAnalyzer
@@ -144,7 +143,7 @@ class ResearchState:
     clarification: dict[str, Any] | None = None
     reasoning_check: dict[str, Any] | None = None
     structure_check: dict[str, Any] | None = None
-    evidence_scores: list[float] = field(default_factory=list)
+    evidence_scores: dict[str, float] = field(default_factory=dict)
     self_loop_counts: dict[str, int] = field(default_factory=dict)
     self_loop_history: list[dict[str, Any]] = field(default_factory=list)
 
@@ -624,17 +623,114 @@ class ResearchEngine:
     # ─── Quality Gate Evaluation ────────────────────────────────────────
 
     def _evaluate_gate(self, state: ResearchState):
-        """Evaluate quality gate based on current phase."""
+        """Evaluate quality gate based on current phase.
+
+        Each phase invokes its base gate plus the 6-step framework gate.
+        The 6-step gate is layered ON TOP of the base gate (both must pass
+        for the engine to proceed; any failure triggers a replan).
+        Returns a combined GateResult (or the first failing one).
+
+        Mapping (per plan:162-166):
+            gathering    → check_after_gathering       + check_evidence_quality
+            analyzing    → check_after_analysis
+            synthesizing → check_after_synthesis       + check_reasoning_quality
+            reporting    → check_before_report         + check_structure_quality
+            reviewing    →                              check_framework_compliance
+        """
         gate = self._quality_gate
+        evidence_enabled = self.config.get("evidence_scoring_enabled", True)
+        reasoning_enabled = self.config.get("reasoning_check_enabled", True)
+        structure_enabled = self.config.get("structure_check_enabled", True)
+        framework_enabled = self.config.get("framework_check_enabled", True)
+
         if state.phase == "gathering":
-            return gate.check_after_gathering(state.sources, state.sub_queries)
+            base = gate.check_after_gathering(state.sources, state.sub_queries)
+            if not base.passed:
+                return base
+            if evidence_enabled:
+                ev = gate.check_evidence_quality(
+                    state.sources,
+                    evidence_threshold=self.config.get("gate_min_evidence_score", 0.5),
+                )
+                if not ev.passed:
+                    return ev
+            return base
         elif state.phase == "analyzing":
             return gate.check_after_analysis(state.sources)
         elif state.phase == "synthesizing":
-            return gate.check_after_synthesis(state.synthesis)
+            base = gate.check_after_synthesis(state.synthesis)
+            if not base.passed:
+                return base
+            if reasoning_enabled:
+                # Build a synthesis text from synthesis dict (synthesizer stores structured output)
+                synth_text = self._synthesis_to_text(state.synthesis)
+                rs = gate.check_reasoning_quality(
+                    synth_text,
+                    evidence_sources=state.sources,
+                    clarification=state.clarification,
+                    reasoning_threshold=self.config.get("gate_min_reasoning_score", 0.5) / 10.0,
+                )
+                if not rs.passed:
+                    return rs
+            return base
         elif state.phase == "reporting":
-            return gate.check_before_report(state.synthesis, state.sources)
+            base = gate.check_before_report(state.synthesis, state.sources)
+            if not base.passed:
+                return base
+            if structure_enabled and state.report_md:
+                st = gate.check_structure_quality(
+                    state.report_md,
+                    synthesis=state.synthesis,
+                    evidence_sources=state.sources,
+                    structure_threshold=self.config.get("gate_min_structure_score", 0.5),
+                )
+                if not st.passed:
+                    return st
+            return base
+        elif state.phase == "reviewing" and framework_enabled:
+            return gate.check_framework_compliance(
+                clarification=state.clarification,
+                reasoning_check=state.reasoning_check,
+                structure_check=state.structure_check,
+            )
         return None
+
+    @staticmethod
+    def _synthesis_to_text(synthesis: dict | None) -> str:
+        """Flatten the synthesis dict into a single text blob for the reasoner.
+
+        The synthesizer stores structured output (claims / reinforced_claims
+        / contradictions / knowledge_gaps). The ReasoningChecker expects
+        a text synthesis, so we concatenate the human-readable parts.
+        """
+        if not synthesis:
+            return ""
+        parts: list[str] = []
+        for key in ("summary", "synthesis", "analysis", "main_text", "narrative"):
+            v = synthesis.get(key)
+            if isinstance(v, str) and v.strip():
+                parts.append(v.strip())
+        for key in ("reinforced_claims", "claims"):
+            items = synthesis.get(key) or []
+            for it in items:
+                if isinstance(it, dict):
+                    text = it.get("text") or it.get("claim") or ""
+                    if text:
+                        parts.append(f"- {text}")
+                elif isinstance(it, str):
+                    parts.append(f"- {it}")
+        for key in ("contradictions",):
+            for it in synthesis.get(key) or []:
+                if isinstance(it, dict):
+                    text = it.get("text") or it.get("description") or ""
+                    if text:
+                        parts.append(f"! {text}")
+        for gap in synthesis.get("knowledge_gaps") or []:
+            if isinstance(gap, str):
+                parts.append(f"? {gap}")
+            elif isinstance(gap, dict):
+                parts.append(f"? {gap.get('text', '')}")
+        return "\n".join(parts)
 
     # ─── Action Implementations ────────────────────────────────────────
 
@@ -797,6 +893,34 @@ class ResearchEngine:
         sources = self.db.get_sources(state.session_id) or []
         yield {"type": "progress", "progress": 0.4, "message": f"Gathered {len(sources)} sources total"}
 
+        # ─── 6-step step 2: evidence scoring (run only when enabled) ───
+        if self.config.get("evidence_scoring_enabled", True) and sources:
+            from llmwikify.autoresearch.source_filter import SourceFilter
+            sf = SourceFilter(self.config)
+            new_scores: dict[str, float] = {}
+            for src in sources:
+                sid = src.get("id")
+                if not sid:
+                    continue
+                try:
+                    new_scores[sid] = round(float(sf.compute_evidence_score(src)), 4)
+                except Exception as e:
+                    logger.warning("evidence_score failed for %s: %s", sid, e)
+                    new_scores[sid] = 0.0
+            # Merge with any existing scores (preserve across replans)
+            state.evidence_scores.update(new_scores)
+            try:
+                self.db.update_six_step_fields(
+                    state.session_id, evidence_scores=state.evidence_scores
+                )
+            except Exception as e:
+                logger.warning("Failed to persist evidence_scores: %s", e)
+            yield {
+                "type": "evidence_scoring_complete",
+                "count": len(new_scores),
+                "avg_score": round(sum(new_scores.values()) / max(1, len(new_scores)), 4),
+            }
+
         if not sources:
             self.session_manager.update_status(state.session_id, "error", "gathering", -1)
             yield {"type": "error", "error": "No sources gathered. All sub-queries failed."}
@@ -867,6 +991,28 @@ class ResearchEngine:
             "new_entities": state.synthesis.get("new_entities", []),
         }}
         yield {"type": "progress", "progress": 0.65, "message": "Synthesis complete"}
+
+        # ─── 6-step step 3: reasoning chain check ───
+        if self.config.get("reasoning_check_enabled", True):
+            try:
+                from llmwikify.autoresearch.reasoning_checker import ReasoningChecker
+                checker = ReasoningChecker()
+                synth_text = self._synthesis_to_text(state.synthesis)
+                result = checker.check(
+                    synthesis=synth_text,
+                    evidence_sources=state.sources,
+                    clarification=state.clarification,
+                )
+                state.reasoning_check = result
+                self.db.update_six_step_fields(state.session_id, reasoning=result)
+                yield {
+                    "type": "reasoning_check_complete",
+                    "aggregate_score": result.get("aggregate_score", 0.0),
+                    "issues_count": len(result.get("issues", [])),
+                }
+            except Exception as e:
+                logger.warning("ReasoningChecker failed: %s", e)
+                # Don't fail the pipeline — self-loop fallback is to skip.
         
         # Finish metrics tracking
         self._finish_action(metrics)
@@ -886,13 +1032,19 @@ class ResearchEngine:
 
         sources = self.db.get_sources(state.session_id) or []
         generator = ReportGenerator(self.wiki, self._report_llm, self.config)
-        
+
+        # ─── 6-step context: build dict to pass into report + review ───
+        six_step_context = self._build_six_step_context(state)
+
         # Use streaming report generation (DR-3)
         import asyncio
         report_chunks: list[str] = []
-        
+
         def _generate_streaming():
-            for event in generator.generate_streaming(state.query, sources, state.synthesis or {}):
+            for event in generator.generate_streaming(
+                state.query, sources, state.synthesis or {},
+                six_step_context=six_step_context,
+            ):
                 if event["type"] == "chunk":
                     report_chunks.append(event["text"])
                 elif event["type"] == "done":
@@ -924,9 +1076,51 @@ class ResearchEngine:
             self.session_manager.update_status(state.session_id, "error", "report", -1)
             state.phase = "error"
             state.issues.append(f"Report generation failed: {e}")
-        
+
+        # ─── 6-step step 4: structure validation ───
+        if state.report_md and self.config.get("structure_check_enabled", True):
+            try:
+                from llmwikify.autoresearch.structure_validator import StructureValidator
+                validator = StructureValidator()
+                result = validator.validate(
+                    report=state.report_md,
+                    synthesis=state.synthesis,
+                    evidence_sources=state.sources,
+                )
+                state.structure_check = result
+                self.db.update_six_step_fields(state.session_id, structure=result)
+                yield {
+                    "type": "structure_check_complete",
+                    "aggregate_score": result.get("aggregate_score", 0.0),
+                    "issues_count": len(result.get("issues", [])),
+                }
+            except Exception as e:
+                logger.warning("StructureValidator failed: %s", e)
+
         # Finish metrics tracking
         self._finish_action(metrics)
+
+    def _build_six_step_context(self, state: ResearchState) -> dict[str, Any] | None:
+        """Build the consolidated 6-step framework context for report/review.
+
+        The ReportGenerator and ResearchReviewer both accept a
+        `six_step_context` dict to inject a framework block into their
+        prompts. Returns None if no 6-step data is available (so the
+        callers fall back to the no-enrichment code path).
+        """
+        if not (
+            state.clarification
+            or state.reasoning_check
+            or state.structure_check
+            or state.evidence_scores
+        ):
+            return None
+        return {
+            "clarification": state.clarification,
+            "reasoning_check": state.reasoning_check,
+            "structure_check": state.structure_check,
+            "evidence_scores": dict(state.evidence_scores),
+        }
 
     async def _action_review(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Review report quality."""
@@ -944,7 +1138,11 @@ class ResearchEngine:
         sources = self.db.get_sources(state.session_id) or []
         reviewer = ResearchReviewer(self.wiki, self._default_llm, self.config)
         try:
-            state.review = await reviewer.review(state.query, state.report_md or "", sources)
+            six_step_context = self._build_six_step_context(state)
+            state.review = await reviewer.review(
+                state.query, state.report_md or "", sources,
+                six_step_context=six_step_context,
+            )
         except Exception as e:
             logger.error("Report review failed: %s", e)
             # DR-4: Skip review on LLM failure instead of creating fake bad review

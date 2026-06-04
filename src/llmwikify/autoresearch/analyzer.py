@@ -8,7 +8,6 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from llmwikify.agent.backend.db import AgentDatabase
 from llmwikify.autoresearch.session import ResearchSessionManager
 
 logger = logging.getLogger(__name__)
