@@ -208,11 +208,13 @@ class StreamableLLMClient:
                     continue
 
                 delta = chunk.get("choices", [{}])[0].get("delta", {})
-                # Handle reasoning_content (MiniMax reasoning_split mode)
+                # Handle reasoning_content (MiniMax reasoning_split mode).
+                # Chain-of-thought is yielded as a "thinking" event but is
+                # NOT mixed into the final "content" — downstream consumers
+                # that wait for the final string should get only the answer.
                 if "reasoning_content" in delta and delta["reasoning_content"]:
-                    accumulated += delta["reasoning_content"]
                     yield {"type": "thinking", "text": delta["reasoning_content"]}
-                # Handle regular content
+                # Handle regular content (only this goes into accumulated)
                 if "content" in delta and delta["content"]:
                     accumulated += delta["content"]
                     yield {"type": "content", "text": delta["content"]}
@@ -227,8 +229,15 @@ class StreamableLLMClient:
                         }
 
                 finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
-                if finish in ("stop", "tool_calls"):
-                    yield {"type": "done", "content": accumulated}
+                # "length" must also emit "done" — otherwise callers waiting
+                # for the done event would hang when the model hits
+                # max_tokens mid-stream.
+                if finish in ("stop", "tool_calls", "length"):
+                    yield {
+                        "type": "done",
+                        "content": accumulated,
+                        "finish_reason": finish,
+                    }
                     return
 
     @check_token_budget(lambda self: self._budget_checker)
@@ -281,11 +290,13 @@ class StreamableLLMClient:
                         continue
 
                     delta = chunk.get("choices", [{}])[0].get("delta", {})
-                    # Handle reasoning_content (MiniMax reasoning_split mode)
+                    # Handle reasoning_content (MiniMax reasoning_split mode).
+                    # Chain-of-thought is yielded as a "thinking" event but is
+                    # NOT mixed into the final "content" — downstream consumers
+                    # that wait for the final string should get only the answer.
                     if "reasoning_content" in delta and delta["reasoning_content"]:
-                        accumulated += delta["reasoning_content"]
                         yield {"type": "thinking", "text": delta["reasoning_content"]}
-                    # Handle regular content
+                    # Handle regular content (only this goes into accumulated)
                     if "content" in delta and delta["content"]:
                         accumulated += delta["content"]
                         yield {"type": "content", "text": delta["content"]}
@@ -300,8 +311,15 @@ class StreamableLLMClient:
                             }
 
                     finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
-                    if finish in ("stop", "tool_calls"):
-                        yield {"type": "done", "content": accumulated}
+                    # "length" must also emit "done" — otherwise callers waiting
+                    # for the done event would hang when the model hits
+                    # max_tokens mid-stream.
+                    if finish in ("stop", "tool_calls", "length"):
+                        yield {
+                            "type": "done",
+                            "content": accumulated,
+                            "finish_reason": finish,
+                        }
                         return
 
     @check_token_budget(lambda self: self._budget_checker)
