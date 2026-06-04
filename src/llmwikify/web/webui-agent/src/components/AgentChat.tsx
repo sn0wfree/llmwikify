@@ -77,6 +77,7 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
   const [currentThinking, setCurrentThinking] = useState('');
   const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
   const [showSidebar, setShowSidebar] = useState(true);
   const [showRail, setShowRail] = useState(true);
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
@@ -128,11 +129,17 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
     await loadMessages(sessionId);
   }, [loadMessages]);
 
-  const handleNewChat = useCallback(() => {
-    setCurrentSessionId(null);
+  const handleNewChat = useCallback(async () => {
+    try {
+      const { session_id } = await api.agent.createSession(currentWikiId || undefined);
+      setCurrentSessionId(session_id);
+      setSidebarRefreshKey((k) => k + 1);
+    } catch {
+      setCurrentSessionId(null);
+    }
     setMessages([{ role: 'assistant', content: "Hello! I'm your wiki assistant. How can I help?", timestamp: new Date().toISOString() }]);
     setInput('');
-  }, []);
+  }, [currentWikiId]);
 
   const handleApproveConfirmation = useCallback(async () => {
     if (!pendingConfirmation || !currentSessionId) return;
@@ -250,6 +257,7 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
         switch (event.type) {
           case 'session_created':
             setCurrentSessionId(event.session_id);
+            setSidebarRefreshKey((k) => k + 1);
             break;
 
           case 'message_delta':
@@ -365,6 +373,7 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
             currentSessionId={currentSessionId}
             onSelectSession={handleSelectSession}
             onNewChat={handleNewChat}
+            refreshKey={sidebarRefreshKey}
           />
         )}
 
