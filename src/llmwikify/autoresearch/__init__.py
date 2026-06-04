@@ -11,6 +11,9 @@ from __future__ import annotations
 from .clarifier import ResearchClarifier
 from .config import DEFAULT_SIX_STEP_CONFIG, merge_six_step_config
 from .engine import ResearchEngine, ResearchState, VALID_TRANSITIONS
+from .quality_gate import GateResult, QualityGate
+from .reasoning_checker import ReasoningChecker
+from .source_filter import SourceFilter
 
 __all__ = [
     "ResearchEngine",
@@ -19,4 +22,8 @@ __all__ = [
     "DEFAULT_SIX_STEP_CONFIG",
     "merge_six_step_config",
     "VALID_TRANSITIONS",
+    "GateResult",
+    "QualityGate",
+    "ReasoningChecker",
+    "SourceFilter",
 ]

@@ -176,3 +176,90 @@ class QualityGate:
             details={"has_synthesis": synthesis is not None, "source_count": len(sources)},
             suggestion="proceed" if passed else "synthesize_again",
         )
+
+    # ─── 6-step framework gates (step 2: evidence, step 3: reasoning) ──
+
+    def check_evidence_quality(
+        self,
+        sources: list[dict],
+        evidence_threshold: float = 0.5,
+    ) -> GateResult:
+        """6-step gate 2 (after_gathering): are sources evidence-quality?
+
+        Uses SourceFilter.compute_evidence_score which adds traceability
+        and authority dimensions on top of base quality.
+        """
+        if not sources:
+            return GateResult(
+                passed=False,
+                gate_name="evidence_quality",
+                summary="No sources to score",
+                suggestion="gather_more",
+            )
+        # Lazy import to avoid circular
+        from .source_filter import SourceFilter
+        sf = SourceFilter()
+        scored = []
+        for s in sources:
+            score = sf.compute_evidence_score(s)
+            scored.append((s.get("title") or s.get("url") or "?", score))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        avg = sum(s[1] for s in scored) / len(scored)
+        high_quality = sum(1 for _, s in scored if s >= evidence_threshold)
+        passed = avg >= evidence_threshold and high_quality >= max(1, len(sources) // 2)
+        return GateResult(
+            passed=passed,
+            gate_name="evidence_quality",
+            summary=(
+                f"Avg evidence score {avg:.2f} (≥{evidence_threshold}), "
+                f"{high_quality}/{len(sources)} sources ≥ threshold"
+            ),
+            details={
+                "avg_score": round(avg, 3),
+                "high_quality_count": high_quality,
+                "total": len(scored),
+                "threshold": evidence_threshold,
+                "top_sources": scored[:3],
+            },
+            suggestion="proceed" if passed else "gather_higher_quality",
+        )
+
+    def check_reasoning_quality(
+        self,
+        synthesis: str,
+        evidence_sources: list[dict] | None = None,
+        clarification: dict | None = None,
+        reasoning_threshold: float = 0.5,
+    ) -> GateResult:
+        """6-step gate 3 (after_synthesis): is the reasoning chain sound?
+
+        Uses ReasoningChecker which scores 6 dimensions and computes an
+        aggregate. A failed gate forces the engine to return to plan stage.
+        """
+        from .reasoning_checker import ReasoningChecker
+        checker = ReasoningChecker()
+        result = checker.check(
+            synthesis=synthesis,
+            evidence_sources=evidence_sources,
+            clarification=clarification,
+        )
+        agg = result["aggregate_score"]
+        passed = agg >= reasoning_threshold
+        # Surface top 3 issues
+        top_issues = result.get("issues", [])[:3]
+        return GateResult(
+            passed=passed,
+            gate_name="reasoning_quality",
+            summary=(
+                f"Reasoning aggregate {agg:.2f} (≥{reasoning_threshold}), "
+                f"{len(result['issues'])} issues"
+            ),
+            details={
+                "aggregate_score": agg,
+                "per_dimension": result["scores"],
+                "issues": top_issues,
+                "method": result["method"],
+                "threshold": reasoning_threshold,
+            },
+            suggestion="proceed" if passed else "replan_reasoning",
+        )
