@@ -172,7 +172,7 @@ function AutoResearchSidebar({
   };
 
   return (
-    <div className="flex flex-col h-full border-r border-[var(--border)]">
+    <div className="flex flex-col h-full min-h-0 border-r border-[var(--border)]">
       <div className="p-3 border-b border-[var(--border)]">
         <button
           onClick={handleNew}
@@ -259,8 +259,9 @@ function NewSessionForm({ onCreated }: { onCreated: (id: string) => void }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[var(--bg-primary)]">
-      <div className="w-full max-w-2xl">
+    <div className="flex-1 overflow-y-auto bg-[var(--bg-primary)] min-h-0">
+      <div className="min-h-full flex flex-col items-center justify-center p-8">
+        <div className="w-full max-w-2xl py-4">
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-[var(--accent)] mb-2">
             AutoResearch — 6 步逻辑框架
@@ -318,6 +319,7 @@ function NewSessionForm({ onCreated }: { onCreated: (id: string) => void }) {
               </div>
             </div>
           ))}
+        </div>
         </div>
       </div>
     </div>
@@ -549,7 +551,7 @@ export function AutoResearchPanel() {
 
   if (!selectedId) {
     return (
-      <div className="flex h-full">
+      <div className="flex h-full min-h-0">
         <div className="w-72 shrink-0">
           <AutoResearchSidebar
             selectedId={selectedId}
@@ -563,7 +565,7 @@ export function AutoResearchPanel() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-h-0">
       <div className="w-72 shrink-0">
         <AutoResearchSidebar
           selectedId={selectedId}
@@ -572,7 +574,7 @@ export function AutoResearchPanel() {
         />
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {loading && !session ? (
           <div className="flex-1 flex items-center justify-center text-sm text-[var(--text-secondary)]">
             加载中...
@@ -600,7 +602,7 @@ export function AutoResearchPanel() {
               ))}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto min-h-0 p-4">
               {activeTab === 'overview' && (
                 <EventLog events={eventLog} />
               )}
@@ -738,8 +740,8 @@ function ReportTab({ session }: { session: AutoResearchSession }) {
   }
 
   return (
-    <div className="prose prose-invert prose-sm max-w-none">
-      <pre className="whitespace-pre-wrap text-[12px] text-[var(--text-primary)] font-mono leading-relaxed bg-[var(--bg-secondary)] p-4 rounded border border-[var(--border)]">
+    <div className="text-[12px] text-[var(--text-primary)] font-mono leading-relaxed bg-[var(--bg-secondary)] p-4 rounded border border-[var(--border)] overflow-x-auto">
+      <pre className="whitespace-pre-wrap break-words">
         {markdown}
       </pre>
     </div>
