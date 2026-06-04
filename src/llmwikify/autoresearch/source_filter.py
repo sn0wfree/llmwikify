@@ -136,6 +136,70 @@ class SourceFilter:
         )
         return round(min(1.0, max(0.0, total)), 3)
 
+    # ─── 6-step framework: evidence scoring (step 2: 建立依据) ─────
+
+    def compute_evidence_score(self, source: dict[str, Any]) -> float:
+        """Compute evidence credibility score (0.0-1.0) for the 6-step framework.
+
+        Reuses the 4 base quality dimensions and adds 2 evidence-specific
+        dimensions: traceability and authority. The 6-step gate uses this
+        to decide if a source is "evidence-quality" enough to ground claims.
+
+        Dimensions (weights):
+        - Base quality: 0.40 (compute_quality_score)
+        - Traceability: 0.30 (URL + title + author visible)
+        - Authority: 0.30 (domain reputation + source type)
+        """
+        base = self.compute_quality_score(source)
+        traceability = self._score_traceability(source)
+        authority = self._score_authority(source)
+
+        total = base * 0.4 + traceability * 0.3 + authority * 0.3
+        return round(min(1.0, max(0.0, total)), 3)
+
+    def _score_traceability(self, source: dict[str, Any]) -> float:
+        """Score whether the source can be traced back to an origin.
+
+        Traceability = having a real URL + a non-empty title + (if available)
+        a non-empty author/owner. Wiki:// URLs are considered fully traceable
+        since they point to a local named page.
+        """
+        url = (source.get("url") or "").strip()
+        title = (source.get("title") or "").strip()
+        author = (source.get("author") or source.get("owner") or "").strip()
+
+        score = 0.0
+        if url:
+            score += 0.5
+            if url.startswith("wiki://"):
+                score += 0.3  # local wiki is fully traceable
+        if title:
+            score += 0.3
+        if author:
+            score += 0.2
+        return min(1.0, score)
+
+    def _score_authority(self, source: dict[str, Any]) -> float:
+        """Score the authority of the source (domain reputation + source type).
+
+        - HIGH_QUALITY_DOMAINS → 1.0
+        - LOW_QUALITY_PATTERNS → 0.2
+        - Unknown → 0.5
+
+        Type bonus: pdf + 0.1, arxiv + 0.1, wiki + 0.0 (already covered by
+        domain).
+        """
+        url = source.get("url", "")
+        source_type = source.get("source_type", "web")
+        score = self._score_domain(url)
+
+        # Type bonus for academic-grade types
+        if source_type == "pdf":
+            score = min(1.0, score + 0.1)
+        elif source_type == "arxiv":
+            score = min(1.0, score + 0.1)
+
+        return round(score, 3)
     def _normalize_url(self, url: str) -> str:
         """Normalize URL for deduplication."""
         url = url.rstrip("/").lower()

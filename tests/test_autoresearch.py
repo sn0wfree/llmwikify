@@ -20,9 +20,12 @@ import pytest
 from llmwikify.agent.backend.db import AgentDatabase
 from llmwikify.autoresearch import (
     DEFAULT_SIX_STEP_CONFIG,
+    QualityGate,
+    ReasoningChecker,
     ResearchClarifier,
     ResearchEngine,
     ResearchState,
+    SourceFilter,
     VALID_TRANSITIONS,
     merge_six_step_config,
 )
@@ -358,3 +361,165 @@ async def _collect_events(aiter):
     async for e in aiter:
         out.append(e)
     return out
+
+
+# ─── Phase 2: evidence + reasoning ───────────────────────────────────
+
+
+class TestSourceFilterEvidence:
+    """SourceFilter.compute_evidence_score: 6-step gate 2 input."""
+
+    def test_high_quality_source_scores_high(self):
+        sf = SourceFilter()
+        arxiv_paper = {
+            "url": "https://arxiv.org/abs/2401.0001",
+            "title": "Attention Is All You Need",
+            "author": "Vaswani et al.",
+            "source_type": "arxiv",
+            "content": "x" * 2000,
+        }
+        score = sf.compute_evidence_score(arxiv_paper)
+        assert score >= 0.7, f"arxiv paper should score ≥ 0.7, got {score}"
+
+    def test_low_quality_source_scores_low(self):
+        sf = SourceFilter()
+        spam = {
+            "url": "https://clickbait.tld/article/123",
+            "title": "",
+            "author": "",
+            "source_type": "web",
+            "content": "short",
+        }
+        score = sf.compute_evidence_score(spam)
+        assert score < 0.5, f"spam should score < 0.5, got {score}"
+
+    def test_wiki_url_is_fully_traceable(self):
+        sf = SourceFilter()
+        wiki = {
+            "url": "wiki://test-page",
+            "title": "Test Page",
+            "author": "",
+            "source_type": "wiki",
+            "content": "x" * 1000,
+        }
+        score = sf.compute_evidence_score(wiki)
+        # wiki URL bonus (0.3) + title (0.3) = traceability 0.6+ → contributes ≥0.18 to total
+        assert score >= 0.5, f"wiki source should be traceable, got {score}"
+
+    def test_traceability_breakdown(self):
+        sf = SourceFilter()
+        # Full traceability: url + title + author
+        full = {"url": "https://x.com", "title": "T", "author": "A", "content": "x" * 500}
+        # No traceability
+        none = {"url": "", "title": "", "author": "", "content": ""}
+        assert sf._score_traceability(full) > sf._score_traceability(none)
+        assert sf._score_traceability(none) == 0.0
+
+    def test_authority_boost_for_pdf(self):
+        sf = SourceFilter()
+        web_unknown = {"url": "https://example.com/x", "content": "x" * 500, "source_type": "web"}
+        pdf = {**web_unknown, "source_type": "pdf"}
+        assert sf._score_authority(pdf) >= sf._score_authority(web_unknown)
+
+
+class TestReasoningChecker:
+    """ReasoningChecker: 6-step gate 3 input."""
+
+    def test_returns_six_dimension_scores(self):
+        rc = ReasoningChecker()
+        result = rc.check(synthesis="Some text. [[Source:a]] Another.", evidence_sources=[{"id": "a"}])
+        assert "scores" in result
+        for dim in ReasoningChecker.DIMENSIONS:
+            assert dim in result["scores"]
+            assert 0.0 <= result["scores"][dim] <= 1.0
+
+    def test_high_quality_synthesis_passes(self):
+        rc = ReasoningChecker()
+        synth = (
+            "The system 因为 high latency 所以 fails. [[Source:s1]] "
+            "可能 this will improve. 假设 we have enough resources. "
+            "Therefore, results are good. 综合 our analysis."
+        )
+        result = rc.check(
+            synthesis=synth,
+            evidence_sources=[{"id": "s1", "url": "u1"}],
+            clarification={"premises": ["high latency is a problem"]},
+        )
+        assert result["aggregate_score"] >= 0.6, f"got {result['aggregate_score']}"
+        assert result["method"] == "rule_based"
+
+    def test_empty_synthesis_scores_zero_on_alignment(self):
+        rc = ReasoningChecker()
+        result = rc.check(synthesis="", evidence_sources=[{"id": "s1"}])
+        # Empty synthesis has 0 sentences, so alignment=0
+        assert result["scores"]["conclusion_evidence_alignment"] == 0.0
+
+    def test_premises_alignment_tracks_token_overlap(self):
+        rc = ReasoningChecker()
+        # Premise keyword "quantum entanglement" appears in synthesis
+        result = rc.check(
+            synthesis="We discuss quantum entanglement extensively.",
+            evidence_sources=[{"id": "s1"}],
+            clarification={"premises": ["quantum entanglement is fundamental"]},
+        )
+        assert result["scores"]["premise_evidence_alignment"] >= 0.5
+
+    def test_issues_list_populated_for_warnings(self):
+        rc = ReasoningChecker()
+        # No citations, no causal markers, no uncertainty, no assumptions
+        result = rc.check(synthesis="Just a statement. Another one. Third.", evidence_sources=[{"id": "s"}])
+        # Expect issues for causal, assumption_visibility, uncertainty_quantification
+        assert len(result["issues"]) >= 2
+
+
+class TestQualityGateNewGates:
+    """QualityGate.check_evidence_quality + check_reasoning_quality."""
+
+    def test_evidence_gate_passes_for_high_quality(self):
+        qg = QualityGate({"gate_evidence_threshold": 0.5})
+        sources = [
+            {
+                "url": "https://arxiv.org/abs/2401",
+                "title": "Paper",
+                "author": "A",
+                "source_type": "arxiv",
+                "content": "x" * 1500,
+            }
+        ]
+        result = qg.check_evidence_quality(sources, evidence_threshold=0.5)
+        assert result.gate_name == "evidence_quality"
+        assert result.passed is True
+        assert "avg_score" in result.details
+
+    def test_evidence_gate_fails_for_empty(self):
+        qg = QualityGate()
+        result = qg.check_evidence_quality([])
+        assert result.passed is False
+        assert result.suggestion == "gather_more"
+
+    def test_reasoning_gate_returns_aggregate(self):
+        qg = QualityGate({"gate_reasoning_threshold": 0.5})
+        synth = (
+            "The system 因为 latency 所以 fails. [[Source:s1]] "
+            "可能 this will improve. 假设 we have resources."
+        )
+        result = qg.check_reasoning_quality(
+            synthesis=synth,
+            evidence_sources=[{"id": "s1"}],
+            clarification={"premises": ["latency is a problem"]},
+            reasoning_threshold=0.5,
+        )
+        assert result.gate_name == "reasoning_quality"
+        assert "per_dimension" in result.details
+        assert result.passed is True
+
+    def test_reasoning_gate_fails_below_threshold(self):
+        qg = QualityGate()
+        # Empty synthesis → all 0s
+        result = qg.check_reasoning_quality(
+            synthesis="",
+            evidence_sources=[],
+            reasoning_threshold=0.5,
+        )
+        assert result.passed is False
+        assert result.suggestion == "replan_reasoning"
