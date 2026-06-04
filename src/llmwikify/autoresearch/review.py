@@ -52,7 +52,7 @@ class ResearchReviewer:
         try:
             import asyncio
             import json as json_mod
-            from llmwikify.autoresearch.retry import retry_async
+            from llmwikify.autoresearch.retry_managers import retry_async
 
             max_attempts = self.config.get("max_retry_attempts", 3)
             call_timeout = self.config.get("llm_call_timeout_seconds", 120)
@@ -194,7 +194,7 @@ class ResearchRevisor:
         api_params = registry.get_api_params("research_revise")
 
         import asyncio
-        from llmwikify.autoresearch.retry import retry_async
+        from llmwikify.autoresearch.retry_managers import retry_async
 
         max_attempts = self.config.get("max_retry_attempts", 3)
         call_timeout = self.config.get("llm_call_timeout_seconds", 120)
