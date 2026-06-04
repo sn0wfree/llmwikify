@@ -16,8 +16,10 @@ class WikiLinkMixin(WikiProtocol):
         """Resolve a wikilink target to a file path.
 
         Resolution order:
-        1. Direct path (e.g., "concepts/Factor Investing")
-        2. SQLite index lookup (authoritative, supports all formats)
+        1. Direct path under wiki_dir (e.g., "concepts/Factor Investing")
+        2. SQLite index lookup:
+           - file_path starting with "raw/" → resolved relative to wiki root
+           - other file_path                → resolved relative to wiki_dir
         """
         direct = self.wiki_dir / f"{target}.md"
         if direct.exists():
@@ -26,6 +28,8 @@ class WikiLinkMixin(WikiProtocol):
         try:
             file_path = self.index.resolve_by_name(target)
             if file_path:
+                if file_path.startswith("raw/"):
+                    return self.root / file_path
                 return self.wiki_dir / file_path
         except Exception as e:
             logger.warning("Index lookup failed for wikilink: %s: %s", target, e)

@@ -85,6 +85,45 @@ class TestWikilinkResolution:
         wiki.close()
 
 
+class TestResolveWikilinkRawPath:
+    """Tests for raw/ file_path resolution (root-relative, not wiki_dir-relative)."""
+
+    def test_resolves_raw_prefixed_index_path(self, temp_wiki):
+        """Index entry with 'raw/...' file_path resolves to wiki root, not wiki_dir."""
+        wiki = Wiki(temp_wiki)
+        wiki.init(overwrite=True)
+
+        raw_file = wiki.raw_dir / "src-abc123def456.md"
+        raw_file.parent.mkdir(parents=True, exist_ok=True)
+        raw_file.write_text("# Raw Source\n\nContent")
+
+        wiki.index.upsert_page(
+            "src-abc123def456", raw_file.read_text(), "raw/src-abc123def456.md"
+        )
+
+        result = wiki._resolve_wikilink_target("src-abc123def456")
+        assert result == wiki.raw_dir / "src-abc123def456.md"
+        assert not result.exists() or result.is_file()
+        wiki.close()
+
+    def test_resolves_wiki_relative_index_path_unchanged(self, temp_wiki):
+        """Index entry without 'raw/' prefix still resolves to wiki_dir."""
+        wiki = Wiki(temp_wiki)
+        wiki.init(overwrite=True)
+
+        page = wiki.wiki_dir / "concepts" / "Risk Parity.md"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text("# Risk Parity")
+
+        wiki.index.upsert_page(
+            "concepts/Risk Parity", page.read_text(), "concepts/Risk Parity.md"
+        )
+
+        result = wiki._resolve_wikilink_target("concepts/Risk Parity")
+        assert result == wiki.wiki_dir / "concepts" / "Risk Parity.md"
+        wiki.close()
+
+
 class TestFixWikilinks:
     """Test fix_wikilinks auto-repair method."""
 
