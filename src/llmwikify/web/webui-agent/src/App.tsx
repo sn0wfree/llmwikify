@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AgentChat } from './components/AgentChat';
+import { AutoResearchPanel } from './components/AutoResearchPanel';
 import { Confirmations } from './components/Confirmations';
 import { DreamLog } from './components/DreamLog';
 import { DreamProposals } from './components/DreamProposals';
@@ -16,7 +17,7 @@ import { Card } from './components/ui/Card';
 import { Badge } from './components/ui/Badge';
 import { Backdrop } from './components/Backdrop';
 
-type ViewMode = 'chat' | 'research' | 'ppt' | 'tasks' | 'confirmations' | 'proposals' | 'dream' | 'ingest' | 'history' | 'settings';
+type ViewMode = 'chat' | 'research' | 'autoresearch' | 'ppt' | 'tasks' | 'confirmations' | 'proposals' | 'dream' | 'ingest' | 'history' | 'settings';
 
 export interface PptSource {
   type: 'research' | 'chat';
@@ -91,6 +92,9 @@ function App() {
           <NavButton active={view === 'research'} onClick={() => setView('research')}>
             Quick Research
           </NavButton>
+          <NavButton active={view === 'autoresearch'} onClick={() => setView('autoresearch')}>
+            AutoResearch
+          </NavButton>
           <NavButton active={view === 'ppt'} onClick={() => setView('ppt')}>
             PPT Generator
           </NavButton>
@@ -128,6 +132,7 @@ function App() {
         <div className="flex-1 overflow-hidden">
           {view === 'chat' && <AgentChat onExportToPpt={handleExportToPpt} />}
           {view === 'research' && <ResearchPanel onExportToPpt={handleExportToPpt} />}
+          {view === 'autoresearch' && <LazyWrapper><AutoResearchPanel /></LazyWrapper>}
           {view === 'ppt' && <PPTGenerator source={pptSource} onSourceConsumed={() => setPptSource(null)} onExit={handlePptExit} />}
           {view === 'tasks' && <LazyWrapper><TaskMonitor /></LazyWrapper>}
           {view === 'confirmations' && <LazyWrapper><Confirmations /></LazyWrapper>}
