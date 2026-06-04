@@ -48,7 +48,7 @@ function formatDate(iso: string): string {
   }
 }
 
-export function PPTSidebar() {
+export function PPTSidebar({ refreshKey }: { refreshKey?: number } = {}) {
   const [taskId, setTaskId] = useUrlTask();
   const [tasks, setTasks] = useState<PPTTaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +76,7 @@ export function PPTSidebar() {
       mounted = false;
       clearInterval(i);
     };
-  }, [filter]);
+  }, [filter, refreshKey]);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
