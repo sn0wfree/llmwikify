@@ -422,13 +422,192 @@ system: |
   12. 报告结构是否符合三层支撑
 ```
 
-### 5. 数据库变更
+### 5. 数据库变更（独立 autoresearch.db）
+
+**设计原则：autoresearch 与 research / chat / ppt 共享进程但使用独立 SQLite 数据库**。
+
+#### 5.1 文件路径
+
+| 数据库 | 路径 | 用途 |
+|--------|------|------|
+| AgentDatabase | `~/.llmwikify/agent/.llmwiki_agent.db` | chat / tool_calls / research / ppt / notifications |
+| **AutoResearchDatabase** | **`~/.llmwikify/agent/autoresearch.db`** | **autoresearch 全部数据** |
+
+两个 DB 在 `~/.llmwikify/agent/` 目录下**同级**，互不引用。Server 启动时各自初始化。
+
+#### 5.2 零共享约束
+
+| 维度 | 现状 | 目标 |
+|------|------|------|
+| 文件 | `agent_service.db` 共享 | `autoresearch.db` 独立 |
+| 表 | `research_sessions` 表加 3 列 | `autoresearch_sessions` 独立表 |
+| ALTER 触发 | 每次 `ResearchEngine.__init__` 跑 `ensure_six_step_columns` | 启动时一次性 `CREATE TABLE IF NOT EXISTS` |
+| 写路径 | engine.py 第 699 行裸 SQL `UPDATE research_sessions SET clarification_json = ?` | 改用 `update_six_step_fields()` 封装方法 |
+| 删除残留 | research_sessions 含 autoresearch 字段 | 可选迁移工具 `migrate_research_six_step_columns()` 显式清理 |
+
+#### 5.3 Schema（幂等 `CREATE TABLE IF NOT EXISTS`）
 
 ```sql
--- 新增字段（迁移脚本）
-ALTER TABLE research_sessions ADD COLUMN clarification_json TEXT;
-ALTER TABLE research_sessions ADD COLUMN reasoning_json TEXT;
-ALTER TABLE research_sessions ADD COLUMN structure_json TEXT;
+-- autoresearch.db 全部表（独立于 .llmwiki_agent.db）
+
+CREATE TABLE autoresearch_sessions (
+    id TEXT PRIMARY KEY,
+    wiki_id TEXT NOT NULL,
+    query TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'clarifying',  -- 默认 'clarifying'，与 research 不同
+    current_step TEXT DEFAULT 'clarifying',
+    progress REAL DEFAULT 0.0,
+    result TEXT,
+    wiki_page_name TEXT,
+    iteration_round INTEGER DEFAULT 0,
+    synthesis_json TEXT,
+    review_json TEXT,
+    -- ─── 6 步框架字段（schema 内置，无需 ALTER） ─────
+    clarification_json TEXT,
+    reasoning_json TEXT,
+    structure_json TEXT,
+    self_loop_counts_json TEXT,
+    self_loop_history_json TEXT,
+    evidence_scores_json TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE autoresearch_sub_queries (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    query TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    url TEXT,
+    status TEXT DEFAULT 'pending',
+    result TEXT,
+    error TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT,
+    FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id)
+);
+
+CREATE TABLE autoresearch_sources (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    sub_query_id TEXT,
+    source_type TEXT NOT NULL,
+    url TEXT,
+    title TEXT,
+    content_length INTEGER,
+    content_preview TEXT,
+    content TEXT,
+    analysis TEXT,
+    rating INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id),
+    FOREIGN KEY (sub_query_id) REFERENCES autoresearch_sub_queries(id)
+);
+
+CREATE INDEX idx_ar_sub_queries_session
+    ON autoresearch_sub_queries(session_id, status);
+CREATE INDEX idx_ar_sources_session
+    ON autoresearch_sources(session_id);
+```
+
+#### 5.4 AutoResearchDatabase 公共 API
+
+保持方法名同形于 AgentDatabase.research_* 系列，**调用方零改动**：
+
+```python
+class AutoResearchDatabase:
+    def __init__(self, data_dir: Path | str):
+        """data_dir = ~/.llmwikify/agent/ → autoresearch.db"""
+
+    # Session CRUD
+    def create_research_session(wiki_id, query) -> str
+    def get_research_session(session_id) -> dict | None
+    def list_research_sessions(wiki_id=None) -> list[dict]
+    def update_research_status(session_id, status, step, iteration_round, synthesis_json, review_json)
+    def update_research_progress(session_id, progress, wiki_page_name)
+    def delete_research(session_id) -> bool  # cascade sub_queries + sources
+
+    # Sub-queries
+    def save_sub_query(session_id, query, source_type, url) -> str
+    def update_sub_query(sq_id, status, result, error)
+    def get_sub_queries(session_id) -> list[dict]
+
+    # Sources
+    def save_source(session_id, sub_query_id, source_type, url, title, content_length, content_preview, content) -> str
+    def update_source_analysis(source_id, analysis)
+    def get_sources(session_id) -> list[dict]
+
+    # Report
+    def persist_report(session_id, result_json)
+    def finalize_research(session_id, result_json, wiki_page_name)
+
+    # 6 步框架专用
+    def update_six_step_fields(
+        session_id,
+        clarification=None,
+        reasoning=None,
+        structure=None,
+        self_loop_counts=None,
+        self_loop_history=None,
+        evidence_scores=None,
+    ) -> None
+    def get_six_step_fields(session_id) -> dict[str, Any]
+```
+
+#### 5.5 db_migrations.py 改写
+
+```python
+"""Schema bootstrap for the autoresearch database."""
+
+def init_autoresearch_db(db_path) -> None:
+    """幂等创建 autoresearch schema（无操作如果表已存在）"""
+    from llmwikify.autoresearch.db import AutoResearchDatabase
+    AutoResearchDatabase(Path(db_path).parent)
+
+
+def migrate_research_six_step_columns(old_db_path, drop_columns=True) -> int:
+    """OPTIONAL: 清理旧 .llmwiki_agent.db 中 research_sessions 的
+    autoresearch 残留字段 (clarification_json / reasoning_json / structure_json)
+
+    Returns: 已删除的列数
+    """
+```
+
+#### 5.6 engine.py 关键修改
+
+| 行 | Before | After |
+|----|--------|-------|
+| 18 | `from llmwikify.agent.backend.db import AgentDatabase` | `from llmwikify.autoresearch.db import AutoResearchDatabase` |
+| 164 | `db: AgentDatabase` | `db: AutoResearchDatabase` |
+| 188-197 | 8 行 `ensure_six_step_columns(...)` 块 | **删除** |
+| 699-704 | 6 行裸 SQL | `self.db.update_six_step_fields(state.session_id, clarification=clarification)` |
+
+#### 5.7 server/http/routes.py 注入
+
+```python
+# AutoResearch - independent 6-step framework engine with its own DB.
+# No shared schema with research / chat / ppt.
+from llmwikify.autoresearch.db import AutoResearchDatabase
+autoresearch_db = AutoResearchDatabase(data_dir)
+set_autoresearch_deps(
+    db=autoresearch_db,  # 独立 DB（非 agent_service.db）
+    wiki_registry=registry,
+    llm_client=None,  # Will fallback to agent service LLM
+    config=research_config,
+)
+```
+
+#### 5.8 旧数据迁移（可选 / 不强制）
+
+当前不自动迁移。如用户曾运行过旧版 autoresearch（共享 DB 模式），可手动调用：
+
+```python
+from llmwikify.autoresearch.db_migrations import migrate_research_six_step_columns
+count = migrate_research_six_step_columns(
+    old_db_path=Path("~/.llmwikify/agent/.llmwiki_agent.db"),
+    drop_columns=True,
+)
+# count: 实际删除的列数（0-3）
 ```
 
 ### 6. 配置参数
@@ -472,7 +651,8 @@ DEFAULT_RESEARCH_CONFIG = {
 | `autoresearch/reasoning_checker.py` | Python | 新建 | ~100 | 推理链校验器 |
 | `autoresearch/structure_validator.py` | Python | 新建 | ~150 | 结构校验器 |
 | `autoresearch/retry_managers.py` | Python | 新建 | ~150 | 3 个重试管理器 |
-| `autoresearch/db_migrations.py` | Python | 新建 | ~30 | 幂等 ALTER TABLE |
+| `autoresearch/db.py` | Python | 新建 | ~380 | 独立 AutoResearchDatabase（含 update_six_step_fields / get_six_step_fields） |
+| `autoresearch/db_migrations.py` | Python | 改写 | ~50 | init_autoresearch_db() + 可选 migrate_research_six_step_columns() |
 | `autoresearch/routes.py` | Python | 新建 | ~120 | FastAPI router |
 | `autoresearch/report_enhancer.py` | Python | 新建 | ~80 | 报告增强 |
 | `autoresearch/review_enhancer.py` | Python | 新建 | ~60 | 评审增强 |
@@ -926,3 +1106,42 @@ DEFAULT_SIX_STEP_CONFIG = {
 4. **手动验证**：使用真实研究主题测试效果
 5. **自我循环测试**：验证 scope_check=false 和证据不足时的重试行为
 6. **重试测试**：验证超时、JSON 解析失败、DB 锁定的重试行为
+
+## Revision History
+
+### v4 (2026-06-04) — Independent autoresearch.db
+
+**变更动机**：autoresearch 与 research 共享 `AgentDatabase` / `research_sessions` 表的设计带来以下问题：
+- 6 步字段通过 `ALTER TABLE` 注入，与 research 模式耦合
+- 任何 autoresearch 写入都会修改 research 共享表
+- DB lock 竞争 / 备份 / 清理时无法独立处理
+
+**变更内容**：
+- 新增 `autoresearch/db.py`（`AutoResearchDatabase`），完全独立的 SQLite 文件
+  - 路径：`~/.llmwikify/agent/autoresearch.db`
+  - 表：`autoresearch_sessions / _sub_queries / _sources`
+  - 6 步字段（`clarification_json / reasoning_json / structure_json` + 3 个扩展字段）**内置于 schema**，不再用 `ALTER TABLE`
+- 重写 `db_migrations.py`：`init_autoresearch_db()` 替代 `ensure_six_step_columns()`，新增可选 `migrate_research_six_step_columns()` 清理旧 `.llmwiki_agent.db` 残留
+- 5 个调用方 import / type hint 改（**公共方法名同形，调用方零代码逻辑改动**）
+- `engine.py` 第 699 行裸 SQL 替换为 `db.update_six_step_fields()`
+- `server/http/routes.py` 启动时创建独立 `AutoResearchDatabase(data_dir)`
+- 测试 fixtures 改用独立 `AutoResearchDatabase`，新增 `TestAutoResearchDatabase`（14 个测试）覆盖表创建、字段、级联删除、零共享验证
+
+**兼容性**：
+- 公共方法名同形 → 现有 engine / session / gatherer / analyzer / routes 调用方零业务逻辑改动
+- 旧数据不自动迁移（用户可手动调用 `migrate_research_six_step_columns`）
+- 默认 status 从 `'planning'` 改为 `'clarifying'`（autoresearch 第一阶段是 clarify）
+
+**验证**：
+- 78 个 autoresearch 测试 + 110 个 research 测试 = **188 passed**，零回归
+- `autoresearch.db` 不含 `research_sessions` 表
+- `.llmwiki_agent.db` 不被 autoresearch 写入
+- Server 启动日志显示两条独立 DB 路径
+
+### v3 (2026-06-04) — 独立顶级子项目
+
+详见本文件主体（928 行）。变更：
+- `autoresearch/` 顶级子目录（与 `strategy/` 并列）
+- 完全 copy 而非继承 / 组合
+- 零 import 耦合到 `agent/backend/research/`
+- 共享 `AgentDatabase`（v4 后改为独立 DB）+ `core/` 模块
