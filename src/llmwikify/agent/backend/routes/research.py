@@ -269,6 +269,7 @@ async def save_to_wiki(research_id: str, request: Request):
     result = await registry.execute("research_save_to_wiki", {
         "session_id": research_id,
         "page_name": page_name,
+        "include_sources": body.get("include_sources", True),
     })
 
     return result
