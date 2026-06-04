@@ -19,6 +19,7 @@ from llmwikify.autoresearch.db import AutoResearchDatabase
 from llmwikify.agent.backend.providers.registry import create_llm
 from llmwikify.autoresearch.analyzer import SourceAnalyzer
 from llmwikify.autoresearch.config import merge_research_config
+from llmwikify.autoresearch._json_utils import safe_json_loads
 from llmwikify.autoresearch.gatherer import SourceGatherer
 from llmwikify.autoresearch.report import ReportGenerator
 from llmwikify.autoresearch.review import ResearchReviewer, ResearchRevisor
@@ -466,7 +467,6 @@ class ResearchEngine:
     async def _llm_reason(self, state: ResearchState) -> str:
         """Use LLM to decide next action with chain-of-thought reasoning."""
         import asyncio
-        import json as json_mod
 
         analyzed_count = sum(1 for s in state.sources if s.get("analysis"))
         failed_sq = sum(1 for sq in state.sub_queries if sq.get("status") == "failed")
@@ -513,14 +513,7 @@ class ResearchEngine:
             )
 
         raw = await asyncio.to_thread(_call)
-        raw = raw.strip()
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
-            if raw.endswith("```"):
-                raw = raw[:-3]
-            raw = raw.strip()
-
-        result = json_mod.loads(raw)
+        result = safe_json_loads(raw)
         action = result.get("action", "done")
         thought = result.get("thought", "")
 
@@ -1304,7 +1297,6 @@ class ResearchEngine:
 
         try:
             import asyncio
-            import json as json_mod
 
             def _call_llm():
                 raw = self._planning_llm.chat(
@@ -1316,13 +1308,7 @@ class ResearchEngine:
                 return raw
 
             raw = await asyncio.to_thread(_call_llm)
-            raw = raw.strip()
-            if raw.startswith("```"):
-                raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
-                if raw.endswith("```"):
-                    raw = raw[:-3]
-                raw = raw.strip()
-            result = json_mod.loads(raw)
+            result = safe_json_loads(raw)
             if not isinstance(result, list):
                 result = []
         except Exception as e:
@@ -1350,7 +1336,6 @@ class ResearchEngine:
     async def _plan_for_gaps(self, query: str, gaps: list[str]) -> list[dict[str, Any]]:
         """Generate sub-queries to fill knowledge gaps."""
         import asyncio
-        import json as json_mod
 
         gaps_text = "\n".join(f"- {gap}" for gap in gaps[:5])
 
@@ -1394,13 +1379,7 @@ class ResearchEngine:
                 return self._planning_llm.chat(messages, json_mode=True, max_tokens=1024, temperature=0.3)
 
             raw = await asyncio.to_thread(_call)
-            raw = raw.strip()
-            if raw.startswith("```"):
-                raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
-                if raw.endswith("```"):
-                    raw = raw[:-3]
-                raw = raw.strip()
-            result = json_mod.loads(raw)
+            result = safe_json_loads(raw)
             if not isinstance(result, list):
                 result = []
         except Exception as e:

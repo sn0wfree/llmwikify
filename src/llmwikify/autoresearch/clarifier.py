@@ -11,6 +11,8 @@ import json
 import logging
 from typing import Any
 
+from llmwikify.autoresearch._json_utils import safe_json_loads
+
 logger = logging.getLogger(__name__)
 
 
@@ -166,16 +168,9 @@ class ResearchClarifier:
         ]
 
     def _parse_response(self, raw: str, query: str) -> dict[str, Any]:
-        """Parse the LLM response, handling code-fence wrappers."""
-        text = raw.strip()
-        if text.startswith("```"):
-            parts = text.split("\n", 1)
-            text = parts[1] if len(parts) > 1 else text[3:]
-            if text.endswith("```"):
-                text = text[:-3]
-            text = text.strip()
+        """Parse the LLM response, handling code-fence wrappers and trailing prose."""
         try:
-            result = json.loads(text)
+            result = safe_json_loads(raw)
         except json.JSONDecodeError as e:
             logger.warning("Clarify JSON parse failed: %s", e)
             return self._fallback(query, reason=f"JSON parse error: {e}")
