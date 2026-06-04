@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from llmwikify.autoresearch.db import AutoResearchDatabase
@@ -80,11 +81,9 @@ class ResearchSessionManager:
 
     def persist_report(self, session_id: str, result: dict | None = None) -> None:
         """Persist report data without changing status (safe to call mid-pipeline)."""
-        import json
         result_json = json.dumps(result) if result else None
         self.db.persist_report(session_id, result_json)
 
     def finalize(self, session_id: str, result: dict | None = None, wiki_page_name: str | None = None) -> None:
-        import json
         result_json = json.dumps(result) if result else None
         self.db.finalize_research(session_id, result_json, wiki_page_name)
