@@ -271,7 +271,7 @@ class TestResearchClarifier:
         clarifier = ResearchClarifier(mock_llm)
         result = _run_async(clarifier.clarify("Q?"))
         assert result["fallback"] is True
-        assert result["scope_check"] is True
+        assert result["scope_check"] is False  # 🐛 fix: trigger retry, not silent pass
         assert "fallback_reason" in result
 
     def test_clarify_falls_back_on_invalid_json(self, mock_llm):
@@ -320,6 +320,83 @@ class TestResearchClarifier:
         assert len(history) == 2
         assert "warnings" in result
         assert any("澄清重试超限" in w for w in result["warnings"])
+
+    def test_fallback_triggers_retry_not_silent(self, mock_llm):
+        """Regression test: JSON parse failure must trigger retry loop,
+        not silently use fallback after 1 attempt.
+
+        Reproduces session 082dd bug:
+        - LLM returns empty string (JSON parse error)
+        - Expect: 3 calls (initial + 2 retries), not 1 call
+        """
+        mock_llm.chat.return_value = ""  # empty triggers JSON parse error
+        clarifier = ResearchClarifier(
+            mock_llm,
+            config={"clarify_max_retries": 2, "self_loop_budget_ratio": 0.3},
+        )
+        result, history = _run_async(
+            clarifier.clarify_with_loop("test query", budget_remaining=1.0)
+        )
+        # Must retry, not silently use fallback
+        assert len(history) == 3, f"Expected 3 attempts, got {len(history)}"
+        # Final state: still fallback (LLM never recovered in this test)
+        assert result["fallback"] is True
+        # And scope_check must be False (signaling "not researchable")
+        assert result["scope_check"] is False
+        # Warning must be set
+        assert any("澄清重试超限" in w for w in result.get("warnings", []))
+
+    def test_fallback_retry_uses_original_query_not_narrowed(self, mock_llm):
+        """When previous attempt was fallback, retry must use ORIGINAL query
+        (not narrowed), to avoid pollution by fallback placeholder data.
+        """
+        call_messages: list[list[dict]] = []
+
+        def capture(messages, **kwargs):
+            # Record what the user message was for each call
+            call_messages.append(list(messages))
+            return ""  # always fail
+
+        mock_llm.chat.side_effect = capture
+        clarifier = ResearchClarifier(
+            mock_llm,
+            config={"clarify_max_retries": 2, "self_loop_budget_ratio": 0.3},
+        )
+        result, history = _run_async(
+            clarifier.clarify_with_loop("original query", budget_remaining=1.0)
+        )
+        assert len(call_messages) == 3  # initial + 2 retries
+        # All 3 calls should have the ORIGINAL query in user message
+        # (no narrowing with fallback placeholders)
+        for i, msgs in enumerate(call_messages):
+            user_msg = next(m for m in msgs if m["role"] == "user")["content"]
+            assert "original query" in user_msg, (
+                f"Call {i}: query was narrowed unexpectedly: {user_msg!r}"
+            )
+
+    def test_fallback_retry_can_succeed(self, mock_llm):
+        """If LLM recovers on retry, we get a real clarification, not fallback."""
+        mock_llm.chat.side_effect = [
+            "",  # 1st: empty (parse error → fallback)
+            json.dumps({  # 2nd: real clarification
+                "context": "recovered", "boundaries": "clear",
+                "position": "researcher", "premises": ["p1"],
+                "scope_check": True,
+            }),
+        ]
+        clarifier = ResearchClarifier(
+            mock_llm,
+            config={"clarify_max_retries": 2, "self_loop_budget_ratio": 0.3},
+        )
+        result, history = _run_async(
+            clarifier.clarify_with_loop("Q?", budget_remaining=1.0)
+        )
+        # After 1 fallback + 1 successful retry, we should have a real result
+        # (successful path doesn't include "fallback" key, so check via get)
+        assert not result.get("fallback", False)
+        assert result["context"] == "recovered"
+        assert result["scope_check"] is True
+        assert len(history) == 2  # initial (fallback) + 1 retry (success)
 
 
 # ─── 5. Engine integration tests ───────────────────────────────────

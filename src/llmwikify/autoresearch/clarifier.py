@@ -79,7 +79,7 @@ class ResearchClarifier:
         })
 
         for attempt in range(1, max_retries + 1):
-            # Stop if scope is researchable
+            # Stop if scope is researchable (genuine clarification succeeded)
             if clarification.get("scope_check", False):
                 break
             # Stop if budget is exhausted
@@ -90,7 +90,25 @@ class ResearchClarifier:
                 )
                 break
 
-            # Refine the query and retry
+            # If previous attempt was a fallback (LLM parse/exception), retry
+            # with the ORIGINAL query — don't narrow using fallback data
+            # (fallback has "未明确"/"研究者视角" placeholders that pollute
+            # the refinement).
+            if clarification.get("fallback"):
+                logger.info(
+                    "Clarify attempt %d: previous was fallback (%s), retrying with original query",
+                    attempt, clarification.get("fallback_reason", "unknown"),
+                )
+                clarification = await self.clarify(query, wiki_context)
+                loop_history.append({
+                    "type": "clarify_retry_after_fallback",
+                    "attempt": attempt,
+                    "scope_check": clarification.get("scope_check", False),
+                    "fallback": clarification.get("fallback", False),
+                })
+                continue
+
+            # Normal path: refine query based on previous clarification and retry
             current_query = self._narrow_query(query, clarification)
             current_context = self._enrich_context(wiki_context, clarification)
             clarification = await self.clarify(current_query, current_context)
@@ -172,13 +190,21 @@ class ResearchClarifier:
         }
 
     def _fallback(self, query: str, reason: str = "") -> dict[str, Any]:
-        """Deterministic fallback when LLM fails."""
+        """Deterministic fallback when LLM fails.
+
+        Returns scope_check=False so that clarify_with_loop will retry
+        on the next iteration. The previous scope_check=True behavior
+        silently used the fallback after a single LLM failure, hiding
+        transient errors from operators. Now a JSON-parse failure (or
+        LLM call exception) is treated as a signal that the scope is
+        unverified, which triggers a retry with the original query.
+        """
         return {
             "context": f"未澄清（{reason}），使用原始查询作为语境",
             "boundaries": "未明确",
             "position": "研究者视角",
             "premises": [f"原始查询: {query[:200]}"],
-            "scope_check": True,  # assume researchable on fallback
+            "scope_check": False,  # 🐛 fix: trigger retry loop on parse failure
             "fallback": True,
             "fallback_reason": reason,
         }
