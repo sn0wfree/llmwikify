@@ -12,20 +12,22 @@ import time
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any
 
 from llmwikify.agent.backend.adapters import StreamableLLMClient
 from llmwikify.autoresearch.db import AutoResearchDatabase
 from llmwikify.agent.backend.providers.registry import create_llm
+from llmwikify.autoresearch import actions
+from llmwikify.autoresearch.actions import ActionContext
 from llmwikify.autoresearch.analyzer import SourceAnalyzer
 from llmwikify.autoresearch.config import merge_six_step_config
 from llmwikify.autoresearch._json_utils import safe_json_loads
 from llmwikify.autoresearch.engine_helpers import chat_json
 from llmwikify.autoresearch.gatherer import SourceGatherer
 from llmwikify.autoresearch.state import (
-    ActionMetrics,
+    MetricsCollector,
     ResearchState,
-    SessionMetrics,
     VALID_TRANSITIONS,
 )
 from llmwikify.autoresearch.report import ReportGenerator
@@ -35,12 +37,6 @@ from llmwikify.autoresearch.synthesizer import ResearchSynthesizer
 from llmwikify.autoresearch.quality_gate import QualityGate
 
 logger = logging.getLogger(__name__)
-
-# ─── Action dispatch table (replaces 8-arm if/elif in _react_loop) ───────
-# Maps the LLM/rule-reasoner's action name to the corresponding method.
-# Unknown actions fall through to _action_done (safe default).
-_ACTION_DISPATCH_ATTR = "_actions"
-
 
 # ─── State Transition Table (DR-14) ──────────────────────────────────────
 # Explicit valid transitions: from_phase → list of allowed to_phases
@@ -89,22 +85,40 @@ class ResearchEngine:
         # native columns in autoresearch_sessions; no ALTER TABLE needed.
         # AutoResearchDatabase.__init__ runs the schema bootstrap once.
 
-        # Metrics (DR-13)
-        self._metrics: SessionMetrics | None = None
+        # Action-level components (used by action functions in actions.py)
+        self.gatherer = SourceGatherer(self.wiki, self.db, self.session_manager, self.config)
+        self.analyzer = SourceAnalyzer(self.wiki, self.session_manager, self.config)
+        self.synthesizer = ResearchSynthesizer(self.wiki, self.config)
+        self.report = ReportGenerator(self.wiki, self._report_llm, self.config)
+        self.reviewer = ResearchReviewer(self.wiki, self._default_llm, self.config)
+        self.revisor = ResearchRevisor(self.wiki, self._report_llm, self.config)
 
-        # Action dispatch table: action name -> async generator method.
-        # Populated here (not at class level) so we can reference bound
-        # methods that only exist after __init__ returns.
-        setattr(self, _ACTION_DISPATCH_ATTR, {
-            "plan":       self._action_plan,
-            "gather":     self._action_gather,
-            "analyze":    self._action_analyze,
-            "synthesize": self._action_synthesize,
-            "report":     self._action_report,
-            "review":     self._action_review,
-            "revise":     self._action_revise,
-            "done":       self._action_done,
-        })
+        # Metrics (DR-13)
+        self._metrics: MetricsCollector | None = None
+
+        # ─── ActionContext + dispatch table ──────────────────────────────
+        # Constructed here so actions.py functions receive all deps via ctx.
+        self._action_ctx = ActionContext(
+            wiki=self.wiki,
+            db=self.db,
+            session_manager=self.session_manager,
+            clarifier=self.clarifier,
+            gatherer=self.gatherer,
+            analyzer=self.analyzer,
+            synthesizer=self.synthesizer,
+            report=self.report,
+            reviewer=self.reviewer,
+            revisor=self.revisor,
+            quality_gate=self._quality_gate,
+            config=self.config,
+            metrics=None,  # set in run() before _react_loop
+            planning_llm=self._planning_llm,
+            default_llm=self._default_llm,
+            report_llm=self._report_llm,
+        )
+        # Dispatch table: action name -> partial(action_fn, ctx).
+        # Set in run() once metrics are initialized (ctx.metrics is set there).
+        self._action_dispatch: dict[str, Any] = {}
 
     def _resolve_model(self, config_key: str) -> StreamableLLMClient | None:
         model_cfg = self.config.get(config_key)
@@ -145,35 +159,26 @@ class ResearchEngine:
             return False
         return True
 
-    def _warn_invalid_transition(self, from_phase: str, to_phase: str) -> None:
-        """Log a warning if the transition is invalid.
-
-        Equivalent to ``if not self._validate_transition(...): logger.warning(...)``
-        but collapses the 8 duplicated callsites in action methods to a
-        single line. Returns nothing (caller always continues anyway).
-        """
-        self._validate_transition(from_phase, to_phase)
-
-    def _start_action(self, action: str) -> ActionMetrics:
-        """Start tracking metrics for an action."""
-        metrics = ActionMetrics(action=action, start_time=time.monotonic())
-        return metrics
-
-    def _finish_action(self, metrics: ActionMetrics) -> None:
-        """Finish tracking metrics for an action and add to session."""
-        metrics.finish()
-        if self._metrics:
-            self._metrics.add_action(metrics)
-        logger.debug("Action %s completed in %dms", metrics.action, metrics.duration_ms)
-
     async def run(self, session_id: str, query: str, resume: bool = False) -> AsyncIterator[dict[str, Any]]:
         """Execute the ReAct research loop, yielding SSE events."""
         self.session_manager.session_id = session_id
         self._start_time = time.monotonic()
         
-        # Initialize metrics (DR-13)
-        self._metrics = SessionMetrics(session_id=session_id)
+        # Initialize metrics (DR-13) + build dispatch table
+        self._metrics = MetricsCollector(session_id=session_id)
         self._metrics.start()
+        self._action_ctx.metrics = self._metrics
+        self._action_dispatch = {
+            "clarify":    partial(actions.action_clarify, self._action_ctx),
+            "plan":       partial(actions.action_plan, self._action_ctx),
+            "gather":     partial(actions.action_gather, self._action_ctx),
+            "analyze":    partial(actions.action_analyze, self._action_ctx),
+            "synthesize": partial(actions.action_synthesize, self._action_ctx),
+            "report":     partial(actions.action_report, self._action_ctx),
+            "review":     partial(actions.action_review, self._action_ctx),
+            "revise":     partial(actions.action_revise, self._action_ctx),
+            "done":       partial(actions.action_done, self._action_ctx),
+        }
 
         try:
             async for event in self._react_loop(session_id, query, resume):
@@ -208,7 +213,7 @@ class ResearchEngine:
 
         # ─── 6-step framework: run clarify before the first plan ───
         if not resume and state.clarification is None:
-            async for event in self._action_clarify(state):
+            async for event in self._action_dispatch["clarify"](state):
                 yield event
 
         try:
@@ -240,14 +245,11 @@ class ResearchEngine:
                 }
 
                 # ── ACT: execute action via dispatch table ──
-                action_method = getattr(self, _ACTION_DISPATCH_ATTR).get(action)
+                action_method = self._action_dispatch.get(action)
                 if action_method is None:
                     # Unknown action → default to done (safe fallback)
                     logger.warning("Unknown action %s, defaulting to done", action)
-                    action_method = self._action_done
-                    async for event in action_method(state):
-                        yield event
-                    break
+                    action_method = self._action_dispatch["done"]
                 async for event in action_method(state):
                     yield event
                 if action == "done":
@@ -589,692 +591,12 @@ class ResearchEngine:
 
     @staticmethod
     def _synthesis_to_text(synthesis: dict | None) -> str:
-        """Flatten the synthesis dict into a single text blob for the reasoner.
+        """Delegate to actions.synthesis_to_text (extracted in Commit 5b/5c).
 
-        The synthesizer stores structured output (claims / reinforced_claims
-        / contradictions / knowledge_gaps). The ReasoningChecker expects
-        a text synthesis, so we concatenate the human-readable parts.
+        Kept as a static method on ResearchEngine for backward compat
+        with code that calls engine._synthesis_to_text.
         """
-        if not synthesis:
-            return ""
-        parts: list[str] = []
-        for key in ("summary", "synthesis", "analysis", "main_text", "narrative"):
-            v = synthesis.get(key)
-            if isinstance(v, str) and v.strip():
-                parts.append(v.strip())
-        for key in ("reinforced_claims", "claims"):
-            items = synthesis.get(key) or []
-            for it in items:
-                if isinstance(it, dict):
-                    text = it.get("text") or it.get("claim") or ""
-                    if text:
-                        parts.append(f"- {text}")
-                elif isinstance(it, str):
-                    parts.append(f"- {it}")
-        for key in ("contradictions",):
-            for it in synthesis.get(key) or []:
-                if isinstance(it, dict):
-                    text = it.get("text") or it.get("description") or ""
-                    if text:
-                        parts.append(f"! {text}")
-        for gap in synthesis.get("knowledge_gaps") or []:
-            if isinstance(gap, str):
-                parts.append(f"? {gap}")
-            elif isinstance(gap, dict):
-                parts.append(f"? {gap.get('text', '')}")
-        return "\n".join(parts)
-
-    # ─── Action Implementations ────────────────────────────────────────
-
-    async def _action_clarify(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
-        """6-step step 1: clarify research context, boundaries, position, premises.
-
-        Runs only when clarify_enabled (default true) and not on resume. The
-        result is stored in state.clarification and persisted to the DB.
-        """
-        # Skip if disabled (only the framework compliance gate respects this;
-        # self-loop itself has no off-switch per the v3 design).
-        if not self.config.get("clarify_enabled", True):
-            state.clarification = {"scope_check": True, "context": "skipped (clarify_enabled=False)"}
-            return
-
-        # Validate state transition
-        self._warn_invalid_transition(state.phase, "clarifying")
-
-        # Track metrics
-        metrics = self._start_action("clarify")
-
-        state.phase = "clarifying"
-        self.session_manager.update_status(state.session_id, "clarifying", "clarifying", None)
-        yield self._step_event("clarifying", "Clarifying research scope and boundaries...")
-
-        # Build wiki context (reuse _plan_sub_queries helper)
-        wiki_context = ""
-        try:
-            wiki_results = self.wiki.search(state.query, limit=3)
-            if wiki_results:
-                lines = [
-                    f"- {r.get('page_name', '')}: {r.get('snippet', '')[:200]}"
-                    for r in wiki_results
-                ]
-                wiki_context = "\n".join(lines)
-        except Exception as e:
-            logger.debug("Wiki search for clarification failed: %s", e)
-
-        # Run clarifier with self-loop
-        clarification, loop_history = await self.clarifier.clarify_with_loop(
-            query=state.query,
-            wiki_context=wiki_context,
-            budget_remaining=state.budget_remaining,
-        )
-
-        state.clarification = clarification
-        state.self_loop_counts["clarify"] = len(loop_history) - 1
-        state.self_loop_history.extend(loop_history)
-
-        # Persist to DB (independent autoresearch.db — no shared schema)
-        try:
-            self.db.update_research_status(
-                state.session_id, "clarifying", "clarifying",
-                iteration_round=state.round,
-                synthesis_json=None,
-                review_json=None,
-            )
-            self.db.update_six_step_fields(
-                state.session_id, clarification=clarification,
-            )
-        except Exception as e:
-            logger.warning("Clarification persist: %s", e)
-
-        # Yield result event
-        yield {
-            "type": "clarification_complete",
-            "round": state.round,
-            "scope_check": clarification.get("scope_check", False),
-            "premises_count": len(clarification.get("premises", [])),
-            "warnings": clarification.get("warnings", []),
-            "loop_attempts": len(loop_history),
-        }
-
-        if not clarification.get("scope_check", False):
-            state.observations.append(
-                f"⚠ 概念澄清未通过 scope_check，但将继续 plan（{len(loop_history)} 次尝试）"
-            )
-
-        # Finish metrics
-        self._finish_action(metrics)
-
-    async def _action_plan(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
-        """Plan sub-queries (initial or replanning for gaps)."""
-        # Validate state transition
-        self._warn_invalid_transition(state.phase, "planning")
-        
-        # Track metrics (DR-13)
-        metrics = self._start_action("plan")
-        
-        state.phase = "planning"
-        self.session_manager.update_status(state.session_id, "planning", "planning", None)
-        yield self._step_event("planning", f"Planning sub-queries (round {state.round})...")
-
-        # Decide: initial plan or gap-focused replan
-        if state.knowledge_gaps and state.sub_queries:
-            yield {"type": "gap_detected", "gaps": state.knowledge_gaps, "round": state.round}
-            sub_queries = await self._plan_for_gaps(state.query, state.knowledge_gaps)
-        else:
-            sub_queries = await self._plan_sub_queries(state.query)
-
-        # Deduplicate against existing
-        existing_queries = {sq["query"].lower().strip() for sq in state.sub_queries}
-        new_queries = [sq for sq in sub_queries if sq["query"].lower().strip() not in existing_queries]
-
-        for sq in new_queries[:5]:  # Limit per round
-            sq_id = self.session_manager.add_sub_query(
-                state.session_id, sq["query"], sq["source_type"], sq.get("url")
-            )
-            sq["id"] = sq_id
-            state.sub_queries.append(sq)
-            yield {
-                "type": "sub_query_created",
-                "sub_query_id": sq_id,
-                "query": sq["query"],
-                "source_type": sq["source_type"],
-                "url": sq.get("url"),
-            }
-
-        yield {"type": "progress", "progress": 0.1, "message": f"Round {state.round}: {len(new_queries)} new sub-queries"}
-        
-        # Finish metrics tracking
-        self._finish_action(metrics)
-
-    async def _action_gather(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
-        """Gather sources for ungathered or failed sub-queries."""
-        # Validate state transition
-        self._warn_invalid_transition(state.phase, "gathering")
-        
-        # Track metrics (DR-13)
-        metrics = self._start_action("gather")
-        
-        state.phase = "gathering"
-        self.session_manager.update_status(state.session_id, "gathering", "gathering", None)
-        yield self._step_event("gathering", "Gathering sources...")
-
-        gathered_ids = {s.get("sub_query_id") for s in state.sources}
-        remaining = [sq for sq in state.sub_queries if sq["id"] not in gathered_ids]
-
-        # DR-2: Also retry failed sub-queries (max 1 retry per sub-query)
-        failed = [sq for sq in state.sub_queries if sq.get("status") == "failed"]
-        retryable = [
-            sq for sq in failed
-            if sq.get("retry_count", 0) < 1
-        ]
-        if retryable:
-            yield {"type": "retrying_failed", "count": len(retryable)}
-            for sq in retryable:
-                sq["retry_count"] = sq.get("retry_count", 0) + 1
-            remaining.extend(retryable)
-
-        if remaining:
-            gatherer = SourceGatherer(self.wiki, self.db, self.session_manager, self.config)
-            events = await gatherer.gather(remaining)
-            for event in events:
-                yield event
-
-        sources = self.db.get_sources(state.session_id) or []
-        yield {"type": "progress", "progress": 0.4, "message": f"Gathered {len(sources)} sources total"}
-
-        # ─── 6-step step 2: evidence scoring (run only when enabled) ───
-        if self.config.get("evidence_scoring_enabled", True) and sources:
-            from llmwikify.autoresearch.source_filter import SourceFilter
-            sf = SourceFilter(self.config)
-            new_scores: dict[str, float] = {}
-            for src in sources:
-                sid = src.get("id")
-                if not sid:
-                    continue
-                try:
-                    new_scores[sid] = round(float(sf.compute_evidence_score(src)), 4)
-                except Exception as e:
-                    logger.warning("evidence_score failed for %s: %s", sid, e)
-                    new_scores[sid] = 0.0
-            # Merge with any existing scores (preserve across replans)
-            state.evidence_scores.update(new_scores)
-            try:
-                self.db.update_six_step_fields(
-                    state.session_id, evidence_scores=state.evidence_scores
-                )
-            except Exception as e:
-                logger.warning("evidence_scores persist: %s", e)
-            yield {
-                "type": "evidence_scoring_complete",
-                "count": len(new_scores),
-                "avg_score": round(sum(new_scores.values()) / max(1, len(new_scores)), 4),
-            }
-
-        if not sources:
-            self.session_manager.update_status(state.session_id, "error", "gathering", -1)
-            yield {"type": "error", "error": "No sources gathered. All sub-queries failed."}
-            state.phase = "error"
-            state.issues.append("No sources gathered — all sub-queries failed")
-        
-        # Finish metrics tracking
-        self._finish_action(metrics)
-
-    async def _action_analyze(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
-        """Analyze unanalyzed sources."""
-        # Validate state transition
-        self._warn_invalid_transition(state.phase, "analyzing")
-        
-        # Track metrics (DR-13)
-        metrics = self._start_action("analyze")
-        
-        state.phase = "analyzing"
-        self.session_manager.update_status(state.session_id, "analyzing", "analyzing", None)
-        yield self._step_event("analyzing", "Analyzing sources...")
-
-        sources = self.db.get_sources(state.session_id) or []
-        unanalyzed = [s for s in sources if not s.get("analysis")]
-
-        if unanalyzed:
-            analyzer = SourceAnalyzer(self.wiki, self.session_manager, self.config)
-            events = await analyzer.analyze_sources(unanalyzed)
-            for event in events:
-                yield event
-
-        yield {"type": "progress", "progress": 0.55, "message": "Analysis complete"}
-        
-        # Finish metrics tracking
-        self._finish_action(metrics)
-
-    async def _action_synthesize(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
-        """Synthesize findings from analyzed sources."""
-        # Validate state transition
-        self._warn_invalid_transition(state.phase, "synthesizing")
-        
-        # Track metrics (DR-13)
-        metrics = self._start_action("synthesize")
-        
-        state.phase = "synthesizing"
-        self.session_manager.update_status(state.session_id, "synthesizing", "synthesizing", None)
-        yield self._step_event("synthesizing", "Synthesizing cross-source findings...")
-
-        sources = self.db.get_sources(state.session_id) or []
-        synthesizer = ResearchSynthesizer(self.wiki, self.config)
-        state.synthesis = await synthesizer.synthesize(sources, query=state.query)
-        state.knowledge_gaps = state.synthesis.get("knowledge_gaps", [])
-        state.contradictions = state.synthesis.get("contradictions", [])
-
-        # Persist synthesis for resume
-        self.session_manager.update_status(
-            state.session_id, "synthesizing", "synthesizing", None,
-            iteration_round=state.round,
-            synthesis_json=json.dumps(state.synthesis),
-        )
-
-        yield {"type": "synthesis_complete", "synthesis": {
-            "reinforced_claims": state.synthesis.get("reinforced_claims", []),
-            "contradictions": state.synthesis.get("contradictions", []),
-            "knowledge_gaps": state.synthesis.get("knowledge_gaps", []),
-            "new_entities": state.synthesis.get("new_entities", []),
-        }}
-        yield {"type": "progress", "progress": 0.65, "message": "Synthesis complete"}
-
-        # ─── 6-step step 3: reasoning chain check ───
-        if self.config.get("reasoning_check_enabled", True):
-            try:
-                from llmwikify.autoresearch.reasoning_checker import ReasoningChecker
-                checker = ReasoningChecker()
-                synth_text = self._synthesis_to_text(state.synthesis)
-                result = checker.check(
-                    synthesis=synth_text,
-                    evidence_sources=state.sources,
-                    clarification=state.clarification,
-                )
-                state.reasoning_check = result
-                self.db.update_six_step_fields(state.session_id, reasoning=result)
-                yield {
-                    "type": "reasoning_check_complete",
-                    "aggregate_score": result.get("aggregate_score", 0.0),
-                    "issues_count": len(result.get("issues", [])),
-                }
-            except Exception as e:
-                logger.warning("ReasoningChecker failed: %s", e)
-                # Don't fail the pipeline — self-loop fallback is to skip.
-        
-        # Finish metrics tracking
-        self._finish_action(metrics)
-
-    async def _action_report(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
-        """Generate research report."""
-        # Validate state transition
-        self._warn_invalid_transition(state.phase, "reporting")
-        
-        # Track metrics (DR-13)
-        metrics = self._start_action("report")
-        
-        state.phase = "reporting"
-        self.session_manager.update_status(state.session_id, "report", "report", None)
-        yield self._step_event("report", "Generating research report...")
-
-        sources = self.db.get_sources(state.session_id) or []
-        generator = ReportGenerator(self.wiki, self._report_llm, self.config)
-
-        # ─── 6-step context: build dict to pass into report + review ───
-        six_step_context = self._build_six_step_context(state)
-
-        # Use streaming report generation (DR-3)
-        import asyncio
-        report_chunks: list[str] = []
-
-        def _generate_streaming():
-            for event in generator.generate_streaming(
-                state.query, sources, state.synthesis or {},
-                six_step_context=six_step_context,
-            ):
-                if event["type"] == "chunk":
-                    report_chunks.append(event["text"])
-                elif event["type"] == "done":
-                    return event["content"]
-                elif event["type"] == "error":
-                    raise Exception(event["error"])
-            return "".join(report_chunks)
-        
-        try:
-            # Run streaming generator in thread pool
-            state.report_md = await asyncio.to_thread(_generate_streaming)
-            
-            # Persist report immediately so it survives pause/cancel/error
-            # Use persist_report (not finalize) to avoid setting status='done' prematurely
-            self.session_manager.persist_report(state.session_id, {
-                "markdown": state.report_md,
-                "query": state.query,
-                "quality_score": state.quality_score,
-                "rounds": state.round,
-                "sources": [
-                    {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
-                    for s in sources
-                ],
-            })
-            yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
-        except Exception as e:
-            logger.error("Report generation failed: %s", e)
-            yield {"type": "error", "error": f"Report generation failed: {e}"}
-            self.session_manager.update_status(state.session_id, "error", "report", -1)
-            state.phase = "error"
-            state.issues.append(f"Report generation failed: {e}")
-
-        # ─── 6-step step 4: structure validation ───
-        if state.report_md and self.config.get("structure_check_enabled", True):
-            try:
-                from llmwikify.autoresearch.structure_validator import StructureValidator
-                validator = StructureValidator()
-                result = validator.validate(
-                    report=state.report_md,
-                    synthesis=state.synthesis,
-                    evidence_sources=state.sources,
-                )
-                state.structure_check = result
-                self.db.update_six_step_fields(state.session_id, structure=result)
-                yield {
-                    "type": "structure_check_complete",
-                    "aggregate_score": result.get("aggregate_score", 0.0),
-                    "issues_count": len(result.get("issues", [])),
-                }
-            except Exception as e:
-                logger.warning("StructureValidator failed: %s", e)
-
-        # Finish metrics tracking
-        self._finish_action(metrics)
-
-    def _build_six_step_context(self, state: ResearchState) -> dict[str, Any] | None:
-        """Build the consolidated 6-step framework context for report/review.
-
-        The ReportGenerator and ResearchReviewer both accept a
-        `six_step_context` dict to inject a framework block into their
-        prompts. Returns None if no 6-step data is available (so the
-        callers fall back to the no-enrichment code path).
-        """
-        if not (
-            state.clarification
-            or state.reasoning_check
-            or state.structure_check
-            or state.evidence_scores
-        ):
-            return None
-        return {
-            "clarification": state.clarification,
-            "reasoning_check": state.reasoning_check,
-            "structure_check": state.structure_check,
-            "evidence_scores": dict(state.evidence_scores),
-        }
-
-    async def _action_review(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
-        """Review report quality."""
-        # Validate state transition
-        self._warn_invalid_transition(state.phase, "reviewing")
-        
-        # Track metrics (DR-13)
-        metrics = self._start_action("review")
-        
-        state.phase = "reviewing"
-        self.session_manager.update_status(state.session_id, "reviewing", "reviewing", None)
-        yield self._step_event("review", "Reviewing report quality...")
-
-        sources = self.db.get_sources(state.session_id) or []
-        reviewer = ResearchReviewer(self.wiki, self._default_llm, self.config)
-        try:
-            six_step_context = self._build_six_step_context(state)
-            state.review = await reviewer.review(
-                state.query, state.report_md or "", sources,
-                six_step_context=six_step_context,
-            )
-        except Exception as e:
-            logger.error("Report review failed: %s", e)
-            # DR-4: Skip review on LLM failure instead of creating fake bad review
-            state.review = {
-                "approved": True,
-                "score": 7,
-                "issues": [],
-                "feedback": "",
-                "skipped": True,
-                "skip_reason": f"Review LLM failed: {e}",
-            }
-        state.quality_score = state.review.get("score", 0)
-        state.issues = state.review.get("issues", [])
-
-        # Persist review for resume
-        self.session_manager.update_status(
-            state.session_id, "reviewing", "reviewing", None,
-            iteration_round=state.round,
-            review_json=json.dumps(state.review),
-        )
-
-        if state.review.get("approved"):
-            yield {
-                "type": "review_passed",
-                "round": state.round,
-                "score": state.quality_score,
-                "feedback": state.review.get("feedback", ""),
-            }
-        else:
-            yield {
-                "type": "review_issues",
-                "round": state.round,
-                "score": state.quality_score,
-                "issues": state.issues,
-            }
-        
-        # Finish metrics tracking
-        self._finish_action(metrics)
-
-    async def _action_revise(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
-        """Revise report based on review feedback."""
-        # Validate state transition
-        self._warn_invalid_transition(state.phase, "revise")
-        
-        # Track metrics (DR-13)
-        metrics = self._start_action("revise")
-        
-        yield self._step_event("revise", "Revising report...")
-
-        sources = self.db.get_sources(state.session_id) or []
-        revisor = ResearchRevisor(self.wiki, self._report_llm, self.config)
-        try:
-            state.report_md = await revisor.revise(state.report_md or "", state.issues, sources)
-            # Reset review so it gets re-evaluated
-            state.review = None
-            # Persist revised report immediately so it survives pause/cancel/error
-            # Use persist_report (not finalize) to avoid setting status='done' prematurely
-            self.session_manager.persist_report(state.session_id, {
-                "markdown": state.report_md,
-                "query": state.query,
-                "quality_score": state.quality_score,
-                "rounds": state.round,
-                "sources": [
-                    {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
-                    for s in sources
-                ],
-            })
-            yield {"type": "progress", "progress": 0.85, "message": "Report revised"}
-        except Exception as e:
-            logger.error("Report revision failed: %s", e)
-            yield {"type": "error", "error": f"Report revision failed: {e}"}
-        
-        # Finish metrics tracking
-        self._finish_action(metrics)
-
-    async def _action_done(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
-        """Finalize research session."""
-        # Validate state transition
-        self._warn_invalid_transition(state.phase, "done")
-        
-        state.phase = "done"
-        sources = self.db.get_sources(state.session_id) or []
-
-        self.session_manager.update_status(state.session_id, "done", "done", 1.0, iteration_round=state.round)
-        self.session_manager.finalize(state.session_id, {
-            "markdown": state.report_md,
-            "query": state.query,
-            "quality_score": state.quality_score,
-            "rounds": state.round,
-            "synthesis_summary": {
-                "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
-                "contradictions": len((state.synthesis or {}).get("contradictions", [])),
-                "knowledge_gaps": len(state.knowledge_gaps),
-            },
-            "sources": [
-                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
-                for s in sources
-            ],
-        })
-
-        yield {
-            "type": "done",
-            "report": {
-                "query": state.query,
-                "markdown": state.report_md,
-                "sources": [
-                    {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
-                    for s in sources
-                ],
-                "synthesis_summary": {
-                    "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
-                    "contradictions": len((state.synthesis or {}).get("contradictions", [])),
-                    "knowledge_gaps": len(state.knowledge_gaps),
-                },
-                "rounds": state.round,
-                "quality_score": state.quality_score,
-            },
-        }
-
-    # ─── Planning Helpers ──────────────────────────────────────────────
-
-    async def _plan_sub_queries(self, query: str) -> list[dict[str, Any]]:
-        """Decompose the research topic into sub-queries using planning_model."""
-        from llmwikify.core.prompt_registry import PromptRegistry
-        registry = PromptRegistry(provider="openai")
-
-        # Proactively search local wiki for relevant articles
-        local_wiki_matches = ""
-        try:
-            wiki_results = self.wiki.search(query, limit=5)
-            if wiki_results:
-                lines = []
-                for r in wiki_results:
-                    name = r.get("page_name", "")
-                    snippet = r.get("snippet", "")
-                    score = r.get("score", 0)
-                    lines.append(f"- {name} (score: {score:.2f}): {snippet}")
-                local_wiki_matches = "\n".join(lines)
-        except Exception as e:
-            logger.debug("Local wiki search failed: %s", e)
-
-        wiki_index = ""
-        if self.wiki.index_file.exists():
-            wiki_index = self.wiki.index_file.read_text()[:3000]
-
-        messages = registry.get_messages(
-            "research_plan",
-            query=query,
-            wiki_index=wiki_index[:2000] if wiki_index else "",
-            local_wiki_matches=local_wiki_matches,
-        )
-        api_params = registry.get_api_params("research_plan")
-
-        try:
-            result = await chat_json(
-                self._planning_llm, messages,
-                max_tokens=api_params.get("max_tokens", 2048),
-                temperature=api_params.get("temperature", 0.3),
-                json_mode=api_params.get("json_mode", True),
-            )
-            if not isinstance(result, list):
-                result = []
-        except Exception as e:
-            logger.warning("Planning LLM failed: %s, using single query", e)
-            result = [{"query": query, "source_type": "web", "url": ""}]
-
-        max_sq = self.config.get("max_sub_queries", 20)
-        sub_queries: list[dict[str, Any]] = []
-
-        for item in result[:max_sq]:
-            sq_type = item.get("source_type", "web")
-            if sq_type not in ("web", "youtube", "wiki", "pdf"):
-                sq_type = "web"
-            sub_queries.append({
-                "query": item.get("query", ""),
-                "source_type": sq_type,
-                "url": item.get("url"),
-            })
-
-        if not sub_queries:
-            sub_queries.append({"query": query, "source_type": "web", "url": ""})
-
-        return sub_queries
-
-    async def _plan_for_gaps(self, query: str, gaps: list[str]) -> list[dict[str, Any]]:
-        """Generate sub-queries to fill knowledge gaps."""
-        import asyncio
-
-        gaps_text = "\n".join(f"- {gap}" for gap in gaps[:5])
-
-        # Proactively search local wiki for gap-related content
-        local_wiki_matches = ""
-        try:
-            gap_query = f"{query} {' '.join(gaps[:3])}"
-            wiki_results = self.wiki.search(gap_query, limit=3)
-            if wiki_results:
-                lines = []
-                for r in wiki_results:
-                    name = r.get("page_name", "")
-                    snippet = r.get("snippet", "")
-                    lines.append(f"- {name}: {snippet}")
-                local_wiki_matches = "\n".join(lines)
-        except Exception as e:
-            logger.debug("Local wiki search for gaps failed: %s", e)
-
-        wiki_context = ""
-        if local_wiki_matches:
-            wiki_context = f"\n\nExisting wiki articles that may help fill gaps:\n{local_wiki_matches}\nUse source_type \"wiki\" for these if relevant."
-
-        messages = [
-            {"role": "system", "content": (
-                "You are a research planner. Generate focused sub-queries to fill knowledge gaps. "
-                "Return a JSON array of objects with 'query', 'source_type', and 'url' fields. "
-                "source_type should be 'web', 'pdf', 'youtube', or 'wiki'. "
-                "Use 'wiki' when existing wiki articles are relevant (see below). "
-                "Generate 1-3 sub-queries per gap, maximum 5 total."
-            )},
-            {"role": "user", "content": (
-                f"Research topic: {query}\n\n"
-                f"Knowledge gaps to fill:\n{gaps_text}"
-                f"{wiki_context}\n\n"
-                "Generate sub-queries now. Return ONLY a JSON array."
-            )},
-        ]
-
-        try:
-            result = await chat_json(
-                self._planning_llm, messages,
-                max_tokens=1024, temperature=0.3, json_mode=True,
-            )
-            if not isinstance(result, list):
-                result = []
-        except Exception as e:
-            logger.warning("Gap planning LLM failed: %s", e)
-            result = [{"query": f"{query} {gaps[0]}", "source_type": "web", "url": ""}] if gaps else []
-
-        sub_queries = []
-        for item in result[:5]:
-            sq_type = item.get("source_type", "web")
-            if sq_type not in ("web", "youtube", "wiki", "pdf"):
-                sq_type = "web"
-            sub_queries.append({
-                "query": item.get("query", ""),
-                "source_type": sq_type,
-                "url": item.get("url"),
-            })
-
-        return sub_queries
+        return actions.synthesis_to_text(synthesis)
 
     # ─── Resume Helpers ────────────────────────────────────────────────
 
@@ -1363,7 +685,3 @@ class ResearchEngine:
 
         logger.info("Resuming session %s from %s (round %d)", state.session_id, current_step, state.round)
 
-    # ─── Utilities ─────────────────────────────────────────────────────
-
-    def _step_event(self, step: str, message: str) -> dict[str, Any]:
-        return {"type": "step", "step": step, "message": message, "session_id": self.session_manager.session_id}

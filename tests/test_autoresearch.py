@@ -693,17 +693,17 @@ class TestAutoresearchIntegration:
         self, mock_wiki, mock_llm, db, config,
     ):
         """six_step_context is built and non-None when report/review are called."""
-        from llmwikify.autoresearch.engine import ResearchEngine as _RE
+        from llmwikify.autoresearch import actions as _actions
 
         build_calls: list = []
-        original_build = _RE._build_six_step_context
+        original_build = _actions._build_six_step_context
 
-        def spy_build(self, state):
-            result = original_build(self, state)
+        def spy_build(state):
+            result = original_build(state)
             build_calls.append(result)
             return result
 
-        with patch.object(_RE, "_build_six_step_context", spy_build):
+        with patch.object(_actions, "_build_six_step_context", spy_build):
             mock_llm = self._build_mock_llm_with_full_cycle()
             config = self._lower_gates_for_test(dict(config))
             config["max_react_rounds"] = 8

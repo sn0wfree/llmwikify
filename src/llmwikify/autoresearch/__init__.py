@@ -22,6 +22,7 @@ from .retry_managers import (
 from .source_filter import SourceFilter
 from .state import (
     ActionMetrics,
+    MetricsCollector,
     ResearchState,
     SessionMetrics,
     VALID_TRANSITIONS,
@@ -36,6 +37,7 @@ __all__ = [
     "merge_six_step_config",
     "VALID_TRANSITIONS",
     "ActionMetrics",
+    "MetricsCollector",
     "SessionMetrics",
     "GateResult",
     "QualityGate",

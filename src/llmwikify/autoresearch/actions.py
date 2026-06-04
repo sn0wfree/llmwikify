@@ -25,12 +25,37 @@ from llmwikify.autoresearch.review import ResearchReviewer, ResearchRevisor
 from llmwikify.autoresearch.session import ResearchSessionManager
 from llmwikify.autoresearch.state import (
     ActionMetrics,
+    MetricsCollector,
     ResearchState,
     SessionMetrics,
     VALID_TRANSITIONS,
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ─── Metrics tracking decorator ─────────────────────────────────────────
+
+
+def tracked(action_name: str):
+    """Decorator: wraps an async-generator action in metrics.record().
+
+    Usage::
+
+        @tracked("clarify")
+        async def action_clarify(ctx, state):
+            ...  # body unchanged, no indentation bump
+    """
+    def decorator(fn):
+        async def wrapper(ctx: ActionContext, state: ResearchState):
+            with ctx.metrics.record(action_name):
+                async for event in fn(ctx, state):
+                    yield event
+        wrapper.__name__ = fn.__name__
+        wrapper.__doc__ = fn.__doc__
+        wrapper.__wrapped__ = fn
+        return wrapper
+    return decorator
 
 
 # ─── ActionContext: all deps the 9 action functions need ─────────────────
@@ -56,7 +81,7 @@ class ActionContext:
     revisor: ResearchRevisor
     quality_gate: QualityGate
     config: dict[str, Any]
-    metrics: SessionMetrics | None
+    metrics: MetricsCollector | None
     planning_llm: StreamableLLMClient
     default_llm: StreamableLLMClient  # used by ResearchReviewer
     report_llm: StreamableLLMClient   # used by ReportGenerator + ResearchRevisor
@@ -288,6 +313,7 @@ def synthesis_to_text(synthesis: dict | None) -> str:
 # ─── Actions: 9 free functions ─────────────────────────────────────────
 
 
+@tracked("clarify")
 async def action_clarify(
     ctx: ActionContext, state: ResearchState,
 ):
@@ -361,6 +387,7 @@ async def action_clarify(
         )
 
 
+@tracked("plan")
 async def action_plan(
     ctx: ActionContext, state: ResearchState,
 ):
@@ -399,6 +426,7 @@ async def action_plan(
     yield {"type": "progress", "progress": 0.1, "message": f"Round {state.round}: {len(new_queries)} new sub-queries"}
 
 
+@tracked("gather")
 async def action_gather(
     ctx: ActionContext, state: ResearchState,
 ):
@@ -471,6 +499,7 @@ async def action_gather(
 # ─── Actions: 6 more (Commit 5b) ─────────────────────────────────────
 
 
+@tracked("analyze")
 async def action_analyze(
     ctx: ActionContext, state: ResearchState,
 ):
@@ -493,6 +522,7 @@ async def action_analyze(
     yield {"type": "progress", "progress": 0.55, "message": "Analysis complete"}
 
 
+@tracked("synthesize")
 async def action_synthesize(
     ctx: ActionContext, state: ResearchState,
 ):
@@ -547,6 +577,7 @@ async def action_synthesize(
             # Don't fail the pipeline — self-loop fallback is to skip.
 
 
+@tracked("report")
 async def action_report(
     ctx: ActionContext, state: ResearchState,
 ):
@@ -624,6 +655,7 @@ async def action_report(
             logger.warning("StructureValidator failed: %s", e)
 
 
+@tracked("review")
 async def action_review(
     ctx: ActionContext, state: ResearchState,
 ):
@@ -679,6 +711,7 @@ async def action_review(
         }
 
 
+@tracked("revise")
 async def action_revise(
     ctx: ActionContext, state: ResearchState,
 ):
@@ -710,6 +743,7 @@ async def action_revise(
         yield {"type": "error", "error": f"Report revision failed: {e}"}
 
 
+@tracked("done")
 async def action_done(
     ctx: ActionContext, state: ResearchState,
 ):
