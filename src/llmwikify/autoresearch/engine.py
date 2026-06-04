@@ -36,6 +36,12 @@ from llmwikify.autoresearch.quality_gate import QualityGate
 
 logger = logging.getLogger(__name__)
 
+# ─── Action dispatch table (replaces 8-arm if/elif in _react_loop) ───────
+# Maps the LLM/rule-reasoner's action name to the corresponding method.
+# Unknown actions fall through to _action_done (safe default).
+_ACTION_DISPATCH_ATTR = "_actions"
+
+
 # ─── State Transition Table (DR-14) ──────────────────────────────────────
 # Explicit valid transitions: from_phase → list of allowed to_phases
 class ResearchEngine:
@@ -85,6 +91,20 @@ class ResearchEngine:
 
         # Metrics (DR-13)
         self._metrics: SessionMetrics | None = None
+
+        # Action dispatch table: action name -> async generator method.
+        # Populated here (not at class level) so we can reference bound
+        # methods that only exist after __init__ returns.
+        setattr(self, _ACTION_DISPATCH_ATTR, {
+            "plan":       self._action_plan,
+            "gather":     self._action_gather,
+            "analyze":    self._action_analyze,
+            "synthesize": self._action_synthesize,
+            "report":     self._action_report,
+            "review":     self._action_review,
+            "revise":     self._action_revise,
+            "done":       self._action_done,
+        })
 
     def _resolve_model(self, config_key: str) -> StreamableLLMClient | None:
         model_cfg = self.config.get(config_key)
@@ -219,37 +239,18 @@ class ResearchEngine:
                     "phase": state.phase,
                 }
 
-                # ── ACT: execute action ──
-                if action == "plan":
-                    async for event in self._action_plan(state):
-                        yield event
-                elif action == "gather":
-                    async for event in self._action_gather(state):
-                        yield event
-                elif action == "analyze":
-                    async for event in self._action_analyze(state):
-                        yield event
-                elif action == "synthesize":
-                    async for event in self._action_synthesize(state):
-                        yield event
-                elif action == "report":
-                    async for event in self._action_report(state):
-                        yield event
-                elif action == "review":
-                    async for event in self._action_review(state):
-                        yield event
-                elif action == "revise":
-                    async for event in self._action_revise(state):
-                        yield event
-                elif action == "done":
-                    async for event in self._action_done(state):
+                # ── ACT: execute action via dispatch table ──
+                action_method = getattr(self, _ACTION_DISPATCH_ATTR).get(action)
+                if action_method is None:
+                    # Unknown action → default to done (safe fallback)
+                    logger.warning("Unknown action %s, defaulting to done", action)
+                    action_method = self._action_done
+                    async for event in action_method(state):
                         yield event
                     break
-                else:
-                    # Unknown action → default to done
-                    logger.warning("Unknown action %s, defaulting to done", action)
-                    async for event in self._action_done(state):
-                        yield event
+                async for event in action_method(state):
+                    yield event
+                if action == "done":
                     break
 
                 # ── OBSERVE: update state from DB ──
