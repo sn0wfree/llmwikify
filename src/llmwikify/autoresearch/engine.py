@@ -16,6 +16,7 @@ from typing import Any
 
 from llmwikify.agent.backend.adapters import StreamableLLMClient
 from llmwikify.agent.backend.db import AgentDatabase
+from llmwikify.autoresearch.db import AutoResearchDatabase
 from llmwikify.agent.backend.providers.registry import create_llm
 from llmwikify.autoresearch.analyzer import SourceAnalyzer
 from llmwikify.autoresearch.config import merge_research_config
@@ -161,7 +162,7 @@ class ResearchEngine:
     def __init__(
         self,
         wiki: Any,
-        db: AgentDatabase,
+        db: AutoResearchDatabase,
         llm_client: StreamableLLMClient,
         config: dict[str, Any] | None = None,
     ):
@@ -185,16 +186,13 @@ class ResearchEngine:
         # Quality gate
         self._quality_gate = QualityGate(self.config)
 
-        # ─── 6-step framework: clarifier + DB migration ────────────────
+        # ─── 6-step framework: clarifier (schema is built into the DB) ──
         from llmwikify.autoresearch.clarifier import ResearchClarifier
-        from llmwikify.autoresearch.db_migrations import ensure_six_step_columns
 
         self.clarifier = ResearchClarifier(self._planning_llm, self.config)
-        # Idempotent: adds 3 columns to research_sessions if missing
-        try:
-            ensure_six_step_columns(self.db.db_path)
-        except Exception as e:
-            logger.warning("ensure_six_step_columns failed (non-fatal): %s", e)
+        # The 6-step JSON fields (clarification/reasoning/structure/...) are
+        # native columns in autoresearch_sessions; no ALTER TABLE needed.
+        # AutoResearchDatabase.__init__ runs the schema bootstrap once.
 
         # Metrics (DR-13)
         self._metrics: SessionMetrics | None = None
@@ -687,8 +685,7 @@ class ResearchEngine:
         state.self_loop_counts["clarify"] = len(loop_history) - 1
         state.self_loop_history.extend(loop_history)
 
-        # Persist to DB
-        import json as _json
+        # Persist to DB (independent autoresearch.db — no shared schema)
         try:
             self.db.update_research_status(
                 state.session_id, "clarifying", "clarifying",
@@ -696,12 +693,9 @@ class ResearchEngine:
                 synthesis_json=None,
                 review_json=None,
             )
-            with __import__("sqlite3").connect(self.db.db_path) as conn:
-                conn.execute(
-                    "UPDATE research_sessions SET clarification_json = ? WHERE id = ?",
-                    (_json.dumps(clarification), state.session_id),
-                )
-                conn.commit()
+            self.db.update_six_step_fields(
+                state.session_id, clarification=clarification,
+            )
         except Exception as e:
             logger.warning("Failed to persist clarification: %s", e)
 

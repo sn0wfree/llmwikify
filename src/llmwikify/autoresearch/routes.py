@@ -13,8 +13,8 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from llmwikify.agent.backend.db import AgentDatabase
 from llmwikify.autoresearch.config import merge_six_step_config
+from llmwikify.autoresearch.db import AutoResearchDatabase
 from llmwikify.autoresearch.engine import ResearchEngine
 from llmwikify.autoresearch.task_manager import get_task_manager
 
@@ -23,30 +23,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/autoresearch", tags=["autoresearch"])
 
 # Initialized at app startup
-_AGENT_DB: AgentDatabase | None = None
+_AUTORESEARCH_DB: AutoResearchDatabase | None = None
 _WIKI_REGISTRY: Any = None
 _LLM_CLIENT: Any = None
 _AUTORESEARCH_CONFIG: dict[str, Any] | None = None
 
 
 def set_autoresearch_deps(
-    db: AgentDatabase,
+    db: AutoResearchDatabase,
     wiki_registry: Any,
     llm_client: Any,
     config: dict[str, Any] | None = None,
 ) -> None:
     """Wire up shared deps. Called from server startup."""
-    global _AGENT_DB, _WIKI_REGISTRY, _LLM_CLIENT, _AUTORESEARCH_CONFIG
-    _AGENT_DB = db
+    global _AUTORESEARCH_DB, _WIKI_REGISTRY, _LLM_CLIENT, _AUTORESEARCH_CONFIG
+    _AUTORESEARCH_DB = db
     _WIKI_REGISTRY = wiki_registry
     _LLM_CLIENT = llm_client
     _AUTORESEARCH_CONFIG = config
 
 
-def _get_db() -> AgentDatabase:
-    if _AGENT_DB is None:
+def _get_db() -> AutoResearchDatabase:
+    if _AUTORESEARCH_DB is None:
         raise RuntimeError("AutoResearch deps not initialized")
-    return _AGENT_DB
+    return _AUTORESEARCH_DB
 
 
 def _get_wiki(wiki_id: str | None = None) -> Any:

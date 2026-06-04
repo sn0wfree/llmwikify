@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from llmwikify.agent.backend.db import AgentDatabase
+from llmwikify.autoresearch.db import AutoResearchDatabase
 
 
 class ResearchSessionManager:
     """Manages research session lifecycle and sub-query/source tracking."""
 
-    def __init__(self, db: AgentDatabase):
+    def __init__(self, db: AutoResearchDatabase):
         self.db = db
         self._session_id: str | None = None
 

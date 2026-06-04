@@ -1,9 +1,10 @@
-"""Tests for the autoresearch 6-step framework (Phase 1: clarify).
+"""Tests for the autoresearch 6-step framework (independent DB).
 
 Covers:
+- AutoResearchDatabase: 3 tables, 6 JSON fields, cascade, zero sharing
+- db_migrations: init_autoresearch_db() + migrate_research_six_step_columns()
 - ResearchClarifier: clarify / scope_check / self-loop / fallback
 - Six-step config: default values, merge, self-loop fields
-- db_migrations: idempotent ALTER TABLE
 - ResearchState: 6-step fields
 - Engine: clarifies before plan on first run
 """
@@ -17,7 +18,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llmwikify.agent.backend.db import AgentDatabase
 from llmwikify.autoresearch import (
     DEFAULT_SIX_STEP_CONFIG,
     DBRetryManager,
@@ -35,9 +35,11 @@ from llmwikify.autoresearch import (
     retry_async,
 )
 from llmwikify.autoresearch.config import merge_research_config
+from llmwikify.autoresearch.db import AutoResearchDatabase
 from llmwikify.autoresearch.db_migrations import (
-    SIX_STEP_COLUMNS,
-    ensure_six_step_columns,
+    LEGACY_SHARED_COLUMNS,
+    init_autoresearch_db,
+    migrate_research_six_step_columns,
 )
 
 
@@ -46,7 +48,8 @@ from llmwikify.autoresearch.db_migrations import (
 
 @pytest.fixture
 def db(tmp_path):
-    return AgentDatabase(tmp_path / "test_autoresearch.db")
+    """Independent autoresearch DB (tmp_path/autoresearch.db)."""
+    return AutoResearchDatabase(tmp_path)
 
 
 @pytest.fixture
@@ -124,35 +127,83 @@ class TestAutoresearchConfig:
 
 
 class TestDBMigrations:
-    def test_ensure_columns_adds_three(self, tmp_path):
-        db_path = tmp_path / "fresh.db"
-        # Create a minimal research_sessions table to match the base
+    def test_init_creates_three_tables(self, tmp_path):
+        db_path = tmp_path / "autoresearch.db"
+        init_autoresearch_db(db_path)
         with sqlite3.connect(db_path) as conn:
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+        assert "autoresearch_sessions" in tables
+        assert "autoresearch_sub_queries" in tables
+        assert "autoresearch_sources" in tables
+
+    def test_init_is_idempotent(self, tmp_path):
+        db_path = tmp_path / "autoresearch.db"
+        init_autoresearch_db(db_path)
+        init_autoresearch_db(db_path)  # second call must not raise
+        # Insert and read back to confirm
+        db = AutoResearchDatabase(tmp_path)
+        sid = db.create_research_session("w", "q")
+        assert db.get_research_session(sid)["status"] == "clarifying"
+
+    def test_migrate_drops_legacy_columns(self, tmp_path):
+        old_db = tmp_path / ".llmwiki_agent.db"
+        with sqlite3.connect(old_db) as conn:
+            conn.execute(
+                """CREATE TABLE research_sessions (
+                    id TEXT PRIMARY KEY,
+                    wiki_id TEXT, query TEXT,
+                    clarification_json TEXT, reasoning_json TEXT, structure_json TEXT
+                )"""
+            )
+            conn.commit()
+        n = migrate_research_six_step_columns(old_db, drop_columns=True)
+        assert n == 3
+        with sqlite3.connect(old_db) as conn:
+            cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(research_sessions)").fetchall()
+            }
+        for col, _ in LEGACY_SHARED_COLUMNS:
+            assert col not in cols
+
+    def test_migrate_dry_run(self, tmp_path):
+        old_db = tmp_path / ".llmwiki_agent.db"
+        with sqlite3.connect(old_db) as conn:
+            conn.execute(
+                """CREATE TABLE research_sessions (
+                    id TEXT PRIMARY KEY,
+                    clarification_json TEXT, reasoning_json TEXT
+                )"""
+            )
+            conn.commit()
+        n = migrate_research_six_step_columns(old_db, drop_columns=False)
+        assert n == 2
+        # Columns should still be there
+        with sqlite3.connect(old_db) as conn:
+            cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(research_sessions)").fetchall()
+            }
+        assert "clarification_json" in cols
+
+    def test_migrate_noop_on_clean_db(self, tmp_path):
+        old_db = tmp_path / ".llmwiki_agent.db"
+        with sqlite3.connect(old_db) as conn:
             conn.execute(
                 "CREATE TABLE research_sessions (id TEXT PRIMARY KEY, query TEXT)"
             )
             conn.commit()
+        n = migrate_research_six_step_columns(old_db)
+        assert n == 0
 
-        ensure_six_step_columns(db_path)
-
-        with sqlite3.connect(db_path) as conn:
-            cols = [row[1] for row in conn.execute("PRAGMA table_info(research_sessions)").fetchall()]
-        for col, _ in SIX_STEP_COLUMNS:
-            assert col in cols
-
-    def test_ensure_columns_is_idempotent(self, tmp_path):
-        db_path = tmp_path / "fresh.db"
-        with sqlite3.connect(db_path) as conn:
-            conn.execute("CREATE TABLE research_sessions (id TEXT PRIMARY KEY)")
-            conn.commit()
-
-        # Run twice; second call should not raise
-        ensure_six_step_columns(db_path)
-        ensure_six_step_columns(db_path)
-
-        with sqlite3.connect(db_path) as conn:
-            cols = [row[1] for row in conn.execute("PRAGMA table_info(research_sessions)").fetchall()]
-        assert len([c for c in cols if c in (c for c, _ in SIX_STEP_COLUMNS)]) == 3
+    def test_migrate_noop_on_missing_db(self, tmp_path):
+        n = migrate_research_six_step_columns(tmp_path / "nope.db")
+        assert n == 0
 
 
 # ─── 3. ResearchState tests ────────────────────────────────────────
@@ -275,22 +326,24 @@ class TestResearchClarifier:
 
 
 class TestEngineInitialization:
-    def test_engine_init_runs_db_migration(self, mock_wiki, mock_llm, db, config):
-        # Before init, no six-step columns
+    def test_engine_init_uses_independent_db(self, mock_wiki, mock_llm, db, config):
+        """The engine uses an independent AutoResearchDatabase (no migration needed)."""
+        # Schema is already built by the fixture (AutoResearchDatabase.__init__).
         with sqlite3.connect(db.db_path) as conn:
-            cols = [r[1] for r in conn.execute("PRAGMA table_info(research_sessions)").fetchall()]
-        assert not any(c in (cc for cc, _ in SIX_STEP_COLUMNS) for c in cols)
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+        assert "autoresearch_sessions" in tables
+        # The shared `research_sessions` table must NOT exist (zero sharing)
+        assert "research_sessions" not in tables
 
-        # Init engine (should run migration)
+        # Init engine
         engine = ResearchEngine(mock_wiki, db, mock_llm, config)
         assert hasattr(engine, "clarifier")
         assert isinstance(engine.clarifier, ResearchClarifier)
-
-        # After init, columns exist
-        with sqlite3.connect(db.db_path) as conn:
-            cols = [r[1] for r in conn.execute("PRAGMA table_info(research_sessions)").fetchall()]
-        for col, _ in SIX_STEP_COLUMNS:
-            assert col in cols
 
     def test_engine_init_uses_six_step_config(self, mock_wiki, mock_llm, db):
         # merge_research_config == merge_six_step_config, so engine sees all keys
@@ -854,3 +907,169 @@ class TestDBRetryManager:
         assert mgr.is_retriable(sqlite3.OperationalError("database is busy"))
         assert not mgr.is_retriable(sqlite3.OperationalError("syntax error"))
         assert not mgr.is_retriable(ValueError("not a sqlite error"))
+
+
+# ─── v4: AutoResearchDatabase tests ────────────────────────────────
+
+
+class TestAutoResearchDatabase:
+    """Independent SQLite database for autoresearch.
+
+    The DB has its own file, its own tables, and its own 6-step framework
+    fields. There is no sharing with the shared .llmwiki_agent.db.
+    """
+
+    def test_creates_three_tables(self, tmp_path):
+        db = AutoResearchDatabase(tmp_path)
+        with sqlite3.connect(db.db_path) as conn:
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+        assert "autoresearch_sessions" in tables
+        assert "autoresearch_sub_queries" in tables
+        assert "autoresearch_sources" in tables
+
+    def test_creates_two_indexes(self, tmp_path):
+        db = AutoResearchDatabase(tmp_path)
+        with sqlite3.connect(db.db_path) as conn:
+            indexes = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index'"
+                ).fetchall()
+            }
+        assert "idx_ar_sub_queries_session" in indexes
+        assert "idx_ar_sources_session" in indexes
+
+    def test_default_status_is_clarifying(self, tmp_path):
+        db = AutoResearchDatabase(tmp_path)
+        sid = db.create_research_session("w", "q")
+        s = db.get_research_session(sid)
+        assert s["status"] == "clarifying"
+        assert s["current_step"] == "clarifying"
+
+    def test_six_step_json_fields_default_none(self, tmp_path):
+        db = AutoResearchDatabase(tmp_path)
+        sid = db.create_research_session("w", "q")
+        s = db.get_research_session(sid)
+        for col in (
+            "clarification_json", "reasoning_json", "structure_json",
+            "self_loop_counts_json", "self_loop_history_json",
+            "evidence_scores_json",
+        ):
+            assert s[col] is None, f"{col} should default to None"
+
+    def test_create_then_get_session_round_trip(self, tmp_path):
+        db = AutoResearchDatabase(tmp_path)
+        sid = db.create_research_session("my-wiki", "What is X?")
+        s = db.get_research_session(sid)
+        assert s is not None
+        assert s["wiki_id"] == "my-wiki"
+        assert s["query"] == "What is X?"
+
+    def test_update_six_step_fields_persists(self, tmp_path):
+        db = AutoResearchDatabase(tmp_path)
+        sid = db.create_research_session("w", "q")
+        db.update_six_step_fields(
+            sid,
+            clarification={"context": "ctx", "premises": ["p1"]},
+            reasoning={"aggregate_score": 0.7},
+            structure={"aggregate_score": 0.8},
+        )
+        fields = db.get_six_step_fields(sid)
+        assert fields["clarification"]["context"] == "ctx"
+        assert fields["reasoning"]["aggregate_score"] == 0.7
+        assert fields["structure"]["aggregate_score"] == 0.8
+
+    def test_update_six_step_fields_partial(self, tmp_path):
+        """Only provided fields are written; others stay None."""
+        db = AutoResearchDatabase(tmp_path)
+        sid = db.create_research_session("w", "q")
+        db.update_six_step_fields(sid, clarification={"context": "ctx"})
+        fields = db.get_six_step_fields(sid)
+        assert fields["clarification"]["context"] == "ctx"
+        assert fields["reasoning"] is None
+        assert fields["structure"] is None
+
+    def test_get_six_step_fields_round_trip(self, tmp_path):
+        """Self-loop counts/history round-trip via update_six_step_fields."""
+        db = AutoResearchDatabase(tmp_path)
+        sid = db.create_research_session("w", "q")
+        db.update_six_step_fields(
+            sid,
+            self_loop_counts={"clarify": 1, "evidence": 0},
+            self_loop_history=[{"stage": "clarify", "result": "ok"}],
+            evidence_scores={"s1": 0.8, "s2": 0.5},
+        )
+        fields = db.get_six_step_fields(sid)
+        assert fields["self_loop_counts"] == {"clarify": 1, "evidence": 0}
+        assert fields["self_loop_history"][0]["stage"] == "clarify"
+        assert fields["evidence_scores"]["s1"] == 0.8
+
+    def test_delete_research_cascades(self, tmp_path):
+        """delete_research removes session + sub_queries + sources."""
+        db = AutoResearchDatabase(tmp_path)
+        sid = db.create_research_session("w", "q")
+        sq = db.save_sub_query(sid, "sub", "web", "http://x")
+        db.save_source(sid, sq, "web", "http://x", "T", 100, "p")
+        # Pre-condition
+        assert len(db.get_sub_queries(sid)) == 1
+        assert len(db.get_sources(sid)) == 1
+        # Delete
+        deleted = db.delete_research(sid)
+        assert deleted is True
+        assert db.get_research_session(sid) is None
+        assert db.get_sub_queries(sid) == []
+        assert db.get_sources(sid) == []
+
+    def test_research_sessions_table_does_not_exist(self, tmp_path):
+        """Zero sharing: the shared `research_sessions` table must not exist."""
+        db = AutoResearchDatabase(tmp_path)
+        with sqlite3.connect(db.db_path) as conn:
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+        assert "research_sessions" not in tables
+        assert "research_sub_queries" not in tables
+        assert "research_sources" not in tables
+
+    def test_idempotent_init(self, tmp_path):
+        """Re-instantiating AutoResearchDatabase on the same dir is a no-op."""
+        db1 = AutoResearchDatabase(tmp_path)
+        sid1 = db1.create_research_session("w", "first")
+        # Re-open — must not lose data
+        db2 = AutoResearchDatabase(tmp_path)
+        s = db2.get_research_session(sid1)
+        assert s is not None
+        assert s["query"] == "first"
+
+    def test_sub_query_json_result_parsed(self, tmp_path):
+        db = AutoResearchDatabase(tmp_path)
+        sid = db.create_research_session("w", "q")
+        sq = db.save_sub_query(sid, "sub", "web")
+        db.update_sub_query(sq, "done", result={"key": "value"})
+        subs = db.get_sub_queries(sid)
+        assert subs[0]["result"] == {"key": "value"}
+
+    def test_source_analysis_parsed(self, tmp_path):
+        db = AutoResearchDatabase(tmp_path)
+        sid = db.create_research_session("w", "q")
+        sq = db.save_sub_query(sid, "sub", "web")
+        src = db.save_source(sid, sq, "web", "http://x", "T", 100)
+        db.update_source_analysis(src, {"topics": ["t1"], "credibility": 8})
+        sources = db.get_sources(sid)
+        assert sources[0]["analysis"]["topics"] == ["t1"]
+
+    def test_get_autoresearch_db_path(self, tmp_path):
+        from llmwikify.autoresearch.db import get_autoresearch_db_path
+        p = get_autoresearch_db_path(tmp_path)
+        assert p == tmp_path / "autoresearch.db"
+        # Also accepts string
+        p2 = get_autoresearch_db_path(str(tmp_path))
+        assert p2 == tmp_path / "autoresearch.db"
