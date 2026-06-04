@@ -11,11 +11,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Trash2, Copy, ArrowUpDown, Palette, Undo2,
-  Send, X, ChevronDown, Loader2, MessageSquare,
+  Send, X, Plus, ChevronDown, Loader2, MessageSquare,
 } from 'lucide-react';
 import { MessageBubble } from './ui/MessageBubble';
 import { Presentation, SlideContent } from '../lib/ppt-themes';
-import { pptChatStream, PPTChatStreamEvent, getPptChatMessages, getPptChatSessionByTask } from '../lib/ppt-api';
+import { pptChatStream, PPTChatStreamEvent, getPptChatMessages, getPptChatSessionByTask, getTask } from '../lib/ppt-api';
 
 interface PPTChatPanelProps {
   taskId: string;
@@ -113,27 +113,60 @@ export function PPTChatPanel({
     if (!taskId || !isOpen) return;
 
     const loadHistory = async () => {
+      // 1. Try localStorage first (fast path, no network).
       const storedSessionId = localStorage.getItem(`ppt-chat-session-${taskId}`);
-      if (!storedSessionId) return;
+      if (storedSessionId) {
+        try {
+          const { messages: history } = await getPptChatMessages(storedSessionId);
+          if (history.length > 0) {
+            setSessionId(storedSessionId);
+            setMessages(history.map(m => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              timestamp: m.created_at,
+            })));
+            return;
+          }
+        } catch {
+          // Session invalid (server restart, DB cleanup, etc.)
+          localStorage.removeItem(`ppt-chat-session-${taskId}`);
+        }
+      }
 
+      // 2. Fallback: ask backend for the latest chat session for this task.
+      //    Handles the case where localStorage was cleared but the user
+      //    had a previous conversation on this task.
       try {
-        const { messages: history } = await getPptChatMessages(storedSessionId);
-        if (history.length > 0) {
-          setSessionId(storedSessionId);
-          setMessages(history.map(m => ({
-            role: m.role as 'user' | 'assistant',
-            content: m.content,
-            timestamp: m.created_at,
-          })));
+        const { session_id: latestSid } = await getPptChatSessionByTask(taskId);
+        if (latestSid) {
+          const { messages: history } = await getPptChatMessages(latestSid);
+          if (history.length > 0) {
+            localStorage.setItem(`ppt-chat-session-${taskId}`, latestSid);
+            setSessionId(latestSid);
+            setMessages(history.map(m => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              timestamp: m.created_at,
+            })));
+          }
         }
       } catch {
-        // Session invalid (server restart, DB cleanup, etc.)
-        localStorage.removeItem(`ppt-chat-session-${taskId}`);
+        // No prior session, or backend lookup failed — leave empty state.
       }
     };
 
     loadHistory();
   }, [taskId, isOpen]);
+
+  // Start a fresh conversation: clear local session + messages.
+  // Next sendMessage() will let the backend implicitly create a new session.
+  const handleNewChat = useCallback(() => {
+    localStorage.removeItem(`ppt-chat-session-${taskId}`);
+    setSessionId(null);
+    setMessages([]);
+    setInput('');
+    abortRef.current?.abort();
+  }, [taskId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -173,6 +206,7 @@ export function PPTChatPanel({
       abortRef.current = new AbortController();
       const decoder = new TextDecoder();
       let buffer = '';
+      let hasConfirmed = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -187,10 +221,26 @@ export function PPTChatPanel({
             try {
               const data = JSON.parse(line.slice(5).trim());
               handleStreamEvent(data);
+              if (data.type === 'done' && data.confirmed) {
+                hasConfirmed = true;
+              }
             } catch {
               // Skip unparseable events
             }
           }
+        }
+      }
+
+      // Reload presentation from DB after confirmation
+      if (hasConfirmed && taskId) {
+        try {
+          const task = await getTask(taskId);
+          const pres = task.presentation?.presentation;
+          if (pres) {
+            onPresentationUpdate(pres);
+          }
+        } catch {
+          // Ignore reload errors
         }
       }
     } catch (err) {
@@ -239,9 +289,6 @@ export function PPTChatPanel({
             timestamp: new Date().toISOString(),
           },
         ]);
-        if (event.updated_presentation) {
-          onPresentationUpdate(event.updated_presentation as Presentation);
-        }
         break;
       case 'error':
         setMessages((prev) => [
@@ -281,9 +328,19 @@ export function PPTChatPanel({
             {currentSlideIndex + 1}/{presentation.slides.length}
           </span>
         </div>
-        <button onClick={onToggle} className="text-slate-400 hover:text-slate-200">
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleNewChat}
+            className="text-slate-400 hover:text-slate-200 p-1 rounded"
+            title="Start a new conversation"
+            aria-label="New chat"
+          >
+            <Plus size={16} />
+          </button>
+          <button onClick={onToggle} className="text-slate-400 hover:text-slate-200 p-1 rounded">
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Quick Actions Bar */}
