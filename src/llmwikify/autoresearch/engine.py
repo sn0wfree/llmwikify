@@ -20,6 +20,7 @@ from llmwikify.agent.backend.providers.registry import create_llm
 from llmwikify.autoresearch.analyzer import SourceAnalyzer
 from llmwikify.autoresearch.config import merge_six_step_config
 from llmwikify.autoresearch._json_utils import safe_json_loads
+from llmwikify.autoresearch.engine_helpers import chat_json
 from llmwikify.autoresearch.gatherer import SourceGatherer
 from llmwikify.autoresearch.report import ReportGenerator
 from llmwikify.autoresearch.review import ResearchReviewer, ResearchRevisor
@@ -515,13 +516,10 @@ class ResearchEngine:
             )},
         ]
 
-        def _call():
-            return self._default_llm.chat(
-                messages, max_tokens=1024, temperature=0.1, json_mode=True
-            )
-
-        raw = await asyncio.to_thread(_call)
-        result = safe_json_loads(raw)
+        result = await chat_json(
+            self._default_llm, messages,
+            max_tokens=1024, temperature=0.1, json_mode=True,
+        )
         action = result.get("action", "done")
         thought = result.get("thought", "")
 
@@ -796,7 +794,7 @@ class ResearchEngine:
                 state.session_id, clarification=clarification,
             )
         except Exception as e:
-            logger.warning("Failed to persist clarification: %s", e)
+            logger.warning("Clarification persist: %s", e)
 
         # Yield result event
         yield {
@@ -915,7 +913,7 @@ class ResearchEngine:
                     state.session_id, evidence_scores=state.evidence_scores
                 )
             except Exception as e:
-                logger.warning("Failed to persist evidence_scores: %s", e)
+                logger.warning("evidence_scores persist: %s", e)
             yield {
                 "type": "evidence_scoring_complete",
                 "count": len(new_scores),
@@ -1293,19 +1291,12 @@ class ResearchEngine:
         api_params = registry.get_api_params("research_plan")
 
         try:
-            import asyncio
-
-            def _call_llm():
-                raw = self._planning_llm.chat(
-                    messages,
-                    json_mode=api_params.get("json_mode", True),
-                    max_tokens=api_params.get("max_tokens", 2048),
-                    temperature=api_params.get("temperature", 0.3),
-                )
-                return raw
-
-            raw = await asyncio.to_thread(_call_llm)
-            result = safe_json_loads(raw)
+            result = await chat_json(
+                self._planning_llm, messages,
+                max_tokens=api_params.get("max_tokens", 2048),
+                temperature=api_params.get("temperature", 0.3),
+                json_mode=api_params.get("json_mode", True),
+            )
             if not isinstance(result, list):
                 result = []
         except Exception as e:
@@ -1372,11 +1363,10 @@ class ResearchEngine:
         ]
 
         try:
-            def _call():
-                return self._planning_llm.chat(messages, json_mode=True, max_tokens=1024, temperature=0.3)
-
-            raw = await asyncio.to_thread(_call)
-            result = safe_json_loads(raw)
+            result = await chat_json(
+                self._planning_llm, messages,
+                max_tokens=1024, temperature=0.3, json_mode=True,
+            )
             if not isinstance(result, list):
                 result = []
         except Exception as e:
