@@ -6,14 +6,18 @@ with confirmation flow for write operations.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import re
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_SOURCE_CITATION_RE = re.compile(r'\[\[Source:([a-f0-9]+)\]\]')
 
 
 class WikiToolRegistry:
@@ -291,7 +295,10 @@ class WikiToolRegistry:
         self._register(
             "research_save_to_wiki",
             self._handle_research_save,
-            description="Save research results to wiki: report page + sources + synthesis",
+            description=(
+                "Save research results to wiki: report page"
+                " + optionally sources + synthesis"
+            ),
             action_type="write",
             requires_confirmation="pre",
             parameters={
@@ -299,6 +306,11 @@ class WikiToolRegistry:
                 "properties": {
                     "session_id": {"type": "string", "description": "Research session ID"},
                     "page_name": {"type": "string", "description": "Wiki page name (auto-generated if omitted)"},
+                    "include_sources": {
+                        "type": "boolean",
+                        "description": "Save raw source content to wiki (raw/ + index). Default true.",
+                        "default": True,
+                    },
                 },
                 "required": ["session_id"],
             },
@@ -441,6 +453,67 @@ class WikiToolRegistry:
         slug = re.sub(r'[^a-z0-9\u4e00-\u9fff]+', '-', text.lower()).strip('-')
         return slug[:60] or 'untitled'
 
+    @staticmethod
+    def _source_slug(url: str, title: str) -> str | None:
+        """Generate a unique, stable slug for a raw source file.
+
+        Uses md5(url)[:12] (or md5(title)[:12] when url is empty) with a
+        'src-' prefix to namespace raw sources away from regular wiki pages.
+
+        Returns None when both url and title are empty.
+        """
+        key = (url or "").strip() or (title or "").strip()
+        if not key:
+            return None
+        h = hashlib.md5(key.encode()).hexdigest()[:12]
+        return f"src-{h}"
+
+    @staticmethod
+    def _build_source_link_map(sources: list[dict]) -> dict[str, dict[str, str]]:
+        """Build hash → {slug, title, url} mapping for inline citation linkification.
+
+        Hash format matches report.py: md5(url)[:12], falling back to md5(title)[:12]
+        when url is empty.
+        """
+        link_map: dict[str, dict[str, str]] = {}
+        for s in sources:
+            url = (s.get("url") or "").strip()
+            title = (s.get("title") or "").strip() or url or "untitled"
+            key = url or title
+            if not key:
+                continue
+            h = hashlib.md5(key.encode()).hexdigest()[:12]
+            slug = f"src-{h}"
+            link_map[h] = {"slug": slug, "title": title, "url": url}
+        return link_map
+
+    @classmethod
+    def _linkify_source_citations(
+        cls, report_md: str, link_map: dict[str, dict[str, str]]
+    ) -> str:
+        """Replace [[Source:HASH]] in report markdown with [[src-HASH|Title]] wikilinks.
+
+        Unmatched citations are left unchanged (graceful degradation).
+        """
+        total = len(_SOURCE_CITATION_RE.findall(report_md))
+        if total == 0 or not link_map:
+            return report_md
+
+        def replacer(m: re.Match) -> str:
+            h = m.group(1)
+            meta = link_map.get(h)
+            if not meta:
+                return m.group(0)
+            return f"[[{meta['slug']}|{meta['title']}]]"
+
+        new_md, n_replaced = _SOURCE_CITATION_RE.subn(replacer, report_md)
+        if n_replaced:
+            logger.info(
+                "Linkified %d/%d inline source citations in research save",
+                n_replaced, total,
+            )
+        return new_md
+
     def _handle_research_save(self, args: dict) -> str:
         """Handle saving research results to wiki."""
         import json
@@ -448,6 +521,7 @@ class WikiToolRegistry:
 
         session_id = args["session_id"]
         page_name = args.get("page_name")
+        include_sources = bool(args.get("include_sources", True))
 
         # 1. Read session from DB
         session = self.db.get_research_session(session_id)
@@ -455,31 +529,40 @@ class WikiToolRegistry:
             return json.dumps({"error": "Session not found or no result"})
 
         result = json.loads(session["result"])
+        sources = self.db.get_sources(session_id) or []
 
         # 2. Auto-generate page_name if not provided
         if not page_name:
             page_name = f"research/{self._slugify(result.get('query', ''))}"
 
-        # 3. Write report page
-        self.wiki.write_page(page_name, result.get("markdown", ""))
+        # 3. Build link map (if sources will be saved) and linkify inline citations
+        report_md = result.get("markdown", "")
+        if include_sources:
+            link_map = self._build_source_link_map(sources)
+            report_md = self._linkify_source_citations(report_md, link_map)
 
-        # 4. Save non-wiki sources to raw/ + update index
-        sources = self.db.get_sources(session_id) or []
+        # 4. Write report page
+        self.wiki.write_page(page_name, report_md)
+
+        # 5. Save non-wiki sources to raw/ + update index (conditional on include_sources)
         sources_saved = 0
-        for src in sources:
-            if src.get("source_type") == "wiki":
-                continue
-            content = src.get("content", "")
-            if not content:
-                continue
-            slug = self._slugify(src.get("title") or src.get("url", ""))
-            raw_path = self.wiki.raw_dir / f"{slug}.md"
-            raw_path.parent.mkdir(parents=True, exist_ok=True)
-            raw_path.write_text(content)
-            self.wiki.index.upsert_page(slug, content, f"{slug}.md")
-            sources_saved += 1
+        if include_sources:
+            for src in sources:
+                if src.get("source_type") == "wiki":
+                    continue
+                content = src.get("content", "")
+                if not content:
+                    continue
+                slug = self._source_slug(src.get("url", ""), src.get("title", ""))
+                if not slug:
+                    continue
+                raw_path = self.wiki.raw_dir / f"{slug}.md"
+                raw_path.parent.mkdir(parents=True, exist_ok=True)
+                raw_path.write_text(content)
+                self.wiki.index.upsert_page(slug, content, f"raw/{slug}.md")
+                sources_saved += 1
 
-        # 5. Write synthesis page
+        # 6. Write synthesis page (always)
         synthesis = result.get("synthesis_summary", {})
         query = result.get("query", "")
         synthesis_lines = [f"# Synthesis: {query}\n"]
@@ -502,7 +585,7 @@ class WikiToolRegistry:
         synthesis_page = f"synthesis/{self._slugify(query)}"
         self.wiki.write_page(synthesis_page, synthesis_md)
 
-        # 6. Update session wiki_page_name
+        # 7. Update session wiki_page_name
         with sqlite3.connect(self.db.db_path) as conn:
             conn.execute(
                 "UPDATE research_sessions SET wiki_page_name = ? WHERE id = ?",
@@ -514,6 +597,7 @@ class WikiToolRegistry:
             "page_name": page_name,
             "sources_saved": sources_saved,
             "synthesis_page": synthesis_page,
+            "include_sources": include_sources,
             "message": f"Saved to wiki: {page_name}",
         })
 
@@ -529,11 +613,33 @@ class WikiToolRegistry:
         elif tool_name == "research_save_to_wiki":
             session_id = arguments.get("session_id", "")
             page_name = arguments.get("page_name", "")
+            include_sources = bool(arguments.get("include_sources", True))
+
+            raw_sources_to_save = 0
+            if include_sources and self.db:
+                try:
+                    sess = self.db.get_research_session(session_id)
+                    if sess:
+                        srcs = self.db.get_sources(session_id) or []
+                        raw_sources_to_save = sum(
+                            1
+                            for s in srcs
+                            if s.get("source_type") != "wiki" and s.get("content")
+                        )
+                except Exception:
+                    pass
+
             return {
                 "session_id": session_id,
                 "page": page_name or "(auto-generated)",
                 "change_type": "research_save",
-                "description": "Save research report + sources + synthesis to wiki",
+                "include_sources": include_sources,
+                "raw_sources_to_save": raw_sources_to_save,
+                "description": (
+                    "Save research report + sources + synthesis to wiki"
+                    if include_sources
+                    else "Save research report + synthesis only (sources skipped)"
+                ),
             }
         elif tool_name == "wiki_synthesize":
             return {
