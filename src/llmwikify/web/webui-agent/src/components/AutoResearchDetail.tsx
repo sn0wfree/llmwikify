@@ -296,11 +296,11 @@ function Step3Panel({ data }: { data: SixStepReasoning | null }) {
   const aggPct = (data.aggregate_score * 100).toFixed(0);
   return (
     <PanelShell step={3} title="推理严密" status="present">
-      <div className="flex gap-3 items-start">
-        <div className="shrink-0">
+      <div className="flex flex-col sm:flex-row gap-3 items-start">
+        <div className="shrink-0 self-center sm:self-start">
           <RadarChart scores={data.scores} />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 w-full">
           <div className="flex items-baseline gap-2 mb-2">
             <div className={`text-2xl font-bold ${STEP_ACCENTS[3]}`}>{aggPct}%</div>
             <div className="text-[10px] text-[var(--text-secondary)]">
@@ -496,7 +496,7 @@ export function AutoResearchDetail({
   const hasReport = !!(session.result || session.review_json);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 min-w-0">
       <Step1Panel data={sixStep.clarification} />
       <Step2Panel data={sixStep.evidence_scores} sourceCount={sources.length} />
       <Step3Panel data={sixStep.reasoning} />
