@@ -48,17 +48,25 @@ body {
 }
 
 *::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 *::-webkit-scrollbar-track {
   background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
 }
 
 *::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
-  border-radius: 3px;
+  background: var(--text-secondary);
+  border-radius: 5px;
+  border: 1px solid var(--bg-tertiary);
+  opacity: 0.6;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  opacity: 1;
 }
 
 @keyframes blink {
