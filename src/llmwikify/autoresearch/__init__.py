@@ -13,6 +13,12 @@ from .config import DEFAULT_SIX_STEP_CONFIG, merge_six_step_config
 from .engine import ResearchEngine, ResearchState, VALID_TRANSITIONS
 from .quality_gate import GateResult, QualityGate
 from .reasoning_checker import ReasoningChecker
+from .retry_managers import (
+    DBRetryManager,
+    LLMRetryManager,
+    StageRetryManager,
+    retry_async,
+)
 from .source_filter import SourceFilter
 from .structure_validator import StructureValidator
 
@@ -28,4 +34,8 @@ __all__ = [
     "ReasoningChecker",
     "SourceFilter",
     "StructureValidator",
+    "StageRetryManager",
+    "LLMRetryManager",
+    "DBRetryManager",
+    "retry_async",
 ]

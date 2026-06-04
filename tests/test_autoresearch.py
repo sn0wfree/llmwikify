@@ -20,15 +20,19 @@ import pytest
 from llmwikify.agent.backend.db import AgentDatabase
 from llmwikify.autoresearch import (
     DEFAULT_SIX_STEP_CONFIG,
+    DBRetryManager,
+    LLMRetryManager,
     QualityGate,
     ReasoningChecker,
     ResearchClarifier,
     ResearchEngine,
     ResearchState,
     SourceFilter,
+    StageRetryManager,
     StructureValidator,
     VALID_TRANSITIONS,
     merge_six_step_config,
+    retry_async,
 )
 from llmwikify.autoresearch.config import merge_research_config
 from llmwikify.autoresearch.db_migrations import (
@@ -688,3 +692,165 @@ class TestReportAndReviewEnrichment:
         rr.config = {}
         assert rr._render_framework_review_block(None) == ""
         assert rr._render_framework_review_block({}) == ""
+
+
+# ─── Phase 4: retry managers ─────────────────────────────────────────
+
+
+class TestRetryAsync:
+    """Base retry_async helper."""
+
+    def test_returns_on_first_success(self):
+        async def ok():
+            return 42
+        result = _run_async(retry_async(ok, max_attempts=3, base_delay=0.01))
+        assert result == 42
+
+    def test_retries_then_raises(self):
+        attempts = [0]
+
+        async def fail():
+            attempts[0] += 1
+            raise ValueError("boom")
+        with pytest.raises(ValueError):
+            _run_async(retry_async(fail, max_attempts=3, base_delay=0.01))
+        assert attempts[0] == 3
+
+    def test_eventually_succeeds(self):
+        attempts = [0]
+
+        async def flaky():
+            attempts[0] += 1
+            if attempts[0] < 3:
+                raise IOError("transient")
+            return "ok"
+        result = _run_async(retry_async(flaky, max_attempts=5, base_delay=0.01))
+        assert result == "ok"
+        assert attempts[0] == 3
+
+
+class TestStageRetryManager:
+    """StageRetryManager: soft-fail with partial result."""
+
+    def test_succeeds_first_try(self):
+        async def go():
+            return "ok"
+        mgr = StageRetryManager("s", max_attempts=2, allow_partial=True)
+        result = _run_async(mgr.run(go))
+        assert result["ok"] is True
+        assert result["value"] == "ok"
+        assert result["attempts"] == 1
+
+    def test_succeeds_on_retry(self):
+        attempts = [0]
+
+        async def flaky():
+            attempts[0] += 1
+            if attempts[0] < 2:
+                raise ValueError("boom")
+            return "ok"
+        mgr = StageRetryManager("s", max_attempts=3, allow_partial=True, base_delay=0.01)
+        result = _run_async(mgr.run(flaky))
+        assert result["ok"] is True
+        assert result["value"] == "ok"
+        assert result["attempts"] == 2
+
+    def test_partial_fallback_on_full_failure(self):
+        async def fail():
+            raise ValueError("nope")
+        mgr = StageRetryManager("s", max_attempts=2, allow_partial=True, base_delay=0.01)
+        result = _run_async(mgr.run(fail, fallback={"partial": True}))
+        assert result["ok"] is False
+        assert result["value"] == {"partial": True}
+        assert any("失败" in w for w in result["warnings"])
+
+    def test_no_partial_returns_none(self):
+        async def fail():
+            raise ValueError("nope")
+        mgr = StageRetryManager("s", max_attempts=2, allow_partial=False, base_delay=0.01)
+        result = _run_async(mgr.run(fail))
+        assert result["ok"] is False
+        assert result["value"] is None
+        assert result["error"] == "nope"
+
+
+class TestLLMRetryManager:
+    """LLMRetryManager: smart retry (transient only)."""
+
+    def test_retries_on_rate_limit(self):
+        attempts = [0]
+
+        async def rate_limit():
+            attempts[0] += 1
+            if attempts[0] < 3:
+                raise Exception("rate limit exceeded")
+            return "ok"
+        mgr = LLMRetryManager(max_attempts=4, base_delay=0.01)
+        result = _run_async(mgr.call(rate_limit))
+        assert result == "ok"
+        assert attempts[0] == 3
+
+    def test_retries_on_5xx(self):
+        attempts = [0]
+
+        async def server_err():
+            attempts[0] += 1
+            if attempts[0] < 2:
+                raise Exception("503 service unavailable")
+            return "ok"
+        mgr = LLMRetryManager(max_attempts=3, base_delay=0.01)
+        result = _run_async(mgr.call(server_err))
+        assert result == "ok"
+
+    def test_does_not_retry_json_decode(self):
+        attempts = [0]
+
+        async def json_err():
+            attempts[0] += 1
+            raise Exception("json decode error: bad token")
+        mgr = LLMRetryManager(max_attempts=3, base_delay=0.01)
+        with pytest.raises(Exception, match="json decode"):
+            _run_async(mgr.call(json_err))
+        assert attempts[0] == 1  # No retry
+
+    def test_does_not_retry_validation_error(self):
+        attempts = [0]
+
+        async def val_err():
+            attempts[0] += 1
+            raise KeyError("missing key")
+        mgr = LLMRetryManager(max_attempts=3, base_delay=0.01)
+        with pytest.raises(KeyError):
+            _run_async(mgr.call(val_err))
+        assert attempts[0] == 1
+
+
+class TestDBRetryManager:
+    """DBRetryManager: SQLite transient error retry."""
+
+    def test_retries_on_locked(self):
+        attempts = [0]
+
+        def lock_then_succeed():
+            attempts[0] += 1
+            if attempts[0] < 2:
+                raise sqlite3.OperationalError("database is locked")
+            return "ok"
+        mgr = DBRetryManager(max_attempts=3, base_delay=0.01)
+        result = mgr.call(lock_then_succeed)
+        assert result == "ok"
+        assert attempts[0] == 2
+
+    def test_does_not_retry_non_transient(self):
+        def syntax_err():
+            raise sqlite3.OperationalError("syntax error")
+        mgr = DBRetryManager(max_attempts=3, base_delay=0.01)
+        with pytest.raises(sqlite3.OperationalError, match="syntax error"):
+            mgr.call(syntax_err)
+
+    def test_is_retriable_detection(self):
+        mgr = DBRetryManager()
+        assert mgr.is_retriable(sqlite3.OperationalError("database is locked"))
+        assert mgr.is_retriable(sqlite3.OperationalError("database is busy"))
+        assert not mgr.is_retriable(sqlite3.OperationalError("syntax error"))
+        assert not mgr.is_retriable(ValueError("not a sqlite error"))
