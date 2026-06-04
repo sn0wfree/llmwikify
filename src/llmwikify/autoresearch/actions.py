@@ -1,0 +1,424 @@
+"""Action implementations for the ReAct research loop.
+
+Each action is a free function that receives an ActionContext (deps)
+and the current ResearchState, and yields SSE event dicts. The engine
+orchestrates the ReAct loop; actions do the work.
+
+This module is extracted from engine.py (Commits 5a/5b/5c of the
+engine.py refactoring plan — see docs/refactoring-engine-py.md).
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from typing import Any
+
+from llmwikify.agent.backend.adapters import StreamableLLMClient
+from llmwikify.autoresearch.clarifier import ResearchClarifier
+from llmwikify.autoresearch.config import merge_six_step_config
+from llmwikify.autoresearch.engine_helpers import chat_json
+from llmwikify.autoresearch.gatherer import SourceGatherer
+from llmwikify.autoresearch.quality_gate import QualityGate
+from llmwikify.autoresearch.report import ReportGenerator
+from llmwikify.autoresearch.review import ResearchReviewer, ResearchRevisor
+from llmwikify.autoresearch.session import ResearchSessionManager
+from llmwikify.autoresearch.state import (
+    ActionMetrics,
+    ResearchState,
+    SessionMetrics,
+    VALID_TRANSITIONS,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ─── ActionContext: all deps the 9 action functions need ─────────────────
+
+
+@dataclass
+class ActionContext:
+    """All deps the 9 action functions need. Constructed once in
+    ResearchEngine.__init__, captured by functools.partial() at dispatch time.
+
+    This replaces the ``self.xxx`` access pattern: each action receives
+    ``ctx`` as its first arg instead of being an instance method.
+    """
+    wiki: Any
+    db: Any  # AutoResearchDatabase
+    session_manager: ResearchSessionManager
+    clarifier: ResearchClarifier
+    gatherer: SourceGatherer
+    analyzer: Any  # SourceAnalyzer
+    synthesizer: Any  # ResearchSynthesizer
+    report: ReportGenerator
+    reviewer: ResearchReviewer
+    revisor: ResearchRevisor
+    quality_gate: QualityGate
+    config: dict[str, Any]
+    metrics: SessionMetrics | None
+    planning_llm: StreamableLLMClient
+
+
+# ─── Helpers (extracted from engine.py) ─────────────────────────────────
+
+
+def _step_event(session_id: str, step: str, message: str) -> dict[str, Any]:
+    """Build an SSE step event dict.
+
+    Free function version of the former ``ResearchEngine._step_event``.
+    """
+    return {"type": "step", "step": step, "message": message, "session_id": session_id}
+
+
+def _warn_invalid_transition(from_phase: str, to_phase: str) -> None:
+    """Log a warning if the transition is invalid.
+
+    Free function version of the former ``ResearchEngine._warn_invalid_transition``.
+    """
+    # First run or uninitialized state → always allow
+    if not from_phase:
+        return
+    valid_targets = VALID_TRANSITIONS.get(from_phase, [])
+    if to_phase not in valid_targets:
+        logger.warning(
+            "Invalid state transition: %s → %s (valid: %s)",
+            from_phase, to_phase, valid_targets or "none",
+        )
+
+
+# ─── Planning helpers (used by action_plan) ────────────────────────────
+
+
+async def _plan_sub_queries(ctx: ActionContext, query: str) -> list[dict[str, Any]]:
+    """Decompose the research topic into sub-queries using planning_model."""
+    from llmwikify.core.prompt_registry import PromptRegistry
+    registry = PromptRegistry(provider="openai")
+
+    local_wiki_matches = ""
+    try:
+        wiki_results = ctx.wiki.search(query, limit=5)
+        if wiki_results:
+            lines = []
+            for r in wiki_results:
+                name = r.get("page_name", "")
+                snippet = r.get("snippet", "")
+                score = r.get("score", 0)
+                lines.append(f"- {name} (score: {score:.2f}): {snippet}")
+            local_wiki_matches = "\n".join(lines)
+    except Exception as e:
+        logger.debug("Local wiki search failed: %s", e)
+
+    wiki_index = ""
+    if ctx.wiki.index_file.exists():
+        wiki_index = ctx.wiki.index_file.read_text()[:3000]
+
+    messages = registry.get_messages(
+        "research_plan",
+        query=query,
+        wiki_index=wiki_index[:2000] if wiki_index else "",
+        local_wiki_matches=local_wiki_matches,
+    )
+    api_params = registry.get_api_params("research_plan")
+
+    try:
+        result = await chat_json(
+            ctx.planning_llm, messages,
+            max_tokens=api_params.get("max_tokens", 2048),
+            temperature=api_params.get("temperature", 0.3),
+            json_mode=api_params.get("json_mode", True),
+        )
+        if not isinstance(result, list):
+            result = []
+    except Exception as e:
+        logger.warning("Planning LLM failed: %s, using single query", e)
+        result = [{"query": query, "source_type": "web", "url": ""}]
+
+    max_sq = ctx.config.get("max_sub_queries", 20)
+    sub_queries: list[dict[str, Any]] = []
+
+    for item in result[:max_sq]:
+        sq_type = item.get("source_type", "web")
+        if sq_type not in ("web", "youtube", "wiki", "pdf"):
+            sq_type = "web"
+        sub_queries.append({
+            "query": item.get("query", ""),
+            "source_type": sq_type,
+            "url": item.get("url"),
+        })
+
+    if not sub_queries:
+        sub_queries.append({"query": query, "source_type": "web", "url": ""})
+
+    return sub_queries
+
+
+async def _plan_for_gaps(
+    ctx: ActionContext, query: str, gaps: list[str],
+) -> list[dict[str, Any]]:
+    """Generate sub-queries to fill knowledge gaps."""
+    gaps_text = "\n".join(f"- {gap}" for gap in gaps[:5])
+
+    local_wiki_matches = ""
+    try:
+        gap_query = f"{query} {' '.join(gaps[:3])}"
+        wiki_results = ctx.wiki.search(gap_query, limit=3)
+        if wiki_results:
+            lines = []
+            for r in wiki_results:
+                name = r.get("page_name", "")
+                snippet = r.get("snippet", "")
+                lines.append(f"- {name}: {snippet}")
+            local_wiki_matches = "\n".join(lines)
+    except Exception as e:
+        logger.debug("Local wiki search for gaps failed: %s", e)
+
+    wiki_context = ""
+    if local_wiki_matches:
+        wiki_context = (
+            f"\n\nExisting wiki articles that may help fill gaps:\n"
+            f"{local_wiki_matches}\nUse source_type \"wiki\" for these if relevant."
+        )
+
+    messages = [
+        {"role": "system", "content": (
+            "You are a research planner. Generate focused sub-queries to fill knowledge gaps. "
+            "Return a JSON array of objects with 'query', 'source_type', and 'url' fields. "
+            "source_type should be 'web', 'pdf', 'youtube', or 'wiki'. "
+            "Use 'wiki' when existing wiki articles are relevant (see below). "
+            "Generate 1-3 sub-queries per gap, maximum 5 total."
+        )},
+        {"role": "user", "content": (
+            f"Research topic: {query}\n\n"
+            f"Knowledge gaps to fill:\n{gaps_text}"
+            f"{wiki_context}\n\n"
+            "Generate sub-queries now. Return ONLY a JSON array."
+        )},
+    ]
+
+    try:
+        result = await chat_json(
+            ctx.planning_llm, messages,
+            max_tokens=1024, temperature=0.3, json_mode=True,
+        )
+        if not isinstance(result, list):
+            result = []
+    except Exception as e:
+        logger.warning("Gap planning LLM failed: %s", e)
+        result = [{"query": f"{query} {gaps[0]}", "source_type": "web", "url": ""}] if gaps else []
+
+    sub_queries = []
+    for item in result[:5]:
+        sq_type = item.get("source_type", "web")
+        if sq_type not in ("web", "youtube", "wiki", "pdf"):
+            sq_type = "web"
+        sub_queries.append({
+            "query": item.get("query", ""),
+            "source_type": sq_type,
+            "url": item.get("url"),
+        })
+
+    return sub_queries
+
+
+# ─── 6-step context builder (used by action_report + action_review) ────
+
+
+def _build_six_step_context(state: ResearchState) -> dict[str, Any] | None:
+    """Build a 6-step context dict from state for report/review prompts."""
+    if not state.clarification and not state.evidence_scores:
+        return None
+
+    ctx: dict[str, Any] = {}
+    if state.clarification:
+        ctx["clarification"] = state.clarification
+    if state.evidence_scores:
+        ctx["evidence_scores"] = state.evidence_scores
+    if state.reasoning_check:
+        ctx["reasoning_check"] = state.reasoning_check
+    if state.structure_check:
+        ctx["structure_check"] = state.structure_check
+    return ctx if ctx else None
+
+
+# ─── Actions: 3 free functions (Commit 5a) ────────────────────────────
+
+
+async def action_clarify(
+    ctx: ActionContext, state: ResearchState,
+):
+    """6-step step 1: clarify research context, boundaries, position, premises.
+
+    Runs only when clarify_enabled (default true) and not on resume. The
+    result is stored in state.clarification and persisted to the DB.
+    """
+    # Skip if disabled
+    if not ctx.config.get("clarify_enabled", True):
+        state.clarification = {"scope_check": True, "context": "skipped (clarify_enabled=False)"}
+        return
+
+    _warn_invalid_transition(state.phase, "clarifying")
+
+    state.phase = "clarifying"
+    ctx.session_manager.update_status(state.session_id, "clarifying", "clarifying", None)
+    yield _step_event(state.session_id, "clarifying", "Clarifying research scope and boundaries...")
+
+    # Build wiki context
+    wiki_context = ""
+    try:
+        wiki_results = ctx.wiki.search(state.query, limit=3)
+        if wiki_results:
+            lines = [
+                f"- {r.get('page_name', '')}: {r.get('snippet', '')[:200]}"
+                for r in wiki_results
+            ]
+            wiki_context = "\n".join(lines)
+    except Exception as e:
+        logger.debug("Wiki search for clarification failed: %s", e)
+
+    # Run clarifier with self-loop
+    clarification, loop_history = await ctx.clarifier.clarify_with_loop(
+        query=state.query,
+        wiki_context=wiki_context,
+        budget_remaining=state.budget_remaining,
+    )
+
+    state.clarification = clarification
+    state.self_loop_counts["clarify"] = len(loop_history) - 1
+    state.self_loop_history.extend(loop_history)
+
+    # Persist to DB (independent autoresearch.db — no shared schema)
+    try:
+        ctx.db.update_research_status(
+            state.session_id, "clarifying", "clarifying",
+            iteration_round=state.round,
+            synthesis_json=None,
+            review_json=None,
+        )
+        ctx.db.update_six_step_fields(
+            state.session_id, clarification=clarification,
+        )
+    except Exception as e:
+        logger.warning("Clarification persist: %s", e)
+
+    # Yield result event
+    yield {
+        "type": "clarification_complete",
+        "round": state.round,
+        "scope_check": clarification.get("scope_check", False),
+        "premises_count": len(clarification.get("premises", [])),
+        "warnings": clarification.get("warnings", []),
+        "loop_attempts": len(loop_history),
+    }
+
+    if not clarification.get("scope_check", False):
+        state.observations.append(
+            f"⚠ 概念澄清未通过 scope_check，但将继续 plan（{len(loop_history)} 次尝试）"
+        )
+
+
+async def action_plan(
+    ctx: ActionContext, state: ResearchState,
+):
+    """Plan sub-queries (initial or replanning for gaps)."""
+    _warn_invalid_transition(state.phase, "planning")
+
+    state.phase = "planning"
+    ctx.session_manager.update_status(state.session_id, "planning", "planning", None)
+    yield _step_event(state.session_id, "planning", f"Planning sub-queries (round {state.round})...")
+
+    # Decide: initial plan or gap-focused replan
+    if state.knowledge_gaps and state.sub_queries:
+        yield {"type": "gap_detected", "gaps": state.knowledge_gaps, "round": state.round}
+        sub_queries = await _plan_for_gaps(ctx, state.query, state.knowledge_gaps)
+    else:
+        sub_queries = await _plan_sub_queries(ctx, state.query)
+
+    # Deduplicate against existing
+    existing_queries = {sq["query"].lower().strip() for sq in state.sub_queries}
+    new_queries = [sq for sq in sub_queries if sq["query"].lower().strip() not in existing_queries]
+
+    for sq in new_queries[:5]:  # Limit per round
+        sq_id = ctx.session_manager.add_sub_query(
+            state.session_id, sq["query"], sq["source_type"], sq.get("url")
+        )
+        sq["id"] = sq_id
+        state.sub_queries.append(sq)
+        yield {
+            "type": "sub_query_created",
+            "sub_query_id": sq_id,
+            "query": sq["query"],
+            "source_type": sq["source_type"],
+            "url": sq.get("url"),
+        }
+
+    yield {"type": "progress", "progress": 0.1, "message": f"Round {state.round}: {len(new_queries)} new sub-queries"}
+
+
+async def action_gather(
+    ctx: ActionContext, state: ResearchState,
+):
+    """Gather sources for ungathered or failed sub-queries."""
+    _warn_invalid_transition(state.phase, "gathering")
+
+    state.phase = "gathering"
+    ctx.session_manager.update_status(state.session_id, "gathering", "gathering", None)
+    yield _step_event(state.session_id, "gathering", "Gathering sources...")
+
+    gathered_ids = {s.get("sub_query_id") for s in state.sources}
+    remaining = [sq for sq in state.sub_queries if sq["id"] not in gathered_ids]
+
+    # DR-2: Also retry failed sub-queries (max 1 retry per sub-query)
+    failed = [sq for sq in state.sub_queries if sq.get("status") == "failed"]
+    retryable = [
+        sq for sq in failed
+        if sq.get("retry_count", 0) < 1
+    ]
+    if retryable:
+        yield {"type": "retrying_failed", "count": len(retryable)}
+        for sq in retryable:
+            sq["retry_count"] = sq.get("retry_count", 0) + 1
+        remaining.extend(retryable)
+
+    if remaining:
+        gatherer = SourceGatherer(ctx.wiki, ctx.db, ctx.session_manager, ctx.config)
+        events = await gatherer.gather(remaining)
+        for event in events:
+            yield event
+
+    sources = ctx.db.get_sources(state.session_id) or []
+    yield {"type": "progress", "progress": 0.4, "message": f"Gathered {len(sources)} sources total"}
+
+    # ─── 6-step step 2: evidence scoring (run only when enabled) ───
+    if ctx.config.get("evidence_scoring_enabled", True) and sources:
+        from llmwikify.autoresearch.source_filter import SourceFilter
+        sf = SourceFilter(ctx.config)
+        new_scores: dict[str, float] = {}
+        for src in sources:
+            sid = src.get("id")
+            if not sid:
+                continue
+            try:
+                new_scores[sid] = round(float(sf.compute_evidence_score(src)), 4)
+            except Exception as e:
+                logger.warning("evidence_score failed for %s: %s", sid, e)
+                new_scores[sid] = 0.0
+        # Merge with any existing scores (preserve across replans)
+        state.evidence_scores.update(new_scores)
+        try:
+            ctx.db.update_six_step_fields(
+                state.session_id, evidence_scores=state.evidence_scores
+            )
+        except Exception as e:
+            logger.warning("evidence_scores persist: %s", e)
+        yield {
+            "type": "evidence_scoring_complete",
+            "count": len(new_scores),
+            "avg_score": round(sum(new_scores.values()) / max(1, len(new_scores)), 4),
+        }
+
+    if not sources:
+        ctx.session_manager.update_status(state.session_id, "error", "gathering", -1)
+        yield {"type": "error", "error": "No sources gathered. All sub-queries failed."}
+        state.phase = "error"
+        state.issues.append("No sources gathered — all sub-queries failed")
