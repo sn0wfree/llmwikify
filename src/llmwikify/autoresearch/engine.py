@@ -477,8 +477,9 @@ class ResearchEngine:
         messages = [
             {"role": "system", "content": (
                 "You are a research orchestrator using ReAct reasoning.\n"
-                "Based on the current state, provide your reasoning and decide the next action.\n\n"
-                "Return a JSON object with:\n"
+                "Based on the current state, decide the next action.\n\n"
+                "Return a JSON object ONLY — no prose, no markdown fence, no explanation.\n"
+                "Schema:\n"
                 '- "thought": Your reasoning about what to do next and why (1-2 sentences)\n'
                 '- "action": One of: plan, gather, analyze, synthesize, report, review, revise, done\n\n'
                 "Rules:\n"
@@ -507,7 +508,9 @@ class ResearchEngine:
         ]
 
         def _call():
-            return self._default_llm.chat(messages, max_tokens=200, temperature=0.1)
+            return self._default_llm.chat(
+                messages, max_tokens=1024, temperature=0.1, json_mode=True
+            )
 
         raw = await asyncio.to_thread(_call)
         raw = raw.strip()
