@@ -50,10 +50,9 @@ src/llmwikify/autoresearch/                # 全新顶级子项目
 ├── clarifier.py                           # 新建：概念澄清器
 ├── reasoning_checker.py                   # 新建：推理链校验器
 ├── structure_validator.py                 # 新建：结构校验器
-├── report_enhancer.py                     # 新建：独立增强版
-├── review_enhancer.py                     # 新建：独立增强版
 ├── retry_managers.py                      # 新建：3 个重试管理器
-├── db_migrations.py                       # 新建：幂等 ALTER TABLE
+├── db.py                                  # v4 新建：独立 AutoResearchDatabase
+├── db_migrations.py                       # v3 新建 → v4 改写：init_autoresearch_db + 可选 migrate_research_six_step_columns
 ├── routes.py                              # 新建 FastAPI router
 └── task_manager.py                        # COPY 自 research
 
@@ -654,8 +653,6 @@ DEFAULT_RESEARCH_CONFIG = {
 | `autoresearch/db.py` | Python | 新建 | ~380 | 独立 AutoResearchDatabase（含 update_six_step_fields / get_six_step_fields） |
 | `autoresearch/db_migrations.py` | Python | 改写 | ~50 | init_autoresearch_db() + 可选 migrate_research_six_step_columns() |
 | `autoresearch/routes.py` | Python | 新建 | ~120 | FastAPI router |
-| `autoresearch/report_enhancer.py` | Python | 新建 | ~80 | 报告增强 |
-| `autoresearch/review_enhancer.py` | Python | 新建 | ~60 | 评审增强 |
 | `autoresearch/engine.py` | Python | COPY+增强 | ~1430 | 主引擎（copy 1178 + 6 步增强 250） |
 | `autoresearch/session.py` | Python | COPY+增强 | ~100 | 会话管理 |
 | `autoresearch/source_filter.py` | Python | COPY+增强 | ~315 | 源过滤器 + evidence_score |
@@ -1137,6 +1134,37 @@ DEFAULT_SIX_STEP_CONFIG = {
 - `autoresearch.db` 不含 `research_sessions` 表
 - `.llmwiki_agent.db` 不被 autoresearch 写入
 - Server 启动日志显示两条独立 DB 路径
+
+### v5 (2026-06-04) — 6 步门禁引擎集成 + 报告上下文注入
+
+**变更动机**：v3-v4 完成了 6 步框架**骨架**（4 个 6 步门禁、3 个 6 步 checker、报告/评审框架块），但**引擎层未调度它们**——`engine.py:_evaluate_gate` 只调 4 个基础门禁；`ReasoningChecker` / `StructureValidator` 从未在 ReAct 循环中运行；`six_step_context` 从未传给报告生成器。现场跑 `POST /api/autoresearch/start`：clarify 跑完后所有 6 步字段除 `clarification_json` 外**全是 NULL**。
+
+**变更内容**：
+- `engine.py:_evaluate_gate`（A1）：在 4 个 phase 分支**叠加** 6 步门禁（gathering→check_evidence_quality / synthesizing→check_reasoning_quality / reporting→check_structure_quality / reviewing→check_framework_compliance）。6 步门禁与基础门禁叠加，任一失败触发 replan
+- `engine.py:_action_gather`（A2）：gather 完成后遍历 `SourceFilter.compute_evidence_score`，写入 `state.evidence_scores: dict[str, float]`，并 `db.update_six_step_fields` 持久化
+- `engine.py:_action_synthesize`（A3）：synthesize 完成后 instantiate `ReasoningChecker` 并 `state.reasoning_check = checker.check(...)`，持久化
+- `engine.py:_action_report`（A4）：report 完成后 instantiate `StructureValidator` 并 `state.structure_check = validator.validate(...)`，持久化
+- `engine.py:_action_report` / `_action_review`（B1+B2）：构建 `six_step_context = {clarification, reasoning_check, structure_check, evidence_scores}` 并作为 `generate_streaming` / `review.review` 的第 4 参数
+- `engine.py:147`（A5）：`state.evidence_scores` 类型从 `list[float]` 改为 `dict[str, float]`（与 `update_six_step_fields.evidence_scores: dict` 签名一致）
+- 4 个新守门：读取 `config["evidence_scoring_enabled"]` / `reasoning_check_enabled` / `structure_check_enabled` / `framework_check_enabled`
+- 清理：删除 `engine.py:18` 和 `analyzer.py:11` 的两个**死 import**（`from llmwikify.agent.backend.db import AgentDatabase`）
+- 新增 `TestAutoresearchIntegration` 类（D）：~7 个 e2e 测试验证完整 ReAct 循环 + 6 步门禁触发 + 6 步上下文传递
+
+**兼容性**：
+- 4 个 6 步开关默认 `True`（与 `framework_check_enabled` 既有配置一致）
+- 失败行为：6 步门禁失败 → 引擎走 plan 重规划（受 `max_replan_attempts=2` 限制）
+- 6 步门禁失败**优先级 >** 基础门禁失败（plan:170）
+
+**验证**：
+- 82 + 7 个 autoresearch 测试 = **89 passed**，零回归
+- 完整 test suite（除 e2e + 3 个 pre-existing 失败）：**1290 passed, 0 regression**
+- 现场跑 `POST /api/autoresearch/start` → `evidence_scores_json` / `reasoning_json` / `structure_json` 全部有值
+- 报告生成器 prompt 实际收到非 None `six_step_context`
+
+**实际影响**：
+- v3-v4 的 6 步框架从"骨架"变为"运行中"——`check_evidence/reasoning/structure/framework_compliance` 4 个方法不再孤立
+- 报告 prompt 自动注入 6 步框架 block（"本报告应反映 6 步"）
+- 评审 prompt 自动注入 6 步框架 review block（"评审应覆盖 6 步"）
 
 ### v3 (2026-06-04) — 独立顶级子项目
 
