@@ -14,6 +14,7 @@ from .engine import ResearchEngine, ResearchState, VALID_TRANSITIONS
 from .quality_gate import GateResult, QualityGate
 from .reasoning_checker import ReasoningChecker
 from .source_filter import SourceFilter
+from .structure_validator import StructureValidator
 
 __all__ = [
     "ResearchEngine",
@@ -26,4 +27,5 @@ __all__ = [
     "QualityGate",
     "ReasoningChecker",
     "SourceFilter",
+    "StructureValidator",
 ]

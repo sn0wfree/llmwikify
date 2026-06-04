@@ -26,6 +26,7 @@ from llmwikify.autoresearch import (
     ResearchEngine,
     ResearchState,
     SourceFilter,
+    StructureValidator,
     VALID_TRANSITIONS,
     merge_six_step_config,
 )
@@ -523,3 +524,167 @@ class TestQualityGateNewGates:
         )
         assert result.passed is False
         assert result.suggestion == "replan_reasoning"
+
+
+# ─── Phase 3: structure + framework compliance + 6-step enrichment ──
+
+
+class TestStructureValidator:
+    """StructureValidator: 6-step gate 4 input."""
+
+    def _good_report(self) -> str:
+        return (
+            "# 背景\n"
+            "This is a test background with sufficient context.\n"
+            "## 分析\n"
+            "The system 因为 high latency 所以 fails. [[Source:abc123]]\n"
+            "## 证据\n"
+            "Some evidence here. [[Source:def456]]\n"
+            "## 结论\n"
+            "Therefore the result is good. 可能 this will improve."
+        )
+
+    def test_three_layer_scores_returned(self):
+        sv = StructureValidator()
+        result = sv.validate(self._good_report())
+        assert "scores" in result
+        for layer in StructureValidator.LAYERS:
+            assert layer in result["scores"]
+
+    def test_good_report_passes_aggregate(self):
+        sv = StructureValidator()
+        result = sv.validate(
+            self._good_report(),
+            synthesis={"reinforced_claims": ["c1", "c2", "c3"]},
+            evidence_sources=[{"id": "abc123"}, {"id": "def456"}],
+        )
+        assert result["aggregate_score"] >= 0.7, f"got {result['aggregate_score']}"
+
+    def test_short_report_fails_hierarchy(self):
+        sv = StructureValidator()
+        result = sv.validate("Just a one-liner.", evidence_sources=[])
+        assert result["scores"]["hierarchical_support"] < 0.5
+
+    def test_missing_sections_emits_issue(self):
+        sv = StructureValidator()
+        result = sv.validate("Random content without headers.")
+        # Should have at least one issue for section completeness
+        section_issues = [
+            i for i in result["issues"]
+            if i.get("layer") == "section_completeness"
+        ]
+        assert len(section_issues) >= 1
+
+
+class TestStructureAndFrameworkGates:
+    """QualityGate.check_structure_quality + check_framework_compliance."""
+
+    def test_structure_gate_passes_for_well_formed_report(self):
+        qg = QualityGate({"gate_structure_threshold": 0.5})
+        report = (
+            "# 背景\nctx\n## 分析\nx [[Source:a]]\n## 证据\ny [[Source:b]]\n"
+            "# 结论\nTherefore. 可能 good."
+        )
+        result = qg.check_structure_quality(
+            report=report,
+            synthesis={"reinforced_claims": ["c1", "c2", "c3"]},
+            evidence_sources=[{"id": "a"}, {"id": "b"}],
+        )
+        assert result.gate_name == "structure_quality"
+        assert result.passed is True
+        assert "per_layer" in result.details
+
+    def test_framework_compliance_passes_when_all_present(self):
+        qg = QualityGate()
+        result = qg.check_framework_compliance(
+            clarification={"context": "ctx"},
+            reasoning_check={"aggregate_score": 0.7},
+            structure_check={"aggregate_score": 0.8},
+        )
+        assert result.passed is True
+        assert result.gate_name == "framework_compliance"
+
+    def test_framework_compliance_fails_when_clarification_missing(self):
+        qg = QualityGate()
+        result = qg.check_framework_compliance(
+            clarification=None,
+            reasoning_check={"aggregate_score": 0.7},
+            structure_check={"aggregate_score": 0.8},
+        )
+        assert result.passed is False
+        assert "missing clarification" in result.summary
+
+    def test_framework_compliance_fails_when_reasoning_missing(self):
+        qg = QualityGate()
+        result = qg.check_framework_compliance(
+            clarification={"context": "ctx"},
+            reasoning_check=None,
+            structure_check={"aggregate_score": 0.8},
+        )
+        assert result.passed is False
+
+    def test_framework_compliance_fails_when_structure_missing(self):
+        qg = QualityGate()
+        result = qg.check_framework_compliance(
+            clarification={"context": "ctx"},
+            reasoning_check={"aggregate_score": 0.7},
+            structure_check=None,
+        )
+        assert result.passed is False
+
+
+class TestReportAndReviewEnrichment:
+    """Report/Review: 6-step framework enrichment in _build_messages."""
+
+    def test_report_renders_framework_block(self):
+        from llmwikify.autoresearch.report import ReportGenerator
+        rg = ReportGenerator.__new__(ReportGenerator)
+        rg.config = {}
+        ctx = {
+            "clarification": {
+                "context": "ctx", "boundaries": "bnd", "position": "pos",
+                "premises": ["p1", "p2"],
+            },
+            "reasoning_check": {"aggregate_score": 0.7, "scores": {"x": 0.8, "y": 0.6}},
+            "structure_check": {"aggregate_score": 0.8, "scores": {"a": 0.9}},
+            "evidence_scores": {"s1": 0.8, "s2": 0.6},
+        }
+        block = rg._render_framework_block(ctx)
+        assert "步骤 1" in block
+        assert "步骤 2" in block
+        assert "步骤 3" in block
+        assert "步骤 4" in block
+        assert "0.70" in block or "0.7" in block
+        assert "前提 (2)" in block
+
+    def test_report_renders_empty_when_no_context(self):
+        from llmwikify.autoresearch.report import ReportGenerator
+        rg = ReportGenerator.__new__(ReportGenerator)
+        rg.config = {}
+        assert rg._render_framework_block(None) == ""
+        assert rg._render_framework_block({}) == ""
+
+    def test_review_renders_framework_block(self):
+        from llmwikify.autoresearch.review import ResearchReviewer
+        rr = ResearchReviewer.__new__(ResearchReviewer)
+        rr.config = {}
+        ctx = {
+            "clarification": {"context": "ctx", "boundaries": "bnd", "position": "pos"},
+            "reasoning_check": {"aggregate_score": 0.7},
+            "structure_check": {"aggregate_score": 0.8},
+            "evidence_scores": {"s1": 0.8},
+        }
+        block = rr._render_framework_review_block(ctx)
+        assert "6-step Framework Review Checklist" in block
+        assert "标准 1" in block
+        assert "标准 2" in block
+        assert "标准 3" in block
+        assert "标准 4" in block
+        assert "标准 5" in block
+
+    def test_review_renders_empty_when_no_context(self):
+        from llmwikify.autoresearch.review import ResearchReviewer
+        rr = ResearchReviewer.__new__(ResearchReviewer)
+        rr.config = {}
+        assert rr._render_framework_review_block(None) == ""
+        assert rr._render_framework_review_block({}) == ""
