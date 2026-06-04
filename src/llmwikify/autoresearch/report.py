@@ -36,8 +36,16 @@ class ReportGenerator:
         query: str,
         sources: list[dict[str, Any]],
         synthesis: dict[str, Any],
+        six_step_context: dict[str, Any] | None = None,
     ) -> tuple[list[dict[str, str]], dict[str, Any]]:
-        """Build messages and API params for report generation."""
+        """Build messages and API params for report generation.
+
+        six_step_context is the consolidated framework output (from
+        ResearchState). It includes: clarification, reasoning_check,
+        structure_check, evidence_scores. When provided, the report
+        prompt is enriched with structured framework guidance so the
+        final report follows the 6-step structure.
+        """
         from llmwikify.core.prompt_registry import PromptRegistry
         registry = PromptRegistry(provider="openai")
 
@@ -71,6 +79,9 @@ class ReportGenerator:
         if self.wiki.index_file.exists():
             wiki_index = self.wiki.index_file.read_text()[:5000]
 
+        # ─── 6-step framework enrichment (step 5: conclusion output) ─
+        framework_block = self._render_framework_block(six_step_context)
+
         messages = registry.get_messages(
             "research_report",
             query=query,
@@ -78,22 +89,106 @@ class ReportGenerator:
             source_contents=source_contents,
             synthesis=synthesis,
         )
+
+        # Inject 6-step framework context as a system-side message if present
+        if framework_block:
+            messages = [
+                {"role": "system", "content": framework_block},
+                *messages,
+            ]
+
         api_params = registry.get_api_params("research_report")
 
         return messages, api_params
+
+    def _render_framework_block(self, six_step_context: dict[str, Any] | None) -> str:
+        """Render the 6-step framework context as a system-prompt block.
+
+        Only emitted when the framework was actually run (i.e. all 5
+        pre-output steps are present). Format is a numbered checklist
+        so the LLM treats it as concrete instructions.
+        """
+        if not six_step_context:
+            return ""
+        clarification = six_step_context.get("clarification") or {}
+        reasoning = six_step_context.get("reasoning_check") or {}
+        structure = six_step_context.get("structure_check") or {}
+        evidence_scores = six_step_context.get("evidence_scores") or {}
+
+        # Skip if no framework data at all
+        if not (clarification.get("context") or reasoning or structure):
+            return ""
+
+        lines = ["# 6-step Framework Guidance (this report should reflect all 6 steps)\n"]
+
+        # Step 1: clarification
+        if clarification.get("context"):
+            lines.append("## 步骤 1: 概念澄清")
+            lines.append(f"- 上下文: {clarification.get('context', '')[:200]}")
+            if clarification.get("boundaries"):
+                lines.append(f"- 边界: {clarification['boundaries'][:200]}")
+            if clarification.get("position"):
+                lines.append(f"- 立场: {clarification['position'][:200]}")
+            premises = clarification.get("premises") or []
+            if premises:
+                lines.append(f"- 前提 ({len(premises)}): {'; '.join(str(p)[:80] for p in premises[:5])}")
+            lines.append("")
+
+        # Step 2-3: evidence & reasoning
+        if evidence_scores:
+            avg_ev = (
+                sum(evidence_scores.values()) / max(1, len(evidence_scores))
+                if isinstance(evidence_scores, dict)
+                else 0
+            )
+            lines.append("## 步骤 2: 建立依据")
+            lines.append(f"- 平均证据分: {avg_ev:.2f}")
+            lines.append("")
+
+        if reasoning.get("aggregate_score") is not None:
+            lines.append("## 步骤 3: 推理严密")
+            lines.append(f"- 推理聚合分: {reasoning['aggregate_score']:.2f}")
+            per_dim = reasoning.get("scores") or {}
+            for dim, score in list(per_dim.items())[:3]:
+                lines.append(f"  - {dim}: {score:.2f}")
+            lines.append("")
+
+        # Step 4: structure
+        if structure.get("aggregate_score") is not None:
+            lines.append("## 步骤 4: 稳固结构")
+            lines.append(f"- 结构聚合分: {structure['aggregate_score']:.2f}")
+            per_layer = structure.get("scores") or {}
+            for layer, score in per_layer.items():
+                lines.append(f"  - {layer}: {score:.2f}")
+            lines.append("")
+
+        # Steps 5 & 6 are the report and review themselves
+        lines.append("## 步骤 5: 结论输出（你正在写）")
+        lines.append("- 输出结构化 markdown 报告")
+        lines.append("- 每个结论引用证据（[[Source:hash]] 格式）")
+        lines.append("- 量化不确定性（可能/likely/approximately）")
+        lines.append("")
+        lines.append("## 步骤 6: 检查清单（评审阶段会执行）")
+        lines.append("- 概念是否清晰？边界是否明确？")
+        lines.append("- 证据是否充分？推理是否严密？")
+        lines.append("- 结构是否稳固？结论是否量化？")
+        return "\n".join(lines)
 
     async def generate(
         self,
         query: str,
         sources: list[dict[str, Any]],
         synthesis: dict[str, Any],
+        six_step_context: dict[str, Any] | None = None,
     ) -> str:
         """Generate a structured markdown report (non-streaming).
 
         Uses report_model if configured, otherwise falls back to default LLM.
         Source citations use [[Source:hash]] format.
+        six_step_context: optional 6-step framework context that augments
+        the prompt with structured guidance.
         """
-        messages, api_params = self._build_messages(query, sources, synthesis)
+        messages, api_params = self._build_messages(query, sources, synthesis, six_step_context)
 
         # Call LLM (sync wrapped in async) with retry
         import asyncio
@@ -121,6 +216,7 @@ class ReportGenerator:
         query: str,
         sources: list[dict[str, Any]],
         synthesis: dict[str, Any],
+        six_step_context: dict[str, Any] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Generate a structured markdown report with streaming output.
 
@@ -130,7 +226,7 @@ class ReportGenerator:
                   {"type": "done", "content": str} or
                   {"type": "error", "error": str}
         """
-        messages, api_params = self._build_messages(query, sources, synthesis)
+        messages, api_params = self._build_messages(query, sources, synthesis, six_step_context)
 
         # Try streaming first, fall back to non-streaming
         if hasattr(self.llm_client, 'stream_chat'):

@@ -263,3 +263,79 @@ class QualityGate:
             },
             suggestion="proceed" if passed else "replan_reasoning",
         )
+
+    def check_structure_quality(
+        self,
+        report: str,
+        synthesis: dict | None = None,
+        evidence_sources: list[dict] | None = None,
+        structure_threshold: float = 0.5,
+    ) -> GateResult:
+        """6-step gate 4 (before_report): is the report structure sound?
+
+        Uses StructureValidator which scores 3 layers (hierarchical support,
+        section completeness, internal consistency).
+        """
+        from .structure_validator import StructureValidator
+        validator = StructureValidator()
+        result = validator.validate(
+            report=report,
+            synthesis=synthesis,
+            evidence_sources=evidence_sources,
+        )
+        agg = result["aggregate_score"]
+        passed = agg >= structure_threshold
+        top_issues = result.get("issues", [])[:3]
+        return GateResult(
+            passed=passed,
+            gate_name="structure_quality",
+            summary=(
+                f"Structure aggregate {agg:.2f} (≥{structure_threshold}), "
+                f"{len(result['issues'])} issues"
+            ),
+            details={
+                "aggregate_score": agg,
+                "per_layer": result["scores"],
+                "issues": top_issues,
+                "method": result["method"],
+                "threshold": structure_threshold,
+            },
+            suggestion="proceed" if passed else "replan_structure",
+        )
+
+    def check_framework_compliance(
+        self,
+        clarification: dict | None,
+        reasoning_check: dict | None,
+        structure_check: dict | None,
+    ) -> GateResult:
+        """6-step gate 5 (before_report): does the output follow the 6-step framework?
+
+        Verifies that the three framework outputs (clarification, reasoning,
+        structure) are all present and non-empty. This is a *meta* check
+        that fails if any step was skipped (e.g. the report ran without
+        a clarification because of resume).
+        """
+        issues: list[str] = []
+        if not clarification or not clarification.get("context"):
+            issues.append("missing clarification step 1 output")
+        if not reasoning_check or reasoning_check.get("aggregate_score", 0) == 0:
+            issues.append("missing reasoning step 3 check")
+        if not structure_check or structure_check.get("aggregate_score", 0) == 0:
+            issues.append("missing structure step 4 check")
+        passed = len(issues) == 0
+        return GateResult(
+            passed=passed,
+            gate_name="framework_compliance",
+            summary=(
+                "All 6-step framework outputs present"
+                if passed
+                else f"Framework incomplete: {'; '.join(issues)}"
+            ),
+            details={
+                "has_clarification": bool(clarification and clarification.get("context")),
+                "has_reasoning_check": bool(reasoning_check),
+                "has_structure_check": bool(structure_check),
+            },
+            suggestion="proceed" if passed else "replan_framework",
+        )
