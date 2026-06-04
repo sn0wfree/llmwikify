@@ -91,5 +91,5 @@ def merge_six_step_config(overrides: dict[str, Any] | None = None) -> dict[str, 
     return config
 
 
-# Alias used by the copied engine.py (which calls merge_research_config)
+# Backward-compat alias; the engine and tests still reference the old name.
 merge_research_config = merge_six_step_config

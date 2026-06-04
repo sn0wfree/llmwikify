@@ -18,14 +18,13 @@ from llmwikify.agent.backend.adapters import StreamableLLMClient
 from llmwikify.autoresearch.db import AutoResearchDatabase
 from llmwikify.agent.backend.providers.registry import create_llm
 from llmwikify.autoresearch.analyzer import SourceAnalyzer
-from llmwikify.autoresearch.config import merge_research_config
+from llmwikify.autoresearch.config import merge_six_step_config
 from llmwikify.autoresearch._json_utils import safe_json_loads
 from llmwikify.autoresearch.gatherer import SourceGatherer
 from llmwikify.autoresearch.report import ReportGenerator
 from llmwikify.autoresearch.review import ResearchReviewer, ResearchRevisor
 from llmwikify.autoresearch.session import ResearchSessionManager
 from llmwikify.autoresearch.synthesizer import ResearchSynthesizer
-from llmwikify.autoresearch.web_search import WebSearch
 from llmwikify.autoresearch.quality_gate import QualityGate
 
 logger = logging.getLogger(__name__)
@@ -168,7 +167,7 @@ class ResearchEngine:
     ):
         self.wiki = wiki
         self.db = db
-        self.config = merge_research_config(config)
+        self.config = merge_six_step_config(config)
         self.session_manager = ResearchSessionManager(db)
         self._timeout_seconds = self.config.get("research_timeout_minutes", 30) * 60
         self._start_time: float = 0
@@ -235,6 +234,15 @@ class ResearchEngine:
             )
             return False
         return True
+
+    def _warn_invalid_transition(self, from_phase: str, to_phase: str) -> None:
+        """Log a warning if the transition is invalid.
+
+        Equivalent to ``if not self._validate_transition(...): logger.warning(...)``
+        but collapses the 8 duplicated callsites in action methods to a
+        single line. Returns nothing (caller always continues anyway).
+        """
+        self._validate_transition(from_phase, to_phase)
 
     def _start_action(self, action: str) -> ActionMetrics:
         """Start tracking metrics for an action."""
@@ -743,8 +751,7 @@ class ResearchEngine:
             return
 
         # Validate state transition
-        if not self._validate_transition(state.phase, "clarifying"):
-            logger.warning("Invalid transition to clarifying from %s, continuing anyway", state.phase)
+        self._warn_invalid_transition(state.phase, "clarifying")
 
         # Track metrics
         metrics = self._start_action("clarify")
@@ -812,8 +819,7 @@ class ResearchEngine:
     async def _action_plan(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Plan sub-queries (initial or replanning for gaps)."""
         # Validate state transition
-        if not self._validate_transition(state.phase, "planning"):
-            logger.warning("Invalid transition to planning from %s, continuing anyway", state.phase)
+        self._warn_invalid_transition(state.phase, "planning")
         
         # Track metrics (DR-13)
         metrics = self._start_action("plan")
@@ -855,8 +861,7 @@ class ResearchEngine:
     async def _action_gather(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Gather sources for ungathered or failed sub-queries."""
         # Validate state transition
-        if not self._validate_transition(state.phase, "gathering"):
-            logger.warning("Invalid transition to gathering from %s, continuing anyway", state.phase)
+        self._warn_invalid_transition(state.phase, "gathering")
         
         # Track metrics (DR-13)
         metrics = self._start_action("gather")
@@ -929,8 +934,7 @@ class ResearchEngine:
     async def _action_analyze(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Analyze unanalyzed sources."""
         # Validate state transition
-        if not self._validate_transition(state.phase, "analyzing"):
-            logger.warning("Invalid transition to analyzing from %s, continuing anyway", state.phase)
+        self._warn_invalid_transition(state.phase, "analyzing")
         
         # Track metrics (DR-13)
         metrics = self._start_action("analyze")
@@ -956,8 +960,7 @@ class ResearchEngine:
     async def _action_synthesize(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Synthesize findings from analyzed sources."""
         # Validate state transition
-        if not self._validate_transition(state.phase, "synthesizing"):
-            logger.warning("Invalid transition to synthesizing from %s, continuing anyway", state.phase)
+        self._warn_invalid_transition(state.phase, "synthesizing")
         
         # Track metrics (DR-13)
         metrics = self._start_action("synthesize")
@@ -973,11 +976,10 @@ class ResearchEngine:
         state.contradictions = state.synthesis.get("contradictions", [])
 
         # Persist synthesis for resume
-        import json as _json
         self.session_manager.update_status(
             state.session_id, "synthesizing", "synthesizing", None,
             iteration_round=state.round,
-            synthesis_json=_json.dumps(state.synthesis),
+            synthesis_json=json.dumps(state.synthesis),
         )
 
         yield {"type": "synthesis_complete", "synthesis": {
@@ -1016,8 +1018,7 @@ class ResearchEngine:
     async def _action_report(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Generate research report."""
         # Validate state transition
-        if not self._validate_transition(state.phase, "reporting"):
-            logger.warning("Invalid transition to reporting from %s, continuing anyway", state.phase)
+        self._warn_invalid_transition(state.phase, "reporting")
         
         # Track metrics (DR-13)
         metrics = self._start_action("report")
@@ -1121,8 +1122,7 @@ class ResearchEngine:
     async def _action_review(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Review report quality."""
         # Validate state transition
-        if not self._validate_transition(state.phase, "reviewing"):
-            logger.warning("Invalid transition to reviewing from %s, continuing anyway", state.phase)
+        self._warn_invalid_transition(state.phase, "reviewing")
         
         # Track metrics (DR-13)
         metrics = self._start_action("review")
@@ -1154,11 +1154,10 @@ class ResearchEngine:
         state.issues = state.review.get("issues", [])
 
         # Persist review for resume
-        import json as _json
         self.session_manager.update_status(
             state.session_id, "reviewing", "reviewing", None,
             iteration_round=state.round,
-            review_json=_json.dumps(state.review),
+            review_json=json.dumps(state.review),
         )
 
         if state.review.get("approved"):
@@ -1182,8 +1181,7 @@ class ResearchEngine:
     async def _action_revise(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Revise report based on review feedback."""
         # Validate state transition
-        if not self._validate_transition(state.phase, "revise"):
-            logger.warning("Invalid transition to revise from %s, continuing anyway", state.phase)
+        self._warn_invalid_transition(state.phase, "revise")
         
         # Track metrics (DR-13)
         metrics = self._start_action("revise")
@@ -1219,8 +1217,7 @@ class ResearchEngine:
     async def _action_done(self, state: ResearchState) -> AsyncIterator[dict[str, Any]]:
         """Finalize research session."""
         # Validate state transition
-        if not self._validate_transition(state.phase, "done"):
-            logger.warning("Invalid transition to done from %s, continuing anyway", state.phase)
+        self._warn_invalid_transition(state.phase, "done")
         
         state.phase = "done"
         sources = self.db.get_sources(state.session_id) or []

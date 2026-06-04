@@ -32,7 +32,6 @@ class ResearchClarifier:
     def __init__(self, llm_client: Any, config: dict[str, Any] | None = None):
         self.llm_client = llm_client
         self.config = config or {}
-        self.max_tokens = self.config.get("llm_call_timeout_seconds", 120)
 
     async def clarify(self, query: str, wiki_context: str = "") -> dict[str, Any]:
         """Clarify the research query.

@@ -264,7 +264,18 @@ class ReportGenerator:
             )
 
         try:
-            # Use asyncio.run to create a new event loop in this thread
+            # Sync generator must NOT be called from a running event loop
+            # (would raise RuntimeError on asyncio.run). Verify and fail
+            # fast with a clear message rather than the cryptic stack trace.
+            try:
+                asyncio.get_running_loop()
+                raise RuntimeError(
+                    "generate_streaming must be called from a thread without "
+                    "a running event loop (use asyncio.to_thread)"
+                )
+            except RuntimeError as e:
+                if "no running event loop" not in str(e):
+                    raise
             report_md = asyncio.run(
                 retry_async(_call_llm, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout)
             )
