@@ -61,6 +61,9 @@ function clearOutlineCache(type: string, id: string): void {
 export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorProps) {
   // v0.5: taskId from URL hash (single source of truth for current task)
   const [taskId, setTaskId] = useUrlTask();
+  // Bump on new task creation so PPTSidebar re-fetches immediately
+  // (5s polling still runs as a fallback for status transitions).
+  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
   // State
   const [step, setStep] = useState<Step>('input');
@@ -320,6 +323,9 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
 
       // v0.5: Set URL hash → triggers useEffect to attach SSE (single owner)
       setTaskId(task_id);
+      // Refresh the task sidebar immediately so the new task appears
+      // without waiting for the 5s polling interval.
+      setSidebarRefreshKey((k) => k + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate content');
       setIsLoading(false);
@@ -377,7 +383,7 @@ export function PPTGenerator({ source, onSourceConsumed, onExit }: PPTGeneratorP
     <div className="h-full flex">
       {/* v0.5: Left sidebar — task history */}
       <div className="w-56 flex-shrink-0 border-r border-[var(--border)] overflow-y-auto bg-[var(--bg-secondary)]">
-        <PPTSidebar />
+        <PPTSidebar refreshKey={sidebarRefreshKey} />
       </div>
 
       {/* Main content area */}
