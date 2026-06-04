@@ -58,6 +58,8 @@ class ActionContext:
     config: dict[str, Any]
     metrics: SessionMetrics | None
     planning_llm: StreamableLLMClient
+    default_llm: StreamableLLMClient  # used by ResearchReviewer
+    report_llm: StreamableLLMClient   # used by ReportGenerator + ResearchRevisor
 
 
 # ─── Helpers (extracted from engine.py) ─────────────────────────────────
@@ -241,7 +243,49 @@ def _build_six_step_context(state: ResearchState) -> dict[str, Any] | None:
     return ctx if ctx else None
 
 
-# ─── Actions: 3 free functions (Commit 5a) ────────────────────────────
+# ─── Synthesis → text helper (used by action_synthesize + engine._evaluate_gate) ───
+
+
+def synthesis_to_text(synthesis: dict | None) -> str:
+    """Flatten the synthesis dict into a single text blob for the reasoner.
+
+    The synthesizer stores structured output (claims / reinforced_claims
+    / contradictions / knowledge_gaps). The ReasoningChecker expects
+    a text synthesis, so we concatenate the human-readable parts.
+
+    Free function version of the former ``ResearchEngine._synthesis_to_text``.
+    """
+    if not synthesis:
+        return ""
+    parts: list[str] = []
+    for key in ("summary", "synthesis", "analysis", "main_text", "narrative"):
+        v = synthesis.get(key)
+        if isinstance(v, str) and v.strip():
+            parts.append(v.strip())
+    for key in ("reinforced_claims", "claims"):
+        items = synthesis.get(key) or []
+        for it in items:
+            if isinstance(it, dict):
+                text = it.get("text") or it.get("claim") or ""
+                if text:
+                    parts.append(f"- {text}")
+            elif isinstance(it, str):
+                parts.append(f"- {it}")
+    for key in ("contradictions",):
+        for it in synthesis.get(key) or []:
+            if isinstance(it, dict):
+                text = it.get("text") or it.get("description") or ""
+                if text:
+                    parts.append(f"! {text}")
+    for gap in synthesis.get("knowledge_gaps") or []:
+        if isinstance(gap, str):
+            parts.append(f"? {gap}")
+        elif isinstance(gap, dict):
+            parts.append(f"? {gap.get('text', '')}")
+    return "\n".join(parts)
+
+
+# ─── Actions: 9 free functions ─────────────────────────────────────────
 
 
 async def action_clarify(
@@ -422,3 +466,291 @@ async def action_gather(
         yield {"type": "error", "error": "No sources gathered. All sub-queries failed."}
         state.phase = "error"
         state.issues.append("No sources gathered — all sub-queries failed")
+
+
+# ─── Actions: 6 more (Commit 5b) ─────────────────────────────────────
+
+
+async def action_analyze(
+    ctx: ActionContext, state: ResearchState,
+):
+    """Analyze unanalyzed sources."""
+    _warn_invalid_transition(state.phase, "analyzing")
+
+    state.phase = "analyzing"
+    ctx.session_manager.update_status(state.session_id, "analyzing", "analyzing", None)
+    yield _step_event(state.session_id, "analyzing", "Analyzing sources...")
+
+    sources = ctx.db.get_sources(state.session_id) or []
+    unanalyzed = [s for s in sources if not s.get("analysis")]
+
+    if unanalyzed:
+        analyzer = ctx.analyzer
+        events = await analyzer.analyze_sources(unanalyzed)
+        for event in events:
+            yield event
+
+    yield {"type": "progress", "progress": 0.55, "message": "Analysis complete"}
+
+
+async def action_synthesize(
+    ctx: ActionContext, state: ResearchState,
+):
+    """Synthesize findings from analyzed sources."""
+    _warn_invalid_transition(state.phase, "synthesizing")
+
+    state.phase = "synthesizing"
+    ctx.session_manager.update_status(state.session_id, "synthesizing", "synthesizing", None)
+    yield _step_event(state.session_id, "synthesizing", "Synthesizing cross-source findings...")
+
+    sources = ctx.db.get_sources(state.session_id) or []
+    synthesizer = ctx.synthesizer
+    state.synthesis = await synthesizer.synthesize(sources, query=state.query)
+    state.knowledge_gaps = state.synthesis.get("knowledge_gaps", [])
+    state.contradictions = state.synthesis.get("contradictions", [])
+
+    # Persist synthesis for resume
+    ctx.session_manager.update_status(
+        state.session_id, "synthesizing", "synthesizing", None,
+        iteration_round=state.round,
+        synthesis_json=__import__("json").dumps(state.synthesis),
+    )
+
+    yield {"type": "synthesis_complete", "synthesis": {
+        "reinforced_claims": state.synthesis.get("reinforced_claims", []),
+        "contradictions": state.synthesis.get("contradictions", []),
+        "knowledge_gaps": state.synthesis.get("knowledge_gaps", []),
+        "new_entities": state.synthesis.get("new_entities", []),
+    }}
+    yield {"type": "progress", "progress": 0.65, "message": "Synthesis complete"}
+
+    # ─── 6-step step 3: reasoning chain check ───
+    if ctx.config.get("reasoning_check_enabled", True):
+        try:
+            from llmwikify.autoresearch.reasoning_checker import ReasoningChecker
+            checker = ReasoningChecker()
+            synth_text = synthesis_to_text(state.synthesis)
+            result = checker.check(
+                synthesis=synth_text,
+                evidence_sources=state.sources,
+                clarification=state.clarification,
+            )
+            state.reasoning_check = result
+            ctx.db.update_six_step_fields(state.session_id, reasoning=result)
+            yield {
+                "type": "reasoning_check_complete",
+                "aggregate_score": result.get("aggregate_score", 0.0),
+                "issues_count": len(result.get("issues", [])),
+            }
+        except Exception as e:
+            logger.warning("ReasoningChecker failed: %s", e)
+            # Don't fail the pipeline — self-loop fallback is to skip.
+
+
+async def action_report(
+    ctx: ActionContext, state: ResearchState,
+):
+    """Generate research report."""
+    _warn_invalid_transition(state.phase, "reporting")
+
+    state.phase = "reporting"
+    ctx.session_manager.update_status(state.session_id, "report", "report", None)
+    yield _step_event(state.session_id, "report", "Generating research report...")
+
+    sources = ctx.db.get_sources(state.session_id) or []
+    generator = ctx.report
+
+    # ─── 6-step context: build dict to pass into report + review ───
+    six_step_context = _build_six_step_context(state)
+
+    # Use streaming report generation (DR-3)
+    import asyncio
+    report_chunks: list[str] = []
+
+    def _generate_streaming():
+        for event in generator.generate_streaming(
+            state.query, sources, state.synthesis or {},
+            six_step_context=six_step_context,
+        ):
+            if event["type"] == "chunk":
+                report_chunks.append(event["text"])
+            elif event["type"] == "done":
+                return event["content"]
+            elif event["type"] == "error":
+                raise Exception(event["error"])
+        return "".join(report_chunks)
+
+    try:
+        # Run streaming generator in thread pool
+        state.report_md = await asyncio.to_thread(_generate_streaming)
+
+        # Persist report immediately so it survives pause/cancel/error
+        ctx.session_manager.persist_report(state.session_id, {
+            "markdown": state.report_md,
+            "query": state.query,
+            "quality_score": state.quality_score,
+            "rounds": state.round,
+            "sources": [
+                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+                for s in sources
+            ],
+        })
+        yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
+    except Exception as e:
+        logger.error("Report generation failed: %s", e)
+        yield {"type": "error", "error": f"Report generation failed: {e}"}
+        ctx.session_manager.update_status(state.session_id, "error", "report", -1)
+        state.phase = "error"
+        state.issues.append(f"Report generation failed: {e}")
+
+    # ─── 6-step step 4: structure validation ───
+    if state.report_md and ctx.config.get("structure_check_enabled", True):
+        try:
+            from llmwikify.autoresearch.structure_validator import StructureValidator
+            validator = StructureValidator()
+            result = validator.validate(
+                report=state.report_md,
+                synthesis=state.synthesis,
+                evidence_sources=state.sources,
+            )
+            state.structure_check = result
+            ctx.db.update_six_step_fields(state.session_id, structure=result)
+            yield {
+                "type": "structure_check_complete",
+                "aggregate_score": result.get("aggregate_score", 0.0),
+                "issues_count": len(result.get("issues", [])),
+            }
+        except Exception as e:
+            logger.warning("StructureValidator failed: %s", e)
+
+
+async def action_review(
+    ctx: ActionContext, state: ResearchState,
+):
+    """Review report quality."""
+    _warn_invalid_transition(state.phase, "reviewing")
+
+    state.phase = "reviewing"
+    ctx.session_manager.update_status(state.session_id, "reviewing", "reviewing", None)
+    yield _step_event(state.session_id, "review", "Reviewing report quality...")
+
+    sources = ctx.db.get_sources(state.session_id) or []
+    reviewer = ctx.reviewer
+    try:
+        six_step_context = _build_six_step_context(state)
+        state.review = await reviewer.review(
+            state.query, state.report_md or "", sources,
+            six_step_context=six_step_context,
+        )
+    except Exception as e:
+        logger.error("Report review failed: %s", e)
+        # DR-4: Skip review on LLM failure instead of creating fake bad review
+        state.review = {
+            "approved": True,
+            "score": 7,
+            "issues": [],
+            "feedback": "",
+            "skipped": True,
+            "skip_reason": f"Review LLM failed: {e}",
+        }
+    state.quality_score = state.review.get("score", 0)
+    state.issues = state.review.get("issues", [])
+
+    # Persist review for resume
+    ctx.session_manager.update_status(
+        state.session_id, "reviewing", "reviewing", None,
+        iteration_round=state.round,
+        review_json=__import__("json").dumps(state.review),
+    )
+
+    if state.review.get("approved"):
+        yield {
+            "type": "review_passed",
+            "round": state.round,
+            "score": state.quality_score,
+            "feedback": state.review.get("feedback", ""),
+        }
+    else:
+        yield {
+            "type": "review_issues",
+            "round": state.round,
+            "score": state.quality_score,
+            "issues": state.issues,
+        }
+
+
+async def action_revise(
+    ctx: ActionContext, state: ResearchState,
+):
+    """Revise report based on review feedback."""
+    _warn_invalid_transition(state.phase, "revise")
+
+    yield _step_event(state.session_id, "revise", "Revising report...")
+
+    sources = ctx.db.get_sources(state.session_id) or []
+    revisor = ctx.revisor
+    try:
+        state.report_md = await revisor.revise(state.report_md or "", state.issues, sources)
+        # Reset review so it gets re-evaluated
+        state.review = None
+        # Persist revised report immediately so it survives pause/cancel/error
+        ctx.session_manager.persist_report(state.session_id, {
+            "markdown": state.report_md,
+            "query": state.query,
+            "quality_score": state.quality_score,
+            "rounds": state.round,
+            "sources": [
+                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+                for s in sources
+            ],
+        })
+        yield {"type": "progress", "progress": 0.85, "message": "Report revised"}
+    except Exception as e:
+        logger.error("Report revision failed: %s", e)
+        yield {"type": "error", "error": f"Report revision failed: {e}"}
+
+
+async def action_done(
+    ctx: ActionContext, state: ResearchState,
+):
+    """Finalize research session."""
+    _warn_invalid_transition(state.phase, "done")
+
+    state.phase = "done"
+    sources = ctx.db.get_sources(state.session_id) or []
+
+    ctx.session_manager.update_status(state.session_id, "done", "done", 1.0, iteration_round=state.round)
+    ctx.session_manager.finalize(state.session_id, {
+        "markdown": state.report_md,
+        "query": state.query,
+        "quality_score": state.quality_score,
+        "rounds": state.round,
+        "synthesis_summary": {
+            "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
+            "contradictions": len((state.synthesis or {}).get("contradictions", [])),
+            "knowledge_gaps": len(state.knowledge_gaps),
+        },
+        "sources": [
+            {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+            for s in sources
+        ],
+    })
+
+    yield {
+        "type": "done",
+        "report": {
+            "query": state.query,
+            "markdown": state.report_md,
+            "sources": [
+                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+                for s in sources
+            ],
+            "synthesis_summary": {
+                "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
+                "contradictions": len((state.synthesis or {}).get("contradictions", [])),
+                "knowledge_gaps": len(state.knowledge_gaps),
+            },
+            "rounds": state.round,
+            "quality_score": state.quality_score,
+        },
+    }
