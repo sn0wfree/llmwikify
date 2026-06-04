@@ -9,7 +9,7 @@ from typing import Any
 from llmwikify.extractors.base import ExtractedContent
 from llmwikify.extractors.web import extract_url
 from llmwikify.extractors.youtube import extract_youtube
-from llmwikify.agent.backend.db import AgentDatabase
+from llmwikify.autoresearch.db import AutoResearchDatabase
 from llmwikify.autoresearch.session import ResearchSessionManager
 from llmwikify.autoresearch.source_filter import SourceFilter
 
@@ -22,7 +22,7 @@ class SourceGatherer:
     def __init__(
         self,
         wiki: Any,
-        db: AgentDatabase,
+        db: AutoResearchDatabase,
         session_manager: ResearchSessionManager,
         config: dict[str, Any],
     ):

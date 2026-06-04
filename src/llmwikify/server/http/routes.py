@@ -525,14 +525,17 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
         llm_client=None,  # Will fallback to agent service LLM
     )
 
-    # AutoResearch - independent 6-step framework engine.
-    # Shares DB and LLM but uses its own router (/api/autoresearch/*).
+    # AutoResearch - independent 6-step framework engine with its own DB.
+    # No shared schema with research / chat / ppt.
+    from llmwikify.autoresearch.db import AutoResearchDatabase
+    autoresearch_db = AutoResearchDatabase(data_dir)
     set_autoresearch_deps(
-        db=agent_service.db,
+        db=autoresearch_db,
         wiki_registry=registry,
         llm_client=None,  # Will fallback to agent service LLM
         config=research_config,  # Inherit base config; 6-step config in module defaults
     )
+    logger.info("AutoResearch DB initialized at: %s", autoresearch_db.db_path)
 
     app.include_router(agent_router)
     app.include_router(research_router)
