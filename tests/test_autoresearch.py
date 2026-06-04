@@ -215,7 +215,7 @@ class TestResearchState:
         assert state.clarification is None
         assert state.reasoning_check is None
         assert state.structure_check is None
-        assert state.evidence_scores == []
+        assert state.evidence_scores == {}
         assert state.self_loop_counts == {}
         assert state.self_loop_history == []
 
@@ -398,6 +398,326 @@ class TestEngineClarifyIntegration:
         # Clarification happens first in our flow (before _react_loop even starts)
         if first_plan_step is not None:
             assert clarify_idx < first_plan_step
+
+
+# ─── Phase 5: end-to-end integration (v5) ─────────────────────────
+
+
+class TestAutoresearchIntegration:
+    """End-to-end tests for the v5 6-step gate engine integration.
+
+    Verifies that when engine.run() completes a full ReAct cycle:
+    1. SourceFilter.compute_evidence_score runs in _action_gather and
+       populates state.evidence_scores (persisted to evidence_scores_json)
+    2. ReasoningChecker.check runs in _action_synthesize and populates
+       state.reasoning_check (persisted to reasoning_json)
+    3. StructureValidator.validate runs in _action_report and populates
+       state.structure_check (persisted to structure_json)
+    4. six_step_context is built and passed to report + review
+    5. QualityGate 6-step gates trigger at the correct phases
+    """
+
+    @pytest.fixture(autouse=True)
+    def _stub_web_search(self, monkeypatch):
+        """Stub WebSearch.search to return [] (no real DuckDuckGo in tests)."""
+        from llmwikify.autoresearch import web_search
+        async def _empty_search(self, query, num_results=None, **kwargs):
+            return []
+        monkeypatch.setattr(web_search.WebSearch, "search", _empty_search)
+
+    @staticmethod
+    def _patch_web_search_empty():
+        """Return a context-manager that makes WebSearch.search return [].
+
+        Prevents the gatherer from hitting real DuckDuckGo during tests.
+        """
+        from llmwikify.autoresearch import web_search
+        async def _empty_search(self, query, num_results=None, **kwargs):
+            return []
+        return patch.object(web_search.WebSearch, "search", _empty_search)
+
+    def _build_mock_llm_with_full_cycle(self):
+        """Mock LLM that completes one full ReAct cycle.
+
+        LLM call order (10 total for a fresh run):
+          1. Clarify (in _action_clarify)
+          2. _reason → plan
+          3. Plan (in _action_plan, returns LIST of sub_queries)
+          4. _reason → gather
+          5. _reason → synthesize (synthesize itself uses no LLM)
+          6. _reason → report
+          7. Report (in _action_report)
+          8. _reason → review
+          9. Review (in _action_review)
+         10. _reason → done
+        """
+        llm = MagicMock()
+        llm.chat.side_effect = [
+            # 1. Clarify
+            json.dumps({
+                "context": "ctx", "boundaries": "bnd", "position": "p",
+                "premises": ["p1"], "scope_check": True,
+            }),
+            # 2. _reason → plan
+            json.dumps({"thought": "need to plan", "action": "plan"}),
+            # 3. Plan — list of sub_queries (must match seeded queries to be deduped)
+            json.dumps([
+                {"query": "sub query 1", "source_type": "web", "url": ""},
+                {"query": "sub query 2", "source_type": "wiki", "url": ""},
+            ]),
+            # 4. _reason → gather
+            json.dumps({"thought": "need sources", "action": "gather"}),
+            # 5. _reason → synthesize
+            json.dumps({"thought": "have sources", "action": "synthesize"}),
+            # 6. _reason → report
+            json.dumps({"thought": "ready to report", "action": "report"}),
+            # 7. Report — must include [[Source:xxx]] and 3 expected sections
+            json.dumps(
+                "# Background\n\nAnalysis text [[Source:src1]]. "
+                "# Evidence\n\nData cited [[Source:src2]]. "
+                "# Conclusion\n\nSummary."
+            ),
+            # 8. _reason → review
+            json.dumps({"thought": "review time", "action": "review"}),
+            # 9. Review
+            json.dumps({"approved": True, "score": 8, "feedback": "ok", "issues": []}),
+            # 10. _reason → done
+            json.dumps({"thought": "all done", "action": "done"}),
+        ]
+        return llm
+
+    @staticmethod
+    def _seed_session_with_source(engine, session_id, source_content_words=200):
+        """Pre-seed a session with sub_queries + sources that satisfy base gates.
+
+        Seeds 2 sources of different types so check_after_gathering and
+        check_before_report both pass with relaxed thresholds.
+
+        Returns list of (sub_query_id, source_id) tuples.
+        """
+        sm = engine.session_manager
+        content = ("Body " * source_content_words).strip()
+        results: list = []
+        for i, (q, st, url) in enumerate([
+            ("sub query 1", "web", "https://example.com/a"),
+            ("sub query 2", "wiki", "https://wiki.local/b"),
+        ]):
+            sq_id = sm.add_sub_query(session_id, q, st, "")
+            src_id = sm.add_source(
+                session_id=session_id, sub_query_id=sq_id, source_type=st,
+                url=url, title=f"Title {chr(65+i)}",
+                content_length=len(content), content_preview=content[:200],
+                content=content,
+            )
+            results.append((sq_id, src_id))
+        return results
+
+    @staticmethod
+    def _lower_gates_for_test(config):
+        """Relax quality-gate thresholds so a 2-source test run can pass.
+
+        The base gates require sources/claims that a mocked LLM run can't
+        provide. Lowering them lets the engine reach every 6-step gate.
+        """
+        config["gate_min_sources"] = 2
+        config["gate_min_type_diversity"] = 2
+        config["gate_min_reinforced_claims"] = 0  # mocked synth has 0 reinforced
+        config["gate_max_knowledge_gaps"] = 999
+        config["gate_min_evidence_score"] = 0.0
+        config["gate_min_reasoning_score"] = 0  # 0/10 = always pass (gate divides by 10)
+        config["gate_min_structure_score"] = 0.0
+        return config
+
+    def test_engine_runs_all_six_steps_to_done(self, mock_wiki, mock_llm, db, config):
+        """Full ReAct loop runs through every 6-step phase and ends at 'done'."""
+        mock_llm = self._build_mock_llm_with_full_cycle()
+        config = self._lower_gates_for_test(dict(config))
+        config["max_react_rounds"] = 8
+
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        session_id = engine.session_manager.create_session("test", "What is X?")
+        self._seed_session_with_source(engine, session_id)
+
+        events = _run_async(_collect_events(engine.run(session_id, "What is X?")))
+        types = [e.get("type") for e in events]
+
+        # Must have seen every key event in the 6-step pipeline
+        assert "clarification_complete" in types
+        assert "evidence_scoring_complete" in types
+        assert "synthesis_complete" in types
+        assert "reasoning_check_complete" in types
+        assert "structure_check_complete" in types
+        assert "review_passed" in types or "review_issues" in types
+
+    def test_evidence_score_populated_after_gather(self, mock_wiki, mock_llm, db, config):
+        """state.evidence_scores is populated and persisted after _action_gather."""
+        mock_llm = self._build_mock_llm_with_full_cycle()
+        config = self._lower_gates_for_test(dict(config))
+        config["max_react_rounds"] = 8
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        session_id = engine.session_manager.create_session("test", "What is X?")
+        self._seed_session_with_source(engine, session_id)
+
+        events = _run_async(_collect_events(engine.run(session_id, "What is X?")))
+        types = [e.get("type") for e in events]
+        assert "evidence_scoring_complete" in types
+
+        # Persisted to DB via update_six_step_fields
+        six_step = db.get_six_step_fields(session_id)
+        assert six_step["evidence_scores"] is not None
+        scores = six_step["evidence_scores"]
+        assert isinstance(scores, dict)
+        assert len(scores) >= 1
+        for sid, score in scores.items():
+            assert 0.0 <= score <= 1.0, f"score for {sid} out of range: {score}"
+
+    def test_reasoning_check_invoked_after_synthesize(self, mock_wiki, mock_llm, db, config):
+        """ReasoningChecker runs in _action_synthesize, populates reasoning."""
+        mock_llm = self._build_mock_llm_with_full_cycle()
+        config = self._lower_gates_for_test(dict(config))
+        config["max_react_rounds"] = 8
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        session_id = engine.session_manager.create_session("test", "What is X?")
+        self._seed_session_with_source(engine, session_id)
+
+        events = _run_async(_collect_events(engine.run(session_id, "What is X?")))
+        types = [e.get("type") for e in events]
+        assert "reasoning_check_complete" in types
+
+        six_step = db.get_six_step_fields(session_id)
+        assert six_step["reasoning"] is not None
+        rc = six_step["reasoning"]
+        assert "aggregate_score" in rc
+        assert "scores" in rc
+        # 6 dimensions per the plan
+        assert len(rc["scores"]) == 6
+
+    def test_structure_check_invoked_after_report(self, mock_wiki, mock_llm, db, config):
+        """StructureValidator runs in _action_report, populates structure."""
+        mock_llm = self._build_mock_llm_with_full_cycle()
+        config = self._lower_gates_for_test(dict(config))
+        config["max_react_rounds"] = 8
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        session_id = engine.session_manager.create_session("test", "What is X?")
+        self._seed_session_with_source(engine, session_id)
+
+        events = _run_async(_collect_events(engine.run(session_id, "What is X?")))
+        types = [e.get("type") for e in events]
+        assert "structure_check_complete" in types
+
+        six_step = db.get_six_step_fields(session_id)
+        assert six_step["structure"] is not None
+        sc = six_step["structure"]
+        assert "aggregate_score" in sc
+        # 3 layers per the plan
+        assert len(sc["scores"]) == 3
+
+    def test_six_step_context_passed_to_report_and_review(
+        self, mock_wiki, mock_llm, db, config,
+    ):
+        """six_step_context is built and non-None when report/review are called."""
+        from llmwikify.autoresearch.engine import ResearchEngine as _RE
+
+        build_calls: list = []
+        original_build = _RE._build_six_step_context
+
+        def spy_build(self, state):
+            result = original_build(self, state)
+            build_calls.append(result)
+            return result
+
+        with patch.object(_RE, "_build_six_step_context", spy_build):
+            mock_llm = self._build_mock_llm_with_full_cycle()
+            config = self._lower_gates_for_test(dict(config))
+            config["max_react_rounds"] = 8
+            engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+            session_id = engine.session_manager.create_session("test", "What is X?")
+            self._seed_session_with_source(engine, session_id)
+            _run_async(_collect_events(engine.run(session_id, "What is X?")))
+
+        # _build_six_step_context should have been called (at least at report time)
+        assert len(build_calls) >= 1
+        last = build_calls[-1]
+        assert last is not None, "_build_six_step_context returned None"
+        assert "clarification" in last
+        assert "reasoning_check" in last
+        assert "structure_check" in last
+        assert "evidence_scores" in last
+
+    def test_six_step_gates_triggered_at_each_phase(
+        self, mock_wiki, mock_llm, db, config,
+    ):
+        """The 4 6-step QualityGate methods are invoked at the correct phases."""
+        from llmwikify.autoresearch.quality_gate import QualityGate
+
+        calls: list[str] = []
+        original_evidence = QualityGate.check_evidence_quality
+        original_reasoning = QualityGate.check_reasoning_quality
+        original_structure = QualityGate.check_structure_quality
+        original_framework = QualityGate.check_framework_compliance
+
+        def spy_evidence(self, *args, **kwargs):
+            calls.append("evidence")
+            return original_evidence(self, *args, **kwargs)
+
+        def spy_reasoning(self, *args, **kwargs):
+            calls.append("reasoning")
+            return original_reasoning(self, *args, **kwargs)
+
+        def spy_structure(self, *args, **kwargs):
+            calls.append("structure")
+            return original_structure(self, *args, **kwargs)
+
+        def spy_framework(self, *args, **kwargs):
+            calls.append("framework")
+            return original_framework(self, *args, **kwargs)
+
+        with patch.object(QualityGate, "check_evidence_quality", spy_evidence), \
+             patch.object(QualityGate, "check_reasoning_quality", spy_reasoning), \
+             patch.object(QualityGate, "check_structure_quality", spy_structure), \
+             patch.object(QualityGate, "check_framework_compliance", spy_framework):
+            mock_llm = self._build_mock_llm_with_full_cycle()
+            config = self._lower_gates_for_test(dict(config))
+            config["max_react_rounds"] = 8
+            engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+            session_id = engine.session_manager.create_session("test", "What is X?")
+            self._seed_session_with_source(engine, session_id)
+            _run_async(_collect_events(engine.run(session_id, "What is X?")))
+
+        # The 4 6-step gates must each have been called at least once
+        assert "evidence" in calls, f"check_evidence_quality never called: {calls}"
+        assert "reasoning" in calls, f"check_reasoning_quality never called: {calls}"
+        assert "structure" in calls, f"check_structure_quality never called: {calls}"
+        assert "framework" in calls, f"check_framework_compliance never called: {calls}"
+
+    def test_framework_compliance_failure_triggers_replan(
+        self, mock_wiki, mock_llm, db, config,
+    ):
+        """In a successful run, framework_compliance should pass with proceed."""
+        from llmwikify.autoresearch.quality_gate import QualityGate
+
+        captured: dict = {}
+        original_framework = QualityGate.check_framework_compliance
+
+        def spy_framework(self, *args, **kwargs):
+            res = original_framework(self, *args, **kwargs)
+            captured["result"] = res
+            return res
+
+        with patch.object(QualityGate, "check_framework_compliance", spy_framework):
+            mock_llm = self._build_mock_llm_with_full_cycle()
+            config = self._lower_gates_for_test(dict(config))
+            config["max_react_rounds"] = 8
+            engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+            session_id = engine.session_manager.create_session("test", "What is X?")
+            self._seed_session_with_source(engine, session_id)
+            _run_async(_collect_events(engine.run(session_id, "What is X?")))
+
+        assert "result" in captured, "framework_compliance never invoked"
+        assert captured["result"].passed is True, (
+            f"expected passed=True, got {captured['result'].summary}"
+        )
+        assert captured["result"].suggestion == "proceed"
 
 
 # ─── Helpers ───────────────────────────────────────────────────────
