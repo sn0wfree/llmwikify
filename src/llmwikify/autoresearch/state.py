@@ -1,0 +1,154 @@
+"""Research state, transitions, and metrics.
+
+This module houses the data classes that describe the state of a
+research session in flight, the state machine that governs valid
+transitions, and the per-action / per-session metrics. These were
+previously declared at the top of engine.py; moving them here lets
+engine.py focus on orchestration.
+
+Re-exports: The ``__init__.py`` re-exports ``ResearchState``,
+``ActionMetrics``, ``SessionMetrics``, and ``VALID_TRANSITIONS`` so
+existing imports (``from llmwikify.autoresearch import ResearchState``,
+``from .engine import VALID_TRANSITIONS``) continue to work unchanged.
+"""
+
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass, field
+from typing import Any
+
+# ─── State machine ────────────────────────────────────────────────────────
+
+VALID_TRANSITIONS: dict[str | None, list[str]] = {
+    None:           ["clarifying", "plan"],   # 6-step: clarify first
+    "clarifying":   ["plan"],                 # 6-step new state
+    "planning":     ["gather"],
+    "gathering":    ["analyze", "plan"],
+    "analyzing":    ["synthesizing", "plan"],
+    "synthesizing": ["reporting", "plan"],
+    "reporting":    ["reviewing"],
+    "reviewing":    ["revise", "done"],
+    "revise":       ["reviewing", "done"],
+    "error":        ["done"],
+    "done":         [],
+}
+
+
+# ─── Metrics Collection (DR-13) ──────────────────────────────────────────
+
+
+@dataclass
+class ActionMetrics:
+    """Metrics for a single action execution."""
+    action: str
+    start_time: float
+    end_time: float = 0.0
+    duration_ms: int = 0
+    tokens_used: int = 0
+    cost_usd: float = 0.0
+
+    def finish(self) -> None:
+        """Mark action as finished and compute duration."""
+        self.end_time = time.monotonic()
+        self.duration_ms = int((self.end_time - self.start_time) * 1000)
+
+
+@dataclass
+class SessionMetrics:
+    """Metrics for an entire research session."""
+    session_id: str
+    start_time: float = 0.0
+    end_time: float = 0.0
+    total_duration_ms: int = 0
+    total_tokens: int = 0
+    total_cost_usd: float = 0.0
+    actions: list[ActionMetrics] = field(default_factory=list)
+
+    def start(self) -> None:
+        """Mark session as started."""
+        self.start_time = time.monotonic()
+
+    def finish(self) -> None:
+        """Mark session as finished and compute totals."""
+        self.end_time = time.monotonic()
+        self.total_duration_ms = int((self.end_time - self.start_time) * 1000)
+        self.total_tokens = sum(a.tokens_used for a in self.actions)
+        self.total_cost_usd = sum(a.cost_usd for a in self.actions)
+
+    def add_action(self, action: ActionMetrics) -> None:
+        """Add an action metric."""
+        self.actions.append(action)
+
+    def summary(self) -> str:
+        """Generate human-readable summary."""
+        lines = [f"Session {self.session_id} completed in {self.total_duration_ms/1000:.1f}s"]
+        for a in self.actions:
+            token_str = f"{a.tokens_used:,} tokens" if a.tokens_used > 0 else "0 tokens"
+            cost_str = f"${a.cost_usd:.3f}" if a.cost_usd > 0 else "$0.00"
+            lines.append(f"├── {a.action}: {a.duration_ms/1000:.1f}s, {token_str}, {cost_str}")
+        lines.append(f"└── Total: {self.total_duration_ms/1000:.1f}s, {self.total_tokens:,} tokens, ${self.total_cost_usd:.3f}")
+        return "\n".join(lines)
+
+
+# ─── Live research state ──────────────────────────────────────────────────
+
+
+@dataclass
+class ResearchState:
+    """Mutable state for the ReAct research loop.
+
+    The engine reads and mutates this object on every loop iteration.
+    On resume, ``_load_resume_state`` hydrates it from the DB.
+
+    The ``_engine`` field is a weak back-reference set by the engine
+    after construction. It is excluded from ``__repr__`` and not part
+    of the value-equality so the dataclass can be safely nested or
+    compared without infinite recursion.
+    """
+
+    session_id: str = ""
+    query: str = ""
+
+    # Round tracking
+    round: int = 0
+    max_rounds: int = 5
+    phase: str = ""  # planning | gathering | analyzing | synthesizing | reporting | reviewing | done
+
+    # Data accumulators
+    sub_queries: list[dict[str, Any]] = field(default_factory=list)
+    sources: list[dict[str, Any]] = field(default_factory=list)
+    synthesis: dict[str, Any] | None = None
+    report_md: str | None = None
+    review: dict[str, Any] | None = None
+
+    # Quality tracking
+    quality_score: int = 0
+    knowledge_gaps: list[str] = field(default_factory=list)
+    contradictions: list[str] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
+
+    # Budget
+    total_llm_calls: int = 0
+    total_sources: int = 0
+    total_sub_queries: int = 0
+    budget_remaining: float = 1.0
+
+    # Control signals
+    cancelled: bool = False
+    paused: bool = False
+
+    # Interpreted observations (generated by _observe)
+    observations: list[str] = field(default_factory=list)
+
+    # ─── 6-step framework fields ──────────────────────────────────────
+    clarification: dict[str, Any] | None = None
+    reasoning_check: dict[str, Any] | None = None
+    structure_check: dict[str, Any] | None = None
+    evidence_scores: dict[str, float] = field(default_factory=dict)
+    self_loop_counts: dict[str, int] = field(default_factory=dict)
+    self_loop_history: list[dict[str, Any]] = field(default_factory=list)
+
+    # Engine back-reference (set after construction by ResearchEngine).
+    # Excluded from repr/eq to avoid circular references.
+    _engine: Any = field(default=None, repr=False, compare=False)

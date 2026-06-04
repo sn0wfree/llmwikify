@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from .clarifier import ResearchClarifier
 from .config import DEFAULT_SIX_STEP_CONFIG, merge_six_step_config
-from .engine import ResearchEngine, ResearchState, VALID_TRANSITIONS
+from .engine import ResearchEngine
 from .quality_gate import GateResult, QualityGate
 from .reasoning_checker import ReasoningChecker
 from .retry_managers import (
@@ -20,6 +20,12 @@ from .retry_managers import (
     retry_async,
 )
 from .source_filter import SourceFilter
+from .state import (
+    ActionMetrics,
+    ResearchState,
+    SessionMetrics,
+    VALID_TRANSITIONS,
+)
 from .structure_validator import StructureValidator
 
 __all__ = [
@@ -29,6 +35,8 @@ __all__ = [
     "DEFAULT_SIX_STEP_CONFIG",
     "merge_six_step_config",
     "VALID_TRANSITIONS",
+    "ActionMetrics",
+    "SessionMetrics",
     "GateResult",
     "QualityGate",
     "ReasoningChecker",
