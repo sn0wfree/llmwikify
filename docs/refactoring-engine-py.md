@@ -1,10 +1,23 @@
 # engine.py Refactoring Design
 
-> **Status**: Design document (pre-implementation)
+> **Status**: Active — Phases 1-4 complete; Phase 2 (actions.py) in progress
 > **Created**: 2026-06-04
 > **Author**: opencode + ll
-> **Target file**: `src/llmwikify/autoresearch/engine.py` (1,492 LOC)
-> **Goal**: Reduce by ~40% while keeping public API and 1,433 tests unchanged.
+> **Target file**: `src/llmwikify/autoresearch/engine.py` (1,492 → 750 LOC, -50%)
+> **Goal**: Reduce by ~50% while keeping public API and 1,433 tests unchanged.
+
+## 0. Progress Tracker (2026-06-04)
+
+| Phase | Commits | Status | engine.py LOC |
+|-------|---------|--------|---------------|
+| **Phase 1: Quick Wins + helpers + state + dict dispatch** | `478f704` → `40486ba` → `7a63e39` → `caef9d8` → `de3ec77` | ✅ Done | 1,492 → 1,369 (-8.2%) |
+| **Phase 2: actions.py extraction (Step 2)** | `5a` → `5b` → `5c` (this section) | 🟡 In progress | 1,369 → ~750 (-45%) |
+| **Phase 3: subpackage split** (deferred) | — | ⚪ Future | ~750 → ~600 |
+
+**Phase 2 is what this document is about now.** Phases 1-4 of the original
+plan were completed in commits `478f704`-`de3ec77` (see `git log`).
+
+---
 
 ---
 
@@ -423,6 +436,328 @@ definitions, but the **cognitive load** drops dramatically:
 - Baseline: commit `31d7ce8` (post Commit C of LLM JSON fix)
 - Test baseline: 1,433 passed, 2 pre-existing v019 failures unrelated
 - WIP files (do not touch during this work):
+  - `src/llmwikify/agent/backend/ppt/chat_engine.py`
+  - `src/llmwikify/agent/backend/ppt/chat_routes.py`
+  - `src/llmwikify/agent/tools.py`
+  - `docs/plans/ashare-strategy-building.md`
+
+---
+
+# Appendix A: Phase 2 — actions.py Extraction (Step 2)
+
+> **Added**: 2026-06-04
+> **Replaces**: Section 9 "Commit 4: actions.py + dictionary dispatch"
+> **Decision**: Use **free functions + ActionContext** instead of `BaseAction`
+> classes (smaller change, less indirection, no MRO complexity).
+
+## A.1 Why free functions, not classes
+
+We considered two designs:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| `BaseAction` class with 9 subclasses (originally planned) | OO, polymorphism | 9 class definitions, 1 base class, MRO complexity, _engine weak-ref plumbing, ~600 LOC of boilerplate |
+| **Free functions + ActionContext** ✅ | Simpler, explicit deps, easier to test | 1 dataclass, 9 functions, ~650 LOC with less boilerplate |
+
+The original `BaseAction` design in Section 6 above is **superseded**.
+We use free functions; the `_begin/_finish` boilerplate lives in
+`MetricsCollector.record()` (a context manager) — see Appendix A.5.
+
+## A.2 Target Architecture (Post Phase 2)
+
+```
+┌─────────────────────────────────────────────────────┐
+│  engine.py: pure orchestrator  (~750 LOC, was 1,369)│
+│    - __init__ (assembles ActionContext)             │
+│    - run() (public entry)                           │
+│    - _react_loop() (ReAct cycle)                    │
+│    - _reason / _llm_reason / _rule_based_reason      │
+│    - _observe / _evaluate_gate / _synthesis_to_text │
+│    - _check_timeout / _check_control_signals         │
+│    - _load_resume_state                             │
+│    - _resolve_model                                 │
+│    - module constants                               │
+└─────────────────────────────────────────────────────┘
+                       ↓ uses
+┌─────────────────────────────────────────────────────┐
+│  actions.py: 9 free functions + 5 helpers (~650 LOC)│
+│    - ActionContext (dataclass)                      │
+│    - action_clarify / plan / gather / analyze /     │
+│      synthesize / report / review / revise / done   │
+│    - _step_event / _warn_invalid_transition /       │
+│      _plan_sub_queries / _plan_for_gaps /           │
+│      _build_six_step_context                        │
+└─────────────────────────────────────────────────────┘
+                       ↓ uses
+┌─────────────────────────────────────────────────────┐
+│  state.py: state + metrics (already exists)         │
+│    - ResearchState                                  │
+│    - MetricsCollector (NEW) with record() ctx mgr   │
+│    - ActionMetrics (value type)                     │
+│    - SessionMetrics = MetricsCollector (alias)      │
+│    - VALID_TRANSITIONS                              │
+└─────────────────────────────────────────────────────┘
+```
+
+## A.3 ActionContext Design
+
+A single dataclass holds all deps that 9 actions need. Built once in
+`ResearchEngine.__init__`, passed to each action via `functools.partial`.
+
+```python
+# actions.py
+from dataclasses import dataclass
+from collections.abc import AsyncIterator
+
+@dataclass
+class ActionContext:
+    """All deps the 9 action functions need. Constructed once in
+    ResearchEngine.__init__, captured by partial() at dispatch time."""
+    wiki: Any
+    db: AutoResearchDatabase
+    session_manager: ResearchSessionManager
+    clarifier: ResearchClarifier
+    gatherer: SourceGatherer
+    analyzer: SourceAnalyzer
+    synthesizer: ResearchSynthesizer
+    report: ReportGenerator
+    reviewer: ResearchReviewer
+    revisor: ResearchRevisor
+    quality_gate: QualityGate
+    config: dict[str, Any]
+    metrics: MetricsCollector
+    planning_llm: StreamableLLMClient
+```
+
+**14 fields**. Of these, 7 (clarifier/gatherer/analyzer/synthesizer/
+report/reviewer/revisor) are used by **exactly one** action each. We
+still pass them all through `ActionContext` for consistency — the cost
+is 14 reference assignments in `__init__`, paid once.
+
+## A.4 Action Function Signatures
+
+```python
+async def action_clarify(
+    ctx: ActionContext, state: ResearchState,
+) -> AsyncIterator[dict[str, Any]]: ...
+
+async def action_plan(
+    ctx: ActionContext, state: ResearchState,
+) -> AsyncIterator[dict[str, Any]]: ...
+
+# ... 7 more, all with the same signature
+```
+
+**All 9 actions share the same signature**: `(ctx, state) -> AsyncIterator[dict]`.
+The dispatch table uses `functools.partial(actions.action_xxx, ctx)` to
+pre-bind the `ctx` argument:
+
+```python
+# engine.py __init__
+from functools import partial
+from llmwikify.autoresearch import actions
+
+self._action_dispatch: dict[str, Callable] = {
+    "clarify":    partial(actions.action_clarify, ctx),
+    "plan":       partial(actions.action_plan, ctx),
+    "gather":     partial(actions.action_gather, ctx),
+    "analyze":    partial(actions.action_analyze, ctx),
+    "synthesize": partial(actions.action_synthesize, ctx),
+    "report":     partial(actions.action_report, ctx),
+    "review":     partial(actions.action_review, ctx),
+    "revise":     partial(actions.action_revise, ctx),
+    "done":       partial(actions.action_done, ctx),
+}
+```
+
+Then in `_react_loop`:
+
+```python
+action_fn = self._action_dispatch.get(action)
+if action_fn is None:
+    logger.warning("Unknown action %s, defaulting to done", action)
+    action_fn = self._action_dispatch["done"]
+    async for event in action_fn(state):
+        yield event
+    break
+async for event in action_fn(state):
+    yield event
+if action == "done":
+    break
+```
+
+**Same dispatch pattern as Commit 4** (`de3ec77`), just with free
+functions instead of bound methods.
+
+## A.5 MetricsCollector + record() Context Manager
+
+Originally planned as a separate "Step 1" (Metrics consolidation). We
+fold it into Commit 5c because the context manager is most useful
+**inside** the action functions in `actions.py`. Doing it earlier
+would require re-touching the action code.
+
+**state.py additions**:
+
+```python
+from contextlib import contextmanager
+from collections.abc import Iterator
+import logging
+
+logger = logging.getLogger(__name__)
+
+@contextmanager
+def _record_action_impl(
+    collector: "MetricsCollector", action: str,
+) -> Iterator["ActionMetrics"]:
+    """Context manager body: start/finish + append action metrics."""
+    m = ActionMetrics(action=action, start_time=time.monotonic())
+    try:
+        yield m
+    finally:
+        m.finish()
+        collector.actions.append(m)
+        logger.debug("Action %s completed in %dms", m.action, m.duration_ms)
+
+
+@dataclass
+class MetricsCollector:
+    """Session-level metrics: aggregates per-action metrics.
+    
+    Replaces the previous SessionMetrics + the engine's
+    _start_action / _finish_action helpers.
+    """
+    session_id: str
+    start_time: float = 0.0
+    end_time: float = 0.0
+    total_duration_ms: int = 0
+    total_tokens: int = 0
+    total_cost_usd: float = 0.0
+    actions: list[ActionMetrics] = field(default_factory=list)
+    
+    def start(self) -> None: ...
+    def finish(self) -> None: ...
+    def add_action(self, action: ActionMetrics) -> None: ...  # back-compat
+    def summary(self) -> str: ...
+    def record(self, action: str) -> Iterator[ActionMetrics]:
+        return _record_action_impl(self, action)
+
+
+# Back-compat alias
+SessionMetrics = MetricsCollector
+```
+
+**Bonus bug fix**: the previous code called `self._start_action(...)`
+then `self._finish_action(...)` with **no try/finally** around the body.
+If the body raised, the action metric was created but never recorded.
+The new `with ctx.metrics.record("plan"):` pattern automatically runs
+the finally block on exception — fixing a latent bug for free.
+
+## A.6 Helper Migration (moved from engine.py → actions.py)
+
+| Helper | LOC | Used by | Migrate? |
+|--------|-----|---------|----------|
+| `_step_event` | 3 | 7 actions | ✅ |
+| `_warn_invalid_transition` | 8 | 6 actions | ✅ |
+| `_plan_sub_queries` | 63 | 1 action (plan) | ✅ |
+| `_plan_for_gaps` | 67 | 1 action (plan) | ✅ |
+| `_build_six_step_context` | 22 | 2 actions (report, review) | ✅ |
+| `_synthesis_to_text` | 38 | 1 action (synthesize) **+ 1 non-action (`_evaluate_gate`)** | ❌ stays in engine.py |
+
+**5 helpers migrate to `actions.py`**, 1 stays.
+
+## A.7 Commit Plan (3 Commits)
+
+### Commit 5a: actions.py skeleton + 3 actions
+
+- **New file**: `actions.py` with:
+  - `ActionContext` dataclass
+  - 3 action functions: `action_clarify`, `action_plan`, `action_gather`
+  - 4 helpers: `_step_event`, `_warn_invalid_transition`, `_plan_sub_queries`, `_plan_for_gaps`
+- **engine.py unchanged** (9 `_action_*` methods still in place)
+- **Test**: `pytest tests/test_autoresearch.py tests/test_research.py -q` → 202/202
+- **Risk**: Very low. No production code path uses the new functions yet.
+
+### Commit 5b: complete 6 actions
+
+- **actions.py additions**:
+  - 6 more action functions: `action_analyze`, `action_synthesize`, `action_report`, `action_review`, `action_revise`, `action_done`
+  - 1 more helper: `_build_six_step_context`
+- **engine.py unchanged**
+- **Test**: 202/202
+- **Risk**: Low. Still no engine.py changes.
+
+### Commit 5c: switch dispatch + delete old methods + MetricsCollector
+
+- **state.py additions**:
+  - `MetricsCollector` class
+  - `SessionMetrics = MetricsCollector` alias
+  - `_record_action_impl` helper
+  - `import logging; logger = ...`
+- **`__init__.py` additions**:
+  - Re-export `MetricsCollector`
+- **engine.py changes**:
+  - Construct `ActionContext` in `__init__` (uses existing fields)
+  - Build `self._action_dispatch` with `functools.partial`
+  - Update `_react_loop` dispatch to use `self._action_dispatch` (already done in Commit 4 — just change the dict construction site)
+  - **Delete 9 `_action_*` methods** (~500 lines)
+  - **Delete 5 helpers**: `_step_event`, `_warn_invalid_transition`, `_plan_sub_queries`, `_plan_for_gaps`, `_build_six_step_context` (~165 lines)
+  - **Delete `_start_action` and `_finish_action` helpers** (~10 lines)
+  - `self._metrics` now `MetricsCollector` (was `SessionMetrics`)
+  - `self._metrics = MetricsCollector(session_id=...)` (init site)
+- **actions.py changes**:
+  - Each of 9 action bodies: replace `metrics = self._start_action("xxx")` / `self._finish_action(metrics)` with `with ctx.metrics.record("xxx"):`
+- **Test**: 1,433/1,433 (or 1,431 with 2 pre-existing v019 failures)
+- **Risk**: Medium. Largest single change, but staged by 5a/5b.
+
+## A.8 Final Target State (Post Commit 5c)
+
+| File | Before (post Phase 1) | After (post Phase 2) | Δ |
+|------|----------------------|---------------------|---|
+| `engine.py` | 1,369 | **~750** | **-619 (-45%)** |
+| `actions.py` | 0 | **~650** | new |
+| `state.py` | 154 | **~200** | +46 (MetricsCollector) |
+| `__init__.py` | 49 | **~52** | +3 (export MetricsCollector) |
+| **Total** | 1,572 | **~1,652** | +80 (+5%) |
+
+**Total LOC +5%, cognitive load -45%** in `engine.py`.
+
+## A.9 Risks
+
+| Risk | Prob | Impact | Mitigation |
+|------|------|--------|------------|
+| SSE event order changes | M | Tests fail | `test_engine_runs_all_six_steps_to_done` is the key guard |
+| `self.xxx` → `ctx.xxx` mechanical errors | M | Runtime AttributeError | Run tests after each action extracted |
+| Async generator + `with MetricsCollector.record()` | L | State leak | Same pattern works as in current code; verified |
+| `_plan_sub_queries` / `_plan_for_gaps` use LLM directly | M | LLM not available | `planning_llm` field on `ActionContext` |
+| Public API breaks | VL | External callers | `_action_*` is private (`_`-prefixed); only `run()` is public |
+| Helper migration misses a caller | L | NameError at runtime | `git grep` after each commit to verify zero `self._step_event` etc. |
+
+## A.10 Verification Steps (after Commit 5c)
+
+```bash
+# 1. Per-target unit tests (~30s)
+python3 -m pytest tests/test_autoresearch.py tests/test_research.py -q
+# Expected: 202 passed
+
+# 2. Full suite (~3 min)
+python3 -m pytest tests/ -q --ignore=tests/test_relation_engine.py --ignore=tests/e2e/test_editor.py
+# Expected: 1,433 passed, 2 pre-existing v019 failures (unrelated)
+
+# 3. Live verification (user-initiated, requires manual server restart)
+#    - Start server: llmwikify serve --web --port 8765 --host 0.0.0.0
+#    - POST /api/autoresearch/sessions with test query
+#    - Check ~/.llmwikify/agent/server.log for:
+#        * 0 "Unknown action" warnings (dispatch works)
+#        * 0 "LLM reasoning failed" warnings (json_mode fix holds)
+#        * All expected SSE event types: step, clarification_complete, sub_query_created, source_added, analysis_complete, synthesis_complete, report_complete, review_complete, done
+```
+
+## A.11 References
+
+- Phase 1 commits: `478f704` → `40486ba` → `7a63e39` → `caef9d8` → `de3ec77`
+- Phase 2 commits: pending (this section)
+- Test baseline: 1,433 passed
+- WIP files (do not touch during Phase 2):
   - `src/llmwikify/agent/backend/ppt/chat_engine.py`
   - `src/llmwikify/agent/backend/ppt/chat_routes.py`
   - `src/llmwikify/agent/tools.py`
