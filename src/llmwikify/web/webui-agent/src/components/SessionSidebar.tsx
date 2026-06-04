@@ -13,6 +13,7 @@ interface SessionSidebarProps {
   currentSessionId: string | null;
   onSelectSession: (sessionId: string) => void;
   onNewChat: () => void;
+  refreshKey?: number;
 }
 
 const COLLAPSED_KEY = 'chat-sidebar-collapsed';
@@ -34,7 +35,7 @@ function formatDate(iso: string): string {
   }
 }
 
-export function SessionSidebar({ currentSessionId, onSelectSession, onNewChat }: SessionSidebarProps) {
+export function SessionSidebar({ currentSessionId, onSelectSession, onNewChat, refreshKey }: SessionSidebarProps) {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -47,7 +48,7 @@ export function SessionSidebar({ currentSessionId, onSelectSession, onNewChat }:
 
   useEffect(() => {
     if (!collapsed) loadSessions();
-  }, [collapsed]);
+  }, [collapsed, refreshKey]);
 
   useEffect(() => {
     try {
