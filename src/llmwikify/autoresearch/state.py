@@ -7,16 +7,22 @@ previously declared at the top of engine.py; moving them here lets
 engine.py focus on orchestration.
 
 Re-exports: The ``__init__.py`` re-exports ``ResearchState``,
-``ActionMetrics``, ``SessionMetrics``, and ``VALID_TRANSITIONS`` so
-existing imports (``from llmwikify.autoresearch import ResearchState``,
+``ActionMetrics``, ``SessionMetrics``, ``MetricsCollector``,
+and ``VALID_TRANSITIONS`` so existing imports
+(``from llmwikify.autoresearch import ResearchState``,
 ``from .engine import VALID_TRANSITIONS``) continue to work unchanged.
 """
 
 from __future__ import annotations
 
+import logging
 import time
+from contextlib import contextmanager
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # ─── State machine ────────────────────────────────────────────────────────
 
@@ -55,8 +61,15 @@ class ActionMetrics:
 
 
 @dataclass
-class SessionMetrics:
-    """Metrics for an entire research session."""
+class MetricsCollector:
+    """Metrics for an entire research session.
+
+    Aggregates per-action metrics. Each action's metric collection is a
+    ``with`` context manager block — no need to remember to call
+    ``_finish_action`` at every return point.
+
+    Back-compat: ``SessionMetrics = MetricsCollector`` (alias at module level).
+    """
     session_id: str
     start_time: float = 0.0
     end_time: float = 0.0
@@ -77,7 +90,7 @@ class SessionMetrics:
         self.total_cost_usd = sum(a.cost_usd for a in self.actions)
 
     def add_action(self, action: ActionMetrics) -> None:
-        """Add an action metric."""
+        """Back-compat: manually append an action metric."""
         self.actions.append(action)
 
     def summary(self) -> str:
@@ -89,6 +102,42 @@ class SessionMetrics:
             lines.append(f"├── {a.action}: {a.duration_ms/1000:.1f}s, {token_str}, {cost_str}")
         lines.append(f"└── Total: {self.total_duration_ms/1000:.1f}s, {self.total_tokens:,} tokens, ${self.total_cost_usd:.3f}")
         return "\n".join(lines)
+
+    def record(self, action: str) -> Iterator[ActionMetrics]:
+        """Context manager: start/finish tracking for one action.
+
+        Usage::
+
+            with ctx.metrics.record("plan"):
+                # ... do work ...
+                # ActionMetrics.finish() runs on exit (even on exception)
+        """
+        return _record_action_impl(self, action)
+
+
+# Back-compat alias
+SessionMetrics = MetricsCollector
+
+
+# ─── Context manager helper for MetricsCollector.record() ───────────────
+
+
+@contextmanager
+def _record_action_impl(
+    collector: MetricsCollector, action: str,
+) -> Iterator[ActionMetrics]:
+    """Context manager body: start/finish + append action metrics.
+
+    Used by ``MetricsCollector.record()``. The ``with`` block ensures
+    the metric is always recorded, even if the action raises.
+    """
+    m = ActionMetrics(action=action, start_time=time.monotonic())
+    try:
+        yield m
+    finally:
+        m.finish()
+        collector.actions.append(m)
+        logger.debug("Action %s completed in %dms", m.action, m.duration_ms)
 
 
 # ─── Live research state ──────────────────────────────────────────────────
