@@ -51,7 +51,7 @@ class ResearchReviewer:
 
         try:
             import asyncio
-            import json as json_mod
+            from llmwikify.autoresearch._json_utils import safe_json_loads
             from llmwikify.autoresearch.retry_managers import retry_async
 
             max_attempts = self.config.get("max_retry_attempts", 3)
@@ -65,13 +65,7 @@ class ResearchReviewer:
                         max_tokens=api_params.get("max_tokens", 2048),
                         temperature=api_params.get("temperature", 0.1),
                     )
-                    raw = raw.strip()
-                    if raw.startswith("```"):
-                        raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
-                        if raw.endswith("```"):
-                            raw = raw[:-3]
-                        raw = raw.strip()
-                    return json_mod.loads(raw)
+                    return safe_json_loads(raw)
                 return await asyncio.to_thread(_sync_call)
 
             result = await retry_async(_call_review, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout)
