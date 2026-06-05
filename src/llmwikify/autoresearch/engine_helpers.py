@@ -53,7 +53,7 @@ async def chat_json(
 
     Args:
         llm: An LLM client with a sync ``chat()`` method (typically
-            ``StreamableLLMClient`` from ``agent.backend.adapters``).
+            ``StreamableLLMClient`` from ``llmwikify.llm.streamable``).
         messages: List of ``{"role": ..., "content": ...}`` dicts.
         max_tokens: Token budget for the response. Default 2048.
         temperature: Sampling temperature. Default 0.3.
