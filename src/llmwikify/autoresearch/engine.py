@@ -25,6 +25,7 @@ from llmwikify.autoresearch.config import merge_six_step_config
 from llmwikify.autoresearch._json_utils import safe_json_loads
 from llmwikify.autoresearch.engine_helpers import chat_json
 from llmwikify.autoresearch.gatherer import SourceGatherer
+from llmwikify.autoresearch.llm_step import run_prompt
 from llmwikify.autoresearch.state import (
     MetricsCollector,
     ResearchState,
@@ -436,15 +437,13 @@ class ResearchEngine:
         return "done"
 
     async def _llm_reason(self, state: ResearchState) -> str:
-        """Use LLM to decide next action with chain-of-thought reasoning."""
-        import asyncio
-        from llmwikify.core.prompt_registry import PromptRegistry
-        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
+        """Use LLM to decide next action with chain-of-thought reasoning.
 
-        registry = PromptRegistry(provider=getattr(self._default_llm, "provider", "openai"))
-        llm_params = resolve_llm_params(
-            registry, self.config, "research_reason", "llm_params",
-        )
+        Migrated to use ``run_prompt`` (commit 3 of the prompt-system
+        refactor). Falls back to the rule-based reasoner on persistent
+        LLM failure.
+        """
+        from llmwikify.autoresearch.prompts import _reason_fallback
 
         analyzed_count = sum(1 for s in state.sources if s.get("analysis"))
         failed_sq = sum(1 for sq in state.sub_queries if sq.get("status") == "failed")
@@ -452,42 +451,36 @@ class ResearchEngine:
         # Build observation context from interpreted observations
         obs_text = "\n".join(f"  - {o}" for o in state.observations) if state.observations else "  (none)"
 
-        messages = [
-            {"role": "system", "content": (
-                "You are a research orchestrator using ReAct reasoning.\n"
-                "Based on the current state, decide the next action.\n\n"
-                "Return a JSON object ONLY — no prose, no markdown fence, no explanation.\n"
-                "Schema:\n"
-                '- "thought": Your reasoning about what to do next and why (1-2 sentences)\n'
-                '- "action": One of: plan, gather, analyze, synthesize, report, review, revise, done\n\n'
-                "Rules:\n"
-                "- If sub-queries exist but not all are gathered → gather\n"
-                "- If sources exist but not all analyzed → analyze\n"
-                "- If all analyzed but no synthesis → synthesize\n"
-                "- If synthesis shows knowledge gaps and budget allows → plan (replan)\n"
-                "- If report exists but not reviewed → review\n"
-                "- If review failed and rounds remain → revise\n"
-                "- If all done and quality acceptable → done\n"
-            )},
-            {"role": "user", "content": (
-                f"Research topic: {state.query}\n"
-                f"Round: {state.round}/{state.max_rounds}\n"
-                f"Phase: {state.phase or 'starting'}\n"
-                f"Quality score: {state.quality_score}/10\n"
-                f"Budget remaining: {state.budget_remaining:.0%}\n\n"
-                f"Sub-queries: {len(state.sub_queries)} ({failed_sq} failed)\n"
-                f"Sources gathered: {len(state.sources)}\n"
-                f"Sources analyzed: {analyzed_count}\n"
-                f"Report exists: {state.report_md is not None}\n"
-                f"Review exists: {state.review is not None}\n\n"
-                f"Observations:\n{obs_text}\n\n"
-                "What should I do next? Return JSON."
-            )},
-        ]
+        # Build vars dict for the YAML template (research_reason.yaml
+        # does not exist yet, but the call layer falls back gracefully
+        # and the rule-based fallback is triggered by the sentinel).
+        vars_dict = {
+            "query": state.query,
+            "round": state.round,
+            "max_rounds": state.max_rounds,
+            "phase": state.phase or "starting",
+            "quality_score": state.quality_score,
+            "budget_remaining": state.budget_remaining,
+            "sub_queries_count": len(state.sub_queries),
+            "failed_sq": failed_sq,
+            "sources_count": len(state.sources),
+            "analyzed_count": analyzed_count,
+            "report_exists": state.report_md is not None,
+            "review_exists": state.review is not None,
+            "observations_text": obs_text,
+        }
 
-        result = await chat_json(
-            self._default_llm, messages, **llm_params,
-        )
+        try:
+            result = await run_prompt(self._action_ctx, "research_reason", **vars_dict)
+        except Exception as e:
+            logger.warning("LLM reason failed: %s, applying rule-based fallback", e)
+            result = _reason_fallback(error=e)
+
+        # If the fallback returned the rule-based sentinel, fall through
+        # to the legacy rule-based logic for parity.
+        if result.get("action") == "__rule_based__":
+            return self._rule_based_reason(state)
+
         action = result.get("action", "done")
         thought = result.get("thought", "")
 

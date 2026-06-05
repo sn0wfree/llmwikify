@@ -142,10 +142,11 @@ async def run_prompt(
     try:
         return await retry.call(_call)
     except Exception as e:
-        # 6. Persistent failure: try fallback, else re-raise
-        if spec.fallback is not None:
-            logger.warning(
-                "Prompt %s failed after retries (%s), using fallback", name, e,
-            )
-            return spec.fallback(**vars)
+        # Persistent failure: always re-raise. Callers use the
+        # ``spec.fallback(**vars, error=e)`` callable from prompts.py
+        # to obtain a deterministic fallback. This keeps the
+        # fallback dict's keys (e.g. "fallback", "fallback_reason")
+        # intact and visible to the caller, rather than being
+        # silently dropped by run_prompt's internal handling.
+        logger.warning("Prompt %s failed after retries: %s", name, e)
         raise

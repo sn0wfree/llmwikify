@@ -294,25 +294,23 @@ class TestFrameworkAugmentation:
 
 
 class TestRunPromptRetryAndFallback:
-    def test_fallback_on_json_parse_error(self):
-        """Non-retriable error (JSON decode) → no retry → fallback."""
+    def test_reraises_on_json_parse_error(self):
+        """Non-retriable error (JSON decode) → no retry → re-raises."""
         llm = MagicMock()
         llm.chat = MagicMock(return_value="not valid json {{")
         llm.provider = "openai"
         ctx = _make_ctx(planning_llm=llm, config={
             "max_retry_attempts": 3, "llm_call_timeout_seconds": 30,
         })
-        result = asyncio.new_event_loop().run_until_complete(
-            run_prompt(ctx, "research_clarify", query="q")
-        )
+        with pytest.raises(Exception, match="Expecting"):
+            asyncio.new_event_loop().run_until_complete(
+                run_prompt(ctx, "research_clarify", query="q")
+            )
         # Called once (no retry on non-retriable)
         assert llm.chat.call_count == 1
-        # Fallback returned
-        assert result["fallback"] is True
-        assert result["scope_check"] is False
 
-    def test_fallback_on_transient_error_after_retries(self):
-        """Retriable error → retried 3x → fallback."""
+    def test_retries_3x_on_transient_error_then_raises(self):
+        """Retriable error → retried 3x → re-raises."""
         llm = MagicMock()
         llm.chat = MagicMock(side_effect=Exception("503 service unavailable"))
         llm.provider = "openai"
@@ -320,13 +318,12 @@ class TestRunPromptRetryAndFallback:
             "max_retry_attempts": 3, "llm_retry_base_delay": 0.001,
             "llm_call_timeout_seconds": 30,
         })
-        result = asyncio.new_event_loop().run_until_complete(
-            run_prompt(ctx, "research_clarify", query="q")
-        )
+        with pytest.raises(Exception, match="503"):
+            asyncio.new_event_loop().run_until_complete(
+                run_prompt(ctx, "research_clarify", query="q")
+            )
         # Called 3 times (3 attempts)
         assert llm.chat.call_count == 3
-        # Fallback returned
-        assert result["fallback"] is True
 
     def test_no_fallback_reraises_for_report(self):
         """report has no fallback → re-raises after retries."""
@@ -354,7 +351,7 @@ class TestRunPromptRetryAndFallback:
             )
 
     def test_succeeds_on_second_attempt(self):
-        """First call transient-fails, second succeeds → no fallback used."""
+        """First call transient-fails, second succeeds → returns real result."""
         llm = MagicMock()
         llm.chat = MagicMock(side_effect=[
             Exception("503 service unavailable"),
@@ -372,3 +369,25 @@ class TestRunPromptRetryAndFallback:
         assert result == {"context": "C", "scope_check": True}
         # Real result, not fallback
         assert "fallback" not in result
+
+    def test_caller_can_use_spec_fallback(self):
+        """Caller (not run_prompt) is responsible for invoking spec.fallback."""
+        from llmwikify.autoresearch.prompts import PROMPT_REGISTRY
+
+        llm = MagicMock()
+        llm.chat = MagicMock(side_effect=Exception("503 service unavailable"))
+        llm.provider = "openai"
+        ctx = _make_ctx(planning_llm=llm, config={
+            "max_retry_attempts": 3, "llm_retry_base_delay": 0.001,
+            "llm_call_timeout_seconds": 30,
+        })
+        try:
+            asyncio.new_event_loop().run_until_complete(
+                run_prompt(ctx, "research_clarify", query="q")
+            )
+        except Exception as e:
+            # Caller invokes fallback explicitly
+            result = PROMPT_REGISTRY["research_clarify"].fallback(query="q", error=e)
+        assert result["fallback"] is True
+        assert result["scope_check"] is False
+        assert "503" in result["fallback_reason"]
