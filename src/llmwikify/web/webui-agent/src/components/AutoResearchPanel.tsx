@@ -572,6 +572,8 @@ export function AutoResearchPanel() {
             msg = `⚠ 部分完成 — ${ev.reason} (${ev.framework_completed}/${ev.framework_total} 步)`;
           } else if (t === 'framework_redirect') {
             msg = `↪ 框架不完整: ${ev.from} → ${ev.to} (${ev.reason})`;
+          } else if (t === 'quality_redirect') {
+            msg = `⚠ 质量不达标: ${ev.from} → ${ev.to} (${ev.reason})`;
           }
 
           if (msg) {
