@@ -1,6 +1,6 @@
 """Cross-cutting helpers for ResearchEngine and adjacent modules.
 
-Two reusable patterns consolidated here:
+Three reusable patterns consolidated here:
 
 1. ``chat_json`` — async wrapper around LLM.chat() + safe_json_loads().
    The same 6-line pattern was duplicated at 6 call sites across
@@ -10,6 +10,12 @@ Two reusable patterns consolidated here:
    session_manager DB writes in try/except so that transient DB
    failures (SQLITE_BUSY, I/O errors) don't crash the main loop.
    The same try/except pattern was duplicated at 8 call sites.
+
+3. ``resolve_llm_params`` — single source of truth for LLM call
+   params (max_tokens / temperature / json_mode). Resolves with
+   a 3-layer priority chain: caller config > prompt registry > safety
+   net. Replaces hardcoded ``api_params.get(..., 2048)`` / etc.
+   patterns at 6 call sites.
 
 These helpers are deliberately small and pure. They are
 imported by engine.py and the stage modules (report, review,
@@ -137,3 +143,99 @@ def safe_persist_six_step(
             "Persist six-step fields %s failed (continuing): %s",
             list(fields.keys()), e,
         )
+
+
+DEFAULT_LLM_PARAMS: dict[str, Any] = {
+    "max_tokens": 2048,
+    "temperature": 0.3,
+    "json_mode": False,
+}
+
+
+def resolve_llm_params(
+    registry: Any,
+    config: dict[str, Any] | None,
+    prompt_name: str,
+    config_section: str | None = None,
+) -> dict[str, Any]:
+    """Resolve LLM call params with 3-layer priority chain.
+
+    The single source of truth for LLM call params (max_tokens,
+    temperature, json_mode) at any autoresearch call site. Replaces
+    the previous pattern:
+
+        api_params = registry.get_api_params("research_plan")
+        max_tokens=api_params.get("max_tokens", 2048),
+        temperature=api_params.get("temperature", 0.3),
+        json_mode=api_params.get("json_mode", True),
+
+    Resolution order (highest priority first):
+
+        1. ``config[config_section][prompt_name][<param>]`` —
+           caller-supplied config override. The section is a
+           per-prompt dict, e.g.::
+
+               config = {
+                   "llm_params": {
+                       "research_plan": {"max_tokens": 7777, ...},
+                       "research_report": {"max_tokens": 8192, ...},
+                   }
+               }
+
+        2. ``registry.get_api_params(prompt_name)[<param>]`` —
+           value declared in the prompt's YAML (with provider
+           override applied).
+        3. ``DEFAULT_LLM_PARAMS[<param>]`` — safety net if both
+           config and YAML omit the param.
+
+    Args:
+        registry: A ``PromptRegistry`` instance. Must have
+            ``get_api_params(prompt_name)`` returning a dict of
+            recognized API params. Pass ``None`` to skip the
+            registry layer (e.g. when the caller has not yet
+            integrated a registry).
+        config: The merged research config dict. May be ``None``.
+            If provided, ``config[config_section][prompt_name]`` is
+            read when ``config_section`` is not None.
+        prompt_name: The prompt template name (e.g.
+            ``"research_plan"``, ``"research_report"``). Used both
+            as the registry key and as the inner config key.
+        config_section: Top-level config key holding the per-prompt
+            override dict. Pass ``None`` to skip the config layer.
+
+    Returns:
+        Dict with keys ``max_tokens`` (int), ``temperature`` (float),
+        and ``json_mode`` (bool). Suitable for ``**``-unpacking into
+        ``chat_json`` / ``llm.chat(...)``.
+    """
+    prompt_cfg: dict[str, Any] = {}
+    if config is not None and config_section:
+        section = config.get(config_section, {}) or {}
+        if isinstance(section, dict):
+            prompt_cfg = section.get(prompt_name, {}) or {}
+
+    registry_params: dict[str, Any] = {}
+    if registry is not None and prompt_name:
+        try:
+            registry_params = registry.get_api_params(prompt_name)
+        except (FileNotFoundError, KeyError, AttributeError, TypeError) as e:
+            logger.debug(
+                "resolve_llm_params: registry lookup failed for %r: %s",
+                prompt_name, e,
+            )
+            registry_params = {}
+
+    return {
+        "max_tokens": prompt_cfg.get(
+            "max_tokens",
+            registry_params.get("max_tokens", DEFAULT_LLM_PARAMS["max_tokens"]),
+        ),
+        "temperature": prompt_cfg.get(
+            "temperature",
+            registry_params.get("temperature", DEFAULT_LLM_PARAMS["temperature"]),
+        ),
+        "json_mode": prompt_cfg.get(
+            "json_mode",
+            registry_params.get("json_mode", DEFAULT_LLM_PARAMS["json_mode"]),
+        ),
+    }
