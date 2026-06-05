@@ -236,7 +236,7 @@ class TestFrameworkAugmentationEndToEnd:
                 "observations_text": "(none)",
             }
         elif prompt_name == "research_replan":
-            kwargs = {"query": "q", "gaps_text": "g", "wiki_context": ""}
+            kwargs = {"query": "q", "gaps": ["g"], "wiki_context": ""}
         else:
             kwargs = {"query": "q"}
 

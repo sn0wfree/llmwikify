@@ -174,8 +174,6 @@ async def _plan_for_gaps(
     ctx: ActionContext, query: str, gaps: list[str],
 ) -> list[dict[str, Any]]:
     """Generate sub-queries to fill knowledge gaps."""
-    gaps_text = "\n".join(f"- {gap}" for gap in gaps[:5])
-
     local_wiki_matches = ""
     try:
         gap_query = f"{query} {' '.join(gaps[:3])}"
@@ -198,10 +196,13 @@ async def _plan_for_gaps(
         )
 
     try:
+        # Pass the raw gaps list (Jinja2 for-loop in the YAML handles
+        # the '- ' formatting). The [:5] slice limits to the top 5
+        # gaps so the user message stays compact.
         result = await run_prompt(
             ctx, "research_replan",
             query=query,
-            gaps_text=gaps_text,
+            gaps=gaps[:5],
             wiki_context=wiki_context,
         )
         if not isinstance(result, list):

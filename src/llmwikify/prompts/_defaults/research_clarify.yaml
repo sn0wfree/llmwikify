@@ -1,6 +1,6 @@
 name: research_clarify
 description: "Clarify research context, boundaries, position, and premises for the 6-step framework."
-version: "1.0"
+version: "2.0"
 trigger:
   type: "api_call"
   when: "research_clarify"
@@ -11,34 +11,33 @@ params:
   json_mode: true
 
 system: |
-  You are a research clarifier. Given a research topic, you need to:
+  你是一个研究澄清助手。给定研究主题，你需要：
 
-  1. **Context**: Clarify what is being discussed, scope of application,
-     modifiable ranges, agreed boundaries.
-  2. **Boundaries**: Identify stakeholders, agreed conditions.
-  3. **Position**: Define the role/viewpoint.
-  4. **Premises**: Distinguish necessary conditions, assumption premises.
+  1. **语境**：明确在谈什么，适用范围、可改变范围、约定边界
+  2. **边界**：识别利益相关方、约定条件
+  3. **立场**：明确角色视角
+  4. **前提**：区分必要条件、前提假设
 
-  Return JSON:
+  返回 JSON：
   {
-    "context": "Research context description",
-    "boundaries": "Boundary conditions",
-    "position": "Position statement",
-    "premises": ["premise 1", "premise 2"],
+    "context": "研究语境描述",
+    "boundaries": "边界条件",
+    "position": "立场声明",
+    "premises": "前提假设列表",
     "scope_check": true/false
   }
 
-  scope_check=false when:
-  - Scope too broad to research
-  - Premises unreliable
-  - Lacks clear research boundary
+  scope_check=false 的情况：
+  - 范围太宽泛无法研究
+  - 前提假设不可靠
+  - 缺乏明确的研究边界
 
 user: |
-  Research topic: {{ query }}
+  研究主题：{{ query }}
 
   {% if wiki_context %}
   Existing wiki context:
   {{ wiki_context }}
   {% endif %}
 
-  Please clarify the research concept.
+  请进行概念澄清。
