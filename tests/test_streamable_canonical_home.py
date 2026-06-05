@@ -117,18 +117,34 @@ def test_streamable_has_all_required_methods():
         assert callable(getattr(c, name)), f"missing method: {name}"
 
 
-def test_streamable_inherits_from_nothing_yet():
-    """Sanity check: not yet a subclass of LLMClient (that's C2's job).
+def test_streamable_inherits_from_llm_client():
+    """StreamableLLMClient is a subclass of LLMClient.
 
-    After C2, this test will be flipped — the class will subclass
-    LLMClient. Until then, both classes are independent.
+    Phase 1 #1 / C2 — the streaming client now extends the basic
+    LLMClient. This lets ``isinstance(client, LLMClient)`` checks
+    succeed and means code that takes a ``LLMClient`` parameter
+    will accept a ``StreamableLLMClient`` instance.
+
+    The reverse is **not** true: an LLMClient instance has no
+    ``stream_chat``/``achat``/``astream_chat``/``chat_with_tools``
+    methods.
     """
     from llmwikify.llm.streamable import StreamableLLMClient
     from llmwikify.llm_client import LLMClient
 
-    # Independent class hierarchy: LLMClient is NOT a base of StreamableLLMClient
-    assert not issubclass(StreamableLLMClient, LLMClient)
+    assert issubclass(StreamableLLMClient, LLMClient)
     assert not issubclass(LLMClient, StreamableLLMClient)
+
+
+def test_streamable_instance_is_instance_of_llm_client():
+    """isinstance check succeeds — type hierarchy lets LLMClient consumers
+    accept a StreamableLLMClient instance.
+    """
+    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.llm_client import LLMClient
+
+    c = StreamableLLMClient(provider="openai", api_key="k", model="m")
+    assert isinstance(c, LLMClient)
 
 
 def test_streamable_uses_relative_imports_for_budget_modules():

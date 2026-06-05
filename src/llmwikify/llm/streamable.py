@@ -23,11 +23,12 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from ..llm_client import LLMClient
 from .budget_decorator import check_token_budget
 from .token_budget import TokenBudgetChecker, TokenBudgetConfig
 
 
-class StreamableLLMClient:
+class StreamableLLMClient(LLMClient):
     """LLM client with streaming and function calling support.
 
     Extends basic LLMClient with:
@@ -35,9 +36,24 @@ class StreamableLLMClient:
     - chat_with_tools(): Function calling support
     - astream_chat(): Async streaming
     - achat(): Async non-streaming
+    - reasoning_split mode (chain-of-thought separation)
+    - Configurable auth header (bearer / api-key)
 
     Token budget checking is applied automatically via decorator.
     Pass ``_prompt_name="..."`` in generation_params to label calls in logs.
+
+    .. note::
+
+        This class extends :class:`LLMClient` purely for type hierarchy
+        (``isinstance(client, LLMClient) == True``). It does **not** call
+        ``super().__init__()`` because its ``__init__`` signature is a
+        strict superset of ``LLMClient.__init__`` (adds ``reasoning_split``
+        and ``auth_header``) AND its ``base_url`` normalization strips a
+        trailing ``/v1`` segment that LLMClient's does not.
+
+        As a result, code that takes an ``LLMClient`` argument will accept
+        a ``StreamableLLMClient`` instance, but the converse is not true:
+        an LLMClient-only consumer cannot call ``stream_chat`` etc.
     """
 
     def __init__(
