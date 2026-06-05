@@ -207,6 +207,7 @@ class PromptEvaluator:
                 "raw_sources": [],
                 "wiki_page_count": 0,
                 "wiki_index": "",
+                "wiki_context": "",
                 "recent_log": "",
                 "contradictions_json": "[]",
                 "data_gaps_json": "[]",
@@ -218,6 +219,19 @@ class PromptEvaluator:
                 "sections": [],
                 "local_wiki_matches": "",
                 "gaps": [],
+                # ReAct research_reason vars (commit 3 of prompt refactor)
+                "round": 0,
+                "max_rounds": 5,
+                "phase": "starting",
+                "quality_score": 0,
+                "budget_remaining": 1.0,
+                "sub_queries_count": 0,
+                "failed_sq": 0,
+                "sources_count": 0,
+                "analyzed_count": 0,
+                "report_exists": False,
+                "review_exists": False,
+                "observations_text": "(none)",
             }
 
             for field_name in ["system", "user", "document", "text"]:
