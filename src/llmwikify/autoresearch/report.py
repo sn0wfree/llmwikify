@@ -7,7 +7,25 @@ import logging
 from collections.abc import Iterator
 from typing import Any
 
+from llmwikify.autoresearch.llm_step import run_prompt
+from llmwikify.autoresearch.prompts import source_hash as _source_hash
+
 logger = logging.getLogger(__name__)
+
+
+class _ReportCtx:
+    """Minimal ctx-like object for run_prompt.
+
+    run_prompt needs default_llm, planning_llm, report_llm, config.
+    The report generator only has a single LLM client (the report
+    one) so the others default to the same client.
+    """
+
+    def __init__(self, llm_client: Any, config: dict[str, Any]):
+        self.default_llm = llm_client
+        self.planning_llm = llm_client
+        self.report_llm = llm_client
+        self.config = config
 
 
 class ReportGenerator:
@@ -18,18 +36,53 @@ class ReportGenerator:
         self.llm_client = llm_client
         self.config = config
 
+    def _as_ctx(self) -> _ReportCtx:
+        """Build a ctx-like object for run_prompt."""
+        return _ReportCtx(self.llm_client, self.config)
+
     def _build_source_map(self, sources: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
         """Build hash → source info mapping for inline citations."""
         source_map: dict[str, dict[str, str]] = {}
         for s in sources:
-            key = s.get("url") or s.get("title", "unknown")
-            h = hashlib.md5(key.encode()).hexdigest()[:12]
+            h = _source_hash(s)
             source_map[h] = {
                 "title": s.get("title", ""),
                 "url": s.get("url", ""),
                 "source_type": s.get("source_type", ""),
             }
         return source_map
+
+    def _build_source_contents(
+        self, sources: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Build the per-source content dicts for the YAML template.
+
+        Each entry has: hash, title, source_type, url, content
+        (truncated), analysis_summary. Honors the
+        ``report_max_per_source`` and ``report_max_total_content``
+        config limits.
+        """
+        max_per_source = self.config.get("report_max_per_source", 4000)
+        max_total_content = self.config.get("report_max_total_content", 60000)
+        total_content = 0
+        source_contents: list[dict[str, Any]] = []
+        for s in sources:
+            if total_content >= max_total_content:
+                break
+            full_content = s.get("content") or s.get("content_preview") or ""
+            remaining = max_total_content - total_content
+            content_limit = min(max_per_source, remaining)
+            truncated = full_content[:content_limit]
+            total_content += len(truncated)
+            source_contents.append({
+                "hash": _source_hash(s),
+                "title": s.get("title", ""),
+                "source_type": s.get("source_type", ""),
+                "url": s.get("url", ""),
+                "content": truncated,
+                "analysis_summary": _summarize_analysis(s.get("analysis", {})),
+            })
+        return source_contents
 
     def _build_messages(
         self,
@@ -40,47 +93,21 @@ class ReportGenerator:
     ) -> tuple[list[dict[str, str]], dict[str, Any]]:
         """Build messages and API params for report generation.
 
-        six_step_context is the consolidated framework output (from
-        ResearchState). It includes: clarification, reasoning_check,
-        structure_check, evidence_scores. When provided, the report
-        prompt is enriched with structured framework guidance so the
-        final report follows the 6-step structure.
+        Kept for backward compatibility with ``generate_streaming``
+        (which still calls LLM.stream_chat directly). The non-streaming
+        ``generate`` method now uses ``run_prompt`` instead and does
+        not call this method.
         """
         from llmwikify.core.prompt_registry import PromptRegistry
+        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
+        from llmwikify.autoresearch.prompts import render_framework_block
+
         registry = PromptRegistry(provider=getattr(self.llm_client, "provider", "openai"))
-
-        source_map = self._build_source_map(sources)
-
-        # Build source content summaries for the prompt
-        max_per_source = self.config.get("report_max_per_source", 4000)
-        max_total_content = self.config.get("report_max_total_content", 60000)
-        total_content = 0
-        source_contents: list[dict[str, Any]] = []
-        for s in sources:
-            if total_content >= max_total_content:
-                break
-            key = s.get("url") or s.get("title", "unknown")
-            h = hashlib.md5(key.encode()).hexdigest()[:12]
-            full_content = s.get("content") or s.get("content_preview") or ""
-            remaining = max_total_content - total_content
-            content_limit = min(max_per_source, remaining)
-            truncated = full_content[:content_limit]
-            total_content += len(truncated)
-            source_contents.append({
-                "hash": h,
-                "title": s.get("title", ""),
-                "source_type": s.get("source_type", ""),
-                "url": s.get("url", ""),
-                "content": truncated,
-                "analysis_summary": _summarize_analysis(s.get("analysis", {})),
-            })
+        source_contents = self._build_source_contents(sources)
 
         wiki_index = ""
         if self.wiki.index_file.exists():
             wiki_index = self.wiki.index_file.read_text()[:5000]
-
-        # ─── 6-step framework enrichment (step 5: conclusion output) ─
-        framework_block = self._render_framework_block(six_step_context)
 
         messages = registry.get_messages(
             "research_report",
@@ -90,92 +117,18 @@ class ReportGenerator:
             synthesis=synthesis,
         )
 
-        # Inject 6-step framework context as a system-side message if present
+        framework_block = render_framework_block(six_step_context, "report")
         if framework_block:
             messages = [
                 {"role": "system", "content": framework_block},
                 *messages,
             ]
 
-        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
         llm_params = resolve_llm_params(
             registry, self.config, "research_report", "llm_params",
         )
 
         return messages, llm_params
-
-    def _render_framework_block(self, six_step_context: dict[str, Any] | None) -> str:
-        """Render the 6-step framework context as a system-prompt block.
-
-        Only emitted when the framework was actually run (i.e. all 5
-        pre-output steps are present). Format is a numbered checklist
-        so the LLM treats it as concrete instructions.
-        """
-        if not six_step_context:
-            return ""
-        clarification = six_step_context.get("clarification") or {}
-        reasoning = six_step_context.get("reasoning_check") or {}
-        structure = six_step_context.get("structure_check") or {}
-        evidence_scores = six_step_context.get("evidence_scores") or {}
-
-        # Skip if no framework data at all
-        if not (clarification.get("context") or reasoning or structure):
-            return ""
-
-        lines = ["# 6-step Framework Guidance (this report should reflect all 6 steps)\n"]
-
-        # Step 1: clarification
-        if clarification.get("context"):
-            lines.append("## 步骤 1: 概念澄清")
-            lines.append(f"- 上下文: {clarification.get('context', '')[:200]}")
-            if clarification.get("boundaries"):
-                lines.append(f"- 边界: {clarification['boundaries'][:200]}")
-            if clarification.get("position"):
-                lines.append(f"- 立场: {clarification['position'][:200]}")
-            premises = clarification.get("premises") or []
-            if premises:
-                lines.append(f"- 前提 ({len(premises)}): {'; '.join(str(p)[:80] for p in premises[:5])}")
-            lines.append("")
-
-        # Step 2-3: evidence & reasoning
-        if evidence_scores:
-            avg_ev = (
-                sum(evidence_scores.values()) / max(1, len(evidence_scores))
-                if isinstance(evidence_scores, dict)
-                else 0
-            )
-            lines.append("## 步骤 2: 建立依据")
-            lines.append(f"- 平均证据分: {avg_ev:.2f}")
-            lines.append("")
-
-        if reasoning.get("aggregate_score") is not None:
-            lines.append("## 步骤 3: 推理严密")
-            lines.append(f"- 推理聚合分: {reasoning['aggregate_score']:.2f}")
-            per_dim = reasoning.get("scores") or {}
-            for dim, score in list(per_dim.items())[:3]:
-                lines.append(f"  - {dim}: {score:.2f}")
-            lines.append("")
-
-        # Step 4: structure
-        if structure.get("aggregate_score") is not None:
-            lines.append("## 步骤 4: 稳固结构")
-            lines.append(f"- 结构聚合分: {structure['aggregate_score']:.2f}")
-            per_layer = structure.get("scores") or {}
-            for layer, score in per_layer.items():
-                lines.append(f"  - {layer}: {score:.2f}")
-            lines.append("")
-
-        # Steps 5 & 6 are the report and review themselves
-        lines.append("## 步骤 5: 结论输出（你正在写）")
-        lines.append("- 输出结构化 markdown 报告")
-        lines.append("- 每个结论引用证据（[[Source:hash]] 格式）")
-        lines.append("- 量化不确定性（可能/likely/approximately）")
-        lines.append("")
-        lines.append("## 步骤 6: 检查清单（评审阶段会执行）")
-        lines.append("- 概念是否清晰？边界是否明确？")
-        lines.append("- 证据是否充分？推理是否严密？")
-        lines.append("- 结构是否稳固？结论是否量化？")
-        return "\n".join(lines)
 
     async def generate(
         self,
@@ -190,22 +143,26 @@ class ReportGenerator:
         Source citations use [[Source:hash]] format.
         six_step_context: optional 6-step framework context that augments
         the prompt with structured guidance.
+
+        Migrated to use ``run_prompt`` (commit 4 of the prompt-system
+        refactor). The streaming version (``generate_streaming``) still
+        uses the lower-level LLM.stream_chat / asyncio.to_thread path
+        because it returns an ``Iterator[chunk]`` of the streaming
+        response — a fundamentally different interface.
         """
-        messages, llm_params = self._build_messages(query, sources, synthesis, six_step_context)
+        source_contents = self._build_source_contents(sources)
+        wiki_index = ""
+        if self.wiki.index_file.exists():
+            wiki_index = self.wiki.index_file.read_text()[:5000]
 
-        # Call LLM (sync wrapped in async) with retry
-        import asyncio
-        from llmwikify.autoresearch.retry_managers import retry_async
-
-        max_attempts = self.config.get("max_retry_attempts", 3)
-        call_timeout = self.config.get("llm_call_timeout_seconds", 120)
-
-        async def _call_llm() -> str:
-            return await asyncio.to_thread(
-                self.llm_client.chat, messages, **llm_params,
-            )
-
-        report_md = await retry_async(_call_llm, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout)
+        report_md = await run_prompt(
+            self._as_ctx(), "research_report",
+            six_step_context=six_step_context,
+            query=query,
+            wiki_index=wiki_index,
+            source_contents=source_contents,
+            synthesis=synthesis,
+        )
 
         # Validate citations
         self._validate_citations(report_md, sources)

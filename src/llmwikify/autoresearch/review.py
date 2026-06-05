@@ -5,7 +5,24 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from llmwikify.autoresearch.llm_step import run_prompt
+from llmwikify.autoresearch.prompts import _review_fallback, source_hash as _source_hash
+
 logger = logging.getLogger(__name__)
+
+
+class _ReviewerCtx:
+    """Minimal ctx-like object for run_prompt.
+
+    The reviewer only has a single LLM client (the default one) so
+    the other two default to the same client.
+    """
+
+    def __init__(self, llm_client: Any, config: dict[str, Any]):
+        self.default_llm = llm_client
+        self.planning_llm = llm_client
+        self.report_llm = llm_client
+        self.config = config
 
 
 class ResearchReviewer:
@@ -16,6 +33,10 @@ class ResearchReviewer:
         self.llm_client = llm_client
         self.config = config
         self.min_score = config.get("quality_threshold", 7)
+
+    def _as_ctx(self) -> _ReviewerCtx:
+        """Build a ctx-like object for run_prompt."""
+        return _ReviewerCtx(self.llm_client, self.config)
 
     async def review(self, query: str, report: str, sources: list[dict[str, Any]],
                     six_step_context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -28,122 +49,29 @@ class ResearchReviewer:
 
             {"approved": bool, "feedback": str, "issues": list[str],
              "score": int, "framework_scores": dict[str, int]?}
+
+        Migrated to use ``run_prompt`` (commit 4 of the prompt-system
+        refactor). On failure, returns the deterministic fallback via
+        ``_review_fallback`` from ``prompts.py``.
         """
-        from llmwikify.core.prompt_registry import PromptRegistry
-        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
-        registry = PromptRegistry(provider=getattr(self.llm_client, "provider", "openai"))
-
-        framework_block = self._render_framework_review_block(six_step_context)
-
-        messages = registry.get_messages(
-            "research_review",
-            query=query,
-            report=report,
-            source_count=len(sources),
-        )
-
-        if framework_block:
-            messages = [
-                {"role": "system", "content": framework_block},
-                *messages,
-            ]
-
-        llm_params = resolve_llm_params(
-            registry, self.config, "research_review", "llm_params",
-        )
-
         try:
-            import asyncio
-            from llmwikify.autoresearch._json_utils import safe_json_loads
-            from llmwikify.autoresearch.retry_managers import retry_async
-
-            max_attempts = self.config.get("max_retry_attempts", 3)
-            call_timeout = self.config.get("llm_call_timeout_seconds", 120)
-
-            async def _call_review() -> dict:
-                def _sync_call():
-                    raw = self.llm_client.chat(messages, **llm_params)
-                    return safe_json_loads(raw)
-                return await asyncio.to_thread(_sync_call)
-
-            result = await retry_async(_call_review, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout)
-            result.setdefault("approved", result.get("score", 0) >= self.min_score)
-            result.setdefault("feedback", "")
-            result.setdefault("issues", [])
-            result.setdefault("score", 0)
-            return result
+            result = await run_prompt(
+                self._as_ctx(), "research_review",
+                six_step_context=six_step_context,
+                query=query,
+                report=report,
+                source_count=len(sources),
+            )
         except Exception as e:
             logger.warning("Report review failed: %s", e)
-            return {"approved": False, "feedback": f"Review failed: {e}", "issues": ["Review LLM call failed"], "score": 0}
+            return _review_fallback(error=e)
 
-    def _render_framework_review_block(
-        self, six_step_context: dict[str, Any] | None
-    ) -> str:
-        """Render the 5 framework review criteria as a system-prompt block.
-
-        Used in step 6 (检查清单). The reviewer LLM is asked to score
-        each criterion 0-10 and report issues per criterion.
-        """
-        if not six_step_context:
-            return ""
-        clarification = six_step_context.get("clarification") or {}
-        reasoning = six_step_context.get("reasoning_check") or {}
-        structure = six_step_context.get("structure_check") or {}
-        evidence_scores = six_step_context.get("evidence_scores") or {}
-
-        # Only emit block if framework was actually run
-        if not (clarification.get("context") or reasoning or structure):
-            return ""
-
-        lines = ["# 6-step Framework Review Checklist\n"]
-        lines.append("评审此报告时，请额外按以下 5 个 6 步框架标准评分 (0-10):\n")
-
-        lines.append("## 标准 1: 概念清晰（步骤 1）")
-        if clarification.get("context"):
-            lines.append(f"- 报告应明确阐述上下文: {clarification['context'][:150]}")
-        if clarification.get("boundaries"):
-            lines.append(f"- 报告应明确边界: {clarification['boundaries'][:150]}")
-        if clarification.get("position"):
-            lines.append(f"- 报告应明确立场: {clarification['position'][:150]}")
-        lines.append("- score_clarity: (0-10)")
-        lines.append("")
-
-        lines.append("## 标准 2: 证据充分（步骤 2）")
-        if evidence_scores:
-            avg_ev = (
-                sum(evidence_scores.values()) / max(1, len(evidence_scores))
-                if isinstance(evidence_scores, dict)
-                else 0
-            )
-            lines.append(f"- 报告所用证据平均分: {avg_ev:.2f}")
-        lines.append("- 至少 3 个不同来源 + 每个结论有引用")
-        lines.append("- score_evidence: (0-10)")
-        lines.append("")
-
-        lines.append("## 标准 3: 推理严密（步骤 3）")
-        if reasoning.get("aggregate_score") is not None:
-            lines.append(f"- 推理链聚合分: {reasoning['aggregate_score']:.2f}")
-        lines.append("- 因果连接词 + 假设标注 + 不确定性量化")
-        lines.append("- score_reasoning: (0-10)")
-        lines.append("")
-
-        lines.append("## 标准 4: 结构稳固（步骤 4）")
-        if structure.get("aggregate_score") is not None:
-            lines.append(f"- 结构聚合分: {structure['aggregate_score']:.2f}")
-        lines.append("- 层次支撑 + 章节完整 + 内部一致")
-        lines.append("- score_structure: (0-10)")
-        lines.append("")
-
-        lines.append("## 标准 5: 结论量化（步骤 5）")
-        lines.append("- 结论应可量化（数字 / 范围 / 概率）")
-        lines.append("- 应标注置信度（可能 / likely / approximately）")
-        lines.append("- score_conclusion: (0-10)")
-        lines.append("")
-
-        lines.append("## 输出要求")
-        lines.append('在 issues 列表中按 "标准N: 反馈" 格式补充。')
-        lines.append("在 score 中取 5 个标准分数的均值。")
-        return "\n".join(lines)
+        # Normalize the result with defaults
+        result.setdefault("approved", result.get("score", 0) >= self.min_score)
+        result.setdefault("feedback", "")
+        result.setdefault("issues", [])
+        result.setdefault("score", 0)
+        return result
 
 
 class ResearchRevisor:
@@ -154,6 +82,10 @@ class ResearchRevisor:
         self.llm_client = llm_client
         self.config = config
 
+    def _as_ctx(self) -> _ReviewerCtx:
+        """Build a ctx-like object for run_prompt."""
+        return _ReviewerCtx(self.llm_client, self.config)
+
     async def revise(
         self,
         report: str,
@@ -163,41 +95,24 @@ class ResearchRevisor:
         """Revise a report to address reviewer issues.
 
         Returns revised markdown report.
-        """
-        import hashlib
-        from llmwikify.core.prompt_registry import PromptRegistry
-        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
-        registry = PromptRegistry(provider=getattr(self.llm_client, "provider", "openai"))
 
+        Migrated to use ``run_prompt`` (commit 4 of the prompt-system
+        refactor). No fallback — re-raises on failure (the engine
+        catches and marks the session as 'error').
+        """
         issues_text = "\n".join(f"- {issue}" for issue in issues)
 
-        # Build source reference for revision
+        # Build source reference for revision (uses shared source_hash helper)
         source_refs: list[str] = []
         for s in sources:
-            key = s.get("url") or s.get("title", "unknown")
-            h = hashlib.md5(key.encode()).hexdigest()[:12]
-            source_refs.append(f"[{h}] {s.get('source_type', '')}: {s.get('title', '')} — {s.get('url', '')}")
+            h = _source_hash(s)
+            source_refs.append(
+                f"[{h}] {s.get('source_type', '')}: {s.get('title', '')} — {s.get('url', '')}"
+            )
 
-        messages = registry.get_messages(
-            "research_revise",
+        return await run_prompt(
+            self._as_ctx(), "research_revise",
             issues_text=issues_text,
             source_refs="\n".join(source_refs),
             report=report,
         )
-        llm_params = resolve_llm_params(
-            registry, self.config, "research_revise", "llm_params",
-        )
-
-        import asyncio
-        from llmwikify.autoresearch.retry_managers import retry_async
-
-        max_attempts = self.config.get("max_retry_attempts", 3)
-        call_timeout = self.config.get("llm_call_timeout_seconds", 120)
-
-        async def _call_revise() -> str:
-            return await asyncio.to_thread(
-                self.llm_client.chat, messages, **llm_params,
-            )
-
-        revised = await retry_async(_call_revise, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout)
-        return revised
