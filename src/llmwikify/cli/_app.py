@@ -1,4 +1,28 @@
-"""CLI commands for llmwikify."""
+"""CLI commands for llmwikify.
+
+Phase 1 #2 / C2 — this module is in the middle of being
+decomposed. The 10 simple commands (init / ingest / status /
+log / sink_status / write_page / read_page / search /
+build_index / fix_wikilinks) now live in
+``llmwikify.cli.commands.<name>`` and their logic is in
+``run_<name>(wiki, args)`` free functions.
+
+``WikiCLI`` keeps its public method API for backward
+compatibility with the existing CLI tests. Each migrated
+method is now a 1-line delegate to the new ``run_<name>``
+function. The remaining 16 methods (lint, references, batch,
+synthesize, watch, graph_*, wikis_*, qmd_*, db_*, serve, mcp,
+analyze_source, etc.) will be migrated in C3.
+
+The new command classes (StatusCommand, ReadPageCommand, etc.)
+are auto-registered in ``COMMAND_REGISTRY`` when the
+``llmwikify.cli.commands`` subpackage is imported. C3 will
+switch ``main()`` to dispatch through the registry.
+
+This file was previously named ``commands.py``; it had to be
+renamed to ``_app.py`` because the new ``commands/``
+subpackage now owns the name.
+"""
 
 import argparse
 import glob as glob_module
@@ -11,12 +35,29 @@ from pathlib import Path
 from typing import Any
 
 from ..core import Wiki
+from .commands.build_index import run_build_index
+from .commands.fix_wikilinks import run_fix_wikilinks
+from .commands.ingest import _ingest_smart_inline, run_ingest
+from .commands.init_cmd import run_init
+from .commands.log_cmd import run_log
+from .commands.read_page import run_read_page
+from .commands.search import run_search
+from .commands.sink_status import run_sink_status
+from .commands.status import run_status
+from .commands.write_page import _get_content, run_write_page
 
 logger = logging.getLogger(__name__)
 
-
 class WikiCLI:
-    """CLI command handler."""
+    """CLI command handler.
+
+    Public methods preserve backward compatibility — each
+    migrated method is a 1-line delegate to the new
+    ``run_<name>`` function in ``llmwikify.cli.commands.<name>``.
+    The Wiki instance is still created once in __init__ and
+    reused across method calls (which is why the delegates
+    pass ``self.wiki`` rather than re-creating it).
+    """
 
     def __init__(self, wiki_root: Path, config: dict[str, Any] | None = None):
         self.wiki_root = wiki_root
@@ -24,198 +65,56 @@ class WikiCLI:
         self.wiki = Wiki(wiki_root, config=self.config)
 
     def init(self, args: Any) -> int:
-        """Initialize wiki."""
-        from ..core.wiki import VALID_AGENTS
-
-        overwrite = getattr(args, 'overwrite', False)
-        agent = getattr(args, 'agent', None)
-        force = getattr(args, 'force', False)
-        merge = getattr(args, 'merge', False)
-
-        if agent and agent not in VALID_AGENTS:
-            print(f"Error: Invalid agent type '{agent}'.")
-            print(f"  Choose: {', '.join(VALID_AGENTS)}")
-            print("  Example: llmwikify init --agent opencode")
-            return 1
-
-        result = self.wiki.init(overwrite=overwrite, agent=agent, force=force, merge=merge)
-
-        if result['status'] == 'already_exists':
-            print(f"⚠️  Wiki already initialized at {self.wiki_root}")
-            print(f"   Existing files: {', '.join(result['existing_files'])}")
-            if agent:
-                print("   Use --force to overwrite or --merge to regenerate MCP config.")
-            else:
-                print("   Use --overwrite to reinitialize.")
-            return 0
-
-        if result['status'] == 'mcp_config_added':
-            print(f"✅ MCP config added to existing wiki at {self.wiki_root}")
-            if result['created_files']:
-                print(f"   Added: {', '.join(result['created_files'])}")
-            warnings = result.get('warnings', [])
-            if warnings:
-                for w in warnings:
-                    print(f"   ⚠️  {w}")
-            return 0
-
-        print(f"✅ {result['message']}")
-        print()
-
-        if result['created_files']:
-            print(f"  Created: {', '.join(result['created_files'])}")
-        if result['skipped_files']:
-            print(f"  Skipped: {', '.join(result['skipped_files'])}")
-
-        warnings = result.get('warnings', [])
-        if warnings:
-            print()
-            for w in warnings:
-                print(f"  ⚠️  {w}")
-
-        raw_stats = result.get('raw_stats', {})
-        if raw_stats and raw_stats.get('total', 0) > 0:
-            print()
-            print("  Source analysis:")
-            print(f"    {raw_stats['total']} files in {len(raw_stats.get('categories', {}))} categories")
-            top_cats = sorted(raw_stats.get('categories', {}).items(), key=lambda x: -x[1])[:5]
-            print(f"    Top: {', '.join(f'{k} ({v})' for k, v in top_cats)}")
-
-        print()
-        print("  Next steps:")
-        if agent:
-            print("    1. Review wiki.md for page conventions")
-            if agent == 'opencode':
-                print("    2. Run: opencode")
-            elif agent == 'claude':
-                print("    2. Run: claude")
-            elif agent == 'codex':
-                print("    2. Run: opencode (codex mode)")
-            print("    3. Tell the agent: 'Start ingesting news from raw/'")
-        else:
-            print("    Run: llmwikify init --agent <opencode|claude|codex|generic> for full setup")
-
-        return 0
+        """Initialize wiki. → ``cli.commands.init_cmd.run_init``."""
+        return run_init(self.wiki, self.wiki_root, args)
 
     def ingest(self, args: Any) -> int:
-        """Ingest a source file."""
-        source = args.file
-        result = self.wiki.ingest_source(source)
-
-        if "error" in result:
-            print(f"Error: {result['error']}")
-            return 1
-
-        # Display extraction summary to stderr (for human readability)
-        print(f"Ingested: {result['title']} ({result['source_type']})", file=sys.stderr)
-        print(f"Content length: {result['content_length']:,} chars", file=sys.stderr)
-
-        if result.get('saved_to_raw'):
-            print(f"Saved to raw: {result['source_name']}", file=sys.stderr)
-        elif result.get('already_exists'):
-            print(f"Already in raw: {result['source_name']}", file=sys.stderr)
-        elif result.get('source_name'):
-            print(f"Source: {result['source_raw_path']}", file=sys.stderr)
-
-        if result['content_length'] > 8000:
-            print("Note: Content truncated to 8,000 chars for LLM processing", file=sys.stderr)
-
-        self_create = getattr(args, 'self_create', False) or getattr(args, 'smart', False)
-        if getattr(args, 'smart', False):
-            import warnings
-            warnings.warn("--smart is deprecated, use --self-create instead", DeprecationWarning, stacklevel=2)
-        dry_run = getattr(args, 'dry_run', False)
-
-        if dry_run:
-            if self_create:
-                print("\n[DRY RUN] LLM self-create mode requested.", file=sys.stderr)
-                print("Remove --dry-run to execute LLM processing.", file=sys.stderr)
-            else:
-                print("\nNo pages created. Use --self-create for LLM-assisted processing.", file=sys.stderr)
-            return 0
-
-        if self_create:
-            return self._ingest_smart(result)
-        else:
-            # Output full structured result as JSON (same as MCP wiki_ingest response)
-            # so agent can parse and decide which pages to create
-            output = {
-                "source_name": result.get("source_name", ""),
-                "source_raw_path": result.get("source_raw_path", ""),
-                "source_type": result.get("source_type", ""),
-                "file_type": result.get("file_type", ""),
-                "title": result.get("title", ""),
-                "content": result.get("content", ""),
-                "content_length": result.get("content_length", 0),
-                "content_preview": result.get("content_preview", ""),
-                "word_count": result.get("word_count", 0),
-                "file_size": result.get("file_size", 0),
-                "has_images": result.get("has_images", False),
-                "image_count": result.get("image_count", 0),
-                "saved_to_raw": result.get("saved_to_raw", False),
-                "already_exists": result.get("already_exists", False),
-                "hint": result.get("hint", ""),
-                "current_index": result.get("current_index", ""),
-                "instructions": result.get("instructions", ""),
-                "message": "Read the content above, read wiki.md for conventions, then create/update wiki pages using write_page.",
-            }
-            print(f"\n{json.dumps(output, ensure_ascii=False, indent=2)}")
-            return 0
+        """Ingest a source file. → ``cli.commands.ingest.run_ingest``."""
+        return run_ingest(self.wiki, args, _ingest_smart_fn=_ingest_smart_inline)
 
     def _ingest_smart(self, result: dict) -> int:
-        """Execute LLM smart processing on ingested content."""
-        try:
-            operations_result = self.wiki._llm_process_source(result)
-        except ValueError as e:
-            print(f"\nLLM not configured: {e}")
-            return 1
-        except (ConnectionError, TimeoutError, RuntimeError, OSError) as e:
-            print(f"\nLLM processing failed: {e}")
-            return 1
-
-        operations = operations_result.get("operations", [])
-        print(f"\nLLM Plan ({len(operations)} operations):")
-
-        for i, op in enumerate(operations, 1):
-            action = op.get("action", "unknown")
-            if action == "write_page":
-                print(f"  {i}. write_page: {op.get('page_name', 'unnamed')}")
-            elif action == "log":
-                print(f"  {i}. log: {op.get('operation', '')} | {op.get('details', '')}")
-            else:
-                print(f"  {i}. {action}")
-
-        # Execute operations
-        print("\nExecuting...")
-        execution = self.wiki.execute_operations(operations)
-
-        for r in execution.get("results", []):
-            status_icon = "ok" if r.get("status") == "done" else "!!"
-            action = r.get("action", "")
-            detail = r.get("page", r.get("operation", ""))
-            print(f"  [{status_icon}] {action}: {detail}")
-
-        # Write relations if extracted
-        relations = operations_result.get("relations", [])
-        if relations:
-            print(f"\nExtracting {len(relations)} relations...")
-            rel_result = self.wiki.write_relations(relations, source_file=result.get("source_name"))
-            print(f"  Relations added: {rel_result.get('count', 0)}")
-
-        print(f"\nCompleted: {execution['operations_executed']} operations")
-        return 0
+        """Smart-ingest helper. Preserved for backward compat with
+        any external caller; delegates to the inline implementation.
+        """
+        return _ingest_smart_inline(self.wiki, result)
 
     def write_page(self, args: Any) -> int:
-        """Write a wiki page."""
-        content = self._get_content(args)
-        if not content:
-            print("❌ Error: No content provided")
-            return 1
+        """Write a wiki page. → ``cli.commands.write_page.run_write_page``."""
+        return run_write_page(self.wiki, args)
 
-        page_type = getattr(args, 'type', None)
-        result = self.wiki.write_page(args.name, content, page_type=page_type)
-        print(f"✅ {result}")
-        return 0
+    def read_page(self, args: Any) -> int:
+        """Read a wiki page. → ``cli.commands.read_page.run_read_page``."""
+        return run_read_page(self.wiki, args)
+
+    def search(self, args: Any) -> int:
+        """Search wiki. → ``cli.commands.search.run_search``."""
+        return run_search(self.wiki, args)
+
+    def status(self, args: Any) -> int:
+        """Show status. → ``cli.commands.status.run_status``."""
+        return run_status(self.wiki, args)
+
+    def log(self, args: Any) -> int:
+        """Record log entry. → ``cli.commands.log_cmd.run_log``."""
+        return run_log(self.wiki, args)
+
+    def sink_status(self, args: Any) -> int:
+        """Show query sink buffer status. → ``cli.commands.sink_status.run_sink_status``."""
+        return run_sink_status(self.wiki, args)
+
+    def build_index(self, args: Any) -> int:
+        """Build reference index. → ``cli.commands.build_index.run_build_index``."""
+        return run_build_index(self.wiki, args)
+
+    def fix_wikilinks(self, args: Any) -> int:
+        """Fix broken wikilinks. → ``cli.commands.fix_wikilinks.run_fix_wikilinks``."""
+        return run_fix_wikilinks(self.wiki, args)
+
+    def _get_content(self, args: Any) -> str | None:
+        """Internal helper used by write_page. Preserved for
+        backward compat — delegates to the new location.
+        """
+        return _get_content(args)
 
     def analyze_source(self, args: Any) -> int:
         """Analyze source files and cache extraction results."""
@@ -267,37 +166,6 @@ class WikiCLI:
             result = self.wiki.analyze_source(source_path, force=getattr(args, 'force', False) if hasattr(args, 'force') else False)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0 if result.get("status") not in ("error", "skipped") else 1
-
-    def read_page(self, args: Any) -> int:
-        """Read a wiki page."""
-        page_type = getattr(args, 'type', None)
-        result = self.wiki.read_page(args.name, page_type=page_type)
-
-        if "error" in result:
-            print(f"❌ {result['error']}")
-            return 1
-
-        print(result['content'])
-        return 0
-
-    def search(self, args: Any) -> int:
-        """Search wiki."""
-        backend = getattr(args, 'backend', 'fts5')
-        results = self.wiki.search(args.query, getattr(args, 'limit', 10), backend=backend)
-
-        if not results:
-            print(f"No results found for: {args.query}")
-            return 0
-
-        print(f"Search results for: {args.query}")
-        mode = results[0].get('mode', 'fts5') if results else 'fts5'
-        print(f"Using backend: {mode}")
-        for i, r in enumerate(results, 1):
-            print(f"\n{i}. {r['page_name']}")
-            print(f"   Score: {r['score']}")
-            print(f"   {r['snippet']}")
-
-        return 0
 
     def lint(self, args: Any) -> int:
         """Health check."""
@@ -485,125 +353,6 @@ class WikiCLI:
             print("✅ No orphan pages\n")
 
         return 0
-
-    def status(self, args: Any) -> int:
-        """Show wiki status."""
-        result = self.wiki.status()
-
-        if not result.get('initialized'):
-            print("❌ Wiki not initialized")
-            return 1
-
-        print("=== Wiki Status ===")
-        print(f"📁 Root: {result['root']}")
-        print(f"📄 Pages: {result['page_count']}")
-        print(f"📦 Sources: {result['source_count']}")
-        print(f"🔍 Indexed: {result.get('indexed_pages', 'N/A')}")
-        print(f"🔗 Links: {result.get('total_links', 'N/A')}")
-
-        return 0
-
-    def fix_wikilinks(self, args: Any) -> int:
-        """Fix broken wikilinks by adding directory prefix."""
-        dry_run = getattr(args, 'dry_run', False)
-        result = self.wiki.fix_wikilinks(dry_run=dry_run)
-
-        mode = "DRY RUN" if dry_run else "FIXED"
-        print(f"=== Wikilink Fix Summary ({mode}) ===")
-        print(f"  Fixed:     {result['fixed']}")
-        print(f"  Skipped:   {result['skipped']}")
-        print(f"  Ambiguous: {result['ambiguous']}")
-
-        if result['changes']:
-            print(f"\nChanges ({len(result['changes'])} total):")
-            for c in result['changes'][:50]:
-                if c['status'] == 'fixed':
-                    print(f"  ✅ {c['page']}: {c['old']} → {c['new']}")
-                elif c['status'] == 'ambiguous':
-                    print(f"  ⚠️  {c['page']}: [[{c['link']}]] matches {len(c['matches'])} pages: {', '.join(c['matches'])}")
-
-        if result['ambiguous'] > 0:
-            print(f"\n⚠️  {result['ambiguous']} ambiguous link(s) require manual resolution.")
-            return 1
-        return 0
-
-    def log(self, args: Any) -> int:
-        """Record log entry."""
-        operation = getattr(args, 'op_flag', None) or args.operation
-        description = getattr(args, 'details', None) or args.description
-
-        if not operation or not description:
-            print("❌ Error: operation and description required")
-            print("Usage: llmwikify log <operation> <description>")
-            print("   or: llmwikify log --operation <op> --details <desc>")
-            return 1
-
-        result = self.wiki.append_log(operation, description)
-        print(f"✅ {result}")
-        return 0
-
-    def build_index(self, args: Any) -> int:
-        """Build reference index."""
-        no_export = getattr(args, 'no_export', False)
-        output = getattr(args, 'output', None)
-        export_only = getattr(args, 'export_only', False)
-        force = getattr(args, 'force', False)
-        output_path = Path(output) if output else None
-
-        if export_only:
-            print("=== Exporting Reference Index ===")
-            result = self.wiki.export_index(output_path or self.wiki.ref_index_path)
-            print("\n=== Export Complete ===")
-            print(f"Pages: {result['total_pages']}")
-            print(f"Links: {result['total_links']}")
-            print(f"Output: {output_path or self.wiki.ref_index_path}")
-            return 0
-
-        # Auto-detect and migrate old index format
-        if self._detect_old_index_format():
-            if not force:
-                print("⚠️  Old index format detected. Migrating to new format automatically.")
-                print("    (Use --force to skip this message in the future)")
-            print()
-
-        print("=== Building Reference Index ===")
-        print(f"Scanning: {self.wiki.wiki_dir}")
-        print()
-
-        result = self.wiki.build_index(auto_export=not no_export, output_path=output_path)
-
-        print()
-        print("=== Index Built ===")
-        print(f"Total pages: {result['total_pages']}")
-        print(f"Total links: {result['total_links']}")
-        print(f"⏱️  Elapsed: {result.get('elapsed_seconds', 'N/A')}s")
-        print(f"📈 Speed: {result.get('files_per_second', 'N/A')} files/sec")
-
-        return 0
-
-    def _detect_old_index_format(self) -> bool:
-        """Check if index contains pages with old-format page_names.
-
-        Old format: page_name is bare name (e.g., "Risk Parity") while
-        file_path has directory prefix (e.g., "concepts/Risk Parity.md").
-        New format: page_name == file_path[:-3] (e.g., both are "concepts/Risk Parity").
-        """
-        if not self.wiki.is_initialized():
-            return False
-        try:
-            cursor = self.wiki.index.conn.execute(
-                "SELECT page_name, file_path FROM pages"
-            )
-            for row in cursor.fetchall():
-                name = row['page_name']
-                fpath = row['file_path']
-                # New format: page_name == file_path without .md
-                if name != fpath[:-3]:
-                    return True
-        except Exception as e:
-            logger.warning("Index format check failed: %s", e)
-            return False
-        return False
 
     def references(self, args: Any) -> int:
         """Show page references."""
@@ -881,23 +630,6 @@ class WikiCLI:
         print(f"Success: {success}, Failed: {failed}", file=sys.stderr)
 
         return 0 if failed == 0 else 1
-
-    def sink_status(self, args: Any) -> int:
-        """Show query sink buffer status."""
-        result = self.wiki.sink_status()
-
-        print("=== Query Sink Status ===\n")
-
-        if isinstance(result, dict) and result.get('sinks'):
-            for sink_name, info in result['sinks'].items():
-                count = info.get('count', 0)
-                status = info.get('status', 'unknown')
-                icon = "⏳" if status == "pending" else "✅"
-                print(f"  {icon} {sink_name}: {count} entries ({status})")
-        else:
-            print("  No sink buffers found.")
-
-        return 0
 
     def synthesize(self, args: Any) -> int:
         """Save query answer as wiki page."""
@@ -1854,7 +1586,6 @@ class WikiCLI:
         print(f"   Tool calls: {len(data['tool_calls'])}")
 
         return 0
-
 
 def main() -> int:
     """Main CLI entry point."""
