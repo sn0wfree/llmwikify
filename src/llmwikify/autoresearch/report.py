@@ -17,27 +17,36 @@ class _ReportCtx:
 
     run_prompt needs default_llm, planning_llm, report_llm, config.
     The report generator only has a single LLM client (the report
-    one) so the others default to the same client.
+    one) so the others default to the same client. ``metrics`` is
+    optional (None if the caller does not track them).
     """
 
-    def __init__(self, llm_client: Any, config: dict[str, Any]):
+    def __init__(
+        self, llm_client: Any, config: dict[str, Any],
+        metrics: Any = None,
+    ):
         self.default_llm = llm_client
         self.planning_llm = llm_client
         self.report_llm = llm_client
         self.config = config
+        self.metrics = metrics
 
 
 class ReportGenerator:
     """Generates structured markdown research reports with inline source citations."""
 
-    def __init__(self, wiki: Any, llm_client: Any, config: dict[str, Any]):
+    def __init__(
+        self, wiki: Any, llm_client: Any, config: dict[str, Any],
+        metrics: Any = None,
+    ):
         self.wiki = wiki
         self.llm_client = llm_client
         self.config = config
+        self.metrics = metrics
 
     def _as_ctx(self) -> _ReportCtx:
         """Build a ctx-like object for run_prompt."""
-        return _ReportCtx(self.llm_client, self.config)
+        return _ReportCtx(self.llm_client, self.config, metrics=self.metrics)
 
     def _build_source_map(self, sources: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
         """Build hash → source info mapping for inline citations."""

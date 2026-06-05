@@ -15,28 +15,37 @@ class _ReviewerCtx:
     """Minimal ctx-like object for run_prompt.
 
     The reviewer only has a single LLM client (the default one) so
-    the other two default to the same client.
+    the other two default to the same client. ``metrics`` is
+    optional (None if the caller does not track them).
     """
 
-    def __init__(self, llm_client: Any, config: dict[str, Any]):
+    def __init__(
+        self, llm_client: Any, config: dict[str, Any],
+        metrics: Any = None,
+    ):
         self.default_llm = llm_client
         self.planning_llm = llm_client
         self.report_llm = llm_client
         self.config = config
+        self.metrics = metrics
 
 
 class ResearchReviewer:
     """Evaluates research report quality and provides feedback."""
 
-    def __init__(self, wiki: Any, llm_client: Any, config: dict[str, Any]):
+    def __init__(
+        self, wiki: Any, llm_client: Any, config: dict[str, Any],
+        metrics: Any = None,
+    ):
         self.wiki = wiki
         self.llm_client = llm_client
         self.config = config
+        self.metrics = metrics
         self.min_score = config.get("quality_threshold", 7)
 
     def _as_ctx(self) -> _ReviewerCtx:
         """Build a ctx-like object for run_prompt."""
-        return _ReviewerCtx(self.llm_client, self.config)
+        return _ReviewerCtx(self.llm_client, self.config, metrics=self.metrics)
 
     async def review(self, query: str, report: str, sources: list[dict[str, Any]],
                     six_step_context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -77,14 +86,18 @@ class ResearchReviewer:
 class ResearchRevisor:
     """Revises a research report based on reviewer feedback."""
 
-    def __init__(self, wiki: Any, llm_client: Any, config: dict[str, Any]):
+    def __init__(
+        self, wiki: Any, llm_client: Any, config: dict[str, Any],
+        metrics: Any = None,
+    ):
         self.wiki = wiki
         self.llm_client = llm_client
         self.config = config
+        self.metrics = metrics
 
     def _as_ctx(self) -> _ReviewerCtx:
         """Build a ctx-like object for run_prompt."""
-        return _ReviewerCtx(self.llm_client, self.config)
+        return _ReviewerCtx(self.llm_client, self.config, metrics=self.metrics)
 
     async def revise(
         self,

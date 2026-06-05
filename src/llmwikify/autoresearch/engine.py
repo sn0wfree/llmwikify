@@ -167,6 +167,12 @@ class ResearchEngine:
         self._metrics = MetricsCollector(session_id=session_id)
         self._metrics.start()
         self._action_ctx.metrics = self._metrics
+        # Propagate to LLM-using submodules so run_prompt (called via
+        # the clarifier/report/reviewer/revisor) also records metrics.
+        self.clarifier.metrics = self._metrics
+        self.report.metrics = self._metrics
+        self.reviewer.metrics = self._metrics
+        self.revisor.metrics = self._metrics
         self._action_dispatch = {
             "clarify":    partial(actions.action_clarify, self._action_ctx),
             "plan":       partial(actions.action_plan, self._action_ctx),
