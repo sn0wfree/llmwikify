@@ -247,16 +247,25 @@ class ResearchEngine:
                 # ── Framework compliance gate: block 'done' if any 6-step
                 #    framework field is missing. Either redirect to the
                 #    missing action (if budget allows) or mark incomplete.
+                #    When strict_exit=True (default v6), also enforce quality
+                #    thresholds (review approved, quality_score, gaps, sources).
                 if action == "done":
-                    non_compliant = self._check_framework_compliance(state)
+                    if self.config.get("strict_exit", True):
+                        non_compliant = self._check_quality_compliance(state)
+                        redirect_type = "quality_redirect"
+                        gate_label = "Strict exit gate"
+                    else:
+                        non_compliant = self._check_framework_compliance(state)
+                        redirect_type = "framework_redirect"
+                        gate_label = "Framework compliance gate"
                     if non_compliant is not None:
                         if self._can_replan(state):
                             logger.info(
-                                "Framework compliance gate: %s → redirecting done→%s",
-                                non_compliant["reason"], non_compliant["missing"],
+                                "%s: %s → redirecting done→%s",
+                                gate_label, non_compliant["reason"], non_compliant["missing"],
                             )
                             yield {
-                                "type": "framework_redirect",
+                                "type": redirect_type,
                                 "from": "done",
                                 "to": non_compliant["missing"],
                                 "reason": non_compliant["reason"],
@@ -265,8 +274,8 @@ class ResearchEngine:
                             action = non_compliant["missing"]
                         else:
                             logger.warning(
-                                "Framework compliance gate failed and no budget: %s",
-                                non_compliant["reason"],
+                                "%s failed and no budget: %s",
+                                gate_label, non_compliant["reason"],
                             )
                             async for ev in self._action_incomplete(
                                 state, non_compliant["reason"],
@@ -315,18 +324,24 @@ class ResearchEngine:
                 if state.round >= state.max_rounds:
                     # Framework compliance gate: do not exit to 'done' if
                     # any 6-step field is missing — mark incomplete instead.
-                    non_compliant = self._check_framework_compliance(state)
+                    # When strict_exit=True, also block on quality thresholds.
+                    if self.config.get("strict_exit", True):
+                        non_compliant = self._check_quality_compliance(state)
+                        gate_label = "Strict exit gate"
+                    else:
+                        non_compliant = self._check_framework_compliance(state)
+                        gate_label = "Framework compliance gate"
                     if non_compliant is not None:
                         logger.warning(
-                            "Max rounds reached, framework non-compliant: %s",
-                            non_compliant["reason"],
+                            "Max rounds reached, %s failed: %s",
+                            gate_label, non_compliant["reason"],
                         )
                         yield {
                             "type": "round_max",
                             "round": state.round,
                             "message": (
                                 f"Reached max rounds ({state.max_rounds}) "
-                                f"with framework incomplete"
+                                f"with {gate_label} failing"
                             ),
                         }
                         async for ev in self._action_incomplete(
@@ -535,6 +550,60 @@ class ResearchEngine:
             return {"missing": "report", "reason": "step 4 (structure check) missing"}
         if state.review is None:
             return {"missing": "review", "reason": "step 6 (review) missing"}
+        return None
+
+    def _check_quality_compliance(self, state: ResearchState) -> dict | None:
+        """Layered check: 6-step presence + quality thresholds.
+
+        Used by the strict_exit gate (v6) to prevent the engine from
+        marking a session 'done' with low-quality output. Returns the
+        first failing check as {missing: action_name, reason: str}.
+
+        Layer 1 (delegates to _check_framework_compliance):
+            - All 6 framework fields present.
+
+        Layer 2 (quality thresholds):
+            - state.review.approved == True
+            - state.quality_score >= config.quality_threshold
+            - len(state.knowledge_gaps) <= config.gate_max_knowledge_gaps
+            - len(state.sources) >= config.gate_min_sources
+
+        Returns None only when all checks pass.
+        """
+        # Layer 1: framework presence
+        missing = self._check_framework_compliance(state)
+        if missing is not None:
+            return missing
+
+        # Layer 2: quality thresholds
+        review = state.review or {}
+        if not review.get("approved"):
+            return {
+                "missing": "revise",
+                "reason": f"review not approved (score={state.quality_score})",
+            }
+
+        threshold = self.config.get("quality_threshold", 7)
+        if state.quality_score < threshold:
+            return {
+                "missing": "revise",
+                "reason": f"quality_score={state.quality_score} < threshold={threshold}",
+            }
+
+        max_gaps = self.config.get("gate_max_knowledge_gaps", 3)
+        if len(state.knowledge_gaps) > max_gaps:
+            return {
+                "missing": "synthesize",
+                "reason": f"knowledge_gaps={len(state.knowledge_gaps)} > max={max_gaps}",
+            }
+
+        min_sources = self.config.get("gate_min_sources", 3)
+        if len(state.sources) < min_sources:
+            return {
+                "missing": "gather",
+                "reason": f"sources={len(state.sources)} < min={min_sources}",
+            }
+
         return None
 
     def _can_replan(self, state: ResearchState) -> bool:

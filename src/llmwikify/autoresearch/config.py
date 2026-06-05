@@ -55,6 +55,15 @@ DEFAULT_SIX_STEP_CONFIG: dict[str, Any] = {
     "evidence_scoring_enabled": True,
     "framework_check_enabled": True,
 
+    # ─── Strict exit gate (v6) ───
+    # When True (default), the done gate also enforces quality thresholds:
+    # review approved, quality_score >= quality_threshold, knowledge_gaps
+    # <= gate_max_knowledge_gaps, sources >= gate_min_sources. If any
+    # check fails, the engine redirects to the missing action (revise /
+    # synthesize / gather) instead of marking done. Disable for legacy
+    # behavior where any session with all 6 framework steps can be done.
+    "strict_exit": True,
+
     # ─── 6-step gate thresholds ───
     "gate_min_evidence_score": 0.5,
     "gate_min_traceable_sources": 2,

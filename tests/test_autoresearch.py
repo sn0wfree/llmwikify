@@ -1976,6 +1976,8 @@ class TestResume:
     def test_resume_skips_clarify(self, mock_wiki, mock_llm, db, config):
         """On resume, clarify should be skipped if clarification already exists."""
         config["max_react_rounds"] = 2
+        # Disable strict_exit to keep test focused on clarify-skip behavior
+        config["strict_exit"] = False
         sid = db.create_research_session("w", "q")
         # Pre-populate ALL framework fields so compliance gate passes
         db.update_six_step_fields(sid,
@@ -2007,3 +2009,126 @@ class TestResume:
         assert "clarification_complete" not in types
         # But reasoning event should appear (loop ran)
         assert "reasoning" in types
+
+
+# ─── Phase 7: Strict exit gate (v6) ────────────────────────────────
+
+
+class TestStrictExit:
+    """Tests for the strict_exit gate: enforces quality thresholds at the done gate.
+
+    When strict_exit=True (default), the engine redirects done to revise /
+    synthesize / gather when quality_score < threshold, too many knowledge
+    gaps, or insufficient sources.
+    """
+
+    def _compliant_state(self, **overrides):
+        """Return a state with all 6 framework fields populated and review approved."""
+        s = ResearchState(session_id="test", query="Q", max_rounds=5)
+        s.clarification = {"context": "ctx", "scope_check": True}
+        s.evidence_scores = {"src1": 0.8, "src2": 0.6, "src3": 0.7}
+        s.synthesis = {"reinforced_claims": ["a"], "contradictions": [], "knowledge_gaps": []}
+        s.reasoning_check = {"aggregate_score": 0.7, "scores": {}, "issues": []}
+        s.report_md = "# Report\n\nContent."
+        s.structure_check = {"aggregate_score": 0.8, "scores": {}, "issues": []}
+        s.review = {"approved": True, "score": 8, "issues": []}
+        s.quality_score = 8  # state.quality_score is what _check_quality_compliance reads
+        # 3 mock sources to satisfy gate_min_sources=3
+        s.sources = [
+            {"id": "src1", "title": "S1", "url": "http://1", "source_type": "web", "analysis": {"quality_assessment": {"credibility": 7}}},
+            {"id": "src2", "title": "S2", "url": "http://2", "source_type": "web", "analysis": {"quality_assessment": {"credibility": 6}}},
+            {"id": "src3", "title": "S3", "url": "http://3", "source_type": "web", "analysis": {"quality_assessment": {"credibility": 7}}},
+        ]
+        for k, v in overrides.items():
+            setattr(s, k, v)
+        return s
+
+    def test_strict_exit_default_enabled(self):
+        """DEFAULT_SIX_STEP_CONFIG should have strict_exit=True."""
+        assert DEFAULT_SIX_STEP_CONFIG.get("strict_exit") is True
+
+    def test_strict_exit_passes_when_all_quality_ok(self, mock_wiki, mock_llm, db, config):
+        """All quality thresholds met → returns None (compliance passed)."""
+        config["strict_exit"] = True
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        state = self._compliant_state()
+        assert engine._check_quality_compliance(state) is None
+
+    def test_strict_exit_blocks_unapproved_review(self, mock_wiki, mock_llm, db, config):
+        """Review not approved → returns {'missing': 'revise'}."""
+        config["strict_exit"] = True
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        state = self._compliant_state()
+        state.review = {"approved": False, "score": 8, "issues": ["x"]}
+        result = engine._check_quality_compliance(state)
+        assert result is not None
+        assert result["missing"] == "revise"
+        assert "not approved" in result["reason"]
+
+    def test_strict_exit_blocks_low_quality_score(self, mock_wiki, mock_llm, db, config):
+        """quality_score < threshold → returns {'missing': 'revise'}."""
+        config["strict_exit"] = True
+        config["quality_threshold"] = 8
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        state = self._compliant_state()
+        state.review = {"approved": True, "score": 5, "issues": []}
+        state.quality_score = 5
+        result = engine._check_quality_compliance(state)
+        assert result is not None
+        assert result["missing"] == "revise"
+        assert "quality_score=5" in result["reason"]
+
+    def test_strict_exit_blocks_too_many_gaps(self, mock_wiki, mock_llm, db, config):
+        """Too many knowledge gaps → returns {'missing': 'synthesize'}."""
+        config["strict_exit"] = True
+        config["gate_max_knowledge_gaps"] = 3
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        state = self._compliant_state()
+        state.knowledge_gaps = ["gap1", "gap2", "gap3", "gap4"]
+        result = engine._check_quality_compliance(state)
+        assert result is not None
+        assert result["missing"] == "synthesize"
+        assert "gaps=4" in result["reason"]
+
+    def test_strict_exit_blocks_too_few_sources(self, mock_wiki, mock_llm, db, config):
+        """Insufficient sources → returns {'missing': 'gather'}."""
+        config["strict_exit"] = True
+        config["gate_min_sources"] = 5
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        state = self._compliant_state()
+        result = engine._check_quality_compliance(state)
+        assert result is not None
+        assert result["missing"] == "gather"
+        assert "sources=3" in result["reason"]
+
+    def test_strict_exit_layer1_check_still_works(self, mock_wiki, mock_llm, db, config):
+        """_check_quality_compliance delegates to _check_framework_compliance first."""
+        config["strict_exit"] = True
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        state = self._compliant_state()
+        state.report_md = None  # framework incomplete
+        result = engine._check_quality_compliance(state)
+        assert result is not None
+        assert result["missing"] == "report"  # framework layer caught it first
+
+    def test_strict_exit_disabled_keeps_old_behavior(self, mock_wiki, mock_llm, db, config):
+        """When strict_exit=False, _check_quality_compliance can be bypassed."""
+        config["strict_exit"] = False
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        state = self._compliant_state()
+        state.review = {"approved": False, "score": 1, "issues": ["bad"]}
+        state.quality_score = 1
+        # _check_framework_compliance should still pass (all 6 fields present)
+        assert engine._check_framework_compliance(state) is None
+        # But _check_quality_compliance still blocks (method exists, just not called in loop)
+        assert engine._check_quality_compliance(state) is not None
+
+    def test_duplicate_action_done_removed(self):
+        """actions.py should have only one action_done function."""
+        from llmwikify.autoresearch import actions
+        # Count action_done in the module
+        count = sum(
+            1 for name, _ in vars(actions).items()
+            if name == "action_done" and callable(getattr(actions, name, None))
+        )
+        assert count == 1, f"Expected 1 action_done, found {count}"

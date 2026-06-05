@@ -793,53 +793,6 @@ async def action_done(
     }
 
 
-@tracked("done")
-async def action_done(
-    ctx: ActionContext, state: ResearchState,
-):
-    """Finalize research session."""
-    _warn_invalid_transition(state.phase, "done")
-
-    state.phase = "done"
-    sources = ctx.db.get_sources(state.session_id) or []
-
-    ctx.session_manager.update_status(state.session_id, "done", "done", 1.0, iteration_round=state.round)
-    ctx.session_manager.finalize(state.session_id, {
-        "markdown": state.report_md,
-        "query": state.query,
-        "quality_score": state.quality_score,
-        "rounds": state.round,
-        "synthesis_summary": {
-            "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
-            "contradictions": len((state.synthesis or {}).get("contradictions", [])),
-            "knowledge_gaps": len(state.knowledge_gaps),
-        },
-        "sources": [
-            {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
-            for s in sources
-        ],
-    })
-
-    yield {
-        "type": "done",
-        "report": {
-            "query": state.query,
-            "markdown": state.report_md,
-            "sources": [
-                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
-                for s in sources
-            ],
-            "synthesis_summary": {
-                "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
-                "contradictions": len((state.synthesis or {}).get("contradictions", [])),
-                "knowledge_gaps": len(state.knowledge_gaps),
-            },
-            "rounds": state.round,
-            "quality_score": state.quality_score,
-        },
-    }
-
-
 async def _action_incomplete_impl(
     ctx: ActionContext, state: ResearchState, reason: str = "",
 ):
