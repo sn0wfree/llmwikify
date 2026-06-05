@@ -32,6 +32,7 @@ class StreamableLLMClient:
         auth_header: str = "bearer",
         context_window: int | None = None,
         budget_on_exceed: str = "warn",
+        request_timeout_seconds: float = 120,
     ):
         self.provider = provider
         raw_base = base_url if base_url else self._default_base_url(provider)
@@ -40,6 +41,7 @@ class StreamableLLMClient:
         self.model = model
         self.reasoning_split = reasoning_split
         self.auth_header = auth_header  # "bearer" or "api-key"
+        self.request_timeout_seconds = request_timeout_seconds
 
         self._budget_checker = TokenBudgetChecker(
             TokenBudgetConfig(
@@ -104,7 +106,7 @@ class StreamableLLMClient:
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        resp = requests.post(url, headers=headers, json=payload, timeout=120)
+        resp = requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_seconds)
         resp.raise_for_status()
         data = resp.json()
         return data["choices"][0]["message"]["content"]
@@ -140,7 +142,7 @@ class StreamableLLMClient:
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        resp = requests.post(url, headers=headers, json=payload, timeout=120)
+        resp = requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_seconds)
         resp.raise_for_status()
         data = resp.json()
         message = data["choices"][0]["message"]
@@ -190,7 +192,7 @@ class StreamableLLMClient:
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        with requests.post(url, headers=headers, json=payload, timeout=120, stream=True) as resp:
+        with requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_seconds, stream=True) as resp:
             resp.raise_for_status()
             accumulated = ""
             for line in resp.iter_lines():
@@ -271,7 +273,7 @@ class StreamableLLMClient:
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120, read=60)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(self.request_timeout_seconds, read=60)) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 resp.raise_for_status()
                 accumulated = ""
@@ -346,7 +348,7 @@ class StreamableLLMClient:
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120, read=60)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(self.request_timeout_seconds, read=60)) as client:
             resp = await client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
