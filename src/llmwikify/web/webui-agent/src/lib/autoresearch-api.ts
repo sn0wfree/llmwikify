@@ -162,6 +162,8 @@ export type AutoResearchStreamEvent =
   | { type: 'review_max_rounds'; message: string }
   | { type: 'cancelled'; round: number; phase: string }
   | { type: 'paused'; round: number; phase: string }
+  | { type: 'incomplete'; reason: string; round: number; framework_completed: number; framework_total: number; report?: AutoResearchReport }  // v6
+  | { type: 'framework_redirect'; from: string; to: string; reason: string; round: number }  // v6
   | { type: 'done'; report: AutoResearchReport }
   | { type: 'error'; error: string };
 

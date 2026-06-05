@@ -791,3 +791,147 @@ async def action_done(
             "quality_score": state.quality_score,
         },
     }
+
+
+@tracked("done")
+async def action_done(
+    ctx: ActionContext, state: ResearchState,
+):
+    """Finalize research session."""
+    _warn_invalid_transition(state.phase, "done")
+
+    state.phase = "done"
+    sources = ctx.db.get_sources(state.session_id) or []
+
+    ctx.session_manager.update_status(state.session_id, "done", "done", 1.0, iteration_round=state.round)
+    ctx.session_manager.finalize(state.session_id, {
+        "markdown": state.report_md,
+        "query": state.query,
+        "quality_score": state.quality_score,
+        "rounds": state.round,
+        "synthesis_summary": {
+            "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
+            "contradictions": len((state.synthesis or {}).get("contradictions", [])),
+            "knowledge_gaps": len(state.knowledge_gaps),
+        },
+        "sources": [
+            {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+            for s in sources
+        ],
+    })
+
+    yield {
+        "type": "done",
+        "report": {
+            "query": state.query,
+            "markdown": state.report_md,
+            "sources": [
+                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+                for s in sources
+            ],
+            "synthesis_summary": {
+                "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
+                "contradictions": len((state.synthesis or {}).get("contradictions", [])),
+                "knowledge_gaps": len(state.knowledge_gaps),
+            },
+            "rounds": state.round,
+            "quality_score": state.quality_score,
+        },
+    }
+
+
+async def _action_incomplete_impl(
+    ctx: ActionContext, state: ResearchState, reason: str = "",
+):
+    """Implementation of action_incomplete (no @tracked wrapper)."""
+    _warn_invalid_transition(state.phase, "incomplete")
+
+    state.phase = "incomplete"
+    sources = ctx.db.get_sources(state.session_id) or []
+
+    # Compute progress based on how many framework steps completed
+    step_progress = 0
+    if state.clarification is not None: step_progress += 1
+    if state.evidence_scores:            step_progress += 1
+    if state.synthesis is not None:      step_progress += 1
+    if state.reasoning_check is not None: step_progress += 1
+    if state.report_md:                  step_progress += 1
+    if state.structure_check is not None: step_progress += 1
+    if state.review is not None:         step_progress += 1
+    # 7 step-progress points → map to 0..1 with 0.85 cap
+    progress = min(0.85, step_progress / 7 * 0.85)
+
+    ctx.session_manager.update_status(
+        state.session_id, "incomplete", "incomplete", progress,
+        iteration_round=state.round,
+    )
+    # Persist whatever we have; mark with incomplete_reason in result
+    try:
+        ctx.session_manager.finalize(state.session_id, {
+            "markdown": state.report_md,
+            "query": state.query,
+            "quality_score": state.quality_score,
+            "rounds": state.round,
+            "incomplete_reason": reason or "framework compliance gate failed",
+            "framework_completed": step_progress,
+            "framework_total": 7,
+            "synthesis_summary": {
+                "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
+                "contradictions": len((state.synthesis or {}).get("contradictions", [])),
+                "knowledge_gaps": len(state.knowledge_gaps),
+            },
+            "sources": [
+                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+                for s in sources
+            ],
+        })
+        # finalize() hardcodes status='done'; re-set to incomplete
+        ctx.session_manager.update_status(
+            state.session_id, "incomplete", "incomplete",
+            progress, iteration_round=state.round,
+        )
+    except Exception as e:
+        logger.warning("incomplete finalize: %s", e)
+
+    yield {
+        "type": "incomplete",
+        "reason": reason or "framework compliance gate failed",
+        "round": state.round,
+        "framework_completed": step_progress,
+        "framework_total": 7,
+        "report": {
+            "query": state.query,
+            "markdown": state.report_md,
+            "sources": [
+                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+                for s in sources
+            ],
+            "quality_score": state.quality_score,
+        },
+    }
+
+
+async def action_incomplete(
+    ctx: ActionContext, state: ResearchState, reason: str = "",
+):
+    """Mark session as incomplete (framework compliance gate failed, no budget).
+
+    Distinct from action_done: the 6-step framework is NOT fully run,
+    and the engine has no more replan budget to fix it. We persist
+    whatever we have (synthesis, report, review) so the user can
+    inspect partial results.
+
+    Status is set to 'incomplete' (not 'done') so the UI can warn
+    the user that the result is partial.
+
+    Note: not decorated with @tracked (which has fixed (ctx, state)
+    signature) because this action takes a custom 'reason' arg.
+    Metrics are recorded manually if ctx.metrics is available.
+    """
+    from contextlib import nullcontext
+    metrics_cm = (
+        ctx.metrics.record("incomplete") if ctx.metrics else nullcontext()
+    )
+    with metrics_cm:
+        async for ev in _action_incomplete_impl(ctx, state, reason):
+            yield ev

@@ -10,6 +10,7 @@ want to drop the 3 leftover JSON columns from `research_sessions`.
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 from pathlib import Path
@@ -126,3 +127,93 @@ def migrate_v3_add_events_column(ar_db_path) -> bool:
         conn.commit()
         logger.info("Added events_json column to autoresearch_sessions")
         return True
+
+
+# 6-step framework fields. A session is "incomplete" if any of these
+# are NULL on a session marked 'done' or with progress=1.0.
+FRAMEWORK_FIELDS = (
+    "clarification_json",
+    "evidence_scores_json",
+    "synthesis_json",
+    "reasoning_json",
+    "structure_json",
+    "review_json",
+)
+
+
+def migrate_v3_mark_partial_sessions(ar_db_path) -> list[str]:
+    """Backfill: mark 'done' sessions as 'incomplete' if 6-step fields are missing.
+
+    Fixes the bug pattern observed in session 7fe6f04f-9cab-...: engine
+    marked session as 'done' but 4/6 framework steps never ran
+    (result.markdown=null, quality_score=0). After the framework
+    compliance gate is added (commit a45d3a7 followup), this can no
+    longer happen — but old sessions in the DB still have status='done'.
+
+    This migration:
+    1. Finds sessions with status='done' (or progress=1.0) where ANY
+       of FRAMEWORK_FIELDS is NULL or empty
+    2. Sets their status to 'incomplete'
+    3. Updates their result JSON with incomplete_reason + framework_completed
+
+    Idempotent: re-running on a clean DB returns an empty list.
+
+    Args:
+        ar_db_path: Path to the autoresearch.db file.
+
+    Returns:
+        List of session IDs that were updated.
+    """
+    ar_db_path = Path(ar_db_path)
+    if not ar_db_path.exists():
+        return []
+    updated: list[str] = []
+    with sqlite3.connect(ar_db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        # Find 'done' sessions with missing framework fields
+        rows = conn.execute(
+            """SELECT id, query, result,
+                      clarification_json, evidence_scores_json,
+                      synthesis_json, reasoning_json, structure_json,
+                      review_json
+               FROM autoresearch_sessions
+               WHERE status = 'done'"""
+        ).fetchall()
+        for row in rows:
+            present = sum(
+                1 for f in FRAMEWORK_FIELDS
+                if row[f] is not None and str(row[f]).strip()
+            )
+            total = len(FRAMEWORK_FIELDS)
+            if present == total:
+                continue  # fully complete, skip
+            # Partial: backfill
+            sid = row["id"]
+            existing_result = {}
+            if row["result"]:
+                try:
+                    existing_result = json.loads(row["result"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            existing_result["incomplete_reason"] = (
+                f"backfill: only {present}/{total} framework steps completed"
+            )
+            existing_result["framework_completed"] = present
+            existing_result["framework_total"] = total
+            new_result = json.dumps(existing_result, ensure_ascii=False)
+            conn.execute(
+                """UPDATE autoresearch_sessions
+                   SET status = 'incomplete',
+                       current_step = 'incomplete',
+                       result = ?,
+                       updated_at = datetime('now')
+                   WHERE id = ?""",
+                (new_result, sid),
+            )
+            updated.append(sid)
+            logger.info(
+                "Backfilled session %s: %d/%d framework steps → status=incomplete",
+                sid, present, total,
+            )
+        conn.commit()
+    return updated

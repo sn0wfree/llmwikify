@@ -46,6 +46,7 @@ const STATUS_LABELS: Record<string, { icon: string; color: string; text: string 
   report:        { icon: '▤', color: 'text-orange-400',   text: '生成报告' },
   reviewing:     { icon: '✓', color: 'text-yellow-400',   text: '评审中' },
   done:          { icon: '✓', color: 'text-green-400',    text: '已完成' },
+  incomplete:    { icon: '⚠', color: 'text-yellow-400',   text: '部分完成' },
   error:         { icon: '✗', color: 'text-red-400',      text: '失败' },
   timeout:       { icon: '⏱', color: 'text-red-400',      text: '超时' },
   paused:        { icon: '⏸', color: 'text-yellow-400',   text: '已暂停' },
@@ -547,6 +548,11 @@ export function AutoResearchPanel() {
             setActiveTab('report');
           } else if (t === 'error') msg = `✗ ${ev.error}`;
           else if (t === 'cancelled' || t === 'paused') msg = `${t}: ${ev.phase}`;
+          else if (t === 'incomplete') {
+            msg = `⚠ 部分完成 — ${ev.reason} (${ev.framework_completed}/${ev.framework_total} 步)`;
+          } else if (t === 'framework_redirect') {
+            msg = `↪ 框架不完整: ${ev.from} → ${ev.to} (${ev.reason})`;
+          }
 
           if (msg) {
             setEventLog((prev) => [...prev, { type: t, message: msg, timestamp: Date.now() }]);
