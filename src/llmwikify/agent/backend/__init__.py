@@ -1,6 +1,12 @@
-"""Agent Backend Package."""
+"""Agent Backend Package.
 
-from .adapters import StreamableLLMClient
+StreamableLLMClient is re-exported from its canonical home in
+``llmwikify.llm.streamable``. The legacy import path
+``llmwikify.agent.backend.adapters`` remains as a deprecation
+shim (1 release cycle, removed in v0.33.0) per PLAN.md.
+"""
+
+from llmwikify.llm.streamable import StreamableLLMClient
 from .db import AgentDatabase, get_agent_db_path
 from .service import AgentContext, AgentService, ChatEvent
 

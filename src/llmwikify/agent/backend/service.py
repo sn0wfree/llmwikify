@@ -14,7 +14,7 @@ from ..dream_editor import DreamEditor
 from ..notifications import NotificationManager
 from ..scheduler import WikiScheduler
 from ..tools import WikiToolRegistry
-from .adapters import StreamableLLMClient
+from llmwikify.llm.streamable import StreamableLLMClient
 from .config_manager import get_global_config_manager, GlobalConfigManager
 from .db import AgentDatabase
 
