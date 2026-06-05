@@ -40,6 +40,7 @@ from llmwikify.autoresearch.db_migrations import (
     LEGACY_SHARED_COLUMNS,
     init_autoresearch_db,
     migrate_research_six_step_columns,
+    migrate_v3_add_events_column,
 )
 
 
@@ -204,6 +205,214 @@ class TestDBMigrations:
     def test_migrate_noop_on_missing_db(self, tmp_path):
         n = migrate_research_six_step_columns(tmp_path / "nope.db")
         assert n == 0
+
+    def test_migrate_v3_add_events_column_creates(self, tmp_path):
+        """Migration adds events_json column to a fresh DB that doesn't have it."""
+        # Simulate a DB created before events_json column was introduced
+        old_path = tmp_path / "old_ar.db"
+        with sqlite3.connect(old_path) as conn:
+            conn.execute(
+                """CREATE TABLE autoresearch_sessions (
+                    id TEXT PRIMARY KEY, wiki_id TEXT NOT NULL, query TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'clarifying', current_step TEXT,
+                    progress REAL DEFAULT 0.0, result TEXT, wiki_page_name TEXT,
+                    iteration_round INTEGER DEFAULT 0,
+                    synthesis_json TEXT, review_json TEXT,
+                    clarification_json TEXT, reasoning_json TEXT,
+                    structure_json TEXT, self_loop_counts_json TEXT,
+                    self_loop_history_json TEXT, evidence_scores_json TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT DEFAULT (datetime('now'))
+                )"""
+            )
+            conn.commit()
+        added = migrate_v3_add_events_column(old_path)
+        assert added is True
+        with sqlite3.connect(old_path) as conn:
+            cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(autoresearch_sessions)").fetchall()
+            }
+        assert "events_json" in cols
+
+    def test_migrate_v3_add_events_column_idempotent(self, tmp_path):
+        """Migration is a no-op when column already exists."""
+        path = tmp_path / "ar.db"
+        # AutoResearchDatabase creates schema with the new column
+        AutoResearchDatabase(tmp_path)
+        added = migrate_v3_add_events_column(path)
+        assert added is False
+
+    def test_migrate_v3_add_events_column_noop_on_missing_db(self, tmp_path):
+        """Migration returns False (no error) when DB doesn't exist yet."""
+        added = migrate_v3_add_events_column(tmp_path / "nope.db")
+        assert added is False
+
+
+# ─── 2b. Event log persistence (DB layer) ──────────────────────────
+
+
+class TestEventLogPersistence:
+    """Verify append_events / get_events for the events_json column."""
+
+    def test_fresh_session_has_no_events(self, db):
+        sid = db.create_research_session("w", "q")
+        assert db.get_events(sid) == []
+
+    def test_get_events_nonexistent_session_returns_empty(self, db):
+        assert db.get_events("nonexistent") == []
+
+    def test_append_events_returns_count(self, db):
+        sid = db.create_research_session("w", "q")
+        n = db.append_events(sid, [
+            {"type": "step", "message": "m1", "timestamp": "2026-06-05T10:00:00Z"},
+            {"type": "step", "message": "m2", "timestamp": "2026-06-05T10:00:01Z"},
+        ])
+        assert n == 2
+
+    def test_append_events_accumulates(self, db):
+        sid = db.create_research_session("w", "q")
+        db.append_events(sid, [{"type": "step", "message": "first"}])
+        db.append_events(sid, [{"type": "step", "message": "second"}])
+        evs = db.get_events(sid)
+        assert len(evs) == 2
+        assert evs[0]["message"] == "first"
+        assert evs[1]["message"] == "second"
+
+    def test_append_events_batch_appends_in_order(self, db):
+        sid = db.create_research_session("w", "q")
+        batch = [{"type": "step", "message": f"m{i}"} for i in range(5)]
+        db.append_events(sid, batch)
+        evs = db.get_events(sid)
+        assert [e["message"] for e in evs] == [f"m{i}" for i in range(5)]
+
+    def test_append_empty_batch_is_noop(self, db):
+        sid = db.create_research_session("w", "q")
+        n = db.append_events(sid, [])
+        assert n == 0
+        assert db.get_events(sid) == []
+
+    def test_get_events_handles_malformed_json(self, db):
+        """Malformed events_json is treated as empty (defensive)."""
+        sid = db.create_research_session("w", "q")
+        # Inject malformed JSON directly
+        import sqlite3
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                "UPDATE autoresearch_sessions SET events_json = ? WHERE id = ?",
+                ("not valid json", sid),
+            )
+            conn.commit()
+        assert db.get_events(sid) == []
+
+    def test_events_column_present_in_schema(self, db):
+        """The events_json column is part of autoresearch_sessions schema."""
+        sid = db.create_research_session("w", "q")
+        session = db.get_research_session(sid)
+        assert "events_json" in session
+
+    def test_delete_session_clears_events(self, db):
+        """Cascading delete removes events along with the session."""
+        sid = db.create_research_session("w", "q")
+        db.append_events(sid, [{"type": "step", "message": "doomed"}])
+        assert len(db.get_events(sid)) == 1
+        db.delete_research(sid)
+        assert db.get_events(sid) == []
+
+
+# ─── 2c. EventBuffer (task manager layer) ─────────────────────────
+
+
+class TestEventBuffer:
+    """Verify dedup, batch flush, and lifecycle of EventBuffer."""
+
+    @pytest.fixture
+    def sid(self, db):
+        return db.create_research_session("w", "q")
+
+    @pytest.mark.asyncio
+    async def test_dedup_same_message_within_window(self, db, sid):
+        from llmwikify.autoresearch.task_manager import EventBuffer
+        buf = EventBuffer(sid, db)
+        for _ in range(5):
+            buf.add({"type": "progress", "message": "50% — gathering"})
+        await buf.flush()
+        assert len(db.get_events(sid)) == 1
+
+    @pytest.mark.asyncio
+    async def test_different_messages_all_stored(self, db, sid):
+        from llmwikify.autoresearch.task_manager import EventBuffer
+        buf = EventBuffer(sid, db)
+        for i in range(5):
+            buf.add({"type": "step", "message": f"step {i}"})
+        await buf.flush()
+        assert len(db.get_events(sid)) == 5
+
+    @pytest.mark.asyncio
+    async def test_dedup_window_expires(self, db, sid):
+        from llmwikify.autoresearch.task_manager import EventBuffer
+        buf = EventBuffer(sid, db)
+        buf.add({"type": "progress", "message": "50% — gathering"})
+        await buf.flush()
+        assert len(db.get_events(sid)) == 1
+        # Wait > DEDUP_WINDOW_S (2.0s)
+        import time
+        time.sleep(2.1)
+        buf.add({"type": "progress", "message": "50% — gathering"})
+        await buf.flush()
+        assert len(db.get_events(sid)) == 2
+
+    @pytest.mark.asyncio
+    async def test_batch_size_triggers_auto_flush(self, db, sid):
+        from llmwikify.autoresearch.task_manager import EventBuffer
+        buf = EventBuffer(sid, db)
+        for i in range(25):  # > BATCH_SIZE=20
+            buf.add({"type": "step", "message": f"auto {i}"})
+        # Give the auto-flush task a moment to run
+        await asyncio.sleep(0.05)
+        # Force any remaining
+        await buf.flush()
+        assert len(db.get_events(sid)) == 25
+
+    @pytest.mark.asyncio
+    async def test_close_makes_subsequent_add_noop(self, db, sid):
+        from llmwikify.autoresearch.task_manager import EventBuffer
+        buf = EventBuffer(sid, db)
+        buf.add({"type": "step", "message": "before close"})
+        buf.close()
+        buf.add({"type": "step", "message": "after close"})
+        await buf.flush()
+        evs = db.get_events(sid)
+        assert len(evs) == 1
+        assert evs[0]["message"] == "before close"
+
+    @pytest.mark.asyncio
+    async def test_events_have_timestamp_and_source(self, db, sid):
+        from llmwikify.autoresearch.task_manager import EventBuffer
+        buf = EventBuffer(sid, db)
+        buf.add({"type": "step", "message": "m"})
+        await buf.flush()
+        evs = db.get_events(sid)
+        assert all("timestamp" in e for e in evs)
+        assert all(e.get("source") == "engine" for e in evs)
+
+    @pytest.mark.asyncio
+    async def test_existing_timestamp_preserved(self, db, sid):
+        """If caller provides timestamp, it's kept (not overwritten)."""
+        from llmwikify.autoresearch.task_manager import EventBuffer
+        buf = EventBuffer(sid, db)
+        ts = "2026-01-01T00:00:00+00:00"
+        buf.add({"type": "step", "message": "m", "timestamp": ts})
+        await buf.flush()
+        assert db.get_events(sid)[0]["timestamp"] == ts
+
+    @pytest.mark.asyncio
+    async def test_flush_empty_is_safe(self, db, sid):
+        from llmwikify.autoresearch.task_manager import EventBuffer
+        buf = EventBuffer(sid, db)
+        n = await buf.flush()
+        assert n == 0
+        assert db.get_events(sid) == []
 
 
 # ─── 3. ResearchState tests ────────────────────────────────────────

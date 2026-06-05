@@ -299,6 +299,33 @@ export async function getClarification(
   return response.json();
 }
 
+/** Persisted event log entry (mirrors server-side append_events shape). */
+export interface PersistedEvent {
+  type: string;
+  message?: string;
+  timestamp?: string;
+  source?: string;
+  [key: string]: unknown;
+}
+
+/** Get the persisted event log for a completed/paused session.
+ *
+ * Returns the full event history (typed messages from the SSE stream)
+ * that was persisted to the autoresearch DB. Used to reconstruct the
+ * event log UI when reopening a session whose SSE stream is no longer
+ * active.
+ */
+export async function getEvents(
+  sessionId: string,
+): Promise<{ events: PersistedEvent[]; error?: string }> {
+  const url = `${API_BASE}/${sessionId}/events`;
+  const response = await fetchWithRetry(url, {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  }, 'GET');
+  return response.json();
+}
+
 // ─── SSE streaming (matches ppt-api streamPresentation style) ─
 
 function sseStreamFromResponse(res: Response): ReadableStream<AutoResearchStreamEvent> {

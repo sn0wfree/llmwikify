@@ -88,6 +88,7 @@ class AutoResearchDatabase:
                     self_loop_counts_json TEXT,
                     self_loop_history_json TEXT,
                     evidence_scores_json TEXT,
+                    events_json TEXT,
                     created_at TEXT DEFAULT (datetime('now')),
                     updated_at TEXT DEFAULT (datetime('now'))
                 )
@@ -509,3 +510,60 @@ class AutoResearchDatabase:
             "self_loop_history": _maybe_load(row["self_loop_history_json"]),
             "evidence_scores": _maybe_load(row["evidence_scores_json"]),
         }
+
+    # ─── Event log persistence ──────────────────────────────────
+
+    def append_events(self, session_id: str, events: list[dict]) -> int:
+        """Append a batch of events to the session's persisted event log.
+
+        Reads the existing events_json (if any), appends the new events,
+        and writes back atomically. Returns the new total count.
+
+        No hard cap (caller should throttle/dedup before calling). The
+        storage cost is small for typical research sessions (≤ 1KB per
+        event, ≤ a few hundred events per session).
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            existing: list[dict] = []
+            if row and row["events_json"]:
+                try:
+                    parsed = json.loads(row["events_json"])
+                    if isinstance(parsed, list):
+                        existing = parsed
+                except (json.JSONDecodeError, TypeError):
+                    existing = []
+            existing.extend(events)
+            new_json = json.dumps(existing, ensure_ascii=False)
+            conn.execute(
+                """UPDATE autoresearch_sessions
+                   SET events_json = ?, updated_at = datetime('now')
+                   WHERE id = ?""",
+                (new_json, session_id),
+            )
+            conn.commit()
+            return len(existing)
+
+    def get_events(self, session_id: str) -> list[dict]:
+        """Return all persisted events for a session, in insertion order.
+
+        Returns an empty list if the session has no events or doesn't
+        exist. Malformed events_json is treated as empty (not raised).
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+        if not row or not row["events_json"]:
+            return []
+        try:
+            parsed = json.loads(row["events_json"])
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, TypeError):
+            return []

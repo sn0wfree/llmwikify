@@ -94,3 +94,35 @@ def migrate_research_six_step_columns(
                 )
         conn.commit()
         return dropped
+
+
+def migrate_v3_add_events_column(ar_db_path) -> bool:
+    """Idempotently add the `events_json` column to autoresearch_sessions.
+
+    New sessions get the column via the CREATE TABLE schema. This helper
+    upgrades existing DBs (created before the events_json column was
+    introduced) by running an ALTER TABLE that is safe to re-run.
+
+    Args:
+        ar_db_path: Path to the autoresearch.db file.
+
+    Returns:
+        True if a column was added; False if it was already present or
+        the DB doesn't exist yet (will be created with the column).
+    """
+    ar_db_path = Path(ar_db_path)
+    if not ar_db_path.exists():
+        return False
+    with sqlite3.connect(ar_db_path) as conn:
+        existing = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(autoresearch_sessions)").fetchall()
+        }
+        if "events_json" in existing:
+            return False
+        conn.execute(
+            "ALTER TABLE autoresearch_sessions ADD COLUMN events_json TEXT"
+        )
+        conn.commit()
+        logger.info("Added events_json column to autoresearch_sessions")
+        return True
