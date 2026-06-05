@@ -474,17 +474,20 @@ class WikiToolRegistry:
 
         Hash format matches report.py: md5(url)[:12], falling back to md5(title)[:12]
         when url is empty.
+
+        Sources with both url AND title empty are skipped (no key to hash).
         """
         link_map: dict[str, dict[str, str]] = {}
         for s in sources:
             url = (s.get("url") or "").strip()
-            title = (s.get("title") or "").strip() or url or "untitled"
-            key = url or title
+            title_raw = (s.get("title") or "").strip()
+            key = url or title_raw
             if not key:
                 continue
+            display_title = title_raw or url or "untitled"
             h = hashlib.md5(key.encode()).hexdigest()[:12]
             slug = f"src-{h}"
-            link_map[h] = {"slug": slug, "title": title, "url": url}
+            link_map[h] = {"slug": slug, "title": display_title, "url": url}
         return link_map
 
     @classmethod
