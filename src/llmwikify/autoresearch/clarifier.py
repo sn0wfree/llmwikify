@@ -6,14 +6,30 @@ the research context, boundaries, position, and premises before planning.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from typing import Any
 
 from llmwikify.autoresearch._json_utils import safe_json_loads
+from llmwikify.autoresearch.llm_step import run_prompt
+from llmwikify.autoresearch.prompts import _clarify_fallback
 
 logger = logging.getLogger(__name__)
+
+
+class _ClarifierCtx:
+    """Minimal ctx-like object for run_prompt.
+
+    ``run_prompt`` needs ``default_llm``, ``planning_llm``, ``report_llm``,
+    and ``config``. The clarifier only has a single LLM client (the
+    planning one) so the other two default to the same client.
+    """
+
+    def __init__(self, llm_client: Any, config: dict[str, Any]):
+        self.default_llm = llm_client
+        self.planning_llm = llm_client
+        self.report_llm = llm_client
+        self.config = config
 
 
 class ResearchClarifier:
@@ -32,8 +48,10 @@ class ResearchClarifier:
     def __init__(self, llm_client: Any, config: dict[str, Any] | None = None):
         self.llm_client = llm_client
         self.config = config or {}
-        from llmwikify.core.prompt_registry import PromptRegistry
-        self.prompt_registry = PromptRegistry(provider=getattr(llm_client, "provider", "openai"))
+
+    def _as_ctx(self) -> _ClarifierCtx:
+        """Build a ctx-like object for ``run_prompt``."""
+        return _ClarifierCtx(self.llm_client, self.config)
 
     async def clarify(self, query: str, wiki_context: str = "") -> dict[str, Any]:
         """Clarify the research query.
@@ -42,19 +60,15 @@ class ResearchClarifier:
             Clarification dict with context, boundaries, position, premises,
             scope_check. Falls back to a minimal dict if LLM call fails.
         """
-        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
-        llm_params = resolve_llm_params(
-            self.prompt_registry, self.config, "research_clarify", "llm_params",
-        )
         try:
-            messages = self._build_messages(query, wiki_context)
-            raw = await asyncio.to_thread(
-                self.llm_client.chat, messages, **llm_params,
+            result = await run_prompt(
+                self._as_ctx(), "research_clarify",
+                query=query, wiki_context=wiki_context,
             )
-            return self._parse_response(raw, query)
         except Exception as e:
             logger.warning("Clarifier LLM call failed: %s, using fallback", e)
-            return self._fallback(query, reason=str(e))
+            return _clarify_fallback(query=query, error=e)
+        return self._normalize(result)
 
     async def clarify_with_loop(
         self,
@@ -133,50 +147,12 @@ class ResearchClarifier:
 
         return clarification, loop_history
 
-    def _build_messages(self, query: str, wiki_context: str) -> list[dict[str, str]]:
-        """Build the LLM messages for clarification."""
-        wiki_block = ""
-        if wiki_context:
-            wiki_block = f"\n\nExisting wiki context:\n{wiki_context[:2000]}"
+    def _normalize(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Normalize the LLM response into a typed dict.
 
-        return [
-            {
-                "role": "system",
-                "content": (
-                    "你是一个研究澄清助手。给定研究主题，你需要：\n\n"
-                    "1. **语境**：明确在谈什么，适用范围、可改变范围、约定边界\n"
-                    "2. **边界**：识别利益相关方、约定条件\n"
-                    "3. **立场**：明确角色视角\n"
-                    "4. **前提**：区分必要条件、前提假设\n\n"
-                    "返回 JSON：\n"
-                    "{\n"
-                    '  "context": "研究语境描述",\n'
-                    '  "boundaries": "边界条件",\n'
-                    '  "position": "立场声明",\n'
-                    '  "premises": "前提假设列表",\n'
-                    '  "scope_check": true/false\n'
-                    "}\n\n"
-                    "scope_check=false 的情况：\n"
-                    "- 范围太宽泛无法研究\n"
-                    "- 前提假设不可靠\n"
-                    "- 缺乏明确的研究边界\n"
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"研究主题：{query}{wiki_block}\n\n请进行概念澄清。",
-            },
-        ]
-
-    def _parse_response(self, raw: str, query: str) -> dict[str, Any]:
-        """Parse the LLM response, handling code-fence wrappers and trailing prose."""
-        try:
-            result = safe_json_loads(raw)
-        except json.JSONDecodeError as e:
-            logger.warning("Clarify JSON parse failed: %s", e)
-            return self._fallback(query, reason=f"JSON parse error: {e}")
-
-        # Normalize
+        Same shape as the legacy ``_parse_response`` (sans fallback
+        handling, which is now in ``_clarify_fallback`` via run_prompt).
+        """
         return {
             "context": result.get("context", ""),
             "boundaries": result.get("boundaries", ""),
@@ -185,29 +161,8 @@ class ResearchClarifier:
             "scope_check": bool(result.get("scope_check", True)),
         }
 
-    def _fallback(self, query: str, reason: str = "") -> dict[str, Any]:
-        """Deterministic fallback when LLM fails.
-
-        Returns scope_check=False so that clarify_with_loop will retry
-        on the next iteration. The previous scope_check=True behavior
-        silently used the fallback after a single LLM failure, hiding
-        transient errors from operators. Now a JSON-parse failure (or
-        LLM call exception) is treated as a signal that the scope is
-        unverified, which triggers a retry with the original query.
-        """
-        return {
-            "context": f"未澄清（{reason}），使用原始查询作为语境",
-            "boundaries": "未明确",
-            "position": "研究者视角",
-            "premises": [f"原始查询: {query[:200]}"],
-            "scope_check": False,  # 🐛 fix: trigger retry loop on parse failure
-            "fallback": True,
-            "fallback_reason": reason,
-        }
-
     def _narrow_query(self, original: str, prev_clarification: dict) -> str:
         """Narrow the query based on the previous clarification result.
-
         Prepends the context and boundaries to constrain the scope.
         """
         parts = [original]

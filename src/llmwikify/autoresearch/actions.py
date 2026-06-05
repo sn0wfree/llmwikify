@@ -19,6 +19,8 @@ from llmwikify.autoresearch.clarifier import ResearchClarifier
 from llmwikify.autoresearch.config import merge_six_step_config
 from llmwikify.autoresearch.engine_helpers import chat_json, resolve_llm_params
 from llmwikify.autoresearch.gatherer import SourceGatherer
+from llmwikify.autoresearch.llm_step import run_prompt
+from llmwikify.autoresearch.prompts import _plan_fallback, _replan_fallback
 from llmwikify.autoresearch.quality_gate import QualityGate
 from llmwikify.autoresearch.report import ReportGenerator
 from llmwikify.autoresearch.review import ResearchReviewer, ResearchRevisor
@@ -119,9 +121,6 @@ def _warn_invalid_transition(from_phase: str, to_phase: str) -> None:
 
 async def _plan_sub_queries(ctx: ActionContext, query: str) -> list[dict[str, Any]]:
     """Decompose the research topic into sub-queries using planning_model."""
-    from llmwikify.core.prompt_registry import PromptRegistry
-    registry = PromptRegistry(provider=getattr(ctx.planning_llm, "provider", "openai"))
-
     local_wiki_matches = ""
     try:
         wiki_results = ctx.wiki.search(query, limit=5)
@@ -140,25 +139,18 @@ async def _plan_sub_queries(ctx: ActionContext, query: str) -> list[dict[str, An
     if ctx.wiki.index_file.exists():
         wiki_index = ctx.wiki.index_file.read_text()[:3000]
 
-    messages = registry.get_messages(
-        "research_plan",
-        query=query,
-        wiki_index=wiki_index[:2000] if wiki_index else "",
-        local_wiki_matches=local_wiki_matches,
-    )
-    llm_params = resolve_llm_params(
-        registry, ctx.config, "research_plan", "llm_params",
-    )
-
     try:
-        result = await chat_json(
-            ctx.planning_llm, messages, **llm_params,
+        result = await run_prompt(
+            ctx, "research_plan",
+            query=query,
+            wiki_index=wiki_index[:2000] if wiki_index else "",
+            local_wiki_matches=local_wiki_matches,
         )
         if not isinstance(result, list):
             result = []
     except Exception as e:
         logger.warning("Planning LLM failed: %s, using single query", e)
-        result = [{"query": query, "source_type": "web", "url": ""}]
+        result = _plan_fallback(query=query, error=e)
 
     max_sq = ctx.config.get("max_sub_queries", 20)
     sub_queries: list[dict[str, Any]] = []
@@ -206,36 +198,18 @@ async def _plan_for_gaps(
             f"{local_wiki_matches}\nUse source_type \"wiki\" for these if relevant."
         )
 
-    messages = [
-        {"role": "system", "content": (
-            "You are a research planner. Generate focused sub-queries to fill knowledge gaps. "
-            "Return a JSON array of objects with 'query', 'source_type', and 'url' fields. "
-            "source_type should be 'web', 'pdf', 'youtube', or 'wiki'. "
-            "Use 'wiki' when existing wiki articles are relevant (see below). "
-            "Generate 1-3 sub-queries per gap, maximum 5 total."
-        )},
-        {"role": "user", "content": (
-            f"Research topic: {query}\n\n"
-            f"Knowledge gaps to fill:\n{gaps_text}"
-            f"{wiki_context}\n\n"
-            "Generate sub-queries now. Return ONLY a JSON array."
-        )},
-    ]
-
     try:
-        from llmwikify.core.prompt_registry import PromptRegistry
-        registry = PromptRegistry(provider=getattr(ctx.planning_llm, "provider", "openai"))
-        llm_params = resolve_llm_params(
-            registry, ctx.config, "research_replan", "llm_params",
-        )
-        result = await chat_json(
-            ctx.planning_llm, messages, **llm_params,
+        result = await run_prompt(
+            ctx, "research_replan",
+            query=query,
+            gaps_text=gaps_text,
+            wiki_context=wiki_context,
         )
         if not isinstance(result, list):
             result = []
     except Exception as e:
         logger.warning("Gap planning LLM failed: %s", e)
-        result = [{"query": f"{query} {gaps[0]}", "source_type": "web", "url": ""}] if gaps else []
+        result = _replan_fallback(query=query, gaps=gaps, error=e)
 
     sub_queries = []
     for item in result[:5]:

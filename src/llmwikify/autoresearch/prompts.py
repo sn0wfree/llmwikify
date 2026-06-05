@@ -243,26 +243,34 @@ def source_hash(source: dict[str, Any]) -> str:
 # ─── fallback functions ───────────────────────────────────────────────
 
 
-def _clarify_fallback(query: str, **_kwargs: Any) -> dict[str, Any]:
+def _clarify_fallback(
+    query: str, error: Exception | None = None, **_kwargs: Any,
+) -> dict[str, Any]:
     """Fallback for research_clarify (verbatim from clarifier._fallback:188-206)."""
+    reason = str(error) if error else "LLM call failed"
     return {
-        "context": f"未澄清（LLM 失败），使用原始查询作为语境",
+        "context": f"未澄清（{reason}），使用原始查询作为语境",
         "boundaries": "未明确",
         "position": "研究者视角",
         "premises": [f"原始查询: {query[:200]}"],
         "scope_check": False,
         "fallback": True,
-        "fallback_reason": "LLM call failed",
+        "fallback_reason": reason,
     }
 
 
-def _plan_fallback(query: str, **_kwargs: Any) -> list[dict[str, Any]]:
+def _plan_fallback(
+    query: str, error: Exception | None = None, **_kwargs: Any,
+) -> list[dict[str, Any]]:
     """Fallback for research_plan (verbatim from actions._plan_sub_queries:161)."""
     return [{"query": query, "source_type": "web", "url": ""}]
 
 
 def _replan_fallback(
-    query: str, gaps: list[str] | None = None, **_kwargs: Any,
+    query: str,
+    gaps: list[str] | None = None,
+    error: Exception | None = None,
+    **_kwargs: Any,
 ) -> list[dict[str, Any]]:
     """Fallback for research_replan (verbatim from actions._plan_for_gaps:238)."""
     if not gaps:
@@ -270,7 +278,22 @@ def _replan_fallback(
     return [{"query": f"{query} {gaps[0]}", "source_type": "web", "url": ""}]
 
 
-def _reason_fallback(**_kwargs: Any) -> dict[str, str]:
+def _review_fallback(
+    error: Exception | None = None, **_kwargs: Any,
+) -> dict[str, Any]:
+    """Fallback for research_review (verbatim from review.py:77)."""
+    reason = f"Review failed: {error}" if error else "Review failed: LLM call failed"
+    return {
+        "approved": False,
+        "feedback": reason,
+        "issues": ["Review LLM call failed"],
+        "score": 0,
+    }
+
+
+def _reason_fallback(
+    error: Exception | None = None, **_kwargs: Any,
+) -> dict[str, str]:
     """Fallback for research_reason.
 
     The original ``_llm_reason`` falls back to a rule-based decision
@@ -280,16 +303,6 @@ def _reason_fallback(**_kwargs: Any) -> dict[str, str]:
     ``engine.py:_rule_based_reason`` (unchanged in this refactor).
     """
     return {"thought": "LLM failed, applying rule-based fallback", "action": "__rule_based__"}
-
-
-def _review_fallback(**_kwargs: Any) -> dict[str, Any]:
-    """Fallback for research_review (verbatim from review.py:77)."""
-    return {
-        "approved": False,
-        "feedback": "Review failed: LLM call failed",
-        "issues": ["Review LLM call failed"],
-        "score": 0,
-    }
 
 
 # ─── ResearchPrompt dataclass + registry ──────────────────────────────
