@@ -131,7 +131,7 @@ async def resume_autoresearch(session_id: str):
     session = db.get_research_session(session_id)
     if not session:
         return {"error": f"Session {session_id} not found"}
-    if session["status"] not in ("paused", "pausing", "gathering", "planning", "analyzing", "synthesizing", "report", "reviewing", "clarifying"):
+    if session["status"] not in ("paused", "pausing", "gathering", "planning", "analyzing", "synthesizing", "report", "reviewing", "clarifying", "incomplete", "error", "timeout", "done"):
         return {"error": f"Cannot resume from status: {session['status']}"}
 
     engine = _get_engine(session.get("wiki_id"))

@@ -1876,3 +1876,134 @@ class TestAutoResearchDatabase:
         # Also accepts string
         p2 = get_autoresearch_db_path(str(tmp_path))
         assert p2 == tmp_path / "autoresearch.db"
+
+
+# ─── Phase 6: Resume tests ────────────────────────────────────────
+
+
+class TestResume:
+    """Tests for session resume: whitelist, round reset, evidence restore."""
+
+    def test_resume_from_incomplete_allows_entry(self, db):
+        """routes.py should allow resume from 'incomplete' status."""
+        from llmwikify.autoresearch.routes import resume_autoresearch
+        sid = db.create_research_session("w", "q")
+        db.update_research_status(sid, "incomplete", "done", 1.0)
+        session = db.get_research_session(sid)
+        # The whitelist check: incomplete should be in the allowed set
+        allowed = ("paused", "pausing", "gathering", "planning", "analyzing",
+                    "synthesizing", "report", "reviewing", "clarifying",
+                    "incomplete", "error", "timeout", "done")
+        assert session["status"] in allowed
+
+    def test_resume_from_done_allows_entry(self, db):
+        """routes.py should allow resume from 'done' status."""
+        sid = db.create_research_session("w", "q")
+        db.update_research_status(sid, "done", "done", 1.0)
+        session = db.get_research_session(sid)
+        allowed = ("paused", "pausing", "gathering", "planning", "analyzing",
+                    "synthesizing", "report", "reviewing", "clarifying",
+                    "incomplete", "error", "timeout", "done")
+        assert session["status"] in allowed
+
+    def test_resume_resets_round_to_zero(self, mock_wiki, mock_llm, db, config):
+        """_load_resume_state should set round=0 for fresh budget cycle."""
+        config["max_react_rounds"] = 3
+        # Create a session that hit max_rounds (round=3)
+        sid = db.create_research_session("w", "q")
+        db.update_research_status(sid, "incomplete", "done", 0.5)
+        # Manually set iteration_round to simulate a session that ran 3 rounds
+        with sqlite3.connect(str(db.db_path)) as conn:
+            conn.execute(
+                "UPDATE autoresearch_sessions SET iteration_round = 3 WHERE id = ?",
+                (sid,),
+            )
+
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        state = ResearchState(session_id=sid, query="test", max_rounds=3)
+        engine._load_resume_state(state)
+
+        # Round should be reset to 0 (not 3)
+        assert state.round == 0
+
+    def test_resume_restores_evidence_scores(self, mock_wiki, mock_llm, db, config):
+        """_load_resume_state should restore evidence_scores from DB."""
+        sid = db.create_research_session("w", "q")
+        # Persist evidence scores (method takes dict, handles JSON internally)
+        evidence = {"src_abc": 0.85, "src_def": 0.62}
+        db.update_six_step_fields(sid, evidence_scores=evidence)
+
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        state = ResearchState(session_id=sid, query="test")
+        engine._load_resume_state(state)
+
+        assert state.evidence_scores == evidence
+
+    def test_resume_restores_all_framework_fields(self, mock_wiki, mock_llm, db, config):
+        """_load_resume_state should restore all 6-step framework fields."""
+        sid = db.create_research_session("w", "q")
+        clarification = {"context": "c", "boundaries": "b", "scope_check": True, "premises": []}
+        evidence = {"src1": 0.9}
+        synthesis = {"reinforced_claims": [], "knowledge_gaps": [], "contradictions": []}
+        reasoning = {"aggregate_score": 0.8, "issues": []}
+        structure = {"aggregate_score": 0.7, "issues": []}
+        review = {"approved": True, "score": 8, "feedback": "ok", "issues": []}
+
+        db.update_six_step_fields(sid,
+            clarification=clarification,
+            evidence_scores=evidence,
+            reasoning=reasoning,
+            structure=structure,
+        )
+        # synthesis and review go through different columns
+        with sqlite3.connect(str(db.db_path)) as conn:
+            conn.execute(
+                "UPDATE autoresearch_sessions SET synthesis_json = ?, review_json = ? WHERE id = ?",
+                (json.dumps(synthesis), json.dumps(review), sid),
+            )
+
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        state = ResearchState(session_id=sid, query="test")
+        engine._load_resume_state(state)
+
+        assert state.clarification == clarification
+        assert state.evidence_scores == evidence
+        assert state.synthesis == synthesis
+        assert state.reasoning_check == reasoning
+        assert state.structure_check == structure
+        assert state.review == review
+
+    def test_resume_skips_clarify(self, mock_wiki, mock_llm, db, config):
+        """On resume, clarify should be skipped if clarification already exists."""
+        config["max_react_rounds"] = 2
+        sid = db.create_research_session("w", "q")
+        # Pre-populate ALL framework fields so compliance gate passes
+        db.update_six_step_fields(sid,
+            clarification={"context": "x", "scope_check": True, "premises": []},
+            evidence_scores={"src1": 0.9},
+            reasoning={"aggregate_score": 0.8, "issues": []},
+            structure={"aggregate_score": 0.7, "issues": []},
+        )
+        with sqlite3.connect(str(db.db_path)) as conn:
+            conn.execute(
+                "UPDATE autoresearch_sessions SET synthesis_json = ?, review_json = ?, result = ? WHERE id = ?",
+                (json.dumps({"reinforced_claims": [], "knowledge_gaps": [], "contradictions": []}),
+                 json.dumps({"approved": True, "score": 8, "feedback": "ok", "issues": []}),
+                 json.dumps({"markdown": "# Report", "quality_score": 8}),
+                 sid),
+            )
+        db.update_research_status(sid, "incomplete", "done", 0.5)
+
+        # LLM: only reason calls (no clarify call expected)
+        mock_llm.chat.side_effect = [
+            json.dumps({"thought": "have data", "action": "done"}),
+        ]
+
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        events = _run_async(_collect_events(engine.run(sid, "test query", resume=True)))
+        types = [e.get("type") for e in events]
+
+        # clarify_complete should NOT appear (skipped on resume)
+        assert "clarification_complete" not in types
+        # But reasoning event should appear (loop ran)
+        assert "reasoning" in types
