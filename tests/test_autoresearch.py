@@ -1494,12 +1494,16 @@ class TestStructureAndFrameworkGates:
 
 
 class TestReportAndReviewEnrichment:
-    """Report/Review: 6-step framework enrichment in _build_messages."""
+    """Report/Review: 6-step framework enrichment.
+
+    After commit 4 of the prompt-system refactor, the framework block
+    rendering is consolidated in ``autoresearch.prompts.render_framework_block``.
+    The report/review modules call this shared helper, so the tests
+    exercise the consolidated function directly.
+    """
 
     def test_report_renders_framework_block(self):
-        from llmwikify.autoresearch.report import ReportGenerator
-        rg = ReportGenerator.__new__(ReportGenerator)
-        rg.config = {}
+        from llmwikify.autoresearch.prompts import render_framework_block
         ctx = {
             "clarification": {
                 "context": "ctx", "boundaries": "bnd", "position": "pos",
@@ -1509,7 +1513,7 @@ class TestReportAndReviewEnrichment:
             "structure_check": {"aggregate_score": 0.8, "scores": {"a": 0.9}},
             "evidence_scores": {"s1": 0.8, "s2": 0.6},
         }
-        block = rg._render_framework_block(ctx)
+        block = render_framework_block(ctx, "report")
         assert "步骤 1" in block
         assert "步骤 2" in block
         assert "步骤 3" in block
@@ -1518,23 +1522,19 @@ class TestReportAndReviewEnrichment:
         assert "前提 (2)" in block
 
     def test_report_renders_empty_when_no_context(self):
-        from llmwikify.autoresearch.report import ReportGenerator
-        rg = ReportGenerator.__new__(ReportGenerator)
-        rg.config = {}
-        assert rg._render_framework_block(None) == ""
-        assert rg._render_framework_block({}) == ""
+        from llmwikify.autoresearch.prompts import render_framework_block
+        assert render_framework_block(None, "report") == ""
+        assert render_framework_block({}, "report") == ""
 
     def test_review_renders_framework_block(self):
-        from llmwikify.autoresearch.review import ResearchReviewer
-        rr = ResearchReviewer.__new__(ResearchReviewer)
-        rr.config = {}
+        from llmwikify.autoresearch.prompts import render_framework_block
         ctx = {
             "clarification": {"context": "ctx", "boundaries": "bnd", "position": "pos"},
             "reasoning_check": {"aggregate_score": 0.7},
             "structure_check": {"aggregate_score": 0.8},
             "evidence_scores": {"s1": 0.8},
         }
-        block = rr._render_framework_review_block(ctx)
+        block = render_framework_block(ctx, "review")
         assert "6-step Framework Review Checklist" in block
         assert "标准 1" in block
         assert "标准 2" in block
@@ -1543,11 +1543,9 @@ class TestReportAndReviewEnrichment:
         assert "标准 5" in block
 
     def test_review_renders_empty_when_no_context(self):
-        from llmwikify.autoresearch.review import ResearchReviewer
-        rr = ResearchReviewer.__new__(ResearchReviewer)
-        rr.config = {}
-        assert rr._render_framework_review_block(None) == ""
-        assert rr._render_framework_review_block({}) == ""
+        from llmwikify.autoresearch.prompts import render_framework_block
+        assert render_framework_block(None, "review") == ""
+        assert render_framework_block({}, "review") == ""
 
 
 # ─── Phase 4: retry managers ─────────────────────────────────────────
