@@ -29,7 +29,7 @@ class XiaomiProvider(BaseLLMProvider):
         ]
 
     def from_config(self, config: dict) -> Any:
-        from ..adapters import StreamableLLMClient
+        from llmwikify.llm.streamable import StreamableLLMClient
 
         api_key = self._resolve_api_key(config)
         if not api_key:
