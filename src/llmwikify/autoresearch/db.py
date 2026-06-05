@@ -67,7 +67,13 @@ class AutoResearchDatabase:
         return conn
 
     def _init_db(self) -> None:
-        """Idempotently create the autoresearch schema (3 tables + 2 indexes)."""
+        """Idempotently create the autoresearch schema (3 tables + 2 indexes)
+        AND run any pending column migrations (e.g. events_json).
+
+        New schemas get the column from the CREATE TABLE statement above.
+        Pre-migration DBs (created before events_json was added) get it
+        via ALTER TABLE inside the migration helper.
+        """
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS autoresearch_sessions (
@@ -135,6 +141,20 @@ class AutoResearchDatabase:
                 ON autoresearch_sources(session_id)
             """)
             conn.commit()
+        # Auto-migrate: add columns added in newer schema versions
+        self._run_pending_migrations()
+
+    def _run_pending_migrations(self) -> None:
+        """Run any column-level migrations idempotently.
+
+        Each migration is a no-op if the column is already present.
+        Add new migrations here when adding new schema columns.
+        """
+        from llmwikify.autoresearch.db_migrations import migrate_v3_add_events_column
+        try:
+            migrate_v3_add_events_column(self.db_path)
+        except Exception as e:
+            logger.warning("Auto-migration failed (events_json): %s", e)
 
     def _check_db_size(self) -> None:
         """Warn if the autoresearch.db file grows beyond the threshold."""

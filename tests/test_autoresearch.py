@@ -638,6 +638,203 @@ class TestEngineInitialization:
         assert engine.config["clarify_max_retries"] == 2
 
 
+# ─── 4b. Framework compliance gate ──────────────────────────────────
+
+
+class TestFrameworkComplianceGate:
+    """Verify the engine's _check_framework_compliance + action_incomplete.
+
+    Reproduces the bug pattern of session 7fe6f04f: 4/6 framework steps
+    skipped but engine still marked done. The gate must catch this and
+    either redirect or mark incomplete.
+    """
+
+    def _full_compliant_state(self):
+        """Return a state with all 6 framework fields populated."""
+        s = ResearchState(session_id="test", query="Q", max_rounds=5)
+        s.clarification = {"context": "ctx", "scope_check": True}
+        s.evidence_scores = {"src1": 0.8, "src2": 0.6}
+        s.synthesis = {"reinforced_claims": ["a"], "contradictions": [], "knowledge_gaps": []}
+        s.reasoning_check = {"aggregate_score": 0.7, "scores": {}, "issues": []}
+        s.report_md = "# Report\n\nContent."
+        s.structure_check = {"aggregate_score": 0.8, "scores": {}, "issues": []}
+        s.review = {"approved": True, "score": 8, "issues": []}
+        return s
+
+    def test_all_compliant_returns_none(self, mock_wiki, mock_llm, db):
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = self._full_compliant_state()
+        assert engine._check_framework_compliance(state) is None
+
+    def test_missing_clarify(self, mock_wiki, mock_llm, db):
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = self._full_compliant_state()
+        state.clarification = None
+        result = engine._check_framework_compliance(state)
+        assert result is not None
+        assert result["missing"] == "clarify"
+        assert "step 1" in result["reason"]
+
+    def test_missing_evidence_scores(self, mock_wiki, mock_llm, db):
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = self._full_compliant_state()
+        state.evidence_scores = {}
+        result = engine._check_framework_compliance(state)
+        assert result["missing"] == "gather"
+
+    def test_missing_synthesis(self, mock_wiki, mock_llm, db):
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = self._full_compliant_state()
+        state.synthesis = None
+        result = engine._check_framework_compliance(state)
+        assert result["missing"] == "synthesize"
+
+    def test_missing_reasoning_check_redirects_to_synthesize(self, mock_wiki, mock_llm, db):
+        """reasoning_check is populated by synthesize action."""
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = self._full_compliant_state()
+        state.reasoning_check = None
+        result = engine._check_framework_compliance(state)
+        # Re-run synthesize to also run reasoning check
+        assert result["missing"] == "synthesize"
+
+    def test_missing_report(self, mock_wiki, mock_llm, db):
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = self._full_compliant_state()
+        state.report_md = None
+        result = engine._check_framework_compliance(state)
+        assert result["missing"] == "report"
+
+    def test_missing_structure_check_redirects_to_report(self, mock_wiki, mock_llm, db):
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = self._full_compliant_state()
+        state.structure_check = None
+        result = engine._check_framework_compliance(state)
+        assert result["missing"] == "report"
+
+    def test_missing_review(self, mock_wiki, mock_llm, db):
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = self._full_compliant_state()
+        state.review = None
+        result = engine._check_framework_compliance(state)
+        assert result["missing"] == "review"
+
+    def test_7fe6f04f_reproduction_redirects(self, mock_wiki, mock_llm, db):
+        """Reproduce session 7fe6f04f pattern: 4/6 missing → gate must catch.
+
+        State has: clarification, evidence_scores, synthesis (but NO
+        reasoning_check), NO report, NO structure_check, NO review.
+        First missing per the gate is synthesis (reasoning check piggybacks
+        on synthesize). After synthesize, report would still be missing
+        (next redirect target). Gate must NOT return None.
+        """
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = ResearchState(session_id="repro", query="Q", max_rounds=5)
+        state.clarification = {"context": "ctx", "scope_check": True}
+        state.evidence_scores = {"s1": 0.7}
+        # Missing: synthesis, reasoning_check, report, structure_check, review
+        result = engine._check_framework_compliance(state)
+        assert result is not None
+        # First missing per gate order
+        assert result["missing"] == "synthesize"
+
+    def test_can_replan_with_budget(self, mock_wiki, mock_llm, db):
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = ResearchState(session_id="t", query="q", max_rounds=5)
+        state.budget_remaining = 0.5
+        state.round = 1
+        assert engine._can_replan(state) is True
+
+    def test_cannot_replan_no_budget(self, mock_wiki, mock_llm, db):
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = ResearchState(session_id="t", query="q", max_rounds=5)
+        state.budget_remaining = 0.05  # below 0.10 threshold
+        state.round = 1
+        assert engine._can_replan(state) is False
+
+    def test_cannot_replan_at_max_rounds(self, mock_wiki, mock_llm, db):
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        state = ResearchState(session_id="t", query="q", max_rounds=5)
+        state.budget_remaining = 0.5
+        state.round = 5  # at max
+        assert engine._can_replan(state) is False
+
+    @pytest.mark.asyncio
+    async def test_action_incomplete_sets_status_and_persists(self, mock_wiki, mock_llm, db):
+        """action_incomplete marks status='incomplete' and persists partial result."""
+        from llmwikify.autoresearch.actions import action_incomplete
+        from llmwikify.autoresearch.engine import ResearchEngine
+
+        engine = ResearchEngine(mock_wiki, db, mock_llm, {})
+        ctx = engine._action_ctx
+        # state.clarification = ...
+        state = self._full_compliant_state()
+        # But leave 2 of 6 missing
+        state.report_md = None
+        state.structure_check = None
+        state.review = None
+
+        sid = db.create_research_session("w", "test incomplete")
+        state.session_id = sid
+        ctx.session_manager.update_status(sid, "running", "gathering", 0.4, iteration_round=3)
+
+        events = []
+        async for ev in action_incomplete(ctx, state, "test reason"):
+            events.append(ev)
+
+        # First event is incomplete status
+        assert any(e.get("type") == "incomplete" for e in events)
+
+        # DB status should be 'incomplete'
+        sess = db.get_research_session(sid)
+        assert sess["status"] == "incomplete"
+
+        # Result should have incomplete_reason
+        result = json.loads(sess["result"])
+        assert "incomplete_reason" in result
+        assert result["incomplete_reason"] == "test reason"
+        assert result["framework_completed"] == 4  # 4/7 present
+        assert result["framework_total"] == 7
+
+
+# ─── 4c. DB auto-migration test ─────────────────────────────────────
+
+
+class TestAutoMigration:
+    """Verify db.py auto-runs the events_json migration on init."""
+
+    def test_init_runs_migration_on_existing_db(self, tmp_path):
+        """Init against a DB that lacks events_json should add it."""
+        import sqlite3
+        # Create a pre-migration DB (no events_json column)
+        db_path = tmp_path / "pre_migration.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                """CREATE TABLE autoresearch_sessions (
+                    id TEXT PRIMARY KEY, wiki_id TEXT NOT NULL, query TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'clarifying', current_step TEXT,
+                    progress REAL DEFAULT 0.0, result TEXT, wiki_page_name TEXT,
+                    iteration_round INTEGER DEFAULT 0,
+                    synthesis_json TEXT, review_json TEXT,
+                    clarification_json TEXT, reasoning_json TEXT,
+                    structure_json TEXT, self_loop_counts_json TEXT,
+                    self_loop_history_json TEXT, evidence_scores_json TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT DEFAULT (datetime('now'))
+                )"""
+            )
+            conn.commit()
+        # Now init — should auto-migrate
+        db = AutoResearchDatabase(tmp_path)
+        # events_json should be present
+        sid = db.create_research_session("w", "q")
+        sess = db.get_research_session(sid)
+        assert "events_json" in sess
+        # And we can append events
+        db.append_events(sid, [{"type": "step", "message": "ok"}])
+        assert len(db.get_events(sid)) == 1
+
+
 class TestEngineClarifyIntegration:
     def test_run_starts_with_clarify_event(self, mock_wiki, mock_llm, db, config):
         """The first event after reasoning should be a clarification_complete."""

@@ -244,6 +244,36 @@ class ResearchEngine:
                     "phase": state.phase,
                 }
 
+                # ── Framework compliance gate: block 'done' if any 6-step
+                #    framework field is missing. Either redirect to the
+                #    missing action (if budget allows) or mark incomplete.
+                if action == "done":
+                    non_compliant = self._check_framework_compliance(state)
+                    if non_compliant is not None:
+                        if self._can_replan(state):
+                            logger.info(
+                                "Framework compliance gate: %s → redirecting done→%s",
+                                non_compliant["reason"], non_compliant["missing"],
+                            )
+                            yield {
+                                "type": "framework_redirect",
+                                "from": "done",
+                                "to": non_compliant["missing"],
+                                "reason": non_compliant["reason"],
+                                "round": state.round,
+                            }
+                            action = non_compliant["missing"]
+                        else:
+                            logger.warning(
+                                "Framework compliance gate failed and no budget: %s",
+                                non_compliant["reason"],
+                            )
+                            async for ev in self._action_incomplete(
+                                state, non_compliant["reason"],
+                            ):
+                                yield ev
+                            break
+
                 # ── ACT: execute action via dispatch table ──
                 action_method = self._action_dispatch.get(action)
                 if action_method is None:
@@ -283,7 +313,32 @@ class ResearchEngine:
 
                 # ── Evaluate: check exit conditions ──
                 if state.round >= state.max_rounds:
-                    yield {"type": "round_max", "round": state.round, "message": f"Reached max rounds ({state.max_rounds})"}
+                    # Framework compliance gate: do not exit to 'done' if
+                    # any 6-step field is missing — mark incomplete instead.
+                    non_compliant = self._check_framework_compliance(state)
+                    if non_compliant is not None:
+                        logger.warning(
+                            "Max rounds reached, framework non-compliant: %s",
+                            non_compliant["reason"],
+                        )
+                        yield {
+                            "type": "round_max",
+                            "round": state.round,
+                            "message": (
+                                f"Reached max rounds ({state.max_rounds}) "
+                                f"with framework incomplete"
+                            ),
+                        }
+                        async for ev in self._action_incomplete(
+                            state, f"max_rounds: {non_compliant['reason']}",
+                        ):
+                            yield ev
+                        break
+                    yield {
+                        "type": "round_max",
+                        "round": state.round,
+                        "message": f"Reached max rounds ({state.max_rounds})",
+                    }
                     async for event in self._action_done(state):
                         yield event
                     break
@@ -444,6 +499,65 @@ class ResearchEngine:
                     state.paused = True
         except Exception as e:
             logger.debug("Control signal check failed: %s", e)
+
+    # ─── Framework Compliance Gate ────────────────────────────────────
+
+    def _check_framework_compliance(self, state: ResearchState) -> dict | None:
+        """Return None if all 6-step framework fields are present, else
+        {missing: action_name, reason: human_readable}.
+
+        Used to prevent the engine from marking a session 'done' when
+        the 6-step framework (clarify→evidence→reasoning→structure→
+        report→review) has skipped steps. The 'missing' field is the
+        next action the engine should take to fix the gap.
+
+        Maps to the 6 framework steps in the README:
+        - 1. clarify       → state.clarification
+        - 2. evidence      → state.evidence_scores (populated by gather)
+        - 3. reasoning     → state.reasoning_check (populated by synthesize)
+        - 4. structure     → state.structure_check (populated by report)
+        - 5. report        → state.report_md
+        - 6. review        → state.review
+        """
+        if state.clarification is None:
+            return {"missing": "clarify", "reason": "step 1 (clarification) missing"}
+        if not state.evidence_scores:
+            return {"missing": "gather", "reason": "step 2 (evidence scoring) missing"}
+        if state.synthesis is None:
+            return {"missing": "synthesize", "reason": "step 5 (synthesis) missing"}
+        if state.reasoning_check is None:
+            # reasoning_check is part of synthesize action
+            return {"missing": "synthesize", "reason": "step 3 (reasoning check) missing"}
+        if state.report_md is None:
+            return {"missing": "report", "reason": "step 5 (report) missing"}
+        if state.structure_check is None:
+            # structure_check is part of report action
+            return {"missing": "report", "reason": "step 4 (structure check) missing"}
+        if state.review is None:
+            return {"missing": "review", "reason": "step 6 (review) missing"}
+        return None
+
+    def _can_replan(self, state: ResearchState) -> bool:
+        """Return True if the engine has budget for one more action.
+
+        Used by the framework compliance gate to decide between
+        'redirect to missing action' vs 'mark incomplete'.
+        """
+        if state.budget_remaining <= 0.10:
+            return False
+        if state.round >= state.max_rounds:
+            return False
+        return True
+
+    async def _action_incomplete(
+        self, state: ResearchState, reason: str,
+    ):
+        """Async-gen wrapper around actions.action_incomplete.
+
+        Lets the main loop yield incomplete events inline.
+        """
+        async for ev in actions.action_incomplete(self._action_ctx, state, reason):
+            yield ev
 
     # ─── Observe Step ──────────────────────────────────────────────────
 
