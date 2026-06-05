@@ -61,12 +61,62 @@ class ActionMetrics:
 
 
 @dataclass
+class LLMCallMetrics:
+    """Metrics for a single LLM call (one ``run_prompt`` invocation).
+
+    Populated by ``run_prompt`` (commit 7 of the prompt-system
+    refactor). Each entry corresponds to one logical call to an
+    underlying LLM, including any retries — so ``attempt_count``
+    can be > 1 when transient failures were retried.
+
+    Fields:
+        prompt_name: Registry key, e.g. ``"research_clarify"``.
+        llm_role: Which client was used — "default" | "planning"
+            | "report".
+        attempt_count: Number of underlying ``client.chat`` calls
+            actually made (1 = succeeded on first try, 2+ = had
+            transient retries that were resolved).
+        latency_ms: Wall-clock time spent in run_prompt, including
+            retries and framework augmentation. The LLM client's
+            own latency is roughly a subset of this.
+        chars_in: Approximate input size — sum of ``len(content)``
+            for every message sent to the LLM (system + user +
+            framework block). Cheap proxy for input tokens.
+        chars_out: Approximate output size — ``len(str(result))``
+            for the final LLM response (JSON-stringified for JSON
+            outputs, raw for markdown). Cheap proxy for output
+            tokens.
+        fallback_used: True if the LLM call failed after retries
+            and the caller invoked ``spec.fallback(**vars)`` (not
+            recorded here directly; set by run_prompt when it
+            re-raises and the caller catches).
+        success: True if the LLM returned a parseable result on
+            the final attempt. False if run_prompt re-raised.
+        json_parsed: True if the response was parsed as JSON
+            (only meaningful for ``expects_json=True`` prompts).
+        error: Stringified exception on failure, "" on success.
+    """
+    prompt_name: str
+    llm_role: str
+    attempt_count: int = 1
+    latency_ms: int = 0
+    chars_in: int = 0
+    chars_out: int = 0
+    fallback_used: bool = False
+    success: bool = True
+    json_parsed: bool = True
+    error: str = ""
+
+
+@dataclass
 class MetricsCollector:
     """Metrics for an entire research session.
 
-    Aggregates per-action metrics. Each action's metric collection is a
-    ``with`` context manager block — no need to remember to call
-    ``_finish_action`` at every return point.
+    Aggregates per-action metrics and per-LLM-call metrics. Each
+    action's metric collection is a ``with`` context manager block
+    — no need to remember to call ``_finish_action`` at every
+    return point. Each LLM call is recorded by ``run_prompt``
+    directly via ``record_llm_call``.
 
     Back-compat: ``SessionMetrics = MetricsCollector`` (alias at module level).
     """
@@ -77,6 +127,7 @@ class MetricsCollector:
     total_tokens: int = 0
     total_cost_usd: float = 0.0
     actions: list[ActionMetrics] = field(default_factory=list)
+    llm_calls: list[LLMCallMetrics] = field(default_factory=list)
 
     def start(self) -> None:
         """Mark session as started."""
@@ -93,6 +144,15 @@ class MetricsCollector:
         """Back-compat: manually append an action metric."""
         self.actions.append(action)
 
+    def record_llm_call(self, metric: LLMCallMetrics) -> None:
+        """Append one LLM call metric.
+
+        Called by ``run_prompt`` (autoresearch.llm_step). Errors
+        raised by this method are caught by the caller; metric
+        recording is best-effort and never breaks the LLM call path.
+        """
+        self.llm_calls.append(metric)
+
     def summary(self) -> str:
         """Generate human-readable summary."""
         lines = [f"Session {self.session_id} completed in {self.total_duration_ms/1000:.1f}s"]
@@ -100,6 +160,24 @@ class MetricsCollector:
             token_str = f"{a.tokens_used:,} tokens" if a.tokens_used > 0 else "0 tokens"
             cost_str = f"${a.cost_usd:.3f}" if a.cost_usd > 0 else "$0.00"
             lines.append(f"├── {a.action}: {a.duration_ms/1000:.1f}s, {token_str}, {cost_str}")
+        if self.llm_calls:
+            lines.append(f"├── LLM calls: {len(self.llm_calls)} total")
+            for c in self.llm_calls:
+                status = (
+                    "fallback" if c.fallback_used
+                    else ("ok" if c.success else f"err: {c.error[:30]}")
+                )
+                lines.append(
+                    f"│   ├── {c.prompt_name} ({c.llm_role}): "
+                    f"{c.latency_ms}ms, {c.attempt_count} attempt(s), "
+                    f"{c.chars_in}→{c.chars_out} chars, {status}"
+                )
+            total_llm_ms = sum(c.latency_ms for c in self.llm_calls)
+            total_attempts = sum(c.attempt_count for c in self.llm_calls)
+            lines.append(
+                f"│   └── Total: {total_llm_ms/1000:.1f}s, "
+                f"{total_attempts} attempt(s)"
+            )
         lines.append(f"└── Total: {self.total_duration_ms/1000:.1f}s, {self.total_tokens:,} tokens, ${self.total_cost_usd:.3f}")
         return "\n".join(lines)
 
