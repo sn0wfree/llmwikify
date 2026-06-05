@@ -726,7 +726,8 @@ class ResearchEngine:
         if not session:
             return
 
-        state.round = session.get("iteration_round", 1)
+        # Reset round to 0 on resume so reasoner gets a fresh budget cycle
+        state.round = 0
         state.max_rounds = session.get("max_rounds", self._max_react_rounds)
         state.quality_score = session.get("quality_score", 0)
 
@@ -748,7 +749,10 @@ class ResearchEngine:
 
         # Determine phase from current_step
         current_step = session.get("current_step", "planning")
-        state.phase = current_step if current_step not in ("done", "error") else ""
+        if current_step in ("done", "error", "incomplete", "timeout"):
+            state.phase = ""
+        else:
+            state.phase = current_step
 
         # If we have a report, set it
         result = session.get("result")
@@ -800,6 +804,14 @@ class ResearchEngine:
         if structure_raw:
             try:
                 state.structure_check = json.loads(structure_raw)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Restore evidence scores
+        evidence_raw = session.get("evidence_scores_json")
+        if evidence_raw:
+            try:
+                state.evidence_scores = json.loads(evidence_raw)
             except (json.JSONDecodeError, TypeError):
                 pass
 

@@ -16,6 +16,7 @@ import {
   listAutoResearch,
   getAutoResearch,
   deleteAutoResearch,
+  resumeAutoResearch,
   streamAutoResearch,
   getEvents,
   type AutoResearchSession,
@@ -334,11 +335,18 @@ function NewSessionForm({ onCreated }: { onCreated: (id: string) => void }) {
 function SessionHeader({
   session,
   onRefresh,
+  onResume,
 }: {
   session: AutoResearchSession;
   onRefresh: () => void;
+  onResume: () => void;
 }) {
   const status = STATUS_LABELS[session.status] || STATUS_LABELS.error;
+  const canResume =
+    session.status === 'incomplete' ||
+    session.status === 'error' ||
+    session.status === 'timeout' ||
+    session.status === 'done';
   return (
     <div className="p-4 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
       <div className="flex items-start justify-between gap-3 mb-2">
@@ -355,14 +363,26 @@ function SessionHeader({
             {session.query}
           </div>
         </div>
-        <button
-          onClick={onRefresh}
-          className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1 rounded
-            border border-[var(--border)]"
-          title="刷新"
-        >
-          ↻
-        </button>
+        <div className="flex gap-1">
+          {canResume && (
+            <button
+              onClick={onResume}
+              className="text-xs text-green-400 hover:text-green-300 px-2 py-1 rounded
+                border border-green-500/30 hover:border-green-500/50 transition-colors"
+              title="恢复研究（使用已有资源重新跑一轮）"
+            >
+              ▶ 恢复
+            </button>
+          )}
+          <button
+            onClick={onRefresh}
+            className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1 rounded
+              border border-[var(--border)]"
+            title="刷新"
+          >
+            ↻
+          </button>
+        </div>
       </div>
       <div className="mt-2">
         <MiniSixStepBar currentStep={session.current_step} status={session.status} />
@@ -503,7 +523,7 @@ export function AutoResearchPanel() {
   // Start streaming when a session is selected and not done
   useEffect(() => {
     if (!selectedId || !session) return;
-    if (session.status === 'done' || session.status === 'error' || session.status === 'cancelled') {
+    if (session.status === 'done' || session.status === 'error' || session.status === 'cancelled' || session.status === 'timeout' || session.status === 'incomplete') {
       return;
     }
 
@@ -593,6 +613,18 @@ export function AutoResearchPanel() {
     if (selectedId) loadSession(selectedId);
   };
 
+  const handleResume = async () => {
+    if (!selectedId) return;
+    try {
+      await resumeAutoResearch(selectedId);
+      // Refresh session status to show "running"
+      loadSession(selectedId);
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      console.error('Resume failed:', e);
+    }
+  };
+
   if (!selectedId) {
     return (
       <div className="flex h-full min-h-0">
@@ -625,7 +657,7 @@ export function AutoResearchPanel() {
           </div>
         ) : session ? (
           <>
-            <SessionHeader session={session} onRefresh={handleRefresh} />
+            <SessionHeader session={session} onRefresh={handleRefresh} onResume={handleResume} />
 
             <div className="px-4 border-b border-[var(--border)] flex gap-1">
               {TABS.map((tab) => (
