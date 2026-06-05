@@ -1,0 +1,33 @@
+{
+  "session_id": "7fe6f04f-9cab-4122-94a1-01658b18dff3",
+  "query": "现在想研究铜的定价因子",
+  "status": "done",
+  "current_step": "done",
+  "progress": 1.0,
+  "iteration_round": 10,
+  "created_at": "2026-06-05 07:14:44",
+  "updated_at": "2026-06-05 07:16:56",
+  "sub_query_count": 10,
+  "source_count": 37,
+  "six_step_present": {
+    "step1_clarify": true,
+    "step2_evidence": true,
+    "step3_reasoning": false,
+    "step4_structure": false,
+    "step5_synthesis": false,
+    "step6_review": false,
+    "self_loop_history": false
+  },
+  "result_keys": [
+    "markdown",
+    "query",
+    "quality_score",
+    "rounds",
+    "synthesis_summary",
+    "sources"
+  ],
+  "result_quality_score": 0,
+  "result_markdown_is_null": true,
+  "result_rounds": 10,
+  "bug_summary": "Engine marked session done with 4/6 framework steps missing. result.markdown=null, quality_score=0."
+}
