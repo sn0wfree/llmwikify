@@ -32,6 +32,8 @@ class ResearchClarifier:
     def __init__(self, llm_client: Any, config: dict[str, Any] | None = None):
         self.llm_client = llm_client
         self.config = config or {}
+        from llmwikify.core.prompt_registry import PromptRegistry
+        self.prompt_registry = PromptRegistry(provider="openai")
 
     async def clarify(self, query: str, wiki_context: str = "") -> dict[str, Any]:
         """Clarify the research query.
@@ -40,14 +42,14 @@ class ResearchClarifier:
             Clarification dict with context, boundaries, position, premises,
             scope_check. Falls back to a minimal dict if LLM call fails.
         """
+        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
+        llm_params = resolve_llm_params(
+            self.prompt_registry, self.config, "research_clarify", "llm_params",
+        )
         try:
             messages = self._build_messages(query, wiki_context)
             raw = await asyncio.to_thread(
-                self.llm_client.chat,
-                messages,
-                json_mode=True,
-                max_tokens=1024,
-                temperature=0.3,
+                self.llm_client.chat, messages, **llm_params,
             )
             return self._parse_response(raw, query)
         except Exception as e:

@@ -30,6 +30,7 @@ class ResearchReviewer:
              "score": int, "framework_scores": dict[str, int]?}
         """
         from llmwikify.core.prompt_registry import PromptRegistry
+        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
         registry = PromptRegistry(provider="openai")
 
         framework_block = self._render_framework_review_block(six_step_context)
@@ -47,7 +48,9 @@ class ResearchReviewer:
                 *messages,
             ]
 
-        api_params = registry.get_api_params("research_review")
+        llm_params = resolve_llm_params(
+            registry, self.config, "research_review", "llm_params",
+        )
 
         try:
             import asyncio
@@ -59,12 +62,7 @@ class ResearchReviewer:
 
             async def _call_review() -> dict:
                 def _sync_call():
-                    raw = self.llm_client.chat(
-                        messages,
-                        json_mode=api_params.get("json_mode", True),
-                        max_tokens=api_params.get("max_tokens", 2048),
-                        temperature=api_params.get("temperature", 0.1),
-                    )
+                    raw = self.llm_client.chat(messages, **llm_params)
                     return safe_json_loads(raw)
                 return await asyncio.to_thread(_sync_call)
 
@@ -168,6 +166,7 @@ class ResearchRevisor:
         """
         import hashlib
         from llmwikify.core.prompt_registry import PromptRegistry
+        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
         registry = PromptRegistry(provider="openai")
 
         issues_text = "\n".join(f"- {issue}" for issue in issues)
@@ -185,7 +184,9 @@ class ResearchRevisor:
             source_refs="\n".join(source_refs),
             report=report,
         )
-        api_params = registry.get_api_params("research_revise")
+        llm_params = resolve_llm_params(
+            registry, self.config, "research_revise", "llm_params",
+        )
 
         import asyncio
         from llmwikify.autoresearch.retry_managers import retry_async
@@ -195,9 +196,7 @@ class ResearchRevisor:
 
         async def _call_revise() -> str:
             return await asyncio.to_thread(
-                self.llm_client.chat, messages,
-                max_tokens=api_params.get("max_tokens", 8192),
-                temperature=api_params.get("temperature", 0.3),
+                self.llm_client.chat, messages, **llm_params,
             )
 
         revised = await retry_async(_call_revise, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout)

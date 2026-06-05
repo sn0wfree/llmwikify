@@ -97,9 +97,12 @@ class ReportGenerator:
                 *messages,
             ]
 
-        api_params = registry.get_api_params("research_report")
+        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
+        llm_params = resolve_llm_params(
+            registry, self.config, "research_report", "llm_params",
+        )
 
-        return messages, api_params
+        return messages, llm_params
 
     def _render_framework_block(self, six_step_context: dict[str, Any] | None) -> str:
         """Render the 6-step framework context as a system-prompt block.
@@ -188,7 +191,7 @@ class ReportGenerator:
         six_step_context: optional 6-step framework context that augments
         the prompt with structured guidance.
         """
-        messages, api_params = self._build_messages(query, sources, synthesis, six_step_context)
+        messages, llm_params = self._build_messages(query, sources, synthesis, six_step_context)
 
         # Call LLM (sync wrapped in async) with retry
         import asyncio
@@ -199,9 +202,7 @@ class ReportGenerator:
 
         async def _call_llm() -> str:
             return await asyncio.to_thread(
-                self.llm_client.chat, messages,
-                max_tokens=api_params.get("max_tokens", 8192),
-                temperature=api_params.get("temperature", 0.3),
+                self.llm_client.chat, messages, **llm_params,
             )
 
         report_md = await retry_async(_call_llm, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout)
@@ -226,16 +227,14 @@ class ReportGenerator:
                   {"type": "done", "content": str} or
                   {"type": "error", "error": str}
         """
-        messages, api_params = self._build_messages(query, sources, synthesis, six_step_context)
+        messages, llm_params = self._build_messages(query, sources, synthesis, six_step_context)
 
         # Try streaming first, fall back to non-streaming
         if hasattr(self.llm_client, 'stream_chat'):
             try:
                 accumulated = ""
                 for chunk in self.llm_client.stream_chat(
-                    messages,
-                    max_tokens=api_params.get("max_tokens", 8192),
-                    temperature=api_params.get("temperature", 0.3),
+                    messages, **llm_params,
                 ):
                     if chunk["type"] == "content":
                         accumulated += chunk["text"]
@@ -258,9 +257,7 @@ class ReportGenerator:
 
         async def _call_llm() -> str:
             return await asyncio.to_thread(
-                self.llm_client.chat, messages,
-                max_tokens=api_params.get("max_tokens", 8192),
-                temperature=api_params.get("temperature", 0.3),
+                self.llm_client.chat, messages, **llm_params,
             )
 
         try:
