@@ -120,7 +120,7 @@ def _warn_invalid_transition(from_phase: str, to_phase: str) -> None:
 async def _plan_sub_queries(ctx: ActionContext, query: str) -> list[dict[str, Any]]:
     """Decompose the research topic into sub-queries using planning_model."""
     from llmwikify.core.prompt_registry import PromptRegistry
-    registry = PromptRegistry(provider="openai")
+    registry = PromptRegistry(provider=getattr(ctx.planning_llm, "provider", "openai"))
 
     local_wiki_matches = ""
     try:
@@ -224,7 +224,7 @@ async def _plan_for_gaps(
 
     try:
         from llmwikify.core.prompt_registry import PromptRegistry
-        registry = PromptRegistry(provider="openai")
+        registry = PromptRegistry(provider=getattr(ctx.planning_llm, "provider", "openai"))
         llm_params = resolve_llm_params(
             registry, ctx.config, "research_replan", "llm_params",
         )

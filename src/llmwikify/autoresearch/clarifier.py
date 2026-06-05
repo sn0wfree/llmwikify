@@ -33,7 +33,7 @@ class ResearchClarifier:
         self.llm_client = llm_client
         self.config = config or {}
         from llmwikify.core.prompt_registry import PromptRegistry
-        self.prompt_registry = PromptRegistry(provider="openai")
+        self.prompt_registry = PromptRegistry(provider=getattr(llm_client, "provider", "openai"))
 
     async def clarify(self, query: str, wiki_context: str = "") -> dict[str, Any]:
         """Clarify the research query.

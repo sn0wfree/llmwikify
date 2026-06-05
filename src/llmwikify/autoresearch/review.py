@@ -31,7 +31,7 @@ class ResearchReviewer:
         """
         from llmwikify.core.prompt_registry import PromptRegistry
         from llmwikify.autoresearch.engine_helpers import resolve_llm_params
-        registry = PromptRegistry(provider="openai")
+        registry = PromptRegistry(provider=getattr(self.llm_client, "provider", "openai"))
 
         framework_block = self._render_framework_review_block(six_step_context)
 
@@ -167,7 +167,7 @@ class ResearchRevisor:
         import hashlib
         from llmwikify.core.prompt_registry import PromptRegistry
         from llmwikify.autoresearch.engine_helpers import resolve_llm_params
-        registry = PromptRegistry(provider="openai")
+        registry = PromptRegistry(provider=getattr(self.llm_client, "provider", "openai"))
 
         issues_text = "\n".join(f"- {issue}" for issue in issues)
 

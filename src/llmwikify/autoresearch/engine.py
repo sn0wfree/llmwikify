@@ -371,7 +371,7 @@ class ResearchEngine:
         from llmwikify.core.prompt_registry import PromptRegistry
         from llmwikify.autoresearch.engine_helpers import resolve_llm_params
 
-        registry = PromptRegistry(provider="openai")
+        registry = PromptRegistry(provider=getattr(self._default_llm, "provider", "openai"))
         llm_params = resolve_llm_params(
             registry, self.config, "research_reason", "llm_params",
         )

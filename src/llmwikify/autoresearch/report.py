@@ -47,7 +47,7 @@ class ReportGenerator:
         final report follows the 6-step structure.
         """
         from llmwikify.core.prompt_registry import PromptRegistry
-        registry = PromptRegistry(provider="openai")
+        registry = PromptRegistry(provider=getattr(self.llm_client, "provider", "openai"))
 
         source_map = self._build_source_map(sources)
 
