@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from collections.abc import Iterator
 from typing import Any
@@ -84,6 +83,30 @@ class ReportGenerator:
             })
         return source_contents
 
+    def _build_prompt_kwargs(
+        self,
+        query: str,
+        sources: list[dict[str, Any]],
+        synthesis: dict[str, Any],
+        six_step_context: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Build kwargs for ``run_prompt(\"research_report\", ...)``.
+
+        Centralizes the construction of source_contents + wiki_index
+        + six_step_context so both the async ``generate`` and the sync
+        streaming fallback can share the same prompt inputs.
+        """
+        wiki_index = ""
+        if self.wiki.index_file.exists():
+            wiki_index = self.wiki.index_file.read_text()[:5000]
+        return {
+            "six_step_context": six_step_context,
+            "query": query,
+            "wiki_index": wiki_index,
+            "source_contents": self._build_source_contents(sources),
+            "synthesis": synthesis,
+        }
+
     def _build_messages(
         self,
         query: str,
@@ -150,18 +173,11 @@ class ReportGenerator:
         because it returns an ``Iterator[chunk]`` of the streaming
         response — a fundamentally different interface.
         """
-        source_contents = self._build_source_contents(sources)
-        wiki_index = ""
-        if self.wiki.index_file.exists():
-            wiki_index = self.wiki.index_file.read_text()[:5000]
-
+        kwargs = self._build_prompt_kwargs(
+            query, sources, synthesis, six_step_context,
+        )
         report_md = await run_prompt(
-            self._as_ctx(), "research_report",
-            six_step_context=six_step_context,
-            query=query,
-            wiki_index=wiki_index,
-            source_contents=source_contents,
-            synthesis=synthesis,
+            self._as_ctx(), "research_report", **kwargs,
         )
 
         # Validate citations
@@ -205,17 +221,8 @@ class ReportGenerator:
             except Exception as e:
                 logger.warning("Streaming failed, falling back to non-streaming: %s", e)
 
-        # Fallback: non-streaming
+        # Fallback: non-streaming (uses run_prompt via asyncio.run)
         import asyncio
-        from llmwikify.autoresearch.retry_managers import retry_async
-
-        max_attempts = self.config.get("max_retry_attempts", 3)
-        call_timeout = self.config.get("llm_call_timeout_seconds", 120)
-
-        async def _call_llm() -> str:
-            return await asyncio.to_thread(
-                self.llm_client.chat, messages, **llm_params,
-            )
 
         try:
             # Sync generator must NOT be called from a running event loop
@@ -230,8 +237,11 @@ class ReportGenerator:
             except RuntimeError as e:
                 if "no running event loop" not in str(e):
                     raise
+            kwargs = self._build_prompt_kwargs(
+                query, sources, synthesis, six_step_context,
+            )
             report_md = asyncio.run(
-                retry_async(_call_llm, max_attempts=max_attempts, base_delay=2.0, call_timeout=call_timeout)
+                run_prompt(self._as_ctx(), "research_report", **kwargs)
             )
             self._validate_citations(report_md, sources)
             yield {"type": "done", "content": report_md}
@@ -242,10 +252,7 @@ class ReportGenerator:
         """Validate citations in the report."""
         import re
         citations = re.findall(r'\[\[Source:([a-f0-9]+)\]\]', report_md)
-        source_hashes = {
-            hashlib.md5((s.get("url") or s.get("title", "")).encode()).hexdigest()[:12]
-            for s in sources
-        }
+        source_hashes = {_source_hash(s) for s in sources}
         invalid = [c for c in citations if c not in source_hashes]
         if invalid:
             logger.warning("Report has %d invalid citations (out of %d total): %s", len(invalid), len(citations), invalid[:5])

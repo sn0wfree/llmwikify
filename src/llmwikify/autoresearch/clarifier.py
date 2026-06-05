@@ -6,11 +6,9 @@ the research context, boundaries, position, and premises before planning.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-from llmwikify.autoresearch._json_utils import safe_json_loads
 from llmwikify.autoresearch.llm_step import run_prompt
 from llmwikify.autoresearch.prompts import _clarify_fallback
 
