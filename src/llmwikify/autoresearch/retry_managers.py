@@ -202,9 +202,15 @@ class LLMRetryManager:
     schema mismatch).
     """
 
-    def __init__(self, max_attempts: int = 3, base_delay: float = 2.0):
+    def __init__(
+        self,
+        max_attempts: int = 3,
+        base_delay: float = 2.0,
+        call_timeout: float = 120.0,
+    ):
         self.max_attempts = max_attempts
         self.base_delay = base_delay
+        self.call_timeout = call_timeout
 
     async def call(
         self,
@@ -215,11 +221,15 @@ class LLMRetryManager:
         """Call an async LLM function with smart retry.
 
         Retries on transient errors. Re-raises immediately on caller errors.
+        Each attempt is bounded by ``call_timeout`` seconds; on per-attempt
+        timeout the attempt is treated as a transient error and retried.
         """
         last_error: Exception | None = None
         for attempt in range(1, self.max_attempts + 1):
             try:
-                return await func(*args, **kwargs)
+                return await asyncio.wait_for(
+                    func(*args, **kwargs), timeout=self.call_timeout,
+                )
             except Exception as e:  # noqa: BLE001
                 last_error = e
                 if not _is_retriable_llm_error(e):
