@@ -74,6 +74,19 @@ DEFAULT_SIX_STEP_CONFIG: dict[str, Any] = {
     "llm_parse_max_retries": 3,
     "db_retry_base_delay": 1.0,
     "db_retry_max_retries": 3,
+
+    # ─── LLM call params per prompt (overridable, fed to resolve_llm_params) ───
+    # Each section is a per-prompt dict. Priority chain:
+    #   1. this config → 2. prompt YAML → 3. DEFAULT_LLM_PARAMS safety net.
+    "llm_params": {
+        "research_plan":   {"max_tokens": 2048, "temperature": 0.3, "json_mode": True},
+        "research_replan": {"max_tokens": 1024, "temperature": 0.3, "json_mode": True},
+        "research_clarify":{"max_tokens": 1024, "temperature": 0.3, "json_mode": True},
+        "research_reason": {"max_tokens": 1024, "temperature": 0.1, "json_mode": True},
+        "research_report": {"max_tokens": 8192, "temperature": 0.3, "json_mode": False},
+        "research_review": {"max_tokens": 2048, "temperature": 0.1, "json_mode": True},
+        "research_revise": {"max_tokens": 8192, "temperature": 0.3, "json_mode": False},
+    },
 }
 
 
