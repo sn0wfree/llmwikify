@@ -27,11 +27,13 @@ class LLMClient:
         model: str = "gpt-4o",
         context_window: int | None = None,
         budget_on_exceed: str = "warn",
+        request_timeout_seconds: float = 120,
     ):
         self.provider = provider
         self.base_url = base_url.rstrip("/") if base_url else self._default_base_url(provider)
         self.api_key = api_key
         self.model = model
+        self.request_timeout_seconds = request_timeout_seconds
 
         self._budget_checker = TokenBudgetChecker(
             TokenBudgetConfig(
@@ -128,7 +130,7 @@ class LLMClient:
                 payload[key] = generation_params[key]
 
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=120)
+            resp = requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_seconds)
             resp.raise_for_status()
             data = resp.json()
             return data["choices"][0]["message"]["content"]
