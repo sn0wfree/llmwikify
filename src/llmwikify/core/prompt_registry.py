@@ -29,7 +29,17 @@ class PromptTemplate:
     post_process: dict[str, Any] = field(default_factory=dict)
 
 
-API_PARAMS = {"temperature", "max_tokens", "top_p", "top_k", "stop", "presence_penalty", "frequency_penalty"}
+API_PARAMS = {
+    "temperature",
+    "max_tokens",
+    "top_p",
+    "top_k",
+    "stop",
+    "presence_penalty",
+    "frequency_penalty",
+    "json_mode",
+    "timeout",
+}
 
 
 class PromptRegistry:
