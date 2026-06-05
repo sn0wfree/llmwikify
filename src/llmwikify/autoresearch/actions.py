@@ -17,7 +17,7 @@ from typing import Any
 from llmwikify.agent.backend.adapters import StreamableLLMClient
 from llmwikify.autoresearch.clarifier import ResearchClarifier
 from llmwikify.autoresearch.config import merge_six_step_config
-from llmwikify.autoresearch.engine_helpers import chat_json
+from llmwikify.autoresearch.engine_helpers import chat_json, resolve_llm_params
 from llmwikify.autoresearch.gatherer import SourceGatherer
 from llmwikify.autoresearch.quality_gate import QualityGate
 from llmwikify.autoresearch.report import ReportGenerator
@@ -146,14 +146,13 @@ async def _plan_sub_queries(ctx: ActionContext, query: str) -> list[dict[str, An
         wiki_index=wiki_index[:2000] if wiki_index else "",
         local_wiki_matches=local_wiki_matches,
     )
-    api_params = registry.get_api_params("research_plan")
+    llm_params = resolve_llm_params(
+        registry, ctx.config, "research_plan", "llm_params",
+    )
 
     try:
         result = await chat_json(
-            ctx.planning_llm, messages,
-            max_tokens=api_params.get("max_tokens", 2048),
-            temperature=api_params.get("temperature", 0.3),
-            json_mode=api_params.get("json_mode", True),
+            ctx.planning_llm, messages, **llm_params,
         )
         if not isinstance(result, list):
             result = []
@@ -224,9 +223,13 @@ async def _plan_for_gaps(
     ]
 
     try:
+        from llmwikify.core.prompt_registry import PromptRegistry
+        registry = PromptRegistry(provider="openai")
+        llm_params = resolve_llm_params(
+            registry, ctx.config, "research_replan", "llm_params",
+        )
         result = await chat_json(
-            ctx.planning_llm, messages,
-            max_tokens=1024, temperature=0.3, json_mode=True,
+            ctx.planning_llm, messages, **llm_params,
         )
         if not isinstance(result, list):
             result = []

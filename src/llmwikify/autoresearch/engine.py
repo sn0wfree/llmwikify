@@ -368,6 +368,13 @@ class ResearchEngine:
     async def _llm_reason(self, state: ResearchState) -> str:
         """Use LLM to decide next action with chain-of-thought reasoning."""
         import asyncio
+        from llmwikify.core.prompt_registry import PromptRegistry
+        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
+
+        registry = PromptRegistry(provider="openai")
+        llm_params = resolve_llm_params(
+            registry, self.config, "research_reason", "llm_params",
+        )
 
         analyzed_count = sum(1 for s in state.sources if s.get("analysis"))
         failed_sq = sum(1 for sq in state.sub_queries if sq.get("status") == "failed")
@@ -409,8 +416,7 @@ class ResearchEngine:
         ]
 
         result = await chat_json(
-            self._default_llm, messages,
-            max_tokens=1024, temperature=0.1, json_mode=True,
+            self._default_llm, messages, **llm_params,
         )
         action = result.get("action", "done")
         thought = result.get("thought", "")
