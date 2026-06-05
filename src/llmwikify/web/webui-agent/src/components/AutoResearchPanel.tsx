@@ -17,9 +17,11 @@ import {
   getAutoResearch,
   deleteAutoResearch,
   streamAutoResearch,
+  getEvents,
   type AutoResearchSession,
   type AutoResearchStreamEvent,
   type AutoResearchSixStepFields,
+  type PersistedEvent,
 } from '../lib/autoresearch-api';
 import { useAgentWikiStore } from '../stores/agentWikiStore';
 import { AutoResearchDetail } from './AutoResearchDetail';
@@ -460,6 +462,42 @@ export function AutoResearchPanel() {
     }
     loadSession(selectedId);
   }, [selectedId, loadSession]);
+
+  // For done/error/cancelled sessions, load historical events once
+  // (the SSE stream is no longer active, so eventLog would otherwise
+  // stay empty). For active sessions, the streaming useEffect below
+  // will populate the log in real time.
+  useEffect(() => {
+    if (!selectedId || !session) return;
+    const isTerminal =
+      session.status === 'done' ||
+      session.status === 'error' ||
+      session.status === 'cancelled' ||
+      session.status === 'timeout';
+    if (!isTerminal) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { events } = await getEvents(selectedId);
+        if (cancelled) return;
+        if (events && events.length > 0) {
+          setEventLog(
+            events.map((e: PersistedEvent) => ({
+              type: e.type,
+              message: `[历史] ${e.message ?? ''}`,
+              timestamp: e.timestamp ? new Date(e.timestamp).getTime() : Date.now(),
+            })),
+          );
+        }
+      } catch {
+        // Silent: historical events are best-effort
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, session?.status]);
 
   // Start streaming when a session is selected and not done
   useEffect(() => {

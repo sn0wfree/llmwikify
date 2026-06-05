@@ -182,6 +182,21 @@ async def get_clarification(session_id: str):
         return {"clarification": None, "raw": raw}
 
 
+@router.get("/{session_id}/events")
+async def get_events(session_id: str):
+    """Get the persisted event log for a session.
+
+    Returns the full history of events emitted by the engine (typed
+    messages from the SSE stream), in insertion order. Empty list for
+    sessions that have no events yet (in-flight or pre-persistence).
+    """
+    db = _get_db()
+    session = db.get_research_session(session_id)
+    if not session:
+        return {"error": f"Session {session_id} not found", "events": []}
+    return {"events": db.get_events(session_id)}
+
+
 # ─── Control: pause / cancel ────────────────────────────────────────
 
 
