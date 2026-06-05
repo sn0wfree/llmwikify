@@ -9,7 +9,7 @@
 
 | # | 候选 | Phase | 状态 | 起始 commit | 完成 commit | 测试增量 |
 |---|------|-------|------|------------|------------|---------|
-| 1 | LLM 客户端去重 | 1 | 🔵 in_progress | — | — | +30 |
+| 1 | LLM 客户端去重 | 1 | ✅ done | 692c40f⁻¹ | ef31d2f | +30 |
 | 2 | CLI 命令拆解 | 1 | 🔵 planned | — | — | +50 |
 | 3 | WikiAnalyzer rule-based | 1 | 🔵 planned | — | — | +30 |
 | 4 | Wiki 13-mixin 收敛 | 2 | 🔵 planned | — | — | +5 |
@@ -32,15 +32,15 @@
 
 ## Phase 1 — 奠基
 
-### #1 LLM 客户端去重（5-6 commit · +30 测试）
+### #1 LLM 客户端去重（5-6 commit · +30 测试）✅
 
 ```
-C1: 新建 src/llmwikify/llm/streamable.py（StreamableLLMClient 复制）
-C2: 合并 __init__ / 父类引用 LLMClient
-C3: autoresearch import 改 → llmwikify.llm.streamable
-C4: agent/backend/adapters.py 变 5 行 shim + DeprecationWarning
-C5: providers/registry.py 内部仍走 agent.backend
-C6: graph 更新 + 全套测试验证
+C1: 新建 src/llmwikify/llm/streamable.py（StreamableLLMClient 复制）        ✅ d7641ed⁻¹
+C2: 合并 __init__ / 父类引用 LLMClient                                       ✅ d7641ed
+C3: autoresearch import 改 → llmwikify.llm.streamable                        ✅ fba2a9f
+C4: agent/backend/adapters.py 变 5 行 shim + DeprecationWarning              ✅ 3555764⁻¹
+C5: providers/registry.py 内部仍走 agent.backend                              ✅ ef31d2f
+C6: graph 更新 + 全套测试验证                                                  ✅ (this commit)
 ```
 
 ### #2 CLI 命令拆解（2-3 commit · +50 测试）
@@ -116,5 +116,11 @@ C1: cli/_base.py 加 _error(e) → logger + 替换 print
 每完成一个 commit 在此追加一行：
 
 ```
-YYYY-MM-DD HH:MM | Phase X #Y-CZ | <commit-hash> | <one-line summary>
+2026-06-05 | Phase 1 #1-C1 | ae8021c⁻¹ | docs: PLAN.md tracker
+2026-06-05 | Phase 1 #1-C1 | d7641ed⁻¹ | refactor(llm): add canonical home
+2026-06-05 | Phase 1 #1-C2 | d7641ed   | refactor(llm): StreamableLLMClient extends LLMClient
+2026-06-05 | Phase 1 #1-C3 | fba2a9f   | refactor(autoresearch): import from new home
+2026-06-05 | Phase 1 #1-C4 | 3555764⁻¹ | refactor(agent): collapse adapters.py to shim
+2026-06-05 | Phase 1 #1-C5 | ef31d2f   | test(providers): validate provider compat
+2026-06-05 | Phase 1 #1-C6 | (this)   | docs: Phase 1 #1 closure + graph update
 ```
