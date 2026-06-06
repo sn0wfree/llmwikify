@@ -45,11 +45,18 @@ from .wikis import WikisCommand, run_wikis
 from .suggest_synthesis import SuggestSynthesisCommand, run_suggest_synthesis
 from .knowledge_gaps import KnowledgeGapsCommand, run_knowledge_gaps
 from .graph_analyze import GraphAnalyzeCommand, run_graph_analyze
-from .serve import McpCommand, ServeCommand, run_serve
+from .serve import ServeCommand, run_serve
 from .qmd import QmdCommand, run_qmd
 from .db import DbCommand, run_db
 
-# Auto-register all 27 commands (10 C2 + 16 C3 + mcp alias = 27)
+# Phase 3 #6 — new ``help`` subcommand for command + alias
+# discovery. ``mcp`` is no longer a separate Command class —
+# it's an argparse alias of ``serve`` (see serve.py).
+from .help_cmd import HelpCommand
+
+# Auto-register all 27 commands (10 C2 + 16 C3 + help = 28)
+# Note: ``mcp`` is NOT in the registry — it's an argparse alias
+# of ``serve`` (added via ``aliases=['mcp']`` in serve.py).
 register_command(InitCommand())
 register_command(IngestCommand())
 register_command(StatusCommand())
@@ -75,9 +82,9 @@ register_command(SuggestSynthesisCommand())
 register_command(KnowledgeGapsCommand())
 register_command(GraphAnalyzeCommand())
 register_command(ServeCommand())
-register_command(McpCommand())
 register_command(QmdCommand())
 register_command(DbCommand())
+register_command(HelpCommand())
 
 __all__ = [
     # C2 simple commands
@@ -106,7 +113,8 @@ __all__ = [
     "SuggestSynthesisCommand", "run_suggest_synthesis",
     "KnowledgeGapsCommand", "run_knowledge_gaps",
     "GraphAnalyzeCommand", "run_graph_analyze",
-    "ServeCommand", "McpCommand", "run_serve",
+    "ServeCommand", "run_serve",  # McpCommand removed in Phase 3 #6
     "QmdCommand", "run_qmd",
     "DbCommand", "run_db",
+    "HelpCommand",  # Phase 3 #6
 ]

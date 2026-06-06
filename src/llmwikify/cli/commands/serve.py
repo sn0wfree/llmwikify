@@ -104,33 +104,50 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                     print(f"  Port: {port}")
                 print()
 
-                from llmwikify.mcp.server import serve_mcp
-                serve_mcp(wiki, name=name, transport=transport, host=host, port=mcp_port, config=mcp_config)
+                # Phase 3 #6 — use MCPAdapter directly instead of
+                # the deprecated ``llmwikify.mcp.server.serve_mcp``
+                # shim. This silences 1 internal DeprecationWarning
+                # while keeping the same runtime behavior.
+                from llmwikify.mcp.adapter import MCPAdapter
+                import asyncio
+                adapter = MCPAdapter(wiki, name=name, config=mcp_config)
+                transport_final = final_transport
+                host_final = final_host
+                port_final = port
+                if transport_final == "stdio":
+                    asyncio.run(adapter.run_stdio())
+                elif transport_final == "http":
+                    asyncio.run(adapter.run_http(host_final, port_final))
+                elif transport_final == "sse":
+                    asyncio.run(adapter.run_sse(host_final, port_final))
+                else:
+                    raise ValueError(
+                        f"Unsupported transport: {transport_final}. "
+                        "Use 'stdio', 'http', or 'sse'."
+                    )
     except KeyboardInterrupt:
         print("\nServer stopped")
 
     return 0
 
 
-def setup_serve_or_mcp_parser(subparsers: Any) -> None:
-    """Add both the ``serve`` and ``mcp`` subparsers.
+def setup_serve_parser(subparsers: Any) -> None:
+    """Add the ``serve`` subparser (with ``mcp`` as argparse alias).
 
-    The original code defines two CLI commands (``mcp`` and ``serve``)
-    that both point to the same handler. This helper adds both
-    parsers in one place, since they share an implementation.
+    Phase 3 #6 — ``mcp`` is an argparse alias of ``serve`` (full
+    backward compat for ``llmwikify mcp ...`` invocations).
+    The ``mcp`` alias will be removed in v0.34.0.
     """
     from argparse import _SubParsersAction
 
     if not isinstance(subparsers, _SubParsersAction):
         raise TypeError("setup_parser requires an argparse subparsers action")
 
-    p = subparsers.add_parser("mcp", help="Start MCP server for Agent interaction (stdio by default)")
-    p.add_argument("--transport", "-t", choices=["stdio", "http", "sse"], help="Transport protocol")
-    p.add_argument("--host", help="Host address")
-    p.add_argument("--port", "-p", type=int, help="Port number")
-    p.add_argument("--name", "-n", help="Service name (defaults to directory name)")
-
-    p = subparsers.add_parser("serve", help="Start MCP server with optional Web UI")
+    p = subparsers.add_parser(
+        "serve",
+        help="Start MCP server with optional Web UI (alias: mcp)",
+        aliases=["mcp"],
+    )
     p.add_argument("--transport", "-t", choices=["stdio", "http", "sse"], help="Transport protocol")
     p.add_argument("--host", help="Host address")
     p.add_argument("--mcp-port", type=int, help="MCP server port")
@@ -142,26 +159,19 @@ def setup_serve_or_mcp_parser(subparsers: Any) -> None:
 
 
 class ServeCommand(Command):
-    """``serve`` command — start MCP server and optional Web UI."""
+    """``serve`` command — start MCP server and optional Web UI.
+
+    ``mcp`` is an argparse alias of ``serve`` (Phase 3 #6).
+    Backward compat: ``llmwikify mcp`` still works for Claude
+    Desktop / Cursor MCP integration that reference
+    ``llmwikify mcp`` in their config.
+    """
 
     name = "serve"
-    help = "Start MCP server with optional Web UI"
+    help = "Start MCP server with optional Web UI (alias: mcp)"
 
     def setup_parser(self, subparsers: Any) -> None:
-        setup_serve_or_mcp_parser(subparsers)
-
-    def run(self, args: Any, wiki: Any, config: dict) -> int:
-        return run_serve(wiki, config, args)
-
-
-class McpCommand(Command):
-    """``mcp`` command — alias for ``serve``."""
-
-    name = "mcp"
-    help = "Start MCP server for Agent interaction (stdio by default)"
-
-    def setup_parser(self, subparsers: Any) -> None:
-        setup_serve_or_mcp_parser(subparsers)
+        setup_serve_parser(subparsers)
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
         return run_serve(wiki, config, args)

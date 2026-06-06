@@ -138,13 +138,20 @@ def test_main_iterates_registry_to_setup_parsers():
     """main() calls setup_parser for each registered command."""
     from llmwikify.cli import _app
 
-    src = inspect.getsource(_app.main)
-    # Pattern: ``for cmd_name in sorted(COMMAND_REGISTRY): cmd.setup_parser(subparsers)``
+    # Phase 3 #6 — the sorted(COMMAND_REGISTRY) iteration moved
+    # from main() to _build_parser() (the helper that builds the
+    # argparse parser, extracted in Phase 3 #6 so tests can
+    # build the parser without starting the MCP server). Both
+    # the parser construction AND the subparsers iteration
+    # patterns are tested here.
+    src = inspect.getsource(_app._build_parser)
     assert "cmd.setup_parser(subparsers)" in src, (
-        "main() should call cmd.setup_parser(subparsers) for each command"
+        "_build_parser() should call cmd.setup_parser(subparsers) "
+        "for each command"
     )
     assert "sorted(COMMAND_REGISTRY)" in src, (
-        "main() should iterate sorted(COMMAND_REGISTRY) for determinism"
+        "_build_parser() should iterate sorted(COMMAND_REGISTRY) "
+        "for determinism"
     )
 
 
