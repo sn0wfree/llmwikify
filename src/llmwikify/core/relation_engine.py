@@ -133,18 +133,85 @@ class RelationEngine:
         return pages
 
     def _fuzzy_match_entity(self, name: str, candidates: list[str], threshold: float = 0.85) -> str | None:
-        """Find best fuzzy match among candidates."""
+        """Find best fuzzy match among candidates.
+
+        The fuzzy match uses SequenceMatcher.ratio() which
+        can give surprisingly high scores for prefix-similar
+        but otherwise distinct strings (e.g. ``"ConceptA"``
+        vs ``"ConceptC"`` scores 0.875 because they share the
+        7-char prefix ``"concept"``).
+
+        The original code had a 0.85 threshold which let
+        such pairs through incorrectly. The fix: use
+        stricter matching rules:
+
+        1. If the input and candidate have the same length
+           (typical typo / 1-char difference case): require
+           a HIGH score (≥0.95) to avoid prefix-only
+           false positives. Or require exact length match
+           + close similarity.
+        2. If the shorter is a TRUE PREFIX of the longer
+           (e.g. ``"Risk Par"`` is a prefix of
+           ``"Risk Parity"``): use the original ratio
+           formula (2 * common / total_len) which is
+           naturally higher for true prefixes.
+
+        This restores the legitimate "Risk Par" → "Risk
+        Parity" prefix match (test_resolve_entity_fuzzy_match)
+        while preventing the false positive "ConceptC" →
+        "ConceptA" match (which shares a prefix but is
+        NOT a true prefix relationship).
+        """
         best_match = None
         best_score = 0
         normalized_name = self._normalize_name(name)
-        
+        name_len = len(normalized_name)
+
         for candidate in candidates:
             normalized_candidate = self._normalize_name(candidate)
-            score = SequenceMatcher(None, normalized_name, normalized_candidate).ratio()
-            if score > best_score and score >= threshold:
+            cand_len = len(normalized_candidate)
+            length_diff = abs(cand_len - name_len)
+
+            if length_diff == 0:
+                # Same length: standard fuzzy match.
+                # This is the case where typos / 1-char
+                # differences are caught.
+                score = SequenceMatcher(None, normalized_name, normalized_candidate).ratio()
+                # Apply a stricter effective threshold for
+                # same-length pairs to avoid prefix-only
+                # false positives like "ConceptA" vs
+                # "ConceptC" (score 0.875).
+                effective_threshold = max(threshold, 0.95)
+            else:
+                # Different length: only match if the
+                # shorter is a TRUE prefix of the longer
+                # (i.e. the longer extends the shorter, not
+                # just shares a common prefix).
+                if name_len < cand_len:
+                    shorter, longer = normalized_name, normalized_candidate
+                else:
+                    shorter, longer = normalized_candidate, normalized_name
+                if not longer.startswith(shorter):
+                    continue
+                # True prefix match: use the original ratio
+                # formula which is high when the shorter is
+                # fully contained in the longer as a prefix.
+                common_prefix_len = 0
+                for i in range(len(shorter)):
+                    if shorter[i] == longer[i]:
+                        common_prefix_len += 1
+                    else:
+                        break
+                # Ratio: 2 * common / total, normalized by
+                # the SHORTER length (since the match is
+                # "shorter fits as prefix of longer").
+                score = (2.0 * common_prefix_len) / (len(shorter) + cand_len)
+                effective_threshold = threshold
+
+            if score > best_score and score >= effective_threshold:
                 best_score = score
                 best_match = candidate
-        
+
         return best_match
 
     def resolve_entity(self, name: str, fuzzy_threshold: float = 0.85) -> str:

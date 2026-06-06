@@ -86,6 +86,39 @@ register_command(QmdCommand())
 register_command(DbCommand())
 register_command(HelpCommand())
 
+# C3 backward-compat re-exports — when ``commands.py`` was
+# renamed to ``_app.py`` (Phase 1 #2 / C2-C3) to make room
+# for the new ``commands/`` subpackage, two public symbols
+# (``WikiCLI`` and ``main``) moved with it. Tests and
+# downstream callers that did
+# ``from llmwikify.cli.commands import WikiCLI`` (or
+# ``main``) broke because ``cli/commands/`` is now a
+# subpackage, not a module.
+#
+# We use PEP 562 module-level ``__getattr__`` for the
+# re-export because a top-level ``from .._app import
+# WikiCLI, main`` would create a circular import: this
+# subpackage is imported by ``_app.py`` (via
+# ``from .commands.analyze_source import run_analyze_source``
+# etc.), so it cannot import from ``_app`` at module init
+# time. ``__getattr__`` defers the lookup until the symbol
+# is actually accessed, breaking the cycle.
+def __getattr__(name):
+    """PEP 562 lazy re-export of ``WikiCLI`` and ``main`` from
+    ``llmwikify.cli._app``.
+
+    Allows legacy imports like
+    ``from llmwikify.cli.commands import WikiCLI`` (or
+    ``main``) to keep working, even though those symbols
+    canonically live in ``llmwikify.cli._app``. The lookup
+    is deferred to avoid a circular import with ``_app``
+    (which imports from this subpackage).
+    """
+    if name in ("WikiCLI", "main"):
+        from .. import _app
+        return getattr(_app, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 __all__ = [
     # C2 simple commands
     "InitCommand", "run_init",
