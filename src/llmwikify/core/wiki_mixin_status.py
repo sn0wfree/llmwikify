@@ -4,8 +4,6 @@ import logging
 
 from llmwikify import __version__
 
-from .wiki_analyzer import WikiAnalyzer
-
 from .protocols import WikiProtocol
 
 logger = logging.getLogger(__name__)
@@ -95,19 +93,14 @@ class WikiStatusMixin(WikiProtocol):
     def recommend(self) -> dict:
         """Generate smart recommendations.
 
-        Delegates to WikiAnalyzer — single source of truth.
+        Delegates to the cached WikiAnalyzer — single source of truth.
         """
-        return WikiAnalyzer(self).recommend()
+        return self._analyzer.recommend()
 
     def hint(self) -> dict:
         """Generate smart suggestions for wiki improvement.
 
         Deprecated: Use `lint(format="brief")` instead.
         """
-        import warnings
-        warnings.warn(
-            "hint() is deprecated; use wiki.lint(format='brief') instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return WikiAnalyzer(self)._generate_hints()
+        return self._analyzer.hint()
+

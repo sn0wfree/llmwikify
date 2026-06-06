@@ -33,6 +33,7 @@ class WikiProtocol:
     index: Any
     config: dict[str, Any]
     query_sink: Any
+    _analyzer: Any
     _prompt_custom_dir: str
 
     # Configuration
