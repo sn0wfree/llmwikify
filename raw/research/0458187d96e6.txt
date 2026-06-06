@@ -1,0 +1,127 @@
+应用中需要实现一个功能： 需要将数据上传到远程存储服务，同时在返回处理成功情况下做其他操作。这个功能不复杂，分为两个步骤：第一步调用远程的Rest服务上传数据后对返回的结果进行处理；第二步拿到第一步结果或者捕捉异常，如果出现错误或异常实现重试上传逻辑，否则继续接下来的功能业务操作。
+常规解决方案
+try-catch-redo简单重试模式
+在包装正常上传逻辑基础上，通过判断返回结果或监听异常决定是否重试，同时为了解决立即重试的无效执行(假设异常是有外部执行不稳定导致的：网络抖动)，休眠一定延迟时间后重新执行功能逻辑。
+public void commonRetry(Map<String, Object> dataMap) throws InterruptedException {
+Map<String, Object> paramMap = Maps.newHashMap();
+paramMap.put("tableName", "creativeTable");
+paramMap.put("ds", "20160220");
+paramMap.put("dataMap", dataMap);
+boolean result = false;
+try {
+result = uploadToOdps(paramMap);
+if (!result) {
+Thread.sleep(1000);
+uploadToOdps(paramMap); //一次重试
+}
+} catch (Exception e) {
+Thread.sleep(1000);
+uploadToOdps(paramMap);//一次重试
+}
+}
+try-catch-redo-retry strategy策略重试模式
+上述方案还是有可能重试无效，解决这个问题尝试增加重试次数retrycount以及重试间隔周期interval，达到增加重试有效的可能性。
+public void commonRetry(Map<String, Object> dataMap) throws InterruptedException {
+Map<String, Object> paramMap = Maps.newHashMap();
+paramMap.put("tableName", "creativeTable");
+paramMap.put("ds", "20160220");
+paramMap.put("dataMap", dataMap);
+boolean result = false;
+try {
+result = uploadToOdps(paramMap);
+if (!result) {
+reuploadToOdps(paramMap,1000L,10);//延迟多次重试
+}
+} catch (Exception e) {
+reuploadToOdps(paramMap,1000L,10);//延迟多次重试
+}
+}
+方案一和方案二存在一个问题：正常逻辑和重试逻辑强耦合，重试逻辑非常依赖正常逻辑的执行结果，对正常逻辑预期结果被动重试触发，对于重试根源往往由于逻辑复杂被淹没，可能导致后续运维对于重试逻辑要解决什么问题产生不一致理解。重试正确性难保证而且不利于运维，原因是重试设计依赖正常逻辑异常或重试根源的臆测。
+优雅重试方案尝试
+应用命令设计模式解耦正常和重试逻辑
+命令设计模式具体定义不展开阐述，主要该方案看中命令模式能够通过执行对象完成接口操作逻辑，同时内部封装处理重试逻辑，不暴露实现细节，对于调用者来看就是执行了正常逻辑，达到解耦的目标，具体看下功能实现。（类图结构）
+IRetry约定了上传和重试接口，其实现类OdpsRetry封装ODPS上传逻辑，同时封装重试机制和重试策略。与此同时使用recover方法在结束执行做恢复操作。
+而我们的调用者LogicClient无需关注重试，通过重试者Retryer实现约定接口功能，同时 Retryer需要对重试逻辑做出响应和处理， Retryer具体重试处理又交给真正的IRtry接口的实现类OdpsRetry完成。通过采用命令模式，优雅实现正常逻辑和重试逻辑分离，同时通过构建重试者角色，实现正常逻辑和重试逻辑的分离，让重试有更好的扩展性。
+使用Guava retryer优雅的实现接口重调机制
+Guava retryer工具与spring-retry类似，都是通过定义重试者角色来包装正常逻辑重试，但是Guava retryer有更优的策略定义，在支持重试次数和重试频度控制基础上，能够兼容支持多个异常或者自定义实体对象的重试源定义，让重试功能有更多的灵活性。Guava Retryer也是线程安全的，入口调用逻辑采用的是Java.util.concurrent.Callable的call方法。 使用Guava retryer 很简单，我们只要做以下几步：
+-
+Maven POM 引入
+<guava-retry.version>2.0.0</guava-retry.version> <dependency> <groupId>com.github.rholder</groupId> <artifactId>guava-retrying</artifactId> <version>${guava-retry.version}</version> </dependency>
+-
+定义实现Callable接口的方法，以便Guava retryer能够调用
+-
+private static Callable<Boolean> updateReimAgentsCall = new Callable<Boolean>() { @Override public Boolean call() throws Exception { String url = ConfigureUtil.get(OaConstants.OA_REIM_AGENT); String result = HttpMethod.post(url, new ArrayList<BasicNameValuePair>()); if(StringUtils.isEmpty(result)){ throw new RemoteException("获取OA可报销代理人接口异常"); } List<OAReimAgents> oaReimAgents = JSON.parseArray(result, OAReimAgents.class); if(CollectionUtils.isNotEmpty(oaReimAgents)){ CacheUtil.put(Constants.REIM_AGENT_KEY,oaReimAgents); return true; } return false; } };
+定义Retry对象并设置相关策略
+Retryer<Boolean> retryer = RetryerBuilder.<Boolean>newBuilder()
+//抛出runtime异常、checked异常时都会重试，但是抛出error不会重试。
+.retryIfException()
+//返回false也需要重试
+.retryIfResult(Predicates.equalTo(false))
+//重调策略
+.withWaitStrategy(WaitStrategies.fixedWait(10, TimeUnit.SECONDS))
+//尝试次数
+.withStopStrategy(StopStrategies.stopAfterAttempt(3))
+.build();
+try {
+retryer.call(updateReimAgentsCall());
+//retry.call(() -> { FileUtils.downloadAttachment(projectNo, url, saveDir, fileName); return true; });
+} catch (ExecutionException e) {
+e.printStackTrace();
+} catch (RetryException e) {
+logger.error("xxx");
+}
+简单三步就能使用Guava Retryer优雅的实现重调方法。
+更多特性
+RetryerBuilder是一个Factory创建者，可以自定义设置重试源且支持多个重试源，可以配置重试次数或重试超时时间，以及可以配置等待时间间隔，创建重试者Retryer实例。 RetryerBuilder的重试源支持Exception异常对象和自定义断言对象，通过retryIfException
+和retryIfResult
+设置，同时支持多个且能兼容。
+-
+retryIfException：抛出runtime异常、checked异常时都会重试，但是抛出error不会重试。
+-
+retryIfRuntimeException：只会在抛runtime异常的时候才重试，checked异常和error都不重试。
+-
+retryIfExceptionOfType：允许我们只在发生特定异常的时候才重试，比如NullPointerException和IllegalStateException都属于runtime异常，也包括自定义的error 如：
+retryIfExceptionOfType(Error.class)
+retryIfExceptionOfType(IllegalStateException.class)
+retryIfExceptionOfType(NullPointerException.class)
+retryIfException(Predicates.or(Predicates.instanceOf(NullPointerException.class),
+Predicates.instanceOf(IllegalStateException.class)))
+retryIfResult可以指定你的Callable方法在返回值的时候进行重试，如
+// 返回false重试
+retryIfResult(Predicates.equalTo(false))
+//以_error结尾才重试
+retryIfResult(Predicates.containsPattern("_error$"))
+当发生重试之后，假如我们需要做一些额外的处理动作，比如发个告警邮件啥的，那么可以使用RetryListener
+。每次重试之后，guava-retrying会自动回调我们注册的监听。也可以注册多个RetryListener，会按照注册顺序依次调用。
+import com.github.rholder.retry.Attempt;
+import com.github.rholder.retry.RetryListener;
+import java.util.concurrent.ExecutionException;
+public class MyRetryListener<Boolean> implements RetryListener {
+@Override
+public <Boolean> void onRetry(Attempt<Boolean> attempt) {
+// 第几次重试,(注意:第一次重试其实是第一次调用)
+System.out.print("[retry]time=" + attempt.getAttemptNumber());
+// 距离第一次重试的延迟
+System.out.print(",delay=" + attempt.getDelaySinceFirstAttempt());
+// 重试结果: 是异常终止, 还是正常返回
+System.out.print(",hasException=" + attempt.hasException());
+System.out.print(",hasResult=" + attempt.hasResult());
+// 是什么原因导致异常
+if (attempt.hasException()) {
+System.out.print(",causeBy=" + attempt.getExceptionCause().toString());
+} else {
+// 正常返回时的结果
+System.out.print(",result=" + attempt.getResult());
+}
+// bad practice: 增加了额外的异常处理代码
+try {
+Boolean result = attempt.get();
+System.out.print(",rude get=" + result);
+} catch (ExecutionException e) {
+System.err.println("this attempt produce exception." + e.getCause().toString());
+}
+System.out.println();
+}
+}
+接下来在Retry对象中指定监听：
+withRetryListener(new MyRetryListener<>())

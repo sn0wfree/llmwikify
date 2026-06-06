@@ -1,0 +1,12 @@
+Python 重试库，Tenacity，如果抛出异常就会重试此函数，可以设定一系列重试条件，比如次数和随机时间
+下面是openai建议接口的调用方法
+import openai
+from tenacity import (
+retry,
+stop_after_attempt,
+wait_random_exponential,
+) # for exponential backoff
+@retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
+def completion_with_backoff(**kwargs):
+return openai.Completion.create(**kwargs)
+completion_with_backoff(model="text-davinci-003", prompt="Once upon a time,")

@@ -144,8 +144,11 @@ def test_wiki_mixin_lint_methods_all_delegate_to_wiki_analyzer():
     for name in delegate_methods:
         method = getattr(WikiLintMixin, name)
         src = inspect.getsource(method)
-        # The body must reference WikiAnalyzer
-        assert "WikiAnalyzer" in src, (
+        # The body must reference WikiAnalyzer (either via direct
+        # ``WikiAnalyzer(self)`` or via the cached ``self._analyzer``
+        # attribute — Phase 2 #4 accepts both as legitimate
+        # delegator patterns).
+        assert "WikiAnalyzer" in src or "_analyzer" in src, (
             f"WikiLintMixin.{name} should delegate to WikiAnalyzer"
         )
 
