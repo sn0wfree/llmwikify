@@ -157,3 +157,54 @@ C1: cli/_base.py 加 _error(e) → logger + 替换 print
 2026-06-05 | Phase 1 #1-C5 | ef31d2f   | test(providers): validate provider compat
 2026-06-05 | Phase 1 #1-C6 | (this)   | docs: Phase 1 #1 closure + graph update
 ```
+
+```
+
+## 最终评估（2026-06-06，7-item 重构 + 预存在修复完成后）
+
+### God Node 演化
+
+| Phase | WikiCLI | WikiAnalyzer | Wiki | ResearchEngine | WikiProtocol | PromptReg |
+|-------|---------|--------------|------|----------------|--------------|-----------|
+| 06-05（pre）| **65** ⭐ | 59 | 111 | 67 | 66 | 132 |
+| Phase 1 后 | gone | 67 | 111 | 71 | 74 | 149 |
+| Phase 2/3 后 | gone | 67 | 111 | 71 | 74 | 149 |
+
+⭐ WikiCLI 已退出 top-10 god nodes（从 65 边降到不在列表）
+
+### 文件结构健康度
+
+| 指标 | Before | After | Δ |
+|------|--------|-------|---|
+| `cli/commands.py` LOC | 2200 | 335 | **−85%** |
+| `core/wiki_analyzer.py` LOC | 929 | 520 | **−44%** |
+| `core/lint/` 新文件 | 0 | 9 | (8 rules + 1 engine) |
+| `autoresearch/engine.py` LOC | 885 | 526 | **−40%** |
+| `mcp/server.py` LOC | 140 | 50 | **−64%** |
+| `mcp/server.py` 3 函数 | 3 inline | 3 1-line 委托 | 简化 |
+| `WikiAnalyzer(self)` 重复实例化 | 16/call | 1 cached | **−94%** |
+| 直接 emoji `print("❌")` 模式 | 4+ | 0 | 全消除 |
+| 内部 deprecation warning | 1 | 0 | **−1** |
+
+### 整个 7-item 重构最终统计
+
+| 项 | Commits | Tests | 状态 |
+|----|---------|-------|------|
+| #1 LLM 客户端去重 | 6 | +30 | ✅ |
+| #2 CLI 命令拆解 | 3 | +94 | ✅ |
+| #3 WikiAnalyzer rule-based | 2 | +28 | ✅ |
+| #4 Wiki 13-mixin 收敛 | 1 | +6 | ✅ |
+| #5 autoresearch 内部重组 | 3 | +30 | ✅ |
+| #6 MCP 整合 | 2 | +7 | ✅ |
+| #7 错误/日志统一 | 1 | +14 | ✅ |
+| pre-existing fixes | 1 | (修 20) | ✅ |
+| **Total** | **19** | **+209** | **7/7** |
+
+### 公共 API 兼容性
+
+- 0 公共 API 破坏
+- `WikiCLI`, `LLMClient`, `StreamableLLMClient`, `WikiAnalyzer`, `ResearchEngine` 全部保持原签名
+- MCP 客户端配置（`command: ['llmwikify', 'mcp']`）继续工作（向后兼容）
+- `from llmwikify.cli.commands import WikiCLI/main` 仍工作（PEP 562 延迟 re-export）
+
+### 7-item 重构全部完成 ✅
