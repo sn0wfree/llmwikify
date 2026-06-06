@@ -10,8 +10,8 @@
 | # | 候选 | Phase | 状态 | 起始 commit | 完成 commit | 测试增量 |
 |---|------|-------|------|------------|------------|---------|
 | 1 | LLM 客户端去重 | 1 | ✅ done | 692c40f⁻¹ | ef31d2f | +30 |
-| 2 | CLI 命令拆解 | 1 | 🔵 planned | — | — | +50 |
-| 3 | WikiAnalyzer rule-based | 1 | 🔵 planned | — | — | +30 |
+| 2 | CLI 命令拆解 | 1 | ✅ done | 435c5cc | 34a253e | +94 |
+| 3 | WikiAnalyzer rule-based | 1 | ✅ done | 0fa1f59 | 716a19a | +28 |
 | 4 | Wiki 13-mixin 收敛 | 2 | 🔵 planned | — | — | +5 |
 | 5 | autoresearch 内部重组 | 2 | 🔵 planned | — | — | +30 |
 | 6 | MCP 整合 | 3 | 🔵 planned | — | — | +5 |
@@ -51,11 +51,11 @@ C2: 简单命令迁移（10 个）
 C3: 复杂命令迁移（16 个）+ main() 改用 registry
 ```
 
-### #3 WikiAnalyzer rule-based（1-2 commit · +30 测试）
+### #3 WikiAnalyzer rule-based（1-2 commit · +28 测试）✅
 
 ```
-C1: core/lint/ 新建 + 17 个 rule 文件
-C2: WikiAnalyzer 变 aggregator + WikiLintMixin 全委托
+C1: core/lint/ 新建 + 8 个 rule 文件                                     ✅ 0fa1f59
+C2: WikiAnalyzer 变 aggregator + WikiLintMixin 全委托（C1 已隐式完成）  ✅ 716a19a
 ```
 
 ---
