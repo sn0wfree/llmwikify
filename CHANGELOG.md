@@ -5,6 +5,20 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed — Phase 3 #6: CLI `mcp` / `serve` consolidation
+- **`mcp` is now an argparse alias of `serve`** — full backward compatibility. Type `llmwikify mcp ...` and it works just like `llmwikify serve ...`. The `mcp` alias will be removed in **v0.34.0**.
+- **New `llmwikify help` subcommand** — lists all available commands plus the alias table. Use `llmwikify help --aliases` to see just the aliases.
+- **`mcp` no longer appears as a separate entry in `llmwikify --help`** — but `serve`'s help text now includes `(alias: mcp)` to make the relationship explicit. The `--help` text examples have been updated to use `serve`.
+- **Bonus capability** — `mcp` users now have access to all of `serve`'s flags, e.g. `llmwikify mcp --web` (previously an argparse error).
+- **`mcp/server.py` 1-line delegations** — the 3 deprecated functions (`create_mcp_server`, `serve_mcp`, `create_unified_server`) now delegate to `MCPAdapter` and `WikiServer`. The deprecation warning is still emitted on import for external users but is silenced for internal callers.
+- **`init` MCP templates** — unchanged. The `command: ["llmwikify", "mcp"]` config written by `init --agent ...` still works because `mcp` is now an alias. The new `test_init_template_supports_both_mcp_and_serve_aliases` test verifies the template can be safely rewritten with `serve` in v0.34.0+.
+
+### Documentation
+- New: `docs/cli-help-and-aliases.md` — full explanation of the `mcp` → `serve` alias, deprecation timeline, port/protocol access points, and migration guide.
+- `README.md` — examples updated to use `llmwikify serve` (with notes about the `mcp` alias).
+
 ## [0.30.1] - 2026-04-27
 
 ### Added — Unified FastAPI Server
