@@ -248,6 +248,12 @@ class TestPrincipleCheckerCheckAllTemplates:
         assert "_internal" not in results
 
     def test_builtins_all_checked(self):
+        """The set of built-in templates matches expectations.
+
+        Phase 1 #5 added 2 new templates
+        (``research_clarify``, ``research_reason``) in the
+        autoresearch YAML sync. Updated to include them.
+        """
         checker = PrincipleChecker()
         results = checker.check_all_templates()
         expected = {
@@ -256,7 +262,9 @@ class TestPrincipleCheckerCheckAllTemplates:
             "generate_wiki_ops",
             "ingest_instructions",
             "investigate_lint",
+            "research_clarify",  # Phase 1 #5
             "research_plan",
+            "research_reason",   # Phase 1 #5
             "research_replan",
             "research_report",
             "research_review",

@@ -121,8 +121,17 @@ class TestOrphanHtmlFile:
 # ============================================================
 class TestCLIDefaultWikiRoot:
     def test_default_wiki_root_not_hardcoded(self):
-        """CLI should not hardcode developer path /home/ll/mining_news."""
-        commands_path = Path(__file__).parent.parent / 'src/llmwikify/cli/commands.py'
+        """CLI should not hardcode developer path /home/ll/mining_news.
+
+        Phase 1 #2 / C2-C3: ``cli/commands.py`` was split into
+        ``cli/_app.py`` (WikiCLI + main) and the
+        ``cli/commands/`` subpackage (per-command modules).
+        The WIKI_ROOT default now lives in ``init_cmd.py``.
+        """
+        commands_path = (
+            Path(__file__).parent.parent
+            / 'src/llmwikify/cli/commands/init_cmd.py'
+        )
         content = commands_path.read_text()
 
         # Should not have hardcoded developer path as default
@@ -255,18 +264,34 @@ class TestMCPToolCount:
 # ============================================================
 class TestSinkCLI:
     def test_read_sink_cli_exists(self):
-        """CLI should have a sink-related command."""
-        commands_path = Path(__file__).parent.parent / 'src/llmwikify/cli/commands.py'
+        """CLI should have a sink-related command.
+
+        Phase 1 #2 / C2-C3: sink command now lives in
+        ``cli/commands/sink_status.py``. Uses class-based
+        structure (``name = "sink-status"``).
+        """
+        commands_path = (
+            Path(__file__).parent.parent
+            / 'src/llmwikify/cli/commands/sink_status.py'
+        )
         content = commands_path.read_text()
 
         # Check for sink command in argparse setup
-        has_sink_cmd = "'sink'" in content or "'sink-status'" in content or "'read-sink'" in content
+        has_sink_cmd = (
+            "'sink'" in content
+            or '"sink"' in content
+            or "'sink-status'" in content
+            or '"sink-status"' in content
+            or "'read-sink'" in content
+            or "class SinkStatusCommand" in content
+            or 'name = "sink-status"' in content
+        )
 
         # Also check if the command handler exists
         has_sink_handler = 'def sink' in content
 
         assert has_sink_cmd or has_sink_handler, (
-            "No sink-related CLI command found in commands.py"
+            "No sink-related CLI command found in sink_status.py"
         )
 
     def test_wiki_has_read_sink_method(self):
@@ -280,13 +305,27 @@ class TestSinkCLI:
 # ============================================================
 class TestSynthesizeCLI:
     def test_synthesize_cli_exists(self):
-        """CLI should have a synthesize command."""
-        commands_path = Path(__file__).parent.parent / 'src/llmwikify/cli/commands.py'
+        """CLI should have a synthesize command.
+
+        Phase 1 #2 / C2-C3: synthesize command now lives in
+        ``cli/commands/synthesize.py``. Uses the class-based
+        structure (``name = "synthesize"``).
+        """
+        commands_path = (
+            Path(__file__).parent.parent
+            / 'src/llmwikify/cli/commands/synthesize.py'
+        )
         content = commands_path.read_text()
 
-        has_synthesize = "'synthesize'" in content
+        has_synthesize = (
+            "'synthesize'" in content
+            or '"synthesize"' in content
+            or 'name = "synthesize"' in content
+            or "name = 'synthesize'" in content
+            or "class SynthesizeCommand" in content
+        )
         assert has_synthesize, (
-            "No 'synthesize' CLI command found in commands.py"
+            "No 'synthesize' CLI command found in synthesize.py"
         )
 
 
@@ -295,8 +334,15 @@ class TestSynthesizeCLI:
 # ============================================================
 class TestLintInvestigations:
     def test_lint_has_generate_investigations_flag(self):
-        """lint command should accept --generate-investigations flag."""
-        commands_path = Path(__file__).parent.parent / 'src/llmwikify/cli/commands.py'
+        """lint command should accept --generate-investigations flag.
+
+        Phase 1 #2 / C2-C3: lint command now lives in
+        ``cli/commands/lint.py``.
+        """
+        commands_path = (
+            Path(__file__).parent.parent
+            / 'src/llmwikify/cli/commands/lint.py'
+        )
         content = commands_path.read_text()
 
         # Check for --generate-investigations in argparse setup
@@ -312,24 +358,37 @@ class TestLintInvestigations:
 # ============================================================
 class TestBatchSmart:
     def test_batch_has_self_create_flag(self):
-        """batch command should accept --self-create flag."""
-        commands_path = Path(__file__).parent.parent / 'src/llmwikify/cli/commands.py'
+        """batch command should accept --self-create flag.
+
+        Phase 1 #2 / C2-C3: batch command now lives in
+        ``cli/commands/batch.py``. The class-based structure
+        uses ``name = "batch"`` and ``--self-create`` without
+        surrounding single-quotes, so the test uses substring
+        matching on the command name and flag separately.
+        """
+        commands_path = (
+            Path(__file__).parent.parent
+            / 'src/llmwikify/cli/commands/batch.py'
+        )
         content = commands_path.read_text()
 
-        has_batch_self_create = False
+        # Verify the batch command exists (via class name,
+        # argparse name, or setup_parser call).
+        has_batch_cmd = (
+            "name = \"batch\"" in content
+            or "name = 'batch'" in content
+            or "'batch'" in content
+            or '"batch"' in content
+            or "class BatchCommand" in content
+        )
+        # Verify --self-create flag exists somewhere in the
+        # batch command's setup_parser.
+        has_self_create = "--self-create" in content
 
-        lines = content.split('\n')
-        in_batch_parser = False
-        for line in lines:
-            if "'batch'" in line or '"batch"' in line:
-                in_batch_parser = True
-            elif in_batch_parser and "'--self-create'" in line:
-                has_batch_self_create = True
-                break
-            elif in_batch_parser and ('add_parser' in line and "'batch'" not in line):
-                break
-
-        assert has_batch_self_create, (
+        assert has_batch_cmd, (
+            "batch command not found in batch.py"
+        )
+        assert has_self_create, (
             "batch command missing --self-create flag in argparse setup"
         )
 

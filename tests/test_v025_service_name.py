@@ -161,40 +161,31 @@ class TestCLIArgParsing:
     """Test CLI argument parsing for --name."""
 
     def test_name_long_parameter(self):
-        """3.1: --name long parameter should be parsed."""
-        from llmwikify.cli.commands import main
-        with patch('sys.argv', ['llmwikify', 'mcp', '--name', 'testwiki']):
-            with patch('llmwikify.cli.commands.WikiCLI') as MockCLI:
-                mock_instance = MagicMock()
-                mock_instance.serve.return_value = 0
-                MockCLI.return_value = mock_instance
+        """3.1: --name long parameter should be parsed.
 
-                try:
-                    main()
-                except SystemExit:
-                    pass
+        Phase 3 #6 — use the parser directly (not main()) to
+        verify argparse parsing without starting the MCP server.
+        """
+        from llmwikify.cli._app import _build_parser
 
-                mock_instance.serve.assert_called_once()
-                args = mock_instance.serve.call_args[0][0]
-                assert args.name == 'testwiki'
+        parser = _build_parser()
+        args = parser.parse_args(["mcp", "--name", "testwiki"])
+        assert args.name == "testwiki", (
+            f"--name should parse to 'testwiki'. Got: {args.name!r}"
+        )
 
     def test_name_short_parameter(self):
-        """3.2: -n short parameter should be parsed."""
-        from llmwikify.cli.commands import main
-        with patch('sys.argv', ['llmwikify', 'mcp', '-n', 'shortwiki']):
-            with patch('llmwikify.cli.commands.WikiCLI') as MockCLI:
-                mock_instance = MagicMock()
-                mock_instance.serve.return_value = 0
-                MockCLI.return_value = mock_instance
+        """3.2: -n short parameter should be parsed.
 
-                try:
-                    main()
-                except SystemExit:
-                    pass
+        Phase 3 #6 — see test_name_long_parameter.
+        """
+        from llmwikify.cli._app import _build_parser
 
-                mock_instance.serve.assert_called_once()
-                args = mock_instance.serve.call_args[0][0]
-                assert args.name == 'shortwiki'
+        parser = _build_parser()
+        args = parser.parse_args(["mcp", "-n", "shortwiki"])
+        assert args.name == "shortwiki", (
+            f"-n should parse to 'shortwiki'. Got: {args.name!r}"
+        )
 
     def test_mcp_help_contains_name(self):
         """3.3: mcp --help should mention --name."""
@@ -222,22 +213,18 @@ class TestCLIArgParsing:
         assert '--name' in output
 
     def test_no_name_defaults_to_none(self):
-        """3.5: Without --name, args.name should be None."""
-        from llmwikify.cli.commands import main
-        with patch('sys.argv', ['llmwikify', 'mcp']):
-            with patch('llmwikify.cli.commands.WikiCLI') as MockCLI:
-                mock_instance = MagicMock()
-                mock_instance.serve.return_value = 0
-                MockCLI.return_value = mock_instance
+        """3.5: Without --name, args.name should be None.
 
-                try:
-                    main()
-                except SystemExit:
-                    pass
+        Phase 3 #6 — use the parser directly.
+        """
+        from llmwikify.cli._app import _build_parser
 
-                mock_instance.serve.assert_called_once()
-                args = mock_instance.serve.call_args[0][0]
-                assert args.name is None
+        parser = _build_parser()
+        args = parser.parse_args(["mcp"])
+        assert args.name is None, (
+            f"Without --name, args.name should be None. "
+            f"Got: {args.name!r}"
+        )
 
 
 # ============================================================
@@ -253,66 +240,128 @@ class TestCLIServeMethod:
         return cli
 
     def test_name_passed_to_serve_mcp(self, cli):
-        """4.1: --name should be passed to serve_mcp."""
-        with patch('llmwikify.mcp.server.serve_mcp') as mock_serve:
-            args = Args()
-            args.name = 'cli-wiki'
-            args.transport = None
-            args.host = None
-            args.port = None
+        """4.1: --name should be passed through to the MCP server.
 
-            cli.serve(args)
+        Phase 3 #6 — ``serve.py`` no longer imports
+        ``llmwikify.mcp.server.serve_mcp`` (the deprecated
+        shim). The stdio path now uses ``MCPAdapter``
+        directly. We mock ``MCPAdapter`` to verify the
+        ``name=`` kwarg flows through.
+        """
+        with patch('llmwikify.cli.commands.serve.MCPAdapter') as MockAdapter:
+            mock_instance = MagicMock()
+            MockAdapter.return_value = mock_instance
 
-            mock_serve.assert_called_once()
-            call_kwargs = mock_serve.call_args.kwargs
-            assert call_kwargs['name'] == 'cli-wiki'
-
-    def test_no_name_falls_back_to_none(self, cli):
-        """4.2: Without --name, serve_mcp receives name=None."""
-        cli.config['mcp']['name'] = None
-        with patch('llmwikify.mcp.server.serve_mcp') as mock_serve:
-            args = Args()
-            args.name = None
-            args.transport = None
-            args.host = None
-            args.port = None
-
-            cli.serve(args)
-
-            call_kwargs = mock_serve.call_args.kwargs
-            assert call_kwargs['name'] is None
-
-    def test_startup_log_prints_service_name(self, cli, temp_wiki):
-        """4.3: Startup log should print service name."""
-        with patch('llmwikify.mcp.server.serve_mcp') as mock_serve:
-            stdout = StringIO()
-            with patch('sys.stdout', stdout):
+            # Patch asyncio.run so we don't actually start the server
+            with patch('asyncio.run') as mock_asyncio:
                 args = Args()
-                args.name = 'log-test-wiki'
+                args.name = 'cli-wiki'
                 args.transport = None
                 args.host = None
                 args.port = None
+                args.mcp_port = None
+                args.web = False
+                args.auth_token = None
+                args.multi_wiki = False
 
                 cli.serve(args)
 
-            output = stdout.getvalue()
-            assert 'log-test-wiki' in output
-            assert "Starting MCP server 'log-test-wiki'" in output
+                # MCPAdapter was constructed with the wiki + name
+                MockAdapter.assert_called_once()
+                call_kwargs = MockAdapter.call_args.kwargs
+                assert call_kwargs.get('name') == 'cli-wiki', (
+                    f"--name should reach MCPAdapter as name=. "
+                    f"Got: {call_kwargs}"
+                )
+
+    def test_no_name_falls_back_to_none(self, cli):
+        """4.2: Without --name, MCPAdapter receives name=None.
+
+        Phase 3 #6 — see test_name_passed_to_serve_mcp.
+        """
+        cli.config['mcp']['name'] = None
+        with patch('llmwikify.cli.commands.serve.MCPAdapter') as MockAdapter:
+            mock_instance = MagicMock()
+            MockAdapter.return_value = mock_instance
+
+            with patch('asyncio.run'):
+                args = Args()
+                args.name = None
+                args.transport = None
+                args.host = None
+                args.port = None
+                args.mcp_port = None
+                args.web = False
+                args.auth_token = None
+                args.multi_wiki = False
+
+                cli.serve(args)
+
+                call_kwargs = MockAdapter.call_args.kwargs
+                assert call_kwargs.get('name') is None, (
+                    f"Without --name and no config, MCPAdapter should "
+                    f"get name=None. Got: {call_kwargs}"
+                )
+
+    def test_startup_log_prints_service_name(self, cli, temp_wiki):
+        """4.3: Startup log should print service name.
+
+        Phase 3 #6 — see test_name_passed_to_serve_mcp.
+        """
+        with patch('llmwikify.cli.commands.serve.MCPAdapter'):
+            with patch('asyncio.run'):
+                stdout = StringIO()
+                with patch('sys.stdout', stdout):
+                    args = Args()
+                    args.name = 'log-test-wiki'
+                    args.transport = None
+                    args.host = None
+                    args.port = None
+                    args.mcp_port = None
+                    args.web = False
+                    args.auth_token = None
+                    args.multi_wiki = False
+
+                    cli.serve(args)
+
+                output = stdout.getvalue()
+                assert 'log-test-wiki' in output, (
+                    f"Service name should appear in startup log. "
+                    f"Output: {output}"
+                )
+                assert "Starting MCP server 'log-test-wiki'" in output, (
+                    f"Startup banner should include service name. "
+                    f"Output: {output}"
+                )
 
     def test_cli_overrides_config_name(self, cli):
-        """4.4: CLI --name wins over config mcp.name."""
+        """4.4: CLI --name wins over config mcp.name.
+
+        Phase 3 #6 — see test_name_passed_to_serve_mcp.
+        """
         cli.config['mcp']['name'] = 'config-wiki'
-        with patch('llmwikify.mcp.server.serve_mcp') as mock_serve:
-            args = Args()
-            args.name = 'cli-wiki'
-            args.transport = None
-            args.host = None
-            args.port = None
+        with patch('llmwikify.cli.commands.serve.MCPAdapter') as MockAdapter:
+            mock_instance = MagicMock()
+            MockAdapter.return_value = mock_instance
 
-            cli.serve(args)
+            with patch('asyncio.run'):
+                args = Args()
+                args.name = 'cli-wiki'
+                args.transport = None
+                args.host = None
+                args.port = None
+                args.mcp_port = None
+                args.web = False
+                args.auth_token = None
+                args.multi_wiki = False
 
-            call_kwargs = mock_serve.call_args.kwargs
-            assert call_kwargs['name'] == 'cli-wiki'
+                cli.serve(args)
+
+                call_kwargs = MockAdapter.call_args.kwargs
+                assert call_kwargs.get('name') == 'cli-wiki', (
+                    f"CLI --name should override config mcp.name. "
+                    f"Got: {call_kwargs}"
+                )
 
 
 # ============================================================
@@ -342,7 +391,10 @@ class TestConfigFileIntegration:
         assert config_name is None
 
     def test_cli_wins_over_config_name(self, temp_wiki):
-        """5.3: CLI --name should override config mcp.name."""
+        """5.3: CLI --name should override config mcp.name.
+
+        Phase 3 #6 — see test_name_passed_to_serve_mcp.
+        """
         config_content = "mcp:\n  name: config-wiki\n"
         (temp_wiki / '.wiki-config.yaml').write_text(config_content)
 
@@ -351,17 +403,28 @@ class TestConfigFileIntegration:
         cli = WikiCLI(temp_wiki, config=config)
         cli.wiki.init()
 
-        with patch('llmwikify.mcp.server.serve_mcp') as mock_serve:
-            args = Args()
-            args.name = 'cli-wiki'
-            args.transport = None
-            args.host = None
-            args.port = None
+        with patch('llmwikify.cli.commands.serve.MCPAdapter') as MockAdapter:
+            mock_instance = MagicMock()
+            MockAdapter.return_value = mock_instance
 
-            cli.serve(args)
+            with patch('asyncio.run'):
+                args = Args()
+                args.name = 'cli-wiki'
+                args.transport = None
+                args.host = None
+                args.port = None
+                args.mcp_port = None
+                args.web = False
+                args.auth_token = None
+                args.multi_wiki = False
 
-            call_kwargs = mock_serve.call_args.kwargs
-            assert call_kwargs['name'] == 'cli-wiki'
+                cli.serve(args)
+
+                call_kwargs = MockAdapter.call_args.kwargs
+                assert call_kwargs.get('name') == 'cli-wiki', (
+                    f"CLI --name should override config mcp.name. "
+                    f"Got: {call_kwargs}"
+                )
 
 
 # ============================================================

@@ -123,6 +123,17 @@ class WikiCLI:
         """Build reference index. → ``cli.commands.build_index.run_build_index``."""
         return run_build_index(self.wiki, args)
 
+    def _detect_old_index_format(self) -> bool:
+        """Check if the index has old-format page_names.
+
+        Backward-compat method (pre-existing tests use
+        ``cli._detect_old_index_format()``). Delegates to
+        the free function in
+        ``cli.commands.build_index._detect_old_index_format``.
+        """
+        from .commands.build_index import _detect_old_index_format
+        return _detect_old_index_format(self.wiki)
+
     def fix_wikilinks(self, args: Any) -> int:
         """Fix broken wikilinks. → ``cli.commands.fix_wikilinks.run_fix_wikilinks``."""
         return run_fix_wikilinks(self.wiki, args)

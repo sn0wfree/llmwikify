@@ -5,7 +5,10 @@ Also wired up to the ``mcp`` alias by ``main()``.
 
 from __future__ import annotations
 
+import asyncio  # Phase 3 #6 — used by stdio/http/sse paths
 from typing import Any
+
+from llmwikify.mcp.adapter import MCPAdapter  # Phase 3 #6
 
 from .._base import Command
 
@@ -108,8 +111,11 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                 # the deprecated ``llmwikify.mcp.server.serve_mcp``
                 # shim. This silences 1 internal DeprecationWarning
                 # while keeping the same runtime behavior.
-                from llmwikify.mcp.adapter import MCPAdapter
-                import asyncio
+                # ``MCPAdapter`` and ``asyncio`` are imported at
+                # module level (top of file) so tests can patch
+                # ``llmwikify.cli.commands.serve.MCPAdapter`` to
+                # verify the name= flow without starting the
+                # actual MCP server.
                 adapter = MCPAdapter(wiki, name=name, config=mcp_config)
                 transport_final = final_transport
                 host_final = final_host
