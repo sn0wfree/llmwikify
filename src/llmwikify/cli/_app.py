@@ -249,8 +249,9 @@ def main() -> int:
     # registered in COMMAND_REGISTRY before main() iterates them.
     # The import is idempotent: subsequent calls are no-ops.
     from . import commands as _commands  # noqa: F401  (registration side effect)
-    from ._base import COMMAND_REGISTRY, get_command
+    from ._base import COMMAND_REGISTRY, CommandError, get_command
     from ._config import load_cli_config
+    from ._output import print_error
 
     parser = argparse.ArgumentParser(
         prog='llmwikify',
@@ -314,5 +315,12 @@ Examples:
         # expect a wiki (with methods like init/read_page/etc.) work.
         # The Command.run signature is ``run(self, args, wiki, config)``.
         return cmd.run(args, cli.wiki, config)
+    except CommandError as e:
+        # Phase 3 #7 — commands raise CommandError instead of
+        # ``print(error); return 1``. ``main()`` centralizes
+        # the error message + exit code so the command bodies
+        # stay focused on the happy path.
+        print_error(e.message)
+        return e.exit_code
     finally:
         cli.wiki.close()

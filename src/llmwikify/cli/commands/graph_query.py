@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._base import Command
+from .._base import Command, CommandError
 
 
 def run_graph_query(wiki: Any, args: Any) -> int:
@@ -16,6 +16,14 @@ def run_graph_query(wiki: Any, args: Any) -> int:
 
     Returns:
         0 on success, 1 on usage error.
+
+    Phase 3 #7 — usage errors raise ``CommandError`` instead
+    of ``print(...) + return 1``. ``main()`` catches
+    ``CommandError`` and prints the message via
+    ``print_error`` (with the ❌ prefix), then returns
+    the requested exit code. This consolidates the
+    user-facing error path so the CLI is consistent
+    across all 26 commands.
     """
     engine = wiki.get_relation_engine()
     subcommand = args.subcommand
@@ -23,8 +31,7 @@ def run_graph_query(wiki: Any, args: Any) -> int:
 
     if subcommand == "neighbors":
         if not cmd_args:
-            print("❌ Usage: llmwikify graph-query neighbors <concept>")
-            return 1
+            raise CommandError("Usage: llmwikify graph-query neighbors <concept>")
         concept = cmd_args[0]
         relations = engine.get_neighbors(concept)
         if not relations:
@@ -39,8 +46,7 @@ def run_graph_query(wiki: Any, args: Any) -> int:
 
     elif subcommand == "path":
         if len(cmd_args) < 2:
-            print("❌ Usage: llmwikify graph-query path <A> <B>")
-            return 1
+            raise CommandError("Usage: llmwikify graph-query path <A> <B>")
         result = engine.get_path(cmd_args[0], cmd_args[1])
         if result is None:
             print(f"No path found between {cmd_args[0]} and {cmd_args[1]}")
@@ -63,13 +69,11 @@ def run_graph_query(wiki: Any, args: Any) -> int:
 
     elif subcommand == "context":
         if not cmd_args:
-            print("❌ Usage: llmwikify graph-query context <relation_id>")
-            return 1
+            raise CommandError("Usage: llmwikify graph-query context <relation_id>")
         rel_id = int(cmd_args[0])
         result = engine.get_context(rel_id)
         if result is None:
-            print(f"Relation {rel_id} not found")
-            return 1
+            raise CommandError(f"Relation {rel_id} not found")
         print(f"Relation #{rel_id}:")
         print(f"  {result['source']} -[{result['relation']}]-> {result['target']}")
         print(f"  Confidence: {result['confidence']}")
