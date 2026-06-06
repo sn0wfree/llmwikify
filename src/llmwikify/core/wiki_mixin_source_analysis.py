@@ -1,9 +1,7 @@
 """Wiki source analysis mixin — source file analysis, caching, summary pages."""
 
 import hashlib
-import json
 import logging
-import re
 from pathlib import Path
 
 from .protocols import WikiProtocol
@@ -44,30 +42,27 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         return None
 
     def _cache_source_analysis(self, page_path: Path, content_hash: str, analysis: dict) -> None:
-        """Embed analysis results as HTML comment in Source summary page."""
+        """Embed analysis results as HTML comment in Source summary page.
+
+        Delegates to the backend which handles the read/modify/write
+        of the analysis HTML comment.
+        """
         try:
-            content = page_path.read_text()
-            analysis_json = json.dumps(analysis, ensure_ascii=False)
-            from datetime import datetime, timezone
-            comment = f'<!-- llmwikify:analysis {{"version":1,"hash":"{content_hash}","analyzed_at":"{datetime.now(timezone.utc).isoformat()}","data":{analysis_json}}} -->'
-
-            if '<!-- llmwikify:analysis' in content:
-                content = re.sub(r'<!-- llmwikify:analysis.*? -->', comment, content, flags=re.DOTALL)
-            else:
-                content += f'\n{comment}'
-
-            page_path.write_text(content)
-        except Exception as e:
+            key = str(page_path.relative_to(self.wiki_dir))[:-3]
+            self._backend.put_source_cache(key, content_hash, analysis)
+        except (ValueError, OSError) as e:
             logger.warning("Failed to cache source analysis for %s: %s", page_path, e)
 
     def _get_cached_source_analysis(self, page_path: Path) -> dict | None:
-        """Extract cached analysis from Source summary page."""
+        """Extract cached analysis from Source summary page.
+
+        Delegates to the backend which reads and parses the
+        analysis HTML comment.
+        """
         try:
-            content = page_path.read_text()
-            match = re.search(r'<!-- llmwikify:analysis (.*?) -->', content, re.DOTALL)
-            if match:
-                return json.loads(match.group(1))
-        except Exception as e:
+            key = str(page_path.relative_to(self.wiki_dir))[:-3]
+            return self._get_source_cache(key)
+        except (ValueError, OSError) as e:
             logger.warning("Failed to parse cached analysis for %s: %s", page_path, e)
         return None
 
@@ -129,14 +124,14 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         registry = self._get_prompt_registry()
         wiki_schema = ""
         if self.wiki_md_file.exists():
-            wiki_schema = self.wiki_md_file.read_text()
+            wiki_schema = self._get_wiki_md_content()
 
         messages = registry.get_messages(
             "analyze_source",
             title=source_path,
             source_type="local",
             content=targeted_content,
-            current_index=self.index_file.read_text() if self.index_file.exists() else "",
+            current_index=self._get_index_content() if self.index_file.exists() else "",
             wiki_schema=wiki_schema,
         )
         params = registry.get_api_params("analyze_source")

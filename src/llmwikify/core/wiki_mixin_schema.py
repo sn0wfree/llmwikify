@@ -14,52 +14,9 @@ class WikiSchemaMixin(WikiProtocol):
     def _load_page_type_mapping(self) -> dict[str, str]:
         """Load page type → directory mapping from wiki.md Page Types table.
 
-        Parses wiki.md for tables like:
-        | Type | Location | Purpose |
-        |------|----------|---------|
-        | Source | wiki/sources/{slug}.md | ... |
-        | MacroFactor | wiki/factors/{name}.md | ... |
-
-        Returns dict mapping type name → directory name, e.g.:
-        {"Source": "sources", "MacroFactor": "factors", ...}
+        Delegates to the backend which parses the Page Types table.
         """
-        if not self.wiki_md_file.exists():
-            return {}
-
-        content = self.wiki_md_file.read_text()
-        type_to_dir: dict[str, str] = {}
-        in_page_types = False
-        in_table = False
-
-        for line in content.split('\n'):
-            if '## Page Types' in line or '### Custom Page Types' in line:
-                in_page_types = True
-                in_table = False
-                continue
-
-            if in_page_types and line.startswith('## ') and 'Page Types' not in line:
-                in_page_types = False
-                continue
-
-            if not in_page_types:
-                continue
-
-            if '|' in line and line.strip().startswith('|---') or line.strip().startswith('| -'):
-                in_table = True
-                continue
-
-            if in_table and '|' in line:
-                parts = [p.strip() for p in line.split('|') if p.strip()]
-                if len(parts) >= 3:
-                    page_type = parts[0]
-                    location = parts[1]
-
-                    match = re.search(r'wiki/([^/\{]+)/', location)
-                    if match:
-                        directory = match.group(1)
-                        type_to_dir[page_type] = directory
-
-        return type_to_dir
+        return self._get_page_type_mapping()
 
     def read_schema(self) -> dict:
         """Read wiki.md (schema/conventions file).
@@ -72,7 +29,7 @@ class WikiSchemaMixin(WikiProtocol):
             return {"error": "wiki.md not found. Run init() first."}
 
         return {
-            "content": self.wiki_md_file.read_text(),
+            "content": self._get_wiki_md_content(),
             "file": str(self.wiki_md_file),
             "hint": "Tip: Save a copy of the current content before making changes to wiki.md",
         }
@@ -98,7 +55,7 @@ class WikiSchemaMixin(WikiProtocol):
         if len(content.strip()) < 50:
             warnings_list.append("Content seems too short for a schema file")
 
-        self.wiki_md_file.write_text(content)
+        self._write_wiki_md_content(content)
 
         result = {
             "status": "updated",

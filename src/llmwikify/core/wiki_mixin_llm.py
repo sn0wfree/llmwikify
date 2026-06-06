@@ -47,7 +47,7 @@ class WikiLLMMixin(WikiProtocol):
 
         wiki_schema = ""
         if self.wiki_md_file.exists():
-            wiki_schema = self.wiki_md_file.read_text()
+            wiki_schema = self._get_wiki_md_content()
 
         analysis_messages = registry.get_messages(
             "analyze_source",
