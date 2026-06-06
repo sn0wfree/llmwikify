@@ -14,7 +14,7 @@
 | 3 | WikiAnalyzer rule-based | 1 | ✅ done | 0fa1f59 | 716a19a | +28 |
 | 4 | Wiki 13-mixin 收敛 | 2 | ✅ done | 5094210⁻¹ | 5094210 | +6 |
 | 5 | autoresearch 内部重组 | 2 | ✅ done | a43dc7c⁻¹ | 43d2a1d | +30 |
-| 6 | MCP 整合 | 3 | 🔵 planned | — | — | +5 |
+| 6 | MCP 整合 | 3 | ✅ done | 45afcdf⁻¹ | 6211b97 | +7 |
 | 7 | 错误/日志统一 | 3 | ✅ done | b07e893⁻¹ | b07e893 | +14 |
 
 **状态图标**：🔵 planned · 🟡 in_progress · ✅ done · ❌ blocked
@@ -82,7 +82,40 @@ C5: 公共 API compatibility shim
 
 ## Phase 3 — 打磨
 
-### #6 MCP 整合（1-2 commit · +5 测试）
+### #6 MCP 整合（1-2 commit · +5 测试）✅
+
+**C1（1 commit, +7 tests, 2 commits total: docs + refactor）**：
+
+```
+45afcdf docs: document Phase 3 #6 — mcp is now alias of serve (v0.34.0 removal)
+6211b97 refactor(cli,mcp): merge mcp→serve alias + add help subcommand
+```
+
+实现：
+- `cli/commands/serve.py`：删除 `McpCommand` 类，serve subparser 加 `aliases=['mcp']`
+- `cli/commands/help_cmd.py`（新）：`HelpCommand` + `SUBCOMMAND_ALIASES` 字典
+- `cli/commands/__init__.py`：注册 HelpCommand，删除 McpCommand
+- `cli/_app.py`：提取 `_build_parser()`，main() 通过 SUBCOMMAND_ALIASES 解析 alias
+- `mcp/server.py`：3 个 deprecated 函数 → 1-line 委托到 MCPAdapter / WikiServer
+- `cli/commands/serve.py:107`：stdio 路径直接用 MCPAdapter（消除 1 个内部 deprecation）
+
+测试（7 个）：
+- test_mcp_is_argparse_alias_of_serve
+- test_mcp_accepts_serve_only_flags (`mcp --web` 现在工作)
+- test_serve_command_is_only_registered_command
+- test_help_command_lists_aliases
+- test_init_writes_serve_command_in_mcp_config (决策 5.b: 验证 init 模板可安全用 serve)
+- test_serve_py_does_not_import_mcp_server (回归 guard)
+- test_mcp_command_class_not_in_commands_init (回归 guard)
+
+净效果：
+- `mcp/server.py`: 140 → 105 LOC
+- `cli/commands/serve.py`: 167 → 158 LOC
+- 新增 1 个命令 (`help`)
+- `mcp` 仍工作（argparse alias）— v0.34.0 移除
+- `init` 模板（claude_mcp.json, codex_mcp.json）保持用 `mcp` — 向后兼容
+- mcp/serve help 文本都加 `(alias: mcp)` 提示
+- 新 `llmwikify help` 子命令提供命令+alias 列表
 
 ```
 C1: mcp/server.py 变 shim
