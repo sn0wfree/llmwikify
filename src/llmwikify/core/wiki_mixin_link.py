@@ -67,7 +67,7 @@ class WikiLinkMixin(WikiProtocol):
                 if (self.wiki_dir / f"{target}.md").exists():
                     continue
 
-                matches = list(self.wiki_dir.rglob(f"{target}.md"))
+                matches = self._find_wiki_page_paths(target)
 
                 if len(matches) == 0:
                     stats["skipped"] += 1

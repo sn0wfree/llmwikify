@@ -255,7 +255,7 @@ class WikiIngestMixin(WikiProtocol):
         hint = ""
         source_name = ""
 
-        self.raw_dir.mkdir(parents=True, exist_ok=True)
+        self._ensure_raw_dir()
 
         if result.source_type in ("url", "youtube"):
             safe_name = self._slugify(result.title) + ".md"
@@ -293,7 +293,7 @@ class WikiIngestMixin(WikiProtocol):
 
         index_content = ""
         if self.index_file.exists():
-            index_content = self.index_file.read_text()
+            index_content = self._get_index_content()
 
         log_detail = f"Source ({result.source_type}): {result.title}"
         if saved_to_raw:

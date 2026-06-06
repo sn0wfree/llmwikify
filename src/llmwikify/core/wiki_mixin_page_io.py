@@ -68,14 +68,8 @@ class WikiPageIOMixin(WikiProtocol):
         except ValueError:
             raise ValueError(f"Page path escapes wiki/ directory: {full_path!r}")
 
-        page_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if page_path.exists():
-            page_path.write_text(content)
-            action = "Updated"
-        else:
-            page_path.write_text(content)
-            action = "Created"
+        action = "Updated" if page_path.exists() else "Created"
+        self._backend.put_page(full_path, content)
 
         rel_path = str(page_path.relative_to(self.wiki_dir))
         self.index.upsert_page(rel_path[:-3], content, rel_path)
@@ -129,9 +123,13 @@ class WikiPageIOMixin(WikiProtocol):
         if not page_path.exists():
             return {"error": f"Page not found: {full_path}"}
 
+        content = self._backend.get_page(full_path)
+        if content is None:
+            return {"error": f"Page not found: {full_path}"}
+
         result = {
             "page_name": full_path,
-            "content": page_path.read_text(),
+            "content": content,
             "file": str(page_path),
             "is_sink": False,
         }
@@ -175,9 +173,11 @@ class WikiPageIOMixin(WikiProtocol):
 
     def append_log(self, operation: str, details: str) -> str:
         """Append entry to wiki log."""
-        entry = f"## [{self._now()}] {operation} | {details}\n"
-        with open(self.log_file, 'a') as f:
-            f.write(entry)
+        self._backend.append_log({
+            "timestamp": self._now(),
+            "operation": operation,
+            "details": details,
+        })
         return "Logged"
 
     def build_index(self, auto_export: bool = True, output_path: Path | None = None) -> dict:
@@ -296,7 +296,7 @@ class WikiPageIOMixin(WikiProtocol):
         sink_entries = []
         type_counts: dict[str, int] = {}
 
-        for page in sorted(self.wiki_dir.rglob("*.md")):
+        for page in sorted(self._backend.list_page_paths()):
             page_path = page.relative_to(self.wiki_dir)
 
             if page_path.parts[0] == '.sink':
@@ -420,4 +420,4 @@ class WikiPageIOMixin(WikiProtocol):
             index_content += "## Pending Sink Buffers 📥\n\n"
             index_content += '\n\n'.join(sink_entries) + '\n'
 
-        self.index_file.write_text(index_content)
+        self._write_index_content(index_content)

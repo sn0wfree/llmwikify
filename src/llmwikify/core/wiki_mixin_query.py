@@ -193,7 +193,7 @@ class WikiQueryMixin(WikiProtocol):
         best_match = None
         best_score = 0
 
-        for page in self.wiki_dir.rglob("*.md"):
+        for page in self._wiki_pages():
             page_name = page.stem
 
             if not page_name.startswith("Query:"):

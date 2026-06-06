@@ -92,7 +92,7 @@ class WikiUtilityMixin(WikiProtocol):
         """Return a condensed wiki index (max 500 chars)."""
         if not self.index_file.exists():
             return "(no index)"
-        content = self.index_file.read_text()
+        content = self._get_index_content()
         if len(content) <= 500:
             return content
         return content[:497] + "..."
