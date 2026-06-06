@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>llmwikify · 企业级 LLM 知识库与研究型智能体架构</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: #fafbff;
+    color: #0f172a;
+    padding: 24px 24px;
+    line-height: 1.55;
+  }
+  .container { max-width: 1440px; margin: 0 auto; }
+
+  /* ─── Title (Apple hero style) ─── */
+  .title { text-align: center; margin-bottom: 8px; }
+  .title h1 {
+    font-size: 50px; font-weight: 800; letter-spacing: -1px;
+    line-height: 1.15;
+    background: linear-gradient(135deg, #1e40af 0%, #7e22ce 50%, #db2777 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .title-en {
+    font-size: 18px; font-weight: 600; color: #7e22ce;
+    letter-spacing: 0.5px; margin-top: 14px;
+  }
+  .title-meta {
+    font-size: 12px; color: #94a3b8; margin-top: 8px;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    font-weight: 500;
+  }
+  .subtitle {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    font-size: 18px; font-weight: 600; margin: 16px 0 12px;
+  }
+  .subtitle .step { padding: 5px 16px; border-radius: 20px; }
+  .subtitle .s1 { color: #fff; background: linear-gradient(135deg, #3b82f6, #1e40af); }
+  .subtitle .s2 { color: #fff; background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+  .subtitle .s3 { color: #fff; background: linear-gradient(135deg, #ec4899, #be185d); }
+  .subtitle .s4 { color: #fff; background: linear-gradient(135deg, #f43f5e, #b91c1c); }
+  .subtitle .arrow { font-size: 22px; color: #cbd5e1; }
+
+  /* ─── Main layout: 2 columns ─── */
+  .main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 16px;
+    align-items: start;
+  }
+  .layers-area {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    column-gap: 16px;
+    row-gap: 4px;
+    align-items: center;
+  }
+
+  /* ─── Layer info (left) ─── */
+  .layer-info { display: flex; align-items: center; gap: 16px; }
+  .layer-num {
+    width: 54px; height: 54px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: 18px; flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  /* v3 风格饱和色（与 lc1-lc7 背景一一对应）*/
+  .n1 { background: linear-gradient(135deg, #3b82f6, #1e40af); }
+  .n2 { background: linear-gradient(135deg, #06b6d4, #0e7490); }
+  .n3 { background: linear-gradient(135deg, #10b981, #047857); }
+  .n4 { background: linear-gradient(135deg, #f59e0b, #b45309); }
+  .n5 { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+  .n6 { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+  .n7 { background: linear-gradient(135deg, #ec4899, #be185d); }
+
+  .layer-text h3 {
+    font-size: 18px; font-weight: 700; color: #0f172a;
+    line-height: 1.3;
+  }
+  .layer-text .en {
+    font-size: 12px; color: #64748b; margin-top: 3px;
+    letter-spacing: 0.3px;
+  }
+  .layer-text .desc {
+    font-size: 12px; color: #475569; margin-top: 4px;
+  }
+  .layer-text .module {
+    font-size: 10px; color: #94a3b8; margin-top: 6px;
+    padding: 2px 6px; background: #f1f5f9; border-radius: 4px;
+    display: inline-block; letter-spacing: 0.3px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  /* ─── Layer content (right) — v3 风格：彩底 + 左彩条 + 轻阴影 ─── */
+  .layer-content {
+    border-radius: 10px; padding: 14px 18px;
+    border-left: 4px solid;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    min-width: 0;
+  }
+  .lc1 { border-left-color: #3b82f6; background: #eff6ff; }
+  .lc2 { border-left-color: #06b6d4; background: #ecfeff; }
+  .lc3 { border-left-color: #10b981; background: #ecfdf5; }
+  .lc4 { border-left-color: #f59e0b; background: #fffbeb; }
+  .lc5 { border-left-color: #ef4444; background: #fef2f2; }
+  .lc6 { border-left-color: #8b5cf6; background: #faf5ff; }
+  .lc7 { border-left-color: #ec4899; background: #fdf2f8; }
+
+  .lc-title {
+    font-size: 13px; font-weight: 700; color: #1e293b;
+    margin-bottom: 12px; line-height: 1.5;
+  }
+  .items { display: flex; flex-wrap: wrap; gap: 6px; }
+  .item {
+    background: rgba(255,255,255,0.85);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 6px; padding: 5px 10px;
+    font-size: 12px; color: #334155;
+    display: inline-flex; align-items: center; gap: 4px;
+    white-space: nowrap;
+  }
+  .item.future {
+    background: #fafafa; color: #94a3b8;
+    border-style: dashed; font-style: italic;
+  }
+
+  /* ─── Arrow between layers ─── */
+  .arrow-down {
+    grid-column: 1 / -1;
+    text-align: center; font-size: 20px; color: #cbd5e1;
+    padding: 0; font-weight: bold;
+  }
+  .arrow-down .label {
+    font-size: 11px; color: #94a3b8; font-weight: 500;
+    margin-left: 6px; letter-spacing: 0.5px;
+  }
+
+  /* ─── Capabilities sidebar ─── */
+  .cap-col {
+    background: #fff;
+    border-radius: 12px; padding: 16px 18px;
+    border: 1px solid #e5e7eb;
+    position: sticky; top: 16px;
+  }
+  .cap-title {
+    text-align: center; font-weight: 700; font-size: 14px; color: #0f172a;
+    padding-bottom: 14px; margin-bottom: 6px;
+    border-bottom: 1px solid #e5e7eb;
+    letter-spacing: 0.5px;
+  }
+  .cap {
+    display: flex; gap: 14px; padding: 10px 0;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .cap:last-child { border-bottom: none; }
+  .cap-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+    background: #f8fafc; border: 1px solid #e5e7eb;
+  }
+  .cap-text h4 { font-size: 13px; font-weight: 700; color: #0f172a; }
+  .cap-text p {
+    font-size: 11px; color: #64748b;
+    margin-top: 4px; line-height: 1.5;
+  }
+
+  /* ─── KaaS Banner (v3 风格：3 色彩虹渐变) ─── */
+  .kaos-banner {
+    background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 50%, #fdf4ff 100%);
+    border: 1px solid #e0e7ff;
+    border-radius: 12px;
+    padding: 18px 24px;
+    margin-bottom: 14px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .kaos-title {
+    font-size: 15px; font-weight: 800;
+    background: linear-gradient(135deg, #1e40af 0%, #7e22ce 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 14px;
+    letter-spacing: 0.5px;
+  }
+  .kaos-flow {
+    display: flex; justify-content: center; align-items: center;
+    gap: 8px; flex-wrap: wrap;
+    font-size: 14px; font-weight: 600;
+  }
+  .kaos-step {
+    background: #fff;
+    border: 1px solid #c7d2fe;
+    color: #1e40af;
+    padding: 5px 14px;
+    border-radius: 18px;
+  }
+  .kaos-step.back {
+    background: #fef3c7;
+    border-color: #fbbf24;
+    color: #b45309;
+  }
+  .kaos-arrow { color: #94a3b8; font-size: 16px; font-weight: bold; }
+
+  /* ─── Bottom: goals ─── */
+  .goals {
+    margin-top: 16px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px; padding: 18px 24px 16px;
+  }
+  .goals-title {
+    text-align: center; font-size: 20px; font-weight: 800;
+    background: linear-gradient(135deg, #1e40af 0%, #7e22ce 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 6px;
+    letter-spacing: 0.5px;
+  }
+  .goals-subtitle {
+    text-align: center; font-size: 13px; color: #64748b;
+    margin-bottom: 24px; font-weight: 500;
+  }
+  .goals-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+  }
+  .goal {
+    text-align: center; padding: 12px 10px 12px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+  }
+  .goal-icon { font-size: 30px; margin-bottom: 4px; }
+  .goal-text {
+    font-size: 14px; color: #0f172a; font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .goal-en {
+    font-size: 10px; color: #94a3b8;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .goal-desc {
+    font-size: 12px; color: #64748b;
+    line-height: 1.5; padding-top: 6px;
+    border-top: 1px solid #f1f5f9;
+  }
+
+  @media print {
+    body { padding: 16px; }
+    .cap-col { position: static; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="title">
+    <h1>企业级 LLM 知识库与研究型智能体架构</h1>
+    <div class="title-en">Knowledge as a Service · 知识即服务</div>
+    <div class="title-meta">v0.31+ · Architecture Blueprint · 2026.06</div>
+  </div>
+
+  <div class="subtitle">
+    <span class="step s1">数据</span>
+    <span class="arrow">→</span>
+    <span class="step s2">知识</span>
+    <span class="arrow">→</span>
+    <span class="step s3">认知</span>
+    <span class="arrow">→</span>
+    <span class="step s4">决策</span>
+  </div>
+
+  <!-- ═══ KaaS VALUE BANNER ═══ -->
+  <div class="kaos-banner">
+    <div class="kaos-title">知识即服务 · Knowledge as a Service</div>
+    <div class="kaos-flow">
+      <span class="kaos-step">数据沉淀</span>
+      <span class="kaos-arrow">→</span>
+      <span class="kaos-step">结构沉淀</span>
+      <span class="kaos-arrow">→</span>
+      <span class="kaos-step">资产沉淀</span>
+      <span class="kaos-arrow">→</span>
+      <span class="kaos-step">决策沉淀</span>
+      <span class="kaos-arrow">→</span>
+      <span class="kaos-step back">反馈沉淀 ⮌</span>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- ═══ LAYERS AREA ═══ -->
+    <div class="layers-area">
+
+      <!-- L1 -->
+      <div class="layer-info">
+        <div class="layer-num n1">01</div>
+        <div class="layer-text">
+          <h3>全域数据接入层</h3>
+          <div class="en">Data Ingestion Layer</div>
+          <div class="desc">整合内外部数据</div>
+          <div class="module">extractors/ · 5 modules</div>
+        </div>
+      </div>
+      <div class="layer-content lc1">
+        <div class="lc-title">多源数据接入 (extractors/ + data provider)</div>
+        <div class="items">
+          <span class="item">📄 研究报告 (PDF/Word)</span>
+          <span class="item">🌐 行业资讯与公告</span>
+          <span class="item">🎬 路演 / 纪要转录</span>
+          <span class="item">📊 行情数据 (iFinD/Tushare)</span>
+          <span class="item">📁 内部研报库与笔记</span>
+        </div>
+      </div>
+      <div class="arrow-down">↓<span class="label">Ingestion</span></div>
+
+      <!-- L2 -->
+      <div class="layer-info">
+        <div class="layer-num n2">02</div>
+        <div class="layer-text">
+          <h3>解析与治理层</h3>
+          <div class="en">Parsing &amp; Enrichment</div>
+          <div class="desc">文档结构化 + 元数据</div>
+          <div class="module">extractors/ + parser pipeline</div>
+        </div>
+      </div>
+      <div class="layer-content lc2">
+        <div class="lc-title">结构化处理 (extractors/ + 解析管线)</div>
+        <div class="items">
+          <span class="item">🔤 文字与版面识别 (OCR)</span>
+          <span class="item">📖 文本解析</span>
+          <span class="item">🧹 数据清洗</span>
+          <span class="item">🧾 财务三表抽取</span>
+          <span class="item">📋 公告要素解析</span>
+          <span class="item">🏷️ 行业归类</span>
+          <span class="item">⏱️ 时间轴对齐</span>
+          <span class="item">🆔 实体识别与合并</span>
+        </div>
+      </div>
+      <div class="arrow-down">↓</div>
+
+      <!-- L3 -->
+      <div class="layer-info">
+        <div class="layer-num n3">03</div>
+        <div class="layer-text">
+          <h3>知识沉淀层</h3>
+          <div class="en">Knowledge Curation</div>
+          <div class="desc">经验→可复用资产</div>
+          <div class="module">Wiki 核心类 · 8 种页面类型</div>
+        </div>
+      </div>
+      <div class="layer-content lc3">
+        <div class="lc-title">知识资产沉淀 · Quick Research 即时产出 (兼容 Obsidian 的 Markdown 知识库)</div>
+        <div class="items">
+          <span class="item">🏭 行业研究</span>
+          <span class="item">🏢 公司研究</span>
+          <span class="item">🎯 主题研究</span>
+          <span class="item">📓 复盘笔记</span>
+          <span class="item">📑 研究底稿</span>
+          <span class="item">⚙️ 投研框架 / SOP</span>
+          <span class="item">🎴 知识卡片</span>
+          <span class="item">🔗 双向链接 (wikilink)</span>
+        </div>
+      </div>
+      <div class="arrow-down">↓</div>
+
+      <!-- L4 -->
+      <div class="layer-info">
+        <div class="layer-num n4">04</div>
+        <div class="layer-text">
+          <h3>语义关联层</h3>
+          <div class="en">Semantic Graph</div>
+          <div class="desc">双向链接 + 关系图谱</div>
+          <div class="module">RelationEngine + GraphAnalyzer</div>
+        </div>
+      </div>
+      <div class="layer-content lc4">
+        <div class="lc-title">知识图谱 · 把零散知识连成网</div>
+        <div class="items">
+          <span class="item">🏷️ 知识归类</span>
+          <span class="item">🔗 关联推理</span>
+          <span class="item">⚖️ 观点论据</span>
+          <span class="item">⭐ 重要度排序</span>
+        </div>
+      </div>
+      <div class="arrow-down">↓</div>
+
+      <!-- L5 -->
+      <div class="layer-info">
+        <div class="layer-num n5">05</div>
+        <div class="layer-text">
+          <h3>混合检索层</h3>
+          <div class="en">Hybrid Retrieval</div>
+          <div class="desc">关键词 + 向量 + 图谱</div>
+          <div class="module">Wiki 全文索引 + 可选检索后端</div>
+        </div>
+      </div>
+      <div class="layer-content lc5">
+        <div class="lc-title">多方式检索与结果排序 (关键词 · 向量 · 图谱)</div>
+        <div class="items">
+          <span class="item">🔤 关键词检索</span>
+          <span class="item future">🧬 语义相似度检索</span>
+          <span class="item">📊 按元数据/字段筛选</span>
+          <span class="item">🕸️ 关系网络检索</span>
+          <span class="item">⏱️ 时间窗口过滤</span>
+          <span class="item">🎯 标的 / 行业筛选</span>
+          <span class="item">🎚️ 结果重排序</span>
+        </div>
+      </div>
+      <div class="arrow-down">↓</div>
+
+      <!-- L6 -->
+      <div class="layer-info">
+        <div class="layer-num n6">06</div>
+        <div class="layer-text">
+          <h3>认知与推理层</h3>
+          <div class="en">Cognitive Reasoning</div>
+          <div class="desc">6 步逻辑框架 + LLM</div>
+          <div class="module">AutoResearch 引擎 · 6 步逻辑框架</div>
+        </div>
+      </div>
+      <div class="layer-content lc6">
+        <div class="lc-title">大模型认知与推理 (AutoResearch 6 步框架)</div>
+        <div class="items">
+          <span class="item">🧠 意图澄清 · Intent Clarification</span>
+          <span class="item">🔗 多源证据 · Evidence Synthesis</span>
+          <span class="item">⚖️ 链式推理 · 逐步思考</span>
+          <span class="item">✍️ 研报生成 · Report Generation</span>
+          <span class="item">📍 引用归因 · Attribution</span>
+          <span class="item">🚧 8 维质量校验</span>
+        </div>
+      </div>
+      <div class="arrow-down">↓</div>
+
+      <!-- L7 -->
+      <div class="layer-info">
+        <div class="layer-num n7">07</div>
+        <div class="layer-text">
+          <h3>应用与决策层</h3>
+          <div class="en">Decision Intelligence</div>
+          <div class="desc">Agent + 策略闭环</div>
+          <div class="module">agent/ + webui-agent/ · 25 components</div>
+        </div>
+      </div>
+      <div class="layer-content lc7">
+        <div class="lc-title">业务应用与决策 (AI Agent · Copilot · Strategy)</div>
+        <div class="items">
+          <span class="item">📈 投研助手</span>
+          <span class="item">📑 研报生成</span>
+          <span class="item">🌍 宏观策略研究</span>
+          <span class="item">⚖️ 组合配置研究</span>
+          <span class="item">🔍 选股 / 选基</span>
+          <span class="item">📊 因子监控</span>
+          <span class="item">📉 策略回测</span>
+          <span class="item">⚠️ 风险预警</span>
+          <span class="item">🧩 DreamEditor 自动提案</span>
+          <span class="item future">⏳ 量化策略 (Strategy Phase 2)</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══ CAPABILITIES SIDEBAR ═══ -->
+    <div class="cap-col">
+      <div class="cap-title">核心能力支撑</div>
+
+      <div class="cap">
+        <div class="cap-icon">🔐</div>
+        <div class="cap-text">
+          <h4>细粒度权限治理</h4>
+          <p>投研合规 · 数据脱敏 · 接口鉴权 · 多租户隔离</p>
+        </div>
+      </div>
+
+      <div class="cap">
+        <div class="cap-icon">🏷️</div>
+        <div class="cap-text">
+          <h4>多维标签体系</h4>
+          <p>申万行业 · 概念板块 · 标的池 · 因子标签</p>
+        </div>
+      </div>
+
+      <div class="cap">
+        <div class="cap-icon">🕒</div>
+        <div class="cap-text">
+          <h4>全链路变更溯源</h4>
+          <p>研报版本 · 因子溯源 · 复盘记录 · 审计可回溯</p>
+        </div>
+      </div>
+
+      <div class="cap">
+        <div class="cap-icon">📊</div>
+        <div class="cap-text">
+          <h4>多维质量评估</h4>
+          <p>研报质控 · 8 维校验 · 因子有效性验证 · 健康巡检</p>
+        </div>
+      </div>
+
+      <div class="cap">
+        <div class="cap-icon">🔄</div>
+        <div class="cap-text">
+          <h4>持续运营闭环</h4>
+          <p>行情同步 · 公告抓取 · 自动日报 · 智能提案</p>
+        </div>
+      </div>
+
+      <div class="cap">
+        <div class="cap-icon">🔌</div>
+        <div class="cap-text">
+          <h4>开放生态集成</h4>
+          <p>iFinD · Tushare · AKShare · 协议接入 · 双端 UI · 多 Wiki</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ BOTTOM: GOALS ═══ -->
+  <div class="goals">
+    <div class="goals-title">最终目标：知识即服务 · Knowledge as a Service</div>
+    <div class="goals-subtitle">让 AI 嵌入研报生产与策略迭代全流程</div>
+    <div class="goals-grid">
+      <div class="goal">
+        <div class="goal-icon">🧠</div>
+        <div class="goal-text">知识沉淀</div>
+        <div class="goal-en">Knowledge Curation</div>
+        <div class="goal-desc">经验→可复用资产</div>
+      </div>
+      <div class="goal">
+        <div class="goal-icon">📚</div>
+        <div class="goal-text">团队传承</div>
+        <div class="goal-en">Team Handover</div>
+        <div class="goal-desc">投研方法跨人传递</div>
+      </div>
+      <div class="goal">
+        <div class="goal-icon">📑</div>
+        <div class="goal-text">研报提速</div>
+        <div class="goal-en">Faster Research</div>
+        <div class="goal-desc">6 步框架加速研报产出</div>
+      </div>
+      <div class="goal">
+        <div class="goal-icon">🎯</div>
+        <div class="goal-text">决策辅助</div>
+        <div class="goal-en">Decision Support</div>
+        <div class="goal-desc">多源证据 + 8 维校验</div>
+      </div>
+      <div class="goal">
+        <div class="goal-icon">📉</div>
+        <div class="goal-text">策略迭代</div>
+        <div class="goal-en">Strategy Iteration</div>
+        <div class="goal-desc">回测 → 调参 → 沉淀</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
