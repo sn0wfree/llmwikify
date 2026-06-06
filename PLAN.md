@@ -16,6 +16,7 @@
 | 5 | autoresearch 内部重组 | 2 | ✅ done | a43dc7c⁻¹ | 43d2a1d | +30 |
 | 6 | MCP 整合 | 3 | ✅ done | 45afcdf⁻¹ | 6211b97 | +7 |
 | 7 | 错误/日志统一 | 3 | ✅ done | b07e893⁻¹ | b07e893 | +14 |
+| 8 | Level 2 WikiBackend | post-7 | ✅ done | 624b268⁻¹ | 624b268 | +31 |
 
 **状态图标**：🔵 planned · 🟡 in_progress · ✅ done · ❌ blocked
 
@@ -208,3 +209,47 @@ C1: cli/_base.py 加 _error(e) → logger + 替换 print
 - `from llmwikify.cli.commands import WikiCLI/main` 仍工作（PEP 562 延迟 re-export）
 
 ### 7-item 重构全部完成 ✅
+
+---
+
+## Post-7-item: Level 2 WikiBackend 实施 (2 commits, +31 测试)
+
+按 `docs/wiki-backend-interface.md` 计划执行，将 Wiki god node 的存储抽象出独立 backend。
+
+| 项 | 起始 commit | 完成 commit | 测试增量 | 状态 |
+|----|------------|------------|---------|------|
+| WikiBackend Protocol + LocalFileBackend | cff301f⁻¹ | cff301f | +20 | ✅ |
+| Wire Wiki to use backend | 624b268⁻¹ | 624b268 | +11 | ✅ |
+
+### 实施结果
+
+- **新文件**：`src/llmwikify/core/wiki_backend.py` (+349 LOC, WikiBackend Protocol + LocalFileBackend 13 方法)
+- **新测试**：`tests/test_wiki_backend.py` (+200 LOC, 20 tests) + `tests/test_wiki_uses_backend.py` (+257 LOC, 11 tests)
+- **Wiki 类改造**：`__init__` 接受 `backend=None`，eagerly 创建 backend + WikiIndex；10 个新 helper 方法
+- **Mixin 改造**：8 个 mixin 文件，27 个 fs ops → Wiki helper 调用
+- **22 storage 方法** → 1-line 委托 (`write_page`, `read_page`, `append_log`, `_update_index_file`, `_cache_source_analysis`, `_get_cached_source_analysis`, `_load_page_type_mapping`, `_merge_wiki_md` 等)
+- **公共 API 100% 向后兼容**：`Wiki(root)` 仍工作
+
+### graphify-out 度量对比
+
+| 指标 | 7-item refactor 后 (9ea7955) | Level 2 后 (624b268) | Δ |
+|------|------|------|---|
+| 节点数 | 11371 | 11572 | +201 |
+| 边数 | 18869 | 19239 | +370 |
+| 社区数 | 753 | 747 | −6 (consolidation) |
+| Wiki god node 总边数 | 334 (119+114+101) | 348 (119+115+114) | +14 |
+| WikiProtocol 边数 | 74 | 85 | +11 (新 helper methods) |
+| WikiAnalyzer 边数 | 87 | 88 | +1 |
+| 新社区: "Storage Layer" | — | 46 节点 (LocalFileBackend, _build_merge_notice, _find_insertion_point, _parse_h2_sections, ...) | 新增 |
+| 新社区: "Backend tests" | — | 42 节点 (test_wiki_backend.py) | 新增 |
+| 新社区: "Wiki-uses-backend" | — | 23 节点 (test_wiki_uses_backend.py) | 新增 |
+
+Wiki in-degree 未显著下降（method count 未变，100+ public methods 保留），但 storage 现在是独立 swappable 抽象。WikiBackend 是 1 个 cohesion 0.05 的独立社区（自包含，连接少 = 目标）。
+
+### 未来加 backends
+
+- **InMemoryBackend**：1 commit + ~100 LOC, 3-4h（5-6s 测试加速）
+- **RemoteWikiBackend**：1 commit + ~150 LOC, ~6h
+- **CloudWikiBackend**：1 commit + ~200 LOC, ~8h
+
+`WikiIndex(db_path=Path(":memory:"))` 复用现有 SQLite 即可，**不需要 InMemoryWikiIndex**。

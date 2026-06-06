@@ -1,16 +1,16 @@
-# Graph Report - llmwikify  (2026-06-06)
+# Graph Report - llmwikify  (2026-06-07)
 
 ## Corpus Check
-- 445 files · ~399,971 words
+- 449 files · ~406,202 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 11371 nodes · 18869 edges · 753 communities (578 shown, 175 thin omitted)
-- Extraction: 81% EXTRACTED · 19% INFERRED · 0% AMBIGUOUS · INFERRED: 3510 edges (avg confidence: 0.57)
+- 11572 nodes · 19239 edges · 747 communities (576 shown, 171 thin omitted)
+- Extraction: 81% EXTRACTED · 19% INFERRED · 0% AMBIGUOUS · INFERRED: 3563 edges (avg confidence: 0.57)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `9ea7955f`
+- Built from commit: `624b2689`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -578,7 +578,6 @@
 - [[_COMMUNITY_Community 574|Community 574]]
 - [[_COMMUNITY_Community 575|Community 575]]
 - [[_COMMUNITY_Community 576|Community 576]]
-- [[_COMMUNITY_Community 577|Community 577]]
 - [[_COMMUNITY_Community 578|Community 578]]
 - [[_COMMUNITY_Community 579|Community 579]]
 - [[_COMMUNITY_Community 580|Community 580]]
@@ -612,7 +611,6 @@
 - [[_COMMUNITY_Community 608|Community 608]]
 - [[_COMMUNITY_Community 609|Community 609]]
 - [[_COMMUNITY_Community 610|Community 610]]
-- [[_COMMUNITY_Community 611|Community 611]]
 - [[_COMMUNITY_Community 612|Community 612]]
 - [[_COMMUNITY_Community 613|Community 613]]
 - [[_COMMUNITY_Community 614|Community 614]]
@@ -722,7 +720,6 @@
 - [[_COMMUNITY_Community 719|Community 719]]
 - [[_COMMUNITY_Community 721|Community 721]]
 - [[_COMMUNITY_Community 722|Community 722]]
-- [[_COMMUNITY_Community 723|Community 723]]
 - [[_COMMUNITY_Community 725|Community 725]]
 - [[_COMMUNITY_Community 726|Community 726]]
 - [[_COMMUNITY_Community 727|Community 727]]
@@ -733,9 +730,6 @@
 - [[_COMMUNITY_Community 733|Community 733]]
 - [[_COMMUNITY_Community 734|Community 734]]
 - [[_COMMUNITY_Community 736|Community 736]]
-- [[_COMMUNITY_Community 737|Community 737]]
-- [[_COMMUNITY_Community 739|Community 739]]
-- [[_COMMUNITY_Community 742|Community 742]]
 - [[_COMMUNITY_Community 746|Community 746]]
 - [[_COMMUNITY_Community 747|Community 747]]
 - [[_COMMUNITY_Community 748|Community 748]]
@@ -756,30 +750,30 @@
 - [[_COMMUNITY_Community 768|Community 768]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `PromptRegistry` - 164 edges
+1. `PromptRegistry` - 169 edges
 2. `AgentDatabase` - 122 edges
 3. `Wiki` - 119 edges
-4. `Wiki` - 114 edges
-5. `ResearchEngine` - 103 edges
-6. `Wiki` - 101 edges
+4. `Wiki` - 115 edges
+5. `Wiki` - 114 edges
+6. `ResearchEngine` - 103 edges
 7. `MagicMock` - 97 edges
-8. `WikiAnalyzer` - 87 edges
-9. `AutoResearchDatabase` - 80 edges
-10. `WikiProtocol` - 74 edges
+8. `WikiAnalyzer` - 88 edges
+9. `WikiProtocol` - 85 edges
+10. `AutoResearchDatabase` - 80 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `registry()` --calls--> `PromptRegistry`  [INFERRED]
   tests/test_v019_wiki_synthesize.py → src/llmwikify/core/prompt_registry.py
+- `backend()` --calls--> `LocalFileBackend`  [INFERRED]
+  tests/test_wiki_backend.py → src/llmwikify/core/wiki_backend.py
 - `mcp()` --calls--> `create_mcp_server()`  [INFERRED]
   tests/test_mcp_integration.py → src/llmwikify/mcp/server.py
 - `example_1_create_and_open()` --calls--> `create_wiki()`  [INFERRED]
   examples/basic_usage.py → src/llmwikify/__init__.py
 - `example_2_page_operations()` --calls--> `create_wiki()`  [INFERRED]
   examples/basic_usage.py → src/llmwikify/__init__.py
-- `example_3_search()` --calls--> `create_wiki()`  [INFERRED]
-  examples/basic_usage.py → src/llmwikify/__init__.py
 
-## Communities (753 total, 175 thin omitted)
+## Communities (747 total, 171 thin omitted)
 
 ### Community 0 - "Agent UI Components"
 Cohesion: 0.08
@@ -794,8 +788,8 @@ Cohesion: 0.08
 Nodes (23): ConnectionState, DbMessage, Message, PendingConfirmation, STATE_DOT, STATE_LABEL, STATE_TONE, ToolCall (+15 more)
 
 ### Community 3 - "Dream Log & Badges"
-Cohesion: 0.03
-Nodes (136): action_analyze(), action_clarify(), action_done(), action_gather(), action_incomplete(), _action_incomplete_impl(), action_plan(), action_report() (+128 more)
+Cohesion: 0.02
+Nodes (135): action_analyze(), action_clarify(), action_done(), action_gather(), action_incomplete(), _action_incomplete_impl(), action_plan(), action_report() (+127 more)
 
 ### Community 4 - "API & Data Types"
 Cohesion: 0.04
@@ -806,20 +800,24 @@ Cohesion: 0.08
 Nodes (16): AgentChat(), Confirmations(), DreamProposals(), ToastContext, ToastContextValue, ToastItem, ToastProvider(), ToastType (+8 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.09
-Nodes (14): copy(), _detect_file_type(), _get_version(), join(), lower(), _now(), Protocol definitions for mixin type resolution., _render_template() (+6 more)
+Cohesion: 0.05
+Nodes (40): Normalize entity name for comparison., Get list of existing wiki page names., Find best fuzzy match among candidates.          The fuzzy match uses SequenceMa, Resolve entity name to canonical form.                  Resolution order:, Resolve entity name to canonical form.                  Resolution order:, Add an alias mapping for an entity.                  Args:             alias: Al, Manage knowledge graph relations stored in SQLite.      Usage:         engine =, Get all aliases for a canonical entity name.                  Args: (+32 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.04
 Nodes (50): formatCount(), MdBlock, Props, renderBlock(), renderInlineMath(), renderMath(), ReportDetail(), parseReport() (+42 more)
+
+### Community 8 - "Community 8"
+Cohesion: 0.05
+Nodes (42): backend(), Tests for the WikiBackend Protocol and LocalFileBackend.  These tests verify the, merge appends new H2 sections wrapped in Schema Updates block., append_log writes a timestamped entry to log.md., If timestamp missing, backend generates one., put_source_cache writes an HTML comment; get_source_cache parses it back., put_source_cache replaces existing analysis comment (not appends duplicate)., get_source_cache returns None for missing page; put is a no-op. (+34 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.10
 Nodes (15): PromptEvaluator, Offline prompt evaluation engine., Tests for offline prompt evaluation script (Phase 4b)., Test evaluator against the actual built-in prompt templates., TestContextInjection, TestCrossReference, TestJinja2Rendering, TestPromptEvaluatorInit (+7 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.08
-Nodes (20): RemoteWiki - HTTP client for remote llmwikify servers., from_dict(), WikiInstance - wraps Wiki with registry metadata for multi-wiki support., Status of wiki instance., Wraps a Wiki with registry metadata.      This dataclass holds metadata about a, WikiInstance, WikiStatus, WikiRegistry - manages multiple Wiki instances with discovery and lifecycle. (+12 more)
+Cohesion: 0.06
+Nodes (33): 10. Risk Matrix, 11. Rollback Strategy, 12. Verification Plan, 13. Future Roadmap (Post Level 2), 14. Decision Log, 15. References, 16. Open Questions (None), 1.1 Current state (post-7-item-refactor) (+25 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.08
@@ -830,20 +828,20 @@ Cohesion: 0.06
 Nodes (36): GraphQueryCommand, Query the knowledge graph (neighbors / path / stats / context).      Args:, ``graph_query`` command — query the knowledge graph., ``graph_query`` command — query the knowledge graph., run_graph_query(), Any, int, Phase 3 #7 — error/log unification tests.  Covers the consolidation of error and (+28 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.05
-Nodes (19): PromptRegistry, Manages prompt templates with provider-specific overrides., Manages prompt templates with provider-specific overrides., Create a PromptRegistry instance with current provider and custom dir., TestBuiltInTemplates, TestPromptRegistryLoading, TestPromptRegistryRendering, Tests for provider-specific prompt rendering. (+11 more)
+Cohesion: 0.04
+Nodes (20): PromptRegistry, Manages prompt templates with provider-specific overrides., Manages prompt templates with provider-specific overrides., Create a PromptRegistry instance with current provider and custom dir., PromptRegistry, TestBuiltInTemplates, TestPromptRegistryLoading, TestPromptRegistryRendering (+12 more)
 
 ### Community 14 - "Community 14"
 Cohesion: 0.05
 Nodes (23): Unit tests for WikiServer core class., Tests for WikiServer initialization., Tests for MCP name configuration., Test custom MCP name is used., Test default MCP name uses wiki root., Test basic WikiServer initialization., Test initializing with MCP disabled., Test initializing with MCP enabled (default). (+15 more)
 
 ### Community 15 - "Community 15"
-Cohesion: 0.06
-Nodes (40): Query the knowledge graph., Ingest a source file., Export knowledge graph visualization., Detect knowledge communities., Generate unexpected connections report., Multi-wiki management commands., List all registered wikis., Scan directories for wikis. (+32 more)
+Cohesion: 0.08
+Nodes (28): Query the knowledge graph., Detect knowledge communities., Multi-wiki management commands., List all registered wikis., Scan directories for wikis., Analyze sources and generate cross-source synthesis suggestions., Analyze knowledge graph structure., Start MCP server and optionally Web UI. Used by both 'mcp' and 'serve' subcomman (+20 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.04
-Nodes (45): GraphAnalyzer, Run community detection and label communities.          Returns:             Dic, Analyze knowledge graph structure and generate suggestions.      Usage:, Generate a label for a community based on member names.          Strategy:, Find nodes that connect multiple communities.          Returns:             List, Generate suggestions for improving the knowledge graph.          Types of sugges, Suggest creating pages for high-degree concepts that lack wiki pages., Run full graph analysis.          Returns:             Dict with:             - (+37 more)
+Cohesion: 0.03
+Nodes (47): GraphAnalyzer, Knowledge graph analysis tools — PageRank, community labeling, page suggestions., Run community detection and label communities.          Returns:             Dic, Analyze knowledge graph structure and generate suggestions.      Usage:, Generate a label for a community based on member names.          Strategy:, Find nodes that connect multiple communities.          Returns:             List, Generate suggestions for improving the knowledge graph.          Types of sugges, Suggest creating pages for high-degree concepts that lack wiki pages. (+39 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.06
@@ -851,15 +849,15 @@ Nodes (28): PrincipleChecker, PrincipleCheckResult, PrincipleViolation, Principl
 
 ### Community 18 - "Community 18"
 Cohesion: 0.04
-Nodes (69): Agent Backend - Database management for chat sessions and tool calls., Source content analysis using Wiki.analyze_source()., Analyzes gathered sources using Wiki.analyze_source()., Analyze all sources in parallel. Returns SSE events., Analyze a single source using Wiki.analyze_source().          Writes content to, SourceAnalyzer, ActionMetrics, Research Engine — ReAct loop orchestrator with adaptive reasoning.  Replaces the (+61 more)
+Nodes (74): Agent Backend - Database management for chat sessions and tool calls., Source content analysis using Wiki.analyze_source()., Analyzes gathered sources using Wiki.analyze_source()., SourceAnalyzer, ActionMetrics, Research Engine — ReAct loop orchestrator with adaptive reasoning.  Replaces the, Generate sub-queries to fill knowledge gaps., Mutable state for the ReAct research loop. (+66 more)
 
 ### Community 19 - "Community 19"
 Cohesion: 0.23
 Nodes (14): ask_llm_context_window(), _extract_ctx_from_name(), probe_provider_api(), Model context window database + multi-level fallback resolver.  Data source: Lit, Resolve context window with multi-level fallback.      Priority:     1. User con, Try to extract context window from model name (e.g. llama3-8k -> 8192)., Call provider's /v1/models/{model} to probe context window.      Returns context, Ask the LLM its own context window size (debug mode only).      This is unreliab (+6 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.09
-Nodes (20): _normalize_url(), Gather content for a single sub-query. Returns list of SSE events.          Skip, Fetch content from a URL based on source type, with retry and hard timeout., Gather content for all sub-queries with early-exit optimization.          Return, Rule-based source pre-filter and quality scoring.  Filters out low-quality sourc, Rule-based source pre-filter and quality scoring.      Filters sources based on, SourceFilter, AgentDatabase (+12 more)
+Cohesion: 0.08
+Nodes (21): Analyze all sources in parallel. Returns SSE events., Analyze a single source using Wiki.analyze_source().          Writes content to, _normalize_url(), Gather content for a single sub-query. Returns list of SSE events.          Skip, Fetch content from a URL based on source type, with retry and hard timeout., Gather content for all sub-queries with early-exit optimization.          Return, Manages research session lifecycle and sub-query/source tracking., Persist report data without changing status (safe to call mid-pipeline). (+13 more)
 
 ### Community 21 - "Community 21"
 Cohesion: 0.11
@@ -890,12 +888,12 @@ Cohesion: 0.04
 Nodes (46): 2.1 CoT+RAG组合优化, 2.2 Self-Consistency自洽性检测, 2.3 HalluClean结构化检测与修正, 2.4 CIP因果提示框架, 2.5 M2R微宏检索框架, 2.6 其他前沿技术, 3.1 中文核心问题, 3.2 中文Prompt设计六脉神剑 (+38 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.03
-Nodes (90): CLI commands for llmwikify., Type of wiki instance., WikiType, Close all Wiki instances and registry DB., Manages multiple Wiki instances with discovery and lifecycle.      This registry, Remove wiki from registry.          Args:             wiki_id: Wiki to remove, Get the default wiki ID.          Returns:             Default wiki ID or None, Set the default wiki.          Args:             wiki_id: Wiki to set as default (+82 more)
+Cohesion: 0.02
+Nodes (119): CLI commands for llmwikify., Type of wiki instance., WikiType, Close all Wiki instances and registry DB., Manages multiple Wiki instances with discovery and lifecycle.      This registry, Remove wiki from registry.          Args:             wiki_id: Wiki to remove, Get the default wiki ID.          Returns:             Default wiki ID or None, Set the default wiki.          Args:             wiki_id: Wiki to set as default (+111 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.05
-Nodes (39): Knowledge graph analysis tools — PageRank, community labeling, page suggestions., _add_entity_click_handlers(), build_graph(), _build_networkx(), _compute_modularity(), compute_surprise_score(), detect_communities(), export_graphml() (+31 more)
+Cohesion: 0.09
+Nodes (19): _build_networkx(), _compute_modularity(), compute_surprise_score(), detect_communities(), generate_report(), _greedy_modularity_communities(), Detect communities in the knowledge graph.      Args:         index: WikiIndex i, Compute surprise score for an edge (borrowed from graphify, adapted for llmwikif (+11 more)
 
 ### Community 30 - "Community 30"
 Cohesion: 0.03
@@ -910,40 +908,40 @@ Cohesion: 0.04
 Nodes (45): 10. 参考, 1.1 原始问题, 1.2 核心矛盾, 1. 问题起源, 2.1 方案 A：auto_merge（系统自动追加）, 2.2 方案 B：LLM 辅助合并（仅增强 hint）, 2.3 方案 C：Sink 缓冲机制（最终方案）, 2. 方案演进 (+37 more)
 
 ### Community 33 - "Community 33"
-Cohesion: 0.17
-Nodes (7): Test no false positives when sources are cited., Test that max 3 gaps are returned., Test with no wiki pages (overview.md exists by default)., Test _detect_data_gaps method., Test detection of claims without sources., Test detection of vague time references., TestDataGapDetection
+Cohesion: 0.08
+Nodes (23): Tests verifying Wiki delegates to its backend.  These tests assert the wiring fr, write_page validates and delegates the file write to backend.put_page., read_page returns content from backend.get_page., wiki.index is the same object as backend.index., wiki.root equals backend.root (backward compat attribute)., Mixin source files should not access wiki_md_file.read_text/write_text     for c, Swapping the backend keeps the public Wiki API working., The _get_wiki_md_content helper delegates to backend. (+15 more)
 
 ### Community 34 - "Community 34"
-Cohesion: 0.02
-Nodes (70): conn(), Remove a page from all indexes., Unified index manager for full-text search and reference tracking., Full-text search with ranking and highlighted snippets.          Args:, Attempt QMD search if the QMD module is available.          Returns:, Check if QMD should be recommended based on wiki size.          Returns:, Get pages that link to this page., Get pages that this page links to. (+62 more)
+Cohesion: 0.03
+Nodes (30): conn(), Remove a page from all indexes., Unified index manager for full-text search and reference tracking., Full-text search with ranking and highlighted snippets.          Args:, Attempt QMD search if the QMD module is available.          Returns:, Check if QMD should be recommended based on wiki size.          Returns:, Get pages that link to this page., Get pages that this page links to. (+22 more)
 
 ### Community 35 - "Community 35"
 Cohesion: 0.08
-Nodes (15): AgentMessage, AgentRunner, Agent Runner - Execution loop with context injection and tool orchestration.  Ad, Core agent execution loop.      Manages:     - Context preparation with wiki sta, Confirm and execute a pending action by confirmation ID., Confirm and execute multiple pending actions., Get all pending confirmations from tool registry., Get pending confirmations grouped by page type. (+7 more)
+Nodes (13): AgentMessage, AgentRunner, Agent Runner - Execution loop with context injection and tool orchestration.  Ad, Core agent execution loop.      Manages:     - Context preparation with wiki sta, Confirm and execute a pending action by confirmation ID., Confirm and execute multiple pending actions., Get all pending confirmations from tool registry., Get pending confirmations grouped by page type. (+5 more)
 
 ### Community 36 - "Community 36"
 Cohesion: 0.05
 Nodes (43): 1. 标准化, 1. 版本检查, 2. 完整性, 2. 测试套件, 3. 可维护性, 3. 导入检查, 4. CLI 检查, code:block1 (llmwikify/) (+35 more)
 
 ### Community 37 - "Community 37"
-Cohesion: 0.14
-Nodes (39): AgentService, agent_status(), apply_proposals(), approve_and_continue(), approve_confirmation(), approve_proposal(), batch_approve(), batch_approve_proposals() (+31 more)
+Cohesion: 0.16
+Nodes (37): agent_status(), apply_proposals(), approve_and_continue(), approve_confirmation(), approve_proposal(), batch_approve(), batch_approve_proposals(), chat() (+29 more)
 
 ### Community 38 - "Community 38"
-Cohesion: 0.08
-Nodes (20): GateResult, QualityGate, Quality gates between research stages.  Gate results are injected as observation, Check after synthesis: enough reinforced claims, not too many gaps., Check before report: synthesis exists and enough sources., Quality gate check result., Stage-transition quality gates.      Results are injected into state.observation, Check after gathering: enough sources and type diversity. (+12 more)
+Cohesion: 0.16
+Nodes (14): _build_source_link_map(), _linkify_source_citations(), Tool Registry - Wraps MCP tools for Agent internal use.  Registers all 20+ MCP t, Classify a tool call into a confirmation group., Classify a tool call into a confirmation group., Handle saving research results to wiki., Handle saving research results to wiki., Analyze the impact of a tool call for confirmation preview. (+6 more)
 
 ### Community 39 - "Community 39"
-Cohesion: 0.06
-Nodes (15): llmwikify Agent - Autonomous wiki maintenance layer.  ⚠️ DEPRECATED ⚠️  This age, Process a chat message and return agent response.          Args:             mes, Execute a specific tool call.          Args:             tool_name: Tool name (e, Confirm a pending action by confirmation ID and execute it.          Args:, Confirm and execute multiple pending actions.          Args:             confirm, Get all pending confirmations grouped by page type., Get all pending Dream proposals grouped by page., Apply approved Dream proposals to wiki files.          Args:             proposa (+7 more)
+Cohesion: 0.07
+Nodes (15): ToolCall, Process a chat message and return agent response.          Args:             mes, Execute a specific tool call.          Args:             tool_name: Tool name (e, Confirm a pending action by confirmation ID and execute it.          Args:, Confirm and execute multiple pending actions.          Args:             confirm, Get all pending confirmations grouped by page type., Get all pending Dream proposals grouped by page., Apply approved Dream proposals to wiki files.          Args:             proposa (+7 more)
 
 ### Community 40 - "Community 40"
 Cohesion: 0.05
 Nodes (41): 1. 全文搜索 (FTS5), 1. 项目初始化 (v0.10.0) ✅, 2. 引用追踪, 2. 模块化重构 (v0.11.0) ✅, 3. 内容提取, 4. 智能推荐, 5. CLI & MCP, CLI (+33 more)
 
 ### Community 41 - "Community 41"
-Cohesion: 0.07
-Nodes (17): Create wiki directory structure., Create index.md, log.md, overview.md, and config example., Check if wiki is initialized., Handle wiki.md schema creation, merging, or skipping., Generate MCP config and skill files if agent is specified., Generate .gitignore if it doesn't exist., Initialize wiki directory structure.          Args:             overwrite: If Tr, Generate skill files for CLI fallback if they don't exist. (+9 more)
+Cohesion: 0.09
+Nodes (24): Create wiki directory structure., Wiki initialization: directories, core files, MCP config, skill files., Create index.md, log.md, overview.md, and config example., Check if wiki is initialized., Handle wiki.md schema creation, merging, or skipping., Generate MCP config and skill files if agent is specified., Generate .gitignore if it doesn't exist., Initialize wiki directory structure.          Args:             overwrite: If Tr (+16 more)
 
 ### Community 42 - "Community 42"
 Cohesion: 0.05
@@ -974,8 +972,8 @@ Cohesion: 0.04
 Nodes (32): MagicMock, mock_llm(), mock_wiki(), Each LLM-using submodule (clarifier, report, reviewer, revisor)     accepts an o, TestSubmoduleMetricsKwarg, mock_llm(), mock_wiki(), Create a mock Wiki object. (+24 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.07
-Nodes (31): _build_source_link_map(), _linkify_source_citations(), Tool Registry - Wraps MCP tools for Agent internal use.  Registers all 20+ MCP t, Registry of wiki tools that the Agent can call.      Wraps existing MCP tools an, Registry of wiki tools that the Agent can call.      Wraps existing MCP tools an, Classify a tool call into a confirmation group., Classify a tool call into a confirmation group., Handle saving research results to wiki. (+23 more)
+Cohesion: 0.13
+Nodes (10): Registry of wiki tools that the Agent can call.      Wraps existing MCP tools an, Registry of wiki tools that the Agent can call.      Wraps existing MCP tools an, Log a post-hoc confirmation for ingest operations., Execute multiple confirmed tool calls at once., Get all pending confirmations., Log a post-hoc confirmation for ingest operations., Execute multiple confirmed tool calls at once., Get all pending confirmations. (+2 more)
 
 ### Community 50 - "Community 50"
 Cohesion: 0.08
@@ -986,8 +984,8 @@ Cohesion: 0.05
 Nodes (38): 1. MiniStageBar, 2. SourceCard (NEW), 3. StageStatusLine, 4. SubQueryRow (collapsible), 5. SourceTooltip, 6. CitationHover, Active Panel: Before → After, Active Panel Layout (+30 more)
 
 ### Community 52 - "Community 52"
-Cohesion: 0.20
-Nodes (14): ExtractedContent, ExtractedContent, Result of extracting content from a source., _extract_html_file(), _extract_text_file(), Text and HTML file extractors., Extract content from a plain text or markdown file., Extract content from a local HTML file. (+6 more)
+Cohesion: 0.08
+Nodes (31): ExtractedContent, detect_source_type(), extract(), ExtractedContent, Link, Base extractor functions and data classes., Result of extracting content from a source., Detect whether a source is a URL, YouTube link, or file (by extension). (+23 more)
 
 ### Community 53 - "Community 53"
 Cohesion: 0.11
@@ -1014,32 +1012,32 @@ Cohesion: 0.05
 Nodes (37): 1. Install QMD CLI, 2. Initialize in your wiki root, 3. Index your wiki pages, 4. Generate embeddings, 5. Start MCP server, Automatic Recommendation, CLI, code:bash (npm install -g @tobilu/qmd) (+29 more)
 
 ### Community 59 - "Community 59"
-Cohesion: 0.05
-Nodes (40): AutoResearch: 6-step framework ReAct engine.  Independent top-level project that, GateResult, Quality gates between research stages.  Gate results are injected as observation, Check after synthesis: enough reinforced claims, not too many gaps., Check before report: synthesis exists and enough sources., Quality gate check result., 6-step gate 2 (after_gathering): are sources evidence-quality?          Uses Sou, 6-step gate 3 (after_synthesis): is the reasoning chain sound?          Uses Rea (+32 more)
+Cohesion: 0.04
+Nodes (42): AutoResearch: 6-step framework ReAct engine.  Independent top-level project that, GateResult, Quality gates between research stages.  Gate results are injected as observation, Check after synthesis: enough reinforced claims, not too many gaps., Check before report: synthesis exists and enough sources., Quality gate check result., 6-step gate 2 (after_gathering): are sources evidence-quality?          Uses Sou, 6-step gate 3 (after_synthesis): is the reasoning chain sound?          Uses Rea (+34 more)
 
 ### Community 60 - "Community 60"
 Cohesion: 0.04
-Nodes (21): DreamEditor, ProposalManager, Dream Editor - Surgical wiki page editing engine with proposal mode.  Analyzes Q, Performs surgical edits to wiki pages based on QuerySink analysis.      Workflow, Execute a Dream cycle: generate proposals from sinks, auto-approve small edits., Manages Dream edit proposals with auto-approve for small changes.      Reuses No, Generate edit proposals from a single sink (no file writes)., Generate proposals for updating an existing wiki page. (+13 more)
+Nodes (20): DreamEditor, ProposalManager, Performs surgical edits to wiki pages based on QuerySink analysis.      Workflow, Execute a Dream cycle: generate proposals from sinks, auto-approve small edits., Manages Dream edit proposals with auto-approve for small changes.      Reuses No, Generate edit proposals from a single sink (no file writes)., Generate proposals for updating an existing wiki page., Generate proposal for creating a new wiki page from sink entries. (+12 more)
 
 ### Community 61 - "Community 61"
 Cohesion: 0.07
 Nodes (17): PromptTemplate, Prompt template registry with provider-specific overrides.  Uses YAML + Jinja2 f, A loaded prompt template with metadata., Prompt templates for LLM interactions., custom_prompts_dir(), Tests for PromptRegistry., Create a temporary prompts directory with test templates., Create a custom prompts directory with override template. (+9 more)
 
 ### Community 62 - "Community 62"
-Cohesion: 0.08
-Nodes (20): Get remote wiki status.          Returns:             Wiki status dict, Search remote wiki.          Args:             query: Search query             l, Read a page from remote wiki.          Args:             page_name: Name of the, Write a page to remote wiki.          Args:             page_name: Name of the p, HTTP client for remote llmwikify server.      Provides methods to interact with, Get page references.          Args:             page_name: Name of the page, Get graph data from remote wiki.          Returns:             Graph visualizati, Run health check on remote wiki.          Args:             format: Output forma (+12 more)
+Cohesion: 0.02
+Nodes (73): RemoteWiki - HTTP client for remote llmwikify servers., Get remote wiki status.          Returns:             Wiki status dict, Search remote wiki.          Args:             query: Search query             l, Read a page from remote wiki.          Args:             page_name: Name of the, Write a page to remote wiki.          Args:             page_name: Name of the p, HTTP client for remote llmwikify server.      Provides methods to interact with, Get page references.          Args:             page_name: Name of the page, Get graph data from remote wiki.          Returns:             Graph visualizati (+65 more)
 
 ### Community 63 - "Community 63"
 Cohesion: 0.07
 Nodes (24): Args, Tests for batch ingest command fix.  Tests for: - Batch JSON output structure (a, Human-readable summary should go to stderr, not stdout., Batch should recursively scan subdirectories., --dry-run should output JSON preview without calling ingest_source., --dry-run --self-create should show LLM preview message., Some sources fail, others succeed; JSON reflects per-source status., With --self-create, LLM processing should execute. (+16 more)
 
 ### Community 64 - "Community 64"
-Cohesion: 0.13
-Nodes (17): _deep_merge(), get_global_config_manager(), GlobalConfigManager, Global + per-wiki LLM configuration manager., Signal the agent service to reload its LLM client on next request., Deep merge two dicts, override taking precedence., Manages global and per-wiki LLM configuration.      Config priority (highest to, Load the global config file (~/.llmwikify/llmwikify.json).          Returns None (+9 more)
+Cohesion: 0.09
+Nodes (28): LLM client with streaming and function calling support.      Extends basic LLMCl, StreamableLLMClient, _deep_merge(), get_global_config_manager(), GlobalConfigManager, Global + per-wiki LLM configuration manager., Signal the agent service to reload its LLM client on next request., Deep merge two dicts, override taking precedence. (+20 more)
 
 ### Community 65 - "Community 65"
-Cohesion: 0.08
-Nodes (10): FileSystemWatcher, Handle a file system event with debouncing., Process a file after debounce period., Manually trigger ingest for a specific file.          Args:             path: Fi, Watch a directory for new files and optionally trigger ingest.      Usage:, Start watching the directory.          Args:             on_event: Optional call, Tests for v0.21.0 Watch mode., Should raise ImportError if watchdog not installed. (+2 more)
+Cohesion: 0.06
+Nodes (16): FileSystemWatcher, install_git_hook(), File system watcher for automatic source ingestion., Handle a file system event with debouncing., Process a file after debounce period., Manually trigger ingest for a specific file.          Args:             path: Fi, Install a git post-commit hook that runs batch ingest.      Args:         wiki_r, Watch a directory for new files and optionally trigger ingest.      Usage: (+8 more)
 
 ### Community 66 - "Community 66"
 Cohesion: 0.06
@@ -1074,16 +1072,16 @@ Cohesion: 0.16
 Nodes (10): get_content_prompt(), get_outline_prompt(), get_research_prompt(), 语言路由：仅 zh 实现；en 返回中文 + TODO 标记（v0.6.3 补全）。, Step 1: 大纲生成提示词（topic → outline）。      v0.6.2.patch1: 新增 language 参数；当前仅 zh 实现，e, Step 2: 逐页内容生成提示词（outline page → slide content）。      v0.6.2.patch1: 新增 language, Research → outline 提示词。, _select_prompt() (+2 more)
 
 ### Community 74 - "Community 74"
-Cohesion: 0.04
-Nodes (87): create_search_provider(), DuckDuckGoProvider, FallbackSearchProvider, MiniMaxSearchProvider, Web search with multiple provider support.  Providers (in fallback order): 1. Se, DuckDuckGo search (free, may fail in restricted networks)., MiniMax Token Plan web search API (450 req/day).      Uses the coding_plan searc, Tries providers in order, returns first successful results. (+79 more)
+Cohesion: 0.03
+Nodes (92): create_search_provider(), DuckDuckGoProvider, FallbackSearchProvider, MiniMaxSearchProvider, Web search with multiple provider support.  Providers (in fallback order): 1. Se, DuckDuckGo search (free, may fail in restricted networks)., MiniMax Token Plan web search API (450 req/day).      Uses the coding_plan searc, Tries providers in order, returns first successful results. (+84 more)
 
 ### Community 75 - "Community 75"
-Cohesion: 0.05
-Nodes (28): EventBuffer, Per-session in-memory event buffer with dedup + batch DB flush.      Decouples e, db(), Tests for the autoresearch 6-step framework (independent DB).  Covers: - AutoRes, SourceFilter.compute_evidence_score: 6-step gate 2 input., QualityGate.check_evidence_quality + check_reasoning_quality., QualityGate.check_structure_quality + check_framework_compliance., Verify dedup, batch flush, and lifecycle of EventBuffer. (+20 more)
+Cohesion: 0.06
+Nodes (22): EventBuffer, Per-session in-memory event buffer with dedup + batch DB flush.      Decouples e, db(), Tests for the autoresearch 6-step framework (independent DB).  Covers: - AutoRes, SourceFilter.compute_evidence_score: 6-step gate 2 input., QualityGate.check_evidence_quality + check_reasoning_quality., QualityGate.check_structure_quality + check_framework_compliance., Independent autoresearch DB (tmp_path/autoresearch.db). (+14 more)
 
 ### Community 76 - "Community 76"
 Cohesion: 0.08
-Nodes (8): Scheduler - Cron-based task scheduler for Agent system tasks.  Uses croniter for, Check and run all due tasks. Returns list of results., Register default wiki system tasks.          Task classification:         - Auto, Represents a scheduled task., Cron scheduler for wiki system tasks., ScheduledTask, WikiScheduler, TestScheduler
+Nodes (7): Check and run all due tasks. Returns list of results., Register default wiki system tasks.          Task classification:         - Auto, Represents a scheduled task., Cron scheduler for wiki system tasks., ScheduledTask, WikiScheduler, TestScheduler
 
 ### Community 77 - "Community 77"
 Cohesion: 0.06
@@ -1095,7 +1093,7 @@ Nodes (31): 1. 知识库路径管理, 2. Wiki 实例生命周期, 3. 并发访�
 
 ### Community 79 - "Community 79"
 Cohesion: 0.07
-Nodes (32): Exception, Report generation from research synthesis results., Generate a structured markdown report with streaming output.          Yields:, Generates structured markdown research reports with inline source citations., Validate citations in the report., Create a concise summary from an analysis dict., Build hash → source info mapping for inline citations., Build messages and API params for report generation. (+24 more)
+Nodes (31): Report generation from research synthesis results., Generate a structured markdown report with streaming output.          Yields:, Generates structured markdown research reports with inline source citations., Validate citations in the report., Create a concise summary from an analysis dict., Build hash → source info mapping for inline citations., Build messages and API params for report generation., Generate a structured markdown report (non-streaming).          Uses report_mode (+23 more)
 
 ### Community 80 - "Community 80"
 Cohesion: 0.06
@@ -1110,20 +1108,20 @@ Cohesion: 0.10
 Nodes (20): Args, _make_cli(), Tests for CLI features added in v0.27.0: json format, fix-wikilinks, build-index, Without --dry-run, fixes links., Simple args namespace for testing., Test build-index --force and old format detection., _detect_old_index_format returns True when page_name != file_path[:-3]., Root pages (overview, log, index) are NOT flagged as old format. (+12 more)
 
 ### Community 83 - "Community 83"
-Cohesion: 0.14
-Nodes (14): AgentContext, confirmation_required(), done(), error(), message_delta(), Agent Service - Core agent logic with tool execution and context management., Truncate message history to fit within context window.          Keeps system pro, Approve a confirmation, execute the tool, and feed result back to LLM. (+6 more)
+Cohesion: 0.13
+Nodes (15): AgentContext, AgentService, confirmation_required(), done(), error(), message_delta(), Agent Service - Core agent logic with tool execution and context management., Truncate message history to fit within context window.          Keeps system pro (+7 more)
 
 ### Community 84 - "Community 84"
 Cohesion: 0.07
 Nodes (28): 1. 基本功能测试, 1. 模块文件创建, 2. Wiki 初始化测试, 2. 导入路径更新, 3. 包入口更新, 3. 测试套件状态, code:block1 (src/llmwikify/), code:python (# __init__.py) (+20 more)
 
 ### Community 85 - "Community 85"
-Cohesion: 0.11
+Cohesion: 0.10
 Nodes (5): Tests for Agent layer components., Run async coroutine, handling nested event loop issues., _run_async(), TestConfirmationMechanism, TestWikiToolRegistry
 
 ### Community 86 - "Community 86"
-Cohesion: 0.13
-Nodes (27): _deep_merge(), expand_env_vars(), get_db_path(), get_default_config(), get_directory(), get_mcp_config(), get_search_config(), get_wikis_config() (+19 more)
+Cohesion: 0.05
+Nodes (46): _build_merge_notice(), _find_insertion_point(), _get_version_safe(), LocalFileBackend, _parse_h2_sections(), Wiki storage backend abstraction.  A WikiBackend is the storage layer for a Wiki, Default backend: filesystem-based storage.      Encapsulates all the filesystem, Merge new schema sections into existing wiki.md.          Strategy: simple secti (+38 more)
 
 ### Community 87 - "Community 87"
 Cohesion: 0.07
@@ -1133,13 +1131,9 @@ Nodes (27): dependencies, katex, lucide-react, pptxgenjs, react, react-dom, reac
 Cohesion: 0.11
 Nodes (23): detect_source_type(), extract(), _extract_html_file(), _extract_pdf(), _extract_text_file(), _extract_url(), _extract_youtube(), _extract_youtube_id() (+15 more)
 
-### Community 89 - "Community 89"
-Cohesion: 0.23
-Nodes (4): AgentService, Clear the cached LLM client so it gets reloaded on the next request., int, str
-
 ### Community 90 - "Community 90"
 Cohesion: 0.05
-Nodes (65): get_agent_db_path(), CLI commands for llmwikify.  Phase 1 #2 / C2 — this module is in the middle of b, Command, get_command(), Command protocol and base classes for CLI commands.  Phase 1 #2 / C1 — establish, Look up a registered command by name. Returns None if absent., Protocol for a single CLI command.      A command is a unit of CLI behavior with, print_error() (+57 more)
+Nodes (74): CLI commands for llmwikify.  Phase 1 #2 / C2 — this module is in the middle of b, Command, get_command(), Command protocol and base classes for CLI commands.  Phase 1 #2 / C1 — establish, Look up a registered command by name. Returns None if absent., Protocol for a single CLI command.      A command is a unit of CLI behavior with, Register a command instance in the global registry.      Usage::          class, register_command() (+66 more)
 
 ### Community 91 - "Community 91"
 Cohesion: 0.07
@@ -1147,15 +1141,15 @@ Nodes (31): Render a document-type template (e.g., wiki.md schema)., Load and ca
 
 ### Community 92 - "Community 92"
 Cohesion: 0.03
-Nodes (110): Shared constants for llmwikify core modules., WikiIndex - SQLite FTS5 full-text search and reference tracking., Core wiki functionality., Protocol defining attributes and methods available to all mixins.      This clas, WikiProtocol, QmdIndex, Return QMD installation instructions., QMD hybrid search index wrapper.      Provides the same interface as WikiIndex f (+102 more)
+Nodes (87): Shared constants for llmwikify core modules., WikiIndex - SQLite FTS5 full-text search and reference tracking., Core wiki functionality., copy(), _detect_file_type(), _get_version(), join(), lower() (+79 more)
 
 ### Community 93 - "Community 93"
 Cohesion: 0.06
 Nodes (24): AutoResearchDatabase, get_autoresearch_db_path(), AutoResearchDatabase: independent SQLite database for autoresearch.  This module, Run any column-level migrations idempotently.          Each migration is a no-op, Warn if the autoresearch.db file grows beyond the threshold., Create a new autoresearch session and return its id.          Default status is, Persist report data without changing status., Delete a session and cascade-delete its sub_queries and sources. (+16 more)
 
 ### Community 94 - "Community 94"
-Cohesion: 0.11
-Nodes (8): Tests for direct lint (schema-aware gap detection)., Test lint() method new signature., Test _build_lint_context method., Test that old signature still works., test_llm_parses_dict_with_gaps(), test_llm_parses_list_response(), TestBuildLintContext, TestLintSignature
+Cohesion: 0.09
+Nodes (10): Tests for direct lint (schema-aware gap detection)., Test lint() method new signature., Test _build_lint_context method., Test that old signature still works., Test _fallback_detect_gaps method., test_llm_parses_dict_with_gaps(), test_llm_parses_list_response(), TestBuildLintContext (+2 more)
 
 ### Community 95 - "Community 95"
 Cohesion: 0.08
@@ -1166,20 +1160,20 @@ Cohesion: 0.08
 Nodes (13): Tests for source analysis caching., Test _compute_content_hash method., Test analyze_source method., Test _build_lint_context with source analysis., Test _find_source_summary_page method., Test _cache_source_analysis and _get_cached_source_analysis methods., test_calls_llm_and_caches(), test_force_reanalysis() (+5 more)
 
 ### Community 97 - "Community 97"
-Cohesion: 0.11
-Nodes (18): Convert to dictionary for API responses., init_ppt_task_manager(), PPTTaskManager, Get an async iterator of events for a task.          Reads from the in-memory qu, Run the generation function in background, feeding events to the queue., Clean up after a task completes., List past tasks (DB-backed)., Delete a task. Cleans up in-memory state too. (+10 more)
+Cohesion: 0.08
+Nodes (29): ActionType, Convert to dictionary for API responses., Enum, init_ppt_task_manager(), PPTTaskManager, Background task manager for PPT generation.  Runs PPT generation as independent, Get an async iterator of events for a task.          Reads from the in-memory qu, Run the generation function in background, feeding events to the queue. (+21 more)
 
 ### Community 98 - "Community 98"
 Cohesion: 0.09
-Nodes (23): _build_parser(), Build the llmwikify top-level ArgumentParser.      Phase 3 #6 — extracted from `, HelpCommand, ``help`` command — list all available commands and aliases.  Phase 3 #6 — provid, ``help`` command — list all commands and aliases., Show all commands, then aliases (if any)., Show only the aliases section., int (+15 more)
+Nodes (22): _build_parser(), Build the llmwikify top-level ArgumentParser.      Phase 3 #6 — extracted from `, Phase 3 #6 — mcp / serve merge + help subcommand tests.  Covers 5 new behaviors, COMMAND_REGISTRY has 'serve' but not 'mcp' (alias only).      After Phase 3 #6,, ``llmwikify help`` shows the mcp → serve alias.      The help command populates, Init MCP config: both 'mcp' and 'serve' are valid entry points.      The init co, Internal deprecation guard: serve.py must not import     ``llmwikify.mcp.server`, McpCommand must not be auto-registered.      After Phase 3 #6, McpCommand is rem (+14 more)
 
 ### Community 99 - "Community 99"
 Cohesion: 0.08
 Nodes (24): 10. Rating affects synthesis weighting, 11. Resume from checkpoint (not restart), 12. Retry logic for failed operations, 13. Reviewer failure handling, 1. Context restored from DB on session resume, 2. Tool spec includes parameter schemas, 3. Confirmation flow: tool result fed back to LLM, 4. Async HTTP client (httpx instead of requests) (+16 more)
 
 ### Community 100 - "Community 100"
-Cohesion: 0.07
-Nodes (14): Tests for WikiRegistry., Initialize WikiRegistry., Register a local wiki., Register a remote wiki., Remove wiki from registry., Raise error when unregistering non-existent wiki., List all registered wikis., Raise error when setting non-existent wiki as default. (+6 more)
+Cohesion: 0.10
+Nodes (11): Test that ingest returns text_extracted flag., Test enhanced ingest metadata (v0.15.0)., Test that ingest does NOT return a summary (LLM's job)., Test that message instructs LLM to read the file., Test that ingest returns file_type., Test that ingest returns file_size., Test that ingest returns word_count., Test that ingest returns has_images when no images. (+3 more)
 
 ### Community 101 - "Community 101"
 Cohesion: 0.13
@@ -1190,8 +1184,8 @@ Cohesion: 0.09
 Nodes (13): index(), Create or update a wiki page., Build reference index from all wiki files., Unified index manager for full-text search and reference tracking., Insert or update a page in all indexes., Remove a page from all indexes., Search for pages matching the query., Get all pages that link to the given page. (+5 more)
 
 ### Community 103 - "Community 103"
-Cohesion: 0.08
-Nodes (13): Test --merge flag for wiki.md schema updates., New sections from schema are appended to existing wiki.md., User-customized sections are not overwritten., When all sections already exist, returns up-to-date., New sections inserted before ## Best Practices., Version number updated even when no new sections., Domain-specific custom content (e.g., mining templates) preserved., _parse_sections correctly extracts H2 sections. (+5 more)
+Cohesion: 0.12
+Nodes (9): opencode.json includes instructions field for skill auto-load., wiki.md includes Knowledge Base Management and page type conventions., Test init with --agent opencode., AGENTS.md is no longer created (wiki.md is single source of truth)., opencode.json created with correct MCP config., wiki.md references raw/ directory., Skill files created for CLI fallback mode., Skill files not overwritten on re-init. (+1 more)
 
 ### Community 104 - "Community 104"
 Cohesion: 0.14
@@ -1202,16 +1196,16 @@ Cohesion: 0.09
 Nodes (22): 1. Wiki 核心层, 2. 知识图谱层, 3. 知识沉淀层, 4. 内容提取层, 5. 接口层, 6. Agent 层, llmwikify v0.30.0 项目状态, 一、已实现的核心能力 (+14 more)
 
 ### Community 106 - "Community 106"
-Cohesion: 0.15
-Nodes (6): Xiaomi MiMo provider using OpenAI-compatible API with api-key auth., XiaomiProvider, Any, str, Tests for XiaomiProvider implementation., TestXiaomiProvider
+Cohesion: 0.10
+Nodes (9): Xiaomi MiMo provider using OpenAI-compatible API with api-key auth., XiaomiProvider, Any, str, Tests for Xiaomi MiMo LLM provider., Tests for XiaomiProvider implementation., Tests for auth_header support in StreamableLLMClient., TestStreamableLLMClientAuthHeader (+1 more)
 
 ### Community 107 - "Community 107"
 Cohesion: 0.40
 Nodes (3): Wiki class should have read_sink method., Wiki class should have read_sink method., lint command should accept --generate-investigations flag.          Phase 1 #2 /
 
 ### Community 108 - "Community 108"
-Cohesion: 0.14
-Nodes (20): LLMProvider, BaseLLMProvider, LLMProvider, Provider abstraction layer for LLM clients., Protocol for LLM providers.      Each provider knows how to:     - Create a Stre, Create an LLM client from a full config dict., Base class with shared utility methods., LLM Provider abstraction layer. (+12 more)
+Cohesion: 0.07
+Nodes (35): LLM client with streaming and function calling support.      Extends basic LLMCl, StreamableLLMClient, LLMProvider, BaseLLMProvider, LLMProvider, Provider abstraction layer for LLM clients., Protocol for LLM providers.      Each provider knows how to:     - Create a Stre, Create an LLM client from a full config dict. (+27 more)
 
 ### Community 109 - "Community 109"
 Cohesion: 0.07
@@ -1222,8 +1216,8 @@ Cohesion: 0.09
 Nodes (11): Tests for PPT prompt templates — v0.6.2.patch1.  Covers: - Prompt template integ, Verify v0.6.2.patch1 critical rules are present in CONTENT prompt.      Regressi, The exact section that fixed the screenshot bug., The '禁止回退为 bullets' rule for comparison type., The prompt must warn against ```json wrapping., The ✓ self-check list must be in the prompt., The ❌ anti-patterns list must be in the prompt., The role should be '10 年' senior designer, not 'assistant'. (+3 more)
 
 ### Community 111 - "Community 111"
-Cohesion: 0.09
-Nodes (12): Test _detect_dated_claims() method (v0.15.0)., Test basic dated claim detection., Test that recent claims are not flagged., Test that critical hints are capped at 3., Test that no hints are returned when there are no sources., Test that dated claim includes observation field., raw/ with category subdirs does not crash., raw/ has both root-level files and subdirectory files. (+4 more)
+Cohesion: 0.12
+Nodes (9): Test raw/ directory analysis., Empty raw/ returns zero counts., Counts files per category subdirectory., No raw/ directory returns empty stats., Flat raw/ with files at root level., Multi-level nested subdirectories: raw/gold/2024/Q1/article.md, Mixed: root-level files + multi-level subdirectories., Only empty subdirectories, no files. (+1 more)
 
 ### Community 112 - "Community 112"
 Cohesion: 0.10
@@ -1235,7 +1229,7 @@ Nodes (11): Tests for entity resolution methods., Test resolving entity to exact
 
 ### Community 114 - "Community 114"
 Cohesion: 0.12
-Nodes (13): Full-text search with sink status and page_type attached.          Args:, Write a wiki page.          Args:             page_name: Page name. Can be:, Append entry to wiki log., Build reference index., Export reference index to JSON., Extract a one-line summary from a wiki page.          Priority:         1. YAML, Extract topics and entities from cached Source analysis.          Returns dict w, Update index.md with current wiki contents, summaries, and sink status. (+5 more)
+Nodes (18): Page read/write, search, log, and index file update., Full-text search with sink status and page_type attached.          Args:, Full-text search with sink status and page_type attached.          Args:, Write a wiki page.          Args:             page_name: Page name. Can be:, Append entry to wiki log., Append entry to wiki log., Build reference index., Export reference index to JSON. (+10 more)
 
 ### Community 115 - "Community 115"
 Cohesion: 0.10
@@ -1262,8 +1256,8 @@ Cohesion: 0.10
 Nodes (10): Tests for CLI commands., Test build-index command., Test CLI command handlers., Test build-index --export-only (replaces old export-index command)., Test lint command with healthy wiki., Test lint --format=brief (replaces old hint command)., Test lint --format=recommendations (replaces old recommend command)., Test write_page command. (+2 more)
 
 ### Community 121 - "Community 121"
-Cohesion: 0.04
-Nodes (32): Tests for v0.15.0 features: ingest metadata and lint clue-based detection., Test that ingest returns text_extracted flag., Test enhanced ingest metadata (v0.15.0)., Test that ingest does NOT return a summary (LLM's job)., Test that message instructs LLM to read the file., Test that ingest returns file_type., Test that ingest returns file_size., Test _detect_query_page_overlap() method (v0.15.0). (+24 more)
+Cohesion: 0.03
+Nodes (41): Tests for v0.15.0 features: ingest metadata and lint clue-based detection., Test _detect_dated_claims() method (v0.15.0)., Test basic dated claim detection., Test that recent claims are not flagged., Test that critical hints are capped at 3., Test that no hints are returned when there are no sources., Test that dated claim includes observation field., raw/ with category subdirs does not crash. (+33 more)
 
 ### Community 122 - "Community 122"
 Cohesion: 0.13
@@ -1287,15 +1281,15 @@ Nodes (43): Resolve LLM call params with 3-layer priority chain.      The single
 
 ### Community 127 - "Community 127"
 Cohesion: 0.03
-Nodes (68): Register a command instance in the global registry.      Usage::          class, register_command(), load_cli_config(), Config loading for the CLI.  Phase 1 #2 / C1 — extract the wiki_root + config lo, Load wiki_root and merged config dict for the CLI.      Args:         wiki_root:, is_known_status(), Return True if ``status`` is a recognized value.      This is a soft check — new, Any (+60 more)
+Nodes (72): load_cli_config(), Config loading for the CLI.  Phase 1 #2 / C1 — extract the wiki_root + config lo, Load wiki_root and merged config dict for the CLI.      Args:         wiki_root:, exit_with_error(), is_known_status(), Return True if ``status`` is a recognized value.      This is a soft check — new, Print an error message and exit with the given code.      Used by ``main()`` aft, NoReturn (+64 more)
 
 ### Community 128 - "Community 128"
-Cohesion: 0.17
-Nodes (3): NotificationManager, In-memory notification queue for Agent events with optional DB persistence., Manages agent notifications in memory with optional SQLite persistence.      Fea
+Cohesion: 0.11
+Nodes (7): Dream Editor - Surgical wiki page editing engine with proposal mode.  Analyzes Q, llmwikify Agent - Autonomous wiki maintenance layer.  ⚠️ DEPRECATED ⚠️  This age, NotificationManager, In-memory notification queue for Agent events with optional DB persistence., Manages agent notifications in memory with optional SQLite persistence.      Fea, Scheduler - Cron-based task scheduler for Agent system tasks.  Uses croniter for, WikiAgent - Main Agent class that orchestrates all Agent components.  ⚠️ DEPRECA
 
 ### Community 129 - "Community 129"
-Cohesion: 0.09
-Nodes (21): [0.10.0] - 2026-04-10, [0.11.1] - 2026-04-10, [0.12.0] - 2026-04-10, [0.12.2] - 2026-04-10, [0.17.0] - 2026-04-11, [0.30.1] - 2026-04-27, Added, Added (+13 more)
+Cohesion: 0.10
+Nodes (20): [0.10.0] - 2026-04-10, [0.11.1] - 2026-04-10, [0.12.0] - 2026-04-10, [0.12.1] - 2026-04-10, [0.12.2] - 2026-04-10, [0.17.0] - 2026-04-11, Added, Added (+12 more)
 
 ### Community 130 - "Community 130"
 Cohesion: 0.11
@@ -1338,20 +1332,20 @@ Cohesion: 0.15
 Nodes (6): Ingest a source file., Build reference index., Export reference index to JSON., Generate smart recommendations for wiki improvements., Get content from file, argument, or stdin., WikiCLI
 
 ### Community 140 - "Community 140"
-Cohesion: 0.17
-Nodes (7): Watch raw/ directory for new files., install_git_hook(), File system watcher for automatic source ingestion., Install a git post-commit hook that runs batch ingest.      Args:         wiki_r, Remove the git post-commit hook.      Args:         wiki_root: Root directory of, uninstall_git_hook(), TestGitHook
+Cohesion: 0.12
+Nodes (9): Test duplicate query detection and handling., Similar queries go to sink instead of creating duplicate pages., Duplicate detection returns hint about existing page and sink., merge_or_replace='replace' revises the existing page., Detects semantically similar queries (keyword overlap)., Finds Query pages nested in subdirectories (rglob coverage)., Unrelated queries don't trigger duplicate detection., Multiple duplicates on same day append to same sink file. (+1 more)
 
 ### Community 141 - "Community 141"
 Cohesion: 0.14
 Nodes (16): ConnectionState, formatMs(), formatTimeShort(), Message, RailElapsed(), relativeTime(), STATE_DOT, STATE_LABEL (+8 more)
 
 ### Community 142 - "Community 142"
-Cohesion: 0.11
-Nodes (14): WikiDiscovery - scans directories for llmwikify wikis., Scans directories for llmwikify wikis.      Looks for .llmwikify.db files in spe, Initialize WikiDiscovery.          Args:             exclude_patterns: Directory, Scan paths for wiki roots.          Args:             scan_paths: List of direct, Recursively find .llmwikify.db files.          Args:             root: Starting, WikiDiscovery, Initialize WikiRegistry.          Args:             config: Configuration dict (, Discover wikis at different depths, but not nested within a wiki. (+6 more)
+Cohesion: 0.21
+Nodes (7): Run cross-source synthesis.          High-rated sources get weighted higher in a, Cross-source synthesis engine — compares new sources against existing wiki knowl, Analyze new sources against existing wiki content and generate suggestions., SynthesisEngine, Analyze sources and generate cross-source synthesis suggestions.          This m, Any, str
 
 ### Community 143 - "Community 143"
 Cohesion: 0.22
-Nodes (9): Read only selected sections, respecting char budget.          Args:, Fallback targeted reading by paragraph when no headings exist., Extract section-level metadata from content for LLM-based navigation.          P, Generate lightweight lint hints (pure computation, no LLM).          Acts as a h, Ingest a source file and return extracted data for LLM processing.          Does, Detect sections from paragraph structure when no headings exist.          Uses h, bool, int (+1 more)
+Nodes (11): Read only selected sections, respecting char budget.          Args:, Source ingestion: extract, save to raw/, return data for LLM processing., Fallback targeted reading by paragraph when no headings exist., Extract section-level metadata from content for LLM-based navigation.          P, Generate lightweight lint hints (pure computation, no LLM).          Acts as a h, Ingest a source file and return extracted data for LLM processing.          Does, Detect sections from paragraph structure when no headings exist.          Uses h, WikiIngestMixin (+3 more)
 
 ### Community 144 - "Community 144"
 Cohesion: 0.12
@@ -1370,8 +1364,8 @@ Cohesion: 0.12
 Nodes (17): 6. Action Implementations, `_action_analyze()` — LLM Analysis, `_action_done()` — Finalize, `_action_gather()` — Search + Extract, `_action_plan()` — Initial or Re-planning, `_action_report()` — Generate Report, `_action_review()` — Evaluate Quality, `_action_revise()` — Fix Issues (+9 more)
 
 ### Community 148 - "Community 148"
-Cohesion: 0.03
-Nodes (40): Tests for init --agent feature — MCP config generation (AGENTS.md removed in v0., opencode.json includes instructions field for skill auto-load., wiki.md includes Knowledge Base Management and page type conventions., Test init with --agent claude., CLAUDE.md is no longer created (wiki.md is single source of truth)., .mcp.json created with Claude format., Test init with --agent codex., AGENTS.md is no longer created for codex. (+32 more)
+Cohesion: 0.04
+Nodes (32): Tests for init --agent feature — MCP config generation (AGENTS.md removed in v0., Test init with --agent claude., CLAUDE.md is no longer created (wiki.md is single source of truth)., .mcp.json created with Claude format., Test init with --agent codex., AGENTS.md is no longer created for codex., .opencode.json created., Test force overwrite and skip behavior. (+24 more)
 
 ### Community 149 - "Community 149"
 Cohesion: 0.12
@@ -1382,12 +1376,12 @@ Cohesion: 0.24
 Nodes (15): achat(), astream_chat(), chat(), chat_with_tools(), _default_base_url(), from_config(), DEPRECATED shim for StreamableLLMClient.  This module is preserved for backward, Build HTTP headers with appropriate auth scheme. (+7 more)
 
 ### Community 152 - "Community 152"
-Cohesion: 0.05
-Nodes (27): QmdClient, QMD (Query Markdown Documents) MCP HTTP Client.  Provides access to QMD hybrid s, Normalize QMD results to match WikiIndex format., Trigger embedding generation for the collection.          Returns:             S, Return installation instructions for QMD., Client for QMD MCP HTTP server.      Connects to a running QMD MCP server to per, Check if QMD server is running and accessible., Get QMD server health status. (+19 more)
+Cohesion: 0.03
+Nodes (43): QmdClient, QMD (Query Markdown Documents) MCP HTTP Client.  Provides access to QMD hybrid s, Normalize QMD results to match WikiIndex format., Trigger embedding generation for the collection.          Returns:             S, Return installation instructions for QMD., Client for QMD MCP HTTP server.      Connects to a running QMD MCP server to per, Check if QMD server is running and accessible., Get QMD server health status. (+35 more)
 
 ### Community 153 - "Community 153"
-Cohesion: 0.06
-Nodes (28): Run cross-source synthesis.          High-rated sources get weighted higher in a, Cross-source synthesis engine — compares new sources against existing wiki knowl, Get all entity names from existing wiki pages., Get all topics covered in existing wiki pages., Find claims in the new source that are confirmed by existing sources., Analyze new sources against existing wiki content and generate suggestions., Find contradictions between new source and existing wiki., Identify knowledge gaps that need more information. (+20 more)
+Cohesion: 0.15
+Nodes (8): Get all topics covered in existing wiki pages., Find claims in the new source that are confirmed by existing sources., Find contradictions between new source and existing wiki., Identify knowledge gaps that need more information., Find entities in new source that don't have wiki pages., Find overlap between new source topics and existing wiki., Analyze a new source against existing wiki content.          Args:             n, Generate a human-readable synthesis summary.
 
 ### Community 154 - "Community 154"
 Cohesion: 0.09
@@ -1398,8 +1392,8 @@ Cohesion: 0.12
 Nodes (15): 6 个 commits（按顺序）, Chat 页面 Hermes 风格化 v0.1 — 设计文档, Commit 1 — chore(deps): add lucide-react icon library, Commit 2 — feat(chat): 4-layer backdrop with warm vignette + grain, Commit 3 — feat(chat): header toolbar with model badge + connection state, Commit 4 — feat(chat): SessionSidebar collapse + active indicator, Commit 5 — feat(chat): right-side ToolsRail, Commit 6 — feat(chat): MessageBubble hover actions + fade-in + avatar (+7 more)
 
 ### Community 156 - "Community 156"
-Cohesion: 0.05
-Nodes (44): FastMCP, MCPAdapter, MCP protocol adapter for llmwikify., MCP protocol adapter - wraps wiki services as MCP tools.      Provides a clean i, Run MCP server in stdio mode (for desktop integration)., Run MCP server in HTTP mode (for network access)., Run MCP server in SSE mode., Call an MCP tool programmatically (for MCP protocol use only). (+36 more)
+Cohesion: 0.04
+Nodes (60): Start the MCP server (and optionally the Web UI).      Args:         wiki: A Wik, Start the MCP server (and optionally the Web UI).      Args:         wiki: A Wik, run_serve(), FastMCP, MCPAdapter, MCP protocol adapter for llmwikify., MCP protocol adapter - wraps wiki services as MCP tools.      Provides a clean i, Run MCP server in stdio mode (for desktop integration). (+52 more)
 
 ### Community 157 - "Community 157"
 Cohesion: 0.12
@@ -1422,8 +1416,8 @@ Cohesion: 0.13
 Nodes (12): Match, _parse_cn_num(), Execute a deterministic tool operation., Generate a human-readable message for deterministic operations., Parse Chinese number string to int., Route user message to appropriate handler.          Yields events in the same fo, SlideHarness, int (+4 more)
 
 ### Community 162 - "Community 162"
-Cohesion: 0.03
-Nodes (36): Tests for wiki_synthesize — Query knowledge compounding cycle., Test basic synthesize_query functionality., Basic: creates a query answer page., Test log.md integration., auto_log=True appends to log.md., auto_log=False does not modify log.md., Log entry follows parseable format with page link., Test duplicate query detection and handling. (+28 more)
+Cohesion: 0.04
+Nodes (34): Tests for wiki_synthesize — Query knowledge compounding cycle., Test basic synthesize_query functionality., Both wiki pages and raw sources in Sources section., auto_link=False does not add Sources section., Basic: creates a query answer page., No sources provided — Sources section not added., Test log.md integration., auto_log=True appends to log.md. (+26 more)
 
 ### Community 163 - "Community 163"
 Cohesion: 0.12
@@ -1434,16 +1428,16 @@ Cohesion: 0.12
 Nodes (10): Unit tests for unified web UI server module., Test unified server module., Unified server module should import without errors., Web server wrapper should import without errors., React WebUI build files should exist., Legacy static directory should exist (renamed to static-legacy-deprecated)., Test CLI web arguments., serve --help should NOT mention --agent (deprecated). (+2 more)
 
 ### Community 165 - "Community 165"
-Cohesion: 0.22
-Nodes (8): Compute SHA-256 hash of a source file's content., Find the Source summary page for a given raw source.          Looks in wiki/sour, Embed analysis results as HTML comment in Source summary page., Extract cached analysis from Source summary page., Analyze a source file and cache structured extraction.          Uses two-phase a, bool, Path, str
+Cohesion: 0.15
+Nodes (13): Compute SHA-256 hash of a source file's content., Compute SHA-256 hash of a source file's content., Find the Source summary page for a given raw source.          Looks in wiki/sour, Find the Source summary page for a given raw source.          Looks in wiki/sour, Embed analysis results as HTML comment in Source summary page.          Delegate, Embed analysis results as HTML comment in Source summary page., Extract cached analysis from Source summary page.          Delegates to the back, Extract cached analysis from Source summary page. (+5 more)
 
 ### Community 166 - "Community 166"
 Cohesion: 0.13
 Nodes (14): Agent Framework & Quick Research — 设计文档, code:block1 (┌───────────────────────────────────────────────────────────), code:sql (-- 1. Chat 会话), code:toml (# pyproject.toml 新增依赖), 一、项目背景与目标, 三、数据库设计, 九、依赖变更, 二、整体架构 (+6 more)
 
 ### Community 167 - "Community 167"
-Cohesion: 0.18
-Nodes (7): _ext_to_source_type(), _extract_title(), MarkItDown unified extractor for Office documents, images, and more.  Wraps Micr, Map file extension to source_type string., Convert a file to Markdown using MarkItDown.          Args:             path: Pa, Test _ext_to_source_type mapping., TestExtToSourceType
+Cohesion: 0.33
+Nodes (4): _ext_to_source_type(), Map file extension to source_type string., Test _ext_to_source_type mapping., TestExtToSourceType
 
 ### Community 168 - "Community 168"
 Cohesion: 0.10
@@ -1490,12 +1484,12 @@ Cohesion: 0.14
 Nodes (8): Tests for Wiki recommend functionality., Test Wiki recommendation engine., Test detection of missing pages., Test detection of orphan pages., Test cross-reference opportunities., Test recommendation summary structure., Test that recommendations don't include false positives., TestRecommend
 
 ### Community 179 - "Community 179"
-Cohesion: 0.14
-Nodes (8): Test lint() return structure with hints (v0.15.0)., Test that lint() returns hints structure., Test that critical hints are capped at 3., Test that informational hints are capped at 5., Test that lint() still returns issues alongside hints., Test that lint() still returns sink_status., Test lint() on empty wiki., TestLintHintsStructure
+Cohesion: 0.18
+Nodes (11): Export knowledge graph visualization., _add_entity_click_handlers(), export_graphml(), export_html(), export_svg(), Convert a name to a filename-safe slug., Add JavaScript click handlers to make entity nodes clickable in the HTML graph., Export graph to GraphML format (compatible with Gephi, yEd). (+3 more)
 
 ### Community 180 - "Community 180"
-Cohesion: 0.09
-Nodes (11): Create a new PPT task. Returns task_id (12-char hex)., Create a new PPT task. Returns task_id (12-char hex)., List tasks ordered by updated_at DESC., List tasks ordered by updated_at DESC., Delete tasks older than N days. Returns count deleted., List tasks ordered by updated_at DESC., Delete tasks older than N days. Returns count deleted., Delete tasks older than N days. Returns count deleted. (+3 more)
+Cohesion: 0.11
+Nodes (8): Create a new PPT task. Returns task_id (12-char hex)., Create a new PPT task. Returns task_id (12-char hex)., Delete tasks older than N days. Returns count deleted., Delete tasks older than N days. Returns count deleted., Delete tasks older than N days. Returns count deleted., Get chat messages for a session, oldest first., Get chat messages for a session, oldest first., int
 
 ### Community 181 - "Community 181"
 Cohesion: 0.10
@@ -1510,8 +1504,8 @@ Cohesion: 0.19
 Nodes (4): _make_presentation(), Tests for PPTChat Harness, ChatEngine, and ChatRouter., Create a test Presentation., TestSlideHarness
 
 ### Community 184 - "Community 184"
-Cohesion: 0.17
-Nodes (15): McpCommand, ``serve`` command — start MCP server (and optional Web UI).  Also wired up to th, Add both the ``serve`` and ``mcp`` subparsers.      The original code defines tw, Start the MCP server (and optionally the Web UI).      Args:         wiki: A Wik, Add the ``serve`` subparser (with ``mcp`` as argparse alias).      Phase 3 #6 —, ``serve`` command — start MCP server and optional Web UI., ``mcp`` command — alias for ``serve``., ``serve`` command — start MCP server and optional Web UI.      ``mcp`` is an arg (+7 more)
+Cohesion: 0.09
+Nodes (20): Command, BatchCommand, ``batch`` command — batch ingest sources., ``batch`` command — batch ingest sources., HelpCommand, ``help`` command — list all commands and aliases., Show all commands, then aliases (if any)., Show only the aliases section. (+12 more)
 
 ### Community 185 - "Community 185"
 Cohesion: 0.15
@@ -1542,8 +1536,8 @@ Cohesion: 0.15
 Nodes (13): 测试用例 (15), 核心特性, 报告输出示例, 社区检测空图处理, 文件变更, 依赖, 新增 CLI 命令, code:bash (llmwikify export-graph [options]) (+5 more)
 
 ### Community 193 - "Community 193"
-Cohesion: 0.18
-Nodes (9): _make_research_session(), str, Tool param include_sources gates raw file + index writes., Report and synthesis pages are always written, regardless of toggle., wiki-typed sources are never re-saved (already in wiki)., Source with empty content does not get a file or index entry., Response includes the toggle value for confirmation display., Create a research session in the DB with given sources and a result JSON blob. (+1 more)
+Cohesion: 0.11
+Nodes (14): _make_research_session(), str, Tool param include_sources gates raw file + index writes., Report and synthesis pages are always written, regardless of toggle., wiki-typed sources are never re-saved (already in wiki)., Source with empty content does not get a file or index entry., Response includes the toggle value for confirmation display., _analyze_impact reports raw_sources_to_save for the toggle preview. (+6 more)
 
 ### Community 194 - "Community 194"
 Cohesion: 0.04
@@ -1586,20 +1580,20 @@ Cohesion: 0.17
 Nodes (7): Test writing page with empty content still works., Tests for /api/wiki/page endpoints., Test reading an existing page., Test reading a non-existent page returns 404., Test writing a new page., Test writing page without page_name returns 400., TestWikiRoutesPage
 
 ### Community 204 - "Community 204"
-Cohesion: 0.22
-Nodes (5): references --inbound should show only inbound links., references --outbound should show only outbound links., references --stats should show reference statistics., references --broken should detect broken links., TestReferencesCommand
+Cohesion: 0.21
+Nodes (7): Args, references --inbound should show only inbound links., references --outbound should show only outbound links., references --stats should show reference statistics., references --broken should detect broken links., batch should handle multiple sources., TestReferencesCommand
 
 ### Community 205 - "Community 205"
-Cohesion: 0.10
-Nodes (14): 6.6: config['name']='' should fall back to directory name., Test _auto_register_mcporter() writes to ~/.mcporter/mcporter.json., 6.6: config['name']='' should fall back to directory name., 8.2: Should skip if service name already registered., 8.3: Should create ~/.mcporter/ if it doesn't exist., Test _auto_register_mcporter() writes to ~/.mcporter/mcporter.json., 8.1: Should write new service to ~/.mcporter/mcporter.json., 8.4: Should print success message with URL. (+6 more)
+Cohesion: 0.20
+Nodes (8): build_graph(), Build a combined graph from wikilinks and relations.      Returns:         Dict, build_visualization_data(), Graph visualization utilities for llmwikify.  Shared between MCP tools and REST, Build knowledge graph data optimized for visualization.      This is the single, Any, str, TestBuildGraph
 
 ### Community 206 - "Community 206"
 Cohesion: 0.18
 Nodes (12): Run the engine in background, feeding events to the queue., Clean up after a task completes., Manages background research tasks, one per session., Start a research task in the background., Cancel a running task., Get an async iterator of events for a session.          Yields events from the p, ResearchTaskManager, bool (+4 more)
 
 ### Community 207 - "Community 207"
-Cohesion: 0.17
-Nodes (7): Both wiki pages and raw sources in Sources section., auto_link=False does not add Sources section., No sources provided — Sources section not added., Test source citation in synthesize_query., Auto-adds [[wikilinks]] for source_pages in Sources section., Auto-adds markdown links for raw_sources in Sources section., TestSynthesizeWithSources
+Cohesion: 0.31
+Nodes (10): backup_shared_db(), _get_agent_dir(), main(), int, Path, One-time migration audit for the v3 → v4 autoresearch DB transition.  Run this s, Back up the shared DB with a timestamp suffix. Returns backup path., Return the agent dir, honoring LLMWIKIFY_AGENT_DIR env var (for tests). (+2 more)
 
 ### Community 208 - "Community 208"
 Cohesion: 0.17
@@ -1626,12 +1620,12 @@ Cohesion: 0.15
 Nodes (7): Get Wiki object by ID (lazy-loaded).          Args:             wiki_id: Wiki id, Get WikiInstance metadata.          Args:             wiki_id: Wiki identifier, List all registered wikis.          Returns:             List of WikiInstance ob, Get the default wiki instance.          Returns:             Default Wiki object, Search across multiple wikis, merge and rank results.          Args:, Get detailed status for a wiki.          Args:             wiki_id: Wiki identif, Re-index a wiki (rebuild FTS5).          Args:             wiki_id: Wiki identif
 
 ### Community 214 - "Community 214"
-Cohesion: 0.19
-Nodes (11): ActionType, Enum, Background task manager for PPT generation.  Runs PPT generation as independent, Reset singleton — for tests only., reset_ppt_task_manager_for_testing(), TaskStatus, GraphMode, Constants and enumerations for llmwikify server. (+3 more)
+Cohesion: 0.27
+Nodes (5): get_agent_db_path(), Database management commands (stats, list, clean, export)., Show database statistics., Delete all data for a wiki., Export wiki data to JSON.
 
 ### Community 215 - "Community 215"
 Cohesion: 0.03
-Nodes (50): Args, Unit tests for v0.25 service name auto-detection feature.  Covers: - create_mcp_, Test CLI argument parsing for --name., 3.3: mcp --help should mention --name., 3.3: mcp --help should mention --name., 3.4: serve --help should mention --name., 3.4: serve --help should mention --name., Test CLI serve() method integration. (+42 more)
+Nodes (53): Args, Unit tests for v0.25 service name auto-detection feature.  Covers: - create_mcp_, Test CLI argument parsing for --name., 3.3: mcp --help should mention --name., 3.3: mcp --help should mention --name., 3.4: serve --help should mention --name., 3.4: serve --help should mention --name., Test CLI serve() method integration. (+45 more)
 
 ### Community 216 - "Community 216"
 Cohesion: 0.18
@@ -1689,10 +1683,6 @@ Nodes (5): Get wiki status overview., Export reference index to JSON., Get total
 Cohesion: 0.20
 Nodes (9): MCP Configuration Feature Report, 📊 代码变更, 修改的文件, 🎉 总结, 📋 执行摘要, 📚 文档, 新增文件, 用户文档 (+1 more)
 
-### Community 231 - "Community 231"
-Cohesion: 0.09
-Nodes (7): Integration tests for Phase 3: chaining, retry, context methods, full flows., Tests for Wiki's context injection methods., Tests for LLM ingest chaining (only mode after single-call removal)., Tests for LLM ingest configuration., TestChainingMode, TestConfiguration, TestWikiContextMethods
-
 ### Community 232 - "Community 232"
 Cohesion: 0.20
 Nodes (10): 7.1 视图结构, 7.2 Chat 视图布局, 7.3 Research 面板布局, 7.4 Chat 会话管理, 7.5 研究评分 UI, code:typescript (type ViewMode =), code:block17 (┌───────────────────────────────────────────────────────────), code:block18 (┌───────────────────────────────────────────────────────────) (+2 more)
@@ -1734,8 +1724,8 @@ Cohesion: 0.20
 Nodes (9): Pytest configuration and fixtures for llmwikify.py tests., Create a temporary wiki directory for testing., Create a Wiki instance with clean initialization., Sample wiki page content with links., Sample extracted PDF content., sample_content(), sample_pdf_content(), temp_wiki() (+1 more)
 
 ### Community 242 - "Community 242"
-Cohesion: 0.09
-Nodes (25): Make a single LLM call for the named prompt.      This is the unified entry poin, run_prompt(), MetricsCollector, Metrics for an entire research session.      Aggregates per-action metrics and p, Mark session as started., Mark session as finished and compute totals., Back-compat: manually append an action metric., Generate human-readable summary. (+17 more)
+Cohesion: 0.10
+Nodes (24): Make a single LLM call for the named prompt.      This is the unified entry poin, run_prompt(), MetricsCollector, Metrics for an entire research session.      Aggregates per-action metrics and p, Mark session as started., Mark session as finished and compute totals., Back-compat: manually append an action metric., Generate human-readable summary. (+16 more)
 
 ### Community 243 - "Community 243"
 Cohesion: 0.20
@@ -1746,12 +1736,12 @@ Cohesion: 0.06
 Nodes (13): AutoResearchDetail(), REASONING_DIMS, STEP_ACCENTS, STEP_COLORS, STRUCTURE_LAYERS, AutoResearchPanel(), AutoResearchSidebar(), EventLogEntry (+5 more)
 
 ### Community 245 - "Community 245"
-Cohesion: 0.08
-Nodes (17): Tests for P1 features: cross-source synthesis, smart lint, knowledge graph enhan, Create a temporary wiki with multiple source pages for testing., Test Wiki.suggest_synthesis method., Test that suggest_synthesis returns a dict., Test suggest_synthesis with a specific source., Test enhanced lint (P1.2)., Test that lint returns new investigation fields., Test outdated page detection. (+9 more)
+Cohesion: 0.20
+Nodes (7): Tests for P1 features: cross-source synthesis, smart lint, knowledge graph enhan, Create a temporary wiki with multiple source pages for testing., Test P1 CLI commands., Test that suggest-synthesis command is registered., Test that knowledge-gaps command is registered., test_wiki(), TestCLICommands
 
 ### Community 246 - "Community 246"
-Cohesion: 0.22
-Nodes (9): detect_source_type(), extract(), Link, Base extractor functions and data classes., Detect whether a source is a URL, YouTube link, or file (by extension)., Extract content from any supported source. Auto-detects type.      Args:, Content extractors for various source types., _extract_pdf() (+1 more)
+Cohesion: 0.20
+Nodes (6): Test cross-source synthesis engine., Test that reinforced claims are detected across sources., Test detection of new entities not in wiki., Test detection of knowledge gaps., Test full analysis of a new source., TestSynthesisEngine
 
 ### Community 247 - "Community 247"
 Cohesion: 0.10
@@ -1760,6 +1750,10 @@ Nodes (19): get_task_manager(), Background task manager for research engine.  Ru
 ### Community 248 - "Community 248"
 Cohesion: 0.25
 Nodes (9): BuildIndexCommand, _detect_old_index_format(), Build or export the reference index.      Args:         wiki: A Wiki instance., Check if index contains pages with old-format page_names.      Old format: page_, ``build_index`` command — build or export the reference index., run_build_index(), Any, bool (+1 more)
+
+### Community 249 - "Community 249"
+Cohesion: 0.11
+Nodes (20): _build_merge_notice(), _detect_file_type(), _find_insertion_point(), _get_version(), _now(), _parse_sections(), _parse_wikilink_target(), Wiki utility mixin — path resolution, slug generation, timestamps, templates. (+12 more)
 
 ### Community 250 - "Community 250"
 Cohesion: 0.20
@@ -1775,11 +1769,11 @@ Nodes (29): cancel_autoresearch(), get_autoresearch(), get_clarification(), _get
 
 ### Community 253 - "Community 253"
 Cohesion: 0.20
-Nodes (6): Test sink directory is created during init., .sink/ directory created during wiki init., .sink/ listed in created_files during fresh init., .sink/ skipped if already exists., Wiki instance has sink_dir attribute., TestSinkDirectoryCreation
+Nodes (6): Test enhanced lint (P1.2)., Test that lint returns new investigation fields., Test outdated page detection., Test knowledge gap detection., Test redundancy detection., TestSmartLint
 
 ### Community 254 - "Community 254"
-Cohesion: 0.03
-Nodes (46): Tests for query sink feature — compound answers without duplicate pages., Test query_sink._find_or_create_sink_file method., Creates sink file with proper frontmatter and sections., Returns existing sink file without overwriting., Updates formal page frontmatter when creating sink., Test read_sink method., Returns empty status when no sink file exists., Parses entries from sink file with hash resolution. (+38 more)
+Cohesion: 0.02
+Nodes (53): Tests for query sink feature — compound answers without duplicate pages., Test query_sink._find_or_create_sink_file method., Creates sink file with proper frontmatter and sections., Test sink directory is created during init., Returns existing sink file without overwriting., Updates formal page frontmatter when creating sink., .sink/ directory created during wiki init., Test query_sink.append_to_sink method. (+45 more)
 
 ### Community 255 - "Community 255"
 Cohesion: 0.20
@@ -1834,8 +1828,8 @@ Cohesion: 0.13
 Nodes (16): Compute quality score (0.0-1.0) based on rules.          Dimensions:         - D, Compute evidence credibility score (0.0-1.0) for the 6-step framework., Score whether the source can be traced back to an origin.          Traceability, Score the authority of the source (domain reputation + source type).          -, Normalize URL for deduplication., Detect navigation pages., Score domain authority (0.0-1.0)., Score content length (0.0-1.0). (+8 more)
 
 ### Community 268 - "Community 268"
-Cohesion: 0.25
-Nodes (5): Comprehensive CLI unit tests.  Covers all CLI commands including: - init (with -, synthesize should create a wiki page from answer., report should generate unexpected connections report., TestReportCommand, TestSynthesizeCommand
+Cohesion: 0.22
+Nodes (6): Comprehensive CLI unit tests.  Covers all CLI commands including: - init (with -, synthesize should create a wiki page from answer., report should generate unexpected connections report., TestBatchIntegration, TestReportCommand, TestSynthesizeCommand
 
 ### Community 269 - "Community 269"
 Cohesion: 0.22
@@ -1939,15 +1933,15 @@ Nodes (5): Tests for /api/wiki/search endpoint., Test search endpoint returns re
 
 ### Community 294 - "Community 294"
 Cohesion: 0.20
-Nodes (5): Trigger embedding generation for the wiki., Check if QMD is available and running., Determine if QMD should be recommended to the user., Get recommendation message if QMD is recommended., Perform hybrid search via QMD.          Args:             query: Search query
+Nodes (6): Test lint() integration with investigations., Test that lint() includes investigations key., Test lint() without LLM suggestions (default)., Test that lint() still returns all existing keys., Test that investigations are separate from hints., TestLintInvestigations
 
 ### Community 295 - "Community 295"
 Cohesion: 0.20
 Nodes (6): Tests for single-wiki API endpoints (backward compatible)., GET /api/wiki/status returns wiki status., GET /api/wiki/search searches the wiki., GET /api/wiki/lint health-checks the wiki., GET /api/wiki/recommend gets recommendations., TestSingleWikiAPI
 
 ### Community 296 - "Community 296"
-Cohesion: 0.29
-Nodes (4): Register a new wiki.          Args:             wiki_id: Unique identifier for t, Register a remote wiki.          Args:             wiki_id: Unique identifier fo, Scan directories for .wiki-config.yaml files.          Args:             scan_pa, Initialize registry: load from config, discover local wikis, connect remote.
+Cohesion: 0.22
+Nodes (4): Detect knowledge gaps, outdated pages, and redundancy., Full health check output., Brief suggestions output (replaces old `hint` command)., Missing pages and orphan pages output (replaces old `recommend` command).
 
 ### Community 297 - "Community 297"
 Cohesion: 0.12
@@ -1962,16 +1956,16 @@ Cohesion: 0.25
 Nodes (5): mock_markitdown(), Tests for Phase 5: MarkItDown enhanced extractor integration., Test image format detection and routing., Image files should attempt MarkItDown first., TestExtractImageFormats
 
 ### Community 300 - "Community 300"
-Cohesion: 0.25
-Nodes (5): Test query_sink.append_to_sink method., Appends query answer to sink file., Includes source pages and raw sources in suggestions., Multiple appends create multiple entries in same sink file., TestAppendToSink
+Cohesion: 0.22
+Nodes (6): Load page type → directory mapping from wiki.md Page Types table.          Deleg, Read wiki.md (schema/conventions file).          Returns:             Dict with, Update wiki.md with new conventions/workflows.          Validates format but doe, Read wiki.md (schema/conventions file).          Returns:             Dict with, Update wiki.md with new conventions/workflows.          Validates format but doe, str
 
 ### Community 301 - "Community 301"
-Cohesion: 0.43
-Nodes (4): Use LLM to decide next action with chain-of-thought reasoning.          Migrated, Decide the next action based on current state.          Returns one of: ``plan``, Deterministic decision tree as fallback.          Walks the state in canonical o, str
+Cohesion: 0.36
+Nodes (6): CommunityDetectCommand, Detect knowledge communities via Leiden / Louvain.      Args:         wiki: A Wi, ``community_detect`` command — detect knowledge communities., run_community_detect(), Any, int
 
 ### Community 302 - "Community 302"
-Cohesion: 0.29
-Nodes (5): Generate smart suggestions for wiki improvement.          Deprecated: Use `lint(, Generate smart suggestions for wiki improvement.          Deprecated: Use `lint(, Generate smart suggestions for wiki improvement.          Deprecated: Use `lint(, Generate smart recommendations.          Delegates to the cached WikiAnalyzer —, Generate smart recommendations.          Delegates to WikiAnalyzer — single sour
+Cohesion: 0.36
+Nodes (6): InitCommand, ``init`` command — initialize a wiki., Initialize a wiki at ``wiki_root``.      Args:         wiki: A Wiki instance (or, run_init(), Any, int
 
 ### Community 303 - "Community 303"
 Cohesion: 0.25
@@ -1994,8 +1988,8 @@ Cohesion: 0.38
 Nodes (3): MCPServer, MCP server for wiki operations., Register all wiki tools with MCP.
 
 ### Community 308 - "Community 308"
-Cohesion: 0.22
-Nodes (5): Generate a page name from a query string.          Extracts topic (first 50 char, Find an existing query page with similar topic.          Searches for pages star, Create a new query page with sources section., Append structured Sources section to answer content., Save a query answer as a new wiki page.          Implements the Query compoundin
+Cohesion: 0.18
+Nodes (12): Generate a page name from a query string.          Extracts topic (first 50 char, Find an existing query page with similar topic.          Searches for pages star, Query handling: page creation, similarity matching, sink integration., Create a new query page with sources section., Append structured Sources section to answer content., Read all entries from a query sink file (hash references resolved)., Overview of all query sinks with entry counts and urgency., Save a query answer as a new wiki page.          Implements the Query compoundin (+4 more)
 
 ### Community 309 - "Community 309"
 Cohesion: 0.29
@@ -2082,20 +2076,20 @@ Cohesion: 0.29
 Nodes (7): code:bash (pip install mcp), code:python (server.serve(port=8766)  # 使用其他端口), code:bash (# Linux example), 依赖要求, ⚠️ 注意事项, 端口冲突, 网络访问
 
 ### Community 330 - "Community 330"
-Cohesion: 0.12
-Nodes (9): The user message should start with '研究主题：{query}'., The legacy user message ended with '请进行概念澄清。, When wiki_context is provided, it should be included., When wiki_context is empty, no 'Existing wiki context' line., The clarify YAML's system + user templates should render to the     same content, Legacy was Chinese. YAML should also be Chinese., The legacy prompt had an explicit JSON schema example., The legacy prompt listed when scope_check should be false. (+1 more)
+Cohesion: 0.36
+Nodes (6): Generate an unexpected-connections report.      Args:         wiki: A Wiki insta, ``report`` command — generate unexpected connections report., ReportCommand, run_report(), Any, int
 
 ### Community 331 - "Community 331"
 Cohesion: 0.29
 Nodes (4): init should create wiki structure., init should handle already initialized wiki., init --overwrite should recreate wiki., TestInitCommand
 
 ### Community 332 - "Community 332"
-Cohesion: 0.32
-Nodes (5): Args, log without args should return error., read_page for non-existent page should return error., write_page without content should return error., TestCLIErrorHandling
+Cohesion: 0.29
+Nodes (4): log without args should return error., read_page for non-existent page should return error., write_page without content should return error., TestCLIErrorHandling
 
 ### Community 333 - "Community 333"
-Cohesion: 0.13
-Nodes (8): Validate config and return list of error messages (empty = valid)., Return the default model name for this provider., Return list of supported model names for this provider., Return the default base URL for this provider., Return the provider identifier string., Resolve API key from config, supporting env:VAR_NAME syntax., Resolve a field from config with environment variable override., str
+Cohesion: 0.24
+Nodes (4): Reject multiple pending confirmations at once., Get detailed changes for a specific ingest., Reject multiple pending confirmations at once., Get detailed changes for a specific ingest.
 
 ### Community 334 - "Community 334"
 Cohesion: 0.33
@@ -2174,16 +2168,16 @@ Cohesion: 0.33
 Nodes (5): command, enabled, type, mcp, llmwikify
 
 ### Community 353 - "Community 353"
-Cohesion: 0.44
-Nodes (3): MiniMaxProvider, MiniMax provider using OpenAI-compatible API., str
+Cohesion: 0.33
+Nodes (4): Test Wiki.suggest_synthesis method., Test that suggest_synthesis returns a dict., Test suggest_synthesis with a specific source., TestWikiSuggestSynthesis
 
 ### Community 354 - "Community 354"
 Cohesion: 0.29
 Nodes (3): EditHistory(), EditEntry, mockStatus
 
 ### Community 355 - "Community 355"
-Cohesion: 0.08
-Nodes (26): init_autoresearch_db(), migrate_research_six_step_columns(), migrate_v3_add_events_column(), migrate_v3_mark_partial_sessions(), Schema bootstrap and migration helpers for the autoresearch database.  AutoResea, Idempotently add the `events_json` column to autoresearch_sessions.      New ses, Backfill: mark 'done' sessions as 'incomplete' if 6-step fields are missing., Idempotently create the autoresearch schema.      Args:         db_path: Path to (+18 more)
+Cohesion: 0.10
+Nodes (16): init_autoresearch_db(), migrate_research_six_step_columns(), migrate_v3_add_events_column(), migrate_v3_mark_partial_sessions(), Schema bootstrap and migration helpers for the autoresearch database.  AutoResea, Idempotently add the `events_json` column to autoresearch_sessions.      New ses, Backfill: mark 'done' sessions as 'incomplete' if 6-step fields are missing., Idempotently create the autoresearch schema.      Args:         db_path: Path to (+8 more)
 
 ### Community 356 - "Community 356"
 Cohesion: 0.33
@@ -2198,8 +2192,8 @@ Cohesion: 0.33
 Nodes (4): Check if a page should be excluded from orphan detection., Check if a page should be excluded from orphan detection., bool, str
 
 ### Community 360 - "Community 360"
-Cohesion: 0.40
-Nodes (5): _extract_youtube(), _extract_youtube_id(), YouTube video transcript extractor., Extract transcript from a YouTube video., Extract the video ID from various YouTube URL formats.
+Cohesion: 0.50
+Nodes (3): Run cross-source synthesis.          High-rated sources get weighted higher in a, Any, str
 
 ### Community 361 - "Community 361"
 Cohesion: 0.33
@@ -2214,8 +2208,8 @@ Cohesion: 0.50
 Nodes (4): [0.9.0] - 2026-04-09, Added, Added, Features
 
 ### Community 364 - "Community 364"
-Cohesion: 0.67
-Nodes (3): [0.12.1] - 2026-04-10, Changed, Changed
+Cohesion: 0.50
+Nodes (3): Get recent ingest log entries., Get recent ingest log entries., int
 
 ### Community 365 - "Community 365"
 Cohesion: 0.67
@@ -2230,8 +2224,8 @@ Cohesion: 0.40
 Nodes (3): main(), Main CLI entry point., Close database connection.
 
 ### Community 368 - "Community 368"
-Cohesion: 0.40
-Nodes (3): Build reference index., Check if index contains pages with old-format page_names.          Old format: p, bool
+Cohesion: 0.17
+Nodes (8): main(), Generate unexpected connections report., Main CLI entry point., Build reference index., Check if index contains pages with old-format page_names.          Old format: p, Command-line interface for llmwikify.  Phase 1 #2 / C2 — the per-command impleme, bool, Path
 
 ### Community 369 - "Community 369"
 Cohesion: 0.40
@@ -2366,8 +2360,8 @@ Cohesion: 0.40
 Nodes (4): args, command, mcpServers, llmwikify
 
 ### Community 402 - "Community 402"
-Cohesion: 0.25
-Nodes (3): Tests for Xiaomi MiMo LLM provider., Tests for auth_header support in StreamableLLMClient., TestStreamableLLMClientAuthHeader
+Cohesion: 0.50
+Nodes (3): List tasks ordered by updated_at DESC., List tasks ordered by updated_at DESC., List tasks ordered by updated_at DESC.
 
 ### Community 403 - "Community 403"
 Cohesion: 0.40
@@ -2377,9 +2371,13 @@ Nodes (3): ingest --dry-run should not create pages., ingest without --self-crea
 Cohesion: 0.40
 Nodes (3): search should return 0 when no results found., search should find content., TestSearchCommand
 
-### Community 407 - "Community 407"
-Cohesion: 0.27
-Nodes (4): Extract should handle missing files gracefully., Extract should handle missing files gracefully., prompts/__init__.py should export PromptRegistry or related symbols., prompts/__init__.py should export PromptRegistry or related symbols.
+### Community 405 - "Community 405"
+Cohesion: 0.05
+Nodes (44): Lint rule base class and LintEngine aggregator.  Phase 1 #3 — extract the 8 ``_d, Base class for a lint rule.      Subclasses override:     - ``name`` (str): the, Rule, DataGapsRule, Rule: detect data gaps (unsourced claims, vague temporal references)., Detect potential data gaps in wiki pages.      Detects two flavors of gap:     1, DatedClaimsRule, Rule: detect pages with year claims older than the latest source. (+36 more)
+
+### Community 410 - "Community 410"
+Cohesion: 0.50
+Nodes (4): [0.30.1] - 2026-04-27, Added — Unified FastAPI Server, Changed, Fixed — Code Quality & Bugs
 
 ### Community 411 - "Community 411"
 Cohesion: 0.14
@@ -2618,12 +2616,8 @@ Cohesion: 0.17
 Nodes (13): _create_task(), _get_presentation_json(), _make_presentation(), Regression tests for PPTChat presentation_json persistence.  Covers:   - update_, After a chat turn, presentation_json must remain in full format     so subsequen, If presentation_json is a partial format, the loader should still     be able to, Helper: create a ppt_task with presentation_json already set., Read raw presentation_json via sqlite3. (+5 more)
 
 ### Community 494 - "Community 494"
-Cohesion: 0.10
-Nodes (11): Tests verifying that research_clarify and research_replan YAMLs match the legacy, The replan YAML's system + user templates should render to the     same content, Legacy prompt specified JSON array shape, source_types, and limits., Legacy user message had 3 sections: research topic, gaps,         instructions., When wiki_context is provided, the wiki block is appended         to the gaps se, When wiki_context is empty, no wiki block., Static checks: no inline prompt text remains in the codebase.     After commit 9, All 6 step prompts (clarify, plan, replan, reason, report,         review, revis (+3 more)
-
-### Community 577 - "Community 577"
-Cohesion: 0.40
-Nodes (4): list_providers(), List all registered provider names., xiaomi + minimax are the auto-registered built-in providers., test_provider_registry_contains_known_providers()
+Cohesion: 0.06
+Nodes (20): Tests verifying that research_clarify and research_replan YAMLs match the legacy, The user message should start with '研究主题：{query}'., The legacy user message ended with '请进行概念澄清。, When wiki_context is provided, it should be included., When wiki_context is empty, no 'Existing wiki context' line., The replan YAML's system + user templates should render to the     same content, Legacy prompt specified JSON array shape, source_types, and limits., Legacy user message had 3 sections: research topic, gaps,         instructions. (+12 more)
 
 ### Community 578 - "Community 578"
 Cohesion: 0.09
@@ -2690,8 +2684,8 @@ Cohesion: 0.13
 Nodes (15): code:block19 (strategy/), code:python (from abc import ABC, abstractmethod), code:python (# strategy/futures/trend.py), code:python (# strategy/option/pricing.py), code:python (class BacktraderRunner:), code:python (class RiskManager:), code:python (class StrategyOptimizer:), 回测引擎（`strategy/backtester.py`） (+7 more)
 
 ### Community 598 - "Community 598"
-Cohesion: 0.11
-Nodes (10): str, StructureValidator: 6-step gate 4 input., Tests for session resume: whitelist, round reset, evidence restore., routes.py should allow resume from 'incomplete' status., routes.py should allow resume from 'done' status., _load_resume_state should set round=0 for fresh budget cycle., _load_resume_state should restore evidence_scores from DB., _load_resume_state should restore all 6-step framework fields. (+2 more)
+Cohesion: 0.15
+Nodes (9): str, Tests for session resume: whitelist, round reset, evidence restore., routes.py should allow resume from 'incomplete' status., routes.py should allow resume from 'done' status., _load_resume_state should set round=0 for fresh budget cycle., _load_resume_state should restore evidence_scores from DB., _load_resume_state should restore all 6-step framework fields., On resume, clarify should be skipped if clarification already exists. (+1 more)
 
 ### Community 599 - "Community 599"
 Cohesion: 0.14
@@ -2711,7 +2705,7 @@ Nodes (8): The PROMPT_REGISTRY in prompts.py should be the single source     of 
 
 ### Community 603 - "Community 603"
 Cohesion: 0.06
-Nodes (22): Tests for v0.16.0 — Smart Investigations (contradictions + data gaps + LLM sugge, Create a temporary wiki for testing., Test _llm_generate_investigations method., Test graceful fallback when LLM not available., Test lint() integration with investigations., Test that lint() includes investigations key., Test lint() without LLM suggestions (default)., Test that lint() still returns all existing keys. (+14 more)
+Nodes (23): Tests for v0.16.0 — Smart Investigations (contradictions + data gaps + LLM sugge, Test no false positives when sources are cited., Test that max 3 gaps are returned., Test with no wiki pages (overview.md exists by default)., Create a temporary wiki for testing., Test _llm_generate_investigations method., Test graceful fallback when LLM not available., Test _detect_potential_contradictions method. (+15 more)
 
 ### Community 604 - "Community 604"
 Cohesion: 0.14
@@ -2741,6 +2735,10 @@ Nodes (6): merge_research_config(), Quick Research configuration., Any, str, Tes
 Cohesion: 0.15
 Nodes (6): _linkify_source_citations: [[Source:HASH]] → [[src-HASH|Title]]., Bogus hash left unchanged (no error)., Without sources, all citations remain as plain text., A hash referenced N times is replaced N times., Mix of known and unknown hashes: replace known, preserve unknown., TestLinkifySourceCitations
 
+### Community 612 - "Community 612"
+Cohesion: 0.50
+Nodes (3): Close database connections., Close database connections., Close database connections.
+
 ### Community 613 - "Community 613"
 Cohesion: 0.08
 Nodes (23): Verify StreamableLLMClient is importable from new canonical home.  Phase 1 #1 /, The class exposes the full streaming/async/tool surface., StreamableLLMClient is a subclass of LLMClient.      Phase 1 #1 / C2 — the strea, isinstance check succeeds — type hierarchy lets LLMClient consumers     accept a, The new module imports from .budget_decorator / .token_budget, not absolute., StreamableLLMClient is importable from llmwikify.llm.streamable., The new home's __init__ signature is byte-equivalent to the legacy one., _default_base_url knows openai/ollama/lmstudio/xiaomi/minimax. (+15 more)
@@ -2754,8 +2752,8 @@ Cohesion: 0.17
 Nodes (12): code:python (async def clarify_with_loop(self, query: str) -> dict:), code:python (async def gather_evidence_with_loop(self, sub_queries: list)), code:python (DEFAULT_RESEARCH_CONFIG = {), code:python (@dataclass), code:block31 (┌───────────────────────────────────────────────────────────), 建立依据自我循环, 概念澄清自我循环, 自我循环数据流 (+4 more)
 
 ### Community 616 - "Community 616"
-Cohesion: 0.15
-Nodes (13): Compute quality score (0.0-1.0) based on rules.          Dimensions:         - D, Normalize URL for deduplication., Detect navigation pages., Score domain authority (0.0-1.0)., Score content length (0.0-1.0)., Score content structure (0.0-1.0)., Score URL clarity (0.0-1.0)., Score source type match (0.0-1.0). (+5 more)
+Cohesion: 0.08
+Nodes (25): Rule-based source pre-filter and quality scoring.  Filters out low-quality sourc, Compute quality score (0.0-1.0) based on rules.          Dimensions:         - D, Normalize URL for deduplication., Detect navigation pages., Rule-based source pre-filter and quality scoring.      Filters sources based on, Score domain authority (0.0-1.0)., Score content length (0.0-1.0)., Score content structure (0.0-1.0). (+17 more)
 
 ### Community 619 - "Community 619"
 Cohesion: 0.29
@@ -2894,8 +2892,8 @@ Cohesion: 0.67
 Nodes (3): 6. `BaseAction` Protocol, code:python (# actions.py), code:python (async def run(self, state):)
 
 ### Community 693 - "Community 693"
-Cohesion: 0.10
-Nodes (19): Verify provider registry remains on agent.backend (C5 validation).  Phase 1 #1 /, Provider modules import StreamableLLMClient from the new home, not the shim., The LLMProvider Protocol's from_config signature references StreamableLLMClient., The provider registry module is still at its historical location.      This guar, create_llm defaults to 'minimax' provider when none specified., get_provider('xiaomi') returns a XiaomiProvider instance., get_provider('nope') raises ValueError with the list of available providers., create_llm returns an instance of the new-home StreamableLLMClient.      The pro (+11 more)
+Cohesion: 0.09
+Nodes (21): Verify provider registry remains on agent.backend (C5 validation).  Phase 1 #1 /, Provider modules import StreamableLLMClient from the new home, not the shim., The LLMProvider Protocol's from_config signature references StreamableLLMClient., The provider registry module is still at its historical location.      This guar, create_llm defaults to 'minimax' provider when none specified., xiaomi + minimax are the auto-registered built-in providers., get_provider('xiaomi') returns a XiaomiProvider instance., get_provider('nope') raises ValueError with the list of available providers. (+13 more)
 
 ### Community 694 - "Community 694"
 Cohesion: 0.09
@@ -2914,8 +2912,8 @@ Cohesion: 0.26
 Nodes (13): ``wikis`` command — multi-wiki management (list / add / remove / scan)., Scan directories for wikis., List all registered wikis., Multi-wiki management.      Args:         wiki: A Wiki instance (unused — wikis, ``wikis`` command — multi-wiki management., run_wikis(), _wikis_add(), _wikis_list() (+5 more)
 
 ### Community 699 - "Community 699"
-Cohesion: 0.06
-Nodes (36): Command, AnalyzeSourceCommand, Analyze a single source or all sources in raw/.      Args:         wiki: A Wiki, ``analyze_source`` command — analyze source files., run_analyze_source(), BatchCommand, ``batch`` command — batch ingest sources., ``batch`` command — batch ingest sources. (+28 more)
+Cohesion: 0.36
+Nodes (6): AnalyzeSourceCommand, Analyze a single source or all sources in raw/.      Args:         wiki: A Wiki, ``analyze_source`` command — analyze source files., run_analyze_source(), Any, int
 
 ### Community 700 - "Community 700"
 Cohesion: 0.33
@@ -2974,8 +2972,8 @@ Cohesion: 0.22
 Nodes (7): F, check_token_budget(), Decorator for automatic token budget checking on LLM client methods.  Usage::, Decorator that checks token budget before LLM calls.      Args:         checker_, float, int, TokenBudgetChecker
 
 ### Community 719 - "Community 719"
-Cohesion: 0.07
-Nodes (32): BaseHTTPMiddleware, AuthMiddleware, HTTP middleware components., Simple API Key authentication middleware.      Verifies requests using either:, _load_research_config(), _mount_agent_spa(), FastAPI route definitions - unified single and multi-wiki mode., Register all API routes (unified architecture).      Args:         app: FastAPI (+24 more)
+Cohesion: 0.29
+Nodes (4): BaseHTTPMiddleware, AuthMiddleware, HTTP middleware components., Simple API Key authentication middleware.      Verifies requests using either:
 
 ### Community 721 - "Community 721"
 Cohesion: 0.36
@@ -2984,10 +2982,6 @@ Nodes (6): ExportGraphCommand, Export the knowledge graph to HTML / SVG / GraphM
 ### Community 722 - "Community 722"
 Cohesion: 0.36
 Nodes (6): FixWikilinksCommand, Fix broken wikilinks in the wiki.      Args:         wiki: A Wiki instance (or a, ``fix_wikilinks`` command — fix broken wikilinks., run_fix_wikilinks(), Any, int
-
-### Community 723 - "Community 723"
-Cohesion: 0.33
-Nodes (6): exit_with_error(), Print an error message and exit with the given code.      Used by ``main()`` aft, NoReturn, int, exit_with_error raises SystemExit with the given code., test_exit_with_error_raises_systemexit()
 
 ### Community 725 - "Community 725"
 Cohesion: 0.36
@@ -3029,33 +3023,25 @@ Nodes (5): Tests for detect_contradictions method., Test contradiction detection
 Cohesion: 0.33
 Nodes (4): Tests for get_stats method., Test stats on empty engine., Test stats with relations present., TestRelationEngineStats
 
-### Community 737 - "Community 737"
-Cohesion: 0.40
-Nodes (3): Full handler flow: report markdown is linkified, raw files are hash-slugged., When include_sources=False, raw files are not created, so         linkified wiki, TestHandlerEndToEndLinkifyAndSlug
-
-### Community 742 - "Community 742"
-Cohesion: 0.50
-Nodes (3): main(), Main CLI entry point., Command-line interface for llmwikify.  Phase 1 #2 / C2 — the per-command impleme
-
 ## Knowledge Gaps
-- **2103 isolated node(s):** `$schema`, `type`, `command`, `enabled`, `int` (+2098 more)
+- **2126 isolated node(s):** `$schema`, `type`, `command`, `enabled`, `int` (+2121 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **175 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **171 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Wiki` connect `Community 92` to `Edit & Ingest Logs`, `Community 132`, `Community 10`, `Community 13`, `Community 16`, `Community 24`, `Community 153`, `Community 28`, `Community 30`, `Community 34`, `Community 35`, `Community 45`, `Community 47`, `Community 48`, `Community 193`, `Community 708`, `Community 591`, `Community 82`, `Community 86`, `Community 90`, `Community 604`, `Community 737`, `Community 610`, `Community 739`, `Community 612`, `Community 101`, `Community 231`, `Community 245`, `Community 631`?**
-  _High betweenness centrality (0.113) - this node is a cross-community bridge._
-- **Why does `AgentDatabase` connect `Community 11` to `Community 641`, `Dream Log & Badges`, `Community 8`, `Community 651`, `Community 18`, `Community 659`, `Community 660`, `Community 661`, `Community 662`, `Community 149`, `Community 20`, `Community 28`, `Community 413`, `Community 38`, `Community 170`, `Community 44`, `Community 304`, `Community 305`, `Community 50`, `Community 180`, `Community 53`, `Community 580`, `Community 581`, `Community 582`, `Community 583`, `Community 452`, `Community 74`, `Community 79`, `Community 83`, `Community 89`, `Community 609`, `Community 638`, `Community 639`?**
-  _High betweenness centrality (0.071) - this node is a cross-community bridge._
-- **Why does `PromptRegistry` connect `Community 13` to `Dream Log & Badges`, `Community 17`, `Community 18`, `Community 411`, `Community 45`, `Community 48`, `Community 61`, `Community 330`, `Community 589`, `Community 79`, `Community 91`, `Community 92`, `Community 604`, `Community 226`, `Community 101`, `Community 231`, `Community 494`, `Community 242`, `Community 249`, `Community 126`?**
-  _High betweenness centrality (0.055) - this node is a cross-community bridge._
-- **Are the 136 inferred relationships involving `PromptRegistry` (e.g. with `WikiUtilityMixin` and `_ReportCtx`) actually correct?**
-  _`PromptRegistry` has 136 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `Wiki` connect `Community 92` to `Community 128`, `Edit & Ingest Logs`, `Community 132`, `Community 13`, `Community 143`, `Community 16`, `Community 405`, `Community 24`, `Community 152`, `Community 28`, `Community 30`, `Community 34`, `Community 41`, `Community 45`, `Community 47`, `Community 48`, `Community 308`, `Community 62`, `Community 193`, `Community 708`, `Community 591`, `Community 82`, `Community 86`, `Community 90`, `Community 604`, `Community 353`, `Community 610`, `Community 612`, `Community 101`, `Community 231`, `Community 114`, `Community 245`, `Community 246`, `Community 631`, `Community 253`?**
+  _High betweenness centrality (0.104) - this node is a cross-community bridge._
+- **Why does `AgentDatabase` connect `Community 11` to `Community 641`, `Community 651`, `Community 18`, `Community 402`, `Community 659`, `Community 660`, `Community 662`, `Community 661`, `Community 149`, `Community 28`, `Community 413`, `Community 170`, `Community 44`, `Community 304`, `Community 305`, `Community 50`, `Community 180`, `Community 53`, `Community 64`, `Community 580`, `Community 581`, `Community 582`, `Community 583`, `Community 452`, `Community 74`, `Community 79`, `Community 83`, `Community 609`, `Community 616`, `Community 638`, `Community 639`?**
+  _High betweenness centrality (0.075) - this node is a cross-community bridge._
+- **Why does `Wiki` connect `Community 28` to `Community 137`, `Community 140`, `Community 269`, `Community 148`, `Community 152`, `Community 25`, `Community 156`, `Community 162`, `Community 35`, `Community 163`, `Community 39`, `Community 46`, `Community 176`, `Community 178`, `Community 60`, `Community 67`, `Community 76`, `Community 85`, `Community 215`, `Community 94`, `Community 96`, `Community 100`, `Community 103`, `Community 111`, `Community 121`, `Community 254`, `Community 255`?**
+  _High betweenness centrality (0.054) - this node is a cross-community bridge._
+- **Are the 141 inferred relationships involving `PromptRegistry` (e.g. with `WikiUtilityMixin` and `str`) actually correct?**
+  _`PromptRegistry` has 141 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 40 inferred relationships involving `AgentDatabase` (e.g. with `ChatEvent` and `str`) actually correct?**
   _`AgentDatabase` has 40 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 117 inferred relationships involving `Wiki` (e.g. with `Path` and `WikiServer`) actually correct?**
   _`Wiki` has 117 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 112 inferred relationships involving `Wiki` (e.g. with `WikiRegistry` and `WikiType`) actually correct?**
-  _`Wiki` has 112 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 75 inferred relationships involving `Wiki` (e.g. with `WikiUtilityMixin` and `WikiLinkMixin`) actually correct?**
+  _`Wiki` has 75 INFERRED edges - model-reasoned connections that need verification._

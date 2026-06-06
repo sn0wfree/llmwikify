@@ -60,8 +60,8 @@
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_ingest.py": {
-    "mtime": 1780621642.8409202,
-    "ast_hash": "2abd4c9f810bdce88e9a0b011f2fa0b9",
+    "mtime": 1780753859.7866185,
+    "ast_hash": "308dfc9ae7c2dbe2d1700e0cd089b220",
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_lint.py": {
@@ -70,8 +70,8 @@
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_link.py": {
-    "mtime": 1780621642.8409202,
-    "ast_hash": "98aa116451f5cd182bd6cfc9df2ec56b",
+    "mtime": 1780753973.4408078,
+    "ast_hash": "e67a02270fa02deeda157b608b81a0a7",
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/qmd_index.py": {
@@ -85,8 +85,8 @@
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_query.py": {
-    "mtime": 1780621642.8409202,
-    "ast_hash": "870da2a04bab875f220d332cf9f0f50f",
+    "mtime": 1780753943.6495433,
+    "ast_hash": "3593ba181a64392258b6d0e3fb5e53e3",
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/graph_analyzer.py": {
@@ -110,13 +110,13 @@
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_schema.py": {
-    "mtime": 1780621642.8409202,
-    "ast_hash": "aa4faee61dc61967e13eedb6ac8bc4b7",
+    "mtime": 1780753797.7351592,
+    "ast_hash": "b107d9d85394c8a715861b3fbaf25fee",
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_llm.py": {
-    "mtime": 1780708680.7219064,
-    "ast_hash": "13823a8c59841321c28fed38f25808a0",
+    "mtime": 1780753805.3729692,
+    "ast_hash": "7b0a9c799a66f8d0e278438efd0dace7",
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/remote_wiki.py": {
@@ -125,8 +125,8 @@
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki.py": {
-    "mtime": 1780708680.7219064,
-    "ast_hash": "f2ee3759c1d3f59edf12b9d17f6a9b8a",
+    "mtime": 1780753967.68295,
+    "ast_hash": "d218a093bbbac81070eb9e7000e61872",
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/constants.py": {
@@ -135,8 +135,8 @@
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_source_analysis.py": {
-    "mtime": 1780621642.8409202,
-    "ast_hash": "a8001e4f04c3d4b2c86d537786984c6f",
+    "mtime": 1780753846.4219499,
+    "ast_hash": "e58b6f31b36e5c4d3471e9fd4e3a9724",
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/prompt_registry.py": {
@@ -150,8 +150,8 @@
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_utility.py": {
-    "mtime": 1780621642.8409202,
-    "ast_hash": "572e3bf734262b77cbb4a2ac78e15ed7",
+    "mtime": 1780754404.5424793,
+    "ast_hash": "23a324c0a980ba13b3f8fc0144467436",
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/graph_visualizer.py": {
@@ -160,8 +160,8 @@
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_page_io.py": {
-    "mtime": 1780621642.8409202,
-    "ast_hash": "ac6b6872ce0da18e45d1cb9bac9ba0b6",
+    "mtime": 1780754323.4105566,
+    "ast_hash": "2d6de784d21123db0735283f9254c78f",
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/__init__.py": {
@@ -180,8 +180,8 @@
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_init.py": {
-    "mtime": 1780621642.8409202,
-    "ast_hash": "a4a09675d4ea873b11cabf0daa344873",
+    "mtime": 1780753890.7018526,
+    "ast_hash": "4e33761dc1da4be065d5cd660274b4c6",
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/core/graph_export.py": {
@@ -2460,8 +2460,8 @@
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/PLAN.md": {
-    "mtime": 1780744752.360194,
-    "ast_hash": "44e47aea739585b03a25ebb394f7c74b",
+    "mtime": 1780748494.5100021,
+    "ast_hash": "8b82542baf043ed9283e39c256185446",
     "semantic_hash": ""
   },
   "/home/ll/llmwikify/src/llmwikify/autoresearch/observer.py": {
@@ -2522,6 +2522,26 @@
   "/home/ll/llmwikify/docs/cli-help-and-aliases.md": {
     "mtime": 1780743417.285422,
     "ast_hash": "0cdf5d9d9d0185903e5c5851b50885df",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_backend.py": {
+    "mtime": 1780752589.3797293,
+    "ast_hash": "a96f2883036365fa36afac63eb8026c2",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_wiki_uses_backend.py": {
+    "mtime": 1780754451.13681,
+    "ast_hash": "83c1ef957b28d1e603820fc8afa5e1bc",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_wiki_backend.py": {
+    "mtime": 1780752596.6725006,
+    "ast_hash": "4f96ed077f46cf27e2c100ca6d6806ba",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/wiki-backend-interface.md": {
+    "mtime": 1780751918.262411,
+    "ast_hash": "080a835dc5ac468ccd7bcda9a2146763",
     "semantic_hash": ""
   }
 }
