@@ -227,6 +227,75 @@ class WikiCLI:
 
         return run_db(self.wiki, args)
 
+def _build_parser():
+    """Build the llmwikify top-level ArgumentParser.
+
+    Phase 3 #6 — extracted from ``main()`` so tests can build
+    a parser without starting the MCP server (which would
+    conflict with pytest's event loop). The parser includes
+    all command subparsers + the SUBCOMMAND_ALIASES scan
+    that populates the help_cmd module's dict.
+    """
+    # Import the commands subpackage so all Command classes are
+    # registered in COMMAND_REGISTRY before we iterate them.
+    from . import commands as _commands  # noqa: F401  (registration side effect)
+    from ._base import COMMAND_REGISTRY
+    from .commands.help_cmd import SUBCOMMAND_ALIASES  # noqa: E402
+
+    parser = argparse.ArgumentParser(
+        prog="llmwikify",
+        description="llmwikify CLI - LLM Wiki Management",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  llmwikify ingest document.pdf                       Show extraction summary + JSON for agent
+  llmwikify ingest document.pdf --dry-run             Preview without changes
+  llmwikify search "gold mining"                      Full-text search
+  llmwikify references "Company"                      Show references
+  llmwikify build-index                               Build reference index
+  llmwikify build-index --export-only                 Export index without rebuilding
+  llmwikify lint --format=brief                       Quick health suggestions
+  llmwikify lint --format=recommendations             Missing and orphan pages
+  llmwikify init                                      Initialize wiki
+  llmwikify init --overwrite                          Reinitialize wiki
+  llmwikify serve                                     Start MCP server (alias: mcp)
+  llmwikify serve --transport http --port 8765        Start MCP server on HTTP port
+  llmwikify serve --web                               Start unified server (MCP + WebUI) on :8765
+  llmwikify serve --web --auth-token mysecret         Start unified server with API key auth
+""",
+    )
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    for cmd_name in sorted(COMMAND_REGISTRY):
+        cmd = COMMAND_REGISTRY[cmd_name]
+        cmd.setup_parser(subparsers)
+
+    # Collect subcommand aliases for the ``help`` command.
+    # argparse on Python 3.10 does not expose ``_aliases`` on
+    # the subparser, but it does add each alias as a separate
+    # key in ``action.choices`` pointing to the SAME subparser
+    # object. We group by object identity, then identify
+    # aliases as names that are NOT in COMMAND_REGISTRY.
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            groups: dict[int, list[str]] = {}
+            for name, sub in action.choices.items():
+                groups.setdefault(id(sub), []).append(name)
+            for _sub_id, names in groups.items():
+                if len(names) <= 1:
+                    continue
+                canonical = next(
+                    (n for n in names if n in COMMAND_REGISTRY),
+                    names[0],
+                )
+                for name in names:
+                    if name == canonical:
+                        continue
+                    SUBCOMMAND_ALIASES[name] = canonical
+            break
+
+    return parser
+
+
 def main() -> int:
     """Main CLI entry point.
 
@@ -253,38 +322,9 @@ def main() -> int:
     from ._config import load_cli_config
     from ._output import print_error
 
-    parser = argparse.ArgumentParser(
-        prog='llmwikify',
-        description='llmwikify CLI - LLM Wiki Management',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  llmwikify ingest document.pdf                       Show extraction summary + JSON for agent
-  llmwikify ingest document.pdf --dry-run             Preview without changes
-  llmwikify search "gold mining"                      Full-text search
-  llmwikify references "Company"                      Show references
-  llmwikify build-index                               Build reference index
-  llmwikify build-index --export-only                 Export index without rebuilding
-  llmwikify lint --format=brief                       Quick health suggestions
-  llmwikify lint --format=recommendations             Missing and orphan pages
-  llmwikify init                                      Initialize wiki
-  llmwikify init --overwrite                          Reinitialize wiki
-  llmwikify mcp                                       Start MCP server for Agent interaction
-  llmwikify mcp --transport http --port 8765          Start MCP server on HTTP port
-  llmwikify serve --web                               Start unified server (MCP + WebUI) on :8765
-  llmwikify serve --web --auth-token mysecret         Start unified server with API key auth
-"""
-    )
-
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
-
-    # Iterate the registered commands in sorted order so the --help
-    # output is deterministic. Each Command owns its own parser
-    # setup — main() doesn't need to know which arguments each
-    # command takes.
-    for cmd_name in sorted(COMMAND_REGISTRY):
-        cmd = COMMAND_REGISTRY[cmd_name]
-        cmd.setup_parser(subparsers)
+    # Build the parser (extracted to _build_parser() in Phase 3
+    # #6 so tests can build it without starting the MCP server).
+    parser = _build_parser()
 
     args = parser.parse_args()
 
@@ -303,7 +343,15 @@ Examples:
     # ``from llmwikify.cli import WikiCLI; cli = WikiCLI(...); cli.X(args)``.
     cli = WikiCLI(wiki_root, config=config)
 
-    cmd = get_command(args.command)
+    # Phase 3 #6 — resolve subcommand aliases before dispatch.
+    # argparse keeps the original name in args.command (e.g.,
+    # typing ``mcp`` leaves args.command == "mcp" even though
+    # it's an alias of "serve"). We use SUBCOMMAND_ALIASES to
+    # look up the canonical command name.
+    from .commands.help_cmd import SUBCOMMAND_ALIASES  # noqa: E402
+    canonical_command = SUBCOMMAND_ALIASES.get(args.command, args.command)
+
+    cmd = get_command(canonical_command)
     if cmd is None:
         # Shouldn't happen — argparse already validated the command
         # name against the registered set — but guard anyway.
