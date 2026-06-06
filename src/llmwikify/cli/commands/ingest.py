@@ -6,7 +6,10 @@ This is one of the larger "simple" commands. It has 3 modes:
 3. Default: emit a JSON payload for the agent to decide what to do
 
 The original code lived in WikiCLI.ingest() and WikiCLI._ingest_smart()
-in commands.py. The body is preserved here byte-for-byte.
+in commands.py. The body is preserved here byte-for-byte,
+with Phase 3 #7 migrations: progress / status messages
+that used ``print(..., file=sys.stderr)`` are now routed
+through ``stderr_print`` from ``cli._output``.
 """
 
 from __future__ import annotations
@@ -17,6 +20,11 @@ import warnings
 from typing import Any
 
 from .._base import Command
+from .._output import (
+    print_error,
+    print_warning_stderr,
+    stderr_print,
+)
 
 
 def run_ingest(wiki: Any, args: Any, _ingest_smart_fn: Any = None) -> int:
@@ -37,25 +45,22 @@ def run_ingest(wiki: Any, args: Any, _ingest_smart_fn: Any = None) -> int:
     result = wiki.ingest_source(source)
 
     if "error" in result:
-        print(f"Error: {result['error']}")
+        print_error(f"Error: {result['error']}")
         return 1
 
     # Display extraction summary to stderr (for human readability)
-    print(f"Ingested: {result['title']} ({result['source_type']})", file=sys.stderr)
-    print(f"Content length: {result['content_length']:,} chars", file=sys.stderr)
+    stderr_print(f"Ingested: {result['title']} ({result['source_type']})")
+    stderr_print(f"Content length: {result['content_length']:,} chars")
 
     if result.get("saved_to_raw"):
-        print(f"Saved to raw: {result['source_name']}", file=sys.stderr)
+        stderr_print(f"Saved to raw: {result['source_name']}")
     elif result.get("already_exists"):
-        print(f"Already in raw: {result['source_name']}", file=sys.stderr)
+        stderr_print(f"Already in raw: {result['source_name']}")
     elif result.get("source_name"):
-        print(f"Source: {result['source_raw_path']}", file=sys.stderr)
+        stderr_print(f"Source: {result['source_raw_path']}")
 
     if result["content_length"] > 8000:
-        print(
-            "Note: Content truncated to 8,000 chars for LLM processing",
-            file=sys.stderr,
-        )
+        stderr_print("Note: Content truncated to 8,000 chars for LLM processing")
 
     self_create = getattr(args, "self_create", False) or getattr(args, "smart", False)
     if getattr(args, "smart", False):
@@ -68,13 +73,10 @@ def run_ingest(wiki: Any, args: Any, _ingest_smart_fn: Any = None) -> int:
 
     if dry_run:
         if self_create:
-            print("\n[DRY RUN] LLM self-create mode requested.", file=sys.stderr)
-            print("Remove --dry-run to execute LLM processing.", file=sys.stderr)
+            stderr_print("\n[DRY RUN] LLM self-create mode requested.")
+            stderr_print("Remove --dry-run to execute LLM processing.")
         else:
-            print(
-                "\nNo pages created. Use --self-create for LLM-assisted processing.",
-                file=sys.stderr,
-            )
+            stderr_print("\nNo pages created. Use --self-create for LLM-assisted processing.")
         return 0
 
     if self_create:
@@ -114,10 +116,10 @@ def _ingest_smart_inline(wiki: Any, result: dict) -> int:
     try:
         operations_result = wiki._llm_process_source(result)
     except ValueError as e:
-        print(f"\nLLM not configured: {e}")
+        print_error(f"LLM not configured: {e}")
         return 1
     except (ConnectionError, TimeoutError, RuntimeError, OSError) as e:
-        print(f"\nLLM processing failed: {e}")
+        print_error(f"LLM processing failed: {e}")
         return 1
 
     operations = operations_result.get("operations", [])

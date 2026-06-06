@@ -137,3 +137,36 @@ def stderr_print(message: str) -> None:
     pattern.
     """
     print(message, file=sys.stderr)
+
+
+# ─── Stderr variants of the print_* helpers ─────────────────────────────
+# Phase 3 #7 — ``batch.py`` and ``ingest.py`` print progress /
+# status to ``file=sys.stderr`` so the agent JSON stdout path
+# stays clean. These helpers wrap the ``print_*`` family with
+# a stderr sink, eliminating the repeated
+# ``print(f"❌ Error: {e}", file=sys.stderr)`` pattern.
+
+
+def print_error_stderr(message: str) -> None:
+    """Print an error message to stderr (with ❌ prefix)."""
+    print(f"{ICON_ERROR} {message}", file=sys.stderr)
+
+
+def print_warning_stderr(message: str) -> None:
+    """Print a warning message to stderr (with ⚠️ prefix)."""
+    print(f"{ICON_WARNING} {message}", file=sys.stderr)
+
+
+def print_success_stderr(message: str) -> None:
+    """Print a success message to stderr (with ✅ prefix).
+
+    Used by long-running commands (batch, ingest) where the
+    user wants progress feedback on stderr while the
+    structured result goes to stdout.
+    """
+    print(f"{ICON_SUCCESS} {message}", file=sys.stderr)
+
+
+def print_info_stderr(message: str) -> None:
+    """Print an info message to stderr (with 📊 prefix)."""
+    print(f"{ICON_INFO} {message}", file=sys.stderr)

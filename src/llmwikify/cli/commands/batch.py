@@ -9,7 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from .._base import Command
-from .._output import print_error
+from .._output import (
+    print_error,
+    print_error_stderr,
+    print_success_stderr,
+    print_warning_stderr,
+    stderr_print,
+)
 
 
 def run_batch(wiki: Any, args: Any) -> int:
@@ -23,6 +29,12 @@ def run_batch(wiki: Any, args: Any) -> int:
 
     Returns:
         0 on success, 1 if any source failed.
+
+    Phase 3 #7 — progress / status messages that used
+    ``print(..., file=sys.stderr)`` are now routed through
+    ``stderr_print`` / ``print_*_stderr`` helpers from
+    ``cli._output``. The structured JSON result still
+    goes to stdout so the agent-facing path stays clean.
     """
     import glob as glob_module
 
@@ -54,10 +66,10 @@ def run_batch(wiki: Any, args: Any) -> int:
 
     if dry_run:
         if self_create:
-            print("\n[DRY RUN] LLM self-create mode requested.", file=sys.stderr)
-            print("Remove --dry-run to execute LLM processing.", file=sys.stderr)
+            stderr_print("\n[DRY RUN] LLM self-create mode requested.")
+            stderr_print("Remove --dry-run to execute LLM processing.")
         else:
-            print("\nNo pages will be created. Use --self-create for LLM-assisted processing.", file=sys.stderr)
+            stderr_print("\nNo pages will be created. Use --self-create for LLM-assisted processing.")
         batch_results = []
         for source in sources:
             batch_results.append({
@@ -77,19 +89,19 @@ def run_batch(wiki: Any, args: Any) -> int:
         print(f"\n{json.dumps(output, ensure_ascii=False, indent=2)}")
         return 0
 
-    print("=== Batch Ingest ===", file=sys.stderr)
-    print(f"Found {len(sources)} source(s)\n", file=sys.stderr)
+    stderr_print("=== Batch Ingest ===")
+    stderr_print(f"Found {len(sources)} source(s)\n")
 
     success = 0
     failed = 0
     batch_results = []
 
     for i, source in enumerate(sources, 1):
-        print(f"[{i}/{len(sources)}] Processing: {source.name}", file=sys.stderr)
+        stderr_print(f"[{i}/{len(sources)}] Processing: {source.name}")
         result = wiki.ingest_source(str(source))
 
         if "error" in result:
-            print(f"  ❌ Error: {result['error']}", file=sys.stderr)
+            print_error_stderr(f"Error: {result['error']}")
             failed += 1
             batch_results.append({
                 "source": str(source),
@@ -97,14 +109,14 @@ def run_batch(wiki: Any, args: Any) -> int:
                 "error": result["error"],
             })
         else:
-            print(f"  ✅ {result['title']}", file=sys.stderr)
+            print_success_stderr(result['title'])
             if self_create:
                 try:
                     ops_result = wiki._llm_process_source(result)
                     ops = ops_result.get("operations", [])
                     if ops:
                         exec_result = wiki.execute_operations(ops)
-                        print(f"    → {exec_result['operations_executed']} operations executed", file=sys.stderr)
+                        stderr_print(f"    → {exec_result['operations_executed']} operations executed")
                         batch_results.append({
                             "source": str(source),
                             "status": "processed",
@@ -113,7 +125,7 @@ def run_batch(wiki: Any, args: Any) -> int:
                             "operations_executed": exec_result.get("operations_executed", 0),
                         })
                     else:
-                        print("    → No operations planned by LLM", file=sys.stderr)
+                        stderr_print("    → No operations planned by LLM")
                         batch_results.append({
                             "source": str(source),
                             "status": "no_operations",
@@ -121,7 +133,7 @@ def run_batch(wiki: Any, args: Any) -> int:
                             "source_name": result.get("source_name", ""),
                         })
                 except (ConnectionError, TimeoutError, RuntimeError, OSError) as e:
-                    print(f"    ⚠️ LLM processing skipped: {e}", file=sys.stderr)
+                    print_warning_stderr(f"LLM processing skipped: {e}")
                     batch_results.append({
                         "source": str(source),
                         "status": "llm_failed",
@@ -163,8 +175,8 @@ def run_batch(wiki: Any, args: Any) -> int:
         }
         print(f"\n{json.dumps(output, ensure_ascii=False, indent=2)}")
 
-    print("\n=== Batch Complete ===", file=sys.stderr)
-    print(f"Success: {success}, Failed: {failed}", file=sys.stderr)
+    stderr_print("\n=== Batch Complete ===")
+    stderr_print(f"Success: {success}, Failed: {failed}")
 
     return 0 if failed == 0 else 1
 
