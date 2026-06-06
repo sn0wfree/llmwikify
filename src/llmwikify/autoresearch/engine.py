@@ -24,7 +24,9 @@ from llmwikify.autoresearch.analyzer import SourceAnalyzer
 from llmwikify.autoresearch.config import merge_six_step_config
 from llmwikify.autoresearch.gatherer import SourceGatherer
 from llmwikify.autoresearch.gates import ResearchGates
+from llmwikify.autoresearch.observer import ResearchObserver
 from llmwikify.autoresearch.reasoner import ResearchReasoner
+from llmwikify.autoresearch.resume import ResearchResumeLoader
 from llmwikify.autoresearch.llm_step import run_prompt
 from llmwikify.autoresearch.state import (
     MetricsCollector,
@@ -135,6 +137,15 @@ class ResearchEngine:
         # the quality gate. Constructed last so it can
         # reference ``self._quality_gate``.
         self.gates = ResearchGates(self)
+
+        # Phase 2 #5 / C3 — ReAct Observe step and Resume
+        # loader live in their own modules. Both need the
+        # database (for ``get_sources`` / ``get_sub_queries`` /
+        # ``get_research_session``). The resume loader also
+        # needs ``_max_react_rounds`` for the default
+        # ``max_rounds`` fallback.
+        self.observer = ResearchObserver(self)
+        self.resume_loader = ResearchResumeLoader(self)
 
     def _resolve_model(self, config_key: str) -> StreamableLLMClient | None:
         model_cfg = self.config.get(config_key)
@@ -483,177 +494,33 @@ class ResearchEngine:
         async for ev in actions.action_incomplete(self._action_ctx, state, reason):
             yield ev
 
-    # ─── Observe Step ──────────────────────────────────────────────────
+    # ─── Observe Step (Phase 2 #5 / C3) ────────────────────────────────
+    # The 1 observe method is now a 1-line delegator to
+    # ``self.observer`` (see ``observer.py``). The method
+    # stays on ResearchEngine for backward compat with
+    # existing tests and any external code that may call
+    # ``engine._observe(state)`` directly.
 
     def _observe(self, state: ResearchState) -> None:
-        """Refresh state from DB and generate interpreted observations after each action."""
-        state.sources = self.db.get_sources(state.session_id) or []
-        state.sub_queries_raw = self.db.get_sub_queries(state.session_id) or []
+        """Refresh state from DB and generate interpreted observations.
 
-        # Rebuild sub_queries list from DB
-        state.sub_queries = [
-            {"id": sq["id"], "query": sq["query"], "source_type": sq["source_type"],
-             "url": sq.get("url"), "status": sq.get("status", "pending")}
-            for sq in state.sub_queries_raw
-        ]
+        Delegates to ``self.observer.observe()``
+        (Phase 2 #5 / C3).
+        """
+        self.observer.observe(state)
 
-        state.total_sources = len(state.sources)
-        state.total_sub_queries = len(state.sub_queries)
-
-        # Extract knowledge gaps from synthesis
-        if state.synthesis:
-            state.knowledge_gaps = state.synthesis.get("knowledge_gaps", [])
-            state.contradictions = state.synthesis.get("contradictions", [])
-
-        # Generate interpreted observations for the reasoner
-        state.observations = []
-
-        # Source quality distribution
-        analyzed = [s for s in state.sources if s.get("analysis")]
-        if analyzed:
-            scores = [s.get("analysis", {}).get("quality_assessment", {}).get("credibility", 5) for s in analyzed]
-            avg = sum(scores) / len(scores) if scores else 0
-            state.observations.append(
-                f"Average source credibility: {avg:.1f}/10 ({len(analyzed)}/{len(state.sources)} analyzed)"
-            )
-
-        # Failed sub-queries
-        failed = [sq for sq in state.sub_queries if sq.get("status") == "failed"]
-        if failed:
-            state.observations.append(
-                f"{len(failed)} sub-queries failed: {[sq['query'] for sq in failed[:3]]}"
-            )
-
-        # Source type distribution
-        type_counts: dict[str, int] = {}
-        for s in state.sources:
-            t = s.get("source_type", "unknown")
-            type_counts[t] = type_counts.get(t, 0) + 1
-        if type_counts:
-            state.observations.append(f"Source types: {type_counts}")
-
-        # Wiki vs web ratio
-        wiki_count = type_counts.get("wiki", 0)
-        web_count = type_counts.get("web", 0)
-        if wiki_count + web_count > 0:
-            state.observations.append(
-                f"Local wiki: {wiki_count} sources, Web: {web_count} sources"
-            )
-
-        # Key quality assessment
-        analyzed = [s for s in state.sources if s.get("analysis")]
-        if analyzed:
-            cred_scores = [
-                s.get("analysis", {}).get("quality_assessment", {}).get("credibility", 5)
-                for s in analyzed
-            ]
-            avg_cred = sum(cred_scores) / len(cred_scores)
-            if avg_cred < 5:
-                state.observations.append(f"⚠ 平均可信度偏低 ({avg_cred:.1f}/10)，建议获取更高质量源")
-            elif avg_cred >= 7:
-                state.observations.append(f"✓ 源质量良好 (平均 {avg_cred:.1f}/10)")
-
-        if len(state.knowledge_gaps) > 3:
-            state.observations.append(
-                f"⚠ {len(state.knowledge_gaps)} 个知识缺口，可能影响报告完整性"
-            )
-
-    # ─── Resume Helpers ────────────────────────────────────────────────
+    # ─── Resume Helpers (Phase 2 #5 / C3) ──────────────────────────────
+    # The 1 resume-state loader method is now a 1-line
+    # delegator to ``self.resume_loader`` (see ``resume.py``).
+    # The method stays on ResearchEngine for backward compat
+    # with existing tests and any external code that may call
+    # ``engine._load_resume_state(state)`` directly.
 
     def _load_resume_state(self, state: ResearchState) -> None:
-        """Load existing session state for resume."""
-        session = self.db.get_research_session(state.session_id)
-        if not session:
-            return
+        """Load existing session state for resume.
 
-        # Reset round to 0 on resume so reasoner gets a fresh budget cycle
-        state.round = 0
-        state.max_rounds = session.get("max_rounds", self._max_react_rounds)
-        state.quality_score = session.get("quality_score", 0)
-
-        gaps_raw = session.get("knowledge_gaps")
-        if gaps_raw:
-            try:
-                state.knowledge_gaps = json.loads(gaps_raw)
-            except (json.JSONDecodeError, TypeError):
-                state.knowledge_gaps = []
-
-        # Load existing sub-queries and sources
-        existing_sqs = self.db.get_sub_queries(state.session_id) or []
-        state.sub_queries = [
-            {"id": sq["id"], "query": sq["query"], "source_type": sq["source_type"],
-             "url": sq.get("url"), "status": sq.get("status", "pending")}
-            for sq in existing_sqs
-        ]
-        state.sources = self.db.get_sources(state.session_id) or []
-
-        # Determine phase from current_step
-        current_step = session.get("current_step", "planning")
-        if current_step in ("done", "error", "incomplete", "timeout"):
-            state.phase = ""
-        else:
-            state.phase = current_step
-
-        # If we have a report, set it
-        result = session.get("result")
-        if result:
-            try:
-                parsed = json.loads(result)
-                state.report_md = parsed.get("markdown")
-            except (json.JSONDecodeError, TypeError):
-                state.report_md = result
-
-        # Restore synthesis for resume
-        synthesis_raw = session.get("synthesis_json")
-        if synthesis_raw:
-            try:
-                state.synthesis = json.loads(synthesis_raw)
-                state.knowledge_gaps = state.synthesis.get("knowledge_gaps", [])
-                state.contradictions = state.synthesis.get("contradictions", [])
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        # Restore review for resume
-        review_raw = session.get("review_json")
-        if review_raw:
-            try:
-                state.review = json.loads(review_raw)
-                state.quality_score = state.review.get("score", 0)
-                state.issues = state.review.get("issues", [])
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        # ─── 6-step framework: restore clarification if present ───
-        clarification_raw = session.get("clarification_json")
-        if clarification_raw:
-            try:
-                state.clarification = json.loads(clarification_raw)
-            except (json.JSONDecodeError, TypeError):
-                state.clarification = None
-
-        # Restore reasoning check
-        reasoning_raw = session.get("reasoning_json")
-        if reasoning_raw:
-            try:
-                state.reasoning_check = json.loads(reasoning_raw)
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        # Restore structure check
-        structure_raw = session.get("structure_json")
-        if structure_raw:
-            try:
-                state.structure_check = json.loads(structure_raw)
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        # Restore evidence scores
-        evidence_raw = session.get("evidence_scores_json")
-        if evidence_raw:
-            try:
-                state.evidence_scores = json.loads(evidence_raw)
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        logger.info("Resuming session %s from %s (round %d)", state.session_id, current_step, state.round)
+        Delegates to ``self.resume_loader.load()``
+        (Phase 2 #5 / C3).
+        """
+        self.resume_loader.load(state)
 
