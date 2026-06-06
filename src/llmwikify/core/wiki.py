@@ -7,6 +7,7 @@ from typing import Any
 from ..config import get_db_path, get_directory, load_config
 from .index import WikiIndex
 from .query_sink import QuerySink
+from .wiki_analyzer import WikiAnalyzer
 from .wiki_mixin_ingest import WikiIngestMixin
 from .wiki_mixin_init import WikiInitMixin
 from .wiki_mixin_link import WikiLinkMixin
@@ -100,6 +101,14 @@ class Wiki(
 
         self._index: WikiIndex | None = None
         self._query_sink: QuerySink | None = None
+
+        # Phase 2 #4 — cache the analyzer instance on the Wiki
+        # so that lint / recommend / hint / detect_X / _llm_*
+        # mixin methods share one WikiAnalyzer (and its
+        # LintEngine) instead of re-instantiating per call.
+        # 16 redundant ``WikiAnalyzer(self)`` instantiations
+        # eliminated across 3 mixins.
+        self._analyzer: WikiAnalyzer = WikiAnalyzer(self)
 
         # Prompt custom directory (optional, from config)
         prompts_config = self.config.get("prompts", {})

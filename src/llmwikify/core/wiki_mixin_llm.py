@@ -201,23 +201,19 @@ class WikiLLMMixin(WikiProtocol):
         data_gaps: list[dict],
     ) -> dict:
         """Use LLM to generate investigation suggestions."""
-        from .wiki_analyzer import WikiAnalyzer
-        return WikiAnalyzer(self)._llm_generate_investigations(contradictions, data_gaps)
+        return self._analyzer._llm_generate_investigations(contradictions, data_gaps)
 
     def _llm_detect_gaps(self, context: str) -> list[dict]:
         """Call LLM to detect gaps between wiki schema and current state."""
-        from .wiki_analyzer import WikiAnalyzer
-        return WikiAnalyzer(self)._llm_detect_gaps(context)
+        return self._analyzer._llm_detect_gaps(context)
 
     def _fallback_detect_gaps(self) -> list[dict]:
         """Basic gap detection without LLM."""
-        from .wiki_analyzer import WikiAnalyzer
-        return WikiAnalyzer(self)._fallback_detect_gaps()
+        return self._analyzer._fallback_detect_gaps()
 
     def _build_lint_context(self, limit: int = 20) -> str:
         """Build minimal context for LLM lint analysis."""
-        from .wiki_analyzer import WikiAnalyzer
-        return WikiAnalyzer(self)._build_lint_context(limit)
+        return self._analyzer._build_lint_context(limit)
 
     def _llm_generate_synthesize_answer(
         self,
