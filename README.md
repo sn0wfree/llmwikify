@@ -70,7 +70,7 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 
 ### Agent Layer (v0.30.0+) ⚠️ DEPRECATED
 **Built-in Agent has moved to an independent project.** Use external AI agents with the MCP protocol:
-- `llmwikify mcp` — Start MCP server for Agent integration
+- `llmwikify serve` — Start MCP server for Agent integration (`mcp` is an argparse alias, removed in v0.34.0)
 - All 28 wiki tools are available via standard MCP protocol
 
 *Legacy Agent is kept for backward compatibility only and will be removed in a future version.*
@@ -158,10 +158,14 @@ llmwikify knowledge-gaps             # Knowledge gap analysis
 
 ### 5. MCP Server for Agents
 ```bash
-llmwikify mcp                        # STDIO (default)
-llmwikify mcp --transport http       # HTTP
+llmwikify serve                      # STDIO (default) — alias: mcp
+llmwikify serve --transport http     # HTTP
 llmwikify serve --web                # MCP + Web UI
 ```
+
+> Note: `llmwikify mcp` is an argparse alias of `llmwikify serve` (Phase 3 #6).
+> Use `llmwikify help` or `llmwikify help --aliases` to see all aliases.
+> The `mcp` alias will be removed in v0.34.0.
 
 ---
 
@@ -351,6 +355,8 @@ Start the unified **FastAPI** web server:
 llmwikify serve --web                  # Starts MCP + Web UI + REST API on http://localhost:8765
 llmwikify serve --web --auth-token=key # With optional API key authentication
 ```
+
+> `llmwikify mcp` is an alias of `llmwikify serve` (removed in v0.34.0).
 
 **Architecture** (FastAPI):
 - 🔄 **MCP Protocol** — `/mcp` endpoint for AI agent integration
