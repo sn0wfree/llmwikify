@@ -1,0 +1,2512 @@
+{
+  "/home/ll/llmwikify/lib/vis-9.1.2/vis-network.min.js": {
+    "mtime": 1776180932.7764049,
+    "ast_hash": "bdb40cde0de5d06838f81e5889f8bd35",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/lib/bindings/utils.js": {
+    "mtime": 1776180932.771405,
+    "ast_hash": "5ba47ef4a0a2adb11d05951545e12e89",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/lib/tom-select/tom-select.complete.min.js": {
+    "mtime": 1776180932.771405,
+    "ast_hash": "16a287f52ebf7f159b49b30a74c0a3ae",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/__main__.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "986d395fb01d67a1b781c172098c10ff",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/config.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "51a94083a67b1fece45dca487391a6d8",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/__init__.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "3b3b4b098e71ff3deefa6c483b5f5bd9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/llm_client.py": {
+    "mtime": 1780622607.7282934,
+    "ast_hash": "1b69a937edc45f506c0db5e279dc093e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/qmd_client.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "137c4a052c5ebfef19634628604ff212",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_relation.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "c87af208915d9f514fcda664007655b1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/relation_engine.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "ac2288eccaf460e8fd66b1bf885fccb6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/principle_checker.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "3947409ebd5929f438aad7946289866a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_analyzer.py": {
+    "mtime": 1780706663.153439,
+    "ast_hash": "ad04bf62aea2bfdc34e6d49b99e322c3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_ingest.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "2abd4c9f810bdce88e9a0b011f2fa0b9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_lint.py": {
+    "mtime": 1780708680.7219064,
+    "ast_hash": "b17495cb453d42738d71a1c11a976ec8",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_link.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "98aa116451f5cd182bd6cfc9df2ec56b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/qmd_index.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "ee267dab6cd700ceb3b0259714a36af7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/watcher.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "11b1bcf2d614535782f2830f1a1b5936",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_query.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "870da2a04bab875f220d332cf9f0f50f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/graph_analyzer.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "e3865084cdbf49d12d574b45dec81aa1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_registry.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "ff0bce4f5655a7290eb29570cec0e7ff",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/synthesis_engine.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "f982bff33eb5f8a63f5e92a92bf31759",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_synthesis.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "eea3178cded98c2b24c188de55ce7286",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_schema.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "aa4faee61dc61967e13eedb6ac8bc4b7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_llm.py": {
+    "mtime": 1780708680.7219064,
+    "ast_hash": "13823a8c59841321c28fed38f25808a0",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/remote_wiki.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "755f6f0b01926792874fd864d91d5f1f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki.py": {
+    "mtime": 1780708680.7219064,
+    "ast_hash": "f2ee3759c1d3f59edf12b9d17f6a9b8a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/constants.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "663c1b3145ab6bf81539c8d35b4062ee",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_source_analysis.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "a8001e4f04c3d4b2c86d537786984c6f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/prompt_registry.py": {
+    "mtime": 1780622235.2922325,
+    "ast_hash": "c92f47b83c006c2a047379c044e700cf",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/index.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "1be4cb655f57f38c9bcad1edf9799169",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_utility.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "572e3bf734262b77cbb4a2ac78e15ed7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/graph_visualizer.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "2464d504d808bce1ee283866347be571",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_page_io.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "ac6b6872ce0da18e45d1cb9bac9ba0b6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/__init__.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "267df2393879f3e89db2e3a3923d8cef",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/query_sink.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "8727a1bc5bcb78f851a2b75d912ee8d1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_instance.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "ac805719eef1a74b88803eb0dd1176ef",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_init.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "a4a09675d4ea873b11cabf0daa344873",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/graph_export.py": {
+    "mtime": 1780621642.83992,
+    "ast_hash": "8de01c61ca895743595874e539842f9e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/protocols.py": {
+    "mtime": 1780708680.7219064,
+    "ast_hash": "e1f2b602e2cc35b1954bbbfe18e760f3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_mixin_status.py": {
+    "mtime": 1780708680.7219064,
+    "ast_hash": "d9870c84361063b5254fe5dc7f933c4a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/wiki_discovery.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "199290aa0a7185897ed184370c327036",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/__init__.py": {
+    "mtime": 1780669429.2265642,
+    "ast_hash": "e9e12f1825b02f2d199177500f0474b2",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/__init__.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "c4c6f7a0c82f6ad081eeb2e6bf8b8140",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/__init__.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "032bbffe095c37c8c1e75a2395dc46c6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/core.py": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "d61ff82a4c4d9a201343358cab839465",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/constants.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "61fc75e1f0ffa2585cf19e6e6da1cd9f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/__init__.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "f444cb38e2884a4a2efd03128b296220",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/http/routes.py": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "98194c5ad6ef7f7f20d2a873f1378e6b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/http/middleware.py": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "87ad4307805616b936e9059c56d68210",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/http/__init__.py": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "f70a774601be331226bfd8b6317c04b3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/utils/__init__.py": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "45224b8fd6859a842404d33d55f9d4c8",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/server/utils/webui.py": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "b333f12629e6e81bc869cd148c4d3bc2",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/__init__.py": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "92ee022964bfd8d6f65fbfbe08a50752",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/server.py": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "d1694f1db5d453d32e08bda47c17b3ca",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/postcss.config.js": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "ef3ba2a81ba19f8ea5ddf625521e96f0",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/vitest.config.ts": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "e5cb98c1a13fe33e5ea1071957bb4b9d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/tailwind.config.js": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "3346df3fd0a1ea3f84440703bf8fd2cb",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/vite.config.ts": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "d7252f389ef697e257a5f528ad3c663c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/api.ts": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "af0e2c2194b18d857bd7cf23eee521a6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/App.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "1310457c740d29e6360b047546078555",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/test-setup.ts": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "00e47f7b9836e8f731101981fa2bb2de",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/main.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "1e967b11e550fb2f03ecbb961aa01481",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/vite-env.d.ts": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "0352474ba2918efe13895edbc3780d94",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/IngestLog.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "e4c3b7fa4e76d96dd77f8b8b6b3c6bf7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/PageTree.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "d7eba4fb0050d9685471e7479c0e4314",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/FrontMatterPanel.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "366c07b88428c4b25af40fd6d49a8a0c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/DreamLog.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "f2fea136002ed82f2260b23942dffd56",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/GraphView.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "d2fd8ab6a6de1dfdf9031c09a8e79d20",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/FileTree.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "e87566c7068f0b2c20d336008c8ff60a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/Toast.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "9d081b619df075ecbb292bdfaa31bf77",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/HealthStatus.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "f98d9892bf0c10e15f25347094632d82",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/SearchBar.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "2bbfeb0457c23d61baa02dc79902523c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/TaskMonitor.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "1efb887b23657b20f30c8dda8d6f61d9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/Confirmations.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "65f4d0a36113cb2869b941681fbaf5ea",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/Notifications.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "b90527ff7827d0339f86ce59b9c61bad",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/KnowledgeGrowth.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "4f4d8c5723b5bbbb48ca4a8d353accf4",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/WikiManager.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "2c1889cb2edfbbdd6f7e8483e9c3a2d0",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/EditHistory.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "4b4d574e65dc3c9946c2d017f5560a7c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/Insights.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "32c2cfaeba1f70d21fb9f6984ddbb308",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/Editor.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "951720d77888e426d3e1f5cc9b1f063e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/CrossWikiSearch.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "e36f42a3329f341fef5d1946689f25e2",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/DreamProposals.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "a255d63f9019697cfaac70d938a56fd2",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/AgentChat.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "6bf53bb6ac6bf3c0a459fda798e05e65",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/components/WikiSelector.tsx": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "f9723eface6fd16e985060ba34aa89f6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/stores/wikiStore.ts": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "f4100913e279647f88522608975fd379",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/Toast.test.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "3b06d64454d5099b2be13f9ec5116ac3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/Editor.test.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "acf5cd3301c037b66e0136d9a6b1159d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/EditHistory.test.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "060fbee549f9020548878febc7583512",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/api.test.ts": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "d6c327e0513828aff7353ceb78bb6585",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/DreamProposals.test.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "39008f19ce13672b579498213af90647",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/App.test.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "aca3bb2ce49e23115da3dff409dc164a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/Confirmations.test.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "2e04c3f08f58902a506f23386a80ccd8",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/src/__tests__/IngestLog.test.tsx": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "19c91098332532595d08dfed653d014e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/lib/marked.min.js": {
+    "mtime": 1776153457.4351213,
+    "ast_hash": "e04ae0bf88da292e65e1e677394f6058",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/lib/d3.min.js": {
+    "mtime": 1776157929.9911418,
+    "ast_hash": "69faba9d2fffc70c04f5620e7076efb0",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/js/graph.js": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "2e49e989559d4ae64c0f5ad2d4ae2601",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/js/app.js": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "81b7c56804d7bd6e7c4418df6606939d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/postcss.config.js": {
+    "mtime": 1780621642.84392,
+    "ast_hash": "470cfd3ee10fbff840b377e769485f3e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/tailwind.config.js": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "f4602f20b48980ca0caeaf055febe442",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/vite.config.ts": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "eba2564965387b3fe2c685c8a0a742bb",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/api.ts": {
+    "mtime": 1780621642.84392,
+    "ast_hash": "01f0df5342350ded658b9659da79fb1f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/App.tsx": {
+    "mtime": 1780621642.84392,
+    "ast_hash": "f468d2af4d353062b34c31746da86afb",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/main.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "6e16c5d60ca046f2c28c1040bc25cc39",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/IngestLog.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "c184636ab68cbbc43ef2c6ce64327968",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/DreamLog.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "b5f270fe6487cbe6dee3b2583d517063",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/Toast.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "4d0b8d49ecfb10d323d7f3ee05deb30f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/TaskMonitor.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "34cf9d55e069856a966664d62571c6d6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/Confirmations.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "33ea179422b3908c1f947172d6b1a147",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/StateViews.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "69edae47816fbbb7d97dc38d3e8f2a03",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/EditHistory.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "df6ff8cfe7e1d95d6194ef16f4ef12da",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/DreamProposals.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "b1245f3095d237f2cd1e34bd8a4e845b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/AgentChat.tsx": {
+    "mtime": 1780621642.84392,
+    "ast_hash": "4599249b717a467be9c2c69c8c734403",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/WikiSelector.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "35e83aecef747c707d701356d97b28f4",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/ToolCard.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "db83f795e6888c1845f0acf9a3c309e2",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Button.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "8334abc905589b20b36f348d21279e5d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Panel.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "110af6f8593d2cdf932c0173c7b56720",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Input.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "74c680279dfcd6fb7dd9cdf3462b3949",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/MessageBubble.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "ac08009bbca567cf2eaa3f2e3016bad3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Card.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "eb28f11bc4671d1819f335b58fbb6595",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Badge.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "70016dafe3521099cb13bb878740ca97",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/stores/agentWikiStore.ts": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "bb3cce28ffbfa3ff1154cfdb4815791d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/runner.py": {
+    "mtime": 1780621642.8379202,
+    "ast_hash": "7cb56c769cd0bcaa5299ef2cd11e0b5c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/hooks.py": {
+    "mtime": 1780621642.8379202,
+    "ast_hash": "1d29dd781f572a36589aa695644cc8c7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/wiki_agent.py": {
+    "mtime": 1780621642.8379202,
+    "ast_hash": "f0df719c8d8e9e5d6673ffe931934b6d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/dream_editor.py": {
+    "mtime": 1780621642.8379202,
+    "ast_hash": "e466c1ae695e1ee954cc90a3e59047b8",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/tools.py": {
+    "mtime": 1780621642.8379202,
+    "ast_hash": "f5fb626dfc4db649de86c12ada1a4779",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/__init__.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "f9447b59bef3ef8c421c1aaf227d4471",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/memory.py": {
+    "mtime": 1780621642.8379202,
+    "ast_hash": "675442571a0c6b39e1d85da7a491388f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/notifications.py": {
+    "mtime": 1780621642.8379202,
+    "ast_hash": "54ee753779dbc05489ec5f452b5aea1f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/scheduler.py": {
+    "mtime": 1780621642.8379202,
+    "ast_hash": "12802bd6a1380704cb203fb8d8833e93",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/db.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "1364c5801ec82466d86668af8c81253b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/adapters.py": {
+    "mtime": 1780666187.8932378,
+    "ast_hash": "60d0fdc2faa6710e132e2e2eb16bc28d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/service.py": {
+    "mtime": 1780666257.0875103,
+    "ast_hash": "08da3791999d0ca7f33abfe0e03a4513",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/__init__.py": {
+    "mtime": 1780666220.0813527,
+    "ast_hash": "d1d50b79071be4da9af8b5d2a75f09ea",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/routes/agent.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "8f70f270fbbc2647e46b8b5610ff496a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/routes/research.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "941562fd02c36a5c4412a74a8d8e22e9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/routes/__init__.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "084352566ca6863b9a2cda46a2b6d624",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/youtube.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "dcff97b90ef6ef7dcba4d7e2e97d1df7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/pdf.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "27150358515eb0eefc1d6ee9f4e5e672",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/web.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "a79271fe175c8c64422dccbf317383e6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/text.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "148ebbc233d3686fb1abb1a3d64b07b3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/__init__.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "b68352ea742dba57699a2752e0a6332e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/base.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "86f0f6396bbcdda390f401a1893deb58",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/extractors/markitdown_extractor.py": {
+    "mtime": 1780621642.8409202,
+    "ast_hash": "bf212d0b7bf8cb63b7dfc761f320e6c2",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/mcp/tools.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "e14009c9086449ffa38db8577a2268dc",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/mcp/__init__.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "509b14c364aa8c7acb7aadd39268103b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/mcp/adapter.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "fcf67780a334e1ff795dba63d65d0796",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/mcp/server.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "409a1bc6d82dfca3e6a842e4c6250567",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/scripts/check_prompt_principles.py": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "9250c2b01e6df5d03454f038c2bd0509",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/scripts/eval_prompts.py": {
+    "mtime": 1780663469.9034448,
+    "ast_hash": "c45ec14edeaa3e8025e0f3c5f933e648",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/archive/llmwikify_original.py": {
+    "mtime": 1780621642.7809224,
+    "ast_hash": "c532ea57e4f747b2033efc565c476fbf",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/examples/basic_usage.py": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "6be84c3774d12d7b02a79f23a70005c9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/examples/mcp_agent.py": {
+    "mtime": 1780621642.7849224,
+    "ast_hash": "3a474b1ffdcfd8d6f2b0971577df5484",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/examples/integrate_with_flask.py": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "c73bc99c21c6ffcc74b90e2966847b68",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/examples/integrate_with_django.py": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "9e34861bcb7503d44f213683aa531973",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/examples/run_server.py": {
+    "mtime": 1780621642.7849224,
+    "ast_hash": "73c007435009364f104183e81affeb8a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_wiki_analyzer.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "6b5417b2657c0ef066ae51b8ab31acc5",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_init_agent.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "553634187a74cb8ef24622023999d0ac",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_relation_engine.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "2b8b33bb90ba68648822b28c7115b21d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_direct_lint.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "00c2de2561f12bde05863d77c8de1250",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v019_harness_regression.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "aa0d719c05dcc30e42f1d17adacd3da2",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_cli_comprehensive.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "eb172e6181bb26f492774a29ccf10385",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v018_prompt_engineering.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "f7fbea00b585891179456bf53b82a163",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v018_integration.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "c754df654cac938e76d6bdf655e1872b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v016_investigations.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "83dd6313d130c74f10d513e310de0106",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_mcp_integration.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "c9ab56bbedc4845e6ea36c922a396a24",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_recommend.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "0b99263236aff1f3f7353b4245203cf4",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v020_markitdown_extractor.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "8f98c9124983d77fd3dea67c7f0c436b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_cli_integration.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "b9a6b4994e53033ff198c6f1e2316c09",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_api_multi_wiki.py": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "51ffe74554a4c03848836316e8f3b057",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_index.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "8b50a01eed85de26327c3e16f7b063f8",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_agent_layer.py": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "862700c05aab9a2ed09ea9375a656995",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v022_relations.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "355adc1a37bac81bcb30066a6f442e80",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v015_features.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "2389d9a26196229bde899ed687938616",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v029_index_enhancement.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "d685b639594943a35978e9e11a2d3e8a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_p0_p3_fixes.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "c16f1d59d9eb8f382df1b98b52de759d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_batch_ingest.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "149f0355f13f51d3dc63120671d03e9e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v025_web_ui.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "40190387e79968242ef78cda15108019",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_source_analysis.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "25511dadcdd594c087efc4ab288e57a1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v019_principle_checker.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "c15d924f7707f45fdb223977f7b4ed33",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_multi_wiki.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "fb97da5354a412e63ccd7a9cec798578",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_p1_features.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "c4c5d0263dcaa1c45b3895d21fcf9484",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_qmd.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "947e541e178a1010899bab356e93e1b1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_cli.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "c528064db81f338163f81e0173caa4c1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_api_routes.py": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "4ebb6fe7cfd1f71d37b2c2ca7c9b8971",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_sink_dedup.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "48e3417168213a8d9a73fdb8248d2649",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_prompt_registry.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "d536c891e14b52ab95fe89c2bcdb9713",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_wiki_server.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "d4a0f200d674cab74b037697ec93f5c0",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v019_eval_prompts.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "9ecae718941465fe59268bb0ab8a7d27",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_p1_3_graph_analyzer.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "f7ffae0ebb273ed93e69d119d11d8b64",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_extractors.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "3df7cc04e9d357864b5c7c8439f06bfd",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v021_watch.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "76d0a58dc3804119f84fc715394e2a33",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_query_flow.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "3ab8cd632d033d8f60e67b23fbcab568",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v026_wikilink_fix.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "7d8961c0674bdeea5029f5185f004c63",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_llm_client.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "543007437d5970523d48d0f431fbd6a2",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v025_service_name.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "946f0ace29b82a6ffc8e94831c80e06d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_sink_flow.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "5f6aa31fd3a609737fd4bf69dd5c3484",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v023_graph.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "00813e044b7974515601b16114bece68",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v027_cli_features.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "b069a215897835cb96911162dee2654f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_v019_wiki_synthesize.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "f973304bd294e4d8c5cd2d8018e4e1a7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_wiki_core.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "0312ca482d936d8822bdc58e78fb169e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/conftest.py": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "e2bab59b811da9e20e3daf60e90edde7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/test_debug.py": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "fa47c1a141accc2063a9edce4742411a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/test_insights.py": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "522877121e4ba936612880e9a8a776bd",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/__init__.py": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/test_editor.py": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "e349f9e79ad5e4345c964b054b2de2db",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/test_searchbar.py": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "c717fcdcf19d048e3b6aa962955b7bb9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/conftest.py": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "fdaa5a41888c55bf7348ffad5daf7c78",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/fixtures/__init__.py": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/mock_llm_framework.py": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "e67c92e91fcda0ea753665cf79f47e8b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/__init__.py": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/CONTRIBUTING.md": {
+    "mtime": 1780621642.7809224,
+    "ast_hash": "c5df95eaefbcb277ed9e45994439f293",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/CHANGELOG.md": {
+    "mtime": 1780621642.7809224,
+    "ast_hash": "38e9518097f63da329ba53c33b2ba8f5",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/MIGRATION.md": {
+    "mtime": 1780621642.7809224,
+    "ast_hash": "a1cc34f37945351741361bb1905f8378",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/README.md": {
+    "mtime": 1780621642.7809224,
+    "ast_hash": "79ef2ecd23de14fcc4ac435c050b4b96",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/ARCHITECTURE.md": {
+    "mtime": 1780621642.7809224,
+    "ast_hash": "ef081ddfa6bfb82de8dea161fef17203",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/generate_wiki_ops.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "b302e8bc99ef1ab764a580da044c7eec",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/direct_lint.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "31efefaa654db7ba2e3264db91631508",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/investigate_lint.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "3956e1682caf37b4047814bae95e1ca1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/ingest_instructions.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "2c8f81ee2528779ebca08ce3d8e2d43e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/wiki_synthesize.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "310d6661ee424476385da86854dc57b7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/wiki_schema.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "db2eb01a7fe75dce789ec6f7dff133c8",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/analyze_source.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "d4fd6f62e688a5c55a8ed63d37305628",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/index.html": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "112fdb0c6b500e6a69ae2ded869d2a3d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/index.html": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "8e07f1bda270ef55de37a0a8d6870f2a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/static-legacy-deprecated/README.md": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "1b96a4b0522ba6dd8179d4b2616cc1f0",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/index.html": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "41c1cf9ef7476555f7d45dc8bc2b12a6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/templates/skill_llmwikify/SKILL.md": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "7de2ab9eeffc18843fd84cccd17e75d9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/templates/skill_llmwikify/resources/cli-reference.md": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "40d7723a88c190d2d83c0a52f758bc31",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/archive/reports/FINAL_SUMMARY.md": {
+    "mtime": 1780621642.7809224,
+    "ast_hash": "2dc8d138c47ac13e39d07e9471b9999f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/archive/reports/MODULARIZATION_REPORT.md": {
+    "mtime": 1780621642.7809224,
+    "ast_hash": "254a0c3d07a61c20dca0afda8c0d5385",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/archive/reports/README_UPDATE_REPORT.md": {
+    "mtime": 1780621642.7809224,
+    "ast_hash": "6375577b0bcf5df6dc452a0b3f052443",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/archive/reports/PROJECT_CLEANUP_REPORT.md": {
+    "mtime": 1780621642.7809224,
+    "ast_hash": "d0a7bd36742deab6700ad161a2b13d05",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/archive/reports/REFACTORING_REPORT.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "9d8ce09c4ce5a6cda2ef41c46f3de1c3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/archive/reports/REFERENCE_TRACING_DISCUSSION.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "f84d6bd9fa9c0b303bdcd8adacbbed91",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/archive/reports/MCP_CONFIGURATION_REPORT.md": {
+    "mtime": 1780621642.7809224,
+    "ast_hash": "290fa789800301e6e41c5aa865ca8b2c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/KNOWN_ISSUES.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "6f802c3ffe43540f7d2fffe74831f7c6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/MCP_SETUP.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "25d098c08c061e401d5fca4f5c6b450f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/CONFIGURATION_GUIDE.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "954d3ba95f75b01eab751e81293db32d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/P3_INGEST_LINT_DESIGN.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "91caf2f4fe434cfc326cdd3861b81595",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/QMD_SETUP.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "da68d73f8a28e6e4600d565767d719f1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/CONFIG_GUIDE.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "c66ff00b7611a4df6d0ac78b82ea2b0e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/REFERENCE_TRACKING_GUIDE.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "a53a8a11e1b7c96f42cc8686cce44cf5",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/WIKI_LLM_PROMPT_ARCHITECTURE.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "4ab0808ea194f91ba3193109c8e43f96",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/agent-framework-design.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "7ff59b408f33e00af058d57d102fbb28",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/AGENT_INTEGRATION_PLAN.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "f7cf5fd9526af3eff7dd0593ae6238f1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/agent-ui-optimization-plan.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "1b11dd37e9033e14992a7ff2342ab3af",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/SINK_DESIGN_DECISIONS.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "e2765a50346d5f48b034acc07e16924f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/agent-backend-implementation-plan.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "2ea3ba52b79fe6105762d637a914e968",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/WEBUI_UNIFIED_SERVER.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "8b2014b7c4e27d09914f07aa387f7d8e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/LLM_WIKI_PRINCIPLES.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "26829b76ecf6d56df04a1de3e45d4afd",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/MCPORTER_DEPLOYMENT.md": {
+    "mtime": 1780621642.7819226,
+    "ast_hash": "4c0941ac95c48d3fc8c53ff1f8234225",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/auto-research-v0.24.0.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "c418922a9bd60bc805aaf06c264ec5b6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/PROJECT_STATUS_0.30.0.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "851fbcb738704a5bcc6a822a8624df47",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/v021-v023-roadmap.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "afafeb4954e8d64de2c765414757fe80",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/v0.15.0.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "1562f7f634b0dda675e667d9d3a6edc0",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/MULTI_WIKI_PLAN.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "97bbece29aae4bdce35aa3cee8268be2",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/examples/personal-kb.yaml": {
+    "mtime": 1780621642.7849224,
+    "ast_hash": "3411d0b5234b39b02f1f8c8a740ba7a0",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/examples/research-wiki.yaml": {
+    "mtime": 1780621642.7849224,
+    "ast_hash": "ca8976009ac77b5a2fe0cf195b54b3a9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/examples/mining-news-wiki.yaml": {
+    "mtime": 1780621642.7849224,
+    "ast_hash": "77560665483caaf27a36d5ff9b8618e0",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/examples/README.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "8261fdb096866a02d344b28bfa019f35",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/examples/project-docs.yaml": {
+    "mtime": 1780621642.7849224,
+    "ast_hash": "f5eac831c0e1cafea39f29a0e6cc12e7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/wiki/log.md": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "9919013cf5f26f3c00ef41ab9f7042e6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/wiki/index.md": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "eabb2a9dd7d85ace2dff892ea9d34a6c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/insights-debug.html": {
+    "mtime": 1780708680.7229064,
+    "ast_hash": "04e4771b1eea749e8caf3cd1a0c38c02",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/04_wiki_ops_generation.yaml": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "c527e9736a34951db0a53537bb12b076",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/01_entity_extraction.yaml": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "f748722574a366f7b03073a42f4190a3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/05_synthesize_answer.yaml": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "6f29560c69fd30121511d9cf66caaabd",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/03_data_gap_detection.yaml": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "88f2199342cce34cdf4cc9a3b573b620",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/fixtures/golden_sources/02_contradiction_detection.yaml": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "dbc5320154327c6f39fb212b3e150962",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/editor-debug.png": {
+    "mtime": 1780621642.8489199,
+    "ast_hash": "9142bc2561091e209f962d51a3886198",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/editor-content.png": {
+    "mtime": 1780708680.7229064,
+    "ast_hash": "43962fee4043e744d11e73babc17fe99",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/graph-analysis.png": {
+    "mtime": 1780708680.7229064,
+    "ast_hash": "9b5c957a845c46b38839069e96f8f4b4",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/synthesis-analyze.png": {
+    "mtime": 1780708680.7239063,
+    "ast_hash": "313083af985d9b45e030fa1694ca8ac4",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/insights-debug.png": {
+    "mtime": 1780708680.7239063,
+    "ast_hash": "65137fbab62d4f3dd1fb9d234efd7883",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/insights-loaded.png": {
+    "mtime": 1780708680.7239063,
+    "ast_hash": "65137fbab62d4f3dd1fb9d234efd7883",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/e2e/screenshots/search-results.png": {
+    "mtime": 1780708680.7239063,
+    "ast_hash": "b6c032190f2e6d7d0275d8007da0c3dc",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/opencode.json": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "018c57dee6f707ada5d61f2c06966bca",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/llm/context_windows.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "7e83203c6d75144bbf3abf8331c38522",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/llm/budget_decorator.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "85789e13ca58da1008ecf419c09fb6f3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/llm/__init__.py": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "06c2094b0d900ec9020c171f9c195e4e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/tsconfig.node.json": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "767b2e9abe6452170cdc399ca052cfbc",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/package.json": {
+    "mtime": 1780621642.8469198,
+    "ast_hash": "768b74936e6b66f21db76977beedb8bd",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui/tsconfig.json": {
+    "mtime": 1780621642.8479197,
+    "ast_hash": "b661fac7c0601ca7f31d3eade4b0367e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/tsconfig.node.json": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "1c139bab5d1a90787cbb951073a5abde",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/package.json": {
+    "mtime": 1780621642.84392,
+    "ast_hash": "a8c976e52e462f95ea3d01b50040b291",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/tsconfig.json": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "c96e8533940bbbf5b155ecee0214ab86",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ResearchRating.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "53eb1db5856802c55f171d3c71564db8",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ReportDetail.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "37a10d24b708bae65ee524e44f98f87c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/Backdrop.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "c24f5338265283ff101e7849e5eca127",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/SaveToWikiModal.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "1c303778bab3777027e814d78544a1b6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/LLMSettings.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "a77d6b1522c7ceab8de35350794c6a51",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/WikiViewer.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "2d53de1ef198487784d5ec1844230004",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/SlidePreview.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "dc5f207fc226bff2b8ec8d46afc6e178",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/PPTSidebar.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "0dce15d6d34864999763fdc708c706a3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/SessionSidebar.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "40f14e4ca0bac59f5ba368ed305b852d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ConfirmationModal.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "c798c4b8eb30dfa41d13c855f7b7f0ba",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ResearchPanel.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "4c9a345de4c3546c24cf3051b92d48c7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ThemeSelector.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "8318c16152c4a9f7e0c77eedfd1e4a02",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ToolsRail.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "00b9c1a77f5bb16681009747c60286f4",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ResearchDetail.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "ada6b82e4157ce2ca9e0d5062d6a829a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/PPTGenerator.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "3df94cb310d6faef103870731f3af813",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/OutlineEditor.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "ef6ebfde3e3530b79e32b75bdcc70754",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/CitationRef.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "a2f021f3c07a324b972a22cf79e61b0d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Select.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "852e89fbccedec30273bf580f419093c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/ui/Toggle.tsx": {
+    "mtime": 1780621642.8459198,
+    "ast_hash": "205251b04f4c59fe0e6aeff28bf6a54c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/config_manager.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "fb9aba2b4fdd7c23f1626442658a979a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/routes/ppt.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "337ec04b74dad14da9f7a45ad89f65fb",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/providers/xiaomi.py": {
+    "mtime": 1780666257.0695097,
+    "ast_hash": "e2d3e1dfe303fc515da9b5258edc6f4c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/providers/__init__.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "e776bb2b3a39819d4d546d0fda192e96",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/providers/registry.py": {
+    "mtime": 1780666257.0505092,
+    "ast_hash": "36474aad65db84c33d9fa1f1dba3ea2c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/providers/base.py": {
+    "mtime": 1780666257.013508,
+    "ast_hash": "33bc62dc3894105730ee35200264abab",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/providers/minimax.py": {
+    "mtime": 1780666257.0325086,
+    "ast_hash": "ae13a7827efb9de6951236f1f4fb9efa",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/gatherer.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "890d062f4f8691be4f4c7c1cdbece38b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/web_search.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "307a0e964cb206cb8fecfee7b45eab4a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/engine.py": {
+    "mtime": 1780666257.105511,
+    "ast_hash": "c50ac00be3fb84cd3e30714a2c1deef2",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/source_filter.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "42b76ad71e9ae738b8055b03d927f77a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/session.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "b99342b0d01a26654432f0caea73d0be",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/synthesizer.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "3ea392a96e6ae10435fac75add469cf5",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/quality_gate.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "41c1cfcefa009196b41911f6b0aba47f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/config.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "fa272439df1f35b53a791539dfdf8215",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/task_manager.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "e9f22a8bee0f327ad41809156c5afbb3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/analyzer.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "ac4fe5b3589b9d06563c08bb3816479d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/report.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "cbabf6142039433f2f7e3f99c88c03b1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/__init__.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "e8f7bb60c9cc19aa284c5ad636c25748",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/retry.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "262b09ed1ab180c8a584e2219d0cbdea",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/research/review.py": {
+    "mtime": 1780621642.8369203,
+    "ast_hash": "792f750e3fd5905eeb477c1498c26234",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/ppt/schema.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "8b2502f82cde10e0d9214a17201a5142",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/ppt/engine.py": {
+    "mtime": 1780666257.1225114,
+    "ast_hash": "00590922bad8316536d3e9d037358f25",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/ppt/rules.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "548cae240469735e676a85fe901fe331",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/ppt/task_manager.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "d3eed4700f07effe1ced458fa0d427a7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/ppt/__init__.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "9012162708b270a959a186664967ecd7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/ppt/themes.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "1160f1a4241d6adf06f2d8bd7c51823d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/templates/claude_mcp.json": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "85b9bb930e5523154f2ccc7c858979cd",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/templates/codex_mcp.json": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "e62de6bb7d3608833d6513231ae38984",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/templates/opencode.json": {
+    "mtime": 1780621642.84292,
+    "ast_hash": "4ca23e2213b76ce9e2f45a0605204c3d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/.opencode/package.json": {
+    "mtime": 1779977433.6777487,
+    "ast_hash": "970ee6b31d6094f6c41df4e55bb52b4b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_research.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "e44138532d22c8c96e1a7989b26282a4",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_xiaomi_provider.py": {
+    "mtime": 1780621642.8529196,
+    "ast_hash": "4c36f822e2eb7a29e1e9538bd90f2d14",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_ppt_rules.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "784b6aab3884d146bcb6abf07d94348c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_agent_db.py": {
+    "mtime": 1780621642.8499198,
+    "ast_hash": "4321073322c559251f581d80bd75d1fb",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_ppt_prompts.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "da1a4028744d99565ffcc520cb5d5a2f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/.readthedocs.yaml": {
+    "mtime": 1780621642.7799225,
+    "ast_hash": "81876b242ab86ad955530179108898fe",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/html-ppt-landscape-research.md": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "13e87ffb06e36a6e86eac69af571ccf5",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/select_sections.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "88950b857a75bb88e305a1e99aa68e6c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/research_report.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "916170296659a4dcf4377ed60cbe96d1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/research_replan.yaml": {
+    "mtime": 1780663286.4858716,
+    "ast_hash": "0ba7b3b6c6878bb427a4b9c2a212471a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/research_review.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "739321f39044ce4d166f967407961995",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/research_revise.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "67a954fc009c05390cb3e2e5c540c341",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/research_plan.yaml": {
+    "mtime": 1780621642.8419201,
+    "ast_hash": "25027dce3bec5c04dbde7ec5ac8c87cb",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/.opencode/plans/react-research-engine.md": {
+    "mtime": 1780621642.7799225,
+    "ast_hash": "ad5882fe602e5772040b8dfecfe59cea",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/workflow-optimization-plan.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "081895b7f3646d7063cc966598553a37",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/deep-research-implementation-plan.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "b5a29ee81cabe1d8c2cdff16c5474a63",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/react-quality-gates.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "c4b189e4d93fba6df8f0ba4afcbf265b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/chat-redesign-v0.1.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "98d7eb680e1948a5c3a983b5b49f9968",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/issues.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "648b21e284f0d34f2d0dc14ac5e0e3b9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/stage-pipeline-ui.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "79f28da0c09f46019637892ce87eb858",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/ppt-v0.6.2-patch1.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "f5389a6fd01cc3bbee07668b7819997c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/deep-research-analysis.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "4bddb8fdbe03677c0aca9064f6ab3c16",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/in8-entity-resolution.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "a751260bb39d4a071117e237d8cbee8c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/ppt-generator.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "4e26ec219d117741a60144373c40620c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/react-research-engine.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "b77d31fb3336e9088785f1752ce6b43f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/deep-research-display-language.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "e2197a98e266211607e6db545fe3c4cf",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/.github/workflows/prompt_quality.yml": {
+    "mtime": 1780621642.7799225,
+    "ast_hash": "47cddc594641f75e5ac2386c835a5dd9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/.github/workflows/publish.yml": {
+    "mtime": 1780621642.7799225,
+    "ast_hash": "e42e9af14dae43e717e0340889c841f8",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/.github/workflows/tests.yml": {
+    "mtime": 1780621642.7799225,
+    "ast_hash": "0c41a21494f89a036a07e00c9fcedb00",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/.github/workflows/lint.yml": {
+    "mtime": 1780621642.7799225,
+    "ast_hash": "3af044894b2cf68aa1964941a11c7bf3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/PPTChatPanel.tsx": {
+    "mtime": 1780621642.84492,
+    "ast_hash": "245920c66091d7b617bd19270e7fa43c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/ppt/harness.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "7311ecc8f9a288b899f386b65e3cc201",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/ppt/chat_routes.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "000624a4e3eaa6571948bd91156cc585",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/ppt/chat_router.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "7a7c1cd90def54d84471aae2a5f93242",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/agent/backend/ppt/chat_engine.py": {
+    "mtime": 1780621642.8359203,
+    "ast_hash": "c29c92187bb8389ced62d24086a450da",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_ppt_chat.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "255590940dc12ac4ba1b192211091d1d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/pptchat-harness-v0.7.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "869fd867769658fda0970d38fd5fe09c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/db_migrations.py": {
+    "mtime": 1780652044.712294,
+    "ast_hash": "df0c8ba86111d817b7bf7fe1a7475cc3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/gatherer.py": {
+    "mtime": 1780621642.83892,
+    "ast_hash": "43c20e29af36bc24d701e48dd2f3d528",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/web_search.py": {
+    "mtime": 1780621642.83892,
+    "ast_hash": "307a0e964cb206cb8fecfee7b45eab4a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/db.py": {
+    "mtime": 1780645170.3053272,
+    "ast_hash": "a263410fe8407ab87d8846cae19c7f0a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/engine.py": {
+    "mtime": 1780709608.5886238,
+    "ast_hash": "45c6d456ca8a715055b52098deac996f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/actions.py": {
+    "mtime": 1780666071.5382583,
+    "ast_hash": "eb65390ba401c8330fa75bc6432c3dcf",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/prompts.py": {
+    "mtime": 1780660508.4141967,
+    "ast_hash": "cb0ac41f89f8d032c15f0afa9493545d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/state.py": {
+    "mtime": 1780662260.1415098,
+    "ast_hash": "9a2e46bd25e60fefaf7a14a5b25fecf4",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/source_filter.py": {
+    "mtime": 1780621642.83892,
+    "ast_hash": "1382ba6f0d029d1065c5e139c9bac9c4",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/routes.py": {
+    "mtime": 1780653050.3267944,
+    "ast_hash": "5d3fa9e4a4370dd8472af750358af2b7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/retry_managers.py": {
+    "mtime": 1780660223.538084,
+    "ast_hash": "a343347f90b105b8da8d9e1b4560cf3f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/session.py": {
+    "mtime": 1780621642.83892,
+    "ast_hash": "b68485e62326380f9254837f0a55a8ab",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/synthesizer.py": {
+    "mtime": 1780621642.83892,
+    "ast_hash": "52875c51b966a13651e345cfbe3e18ec",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/quality_gate.py": {
+    "mtime": 1780621642.83892,
+    "ast_hash": "2d019aa502db62c4dc75a25325749bd5",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/config.py": {
+    "mtime": 1780654850.6096787,
+    "ast_hash": "01af8a112d11ca164a00c1ca36da6d76",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/task_manager.py": {
+    "mtime": 1780643321.4460104,
+    "ast_hash": "8d076d5038aeb4fd84de35371f9c77b6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/analyzer.py": {
+    "mtime": 1780621642.8379202,
+    "ast_hash": "7a4f180434b2012bd14de56f148975dc",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/clarifier.py": {
+    "mtime": 1780662594.737258,
+    "ast_hash": "4f8d0b4ad44dd84543e2daff04ae6f13",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/structure_validator.py": {
+    "mtime": 1780621642.83892,
+    "ast_hash": "e814def5df406f21441a8b9e0ee0111d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/report.py": {
+    "mtime": 1780662604.4769065,
+    "ast_hash": "31f4cc7874a9418702ddc6bb2e427c3d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/engine_helpers.py": {
+    "mtime": 1780666094.0833492,
+    "ast_hash": "1ae5ce6a0ae3a81d84324639f17d866c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/__init__.py": {
+    "mtime": 1780662290.4131951,
+    "ast_hash": "6ab6c6bd03625cb26d85f8bdbffac1a3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/llm_step.py": {
+    "mtime": 1780662406.3144002,
+    "ast_hash": "176f5beb9d4b0f668e5ec7077a35d62a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/review.py": {
+    "mtime": 1780662620.9983141,
+    "ast_hash": "8b906f4c2dd3e61293159f53e86e3396",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/_json_utils.py": {
+    "mtime": 1780621642.8379202,
+    "ast_hash": "3381950139c765bb30a2e81e932960be",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/reasoning_checker.py": {
+    "mtime": 1780621642.83892,
+    "ast_hash": "304ee7e06f57ab468367aec12d014412",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/AutoResearchPanel.tsx": {
+    "mtime": 1780654999.5567713,
+    "ast_hash": "c0a49b57335952bd12dac141fa7e1d66",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/web/webui-agent/src/components/AutoResearchDetail.tsx": {
+    "mtime": 1780621642.84392,
+    "ast_hash": "1450feba00b45abcabc0612a109f987e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/scripts/repair_corrupted_ppt_task.py": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "3d683c251b88f6d268189d25288ae7d1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/scripts/migrate_autoresearch_v3_to_v4.py": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "a081ce150a61fb1aef1efc0965afd1de",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/scripts/fix_swot_slide.py": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "5c6dc5e08db7711c8bc8996f6b4b003e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/bugs/autoresearch-7fe6f04f-partial-completion.json": {
+    "mtime": 1780644830.1753833,
+    "ast_hash": "bcf2bdcfbc179492730fc48b63e06bba",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_llm_step.py": {
+    "mtime": 1780660808.3103898,
+    "ast_hash": "7ac902b03f6756860bd5133702c971f9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_autoresearch.py": {
+    "mtime": 1780661333.7124016,
+    "ast_hash": "965006c55b787c6c864135a1cec72f83",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_resolve_llm_params.py": {
+    "mtime": 1780622001.4911973,
+    "ast_hash": "368a7081839a6d6ce8fe215478587ff3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_research_save.py": {
+    "mtime": 1780621642.8519197,
+    "ast_hash": "9f9d20ccebd97129d2a97a00700bbe70",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_ppt_slide_layouts.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "8d4aed460d6bfe3a959016611f59a2f1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_json_utils.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "097fd6cf4c8ecdbabcbe5637d7ca0bd0",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_prompt_refactor_integration.py": {
+    "mtime": 1780663399.0685265,
+    "ast_hash": "2fca0cef91021a95c82340bbe4f9559f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_yaml_content_sync.py": {
+    "mtime": 1780663372.5303106,
+    "ast_hash": "ea1072daab18a9a8b283f0579547fd8b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_ppt_chat_presentation_persistence.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "36c7f13ca0280cd496282e244f4b9fd1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_migrate_autoresearch_v3_to_v4.py": {
+    "mtime": 1780621642.8509197,
+    "ast_hash": "84a0937f4d12ccca30ce24582e224a7b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_prompt_system.py": {
+    "mtime": 1780660168.7139199,
+    "ast_hash": "0f709b581f09328ba1ea671bafd02194",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_llm_metrics.py": {
+    "mtime": 1780662720.1828418,
+    "ast_hash": "d9d0bef2e8e63810d943cf499d62e78e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/research_clarify.yaml": {
+    "mtime": 1780663268.9433973,
+    "ast_hash": "d3cd8796c8a7bdd0ee63f08c8dd655bf",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/prompts/_defaults/research_reason.yaml": {
+    "mtime": 1780660990.9306538,
+    "ast_hash": "cbaaf82bc08810971106339e9a27e962",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/README.md": {
+    "mtime": 1780621642.8379202,
+    "ast_hash": "823ff0f3f480e8ff7a3e84b5abe54dfe",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/74759e7441a3.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "cb9f8b9037fec890c0a5adb3b15808f7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/4be795183815.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "92c51ad1b4006fe1f368a2b1bed258c6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/0458187d96e6.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "3cacd0ffdf616db1ca23725792cdb789",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/a3e57b2d34ae.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "3532106356ffe70c12a2699cb5239cba",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/e848df294d94.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "3219e781e0a6b7a24d2381883e172b67",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/19ebffecda2c.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "6222197e91da600942091e33c574ead7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/805e01d0d19d.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "abbba6b38f3a9c5c1323ca5c22646129",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/206f001dabf3.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "deb40d58d821b25507e099c2b2b066c1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/4f1e1821b20f.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "ea6676ad647c059b07771bf9de129f6b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/7fdaad295bd4.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "e7578ab0bd619f1bff61def1e9b33575",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/1ae625c9bada.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "8175b08d62f581cbc7fa887a47d6bfca",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/5221a093e2a2.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "3b2149facfb77de8fa7e225d9827e70c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/5116fe316b43.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "c067c05d57a6ebb9d06e9251f0d9e7dc",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/daf1f8212b3b.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "b3874c9fcf410139912db4f44eb8178c",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/raw/research/e78ff86212a1.txt": {
+    "mtime": 1780621642.8349204,
+    "ast_hash": "2b4327809a4b01afa2c4c5490a4d379d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/autoresearch-phase1-status.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "09b6c314b89ee293e3e3b3a6a4ac6e03",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/refactoring-engine-py.md": {
+    "mtime": 1780621642.7839224,
+    "ast_hash": "c267dbc070d1fd2376a90e697a98fb03",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/autoresearch-structured-reasoning.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "b78d07d97f93ca31149324d1099d3cdc",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/docs/plans/ashare-strategy-building.md": {
+    "mtime": 1780621642.7829225,
+    "ast_hash": "dc150c140a4115e2ef1d0c48fd12f9c6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/lint/__init__.py": {
+    "mtime": 1780706262.4664893,
+    "ast_hash": "872cbda2c327067d45b03e6d3491c721",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/lint/rules/missing_cross_refs.py": {
+    "mtime": 1780706370.1392512,
+    "ast_hash": "242ff9dfe09b8e52f152d457cea95eed",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/lint/rules/query_page_overlap.py": {
+    "mtime": 1780706353.304597,
+    "ast_hash": "002a30e5dc8d26eae3c1e393cdfcbd71",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/lint/rules/data_gaps.py": {
+    "mtime": 1780706419.7112422,
+    "ast_hash": "eb6e4e57b9439fb0984d222b65974ff7",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/lint/rules/knowledge_gaps.py": {
+    "mtime": 1780706450.1226292,
+    "ast_hash": "86020c71d8d835194afe82d9bb5618a9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/lint/rules/dated_claims.py": {
+    "mtime": 1780706336.367946,
+    "ast_hash": "ad2c539369ecddcd0f2f90be1aa119fe",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/lint/rules/outdated_pages.py": {
+    "mtime": 1780706434.0709522,
+    "ast_hash": "b92861f0dd8228ca41916640e9c62a81",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/lint/rules/__init__.py": {
+    "mtime": 1780706278.4621525,
+    "ast_hash": "02218e29990cda1c4f065351112152c1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/lint/rules/redundancy.py": {
+    "mtime": 1780706464.8963327,
+    "ast_hash": "3b202039147ddb529bb53c05f76f75e3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/core/lint/rules/potential_contradictions.py": {
+    "mtime": 1780706398.9486632,
+    "ast_hash": "5b6d6677234840772491fd506f90ae8f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/_output.py": {
+    "mtime": 1780739582.5075557,
+    "ast_hash": "0cc05992e475a4306c96a9042b97489d",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/_config.py": {
+    "mtime": 1780667643.1223662,
+    "ast_hash": "70b18525a7ae6de83484238776f71bf1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/_app.py": {
+    "mtime": 1780739599.0721025,
+    "ast_hash": "3229614e385f03bdcf6f2f83408a8162",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/_base.py": {
+    "mtime": 1780667604.2898939,
+    "ast_hash": "380ec8f53779db975a02067fbb21faff",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/fix_wikilinks.py": {
+    "mtime": 1780669237.5414503,
+    "ast_hash": "cdac449a5db8445a76314c8cb6e8c069",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/log_cmd.py": {
+    "mtime": 1780669194.8575685,
+    "ast_hash": "18e8ec8140d5aa28fb8befc03e4b7ee6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/suggest_synthesis.py": {
+    "mtime": 1780705023.0310626,
+    "ast_hash": "325f043c1fd32f9fafb0984cc0b4c764",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/references.py": {
+    "mtime": 1780705112.0084083,
+    "ast_hash": "948e33a4712240051622b38217c35ceb",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/db.py": {
+    "mtime": 1780705252.2580369,
+    "ast_hash": "fdce6afeda8a25f55a9eb9ee371d7793",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/synthesize.py": {
+    "mtime": 1780704884.6303341,
+    "ast_hash": "f733974a427b8fe7ccb990facd890d6e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/analyze_source.py": {
+    "mtime": 1780704969.6351292,
+    "ast_hash": "3f7e75d74a069a774676204bbcfe6317",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/batch.py": {
+    "mtime": 1780739682.6758187,
+    "ast_hash": "2b720d09584ddcb242c721f6f905c317",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/graph_query.py": {
+    "mtime": 1780739635.4221087,
+    "ast_hash": "93685998f6ede414852f41595fa23cdb",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/knowledge_gaps.py": {
+    "mtime": 1780704985.0642202,
+    "ast_hash": "228f9512792a0063f9dad12c3eefeed9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/ingest.py": {
+    "mtime": 1780739745.3281112,
+    "ast_hash": "56d854f1b2585b133b70fcbc0c7fb6cd",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/lint.py": {
+    "mtime": 1780705082.7068825,
+    "ast_hash": "0f462c062faf56ad7256c339b8c0c786",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/read_page.py": {
+    "mtime": 1780669062.3991265,
+    "ast_hash": "db1653a7f50950d11a7e8ed915951dc9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/build_index.py": {
+    "mtime": 1780669217.9299626,
+    "ast_hash": "a43f2240f7409f423036de788af6a6d9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/wikis.py": {
+    "mtime": 1780705168.8836954,
+    "ast_hash": "f15fac32a70d881b98a1fa289886af91",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/graph_analyze.py": {
+    "mtime": 1780705004.7350886,
+    "ast_hash": "0eacd2c0d880a998ea0579e1748f6529",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/init_cmd.py": {
+    "mtime": 1780669123.182476,
+    "ast_hash": "1b7fa400b095cd02e357b8a2ee923d85",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/search.py": {
+    "mtime": 1780669467.7946036,
+    "ast_hash": "610546d53acbb5bbbadbe216a89c684a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/status.py": {
+    "mtime": 1780669505.5556688,
+    "ast_hash": "3bdbf9a1b98cc6d7d89ce7547faaf1ee",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/report.py": {
+    "mtime": 1780704896.6661963,
+    "ast_hash": "b09beb24a5ba740747163737a0fb0264",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/write_page.py": {
+    "mtime": 1780669177.0830379,
+    "ast_hash": "78f018c731fd357b1df97eeb42c2c728",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/export_graph.py": {
+    "mtime": 1780704951.0025709,
+    "ast_hash": "7933d5aa126e13e71f1d355fc03a4c3e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/__init__.py": {
+    "mtime": 1780705753.7924385,
+    "ast_hash": "77718de1f482f7f5a5873de4468b68fc",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/sink_status.py": {
+    "mtime": 1780669094.785243,
+    "ast_hash": "e228b754bc878be119842603b2a8f092",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/community_detect.py": {
+    "mtime": 1780704915.608979,
+    "ast_hash": "5399fc9e06da24012b0066c5af0b0451",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/qmd.py": {
+    "mtime": 1780705225.2661827,
+    "ast_hash": "bcf149527936ac9165f60fb51377c6b3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/watch.py": {
+    "mtime": 1780705046.4727838,
+    "ast_hash": "69250e7b481c4b52110f9054cd6b0093",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/cli/commands/serve.py": {
+    "mtime": 1780705198.313363,
+    "ast_hash": "7730fd7e184b4543639e655e58f6fd0e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/llm/streamable.py": {
+    "mtime": 1780665964.0430834,
+    "ast_hash": "175ded3e5ed3ce91387132f821ec6a74",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_autoresearch_uses_new_llm_home.py": {
+    "mtime": 1780666158.6481318,
+    "ast_hash": "25d0a69a636dae210ab2951e3c70078b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_deprecation_shim.py": {
+    "mtime": 1780666327.5903792,
+    "ast_hash": "9eb0af744d5499c6bbbb91e975972840",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_cli_registry_dispatch.py": {
+    "mtime": 1780705631.2198665,
+    "ast_hash": "c877f0c78f211c82b4a92a6c20c64527",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_streamable_canonical_home.py": {
+    "mtime": 1780665978.3537235,
+    "ast_hash": "875e4d9aab29502398066332cad4b61f",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_simple_commands_extraction.py": {
+    "mtime": 1780669570.9440634,
+    "ast_hash": "a48eee920f64c5ba81e97b49d59976c1",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_lint_engine_aggregator.py": {
+    "mtime": 1780708680.7249062,
+    "ast_hash": "4734bba34d44dad13c847b0455e9466e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_cli_framework.py": {
+    "mtime": 1780667713.29039,
+    "ast_hash": "cb1fcc0eac5af59a2eedc0b1f1d6d31b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_lint_engine.py": {
+    "mtime": 1780707063.2203002,
+    "ast_hash": "92cb852f28a22ef682edabd60f6f2c63",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_provider_registry_compat.py": {
+    "mtime": 1780666518.9976132,
+    "ast_hash": "ba4c6a63a99b25ddf2a26f79ec284cf6",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/PLAN.md": {
+    "mtime": 1780740158.0148864,
+    "ast_hash": "070f3457a4e1c37bdb4f586bf336c78e",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/observer.py": {
+    "mtime": 1780709535.94558,
+    "ast_hash": "ffd42801fac11cc2243a1915314a862a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/resume.py": {
+    "mtime": 1780709562.8928475,
+    "ast_hash": "27f3ec1298d41ec55ccebcfe44e0bc8b",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/reasoner.py": {
+    "mtime": 1780709123.097236,
+    "ast_hash": "ff82cadf4aaa153a2c39a1feb38c4e0a",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/src/llmwikify/autoresearch/gates.py": {
+    "mtime": 1780709310.4151037,
+    "ast_hash": "9be71587d240efe5308c1a7182487e91",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_engine_observer_resume.py": {
+    "mtime": 1780709687.2735667,
+    "ast_hash": "f2eddf33e703b6f5c7fa9fb1fa43da94",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_wiki_engine_caching.py": {
+    "mtime": 1780708759.624354,
+    "ast_hash": "50eb10222752567e44aaa220219c5846",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_engine_gates.py": {
+    "mtime": 1780709402.7603388,
+    "ast_hash": "753030542b005d18e1696a3ac0e094c9",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_engine_reasoner.py": {
+    "mtime": 1780709218.8240037,
+    "ast_hash": "bbea94e9f7ead5a67a665140699274d3",
+    "semantic_hash": ""
+  },
+  "/home/ll/llmwikify/tests/test_error_log_unification.py": {
+    "mtime": 1780740084.8234034,
+    "ast_hash": "3ae24c901bcb3f93943bdc39dfd2fe0f",
+    "semantic_hash": ""
+  }
+}

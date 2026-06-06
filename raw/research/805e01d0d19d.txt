@@ -1,0 +1,187 @@
+Collection<T>.RemoveAt(Int32) Method
+Definition
+Important
+Some information relates to prerelease product that may be substantially modified before itâs released. Microsoft makes no warranties, express or implied, with respect to the information provided here.
+Removes the element at the specified index of the Collection<T>.
+public:
+virtual void RemoveAt(int index);
+public void RemoveAt(int index);
+abstract member RemoveAt : int -> unit
+override this.RemoveAt : int -> unit
+Public Sub RemoveAt (index As Integer)
+Parameters
+- index
+- Int32
+The zero-based index of the element to remove.
+Implements
+Exceptions
+Examples
+The following code example demonstrates many of the properties and methods of Collection<T>. The code example creates a collection of strings, uses the Add method to add several strings, displays the Count, and lists the strings. The example uses the IndexOf method to find the index of a string and the Contains method to determine whether a string is in the collection. The example inserts a string using the Insert method and retrieves and sets strings using the default Item[] property (the indexer in C#). The example removes strings by string identity using the Remove method and by index using the RemoveAt method. Finally, the Clear method is used to clear all strings from the collection.
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+public class Demo
+{
+public static void Main()
+{
+Collection<string> dinosaurs = new Collection<string>();
+dinosaurs.Add("Psitticosaurus");
+dinosaurs.Add("Caudipteryx");
+dinosaurs.Add("Compsognathus");
+dinosaurs.Add("Muttaburrasaurus");
+Console.WriteLine("{0} dinosaurs:", dinosaurs.Count);
+Display(dinosaurs);
+Console.WriteLine("\nIndexOf(\"Muttaburrasaurus\"): {0}",
+dinosaurs.IndexOf("Muttaburrasaurus"));
+Console.WriteLine("\nContains(\"Caudipteryx\"): {0}",
+dinosaurs.Contains("Caudipteryx"));
+Console.WriteLine("\nInsert(2, \"Nanotyrannus\")");
+dinosaurs.Insert(2, "Nanotyrannus");
+Display(dinosaurs);
+Console.WriteLine("\ndinosaurs[2]: {0}", dinosaurs[2]);
+Console.WriteLine("\ndinosaurs[2] = \"Microraptor\"");
+dinosaurs[2] = "Microraptor";
+Display(dinosaurs);
+Console.WriteLine("\nRemove(\"Microraptor\")");
+dinosaurs.Remove("Microraptor");
+Display(dinosaurs);
+Console.WriteLine("\nRemoveAt(0)");
+dinosaurs.RemoveAt(0);
+Display(dinosaurs);
+Console.WriteLine("\ndinosaurs.Clear()");
+dinosaurs.Clear();
+Console.WriteLine("Count: {0}", dinosaurs.Count);
+}
+private static void Display(Collection<string> cs)
+{
+Console.WriteLine();
+foreach( string item in cs )
+{
+Console.WriteLine(item);
+}
+}
+}
+/* This code example produces the following output:
+4 dinosaurs:
+Psitticosaurus
+Caudipteryx
+Compsognathus
+Muttaburrasaurus
+IndexOf("Muttaburrasaurus"): 3
+Contains("Caudipteryx"): True
+Insert(2, "Nanotyrannus")
+Psitticosaurus
+Caudipteryx
+Nanotyrannus
+Compsognathus
+Muttaburrasaurus
+dinosaurs[2]: Nanotyrannus
+dinosaurs[2] = "Microraptor"
+Psitticosaurus
+Caudipteryx
+Microraptor
+Compsognathus
+Muttaburrasaurus
+Remove("Microraptor")
+Psitticosaurus
+Caudipteryx
+Compsognathus
+Muttaburrasaurus
+RemoveAt(0)
+Caudipteryx
+Compsognathus
+Muttaburrasaurus
+dinosaurs.Clear()
+Count: 0
+*/
+Imports System.Collections.Generic
+Imports System.Collections.ObjectModel
+Public Class Demo
+Public Shared Sub Main()
+Dim dinosaurs As New Collection(Of String)
+dinosaurs.Add("Psitticosaurus")
+dinosaurs.Add("Caudipteryx")
+dinosaurs.Add("Compsognathus")
+dinosaurs.Add("Muttaburrasaurus")
+Console.WriteLine("{0} dinosaurs:", dinosaurs.Count)
+Display(dinosaurs)
+Console.WriteLine(vbLf & "IndexOf(""Muttaburrasaurus""): {0}", _
+dinosaurs.IndexOf("Muttaburrasaurus"))
+Console.WriteLine(vbLf & "Contains(""Caudipteryx""): {0}", _
+dinosaurs.Contains("Caudipteryx"))
+Console.WriteLine(vbLf & "Insert(2, ""Nanotyrannus"")")
+dinosaurs.Insert(2, "Nanotyrannus")
+Display(dinosaurs)
+Console.WriteLine(vbLf & "dinosaurs(2): {0}", dinosaurs(2))
+Console.WriteLine(vbLf & "dinosaurs(2) = ""Microraptor""")
+dinosaurs(2) = "Microraptor"
+Display(dinosaurs)
+Console.WriteLine(vbLf & "Remove(""Microraptor"")")
+dinosaurs.Remove("Microraptor")
+Display(dinosaurs)
+Console.WriteLine(vbLf & "RemoveAt(0)")
+dinosaurs.RemoveAt(0)
+Display(dinosaurs)
+Console.WriteLine(vbLf & "dinosaurs.Clear()")
+dinosaurs.Clear()
+Console.WriteLine("Count: {0}", dinosaurs.Count)
+End Sub
+Private Shared Sub Display(ByVal cs As Collection(Of String))
+Console.WriteLine()
+For Each item As String In cs
+Console.WriteLine(item)
+Next item
+End Sub
+End Class
+' This code example produces the following output:
+'
+'4 dinosaurs:
+'
+'Psitticosaurus
+'Caudipteryx
+'Compsognathus
+'Muttaburrasaurus
+'
+'IndexOf("Muttaburrasaurus"): 3
+'
+'Contains("Caudipteryx"): True
+'
+'Insert(2, "Nanotyrannus")
+'
+'Psitticosaurus
+'Caudipteryx
+'Nanotyrannus
+'Compsognathus
+'Muttaburrasaurus
+'
+'dinosaurs(2): Nanotyrannus
+'
+'dinosaurs(2) = "Microraptor"
+'
+'Psitticosaurus
+'Caudipteryx
+'Microraptor
+'Compsognathus
+'Muttaburrasaurus
+'
+'Remove("Microraptor")
+'
+'Psitticosaurus
+'Caudipteryx
+'Compsognathus
+'Muttaburrasaurus
+'
+'RemoveAt(0)
+'
+'Caudipteryx
+'Compsognathus
+'Muttaburrasaurus
+'
+'dinosaurs.Clear()
+'Count: 0
+Remarks
+This method is an O(n
+) operation, where n
+is Count.
+Notes to Inheritors
+Derived classes can override RemoveItem(Int32) to change the behavior of this method.

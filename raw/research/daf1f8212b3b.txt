@@ -1,0 +1,21 @@
+关于 hystrix 的异常 fallback method wasn't found
+典型如下：
+@HystrixCommand(fallbackMethod = "fallbackHi")
+public String getHi(String x) {
+String msg = restTemplate.getForObject("http://jack/hi", String.class);
+return msg;
+}
+public String fallbackHi(){
+return "can't say hi";
+}
+这样就会出现如上所述的异常，这是因为指定的 备用方法 和 原方法 的参数个数，类型不同造成的；
+所以需要统一参数的个数，类型：
+@HystrixCommand(fallbackMethod = "fallbackHi")
+public String getHi(String x) {
+String msg = restTemplate.getForObject("http://jack/hi", String.class);
+return msg;
+}
+public String fallbackHi(String x){
+return "can't say hi, and get: " + x;
+}
+这样就可以解决上述的异常了。

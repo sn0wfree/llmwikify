@@ -1,0 +1,64 @@
+前提条件
+必须开启 FeignClient，而且开启 hystrix 熔断限流，fallback 方法才能被调用。
+开启 hystrix 熔断限流
+开启 feign.hystrix.enabled=true
+之后，FeignClientsConfiguration.HystrixFeignConfiguration
+会创建一个 HystrixFeign.builder
+作为 Feign.Builder
+。
+开启 FeignClient
+@EnableFeignClients
+是开启 feign 调用的功能。FeignClientsRegistrar
+负责加载 feign bean。
+FeignClientsRegistrar
+FeignClientsRegistrar
+负责为每一个 @FeignClient
+创建一个 BeanDefinition
+对象，这个 @FeignClient
+装载的对象类型为 FeignClientFactoryBean
+。 其中 registerFeignClient()
+可以查看创建 bean 的过程。
+FeignClientFactoryBean
+其中 getTarget()
+方法负责 bean 的具体创建过程。
+<T> T getTarget() {
+FeignContext context = this.applicationContext.getBean(FeignContext.class);
+// 因为 feign.hystrix.enabled=true，所以这里获取到的是 HystrixFeign.builder
+Feign.Builder builder = feign(context);
+...
+Targeter targeter = get(context, Targeter.class);
+// 使用 hystrix 封装 feign bean
+return (T) targeter.target(this, builder, context,
+new HardCodedTarget<>(this.type, this.name, url));
+}
+HystrixTargeter
+HystrixTargeter
+对 feign 进一步封装，用于在异常时执行 fallback
+方法。
+@Override
+public <T> T target(FeignClientFactoryBean factory, Feign.Builder feign,
+FeignContext context, Target.HardCodedTarget<T> target) {
+...
+feign.hystrix.HystrixFeign.Builder builder = (feign.hystrix.HystrixFeign.Builder) feign;
+...
+// @FeignClient 配置了 fallback 属性时
+Class<?> fallback = factory.getFallback();
+if (fallback != void.class) {
+return targetWithFallback(name, context, target, builder, fallback);
+}
+// @FeignClient 配置了 fallbackFactory 属性时
+Class<?> fallbackFactory = factory.getFallbackFactory();
+if (fallbackFactory != void.class) {
+return targetWithFallbackFactory(name, context, target, builder,
+fallbackFactory);
+}
+return feign.target(target);
+}
+当配置了 fallback
+属性时，会调用 HystrixFeign#build()
+构建一个由 Hystrix 封装后的 Feign 对象。
+HystrixInvocationHandler
+当调用接口异常时，会调用 HystrixInvocationHandler#invoke()
+方法，这个方法主要通过反射调用调用 @FeignClient
+的 fallback
+属性配置的方法。

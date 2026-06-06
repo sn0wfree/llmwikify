@@ -1,0 +1,14 @@
+@CircuitBreaker
+原理是利用Spring Aop进行增强，@CircuitBreaker 声明在Class上，该Class所有public method会做熔断处理，声明在特定method上，只有该特定method才会做熔断处理。
+CircuitBreakerAspect
+CircuitBreaker利用CircuitBreakerAspect作为切面容器进行熔断处理，实现org.springframework.core.Ordered，保证Pointcut优先切入。
+The Resilience4j Aspects order is following:
+Retry > CircuitBreaker > RateLimiter > Bulkhead
+构造方法
+//CircuitBreaker基于SpringBoot的自动配置
+private final CircuitBreakerConfigurationProperties circuitBreakerProperties;
+/*CircuitBreaker注册容器，只能管理被Spring管理的bean创建的CircuitBreaker 实例*/
+private final CircuitBreakerRegistry circuitBreakerRegistry;
+//CircuitBreaker切面扩展默认支持（RxJava2CircuitBreakerAspectExt、ReactorCircuitBreakerAspectExt）
+private final List<CircuitBreakerAspectExt> circuitBreakerAspectExtList;
+public CircuitBreakerAspect(
