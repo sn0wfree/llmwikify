@@ -23,6 +23,7 @@ from llmwikify.autoresearch.actions import ActionContext
 from llmwikify.autoresearch.analyzer import SourceAnalyzer
 from llmwikify.autoresearch.config import merge_six_step_config
 from llmwikify.autoresearch.gatherer import SourceGatherer
+from llmwikify.autoresearch.reasoner import ResearchReasoner
 from llmwikify.autoresearch.llm_step import run_prompt
 from llmwikify.autoresearch.state import (
     MetricsCollector,
@@ -118,6 +119,14 @@ class ResearchEngine:
         # Dispatch table: action name -> partial(action_fn, ctx).
         # Set in run() once metrics are initialized (ctx.metrics is set there).
         self._action_dispatch: dict[str, Any] = {}
+
+        # Phase 2 #5 / C1 — ReAct Thought step lives in its own
+        # module. The reasoner needs the action context (for
+        # ``run_prompt``), the database (for ``get_sources`` in
+        # the rule-based fallback), the config, and the
+        # ``_max_replan`` constant. Constructed after the
+        # action context is built.
+        self.reasoner = ResearchReasoner(self)
 
     def _resolve_model(self, config_key: str) -> StreamableLLMClient | None:
         model_cfg = self.config.get(config_key)
@@ -368,134 +377,35 @@ class ResearchEngine:
             self.session_manager.update_status(session_id, "error", state.phase or "unknown", -1)
             yield {"type": "error", "error": str(e)}
 
-    # ─── Reason Step ───────────────────────────────────────────────────
+    # ─── Reason Step (Phase 2 #5 / C1) ────────────────────────────────
+    # The 3 reason methods are now thin 1-line delegates to
+    # ``self.reasoner`` (see ``engine/reasoner.py``). The
+    # methods stay on ResearchEngine for backward compat with
+    # existing tests and any external code that may call them
+    # via ``engine._reason(state)`` etc.
 
     async def _reason(self, state: ResearchState) -> str:
         """Decide next action based on current state.
 
-        Uses LLM for reasoning (ReAct Thought step), falls back to deterministic rules.
+        Delegates to ``self.reasoner.reason()`` (Phase 2 #5 / C1).
+        Uses LLM for reasoning (ReAct Thought step), falls back
+        to deterministic rules.
         """
-        # LLM-based reasoning first (true ReAct Thought)
-        try:
-            return await self._llm_reason(state)
-        except Exception as e:
-            logger.warning("LLM reasoning failed: %s, using rule-based fallback", e)
-            return self._rule_based_reason(state) or "done"
+        return await self.reasoner.reason(state)
 
     def _rule_based_reason(self, state: ResearchState) -> str | None:
-        """Deterministic decision rules as fallback."""
-        # Error state → done (let LLM override if it wants to retry)
-        if state.phase == "error":
-            return "done"
+        """Deterministic decision rules as fallback.
 
-        # ─── 6-step framework: if no clarification yet, redo clarify ───
-        if state.clarification is None:
-            return "plan"  # In the new flow this path is unreachable (clarify runs before loop) but keep for resume safety
-
-        # No sub-queries yet → plan
-        if not state.sub_queries:
-            return "plan"
-
-        # Not all gathered → gather (skip failed sub-queries)
-        gathered_ids = {s.get("sub_query_id") for s in state.sources}
-        ungathered = [
-            sq for sq in state.sub_queries
-            if sq["id"] not in gathered_ids and sq.get("status") != "failed"
-        ]
-        if ungathered:
-            return "gather"
-
-        # Not all analyzed → analyze
-        sources = self.db.get_sources(state.session_id)
-        unanalyzed = [s for s in sources if not s.get("analysis")]
-        if unanalyzed:
-            return "analyze"
-
-        # No synthesis yet → synthesize
-        if state.synthesis is None:
-            return "synthesize"
-
-        # Knowledge gaps detected + budget allows + replan attempts left → replan
-        if (state.knowledge_gaps
-                and state.budget_remaining > 0.15
-                and state.round < state.max_replan + 1):
-            return "plan"
-
-        # No report yet → report
-        if state.report_md is None:
-            return "report"
-
-        # Report exists, not reviewed → review
-        if state.review is None:
-            return "review"
-
-        # Review passed → done
-        if state.review and state.review.get("approved"):
-            return "done"
-
-        # Review failed + rounds remaining → revise
-        if state.round < state.max_rounds:
-            return "revise"
-
-        # Default → done
-        return "done"
+        Delegates to ``self.reasoner.rule_based()``.
+        """
+        return self.reasoner.rule_based(state)
 
     async def _llm_reason(self, state: ResearchState) -> str:
-        """Use LLM to decide next action with chain-of-thought reasoning.
+        """LLM-based reasoning via run_prompt.
 
-        Migrated to use ``run_prompt`` (commit 3 of the prompt-system
-        refactor). Falls back to the rule-based reasoner on persistent
-        LLM failure.
+        Delegates to ``self.reasoner._llm_reason()``.
         """
-        from llmwikify.autoresearch.prompts import _reason_fallback
-
-        analyzed_count = sum(1 for s in state.sources if s.get("analysis"))
-        failed_sq = sum(1 for sq in state.sub_queries if sq.get("status") == "failed")
-
-        # Build observation context from interpreted observations
-        obs_text = "\n".join(f"  - {o}" for o in state.observations) if state.observations else "  (none)"
-
-        # Build vars dict for the YAML template (research_reason.yaml
-        # does not exist yet, but the call layer falls back gracefully
-        # and the rule-based fallback is triggered by the sentinel).
-        vars_dict = {
-            "query": state.query,
-            "round": state.round,
-            "max_rounds": state.max_rounds,
-            "phase": state.phase or "starting",
-            "quality_score": state.quality_score,
-            "budget_remaining": state.budget_remaining,
-            "sub_queries_count": len(state.sub_queries),
-            "failed_sq": failed_sq,
-            "sources_count": len(state.sources),
-            "analyzed_count": analyzed_count,
-            "report_exists": state.report_md is not None,
-            "review_exists": state.review is not None,
-            "observations_text": obs_text,
-        }
-
-        try:
-            result = await run_prompt(self._action_ctx, "research_reason", **vars_dict)
-        except Exception as e:
-            logger.warning("LLM reason failed: %s, applying rule-based fallback", e)
-            result = _reason_fallback(error=e)
-
-        # If the fallback returned the rule-based sentinel, fall through
-        # to the legacy rule-based logic for parity.
-        if result.get("action") == "__rule_based__":
-            return self._rule_based_reason(state)
-
-        action = result.get("action", "done")
-        thought = result.get("thought", "")
-
-        valid = {"plan", "gather", "analyze", "synthesize", "report", "review", "revise", "done"}
-        if action not in valid:
-            action = "done"
-
-        # Store thought for SSE event (set on state so _react_loop can yield it)
-        state._last_thought = thought
-
-        return action
+        return await self.reasoner._llm_reason(state)
 
     # ─── Control Signal Check ─────────────────────────────────────────
 
