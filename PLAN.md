@@ -12,8 +12,8 @@
 | 1 | LLM 客户端去重 | 1 | ✅ done | 692c40f⁻¹ | ef31d2f | +30 |
 | 2 | CLI 命令拆解 | 1 | ✅ done | 435c5cc | 34a253e | +94 |
 | 3 | WikiAnalyzer rule-based | 1 | ✅ done | 0fa1f59 | 716a19a | +28 |
-| 4 | Wiki 13-mixin 收敛 | 2 | 🔵 planned | — | — | +5 |
-| 5 | autoresearch 内部重组 | 2 | 🔵 planned | — | — | +30 |
+| 4 | Wiki 13-mixin 收敛 | 2 | ✅ done | 5094210⁻¹ | 5094210 | +6 |
+| 5 | autoresearch 内部重组 | 2 | ✅ done | a43dc7c⁻¹ | 43d2a1d | +30 |
 | 6 | MCP 整合 | 3 | 🔵 planned | — | — | +5 |
 | 7 | 错误/日志统一 | 3 | 🔵 planned | — | — | +20 |
 
