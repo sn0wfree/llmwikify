@@ -439,7 +439,7 @@ definitions, but the **cognitive load** drops dramatically:
   - `src/llmwikify/agent/backend/ppt/chat_engine.py`
   - `src/llmwikify/agent/backend/ppt/chat_routes.py`
   - `src/llmwikify/agent/tools.py`
-  - `docs/plans/ashare-strategy-building.md`
+  - `docs/designs/ashare-strategy-building.md`
 
 ---
 
@@ -761,4 +761,4 @@ python3 -m pytest tests/ -q --ignore=tests/test_relation_engine.py --ignore=test
   - `src/llmwikify/agent/backend/ppt/chat_engine.py`
   - `src/llmwikify/agent/backend/ppt/chat_routes.py`
   - `src/llmwikify/agent/tools.py`
-  - `docs/plans/ashare-strategy-building.md`
+  - `docs/designs/ashare-strategy-building.md`

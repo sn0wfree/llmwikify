@@ -214,7 +214,7 @@ C1: cli/_base.py 加 _error(e) → logger + 替换 print
 
 ## Post-7-item: Level 2 WikiBackend 实施 (2 commits, +31 测试)
 
-按 `docs/wiki-backend-interface.md` 计划执行，将 Wiki god node 的存储抽象出独立 backend。
+按 `docs/archive/done/wiki-backend-interface.md` 计划执行，将 Wiki god node 的存储抽象出独立 backend。
 
 | 项 | 起始 commit | 完成 commit | 测试增量 | 状态 |
 |----|------------|------------|---------|------|

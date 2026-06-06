@@ -750,7 +750,7 @@ src/llmwikify/autoresearch/                # 全新顶级子项目
 └── task_manager.py                        # 后台任务管理（~144 行）
 
 tests/test_autoresearch.py                 # 89 测试（82 旧 + 7 e2e v5）
-docs/plans/autoresearch-structured-reasoning.md  # 设计文档（含 v5 revision）
+docs/designs/autoresearch-structured-reasoning.md  # 设计文档（含 v5 revision）
 ```
 
 ---
@@ -796,7 +796,7 @@ $ python3 -m pytest tests/test_autoresearch.py
 
 完整设计 + 决策历史 + 4 次 revision：
 
-- `docs/plans/autoresearch-structured-reasoning.md`（1147 行）
+- `docs/designs/autoresearch-structured-reasoning.md`（1147 行）
   - v3 — 独立顶级子项目
   - v4 — 独立 `autoresearch.db`（替代共享 `AgentDatabase`）
   - **v5 — 6 步门禁引擎集成 + 报告上下文注入**（2026-06-04 最新）

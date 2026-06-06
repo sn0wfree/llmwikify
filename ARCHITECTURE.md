@@ -379,13 +379,13 @@ POST   /api/wiki/{wiki_id}/page
 | Phase 4 | Week 4-5 | MCP 集成 (工具添加 `wiki_id`) |
 | Phase 5 | Week 5-6 | CLI + 文档 + 优化 |
 
-详细设计见: [docs/plans/MULTI_WIKI_PLAN.md](docs/plans/MULTI_WIKI_PLAN.md)
+详细设计见: [docs/designs/MULTI_WIKI_PLAN.md](docs/designs/MULTI_WIKI_PLAN.md)
 
 ---
 
 ## Project Status
 
-See [docs/plans/PROJECT_STATUS_0.30.0.md](docs/plans/PROJECT_STATUS_0.30.0.md) for:
+See [docs/archive/plans/PROJECT_STATUS_0.30.0.md](docs/archive/plans/PROJECT_STATUS_0.30.0.md) for:
 - Capability maturity levels by module
 - Test coverage analysis
 - Outstanding work priorities

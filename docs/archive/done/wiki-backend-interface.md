@@ -529,7 +529,7 @@ llmwikify close
 ## 15. References
 
 - **Original 7-item refactor plan**: `PLAN.md`
-- **MCP consolidation plan**: `docs/cli-help-and-aliases.md`
+- **MCP consolidation plan**: `docs/archive/done/cli-help-and-aliases.md`
 - **Engines analysis**: `wiki_analyzer.py`, `relation_engine.py`, `synthesis_engine.py`
 - **Mixin files**: `src/llmwikify/core/wiki_mixin_*.py`
 - **WikiIndex**: `src/llmwikify/core/index.py`
