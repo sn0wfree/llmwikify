@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`init` MCP templates** — unchanged. The `command: ["llmwikify", "mcp"]` config written by `init --agent ...` still works because `mcp` is now an alias. The new `test_init_template_supports_both_mcp_and_serve_aliases` test verifies the template can be safely rewritten with `serve` in v0.34.0+.
 
 ### Documentation
-- New: `docs/cli-help-and-aliases.md` — full explanation of the `mcp` → `serve` alias, deprecation timeline, port/protocol access points, and migration guide.
+- New: `docs/archive/done/cli-help-and-aliases.md` — full explanation of the `mcp` → `serve` alias, deprecation timeline, port/protocol access points, and migration guide.
 - `README.md` — examples updated to use `llmwikify serve` (with notes about the `mcp` alias).
 
 ## [0.30.1] - 2026-04-27

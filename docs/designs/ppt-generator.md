@@ -1704,7 +1704,7 @@ inline style 注入 CSS variables
 | `webui-agent/src/components/slide-renderer.tsx` | 改 | inline style + var(--*) | +40 / -30 |
 | `webui-agent/src/components/PPTGenerator.tsx` | 改 | 透传 theme_id | +5 |
 | `README.md` | 改 | Credits 段 | +5 |
-| `docs/plans/ppt-generator.md` | 改 | 本节 | +200 |
+| `docs/designs/ppt-generator.md` | 改 | 本节 | +200 |
 
 #### 13.4.9 风险与缓解
 

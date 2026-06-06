@@ -350,9 +350,9 @@ Step 7: Git commit ×3
 
 | 文档 | 位置 | 用途 |
 |------|------|------|
-| 设计文档 v3→v5 | `docs/plans/autoresearch-structured-reasoning.md` | 完整设计 + 决策历史 + 4 次 revision |
+| 设计文档 v3→v5 | `docs/designs/autoresearch-structured-reasoning.md` | 完整设计 + 决策历史 + 4 次 revision |
 | **子项目 README** | `src/llmwikify/autoresearch/README.md` | **使用文档**（已交付） |
-| **本文档（状态报告）** | `docs/autoresearch-phase1-status.md` | **本次 v5 + 路线图整理**（已交付） |
+| **本文档（状态报告）** | `docs/archive/status/autoresearch-phase1-status.md` | **本次 v5 + 路线图整理**（已交付） |
 | 测试套件 | `tests/test_autoresearch.py` | 89 测试 |
 | v4 迁移审计脚本 | `scripts/migrate_autoresearch_v3_to_v4.py` | 旧数据清理 |
 
