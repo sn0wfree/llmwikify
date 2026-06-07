@@ -93,6 +93,7 @@ dev = [
     "types-requests>=2.30",
     "build>=0.10.0",
     "twine>=4.0.0",
+    "import-linter>=2.0",
 ]
 
 [project.urls]
@@ -192,3 +193,15 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
+
+[tool.importlinter]
+# 4-layer architecture enforcement.
+# Contracts are added incrementally as each layer is created in
+# the refactor (see docs/designs/refactor-4layer-architecture.md).
+# At A1, no contracts are enforceable since the new layers
+# (foundation/, kernel/, apps/, interfaces/) don't exist yet.
+# Contracts will be added as layers are introduced in Sprint B.
+root_package = "llmwikify"
+include_external_packages = true
+contracts = []
+
