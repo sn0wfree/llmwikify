@@ -6,9 +6,9 @@ import asyncio
 import logging
 from typing import Any
 
-from llmwikify.extractors.base import ExtractedContent
-from llmwikify.extractors.web import extract_url
-from llmwikify.extractors.youtube import extract_youtube
+from llmwikify.foundation.extractors.base import ExtractedContent
+from llmwikify.foundation.extractors.web import extract_url
+from llmwikify.foundation.extractors.youtube import extract_youtube
 from llmwikify.autoresearch.db import AutoResearchDatabase
 from llmwikify.autoresearch.session import ResearchSessionManager
 from llmwikify.autoresearch.source_filter import SourceFilter
@@ -396,7 +396,7 @@ class SourceGatherer:
                     return result.text
                 else:
                     from pathlib import Path
-                    from llmwikify.extractors.pdf import extract_pdf
+                    from llmwikify.foundation.extractors.pdf import extract_pdf
                     result = extract_pdf(Path(url))
                 if result.source_type == "error":
                     raise ValueError(result.metadata.get("error", "PDF extraction failed"))

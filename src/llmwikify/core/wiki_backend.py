@@ -34,7 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
-from ..config import get_db_path, get_directory, load_config
+from ..foundation.config import get_db_path, get_directory, load_config
 
 if TYPE_CHECKING:
     from .index import WikiIndex

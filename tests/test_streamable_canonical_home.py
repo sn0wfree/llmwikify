@@ -2,7 +2,7 @@
 
 Phase 1 #1 / C1 — refactor to move the streaming LLM client out of
 the deprecated ``llmwikify.agent.backend.adapters`` module and into
-the neutral ``llmwikify.llm.streamable`` location.
+the neutral ``llmwikify.foundation.llm.streamable`` location.
 
 This test asserts the new import path works and that the class
 behaves identically to the legacy one (same constructor signature,
@@ -15,15 +15,15 @@ import inspect
 
 
 def test_streamable_imports_from_llm_package():
-    """StreamableLLMClient is importable from llmwikify.llm.streamable."""
-    from llmwikify.llm.streamable import StreamableLLMClient
+    """StreamableLLMClient is importable from llmwikify.foundation.llm.streamable."""
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     assert StreamableLLMClient is not None
 
 
 def test_streamable_constructor_signature_matches_legacy():
     """The new home's __init__ signature is byte-equivalent to the legacy one."""
-    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     sig = inspect.signature(StreamableLLMClient.__init__)
     params = list(sig.parameters.keys())
@@ -46,7 +46,7 @@ def test_streamable_constructor_signature_matches_legacy():
 
 def test_streamable_default_base_url_table_includes_known_providers():
     """_default_base_url knows openai/ollama/lmstudio/xiaomi/minimax."""
-    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     assert StreamableLLMClient._default_base_url("openai") == "https://api.openai.com"
     assert StreamableLLMClient._default_base_url("ollama") == "http://localhost:11434/v1"
@@ -59,7 +59,7 @@ def test_streamable_default_base_url_table_includes_known_providers():
 
 def test_streamable_instance_creation_strips_v1_from_base_url():
     """When user passes base_url ending in /v1, the trailing /v1 is stripped."""
-    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     c = StreamableLLMClient(
         provider="custom",
@@ -72,7 +72,7 @@ def test_streamable_instance_creation_strips_v1_from_base_url():
 
 def test_streamable_instance_preserves_user_base_url():
     """When user passes base_url without /v1, it is left alone."""
-    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     c = StreamableLLMClient(
         provider="custom",
@@ -85,7 +85,7 @@ def test_streamable_instance_preserves_user_base_url():
 
 def test_streamable_build_headers_bearer():
     """Default auth_header=bearer emits Authorization: Bearer ..."""
-    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     c = StreamableLLMClient(provider="openai", api_key="sk-test", model="m")
     headers = c._build_headers()
@@ -95,7 +95,7 @@ def test_streamable_build_headers_bearer():
 
 def test_streamable_build_headers_api_key():
     """auth_header=api-key emits api-key: ..."""
-    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     c = StreamableLLMClient(
         provider="custom",
@@ -110,7 +110,7 @@ def test_streamable_build_headers_api_key():
 
 def test_streamable_has_all_required_methods():
     """The class exposes the full streaming/async/tool surface."""
-    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     c = StreamableLLMClient(provider="openai", api_key="k", model="m")
     for name in ("chat", "chat_with_tools", "stream_chat", "astream_chat", "achat"):
@@ -129,8 +129,8 @@ def test_streamable_inherits_from_llm_client():
     ``stream_chat``/``achat``/``astream_chat``/``chat_with_tools``
     methods.
     """
-    from llmwikify.llm.streamable import StreamableLLMClient
-    from llmwikify.llm_client import LLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm_client import LLMClient
 
     assert issubclass(StreamableLLMClient, LLMClient)
     assert not issubclass(LLMClient, StreamableLLMClient)
@@ -140,8 +140,8 @@ def test_streamable_instance_is_instance_of_llm_client():
     """isinstance check succeeds — type hierarchy lets LLMClient consumers
     accept a StreamableLLMClient instance.
     """
-    from llmwikify.llm.streamable import StreamableLLMClient
-    from llmwikify.llm_client import LLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm_client import LLMClient
 
     c = StreamableLLMClient(provider="openai", api_key="k", model="m")
     assert isinstance(c, LLMClient)
@@ -157,7 +157,7 @@ def test_streamable_uses_relative_imports_for_budget_modules():
     bridge inside ``from_config`` — that one is intentional and
     will be revisited in C5 (Phase 1 #1).
     """
-    import llmwikify.llm.streamable as streamable_mod
+    import llmwikify.foundation.llm.streamable as streamable_mod
 
     src = inspect.getsource(streamable_mod)
     # Module-level imports must be relative (we live in llm/ now)

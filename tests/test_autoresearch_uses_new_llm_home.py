@@ -1,7 +1,7 @@
 """Verify autoresearch no longer imports from the deprecated agent backend.
 
 Phase 1 #1 / C3 — autoresearch modules now import StreamableLLMClient
-from ``llmwikify.llm.streamable`` (the canonical home) rather than
+from ``llmwikify.foundation.llm.streamable`` (the canonical home) rather than
 ``llmwikify.agent.backend.adapters`` (the deprecated home).
 
 The remaining deprecation warning in this codebase is for
@@ -49,7 +49,7 @@ def test_autoresearch_engine_imports_streamable_from_new_home():
     from llmwikify.autoresearch import engine
 
     src = Path(engine.__file__).read_text()
-    assert "from llmwikify.llm.streamable import StreamableLLMClient" in src
+    assert "from llmwikify.foundation.llm.streamable import StreamableLLMClient" in src
     assert "from llmwikify.agent.backend.adapters import" not in src
 
 
@@ -58,7 +58,7 @@ def test_autoresearch_actions_imports_streamable_from_new_home():
     from llmwikify.autoresearch import actions
 
     src = Path(actions.__file__).read_text()
-    assert "from llmwikify.llm.streamable import StreamableLLMClient" in src
+    assert "from llmwikify.foundation.llm.streamable import StreamableLLMClient" in src
     assert "from llmwikify.agent.backend.adapters import" not in src
 
 
@@ -68,4 +68,4 @@ def test_autoresearch_engine_helpers_docstring_updated():
 
     src = Path(engine_helpers.__file__).read_text()
     assert "agent.backend.adapters" not in src
-    assert "llmwikify.llm.streamable" in src
+    assert "llmwikify.foundation.llm.streamable" in src

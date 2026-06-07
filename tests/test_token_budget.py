@@ -1,4 +1,4 @@
-"""Unit tests for llmwikify.llm module — token estimation, budget checking, context windows."""
+"""Unit tests for llmwikify.foundation.llm module — token estimation, budget checking, context windows."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llmwikify.llm import (
+from llmwikify.foundation.llm import (
     CONTEXT_WINDOWS,
     TokenBudgetChecker,
     TokenBudgetConfig,
@@ -19,8 +19,8 @@ from llmwikify.llm import (
     probe_provider_api,
     resolve_context_window,
 )
-from llmwikify.llm.context_windows import _extract_ctx_from_name
-from llmwikify.llm.token_estimator import _get_tiktoken_encoding
+from llmwikify.foundation.llm.context_windows import _extract_ctx_from_name
+from llmwikify.foundation.llm.token_estimator import _get_tiktoken_encoding
 
 
 # ─── context_windows.py ─────────────────────────────────────────────
@@ -160,7 +160,7 @@ class TestTokenEstimator:
         assert n > 0
 
     def test_count_tokens_fallback_no_tiktoken(self):
-        with patch("llmwikify.llm.token_estimator._get_tiktoken_encoding", return_value=None):
+        with patch("llmwikify.foundation.llm.token_estimator._get_tiktoken_encoding", return_value=None):
             n = count_tokens("hello world")
             # fallback: len("hello world") // 3 = 11 // 3 = 3
             assert n == 3
@@ -272,7 +272,7 @@ class TestTokenBudgetChecker:
         # First call: small content -> OK
         checker.check([{"role": "user", "content": "Hi"}], prompt_name="test")
         # Second call: large content -> exceeds (use mock to avoid slow tiktoken)
-        with patch("llmwikify.llm.token_budget.count_messages", return_value=200_000):
+        with patch("llmwikify.foundation.llm.token_budget.count_messages", return_value=200_000):
             checker.check(
                 [{"role": "user", "content": "x" * 1000}], prompt_name="test"
             )
@@ -368,7 +368,7 @@ class TestIntegration:
         checker = TokenBudgetChecker(config)
 
         # Mock count_messages to simulate exceeding budget
-        with patch("llmwikify.llm.token_budget.count_messages", return_value=10_000):
+        with patch("llmwikify.foundation.llm.token_budget.count_messages", return_value=10_000):
             messages = [
                 {"role": "system", "content": "x" * 1000},
                 {"role": "user", "content": "y" * 1000},
@@ -384,7 +384,7 @@ class TestIntegration:
 
 class TestBudgetDecorator:
     def test_decorator_extracts_prompt_name(self):
-        from llmwikify.llm.budget_decorator import check_token_budget
+        from llmwikify.foundation.llm.budget_decorator import check_token_budget
 
         checker = MagicMock(spec=TokenBudgetChecker)
 
@@ -408,7 +408,7 @@ class TestBudgetDecorator:
         assert call_args[1]["prompt_name"] == "test_prompt"
 
     def test_decorator_uses_function_name_as_default(self):
-        from llmwikify.llm.budget_decorator import check_token_budget
+        from llmwikify.foundation.llm.budget_decorator import check_token_budget
 
         checker = MagicMock(spec=TokenBudgetChecker)
 
@@ -427,7 +427,7 @@ class TestBudgetDecorator:
         assert call_args[1]["prompt_name"] == "my_custom_chat"
 
     def test_decorator_passes_kwargs_through(self):
-        from llmwikify.llm.budget_decorator import check_token_budget
+        from llmwikify.foundation.llm.budget_decorator import check_token_budget
 
         checker = MagicMock(spec=TokenBudgetChecker)
 
@@ -444,7 +444,7 @@ class TestBudgetDecorator:
         assert result == 0.7
 
     def test_decorator_removes_prompt_name_from_kwargs(self):
-        from llmwikify.llm.budget_decorator import check_token_budget
+        from llmwikify.foundation.llm.budget_decorator import check_token_budget
 
         checker = MagicMock(spec=TokenBudgetChecker)
         received_kwargs = {}
@@ -473,7 +473,7 @@ class TestBudgetDecorator:
 
 class TestLLMClientIntegration:
     def test_llm_client_has_budget_checker(self):
-        from llmwikify.llm_client import LLMClient
+        from llmwikify.foundation.llm_client import LLMClient
 
         client = LLMClient(
             provider="openai",
@@ -485,7 +485,7 @@ class TestLLMClientIntegration:
         assert isinstance(client._budget_checker, TokenBudgetChecker)
 
     def test_llm_client_custom_context_window(self):
-        from llmwikify.llm_client import LLMClient
+        from llmwikify.foundation.llm_client import LLMClient
 
         client = LLMClient(
             provider="openai",
@@ -497,7 +497,7 @@ class TestLLMClientIntegration:
         assert client._budget_checker.context_window == 64_000
 
     def test_llm_client_from_config(self):
-        from llmwikify.llm_client import LLMClient
+        from llmwikify.foundation.llm_client import LLMClient
 
         config = {
             "llm": {
@@ -515,7 +515,7 @@ class TestLLMClientIntegration:
         assert client._budget_checker.on_exceed == "raise"
 
     def test_llm_client_from_config_defaults(self):
-        from llmwikify.llm_client import LLMClient
+        from llmwikify.foundation.llm_client import LLMClient
 
         config = {
             "llm": {

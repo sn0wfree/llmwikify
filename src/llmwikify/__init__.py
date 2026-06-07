@@ -17,7 +17,7 @@ __license__ = "MIT"
 from pathlib import Path
 
 from .cli import WikiCLI
-from .config import (
+from .foundation.config import (
     get_default_config,
     get_mcp_config,
     get_wikis_config,
@@ -30,7 +30,7 @@ from .core.remote_wiki import RemoteWiki
 from .core.wiki_discovery import WikiDiscovery
 from .core.wiki_instance import WikiInstance, WikiStatus, WikiType
 from .core.wiki_registry import WikiRegistry
-from .extractors import ExtractedContent, Link
+from .foundation.extractors import ExtractedContent, Link
 from .mcp import create_mcp_server, serve_mcp
 
 

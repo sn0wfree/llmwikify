@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.extractors.base import detect_source_type, extract
-from llmwikify.extractors.markitdown_extractor import (
+from llmwikify.foundation.extractors.base import detect_source_type, extract
+from llmwikify.foundation.extractors.markitdown_extractor import (
     MARKITDOWN_FORMATS,
     MarkItDownExtractor,
     _ext_to_source_type,

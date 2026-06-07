@@ -8,7 +8,7 @@ provider system.
 
 What changed in C1-C4 is the LLM client class itself
 (``StreamableLLMClient``), which now lives in
-``llmwikify.llm.streamable``. The provider classes still call
+``llmwikify.foundation.llm.streamable``. The provider classes still call
 ``StreamableLLMClient(...)`` from their ``from_config`` methods —
 they just import the class from the new home.
 
@@ -67,7 +67,7 @@ def test_create_llm_uses_canonical_streamable_class():
     must be the canonical StreamableLLMClient.
     """
     from llmwikify.agent.backend.providers import create_llm
-    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     config = {
         "enabled": True,
@@ -131,7 +131,7 @@ def test_provider_classes_use_new_home_for_type_hints():
         # in a runtime scan — we only assert the absence of the
         # shim import)
         if "StreamableLLMClient" in src:
-            assert "from llmwikify.llm.streamable" in src, (
+            assert "from llmwikify.foundation.llm.streamable" in src, (
                 f"{mod.__name__} references StreamableLLMClient but doesn't "
                 f"import it from the canonical home"
             )
@@ -144,7 +144,7 @@ def test_provider_protocol_still_uses_streamable_type():
     src = inspect.getsource(base)
     assert "StreamableLLMClient" in src
     # And it's imported from the new home
-    assert "from llmwikify.llm.streamable" in src
+    assert "from llmwikify.foundation.llm.streamable" in src
 
 
 def test_provider_registry_unchanged_path():

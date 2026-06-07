@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
 
-from llmwikify.llm.streamable import StreamableLLMClient
+from llmwikify.foundation.llm.streamable import StreamableLLMClient
 from llmwikify.autoresearch.db import AutoResearchDatabase
 from llmwikify.agent.backend.providers.registry import create_llm
 from llmwikify.autoresearch import actions

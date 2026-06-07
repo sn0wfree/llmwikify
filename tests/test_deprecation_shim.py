@@ -24,7 +24,7 @@ import warnings
 def test_shim_reexports_streamable_llm_client():
     """adapters.StreamableLLMClient is the same class as llm.streamable.StreamableLLMClient."""
     from llmwikify.agent.backend.adapters import StreamableLLMClient as LegacyClient
-    from llmwikify.llm.streamable import StreamableLLMClient as NewClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient as NewClient
 
     assert LegacyClient is NewClient
 
@@ -48,7 +48,7 @@ def test_shim_emits_deprecation_warning():
     ]
     assert len(deprecations) == 1, f"expected 1 deprecation, got {len(deprecations)}"
     msg = str(deprecations[0].message)
-    assert "llmwikify.llm.streamable" in msg, (
+    assert "llmwikify.foundation.llm.streamable" in msg, (
         f"shim warning must point to new home, got: {msg}"
     )
     assert "v0.33.0" in msg, f"shim warning must mention removal version, got: {msg}"
@@ -88,7 +88,7 @@ def test_shim_emits_warning_for_provider_registry_path():
     assert "from ..adapters" not in src, (
         "registry.py must not import from the deprecated adapters path"
     )
-    assert "from llmwikify.llm.streamable" in src
+    assert "from llmwikify.foundation.llm.streamable" in src
 
 
 def test_internal_agent_backend_import_does_not_fire_shim_warning():
@@ -113,7 +113,7 @@ def test_internal_agent_backend_import_does_not_fire_shim_warning():
     shim_msgs = [
         w for w in caught
         if issubclass(w.category, DeprecationWarning)
-        and "llmwikify.llm.streamable" in str(w.message)
+        and "llmwikify.foundation.llm.streamable" in str(w.message)
     ]
     assert shim_msgs == [], (
         f"shim warning fired for internal use, expected 0: "
@@ -137,5 +137,5 @@ def test_shim_does_not_break_existing_chat_functionality():
     assert callable(c.achat)
     assert callable(c.chat_with_tools)
     # Class still inherits from LLMClient
-    from llmwikify.llm_client import LLMClient
+    from llmwikify.foundation.llm_client import LLMClient
     assert isinstance(c, LLMClient)

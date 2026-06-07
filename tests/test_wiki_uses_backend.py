@@ -44,7 +44,7 @@ def test_wiki_accepts_custom_backend(wiki_root):
 
     class MockBackend:
         def __init__(self, root):
-            from llmwikify.config import load_config
+            from llmwikify.foundation.config import load_config
             from llmwikify.core.index import WikiIndex
             from llmwikify.core.wiki_backend import LocalFileBackend as _LFB
             self.root = root.resolve()

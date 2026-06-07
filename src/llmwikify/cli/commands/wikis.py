@@ -11,7 +11,7 @@ from .._output import print_error
 
 def _wikis_list(config: dict, cli_config: Any) -> int:
     """List all registered wikis."""
-    from llmwikify.config import get_wikis_config
+    from llmwikify.foundation.config import get_wikis_config
     from llmwikify.core.wiki_registry import WikiRegistry
 
     wikis_config = get_wikis_config(config)

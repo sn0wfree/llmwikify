@@ -26,7 +26,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     Returns:
         0 on success (or after KeyboardInterrupt).
     """
-    from llmwikify.config import get_wikis_config
+    from llmwikify.foundation.config import get_wikis_config
     from llmwikify.server import WikiServer
 
     mcp_config = config.get("mcp", {})

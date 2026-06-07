@@ -52,7 +52,7 @@ class PromptRegistry:
     ):
         self.provider = provider
         self.custom_dir = custom_dir
-        self._defaults_dir = Path(__file__).parent.parent / "prompts" / "_defaults"
+        self._defaults_dir = Path(__file__).parent.parent / "foundation" / "prompts" / "_defaults"
 
         self._env = Environment(
             loader=BaseLoader(),

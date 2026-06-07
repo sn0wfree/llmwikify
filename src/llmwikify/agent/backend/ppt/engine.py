@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any
 
-from llmwikify.llm.streamable import StreamableLLMClient
+from llmwikify.foundation.llm.streamable import StreamableLLMClient
 from .rules import resolve_layout, validate_content_for_layout
 from .schema import (
     CONTENT_TYPES,

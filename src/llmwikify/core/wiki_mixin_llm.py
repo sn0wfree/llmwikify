@@ -21,7 +21,7 @@ class WikiLLMMixin(WikiProtocol):
         Phase 4: Full analysis on selected content
         Phase 5: Generate wiki operations
         """
-        from ..llm import LLMClient
+        from ..foundation.llm import LLMClient
 
         LLMClient.from_config(self.config)
         registry = self._get_prompt_registry()
@@ -157,7 +157,7 @@ class WikiLLMMixin(WikiProtocol):
         params: dict,
     ) -> Any:
         """Call LLM with retry on validation failure."""
-        from ..llm import LLMClient
+        from ..foundation.llm import LLMClient
 
         client = LLMClient.from_config(self.config)
         registry = self._get_prompt_registry()
@@ -237,7 +237,7 @@ class WikiLLMMixin(WikiProtocol):
             and 'source_citations' (list of page names referenced).
         """
         try:
-            from ..llm import LLMClient
+            from ..foundation.llm import LLMClient
             client = LLMClient.from_config(self.config)
         except (ImportError, ValueError, OSError):
             return {

@@ -214,7 +214,7 @@ class TestLLMGenerateSynthesizeAnswer:
             captured_messages.append(msgs)
             return {"answer": expected_answer}
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = mock_chat_json
             MockClient.from_config.return_value = mock_instance
@@ -237,7 +237,7 @@ class TestLLMGenerateSynthesizeAnswer:
             assert "ML is a subset of AI" in user_content
             return {"answer": "# Test\n\nContent."}
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = mock_chat_json
             MockClient.from_config.return_value = mock_instance
@@ -256,7 +256,7 @@ class TestLLMGenerateSynthesizeAnswer:
             assert "test_article.md" in user_content
             return {"answer": "# Test\n\nContent."}
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = mock_chat_json
             MockClient.from_config.return_value = mock_instance
@@ -275,7 +275,7 @@ class TestLLMGenerateSynthesizeAnswer:
             assert "Page1" in user_content or "2 pages" in user_content
             return {"answer": "# Test\n\nContent."}
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = mock_chat_json
             MockClient.from_config.return_value = mock_instance
@@ -286,7 +286,7 @@ class TestLLMGenerateSynthesizeAnswer:
         def mock_chat_json(msgs, **kwargs):
             return {"not_answer": "missing key"}
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = mock_chat_json
             MockClient.from_config.return_value = mock_instance
@@ -304,7 +304,7 @@ class TestLLMGenerateSynthesizeAnswer:
                 "source_citations": ["Machine Learning"],
             }
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = mock_chat_json
             MockClient.from_config.return_value = mock_instance
@@ -315,7 +315,7 @@ class TestLLMGenerateSynthesizeAnswer:
             assert result["source_citations"] == ["Machine Learning"]
 
     def test_llm_exception_returns_warning(self, temp_wiki):
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = ConnectionError("API timeout")
             MockClient.from_config.return_value = mock_instance

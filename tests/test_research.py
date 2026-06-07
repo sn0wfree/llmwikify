@@ -813,7 +813,7 @@ class TestSourceGatherer:
         gatherer = SourceGatherer(mock_wiki, db, session_manager, config)
 
         with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract:
-            from llmwikify.extractors.base import ExtractedContent
+            from llmwikify.foundation.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
                 text="Article content here. " * 20,
                 source_type="url",
@@ -882,7 +882,7 @@ class TestSourceGatherer:
 
         with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract, \
              patch("llmwikify.agent.backend.research.web_search.WebSearch") as MockSearch:
-            from llmwikify.extractors.base import ExtractedContent
+            from llmwikify.foundation.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
                 text="Python documentation content here. " * 10,
                 source_type="url",
@@ -913,7 +913,7 @@ class TestSourceGatherer:
         gatherer = SourceGatherer(mock_wiki, db, session_manager, config)
 
         with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract:
-            from llmwikify.extractors.base import ExtractedContent
+            from llmwikify.foundation.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
                 text="x" * 500, source_type="url", title="Long", metadata={}
             )
@@ -1328,7 +1328,7 @@ class TestResearchEngine:
                  "topics": ["test"], "entities": [], "claims": [], "key_facts": ["fact"],
                  "suggested_pages": [], "cross_refs": [],
              }):
-            from llmwikify.extractors.base import ExtractedContent
+            from llmwikify.foundation.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
                 text="Article content here. " * 20, source_type="url", title="Article", metadata={}
             )
@@ -1383,7 +1383,7 @@ class TestResearchEngine:
         with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract, \
              patch("llmwikify.agent.backend.research.web_search.WebSearch") as MockSearch, \
              patch.object(mock_wiki, "analyze_source", return_value={"status": "skipped"}):
-            from llmwikify.extractors.base import ExtractedContent
+            from llmwikify.foundation.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
                 text="content", source_type="url", title="T", metadata={}
             )
@@ -1634,7 +1634,7 @@ class TestResearchIntegration:
                  "topics": ["topic1"], "entities": [], "claims": [],
                  "key_facts": ["fact1"], "suggested_pages": [], "cross_refs": [],
              }):
-            from llmwikify.extractors.base import ExtractedContent
+            from llmwikify.foundation.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
                 text="Web content", source_type="url", title="Web Page", metadata={}
             )

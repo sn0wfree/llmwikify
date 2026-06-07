@@ -117,7 +117,7 @@ class TestLLMRetryMechanism:
         messages = [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}]
         params = {"temperature": 0.1}
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.return_value = {
                 "topics": [],
@@ -163,7 +163,7 @@ class TestLLMRetryMechanism:
                 },
             }
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
@@ -178,7 +178,7 @@ class TestLLMRetryMechanism:
         messages = [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}]
         params = {"temperature": 0.1}
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.return_value = {"invalid": "response"}
             MockClient.from_config.return_value = mock_instance
@@ -211,7 +211,7 @@ class TestLLMRetryMechanism:
                 },
             }
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
@@ -245,7 +245,7 @@ class TestLLMRetryMechanism:
                 },
             }
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
@@ -302,7 +302,7 @@ class TestChainingMode:
                 return analysis_result
             return []
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = mock_chat_json
             MockClient.from_config.return_value = mock_instance
@@ -347,7 +347,7 @@ class TestChainingMode:
                 return analysis_result
             return []
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = mock_chat_json
             MockClient.from_config.return_value = mock_instance
@@ -376,7 +376,7 @@ class TestValidationIntegration:
         wiki = temp_wiki
         source_data = {"content": "Test", "title": "Test", "source_type": "markdown", "current_index": ""}
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.return_value = {"missing": "required_keys"}
             MockClient.from_config.return_value = mock_instance
@@ -399,7 +399,7 @@ class TestValidationIntegration:
                 return analysis_result
             return {"not": "an_array"}
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
@@ -444,7 +444,7 @@ class TestConfiguration:
                 }
             return []
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
@@ -523,7 +523,7 @@ class TestFullIngestFlow:
                 return analysis_result
             return operations_data
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
@@ -578,7 +578,7 @@ class TestFullIngestFlow:
                 return analysis_result
             return operations_data
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance

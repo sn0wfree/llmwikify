@@ -6,9 +6,9 @@ import asyncio
 import logging
 from typing import Any
 
-from ....extractors.base import ExtractedContent
-from ....extractors.web import extract_url
-from ....extractors.youtube import extract_youtube
+from ....foundation.extractors.base import ExtractedContent
+from ....foundation.extractors.web import extract_url
+from ....foundation.extractors.youtube import extract_youtube
 from ..db import AgentDatabase
 from .session import ResearchSessionManager
 from .source_filter import SourceFilter
@@ -396,7 +396,7 @@ class SourceGatherer:
                     return result.text
                 else:
                     from pathlib import Path
-                    from ....extractors.pdf import extract_pdf
+                    from ....foundation.extractors.pdf import extract_pdf
                     result = extract_pdf(Path(url))
                 if result.source_type == "error":
                     raise ValueError(result.metadata.get("error", "PDF extraction failed"))

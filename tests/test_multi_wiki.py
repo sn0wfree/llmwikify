@@ -369,7 +369,7 @@ class TestConfigWikis:
 
     def test_get_wikis_config_default(self):
         """Get default wikis configuration."""
-        from llmwikify.config import get_wikis_config
+        from llmwikify.foundation.config import get_wikis_config
 
         config = get_wikis_config()
         assert config["default"] is None
@@ -379,7 +379,7 @@ class TestConfigWikis:
 
     def test_get_wikis_config_custom(self):
         """Get custom wikis configuration."""
-        from llmwikify.config import get_wikis_config
+        from llmwikify.foundation.config import get_wikis_config
 
         custom_config = {
             "wikis": {
