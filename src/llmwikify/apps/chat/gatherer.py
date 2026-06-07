@@ -165,7 +165,7 @@ class SourceGatherer:
 
             # For web/youtube without URL, search first
             if source_type in ("web", "youtube") and not url:
-                from llmwikify.apps.chat.web_search import WebSearch
+                from llmwikify.apps.research.web_search import WebSearch
                 searcher = WebSearch(self.config)
                 try:
                     if source_type == "youtube":
