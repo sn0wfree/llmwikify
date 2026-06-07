@@ -18,15 +18,13 @@ and API requests with old IDs continue to work.
 Attribution: theme tokens are adapted from html-ppt-skill (MIT, © 2026 lewislulu).
 """
 
-from typing import Dict, List
 from .schema import Theme, ThemeColors
-
 
 # ============================================================================
 # 36 v0.6.1 themes (adapted from html-ppt-skill)
 # ============================================================================
 
-THEMES: Dict[str, Theme] = {
+THEMES: dict[str, Theme] = {
     "minimal-white": Theme(
         id="minimal-white",
         name="Minimal White",
@@ -641,14 +639,13 @@ THEMES: Dict[str, Theme] = {
     ),
 }
 
-
 # ============================================================================
 # v0.5 backward compatibility aliases
 # ============================================================================
 # Old v0.5 theme IDs map to their closest v0.6.1 equivalent.
 # Stored tasks and API requests with old IDs continue to work.
 
-LEGACY_THEME_ALIASES: Dict[str, str] = {
+LEGACY_THEME_ALIASES: dict[str, str] = {
     "professional": "corporate-clean",
     "modern": "dracula",
     "minimal": "minimal-white",
@@ -659,13 +656,11 @@ LEGACY_THEME_ALIASES: Dict[str, str] = {
     "creative": "memphis-pop",
 }
 
-
 # ============================================================================
 # Public API
 # ============================================================================
 
 DEFAULT_THEME = "minimal-white"
-
 
 def get_theme(name: str) -> Theme:
     """Get theme by id, with legacy alias resolution and safe fallback.
@@ -682,32 +677,27 @@ def get_theme(name: str) -> Theme:
         return THEMES[resolved]
     return THEMES[DEFAULT_THEME]
 
-
-def list_themes() -> List[Theme]:
+def list_themes() -> list[Theme]:
     """List all 36 available themes (in declared order)."""
     return list(THEMES.values())
 
-
-def list_theme_ids() -> List[str]:
+def list_theme_ids() -> list[str]:
     """List theme IDs in declared order."""
     return list(THEMES.keys())
 
-
-def list_themes_by_category() -> Dict[str, List[Theme]]:
+def list_themes_by_category() -> dict[str, list[Theme]]:
     """Group themes by category for grouped display in UI."""
-    grouped: Dict[str, List[Theme]] = {}
+    grouped: dict[str, list[Theme]] = {}
     for theme in THEMES.values():
         grouped.setdefault(theme.category, []).append(theme)
     return grouped
 
-
-def get_legacy_aliases() -> Dict[str, str]:
+def get_legacy_aliases() -> dict[str, str]:
     """Return the legacy v0.5 -> v0.6.1 alias mapping (for API/docs)."""
     return dict(LEGACY_THEME_ALIASES)
 
-
 # Category display labels (zh + en) for UI grouping
-CATEGORY_LABELS: Dict[str, Dict[str, str]] = {
+CATEGORY_LABELS: dict[str, dict[str, str]] = {
     "minimal":   {"zh": "极简",   "en": "Minimal"},
     "soft":      {"zh": "柔和",   "en": "Soft"},
     "warm":      {"zh": "暖色",   "en": "Warm"},
@@ -720,7 +710,6 @@ CATEGORY_LABELS: Dict[str, Dict[str, str]] = {
     "retro":     {"zh": "复古",   "en": "Retro"},
 }
 
-
-def get_category_order() -> List[str]:
+def get_category_order() -> list[str]:
     """Canonical category display order."""
     return ["minimal", "soft", "warm", "cool", "dark", "colorful", "tech", "brand", "design", "retro"]

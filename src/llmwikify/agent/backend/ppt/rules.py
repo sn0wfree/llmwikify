@@ -1,10 +1,9 @@
 """PPT Generator - Rules engine for content_type to layout mapping."""
 
-from typing import Dict, Any, List, Optional
-
+from typing import Any
 
 # Fixed mapping: content_type → layout
-TYPE_TO_LAYOUT: Dict[str, str] = {
+TYPE_TO_LAYOUT: dict[str, str] = {
     "intro": "title",
     "section": "section",
     "quote": "quote",
@@ -12,8 +11,7 @@ TYPE_TO_LAYOUT: Dict[str, str] = {
     "comparison": "two_column",
 }
 
-
-def resolve_layout(content_type: str, content: Dict[str, Any]) -> str:
+def resolve_layout(content_type: str, content: dict[str, Any]) -> str:
     """
     Map semantic content_type to structural layout.
     
@@ -30,7 +28,7 @@ def resolve_layout(content_type: str, content: Dict[str, Any]) -> str:
     
     # Dynamic mapping based on content characteristics
     if content_type == "bullets":
-        bullets: List[str] = content.get("bullets") or []
+        bullets: list[str] = content.get("bullets") or []
         count = len(bullets)
         if count <= 5:
             return "bullets"
@@ -46,8 +44,7 @@ def resolve_layout(content_type: str, content: Dict[str, Any]) -> str:
     # Fallback
     return "title_content"
 
-
-def validate_content_for_layout(content_type: str, layout: str, content: Dict[str, Any]) -> Dict[str, Any]:
+def validate_content_for_layout(content_type: str, layout: str, content: dict[str, Any]) -> dict[str, Any]:
     """
     Validate content and fill in missing required fields for the assigned layout.
     
