@@ -121,7 +121,9 @@ packages = [
     "llmwikify.server",
     "llmwikify.server.http",
     "llmwikify.server.utils",
-    "llmwikify.web",
+    "llmwikify.interfaces",
+    "llmwikify.interfaces.web",
+    "llmwikify.web",  # backward-compat shim (v0.33.0 removal)
 ]
 
 [tool.setuptools.package-data]
