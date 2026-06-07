@@ -27,11 +27,6 @@ class TestUnifiedServer:
         if webui_dist.exists():
             assert (webui_dist / 'index.html').exists()
 
-    def test_legacy_static_dir_exists(self):
-        """Legacy static directory should exist (renamed to static-legacy-deprecated)."""
-        static_dir = Path(__file__).parent.parent / 'src' / 'llmwikify' / 'web' / 'static-legacy-deprecated'
-        assert static_dir.exists()
-
 
 class TestCLIWebArgs:
     """Test CLI web arguments."""
