@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from llmwikify.cli import WikiCLI
+from llmwikify.interfaces.cli import WikiCLI
 
 
 class Args:

@@ -91,7 +91,7 @@ register_command(HelpCommand())
 # for the new ``commands/`` subpackage, two public symbols
 # (``WikiCLI`` and ``main``) moved with it. Tests and
 # downstream callers that did
-# ``from llmwikify.cli.commands import WikiCLI`` (or
+# ``from llmwikify.interfaces.cli.commands import WikiCLI`` (or
 # ``main``) broke because ``cli/commands/`` is now a
 # subpackage, not a module.
 #
@@ -108,7 +108,7 @@ def __getattr__(name):
     ``llmwikify.cli._app``.
 
     Allows legacy imports like
-    ``from llmwikify.cli.commands import WikiCLI`` (or
+    ``from llmwikify.interfaces.cli.commands import WikiCLI`` (or
     ``main``) to keep working, even though those symbols
     canonically live in ``llmwikify.cli._app``. The lookup
     is deferred to avoid a circular import with ``_app``

@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from llmwikify.cli.commands import WikiCLI
+from llmwikify.interfaces.cli.commands import WikiCLI
 from llmwikify.core.wiki import Wiki
 
 

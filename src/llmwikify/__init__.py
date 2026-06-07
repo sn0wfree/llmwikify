@@ -16,7 +16,7 @@ __license__ = "MIT"
 
 from pathlib import Path
 
-from .cli import WikiCLI
+from .interfaces.cli import WikiCLI
 from .foundation.config import (
     get_default_config,
     get_mcp_config,
@@ -31,7 +31,7 @@ from .core.wiki_discovery import WikiDiscovery
 from .core.wiki_instance import WikiInstance, WikiStatus, WikiType
 from .core.wiki_registry import WikiRegistry
 from .foundation.extractors import ExtractedContent, Link
-from .mcp import create_mcp_server, serve_mcp
+from .interfaces.mcp import create_mcp_server, serve_mcp
 
 
 # Convenience functions

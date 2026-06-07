@@ -78,7 +78,7 @@ def create_unified_server(
     mcp_name: str | None = None,
 ) -> Any:
     """[DEPRECATED] Create FastAPI app. → ``WikiServer(wiki).app``."""
-    from llmwikify.server import WikiServer
+    from llmwikify.interfaces.server import WikiServer
     server = WikiServer(
         wiki,
         api_key=api_key,

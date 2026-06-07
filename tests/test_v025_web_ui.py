@@ -13,7 +13,7 @@ class TestUnifiedServer:
 
     def test_unified_server_imports(self):
         """Unified server module should import without errors."""
-        from llmwikify.mcp.server import create_unified_server
+        from llmwikify.interfaces.mcp.server import create_unified_server
         assert create_unified_server is not None
 
     def test_web_server_imports(self):
@@ -36,7 +36,7 @@ class TestCLIWebArgs:
         import io
         from unittest.mock import patch
 
-        from llmwikify.cli.commands import main
+        from llmwikify.interfaces.cli.commands import main
 
         help_output = io.StringIO()
         with patch('sys.argv', ['llmwikify', 'serve', '--help']):

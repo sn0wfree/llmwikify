@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llmwikify.cli import WikiCLI
+from llmwikify.interfaces.cli import WikiCLI
 
 
 class TestCLI:

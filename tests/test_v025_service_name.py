@@ -34,9 +34,9 @@ def _run_async(coro):
         raise
 
 
-from llmwikify.cli import WikiCLI
+from llmwikify.interfaces.cli import WikiCLI
 from llmwikify.core import Wiki
-from llmwikify.mcp.server import create_mcp_server, serve_mcp
+from llmwikify.interfaces.mcp.server import create_mcp_server, serve_mcp
 
 
 class Args:
@@ -166,7 +166,7 @@ class TestCLIArgParsing:
         Phase 3 #6 — use the parser directly (not main()) to
         verify argparse parsing without starting the MCP server.
         """
-        from llmwikify.cli._app import _build_parser
+        from llmwikify.interfaces.cli._app import _build_parser
 
         parser = _build_parser()
         args = parser.parse_args(["mcp", "--name", "testwiki"])
@@ -179,7 +179,7 @@ class TestCLIArgParsing:
 
         Phase 3 #6 — see test_name_long_parameter.
         """
-        from llmwikify.cli._app import _build_parser
+        from llmwikify.interfaces.cli._app import _build_parser
 
         parser = _build_parser()
         args = parser.parse_args(["mcp", "-n", "shortwiki"])
@@ -189,7 +189,7 @@ class TestCLIArgParsing:
 
     def test_mcp_help_contains_name(self):
         """3.3: mcp --help should mention --name."""
-        from llmwikify.cli.commands import main
+        from llmwikify.interfaces.cli.commands import main
         stdout = StringIO()
         with patch('sys.argv', ['llmwikify', 'mcp', '--help']):
             with patch('sys.stdout', stdout):
@@ -202,7 +202,7 @@ class TestCLIArgParsing:
 
     def test_serve_help_contains_name(self):
         """3.4: serve --help should mention --name."""
-        from llmwikify.cli.commands import main
+        from llmwikify.interfaces.cli.commands import main
         stdout = StringIO()
         with patch('sys.argv', ['llmwikify', 'serve', '--help']):
             with patch('sys.stdout', stdout):
@@ -217,7 +217,7 @@ class TestCLIArgParsing:
 
         Phase 3 #6 — use the parser directly.
         """
-        from llmwikify.cli._app import _build_parser
+        from llmwikify.interfaces.cli._app import _build_parser
 
         parser = _build_parser()
         args = parser.parse_args(["mcp"])
@@ -573,7 +573,7 @@ class TestAutoRegisterMcporter:
         """8.1: Should write new service to ~/.mcporter/mcporter.json."""
         import json
 
-        from llmwikify.mcp.server import _auto_register_mcporter
+        from llmwikify.interfaces.mcp.server import _auto_register_mcporter
 
         fake_home = tmp_path / "fakehome"
         fake_home.mkdir()
@@ -592,7 +592,7 @@ class TestAutoRegisterMcporter:
         """8.2: Should skip if service name already registered."""
         import json
 
-        from llmwikify.mcp.server import _auto_register_mcporter
+        from llmwikify.interfaces.mcp.server import _auto_register_mcporter
 
         fake_home = tmp_path / "fakehome"
         fake_home.mkdir()
@@ -621,7 +621,7 @@ class TestAutoRegisterMcporter:
 
     def test_creates_config_dir_if_missing(self, tmp_path, monkeypatch):
         """8.3: Should create ~/.mcporter/ if it doesn't exist."""
-        from llmwikify.mcp.server import _auto_register_mcporter
+        from llmwikify.interfaces.mcp.server import _auto_register_mcporter
 
         fake_home = tmp_path / "fakehome"
         fake_home.mkdir()
@@ -635,7 +635,7 @@ class TestAutoRegisterMcporter:
 
     def test_prints_success_message(self, tmp_path, monkeypatch):
         """8.4: Should print success message with URL."""
-        from llmwikify.mcp.server import _auto_register_mcporter
+        from llmwikify.interfaces.mcp.server import _auto_register_mcporter
 
         fake_home = tmp_path / "fakehome"
         fake_home.mkdir()
@@ -652,7 +652,7 @@ class TestAutoRegisterMcporter:
 
     def test_handles_write_error_gracefully(self, tmp_path, monkeypatch):
         """8.5: Should not crash on write errors."""
-        from llmwikify.mcp.server import _auto_register_mcporter
+        from llmwikify.interfaces.mcp.server import _auto_register_mcporter
 
         fake_home = tmp_path / "fakehome"
         fake_home.mkdir()

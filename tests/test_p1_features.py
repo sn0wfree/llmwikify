@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from src.llmwikify.core.wiki import Wiki
-from src.llmwikify.core.synthesis_engine import SynthesisEngine
+from llmwikify.core.wiki import Wiki
+from llmwikify.core.synthesis_engine import SynthesisEngine
 
 
 @pytest.fixture
@@ -356,12 +356,12 @@ class TestCLICommands:
 
     def test_suggest_synthesis_command_exists(self):
         """Test that suggest-synthesis command is registered."""
-        from src.llmwikify.cli.commands import WikiCLI
+        from llmwikify.interfaces.cli.commands import WikiCLI
         cli = WikiCLI.__new__(WikiCLI)
         assert hasattr(cli, 'suggest_synthesis')
 
     def test_knowledge_gaps_command_exists(self):
         """Test that knowledge-gaps command is registered."""
-        from src.llmwikify.cli.commands import WikiCLI
+        from llmwikify.interfaces.cli.commands import WikiCLI
         cli = WikiCLI.__new__(WikiCLI)
         assert hasattr(cli, 'knowledge_gaps')

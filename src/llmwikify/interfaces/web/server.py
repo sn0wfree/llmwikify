@@ -35,8 +35,10 @@ def main():
 
     args = parser.parse_args()
 
+    # TODO(4layer-B3): once ``core/`` moves to ``kernel/``, update
+    # the Wiki import to ``from llmwikify.kernel.wiki import Wiki``.
     from llmwikify.core import Wiki
-    from llmwikify.server import WikiServer
+    from llmwikify.interfaces.server import WikiServer
 
     wiki_root = Path(args.wiki_root).resolve()
     wiki = Wiki(wiki_root)

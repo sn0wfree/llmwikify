@@ -6,7 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from llmwikify.server.constants import EXCLUDED_AUTH_PATHS, EXCLUDED_AUTH_PREFIXES
+from llmwikify.interfaces.server.constants import EXCLUDED_AUTH_PATHS, EXCLUDED_AUTH_PREFIXES
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

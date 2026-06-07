@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.llmwikify.core.wiki import Wiki
+from llmwikify.core.wiki import Wiki
 
 
 @pytest.fixture

@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from llmwikify.server import WikiServer
+from llmwikify.interfaces.server import WikiServer
 
 
 @pytest.fixture

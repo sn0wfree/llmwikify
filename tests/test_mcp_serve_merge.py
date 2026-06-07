@@ -46,8 +46,8 @@ def test_mcp_is_argparse_alias_of_serve():
     the parser correctly accepts both names with the same
     flag set.
     """
-    from llmwikify.cli._app import _build_parser
-    from llmwikify.cli.commands.help_cmd import SUBCOMMAND_ALIASES
+    from llmwikify.interfaces.cli._app import _build_parser
+    from llmwikify.interfaces.cli.commands.help_cmd import SUBCOMMAND_ALIASES
 
     for cmd in ("mcp", "serve"):
         # Build the parser (this populates SUBCOMMAND_ALIASES).
@@ -81,7 +81,7 @@ def test_mcp_accepts_serve_only_flags():
     After merge, ``mcp`` is an alias of ``serve``, so all
     serve flags (including ``--web``) are accepted.
     """
-    from llmwikify.cli._app import _build_parser
+    from llmwikify.interfaces.cli._app import _build_parser
 
     parser = _build_parser()
     # 'mcp' should accept 'serve' flags like --web.
@@ -114,7 +114,7 @@ def test_serve_command_is_only_registered_command():
     in COMMAND_REGISTRY. This test catches regression if
     someone re-adds ``McpCommand`` to the registry.
     """
-    from llmwikify.cli._base import COMMAND_REGISTRY
+    from llmwikify.interfaces.cli._base import COMMAND_REGISTRY
 
     assert "serve" in COMMAND_REGISTRY, (
         "serve command must be in COMMAND_REGISTRY"
@@ -141,8 +141,8 @@ def test_help_command_lists_aliases():
     argparse internals at startup. This test verifies the
     mcp → serve alias appears in the alias table.
     """
-    from llmwikify.cli._app import _build_parser
-    from llmwikify.cli.commands.help_cmd import HelpCommand, SUBCOMMAND_ALIASES
+    from llmwikify.interfaces.cli._app import _build_parser
+    from llmwikify.interfaces.cli.commands.help_cmd import HelpCommand, SUBCOMMAND_ALIASES
 
     # Build the parser (this populates SUBCOMMAND_ALIASES).
     _build_parser()
@@ -226,7 +226,7 @@ def test_init_writes_serve_command_in_mcp_config():
     # 2. Verify 'serve' is also a valid entry point (forward
     #    compat for v0.34.0+ rename). We test this by parsing
     #    the command through the real argparse parser.
-    from llmwikify.cli._app import _build_parser
+    from llmwikify.interfaces.cli._app import _build_parser
 
     parser = _build_parser()
     args = parser.parse_args(["serve", "--name", "test-init-template"])
@@ -259,8 +259,8 @@ def test_serve_py_does_not_import_mcp_server():
     again, which would re-trigger 1 internal deprecation
     warning per CLI invocation.
     """
-    src = inspect.getsource(__import__("llmwikify.cli.commands.serve", fromlist=["run_serve"]))
-    assert "from llmwikify.mcp.server import" not in src, (
+    src = inspect.getsource(__import__("llmwikify.interfaces.cli.commands.serve", fromlist=["run_serve"]))
+    assert "from llmwikify.interfaces.mcp.server import" not in src, (
         "cli/commands/serve.py should not import from "
         "llmwikify.mcp.server (use llmwikify.mcp.adapter.MCPAdapter "
         "directly). Phase 3 #6 removed this to silence internal "
@@ -277,7 +277,7 @@ def test_mcp_command_class_not_in_commands_init():
     for backward compat with any external import, but
     it's NOT auto-registered.
     """
-    from llmwikify.cli import commands as commands_pkg
+    from llmwikify.interfaces.cli import commands as commands_pkg
 
     # The __all__ list should not include McpCommand
     if hasattr(commands_pkg, "__all__"):

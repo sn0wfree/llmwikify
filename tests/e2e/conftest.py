@@ -72,7 +72,7 @@ def server_port():
 def start_server(test_wiki, server_port):
     """Start Unified Server for all tests."""
     from llmwikify.core import Wiki
-    from llmwikify.mcp.server import create_unified_server
+    from llmwikify.interfaces.mcp.server import create_unified_server
 
     wiki = Wiki(test_wiki)
     wiki.build_index()

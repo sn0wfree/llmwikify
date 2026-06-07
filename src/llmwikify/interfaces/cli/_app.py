@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ..core import Wiki
+from ...core import Wiki
 from .commands.analyze_source import run_analyze_source
 from .commands.batch import run_batch
 from .commands.build_index import run_build_index
@@ -351,7 +351,7 @@ def main() -> int:
     # Note: we don't dispatch through WikiCLI's methods anymore —
     # the registry is the new dispatch path. WikiCLI is kept only
     # for backward compatibility with external code that does
-    # ``from llmwikify.cli import WikiCLI; cli = WikiCLI(...); cli.X(args)``.
+    # ``from llmwikify.interfaces.cli import WikiCLI; cli = WikiCLI(...); cli.X(args)``.
     cli = WikiCLI(wiki_root, config=config)
 
     # Phase 3 #6 — resolve subcommand aliases before dispatch.
