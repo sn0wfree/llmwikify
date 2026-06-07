@@ -410,6 +410,82 @@ from .apps.chat import ResearchEngine         # new canonical path
 
 ## 4. Execution Plan (10 batches, 3 sprints)
 
+### 4.0 Per-step verification protocol (MANDATORY)
+
+> **Every single commit must run the verification protocol below
+> before being marked complete.** This is non-negotiable: any
+> commit that introduces regressions, new warnings, or test
+> count regressions must be fixed immediately or reverted.
+
+#### Verification command sequence (run after every commit)
+
+```bash
+# Step 1: Full test suite (must equal or exceed baseline)
+pytest tests/ --ignore=tests/e2e -q 2>&1 | tail -5
+# Expected: "===== 1852 passed, 5 skipped =====" (baseline) or higher
+#         After Sprint C: "===== ~1912 passed, 5 skipped ====="
+
+# Step 2: import-linter (must pass all contracts)
+lint-imports
+# Expected: "Contracts: 5 kept, 0 broken."
+
+# Step 3: Diff the test count (must not decrease)
+pytest tests/ --ignore=tests/e2e --collect-only -q 2>&1 | tail -1
+# Expected: >= 1852 (or >= ~1912 after Sprint C5)
+
+# Step 4: New warnings (must not increase)
+pytest tests/ --ignore=tests/e2e -W error 2>&1 | tail -3
+# Expected: no new DeprecationWarning, PendingDeprecationWarning, etc.
+#         (Some warnings may be expected; compare against pre-step baseline)
+```
+
+#### Per-step regression detection checklist
+
+| Check | What to look for | Action if found |
+|-------|------------------|------------------|
+| Test count delta | `passed` count must not decrease | Investigate failing test, fix or revert |
+| New deprecation warnings | `DeprecationWarning` for moved modules | Update shim or add `__getattr__` warning filter |
+| import-linter failure | Contract violation | Fix dependency direction or update contract |
+| Public API breakage | `ImportError` for `from llmwikify.X import Y` (old paths) | Add `_legacy/` shim or update top-level re-export |
+| Lint regression | New ruff/mypy errors | Fix or update noqa |
+| Behavioral test changes | Tests that previously passed now fail | Investigate — likely unintended side effect |
+| Performance regression | Test runtime increases > 20% | Profile and optimize (but category 4 excluded, so accept) |
+
+#### When verification fails
+
+| Severity | Response |
+|----------|----------|
+| Test count drops | **STOP**, investigate, either fix forward or `git revert HEAD` |
+| New warning (minor) | Fix in same commit before next step |
+| import-linter failure | **STOP**, fix dependency or update contract |
+| Performance regression | Note in progress table, proceed (deferred to future) |
+| Cosmetic issue | Fix in next batch |
+
+**No batch proceeds until its last commit passes ALL 4 verification
+steps.** This is the gate that prevents regression cascades.
+
+### Baseline (pre-refactor) — captured 2026-06-07
+
+| Metric | Value |
+|--------|-------|
+| Tests passing | **1852** |
+| Tests skipped | 5 |
+| Tests failing | 1 (pre-existing flaky `test_research.py::TestResearchEngine::test_engine_init_with_model_layering`; **not a regression**) |
+| Total pytest warnings | 370 (most are third-party: pytest-asyncio, pydub, youtube_transcript_api) |
+| Project-specific `DeprecationWarning` count | **17** (sources: `llmwikify.mcp.server`, `llmwikify.agent`, `WikiAgent` — all expected, from shims) |
+| Total Python LOC | 30,194 |
+| Frontend assets in Python package | 274M (web/webui + web/webui-agent) |
+
+> **Captured before Batch A1.** Reference point for all
+> subsequent verification. Any deviation must be investigated
+> and either fixed or explicitly documented.
+>
+> **Acceptable growth during refactor**:
+> - Test count: ≥ 1852 (Sprint C5 adds ~60 → ~1912)
+> - Deprecation warnings: ≤ 17 (shims preserved; can decrease as
+>   shims are removed in v0.33.0)
+> - 1 pre-existing flaky failure: should remain 1 (not a regression)
+
 ### Sprint A: Cleanup + Infrastructure (1.5h)
 
 #### Batch A1: Delete dead code + import-linter (35 min, 🟢 0 risk)
@@ -421,9 +497,11 @@ from .apps.chat import ResearchEngine         # new canonical path
 5. Add `[tool.importlinter]` section to `pyproject.toml`
 6. Add `lint-imports` to CI workflow
 
-**Verification**:
-- `pytest tests/ --ignore=tests/e2e -q` → 1852/1852 pass
-- `lint-imports` → all green
+**Verification** (per §4.0 protocol):
+- [ ] Step 1: `pytest tests/ --ignore=tests/e2e -q` → 1852/1852 pass
+- [ ] Step 2: `lint-imports` → all green
+- [ ] Step 3: test count delta ≥ 0 (no regression)
+- [ ] Step 4: no new deprecation warnings
 
 #### Batch A2: Frontend move + path simplification (45 min, 🟡 medium)
 
@@ -434,10 +512,13 @@ from .apps.chat import ResearchEngine         # new canonical path
 5. Simplify `src/llmwikify/server/utils/webui.py::find_webui_dist()` — delete fallback, only check `ui/webui/dist`
 6. Simplify `src/llmwikify/server/http/routes.py::_mount_agent_spa()` — delete fallback, only check `ui/webui-agent/dist`
 
-**Verification**:
-- `pytest` → 1852/1852
-- `cd ui/webui && npm run build` produces dist/
-- `python -m llmwikify serve` → WebUI loads at `/`, agent UI at `/agent`
+**Verification** (per §4.0 protocol):
+- [ ] Step 1: `pytest tests/ --ignore=tests/e2e -q` → 1852/1852 pass
+- [ ] Step 2: `lint-imports` → all green
+- [ ] Step 3: test count delta ≥ 0 (no regression)
+- [ ] Step 4: no new deprecation warnings
+- [ ] `cd ui/webui && npm run build` produces dist/
+- [ ] `python -m llmwikify serve` → WebUI loads at `/`, agent UI at `/agent`
 
 #### 🚦 Pause 1
 - pytest + lint-imports all green
@@ -456,9 +537,11 @@ from .apps.chat import ResearchEngine         # new canonical path
    - `from .foundation.config import ...`
    - etc.
 
-**Verification**:
-- `pytest` → 1852/1852
-- `lint-imports` → all green
+**Verification** (per §4.0 protocol):
+- [ ] Step 1: `pytest tests/ --ignore=tests/e2e -q` → 1852/1852 pass
+- [ ] Step 2: `lint-imports` → all green
+- [ ] Step 3: test count delta ≥ 0 (no regression)
+- [ ] Step 4: no new deprecation warnings
 
 #### Batch B2: L4 interfaces/ (2h, 🟡 medium)
 
@@ -469,9 +552,11 @@ from .apps.chat import ResearchEngine         # new canonical path
 3. Update `__init__.py` re-exports
 4. Move `_legacy/mcp_server.py`, `_legacy/create_unified_server.py` shims in place
 
-**Verification**:
-- `pytest` → 1852/1852
-- `lint-imports` → all green
+**Verification** (per §4.0 protocol):
+- [ ] Step 1: `pytest tests/ --ignore=tests/e2e -q` → 1852/1852 pass
+- [ ] Step 2: `lint-imports` → all green
+- [ ] Step 3: test count delta ≥ 0 (no regression)
+- [ ] Step 4: no new deprecation warnings
 - Manual: `llmwikify init`, `llmwikify serve`, `llmwikify mcp` all work
 
 #### 🚦 Pause 2
@@ -518,9 +603,11 @@ kernel/wiki/mixins/
 
 Cross-package import updates (large mechanical change).
 
-**Verification**:
-- `pytest` → 1852/1852
-- `lint-imports` → all green
+**Verification** (per §4.0 protocol):
+- [ ] Step 1: `pytest tests/ --ignore=tests/e2e -q` → 1852/1852 pass
+- [ ] Step 2: `lint-imports` → all green
+- [ ] Step 3: test count delta ≥ 0 (no regression)
+- [ ] Step 4: no new deprecation warnings
 
 #### Batch B4: L3 apps/ + `_legacy/` shims (3h, 🔴 high)
 
@@ -534,9 +621,11 @@ Cross-package import updates (large mechanical change).
 8. Create `_legacy/` package with all shims centralized
 9. Update `__init__.py` top-level re-exports
 
-**Verification**:
-- `pytest` → 1852/1852
-- `lint-imports` → all green
+**Verification** (per §4.0 protocol):
+- [ ] Step 1: `pytest tests/ --ignore=tests/e2e -q` → 1852/1852 pass
+- [ ] Step 2: `lint-imports` → all green
+- [ ] Step 3: test count delta ≥ 0 (no regression)
+- [ ] Step 4: no new deprecation warnings
 - Backward compat test: `from llmwikify.agent import *` still works
 
 #### 🚦 Pause 3
@@ -672,13 +761,14 @@ paths or test removed functionality.
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| Path changes break external code | 🟡 medium | `_legacy/` shim + top-level re-exports |
+| Path changes break external code | 🟡 medium | `_legacy/` shim + top-level re-exports; per-step test verifies shim works |
 | import-linter false positives | 🟡 medium | Enable contracts one at a time, start with disabled |
-| 27K+ LOC move introduces typos | 🔴 high | Full test suite per batch + per-file static checks |
-| `apps/chat` C4 merge breaks public API | 🔴 high | 5 files preserve API, full test suite as safety net |
+| 27K+ LOC move introduces typos | 🔴 high | **Per-step** full test suite + per-file static checks; immediate revert on regression |
+| `apps/chat` C4 merge breaks public API | 🔴 high | 5 files preserve API; **per-step** full test suite as safety net; C5.2 test backfill before C4 refactor |
 | Frontend path not found at runtime | 🟢 low | Dev message: `cd ui/webui && npm run build` |
 | `webui-agent` dist missing in dev | 🟢 low | Same as above for `ui/webui-agent/` |
-| Backward compat shim has bugs | 🟡 medium | Each shim has explicit test in Sprint A/B/C verification |
+| Backward compat shim has bugs | 🟡 medium | Each shim has explicit test in Sprint A/B/C verification; per-step deprecation warning check |
+| **New regressions introduced mid-refactor** | 🔴 high | **Mandatory per-step test + warning count check**; any commit that drops test count or adds new warnings is immediately fixed or reverted |
 
 **Rollback**: Each batch is independently revertable via `git revert`.
 
@@ -686,9 +776,19 @@ paths or test removed functionality.
 
 ## 6. Progress Tracking
 
-> **Update this section as batches complete.** Each batch is one
-> or more commits. After each commit, run pytest + lint-imports
-> and record results here.
+> **Update this section as commits complete.** Each commit is one
+> step. After each commit, run the **per-step verification
+> protocol (§4.0)** and record results in the table below.
+> **No batch proceeds until every commit in it passes all
+> 4 verification steps.**
+
+### Per-step test results (per commit)
+
+> Append one row per commit. Format:
+> `Batch | commit-hash | pytest (pass/skip) | warnings | lint-imports | regressions?`
+
+| # | Batch | Commit | pytest | New warnings | lint-imports | Regression? | Notes |
+|---|-------|--------|--------|--------------|--------------|-------------|-------|
 
 ### Batch progress table
 
@@ -714,6 +814,15 @@ paths or test removed functionality.
 | C5.6 | ⬜ Not started | — | — | — | — |
 | C5.7 | ⬜ Not started | — | — | — | — |
 | 🚦 Final | ⬜ Not started | — | — | — | — |
+
+### Per-batch pre/post test snapshot (fill at batch boundaries)
+
+> At each batch boundary, record full pytest + lint-imports +
+> deprecation warning count. Compare to baseline (1852 pass,
+> 5 skip, 1 pre-existing flaky, 0 new deprecation warnings).
+
+| Batch | pre-pytest | post-pytest | Δ pass | Δ skip | Δ warnings | Regression? |
+|-------|------------|-------------|--------|--------|------------|-------------|
 
 ### Coverage tracking (Sprint C5)
 
