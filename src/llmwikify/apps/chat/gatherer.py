@@ -9,9 +9,9 @@ from typing import Any
 from llmwikify.foundation.extractors.base import ExtractedContent
 from llmwikify.foundation.extractors.web import extract_url
 from llmwikify.foundation.extractors.youtube import extract_youtube
-from llmwikify.autoresearch.db import AutoResearchDatabase
-from llmwikify.autoresearch.session import ResearchSessionManager
-from llmwikify.autoresearch.source_filter import SourceFilter
+from llmwikify.apps.chat.db import AutoResearchDatabase
+from llmwikify.apps.chat.session import ResearchSessionManager
+from llmwikify.apps.chat.source_filter import SourceFilter
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +165,7 @@ class SourceGatherer:
 
             # For web/youtube without URL, search first
             if source_type in ("web", "youtube") and not url:
-                from llmwikify.autoresearch.web_search import WebSearch
+                from llmwikify.apps.chat.web_search import WebSearch
                 searcher = WebSearch(self.config)
                 try:
                     if source_type == "youtube":

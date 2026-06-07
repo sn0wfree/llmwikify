@@ -29,11 +29,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from llmwikify.autoresearch.llm_step import run_prompt
+from llmwikify.apps.chat.llm_step import run_prompt
 
 if TYPE_CHECKING:
-    from llmwikify.autoresearch.engine import ResearchEngine
-    from llmwikify.autoresearch.state import ResearchState
+    from llmwikify.apps.chat.engine import ResearchEngine
+    from llmwikify.apps.chat.state import ResearchState
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +174,7 @@ class ResearchReasoner:
         Migrated to use ``run_prompt``. Falls back to the
         rule-based reasoner on persistent LLM failure.
         """
-        from llmwikify.autoresearch.prompts import _reason_fallback
+        from llmwikify.apps.chat.prompts import _reason_fallback
 
         analyzed_count = sum(1 for s in state.sources if s.get("analysis"))
         failed_sq = sum(

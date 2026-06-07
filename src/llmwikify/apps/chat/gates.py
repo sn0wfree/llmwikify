@@ -29,11 +29,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from llmwikify.autoresearch import actions
+from llmwikify.apps.chat import actions
 
 if TYPE_CHECKING:
-    from llmwikify.autoresearch.engine import ResearchEngine
-    from llmwikify.autoresearch.state import ResearchState
+    from llmwikify.apps.chat.engine import ResearchEngine
+    from llmwikify.apps.chat.state import ResearchState
 
 logger = logging.getLogger(__name__)
 

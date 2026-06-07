@@ -221,7 +221,7 @@ def main() -> int:
     if backup and not args.json:
         logger.info("Backed up shared DB to: %s", backup)
 
-    from llmwikify.autoresearch.db_migrations import migrate_research_six_step_columns
+    from llmwikify.apps.chat.db_migrations import migrate_research_six_step_columns
     n = migrate_research_six_step_columns(_get_agent_dir() / ".llmwiki_agent.db", drop_columns=True)
     if not args.json:
         logger.info("Dropped %d column(s)", n)

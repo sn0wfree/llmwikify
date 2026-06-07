@@ -16,7 +16,7 @@ import ast
 from pathlib import Path
 
 
-AUTORESEARCH_DIR = Path("src/llmwikify/autoresearch")
+AUTORESEARCH_DIR = Path("src/llmwikify/apps/chat")
 DEPRECATED_PATH = "llmwikify.agent.backend.adapters"
 
 
@@ -46,7 +46,7 @@ def test_autoresearch_does_not_import_from_deprecated_adapters():
 
 def test_autoresearch_engine_imports_streamable_from_new_home():
     """engine.py uses the new home for StreamableLLMClient."""
-    from llmwikify.autoresearch import engine
+    from llmwikify.apps.chat import engine
 
     src = Path(engine.__file__).read_text()
     assert "from llmwikify.foundation.llm.streamable import StreamableLLMClient" in src
@@ -55,7 +55,7 @@ def test_autoresearch_engine_imports_streamable_from_new_home():
 
 def test_autoresearch_actions_imports_streamable_from_new_home():
     """actions.py uses the new home for StreamableLLMClient."""
-    from llmwikify.autoresearch import actions
+    from llmwikify.apps.chat import actions
 
     src = Path(actions.__file__).read_text()
     assert "from llmwikify.foundation.llm.streamable import StreamableLLMClient" in src
@@ -64,7 +64,7 @@ def test_autoresearch_actions_imports_streamable_from_new_home():
 
 def test_autoresearch_engine_helpers_docstring_updated():
     """engine_helpers.py no longer references the deprecated path in its docs."""
-    from llmwikify.autoresearch import engine_helpers
+    from llmwikify.apps.chat import engine_helpers
 
     src = Path(engine_helpers.__file__).read_text()
     assert "agent.backend.adapters" not in src

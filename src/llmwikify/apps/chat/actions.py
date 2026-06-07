@@ -15,16 +15,16 @@ from dataclasses import dataclass
 from typing import Any
 
 from llmwikify.foundation.llm.streamable import StreamableLLMClient
-from llmwikify.autoresearch.clarifier import ResearchClarifier
-from llmwikify.autoresearch.config import merge_six_step_config
-from llmwikify.autoresearch.gatherer import SourceGatherer
-from llmwikify.autoresearch.llm_step import run_prompt
-from llmwikify.autoresearch.prompts import _plan_fallback, _replan_fallback
-from llmwikify.autoresearch.quality_gate import QualityGate
-from llmwikify.autoresearch.report import ReportGenerator
-from llmwikify.autoresearch.review import ResearchReviewer, ResearchRevisor
-from llmwikify.autoresearch.session import ResearchSessionManager
-from llmwikify.autoresearch.state import (
+from llmwikify.apps.chat.clarifier import ResearchClarifier
+from llmwikify.apps.chat.config import merge_six_step_config
+from llmwikify.apps.chat.gatherer import SourceGatherer
+from llmwikify.apps.chat.llm_step import run_prompt
+from llmwikify.apps.chat.prompts import _plan_fallback, _replan_fallback
+from llmwikify.apps.chat.quality_gate import QualityGate
+from llmwikify.apps.chat.report import ReportGenerator
+from llmwikify.apps.chat.review import ResearchReviewer, ResearchRevisor
+from llmwikify.apps.chat.session import ResearchSessionManager
+from llmwikify.apps.chat.state import (
     ActionMetrics,
     MetricsCollector,
     ResearchState,
@@ -440,7 +440,7 @@ async def action_gather(
 
     # ─── 6-step step 2: evidence scoring (run only when enabled) ───
     if ctx.config.get("evidence_scoring_enabled", True) and sources:
-        from llmwikify.autoresearch.source_filter import SourceFilter
+        from llmwikify.apps.chat.source_filter import SourceFilter
         sf = SourceFilter(ctx.config)
         new_scores: dict[str, float] = {}
         for src in sources:
@@ -534,7 +534,7 @@ async def action_synthesize(
     # ─── 6-step step 3: reasoning chain check ───
     if ctx.config.get("reasoning_check_enabled", True):
         try:
-            from llmwikify.autoresearch.reasoning_checker import ReasoningChecker
+            from llmwikify.apps.chat.reasoning_checker import ReasoningChecker
             checker = ReasoningChecker()
             synth_text = synthesis_to_text(state.synthesis)
             result = checker.check(
@@ -614,7 +614,7 @@ async def action_report(
     # ─── 6-step step 4: structure validation ───
     if state.report_md and ctx.config.get("structure_check_enabled", True):
         try:
-            from llmwikify.autoresearch.structure_validator import StructureValidator
+            from llmwikify.apps.chat.structure_validator import StructureValidator
             validator = StructureValidator()
             result = validator.validate(
                 report=state.report_md,

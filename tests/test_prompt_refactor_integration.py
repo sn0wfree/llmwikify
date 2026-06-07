@@ -89,7 +89,7 @@ class TestAllSevenStepsGoThroughRunPrompt:
         self, prompt_name, llm_role, expects_json, client_attr,
     ):
         """Each step uses the LLM client matching its role."""
-        from llmwikify.autoresearch.llm_step import run_prompt
+        from llmwikify.apps.chat.llm_step import run_prompt
 
         chat_return = (
             json.dumps({"x": 1}) if expects_json else "raw markdown text"
@@ -145,7 +145,7 @@ class TestFrameworkAugmentationEndToEnd:
     """
 
     def test_report_injects_before_yaml_messages(self):
-        from llmwikify.autoresearch.llm_step import run_prompt
+        from llmwikify.apps.chat.llm_step import run_prompt
 
         llm = _make_llm("# R")
         ctx = _make_ctx(
@@ -172,7 +172,7 @@ class TestFrameworkAugmentationEndToEnd:
         assert len(messages) >= 2
 
     def test_review_injects_before_yaml_messages(self):
-        from llmwikify.autoresearch.llm_step import run_prompt
+        from llmwikify.apps.chat.llm_step import run_prompt
 
         llm = _make_llm(json.dumps({"approved": True, "score": 8}))
         ctx = _make_ctx(
@@ -203,7 +203,7 @@ class TestFrameworkAugmentationEndToEnd:
     def test_no_framework_injection_for_non_augmented_steps(self, prompt_name):
         """Steps without framework_kind set never inject, even when
         six_step_context is provided."""
-        from llmwikify.autoresearch.llm_step import run_prompt
+        from llmwikify.apps.chat.llm_step import run_prompt
 
         chat_return = json.dumps({"x": 1})
         default_llm = _make_llm(chat_return)
@@ -271,7 +271,7 @@ class TestPromptRegistrySingleSourceOfTruth:
     def test_clarifier_does_not_define_its_own_prompt(self):
         """clarifier.py should not have its own inline system prompt
         or message-building code; it should rely on run_prompt."""
-        from llmwikify.autoresearch import clarifier
+        from llmwikify.apps.chat import clarifier
         source = open(clarifier.__file__).read()
         # The inline Chinese system prompt is no longer in clarifier.py
         assert "你是一个研究澄清助手" not in source
@@ -281,35 +281,35 @@ class TestPromptRegistrySingleSourceOfTruth:
     def test_actions_does_not_have_inline_replan_messages(self):
         """actions._plan_for_gaps should not have its own inline
         English prompt; it should use run_prompt."""
-        from llmwikify.autoresearch import actions
+        from llmwikify.apps.chat import actions
         source = open(actions.__file__).read()
         assert "You are a research planner" not in source
 
     def test_engine_does_not_have_inline_reason_messages(self):
         """engine._llm_reason should not have its own inline English
         ReAct prompt; it should use run_prompt."""
-        from llmwikify.autoresearch import engine
+        from llmwikify.apps.chat import engine
         source = open(engine.__file__).read()
         assert "You are a research orchestrator" not in source
 
     def test_report_does_not_have_its_own_framework_block_renderer(self):
         """report.py should not define its own _render_framework_block;
         it should use prompts.render_framework_block."""
-        from llmwikify.autoresearch import report
+        from llmwikify.apps.chat import report
         source = open(report.__file__).read()
         assert "def _render_framework_block" not in source
 
     def test_review_does_not_have_its_own_framework_block_renderer(self):
         """review.py should not define its own _render_framework_review_block;
         it should use prompts.render_framework_block (via run_prompt)."""
-        from llmwikify.autoresearch import review
+        from llmwikify.apps.chat import review
         source = open(review.__file__).read()
         assert "def _render_framework_review_block" not in source
 
     def test_no_inline_md5_in_report_or_review(self):
         """The md5-based source hash logic should be in prompts.source_hash,
         not duplicated in report/review."""
-        from llmwikify.autoresearch import report, review
+        from llmwikify.apps.chat import report, review
         for module in (report, review):
             source = open(module.__file__).read()
             assert "hashlib.md5" not in source, (

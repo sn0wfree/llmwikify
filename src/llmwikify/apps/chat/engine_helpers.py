@@ -25,10 +25,50 @@ clarifier); the original inline code is replaced.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import Any
 
-from llmwikify.autoresearch._json_utils import safe_json_loads
+
+def safe_json_loads(raw: str, *, allow_truncate: bool = True) -> Any:
+    """Robustly parse JSON returned by an LLM.
+
+    Per Sprint C cleanup (C3 dead code): inlined from the
+    deleted ``_json_utils`` module to avoid a circular
+    import with ``llm_step``.
+    """
+    text = raw.strip() if raw else ""
+    if not text:
+        raise json.JSONDecodeError("empty response", "", 0)
+
+    if text.startswith("```"):
+        parts = text.split("\n", 1)
+        text = parts[1] if len(parts) > 1 else text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+
+    if not text:
+        raise json.JSONDecodeError("empty response (after fence strip)", "", 0)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        if not allow_truncate:
+            raise
+        start = -1
+        for i, c in enumerate(text):
+            if c in "{[":
+                start = i
+                break
+        if start < 0:
+            raise
+        try:
+            obj, _end = json.JSONDecoder().raw_decode(text, idx=start)
+            return obj
+        except json.JSONDecodeError:
+            raise
+
 
 logger = logging.getLogger(__name__)
 

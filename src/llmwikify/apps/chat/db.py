@@ -150,7 +150,7 @@ class AutoResearchDatabase:
         Each migration is a no-op if the column is already present.
         Add new migrations here when adding new schema columns.
         """
-        from llmwikify.autoresearch.db_migrations import migrate_v3_add_events_column
+        from llmwikify.apps.chat.db_migrations import migrate_v3_add_events_column
         try:
             migrate_v3_add_events_column(self.db_path)
         except Exception as e:

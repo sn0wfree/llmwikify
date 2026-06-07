@@ -24,8 +24,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llmwikify.autoresearch import LLMCallMetrics, MetricsCollector
-from llmwikify.autoresearch.llm_step import run_prompt
+from llmwikify.apps.chat import LLMCallMetrics, MetricsCollector
+from llmwikify.apps.chat.llm_step import run_prompt
 
 
 # ─── helpers ──────────────────────────────────────────────────────────
@@ -362,7 +362,7 @@ class TestRunPromptMetricsRobustness:
 class TestBackwardCompatWithExistingMetrics:
     def test_action_metrics_still_work(self):
         """The legacy action-level metrics path is unchanged."""
-        from llmwikify.autoresearch import ActionMetrics
+        from llmwikify.apps.chat import ActionMetrics
         mc = MetricsCollector(session_id="s1")
         a = ActionMetrics(action="plan", start_time=0.0)
         a.finish()
@@ -372,7 +372,7 @@ class TestBackwardCompatWithExistingMetrics:
 
     def test_session_metrics_alias_still_works(self):
         """SessionMetrics is an alias for MetricsCollector."""
-        from llmwikify.autoresearch import SessionMetrics
+        from llmwikify.apps.chat import SessionMetrics
         assert SessionMetrics is MetricsCollector
 
 
@@ -387,30 +387,30 @@ class TestSubmoduleMetricsKwarg:
     """
 
     def test_clarifier_accepts_metrics(self):
-        from llmwikify.autoresearch.clarifier import ResearchClarifier
+        from llmwikify.apps.chat.clarifier import ResearchClarifier
         mc = MetricsCollector(session_id="s")
         c = ResearchClarifier(MagicMock(), config={}, metrics=mc)
         assert c.metrics is mc
 
     def test_clarifier_metrics_defaults_to_none(self):
-        from llmwikify.autoresearch.clarifier import ResearchClarifier
+        from llmwikify.apps.chat.clarifier import ResearchClarifier
         c = ResearchClarifier(MagicMock())
         assert c.metrics is None
 
     def test_report_accepts_metrics(self):
-        from llmwikify.autoresearch.report import ReportGenerator
+        from llmwikify.apps.chat.report import ReportGenerator
         mc = MetricsCollector(session_id="s")
         r = ReportGenerator(MagicMock(), MagicMock(), config={}, metrics=mc)
         assert r.metrics is mc
 
     def test_reviewer_accepts_metrics(self):
-        from llmwikify.autoresearch.review import ResearchReviewer
+        from llmwikify.apps.chat.review import ResearchReviewer
         mc = MetricsCollector(session_id="s")
         rv = ResearchReviewer(MagicMock(), MagicMock(), config={}, metrics=mc)
         assert rv.metrics is mc
 
     def test_revisor_accepts_metrics(self):
-        from llmwikify.autoresearch.review import ResearchRevisor
+        from llmwikify.apps.chat.review import ResearchRevisor
         mc = MetricsCollector(session_id="s")
         rs = ResearchRevisor(MagicMock(), MagicMock(), config={}, metrics=mc)
         assert rs.metrics is mc
@@ -418,7 +418,7 @@ class TestSubmoduleMetricsKwarg:
     def test_submodule_metrics_flows_to_run_prompt(self):
         """When a submodule has metrics, run_prompt records into it
         (not the engine's _action_ctx)."""
-        from llmwikify.autoresearch.clarifier import ResearchClarifier
+        from llmwikify.apps.chat.clarifier import ResearchClarifier
 
         # Submodule's own MetricsCollector
         sub_mc = MetricsCollector(session_id="sub")

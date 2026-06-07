@@ -13,10 +13,10 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from llmwikify.autoresearch.config import merge_six_step_config
-from llmwikify.autoresearch.db import AutoResearchDatabase
-from llmwikify.autoresearch.engine import ResearchEngine
-from llmwikify.autoresearch.task_manager import get_task_manager
+from llmwikify.apps.chat.config import merge_six_step_config
+from llmwikify.apps.chat.db import AutoResearchDatabase
+from llmwikify.apps.chat.engine import ResearchEngine
+from llmwikify.apps.chat.task_manager import get_task_manager
 
 logger = logging.getLogger(__name__)
 

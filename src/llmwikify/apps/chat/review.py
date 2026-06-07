@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from llmwikify.autoresearch.llm_step import run_prompt
-from llmwikify.autoresearch.prompts import _review_fallback, source_hash as _source_hash
+from llmwikify.apps.chat.llm_step import run_prompt
+from llmwikify.apps.chat.prompts import _review_fallback, source_hash as _source_hash
 
 logger = logging.getLogger(__name__)
 

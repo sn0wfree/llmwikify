@@ -31,7 +31,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.autoresearch.llm_step import run_prompt
+from llmwikify.apps.chat.llm_step import run_prompt
 
 
 # ─── research_clarify.yaml matches legacy Chinese inline content ─────
@@ -243,7 +243,7 @@ class TestNoInlinePromptResidue:
     """
 
     def test_clarifier_no_chinese_inline_prompt(self):
-        from llmwikify.autoresearch import clarifier
+        from llmwikify.apps.chat import clarifier
         source = open(clarifier.__file__).read()
         # The legacy Chinese prompt text should not be in the source
         assert "你是一个研究澄清助手" not in source
@@ -251,13 +251,13 @@ class TestNoInlinePromptResidue:
         assert "def _build_messages" not in source
 
     def test_actions_no_english_replan_prompt(self):
-        from llmwikify.autoresearch import actions
+        from llmwikify.apps.chat import actions
         source = open(actions.__file__).read()
         # Legacy English replan system prompt
         assert "You are a research planner. Generate focused sub-queries" not in source
 
     def test_engine_no_reason_prompt(self):
-        from llmwikify.autoresearch import engine
+        from llmwikify.apps.chat import engine
         source = open(engine.__file__).read()
         # Legacy English reason prompt
         assert "You are a research orchestrator using ReAct reasoning" not in source

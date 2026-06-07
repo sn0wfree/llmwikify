@@ -16,28 +16,28 @@ from functools import partial
 from typing import Any
 
 from llmwikify.foundation.llm.streamable import StreamableLLMClient
-from llmwikify.autoresearch.db import AutoResearchDatabase
+from llmwikify.apps.chat.db import AutoResearchDatabase
 from llmwikify.apps.agent.providers.registry import create_llm
-from llmwikify.autoresearch import actions
-from llmwikify.autoresearch.actions import ActionContext
-from llmwikify.autoresearch.analyzer import SourceAnalyzer
-from llmwikify.autoresearch.config import merge_six_step_config
-from llmwikify.autoresearch.gatherer import SourceGatherer
-from llmwikify.autoresearch.gates import ResearchGates
-from llmwikify.autoresearch.observer import ResearchObserver
-from llmwikify.autoresearch.reasoner import ResearchReasoner
-from llmwikify.autoresearch.resume import ResearchResumeLoader
-from llmwikify.autoresearch.llm_step import run_prompt
-from llmwikify.autoresearch.state import (
+from llmwikify.apps.chat import actions
+from llmwikify.apps.chat.actions import ActionContext
+from llmwikify.apps.chat.analyzer import SourceAnalyzer
+from llmwikify.apps.chat.config import merge_six_step_config
+from llmwikify.apps.chat.gatherer import SourceGatherer
+from llmwikify.apps.chat.gates import ResearchGates
+from llmwikify.apps.chat.observer import ResearchObserver
+from llmwikify.apps.chat.reasoner import ResearchReasoner
+from llmwikify.apps.chat.resume import ResearchResumeLoader
+from llmwikify.apps.chat.llm_step import run_prompt
+from llmwikify.apps.chat.state import (
     MetricsCollector,
     ResearchState,
     VALID_TRANSITIONS,
 )
-from llmwikify.autoresearch.report import ReportGenerator
-from llmwikify.autoresearch.review import ResearchReviewer, ResearchRevisor
-from llmwikify.autoresearch.session import ResearchSessionManager
-from llmwikify.autoresearch.synthesizer import ResearchSynthesizer
-from llmwikify.autoresearch.quality_gate import QualityGate
+from llmwikify.apps.chat.report import ReportGenerator
+from llmwikify.apps.chat.review import ResearchReviewer, ResearchRevisor
+from llmwikify.apps.chat.session import ResearchSessionManager
+from llmwikify.apps.chat.synthesizer import ResearchSynthesizer
+from llmwikify.apps.chat.quality_gate import QualityGate
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class ResearchEngine:
         self._quality_gate = QualityGate(self.config)
 
         # ─── 6-step framework: clarifier (schema is built into the DB) ──
-        from llmwikify.autoresearch.clarifier import ResearchClarifier
+        from llmwikify.apps.chat.clarifier import ResearchClarifier
 
         self.clarifier = ResearchClarifier(self._planning_llm, self.config)
         # The 6-step JSON fields (clarification/reasoning/structure/...) are

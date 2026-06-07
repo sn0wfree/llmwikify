@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from llmwikify.autoresearch.llm_step import run_prompt
-from llmwikify.autoresearch.prompts import _clarify_fallback
+from llmwikify.apps.chat.llm_step import run_prompt
+from llmwikify.apps.chat.prompts import _clarify_fallback
 
 logger = logging.getLogger(__name__)
 

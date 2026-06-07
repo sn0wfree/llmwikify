@@ -6,8 +6,8 @@ import logging
 from collections.abc import Iterator
 from typing import Any
 
-from llmwikify.autoresearch.llm_step import run_prompt
-from llmwikify.autoresearch.prompts import source_hash as _source_hash
+from llmwikify.apps.chat.llm_step import run_prompt
+from llmwikify.apps.chat.prompts import source_hash as _source_hash
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +131,8 @@ class ReportGenerator:
         not call this method.
         """
         from llmwikify.core.prompt_registry import PromptRegistry
-        from llmwikify.autoresearch.engine_helpers import resolve_llm_params
-        from llmwikify.autoresearch.prompts import render_framework_block
+        from llmwikify.apps.chat.engine_helpers import resolve_llm_params
+        from llmwikify.apps.chat.prompts import render_framework_block
 
         registry = PromptRegistry(provider=getattr(self.llm_client, "provider", "openai"))
         source_contents = self._build_source_contents(sources)

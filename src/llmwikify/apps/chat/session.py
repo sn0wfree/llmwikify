@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from llmwikify.autoresearch.db import AutoResearchDatabase
+from llmwikify.apps.chat.db import AutoResearchDatabase
 
 
 class ResearchSessionManager:
