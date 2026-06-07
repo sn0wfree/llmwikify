@@ -207,11 +207,14 @@ exclude_lines = [
 
 [tool.importlinter]
 # 4-layer architecture enforcement.
-# Contracts are added incrementally as each layer is created in
-# the refactor (see docs/designs/refactor-4layer-architecture.md).
-# At A1, no contracts are enforceable since the new layers
-# (foundation/, kernel/, apps/, interfaces/) don't exist yet.
-# Contracts will be added as layers are introduced in Sprint B.
+# Replaced by the custom ``scripts/check_architecture.py`` AST
+# check (see the 4-layer refactor design doc
+# docs/designs/refactor-4layer-architecture.md). import-linter
+# proved to be too brittle: the .importlinter ini format has a
+# 'name' vs 'id' field inconsistency that surfaces only at
+# runtime, and the TOML form requires verbose nested tables.
+# The custom script gives the same enforcement with no
+# external dependency and full control over rule encoding.
 root_package = "llmwikify"
 include_external_packages = true
 contracts = []

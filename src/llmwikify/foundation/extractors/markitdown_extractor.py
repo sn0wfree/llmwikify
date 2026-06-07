@@ -47,12 +47,29 @@ class MarkItDownExtractor:
         else:
             # Fallback to existing extractors
             pass
+
+    For LLM-based image OCR / vision descriptions, pass a pre-constructed
+    ``llm_client`` and ``llm_model`` instead of letting the extractor
+    build one from a config dict. This keeps the ``extractors`` package
+    independent of the ``llm`` package (L1 ``foundation-isolation``).
     """
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        llm_client: Any | None = None,
+        llm_model: str | None = None,
+    ):
         self._md: Any | None = None
         self._available: bool = False
         self._config = config
+        # Per the 4-layer refactor (Batch B1), we no longer
+        # ``from ..llm import LLMClient`` here. If ``llm_client`` is
+        # None but ``config`` is provided and LLM is enabled, we skip
+        # the LLM-augmented MarkItDown path silently (callers can
+        # pre-construct the client if they want vision OCR).
+        self._llm_client = llm_client
+        self._llm_model = llm_model
         self._init_markitdown()
 
     @property
@@ -66,17 +83,8 @@ class MarkItDownExtractor:
         except ImportError:
             return
 
-        # Try to configure LLM client for image descriptions / OCR
-        llm_client = None
-        llm_model = None
-
-        if self._config and self._config.get("llm", {}).get("enabled"):
-            try:
-                from ..llm import LLMClient
-                llm_client = LLMClient.from_config(self._config)
-                llm_model = self._config["llm"].get("model", "gpt-4o")
-            except (ImportError, ValueError, OSError):
-                pass
+        llm_client = self._llm_client
+        llm_model = self._llm_model
 
         try:
             if llm_client:
