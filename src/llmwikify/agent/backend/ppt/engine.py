@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from llmwikify.llm.streamable import StreamableLLMClient
 from .rules import resolve_layout, validate_content_for_layout
@@ -25,7 +25,6 @@ from .themes import get_theme
 
 logger = logging.getLogger(__name__)
 
-
 def _bullet_to_str(item) -> str:
     """Convert an LLM bullet item (string or dict) to a plain string."""
     if isinstance(item, str):
@@ -42,7 +41,6 @@ def _bullet_to_str(item) -> str:
                 parts.append(str(item[key]))
         return ": ".join(parts) if parts else str(item)
     return str(item)
-
 
 # ─── Prompts ──────────────────────────────────────────────────────────────
 # v0.6.2.patch1: Prompt 全面升级
@@ -347,7 +345,6 @@ CHAT_OUTLINE_PROMPT_ZH = """你是一位资深演示文稿大纲设计师（10 �
 【禁止】❌ 首末用 section、全本仅用 bullets、标题与 description 重复
 """
 
-
 # ─── Prompt helpers ────────────────────────────────────────────────────────
 # v0.6.2.patch1: 4 个 helper 统一支持 language 路由
 # 当前仅 zh 实现，en 返回 zh + TODO 标记（per Q6 中文版优先）
@@ -357,13 +354,11 @@ _LANGUAGE_TODO_MARKER = (
     "Currently falling back to Chinese prompt. -->\n"
 )
 
-
 def _select_prompt(language: str, zh_prompt: str) -> str:
     """语言路由：仅 zh 实现；en 返回中文 + TODO 标记（v0.6.3 补全）。"""
     if language == "zh":
         return zh_prompt
     return zh_prompt + _LANGUAGE_TODO_MARKER
-
 
 def get_outline_prompt(language: str = "zh", **kwargs) -> str:
     """Step 1: 大纲生成提示词（topic → outline）。
@@ -372,7 +367,6 @@ def get_outline_prompt(language: str = "zh", **kwargs) -> str:
     """
     return _select_prompt(language, OUTLINE_PROMPT_ZH).format(**kwargs)
 
-
 def get_content_prompt(language: str = "zh", **kwargs) -> str:
     """Step 2: 逐页内容生成提示词（outline page → slide content）。
 
@@ -380,16 +374,13 @@ def get_content_prompt(language: str = "zh", **kwargs) -> str:
     """
     return _select_prompt(language, CONTENT_PROMPT_ZH).format(**kwargs)
 
-
 def get_research_prompt(language: str = "zh", **kwargs) -> str:
     """Research → outline 提示词。"""
     return _select_prompt(language, RESEARCH_OUTLINE_PROMPT_ZH).format(**kwargs)
 
-
 def get_chat_prompt(language: str = "zh", **kwargs) -> str:
     """Chat → outline 提示词。"""
     return _select_prompt(language, CHAT_OUTLINE_PROMPT_ZH).format(**kwargs)
-
 
 # ─── Engine ────────────────────────────────────────────────────────────────
 
@@ -451,7 +442,7 @@ class PPTEngine:
         """
         start_time = time.monotonic()
         theme = get_theme(request.theme)
-        slides: List[SlideContent] = []
+        slides: list[SlideContent] = []
         
         total_pages = len(request.outline.pages)
         
@@ -501,7 +492,7 @@ class PPTEngine:
 
         start_time = time.monotonic()
         theme = get_theme(request.theme)
-        slides: List[SlideContent] = []
+        slides: list[SlideContent] = []
         total_pages = len(request.outline.pages)
 
         for idx, page in enumerate(request.outline.pages):
@@ -588,7 +579,7 @@ class PPTEngine:
         self,
         topic: str,
         summary: str,
-        findings: List[str],
+        findings: list[str],
         source_count: int,
     ) -> Outline:
         """
@@ -626,7 +617,7 @@ class PPTEngine:
         self,
         topic: str,
         summary: str,
-        key_points: List[str],
+        key_points: list[str],
         message_count: int,
     ) -> Outline:
         """
@@ -754,7 +745,7 @@ class PPTEngine:
             image=content_data.get("image"),
         )
 
-    async def _call_llm(self, messages: List[Dict[str, str]]) -> str:
+    async def _call_llm(self, messages: list[dict[str, str]]) -> str:
         """Call LLM and return response text."""
         # Use sync chat in a thread to avoid blocking
         import asyncio
@@ -764,7 +755,7 @@ class PPTEngine:
             lambda: self.llm.chat(messages, json_mode=True),
         )
 
-    def _parse_json(self, text: str) -> Dict[str, Any]:
+    def _parse_json(self, text: str) -> dict[str, Any]:
         """Parse JSON from LLM response, handling markdown code blocks."""
         # Try to extract JSON from markdown code block
         if "```json" in text:
@@ -792,8 +783,8 @@ class PPTEngine:
 
     def _validate_outline(
         self,
-        data: Dict[str, Any],
-        num_slides: Optional[int] = None,
+        data: dict[str, Any],
+        num_slides: int | None = None,
     ) -> Outline:
         """Validate and construct outline from parsed JSON."""
         pages = []

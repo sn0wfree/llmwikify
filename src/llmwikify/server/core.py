@@ -9,7 +9,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from pathlib import Path
-from typing import Union
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,9 +23,7 @@ from .http.middleware import AuthMiddleware
 from .http.routes import register_routes
 from .utils.webui import mount_webui
 
-
 logger = logging.getLogger(__name__)
-
 
 def setup_logging(log_dir: Path | None = None) -> None:
     """Configure root logger with file + stream handlers."""
@@ -47,7 +45,6 @@ def setup_logging(log_dir: Path | None = None) -> None:
     sh = logging.StreamHandler()
     sh.setFormatter(fmt)
     root.addHandler(sh)
-
 
 class WikiServer:
     """llmwikify Unified Server - combines all service layers.

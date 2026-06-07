@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator
 
 from .chat_engine import PPTChatEngine
 from .harness import SlideHarness
@@ -36,8 +36,7 @@ CN_NUMS = {
     "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
 }
 
-
-def _parse_cn_num(s: str) -> Optional[int]:
+def _parse_cn_num(s: str) -> int | None:
     """Parse Chinese number string to int."""
     if s in CN_NUMS:
         return CN_NUMS[s]
@@ -45,7 +44,6 @@ def _parse_cn_num(s: str) -> Optional[int]:
         return int(s)
     except (ValueError, TypeError):
         return None
-
 
 class PPTChatRouter:
     """Unified message router.
@@ -62,7 +60,7 @@ class PPTChatRouter:
         message: str,
         presentation: Presentation,
         current_slide_index: int,
-        history: Optional[list] = None,
+        history: list | None = None,
     ) -> AsyncGenerator[dict, None]:
         """Route user message to appropriate handler.
 
@@ -110,7 +108,7 @@ class PPTChatRouter:
         match: re.Match,
         harness: SlideHarness,
         current_slide_index: int,
-    ) -> Optional[Presentation]:
+    ) -> Presentation | None:
         """Execute a deterministic tool operation."""
         try:
             if tool_name == "delete_slide":

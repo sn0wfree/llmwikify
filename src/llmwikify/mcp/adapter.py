@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Union
+from typing import Any
 
 from fastmcp import FastMCP
 
@@ -13,9 +13,7 @@ from llmwikify.core.wiki_registry import WikiRegistry
 
 from .tools import register_wiki_tools, register_multi_wiki_tools
 
-
 logger = logging.getLogger(__name__)
-
 
 class MCPAdapter:
     """MCP protocol adapter - wraps wiki services as MCP tools.

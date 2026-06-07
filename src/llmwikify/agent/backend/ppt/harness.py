@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import List, Optional
 
 from .schema import Presentation, SlideContent, Theme
 from .themes import get_theme
@@ -48,7 +47,6 @@ ALL_OPTIONAL_FIELDS = [
     "chart_type", "chart_data", "text", "author", "image",
 ]
 
-
 class SlideHarness:
     """Deterministic slide operations with undo support.
 
@@ -62,7 +60,7 @@ class SlideHarness:
         self.original = presentation
         self.slides = [s.model_copy(deep=True) for s in presentation.slides]
         self.theme = presentation.theme
-        self.history: List[List[SlideContent]] = []
+        self.history: list[list[SlideContent]] = []
         self._max_history = 20
 
     def _save_history(self) -> None:
@@ -141,7 +139,7 @@ class SlideHarness:
         """Check if undo is available."""
         return len(self.history) > 0
 
-    def get_slide(self, index: int) -> Optional[SlideContent]:
+    def get_slide(self, index: int) -> SlideContent | None:
         """Get slide at index (read-only)."""
         if 0 <= index < len(self.slides):
             return self.slides[index]

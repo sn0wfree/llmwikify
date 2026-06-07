@@ -1,6 +1,6 @@
 """PPT Generator - JSON Schema definitions for outline and content."""
 
-from typing import List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -15,8 +15,8 @@ class OutlinePage(BaseModel):
 class Outline(BaseModel):
     """Presentation outline (Step 1 output)."""
     title: str = Field(..., description="Presentation title")
-    subtitle: Optional[str] = Field(None, description="Presentation subtitle")
-    pages: List[OutlinePage] = Field(..., description="List of slide outlines")
+    subtitle: str | None = Field(None, description="Presentation subtitle")
+    pages: list[OutlinePage] = Field(..., description="List of slide outlines")
 
 
 class OutlineRequest(BaseModel):
@@ -36,10 +36,10 @@ class GenerateRequest(BaseModel):
     outline: Outline = Field(..., description="The outline to generate content for")
     theme: str = Field("professional", description="Theme name")
     language: str = Field("zh", description="Language: zh or en")
-    source_type: Optional[str] = Field(
+    source_type: str | None = Field(
         None, description="v0.5: Source of outline — 'topic'|'research'|'chat'"
     )
-    source_id: Optional[str] = Field(
+    source_id: str | None = Field(
         None, description="v0.5: ID of source research/chat session"
     )
 
@@ -56,27 +56,27 @@ class SlideContent(BaseModel):
     id: str = Field(..., description="Unique slide ID")
     layout: str = Field(..., description="Layout type")
     title: str = Field(..., description="Slide title")
-    subtitle: Optional[str] = Field(None, description="Subtitle (for intro/title layouts)")
-    content: Optional[str] = Field(None, description="Main content text")
-    bullets: Optional[List[str]] = Field(None, description="Bullet points")
-    left: Optional[dict] = Field(None, description="Left column (for two_column layout)")
-    right: Optional[dict] = Field(None, description="Right column (for two_column layout)")
-    chart_type: Optional[str] = Field(None, description="Chart type: bar, line, pie")
-    chart_data: Optional[dict] = Field(None, description="Chart data with labels and values")
-    text: Optional[str] = Field(None, description="Quote text")
-    author: Optional[str] = Field(None, description="Quote author")
-    image: Optional[str] = Field(None, description="Image URL or base64")
+    subtitle: str | None = Field(None, description="Subtitle (for intro/title layouts)")
+    content: str | None = Field(None, description="Main content text")
+    bullets: list[str] | None = Field(None, description="Bullet points")
+    left: dict | None = Field(None, description="Left column (for two_column layout)")
+    right: dict | None = Field(None, description="Right column (for two_column layout)")
+    chart_type: str | None = Field(None, description="Chart type: bar, line, pie")
+    chart_data: dict | None = Field(None, description="Chart data with labels and values")
+    text: str | None = Field(None, description="Quote text")
+    author: str | None = Field(None, description="Quote author")
+    image: str | None = Field(None, description="Image URL or base64")
     # Extended layout fields (v0.7)
-    swot: Optional[dict] = Field(None, description="SWOT data: {strengths:[], weaknesses:[], opportunities:[], threats:[]}")
-    table_headers: Optional[List[str]] = Field(None, description="Table headers")
-    table_rows: Optional[List[List[str]]] = Field(None, description="Table data rows")
-    events: Optional[List[dict]] = Field(None, description="Timeline events: [{date, title, description}]")
-    kpi_items: Optional[List[dict]] = Field(None, description="KPI items: [{label, value, trend}]")
-    central_topic: Optional[str] = Field(None, description="Mindmap center topic")
-    branches: Optional[List[dict]] = Field(None, description="Mindmap branches: [{name, children:[{name}]}]")
-    steps: Optional[List[dict]] = Field(None, description="Process steps: [{title, description}]")
-    images: Optional[List[dict]] = Field(None, description="Gallery images: [{url, caption}]")
-    html: Optional[str] = Field(None, description="Custom HTML content for unknown layouts")
+    swot: dict | None = Field(None, description="SWOT data: {strengths:[], weaknesses:[], opportunities:[], threats:[]}")
+    table_headers: list[str] | None = Field(None, description="Table headers")
+    table_rows: list[list[str]] | None = Field(None, description="Table data rows")
+    events: list[dict] | None = Field(None, description="Timeline events: [{date, title, description}]")
+    kpi_items: list[dict] | None = Field(None, description="KPI items: [{label, value, trend}]")
+    central_topic: str | None = Field(None, description="Mindmap center topic")
+    branches: list[dict] | None = Field(None, description="Mindmap branches: [{name, children:[{name}]}]")
+    steps: list[dict] | None = Field(None, description="Process steps: [{title, description}]")
+    images: list[dict] | None = Field(None, description="Gallery images: [{url, caption}]")
+    html: str | None = Field(None, description="Custom HTML content for unknown layouts")
 
 
 class ThemeColors(BaseModel):
@@ -121,9 +121,9 @@ class Theme(BaseModel):
 class Presentation(BaseModel):
     """Complete presentation data."""
     title: str = Field(..., description="Presentation title")
-    subtitle: Optional[str] = Field(None, description="Presentation subtitle")
+    subtitle: str | None = Field(None, description="Presentation subtitle")
     theme: Theme
-    slides: List[SlideContent]
+    slides: list[SlideContent]
     source: dict = Field(default_factory=lambda: {"type": "topic"})
 
 
