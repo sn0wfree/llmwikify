@@ -72,7 +72,7 @@ class MarkItDownExtractor:
 
         if self._config and self._config.get("llm", {}).get("enabled"):
             try:
-                from ..llm_client import LLMClient
+                from ..llm import LLMClient
                 llm_client = LLMClient.from_config(self._config)
                 llm_model = self._config["llm"].get("model", "gpt-4o")
             except (ImportError, ValueError, OSError):
