@@ -789,13 +789,16 @@ paths or test removed functionality.
 
 | # | Batch | Commit | pytest | New warnings | lint-imports | Regression? | Notes |
 |---|-------|--------|--------|--------------|--------------|-------------|-------|
+| 1 | A1 | 88c523d | 1851/5/1 | 0 (17→17) | 0 kept, 0 broken | No | Delete 3 dead dirs, add import-linter. Removed 1 obsolete test (test_legacy_static_dir_exists). |
+| 2 | A2 | 353b246 | 1851/5/1 | +2 (17→19) | 0 kept, 0 broken | No | Frontend → ui/. Path lookup simplified. 2 shim deprecations added (expected). |
+| 3 | A2 | 353b246 | 1851/5/1 | 0 | 0 kept, 0 broken | No | Path simplification commit (same push). |
 
 ### Batch progress table
 
 | Batch | Status | Commits | pytest | lint-imports | Notes |
 |-------|--------|---------|--------|--------------|-------|
-| A1 | ⬜ Not started | — | — | — | — |
-| A2 | ⬜ Not started | — | — | — | — |
+| A1 | ✅ done | 88c523d | 1851/5/1 | green | Delete 3 dead dirs, add import-linter infra |
+| A2 | ✅ done | 353b246 | 1851/5/1 | green (+2 deprecations from shims) | Frontend → ui/, path lookup simplified |
 | 🚦 Pause 1 | ⬜ Not started | — | — | — | — |
 | B1 | ⬜ Not started | — | — | — | — |
 | B2 | ⬜ Not started | — | — | — | — |
