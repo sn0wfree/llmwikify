@@ -101,7 +101,7 @@ class WikiAnalyzer:
     ) -> dict:
         """Use LLM to generate investigation suggestions."""
         try:
-            from ..llm_client import LLMClient
+            from ..llm import LLMClient
             client = LLMClient.from_config(self.wiki.config)
         except (ImportError, ValueError, OSError):
             return {
@@ -209,7 +209,7 @@ class WikiAnalyzer:
     def _llm_detect_gaps(self, context: str) -> list[dict]:
         """Call LLM to detect gaps between wiki schema and current state."""
         try:
-            from ..llm_client import LLMClient
+            from ..llm import LLMClient
             client = LLMClient.from_config(self.wiki.config)
         except (ImportError, ValueError, OSError):
             return self._fallback_detect_gaps()
