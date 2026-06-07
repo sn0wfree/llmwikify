@@ -20,16 +20,16 @@ def _run_async(coro):
                 return pool.submit(asyncio.run, coro).result()
         raise
 
-from llmwikify.agent.backend.db import AgentDatabase
-from llmwikify.agent.backend.research.config import DEFAULT_RESEARCH_CONFIG, merge_research_config
-from llmwikify.agent.backend.research.session import ResearchSessionManager
-from llmwikify.agent.backend.research.web_search import WebSearch, SearchResult
-from llmwikify.agent.backend.research.gatherer import SourceGatherer
-from llmwikify.agent.backend.research.analyzer import SourceAnalyzer
-from llmwikify.agent.backend.research.synthesizer import ResearchSynthesizer
-from llmwikify.agent.backend.research.report import ReportGenerator
-from llmwikify.agent.backend.research.review import ResearchReviewer, ResearchRevisor
-from llmwikify.agent.backend.research.engine import ResearchEngine
+from llmwikify.apps.agent.core.db import AgentDatabase
+from llmwikify.apps.research.config import DEFAULT_RESEARCH_CONFIG, merge_research_config
+from llmwikify.apps.research.session import ResearchSessionManager
+from llmwikify.apps.research.web_search import WebSearch, SearchResult
+from llmwikify.apps.research.gatherer import SourceGatherer
+from llmwikify.apps.research.analyzer import SourceAnalyzer
+from llmwikify.apps.research.synthesizer import ResearchSynthesizer
+from llmwikify.apps.research.report import ReportGenerator
+from llmwikify.apps.research.review import ResearchReviewer, ResearchRevisor
+from llmwikify.apps.research.engine import ResearchEngine
 
 
 # ==============================================================================
@@ -481,7 +481,7 @@ class TestSearXNGProvider:
     """Tests for SearXNG search provider."""
 
     def test_search_returns_results(self):
-        from llmwikify.agent.backend.research.web_search import SearXNGProvider
+        from llmwikify.apps.research.web_search import SearXNGProvider
 
         provider = SearXNGProvider("http://localhost:8888")
         mock_response = {
@@ -501,7 +501,7 @@ class TestSearXNGProvider:
         assert results[0].url == "https://example.com/1"
 
     def test_search_filters_empty_urls(self):
-        from llmwikify.agent.backend.research.web_search import SearXNGProvider
+        from llmwikify.apps.research.web_search import SearXNGProvider
 
         provider = SearXNGProvider("http://localhost:8888")
         mock_response = {
@@ -519,7 +519,7 @@ class TestSearXNGProvider:
         assert len(results) == 1
 
     def test_search_handles_error(self):
-        from llmwikify.agent.backend.research.web_search import SearXNGProvider
+        from llmwikify.apps.research.web_search import SearXNGProvider
 
         provider = SearXNGProvider("http://localhost:8888")
 
@@ -532,7 +532,7 @@ class TestTavilyProvider:
     """Tests for Tavily search provider."""
 
     def test_search_returns_results(self):
-        from llmwikify.agent.backend.research.web_search import TavilyProvider
+        from llmwikify.apps.research.web_search import TavilyProvider
 
         provider = TavilyProvider("tvly-test-key")
         mock_response = {
@@ -550,7 +550,7 @@ class TestTavilyProvider:
         assert results[0].title == "Result 1"
 
     def test_search_handles_error(self):
-        from llmwikify.agent.backend.research.web_search import TavilyProvider
+        from llmwikify.apps.research.web_search import TavilyProvider
 
         provider = TavilyProvider("tvly-test-key")
 
@@ -563,7 +563,7 @@ class TestMiniMaxSearchProvider:
     """Tests for MiniMax search provider."""
 
     def test_search_returns_results(self):
-        from llmwikify.agent.backend.research.web_search import MiniMaxSearchProvider
+        from llmwikify.apps.research.web_search import MiniMaxSearchProvider
 
         provider = MiniMaxSearchProvider("test-key", "https://api.minimaxi.com")
         mock_response = {
@@ -591,7 +591,7 @@ class TestMiniMaxSearchProvider:
         assert results[0].url == "https://example.com/1"
 
     def test_search_filters_empty_links(self):
-        from llmwikify.agent.backend.research.web_search import MiniMaxSearchProvider
+        from llmwikify.apps.research.web_search import MiniMaxSearchProvider
 
         provider = MiniMaxSearchProvider("test-key")
         mock_response = {
@@ -617,7 +617,7 @@ class TestMiniMaxSearchProvider:
         assert results[0].url == "https://example.com/1"
 
     def test_search_raises_on_api_error(self):
-        from llmwikify.agent.backend.research.web_search import MiniMaxSearchProvider
+        from llmwikify.apps.research.web_search import MiniMaxSearchProvider
 
         provider = MiniMaxSearchProvider("test-key")
         mock_response = {
@@ -641,7 +641,7 @@ class TestFallbackSearchProvider:
     """Tests for FallbackSearchProvider."""
 
     def test_returns_first_successful(self):
-        from llmwikify.agent.backend.research.web_search import FallbackSearchProvider, SearchResult
+        from llmwikify.apps.research.web_search import FallbackSearchProvider, SearchResult
 
         p1 = MagicMock()
         p1.search = AsyncMock(return_value=[SearchResult("T1", "https://u1", "S1")])
@@ -656,7 +656,7 @@ class TestFallbackSearchProvider:
         p2.search.assert_not_called()
 
     def test_falls_back_on_failure(self):
-        from llmwikify.agent.backend.research.web_search import FallbackSearchProvider, SearchResult
+        from llmwikify.apps.research.web_search import FallbackSearchProvider, SearchResult
 
         p1 = MagicMock()
         p1.search = AsyncMock(side_effect=Exception("p1 failed"))
@@ -670,7 +670,7 @@ class TestFallbackSearchProvider:
         assert results[0].title == "T2"
 
     def test_returns_empty_if_all_fail(self):
-        from llmwikify.agent.backend.research.web_search import FallbackSearchProvider
+        from llmwikify.apps.research.web_search import FallbackSearchProvider
 
         p1 = MagicMock()
         p1.search = AsyncMock(side_effect=Exception("p1 failed"))
@@ -683,7 +683,7 @@ class TestFallbackSearchProvider:
         assert results == []
 
     def test_skips_empty_results(self):
-        from llmwikify.agent.backend.research.web_search import FallbackSearchProvider, SearchResult
+        from llmwikify.apps.research.web_search import FallbackSearchProvider, SearchResult
 
         p1 = MagicMock()
         p1.search = AsyncMock(return_value=[])
@@ -701,7 +701,7 @@ class TestCreateSearchProvider:
     """Tests for create_search_provider factory."""
 
     def test_auto_mode_creates_chain(self):
-        from llmwikify.agent.backend.research.web_search import (
+        from llmwikify.apps.research.web_search import (
             create_search_provider, FallbackSearchProvider, DuckDuckGoProvider
         )
 
@@ -713,7 +713,7 @@ class TestCreateSearchProvider:
         assert isinstance(provider.providers[0], DuckDuckGoProvider)
 
     def test_auto_with_tavily_key(self):
-        from llmwikify.agent.backend.research.web_search import (
+        from llmwikify.apps.research.web_search import (
             create_search_provider, FallbackSearchProvider, TavilyProvider, DuckDuckGoProvider
         )
 
@@ -726,7 +726,7 @@ class TestCreateSearchProvider:
         assert isinstance(provider.providers[1], DuckDuckGoProvider)
 
     def test_auto_with_minimax_key(self):
-        from llmwikify.agent.backend.research.web_search import (
+        from llmwikify.apps.research.web_search import (
             create_search_provider, FallbackSearchProvider, MiniMaxSearchProvider, DuckDuckGoProvider
         )
 
@@ -739,7 +739,7 @@ class TestCreateSearchProvider:
         assert isinstance(provider.providers[1], DuckDuckGoProvider)
 
     def test_auto_with_searxng_url(self):
-        from llmwikify.agent.backend.research.web_search import (
+        from llmwikify.apps.research.web_search import (
             create_search_provider, FallbackSearchProvider, SearXNGProvider
         )
 
@@ -750,7 +750,7 @@ class TestCreateSearchProvider:
         assert isinstance(provider.providers[0], SearXNGProvider)
 
     def test_auto_full_chain(self):
-        from llmwikify.agent.backend.research.web_search import (
+        from llmwikify.apps.research.web_search import (
             create_search_provider, FallbackSearchProvider,
             SearXNGProvider, MiniMaxSearchProvider, TavilyProvider, DuckDuckGoProvider
         )
@@ -771,7 +771,7 @@ class TestCreateSearchProvider:
         assert isinstance(provider.providers[3], DuckDuckGoProvider)
 
     def test_explicit_minimax_only(self):
-        from llmwikify.agent.backend.research.web_search import (
+        from llmwikify.apps.research.web_search import (
             create_search_provider, MiniMaxSearchProvider
         )
 
@@ -782,7 +782,7 @@ class TestCreateSearchProvider:
         assert isinstance(provider.providers[0], MiniMaxSearchProvider)
 
     def test_explicit_tavily_only(self):
-        from llmwikify.agent.backend.research.web_search import (
+        from llmwikify.apps.research.web_search import (
             create_search_provider, TavilyProvider
         )
 
@@ -793,7 +793,7 @@ class TestCreateSearchProvider:
         assert isinstance(provider.providers[0], TavilyProvider)
 
     def test_no_config_falls_back_to_ddg(self):
-        from llmwikify.agent.backend.research.web_search import (
+        from llmwikify.apps.research.web_search import (
             create_search_provider, DuckDuckGoProvider
         )
 
@@ -812,7 +812,7 @@ class TestSourceGatherer:
 
         gatherer = SourceGatherer(mock_wiki, db, session_manager, config)
 
-        with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract:
+        with patch("llmwikify.apps.research.gatherer.extract_url") as mock_extract:
             from llmwikify.foundation.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
                 text="Article content here. " * 20,
@@ -860,7 +860,7 @@ class TestSourceGatherer:
 
         gatherer = SourceGatherer(mock_wiki, db, session_manager, config)
 
-        with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract:
+        with patch("llmwikify.apps.research.gatherer.extract_url") as mock_extract:
             mock_extract.side_effect = Exception("connection failed")
 
             events = _run_async(
@@ -880,8 +880,8 @@ class TestSourceGatherer:
 
         gatherer = SourceGatherer(mock_wiki, db, session_manager, config)
 
-        with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract, \
-             patch("llmwikify.agent.backend.research.web_search.WebSearch") as MockSearch:
+        with patch("llmwikify.apps.research.gatherer.extract_url") as mock_extract, \
+             patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
             from llmwikify.foundation.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
                 text="Python documentation content here. " * 10,
@@ -912,7 +912,7 @@ class TestSourceGatherer:
 
         gatherer = SourceGatherer(mock_wiki, db, session_manager, config)
 
-        with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract:
+        with patch("llmwikify.apps.research.gatherer.extract_url") as mock_extract:
             from llmwikify.foundation.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
                 text="x" * 500, source_type="url", title="Long", metadata={}
@@ -1283,7 +1283,7 @@ class TestResearchEngine:
         config["planning_model"] = {"provider": "test", "model": "planner"}
         config["report_model"] = {"provider": "test", "model": "reporter"}
 
-        with patch("llmwikify.agent.backend.research.engine.create_llm") as mock_create:
+        with patch("llmwikify.apps.research.engine.create_llm") as mock_create:
             mock_planner = MagicMock()
             mock_reporter = MagicMock()
             mock_create.side_effect = [mock_planner, mock_reporter]
@@ -1323,7 +1323,7 @@ class TestResearchEngine:
         ]
 
         # Mock extractors
-        with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract, \
+        with patch("llmwikify.apps.research.gatherer.extract_url") as mock_extract, \
              patch.object(mock_wiki, "analyze_source", return_value={
                  "topics": ["test"], "entities": [], "claims": [], "key_facts": ["fact"],
                  "suggested_pages": [], "cross_refs": [],
@@ -1380,8 +1380,8 @@ class TestResearchEngine:
             json.dumps({"thought": "Done.", "action": "done"}),
         ]
 
-        with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract, \
-             patch("llmwikify.agent.backend.research.web_search.WebSearch") as MockSearch, \
+        with patch("llmwikify.apps.research.gatherer.extract_url") as mock_extract, \
+             patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch, \
              patch.object(mock_wiki, "analyze_source", return_value={"status": "skipped"}):
             from llmwikify.foundation.extractors.base import ExtractedContent
             mock_extract.return_value = ExtractedContent(
@@ -1478,7 +1478,7 @@ class TestResearchRoutes:
         """Create a FastAPI test client."""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from llmwikify.agent.backend.routes.research import router, set_research_deps
+        from llmwikify.apps.agent.routes.research import router, set_research_deps
 
         # Create a mock wiki registry
         registry = MagicMock()
@@ -1629,7 +1629,7 @@ class TestResearchIntegration:
 
         mock_llm.chat.side_effect = mock_chat
 
-        with patch("llmwikify.agent.backend.research.gatherer.extract_url") as mock_extract, \
+        with patch("llmwikify.apps.research.gatherer.extract_url") as mock_extract, \
              patch.object(mock_wiki, "analyze_source", return_value={
                  "topics": ["topic1"], "entities": [], "claims": [],
                  "key_facts": ["fact1"], "suggested_pages": [], "cross_refs": [],
@@ -1675,7 +1675,7 @@ class TestResearchIntegration:
 class TestSourceFilter:
     def test_filter_short_content(self):
         """Content < 100 chars is rejected."""
-        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        from llmwikify.apps.research.source_filter import SourceFilter
         sources = [{"content": "短", "url": "http://example.com", "title": "Test"}]
         f = SourceFilter({})
         kept, rejected = f.filter_sources(sources, "test query")
@@ -1684,7 +1684,7 @@ class TestSourceFilter:
 
     def test_filter_duplicate_url(self):
         """Duplicate URLs only keep the first."""
-        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        from llmwikify.apps.research.source_filter import SourceFilter
         sources = [
             {"content": "A" * 200, "url": "http://example.com/a", "title": "A"},
             {"content": "B" * 200, "url": "http://example.com/a", "title": "B"},
@@ -1696,7 +1696,7 @@ class TestSourceFilter:
 
     def test_filter_nav_page(self):
         """Navigation pages are rejected."""
-        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        from llmwikify.apps.research.source_filter import SourceFilter
         sources = [{"content": "Home | Menu | Contact", "url": "http://example.com", "title": "Home | Example"}]
         f = SourceFilter({})
         kept, rejected = f.filter_sources(sources, "test")
@@ -1704,7 +1704,7 @@ class TestSourceFilter:
 
     def test_quality_score_high_domain(self):
         """High-quality domain gets high score."""
-        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        from llmwikify.apps.research.source_filter import SourceFilter
         source = {
             "content": "A" * 1000,
             "url": "https://arxiv.org/abs/2301.00001",
@@ -1716,7 +1716,7 @@ class TestSourceFilter:
 
     def test_quality_score_low_domain(self):
         """Low-quality domain gets low score."""
-        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        from llmwikify.apps.research.source_filter import SourceFilter
         source = {
             "content": "A" * 1000,
             "url": "https://pinterest.com/pin/123",
@@ -1728,7 +1728,7 @@ class TestSourceFilter:
 
     def test_disabled_filter_passes_all(self):
         """When disabled, all sources pass."""
-        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        from llmwikify.apps.research.source_filter import SourceFilter
         sources = [{"content": "x", "url": "", "title": ""}]
         f = SourceFilter({"source_filter_enabled": False})
         kept, rejected = f.filter_sources(sources, "test")
@@ -1737,7 +1737,7 @@ class TestSourceFilter:
 
     def test_normalize_url_strips_tracking(self):
         """URL normalization strips tracking params."""
-        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        from llmwikify.apps.research.source_filter import SourceFilter
         f = SourceFilter({})
         url1 = f._normalize_url("https://example.com/page?utm_source=google&ref=home")
         url2 = f._normalize_url("https://example.com/page")
@@ -1745,7 +1745,7 @@ class TestSourceFilter:
 
     def test_wiki_type_gets_high_score(self):
         """Wiki source type gets high score."""
-        from llmwikify.agent.backend.research.source_filter import SourceFilter
+        from llmwikify.apps.research.source_filter import SourceFilter
         source = {
             "content": "A" * 1000,
             "url": "wiki://SomePage",
@@ -1764,7 +1764,7 @@ class TestSourceFilter:
 class TestQualityGate:
     def test_after_gathering_pass(self):
         """Gathering gate passes with enough sources."""
-        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        from llmwikify.apps.research.quality_gate import QualityGate
         sources = [
             {"id": "1", "source_type": "web", "content": "A" * 1000},
             {"id": "2", "source_type": "wiki", "content": "B" * 1000},
@@ -1777,7 +1777,7 @@ class TestQualityGate:
 
     def test_after_gathering_fail(self):
         """Gathering gate fails with too few sources."""
-        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        from llmwikify.apps.research.quality_gate import QualityGate
         sources = [{"id": "1", "source_type": "web"}]
         sub_queries = [{"id": "1"}]
         gate = QualityGate({"gate_min_sources": 3})
@@ -1787,7 +1787,7 @@ class TestQualityGate:
 
     def test_after_analysis_low_credibility(self):
         """Analysis gate fails with low credibility."""
-        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        from llmwikify.apps.research.quality_gate import QualityGate
         sources = [
             {"analysis": {"quality_assessment": {"credibility": 3}}},
             {"analysis": {"quality_assessment": {"credibility": 4}}},
@@ -1798,7 +1798,7 @@ class TestQualityGate:
 
     def test_after_analysis_pass(self):
         """Analysis gate passes with good credibility."""
-        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        from llmwikify.apps.research.quality_gate import QualityGate
         sources = [
             {"analysis": {"quality_assessment": {"credibility": 7}}},
             {"analysis": {"quality_assessment": {"credibility": 8}}},
@@ -1809,7 +1809,7 @@ class TestQualityGate:
 
     def test_after_synthesis_pass(self):
         """Synthesis gate passes with enough reinforced claims."""
-        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        from llmwikify.apps.research.quality_gate import QualityGate
         synthesis = {"reinforced_claims": ["a", "b", "c"], "knowledge_gaps": ["x"]}
         gate = QualityGate({"gate_min_reinforced_claims": 2, "gate_max_knowledge_gaps": 3})
         result = gate.check_after_synthesis(synthesis)
@@ -1817,7 +1817,7 @@ class TestQualityGate:
 
     def test_after_synthesis_fail_too_many_gaps(self):
         """Synthesis gate fails with too many knowledge gaps."""
-        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        from llmwikify.apps.research.quality_gate import QualityGate
         synthesis = {"reinforced_claims": ["a", "b"], "knowledge_gaps": ["x", "y", "z", "w"]}
         gate = QualityGate({"gate_min_reinforced_claims": 2, "gate_max_knowledge_gaps": 3})
         result = gate.check_after_synthesis(synthesis)
@@ -1825,7 +1825,7 @@ class TestQualityGate:
 
     def test_before_report_pass(self):
         """Report gate passes with synthesis and sources."""
-        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        from llmwikify.apps.research.quality_gate import QualityGate
         synthesis = {"reinforced_claims": ["a"]}
         sources = [{"id": "1"}, {"id": "2"}]
         gate = QualityGate({})
@@ -1834,7 +1834,7 @@ class TestQualityGate:
 
     def test_before_report_fail_no_synthesis(self):
         """Report gate fails without synthesis."""
-        from llmwikify.agent.backend.research.quality_gate import QualityGate
+        from llmwikify.apps.research.quality_gate import QualityGate
         sources = [{"id": "1"}]
         gate = QualityGate({})
         result = gate.check_before_report(None, sources)

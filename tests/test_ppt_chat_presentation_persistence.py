@@ -13,9 +13,9 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from llmwikify.agent.backend.db import AgentDatabase
-from llmwikify.agent.backend.ppt.schema import Presentation, SlideContent
-from llmwikify.agent.backend.ppt.themes import get_theme
+from llmwikify.apps.agent.core.db import AgentDatabase
+from llmwikify.apps.ppt.schema import Presentation, SlideContent
+from llmwikify.apps.ppt.themes import get_theme
 
 
 def _make_presentation(title="Test Deck", slides=None):

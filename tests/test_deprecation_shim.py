@@ -23,7 +23,7 @@ import warnings
 
 def test_shim_reexports_streamable_llm_client():
     """adapters.StreamableLLMClient is the same class as llm.streamable.StreamableLLMClient."""
-    from llmwikify.agent.backend.adapters import StreamableLLMClient as LegacyClient
+    from llmwikify._legacy.adapters import StreamableLLMClient as LegacyClient
     from llmwikify.foundation.llm.streamable import StreamableLLMClient as NewClient
 
     assert LegacyClient is NewClient
@@ -36,12 +36,13 @@ def test_shim_emits_deprecation_warning():
 
     # Force a fresh import — otherwise a previous import in the
     # same process will be cached and no warning will fire.
-    if "llmwikify.agent.backend.adapters" in sys.modules:
-        del sys.modules["llmwikify.agent.backend.adapters"]
+    for mod_name in list(sys.modules.keys()):
+        if "llmwikify" in mod_name and "adapters" in mod_name:
+            del sys.modules[mod_name]
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        from llmwikify.agent.backend.adapters import StreamableLLMClient  # noqa: F401
+        from llmwikify._legacy.adapters import StreamableLLMClient  # noqa: F401
 
     deprecations = [
         w for w in caught if issubclass(w.category, DeprecationWarning)
@@ -62,7 +63,7 @@ def test_shim_does_not_define_class_methods():
     re-export, not a parallel definition.
     """
     import inspect
-    from llmwikify.agent.backend import adapters as shim
+    from llmwikify._legacy import adapters as shim
 
     src = inspect.getsource(shim)
     # No method definitions beyond module docstring + import + warning + __all__
@@ -81,7 +82,7 @@ def test_shim_emits_warning_for_provider_registry_path():
     This test guards against re-introducing ``from ..adapters import``
     in the provider registry files.
     """
-    from llmwikify.agent.backend.providers import registry
+    from llmwikify.apps.agent.providers import registry
     import inspect
 
     src = inspect.getsource(registry)
@@ -106,9 +107,9 @@ def test_internal_agent_backend_import_does_not_fire_shim_warning():
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         # This is the internal re-export path
-        from llmwikify.agent.backend import StreamableLLMClient  # noqa: F401
+        from llmwikify._legacy.adapters import StreamableLLMClient  # noqa: F401
         # And the agent.backend package itself
-        import llmwikify.agent.backend  # noqa: F401
+        import llmwikify._legacy.adapters  # noqa: F401
 
     shim_msgs = [
         w for w in caught
@@ -127,7 +128,7 @@ def test_shim_does_not_break_existing_chat_functionality():
     This is the behavioral compatibility guarantee: the shim
     must be a transparent re-export, not a stub.
     """
-    from llmwikify.agent.backend.adapters import StreamableLLMClient
+    from llmwikify._legacy.adapters import StreamableLLMClient
 
     c = StreamableLLMClient(provider="openai", api_key="k", model="m")
     # Methods inherited via the LLMClient chain still exist

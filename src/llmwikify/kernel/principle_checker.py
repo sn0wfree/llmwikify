@@ -94,7 +94,7 @@ class PrincipleChecker:
 
     def __init__(self, defaults_dir: Path | None = None):
         if defaults_dir is None:
-            defaults_dir = Path(__file__).parent.parent / "prompts" / "_defaults"
+            defaults_dir = Path(__file__).parent.parent / "foundation" / "prompts" / "_defaults"
         self.defaults_dir = defaults_dir
 
     def check_all_templates(self) -> dict[str, PrincipleCheckResult]:

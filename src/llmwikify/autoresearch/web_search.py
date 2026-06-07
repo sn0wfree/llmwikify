@@ -10,7 +10,7 @@ rebuilt as a chat base + harness (see
 docs/designs/code-reuse-modernization.md).
 """
 
-from llmwikify.agent.backend.research.web_search import (  # noqa: F401
+from llmwikify.apps.research.web_search import (  # noqa: F401
     DuckDuckGoProvider,
     FallbackSearchProvider,
     MiniMaxSearchProvider,

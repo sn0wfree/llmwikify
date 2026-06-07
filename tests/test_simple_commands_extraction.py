@@ -42,7 +42,7 @@ MIGRATED_COMMANDS = [
 
 
 def test_commands_subpackage_exists():
-    """llmwikify.cli.commands is a subpackage, not the old commands.py file."""
+    """llmwikify.interfaces.cli.commands is a subpackage, not the old commands.py file."""
     from llmwikify.interfaces.cli import commands
 
     # Subpackages have __path__ attribute

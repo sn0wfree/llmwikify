@@ -1,26 +1,6 @@
-"""DEPRECATED shim for StreamableLLMClient.
+"""Backward-compat shim: ``llmwikify.agent.backend.adapters`` →
+``llmwikify.apps.agent`` (Batch B4 of the 4-layer refactor).
 
-This module is preserved for backward compatibility and will be
-removed in v0.33.0 (1 release cycle per PLAN.md / Phase 1 #1).
-
-The canonical home for :class:`StreamableLLMClient` is now
-``llmwikify.foundation.llm.streamable``. Update imports to::
-
-    from llmwikify.foundation.llm.streamable import StreamableLLMClient
+Update your imports. This shim will be removed in v0.33.0.
 """
-
-from __future__ import annotations
-
-import warnings
-
-from llmwikify.foundation.llm.streamable import StreamableLLMClient
-
-warnings.warn(
-    "llmwikify.agent.backend.adapters is deprecated. "
-    "Import StreamableLLMClient from llmwikify.foundation.llm.streamable instead. "
-    "This shim will be removed in v0.33.0.",
-    DeprecationWarning,
-    stacklevel=2,
-)
-
-__all__ = ["StreamableLLMClient"]
+from llmwikify.apps.agent import *  # noqa: F401, F403

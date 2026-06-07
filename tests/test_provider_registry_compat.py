@@ -27,7 +27,7 @@ import inspect
 
 def test_provider_registry_contains_known_providers():
     """xiaomi + minimax are the auto-registered built-in providers."""
-    from llmwikify.agent.backend.providers import list_providers
+    from llmwikify.apps.agent.providers import list_providers
 
     providers = list_providers()
     assert "xiaomi" in providers
@@ -38,8 +38,8 @@ def test_provider_registry_contains_known_providers():
 
 def test_get_provider_returns_provider_instance():
     """get_provider('xiaomi') returns a XiaomiProvider instance."""
-    from llmwikify.agent.backend.providers import get_provider
-    from llmwikify.agent.backend.providers.xiaomi import XiaomiProvider
+    from llmwikify.apps.agent.providers import get_provider
+    from llmwikify.apps.agent.providers.xiaomi import XiaomiProvider
 
     p = get_provider("xiaomi")
     assert isinstance(p, XiaomiProvider)
@@ -47,7 +47,7 @@ def test_get_provider_returns_provider_instance():
 
 def test_get_provider_unknown_raises():
     """get_provider('nope') raises ValueError with the list of available providers."""
-    from llmwikify.agent.backend.providers import get_provider
+    from llmwikify.apps.agent.providers import get_provider
 
     try:
         get_provider("nope")
@@ -66,7 +66,7 @@ def test_create_llm_uses_canonical_streamable_class():
     (with reasoning_split/auth_header set), but the class identity
     must be the canonical StreamableLLMClient.
     """
-    from llmwikify.agent.backend.providers import create_llm
+    from llmwikify.apps.agent.providers import create_llm
     from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     config = {
@@ -85,7 +85,7 @@ def test_create_llm_uses_canonical_streamable_class():
 
 def test_create_llm_raises_when_disabled():
     """create_llm with enabled=False raises ValueError."""
-    from llmwikify.agent.backend.providers import create_llm
+    from llmwikify.apps.agent.providers import create_llm
 
     try:
         create_llm({"enabled": False, "api_key": "x"})
@@ -97,7 +97,7 @@ def test_create_llm_raises_when_disabled():
 
 def test_create_llm_respects_llm_provider_env(monkeypatch):
     """LLM_PROVIDER env var overrides the config provider."""
-    from llmwikify.agent.backend.providers import create_llm
+    from llmwikify.apps.agent.providers import create_llm
 
     monkeypatch.setenv("LLM_PROVIDER", "minimax")
     # We don't test the actual minimax.from_config path (network), just
@@ -117,7 +117,7 @@ def test_create_llm_respects_llm_provider_env(monkeypatch):
 
 def test_provider_classes_use_new_home_for_type_hints():
     """Provider modules import StreamableLLMClient from the new home, not the shim."""
-    from llmwikify.agent.backend.providers import xiaomi, minimax, base, registry
+    from llmwikify.apps.agent.providers import xiaomi, minimax, base, registry
 
     for mod in (xiaomi, minimax, base, registry):
         src = inspect.getsource(mod)
@@ -139,7 +139,7 @@ def test_provider_classes_use_new_home_for_type_hints():
 
 def test_provider_protocol_still_uses_streamable_type():
     """The LLMProvider Protocol's from_config signature references StreamableLLMClient."""
-    from llmwikify.agent.backend.providers import base
+    from llmwikify.apps.agent.providers import base
 
     src = inspect.getsource(base)
     assert "StreamableLLMClient" in src
@@ -154,9 +154,9 @@ def test_provider_registry_unchanged_path():
     ``agent.backend.providers`` (which would be a separate refactor
     — not part of C5).
     """
-    from llmwikify.agent.backend.providers import registry
+    from llmwikify.apps.agent.providers import registry
 
-    assert registry.__name__ == "llmwikify.agent.backend.providers.registry"
+    assert registry.__name__ == "llmwikify.apps.agent.providers.registry"
     assert hasattr(registry, "create_llm")
     assert hasattr(registry, "get_provider")
     assert hasattr(registry, "list_providers")
@@ -165,7 +165,7 @@ def test_provider_registry_unchanged_path():
 
 def test_create_llm_falls_back_to_minimax_by_default(monkeypatch):
     """create_llm defaults to 'minimax' provider when none specified."""
-    from llmwikify.agent.backend.providers import create_llm
+    from llmwikify.apps.agent.providers import create_llm
 
     # Make sure LLM_PROVIDER env var doesn't override
     monkeypatch.delenv("LLM_PROVIDER", raising=False)

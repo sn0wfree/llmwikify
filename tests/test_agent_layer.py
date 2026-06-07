@@ -42,7 +42,7 @@ def wiki_root(tmp_path):
 
 class TestAgentRunner:
     def test_runner_init(self, wiki_root):
-        from llmwikify.agent.runner import AgentRunner
+        from llmwikify.apps.agent.core.runner import AgentRunner
         runner = AgentRunner(wiki_root)
         assert runner.wiki is wiki_root
         assert runner.state.value == "idle"
@@ -50,7 +50,7 @@ class TestAgentRunner:
         assert runner.action_log == []
 
     def test_runner_reset(self, wiki_root):
-        from llmwikify.agent.runner import AgentRunner
+        from llmwikify.apps.agent.core.runner import AgentRunner
         runner = AgentRunner(wiki_root)
         runner.state = "running"
         runner.history = [{"role": "user", "content": "test"}]
@@ -59,7 +59,7 @@ class TestAgentRunner:
         assert runner.history == []
 
     def test_context_injector_builds_prompt(self, wiki_root):
-        from llmwikify.agent.runner import WikiContextInjector
+        from llmwikify.apps.agent.core.runner import WikiContextInjector
         injector = WikiContextInjector(wiki_root)
         prompt = injector.build_system_prompt()
         assert "wiki maintenance agent" in prompt.lower()
@@ -67,7 +67,7 @@ class TestAgentRunner:
         assert "Rules" in prompt
 
     def test_runner_hooks(self, wiki_root):
-        from llmwikify.agent.runner import AgentRunner
+        from llmwikify.apps.agent.core.runner import AgentRunner
         runner = AgentRunner(wiki_root)
         calls = []
         runner.register_hook("pre_run", lambda **kw: calls.append("pre_run"))
@@ -78,7 +78,7 @@ class TestAgentRunner:
         assert "post_run" in calls
 
     def test_runner_stop(self, wiki_root):
-        from llmwikify.agent.runner import AgentRunner, RunState
+        from llmwikify.apps.agent.core.runner import AgentRunner, RunState
         runner = AgentRunner(wiki_root)
         runner.stop()
         assert runner.state == RunState.STOPPED
@@ -88,13 +88,13 @@ class TestAgentRunner:
 
 class TestWikiToolRegistry:
     def test_registry_init(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         tools = registry.list_tools()
         assert len(tools) >= 15
 
     def test_list_tools_has_descriptions(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         tools = registry.list_tools()
         for tool in tools:
@@ -103,7 +103,7 @@ class TestWikiToolRegistry:
             assert "action_type" in tool
 
     def test_execute_read_page(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
 
         wiki_root.write_page("Test Page", "# Test")
@@ -113,7 +113,7 @@ class TestWikiToolRegistry:
         assert "content" in result
 
     def test_execute_search(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         result = _run_async(
             registry.execute("wiki_search", {"query": "test", "limit": 5})
@@ -121,7 +121,7 @@ class TestWikiToolRegistry:
         assert isinstance(result, list)
 
     def test_execute_unknown_tool(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         with pytest.raises(ValueError, match="Unknown tool"):
             _run_async(
@@ -129,7 +129,7 @@ class TestWikiToolRegistry:
             )
 
     def test_execute_status(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         result = _run_async(
             registry.execute("wiki_status", {})
@@ -137,7 +137,7 @@ class TestWikiToolRegistry:
         assert result is not None
 
     def test_confirmation_required_for_write(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "Test", "content": "Hello"})
@@ -147,7 +147,7 @@ class TestWikiToolRegistry:
         assert "confirmation_id" in result
 
     def test_confirmation_approve(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "TestConfirm", "content": "Hello"})
@@ -157,7 +157,7 @@ class TestWikiToolRegistry:
         assert exec_result["status"] == "executed"
 
     def test_confirmation_reject(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "TestReject", "content": "Hello"})
@@ -167,7 +167,7 @@ class TestWikiToolRegistry:
         assert reject_result["status"] == "rejected"
 
     def test_confirmation_batch(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         ids = []
         for i in range(3):
@@ -180,7 +180,7 @@ class TestWikiToolRegistry:
         assert all(r["status"] == "executed" for r in batch_results)
 
     def test_get_pending_by_group(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         _run_async(
             registry.execute("wiki_write_page", {"page_name": "concepts/Test", "content": "Hello"})
@@ -189,7 +189,7 @@ class TestWikiToolRegistry:
         assert "concept_pages" in groups
 
     def test_ingest_log(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         log = registry.get_ingest_log()
         assert isinstance(log, list)
@@ -199,8 +199,8 @@ class TestWikiToolRegistry:
 
 class TestHooks:
     def test_wiki_hook(self, wiki_root):
-        from llmwikify.agent.hooks import WikiHook
-        from llmwikify.agent.runner import ToolCall, ActionResult
+        from llmwikify.apps.agent.hooks import WikiHook
+        from llmwikify.apps.agent.core.runner import ToolCall, ActionResult
         hook = WikiHook(wiki_root)
         mock_runner = MagicMock()
         tool_call = ToolCall(name="wiki_write_page", arguments={})
@@ -208,7 +208,7 @@ class TestHooks:
         hook.on_post_tool(mock_runner, tool_call, result)
 
     def test_composite_hook(self):
-        from llmwikify.agent.hooks import CompositeHook, Hook
+        from llmwikify.apps.agent.hooks import CompositeHook, Hook
         composite = CompositeHook()
 
         class TestHook(Hook):
@@ -224,7 +224,7 @@ class TestHooks:
         assert th.called
 
     def test_composite_hook_remove(self):
-        from llmwikify.agent.hooks import CompositeHook, Hook
+        from llmwikify.apps.agent.hooks import CompositeHook, Hook
         composite = CompositeHook()
 
         class TestHook(Hook):
@@ -235,7 +235,7 @@ class TestHooks:
         assert len(composite._hooks) == 0
 
     def test_composite_hook_error_isolation(self):
-        from llmwikify.agent.hooks import CompositeHook, Hook
+        from llmwikify.apps.agent.hooks import CompositeHook, Hook
         composite = CompositeHook()
 
         class FailingHook(Hook):
@@ -247,14 +247,14 @@ class TestHooks:
         composite.fire_pre_run(None, [])
 
     def test_auto_ingest_hook(self, wiki_root):
-        from llmwikify.agent.hooks import AutoIngestHook
+        from llmwikify.apps.agent.hooks import AutoIngestHook
         hook = AutoIngestHook(wiki_root)
         new_files = hook.check_new_files()
         assert isinstance(new_files, list)
 
     def test_dream_sync_hook(self):
-        from llmwikify.agent.hooks import DreamSyncHook
-        from llmwikify.agent.runner import ToolCall, ActionResult
+        from llmwikify.apps.agent.hooks import DreamSyncHook
+        from llmwikify.apps.agent.core.runner import ToolCall, ActionResult
         hook = DreamSyncHook()
         mock_runner = MagicMock()
         tool_call = ToolCall(name="wiki_synthesize", arguments={})
@@ -267,26 +267,26 @@ class TestHooks:
 
 class TestScheduler:
     def test_scheduler_init(self):
-        from llmwikify.agent.scheduler import WikiScheduler
+        from llmwikify.apps.agent.scheduler import WikiScheduler
         scheduler = WikiScheduler()
         assert scheduler._tasks == {}
 
     def test_add_task(self):
-        from llmwikify.agent.scheduler import WikiScheduler
+        from llmwikify.apps.agent.scheduler import WikiScheduler
         scheduler = WikiScheduler()
         task = scheduler.add_task("test", "*/5 * * * *", lambda: "ok", "Test task")
         assert task.name == "test"
         assert task.enabled is True
 
     def test_remove_task(self):
-        from llmwikify.agent.scheduler import WikiScheduler
+        from llmwikify.apps.agent.scheduler import WikiScheduler
         scheduler = WikiScheduler()
         scheduler.add_task("test", "*/5 * * * *", lambda: "ok")
         scheduler.remove_task("test")
         assert scheduler.get_task("test") is None
 
     def test_enable_disable_task(self):
-        from llmwikify.agent.scheduler import WikiScheduler
+        from llmwikify.apps.agent.scheduler import WikiScheduler
         scheduler = WikiScheduler()
         scheduler.add_task("test", "*/5 * * * *", lambda: "ok")
         scheduler.disable_task("test")
@@ -295,7 +295,7 @@ class TestScheduler:
         assert scheduler.get_task("test").enabled is True
 
     def test_list_tasks(self):
-        from llmwikify.agent.scheduler import WikiScheduler
+        from llmwikify.apps.agent.scheduler import WikiScheduler
         scheduler = WikiScheduler()
         scheduler.add_task("t1", "*/5 * * * *", lambda: "ok")
         scheduler.add_task("t2", "0 * * * *", lambda: "ok2")
@@ -303,7 +303,7 @@ class TestScheduler:
         assert len(tasks) == 2
 
     def test_task_to_dict(self):
-        from llmwikify.agent.scheduler import ScheduledTask
+        from llmwikify.apps.agent.scheduler import ScheduledTask
         task = ScheduledTask("test", "*/5 * * * *", lambda: "ok", "desc")
         d = task.to_dict()
         assert d["name"] == "test"
@@ -311,7 +311,7 @@ class TestScheduler:
         assert d["description"] == "desc"
 
     def test_register_system_tasks(self, wiki_root):
-        from llmwikify.agent.scheduler import WikiScheduler
+        from llmwikify.apps.agent.scheduler import WikiScheduler
         scheduler = WikiScheduler()
         scheduler.register_system_tasks(wiki_root)
         tasks = scheduler.list_tasks()
@@ -323,7 +323,7 @@ class TestScheduler:
         assert "weekly_gaps" in task_names
 
     def test_save_load_state(self, tmp_path):
-        from llmwikify.agent.scheduler import WikiScheduler
+        from llmwikify.apps.agent.scheduler import WikiScheduler
         data_dir = tmp_path / "agent_data"
         data_dir.mkdir()
         scheduler = WikiScheduler(data_dir)
@@ -340,7 +340,7 @@ class TestScheduler:
 
 class TestConversationMemory:
     def test_append_and_get(self, tmp_path):
-        from llmwikify.agent.memory import ConversationMemory
+        from llmwikify.apps.agent.memory import ConversationMemory
         mem = ConversationMemory(tmp_path)
         mem.append("user", "hello")
         mem.append("assistant", "hi there")
@@ -349,7 +349,7 @@ class TestConversationMemory:
         assert entries[0]["role"] == "user"
 
     def test_get_recent_limit(self, tmp_path):
-        from llmwikify.agent.memory import ConversationMemory
+        from llmwikify.apps.agent.memory import ConversationMemory
         mem = ConversationMemory(tmp_path)
         for i in range(50):
             mem.append("user", f"msg {i}")
@@ -357,21 +357,21 @@ class TestConversationMemory:
         assert len(entries) == 5
 
     def test_get_all(self, tmp_path):
-        from llmwikify.agent.memory import ConversationMemory
+        from llmwikify.apps.agent.memory import ConversationMemory
         mem = ConversationMemory(tmp_path)
         mem.append("user", "hello")
         all_entries = mem.get_all()
         assert len(all_entries) == 1
 
     def test_clear(self, tmp_path):
-        from llmwikify.agent.memory import ConversationMemory
+        from llmwikify.apps.agent.memory import ConversationMemory
         mem = ConversationMemory(tmp_path)
         mem.append("user", "hello")
         mem.clear()
         assert mem.get_all() == []
 
     def test_metadata(self, tmp_path):
-        from llmwikify.agent.memory import ConversationMemory
+        from llmwikify.apps.agent.memory import ConversationMemory
         mem = ConversationMemory(tmp_path)
         mem.append("system", "info", {"key": "value"})
         entries = mem.get_all()
@@ -380,13 +380,13 @@ class TestConversationMemory:
 
 class TestSinkMemory:
     def test_get_pending_pages_empty(self, wiki_root):
-        from llmwikify.agent.memory import SinkMemory
+        from llmwikify.apps.agent.memory import SinkMemory
         sm = SinkMemory(wiki_root)
         pages = sm.get_pending_pages()
         assert pages == []
 
     def test_get_sink_status(self, wiki_root):
-        from llmwikify.agent.memory import SinkMemory
+        from llmwikify.apps.agent.memory import SinkMemory
         sm = SinkMemory(wiki_root)
         status = sm.get_sink_status()
         assert "total_entries" in status
@@ -394,7 +394,7 @@ class TestSinkMemory:
 
 class TestMemoryManager:
     def test_store_and_get_context(self, wiki_root, tmp_path):
-        from llmwikify.agent.memory import MemoryManager
+        from llmwikify.apps.agent.memory import MemoryManager
         mm = MemoryManager(wiki_root, tmp_path / "mem")
         mm.store_conversation("user", "hello")
         mm.store_conversation("assistant", "hi")
@@ -406,27 +406,27 @@ class TestMemoryManager:
 
 class TestDreamEditor:
     def test_init(self, wiki_root, tmp_path):
-        from llmwikify.agent.dream_editor import DreamEditor
+        from llmwikify.apps.agent.dream_editor import DreamEditor
         data_dir = tmp_path / "agent"
         editor = DreamEditor(wiki_root, data_dir)
         assert editor.wiki is wiki_root
         assert editor.data_dir == data_dir
 
     def test_run_dream_empty_sinks(self, wiki_root, tmp_path):
-        from llmwikify.agent.dream_editor import DreamEditor
+        from llmwikify.apps.agent.dream_editor import DreamEditor
         editor = DreamEditor(wiki_root, tmp_path / "agent")
         result = editor.run_dream()
         assert "sinks_processed" in result
         assert result["sinks_processed"] == 0
 
     def test_get_edit_log_empty(self, wiki_root, tmp_path):
-        from llmwikify.agent.dream_editor import DreamEditor
+        from llmwikify.apps.agent.dream_editor import DreamEditor
         editor = DreamEditor(wiki_root, tmp_path / "agent")
         log = editor.get_edit_log()
         assert log == []
 
     def test_surgical_edit_append(self, wiki_root, tmp_path):
-        from llmwikify.agent.dream_editor import DreamEditor
+        from llmwikify.apps.agent.dream_editor import DreamEditor
         wiki_root.write_page("TestEdit", "# Original")
         editor = DreamEditor(wiki_root, tmp_path / "agent")
         result = editor._apply_surgical_edit("TestEdit", {
@@ -438,7 +438,7 @@ class TestDreamEditor:
         assert "New Section" in content
 
     def test_surgical_edit_nonexistent_page(self, wiki_root, tmp_path):
-        from llmwikify.agent.dream_editor import DreamEditor
+        from llmwikify.apps.agent.dream_editor import DreamEditor
         editor = DreamEditor(wiki_root, tmp_path / "agent")
         result = editor._apply_surgical_edit("NonExistent", {
             "type": "append",
@@ -447,14 +447,14 @@ class TestDreamEditor:
         assert result is False
 
     def test_edit_log_persistence(self, wiki_root, tmp_path):
-        from llmwikify.agent.dream_editor import DreamEditor
+        from llmwikify.apps.agent.dream_editor import DreamEditor
         editor = DreamEditor(wiki_root, tmp_path / "agent")
         editor.run_dream()
         log = editor.get_edit_log()
         assert len(log) >= 1
 
     def test_create_page_from_sink(self, wiki_root, tmp_path):
-        from llmwikify.agent.dream_editor import DreamEditor
+        from llmwikify.apps.agent.dream_editor import DreamEditor
         editor = DreamEditor(wiki_root, tmp_path / "agent")
         entries = [
             {"query": "Q1", "answer": "A1", "note": "unique"},
@@ -469,7 +469,7 @@ class TestDreamEditor:
         assert "Q2" in proposals[0]["content"]
 
     def test_proposal_auto_approve_small(self, wiki_root, tmp_path):
-        from llmwikify.agent.dream_editor import DreamEditor, ProposalManager
+        from llmwikify.apps.agent.dream_editor import DreamEditor, ProposalManager
         pm = ProposalManager()
         # Small append should be auto-approved
         pm.create_proposal("TestPage", "append", "Short content", "test", [])
@@ -478,7 +478,7 @@ class TestDreamEditor:
         assert auto[0]["status"] == "auto_approved"
 
     def test_proposal_no_auto_approve_large(self, wiki_root, tmp_path):
-        from llmwikify.agent.dream_editor import ProposalManager
+        from llmwikify.apps.agent.dream_editor import ProposalManager
         pm = ProposalManager()
         # Large content should NOT be auto-approved
         pm.create_proposal("TestPage", "append", "x" * 200, "test", [])
@@ -492,14 +492,14 @@ class TestDreamEditor:
 
 class TestNotificationManager:
     def test_add_and_list(self):
-        from llmwikify.agent.notifications import NotificationManager
+        from llmwikify.apps.agent.notifications import NotificationManager
         nm = NotificationManager()
         n = nm.add("info", "test message")
         assert n["message"] == "test message"
         assert n["read"] is False
 
     def test_list_unread(self):
-        from llmwikify.agent.notifications import NotificationManager
+        from llmwikify.apps.agent.notifications import NotificationManager
         nm = NotificationManager()
         nm.add("info", "msg1")
         nm.add("info", "msg2")
@@ -507,7 +507,7 @@ class TestNotificationManager:
         assert len(unread) == 2
 
     def test_mark_read(self):
-        from llmwikify.agent.notifications import NotificationManager
+        from llmwikify.apps.agent.notifications import NotificationManager
         nm = NotificationManager()
         n = nm.add("info", "msg")
         nm.mark_read(n["id"])
@@ -515,7 +515,7 @@ class TestNotificationManager:
         assert len(unread) == 0
 
     def test_mark_all_read(self):
-        from llmwikify.agent.notifications import NotificationManager
+        from llmwikify.apps.agent.notifications import NotificationManager
         nm = NotificationManager()
         nm.add("info", "msg1")
         nm.add("info", "msg2")
@@ -524,20 +524,20 @@ class TestNotificationManager:
         assert nm.unread_count() == 0
 
     def test_max_size(self):
-        from llmwikify.agent.notifications import NotificationManager
+        from llmwikify.apps.agent.notifications import NotificationManager
         nm = NotificationManager(max_size=5)
         for i in range(10):
             nm.add("info", f"msg {i}")
         assert len(nm._notifications) == 5
 
     def test_mark_read_nonexistent(self):
-        from llmwikify.agent.notifications import NotificationManager
+        from llmwikify.apps.agent.notifications import NotificationManager
         nm = NotificationManager()
         result = nm.mark_read("nonexistent")
         assert result is False
 
     def test_unread_count(self):
-        from llmwikify.agent.notifications import NotificationManager
+        from llmwikify.apps.agent.notifications import NotificationManager
         nm = NotificationManager()
         nm.add("info", "msg1")
         nm.add("info", "msg2")
@@ -551,30 +551,30 @@ class TestNotificationManager:
 
 class TestWikiAgent:
     def test_agent_init_with_root(self, wiki_root):
-        from llmwikify.agent import WikiAgent
+        from llmwikify.apps.agent import WikiAgent
         agent = WikiAgent(root=str(wiki_root.root))
         assert agent.wiki is not None
         assert agent.tool_registry is not None
         assert agent.scheduler is not None
 
     def test_agent_init_with_wiki(self, wiki_root):
-        from llmwikify.agent import WikiAgent
+        from llmwikify.apps.agent import WikiAgent
         agent = WikiAgent(wiki=wiki_root)
         assert agent.wiki is wiki_root
 
     def test_agent_requires_root_or_wiki(self):
-        from llmwikify.agent import WikiAgent
+        from llmwikify.apps.agent import WikiAgent
         with pytest.raises(ValueError):
             WikiAgent()
 
     def test_agent_get_tools(self, wiki_root):
-        from llmwikify.agent import WikiAgent
+        from llmwikify.apps.agent import WikiAgent
         agent = WikiAgent(wiki=wiki_root)
         tools = agent.get_tools()
         assert len(tools) > 0
 
     def test_agent_get_status(self, wiki_root):
-        from llmwikify.agent import WikiAgent
+        from llmwikify.apps.agent import WikiAgent
         agent = WikiAgent(wiki=wiki_root)
         status = agent.get_status()
         assert "state" in status
@@ -582,7 +582,7 @@ class TestWikiAgent:
         assert "pending_work" in status
 
     def test_agent_notification_callback(self, wiki_root):
-        from llmwikify.agent import WikiAgent
+        from llmwikify.apps.agent import WikiAgent
         agent = WikiAgent(wiki=wiki_root)
         notifications = []
         agent.on_notification(lambda e, d: notifications.append((e, d)))
@@ -595,7 +595,7 @@ class TestWikiAgent:
 
 class TestConfirmationMechanism:
     def test_confirmation_created_for_write(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "Test", "content": "Hello"})
@@ -607,7 +607,7 @@ class TestConfirmationMechanism:
         assert "group" in result
 
     def test_confirmation_approve_executes(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "TestConfirm", "content": "Hello"})
@@ -619,7 +619,7 @@ class TestConfirmationMechanism:
         assert "Hello" in page_content["content"]
 
     def test_confirmation_reject_discards(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         result = _run_async(
             registry.execute("wiki_write_page", {"page_name": "TestReject", "content": "Hello"})
@@ -631,7 +631,7 @@ class TestConfirmationMechanism:
         assert not any(c["id"] == conf_id for c in pending)
 
     def test_confirmation_batch_approve(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         ids = []
         for i in range(3):
@@ -644,7 +644,7 @@ class TestConfirmationMechanism:
         assert all(r["status"] == "executed" for r in batch_results)
 
     def test_confirmation_batch_reject(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         ids = []
         for i in range(3):
@@ -657,7 +657,7 @@ class TestConfirmationMechanism:
         assert all(r["status"] == "rejected" for r in batch_results)
 
     def test_get_pending_by_group(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         _run_async(
             registry.execute("wiki_write_page", {"page_name": "concepts/Test", "content": "Hello"})
@@ -670,13 +670,13 @@ class TestConfirmationMechanism:
         assert "entity_pages" in groups
 
     def test_confirmation_invalid_id(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         result = registry.confirm_execution("invalid-id")
         assert result["status"] == "error"
 
     def test_read_tool_no_confirmation(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         result = _run_async(
             registry.execute("wiki_status", {})
@@ -684,13 +684,13 @@ class TestConfirmationMechanism:
         assert not isinstance(result, dict) or result.get("status") != "confirmation_required"
 
     def test_ingest_posthoc_logging(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         log = registry.get_ingest_log()
         assert isinstance(log, list)
 
     def test_ingest_log_detail(self, wiki_root):
-        from llmwikify.agent.tools import WikiToolRegistry
+        from llmwikify.apps.agent.tools import WikiToolRegistry
         registry = WikiToolRegistry(wiki_root)
         result = registry.get_ingest_changes("nonexistent")
         assert result is None
@@ -700,7 +700,7 @@ class TestConfirmationMechanism:
 
 class TestDreamProposals:
     def test_proposal_creation(self, wiki_root):
-        from llmwikify.agent.dream_editor import ProposalManager
+        from llmwikify.apps.agent.dream_editor import ProposalManager
         pm = ProposalManager()
         proposal = pm.create_proposal("TestPage", "append", "Content", "reason", [])
         assert proposal["id"].startswith("prop-")
@@ -708,7 +708,7 @@ class TestDreamProposals:
         assert proposal["content_length"] == 7
 
     def test_proposal_auto_approve_small(self, wiki_root):
-        from llmwikify.agent.dream_editor import ProposalManager
+        from llmwikify.apps.agent.dream_editor import ProposalManager
         pm = ProposalManager()
         pm.create_proposal("TestPage", "append", "Short content", "test", [])
         auto = pm.auto_approve_pending()
@@ -716,7 +716,7 @@ class TestDreamProposals:
         assert auto[0]["status"] == "auto_approved"
 
     def test_proposal_no_auto_approve_large(self, wiki_root):
-        from llmwikify.agent.dream_editor import ProposalManager
+        from llmwikify.apps.agent.dream_editor import ProposalManager
         pm = ProposalManager()
         pm.create_proposal("TestPage", "append", "x" * 200, "test", [])
         auto = pm.auto_approve_pending()
@@ -725,14 +725,14 @@ class TestDreamProposals:
         assert len(pending) == 1
 
     def test_proposal_no_auto_approve_replace(self, wiki_root):
-        from llmwikify.agent.dream_editor import ProposalManager
+        from llmwikify.apps.agent.dream_editor import ProposalManager
         pm = ProposalManager()
         pm.create_proposal("TestPage", "replace", "Short", "test", [])
         auto = pm.auto_approve_pending()
         assert len(auto) == 0
 
     def test_proposal_approve_reject(self, wiki_root):
-        from llmwikify.agent.dream_editor import ProposalManager
+        from llmwikify.apps.agent.dream_editor import ProposalManager
         pm = ProposalManager()
         p = pm.create_proposal("TestPage", "append", "Content", "test", [])
         approved = pm.approve(p["id"])
@@ -744,7 +744,7 @@ class TestDreamProposals:
         assert rejected["status"] == "rejected"
 
     def test_proposal_batch_approve(self, wiki_root):
-        from llmwikify.agent.dream_editor import ProposalManager
+        from llmwikify.apps.agent.dream_editor import ProposalManager
         pm = ProposalManager()
         ids = []
         for i in range(3):
@@ -755,7 +755,7 @@ class TestDreamProposals:
         assert all(r["status"] == "approved" for r in results)
 
     def test_proposal_get_by_page(self, wiki_root):
-        from llmwikify.agent.dream_editor import ProposalManager
+        from llmwikify.apps.agent.dream_editor import ProposalManager
         pm = ProposalManager()
         pm.create_proposal("PageA", "append", "Content", "test", [])
         pm.create_proposal("PageA", "append", "Content2", "test", [])
@@ -765,7 +765,7 @@ class TestDreamProposals:
         assert len(groups["PageB"]) == 1
 
     def test_proposal_stats(self, wiki_root):
-        from llmwikify.agent.dream_editor import ProposalManager
+        from llmwikify.apps.agent.dream_editor import ProposalManager
         pm = ProposalManager()
         pm.create_proposal("PageA", "append", "Short", "test", [])
         pm.create_proposal("PageB", "append", "x" * 200, "test", [])
@@ -775,7 +775,7 @@ class TestDreamProposals:
         assert stats["pending"] == 1
 
     def test_dream_editor_generates_proposals(self, wiki_root):
-        from llmwikify.agent.dream_editor import DreamEditor
+        from llmwikify.apps.agent.dream_editor import DreamEditor
         editor = DreamEditor(wiki_root, wiki_root.root / ".llmwikify" / "agent")
         result = editor.run_dream()
         assert "proposals_generated" in result
@@ -783,7 +783,7 @@ class TestDreamProposals:
         assert "pending_review" in result
 
     def test_dream_editor_proposal_from_sink(self, wiki_root):
-        from llmwikify.agent.dream_editor import DreamEditor
+        from llmwikify.apps.agent.dream_editor import DreamEditor
         editor = DreamEditor(wiki_root, wiki_root.root / ".llmwikify" / "agent")
         page_path = wiki_root.wiki_dir / "TestPage.md"
         page_path.write_text("# TestPage\n\nExisting content.\n")
@@ -801,7 +801,7 @@ class TestDreamProposals:
 
 class TestSchedulerTaskClassification:
     def test_task_is_write_flag(self, wiki_root):
-        from llmwikify.agent.scheduler import WikiScheduler
+        from llmwikify.apps.agent.scheduler import WikiScheduler
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             scheduler = WikiScheduler(Path(tmp))
@@ -814,7 +814,7 @@ class TestSchedulerTaskClassification:
             assert task_map["check_raw"]["is_write"] is False
 
     def test_tick_result_includes_is_write(self, wiki_root):
-        from llmwikify.agent.scheduler import WikiScheduler
+        from llmwikify.apps.agent.scheduler import WikiScheduler
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             scheduler = WikiScheduler(Path(tmp))
@@ -830,27 +830,27 @@ class TestSchedulerTaskClassification:
 
 class TestWikiAgentConfirmation:
     def test_get_pending_confirmations(self, wiki_root):
-        from llmwikify.agent import WikiAgent
+        from llmwikify.apps.agent import WikiAgent
         agent = WikiAgent(wiki=wiki_root)
         result = agent.get_pending_confirmations()
         assert "confirmations" in result
         assert "total" in result
 
     def test_get_dream_proposals(self, wiki_root):
-        from llmwikify.agent import WikiAgent
+        from llmwikify.apps.agent import WikiAgent
         agent = WikiAgent(wiki=wiki_root)
         result = agent.get_dream_proposals()
         assert "proposals" in result
         assert "stats" in result
 
     def test_get_ingest_log(self, wiki_root):
-        from llmwikify.agent import WikiAgent
+        from llmwikify.apps.agent import WikiAgent
         agent = WikiAgent(wiki=wiki_root)
         log = agent.get_ingest_log()
         assert isinstance(log, list)
 
     def test_status_includes_confirmation_count(self, wiki_root):
-        from llmwikify.agent import WikiAgent
+        from llmwikify.apps.agent import WikiAgent
         agent = WikiAgent(wiki=wiki_root)
         status = agent.get_status()
         assert "pending_confirmations" in status

@@ -2,8 +2,8 @@
 
 import json
 import pytest
-from llmwikify.agent.backend.ppt.schema import SlideContent, Presentation
-from llmwikify.agent.backend.ppt.themes import get_theme
+from llmwikify.apps.ppt.schema import SlideContent, Presentation
+from llmwikify.apps.ppt.themes import get_theme
 
 
 def _make_slide(**overrides):

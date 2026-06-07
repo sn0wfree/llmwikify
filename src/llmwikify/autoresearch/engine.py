@@ -17,7 +17,7 @@ from typing import Any
 
 from llmwikify.foundation.llm.streamable import StreamableLLMClient
 from llmwikify.autoresearch.db import AutoResearchDatabase
-from llmwikify.agent.backend.providers.registry import create_llm
+from llmwikify.apps.agent.providers.registry import create_llm
 from llmwikify.autoresearch import actions
 from llmwikify.autoresearch.actions import ActionContext
 from llmwikify.autoresearch.analyzer import SourceAnalyzer

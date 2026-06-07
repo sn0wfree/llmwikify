@@ -3,7 +3,7 @@
 Independent top-level project that integrates a structured reasoning
 framework (clarify → evidence → reasoning → structure → conclusion →
 checklist) on top of a copy of the base research engine. Does not import
-from llmwikify.agent.backend.research.
+from llmwikify.apps.research.
 """
 
 from __future__ import annotations

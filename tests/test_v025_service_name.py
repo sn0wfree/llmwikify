@@ -110,7 +110,7 @@ class TestServeMCPPassthrough:
 
     def test_name_passed_to_create_mcp_server(self, wiki):
         """2.1: serve_mcp should pass name to MCPAdapter."""
-        with patch('llmwikify.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+        with patch('llmwikify.interfaces.mcp.adapter.MCPAdapter') as mock_adapter_cls:
             mock_adapter = MagicMock()
             mock_adapter.name = 'test-wiki'
             mock_adapter_cls.return_value = mock_adapter
@@ -121,7 +121,7 @@ class TestServeMCPPassthrough:
 
     def test_stdio_log_contains_service_name(self, wiki, tmp_path):
         """2.2: stdio mode should call MCPAdapter with correct name."""
-        with patch('llmwikify.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+        with patch('llmwikify.interfaces.mcp.adapter.MCPAdapter') as mock_adapter_cls:
             mock_adapter = MagicMock()
             mock_adapter.name = 'my-wiki'
             mock_adapter_cls.return_value = mock_adapter
@@ -132,7 +132,7 @@ class TestServeMCPPassthrough:
 
     def test_http_log_contains_service_name(self, wiki, tmp_path):
         """2.3: http mode should call MCPAdapter with correct name."""
-        with patch('llmwikify.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+        with patch('llmwikify.interfaces.mcp.adapter.MCPAdapter') as mock_adapter_cls:
             mock_adapter = MagicMock()
             mock_adapter.name = 'http-wiki'
             mock_adapter_cls.return_value = mock_adapter
@@ -143,7 +143,7 @@ class TestServeMCPPassthrough:
 
     def test_no_name_uses_directory_name_in_log(self, wiki, tmp_path):
         """2.4: When no name provided, MCPAdapter should use directory name."""
-        with patch('llmwikify.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+        with patch('llmwikify.interfaces.mcp.adapter.MCPAdapter') as mock_adapter_cls:
             mock_adapter = MagicMock()
             mock_adapter.name = tmp_path.name
             mock_adapter_cls.return_value = mock_adapter
@@ -248,7 +248,7 @@ class TestCLIServeMethod:
         directly. We mock ``MCPAdapter`` to verify the
         ``name=`` kwarg flows through.
         """
-        with patch('llmwikify.cli.commands.serve.MCPAdapter') as MockAdapter:
+        with patch('llmwikify.interfaces.cli.commands.serve.MCPAdapter') as MockAdapter:
             mock_instance = MagicMock()
             MockAdapter.return_value = mock_instance
 
@@ -280,7 +280,7 @@ class TestCLIServeMethod:
         Phase 3 #6 — see test_name_passed_to_serve_mcp.
         """
         cli.config['mcp']['name'] = None
-        with patch('llmwikify.cli.commands.serve.MCPAdapter') as MockAdapter:
+        with patch('llmwikify.interfaces.cli.commands.serve.MCPAdapter') as MockAdapter:
             mock_instance = MagicMock()
             MockAdapter.return_value = mock_instance
 
@@ -308,7 +308,7 @@ class TestCLIServeMethod:
 
         Phase 3 #6 — see test_name_passed_to_serve_mcp.
         """
-        with patch('llmwikify.cli.commands.serve.MCPAdapter'):
+        with patch('llmwikify.interfaces.cli.commands.serve.MCPAdapter'):
             with patch('asyncio.run'):
                 stdout = StringIO()
                 with patch('sys.stdout', stdout):
@@ -340,7 +340,7 @@ class TestCLIServeMethod:
         Phase 3 #6 — see test_name_passed_to_serve_mcp.
         """
         cli.config['mcp']['name'] = 'config-wiki'
-        with patch('llmwikify.cli.commands.serve.MCPAdapter') as MockAdapter:
+        with patch('llmwikify.interfaces.cli.commands.serve.MCPAdapter') as MockAdapter:
             mock_instance = MagicMock()
             MockAdapter.return_value = mock_instance
 
@@ -403,7 +403,7 @@ class TestConfigFileIntegration:
         cli = WikiCLI(temp_wiki, config=config)
         cli.wiki.init()
 
-        with patch('llmwikify.cli.commands.serve.MCPAdapter') as MockAdapter:
+        with patch('llmwikify.interfaces.cli.commands.serve.MCPAdapter') as MockAdapter:
             mock_instance = MagicMock()
             MockAdapter.return_value = mock_instance
 
