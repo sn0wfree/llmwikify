@@ -226,7 +226,7 @@ def test_eight_rule_files_exist_on_disk():
     """All 8 rule files exist in core/lint/rules/."""
     from pathlib import Path
 
-    rules_dir = Path("src/llmwikify/core/lint/rules")
+    rules_dir = Path("src/llmwikify/kernel/wiki/lint/rules")
     expected = {
         "__init__.py",
         "dated_claims.py",
