@@ -600,11 +600,18 @@ def _start_ppt_cleanup_hook(app: FastAPI, db: Any) -> None:
 
 
 def _mount_agent_spa(app: FastAPI) -> None:
-    """Mount Agent SPA to /agent path."""
+    """Mount Agent SPA to /agent path.
+
+    Per the 4-layer refactor (Batch A2), agent frontend assets
+    live at the top-level ``ui/webui-agent/dist/`` directory.
+    For dev mode, run ``cd ui/webui-agent && npm run build`` first.
+    """
     from fastapi.staticfiles import StaticFiles
 
-    pkg_dir = Path(__file__).parent.parent.parent.parent.parent
-    agent_dist = pkg_dir / "src" / "llmwikify" / "web" / "webui-agent" / "dist"
+    # routes.py is at: src/llmwikify/server/http/routes.py
+    # Up 4 levels: http → server → llmwikify → src → repo root
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent
+    agent_dist = repo_root / "ui" / "webui-agent" / "dist"
 
     if agent_dist.exists():
         app.mount("/agent", StaticFiles(directory=str(agent_dist), html=True), name="agent_static")
