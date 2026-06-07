@@ -9,7 +9,7 @@ engine.py focus on orchestration.
 Re-exports: The ``__init__.py`` re-exports ``ResearchState``,
 ``ActionMetrics``, ``SessionMetrics``, ``MetricsCollector``,
 and ``VALID_TRANSITIONS`` so existing imports
-(``from llmwikify.autoresearch import ResearchState``,
+(``from llmwikify.apps.chat import ResearchState``,
 ``from .engine import VALID_TRANSITIONS``) continue to work unchanged.
 """
 

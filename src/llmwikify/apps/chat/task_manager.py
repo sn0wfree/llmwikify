@@ -15,7 +15,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator
 
-from llmwikify.autoresearch.engine import ResearchEngine
+from llmwikify.apps.chat.engine import ResearchEngine
 
 logger = logging.getLogger(__name__)
 

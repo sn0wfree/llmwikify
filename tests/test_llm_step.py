@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llmwikify.autoresearch.llm_step import _resolve_llm_client, run_prompt
+from llmwikify.apps.chat.llm_step import _resolve_llm_client, run_prompt
 
 
 # Patch PromptRegistry.get_messages to return a minimal valid message
@@ -372,7 +372,7 @@ class TestRunPromptRetryAndFallback:
 
     def test_caller_can_use_spec_fallback(self):
         """Caller (not run_prompt) is responsible for invoking spec.fallback."""
-        from llmwikify.autoresearch.prompts import PROMPT_REGISTRY
+        from llmwikify.apps.chat.prompts import PROMPT_REGISTRY
 
         llm = MagicMock()
         llm.chat = MagicMock(side_effect=Exception("503 service unavailable"))

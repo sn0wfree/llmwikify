@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llmwikify.autoresearch import (
+from llmwikify.apps.chat import (
     DEFAULT_SIX_STEP_CONFIG,
     DBRetryManager,
     LLMRetryManager,
@@ -34,9 +34,9 @@ from llmwikify.autoresearch import (
     merge_six_step_config,
     retry_async,
 )
-from llmwikify.autoresearch.config import merge_research_config
-from llmwikify.autoresearch.db import AutoResearchDatabase
-from llmwikify.autoresearch.db_migrations import (
+from llmwikify.apps.chat.config import merge_research_config
+from llmwikify.apps.chat.db import AutoResearchDatabase
+from llmwikify.apps.chat.db_migrations import (
     LEGACY_SHARED_COLUMNS,
     init_autoresearch_db,
     migrate_research_six_step_columns,
@@ -332,7 +332,7 @@ class TestEventBuffer:
 
     @pytest.mark.asyncio
     async def test_dedup_same_message_within_window(self, db, sid):
-        from llmwikify.autoresearch.task_manager import EventBuffer
+        from llmwikify.apps.chat.task_manager import EventBuffer
         buf = EventBuffer(sid, db)
         for _ in range(5):
             buf.add({"type": "progress", "message": "50% — gathering"})
@@ -341,7 +341,7 @@ class TestEventBuffer:
 
     @pytest.mark.asyncio
     async def test_different_messages_all_stored(self, db, sid):
-        from llmwikify.autoresearch.task_manager import EventBuffer
+        from llmwikify.apps.chat.task_manager import EventBuffer
         buf = EventBuffer(sid, db)
         for i in range(5):
             buf.add({"type": "step", "message": f"step {i}"})
@@ -350,7 +350,7 @@ class TestEventBuffer:
 
     @pytest.mark.asyncio
     async def test_dedup_window_expires(self, db, sid):
-        from llmwikify.autoresearch.task_manager import EventBuffer
+        from llmwikify.apps.chat.task_manager import EventBuffer
         buf = EventBuffer(sid, db)
         buf.add({"type": "progress", "message": "50% — gathering"})
         await buf.flush()
@@ -364,7 +364,7 @@ class TestEventBuffer:
 
     @pytest.mark.asyncio
     async def test_batch_size_triggers_auto_flush(self, db, sid):
-        from llmwikify.autoresearch.task_manager import EventBuffer
+        from llmwikify.apps.chat.task_manager import EventBuffer
         buf = EventBuffer(sid, db)
         for i in range(25):  # > BATCH_SIZE=20
             buf.add({"type": "step", "message": f"auto {i}"})
@@ -376,7 +376,7 @@ class TestEventBuffer:
 
     @pytest.mark.asyncio
     async def test_close_makes_subsequent_add_noop(self, db, sid):
-        from llmwikify.autoresearch.task_manager import EventBuffer
+        from llmwikify.apps.chat.task_manager import EventBuffer
         buf = EventBuffer(sid, db)
         buf.add({"type": "step", "message": "before close"})
         buf.close()
@@ -388,7 +388,7 @@ class TestEventBuffer:
 
     @pytest.mark.asyncio
     async def test_events_have_timestamp_and_source(self, db, sid):
-        from llmwikify.autoresearch.task_manager import EventBuffer
+        from llmwikify.apps.chat.task_manager import EventBuffer
         buf = EventBuffer(sid, db)
         buf.add({"type": "step", "message": "m"})
         await buf.flush()
@@ -399,7 +399,7 @@ class TestEventBuffer:
     @pytest.mark.asyncio
     async def test_existing_timestamp_preserved(self, db, sid):
         """If caller provides timestamp, it's kept (not overwritten)."""
-        from llmwikify.autoresearch.task_manager import EventBuffer
+        from llmwikify.apps.chat.task_manager import EventBuffer
         buf = EventBuffer(sid, db)
         ts = "2026-01-01T00:00:00+00:00"
         buf.add({"type": "step", "message": "m", "timestamp": ts})
@@ -408,7 +408,7 @@ class TestEventBuffer:
 
     @pytest.mark.asyncio
     async def test_flush_empty_is_safe(self, db, sid):
-        from llmwikify.autoresearch.task_manager import EventBuffer
+        from llmwikify.apps.chat.task_manager import EventBuffer
         buf = EventBuffer(sid, db)
         n = await buf.flush()
         assert n == 0
@@ -762,8 +762,8 @@ class TestFrameworkComplianceGate:
     @pytest.mark.asyncio
     async def test_action_incomplete_sets_status_and_persists(self, mock_wiki, mock_llm, db):
         """action_incomplete marks status='incomplete' and persists partial result."""
-        from llmwikify.autoresearch.actions import action_incomplete
-        from llmwikify.autoresearch.engine import ResearchEngine
+        from llmwikify.apps.chat.actions import action_incomplete
+        from llmwikify.apps.chat.engine import ResearchEngine
 
         engine = ResearchEngine(mock_wiki, db, mock_llm, {})
         ctx = engine._action_ctx
@@ -903,7 +903,7 @@ class TestAutoresearchIntegration:
     @pytest.fixture(autouse=True)
     def _stub_web_search(self, monkeypatch):
         """Stub WebSearch.search to return [] (no real DuckDuckGo in tests)."""
-        from llmwikify.autoresearch import web_search
+        from llmwikify.apps.chat import web_search
         async def _empty_search(self, query, num_results=None, **kwargs):
             return []
         monkeypatch.setattr(web_search.WebSearch, "search", _empty_search)
@@ -914,7 +914,7 @@ class TestAutoresearchIntegration:
 
         Prevents the gatherer from hitting real DuckDuckGo during tests.
         """
-        from llmwikify.autoresearch import web_search
+        from llmwikify.apps.chat import web_search
         async def _empty_search(self, query, num_results=None, **kwargs):
             return []
         return patch.object(web_search.WebSearch, "search", _empty_search)
@@ -1099,7 +1099,7 @@ class TestAutoresearchIntegration:
         self, mock_wiki, mock_llm, db, config,
     ):
         """six_step_context is built and non-None when report/review are called."""
-        from llmwikify.autoresearch import actions as _actions
+        from llmwikify.apps.chat import actions as _actions
 
         build_calls: list = []
         original_build = _actions._build_six_step_context
@@ -1131,7 +1131,7 @@ class TestAutoresearchIntegration:
         self, mock_wiki, mock_llm, db, config,
     ):
         """The 4 6-step QualityGate methods are invoked at the correct phases."""
-        from llmwikify.autoresearch.quality_gate import QualityGate
+        from llmwikify.apps.chat.quality_gate import QualityGate
 
         calls: list[str] = []
         original_evidence = QualityGate.check_evidence_quality
@@ -1177,7 +1177,7 @@ class TestAutoresearchIntegration:
         self, mock_wiki, mock_llm, db, config,
     ):
         """In a successful run, framework_compliance should pass with proceed."""
-        from llmwikify.autoresearch.quality_gate import QualityGate
+        from llmwikify.apps.chat.quality_gate import QualityGate
 
         captured: dict = {}
         original_framework = QualityGate.check_framework_compliance
@@ -1503,7 +1503,7 @@ class TestReportAndReviewEnrichment:
     """
 
     def test_report_renders_framework_block(self):
-        from llmwikify.autoresearch.prompts import render_framework_block
+        from llmwikify.apps.chat.prompts import render_framework_block
         ctx = {
             "clarification": {
                 "context": "ctx", "boundaries": "bnd", "position": "pos",
@@ -1522,12 +1522,12 @@ class TestReportAndReviewEnrichment:
         assert "前提 (2)" in block
 
     def test_report_renders_empty_when_no_context(self):
-        from llmwikify.autoresearch.prompts import render_framework_block
+        from llmwikify.apps.chat.prompts import render_framework_block
         assert render_framework_block(None, "report") == ""
         assert render_framework_block({}, "report") == ""
 
     def test_review_renders_framework_block(self):
-        from llmwikify.autoresearch.prompts import render_framework_block
+        from llmwikify.apps.chat.prompts import render_framework_block
         ctx = {
             "clarification": {"context": "ctx", "boundaries": "bnd", "position": "pos"},
             "reasoning_check": {"aggregate_score": 0.7},
@@ -1543,7 +1543,7 @@ class TestReportAndReviewEnrichment:
         assert "标准 5" in block
 
     def test_review_renders_empty_when_no_context(self):
-        from llmwikify.autoresearch.prompts import render_framework_block
+        from llmwikify.apps.chat.prompts import render_framework_block
         assert render_framework_block(None, "review") == ""
         assert render_framework_block({}, "review") == ""
 
@@ -1868,7 +1868,7 @@ class TestAutoResearchDatabase:
         assert sources[0]["analysis"]["topics"] == ["t1"]
 
     def test_get_autoresearch_db_path(self, tmp_path):
-        from llmwikify.autoresearch.db import get_autoresearch_db_path
+        from llmwikify.apps.chat.db import get_autoresearch_db_path
         p = get_autoresearch_db_path(tmp_path)
         assert p == tmp_path / "autoresearch.db"
         # Also accepts string
@@ -1884,7 +1884,7 @@ class TestResume:
 
     def test_resume_from_incomplete_allows_entry(self, db):
         """routes.py should allow resume from 'incomplete' status."""
-        from llmwikify.autoresearch.routes import resume_autoresearch
+        from llmwikify.apps.chat.routes import resume_autoresearch
         sid = db.create_research_session("w", "q")
         db.update_research_status(sid, "incomplete", "done", 1.0)
         session = db.get_research_session(sid)
@@ -2123,7 +2123,7 @@ class TestStrictExit:
 
     def test_duplicate_action_done_removed(self):
         """actions.py should have only one action_done function."""
-        from llmwikify.autoresearch import actions
+        from llmwikify.apps.chat import actions
         # Count action_done in the module
         count = sum(
             1 for name, _ in vars(actions).items()

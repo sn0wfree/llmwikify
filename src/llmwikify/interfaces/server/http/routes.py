@@ -499,7 +499,7 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     from llmwikify.apps.agent.routes.research import set_research_deps
     from llmwikify.apps.agent.routes.ppt import set_ppt_deps
     from llmwikify.apps.ppt.chat_routes import set_ppt_chat_deps
-    from llmwikify.autoresearch.routes import set_autoresearch_deps, router as autoresearch_router
+    from llmwikify.apps.chat.routes import set_autoresearch_deps, router as autoresearch_router
 
     # Load research config from global config file
     research_config = _load_research_config()
@@ -527,7 +527,7 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
 
     # AutoResearch - independent 6-step framework engine with its own DB.
     # No shared schema with research / chat / ppt.
-    from llmwikify.autoresearch.db import AutoResearchDatabase
+    from llmwikify.apps.chat.db import AutoResearchDatabase
     autoresearch_db = AutoResearchDatabase(data_dir)
     set_autoresearch_deps(
         db=autoresearch_db,

@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.autoresearch.engine_helpers import (
+from llmwikify.apps.chat.engine_helpers import (
     DEFAULT_LLM_PARAMS,
     resolve_llm_params,
 )
@@ -263,7 +263,7 @@ def test_types_are_stable():
 def test_output_unpacks_into_chat_json_kwargs():
     """resolve_llm_params output can be **-unpacked into chat_json."""
     import inspect
-    from llmwikify.autoresearch.engine_helpers import chat_json
+    from llmwikify.apps.chat.engine_helpers import chat_json
 
     result = resolve_llm_params(
         registry=_make_registry({}), config=None, prompt_name="research_plan"

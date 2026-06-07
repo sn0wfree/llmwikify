@@ -25,8 +25,8 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from llmwikify.autoresearch.engine import ResearchEngine
-    from llmwikify.autoresearch.state import ResearchState
+    from llmwikify.apps.chat.engine import ResearchEngine
+    from llmwikify.apps.chat.state import ResearchState
 
 logger = logging.getLogger(__name__)
 

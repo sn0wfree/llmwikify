@@ -49,17 +49,57 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import Callable
 from typing import Any
 
-from llmwikify.autoresearch._json_utils import safe_json_loads
-from llmwikify.autoresearch.engine_helpers import resolve_llm_params
-from llmwikify.autoresearch.prompts import (
+from llmwikify.apps.chat.engine_helpers import resolve_llm_params
+from llmwikify.apps.chat.prompts import (
     PROMPT_REGISTRY,
     ResearchPrompt,
     render_framework_block,
 )
-from llmwikify.autoresearch.retry_managers import LLMRetryManager
-from llmwikify.autoresearch.state import LLMCallMetrics
+from llmwikify.apps.chat.retry_managers import LLMRetryManager
+from llmwikify.apps.chat.state import LLMCallMetrics
+
+def _safe_json_loads(raw: str, *, allow_truncate: bool = True) -> Any:
+    """Robustly parse JSON returned by an LLM.
+
+    Per Sprint C cleanup (C3 dead code): inlined here from
+    the deleted ``_json_utils`` module. Handles empty
+    responses, markdown code fences, and trailing prose.
+    """
+    text = raw.strip() if raw else ""
+    if not text:
+        raise json.JSONDecodeError("empty response", "", 0)
+
+    if text.startswith("```"):
+        parts = text.split("\n", 1)
+        text = parts[1] if len(parts) > 1 else text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+
+    if not text:
+        raise json.JSONDecodeError("empty response (after fence strip)", "", 0)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        if not allow_truncate:
+            raise
+        start = -1
+        for i, c in enumerate(text):
+            if c in "{[":
+                start = i
+                break
+        if start < 0:
+            raise
+        try:
+            obj, _end = json.JSONDecoder().raw_decode(text, idx=start)
+            return obj
+        except json.JSONDecodeError:
+            raise
+
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +241,7 @@ async def run_prompt(
             attempt_count += 1
             raw = await asyncio.to_thread(client.chat, messages, **llm_params)
             if spec.expects_json:
-                return safe_json_loads(raw)
+                return _safe_json_loads(raw)
             return raw
 
         result = await retry.call(_call)

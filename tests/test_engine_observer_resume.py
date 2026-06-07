@@ -28,7 +28,7 @@ import inspect
 
 def test_engine_constructs_observer_and_resume_loader():
     """ResearchEngine.__init__ creates self.observer + self.resume_loader."""
-    import llmwikify.autoresearch.engine as engine_mod
+    import llmwikify.apps.chat.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine.__init__)
     assert "self.observer = ResearchObserver(self)" in src, (
@@ -41,7 +41,7 @@ def test_engine_constructs_observer_and_resume_loader():
 
 def test_observer_holds_back_refs_to_engine_deps():
     """ResearchObserver caches the engine's db."""
-    from llmwikify.autoresearch.observer import ResearchObserver
+    from llmwikify.apps.chat.observer import ResearchObserver
 
     class FakeEngine:
         db = "fake_db"
@@ -52,7 +52,7 @@ def test_observer_holds_back_refs_to_engine_deps():
 
 def test_resume_loader_holds_back_refs_to_engine_deps():
     """ResearchResumeLoader caches the engine's db and _max_react_rounds."""
-    from llmwikify.autoresearch.resume import ResearchResumeLoader
+    from llmwikify.apps.chat.resume import ResearchResumeLoader
 
     class FakeEngine:
         db = "fake_db"
@@ -65,7 +65,7 @@ def test_resume_loader_holds_back_refs_to_engine_deps():
 
 def test_engine_observe_delegates_to_observer():
     """engine._observe → self.observer.observe."""
-    import llmwikify.autoresearch.engine as engine_mod
+    import llmwikify.apps.chat.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._observe)
     assert "self.observer.observe" in src, (
@@ -75,7 +75,7 @@ def test_engine_observe_delegates_to_observer():
 
 def test_engine_load_resume_state_delegates_to_resume_loader():
     """engine._load_resume_state → self.resume_loader.load."""
-    import llmwikify.autoresearch.engine as engine_mod
+    import llmwikify.apps.chat.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._load_resume_state)
     assert "self.resume_loader.load" in src, (
@@ -86,8 +86,8 @@ def test_engine_load_resume_state_delegates_to_resume_loader():
 
 def test_observer_reloads_sources_and_sub_queries():
     """observer.observe reloads state.sources and state.sub_queries from DB."""
-    from llmwikify.autoresearch.observer import ResearchObserver
-    from llmwikify.autoresearch.state import ResearchState
+    from llmwikify.apps.chat.observer import ResearchObserver
+    from llmwikify.apps.chat.state import ResearchState
 
     class FakeDB:
         def __init__(self):
@@ -124,8 +124,8 @@ def test_observer_reloads_sources_and_sub_queries():
 
 def test_observer_populates_observations_on_analyzed_sources():
     """observer.observe builds credibility + type + wiki/web observations."""
-    from llmwikify.autoresearch.observer import ResearchObserver
-    from llmwikify.autoresearch.state import ResearchState
+    from llmwikify.apps.chat.observer import ResearchObserver
+    from llmwikify.apps.chat.state import ResearchState
 
     class FakeDB:
         def __init__(self):
@@ -170,8 +170,8 @@ def test_observer_populates_observations_on_analyzed_sources():
 
 def test_resume_loader_returns_silently_for_missing_session():
     """resume_loader.load silently returns if session row is missing."""
-    from llmwikify.autoresearch.resume import ResearchResumeLoader
-    from llmwikify.autoresearch.state import ResearchState
+    from llmwikify.apps.chat.resume import ResearchResumeLoader
+    from llmwikify.apps.chat.state import ResearchState
 
     class FakeDB:
         def get_research_session(self, session_id):
@@ -196,8 +196,8 @@ def test_resume_loader_returns_silently_for_missing_session():
 def test_resume_loader_hydrates_knowledge_gaps_from_json():
     """resume_loader.load restores state.knowledge_gaps from JSON column."""
     import json
-    from llmwikify.autoresearch.resume import ResearchResumeLoader
-    from llmwikify.autoresearch.state import ResearchState
+    from llmwikify.apps.chat.resume import ResearchResumeLoader
+    from llmwikify.apps.chat.state import ResearchState
 
     session_row = {
         "max_rounds": 5,
@@ -238,7 +238,7 @@ def test_legacy_observe_and_resume_logic_not_in_engine():
     1-line delegators remain. This test catches
     re-introduction of the inline logic.
     """
-    import llmwikify.autoresearch.engine as engine_mod
+    import llmwikify.apps.chat.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine)
     # The phrase ``Average source credibility`` (from

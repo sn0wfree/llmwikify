@@ -144,6 +144,7 @@ packages = [
     "llmwikify.apps.agent.routes",
     "llmwikify.apps.research",
     "llmwikify.apps.ppt",
+    "llmwikify.apps.chat",
     "llmwikify.agent",  # backward-compat shim (v0.33.0 removal)
     "llmwikify.agent.backend",  # backward-compat shim
     "llmwikify.agent.backend.research",  # backward-compat shim

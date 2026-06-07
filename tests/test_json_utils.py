@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from llmwikify.autoresearch._json_utils import safe_json_loads
+from llmwikify.apps.chat.engine_helpers import safe_json_loads
 
 
 class TestSafeJsonLoadsHappyPath:

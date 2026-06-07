@@ -35,7 +35,7 @@ def init_autoresearch_db(db_path) -> None:
         db_path: Path to the autoresearch.db file (typically
                  ~/.llmwikify/agent/autoresearch.db).
     """
-    from llmwikify.autoresearch.db import AutoResearchDatabase
+    from llmwikify.apps.chat.db import AutoResearchDatabase
     db_path = Path(db_path)
     AutoResearchDatabase(db_path.parent)
 

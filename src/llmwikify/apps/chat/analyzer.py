@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from llmwikify.autoresearch.session import ResearchSessionManager
+from llmwikify.apps.chat.session import ResearchSessionManager
 
 logger = logging.getLogger(__name__)
 
