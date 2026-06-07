@@ -16,30 +16,23 @@ logger = logging.getLogger(__name__)
 
 
 def find_webui_dist() -> Path | None:
-    """Find the WebUI dist directory.
+    """Find the WebUI dist directory at the top-level ``ui/webui/dist``.
 
-    Supports multiple deployment modes:
-    1. Installed mode: package/web/webui/dist/
-    2. Dev mode: repo/src/llmwikify/web/webui/dist/
+    Per the 4-layer refactor (Batch A2), frontend assets live at
+    the top-level ``ui/`` directory. The old location
+    ``src/llmwikify/web/webui/`` was removed.
 
-    Note: Legacy Vanilla JS WebUI (static/) has been archived to static-legacy-deprecated/.
+    For dev mode, run ``cd ui/webui && npm run build`` first.
 
     Returns:
-        Path to dist directory, or None if not found
+        Path to dist directory, or None if not found.
     """
     # webui.py is at: src/llmwikify/server/utils/webui.py
-    # Go up 3 levels to get to llmwikify package root
-    pkg_dir = Path(__file__).parent.parent.parent
-    candidates = [
-        pkg_dir / "web" / "webui" / "dist",           # src/llmwikify/web/webui/dist (dev mode)
-        pkg_dir.parent.parent / "web" / "webui" / "dist",  # installed package mode
-    ]
-
-    for candidate in candidates:
-        if candidate.exists() and (candidate / "index.html").exists():
-            return candidate
-
-    logger.warning("No WebUI dist found")
+    # Up 5 levels: utils → server → llmwikify → src → repo root
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+    candidate = repo_root / "ui" / "webui" / "dist"
+    if candidate.exists() and (candidate / "index.html").exists():
+        return candidate
     return None
 
 
