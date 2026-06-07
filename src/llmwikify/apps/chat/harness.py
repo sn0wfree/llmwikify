@@ -31,7 +31,6 @@ Usage::
 """
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
@@ -129,10 +128,17 @@ class Harness:
         if case.expected_judge_prompt:
             if not self.judge_client:
                 return True, "skipped (no judge_client)"
-            return asyncio.run(self._judge(case, reply))
+            return self._judge(case, reply)
         return True, "no expectation set"
 
-    async def _judge(self, case: GoldenCase, reply: str) -> tuple[bool, str]:
+    def _judge(self, case: GoldenCase, reply: str) -> tuple[bool, str]:
+        """Synchronously call the judge LLM and parse its verdict.
+
+        Kept sync (rather than async) so ``_grade`` can be called
+        from a sync context (e.g. a CLI runner) without needing
+        ``asyncio.run``. The judge is a plain LLM call; if a
+        caller needs an async judge, they can wrap this.
+        """
         prompt = (
             f"{case.expected_judge_prompt}\n\n"
             f"--- candidate reply ---\n{reply}\n--- end ---\n\n"

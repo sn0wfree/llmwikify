@@ -22,6 +22,7 @@ adapter code; the real research logic remains in
 """
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -57,25 +58,38 @@ class ResearchAgent(ChatBase):
     # ── canonical chat-style interface ─────────────────────
 
     async def aresearch(self, query: str, **kwargs: Any) -> dict[str, Any]:
-        """Async-iterate over research events (plan → gather → ...).
+        """Async-run the research engine and return the final report.
 
-        Returns a dict with the final ``report`` and the
-        ``steps`` list.
+        Drains the engine's async event stream (``engine.run``)
+        into a final dict with ``{"report": ..., "steps": [...]}``.
         """
-        return await self.engine.aresearch(query, **kwargs)
+        steps: list[dict[str, Any]] = []
+        report_text: str = ""
+        async for event in self.engine.run(query, **kwargs):
+            steps.append(dict(event))
+            if event.get("type") == "report":
+                report_text = str(event.get("text", ""))
+        return {"report": report_text, "steps": steps}
 
     async def astream_research(
         self, query: str, **kwargs: Any
     ) -> AsyncIterator[dict[str, Any]]:
         """Async-iterate over per-step events as the engine runs."""
-        async for event in self.engine.astream_research(query, **kwargs):
+        async for event in self.engine.run(query, **kwargs):
             yield event
 
-    # ── backward-compat with ResearchEngine.research() ─────
+    # ── backward-compat with the original sync research() API ─
 
     def research(self, query: str, **kwargs: Any) -> dict[str, Any]:
-        """Synchronous, blocking research. Delegates to the engine."""
-        return self.engine.research(query, **kwargs)
+        """Synchronous, blocking research.
+
+        Drives the engine's async ``run`` via ``asyncio.run``
+        and returns the same shape as ``aresearch`` (dict with
+        ``report`` and ``steps``). For backward compat with the
+        pre-async ``autoresearch.ResearchEngine.research`` API
+        that external callers may still use.
+        """
+        return asyncio.run(self.aresearch(query, **kwargs))
 
     # ── ChatBase overrides ────────────────────────────────
 
@@ -93,8 +107,10 @@ class ResearchAgent(ChatBase):
         through the engine.
         """
         if self._looks_like_research(prompt):
-            async for event in self.engine.astream_research(prompt, **kwargs):
+            async for event in self.engine.run(prompt, **kwargs):
                 if event.get("type") == "report_chunk":
+                    yield event.get("text", "")
+                elif event.get("type") == "report":
                     yield event.get("text", "")
         else:
             async for chunk in super().astream(prompt, session=session, **kwargs):
