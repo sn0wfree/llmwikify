@@ -15,7 +15,13 @@ from .protocols import WikiProtocol
 
 logger = logging.getLogger(__name__)
 
-TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
+# Per the 4-layer refactor (Batch B1), templates/ was moved to
+# foundation/. The path computation stays two levels up to reach
+# the package root, then descends into foundation/templates/.
+# After Batch B3 moves this mixin to
+# ``kernel/wiki/mixins/core/``, this will need a further update
+# to five levels up plus foundation/templates.
+TEMPLATES_DIR = Path(__file__).parent.parent / "foundation" / "templates"
 
 
 class WikiUtilityMixin(WikiProtocol):

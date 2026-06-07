@@ -78,7 +78,7 @@ class TestPromptRegression:
                 return {"selected_sections": [1, 2, 3], "reasoning": "test"}
             return analysis_response if call_count == 2 else ops_response
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
@@ -123,7 +123,7 @@ class TestPromptRegression:
                 return {"selected_sections": [1, 2, 3], "reasoning": "test"}
             return analysis_response if call_count == 2 else ops_response
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
@@ -167,7 +167,7 @@ class TestPromptRegression:
                 return {"selected_sections": [1, 2, 3], "reasoning": "test"}
             return analysis_response if call_count == 2 else ops_response
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
@@ -214,7 +214,7 @@ class TestPromptRegression:
                 return {"selected_sections": [1, 2, 3], "reasoning": "test"}
             return analysis_result if call_count == 2 else ops_result
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
@@ -261,7 +261,7 @@ class TestPromptRegression:
                 return {"selected_sections": [1, 2, 3], "reasoning": "test"}
             return analysis_result if call_count == 2 else ops_result
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
@@ -284,7 +284,7 @@ class TestPromptRegression:
             "source_citations": ["Machine Learning"],
         }
 
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.return_value = mock_response
             MockClient.from_config.return_value = mock_instance

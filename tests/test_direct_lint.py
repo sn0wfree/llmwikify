@@ -199,7 +199,7 @@ class TestLLMDetectGaps:
 
         wiki.close()
 
-    @patch('llmwikify.llm_client.LLMClient')
+    @patch('llmwikify.foundation.llm_client.LLMClient')
     def test_llm_parses_list_response(self, mock_client_class, temp_wiki):
         wiki = Wiki(temp_wiki)
         wiki.init()
@@ -217,7 +217,7 @@ class TestLLMDetectGaps:
 
         wiki.close()
 
-    @patch('llmwikify.llm_client.LLMClient')
+    @patch('llmwikify.foundation.llm_client.LLMClient')
     def test_llm_parses_dict_with_gaps(self, mock_client_class, temp_wiki):
         wiki = Wiki(temp_wiki)
         wiki.init()

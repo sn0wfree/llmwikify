@@ -3,11 +3,11 @@
 Canonical location for the streaming-capable LLM client. The historical
 home in ``llmwikify.agent.backend.adapters`` is preserved as a thin
 deprecation shim; new code should import from
-``llmwikify.llm.streamable`` instead.
+``llmwikify.foundation.llm.streamable`` instead.
 
 Usage::
 
-    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     client = StreamableLLMClient.from_config(config_dict)
     text = client.chat(messages, temperature=0.3)

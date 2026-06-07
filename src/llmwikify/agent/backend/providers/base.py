@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
 
 @runtime_checkable

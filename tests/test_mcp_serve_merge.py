@@ -201,7 +201,7 @@ def test_init_writes_serve_command_in_mcp_config():
     import json
     from pathlib import Path
 
-    template_dir = Path(__file__).parent.parent / "src" / "llmwikify" / "templates"
+    template_dir = Path(__file__).parent.parent / "src" / "llmwikify" / "foundation" / "templates"
     claude_template = template_dir / "claude_mcp.json"
     codex_template = template_dir / "codex_mcp.json"
 

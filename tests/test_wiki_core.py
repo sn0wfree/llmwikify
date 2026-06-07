@@ -206,7 +206,7 @@ class TestWiki:
 
     def test_ingest_saves_url_to_raw(self, temp_wiki, monkeypatch):
         """Test that URL/YouTube sources are saved to raw/."""
-        from llmwikify.extractors import ExtractedContent
+        from llmwikify.foundation.extractors import ExtractedContent
 
         wiki = Wiki(temp_wiki)
         wiki.init()
@@ -237,7 +237,7 @@ class TestWiki:
 
     def test_ingest_url_already_exists(self, temp_wiki, monkeypatch):
         """Test that re-ingesting same URL reports already_exists."""
-        from llmwikify.extractors import ExtractedContent
+        from llmwikify.foundation.extractors import ExtractedContent
 
         wiki = Wiki(temp_wiki)
         wiki.init()
@@ -302,11 +302,11 @@ class TestWiki:
 
         import sys
 
-        import llmwikify.llm_client as llm_module
+        import llmwikify.foundation.llm_client as llm_module
         orig_client = llm_module.LLMClient
         llm_module.LLMClient = MockClient
-        sys.modules['llmwikify.llm_client'] = llm_module
-        sys.modules['llmwikify.core.llm_client'] = llm_module
+        sys.modules['llmwikify.foundation.llm_client'] = llm_module
+        sys.modules['llmwikify.foundation.llm_client'] = llm_module
 
         source_data = {
             "title": "Test Source",
@@ -318,7 +318,7 @@ class TestWiki:
         result = wiki._llm_process_source(source_data)
 
         llm_module.LLMClient = orig_client
-        sys.modules['llmwikify.llm_client'] = llm_module
+        sys.modules['llmwikify.foundation.llm_client'] = llm_module
 
         assert result['status'] == 'success'
         assert result['mode'] == 'chained'
@@ -367,11 +367,11 @@ class TestWiki:
 
         import sys
 
-        import llmwikify.llm_client as llm_module
+        import llmwikify.foundation.llm_client as llm_module
         orig_client = llm_module.LLMClient
         llm_module.LLMClient = MockClient
-        sys.modules['llmwikify.llm_client'] = llm_module
-        sys.modules['llmwikify.core.llm_client'] = llm_module
+        sys.modules['llmwikify.foundation.llm_client'] = llm_module
+        sys.modules['llmwikify.foundation.llm_client'] = llm_module
 
         source_data = {
             "title": "Test Source",
@@ -383,7 +383,7 @@ class TestWiki:
         result = wiki._llm_process_source(source_data)
 
         llm_module.LLMClient = orig_client
-        sys.modules['llmwikify.llm_client'] = llm_module
+        sys.modules['llmwikify.foundation.llm_client'] = llm_module
 
         assert result['status'] == 'success'
         # Verify wiki_schema was injected into the analyze_source LLM call messages
@@ -431,11 +431,11 @@ class TestWiki:
 
         import sys
 
-        import llmwikify.llm_client as llm_module
+        import llmwikify.foundation.llm_client as llm_module
         orig_client = llm_module.LLMClient
         llm_module.LLMClient = MockClient
-        sys.modules['llmwikify.llm_client'] = llm_module
-        sys.modules['llmwikify.core.llm_client'] = llm_module
+        sys.modules['llmwikify.foundation.llm_client'] = llm_module
+        sys.modules['llmwikify.foundation.llm_client'] = llm_module
 
         source_data = {
             "title": "Test Source",
@@ -448,7 +448,7 @@ class TestWiki:
         result = wiki._llm_process_source(source_data)
 
         llm_module.LLMClient = orig_client
-        sys.modules['llmwikify.llm_client'] = llm_module
+        sys.modules['llmwikify.foundation.llm_client'] = llm_module
 
         assert result['status'] == 'success'
 

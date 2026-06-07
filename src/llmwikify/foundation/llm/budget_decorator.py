@@ -2,7 +2,7 @@
 
 Usage::
 
-    from llmwikify.llm.budget_decorator import check_token_budget
+    from llmwikify.foundation.llm.budget_decorator import check_token_budget
 
     class MyLLMClient:
         def __init__(self):

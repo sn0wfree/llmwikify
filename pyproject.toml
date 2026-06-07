@@ -111,12 +111,15 @@ wiki = "llmwikify.cli:main"
 package-dir = {"" = "src"}
 packages = [
     "llmwikify",
+    "llmwikify.foundation",
+    "llmwikify.foundation.llm",
+    "llmwikify.foundation.extractors",
+    "llmwikify.foundation.prompts",
+    "llmwikify.foundation.prompts._defaults",
+    "llmwikify.foundation.templates",
     "llmwikify.cli",
     "llmwikify.core",
-    "llmwikify.extractors",
     "llmwikify.mcp",
-    "llmwikify.prompts",
-    "llmwikify.prompts._defaults",
     "llmwikify.agent",
     "llmwikify.server",
     "llmwikify.server.http",
@@ -128,6 +131,12 @@ packages = [
 
 [tool.setuptools.package-data]
 llmwikify = ["py.typed"]
+"llmwikify.foundation.templates" = [
+    "*.json",
+    "_gitignore",
+    "skill_llmwikify/*.md",
+    "skill_llmwikify/resources/*.md",
+]
 
 [tool.black]
 line-length = 88

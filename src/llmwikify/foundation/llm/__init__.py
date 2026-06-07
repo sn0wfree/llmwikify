@@ -6,10 +6,10 @@ heuristic estimation if not installed).
 Re-exports of ``LLMClient`` and ``StreamableLLMClient`` are available
 via PEP 562 lazy module ``__getattr__`` (defined at the bottom of this
 file), which defers the import to break the cycle with the legacy
-``llmwikify.llm_client`` module. Use::
+``llmwikify.foundation.llm_client`` module. Use::
 
-    from llmwikify.llm import StreamableLLMClient   # canonical
-    from llmwikify.llm import LLMClient              # base class (lazy)
+    from llmwikify.foundation.llm import StreamableLLMClient   # canonical
+    from llmwikify.foundation.llm import LLMClient              # base class (lazy)
 """
 
 from .budget_decorator import check_token_budget
@@ -31,7 +31,7 @@ from .token_estimator import count_messages, count_tokens
 def __getattr__(name: str):
     """Lazy re-export of LLMClient and StreamableLLMClient (PEP 562).
 
-    Triggered by ``from llmwikify.llm import X`` when X is not in
+    Triggered by ``from llmwikify.foundation.llm import X`` when X is not in
     this module's namespace. Avoids the eager-import cycle:
 
       llm_client.py → llm.budget_decorator → llm/__init__.py

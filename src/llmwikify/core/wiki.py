@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ..config import get_db_path, get_directory, load_config
+from ..foundation.config import get_db_path, get_directory, load_config
 from .index import WikiIndex
 from .query_sink import QuerySink
 from .wiki_analyzer import WikiAnalyzer

@@ -99,7 +99,7 @@ class GoldenTestRunner:
 
         # Since _llm_process_source calls ingest_source in single mode (which expects array),
         # we need to enable chaining mode to test analyze_source properly
-        with patch("llmwikify.llm_client.LLMClient") as MockClient:
+        with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             # First call is select_sections, second is analyze_source, third is generate_wiki_ops
             ops_result = [

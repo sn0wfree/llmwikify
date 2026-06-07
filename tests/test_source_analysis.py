@@ -154,7 +154,7 @@ class TestAnalyzeSource:
 
         wiki.close()
 
-    @patch('llmwikify.llm_client.LLMClient')
+    @patch('llmwikify.foundation.llm_client.LLMClient')
     def test_calls_llm_and_caches(self, mock_client_class, temp_wiki):
         wiki = Wiki(temp_wiki)
         wiki.init()
@@ -182,7 +182,7 @@ class TestAnalyzeSource:
 
         wiki.close()
 
-    @patch('llmwikify.llm_client.LLMClient')
+    @patch('llmwikify.foundation.llm_client.LLMClient')
     def test_force_reanalysis(self, mock_client_class, temp_wiki):
         wiki = Wiki(temp_wiki)
         wiki.init()

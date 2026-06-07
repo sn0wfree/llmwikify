@@ -21,14 +21,14 @@ class TestQmdConfig:
 
     def test_search_config_default(self, wiki):
         """Default search backend should be 'fts5'."""
-        from llmwikify.config import get_search_config
+        from llmwikify.foundation.config import get_search_config
         config = get_search_config(wiki.config)
         assert "backend" in config
         assert "qmd" in config
 
     def test_qmd_config_defaults(self, wiki):
         """QMD default configuration should be set."""
-        from llmwikify.config import get_search_config
+        from llmwikify.foundation.config import get_search_config
         config = get_search_config(wiki.config)
         qmd_config = config["qmd"]
         assert "host" in qmd_config

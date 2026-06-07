@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
-from llmwikify.llm.streamable import StreamableLLMClient
+from llmwikify.foundation.llm.streamable import StreamableLLMClient
 from ..db import AgentDatabase
 from ..providers.registry import create_llm
 from .analyzer import SourceAnalyzer

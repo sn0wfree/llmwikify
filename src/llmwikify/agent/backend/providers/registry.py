@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .base import LLMProvider
-    from llmwikify.llm.streamable import StreamableLLMClient
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
 
 PROVIDERS: dict[str, type[LLMProvider]] = {}

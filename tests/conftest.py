@@ -11,7 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from llmwikify.core import Wiki
-from llmwikify.extractors import ExtractedContent
+from llmwikify.foundation.extractors import ExtractedContent
 
 
 @pytest.fixture

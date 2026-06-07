@@ -107,8 +107,8 @@ class TestOrphanHtmlFile:
             )
 
     def test_extractors_init_does_not_import_orphan_html(self):
-        """extractors/__init__.py should not import the orphan html module."""
-        init_path = Path(__file__).parent.parent / 'src/llmwikify/extractors/__init__.py'
+        """foundation/extractors/__init__.py should not import the orphan html module."""
+        init_path = Path(__file__).parent.parent / 'src/llmwikify/foundation/extractors/__init__.py'
         content = init_path.read_text()
 
         # Should not import from .html
@@ -154,7 +154,7 @@ class TestMarkItDownPlugins:
         """MarkItDown should enable plugins when LLM client is available."""
         pytest.importorskip('markitdown', reason="markitdown not installed")
 
-        from llmwikify.extractors.markitdown_extractor import MarkItDownExtractor
+        from llmwikify.foundation.extractors.markitdown_extractor import MarkItDownExtractor
 
         config = {
             "llm": {
@@ -166,7 +166,7 @@ class TestMarkItDownPlugins:
 
         with patch('markitdown.MarkItDown') as MockMD:
             MockMD.return_value = MagicMock()
-            with patch('llmwikify.llm_client.LLMClient') as MockClient:
+            with patch('llmwikify.foundation.llm_client.LLMClient') as MockClient:
                 MockClient.from_config.return_value = MagicMock()
 
                 extractor = MarkItDownExtractor(config)
@@ -181,7 +181,7 @@ class TestMarkItDownPlugins:
         """MarkItDown should disable plugins when LLM is not configured."""
         pytest.importorskip('markitdown', reason="markitdown not installed")
 
-        from llmwikify.extractors.markitdown_extractor import MarkItDownExtractor
+        from llmwikify.foundation.extractors.markitdown_extractor import MarkItDownExtractor
 
         with patch('markitdown.MarkItDown') as MockMD:
             MockMD.return_value = MagicMock()
@@ -205,7 +205,7 @@ class TestFallbackBehavior:
         test_file = temp_wiki / 'test.unknown'
         test_file.write_text("Some text content")
 
-        from llmwikify.extractors.base import extract
+        from llmwikify.foundation.extractors.base import extract
         result = extract(str(test_file), temp_wiki)
 
         # Should not return empty text for existing files
@@ -215,7 +215,7 @@ class TestFallbackBehavior:
 
     def test_extract_handles_missing_file_gracefully(self):
         """Extract should handle missing files gracefully."""
-        from llmwikify.extractors.base import extract
+        from llmwikify.foundation.extractors.base import extract
 
         result = extract('/nonexistent/file.xyz')
 
@@ -414,8 +414,8 @@ class TestReadTheDocs:
 # ============================================================
 class TestPromptsInit:
     def test_prompts_init_exports_registry(self):
-        """prompts/__init__.py should export PromptRegistry or related symbols."""
-        from llmwikify import prompts
+        """foundation/prompts/__init__.py should export PromptRegistry or related symbols."""
+        from llmwikify.foundation import prompts
 
         # Should have some exports beyond just a docstring
         module_attrs = [
@@ -429,8 +429,8 @@ class TestPromptsInit:
         )
 
     def test_defaults_init_has_content(self):
-        """prompts/_defaults/__init__.py should have meaningful content."""
-        defaults_path = Path(__file__).parent.parent / 'src/llmwikify/prompts/_defaults/__init__.py'
+        """foundation/prompts/_defaults/__init__.py should have meaningful content."""
+        defaults_path = Path(__file__).parent.parent / 'src/llmwikify/foundation/prompts/_defaults/__init__.py'
         content = defaults_path.read_text()
 
         # Should have more than just a docstring

@@ -85,7 +85,7 @@ class WikiSourceAnalysisMixin(WikiProtocol):
             Or {"status": "skipped", "reason": "..."} if LLM unavailable.
         """
         try:
-            from ..llm import LLMClient
+            from ..foundation.llm import LLMClient
             client = LLMClient.from_config(self.config)
         except (ImportError, ValueError, OSError):
             return {"status": "skipped", "reason": "No LLM configured"}

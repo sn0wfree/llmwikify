@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from llmwikify.llm.streamable import StreamableLLMClient
+from llmwikify.foundation.llm.streamable import StreamableLLMClient
 from llmwikify.autoresearch.clarifier import ResearchClarifier
 from llmwikify.autoresearch.config import merge_six_step_config
 from llmwikify.autoresearch.gatherer import SourceGatherer

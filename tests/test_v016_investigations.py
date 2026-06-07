@@ -144,7 +144,7 @@ class TestDataGapDetection:
 class TestLLMInvestigations:
     """Test _llm_generate_investigations method."""
 
-    @patch('llmwikify.llm_client.LLMClient')
+    @patch('llmwikify.foundation.llm_client.LLMClient')
     def test_generates_suggestions(self, mock_client_class, temp_wiki):
         """Test LLM generates investigation suggestions."""
         # Mock LLM client
@@ -195,7 +195,7 @@ class TestLintInvestigations:
         assert "suggested_questions" not in result["investigations"]
         assert "suggested_sources" not in result["investigations"]
 
-    @patch('llmwikify.llm_client.LLMClient')
+    @patch('llmwikify.foundation.llm_client.LLMClient')
     def test_lint_with_llm_suggestions(self, mock_client_class, temp_wiki):
         """Test lint() with LLM suggestions enabled."""
         mock_client = MagicMock()
