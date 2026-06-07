@@ -100,9 +100,25 @@ class StreamableLLMClient(LLMClient):
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> "StreamableLLMClient":
-        from llmwikify.agent.backend.providers.registry import create_llm
+        """Build a client from the ``llm.*`` section of a wiki config.
 
-        return create_llm(config)
+        This is a pure config-to-constructor translation; it does
+        NOT consult the LLM provider registry (that lives at
+        L3 in ``llmwikify.apps.agent.providers.registry``).
+        Callers that need the registry's provider discovery
+        should call ``apps.agent.providers.registry.create_llm``
+        directly.
+        """
+        llm_cfg = config.get("llm", config)
+        return cls(
+            provider=llm_cfg.get("provider", "openai"),
+            base_url=llm_cfg.get("base_url", ""),
+            api_key=llm_cfg.get("api_key", ""),
+            model=llm_cfg.get("model", "gpt-4o"),
+            context_window=llm_cfg.get("context_window"),
+            budget_on_exceed=llm_cfg.get("budget_on_exceed", "warn"),
+            request_timeout_seconds=llm_cfg.get("timeout", 120),
+        )
 
     def _build_headers(self) -> dict[str, str]:
         """Build HTTP headers with appropriate auth scheme."""

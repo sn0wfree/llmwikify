@@ -164,7 +164,13 @@ def test_streamable_uses_relative_imports_for_budget_modules():
     assert "from .budget_decorator import" in src
     assert "from .token_budget import" in src
     # The provider-registry bridge is allowed (lazy, only in from_config)
-    assert "from llmwikify.agent.backend.providers.registry" in src
+    # Per the 4-layer refactor (Batch B4), the L1->L3 cross-dep
+    # in ``from_config`` was removed. The function is now a
+    # pure config-to-constructor translation; callers that need
+    # the provider registry use ``apps.agent.providers.registry``
+    # directly.
+    assert "from llmwikify.apps.agent.providers.registry" not in src
+    assert "from llmwikify._legacy.adapters" not in src
     # No other absolute agent imports at module level
     top_level_agent_imports = [
         line for line in src.splitlines()

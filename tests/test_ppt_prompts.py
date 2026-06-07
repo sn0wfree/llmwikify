@@ -9,7 +9,7 @@ Covers:
 
 import pytest
 
-from llmwikify.agent.backend.ppt.engine import (
+from llmwikify.apps.ppt.engine import (
     CONTENT_PROMPT_ZH,
     OUTLINE_PROMPT_ZH,
     RESEARCH_OUTLINE_PROMPT_ZH,

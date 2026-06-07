@@ -50,7 +50,7 @@ def test_autoresearch_engine_imports_streamable_from_new_home():
 
     src = Path(engine.__file__).read_text()
     assert "from llmwikify.foundation.llm.streamable import StreamableLLMClient" in src
-    assert "from llmwikify.agent.backend.adapters import" not in src
+    assert "from llmwikify._legacy.adapters import" not in src
 
 
 def test_autoresearch_actions_imports_streamable_from_new_home():
@@ -59,7 +59,7 @@ def test_autoresearch_actions_imports_streamable_from_new_home():
 
     src = Path(actions.__file__).read_text()
     assert "from llmwikify.foundation.llm.streamable import StreamableLLMClient" in src
-    assert "from llmwikify.agent.backend.adapters import" not in src
+    assert "from llmwikify._legacy.adapters import" not in src
 
 
 def test_autoresearch_engine_helpers_docstring_updated():

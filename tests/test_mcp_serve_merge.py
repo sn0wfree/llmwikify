@@ -262,7 +262,7 @@ def test_serve_py_does_not_import_mcp_server():
     src = inspect.getsource(__import__("llmwikify.interfaces.cli.commands.serve", fromlist=["run_serve"]))
     assert "from llmwikify.interfaces.mcp.server import" not in src, (
         "cli/commands/serve.py should not import from "
-        "llmwikify.mcp.server (use llmwikify.mcp.adapter.MCPAdapter "
+        "llmwikify.interfaces.mcp.server (use llmwikify.mcp.adapter.MCPAdapter "
         "directly). Phase 3 #6 removed this to silence internal "
         "deprecation warnings."
     )

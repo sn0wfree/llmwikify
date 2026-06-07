@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llmwikify.agent.backend.db import AgentDatabase
-from llmwikify.agent.tools import WikiToolRegistry
+from llmwikify.apps.agent.core.db import AgentDatabase
+from llmwikify.apps.agent.tools import WikiToolRegistry
 from llmwikify.core.wiki import Wiki
 
 

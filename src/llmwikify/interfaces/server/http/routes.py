@@ -486,8 +486,8 @@ def _load_research_config() -> dict[str, Any] | None:
 
 def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     """Register Agent backend routes (Phase 1)."""
-    from llmwikify.agent.backend.service import AgentService
-    from llmwikify.agent.backend.routes.agent import set_agent_service
+    from llmwikify.apps.agent.core.service import AgentService
+    from llmwikify.apps.agent.routes.agent import set_agent_service
 
     data_dir = Path.home() / ".llmwikify" / "agent"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -495,10 +495,10 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     agent_service = AgentService(registry, data_dir)
     set_agent_service(agent_service)
 
-    from llmwikify.agent.backend.routes import agent_router, ppt_router, research_router, ppt_chat_router
-    from llmwikify.agent.backend.routes.research import set_research_deps
-    from llmwikify.agent.backend.routes.ppt import set_ppt_deps
-    from llmwikify.agent.backend.ppt.chat_routes import set_ppt_chat_deps
+    from llmwikify.apps.agent.routes import agent_router, ppt_router, research_router, ppt_chat_router
+    from llmwikify.apps.agent.routes.research import set_research_deps
+    from llmwikify.apps.agent.routes.ppt import set_ppt_deps
+    from llmwikify.apps.ppt.chat_routes import set_ppt_chat_deps
     from llmwikify.autoresearch.routes import set_autoresearch_deps, router as autoresearch_router
 
     # Load research config from global config file

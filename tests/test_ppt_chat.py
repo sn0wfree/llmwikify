@@ -2,11 +2,11 @@
 
 import pytest
 import json
-from llmwikify.agent.backend.ppt.harness import SlideHarness
-from llmwikify.agent.backend.ppt.schema import (
+from llmwikify.apps.ppt.harness import SlideHarness
+from llmwikify.apps.ppt.schema import (
     Presentation, SlideContent, Theme, ThemeColors,
 )
-from llmwikify.agent.backend.ppt.themes import get_theme
+from llmwikify.apps.ppt.themes import get_theme
 
 
 # ─── Fixtures ──────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ class TestChatRouterPatterns:
     """Test the regex pattern matching in PPTChatRouter."""
 
     def test_delete_pattern_cn(self):
-        from llmwikify.agent.backend.ppt.chat_router import PATTERNS
+        from llmwikify.apps.ppt.chat_router import PATTERNS
         import re
         # Get the actual key from the dict
         delete_key = [k for k in PATTERNS if "删除" in k and "幻灯片" in k][0]
@@ -150,14 +150,14 @@ class TestChatRouterPatterns:
 
     def test_delete_pattern_this(self):
         import re
-        from llmwikify.agent.backend.ppt.chat_router import PATTERNS
+        from llmwikify.apps.ppt.chat_router import PATTERNS
         delete_key = [k for k in PATTERNS if "删除" in k and "幻灯片" in k][0]
         match = re.search(delete_key, "删除这页")
         assert match is None  # "这页" doesn't have a number
 
     def test_move_pattern(self):
         import re
-        from llmwikify.agent.backend.ppt.chat_router import PATTERNS
+        from llmwikify.apps.ppt.chat_router import PATTERNS
         move_key = [k for k in PATTERNS if "移动" in k][0]
         match = re.search(move_key, "移动第2页到第5页")
         assert match is not None
@@ -166,7 +166,7 @@ class TestChatRouterPatterns:
 
     def test_duplicate_pattern(self):
         import re
-        from llmwikify.agent.backend.ppt.chat_router import PATTERNS
+        from llmwikify.apps.ppt.chat_router import PATTERNS
         dup_key = [k for k in PATTERNS if "复制" in k][0]
         match = re.search(dup_key, "复制第3页")
         assert match is not None
@@ -174,7 +174,7 @@ class TestChatRouterPatterns:
 
     def test_undo_pattern(self):
         import re
-        from llmwikify.agent.backend.ppt.chat_router import PATTERNS
+        from llmwikify.apps.ppt.chat_router import PATTERNS
         undo_key = [k for k in PATTERNS if "撤销" in k][0]
         assert re.search(undo_key, "撤销")
         assert re.search(undo_key, "回退")
@@ -182,14 +182,14 @@ class TestChatRouterPatterns:
 
     def test_theme_pattern(self):
         import re
-        from llmwikify.agent.backend.ppt.chat_router import PATTERNS
+        from llmwikify.apps.ppt.chat_router import PATTERNS
         theme_key = [k for k in PATTERNS if "换" in k and "主题" in k][0]
         match = re.search(theme_key, "换个主题为dracula")
         assert match is not None
         assert match.group(1) == "dracula"
 
     def test_parse_cn_num(self):
-        from llmwikify.agent.backend.ppt.chat_router import _parse_cn_num
+        from llmwikify.apps.ppt.chat_router import _parse_cn_num
         assert _parse_cn_num("一") == 1
         assert _parse_cn_num("三") == 3
         assert _parse_cn_num("5") == 5

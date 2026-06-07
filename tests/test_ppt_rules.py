@@ -11,7 +11,7 @@ Covers:
 
 import pytest
 
-from llmwikify.agent.backend.ppt.rules import (
+from llmwikify.apps.ppt.rules import (
     TYPE_TO_LAYOUT,
     resolve_layout,
     validate_content_for_layout,

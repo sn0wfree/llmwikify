@@ -104,7 +104,9 @@ class PromptEvaluator:
 
     def __init__(self, defaults_dir: Optional[Path] = None):
         if defaults_dir is None:
-            defaults_dir = Path(__file__).parent.parent / "src" / "llmwikify" / "prompts" / "_defaults"
+            # Per the 4-layer refactor (Batch B1), prompts/ moved
+            # to foundation/prompts/.
+            defaults_dir = Path(__file__).parent.parent / "src" / "llmwikify" / "foundation" / "prompts" / "_defaults"
         self.defaults_dir = defaults_dir
         self._jinja_env = Environment(
             loader=BaseLoader(),

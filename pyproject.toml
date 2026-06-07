@@ -117,8 +117,47 @@ packages = [
     "llmwikify.foundation.prompts",
     "llmwikify.foundation.prompts._defaults",
     "llmwikify.foundation.templates",
-    "llmwikify.core",
-    "llmwikify.agent",
+    "llmwikify.kernel",
+    "llmwikify.kernel.wiki",
+    "llmwikify.kernel.wiki.mixins",
+    "llmwikify.kernel.wiki.mixins.core",
+    "llmwikify.kernel.wiki.mixins.io",
+    "llmwikify.kernel.wiki.mixins.analysis",
+    "llmwikify.kernel.wiki.engines",
+    "llmwikify.kernel.wiki.lint",
+    "llmwikify.kernel.wiki.lint.rules",
+    "llmwikify.kernel.storage",
+    "llmwikify.kernel.graph",
+    "llmwikify.kernel.search",
+    "llmwikify.kernel.multi_wiki",
+    "llmwikify.core",  # backward-compat shim (v0.33.0 removal)
+    "llmwikify.core.lint",  # backward-compat shim
+    "llmwikify.core.lint.rules",  # backward-compat shim
+    "llmwikify.apps",
+    "llmwikify.apps.agent",
+    "llmwikify.apps.agent.core",
+    "llmwikify.apps.agent.tools",
+    "llmwikify.apps.agent.memory",
+    "llmwikify.apps.agent.notifications",
+    "llmwikify.apps.agent.scheduler",
+    "llmwikify.apps.agent.providers",
+    "llmwikify.apps.agent.routes",
+    "llmwikify.apps.research",
+    "llmwikify.apps.ppt",
+    "llmwikify.agent",  # backward-compat shim (v0.33.0 removal)
+    "llmwikify.agent.backend",  # backward-compat shim
+    "llmwikify.agent.backend.research",  # backward-compat shim
+    "llmwikify.agent.backend.ppt",  # backward-compat shim
+    "llmwikify.agent.backend.providers",  # backward-compat shim
+    "llmwikify.agent.backend.providers.base",  # backward-compat shim
+    "llmwikify.agent.backend.providers.registry",  # backward-compat shim
+    "llmwikify.agent.backend.providers.xiaomi",  # backward-compat shim
+    "llmwikify.agent.backend.providers.minimax",  # backward-compat shim
+    "llmwikify.agent.backend.routes",  # backward-compat shim
+    "llmwikify.agent.backend.routes.agent",  # backward-compat shim
+    "llmwikify.agent.backend.routes.ppt",  # backward-compat shim
+    "llmwikify.agent.backend.routes.research",  # backward-compat shim
+    "llmwikify._legacy",
     "llmwikify.interfaces",
     "llmwikify.interfaces.cli",
     "llmwikify.interfaces.cli.commands",

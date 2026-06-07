@@ -65,7 +65,7 @@ def _get_engine(wiki_id: str | None = None) -> ResearchEngine:
     wiki = _get_wiki(wiki_id)
     llm = _LLM_CLIENT
     if llm is None:
-        from llmwikify.agent.backend.routes.agent import get_agent_service
+        from llmwikify.apps.agent.routes.agent import get_agent_service
         svc = get_agent_service()
         llm = svc._get_llm()
     return ResearchEngine(

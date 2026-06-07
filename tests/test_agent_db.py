@@ -4,7 +4,7 @@ import json
 import logging
 import pytest
 from pathlib import Path
-from llmwikify.agent.backend.db import AgentDatabase
+from llmwikify.apps.agent.core.db import AgentDatabase
 
 
 # ==============================================================================
