@@ -29,10 +29,12 @@ preserved byte-for-byte. The 3 new files are thin wrappers
 that expose a unified chat-style interface on top of the
 existing engine.
 """
+from .base import ChatBase, ChatMessage, ChatSession
 from .clarifier import ResearchClarifier
 from .config import DEFAULT_SIX_STEP_CONFIG, merge_six_step_config
 from .engine import ResearchEngine, ResearchState  # re-exported below
 from .gates import ResearchGates
+from .harness import CaseResult, GoldenCase, Harness, HarnessReport
 from .llm_step import LLMCallMetrics
 from .state import MetricsCollector
 from .quality_gate import GateResult, QualityGate
@@ -70,4 +72,12 @@ __all__ = [
     "MetricsCollector",
     "ActionMetrics",
     "SessionMetrics",
+    # C1: new chat framework
+    "ChatBase",
+    "ChatMessage",
+    "ChatSession",
+    "Harness",
+    "GoldenCase",
+    "CaseResult",
+    "HarnessReport",
 ]
