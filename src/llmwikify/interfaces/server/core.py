@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from llmwikify.core import Wiki
 from llmwikify.core.wiki_registry import WikiRegistry
-from llmwikify.server.constants import DEFAULT_HOST, DEFAULT_PORT
+from llmwikify.interfaces.server.constants import DEFAULT_HOST, DEFAULT_PORT
 
 from ..mcp.adapter import MCPAdapter
 from .http.middleware import AuthMiddleware

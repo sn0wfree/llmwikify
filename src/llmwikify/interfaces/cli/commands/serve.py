@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio  # Phase 3 #6 — used by stdio/http/sse paths
 from typing import Any
 
-from llmwikify.mcp.adapter import MCPAdapter  # Phase 3 #6
+from llmwikify.interfaces.mcp.adapter import MCPAdapter  # Phase 3 #6
 
 from .._base import Command
 
@@ -27,7 +27,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
         0 on success (or after KeyboardInterrupt).
     """
     from llmwikify.foundation.config import get_wikis_config
-    from llmwikify.server import WikiServer
+    from llmwikify.interfaces.server import WikiServer
 
     mcp_config = config.get("mcp", {})
 

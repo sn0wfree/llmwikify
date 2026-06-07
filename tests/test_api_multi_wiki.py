@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from llmwikify import Wiki, WikiRegistry
-from llmwikify.server.core import WikiServer
+from llmwikify.interfaces.server.core import WikiServer
 
 
 @pytest.fixture

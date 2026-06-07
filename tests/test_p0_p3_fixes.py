@@ -130,7 +130,7 @@ class TestCLIDefaultWikiRoot:
         """
         commands_path = (
             Path(__file__).parent.parent
-            / 'src/llmwikify/cli/commands/init_cmd.py'
+            / 'src/llmwikify/interfaces/cli/commands/init_cmd.py'
         )
         content = commands_path.read_text()
 
@@ -151,31 +151,32 @@ class TestCLIDefaultWikiRoot:
 # ============================================================
 class TestMarkItDownPlugins:
     def test_enable_plugins_true_when_llm_configured(self):
-        """MarkItDown should enable plugins when LLM client is available."""
+        """MarkItDown should enable plugins when LLM client is available.
+
+        Per the 4-layer refactor (Batch B1), MarkItDownExtractor no
+        longer constructs an LLM client from a config dict (that
+        would create a ``foundation.extractors → foundation.llm``
+        cross-subpackage import, violating L1 isolation). The
+        caller passes a pre-constructed ``llm_client``.
+        """
         pytest.importorskip('markitdown', reason="markitdown not installed")
 
         from llmwikify.foundation.extractors.markitdown_extractor import MarkItDownExtractor
 
-        config = {
-            "llm": {
-                "enabled": True,
-                "api_key": "test-key",
-                "model": "gpt-4o",
-            }
-        }
-
         with patch('markitdown.MarkItDown') as MockMD:
             MockMD.return_value = MagicMock()
-            with patch('llmwikify.foundation.llm_client.LLMClient') as MockClient:
-                MockClient.from_config.return_value = MagicMock()
 
-                extractor = MarkItDownExtractor(config)
+            extractor = MarkItDownExtractor(
+                config={"llm": {"enabled": True}},
+                llm_client=MagicMock(),
+                llm_model="gpt-4o",
+            )
 
-                if MockMD.called:
-                    call_kwargs = MockMD.call_args
-                    enable_plugins = call_kwargs.kwargs.get('enable_plugins',
-                                      call_kwargs[1].get('enable_plugins', None) if call_kwargs[1] else None)
-                    assert enable_plugins == True
+            if MockMD.called:
+                call_kwargs = MockMD.call_args
+                enable_plugins = call_kwargs.kwargs.get('enable_plugins',
+                                  call_kwargs[1].get('enable_plugins', None) if call_kwargs[1] else None)
+                assert enable_plugins == True
 
     def test_enable_plugins_false_without_llm(self):
         """MarkItDown should disable plugins when LLM is not configured."""
@@ -230,7 +231,7 @@ class TestMCPToolCount:
     def test_mcp_tool_count_matches_readme(self):
         """MCP tool count in README should match actual implementation."""
         # Count tools in tools.py (single source of truth)
-        tools_path = Path(__file__).parent.parent / 'src/llmwikify/mcp/tools.py'
+        tools_path = Path(__file__).parent.parent / 'src/llmwikify/interfaces/mcp/tools.py'
         content = tools_path.read_text()
         actual_count = content.count('@mcp.tool')
 
@@ -272,7 +273,7 @@ class TestSinkCLI:
         """
         commands_path = (
             Path(__file__).parent.parent
-            / 'src/llmwikify/cli/commands/sink_status.py'
+            / 'src/llmwikify/interfaces/cli/commands/sink_status.py'
         )
         content = commands_path.read_text()
 
@@ -313,7 +314,7 @@ class TestSynthesizeCLI:
         """
         commands_path = (
             Path(__file__).parent.parent
-            / 'src/llmwikify/cli/commands/synthesize.py'
+            / 'src/llmwikify/interfaces/cli/commands/synthesize.py'
         )
         content = commands_path.read_text()
 
@@ -341,7 +342,7 @@ class TestLintInvestigations:
         """
         commands_path = (
             Path(__file__).parent.parent
-            / 'src/llmwikify/cli/commands/lint.py'
+            / 'src/llmwikify/interfaces/cli/commands/lint.py'
         )
         content = commands_path.read_text()
 
@@ -368,7 +369,7 @@ class TestBatchSmart:
         """
         commands_path = (
             Path(__file__).parent.parent
-            / 'src/llmwikify/cli/commands/batch.py'
+            / 'src/llmwikify/interfaces/cli/commands/batch.py'
         )
         content = commands_path.read_text()
 

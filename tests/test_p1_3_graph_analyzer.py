@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from src.llmwikify.core.wiki import Wiki
-from src.llmwikify.core.graph_analyzer import GraphAnalyzer
+from llmwikify.core.wiki import Wiki
+from llmwikify.core.graph_analyzer import GraphAnalyzer
 
 
 @pytest.fixture
@@ -216,6 +216,6 @@ class TestCLICommandExists:
 
     def test_graph_analyze_command_exists(self):
         """Test that graph_analyze method exists on CLI."""
-        from src.llmwikify.cli.commands import WikiCLI
+        from llmwikify.interfaces.cli.commands import WikiCLI
         cli = WikiCLI.__new__(WikiCLI)
         assert hasattr(cli, 'graph_analyze')

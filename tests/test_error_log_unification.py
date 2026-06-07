@@ -35,7 +35,7 @@ import pytest
 
 def test_command_error_has_message_and_exit_code():
     """CommandError stores message and exit_code (default 1)."""
-    from llmwikify.cli._base import CommandError
+    from llmwikify.interfaces.cli._base import CommandError
 
     e = CommandError("test error")
     assert e.message == "test error"
@@ -51,7 +51,7 @@ def test_main_catches_command_error_and_returns_exit_code():
     # Use the real graph-query command with the missing
     # concept arg — the run() raises CommandError, main()
     # catches it and returns 1.
-    from llmwikify.cli._app import main
+    from llmwikify.interfaces.cli._app import main
 
     saved_argv = sys.argv
     sys.argv = ["llmwikify", "graph-query", "neighbors"]
@@ -65,7 +65,7 @@ def test_main_catches_command_error_and_returns_exit_code():
 
 def test_main_prints_command_error_message_with_error_icon():
     """``main()`` prints the CommandError message via print_error (❌)."""
-    from llmwikify.cli._app import main
+    from llmwikify.interfaces.cli._app import main
 
     saved_argv = sys.argv
     sys.argv = ["llmwikify", "graph-query", "neighbors"]
@@ -88,7 +88,7 @@ def test_main_prints_command_error_message_with_error_icon():
 
 def test_print_error_stderr_writes_to_stderr():
     """print_error_stderr writes the ❌-prefixed line to stderr."""
-    from llmwikify.cli._output import ICON_ERROR, print_error_stderr
+    from llmwikify.interfaces.cli._output import ICON_ERROR, print_error_stderr
 
     captured_err = io.StringIO()
     captured_out = io.StringIO()
@@ -104,7 +104,7 @@ def test_print_error_stderr_writes_to_stderr():
 
 def test_print_warning_stderr_writes_to_stderr():
     """print_warning_stderr writes the ⚠️-prefixed line to stderr."""
-    from llmwikify.cli._output import ICON_WARNING, print_warning_stderr
+    from llmwikify.interfaces.cli._output import ICON_WARNING, print_warning_stderr
 
     captured_err = io.StringIO()
     captured_out = io.StringIO()
@@ -118,7 +118,7 @@ def test_print_warning_stderr_writes_to_stderr():
 
 def test_print_success_stderr_writes_to_stderr():
     """print_success_stderr writes the ✅-prefixed line to stderr."""
-    from llmwikify.cli._output import ICON_SUCCESS, print_success_stderr
+    from llmwikify.interfaces.cli._output import ICON_SUCCESS, print_success_stderr
 
     captured_err = io.StringIO()
     captured_out = io.StringIO()
@@ -132,7 +132,7 @@ def test_print_success_stderr_writes_to_stderr():
 
 def test_print_info_stderr_writes_to_stderr():
     """print_info_stderr writes the 📊-prefixed line to stderr."""
-    from llmwikify.cli._output import ICON_INFO, print_info_stderr
+    from llmwikify.interfaces.cli._output import ICON_INFO, print_info_stderr
 
     captured_err = io.StringIO()
     captured_out = io.StringIO()
@@ -146,7 +146,7 @@ def test_print_info_stderr_writes_to_stderr():
 
 def test_stderr_print_writes_raw_to_stderr():
     """stderr_print writes the raw message (no icon) to stderr."""
-    from llmwikify.cli._output import stderr_print
+    from llmwikify.interfaces.cli._output import stderr_print
 
     captured_err = io.StringIO()
     captured_out = io.StringIO()
@@ -159,8 +159,8 @@ def test_stderr_print_writes_raw_to_stderr():
 def test_graph_query_raises_command_error_on_missing_concept():
     """``graph-query neighbors`` without arg raises CommandError."""
     from argparse import Namespace
-    from llmwikify.cli._base import CommandError
-    from llmwikify.cli.commands.graph_query import run_graph_query
+    from llmwikify.interfaces.cli._base import CommandError
+    from llmwikify.interfaces.cli.commands.graph_query import run_graph_query
 
     class FakeEngine:
         def get_neighbors(self, concept):
@@ -179,8 +179,8 @@ def test_graph_query_raises_command_error_on_missing_concept():
 def test_graph_query_context_raises_command_error_on_missing_row():
     """``graph-query context`` with unknown relation id raises CommandError."""
     from argparse import Namespace
-    from llmwikify.cli._base import CommandError
-    from llmwikify.cli.commands.graph_query import run_graph_query
+    from llmwikify.interfaces.cli._base import CommandError
+    from llmwikify.interfaces.cli.commands.graph_query import run_graph_query
 
     class FakeEngine:
         def get_context(self, rel_id):
@@ -210,7 +210,7 @@ def test_batch_no_longer_uses_file_sys_stderr_for_emoji():
     mentions of the pattern don't false-positive.
     """
     import ast
-    import llmwikify.cli.commands.batch as batch_mod
+    import llmwikify.interfaces.cli.commands.batch as batch_mod
 
     tree = ast.parse(inspect.getsource(batch_mod))
 
@@ -253,7 +253,7 @@ def test_ingest_no_longer_uses_file_sys_stderr_for_emoji():
     AST-based check so docstring mentions don't false-positive.
     """
     import ast
-    import llmwikify.cli.commands.ingest as ingest_mod
+    import llmwikify.interfaces.cli.commands.ingest as ingest_mod
 
     tree = ast.parse(inspect.getsource(ingest_mod))
 
@@ -295,7 +295,7 @@ def test_main_finally_runs_wiki_close_on_command_error():
     the finally block. On the CommandError path, both
     should still run.
     """
-    from llmwikify.cli._app import main
+    from llmwikify.interfaces.cli._app import main
 
     saved_argv = sys.argv
     sys.argv = ["llmwikify", "graph-query", "neighbors"]
@@ -316,7 +316,7 @@ def test_regression_no_direct_print_error_in_graph_query():
     ``raise CommandError(...)``. This test asserts the
     migration is complete.
     """
-    import llmwikify.cli.commands.graph_query as gq
+    import llmwikify.interfaces.cli.commands.graph_query as gq
 
     src = inspect.getsource(gq)
     # The pattern ``print("❌`` should not appear in

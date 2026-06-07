@@ -42,7 +42,7 @@ ALL_26_COMMANDS = [
 
 def test_all_26_commands_in_registry():
     """Every CLI command has a corresponding entry in COMMAND_REGISTRY."""
-    from llmwikify.cli._base import COMMAND_REGISTRY
+    from llmwikify.interfaces.cli._base import COMMAND_REGISTRY
 
     for cmd_name in ALL_26_COMMANDS:
         assert cmd_name in COMMAND_REGISTRY, (
@@ -53,7 +53,7 @@ def test_all_26_commands_in_registry():
 
 def test_registry_size_matches_command_count():
     """The registry should have at least 26 entries (mcp is an alias of serve)."""
-    from llmwikify.cli._base import COMMAND_REGISTRY
+    from llmwikify.interfaces.cli._base import COMMAND_REGISTRY
 
     # mcp is a separate Command that delegates to the same handler,
     # so it's a separate entry. We expect 27 entries (26 + mcp).
@@ -64,7 +64,7 @@ def test_registry_size_matches_command_count():
 
 def test_each_registry_command_has_setup_parser():
     """Each registered command has a callable setup_parser."""
-    from llmwikify.cli._base import COMMAND_REGISTRY
+    from llmwikify.interfaces.cli._base import COMMAND_REGISTRY
 
     for name, cmd in COMMAND_REGISTRY.items():
         assert callable(cmd.setup_parser), (
@@ -74,7 +74,7 @@ def test_each_registry_command_has_setup_parser():
 
 def test_each_registry_command_has_run():
     """Each registered command has a callable run."""
-    from llmwikify.cli._base import COMMAND_REGISTRY
+    from llmwikify.interfaces.cli._base import COMMAND_REGISTRY
 
     for name, cmd in COMMAND_REGISTRY.items():
         assert callable(cmd.run), (
@@ -89,7 +89,7 @@ def test_each_registry_command_has_run():
 
 def test_main_references_command_registry():
     """main() imports/uses COMMAND_REGISTRY (not a hand-written dict)."""
-    from llmwikify.cli import _app
+    from llmwikify.interfaces.cli import _app
 
     src = inspect.getsource(_app.main)
     assert "COMMAND_REGISTRY" in src, (
@@ -102,7 +102,7 @@ def test_main_references_command_registry():
 
 def test_main_does_not_contain_handwritten_command_dict():
     """main() no longer maintains a 27-entry ``commands = {…}`` dict."""
-    from llmwikify.cli import _app
+    from llmwikify.interfaces.cli import _app
 
     src = inspect.getsource(_app.main)
     # The old dict was: ``commands = {\n        'init': cli.init,``
@@ -113,7 +113,7 @@ def test_main_does_not_contain_handwritten_command_dict():
 
 def test_main_uses_load_cli_config_helper():
     """main() delegates config loading to ``cli._config.load_cli_config``."""
-    from llmwikify.cli import _app
+    from llmwikify.interfaces.cli import _app
 
     src = inspect.getsource(_app.main)
     assert "load_cli_config" in src, (
@@ -123,7 +123,7 @@ def test_main_uses_load_cli_config_helper():
 
 def test_main_does_not_inline_yaml_loading():
     """main() no longer inlines ``yaml.safe_load(config_file.read_text())``."""
-    from llmwikify.cli import _app
+    from llmwikify.interfaces.cli import _app
 
     src = inspect.getsource(_app.main)
     assert "yaml.safe_load" not in src, (
@@ -136,7 +136,7 @@ def test_main_does_not_inline_yaml_loading():
 
 def test_main_iterates_registry_to_setup_parsers():
     """main() calls setup_parser for each registered command."""
-    from llmwikify.cli import _app
+    from llmwikify.interfaces.cli import _app
 
     # Phase 3 #6 — the sorted(COMMAND_REGISTRY) iteration moved
     # from main() to _build_parser() (the helper that builds the
@@ -157,7 +157,7 @@ def test_main_iterates_registry_to_setup_parsers():
 
 def test_main_dispatches_via_registry_run():
     """main() dispatches via ``cmd.run(args, wiki_root, config)``."""
-    from llmwikify.cli import _app
+    from llmwikify.interfaces.cli import _app
 
     src = inspect.getsource(_app.main)
     assert "cmd.run(args" in src, (
@@ -176,7 +176,7 @@ def test_main_body_is_much_shorter_than_before():
     After C3, main() should be ~80-120 lines (parser + epilog + dispatch).
     If it grows back toward 300+, the registry was bypassed.
     """
-    from llmwikify.cli import _app
+    from llmwikify.interfaces.cli import _app
 
     src_lines = inspect.getsource(_app.main).splitlines()
     line_count = len(src_lines)
@@ -194,7 +194,7 @@ def test_main_body_is_much_shorter_than_before():
 
 def test_no_handwritten_subparsers_add_parser_calls_in_main():
     """main() should not have hand-written ``subparsers.add_parser('init', ...)`` etc."""
-    from llmwikify.cli import _app
+    from llmwikify.interfaces.cli import _app
 
     src = inspect.getsource(_app.main)
     # The old code had lines like:
@@ -218,7 +218,7 @@ def test_no_handwritten_subparsers_add_parser_calls_in_main():
 
 def test_wiki_cli_still_has_all_public_methods():
     """WikiCLI still has the 26 public methods (backward compat for tests)."""
-    from llmwikify.cli import WikiCLI
+    from llmwikify.interfaces.cli import WikiCLI
 
     for cmd_name in ALL_26_COMMANDS:
         # Convert command name → method name (snake_case)
@@ -230,7 +230,7 @@ def test_wiki_cli_still_has_all_public_methods():
 
 def test_wiki_cli_methods_are_one_line_delegates():
     """Each WikiCLI public method is a 1-line delegate to run_<name>."""
-    from llmwikify.cli import WikiCLI
+    from llmwikify.interfaces.cli import WikiCLI
 
     for cmd_name in ALL_26_COMMANDS:
         method_name = cmd_name.replace("-", "_")

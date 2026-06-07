@@ -19,7 +19,7 @@ def _run_async(coro):
 
 
 from llmwikify.core import Wiki
-from llmwikify.mcp import create_mcp_server
+from llmwikify.interfaces.mcp import create_mcp_server
 
 
 @pytest.fixture

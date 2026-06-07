@@ -43,7 +43,7 @@ MIGRATED_COMMANDS = [
 
 def test_commands_subpackage_exists():
     """llmwikify.cli.commands is a subpackage, not the old commands.py file."""
-    from llmwikify.cli import commands
+    from llmwikify.interfaces.cli import commands
 
     # Subpackages have __path__ attribute
     assert hasattr(commands, "__path__"), "cli.commands should be a subpackage"
@@ -52,7 +52,7 @@ def test_commands_subpackage_exists():
 
 def test_commands_subpackage_exports_all_ten():
     """All 10 migrated commands are exported from cli.commands."""
-    from llmwikify.cli import commands
+    from llmwikify.interfaces.cli import commands
 
     for _, class_name, run_fn_name, _ in MIGRATED_COMMANDS:
         assert hasattr(commands, class_name), f"missing {class_name} in cli.commands"
@@ -61,7 +61,7 @@ def test_commands_subpackage_exports_all_ten():
 
 def test_each_command_module_is_a_separate_file():
     """Each command lives in its own .py file under cli/commands/."""
-    commands_dir = Path("src/llmwikify/cli/commands")
+    commands_dir = Path("src/llmwikify/interfaces/cli/commands")
 
     for submodule, _, _, _ in MIGRATED_COMMANDS:
         path = commands_dir / f"{submodule}.py"
@@ -75,7 +75,7 @@ def test_each_command_module_is_a_separate_file():
 
 def test_each_command_class_has_name_and_run():
     """Each Command class has ``name`` (str) and a callable ``run()``."""
-    from llmwikify.cli import commands
+    from llmwikify.interfaces.cli import commands
 
     for _, class_name, _, _ in MIGRATED_COMMANDS:
         cls = getattr(commands, class_name)
@@ -85,7 +85,7 @@ def test_each_command_class_has_name_and_run():
 
 def test_command_names_are_unique():
     """No two migrated commands share the same ``name`` attribute."""
-    from llmwikify.cli import commands
+    from llmwikify.interfaces.cli import commands
 
     names = []
     for _, class_name, _, _ in MIGRATED_COMMANDS:
@@ -97,7 +97,7 @@ def test_command_names_are_unique():
 
 def test_command_run_delegates_to_free_function():
     """Each Command.run() method delegates to the matching run_<name> function."""
-    from llmwikify.cli import commands
+    from llmwikify.interfaces.cli import commands
 
     for _, class_name, run_fn_name, _ in MIGRATED_COMMANDS:
         cls = getattr(commands, class_name)
@@ -116,7 +116,7 @@ def test_command_run_delegates_to_free_function():
 
 def test_wiki_cli_delegates_migrated_methods():
     """WikiCLI's migrated methods are 1-line delegates to run_<name> functions."""
-    from llmwikify.cli import WikiCLI
+    from llmwikify.interfaces.cli import WikiCLI
 
     for _, class_name, run_fn_name, method_name in MIGRATED_COMMANDS:
         method = getattr(WikiCLI, method_name)
@@ -137,7 +137,7 @@ def test_wiki_cli_methods_not_duplicated_in_app_file():
     This is the structural guard against someone re-inlining
     the extracted code back into _app.py.
     """
-    app_src = Path("src/llmwikify/cli/_app.py").read_text()
+    app_src = Path("src/llmwikify/interfaces/cli/_app.py").read_text()
     for _, _, run_fn_name, method_name in MIGRATED_COMMANDS:
         # The function call site is OK — what we forbid is a second
         # full method body (e.g., `def method_name(self, args):` with
@@ -174,10 +174,10 @@ def test_wiki_cli_methods_not_duplicated_in_app_file():
 
 def test_old_commands_py_file_is_gone():
     """The original commands.py file was renamed to _app.py to avoid shadowing."""
-    assert not Path("src/llmwikify/cli/commands.py").exists(), (
+    assert not Path("src/llmwikify/interfaces/cli/commands.py").exists(), (
         "commands.py should have been renamed to _app.py"
     )
-    assert Path("src/llmwikify/cli/_app.py").exists(), (
+    assert Path("src/llmwikify/interfaces/cli/_app.py").exists(), (
         "_app.py should exist as the new home for WikiCLI + main()"
     )
 
@@ -189,7 +189,7 @@ def test_old_commands_py_file_is_gone():
 
 def test_app_file_imports_run_functions_from_commands_subpackage():
     """_app.py imports the 10 run_<name> functions from the new subpackage."""
-    src = Path("src/llmwikify/cli/_app.py").read_text()
+    src = Path("src/llmwikify/interfaces/cli/_app.py").read_text()
     for _, _, run_fn_name, _ in MIGRATED_COMMANDS:
         # There should be an import like:
         # from .commands.X import run_Y
@@ -202,7 +202,7 @@ def test_app_file_imports_run_functions_from_commands_subpackage():
 
 def test_cli_init_does_not_import_from_old_path():
     """cli/__init__.py imports from _app, not from commands (the subpackage)."""
-    src = Path("src/llmwikify/cli/__init__.py").read_text()
+    src = Path("src/llmwikify/interfaces/cli/__init__.py").read_text()
     assert "from ._app import" in src, (
         "cli/__init__.py should import from ._app"
     )
