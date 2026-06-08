@@ -35,6 +35,7 @@ from .config import DEFAULT_SIX_STEP_CONFIG, merge_six_step_config
 from .engine import ResearchEngine, ResearchState  # re-exported below
 from .gates import ResearchGates
 from .eval_harness import CaseResult, GoldenCase, Harness, HarnessReport
+from .db import AutoResearchDatabase, ChatDatabase
 from .llm_step import LLMCallMetrics
 from .state import MetricsCollector
 from .quality_gate import GateResult, QualityGate
@@ -80,4 +81,7 @@ __all__ = [
     "GoldenCase",
     "CaseResult",
     "HarnessReport",
+    # v0.32 Phase 3: unified DB
+    "ChatDatabase",
+    "AutoResearchDatabase",  # back-compat alias
 ]

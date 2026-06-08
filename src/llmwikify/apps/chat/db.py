@@ -1,17 +1,97 @@
-"""AutoResearchDatabase: independent SQLite database for autoresearch.
+"""ChatDatabase — unified SQLite database for all chat-driven state.
 
-This module is fully self-contained — it does not import from
-llmwikify.agent.backend. The public method names intentionally mirror
-AgentDatabase's research-related API so that engine.py / session.py /
-gatherer.py / analyzer.py / routes.py work unchanged.
+Per v0.32 Phase 3 (🔴 2 weeks, now shipped incrementally):
 
-Differences from AgentDatabase:
-- DB file: ~/.llmwikify/agent/autoresearch.db (independent)
-- Tables: autoresearch_sessions / autoresearch_sub_queries / autoresearch_sources
-- 6-step framework fields are native in the schema (no ALTER TABLE)
-- Default status is 'clarifying' (not 'planning') because the first
-  6-step stage is concept clarification
-- Adds 6-step framework helpers: update_six_step_fields, get_six_step_fields
+This module consolidates the two pre-refactor databases:
+
+  - ``apps/agent/core/db.py::AgentDatabase``  (1387 LOC,
+    ``.llmwiki_agent.db`` — 13 tables: chat_sessions,
+    chat_messages, tool_calls, research_sessions,
+    research_sub_queries, research_sources, dream_proposals,
+    notifications, confirmations, ingest_log, ppt_tasks,
+    ppt_chat_sessions, ppt_chat_messages)
+  - ``apps/chat/db.py::AutoResearchDatabase``   (589 LOC,
+    ``autoresearch.db`` — 3 tables: autoresearch_sessions,
+    autoresearch_sub_queries, autoresearch_sources)
+
+into a single ``ChatDatabase`` class living in one file
+(``apps/chat/db.py``). The two legacy classes are now thin
+shims that re-export the consolidated methods.
+
+The consolidation is **focused on the research tables** (the
+design's 9-table target is a future v0.32.5 goal). The
+non-research AgentDatabase tables (chat_sessions, chat_messages,
+tool_calls, dream_proposals, notifications, confirmations,
+ingest_log, ppt_*) are **NOT** migrated into ChatDatabase —
+they are different business domains (chat UI, dream editor,
+PPT) that don't share data with the research loop. Folding
+them in would violate the Unix philosophy (one file = one
+focus) for ~zero functional gain. They stay in
+``apps/agent/core/db.py::AgentDatabase`` (the shim file) for
+the v0.32 cycle and are revisited in v0.32.5+.
+
+Schema
+------
+
+The new ChatDatabase owns 4 tables (one new, three carried
+over with renaming):
+
+  sessions             (id, wiki_id, query, type, status, ...)
+                       — replaces both ``research_sessions``
+                         (AgentDatabase) and
+                         ``autoresearch_sessions``
+                         (AutoResearchDatabase). Unified
+                         session tracking with ``type`` column
+                         (legacy: 'research' or 'autoresearch').
+
+  research_sub_queries (id, session_id, query, source_type, ...)
+                       — same as before (renamed to drop the
+                         ``autoresearch_`` prefix; both old DBs
+                         had identical schemas here)
+
+  research_sources     (id, session_id, sub_query_id, url, ...)
+                       — same as before (renamed similarly)
+
+  research_steps       (session_id, step_num, status, ...)
+                       — **NEW** (Phase 3 deliverable):
+                         one row per (session, step_num)
+                         for persisting the 15+ ResearchState
+                         fields (round, max_rounds, max_replan,
+                         phase, sub_queries, sources, synthesis,
+                         report_md, review, knowledge_gaps,
+                         contradictions, issues, observations,
+                         _last_thought, cancelled, paused,
+                         budget_remaining).
+
+Backward compatibility
+----------------------
+
+  - ``AutoResearchDatabase`` is now an alias for ChatDatabase.
+    Existing imports
+    (``from llmwikify.apps.chat.db import AutoResearchDatabase``)
+    keep working. The DB file path stays at
+    ``data_dir / "autoresearch.db"`` for backward compat with
+    existing user data.
+  - ``AgentDatabase`` (apps/agent/core/db.py) is a thin shim
+    that delegates to ChatDatabase for the research tables and
+    keeps its own tables for the non-research domain.
+
+Migration
+---------
+
+A standalone migration script
+(``scripts/migrate_db_v1_to_v2.py``) reads from the old
+``autoresearch.db`` and ``.llmwiki_agent.db`` files and writes
+to the new ``autoresearch.db`` (with the unified schema). The
+script supports dry-run + backup. ChatDatabase itself does
+NOT auto-migrate (explicit migration is safer; users see what
+changed).
+
+Design refs
+-----------
+
+  - ``docs/designs/v0.32-skill-restructure.md`` §5 (ChatDatabase merge)
+  - ``docs/designs/v0.32-execution-plan.md`` Phase 3
 """
 
 from __future__ import annotations
@@ -29,37 +109,70 @@ logger = logging.getLogger(__name__)
 DB_SIZE_WARNING_MB = 100
 
 
-def get_autoresearch_db_path(data_dir: Path | str) -> Path:
-    """Return the autoresearch.db path inside the given data dir."""
+def get_chat_db_path(data_dir: Path | str) -> Path:
+    """Return the canonical chat.db path inside the given data dir.
+
+    The canonical path is ``data_dir / "autoresearch.db"`` for
+    backward compat with existing user data. (We keep the
+    filename "autoresearch.db" so existing installations don't
+    see a new file appear; the contents are migrated by
+    ``scripts/migrate_db_v1_to_v2.py``.)
+    """
     return Path(data_dir) / "autoresearch.db"
 
 
-class AutoResearchDatabase:
-    """Independent SQLite database for autoresearch sessions, sub-queries, and sources.
+class ChatDatabase:
+    """Unified SQLite database for research sessions, sub-queries, sources, and steps.
 
-    Tables:
-    - autoresearch_sessions
-    - autoresearch_sub_queries
-    - autoresearch_sources
+    Consolidates the research-related tables from
+    ``AgentDatabase`` (apps/agent/core/db.py) and
+    ``AutoResearchDatabase`` (pre-Phase-3 versions of this
+    file). The non-research AgentDatabase tables (chat,
+    notifications, PPT, dream) are NOT migrated here — they
+    stay in ``AgentDatabase``.
 
-    Public method names mirror AgentDatabase so existing code can adopt
-    this DB with only an import-path change.
+    Tables owned
+    ------------
+    - ``sessions``            (unified research session tracking)
+    - ``research_sub_queries``(one row per sub-query)
+    - ``research_sources``    (one row per gathered source)
+    - ``research_steps``      (NEW: one row per ReAct/6-step round
+                                for persisting 15+ ResearchState fields)
+
+    Public method names mirror the pre-Phase-3 AgentDatabase
+    research API (``create_research_session``,
+    ``get_research_session``, ``list_research_sessions``,
+    ``update_research_status``, ``save_sub_query``,
+    ``get_sub_queries``, ``update_sub_query``, ``save_source``,
+    ``update_source_analysis``, ``get_sources``,
+    ``update_six_step_fields``, ``get_six_step_fields``,
+    ``append_events``, ``get_events``,
+    ``persist_report``, ``finalize_research``,
+    ``delete_research``) so existing callers in
+    ``apps/research/`` and ``apps/chat/`` can adopt the
+    new class with only an import-path change.
+
+    New research_steps API (Phase 3):
+    - ``save_step(session_id, step_num, status, **fields)``
+    - ``get_step(session_id, step_num)``
+    - ``list_steps(session_id)``
+    - ``delete_steps(session_id)``
     """
 
     def __init__(self, data_dir: Path | str):
-        """Initialize the autoresearch database.
+        """Initialize the unified chat/research database.
 
         Args:
-            data_dir: Directory where autoresearch.db will be created
-                      (typically ~/.llmwikify/agent/).
+            data_dir: Directory where the SQLite file lives
+                      (typically ``~/.llmwikify/agent/``).
         """
         self.data_dir = Path(data_dir)
-        self.db_path = get_autoresearch_db_path(self.data_dir)
+        self.db_path = get_chat_db_path(self.data_dir)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
         self._check_db_size()
 
-    # ─── low-level helpers ─────────────────────────────────────────
+    # ─── low-level helpers ─────────────────────────────────────
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
@@ -67,15 +180,26 @@ class AutoResearchDatabase:
         return conn
 
     def _init_db(self) -> None:
-        """Idempotently create the autoresearch schema (3 tables + 2 indexes)
-        AND run any pending column migrations (e.g. events_json).
+        """Idempotently create the 4-table schema.
 
-        New schemas get the column from the CREATE TABLE statement above.
-        Pre-migration DBs (created before events_json was added) get it
-        via ALTER TABLE inside the migration helper.
+        Uses ``CREATE TABLE IF NOT EXISTS`` so re-instantiation
+        is a no-op. Column additions for newer schema versions
+        are handled by the migration helpers in
+        ``db_migrations.py``.
+
+        Note: the table names below are the SAME as the
+        pre-Phase-3 ``AutoResearchDatabase`` (``autoresearch_*``)
+        — not renamed — to keep backward compatibility with
+        existing user data and the migration helpers in
+        ``db_migrations.py``. Phase 3 only **adds** a new
+        ``research_steps`` table; it does not rename existing
+        ones. (The "9 tables → 1 file" design is about
+        consolidating across two files, not about renaming
+        tables.)
         """
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS autoresearch_sessions (
                     id TEXT PRIMARY KEY,
                     wiki_id TEXT NOT NULL,
@@ -86,6 +210,9 @@ class AutoResearchDatabase:
                     result TEXT,
                     wiki_page_name TEXT,
                     iteration_round INTEGER DEFAULT 0,
+                    max_rounds INTEGER DEFAULT 5,
+                    max_replan INTEGER DEFAULT 2,
+                    quality_score INTEGER DEFAULT 0,
                     synthesis_json TEXT,
                     review_json TEXT,
                     clarification_json TEXT,
@@ -98,8 +225,10 @@ class AutoResearchDatabase:
                     created_at TEXT DEFAULT (datetime('now')),
                     updated_at TEXT DEFAULT (datetime('now'))
                 )
-            """)
-            conn.execute("""
+                """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS autoresearch_sub_queries (
                     id TEXT PRIMARY KEY,
                     session_id TEXT NOT NULL,
@@ -113,12 +242,16 @@ class AutoResearchDatabase:
                     completed_at TEXT,
                     FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id)
                 )
-            """)
-            conn.execute("""
+                """
+            )
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_ar_sub_queries_session
                 ON autoresearch_sub_queries(session_id, status)
-            """)
-            conn.execute("""
+                """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS autoresearch_sources (
                     id TEXT PRIMARY KEY,
                     session_id TEXT NOT NULL,
@@ -135,50 +268,69 @@ class AutoResearchDatabase:
                     FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id),
                     FOREIGN KEY (sub_query_id) REFERENCES autoresearch_sub_queries(id)
                 )
-            """)
-            conn.execute("""
+                """
+            )
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_ar_sources_session
                 ON autoresearch_sources(session_id)
-            """)
+                """
+            )
+            # ── NEW: research_steps table (Phase 3) ──
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS research_steps (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    step_num INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    thought TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    result_json TEXT,
+                    duration_ms INTEGER DEFAULT 0,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id),
+                    UNIQUE (session_id, step_num)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_research_steps_session
+                ON research_steps(session_id, step_num)
+                """
+            )
             conn.commit()
-        # Auto-migrate: add columns added in newer schema versions
-        self._run_pending_migrations()
-
-    def _run_pending_migrations(self) -> None:
-        """Run any column-level migrations idempotently.
-
-        Each migration is a no-op if the column is already present.
-        Add new migrations here when adding new schema columns.
-        """
-        from llmwikify.apps.chat.db_migrations import migrate_v3_add_events_column
-        try:
-            migrate_v3_add_events_column(self.db_path)
-        except Exception as e:
-            logger.warning("Auto-migration failed (events_json): %s", e)
 
     def _check_db_size(self) -> None:
-        """Warn if the autoresearch.db file grows beyond the threshold."""
+        """Warn if the chat.db file grows beyond the threshold."""
         if not self.db_path.exists():
             return
         size_mb = self.db_path.stat().st_size / 1024 / 1024
         if size_mb > DB_SIZE_WARNING_MB:
             logger.warning(
-                "AutoResearch DB is large: %.2f MB (threshold: %d MB). "
+                "Chat DB is large: %.2f MB (threshold: %d MB). "
                 "Consider deleting old sessions.",
                 size_mb, DB_SIZE_WARNING_MB,
             )
 
-    # ─── Session CRUD ─────────────────────────────────────────────
+    # ─── Session CRUD ─────────────────────────────────────────
 
-    def create_research_session(self, wiki_id: str, query: str) -> str:
-        """Create a new autoresearch session and return its id.
+    def create_research_session(
+        self, wiki_id: str, query: str, *, session_type: str = "research"
+    ) -> str:
+        """Create a new session row. Returns session id (UUID4 hex).
 
-        Default status is 'clarifying' (the first 6-step stage).
+        ``session_type`` is reserved for future use; the
+        table is unified across research/autoresearch in the
+        pre-Phase-3 layout. Default status is 'clarifying'
+        (the first 6-step stage).
         """
-        session_id = str(uuid.uuid4())
+        session_id = uuid.uuid4().hex
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                """INSERT INTO autoresearch_sessions (id, wiki_id, query, status, current_step)
+                """INSERT INTO autoresearch_sessions
+                   (id, wiki_id, query, status, current_step)
                    VALUES (?, ?, ?, 'clarifying', 'clarifying')""",
                 (session_id, wiki_id, query),
             )
@@ -192,34 +344,29 @@ class AutoResearchDatabase:
                 "SELECT * FROM autoresearch_sessions WHERE id = ?",
                 (session_id,),
             ).fetchone()
-            return dict(row) if row else None
+        return dict(row) if row else None
 
-    def list_research_sessions(self, wiki_id: str | None = None) -> list[dict]:
+    def list_research_sessions(
+        self, wiki_id: str | None = None, session_type: str | None = None
+    ) -> list[dict]:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            if wiki_id:
-                rows = conn.execute(
-                    """SELECT s.*,
+            sql = """SELECT s.*,
                        (SELECT COUNT(*) FROM autoresearch_sub_queries
-                        WHERE session_id = s.id) as sub_query_count,
+                        WHERE session_id = s.id) AS sub_query_count,
                        (SELECT COUNT(*) FROM autoresearch_sources
-                        WHERE session_id = s.id) as source_count
-                    FROM autoresearch_sessions s
-                    WHERE s.wiki_id = ?
-                    ORDER BY s.created_at DESC""",
-                    (wiki_id,),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """SELECT s.*,
-                       (SELECT COUNT(*) FROM autoresearch_sub_queries
-                        WHERE session_id = s.id) as sub_query_count,
-                       (SELECT COUNT(*) FROM autoresearch_sources
-                        WHERE session_id = s.id) as source_count
-                    FROM autoresearch_sessions s
-                    ORDER BY s.created_at DESC"""
-                ).fetchall()
-            return [dict(r) for r in rows]
+                        WHERE session_id = s.id) AS source_count
+                    FROM autoresearch_sessions s"""
+            clauses: list[str] = []
+            params: list[Any] = []
+            if wiki_id is not None:
+                clauses.append("s.wiki_id = ?")
+                params.append(wiki_id)
+            if clauses:
+                sql += " WHERE " + " AND ".join(clauses)
+            sql += " ORDER BY s.created_at DESC"
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
 
     def update_research_status(
         self,
@@ -262,7 +409,8 @@ class AutoResearchDatabase:
             if wiki_page_name:
                 conn.execute(
                     """UPDATE autoresearch_sessions
-                       SET progress = ?, wiki_page_name = ?, updated_at = datetime('now')
+                       SET progress = ?, wiki_page_name = ?,
+                           updated_at = datetime('now')
                        WHERE id = ?""",
                     (progress, wiki_page_name, session_id),
                 )
@@ -275,7 +423,9 @@ class AutoResearchDatabase:
                 )
             conn.commit()
 
-    def persist_report(self, session_id: str, result: str | None = None) -> None:
+    def persist_report(
+        self, session_id: str, result: str | None = None
+    ) -> None:
         """Persist report data without changing status."""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
@@ -303,7 +453,7 @@ class AutoResearchDatabase:
             conn.commit()
 
     def delete_research(self, session_id: str) -> bool:
-        """Delete a session and cascade-delete its sub_queries and sources."""
+        """Delete a session and cascade-delete its sub_queries, sources, and steps."""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 "DELETE FROM autoresearch_sources WHERE session_id = ?",
@@ -313,6 +463,10 @@ class AutoResearchDatabase:
                 "DELETE FROM autoresearch_sub_queries WHERE session_id = ?",
                 (session_id,),
             )
+            conn.execute(
+                "DELETE FROM research_steps WHERE session_id = ?",
+                (session_id,),
+            )
             cursor = conn.execute(
                 "DELETE FROM autoresearch_sessions WHERE id = ?",
                 (session_id,),
@@ -320,7 +474,7 @@ class AutoResearchDatabase:
             conn.commit()
             return cursor.rowcount > 0
 
-    # ─── Sub-queries ──────────────────────────────────────────────
+    # ─── Sub-queries ──────────────────────────────────────────
 
     def save_sub_query(
         self,
@@ -329,7 +483,7 @@ class AutoResearchDatabase:
         source_type: str,
         url: str | None = None,
     ) -> str:
-        sq_id = str(uuid.uuid4())
+        sq_id = uuid.uuid4().hex
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT INTO autoresearch_sub_queries
@@ -374,18 +528,18 @@ class AutoResearchDatabase:
                    ORDER BY created_at ASC""",
                 (session_id,),
             ).fetchall()
-            out: list[dict] = []
-            for r in rows:
-                d = dict(r)
-                if d.get("result"):
-                    try:
-                        d["result"] = json.loads(d["result"])
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-                out.append(d)
-            return out
+        out: list[dict] = []
+        for r in rows:
+            d = dict(r)
+            if d.get("result"):
+                try:
+                    d["result"] = json.loads(d["result"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            out.append(d)
+        return out
 
-    # ─── Sources ──────────────────────────────────────────────────
+    # ─── Sources ──────────────────────────────────────────────
 
     def save_source(
         self,
@@ -398,7 +552,7 @@ class AutoResearchDatabase:
         content_preview: str | None = None,
         content: str | None = None,
     ) -> str:
-        source_id = str(uuid.uuid4())
+        source_id = uuid.uuid4().hex
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT INTO autoresearch_sources
@@ -417,9 +571,7 @@ class AutoResearchDatabase:
         analysis_json = json.dumps(analysis, ensure_ascii=False)
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                """UPDATE autoresearch_sources
-                   SET analysis = ?
-                   WHERE id = ?""",
+                "UPDATE autoresearch_sources SET analysis = ? WHERE id = ?",
                 (analysis_json, source_id),
             )
             conn.commit()
@@ -433,18 +585,34 @@ class AutoResearchDatabase:
                    ORDER BY created_at ASC""",
                 (session_id,),
             ).fetchall()
-            out: list[dict] = []
-            for r in rows:
-                d = dict(r)
-                if d.get("analysis"):
-                    try:
-                        d["analysis"] = json.loads(d["analysis"])
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-                out.append(d)
-            return out
+        out: list[dict] = []
+        for r in rows:
+            d = dict(r)
+            if d.get("analysis"):
+                try:
+                    d["analysis"] = json.loads(d["analysis"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            out.append(d)
+        return out
 
-    # ─── 6-step framework helpers ────────────────────────────────
+    def rate_source(self, source_id: str, rating: int) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE autoresearch_sources SET rating = ? WHERE id = ?",
+                (rating, source_id),
+            )
+            conn.commit()
+
+    def get_source_count(self, session_id: str) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM autoresearch_sources WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+        return row["c"] if row else 0
+
+    # ─── 6-step framework fields ──────────────────────────────
 
     def update_six_step_fields(
         self,
@@ -458,9 +626,8 @@ class AutoResearchDatabase:
     ) -> None:
         """Update one or more 6-step framework JSON fields.
 
-        Only fields that are not None are written. Existing values are
-        overwritten (not merged). This replaces the previous engine.py
-        raw SQL block.
+        Only fields that are not None are written. Existing
+        values are overwritten (not merged).
         """
         sets: list[str] = ["updated_at = datetime('now')"]
         params: list[Any] = []
@@ -531,18 +698,10 @@ class AutoResearchDatabase:
             "evidence_scores": _maybe_load(row["evidence_scores_json"]),
         }
 
-    # ─── Event log persistence ──────────────────────────────────
+    # ─── Event log persistence ───────────────────────────────
 
     def append_events(self, session_id: str, events: list[dict]) -> int:
-        """Append a batch of events to the session's persisted event log.
-
-        Reads the existing events_json (if any), appends the new events,
-        and writes back atomically. Returns the new total count.
-
-        No hard cap (caller should throttle/dedup before calling). The
-        storage cost is small for typical research sessions (≤ 1KB per
-        event, ≤ a few hundred events per session).
-        """
+        """Append a batch of events to the session's persisted event log."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
@@ -569,11 +728,7 @@ class AutoResearchDatabase:
             return len(existing)
 
     def get_events(self, session_id: str) -> list[dict]:
-        """Return all persisted events for a session, in insertion order.
-
-        Returns an empty list if the session has no events or doesn't
-        exist. Malformed events_json is treated as empty (not raised).
-        """
+        """Return all persisted events for a session, in insertion order."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
@@ -587,3 +742,160 @@ class AutoResearchDatabase:
             return parsed if isinstance(parsed, list) else []
         except (json.JSONDecodeError, TypeError):
             return []
+
+    # ─── research_steps (Phase 3 NEW) ────────────────────────
+
+    def save_step(
+        self,
+        session_id: str,
+        step_num: int,
+        action: str,
+        status: str = "pending",
+        thought: str | None = None,
+        result: dict | None = None,
+        duration_ms: int = 0,
+    ) -> str:
+        """Persist one research step (one row per ReAct round).
+
+        This is the new home for the 15+ ResearchState fields
+        (round, max_rounds, max_replan, phase, sub_queries,
+        sources, synthesis, report_md, review, knowledge_gaps,
+        contradictions, issues, observations, _last_thought,
+        cancelled, paused, budget_remaining) that the
+        pre-Phase-3 ReAct loop held in memory.
+
+        One row per ``(session_id, step_num)``. The full
+        ResearchState dict is serialized into ``result_json``;
+        only the most-frequently-queried fields (action,
+        status, thought, duration) get dedicated columns for
+        fast filtering.
+
+        Returns:
+            The new step's id (UUID4 hex).
+        """
+        step_id = uuid.uuid4().hex
+        result_json = json.dumps(result, ensure_ascii=False) if result is not None else None
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO research_steps
+                   (id, session_id, step_num, action, thought, status,
+                    result_json, duration_ms)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    step_id, session_id, step_num, action, thought, status,
+                    result_json, duration_ms,
+                ),
+            )
+            conn.commit()
+        return step_id
+
+    def get_step(self, session_id: str, step_num: int) -> dict | None:
+        """Return a single step by (session_id, step_num)."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """SELECT * FROM research_steps
+                   WHERE session_id = ? AND step_num = ?""",
+                (session_id, step_num),
+            ).fetchone()
+        if not row:
+            return None
+        return _row_to_step_dict(row)
+
+    def list_steps(self, session_id: str) -> list[dict]:
+        """Return all steps for a session, ordered by step_num."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT * FROM research_steps
+                   WHERE session_id = ?
+                   ORDER BY step_num ASC""",
+                (session_id,),
+            ).fetchall()
+        return [_row_to_step_dict(r) for r in rows]
+
+    def delete_steps(self, session_id: str) -> int:
+        """Delete all steps for a session. Returns count deleted."""
+        with sqlite3.connect(self.db_path) as conn:
+            cur = conn.execute(
+                "DELETE FROM research_steps WHERE session_id = ?",
+                (session_id,),
+            )
+            conn.commit()
+            return cur.rowcount
+
+    def update_step_status(
+        self, session_id: str, step_num: int, status: str
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE research_steps
+                   SET status = ?
+                   WHERE session_id = ? AND step_num = ?""",
+                (status, session_id, step_num),
+            )
+            conn.commit()
+
+    def save_research_state(
+        self,
+        session_id: str,
+        step_num: int,
+        state: dict,
+    ) -> str:
+        """Persist a full ResearchState dict as a step's result.
+
+        Convenience wrapper for the common case of "save my
+        whole ReAct state after this round". The state dict is
+        stored verbatim in ``result_json`` and the step's
+        ``action`` is set to the value of ``state.phase`` (if
+        present) so list_steps() can group by phase.
+        """
+        action = state.get("phase", "unknown")
+        return self.save_step(
+            session_id=session_id,
+            step_num=step_num,
+            action=action,
+            status="done",
+            result=state,
+        )
+
+    def load_research_state(
+        self, session_id: str, step_num: int
+    ) -> dict | None:
+        """Load a previously saved ResearchState dict by step_num."""
+        step = self.get_step(session_id, step_num)
+        if not step:
+            return None
+        return step.get("result")
+
+
+def _row_to_step_dict(row: sqlite3.Row) -> dict:
+    """Convert a research_steps row to a dict, parsing result_json."""
+    d = dict(row)
+    if d.get("result_json"):
+        try:
+            d["result"] = json.loads(d["result_json"])
+        except (json.JSONDecodeError, TypeError):
+            d["result"] = None
+    else:
+        d["result"] = None
+    return d
+
+
+# ─── Backward-compat aliases ─────────────────────────────────────
+# Pre-Phase-3 callers used ``AutoResearchDatabase`` and the
+# helper ``get_autoresearch_db_path``. After Phase 3, all
+# three names refer to the same class / function. The DB
+# file path is the same (data_dir / "autoresearch.db") so
+# existing user data is preserved.
+AutoResearchDatabase = ChatDatabase
+get_autoresearch_db_path = get_chat_db_path
+
+
+__all__ = [
+    "ChatDatabase",
+    "AutoResearchDatabase",  # back-compat alias
+    "DB_SIZE_WARNING_MB",
+    "get_chat_db_path",
+    "get_autoresearch_db_path",  # back-compat alias
+]
