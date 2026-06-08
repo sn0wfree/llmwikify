@@ -52,15 +52,15 @@ class TestIdentityAndPaths:
     def test_path_helpers_return_same_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             assert get_chat_db_path(tmp) == get_autoresearch_db_path(tmp)
-            # Both return the canonical autoresearch.db filename
-            # (kept for backward compat with existing user data)
-            assert get_chat_db_path(tmp).name == "autoresearch.db"
+            # Both return the canonical .llmwiki_agent.db filename
+            # (auto-migrated from autoresearch.db in v0.33.0)
+            assert get_chat_db_path(tmp).name == ".llmwiki_agent.db"
 
     def test_canonical_path_under_data_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             p = get_chat_db_path(tmp)
             assert p.parent == Path(tmp)
-            assert p.name == "autoresearch.db"
+            assert p.name == ".llmwiki_agent.db"
 
     def test_size_warning_threshold_exported(self) -> None:
         assert DB_SIZE_WARNING_MB == 100
