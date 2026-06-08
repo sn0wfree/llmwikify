@@ -227,6 +227,10 @@ def check_apps_chat_allowed(sites: list[ImportSite]) -> Contract:
     This is the "chat reuses research/agent/autorun capabilities"
     exception listed in the design doc §3.2. Other apps (agent,
     research, ppt, autorun) must remain independent.
+
+    The check covers BOTH the post-refactor apps/* names AND the
+    pre-refactor deprecation shims (llmwikify.agent, .research,
+    .ppt, .autorun, .chat) at the package top level.
     """
     c = Contract(
         name="chat-uses-research-and-agent",
@@ -235,21 +239,53 @@ def check_apps_chat_allowed(sites: list[ImportSite]) -> Contract:
             "apps must be independent."
         ),
     )
-    chat_allowed = {"llmwikify.apps.research", "llmwikify.apps.agent", "llmwikify.apps.autorun"}
-    apps_top = {"llmwikify.agent", "llmwikify.research", "llmwikify.ppt", "llmwikify.autorun"}
+    chat_importer_prefixes = ("llmwikify.apps.chat", "llmwikify.chat")
+    chat_allowed_post = {
+        "llmwikify.apps.research",
+        "llmwikify.apps.agent",
+        "llmwikify.apps.autorun",
+    }
+    chat_allowed_legacy = {
+        "llmwikify.research",
+        "llmwikify.agent",
+        "llmwikify.autorun",
+    }
+    apps_post = {
+        "llmwikify.apps.agent",
+        "llmwikify.apps.research",
+        "llmwikify.apps.ppt",
+        "llmwikify.apps.autorun",
+        "llmwikify.apps.chat",
+    }
+    apps_legacy = {
+        "llmwikify.agent",
+        "llmwikify.research",
+        "llmwikify.ppt",
+        "llmwikify.autorun",
+    }
     for site in sites:
         importer_top = ".".join(site.importer_module.split(".")[0:2])
         imported_top = ".".join(site.imported_module.split(".")[0:2])
-        if importer_top == "llmwikify.chat":
-            if imported_top in chat_allowed:
-                continue  # allowed
-        # For all other app pairs, independence is required.
-        if importer_top in apps_top and imported_top in apps_top and importer_top != imported_top:
+        is_chat = any(
+            importer_top == p or importer_top.startswith(p + ".")
+            for p in chat_importer_prefixes
+        )
+        if is_chat:
+            if imported_top in chat_allowed_post or imported_top in chat_allowed_legacy:
+                continue
+        if importer_top in apps_post and imported_top in apps_post and importer_top != imported_top:
             c.add(
                 f"{site.importer_file.relative_to(REPO_ROOT_DEFAULT)}:"
                 f"{site.lineno}: {site.importer_module} → "
                 f"{site.imported_module} — apps must be independent "
                 f"(only apps.chat may reuse research/agent/autorun)"
+            )
+        if importer_top in apps_legacy and imported_top in apps_legacy and importer_top != imported_top:
+            c.add(
+                f"{site.importer_file.relative_to(REPO_ROOT_DEFAULT)}:"
+                f"{site.lineno}: {site.importer_module} → "
+                f"{site.imported_module} — legacy deprecation shim "
+                f"must not import from another legacy shim"
             )
     return c
 
