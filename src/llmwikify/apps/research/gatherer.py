@@ -9,7 +9,7 @@ from typing import Any
 from ...foundation.extractors.base import ExtractedContent
 from ...foundation.extractors.web import extract_url
 from ...foundation.extractors.youtube import extract_youtube
-from ..agent.core.db import AgentDatabase
+from ..chat.db import ChatDatabase
 from .session import ResearchSessionManager
 from .source_filter import SourceFilter
 
@@ -22,7 +22,7 @@ class SourceGatherer:
     def __init__(
         self,
         wiki: Any,
-        db: AgentDatabase,
+        db: ChatDatabase,
         session_manager: ResearchSessionManager,
         config: dict[str, Any],
     ):

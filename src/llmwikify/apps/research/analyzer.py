@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ..agent.core.db import AgentDatabase
+from ..chat.db import ChatDatabase
 from .session import ResearchSessionManager
 
 logger = logging.getLogger(__name__)
