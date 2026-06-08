@@ -11,7 +11,7 @@ from .._output import print_error, print_warning
 
 def _db_stats(wiki: Any, args: Any) -> int:
     """Show database statistics."""
-    from llmwikify.apps.agent.db import AgentDatabase, get_agent_db_path
+    from llmwikify.apps.agent.core.db import AgentDatabase, get_agent_db_path
 
     db_path = get_agent_db_path(wiki.root / ".llmwikify" / "agent")
     if not db_path.exists():
@@ -43,7 +43,7 @@ def _db_stats(wiki: Any, args: Any) -> int:
 
 def _db_list(wiki: Any, args: Any) -> int:
     """List all wikis."""
-    from llmwikify.apps.agent.db import AgentDatabase, get_agent_db_path
+    from llmwikify.apps.agent.core.db import AgentDatabase, get_agent_db_path
 
     db_path = get_agent_db_path(wiki.root / ".llmwikify" / "agent")
     if not db_path.exists():
@@ -71,7 +71,7 @@ def _db_list(wiki: Any, args: Any) -> int:
 
 def _db_clean(wiki: Any, args: Any) -> int:
     """Delete all data for a wiki."""
-    from llmwikify.apps.agent.db import AgentDatabase, get_agent_db_path
+    from llmwikify.apps.agent.core.db import AgentDatabase, get_agent_db_path
 
     wiki_id = args.wiki_id
     force = getattr(args, "force", False)
@@ -102,7 +102,7 @@ def _db_clean(wiki: Any, args: Any) -> int:
 
 def _db_export(wiki: Any, args: Any) -> int:
     """Export wiki data to JSON."""
-    from llmwikify.apps.agent.db import AgentDatabase, get_agent_db_path
+    from llmwikify.apps.agent.core.db import AgentDatabase, get_agent_db_path
 
     wiki_id = args.wiki_id
     output = args.output
