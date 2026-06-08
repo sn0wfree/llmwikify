@@ -167,9 +167,11 @@ def test_streamable_uses_relative_imports_for_budget_modules():
     # Per the 4-layer refactor (Batch B4), the L1->L3 cross-dep
     # in ``from_config`` was removed. The function is now a
     # pure config-to-constructor translation; callers that need
-    # the provider registry use ``apps.agent.providers.registry``
-    # directly.
+    # the provider registry use ``apps.chat.providers.registry``
+    # directly (per v0.32 Phase 4, providers migrated from
+    # apps/agent/ to apps/chat/).
     assert "from llmwikify.apps.agent.providers.registry" not in src
+    assert "from llmwikify.apps.chat.providers.registry" not in src
     assert "from llmwikify._legacy.adapters" not in src
     # No other absolute agent imports at module level
     top_level_agent_imports = [

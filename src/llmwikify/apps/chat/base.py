@@ -19,7 +19,7 @@ What it provides
 - **Provider abstraction** — the LLM client is supplied at
   construction time (``base.llm_client``), so ChatBase
   doesn't need to know about the L1 ``foundation.llm`` or
-  the L3 ``apps.agent.providers.registry`` directly.
+  the L3 ``apps.chat.providers.registry`` directly.
 
 What it does NOT do
 -------------------

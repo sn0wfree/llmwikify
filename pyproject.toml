@@ -140,13 +140,14 @@ packages = [
     "llmwikify.apps.agent.memory",
     "llmwikify.apps.agent.notifications",
     "llmwikify.apps.agent.scheduler",
-    "llmwikify.apps.agent.providers",
     "llmwikify.apps.agent.routes",
     "llmwikify.apps.research",
     "llmwikify.apps.ppt",
     "llmwikify.apps.chat",
+    "llmwikify.apps.chat.providers",
     "llmwikify.agent",  # backward-compat shim (v0.33.0 removal)
     "llmwikify.agent.backend",  # backward-compat shim
+    "llmwikify.agent.backend.providers",  # backward-compat shim (v0.32 Phase 4)
     "llmwikify._legacy",
     "llmwikify.interfaces",
     "llmwikify.interfaces.cli",

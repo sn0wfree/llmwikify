@@ -1,23 +1,27 @@
-"""Verify provider registry remains on agent.backend (C5 validation).
+"""Verify provider registry at the post-Phase-4 canonical home.
 
-Phase 1 #1 / C5 — the provider registry, provider implementations,
-and provider-related infrastructure all stay inside
-``llmwikify.agent.backend.providers``. They are NOT migrated to a
-new location; they remain agent-internal as part of the agent
-provider system.
+Per v0.32 Phase 4 (3 days, 🟢): the provider registry, provider
+implementations, and provider-related infrastructure were
+migrated from ``llmwikify.apps.agent.providers`` to
+``llmwikify.apps.chat.providers`` so they live alongside
+ChatBase and other LLM-consuming components in apps/chat/.
 
-What changed in C1-C4 is the LLM client class itself
-(``StreamableLLMClient``), which now lives in
-``llmwikify.foundation.llm.streamable``. The provider classes still call
-``StreamableLLMClient(...)`` from their ``from_config`` methods —
-they just import the class from the new home.
+The backward-compat shim at
+``llmwikify.agent.backend.providers`` re-exports the new home
+and is scheduled for removal in v0.33.0.
 
-This test validates the post-refactor state:
-- Provider registry resolves the same providers as before
-- Each provider's ``from_config`` returns a working
-  ``StreamableLLMClient`` instance from the canonical home
-- The provider classes are still Liskov-substitutable
-- The provider registry's TYPE_CHECKING imports are healthy
+This test validates the post-Phase-4 state:
+
+  - Provider registry resolves the same providers (xiaomi,
+    minimax) as before
+  - Each provider's ``from_config`` returns a working
+    ``StreamableLLMClient`` instance from the canonical home
+    (``llmwikify.foundation.llm.streamable``)
+  - The provider classes are still Liskov-substitutable
+  - The provider registry module lives at the new home
+    (``llmwikify.apps.chat.providers.registry``)
+  - The legacy shim still re-exports everything for callers
+    that haven't migrated yet
 """
 
 from __future__ import annotations
@@ -27,19 +31,18 @@ import inspect
 
 def test_provider_registry_contains_known_providers():
     """xiaomi + minimax are the auto-registered built-in providers."""
-    from llmwikify.apps.agent.providers import list_providers
+    from llmwikify.apps.chat.providers import list_providers
 
     providers = list_providers()
     assert "xiaomi" in providers
     assert "minimax" in providers
-    # Sanity: not zero
     assert len(providers) >= 2
 
 
 def test_get_provider_returns_provider_instance():
     """get_provider('xiaomi') returns a XiaomiProvider instance."""
-    from llmwikify.apps.agent.providers import get_provider
-    from llmwikify.apps.agent.providers.xiaomi import XiaomiProvider
+    from llmwikify.apps.chat.providers import get_provider
+    from llmwikify.apps.chat.providers.xiaomi import XiaomiProvider
 
     p = get_provider("xiaomi")
     assert isinstance(p, XiaomiProvider)
@@ -47,26 +50,21 @@ def test_get_provider_returns_provider_instance():
 
 def test_get_provider_unknown_raises():
     """get_provider('nope') raises ValueError with the list of available providers."""
-    from llmwikify.apps.agent.providers import get_provider
+    from llmwikify.apps.chat.providers import get_provider
 
     try:
         get_provider("nope")
     except ValueError as e:
         msg = str(e)
         assert "Unknown provider 'nope'" in msg
-        assert "xiaomi" in msg  # at least one of the available providers
+        assert "xiaomi" in msg
     else:
         raise AssertionError("expected ValueError for unknown provider")
 
 
 def test_create_llm_uses_canonical_streamable_class():
-    """create_llm returns an instance of the new-home StreamableLLMClient.
-
-    The provider's from_config may construct a subclass-like object
-    (with reasoning_split/auth_header set), but the class identity
-    must be the canonical StreamableLLMClient.
-    """
-    from llmwikify.apps.agent.providers import create_llm
+    """create_llm returns an instance of the new-home StreamableLLMClient."""
+    from llmwikify.apps.chat.providers import create_llm
     from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     config = {
@@ -85,7 +83,7 @@ def test_create_llm_uses_canonical_streamable_class():
 
 def test_create_llm_raises_when_disabled():
     """create_llm with enabled=False raises ValueError."""
-    from llmwikify.apps.agent.providers import create_llm
+    from llmwikify.apps.chat.providers import create_llm
 
     try:
         create_llm({"enabled": False, "api_key": "x"})
@@ -97,39 +95,28 @@ def test_create_llm_raises_when_disabled():
 
 def test_create_llm_respects_llm_provider_env(monkeypatch):
     """LLM_PROVIDER env var overrides the config provider."""
-    from llmwikify.apps.agent.providers import create_llm
+    from llmwikify.apps.chat.providers import create_llm
 
     monkeypatch.setenv("LLM_PROVIDER", "minimax")
-    # We don't test the actual minimax.from_config path (network), just
-    # that the env var is read. The error message will indicate the
-    # provider was selected.
     config = {"enabled": True, "api_key": "x", "model": "y"}
     try:
         create_llm(config)
-    except Exception as e:
-        # Either the provider is selected (success) or fails for an
-        # unrelated reason (e.g., no api key). Either way, the
-        # minimax provider should be the one being attempted.
-        assert True  # env var was at least read
+    except Exception:
+        pass
     finally:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
 
 
 def test_provider_classes_use_new_home_for_type_hints():
     """Provider modules import StreamableLLMClient from the new home, not the shim."""
-    from llmwikify.apps.agent.providers import xiaomi, minimax, base, registry
+    from llmwikify.apps.chat.providers import xiaomi, minimax, base, registry
 
     for mod in (xiaomi, minimax, base, registry):
         src = inspect.getsource(mod)
-        # Forbidden: import from the deprecated shim
         assert "from ..adapters" not in src, (
             f"{mod.__name__} still imports from the deprecated adapters shim"
         )
         assert "from .adapters" not in src
-        # Required: TYPE_CHECKING or runtime import from new home
-        # (some modules use TYPE_CHECKING only, which doesn't appear
-        # in a runtime scan — we only assert the absence of the
-        # shim import)
         if "StreamableLLMClient" in src:
             assert "from llmwikify.foundation.llm.streamable" in src, (
                 f"{mod.__name__} references StreamableLLMClient but doesn't "
@@ -139,51 +126,82 @@ def test_provider_classes_use_new_home_for_type_hints():
 
 def test_provider_protocol_still_uses_streamable_type():
     """The LLMProvider Protocol's from_config signature references StreamableLLMClient."""
-    from llmwikify.apps.agent.providers import base
+    from llmwikify.apps.chat.providers import base
 
     src = inspect.getsource(base)
     assert "StreamableLLMClient" in src
-    # And it's imported from the new home
     assert "from llmwikify.foundation.llm.streamable" in src
 
 
-def test_provider_registry_unchanged_path():
-    """The provider registry module is still at its historical location.
+def test_provider_registry_at_new_home():
+    """The provider registry module is at its post-Phase-4 home."""
+    from llmwikify.apps.chat.providers import registry
 
-    This guards against an accidental move of the registry out of
-    ``agent.backend.providers`` (which would be a separate refactor
-    — not part of C5).
-    """
-    from llmwikify.apps.agent.providers import registry
-
-    assert registry.__name__ == "llmwikify.apps.agent.providers.registry"
+    assert registry.__name__ == "llmwikify.apps.chat.providers.registry"
     assert hasattr(registry, "create_llm")
     assert hasattr(registry, "get_provider")
     assert hasattr(registry, "list_providers")
     assert hasattr(registry, "register_provider")
 
 
+def test_legacy_shim_reexports_providers():
+    """llmwikify.agent.backend.providers shim re-exports the new home.
+
+    Backward compatibility for callers that imported via the
+    deprecation shim during the v0.32 transition window.
+    """
+    from llmwikify.agent.backend import providers as shim
+
+    # The shim's __name__ still identifies as the legacy path
+    assert shim.__name__ == "llmwikify.agent.backend.providers"
+    # But the symbols resolve to the new-home classes
+    from llmwikify.apps.chat.providers import (
+        create_llm as new_create_llm,
+        get_provider as new_get_provider,
+        list_providers as new_list_providers,
+    )
+    assert shim.create_llm is new_create_llm
+    assert shim.get_provider is new_get_provider
+    assert shim.list_providers is new_list_providers
+
+
+def test_legacy_shim_submodule_paths():
+    """The 4 sub-shims (base, registry, xiaomi, minimax) all re-export."""
+    from llmwikify.agent.backend.providers import (
+        base as shim_base,
+        registry as shim_reg,
+        xiaomi as shim_xiaomi,
+        minimax as shim_minimax,
+    )
+    from llmwikify.apps.chat.providers import (
+        base as new_base,
+        registry as new_registry,
+        xiaomi as new_xiaomi,
+        minimax as new_minimax,
+    )
+    assert shim_base.__name__ == "llmwikify.agent.backend.providers.base"
+    assert shim_reg.__name__ == "llmwikify.agent.backend.providers.registry"
+    assert shim_xiaomi.__name__ == "llmwikify.agent.backend.providers.xiaomi"
+    assert shim_minimax.__name__ == "llmwikify.agent.backend.providers.minimax"
+    # Classes re-export (name identity, not object identity — Python
+    # ``from X import *`` re-binds the names in the shim's namespace)
+    assert shim_base.BaseLLMProvider is new_base.BaseLLMProvider
+    assert shim_xiaomi.XiaomiProvider is new_xiaomi.XiaomiProvider
+    assert shim_minimax.MiniMaxProvider is new_minimax.MiniMaxProvider
+    assert shim_reg.create_llm is new_registry.create_llm
+
+
 def test_create_llm_falls_back_to_minimax_by_default(monkeypatch):
     """create_llm defaults to 'minimax' provider when none specified."""
-    from llmwikify.apps.agent.providers import create_llm
+    from llmwikify.apps.chat.providers import create_llm
 
-    # Make sure LLM_PROVIDER env var doesn't override
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
 
     config = {"enabled": True, "api_key": "x", "model": "y"}
-    # The default is 'minimax' per registry.create_llm line 49.
-    # We don't make a real call — we just want to confirm the
-    # provider name resolution. A ValueError about an unknown
-    # provider would mean the default didn't work.
     try:
         create_llm(config)
     except ValueError as e:
-        # If the error is "Unknown provider 'minimax'" that's a
-        # regression — minimax is always registered.
         if "Unknown provider 'minimax'" in str(e):
             raise AssertionError("minimax should be auto-registered")
-        # Any other ValueError is fine (e.g. missing api key)
     except Exception:
-        # Other errors (e.g. network) are fine — we're testing
-        # provider selection, not request success.
         pass

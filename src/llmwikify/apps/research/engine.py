@@ -16,7 +16,7 @@ from typing import Any
 
 from llmwikify.foundation.llm.streamable import StreamableLLMClient
 from ..agent.core.db import AgentDatabase
-from ..agent.providers.registry import create_llm
+from ..chat.providers.registry import create_llm
 from .analyzer import SourceAnalyzer
 from .config import merge_research_config
 from .gatherer import SourceGatherer

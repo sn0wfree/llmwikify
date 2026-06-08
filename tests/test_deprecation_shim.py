@@ -82,7 +82,7 @@ def test_shim_emits_warning_for_provider_registry_path():
     This test guards against re-introducing ``from ..adapters import``
     in the provider registry files.
     """
-    from llmwikify.apps.agent.providers import registry
+    from llmwikify.apps.chat.providers import registry
     import inspect
 
     src = inspect.getsource(registry)
