@@ -104,8 +104,8 @@ Issues = "https://github.com/sn0wfree/llmwikify/issues"
 Changelog = "https://github.com/sn0wfree/llmwikify/blob/main/CHANGELOG.md"
 
 [project.scripts]
-llmwikify = "llmwikify.cli:main"
-wiki = "llmwikify.cli:main"
+llmwikify = "llmwikify.interfaces.cli:main"
+wiki = "llmwikify.interfaces.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -147,17 +147,6 @@ packages = [
     "llmwikify.apps.chat",
     "llmwikify.agent",  # backward-compat shim (v0.33.0 removal)
     "llmwikify.agent.backend",  # backward-compat shim
-    "llmwikify.agent.backend.research",  # backward-compat shim
-    "llmwikify.agent.backend.ppt",  # backward-compat shim
-    "llmwikify.agent.backend.providers",  # backward-compat shim
-    "llmwikify.agent.backend.providers.base",  # backward-compat shim
-    "llmwikify.agent.backend.providers.registry",  # backward-compat shim
-    "llmwikify.agent.backend.providers.xiaomi",  # backward-compat shim
-    "llmwikify.agent.backend.providers.minimax",  # backward-compat shim
-    "llmwikify.agent.backend.routes",  # backward-compat shim
-    "llmwikify.agent.backend.routes.agent",  # backward-compat shim
-    "llmwikify.agent.backend.routes.ppt",  # backward-compat shim
-    "llmwikify.agent.backend.routes.research",  # backward-compat shim
     "llmwikify._legacy",
     "llmwikify.interfaces",
     "llmwikify.interfaces.cli",
