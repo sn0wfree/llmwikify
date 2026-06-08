@@ -34,10 +34,23 @@ def init_autoresearch_db(db_path) -> None:
     Args:
         db_path: Path to the autoresearch.db file (typically
                  ~/.llmwikify/agent/autoresearch.db).
+
+    .. note::
+        The canonical filename is now ``.llmwiki_agent.db``.
+        Calling this with a path pointing to the old
+        ``autoresearch.db`` filename works: the underlying
+        ChatDatabase init will auto-migrate the legacy file to
+        the new name. To read the resulting DB, query the
+        canonical path returned by ``get_app_db_path()``.
     """
     from llmwikify.apps.chat.db import AutoResearchDatabase
+    from llmwikify.apps.db_base import get_app_db_path
     db_path = Path(db_path)
     AutoResearchDatabase(db_path.parent)
+    # The init above will create the file at the canonical
+    # .llmwiki_agent.db path. If the caller passed the legacy
+    # path, they should use get_app_db_path() to find it.
+    _ = get_app_db_path(db_path.parent)
 
 
 def migrate_research_six_step_columns(

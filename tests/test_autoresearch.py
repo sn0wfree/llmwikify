@@ -129,7 +129,11 @@ class TestAutoresearchConfig:
 
 class TestDBMigrations:
     def test_init_creates_three_tables(self, tmp_path):
-        db_path = tmp_path / "autoresearch.db"
+        # The canonical filename is now .llmwiki_agent.db
+        # (auto-migrated from autoresearch.db in v0.33.0).
+        # init_autoresearch_db writes to the canonical path.
+        from llmwikify.apps.db_base import get_app_db_path
+        db_path = get_app_db_path(tmp_path)
         init_autoresearch_db(db_path)
         with sqlite3.connect(db_path) as conn:
             tables = {
@@ -143,7 +147,8 @@ class TestDBMigrations:
         assert "autoresearch_sources" in tables
 
     def test_init_is_idempotent(self, tmp_path):
-        db_path = tmp_path / "autoresearch.db"
+        from llmwikify.apps.db_base import get_app_db_path
+        db_path = get_app_db_path(tmp_path)
         init_autoresearch_db(db_path)
         init_autoresearch_db(db_path)  # second call must not raise
         # Insert and read back to confirm
@@ -1870,10 +1875,14 @@ class TestAutoResearchDatabase:
     def test_get_autoresearch_db_path(self, tmp_path):
         from llmwikify.apps.chat.db import get_autoresearch_db_path
         p = get_autoresearch_db_path(tmp_path)
-        assert p == tmp_path / "autoresearch.db"
+        # The canonical filename is now .llmwiki_agent.db
+        # (auto-migrated from autoresearch.db in v0.33.0).
+        # get_autoresearch_db_path is now an alias for
+        # get_app_db_path, which returns the canonical filename.
+        assert p == tmp_path / ".llmwiki_agent.db"
         # Also accepts string
         p2 = get_autoresearch_db_path(str(tmp_path))
-        assert p2 == tmp_path / "autoresearch.db"
+        assert p2 == tmp_path / ".llmwiki_agent.db"
 
 
 # ─── Phase 6: Resume tests ────────────────────────────────────────

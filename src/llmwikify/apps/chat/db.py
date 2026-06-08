@@ -112,13 +112,13 @@ DB_SIZE_WARNING_MB = 100
 def get_chat_db_path(data_dir: Path | str) -> Path:
     """Return the canonical chat.db path inside the given data dir.
 
-    The canonical path is ``data_dir / "autoresearch.db"`` for
-    backward compat with existing user data. (We keep the
-    filename "autoresearch.db" so existing installations don't
-    see a new file appear; the contents are migrated by
-    ``scripts/migrate_db_v1_to_v2.py``.)
+    .. deprecated::
+        Use ``get_app_db_path()`` (from ``apps.db_base``) instead.
+        This wrapper exists for backward compat only; the
+        canonical filename is now ``.llmwiki_agent.db``.
     """
-    return Path(data_dir) / "autoresearch.db"
+    from llmwikify.apps.db_base import get_app_db_path
+    return get_app_db_path(data_dir)
 
 
 class ChatDatabase:
