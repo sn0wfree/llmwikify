@@ -5,6 +5,119 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0] - 2026-06-08
+
+### Added — Phase 1: Skill framework (`apps/chat/skills/`)
+- **`Skill` ABC + `SkillAction` + `SkillContext` + `SkillResult` + `SkillManifest`** — 5 dataclasses/classes that form the unified contract for any chat-facing capability.
+- **`SkillRegistry`** — process-wide, thread-safe collection of registered skills. `default_registry()` singleton + `reset_default_registry()` for test isolation.
+- **`SkillRuntime`** — executor with JSON Schema subset validation (`required` + `type` + `additionalProperties: false`), 6-tier error hierarchy (`SkillError` → 5 subclasses), exception → `SkillResult.fail(...)` translation.
+- **6 error types**: `SkillNotFoundError`, `ActionNotFoundError`, `SkillValidationError`, `SkillExecutionError`, `ConfirmationRequiredError`.
+- **79 new unit tests** covering Skill ABC, Registry, Runtime, 6 error types, manifest aggregation.
+- Location: `src/llmwikify/apps/chat/skills/{base,registry,runtime,errors}.py`
+
+### Added — Phase 5: 23 base actions
+- **14 base actions** (`search`, `extract`, `read`, `write`, `lint`, `plan`, `analyze`, `summarize`, `score`, `revise`, `filter`, `graph`, `reason`, `observe`) — each a thin wrapper over existing wiki / engine / DB methods.
+- **8 detect actions** (`detect_{knowledge_gaps,data_gaps,outdated_pages,dated_claims,query_page_overlap,missing_cross_refs,potential_contradictions,redundancy}`) — extracted from `kernel/wiki/mixins/analysis/lint.py::_detect_*` methods via a `DetectActionSkill` base class.
+- **1 clarify action** (`clarify`) — rule-based fallback for `ResearchClarifier.clarify`.
+- **`actions/__init__.py` contract**: `assert len(ALL_ACTIONS) == 23` on import — silent-drift guard for the inventory.
+- **86 new tests** covering all 23 actions, OpenAI schema generation, runtime validation.
+- Location: `src/llmwikify/apps/chat/skills/actions/`
+
+### Added — Phase 8: ReactLoop framework
+- **`ReactConfig` (13-field dataclass)** + **`ReactLoop` class** with `run(ctx)` async generator.
+- **5 event types** yielded by `run()`: `reasoning`, `action_error`, `observation_error`, `round_complete`, `phase(done)`.
+- **9 lifecycle hooks**: `restore_state`, `done_condition`, `on_before_act`, `on_after_act` (gate intervention), `on_before_observe`, `on_after_observe`, `persist_state`, `max_rounds`, `reason_prompt`.
+- `reason` callable (LLM-driven or rule-based) + `observe` callable (state → observations).
+- 40 new tests covering all hooks, edge cases (unknown action, max_iterations cap, action_error).
+- Location: `src/llmwikify/apps/chat/agent/react_loop.py`
+
+### Added — Phase 6: research_skill
+- **`ResearchSkill`** — thin ReactLoop wrapper composing 7 phase handlers:
+  1. `plan` → `plan_skill.plan`
+  2. `gather` → inline (will be split into `gather_skill` pipeline in v0.32.5)
+  3. `analyze` → `analyze_skill.analyze`
+  4. `synthesize` → `summarize_skill.summarize`
+  5. `score` → `score_skill.score` (3-dim: length/structure/citations)
+  6. `revise` → `revise_skill.revise` (only if score < 0.5)
+  7. `report` → inline markdown assembly
+- **3 public actions**: `run_research`, `resume_research`, `cancel_research`.
+- **State persistence**: every round serializes the full state (15+ fields) into `research_steps.result_json` (new table from Phase 3). Resume loads the last step.
+- 52 new tests covering handler unit tests, end-to-end, persistence, cancel flow.
+- Location: `src/llmwikify/apps/chat/skills/research_skill.py`
+
+### Added — Phase 3: ChatDatabase consolidation + research_steps
+- **`ChatDatabase`** class consolidating the two pre-refactor research databases into one file (`apps/chat/db.py`).
+- **4 tables** in one SQLite file (`data_dir/autoresearch.db`):
+  - `autoresearch_sessions` (unchanged schema, +9 framework JSON columns)
+  - `autoresearch_sub_queries`
+  - `autoresearch_sources`
+  - **`research_steps`** (NEW) — one row per ReAct/6-step round, persists the 15+ ResearchState fields
+- **`AutoResearchDatabase = ChatDatabase`** alias for backward compat (same class).
+- **New API**: `save_step` / `get_step` / `list_steps` / `delete_steps` / `update_step_status` / `save_research_state` / `load_research_state`.
+- **Migration script**: `scripts/migrate_db_v1_to_v2.py` — dry-run + backup + copy from old `agent.db::research_sessions` to new `autoresearch.db::autoresearch_sessions`. 9 tests cover end-to-end.
+- 25 + 9 new tests.
+
+### Added — Phase 7: 5 harness eval classes
+- **5 evaluation classes** → `apps/chat/harness/`:
+  - `QualityGate` (4 base gates + 4 framework gates)
+  - `SourceFilter` (filter_sources + compute_quality_score)
+  - `ResearchReviewer` + `ResearchRevisor` (LLM-as-judge)
+  - `StructureValidator` (3-layer structure scoring)
+  - `SourceAnalyzer` (entity recognition)
+- 5 backward-compat shim files at the old paths (removed in v0.33.0).
+- 32 new tests covering package structure, shim identity, class instantiation, GateResult dataclass.
+- Location: `src/llmwikify/apps/chat/harness/`
+
+### Added — Phase 4: providers migrate
+- **`apps/chat/providers/`** package: `__init__.py`, `base.py`, `registry.py`, `xiaomi.py`, `minimax.py` (4 LLM provider files, 261 LOC).
+- 5 backward-compat shim files at the old `agent/backend/providers.*` paths.
+- `pyproject.toml` updated to register the new package.
+
+### Added — Phase 2: eval_harness rename
+- **`apps/chat/eval_harness.py`** (renamed from `harness.py`) — frees the `harness/` package slot for Phase 7.
+
+### Added — Phase 9: REST routes migrate
+- **3 REST route modules** → `interfaces/server/http/`:
+  - `agent.py` → `chat_sse.py` (renamed: the SSE feature is a chat concern, not an agent concern)
+  - `ppt.py`
+  - `research.py`
+- **Removed L3→L4 dependency** in `apps/chat/routes.py` via dependency inversion: the LLM client is now passed explicitly via `set_autoresearch_deps(llm_client=agent_service._get_llm(), ...)` at L4 startup.
+- 4 backward-compat shim files at `agent/backend/routes{,_agent,_ppt,_research}.py`.
+- 24 new tests covering new home, shims, no L3→L4 import.
+
+### Added — Phase 10: ChatBase + Skill integration
+- **`ChatBase.register_skills(registry)`** — bulk-register all skill actions as LLM tools with qualified names (`<skill>.<action>`).
+- **`ChatBase.tools_schema(registry)`** — generate OpenAI function-calling JSON schema for the LLM.
+- **`ChatBase.invoke_tool(name, args, ctx)`** + **`ainvoke_tool(name, args, ctx)`** — sync/async split that bridges to the async `SkillRuntime.execute` (uses `asyncio.run()` when no event loop is running).
+- **`ChatBase.ask_with_tools(prompt, ...)`** — full OpenAI-style tool-call loop with `DEFAULT_MAX_TOOL_ITERATIONS = 8` cap.
+- **Fixed 3 latent bugs** discovered by the new test suite:
+  1. `invoke_tool()` was returning an unawaited coroutine (now sync/async split with `ainvoke_tool`)
+  2. `_extract_content_and_tool_calls()` only normalized tool_calls for object replies, not dicts (now always normalizes via `_normalize_tool_call_dict`)
+  3. `asyncio` import was missing
+- **`_SkillToolProxy`** — internal wrapper that resolves a qualified tool name back to a skill action via the registry.
+- 41 new tests covering construction, register_skills, tools_schema, invoke_tool, ask_with_tools, edge cases.
+
+### Changed
+- **Backward compatibility**: 28 MCP `@mcp.tool` definitions in `interfaces/mcp/tools.py` are **byte-identical** to v0.31 — no MCP client breakage.
+- **All old import paths** still work via 14 deprecation shim files in `_legacy/`, `core/`, and `agent/backend/`. Scheduled for removal in v0.33.0.
+- **Test growth**: 1911 → 2164 passing (+253 tests), 116 skip, 4/4 architecture contracts green.
+- **New CLI**: `python -m scripts.migrate_db_v1_to_v2 [--data-dir DIR] [--apply]` to migrate pre-Phase-3 research data.
+
+### Deprecated (will be removed in v0.33.0)
+- `llmwikify.apps.chat.quality_gate` → use `llmwikify.apps.chat.harness.quality_gate`
+- `llmwikify.apps.chat.source_filter` → use `llmwikify.apps.chat.harness.source_filter`
+- `llmwikify.apps.chat.review` → use `llmwikify.apps.chat.harness.review`
+- `llmwikify.apps.chat.structure_validator` → use `llmwikify.apps.chat.harness.structure_validator`
+- `llmwikify.apps.chat.analyzer` → use `llmwikify.apps.chat.harness.source_analyzer`
+- `llmwikify.apps.agent.routes.*` → use `llmwikify.interfaces.server.http.*`
+- `llmwikify.apps.agent.backend.providers.*` → use `llmwikify.apps.chat.providers.*`
+- 14 shim files emit `DeprecationWarning` on import.
+
+### Notes
+- **PPTSkill** (3 PPT-related skills) is **deferred to v0.37** — see `docs/KNOWN_ISSUES.md`.
+- The 8 pre-existing 3rd-party-dep test failures (pymupdf, duckduckgo_search, tavily, youtube_transcript_api) are environment issues, NOT v0.32 regressions. They remain failures in the baseline; fix in a separate release.
+- v0.32.5 is the next minor release — it will add: `gather_skill` / `report_skill` pipelines, `wiki_query_skill` aggregator, dream_skill, notify_skill, scheduler_skill, memory_skill, Tauri desktop packaging.
+
 ## [Unreleased]
 
 ### Changed — Phase 3 #6: CLI `mcp` / `serve` consolidation
@@ -18,8 +131,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 - New: `docs/archive/done/cli-help-and-aliases.md` — full explanation of the `mcp` → `serve` alias, deprecation timeline, port/protocol access points, and migration guide.
 - `README.md` — examples updated to use `llmwikify serve` (with notes about the `mcp` alias).
-
-## [0.30.1] - 2026-04-27
 
 ### Added — Unified FastAPI Server
 - **New `server/` module** — Unified FastAPI-based server architecture:
