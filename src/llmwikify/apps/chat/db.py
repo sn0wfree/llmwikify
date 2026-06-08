@@ -179,25 +179,22 @@ class ChatDatabase(BaseDatabase):
         return conn
 
     def _init_db(self) -> None:
-        """Create ChatDatabase's 7 tables (chat + research domains).
+        """Create ChatDatabase's tables.
 
-        ChatDatabase owns 7 tables (v0.33.0 split):
-          - Chat (3): chat_sessions, chat_messages, tool_calls
-          - Research (4): autoresearch_sessions,
-            autoresearch_sub_queries, autoresearch_sources,
-            research_steps
+        ChatDatabase owns 3 chat tables:
+          - chat_sessions, chat_messages, tool_calls
+
+        The 4 research tables (autoresearch_sessions,
+        autoresearch_sub_queries, autoresearch_sources,
+        research_steps) are now owned by ResearchDatabase.
 
         The 4 wiki-domain tables (dream_proposals, notifications,
-        confirmations, ingest_log) are owned by WikiDatabase
-        and created when that facade is instantiated. For
-        backward compat with pre-v0.33.0 data, ChatDatabase
-        also creates those 4 tables — they live in the same
-        physical file. New code should call WikiDatabase for
-        those tables; the wiki methods on ChatDatabase are
-        deprecated thin delegates.
+        confirmations, ingest_log) are owned by WikiDatabase.
 
-        Uses ``CREATE TABLE IF NOT EXISTS`` so re-instantiation
-        is a no-op.
+        For backward compat with pre-v0.33.0 data, ChatDatabase
+        also creates all 11 tables (CREATE TABLE IF NOT EXISTS
+        is idempotent). After v0.33.0, each facade will only
+        create its own tables.
         """
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
@@ -448,559 +445,113 @@ class ChatDatabase(BaseDatabase):
                 size_mb, DB_SIZE_WARNING_MB,
             )
 
-    # ─── Session CRUD ─────────────────────────────────────────
+    # ════════════════════════════════════════════════════════════
+    # DEPRECATED: Research-domain methods
+    # ════════════════════════════════════════════════════════════
+    # These 27 methods are deprecated thin delegates.
+    # New code should use ``apps.research.db.ResearchDatabase`` instead.
+    # They will be removed in v0.33.0.
 
-    def create_research_session(
-        self, wiki_id: str, query: str, *, session_type: str = "research"
-    ) -> str:
-        """Create a new session row. Returns session id (UUID4 hex).
+    @property
+    def _research(self):
+        """Lazy ResearchDatabase instance."""
+        if not hasattr(self, "_research_db"):
+            from llmwikify.apps.research.db import ResearchDatabase
+            object.__setattr__(self, "_research_db", ResearchDatabase(self.data_dir))
+        return self._research_db
 
-        ``session_type`` is reserved for future use; the
-        table is unified across research/autoresearch in the
-        pre-Phase-3 layout. Default status is 'clarifying'
-        (the first 6-step stage).
-        """
-        session_id = uuid.uuid4().hex
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT INTO autoresearch_sessions
-                   (id, wiki_id, query, status, current_step)
-                   VALUES (?, ?, ?, 'clarifying', 'clarifying')""",
-                (session_id, wiki_id, query),
-            )
-            conn.commit()
-        return session_id
+    # ─── Sessions ──────────────────────────────────────────────
+
+    def create_research_session(self, wiki_id: str, query: str) -> str:
+        return self._research.create_research_session(wiki_id, query)
 
     def get_research_session(self, session_id: str) -> dict | None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM autoresearch_sessions WHERE id = ?",
-                (session_id,),
-            ).fetchone()
-        return dict(row) if row else None
+        return self._research.get_research_session(session_id)
 
-    def list_research_sessions(
-        self, wiki_id: str | None = None, session_type: str | None = None
-    ) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            sql = """SELECT s.*,
-                       (SELECT COUNT(*) FROM autoresearch_sub_queries
-                        WHERE session_id = s.id) AS sub_query_count,
-                       (SELECT COUNT(*) FROM autoresearch_sources
-                        WHERE session_id = s.id) AS source_count
-                    FROM autoresearch_sessions s"""
-            clauses: list[str] = []
-            params: list[Any] = []
-            if wiki_id is not None:
-                clauses.append("s.wiki_id = ?")
-                params.append(wiki_id)
-            if clauses:
-                sql += " WHERE " + " AND ".join(clauses)
-            sql += " ORDER BY s.created_at DESC"
-            rows = conn.execute(sql, params).fetchall()
-        return [dict(r) for r in rows]
+    def list_research_sessions(self, wiki_id: str | None = None, limit: int = 50) -> list[dict]:
+        return self._research.list_research_sessions(wiki_id, limit)
 
-    def update_research_status(
-        self,
-        session_id: str,
-        status: str,
-        step: str | None = None,
-        iteration_round: int | None = None,
-        synthesis_json: str | None = None,
-        review_json: str | None = None,
-    ) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            sets = ["status = ?", "updated_at = datetime('now')"]
-            params: list[Any] = [status]
-            if step:
-                sets.append("current_step = ?")
-                params.append(step)
-            if iteration_round is not None:
-                sets.append("iteration_round = ?")
-                params.append(iteration_round)
-            if synthesis_json is not None:
-                sets.append("synthesis_json = ?")
-                params.append(synthesis_json)
-            if review_json is not None:
-                sets.append("review_json = ?")
-                params.append(review_json)
-            params.append(session_id)
-            conn.execute(
-                f"UPDATE autoresearch_sessions SET {', '.join(sets)} WHERE id = ?",
-                params,
-            )
-            conn.commit()
+    def update_research_status(self, session_id: str, status: str, step: str | None = None, iteration_round: int | None = None, synthesis_json: str | None = None, review_json: str | None = None) -> None:
+        return self._research.update_research_status(session_id, status, step, iteration_round, synthesis_json, review_json)
 
-    def update_research_progress(
-        self,
-        session_id: str,
-        progress: float,
-        wiki_page_name: str | None = None,
-    ) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            if wiki_page_name:
-                conn.execute(
-                    """UPDATE autoresearch_sessions
-                       SET progress = ?, wiki_page_name = ?,
-                           updated_at = datetime('now')
-                       WHERE id = ?""",
-                    (progress, wiki_page_name, session_id),
-                )
-            else:
-                conn.execute(
-                    """UPDATE autoresearch_sessions
-                       SET progress = ?, updated_at = datetime('now')
-                       WHERE id = ?""",
-                    (progress, session_id),
-                )
-            conn.commit()
+    def update_research_progress(self, session_id: str, progress: float) -> None:
+        return self._research.update_research_progress(session_id, progress)
 
-    def persist_report(
-        self, session_id: str, result: str | None = None
-    ) -> None:
-        """Persist report data without changing status."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """UPDATE autoresearch_sessions
-                   SET result = ?, updated_at = datetime('now')
-                   WHERE id = ?""",
-                (result, session_id),
-            )
-            conn.commit()
+    def persist_report(self, session_id: str, result: str | None = None) -> None:
+        return self._research.persist_report(session_id, result)
 
-    def finalize_research(
-        self,
-        session_id: str,
-        result: str | None = None,
-        wiki_page_name: str | None = None,
-    ) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """UPDATE autoresearch_sessions
-                   SET status = 'done', result = ?, wiki_page_name = ?,
-                       updated_at = datetime('now')
-                   WHERE id = ?""",
-                (result, wiki_page_name, session_id),
-            )
-            conn.commit()
+    def finalize_research(self, session_id: str, result: str | None = None, wiki_page_name: str | None = None) -> None:
+        return self._research.finalize_research(session_id, result, wiki_page_name)
 
     def delete_research(self, session_id: str) -> bool:
-        """Delete a session and cascade-delete its sub_queries, sources, and steps."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "DELETE FROM autoresearch_sources WHERE session_id = ?",
-                (session_id,),
-            )
-            conn.execute(
-                "DELETE FROM autoresearch_sub_queries WHERE session_id = ?",
-                (session_id,),
-            )
-            conn.execute(
-                "DELETE FROM research_steps WHERE session_id = ?",
-                (session_id,),
-            )
-            cursor = conn.execute(
-                "DELETE FROM autoresearch_sessions WHERE id = ?",
-                (session_id,),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        return self._research.delete_research(session_id)
 
     # ─── Sub-queries ──────────────────────────────────────────
 
-    def save_sub_query(
-        self,
-        session_id: str,
-        query: str,
-        source_type: str,
-        url: str | None = None,
-    ) -> str:
-        sq_id = uuid.uuid4().hex
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT INTO autoresearch_sub_queries
-                   (id, session_id, query, source_type, url)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (sq_id, session_id, query, source_type, url),
-            )
-            conn.commit()
-        return sq_id
+    def save_sub_query(self, session_id: str, query: str, source_type: str, url: str | None = None) -> str:
+        return self._research.save_sub_query(session_id, query, source_type, url)
 
-    def update_sub_query(
-        self,
-        sq_id: str,
-        status: str,
-        result: dict | None = None,
-        error: str | None = None,
-    ) -> None:
-        result_json = json.dumps(result) if result is not None else None
-        with sqlite3.connect(self.db_path) as conn:
-            if status == "done":
-                conn.execute(
-                    """UPDATE autoresearch_sub_queries
-                       SET status = ?, result = ?, completed_at = datetime('now')
-                       WHERE id = ?""",
-                    (status, result_json, sq_id),
-                )
-            else:
-                conn.execute(
-                    """UPDATE autoresearch_sub_queries
-                       SET status = ?, result = ?, error = ?
-                       WHERE id = ?""",
-                    (status, result_json, error, sq_id),
-                )
-            conn.commit()
+    def update_sub_query(self, sq_id: str, status: str, result: dict | None = None, error: str | None = None) -> None:
+        return self._research.update_sub_query(sq_id, status, result, error)
 
     def get_sub_queries(self, session_id: str) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """SELECT * FROM autoresearch_sub_queries
-                   WHERE session_id = ?
-                   ORDER BY created_at ASC""",
-                (session_id,),
-            ).fetchall()
-        out: list[dict] = []
-        for r in rows:
-            d = dict(r)
-            if d.get("result"):
-                try:
-                    d["result"] = json.loads(d["result"])
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            out.append(d)
-        return out
+        return self._research.get_sub_queries(session_id)
 
     # ─── Sources ──────────────────────────────────────────────
 
-    def save_source(
-        self,
-        session_id: str,
-        sub_query_id: str,
-        source_type: str,
-        url: str,
-        title: str,
-        content_length: int,
-        content_preview: str | None = None,
-        content: str | None = None,
-    ) -> str:
-        source_id = uuid.uuid4().hex
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT INTO autoresearch_sources
-                   (id, session_id, sub_query_id, source_type, url, title,
-                    content_length, content_preview, content)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    source_id, session_id, sub_query_id, source_type, url,
-                    title, content_length, content_preview, content,
-                ),
-            )
-            conn.commit()
-        return source_id
+    def save_source(self, session_id: str, sub_query_id: str, source_type: str, url: str, title: str, content_length: int, content_preview: str | None = None, content: str | None = None) -> str:
+        return self._research.save_source(session_id, sub_query_id, source_type, url, title, content_length, content_preview, content)
 
     def update_source_analysis(self, source_id: str, analysis: dict) -> None:
-        analysis_json = json.dumps(analysis, ensure_ascii=False)
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE autoresearch_sources SET analysis = ? WHERE id = ?",
-                (analysis_json, source_id),
-            )
-            conn.commit()
+        return self._research.update_source_analysis(source_id, analysis)
 
     def get_sources(self, session_id: str) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """SELECT * FROM autoresearch_sources
-                   WHERE session_id = ?
-                   ORDER BY created_at ASC""",
-                (session_id,),
-            ).fetchall()
-        out: list[dict] = []
-        for r in rows:
-            d = dict(r)
-            if d.get("analysis"):
-                try:
-                    d["analysis"] = json.loads(d["analysis"])
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            out.append(d)
-        return out
+        return self._research.get_sources(session_id)
 
     def rate_source(self, source_id: str, rating: int) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE autoresearch_sources SET rating = ? WHERE id = ?",
-                (rating, source_id),
-            )
-            conn.commit()
+        return self._research.rate_source(source_id, rating)
 
     def get_source_count(self, session_id: str) -> int:
-        with sqlite3.connect(self.db_path) as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) AS c FROM autoresearch_sources WHERE session_id = ?",
-                (session_id,),
-            ).fetchone()
-        return row["c"] if row else 0
+        return self._research.get_source_count(session_id)
 
     # ─── 6-step framework fields ──────────────────────────────
 
-    def update_six_step_fields(
-        self,
-        session_id: str,
-        clarification: dict | None = None,
-        reasoning: dict | None = None,
-        structure: dict | None = None,
-        self_loop_counts: dict | None = None,
-        self_loop_history: list | None = None,
-        evidence_scores: dict | None = None,
-    ) -> None:
-        """Update one or more 6-step framework JSON fields.
-
-        Only fields that are not None are written. Existing
-        values are overwritten (not merged).
-        """
-        sets: list[str] = ["updated_at = datetime('now')"]
-        params: list[Any] = []
-        if clarification is not None:
-            sets.append("clarification_json = ?")
-            params.append(json.dumps(clarification, ensure_ascii=False))
-        if reasoning is not None:
-            sets.append("reasoning_json = ?")
-            params.append(json.dumps(reasoning, ensure_ascii=False))
-        if structure is not None:
-            sets.append("structure_json = ?")
-            params.append(json.dumps(structure, ensure_ascii=False))
-        if self_loop_counts is not None:
-            sets.append("self_loop_counts_json = ?")
-            params.append(json.dumps(self_loop_counts, ensure_ascii=False))
-        if self_loop_history is not None:
-            sets.append("self_loop_history_json = ?")
-            params.append(json.dumps(self_loop_history, ensure_ascii=False))
-        if evidence_scores is not None:
-            sets.append("evidence_scores_json = ?")
-            params.append(json.dumps(evidence_scores, ensure_ascii=False))
-        params.append(session_id)
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                f"UPDATE autoresearch_sessions SET {', '.join(sets)} WHERE id = ?",
-                params,
-            )
-            conn.commit()
+    def update_six_step_fields(self, session_id: str, clarification: dict | None = None, reasoning: dict | None = None, structure: dict | None = None, self_loop_counts: dict | None = None, self_loop_history: list | None = None, evidence_scores: dict | None = None) -> None:
+        return self._research.update_six_step_fields(session_id, clarification, reasoning, structure, self_loop_counts, self_loop_history, evidence_scores)
 
     def get_six_step_fields(self, session_id: str) -> dict[str, Any]:
-        """Return all 6 JSON framework fields for a session, parsed.
-
-        Missing fields are returned as None.
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """SELECT clarification_json, reasoning_json, structure_json,
-                          self_loop_counts_json, self_loop_history_json,
-                          evidence_scores_json
-                   FROM autoresearch_sessions WHERE id = ?""",
-                (session_id,),
-            ).fetchone()
-        if not row:
-            return {
-                "clarification": None,
-                "reasoning": None,
-                "structure": None,
-                "self_loop_counts": None,
-                "self_loop_history": None,
-                "evidence_scores": None,
-            }
-
-        def _maybe_load(raw: str | None) -> Any:
-            if not raw:
-                return None
-            try:
-                return json.loads(raw)
-            except (json.JSONDecodeError, TypeError):
-                return None
-
-        return {
-            "clarification": _maybe_load(row["clarification_json"]),
-            "reasoning": _maybe_load(row["reasoning_json"]),
-            "structure": _maybe_load(row["structure_json"]),
-            "self_loop_counts": _maybe_load(row["self_loop_counts_json"]),
-            "self_loop_history": _maybe_load(row["self_loop_history_json"]),
-            "evidence_scores": _maybe_load(row["evidence_scores_json"]),
-        }
+        return self._research.get_six_step_fields(session_id)
 
     # ─── Event log persistence ───────────────────────────────
 
     def append_events(self, session_id: str, events: list[dict]) -> int:
-        """Append a batch of events to the session's persisted event log."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
-                (session_id,),
-            ).fetchone()
-            existing: list[dict] = []
-            if row and row["events_json"]:
-                try:
-                    parsed = json.loads(row["events_json"])
-                    if isinstance(parsed, list):
-                        existing = parsed
-                except (json.JSONDecodeError, TypeError):
-                    existing = []
-            existing.extend(events)
-            new_json = json.dumps(existing, ensure_ascii=False)
-            conn.execute(
-                """UPDATE autoresearch_sessions
-                   SET events_json = ?, updated_at = datetime('now')
-                   WHERE id = ?""",
-                (new_json, session_id),
-            )
-            conn.commit()
-            return len(existing)
+        return self._research.append_events(session_id, events)
 
     def get_events(self, session_id: str) -> list[dict]:
-        """Return all persisted events for a session, in insertion order."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
-                (session_id,),
-            ).fetchone()
-        if not row or not row["events_json"]:
-            return []
-        try:
-            parsed = json.loads(row["events_json"])
-            return parsed if isinstance(parsed, list) else []
-        except (json.JSONDecodeError, TypeError):
-            return []
+        return self._research.get_events(session_id)
 
-    # ─── research_steps (Phase 3 NEW) ────────────────────────
+    # ─── research_steps ──────────────────────────────────────
 
-    def save_step(
-        self,
-        session_id: str,
-        step_num: int,
-        action: str,
-        status: str = "pending",
-        thought: str | None = None,
-        result: dict | None = None,
-        duration_ms: int = 0,
-    ) -> str:
-        """Persist one research step (one row per ReAct round).
-
-        This is the new home for the 15+ ResearchState fields
-        (round, max_rounds, max_replan, phase, sub_queries,
-        sources, synthesis, report_md, review, knowledge_gaps,
-        contradictions, issues, observations, _last_thought,
-        cancelled, paused, budget_remaining) that the
-        pre-Phase-3 ReAct loop held in memory.
-
-        One row per ``(session_id, step_num)``. The full
-        ResearchState dict is serialized into ``result_json``;
-        only the most-frequently-queried fields (action,
-        status, thought, duration) get dedicated columns for
-        fast filtering.
-
-        Returns:
-            The new step's id (UUID4 hex).
-        """
-        step_id = uuid.uuid4().hex
-        result_json = json.dumps(result, ensure_ascii=False) if result is not None else None
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT OR REPLACE INTO research_steps
-                   (id, session_id, step_num, action, thought, status,
-                    result_json, duration_ms)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    step_id, session_id, step_num, action, thought, status,
-                    result_json, duration_ms,
-                ),
-            )
-            conn.commit()
-        return step_id
+    def save_step(self, session_id: str, step_num: int, action: str, status: str = "pending", thought: str | None = None, result: Any = None, duration_ms: int = 0) -> None:
+        return self._research.save_step(session_id, step_num, action, status, thought, result, duration_ms)
 
     def get_step(self, session_id: str, step_num: int) -> dict | None:
-        """Return a single step by (session_id, step_num)."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """SELECT * FROM research_steps
-                   WHERE session_id = ? AND step_num = ?""",
-                (session_id, step_num),
-            ).fetchone()
-        if not row:
-            return None
-        return _row_to_step_dict(row)
+        return self._research.get_step(session_id, step_num)
 
     def list_steps(self, session_id: str) -> list[dict]:
-        """Return all steps for a session, ordered by step_num."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """SELECT * FROM research_steps
-                   WHERE session_id = ?
-                   ORDER BY step_num ASC""",
-                (session_id,),
-            ).fetchall()
-        return [_row_to_step_dict(r) for r in rows]
+        return self._research.list_steps(session_id)
 
     def delete_steps(self, session_id: str) -> int:
-        """Delete all steps for a session. Returns count deleted."""
-        with sqlite3.connect(self.db_path) as conn:
-            cur = conn.execute(
-                "DELETE FROM research_steps WHERE session_id = ?",
-                (session_id,),
-            )
-            conn.commit()
-            return cur.rowcount
+        return self._research.delete_steps(session_id)
 
-    def update_step_status(
-        self, session_id: str, step_num: int, status: str
-    ) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """UPDATE research_steps
-                   SET status = ?
-                   WHERE session_id = ? AND step_num = ?""",
-                (status, session_id, step_num),
-            )
-            conn.commit()
+    def update_step_status(self, session_id: str, step_num: int, status: str) -> None:
+        return self._research.update_step_status(session_id, step_num, status)
 
-    def save_research_state(
-        self,
-        session_id: str,
-        step_num: int,
-        state: dict,
-    ) -> str:
-        """Persist a full ResearchState dict as a step's result.
+    def save_research_state(self, session_id: str, step_num: int, state: dict) -> str:
+        return self._research.save_research_state(session_id, step_num, state)
 
-        Convenience wrapper for the common case of "save my
-        whole ReAct state after this round". The state dict is
-        stored verbatim in ``result_json`` and the step's
-        ``action`` is set to the value of ``state.phase`` (if
-        present) so list_steps() can group by phase.
-        """
-        action = state.get("phase", "unknown")
-        return self.save_step(
-            session_id=session_id,
-            step_num=step_num,
-            action=action,
-            status="done",
-            result=state,
-        )
-
-    def load_research_state(
-        self, session_id: str, step_num: int
-    ) -> dict | None:
-        """Load a previously saved ResearchState dict by step_num."""
-        step = self.get_step(session_id, step_num)
-        if not step:
-            return None
-        return step.get("result")
+    def load_research_state(self, session_id: str, step_num: int) -> dict | None:
+        return self._research.load_research_state(session_id, step_num)
 
     # ─── Chat sessions/messages (migrated from AgentDatabase) ──────
 
@@ -1361,19 +912,6 @@ class ChatDatabase(BaseDatabase):
                     stats[table] = 0
             size_mb = self.db_path.stat().st_size / 1024 / 1024
             return {"tables": stats, "size_mb": round(size_mb, 2)}
-
-
-def _row_to_step_dict(row: sqlite3.Row) -> dict:
-    """Convert a research_steps row to a dict, parsing result_json."""
-    d = dict(row)
-    if d.get("result_json"):
-        try:
-            d["result"] = json.loads(d["result_json"])
-        except (json.JSONDecodeError, TypeError):
-            d["result"] = None
-    else:
-        d["result"] = None
-    return d
 
 
 # ─── Backward-compat aliases ─────────────────────────────────────
