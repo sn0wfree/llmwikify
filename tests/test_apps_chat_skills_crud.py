@@ -19,9 +19,9 @@ from __future__ import annotations
 import pytest
 
 from llmwikify.apps.chat.skills import SkillContext, SkillResult
-from llmwikify.apps.chat.skills.crud.dream_skill import DreamSkill, _approve, _reject, _run, dream_skill
+from llmwikify.apps.chat.skills.crud.dream_skill import DreamSkill, _approve, _get_proposals, _reject, _run, dream_skill
 from llmwikify.apps.chat.skills.crud.memory_skill import MemorySkill, _append, _clear, _query, _summarize, memory_skill
-from llmwikify.apps.chat.skills.crud.notify_skill import NotifySkill, _list_notifications, _mark_read, notify_skill
+from llmwikify.apps.chat.skills.crud.notify_skill import NotifySkill, _list_notifications, _mark_read, _subscribe, notify_skill
 from llmwikify.apps.chat.skills.crud.scheduler_skill import SchedulerSkill, _add_job, _list_jobs, _remove_job, _trigger, scheduler_skill
 
 
@@ -103,30 +103,33 @@ class MockDreamEditor:
     def run_dream(self) -> dict:
         return {"status": "ok", "pending_review": 0}
 
-    class proposals:
-        _proposals: list[dict] = [{"id": "p1", "status": "pending"}]
+    @property
+    def proposals(self) -> "_ProposalManager":
+        return _ProposalManager(self._proposals)
 
-        @classmethod
-        def get_proposals(cls, status: str = "pending") -> list[dict]:
-            if status == "all":
-                return list(cls._proposals)
-            return [p for p in cls._proposals if p["status"] == status]
 
-        @classmethod
-        def approve(cls, pid: str) -> bool:
-            for p in cls._proposals:
-                if p["id"] == pid and p["status"] == "pending":
-                    p["status"] = "approved"
-                    return True
-            return False
+class _ProposalManager:
+    def __init__(self, proposals: list[dict]) -> None:
+        self._proposals = proposals
 
-        @classmethod
-        def reject(cls, pid: str, reason: str = "") -> bool:
-            for p in cls._proposals:
-                if p["id"] == pid and p["status"] == "pending":
-                    p["status"] = "rejected"
-                    return True
-            return False
+    def get_proposals(self, status: str = "pending") -> list[dict]:
+        if status == "all":
+            return list(self._proposals)
+        return [p for p in self._proposals if p["status"] == status]
+
+    def approve(self, pid: str) -> bool:
+        for p in self._proposals:
+            if p["id"] == pid and p["status"] == "pending":
+                p["status"] = "approved"
+                return True
+        return False
+
+    def reject(self, pid: str, reason: str = "") -> bool:
+        for p in self._proposals:
+            if p["id"] == pid and p["status"] == "pending":
+                p["status"] = "rejected"
+                return True
+        return False
 
 
 @pytest.fixture
@@ -300,6 +303,7 @@ class TestSchedulerSkillActions:
 
     @pytest.mark.asyncio
     async def test_trigger(self, ctx_with_scheduler: SkillContext) -> None:
+        await _add_job({"name": "test", "cron_expr": "0 * * * *"}, ctx_with_scheduler)
         r = await _trigger({"name": "test"}, ctx_with_scheduler)
         assert r.status == "ok"
         assert r.data["triggered"] is True
