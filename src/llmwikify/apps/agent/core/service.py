@@ -1,10 +1,12 @@
-"""AgentBackend Service — DEPRECATED wrapper.
+"""AgentBackend Service — composition root (v0.33.0).
 
 .. deprecated::
-    Use ``ChatService`` + ``WikiService`` instead.
-    This module is scheduled for removal in v0.33.0.
+    Use ``ChatService`` + ``WikiService`` directly instead.
+    This wrapper is kept for backward compat and will be
+    removed in a future version.
 
-All methods delegate to ChatService or WikiService.
+The new AgentService accepts ``AppDatabase`` (aggregate of
+3 facades) and wires up ChatService + WikiService.
 """
 
 from __future__ import annotations
@@ -16,13 +18,13 @@ from typing import Any
 
 
 class AgentService:
-    """DEPRECATED: Use ChatService + WikiService instead.
+    """Composition root wrapping ChatService + WikiService.
 
-    This wrapper delegates all methods to ChatService and
-    WikiService. Will be removed in v0.33.0.
+    Accepts either the new ``AppDatabase`` or legacy
+    ``(wiki_registry, data_dir)`` signature.
     """
 
-    def __init__(self, wiki_registry: Any, data_dir: Path):
+    def __init__(self, wiki_registry: Any, data_dir: Path, app_db: Any = None):
         warnings.warn(
             "AgentService is deprecated. Use ChatService + WikiService instead. "
             "This wrapper will be removed in v0.33.0.",
@@ -30,14 +32,22 @@ class AgentService:
             stacklevel=2,
         )
 
-        from llmwikify.apps.chat.db import ChatDatabase
+        from llmwikify.apps.db import AppDatabase
         from llmwikify.apps.chat.agent.service import ChatService
         from llmwikify.apps.wiki.service import WikiService
 
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.db = ChatDatabase(self.data_dir)
-        self.wiki_service = WikiService(wiki_registry, self.data_dir, self.db)
+
+        if app_db is not None:
+            self.app_db = app_db
+        else:
+            self.app_db = AppDatabase(self.data_dir)
+
+        self.db = self.app_db.chat
+        self.wiki_service = WikiService(
+            wiki_registry, self.data_dir, self.app_db.chat,
+        )
         self.chat_service = ChatService(self.wiki_service, self.data_dir)
 
     # ─── Delegated: Chat ─────────────────────────────────────────
