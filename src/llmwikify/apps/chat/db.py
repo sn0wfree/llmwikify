@@ -179,127 +179,19 @@ class ChatDatabase(BaseDatabase):
         return conn
 
     def _init_db(self) -> None:
-        """Create ChatDatabase's tables.
+        """Create ChatDatabase's tables (chat domain only).
 
-        ChatDatabase owns 3 chat tables:
+        ChatDatabase owns 4 tables:
           - chat_sessions, chat_messages, tool_calls
+          - context_entries (NEW for MemoryManager, v0.33.0)
 
-        The 4 research tables (autoresearch_sessions,
-        autoresearch_sub_queries, autoresearch_sources,
-        research_steps) are now owned by ResearchDatabase.
-
-        The 4 wiki-domain tables (dream_proposals, notifications,
-        confirmations, ingest_log) are owned by WikiDatabase.
-
-        For backward compat with pre-v0.33.0 data, ChatDatabase
-        also creates all 11 tables (CREATE TABLE IF NOT EXISTS
-        is idempotent). After v0.33.0, each facade will only
-        create its own tables.
+        The 4 research tables are owned by ResearchDatabase.
+        The 4 wiki-domain tables are owned by WikiDatabase.
+        Each facade creates its own tables via
+        ``CREATE TABLE IF NOT EXISTS`` (idempotent).
         """
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS autoresearch_sessions (
-                    id TEXT PRIMARY KEY,
-                    wiki_id TEXT NOT NULL,
-                    query TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'clarifying',
-                    current_step TEXT DEFAULT 'clarifying',
-                    progress REAL DEFAULT 0.0,
-                    result TEXT,
-                    wiki_page_name TEXT,
-                    iteration_round INTEGER DEFAULT 0,
-                    max_rounds INTEGER DEFAULT 5,
-                    max_replan INTEGER DEFAULT 2,
-                    quality_score INTEGER DEFAULT 0,
-                    synthesis_json TEXT,
-                    review_json TEXT,
-                    clarification_json TEXT,
-                    reasoning_json TEXT,
-                    structure_json TEXT,
-                    self_loop_counts_json TEXT,
-                    self_loop_history_json TEXT,
-                    evidence_scores_json TEXT,
-                    events_json TEXT,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    updated_at TEXT DEFAULT (datetime('now'))
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS autoresearch_sub_queries (
-                    id TEXT PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    query TEXT NOT NULL,
-                    source_type TEXT NOT NULL,
-                    url TEXT,
-                    status TEXT DEFAULT 'pending',
-                    result TEXT,
-                    error TEXT,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    completed_at TEXT,
-                    FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id)
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_ar_sub_queries_session
-                ON autoresearch_sub_queries(session_id, status)
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS autoresearch_sources (
-                    id TEXT PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    sub_query_id TEXT,
-                    source_type TEXT NOT NULL,
-                    url TEXT,
-                    title TEXT,
-                    content_length INTEGER,
-                    content_preview TEXT,
-                    content TEXT,
-                    analysis TEXT,
-                    rating INTEGER,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id),
-                    FOREIGN KEY (sub_query_id) REFERENCES autoresearch_sub_queries(id)
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_ar_sources_session
-                ON autoresearch_sources(session_id)
-                """
-            )
-            # ── NEW: research_steps table (Phase 3) ──
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS research_steps (
-                    id TEXT PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    step_num INTEGER NOT NULL,
-                    action TEXT NOT NULL,
-                    thought TEXT,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    result_json TEXT,
-                    duration_ms INTEGER DEFAULT 0,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id),
-                    UNIQUE (session_id, step_num)
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_research_steps_session
-                ON research_steps(session_id, step_num)
-                """
-            )
-            # ── Chat sessions/messages (migrated from AgentDatabase) ──
+            # ─── Chat domain (3 tables + 1 NEW for MemoryManager) ──
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -330,7 +222,6 @@ class ChatDatabase(BaseDatabase):
                 ON chat_messages(session_id, created_at DESC)
                 """
             )
-            # ── Tool calls ──
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS tool_calls (
@@ -345,90 +236,26 @@ class ChatDatabase(BaseDatabase):
                 )
                 """
             )
-            # ── Dream proposals ──
+            # ─── Context entries (for MemoryManager, v0.33.0) ──────
             conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS dream_proposals (
+                CREATE TABLE IF NOT EXISTS context_entries (
                     id TEXT PRIMARY KEY,
-                    wiki_id TEXT NOT NULL,
-                    page_name TEXT NOT NULL,
-                    edit_type TEXT NOT NULL,
+                    session_id TEXT,
+                    entry_type TEXT NOT NULL,
                     content TEXT NOT NULL,
-                    reason TEXT,
-                    content_length INTEGER,
-                    source_entries TEXT,
-                    status TEXT NOT NULL DEFAULT 'pending',
+                    metadata TEXT,
+                    embedding TEXT,
                     created_at TEXT DEFAULT (datetime('now')),
-                    reviewed_at TEXT
+                    updated_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
                 )
                 """
             )
             conn.execute(
                 """
-                CREATE INDEX IF NOT EXISTS idx_dream_proposals_wiki_status
-                ON dream_proposals(wiki_id, status)
-                """
-            )
-            # ── Notifications ──
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS notifications (
-                    id TEXT PRIMARY KEY,
-                    wiki_id TEXT NOT NULL,
-                    type TEXT NOT NULL,
-                    message TEXT NOT NULL,
-                    data TEXT,
-                    read INTEGER DEFAULT 0,
-                    timestamp TEXT DEFAULT (datetime('now'))
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_notifications_wiki_read
-                ON notifications(wiki_id, read)
-                """
-            )
-            # ── Confirmations ──
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS confirmations (
-                    id TEXT PRIMARY KEY,
-                    wiki_id TEXT NOT NULL,
-                    tool TEXT NOT NULL,
-                    arguments TEXT NOT NULL,
-                    action_type TEXT,
-                    impact TEXT,
-                    group_name TEXT,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    created_at TEXT DEFAULT (datetime('now'))
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_confirmations_wiki_status
-                ON confirmations(wiki_id, status)
-                """
-            )
-            # ── Ingest log ──
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS ingest_log (
-                    id TEXT PRIMARY KEY,
-                    wiki_id TEXT NOT NULL,
-                    tool TEXT NOT NULL,
-                    arguments TEXT NOT NULL,
-                    result_summary TEXT,
-                    status TEXT NOT NULL,
-                    timestamp TEXT DEFAULT (datetime('now'))
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_ingest_log_wiki
-                ON ingest_log(wiki_id, timestamp DESC)
+                CREATE INDEX IF NOT EXISTS idx_context_entries_session
+                ON context_entries(session_id, entry_type)
                 """
             )
             conn.commit()
@@ -920,8 +747,24 @@ class ChatDatabase(BaseDatabase):
 # three names refer to the same class / function. The DB
 # file path is the same (data_dir / "autoresearch.db") so
 # existing user data is preserved.
-AutoResearchDatabase = ChatDatabase
 get_autoresearch_db_path = get_chat_db_path
+
+
+class AutoResearchDatabase(ChatDatabase):
+    """Backward-compat: initializes all 3 facades.
+
+    Pre-v0.33.0 code used ``AutoResearchDatabase`` which created
+    all 11 tables. This subclass ensures all 3 facades are
+    instantiated so all tables exist in the shared DB file.
+    """
+
+    def __init__(self, data_dir):
+        super().__init__(data_dir)
+        # Initialize Research + Wiki facades so their tables exist
+        from llmwikify.apps.research.db import ResearchDatabase
+        from llmwikify.apps.wiki.db import WikiDatabase
+        ResearchDatabase(data_dir)
+        WikiDatabase(data_dir)
 
 
 __all__ = [

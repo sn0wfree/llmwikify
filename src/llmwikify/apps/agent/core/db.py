@@ -45,8 +45,14 @@ class AgentDatabase:
 
         # Import here to avoid circular imports at module level
         from llmwikify.apps.chat.db import ChatDatabase
+        from llmwikify.apps.research.db import ResearchDatabase
+        from llmwikify.apps.wiki.db import WikiDatabase
 
         self._chat_db = ChatDatabase(db_path.parent)
+        # Initialize all 3 facades so all 11 tables exist
+        # (backward compat: old code expects all tables in one file)
+        ResearchDatabase(db_path.parent)
+        WikiDatabase(db_path.parent)
         # Expose the resolved path (may differ from input db_path
         # when ChatDatabase normalises to .llmwiki_agent.db).
         self.db_path = self._chat_db.db_path

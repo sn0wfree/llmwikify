@@ -47,7 +47,7 @@ def db_with_session() -> tuple[ChatDatabase, str]:
 
 class TestIdentityAndPaths:
     def test_autoresearch_is_alias_for_chat(self) -> None:
-        assert AutoResearchDatabase is ChatDatabase
+        assert issubclass(AutoResearchDatabase, ChatDatabase)
 
     def test_path_helpers_return_same_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -81,42 +81,45 @@ class TestSchema:
                         "SELECT name FROM sqlite_master WHERE type='table'"
                     ).fetchall()
                 }
-            # 3 pre-Phase-3 research tables
-            assert "autoresearch_sessions" in tables
-            assert "autoresearch_sub_queries" in tables
-            assert "autoresearch_sources" in tables
-            # NEW Phase 3 table
-            assert "research_steps" in tables
+            # ChatDatabase owns 4 tables (v0.33.0 split)
+            assert "chat_sessions" in tables
+            assert "chat_messages" in tables
+            assert "tool_calls" in tables
+            assert "context_entries" in tables
 
     def test_research_steps_columns(self, fresh_db: ChatDatabase) -> None:
-        import sqlite3
-        with sqlite3.connect(fresh_db.db_path) as conn:
-            cols = {
-                row[1]
-                for row in conn.execute(
-                    "PRAGMA table_info(research_steps)"
-                ).fetchall()
+        from llmwikify.apps.research.db import ResearchDatabase
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            rdb = ResearchDatabase(tmp)
+            import sqlite3
+            with sqlite3.connect(rdb.db_path) as conn:
+                cols = {
+                    row[1]
+                    for row in conn.execute(
+                        "PRAGMA table_info(research_steps)"
+                    ).fetchall()
+                }
+            expected = {
+                "id", "session_id", "step_num", "action", "thought",
+                "status", "result_json", "duration_ms", "created_at",
             }
-        expected = {
-            "id", "session_id", "step_num", "action", "thought",
-            "status", "result_json", "duration_ms", "created_at",
-        }
-        assert expected.issubset(cols)
+            assert expected.issubset(cols)
 
     def test_research_steps_indexes(self, fresh_db: ChatDatabase) -> None:
-        import sqlite3
-        with sqlite3.connect(fresh_db.db_path) as conn:
-            indexes = {
-                row[0]
-                for row in conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='index'"
-                ).fetchall()
-            }
-        # Pre-Phase-3 indexes
-        assert "idx_ar_sub_queries_session" in indexes
-        assert "idx_ar_sources_session" in indexes
-        # NEW Phase 3 index
-        assert "idx_research_steps_session" in indexes
+        from llmwikify.apps.research.db import ResearchDatabase
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            rdb = ResearchDatabase(tmp)
+            import sqlite3
+            with sqlite3.connect(rdb.db_path) as conn:
+                indexes = {
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type='index'"
+                    ).fetchall()
+                }
+            assert "idx_research_steps_session" in indexes
 
     def test_idempotent_re_instantiation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
