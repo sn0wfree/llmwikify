@@ -144,6 +144,7 @@ packages = [
     "llmwikify.apps.research",
     "llmwikify.apps.ppt",
     "llmwikify.apps.chat",
+    "llmwikify.apps.chat.harness",  # v0.32 Phase 7: 5 eval classes
     "llmwikify.apps.chat.providers",
     "llmwikify.agent",  # backward-compat shim (v0.33.0 removal)
     "llmwikify.agent.backend",  # backward-compat shim
