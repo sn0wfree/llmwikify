@@ -591,7 +591,7 @@ class WikiToolRegistry:
         # 7. Update session wiki_page_name
         with sqlite3.connect(self.db.db_path) as conn:
             conn.execute(
-                "UPDATE research_sessions SET wiki_page_name = ? WHERE id = ?",
+                "UPDATE autoresearch_sessions SET wiki_page_name = ? WHERE id = ?",
                 (page_name, session_id),
             )
             conn.commit()
