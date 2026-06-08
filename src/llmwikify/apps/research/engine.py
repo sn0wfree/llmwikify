@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from llmwikify.foundation.llm.streamable import StreamableLLMClient
-from ..agent.core.db import AgentDatabase
+from ..chat.db import ChatDatabase
 from ..chat.providers.registry import create_llm
 from .analyzer import SourceAnalyzer
 from .config import merge_research_config
@@ -152,7 +152,7 @@ class ResearchEngine:
     def __init__(
         self,
         wiki: Any,
-        db: AgentDatabase,
+        db: ChatDatabase,
         llm_client: StreamableLLMClient,
         config: dict[str, Any] | None = None,
     ):

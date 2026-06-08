@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..agent.core.db import AgentDatabase
+from ..chat.db import ChatDatabase
 
 
 class ResearchSessionManager:
     """Manages research session lifecycle and sub-query/source tracking."""
 
-    def __init__(self, db: AgentDatabase):
+    def __init__(self, db: ChatDatabase):
         self.db = db
         self._session_id: str | None = None
 

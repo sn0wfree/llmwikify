@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette import EventSourceResponse
 
-from llmwikify.apps.agent.core.db import AgentDatabase
+from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.apps.research.config import merge_research_config
 from llmwikify.apps.research.engine import ResearchEngine
 from llmwikify.apps.research.task_manager import get_task_manager
@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/research", tags=["research"])
 
 # These are set during app startup
-_AGENT_DB: AgentDatabase | None = None
+_AGENT_DB: ChatDatabase | None = None
 _WIKI_REGISTRY: Any = None
 _LLM_CLIENT: Any = None
 _RESEARCH_CONFIG: dict[str, Any] | None = None
 
 
-def set_research_deps(db: AgentDatabase, wiki_registry: Any, llm_client: Any, config: dict[str, Any] | None = None) -> None:
+def set_research_deps(db: ChatDatabase, wiki_registry: Any, llm_client: Any, config: dict[str, Any] | None = None) -> None:
     global _AGENT_DB, _WIKI_REGISTRY, _LLM_CLIENT, _RESEARCH_CONFIG
     _AGENT_DB = db
     _WIKI_REGISTRY = wiki_registry
@@ -34,7 +34,7 @@ def set_research_deps(db: AgentDatabase, wiki_registry: Any, llm_client: Any, co
     _RESEARCH_CONFIG = config
 
 
-def _get_db() -> AgentDatabase:
+def _get_db() -> ChatDatabase:
     if _AGENT_DB is None:
         raise RuntimeError("Research deps not initialized")
     return _AGENT_DB
