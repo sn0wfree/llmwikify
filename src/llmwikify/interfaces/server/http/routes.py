@@ -608,9 +608,9 @@ def _mount_agent_spa(app: FastAPI) -> None:
     """
     from fastapi.staticfiles import StaticFiles
 
-    # routes.py is at: src/llmwikify/server/http/routes.py
-    # Up 4 levels: http → server → llmwikify → src → repo root
-    repo_root = Path(__file__).resolve().parent.parent.parent.parent
+    # routes.py is at: src/llmwikify/interfaces/server/http/routes.py
+    # Up 6 levels: http → server → interfaces → llmwikify → src → repo root
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
     agent_dist = repo_root / "ui" / "webui-agent" / "dist"
 
     if agent_dist.exists():
@@ -621,3 +621,5 @@ def _mount_agent_spa(app: FastAPI) -> None:
         @app.get("/agent", include_in_schema=False)
         async def agent_root_redirect():
             return RedirectResponse(url="/agent/")
+    else:
+        logger.warning("Agent SPA dist not found at %s; /agent/ will return 404", agent_dist)
