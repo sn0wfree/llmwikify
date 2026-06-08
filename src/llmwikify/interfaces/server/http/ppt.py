@@ -10,16 +10,19 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette import EventSourceResponse
 
-from ..core.db import AgentDatabase
-from ...ppt.engine import PPTEngine
-from ...ppt.schema import (
+from llmwikify.apps.agent.core.db import AgentDatabase
+from llmwikify.apps.ppt.engine import PPTEngine
+from llmwikify.apps.ppt.schema import (
     FromChatRequest,
     FromResearchRequest,
     GenerateRequest,
     OutlineRequest,
 )
-from ...ppt.task_manager import get_ppt_task_manager, init_ppt_task_manager
-from ...ppt.themes import list_themes
+from llmwikify.apps.ppt.task_manager import (
+    get_ppt_task_manager,
+    init_ppt_task_manager,
+)
+from llmwikify.apps.ppt.themes import list_themes
 
 logger = logging.getLogger(__name__)
 

@@ -10,10 +10,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette import EventSourceResponse
 
-from ..core.db import AgentDatabase
-from ...research.config import merge_research_config
-from ...research.engine import ResearchEngine
-from ...research.task_manager import get_task_manager
+from llmwikify.apps.agent.core.db import AgentDatabase
+from llmwikify.apps.research.config import merge_research_config
+from llmwikify.apps.research.engine import ResearchEngine
+from llmwikify.apps.research.task_manager import get_task_manager
 
 logger = logging.getLogger(__name__)
 

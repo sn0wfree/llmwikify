@@ -1478,7 +1478,7 @@ class TestResearchRoutes:
         """Create a FastAPI test client."""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from llmwikify.apps.agent.routes.research import router, set_research_deps
+        from llmwikify.interfaces.server.http.research import router, set_research_deps
 
         # Create a mock wiki registry
         registry = MagicMock()
