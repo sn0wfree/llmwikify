@@ -1,4 +1,11 @@
-"""Agent Backend - Database management for chat sessions and tool calls."""
+"""AgentBackend Database — DEPRECATED wrapper around ChatDatabase.
+
+.. deprecated::
+    Use ``llmwikify.apps.chat.db.ChatDatabase`` instead.
+    This module is scheduled for removal in v0.33.0.
+
+All methods delegate to ``ChatDatabase``.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +13,7 @@ import json
 import logging
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -21,1368 +28,425 @@ def get_agent_db_path(data_dir: Path) -> Path:
 
 
 class AgentDatabase:
-    """SQLite database for chat sessions, tool calls, and research sessions."""
+    """DEPRECATED: Use ``ChatDatabase`` instead.
+
+    All methods delegate to ``ChatDatabase``.
+    Will be removed in v0.33.0.
+    """
 
     def __init__(self, db_path: Path):
+        warnings.warn(
+            "AgentDatabase is deprecated. Use ChatDatabase instead. "
+            "This wrapper will be removed in v0.33.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._init_db()
-        self._check_db_size()
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        # Import here to avoid circular imports at module level
+        from llmwikify.apps.chat.db import ChatDatabase
 
-    def _init_db(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS chat_sessions (
-                    id TEXT PRIMARY KEY,
-                    wiki_id TEXT,
-                    jwt_token TEXT,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    updated_at TEXT DEFAULT (datetime('now'))
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS tool_calls (
-                    id TEXT PRIMARY KEY,
-                    session_id TEXT,
-                    tool_name TEXT NOT NULL,
-                    arguments TEXT NOT NULL,
-                    result TEXT,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    created_at TEXT DEFAULT (datetime('now')),
-                    FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS research_sessions (
-                    id TEXT PRIMARY KEY,
-                    wiki_id TEXT NOT NULL,
-                    query TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'planning',
-                    current_step TEXT DEFAULT 'planning',
-                    progress REAL DEFAULT 0.0,
-                    result TEXT,
-                    wiki_page_name TEXT,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    updated_at TEXT DEFAULT (datetime('now'))
-                )
-            """)
-            conn.commit()
-        self._init_tables()
+        self._chat_db = ChatDatabase(self.db_path.parent)
+
+        # PPT tables still live in the agent DB file
+        self._init_ppt_tables()
 
     def _check_db_size(self) -> None:
         """Check database size and log warning if too large."""
-        if not self.db_path.exists():
+        db_path = self._chat_db.db_path
+        if not db_path.exists():
             return
-        size_mb = self.db_path.stat().st_size / 1024 / 1024
+        size_mb = db_path.stat().st_size / 1024 / 1024
         logger.debug("Agent DB size: %.2f MB", size_mb)
         if size_mb > DB_SIZE_WARNING_MB:
             logger.warning(
-                "Agent DB is large: %.2f MB (threshold: %d MB). "
-                "Consider running 'llmwikify db clean' to remove old data.",
+                "Agent DB is large: %.2f MB (threshold: %d MB).",
                 size_mb, DB_SIZE_WARNING_MB,
             )
 
-    def create_session(self, wiki_id: str | None = None, jwt_token: str | None = None) -> str:
-        session_id = str(uuid.uuid4())[:8]
-        with sqlite3.connect(self.db_path) as conn:
+    def _connect(self) -> sqlite3.Connection:
+        """Return a connection to the chat DB (autoresearch.db)."""
+        conn = sqlite3.connect(self._chat_db.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _init_ppt_tables(self) -> None:
+        """Create backward-compat views for old table names."""
+        db_path = self._chat_db.db_path
+        with sqlite3.connect(db_path) as conn:
             conn.execute(
-                "INSERT INTO chat_sessions (id, wiki_id, jwt_token) VALUES (?, ?, ?)",
-                (session_id, wiki_id, jwt_token),
+                """CREATE VIEW IF NOT EXISTS research_sessions AS
+                   SELECT * FROM autoresearch_sessions"""
+            )
+            conn.execute(
+                """CREATE VIEW IF NOT EXISTS research_sub_queries AS
+                   SELECT * FROM autoresearch_sub_queries"""
+            )
+            conn.execute(
+                """CREATE VIEW IF NOT EXISTS research_sources AS
+                   SELECT * FROM autoresearch_sources"""
             )
             conn.commit()
-        return session_id
+
+    # ─── Delegated: Chat sessions ─────────────────────────────────
+
+    def create_session(self, wiki_id: str | None = None, jwt_token: str | None = None) -> str:
+        return self._chat_db.create_chat_session(wiki_id, jwt_token)
 
     def get_session(self, session_id: str) -> dict | None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM chat_sessions WHERE id = ?", (session_id,)
-            ).fetchone()
-            if row is None:
-                return None
-            return dict(row)
+        return self._chat_db.get_chat_session(session_id)
 
     def update_session_wiki(self, session_id: str, wiki_id: str) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE chat_sessions SET wiki_id = ?, updated_at = datetime('now') WHERE id = ?",
-                (wiki_id, session_id),
-            )
-            conn.commit()
+        self._chat_db.update_chat_session_wiki(session_id, wiki_id)
 
     def update_session_jwt(self, session_id: str, jwt_token: str) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE chat_sessions SET jwt_token = ?, updated_at = datetime('now') WHERE id = ?",
-                (jwt_token, session_id),
-            )
-            conn.commit()
+        self._chat_db.update_chat_session_jwt(session_id, jwt_token)
 
     def list_sessions(self) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM chat_sessions ORDER BY updated_at DESC"
-            ).fetchall()
-            return [dict(row) for row in rows]
+        return self._chat_db.list_chat_sessions()
 
     def delete_session(self, session_id: str) -> bool:
-        with sqlite3.connect(self.db_path) as conn:
+        db_path = self._chat_db.db_path
+        with sqlite3.connect(db_path) as conn:
             conn.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM tool_calls WHERE session_id = ?", (session_id,))
             cur = conn.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
             conn.commit()
             return cur.rowcount > 0
 
     def get_session_title(self, session_id: str) -> str:
-        messages = self.get_messages(session_id, limit=1)
-        for msg in messages:
-            if msg["role"] == "user":
-                content = msg["content"][:50]
-                return content + ("..." if len(msg["content"]) > 50 else "")
-        return "New Chat"
+        return self._chat_db.get_chat_session_title(session_id)
 
     def save_message(self, message: dict) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT INTO chat_messages (id, session_id, role, content, tool_calls, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                message["id"],
-                message["session_id"],
-                message["role"],
-                message["content"],
-                json.dumps(message.get("tool_calls")) if message.get("tool_calls") else None,
-                message.get("created_at"),
-            ))
-            conn.commit()
+        self._chat_db.save_chat_message(message)
 
     def get_messages(self, session_id: str, limit: int = 50, before: str | None = None) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            if before:
-                rows = conn.execute(
-                    "SELECT * FROM chat_messages WHERE session_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT ?",
-                    (session_id, before, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
-                    (session_id, limit),
-                ).fetchall()
-            results = []
-            for row in rows:
-                d = dict(row)
-                if d.get("tool_calls"):
-                    d["tool_calls"] = json.loads(d["tool_calls"])
-                results.append(d)
-            return list(reversed(results))
+        return self._chat_db.get_chat_messages(session_id, limit, before)
 
-    def log_tool_call(
-        self,
-        session_id: str,
-        tool_name: str,
-        arguments: dict,
-        status: str = "pending",
-    ) -> str:
-        call_id = str(uuid.uuid4())[:8]
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "INSERT INTO tool_calls (id, session_id, tool_name, arguments, status) VALUES (?, ?, ?, ?, ?)",
-                (call_id, session_id, tool_name, json.dumps(arguments), status),
-            )
-            conn.commit()
-        return call_id
+    # ─── Delegated: Tool calls ────────────────────────────────────
+
+    def log_tool_call(self, session_id: str, tool_name: str, arguments: dict, status: str = "pending") -> str:
+        return self._chat_db.log_tool_call(session_id, tool_name, arguments, status)
 
     def update_tool_call(self, call_id: str, result: Any, status: str) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE tool_calls SET result = ?, status = ? WHERE id = ?",
-                (json.dumps(result), status, call_id),
-            )
-            conn.commit()
+        self._chat_db.update_tool_call(call_id, result, status)
 
     def get_tool_calls(self, session_id: str) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM tool_calls WHERE session_id = ? ORDER BY created_at DESC",
-                (session_id,),
-            ).fetchall()
-            return [dict(row) for row in rows]
+        return self._chat_db.get_tool_calls(session_id)
 
-    def create_research_session(self, wiki_id: str, query: str) -> str:
-        session_id = str(uuid.uuid4())[:8]
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "INSERT INTO research_sessions (id, wiki_id, query) VALUES (?, ?, ?)",
-                (session_id, wiki_id, query),
-            )
-            conn.commit()
-        return session_id
-
-    def update_research_progress(self, session_id: str, progress: float, wiki_page_name: str | None = None) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            if wiki_page_name:
-                conn.execute(
-                    "UPDATE research_sessions SET progress = ?, wiki_page_name = ?, status = 'done' WHERE id = ?",
-                    (progress, wiki_page_name, session_id),
-                )
-            else:
-                conn.execute(
-                    "UPDATE research_sessions SET progress = ? WHERE id = ?",
-                    (progress, session_id),
-                )
-            conn.commit()
-
-    def get_research_session(self, session_id: str) -> dict | None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM research_sessions WHERE id = ?", (session_id,)
-            ).fetchone()
-            if row is None:
-                return None
-            return dict(row)
-
-    def list_research_sessions(self, wiki_id: str | None = None) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            if wiki_id:
-                rows = conn.execute(
-                    """SELECT rs.*,
-                       (SELECT COUNT(*) FROM research_sub_queries WHERE session_id = rs.id) as sub_query_count,
-                       (SELECT COUNT(*) FROM research_sources WHERE session_id = rs.id) as source_count
-                    FROM research_sessions rs
-                    WHERE rs.wiki_id = ?
-                    ORDER BY rs.created_at DESC""",
-                    (wiki_id,),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """SELECT rs.*,
-                       (SELECT COUNT(*) FROM research_sub_queries WHERE session_id = rs.id) as sub_query_count,
-                       (SELECT COUNT(*) FROM research_sources WHERE session_id = rs.id) as source_count
-                    FROM research_sessions rs
-                    ORDER BY rs.created_at DESC"""
-                ).fetchall()
-            return [dict(row) for row in rows]
-
-    def update_research_status(
-        self,
-        session_id: str,
-        status: str,
-        step: str | None = None,
-        iteration_round: int | None = None,
-        synthesis_json: str | None = None,
-        review_json: str | None = None,
-    ) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            sets = ["status = ?", "updated_at = datetime('now')"]
-            params: list = [status]
-            if step:
-                sets.append("current_step = ?")
-                params.append(step)
-            if iteration_round is not None:
-                sets.append("iteration_round = ?")
-                params.append(iteration_round)
-            if synthesis_json is not None:
-                sets.append("synthesis_json = ?")
-                params.append(synthesis_json)
-            if review_json is not None:
-                sets.append("review_json = ?")
-                params.append(review_json)
-            params.append(session_id)
-            conn.execute(
-                f"UPDATE research_sessions SET {', '.join(sets)} WHERE id = ?",
-                params,
-            )
-            conn.commit()
-
-    def persist_report(self, session_id: str, result: str | None = None) -> None:
-        """Persist report data without changing status (safe to call mid-pipeline)."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE research_sessions SET result = ?, updated_at = datetime('now') WHERE id = ?",
-                (result, session_id),
-            )
-            conn.commit()
-
-    def finalize_research(self, session_id: str, result: str | None = None, wiki_page_name: str | None = None) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE research_sessions SET status = 'done', result = ?, wiki_page_name = ?, updated_at = datetime('now') WHERE id = ?",
-                (result, wiki_page_name, session_id),
-            )
-            conn.commit()
-
-    def delete_research(self, session_id: str) -> bool:
-        """Delete a research session and its related data."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("DELETE FROM research_sources WHERE session_id = ?", (session_id,))
-            conn.execute("DELETE FROM research_sub_queries WHERE session_id = ?", (session_id,))
-            cursor = conn.execute("DELETE FROM research_sessions WHERE id = ?", (session_id,))
-            conn.commit()
-            return cursor.rowcount > 0
-
-    def save_sub_query(self, session_id: str, query: str, source_type: str, url: str | None = None) -> str:
-        sq_id = str(uuid.uuid4())[:8]
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "INSERT INTO research_sub_queries (id, session_id, query, source_type, url) VALUES (?, ?, ?, ?, ?)",
-                (sq_id, session_id, query, source_type, url),
-            )
-            conn.commit()
-        return sq_id
-
-    def get_sub_queries(self, session_id: str) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM research_sub_queries WHERE session_id = ? ORDER BY created_at",
-                (session_id,),
-            ).fetchall()
-            results = []
-            for row in rows:
-                d = dict(row)
-                if d.get("result"):
-                    d["result"] = json.loads(d["result"])
-                results.append(d)
-            return results
-
-    def update_sub_query(self, sq_id: str, status: str, result: dict | None = None, error: str | None = None) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            if status == "done":
-                conn.execute(
-                    "UPDATE research_sub_queries SET status = ?, result = ?, completed_at = datetime('now') WHERE id = ?",
-                    (status, json.dumps(result) if result else None, sq_id),
-                )
-            elif status == "failed":
-                conn.execute(
-                    "UPDATE research_sub_queries SET status = ?, error = ?, completed_at = datetime('now') WHERE id = ?",
-                    (status, error, sq_id),
-                )
-            else:
-                conn.execute(
-                    "UPDATE research_sub_queries SET status = ? WHERE id = ?",
-                    (status, sq_id),
-                )
-            conn.commit()
-
-    def save_source(self, session_id: str, sub_query_id: str, source_type: str, url: str, title: str, content_length: int, content_preview: str | None = None, content: str | None = None) -> str:
-        source_id = str(uuid.uuid4())[:8]
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "INSERT INTO research_sources (id, session_id, sub_query_id, source_type, url, title, content_length, content_preview, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (source_id, session_id, sub_query_id, source_type, url, title, content_length, content_preview, content),
-            )
-            conn.commit()
-        return source_id
-
-    def get_sources(self, session_id: str) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM research_sources WHERE session_id = ? ORDER BY created_at",
-                (session_id,),
-            ).fetchall()
-            results = []
-            for row in rows:
-                d = dict(row)
-                if d.get("analysis"):
-                    d["analysis"] = json.loads(d["analysis"])
-                results.append(d)
-            return results
-
-    def update_source_analysis(self, source_id: str, analysis: dict) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE research_sources SET analysis = ? WHERE id = ?",
-                (json.dumps(analysis), source_id),
-            )
-            conn.commit()
-
-    def rate_source(self, source_id: str, rating: int) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE research_sources SET rating = ? WHERE id = ?",
-                (rating, source_id),
-            )
-            conn.commit()
-
-    def get_source_count(self, session_id: str) -> int:
-        with sqlite3.connect(self.db_path) as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) as count FROM research_sources WHERE session_id = ?",
-                (session_id,),
-            ).fetchone()
-            return row[0] if row else 0
-
-    def _init_tables(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            # Migrate research_sessions: add columns if missing
-            for col, col_type in [
-                ("current_step", "TEXT"),
-                ("result", "TEXT"),
-                ("updated_at", "TEXT"),
-                ("iteration_round", "INTEGER DEFAULT 1"),
-                ("max_rounds", "INTEGER DEFAULT 5"),
-                ("knowledge_gaps", "TEXT"),
-                ("quality_score", "INTEGER DEFAULT 0"),
-                ("synthesis_json", "TEXT"),
-                ("review_json", "TEXT"),
-            ]:
-                try:
-                    conn.execute(f"ALTER TABLE research_sessions ADD COLUMN {col} {col_type}")
-                except sqlite3.OperationalError:
-                    pass  # column already exists
-            # Migrate status default
-            try:
-                conn.execute("UPDATE research_sessions SET status = 'planning' WHERE status = 'running'")
-            except sqlite3.OperationalError:
-                pass
-
-            # Migrate research_sources: add content column if missing
-            try:
-                conn.execute("ALTER TABLE research_sources ADD COLUMN content TEXT")
-            except sqlite3.OperationalError:
-                pass  # column already exists
-
-            # Backfill result JSON for existing done sessions missing quality_score
-            try:
-                import json as _json
-                rows = conn.execute(
-                    "SELECT id, result, review_json, synthesis_json, iteration_round "
-                    "FROM research_sessions WHERE status = 'done'"
-                ).fetchall()
-                for sid, result_raw, review_raw, synth_raw, iteration_round in rows:
-                    if not result_raw:
-                        continue
-                    try:
-                        result = _json.loads(result_raw)
-                    except (_json.JSONDecodeError, TypeError):
-                        continue
-                    if "quality_score" in result:
-                        continue  # already backfilled
-                    # Extract quality_score from review_json
-                    quality_score = 0
-                    if review_raw:
-                        try:
-                            review = _json.loads(review_raw)
-                            quality_score = review.get("score", 0)
-                        except (_json.JSONDecodeError, TypeError):
-                            pass
-                    # Extract synthesis_summary from synthesis_json
-                    synthesis_summary = {
-                        "reinforced_claims": 0,
-                        "contradictions": 0,
-                        "knowledge_gaps": 0,
-                    }
-                    if synth_raw:
-                        try:
-                            synth = _json.loads(synth_raw)
-                            synthesis_summary["reinforced_claims"] = len(synth.get("reinforced_claims", []))
-                            synthesis_summary["contradictions"] = len(synth.get("contradictions", []))
-                            synthesis_summary["knowledge_gaps"] = len(synth.get("knowledge_gaps", []))
-                        except (_json.JSONDecodeError, TypeError):
-                            pass
-                    # Get sources from research_sources table
-                    source_rows = conn.execute(
-                        "SELECT id, title, url, source_type FROM research_sources WHERE session_id = ?",
-                        (sid,),
-                    ).fetchall()
-                    sources = [
-                        {"id": sr[0], "title": sr[1] or "", "url": sr[2] or "", "source_type": sr[3] or ""}
-                        for sr in source_rows
-                    ]
-                    # Merge into result
-                    result["quality_score"] = quality_score
-                    result["rounds"] = iteration_round or 1
-                    result["synthesis_summary"] = synthesis_summary
-                    result["sources"] = sources
-                    conn.execute(
-                        "UPDATE research_sessions SET result = ? WHERE id = ?",
-                        (_json.dumps(result), sid),
-                    )
-                conn.commit()
-            except sqlite3.OperationalError:
-                pass
-
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS chat_messages (
-                    id TEXT PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    tool_calls TEXT,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_chat_messages_session
-                ON chat_messages(session_id, created_at DESC)
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS dream_proposals (
-                    id TEXT PRIMARY KEY,
-                    wiki_id TEXT NOT NULL,
-                    page_name TEXT NOT NULL,
-                    edit_type TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    reason TEXT,
-                    content_length INTEGER,
-                    source_entries TEXT,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    created_at TEXT DEFAULT (datetime('now')),
-                    reviewed_at TEXT
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_dream_proposals_wiki_status
-                ON dream_proposals(wiki_id, status)
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS notifications (
-                    id TEXT PRIMARY KEY,
-                    wiki_id TEXT NOT NULL,
-                    type TEXT NOT NULL,
-                    message TEXT NOT NULL,
-                    data TEXT,
-                    read INTEGER DEFAULT 0,
-                    timestamp TEXT DEFAULT (datetime('now'))
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notifications_wiki_read
-                ON notifications(wiki_id, read)
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS confirmations (
-                    id TEXT PRIMARY KEY,
-                    wiki_id TEXT NOT NULL,
-                    tool TEXT NOT NULL,
-                    arguments TEXT NOT NULL,
-                    action_type TEXT,
-                    impact TEXT,
-                    group_name TEXT,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    created_at TEXT DEFAULT (datetime('now'))
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_confirmations_wiki_status
-                ON confirmations(wiki_id, status)
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS ingest_log (
-                    id TEXT PRIMARY KEY,
-                    wiki_id TEXT NOT NULL,
-                    tool TEXT NOT NULL,
-                    arguments TEXT NOT NULL,
-                    result_summary TEXT,
-                    status TEXT NOT NULL,
-                    timestamp TEXT DEFAULT (datetime('now'))
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_ingest_log_wiki
-                ON ingest_log(wiki_id, timestamp DESC)
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS research_sub_queries (
-                    id TEXT PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    query TEXT NOT NULL,
-                    source_type TEXT NOT NULL,
-                    url TEXT,
-                    status TEXT DEFAULT 'pending',
-                    result TEXT,
-                    error TEXT,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    completed_at TEXT,
-                    FOREIGN KEY (session_id) REFERENCES research_sessions(id)
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_sub_queries_session
-                ON research_sub_queries(session_id, status)
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS research_sources (
-                    id TEXT PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    sub_query_id TEXT,
-                    source_type TEXT NOT NULL,
-                    url TEXT,
-                    title TEXT,
-                    content_length INTEGER,
-                    content_preview TEXT,
-                    content TEXT,
-                    analysis TEXT,
-                    rating INTEGER,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    FOREIGN KEY (session_id) REFERENCES research_sessions(id),
-                    FOREIGN KEY (sub_query_id) REFERENCES research_sub_queries(id)
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_sources_session
-                ON research_sources(session_id)
-            """)
-
-            # ─── PPT Tasks (v0.5) ─────────────────────────────────
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS ppt_tasks (
-                    id TEXT PRIMARY KEY,
-                    title TEXT,
-                    subtitle TEXT,
-                    theme TEXT,
-                    source_type TEXT,
-                    source_id TEXT,
-                    outline_json TEXT,
-                    presentation_json TEXT,
-                    status TEXT NOT NULL,
-                    error TEXT,
-                    slide_count INTEGER DEFAULT 0,
-                    model_used TEXT,
-                    generation_time_ms INTEGER,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    updated_at TEXT DEFAULT (datetime('now'))
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_ppt_tasks_updated
-                ON ppt_tasks(updated_at DESC)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_ppt_tasks_status
-                ON ppt_tasks(status)
-            """)
-
-            # ─── PPTChat sessions + messages ─────────────────────
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS ppt_chat_sessions (
-                    id TEXT PRIMARY KEY,
-                    ppt_task_id TEXT NOT NULL,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    updated_at TEXT DEFAULT (datetime('now'))
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_ppt_chat_sessions_task
-                ON ppt_chat_sessions(ppt_task_id, created_at DESC)
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS ppt_chat_messages (
-                    id TEXT PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    created_at TEXT DEFAULT (datetime('now'))
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_ppt_chat_messages_session
-                ON ppt_chat_messages(session_id, created_at DESC)
-            """)
-
-            conn.commit()
+    # ─── Delegated: Dream proposals ───────────────────────────────
 
     def save_proposal(self, proposal: dict) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT OR REPLACE INTO dream_proposals
-                (id, wiki_id, page_name, edit_type, content, reason, content_length,
-                 source_entries, status, created_at, reviewed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                proposal["id"],
-                proposal.get("wiki_id"),
-                proposal["page_name"],
-                proposal["edit_type"],
-                proposal["content"],
-                proposal.get("reason"),
-                proposal.get("content_length"),
-                json.dumps(proposal.get("source_entries")),
-                proposal["status"],
-                proposal.get("created_at"),
-                proposal.get("reviewed_at"),
-            ))
-            conn.commit()
+        self._chat_db.save_dream_proposal(proposal)
 
     def get_proposals(self, wiki_id: str, status: str | None = None, limit: int = 50) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            if status:
-                rows = conn.execute(
-                    "SELECT * FROM dream_proposals WHERE wiki_id = ? AND status = ? ORDER BY created_at DESC LIMIT ?",
-                    (wiki_id, status, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM dream_proposals WHERE wiki_id = ? ORDER BY created_at DESC LIMIT ?",
-                    (wiki_id, limit),
-                ).fetchall()
-            results = []
-            for row in rows:
-                d = dict(row)
-                if d.get("source_entries"):
-                    d["source_entries"] = json.loads(d["source_entries"])
-                results.append(d)
-            return results
+        return self._chat_db.get_dream_proposals(wiki_id, status, limit)
 
     def update_proposal_status(self, proposal_id: str, status: str) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE dream_proposals SET status = ?, reviewed_at = datetime('now') WHERE id = ?",
-                (status, proposal_id),
-            )
-            conn.commit()
+        self._chat_db.update_dream_proposal_status(proposal_id, status)
 
     def get_proposal_stats(self, wiki_id: str) -> dict:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT status, COUNT(*) as count FROM dream_proposals WHERE wiki_id = ? GROUP BY status",
-                (wiki_id,),
-            ).fetchall()
-            stats = {"pending": 0, "approved": 0, "rejected": 0, "auto_approved": 0, "applied": 0}
-            for row in rows:
-                s = row["status"]
-                if s in stats:
-                    stats[s] = row["count"]
-            return stats
+        return self._chat_db.get_dream_proposal_stats(wiki_id)
+
+    # ─── Delegated: Notifications ─────────────────────────────────
 
     def save_notification(self, n: dict) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT INTO notifications (id, wiki_id, type, message, data, read, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                n["id"],
-                n.get("wiki_id"),
-                n["type"],
-                n["message"],
-                json.dumps(n.get("data")) if n.get("data") else None,
-                1 if n.get("read") else 0,
-                n.get("timestamp"),
-            ))
-            conn.commit()
+        self._chat_db.save_notification(n)
 
     def list_notifications(self, wiki_id: str, unread_only: bool = False) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            if unread_only:
-                rows = conn.execute(
-                    "SELECT * FROM notifications WHERE wiki_id = ? AND read = 0 ORDER BY timestamp DESC",
-                    (wiki_id,),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM notifications WHERE wiki_id = ? ORDER BY timestamp DESC",
-                    (wiki_id,),
-                ).fetchall()
-            results = []
-            for row in rows:
-                d = dict(row)
-                d["read"] = bool(d["read"])
-                if d.get("data"):
-                    d["data"] = json.loads(d["data"])
-                results.append(d)
-            return results
+        return self._chat_db.list_notifications(wiki_id, unread_only)
 
     def mark_notification_read(self, notification_id: str) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE notifications SET read = 1 WHERE id = ?",
-                (notification_id,),
-            )
-            conn.commit()
+        self._chat_db.mark_notification_read(notification_id)
 
     def get_unread_count(self, wiki_id: str) -> int:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) as count FROM notifications WHERE wiki_id = ? AND read = 0",
-                (wiki_id,),
-            ).fetchone()
-            return row["count"] if row else 0
+        return self._chat_db.get_unread_count(wiki_id)
+
+    # ─── Delegated: Confirmations ─────────────────────────────────
 
     def save_confirmation(self, c: dict) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT INTO confirmations (id, wiki_id, tool, arguments, action_type, impact, group_name, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                c["id"],
-                c.get("wiki_id"),
-                c["tool"],
-                json.dumps(c["arguments"]),
-                c.get("action_type"),
-                json.dumps(c["impact"]) if c.get("impact") else None,
-                c.get("group"),
-                c["status"],
-                c.get("created_at"),
-            ))
-            conn.commit()
+        self._chat_db.save_confirmation(c)
 
     def get_confirmations(self, wiki_id: str, status: str | None = None) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            if status:
-                rows = conn.execute(
-                    "SELECT * FROM confirmations WHERE wiki_id = ? AND status = ? ORDER BY created_at DESC",
-                    (wiki_id, status),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM confirmations WHERE wiki_id = ? ORDER BY created_at DESC",
-                    (wiki_id,),
-                ).fetchall()
-            results = []
-            for row in rows:
-                d = dict(row)
-                d["arguments"] = json.loads(d["arguments"])
-                if d.get("impact"):
-                    d["impact"] = json.loads(d["impact"])
-                results.append(d)
-            return results
+        return self._chat_db.get_confirmations(wiki_id, status)
 
     def update_confirmation_status(self, confirmation_id: str, status: str) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE confirmations SET status = ? WHERE id = ?",
-                (status, confirmation_id),
-            )
-            conn.commit()
+        self._chat_db.update_confirmation_status(confirmation_id, status)
 
     def update_confirmation_arguments(self, confirmation_id: str, arguments: dict) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE confirmations SET arguments = ? WHERE id = ?",
-                (json.dumps(arguments), confirmation_id),
-            )
-            conn.commit()
+        self._chat_db.update_confirmation_arguments(confirmation_id, arguments)
 
     def get_confirmation(self, confirmation_id: str) -> dict | None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM confirmations WHERE id = ?",
-                (confirmation_id,),
-            ).fetchone()
-            if row is None:
-                return None
-            d = dict(row)
-            d["arguments"] = json.loads(d["arguments"])
-            if d.get("impact"):
-                d["impact"] = json.loads(d["impact"])
-            return d
+        return self._chat_db.get_confirmation(confirmation_id)
 
     def delete_confirmation(self, confirmation_id: str) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("DELETE FROM confirmations WHERE id = ?", (confirmation_id,))
-            conn.commit()
+        self._chat_db.delete_confirmation(confirmation_id)
+
+    # ─── Delegated: Ingest log ────────────────────────────────────
 
     def log_ingest(self, entry: dict) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT INTO ingest_log (id, wiki_id, tool, arguments, result_summary, status, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                entry["id"],
-                entry.get("wiki_id"),
-                entry["tool"],
-                json.dumps(entry["arguments"]),
-                entry.get("result_summary"),
-                entry["status"],
-                entry.get("timestamp"),
-            ))
-            conn.commit()
+        self._chat_db.log_ingest(entry)
 
     def get_ingest_log(self, wiki_id: str, limit: int = 20) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM ingest_log WHERE wiki_id = ? ORDER BY timestamp DESC LIMIT ?",
-                (wiki_id, limit),
-            ).fetchall()
-            results = []
-            for row in rows:
-                d = dict(row)
-                d["arguments"] = json.loads(d["arguments"])
-                results.append(d)
-            return results
+        return self._chat_db.get_ingest_log(wiki_id, limit)
 
     def get_ingest_entry(self, ingest_id: str) -> dict | None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM ingest_log WHERE id = ?",
-                (ingest_id,),
-            ).fetchone()
-            if row is None:
-                return None
-            d = dict(row)
-            d["arguments"] = json.loads(d["arguments"])
-            return d
+        return self._chat_db.get_ingest_entry(ingest_id)
 
-    # ─── Data Management Methods ───────────────────────────────────────
+    # ─── Admin/stats (match old AgentDatabase API) ─────────────────
 
     def get_wiki_stats(self, wiki_id: str) -> dict:
-        """Get statistics for a specific wiki.
-
-        Args:
-            wiki_id: Wiki identifier
-
-        Returns:
-            Dict with chat_sessions, research_sessions, research_sources counts
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            chat_count = conn.execute(
-                "SELECT COUNT(*) FROM chat_sessions WHERE wiki_id = ?", (wiki_id,)
-            ).fetchone()[0]
-
-            research_count = conn.execute(
-                "SELECT COUNT(*) FROM research_sessions WHERE wiki_id = ?", (wiki_id,)
-            ).fetchone()[0]
-
-            source_count = conn.execute(
-                """SELECT COUNT(*) FROM research_sources 
-                   WHERE session_id IN (SELECT id FROM research_sessions WHERE wiki_id = ?)""",
-                (wiki_id,)
-            ).fetchone()[0]
-
-            return {
-                "wiki_id": wiki_id,
-                "chat_sessions": chat_count,
-                "research_sessions": research_count,
-                "research_sources": source_count,
-            }
+        """Return stats as flat dict matching old AgentDatabase API."""
+        db_path = self._chat_db.db_path
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            stats: dict[str, Any] = {"wiki_id": wiki_id}
+            for table, col in [
+                ("chat_sessions", "wiki_id"),
+                ("dream_proposals", "wiki_id"),
+                ("notifications", "wiki_id"),
+                ("confirmations", "wiki_id"),
+                ("ingest_log", "wiki_id"),
+            ]:
+                row = conn.execute(
+                    f"SELECT COUNT(*) as cnt FROM {table} WHERE {col} = ?",
+                    (wiki_id,),
+                ).fetchone()
+                stats[table] = row["cnt"] if row else 0
+            row = conn.execute(
+                "SELECT COUNT(*) as cnt FROM autoresearch_sessions WHERE wiki_id = ?",
+                (wiki_id,),
+            ).fetchone()
+            stats["research_sessions"] = row["cnt"] if row else 0
+            # Count sources for research sessions
+            rsids = [r["id"] for r in conn.execute(
+                "SELECT id FROM autoresearch_sessions WHERE wiki_id = ?",
+                (wiki_id,),
+            ).fetchall()]
+            if rsids:
+                placeholders = ",".join("?" * len(rsids))
+                row = conn.execute(
+                    f"SELECT COUNT(*) as cnt FROM autoresearch_sources WHERE session_id IN ({placeholders})",
+                    rsids,
+                ).fetchone()
+                stats["research_sources"] = row["cnt"] if row else 0
+            else:
+                stats["research_sources"] = 0
+        return stats
 
     def list_all_wikis(self) -> list[dict]:
-        """List all wikis with their statistics.
-
-        Returns:
-            List of wiki stats dicts
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            # Get all unique wiki_ids
-            chat_wikis = conn.execute(
-                "SELECT DISTINCT wiki_id FROM chat_sessions WHERE wiki_id IS NOT NULL"
-            ).fetchall()
-            research_wikis = conn.execute(
-                "SELECT DISTINCT wiki_id FROM research_sessions WHERE wiki_id IS NOT NULL"
-            ).fetchall()
-
-            all_wikis = set()
-            for row in chat_wikis:
-                all_wikis.add(row[0])
-            for row in research_wikis:
-                all_wikis.add(row[0])
-
-            result = []
-            for wiki_id in sorted(all_wikis):
-                stats = self.get_wiki_stats(wiki_id)
-                result.append(stats)
-
-            return result
-
-    def delete_wiki_data(self, wiki_id: str) -> dict:
-        """Delete all data for a specific wiki.
-
-        Args:
-            wiki_id: Wiki identifier
-
-        Returns:
-            Dict with counts of deleted records
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            # Get chat session IDs for this wiki
-            chat_sessions = conn.execute(
-                "SELECT id FROM chat_sessions WHERE wiki_id = ?", (wiki_id,)
-            ).fetchall()
-            chat_ids = [row[0] for row in chat_sessions]
-
-            # Delete chat-related data
-            if chat_ids:
-                placeholders = ",".join("?" * len(chat_ids))
-                conn.execute(f"DELETE FROM chat_messages WHERE session_id IN ({placeholders})", chat_ids)
-                conn.execute(f"DELETE FROM tool_calls WHERE session_id IN ({placeholders})", chat_ids)
-
-            cur_chat = conn.execute("DELETE FROM chat_sessions WHERE wiki_id = ?", (wiki_id,))
-
-            # Get research session IDs for this wiki
-            research_sessions = conn.execute(
-                "SELECT id FROM research_sessions WHERE wiki_id = ?", (wiki_id,)
-            ).fetchall()
-            research_ids = [row[0] for row in research_sessions]
-
-            # Delete research-related data
-            if research_ids:
-                placeholders = ",".join("?" * len(research_ids))
-                conn.execute(f"DELETE FROM research_sources WHERE session_id IN ({placeholders})", research_ids)
-                conn.execute(f"DELETE FROM research_sub_queries WHERE session_id IN ({placeholders})", research_ids)
-
-            cur_research = conn.execute("DELETE FROM research_sessions WHERE wiki_id = ?", (wiki_id,))
-
-            # Delete ingest log
-            cur_ingest = conn.execute("DELETE FROM ingest_log WHERE wiki_id = ?", (wiki_id,))
-
-            conn.commit()
-
-            return {
-                "chat_sessions": cur_chat.rowcount,
-                "research_sessions": cur_research.rowcount,
-                "tool_calls": len(chat_ids),
-                "ingest_log": cur_ingest.rowcount,
-            }
-
-    def export_wiki_data(self, wiki_id: str) -> dict:
-        """Export all data for a specific wiki.
-
-        Args:
-            wiki_id: Wiki identifier
-
-        Returns:
-            Dict with all wiki data
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-
-            # Export chat data (exclude jwt_token for security)
-            chat_sessions = conn.execute(
-                "SELECT id, wiki_id, created_at, updated_at FROM chat_sessions WHERE wiki_id = ?",
-                (wiki_id,)
-            ).fetchall()
-
-            chat_messages = []
-            for session in chat_sessions:
-                messages = conn.execute(
-                    "SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at",
-                    (session["id"],)
-                ).fetchall()
-                chat_messages.extend([dict(m) for m in messages])
-
-            # Export research data
-            research_sessions = conn.execute(
-                "SELECT * FROM research_sessions WHERE wiki_id = ?", (wiki_id,)
-            ).fetchall()
-
-            research_sources = []
-            research_sub_queries = []
-            for session in research_sessions:
-                sources = conn.execute(
-                    "SELECT * FROM research_sources WHERE session_id = ?",
-                    (session["id"],)
-                ).fetchall()
-                research_sources.extend([dict(s) for s in sources])
-
-                sub_queries = conn.execute(
-                    "SELECT * FROM research_sub_queries WHERE session_id = ?",
-                    (session["id"],)
-                ).fetchall()
-                research_sub_queries.extend([dict(sq) for sq in sub_queries])
-
-            # Export tool calls
-            tool_calls = []
-            for session in chat_sessions:
-                calls = conn.execute(
-                    "SELECT * FROM tool_calls WHERE session_id = ?",
-                    (session["id"],)
-                ).fetchall()
-                tool_calls.extend([dict(c) for c in calls])
-
-            return {
-                "wiki_id": wiki_id,
-                "chat_sessions": [dict(s) for s in chat_sessions],
-                "chat_messages": chat_messages,
-                "research_sessions": [dict(s) for s in research_sessions],
-                "research_sources": research_sources,
-                "research_sub_queries": research_sub_queries,
-                "tool_calls": tool_calls,
-            }
-
-    def get_db_stats(self) -> dict:
-        """Get overall database statistics.
-
-        Returns:
-            Dict with database size and table counts
-        """
-        size_bytes = self.db_path.stat().st_size if self.db_path.exists() else 0
-
-        with sqlite3.connect(self.db_path) as conn:
-            tables = {}
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
-            for row in cursor.fetchall():
-                table_name = row[0]
-                count = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
-                tables[table_name] = count
-
-            return {
-                "db_path": str(self.db_path),
-                "size_bytes": size_bytes,
-                "size_mb": size_bytes / 1024 / 1024,
-                "tables": tables,
-            }
-
-    # ─── PPT Tasks (v0.5) ───────────────────────────────────────
-
-    def create_ppt_task(
-        self,
-        title: str,
-        theme: str,
-        source_type: str | None,
-        source_id: str | None,
-        outline_json: str,
-        slide_count: int = 0,
-    ) -> str:
-        """Create a new PPT task. Returns task_id (12-char hex)."""
-        task_id = uuid.uuid4().hex[:12]
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                INSERT INTO ppt_tasks
-                (id, title, theme, source_type, source_id, outline_json,
-                 status, slide_count)
-                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-                """,
-                (task_id, title, theme, source_type, source_id,
-                 outline_json, slide_count),
-            )
-            conn.commit()
-        return task_id
-
-    def update_ppt_task_status(
-        self, task_id: str, status: str, error: str | None = None,
-    ) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                UPDATE ppt_tasks
-                SET status = ?, error = ?, updated_at = datetime('now')
-                WHERE id = ?
-                """,
-                (status, error, task_id),
-            )
-            conn.commit()
-
-    def set_ppt_task_partial_presentation(
-        self, task_id: str, slides: list[dict],
-    ) -> None:
-        """Persist partial slides JSON (called on each slide_done for reconnect)."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                UPDATE ppt_tasks
-                SET presentation_json = ?, slide_count = ?, updated_at = datetime('now')
-                WHERE id = ?
-                """,
-                (json.dumps({"slides": slides, "partial": True},
-                            ensure_ascii=False),
-                 len(slides), task_id),
-            )
-            conn.commit()
-
-    def update_ppt_task_presentation(
-        self, task_id: str, presentation_dict: dict,
-    ) -> None:
-        """Persist full presentation dict (used by PPTChat turn updates).
-
-        Unlike ``set_ppt_task_partial_presentation`` (which writes a partial
-        stub for incremental slide_done events during async generation), this
-        writes the complete presentation so it can be re-parsed by
-        ``Presentation(**...)`` on subsequent loads.
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                UPDATE ppt_tasks
-                SET presentation_json = ?, updated_at = datetime('now')
-                WHERE id = ?
-                """,
-                (json.dumps(presentation_dict, ensure_ascii=False), task_id),
-            )
-            conn.commit()
-
-    def set_ppt_task_result(
-        self,
-        task_id: str,
-        presentation_dict: dict,
-        model_used: str,
-        generation_time_ms: int,
-    ) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                UPDATE ppt_tasks
-                SET presentation_json = ?, model_used = ?,
-                    generation_time_ms = ?, status = 'done',
-                    updated_at = datetime('now')
-                WHERE id = ?
-                """,
-                (json.dumps(presentation_dict, ensure_ascii=False),
-                 model_used, generation_time_ms, task_id),
-            )
-            conn.commit()
-
-    def get_ppt_task(self, task_id: str) -> dict | None:
-        """Get full task including presentation. Returns None if not found."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM ppt_tasks WHERE id = ?", (task_id,),
-            ).fetchone()
-            if not row:
-                return None
-            d = dict(row)
-            if d.get("presentation_json"):
-                d["presentation"] = json.loads(d["presentation_json"])
-            if d.get("outline_json"):
-                d["outline"] = json.loads(d["outline_json"])
-            return d
-
-    def list_ppt_tasks(
-        self, limit: int = 50, source_type: str | None = None,
-    ) -> list[dict]:
-        """List tasks ordered by updated_at DESC."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            if source_type:
-                rows = conn.execute(
-                    """
-                    SELECT id, title, subtitle, theme, source_type, source_id,
-                           status, error, slide_count, model_used,
-                           generation_time_ms, created_at, updated_at
-                    FROM ppt_tasks WHERE source_type = ?
-                    ORDER BY updated_at DESC LIMIT ?
-                    """,
-                    (source_type, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """
-                    SELECT id, title, subtitle, theme, source_type, source_id,
-                           status, error, slide_count, model_used,
-                           generation_time_ms, created_at, updated_at
-                    FROM ppt_tasks
-                    ORDER BY updated_at DESC LIMIT ?
-                    """,
-                    (limit,),
-                ).fetchall()
-            return [dict(r) for r in rows]
-
-    def delete_ppt_task(self, task_id: str) -> bool:
-        with sqlite3.connect(self.db_path) as conn:
-            cur = conn.execute(
-                "DELETE FROM ppt_tasks WHERE id = ?", (task_id,),
-            )
-            conn.commit()
-            return cur.rowcount > 0
-
-    def cleanup_old_ppt_tasks(self, days: int = 30) -> int:
-        """Delete tasks older than N days. Returns count deleted."""
-        with sqlite3.connect(self.db_path) as conn:
-            cur = conn.execute(
-                """
-                DELETE FROM ppt_tasks
-                WHERE updated_at < datetime('now', ?)
-                """,
-                (f"-{days} days",),
-            )
-            conn.commit()
-            return cur.rowcount
-
-    # ─── PPTChat CRUD ─────────────────────────────────────────────
-
-    def create_ppt_chat_session(self, ppt_task_id: str) -> str:
-        """Create a PPTChat session. Returns session_id (8-char hex)."""
-        session_id = uuid.uuid4().hex[:8]
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "INSERT INTO ppt_chat_sessions (id, ppt_task_id) VALUES (?, ?)",
-                (session_id, ppt_task_id),
-            )
-            conn.commit()
-        return session_id
-
-    def save_ppt_chat_message(
-        self, session_id: str, role: str, content: str,
-    ) -> None:
-        """Save a chat message to the session."""
-        msg_id = uuid.uuid4().hex[:8]
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "INSERT INTO ppt_chat_messages (id, session_id, role, content) "
-                "VALUES (?, ?, ?, ?)",
-                (msg_id, session_id, role, content),
-            )
-            conn.execute(
-                "UPDATE ppt_chat_sessions SET updated_at = datetime('now') WHERE id = ?",
-                (session_id,),
-            )
-            conn.commit()
-
-    def get_ppt_chat_messages(
-        self, session_id: str, limit: int = 50,
-    ) -> list[dict]:
-        """Get chat messages for a session, oldest first."""
-        with sqlite3.connect(self.db_path) as conn:
+        """List all wikis with stats, matching old AgentDatabase API."""
+        db_path = self._chat_db.db_path
+        with sqlite3.connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                "SELECT * FROM ppt_chat_messages "
-                "WHERE session_id = ? "
-                "ORDER BY created_at DESC LIMIT ?",
-                (session_id, limit),
+                """SELECT DISTINCT wiki_id
+                   FROM chat_sessions WHERE wiki_id IS NOT NULL
+                   UNION
+                   SELECT DISTINCT wiki_id
+                   FROM autoresearch_sessions WHERE wiki_id IS NOT NULL"""
             ).fetchall()
-        return [dict(r) for r in reversed(rows)]
+            result = []
+            for r in rows:
+                wid = r["wiki_id"]
+                stats = self.get_wiki_stats(wid)
+                result.append(stats)
+            return sorted(result, key=lambda x: x.get("wiki_id", ""))
 
-    def get_ppt_chat_session(self, session_id: str) -> dict | None:
-        """Get a single PPTChat session."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM ppt_chat_sessions WHERE id = ?",
-                (session_id,),
-            ).fetchone()
-        return dict(row) if row else None
+    def delete_wiki_data(self, wiki_id: str) -> dict:
+        """Delete all data for a wiki. Returns flat count dict."""
+        db_path = self._chat_db.db_path
+        result: dict[str, int] = {}
+        with sqlite3.connect(db_path) as conn:
+            # Delete research sources and sub-queries first (cascade)
+            rsids = [r[0] for r in conn.execute(
+                "SELECT id FROM autoresearch_sessions WHERE wiki_id = ?",
+                (wiki_id,),
+            ).fetchall()]
+            if rsids:
+                placeholders = ",".join("?" * len(rsids))
+                conn.execute(
+                    f"DELETE FROM autoresearch_sources WHERE session_id IN ({placeholders})",
+                    rsids,
+                )
+                conn.execute(
+                    f"DELETE FROM autoresearch_sub_queries WHERE session_id IN ({placeholders})",
+                    rsids,
+                )
+                conn.execute(
+                    f"DELETE FROM research_steps WHERE session_id IN ({placeholders})",
+                    rsids,
+                )
+            # Delete sessions
+            for table, col in [
+                ("chat_sessions", "wiki_id"),
+                ("dream_proposals", "wiki_id"),
+                ("notifications", "wiki_id"),
+                ("confirmations", "wiki_id"),
+                ("ingest_log", "wiki_id"),
+            ]:
+                cursor = conn.execute(
+                    f"DELETE FROM {table} WHERE {col} = ?", (wiki_id,),
+                )
+                result[table] = cursor.rowcount
+            cursor = conn.execute(
+                "DELETE FROM autoresearch_sessions WHERE wiki_id = ?",
+                (wiki_id,),
+            )
+            result["research_sessions"] = cursor.rowcount
+            # Cascade: delete messages and tool_calls for deleted sessions
+            cursor = conn.execute(
+                "DELETE FROM chat_messages WHERE session_id NOT IN "
+                "(SELECT id FROM chat_sessions)",
+            )
+            result["chat_messages"] = cursor.rowcount
+            cursor = conn.execute(
+                "DELETE FROM tool_calls WHERE session_id NOT IN "
+                "(SELECT id FROM chat_sessions)",
+            )
+            result["tool_calls"] = cursor.rowcount
+            conn.commit()
+        return result
 
-    def list_ppt_chat_sessions(
-        self, ppt_task_id: str | None = None,
-    ) -> list[dict]:
-        """List PPTChat sessions, optionally filtered by task."""
-        with sqlite3.connect(self.db_path) as conn:
+    def export_wiki_data(self, wiki_id: str) -> dict:
+        """Export data matching old AgentDatabase API key structure.
+
+        Queries autoresearch.db (via ChatDatabase) for all tables.
+        """
+        data: dict[str, Any] = {}
+        db_path = self._chat_db.db_path
+        with sqlite3.connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
-            if ppt_task_id:
+            # chat_sessions (exclude jwt_token)
+            rows = conn.execute(
+                "SELECT id, wiki_id, created_at, updated_at FROM chat_sessions WHERE wiki_id = ?",
+                (wiki_id,),
+            ).fetchall()
+            data["chat_sessions"] = [dict(r) for r in rows]
+            # chat_messages (joined via session)
+            session_ids = [r["id"] for r in rows]
+            if session_ids:
+                placeholders = ",".join("?" * len(session_ids))
                 rows = conn.execute(
-                    "SELECT * FROM ppt_chat_sessions "
-                    "WHERE ppt_task_id = ? "
-                    "ORDER BY updated_at DESC",
-                    (ppt_task_id,),
+                    f"SELECT * FROM chat_messages WHERE session_id IN ({placeholders})",
+                    session_ids,
                 ).fetchall()
             else:
+                rows = []
+            data["chat_messages"] = [dict(r) for r in rows]
+            # tool_calls (joined via session)
+            if session_ids:
                 rows = conn.execute(
-                    "SELECT * FROM ppt_chat_sessions "
-                    "ORDER BY updated_at DESC"
+                    f"SELECT * FROM tool_calls WHERE session_id IN ({placeholders})",
+                    session_ids,
                 ).fetchall()
-        return [dict(r) for r in rows]
+            else:
+                rows = []
+            data["tool_calls"] = [dict(r) for r in rows]
+            # research_sessions
+            rows = conn.execute(
+                "SELECT * FROM autoresearch_sessions WHERE wiki_id = ?",
+                (wiki_id,),
+            ).fetchall()
+            data["research_sessions"] = [dict(r) for r in rows]
+            # research_sub_queries
+            rsids = [r["id"] for r in rows]
+            if rsids:
+                placeholders = ",".join("?" * len(rsids))
+                rows = conn.execute(
+                    f"SELECT * FROM autoresearch_sub_queries WHERE session_id IN ({placeholders})",
+                    rsids,
+                ).fetchall()
+            else:
+                rows = []
+            data["research_sub_queries"] = [dict(r) for r in rows]
+            # research_sources
+            if rsids:
+                rows = conn.execute(
+                    f"SELECT * FROM autoresearch_sources WHERE session_id IN ({placeholders})",
+                    rsids,
+                ).fetchall()
+            else:
+                rows = []
+            data["research_sources"] = [dict(r) for r in rows]
+        return data
 
-    def delete_ppt_chat_session(self, session_id: str) -> bool:
-        """Delete a PPTChat session and its messages."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "DELETE FROM ppt_chat_messages WHERE session_id = ?",
-                (session_id,),
-            )
-            cur = conn.execute(
-                "DELETE FROM ppt_chat_sessions WHERE id = ?",
-                (session_id,),
-            )
-            conn.commit()
-            return cur.rowcount > 0
+    def get_db_stats(self) -> dict:
+        """Return stats matching old AgentDatabase API."""
+        db_path = self._chat_db.db_path
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            tables = {}
+            for table in [
+                "chat_sessions", "chat_messages", "tool_calls",
+                "autoresearch_sessions", "autoresearch_sub_queries",
+                "autoresearch_sources", "research_steps",
+            ]:
+                try:
+                    row = conn.execute(f"SELECT COUNT(*) as cnt FROM {table}").fetchone()
+                    tables[table] = row["cnt"] if row else 0
+                except Exception:
+                    tables[table] = 0
+            # Map to old API key names
+            tables["research_sessions"] = tables.pop("autoresearch_sessions", 0)
+            tables["research_sources"] = tables.pop("autoresearch_sources", 0)
+            tables["research_sub_queries"] = tables.pop("autoresearch_sub_queries", 0)
+        size_bytes = db_path.stat().st_size if db_path.exists() else 0
+        return {
+            "size_bytes": size_bytes,
+            "size_mb": size_bytes / 1024 / 1024,
+            "tables": tables,
+        }
+
+    # ─── Delegated: Research methods ──────────────────────────────
+
+    def create_research_session(self, wiki_id: str, query: str) -> str:
+        return self._chat_db.create_research_session(wiki_id, query)
+
+    def get_research_session(self, session_id: str) -> dict | None:
+        return self._chat_db.get_research_session(session_id)
+
+    def list_research_sessions(self, wiki_id: str | None = None) -> list[dict]:
+        return self._chat_db.list_research_sessions(wiki_id)
+
+    def update_research_status(self, session_id: str, status: str, step: str | None = None, iteration_round: int | None = None, synthesis_json: str | None = None, review_json: str | None = None) -> None:
+        self._chat_db.update_research_status(session_id, status, step, iteration_round, synthesis_json, review_json)
+
+    def update_research_progress(self, session_id: str, progress: float, wiki_page_name: str | None = None) -> None:
+        self._chat_db.update_research_progress(session_id, progress, wiki_page_name)
+
+    def persist_report(self, session_id: str, result: str | None = None) -> None:
+        self._chat_db.persist_report(session_id, result)
+
+    def finalize_research(self, session_id: str, result: str | None = None, wiki_page_name: str | None = None) -> None:
+        self._chat_db.finalize_research(session_id, result, wiki_page_name)
+
+    def delete_research(self, session_id: str) -> bool:
+        return self._chat_db.delete_research(session_id)
+
+    def save_sub_query(self, session_id: str, query: str, source_type: str, url: str | None = None) -> str:
+        return self._chat_db.save_sub_query(session_id, query, source_type, url)
+
+    def get_sub_queries(self, session_id: str) -> list[dict]:
+        return self._chat_db.get_sub_queries(session_id)
+
+    def update_sub_query(self, sq_id: str, status: str, result: dict | None = None, error: str | None = None) -> None:
+        self._chat_db.update_sub_query(sq_id, status, result, error)
+
+    def save_source(self, session_id: str, sub_query_id: str, source_type: str, url: str, title: str, content_length: int, content_preview: str | None = None, content: str | None = None) -> str:
+        return self._chat_db.save_source(session_id, sub_query_id, source_type, url, title, content_length, content_preview, content)
+
+    def get_sources(self, session_id: str) -> list[dict]:
+        return self._chat_db.get_sources(session_id)
+
+    def update_source_analysis(self, source_id: str, analysis: dict) -> None:
+        self._chat_db.update_source_analysis(source_id, analysis)
+
+    def rate_source(self, source_id: str, rating: int) -> None:
+        self._chat_db.rate_source(source_id, rating)
+
+    def get_source_count(self, session_id: str) -> int:
+        return self._chat_db.get_source_count(session_id)
+
+
