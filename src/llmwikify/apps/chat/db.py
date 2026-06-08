@@ -300,6 +300,138 @@ class ChatDatabase:
                 ON research_steps(session_id, step_num)
                 """
             )
+            # ── Chat sessions/messages (migrated from AgentDatabase) ──
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS chat_sessions (
+                    id TEXT PRIMARY KEY,
+                    wiki_id TEXT,
+                    jwt_token TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT DEFAULT (datetime('now'))
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    tool_calls TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_chat_messages_session
+                ON chat_messages(session_id, created_at DESC)
+                """
+            )
+            # ── Tool calls ──
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tool_calls (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT,
+                    tool_name TEXT NOT NULL,
+                    arguments TEXT NOT NULL,
+                    result TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
+                )
+                """
+            )
+            # ── Dream proposals ──
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS dream_proposals (
+                    id TEXT PRIMARY KEY,
+                    wiki_id TEXT NOT NULL,
+                    page_name TEXT NOT NULL,
+                    edit_type TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    reason TEXT,
+                    content_length INTEGER,
+                    source_entries TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TEXT DEFAULT (datetime('now')),
+                    reviewed_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_dream_proposals_wiki_status
+                ON dream_proposals(wiki_id, status)
+                """
+            )
+            # ── Notifications ──
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id TEXT PRIMARY KEY,
+                    wiki_id TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    data TEXT,
+                    read INTEGER DEFAULT 0,
+                    timestamp TEXT DEFAULT (datetime('now'))
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_notifications_wiki_read
+                ON notifications(wiki_id, read)
+                """
+            )
+            # ── Confirmations ──
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS confirmations (
+                    id TEXT PRIMARY KEY,
+                    wiki_id TEXT NOT NULL,
+                    tool TEXT NOT NULL,
+                    arguments TEXT NOT NULL,
+                    action_type TEXT,
+                    impact TEXT,
+                    group_name TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TEXT DEFAULT (datetime('now'))
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_confirmations_wiki_status
+                ON confirmations(wiki_id, status)
+                """
+            )
+            # ── Ingest log ──
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ingest_log (
+                    id TEXT PRIMARY KEY,
+                    wiki_id TEXT NOT NULL,
+                    tool TEXT NOT NULL,
+                    arguments TEXT NOT NULL,
+                    result_summary TEXT,
+                    status TEXT NOT NULL,
+                    timestamp TEXT DEFAULT (datetime('now'))
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_ingest_log_wiki
+                ON ingest_log(wiki_id, timestamp DESC)
+                """
+            )
             conn.commit()
 
     def _check_db_size(self) -> None:
@@ -867,6 +999,543 @@ class ChatDatabase:
         if not step:
             return None
         return step.get("result")
+
+    # ─── Chat sessions/messages (migrated from AgentDatabase) ──────
+
+    def create_chat_session(
+        self,
+        wiki_id: str | None = None,
+        jwt_token: str | None = None,
+    ) -> str:
+        session_id = uuid.uuid4().hex
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO chat_sessions (id, wiki_id, jwt_token)
+                   VALUES (?, ?, ?)""",
+                (session_id, wiki_id, jwt_token),
+            )
+            conn.commit()
+        return session_id
+
+    def get_chat_session(self, session_id: str) -> dict | None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM chat_sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def update_chat_session_wiki(
+        self, session_id: str, wiki_id: str
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE chat_sessions
+                   SET wiki_id = ?, updated_at = datetime('now')
+                   WHERE id = ?""",
+                (wiki_id, session_id),
+            )
+            conn.commit()
+
+    def update_chat_session_jwt(
+        self, session_id: str, jwt_token: str
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE chat_sessions
+                   SET jwt_token = ?, updated_at = datetime('now')
+                   WHERE id = ?""",
+                (jwt_token, session_id),
+            )
+            conn.commit()
+
+    def list_chat_sessions(self) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM chat_sessions ORDER BY created_at DESC"
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def delete_chat_session(self, session_id: str) -> bool:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "DELETE FROM chat_sessions WHERE id = ?",
+                (session_id,),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_chat_session_title(self, session_id: str) -> str:
+        session = self.get_chat_session(session_id)
+        if not session:
+            return ""
+        messages = self.get_chat_messages(session_id, limit=2)
+        for m in messages:
+            if m.get("role") == "user":
+                content = m.get("content", "")
+                return content[:100] if content else ""
+        return ""
+
+    def save_chat_message(self, message: dict) -> None:
+        msg_id = message.get("id", uuid.uuid4().hex)
+        session_id = message.get("session_id", "")
+        role = message.get("role", "")
+        content = message.get("content", "")
+        tool_calls = json.dumps(message["tool_calls"]) if message.get("tool_calls") else None
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO chat_messages
+                   (id, session_id, role, content, tool_calls)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (msg_id, session_id, role, content, tool_calls),
+            )
+            conn.commit()
+
+    def get_chat_messages(
+        self,
+        session_id: str,
+        limit: int = 50,
+        before: str | None = None,
+    ) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if before:
+                rows = conn.execute(
+                    """SELECT * FROM chat_messages
+                       WHERE session_id = ? AND created_at < ?
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (session_id, before, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT * FROM chat_messages
+                       WHERE session_id = ?
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (session_id, limit),
+                ).fetchall()
+            return [dict(r) for r in reversed(rows)]
+
+    # ─── Tool calls ───────────────────────────────────────────────
+
+    def log_tool_call(
+        self,
+        session_id: str,
+        tool_name: str,
+        arguments: dict,
+        status: str = "pending",
+    ) -> str:
+        call_id = uuid.uuid4().hex
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO tool_calls
+                   (id, session_id, tool_name, arguments, status)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (call_id, session_id, tool_name,
+                 json.dumps(arguments, ensure_ascii=False), status),
+            )
+            conn.commit()
+        return call_id
+
+    def update_tool_call(
+        self, call_id: str, result: Any, status: str
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE tool_calls
+                   SET result = ?, status = ?
+                   WHERE id = ?""",
+                (json.dumps(result, ensure_ascii=False)
+                 if not isinstance(result, str) else result,
+                 status, call_id),
+            )
+            conn.commit()
+
+    def get_tool_calls(self, session_id: str) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT * FROM tool_calls
+                   WHERE session_id = ?
+                   ORDER BY created_at""",
+                (session_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    # ─── Dream proposals ──────────────────────────────────────────
+
+    def save_dream_proposal(self, proposal: dict) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO dream_proposals
+                   (id, wiki_id, page_name, edit_type, content,
+                    reason, content_length, source_entries,
+                    status, reviewed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (proposal.get("id", uuid.uuid4().hex),
+                 proposal.get("wiki_id", ""),
+                 proposal.get("page_name", ""),
+                 proposal.get("edit_type", ""),
+                 proposal.get("content", ""),
+                 proposal.get("reason"),
+                 proposal.get("content_length"),
+                 json.dumps(proposal.get("source_entries", []))
+                 if proposal.get("source_entries") else None,
+                 proposal.get("status", "pending"),
+                 proposal.get("reviewed_at")),
+            )
+            conn.commit()
+
+    def get_dream_proposals(
+        self,
+        wiki_id: str,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if status:
+                rows = conn.execute(
+                    """SELECT * FROM dream_proposals
+                       WHERE wiki_id = ? AND status = ?
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (wiki_id, status, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT * FROM dream_proposals
+                       WHERE wiki_id = ?
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (wiki_id, limit),
+                ).fetchall()
+            return [dict(r) for r in rows]
+
+    def update_dream_proposal_status(
+        self, proposal_id: str, status: str
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE dream_proposals
+                   SET status = ?, reviewed_at = datetime('now')
+                   WHERE id = ?""",
+                (status, proposal_id),
+            )
+            conn.commit()
+
+    def get_dream_proposal_stats(self, wiki_id: str) -> dict:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT status, COUNT(*) as cnt
+                   FROM dream_proposals
+                   WHERE wiki_id = ?
+                   GROUP BY status""",
+                (wiki_id,),
+            ).fetchall()
+            return {r["status"]: r["cnt"] for r in rows}
+
+    # ─── Notifications ────────────────────────────────────────────
+
+    def save_notification(self, n: dict) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO notifications
+                   (id, wiki_id, type, message, data, read, timestamp)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (n.get("id", uuid.uuid4().hex),
+                 n.get("wiki_id", ""),
+                 n.get("type", "info"),
+                 n.get("message", ""),
+                 json.dumps(n.get("data", {}), ensure_ascii=False)
+                 if n.get("data") else None,
+                 1 if n.get("read") else 0,
+                 n.get("timestamp")),
+            )
+            conn.commit()
+
+    def list_notifications(
+        self, wiki_id: str, unread_only: bool = False
+    ) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if unread_only:
+                rows = conn.execute(
+                    """SELECT * FROM notifications
+                       WHERE wiki_id = ? AND read = 0
+                       ORDER BY timestamp DESC""",
+                    (wiki_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT * FROM notifications
+                       WHERE wiki_id = ?
+                       ORDER BY timestamp DESC""",
+                    (wiki_id,),
+                ).fetchall()
+            return [dict(r) for r in rows]
+
+    def mark_notification_read(self, notification_id: str) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE notifications
+                   SET read = 1
+                   WHERE id = ?""",
+                (notification_id,),
+            )
+            conn.commit()
+
+    def get_unread_count(self, wiki_id: str) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT COUNT(*) as cnt
+                   FROM notifications
+                   WHERE wiki_id = ? AND read = 0""",
+                (wiki_id,),
+            ).fetchone()
+            return row[0] if row else 0
+
+    # ─── Confirmations ────────────────────────────────────────────
+
+    def save_confirmation(self, c: dict) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO confirmations
+                   (id, wiki_id, tool, arguments, action_type,
+                    impact, group_name, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (c.get("id", uuid.uuid4().hex),
+                 c.get("wiki_id", ""),
+                 c.get("tool", ""),
+                 json.dumps(c.get("arguments", {}), ensure_ascii=False),
+                 c.get("action_type"),
+                 json.dumps(c.get("impact"), ensure_ascii=False)
+                 if c.get("impact") else None,
+                 c.get("group_name"),
+                 c.get("status", "pending")),
+            )
+            conn.commit()
+
+    def get_confirmations(
+        self, wiki_id: str, status: str | None = None
+    ) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if status:
+                rows = conn.execute(
+                    """SELECT * FROM confirmations
+                       WHERE wiki_id = ? AND status = ?
+                       ORDER BY created_at""",
+                    (wiki_id, status),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT * FROM confirmations
+                       WHERE wiki_id = ?
+                       ORDER BY created_at""",
+                    (wiki_id,),
+                ).fetchall()
+            return [dict(r) for r in rows]
+
+    def update_confirmation_status(
+        self, confirmation_id: str, status: str
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE confirmations
+                   SET status = ?
+                   WHERE id = ?""",
+                (status, confirmation_id),
+            )
+            conn.commit()
+
+    def update_confirmation_arguments(
+        self, confirmation_id: str, arguments: dict
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE confirmations
+                   SET arguments = ?
+                   WHERE id = ?""",
+                (json.dumps(arguments, ensure_ascii=False),
+                 confirmation_id),
+            )
+            conn.commit()
+
+    def get_confirmation(
+        self, confirmation_id: str
+    ) -> dict | None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM confirmations WHERE id = ?",
+                (confirmation_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def delete_confirmation(self, confirmation_id: str) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "DELETE FROM confirmations WHERE id = ?",
+                (confirmation_id,),
+            )
+            conn.commit()
+
+    # ─── Ingest log ───────────────────────────────────────────────
+
+    def log_ingest(self, entry: dict) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO ingest_log
+                   (id, wiki_id, tool, arguments, result_summary, status)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (entry.get("id", uuid.uuid4().hex),
+                 entry.get("wiki_id", ""),
+                 entry.get("tool", ""),
+                 json.dumps(entry.get("arguments", {}), ensure_ascii=False),
+                 entry.get("result_summary"),
+                 entry.get("status", "ok")),
+            )
+            conn.commit()
+
+    def get_ingest_log(
+        self, wiki_id: str, limit: int = 20
+    ) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT * FROM ingest_log
+                   WHERE wiki_id = ?
+                   ORDER BY timestamp DESC LIMIT ?""",
+                (wiki_id, limit),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_ingest_entry(self, ingest_id: str) -> dict | None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM ingest_log WHERE id = ?",
+                (ingest_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    # ─── Admin/stats ──────────────────────────────────────────────
+
+    def get_wiki_stats(self, wiki_id: str) -> dict:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            # Count across all relevant tables
+            tables = {
+                "chat_sessions": "wiki_id",
+                "dream_proposals": "wiki_id",
+                "notifications": "wiki_id",
+                "confirmations": "wiki_id",
+                "ingest_log": "wiki_id",
+            }
+            stats: dict[str, int] = {}
+            for table, col in tables.items():
+                row = conn.execute(
+                    f"SELECT COUNT(*) as cnt FROM {table} WHERE {col} = ?",
+                    (wiki_id,),
+                ).fetchone()
+                stats[table] = row["cnt"] if row else 0
+            # Research sessions from autoresearch_sessions
+            row = conn.execute(
+                """SELECT COUNT(*) as cnt
+                   FROM autoresearch_sessions
+                   WHERE wiki_id = ?""",
+                (wiki_id,),
+            ).fetchone()
+            stats["research_sessions"] = row["cnt"] if row else 0
+            return {"wiki_id": wiki_id, "counts": stats}
+
+    def list_all_wikis(self) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT DISTINCT wiki_id
+                   FROM chat_sessions
+                   WHERE wiki_id IS NOT NULL
+                   UNION
+                   SELECT DISTINCT wiki_id
+                   FROM dream_proposals
+                   UNION
+                   SELECT DISTINCT wiki_id
+                   FROM notifications
+                   UNION
+                   SELECT DISTINCT wiki_id
+                   FROM autoresearch_sessions"""
+            ).fetchall()
+            return [{"wiki_id": r["wiki_id"]} for r in rows]
+
+    def delete_wiki_data(self, wiki_id: str) -> dict:
+        deleted: dict[str, int] = {}
+        with sqlite3.connect(self.db_path) as conn:
+            for table, col in [
+                ("chat_sessions", "wiki_id"),
+                ("dream_proposals", "wiki_id"),
+                ("notifications", "wiki_id"),
+                ("confirmations", "wiki_id"),
+                ("ingest_log", "wiki_id"),
+            ]:
+                cursor = conn.execute(
+                    f"DELETE FROM {table} WHERE {col} = ?",
+                    (wiki_id,),
+                )
+                deleted[table] = cursor.rowcount
+            cursor = conn.execute(
+                """DELETE FROM autoresearch_sessions
+                   WHERE wiki_id = ?""",
+                (wiki_id,),
+            )
+            deleted["autoresearch_sessions"] = cursor.rowcount
+            conn.commit()
+        return {"wiki_id": wiki_id, "deleted": deleted}
+
+    def export_wiki_data(self, wiki_id: str) -> dict:
+        data: dict[str, Any] = {"wiki_id": wiki_id}
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            for table, col in [
+                ("chat_sessions", "wiki_id"),
+                ("dream_proposals", "wiki_id"),
+                ("notifications", "wiki_id"),
+            ]:
+                rows = conn.execute(
+                    f"SELECT * FROM {table} WHERE {col} = ?",
+                    (wiki_id,),
+                ).fetchall()
+                data[table] = [dict(r) for r in rows]
+            rows = conn.execute(
+                """SELECT * FROM autoresearch_sessions
+                   WHERE wiki_id = ?""",
+                (wiki_id,),
+            ).fetchall()
+            data["autoresearch_sessions"] = [dict(r) for r in rows]
+        return data
+
+    def get_db_stats(self) -> dict:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            tables = [
+                "autoresearch_sessions", "autoresearch_sub_queries",
+                "autoresearch_sources", "research_steps",
+                "chat_sessions", "chat_messages", "tool_calls",
+                "dream_proposals", "notifications", "confirmations",
+                "ingest_log",
+            ]
+            stats = {}
+            for table in tables:
+                try:
+                    row = conn.execute(
+                        f"SELECT COUNT(*) as cnt FROM {table}"
+                    ).fetchone()
+                    stats[table] = row["cnt"] if row else 0
+                except Exception:
+                    stats[table] = 0
+            size_mb = self.db_path.stat().st_size / 1024 / 1024
+            return {"tables": stats, "size_mb": round(size_mb, 2)}
 
 
 def _row_to_step_dict(row: sqlite3.Row) -> dict:
