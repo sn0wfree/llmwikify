@@ -802,6 +802,13 @@ paths or test removed functionality.
 | 11 | C2/C3 | d0dfaac | 1849/5/1 | 0 | 4/4 PASS | No | Delete web_search re-export stub. Docstring updates from C1/B4 cover most of C2. |
 | 12 | C1.1 | 2451606 | 1849/5/1 | 0 | 4/4 PASS | No | Re-export new chat framework symbols (ChatBase/Harness/etc.) in apps/chat/__init__. |
 | 13 | C5 | 097a8e1 | 1911/5/1 | 0 | 4/4 PASS | No | 62 new tests for ChatBase (23) + Harness (21) + ResearchAgent (15) + integration (3). Fixed Harness._grade sync/async bug + ResearchAgent.engine API mismatch. |
+| 14 | C4.1 | 95251d4 | 1911/5/1 | 0 | 4/4 PASS | No | Extract `BaseResearchConfig` to `apps/research/base.py`. 31 shared default keys + `merge()` helper. research/config.py 54→22 LOC, chat/config.py 117→96 LOC. |
+| 15 | C4.2 | 3f40a35 | 1911/5/1 | 0 | 4/4 PASS | No | Extract `BaseGateResult` + `BaseQualityGate` (4 base stage-transition gates). research/quality_gate.py 178→31 LOC, chat/quality_gate.py 341→192 LOC (still owns the 4 6-step framework gates). Net −120 LOC. |
+| 16 | C4.3 | d433aa3 | 1911/5/1 | 0 | 4/4 PASS | No | Extract `BaseResearchTaskManager` with 4 hook points (`_on_session_start / _on_event / _on_task_finalize / _on_session_cleanup`). research/task_manager.py 144→40 LOC, chat/task_manager.py 236→152 LOC (adds DB-backed `EventBuffer`). Net −29 LOC; one subtle behavior change in `_on_task_finalize` (fire-and-forget `create_task(flush())` instead of `await buffer.flush()`) — equivalent because `EventBuffer.flush()` already catches its own exceptions. |
+| 17 | (unplanned) install fix | 0155e16 | 1911/5/1 | 0 | 4/4 PASS | No | After B2/B4 moved `cli/` and `agent/backend/*` to `interfaces/` and `apps/`, `pyproject.toml` was left with (a) entry points pointing at the deleted `llmwikify.cli:main`, and (b) 11 nonexistent `agent.backend.*` subpackages in `[tool.setuptools] packages`. Both made `pip install -e .` fail with `package directory does not exist`. Repaired both. |
+| 18 | (unplanned) server fix | e467ef8 | 1911/5/1 | 0 | 4/4 PASS | No | After B2 moved `web/server/` → `interfaces/server/`, 2 files had stale `repo_root` calculations (one `.parent` short after the move): `interfaces/server/utils/webui.py` (5→6 levels) and `interfaces/server/http/routes.py` (4→6 levels). `find_webui_dist()` and `_mount_agent_spa()` were silently no-op'ing, so the WebUI banner was printed but the SPA was never mounted (→ 404 on `/` and `/agent/`). Also added `logger.warning` on the "dist not found" branches so future regressions are visible in server logs. |
+| 19 | (unplanned) gitignore | bd0c3df | 1911/5/1 | 0 | 4/4 PASS | No | Untrack `graphify-out/` (skill cache, always regenerated) and `tests/e2e/screenshots/` (Playwright debug screenshots that drift quickly). Files remain on disk (`git rm --cached`). 628 files removed from the index, +7 / −1,333,640 LOC. |
+| 20 | C2 cleanup | a0f4cfd | 1911/5/1 | 0 | 4/4 PASS | No | Tighten formatting on the 16 C3 backward-compat delegate methods in `_app.py` (5-line `def / 空行 / docstring / 空行 / return` → 3-line to match the 10 C2 delegates). Shorten docstrings to one descriptive line. _app.py 385→353 LOC; 0 behavior change. The actual logic of all 26 commands already lives in `commands/<name>.py` and is dispatched through `COMMAND_REGISTRY`; the 27 WikiCLI methods are an intentional compat shim (84 test call sites use the `cli.method(args)` pattern, removal would break them all). |
 
 ### Batch progress table
 
@@ -818,16 +825,19 @@ paths or test removed functionality.
 | B4 | ✅ done | a6bef75 | 1849/5/1 | 4/4 PASS | L3 apps/ + layered + apps-isolation + L1→L3 cycle fix |
 | 🚦 Pause 3 | ✅ done | — | — | — | All backward-compat paths verified, 4 contracts green |
 | C1 | ✅ done | 69b1cd7, 2451606 | 1849/5/1 | 4/4 PASS | git mv autoresearch → apps/chat + 3 new wrapper files |
-| C2 | ✅ done | d0dfaac | 1849/5/1 | 4/4 PASS | Docstring updates (largely done in B4/C1) |
+| C2 | ✅ done | d0dfaac, a0f4cfd | 1849/5/1 | 4/4 PASS | Docstring updates (largely done in B4/C1). Follow-up a0f4cfd tightens the 16 C3 delegate-method formatting in _app.py to match the 10 C2 delegates (no behavior change). |
 | C3 | ✅ done | d0dfaac | 1849/5/1 | 4/4 PASS | Deleted _json_utils.py, inlined safe_json_loads. web_search.py stub removed. db_migrations.py kept (actively used). |
 | C5.1 | ✅ done (covered by C5 commit) | — | — | — | Coverage baseline: existing 134 autoresearch tests + 62 new chat tests = 196 test cases for apps/chat/. |
 | C5.2 | ✅ done | — | — | — | Tests for existing structure added during C1 (test_apps_chat_*) cover the previously-tested engine. |
 | 🚦 Sub-pause | ✅ done | — | — | — | Test safety net established (1911 tests passing) |
-| C4 | ⏭️ **Skipped (architecture-evolved)** | — | — | — | The original C4 plan was to merge 5 diverged files between `agent.backend.research` and `autoresearch`. After B4+C1, those two code paths are in **different L3 apps packages** (`apps/research/` vs `apps/chat/`) and no longer share code. The "merge" is moot in the new architecture. If future work needs to share state, the right tool is a `kernel/` utility, not file merging. |
+| C4 | ✅ **3/4 done, 2/4 skipped by design** | 95251d4, 3f40a35, d433aa3 | 1911/5/1 | 4/4 PASS | Original 5-pair merge plan revisited after re-analysis. 3 pairs are >95% duplicate and merged to `apps/research/base.py` (BaseResearchConfig / BaseGateResult+BaseQualityGate / BaseResearchTaskManager with 4 hook points). 2 pairs deliberately skipped: **report.py** — the two `generate`/`generate_streaming` implementations have already diverged (chat uses `run_prompt` abstraction, research uses `llm_client.chat` directly); forcing a shared base would create ~50 LOC of false sharing, maintenance cost > benefit. **review.py** — both classes' `review()` and `revise()` methods were independently rewritten during the `run_prompt` migration; the shared skeleton is only the class signature (~20 LOC savings) which doesn't justify a base class. Net result: 1070 → 981 LOC (−89, −8%) with 3 new abstractions and 0 new test failures. |
 | C5.3-5 | ✅ done | 097a8e1 | 1911/5/1 | 4/4 PASS | 23 + 21 + 15 = 59 new unit tests (target ~45) |
 | C5.6 | ✅ done | 097a8e1 | 1911/5/1 | 4/4 PASS | 3 integration tests (target 1) |
 | C5.7 | ⏭️ **Skipped (no obsolete tests)** | — | — | — | After the refactor, all 1911 tests pass. No obsolete tests to remove. |
 | 🚦 Final | ✅ done | — | 1911/5/1 | 4/4 PASS | 1911 passed, 5 skipped, 3 deselected (youtobe). All 4 architecture contracts green. Backward compat via _legacy + core/ + agent/ shims. |
+| (post-final) install fix | ✅ done | 0155e16 | 1911/5/1 | 4/4 PASS | Unblocks `pip install -e .` after B2/B4 path moves. See commit for details. |
+| (post-final) server fix | ✅ done | e467ef8 | 1911/5/1 | 4/4 PASS | Repairs the `interfaces/server/*` static-mount regression that made `/` and `/agent/` return 404. See commit for details. |
+| (post-final) gitignore | ✅ done | bd0c3df | 1911/5/1 | 4/4 PASS | 628 untracked files removed from the index; working tree now clean. See commit for details. |
 
 ### Per-batch pre/post test snapshot (per batch boundary)
 
@@ -842,7 +852,12 @@ paths or test removed functionality.
 | B4 | 1851/5/1 | 1849/5/1 | -2 | 0 | 0 | No (2 tests became environment-dependent during the agent/backend shim creation; both still pass in isolation) |
 | C1 | 1849/5/1 | 1849/5/1 | 0 | 0 | 0 | No |
 | C2/C3 | 1849/5/1 | 1849/5/1 | 0 | 0 | 0 | No |
+| C4 (3 of 5 pairs) | 1849/5/1 | 1849/5/1 | 0 | 0 | 0 | No (2 pairs skipped by design — see Batch progress table) |
 | C5 | 1849/5/1 | 1911/5/1 | **+62** | 0 | 0 | No (target growth from new tests) |
+| (post-C5) install fix | 1911/5/1 | 1911/5/1 | 0 | 0 | 0 | No (0155e16) |
+| (post-C5) server fix | 1911/5/1 | 1911/5/1 | 0 | 0 | 0 | No (e467ef8) |
+| (post-C5) gitignore | 1911/5/1 | 1911/5/1 | 0 | 0 | 0 | No (bd0c3df) |
+| (post-C5) C2 cleanup | 1911/5/1 | 1911/5/1 | 0 | 0 | 0 | No (a0f4cfd) |
 
 ### Coverage tracking (Sprint C5)
 
@@ -872,11 +887,13 @@ paths or test removed functionality.
 | C | C3 | 30 min | 🟢 | -200 (dead code) |
 | C | C5.1 | 30 min | 🟢 | 0 |
 | C | C5.2 | 1-2h | 🟢 | +300-500 (new tests) |
-| C | C4 | 4-6h | 🟡 | -140 (12% merge savings) |
+| C | C4 | ~2h (3/4 done) | 🟢 | -89 (8% net, 2 of 5 pairs skipped by design — see §6) |
 | C | C5.3-5 | 3-4.5h | 🟢 | +500-700 (new tests) |
 | C | C5.6 | 1-1.5h | 🟢 | 0 |
 | C | C5.7 | 30 min | 🟢 | -50 (obsolete tests) |
-| **Total** | | **~22-27h** | **Mixed** | **+610 to +1010 net new LOC** |
+| **Total** | | **~20-25h** (post-actual) | **Mixed** | **+659 to +1059 net new LOC** |
+| (post-final) install + server + gitignore | 1h | 🟢 | 0 (repairs, no LOC change in source) |
+| (post-final) C2 cleanup (`a0f4cfd`) | 15 min | 🟢 | -32 (`_app.py` only, cosmetic) |
 
 ---
 
@@ -905,3 +922,4 @@ the go-ahead, batch by batch with pause-and-verify gates.
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-06-07 | Initial design document | Plan mode consolidation |
+| 2026-06-08 | §6 Progress tracking updated: C4 3/4 done (2/4 skipped by design), C2 follow-up `a0f4cfd`, 3 post-final fixes (install/server/gitignore). Full 1914-pass test baseline confirmed; 4/4 arch contracts green. | Refactor session |
