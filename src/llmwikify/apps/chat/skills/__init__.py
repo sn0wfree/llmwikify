@@ -21,8 +21,8 @@ What does NOT live here yet
 
   - The 23 actions (``search``, ``extract``, ``read``, ...)
     are added in **Phase 5**.
-  - The 4 pipelines (``gather``, ``ingest``, ``report``,
-    ``research``) are added in **Phase 6**.
+  - The 2 pipelines (``gather``, ``report``)
+    are added in **Phase 12**.
   - The 5 CRUD skills (``memory``, ``notify``,
     ``scheduler``, ``dream``, ``wiki_query``) are added in
     **Phase 12**.
