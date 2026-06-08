@@ -14,8 +14,7 @@ The 7 phases of a research session, in order:
   1. plan       — decompose the query into sub-queries
                   (action: plan_skill.plan)
   2. gather     — search/extract sources for each sub-query
-                  (inline; will be split into gather_skill
-                  pipeline in v0.32.5)
+                  (delegates to gather_skill pipeline, Phase 12)
   3. analyze    — entity recognition + quality assessment
                   (action: analyze_skill.analyze)
   4. synthesize — cross-source claims + gaps
@@ -25,8 +24,7 @@ The 7 phases of a research session, in order:
   6. revise     — improve text if score < threshold
                   (action: revise_skill.revise)
   7. report     — write final markdown report
-                  (inline; will be split into report_skill
-                  pipeline in v0.32.5)
+                  (delegates to report_skill pipeline, Phase 12)
 
 Plus a sentinel ``done`` action that the reason function
 returns to exit the loop.
@@ -151,53 +149,47 @@ async def _act_plan(args: dict, ctx: SkillContext) -> SkillResult:
 async def _act_gather(args: dict, ctx: SkillContext) -> SkillResult:
     """Phase 2: gather sources for the (still-ungathered) sub-queries.
 
-    Inline implementation: uses the wiki's search + extract
-    to gather sources. Phase 6.5 will split this into a
-    dedicated ``gather_skill`` pipeline (per design §3.1).
+    Delegates to ``gather_skill`` pipeline (Phase 12). The
+    pipeline handles wiki.search, dedup, and optional content
+    extraction.
     """
     state = args
     state["phase"] = "gathering"
-    wiki = ctx.wiki
+    # Filter out already-gathered sub-queries
     sub_queries = state.get("sub_queries", [])
-    sources_collected: list[dict] = list(state.get("sources", []))
-    new_sources = 0
-    for sq in sub_queries:
-        if sq.get("status") == "gathered":
-            continue
-        query = sq.get("q", "")
-        if wiki is None:
-            # Offline / test mode: produce a synthetic source
-            # so the rest of the pipeline has data to work
-            # with. This keeps the rule-based reasoner
-            # progressing through all 7 phases.
-            sources_collected.append({
-                "url": f"https://offline.example/{query[:30]}",
-                "title": f"Synthetic result for: {query[:50]}",
-                "source_type": "web",
-                "sub_query": query,
-                "content_preview": f"Offline content for {query}",
-            })
-            new_sources += 1
-            sq["status"] = "gathered"
-            continue
-        try:
-            r = wiki.search(query, limit=3)
-            for page in (r if isinstance(r, list) else []):
-                sources_collected.append({
-                    "url": page,
-                    "title": page,
-                    "source_type": "wiki",
-                    "sub_query": query,
-                })
-                new_sources += 1
-            sq["status"] = "gathered"
-        except Exception as e:
-            logger.warning("gather failed for sub_query %s: %s", sq, e)
+    ungathered = [
+        sq for sq in sub_queries
+        if sq.get("status") != "gathered"
+    ]
+    if not ungathered:
+        state.setdefault("sources", [])
+        return SkillResult.ok({
+            "sources": state["sources"],
+            "_new_sources": 0,
+        })
+    # Delegate to the gather pipeline
+    from llmwikify.apps.chat.skills.pipelines.gather_skill import (
+        gather_skill as _gather,
+    )
+    r = await _gather.actions["gather_for_research"].handler(
+        {
+            "sub_queries": ungathered,
+            "sources": state.get("sources", []),
+        }, ctx,
+    )
+    if r.status != "ok":
+        return r
+    # Update sub-query statuses
+    failed = set(r.data.get("_failed_queries", []))
+    for sq in ungathered:
+        if sq.get("q", "") in failed:
             sq["status"] = "failed"
-    state["sources"] = sources_collected
+        else:
+            sq["status"] = "gathered"
+    state["sources"] = r.data["sources"]
     return SkillResult.ok({
-        "sources": sources_collected,
-        "_new_sources": new_sources,
+        "sources": state["sources"],
+        "_new_sources": r.data.get("_new_sources", 0),
     })
 
 
@@ -311,39 +303,30 @@ async def _act_revise(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _act_report(args: dict, ctx: SkillContext) -> SkillResult:
-    """Phase 7: write the final markdown report."""
+    """Phase 7: write the final markdown report.
+
+    Delegates to ``report_skill`` pipeline (Phase 12). The
+    pipeline builds the markdown from synthesis + sources.
+    """
     state = args
     state["phase"] = "reporting"
-    synthesis = state.get("synthesis") or {}
-    sources = state.get("sources", [])
-    # Build a simple markdown report inline
-    lines: list[str] = [
-        f"# {state.get('query', 'Research Report')}",
-        "",
-        "## Summary",
-        synthesis.get("narrative", "(no synthesis)"),
-        "",
-        "## Key Claims",
-    ]
-    for claim in synthesis.get("claims", []):
-        text = claim.get("text", "") if isinstance(claim, dict) else str(claim)
-        lines.append(f"- {text}")
-    lines.extend(["", "## Sources", ""])
-    for s in sources:
-        title = s.get("title", s.get("url", "?"))
-        url = s.get("url", "")
-        lines.append(f"- [{title}]({url})")
-    if state.get("knowledge_gaps"):
-        lines.extend([
-            "",
-            "## Knowledge Gaps",
-            "",
-            *[f"- {g}" for g in state["knowledge_gaps"]],
-        ])
-    state["report_md"] = "\n".join(lines)
+    from llmwikify.apps.chat.skills.pipelines.report_skill import (
+        report_skill as _report,
+    )
+    r = await _report.actions["generate_report"].handler(
+        {
+            "query": state.get("query", "Research Report"),
+            "synthesis": state.get("synthesis"),
+            "sources": state.get("sources", []),
+            "knowledge_gaps": state.get("knowledge_gaps", []),
+        }, ctx,
+    )
+    if r.status != "ok":
+        return r
+    state["report_md"] = r.data["report_md"]
     return SkillResult.ok({
         "report_md": state["report_md"],
-        "report_length": len(state["report_md"]),
+        "report_length": r.data.get("report_length", 0),
     })
 
 
