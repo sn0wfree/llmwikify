@@ -14,7 +14,7 @@ Use cases:
 
 Usage::
 
-    from llmwikify.apps.chat.harness import Harness, GoldenCase
+    from llmwikify.apps.chat.eval_harness import Harness, GoldenCase
 
     harness = Harness(judge_client=my_judge)
     harness.add(GoldenCase(

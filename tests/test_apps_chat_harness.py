@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from llmwikify.apps.chat.harness import (
+from llmwikify.apps.chat.eval_harness import (
     CaseResult,
     GoldenCase,
     Harness,

@@ -641,7 +641,7 @@ Cross-package import updates (large mechanical change).
 1. `git mv autoresearch/* apps/chat/` (26 files, preserve history)
 2. Create 3 new files:
    - `apps/chat/base.py` (ChatBase, ~150 LOC)
-   - `apps/chat/harness.py` (Harness, ~100 LOC)
+   - `apps/chat/harness.py` (Harness, ~100 LOC) — **renamed to `eval_harness.py` in v0.32 Phase 2 to free the `harness/` package slot for the 5 evaluation classes planned in Phase 7**
    - `apps/chat/research_agent.py` (thin wrapper, ~50 LOC)
 3. Update `apps/chat/__init__.py` to re-export everything
 4. Create `_legacy/autoresearch.py` shim: `from llmwikify.apps.chat import *`
@@ -864,7 +864,7 @@ paths or test removed functionality.
 | Module | Before C5 | After C5 |
 |--------|-----------|----------|
 | `apps/chat/base.py` (NEW in C1) | 0% | ~95% (23 tests) |
-| `apps/chat/harness.py` (NEW in C1) | 0% | ~95% (21 tests) |
+| `apps/chat/harness.py` (NEW in C1, renamed to `eval_harness.py` in v0.32 Phase 2) | 0% | ~95% (21 tests) |
 | `apps/chat/research_agent.py` (NEW in C1) | 0% | ~90% (15 tests + 3 integration) |
 | `apps/chat/engine.py` (existing) | covered by 134 existing tests | unchanged |
 | `apps/chat/engine_helpers.py` (newly contains inlined `safe_json_loads`) | covered by tests/test_json_utils.py (22 tests) | unchanged |
