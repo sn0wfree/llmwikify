@@ -139,103 +139,71 @@ class WikiCLI:
         return run_fix_wikilinks(self.wiki, args)
 
     def analyze_source(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.analyze_source.run_analyze_source``."""
-
+        """Analyze source. → ``cli.commands.analyze_source.run_analyze_source``."""
         return run_analyze_source(self.wiki, args)
 
     def lint(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.lint.run_lint``."""
-
+        """Health check. → ``cli.commands.lint.run_lint``."""
         return run_lint(self.wiki, args)
 
     def references(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.references.run_references``."""
-
+        """Show references. → ``cli.commands.references.run_references``."""
         return run_references(self.wiki, args)
 
     def batch(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.batch.run_batch``."""
-
+        """Batch ingest sources. → ``cli.commands.batch.run_batch``."""
         return run_batch(self.wiki, args)
 
     def synthesize(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.synthesize.run_synthesize``."""
-
+        """Synthesize wiki content. → ``cli.commands.synthesize.run_synthesize``."""
         return run_synthesize(self.wiki, args)
 
     def watch(self, args: Any) -> int:
-        """Delegated to ``cli.commands.watch.run_watch``."""
+        """Watch wiki. → ``cli.commands.watch.run_watch``."""
         return run_watch(self.wiki, self.wiki_root, args)
 
     def graph_query(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.graph_query.run_graph_query``."""
-
+        """Query knowledge graph. → ``cli.commands.graph_query.run_graph_query``."""
         return run_graph_query(self.wiki, args)
 
     def export_graph(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.export_graph.run_export_graph``."""
-
+        """Export knowledge graph. → ``cli.commands.export_graph.run_export_graph``."""
         return run_export_graph(self.wiki, args)
 
     def community_detect(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.community_detect.run_community_detect``."""
-
+        """Detect communities. → ``cli.commands.community_detect.run_community_detect``."""
         return run_community_detect(self.wiki, args)
 
     def report(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.report.run_report``."""
-
+        """Show report. → ``cli.commands.report.run_report``."""
         return run_report(self.wiki, args)
 
     def wikis(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.wikis.run_wikis``."""
-
+        """Manage wikis. → ``cli.commands.wikis.run_wikis``."""
         return run_wikis(self.wiki, self.config, args)
 
     def suggest_synthesis(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.suggest_synthesis.run_suggest_synthesis``."""
-
+        """Suggest synthesis. → ``cli.commands.suggest_synthesis.run_suggest_synthesis``."""
         return run_suggest_synthesis(self.wiki, args)
 
     def knowledge_gaps(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.knowledge_gaps.run_knowledge_gaps``."""
-
+        """Detect knowledge gaps. → ``cli.commands.knowledge_gaps.run_knowledge_gaps``."""
         return run_knowledge_gaps(self.wiki, args)
 
     def graph_analyze(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.graph_analyze.run_graph_analyze``."""
-
+        """Analyze knowledge graph. → ``cli.commands.graph_analyze.run_graph_analyze``."""
         return run_graph_analyze(self.wiki, args)
 
     def serve(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.serve.run_serve``."""
-
+        """Start MCP/Web server. → ``cli.commands.serve.run_serve``."""
         return run_serve(self.wiki, self.config, args)
 
     def qmd(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.qmd.run_qmd``."""
-
+        """QMD operations. → ``cli.commands.qmd.run_qmd``."""
         return run_qmd(self.wiki, args)
 
     def db(self, args: Any) -> int:
-
-        """Delegated to ``cli.commands.db.run_db``."""
-
+        """Database management. → ``cli.commands.db.run_db``."""
         return run_db(self.wiki, args)
 
 def _build_parser():
