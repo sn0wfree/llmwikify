@@ -27,12 +27,13 @@ def find_webui_dist() -> Path | None:
     Returns:
         Path to dist directory, or None if not found.
     """
-    # webui.py is at: src/llmwikify/server/utils/webui.py
-    # Up 5 levels: utils → server → llmwikify → src → repo root
-    repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+    # webui.py is at: src/llmwikify/interfaces/server/utils/webui.py
+    # Up 6 levels: utils → server → interfaces → llmwikify → src → repo root
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
     candidate = repo_root / "ui" / "webui" / "dist"
     if candidate.exists() and (candidate / "index.html").exists():
         return candidate
+    logger.warning("WebUI dist not found at %s; / will return 404", candidate)
     return None
 
 
