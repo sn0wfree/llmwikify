@@ -153,7 +153,7 @@ class AgentService:
                 if wiki_instance and wiki_instance.root:
                     wiki_root = wiki_instance.root
             config = self._config_manager.load_effective_llm_config(wiki_root)
-            from ..providers.registry import create_llm
+            from llmwikify.apps.chat.providers.registry import create_llm
             self._llm = create_llm(config)
         return self._llm
 

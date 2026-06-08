@@ -487,7 +487,7 @@ def _load_research_config() -> dict[str, Any] | None:
 def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     """Register Agent backend routes (Phase 1)."""
     from llmwikify.apps.agent.core.service import AgentService
-    from llmwikify.apps.agent.routes.agent import set_agent_service
+    from llmwikify.interfaces.server.http.chat_sse import set_agent_service
 
     data_dir = Path.home() / ".llmwikify" / "agent"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -495,9 +495,12 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     agent_service = AgentService(registry, data_dir)
     set_agent_service(agent_service)
 
-    from llmwikify.apps.agent.routes import agent_router, ppt_router, research_router, ppt_chat_router
-    from llmwikify.apps.agent.routes.research import set_research_deps
-    from llmwikify.apps.agent.routes.ppt import set_ppt_deps
+    from llmwikify.interfaces.server.http.chat_sse import router as agent_router
+    from llmwikify.interfaces.server.http.ppt import router as ppt_router
+    from llmwikify.apps.ppt.chat_routes import router as ppt_chat_router
+    from llmwikify.interfaces.server.http.research import router as research_router
+    from llmwikify.interfaces.server.http.research import set_research_deps
+    from llmwikify.interfaces.server.http.ppt import set_ppt_deps
     from llmwikify.apps.ppt.chat_routes import set_ppt_chat_deps
     from llmwikify.apps.chat.routes import set_autoresearch_deps, router as autoresearch_router
 
@@ -529,10 +532,13 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     # No shared schema with research / chat / ppt.
     from llmwikify.apps.chat.db import AutoResearchDatabase
     autoresearch_db = AutoResearchDatabase(data_dir)
+    # Phase 9: pass the LLM client explicitly so the L3 chat/
+    # routes module doesn't need an L3→L4 import to the agent
+    # service (which would violate the layered architecture).
     set_autoresearch_deps(
         db=autoresearch_db,
         wiki_registry=registry,
-        llm_client=None,  # Will fallback to agent service LLM
+        llm_client=agent_service._get_llm(),
         config=research_config,  # Inherit base config; 6-step config in module defaults
     )
     logger.info("AutoResearch DB initialized at: %s", autoresearch_db.db_path)

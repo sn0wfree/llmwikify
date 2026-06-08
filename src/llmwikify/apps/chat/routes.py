@@ -65,9 +65,10 @@ def _get_engine(wiki_id: str | None = None) -> ResearchEngine:
     wiki = _get_wiki(wiki_id)
     llm = _LLM_CLIENT
     if llm is None:
-        from llmwikify.apps.agent.routes.agent import get_agent_service
-        svc = get_agent_service()
-        llm = svc._get_llm()
+        raise RuntimeError(
+            "AutoResearch LLM client not initialized. "
+            "Call set_autoresearch_deps(llm_client=...) at startup."
+        )
     return ResearchEngine(
         wiki=wiki,
         db=db,
