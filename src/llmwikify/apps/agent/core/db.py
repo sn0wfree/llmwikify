@@ -41,13 +41,15 @@ class AgentDatabase:
             DeprecationWarning,
             stacklevel=2,
         )
-        self.db_path = db_path
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Import here to avoid circular imports at module level
         from llmwikify.apps.chat.db import ChatDatabase
 
-        self._chat_db = ChatDatabase(self.db_path.parent)
+        self._chat_db = ChatDatabase(db_path.parent)
+        # Expose the resolved path (may differ from input db_path
+        # when ChatDatabase normalises to .llmwiki_agent.db).
+        self.db_path = self._chat_db.db_path
 
         # PPT tables still live in the agent DB file
         self._init_ppt_tables()

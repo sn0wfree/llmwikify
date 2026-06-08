@@ -77,7 +77,7 @@ def _make_research_session(
     session_id = db.create_research_session(wiki_id="test_wiki", query=query)
     with sqlite3.connect(db.db_path) as conn:
         conn.execute(
-            "UPDATE research_sessions SET status='done', result=? WHERE id=?",
+            "UPDATE autoresearch_sessions SET status='done', result=? WHERE id=?",
             (result_blob, session_id),
         )
         conn.commit()

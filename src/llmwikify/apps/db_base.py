@@ -89,14 +89,21 @@ class BaseDatabase:
         return conn
 
     def _init_db(self) -> None:
-        """Create all 12 tables. Called once on instantiation.
+        """Create the database schema. Subclasses must implement.
 
-        Subclasses may call ``super()._init_db()`` to ensure
-        all 12 tables exist, then specialize. Or they may
-        override entirely.
+        Each facade (ChatDatabase, WikiDatabase, ResearchDatabase)
+        implements this to create only its domain's tables.
+        All 3 facades share the same physical .llmwiki_agent.db
+        file but each maintains its own table subset.
+
+        Note: tables use ``CREATE TABLE IF NOT EXISTS`` so
+        multiple facades instantiating in sequence are idempotent
+        (no duplicate-table errors when both facades' tables
+        already exist).
         """
         raise NotImplementedError(
-            f"{type(self).__name__}._init_db() not implemented"
+            f"{type(self).__name__}._init_db() must be implemented "
+            f"to create the facade's own domain tables."
         )
 
     def _check_db_size(self) -> None:
