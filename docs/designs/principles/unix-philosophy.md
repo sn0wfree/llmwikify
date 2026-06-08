@@ -157,6 +157,7 @@ class MemorySkill(Skill):
 
 ## 相关文档
 
+- `docs/designs/principles/skill-taxonomy.md`：skill 分类法（如何区分底层 vs 上层）
 - `docs/designs/v0.32-skill-restructure.md`：本原则在 v0.32 重构中的具体落地
 - `docs/designs/refactor-4layer-architecture.md`：4 层技术架构（D1-D14 决策）
 - `docs/LLM_WIKI_PRINCIPLES.md`：Karpathy LLM Wiki 原始原则
