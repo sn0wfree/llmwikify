@@ -28,7 +28,7 @@ from typing import Any
 import pytest
 
 from llmwikify.apps.chat.engine import ResearchEngine
-from llmwikify.apps.chat.harness import GoldenCase, Harness
+from llmwikify.apps.chat.eval_harness import GoldenCase, Harness
 from llmwikify.apps.chat.research_agent import ResearchAgent
 
 
