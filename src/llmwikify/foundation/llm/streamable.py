@@ -104,9 +104,9 @@ class StreamableLLMClient(LLMClient):
 
         This is a pure config-to-constructor translation; it does
         NOT consult the LLM provider registry (that lives at
-        L3 in ``llmwikify.apps.agent.providers.registry``).
+        L3 in ``llmwikify.apps.chat.providers.registry``).
         Callers that need the registry's provider discovery
-        should call ``apps.agent.providers.registry.create_llm``
+        should call ``apps.chat.providers.registry.create_llm``
         directly.
         """
         llm_cfg = config.get("llm", config)

@@ -17,7 +17,7 @@ from typing import Any
 
 from llmwikify.foundation.llm.streamable import StreamableLLMClient
 from llmwikify.apps.chat.db import AutoResearchDatabase
-from llmwikify.apps.agent.providers.registry import create_llm
+from llmwikify.apps.chat.providers.registry import create_llm
 from llmwikify.apps.chat import actions
 from llmwikify.apps.chat.actions import ActionContext
 from llmwikify.apps.chat.analyzer import SourceAnalyzer

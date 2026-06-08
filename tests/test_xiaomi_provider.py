@@ -2,9 +2,9 @@
 
 import pytest
 
-from llmwikify._legacy.adapters import StreamableLLMClient
-from llmwikify.apps.agent.providers import list_providers, get_provider
-from llmwikify.apps.agent.providers.xiaomi import XiaomiProvider
+from llmwikify.foundation.llm.streamable import StreamableLLMClient
+from llmwikify.apps.chat.providers import list_providers, get_provider
+from llmwikify.apps.chat.providers.xiaomi import XiaomiProvider
 
 
 class TestXiaomiProvider:
