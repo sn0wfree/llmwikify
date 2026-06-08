@@ -1131,7 +1131,7 @@ class TestAutoresearchIntegration:
         self, mock_wiki, mock_llm, db, config,
     ):
         """The 4 6-step QualityGate methods are invoked at the correct phases."""
-        from llmwikify.apps.chat.quality_gate import QualityGate
+        from llmwikify.apps.chat.harness.quality_gate import QualityGate
 
         calls: list[str] = []
         original_evidence = QualityGate.check_evidence_quality
@@ -1177,7 +1177,7 @@ class TestAutoresearchIntegration:
         self, mock_wiki, mock_llm, db, config,
     ):
         """In a successful run, framework_compliance should pass with proceed."""
-        from llmwikify.apps.chat.quality_gate import QualityGate
+        from llmwikify.apps.chat.harness.quality_gate import QualityGate
 
         captured: dict = {}
         original_framework = QualityGate.check_framework_compliance

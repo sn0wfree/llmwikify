@@ -404,13 +404,13 @@ class TestSubmoduleMetricsKwarg:
         assert r.metrics is mc
 
     def test_reviewer_accepts_metrics(self):
-        from llmwikify.apps.chat.review import ResearchReviewer
+        from llmwikify.apps.chat.harness.review import ResearchReviewer
         mc = MetricsCollector(session_id="s")
         rv = ResearchReviewer(MagicMock(), MagicMock(), config={}, metrics=mc)
         assert rv.metrics is mc
 
     def test_revisor_accepts_metrics(self):
-        from llmwikify.apps.chat.review import ResearchRevisor
+        from llmwikify.apps.chat.harness.review import ResearchRevisor
         mc = MetricsCollector(session_id="s")
         rs = ResearchRevisor(MagicMock(), MagicMock(), config={}, metrics=mc)
         assert rs.metrics is mc

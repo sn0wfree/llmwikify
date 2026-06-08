@@ -20,7 +20,7 @@ from llmwikify.apps.chat.db import AutoResearchDatabase
 from llmwikify.apps.chat.providers.registry import create_llm
 from llmwikify.apps.chat import actions
 from llmwikify.apps.chat.actions import ActionContext
-from llmwikify.apps.chat.analyzer import SourceAnalyzer
+from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
 from llmwikify.apps.chat.config import merge_six_step_config
 from llmwikify.apps.chat.gatherer import SourceGatherer
 from llmwikify.apps.chat.gates import ResearchGates
@@ -34,10 +34,10 @@ from llmwikify.apps.chat.state import (
     VALID_TRANSITIONS,
 )
 from llmwikify.apps.chat.report import ReportGenerator
-from llmwikify.apps.chat.review import ResearchReviewer, ResearchRevisor
+from llmwikify.apps.chat.harness.review import ResearchReviewer, ResearchRevisor
 from llmwikify.apps.chat.session import ResearchSessionManager
 from llmwikify.apps.chat.synthesizer import ResearchSynthesizer
-from llmwikify.apps.chat.quality_gate import QualityGate
+from llmwikify.apps.chat.harness.quality_gate import QualityGate
 
 logger = logging.getLogger(__name__)
 

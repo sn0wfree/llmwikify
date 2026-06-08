@@ -20,9 +20,9 @@ from llmwikify.apps.chat.config import merge_six_step_config
 from llmwikify.apps.chat.gatherer import SourceGatherer
 from llmwikify.apps.chat.llm_step import run_prompt
 from llmwikify.apps.chat.prompts import _plan_fallback, _replan_fallback
-from llmwikify.apps.chat.quality_gate import QualityGate
+from llmwikify.apps.chat.harness.quality_gate import QualityGate
 from llmwikify.apps.chat.report import ReportGenerator
-from llmwikify.apps.chat.review import ResearchReviewer, ResearchRevisor
+from llmwikify.apps.chat.harness.review import ResearchReviewer, ResearchRevisor
 from llmwikify.apps.chat.session import ResearchSessionManager
 from llmwikify.apps.chat.state import (
     ActionMetrics,
@@ -440,7 +440,7 @@ async def action_gather(
 
     # ─── 6-step step 2: evidence scoring (run only when enabled) ───
     if ctx.config.get("evidence_scoring_enabled", True) and sources:
-        from llmwikify.apps.chat.source_filter import SourceFilter
+        from llmwikify.apps.chat.harness.source_filter import SourceFilter
         sf = SourceFilter(ctx.config)
         new_scores: dict[str, float] = {}
         for src in sources:
@@ -614,7 +614,7 @@ async def action_report(
     # ─── 6-step step 4: structure validation ───
     if state.report_md and ctx.config.get("structure_check_enabled", True):
         try:
-            from llmwikify.apps.chat.structure_validator import StructureValidator
+            from llmwikify.apps.chat.harness.structure_validator import StructureValidator
             validator = StructureValidator()
             result = validator.validate(
                 report=state.report_md,

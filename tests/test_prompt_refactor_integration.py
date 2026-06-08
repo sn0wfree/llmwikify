@@ -302,14 +302,15 @@ class TestPromptRegistrySingleSourceOfTruth:
     def test_review_does_not_have_its_own_framework_block_renderer(self):
         """review.py should not define its own _render_framework_review_block;
         it should use prompts.render_framework_block (via run_prompt)."""
-        from llmwikify.apps.chat import review
+        from llmwikify.apps.chat.harness import review
         source = open(review.__file__).read()
         assert "def _render_framework_review_block" not in source
 
     def test_no_inline_md5_in_report_or_review(self):
         """The md5-based source hash logic should be in prompts.source_hash,
         not duplicated in report/review."""
-        from llmwikify.apps.chat import report, review
+        from llmwikify.apps.chat import report
+        from llmwikify.apps.chat.harness import review
         for module in (report, review):
             source = open(module.__file__).read()
             assert "hashlib.md5" not in source, (

@@ -38,15 +38,15 @@ from .eval_harness import CaseResult, GoldenCase, Harness, HarnessReport
 from .db import AutoResearchDatabase, ChatDatabase
 from .llm_step import LLMCallMetrics
 from .state import MetricsCollector
-from .quality_gate import GateResult, QualityGate
+from .harness.quality_gate import GateResult, QualityGate
 from .reasoning_checker import ReasoningChecker
 from .report import ReportGenerator
 from .research_agent import ResearchAgent
 from .retry_managers import DBRetryManager, LLMRetryManager, StageRetryManager, retry_async
 from .synthesizer import ResearchSynthesizer
-from .source_filter import SourceFilter
+from .harness.source_filter import SourceFilter
 from .state import VALID_TRANSITIONS, ActionMetrics, ResearchState, SessionMetrics
-from .structure_validator import StructureValidator
+from .harness.structure_validator import StructureValidator
 
 __all__ = [
     # Engine

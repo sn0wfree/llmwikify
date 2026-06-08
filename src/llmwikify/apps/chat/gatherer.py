@@ -11,7 +11,7 @@ from llmwikify.foundation.extractors.web import extract_url
 from llmwikify.foundation.extractors.youtube import extract_youtube
 from llmwikify.apps.chat.db import AutoResearchDatabase
 from llmwikify.apps.chat.session import ResearchSessionManager
-from llmwikify.apps.chat.source_filter import SourceFilter
+from llmwikify.apps.chat.harness.source_filter import SourceFilter
 
 logger = logging.getLogger(__name__)
 
