@@ -326,8 +326,10 @@ class ChatService(ChatBase):
         if session_id not in self._contexts:
             ctx = AgentContext(wiki_id=wiki_id)
             # Restore conversation history from DB
+            # get_chat_messages returns DESC (newest first);
+            # reverse to get chronological (ASC) order
             db_messages = self.db.get_chat_messages(session_id, limit=100)
-            for msg in db_messages:
+            for msg in reversed(db_messages):
                 role = msg.get("role", "")
                 content = msg.get("content", "")
                 if role == "user":

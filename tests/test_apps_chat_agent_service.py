@@ -1,0 +1,594 @@
+"""Unit tests for ChatService — SSE chat service.
+
+Covers:
+
+  - ChatEvent factory (7 event types)
+  - AgentContext (per-session state)
+  - ChatService init + DB persistence
+  - SSE chat flow (session creation, message persistence)
+  - Wiki prefix parsing (@wiki_id)
+  - Message truncation
+  - System prompt construction
+  - Tool spec generation
+  - approve_confirmation_continue flow
+  - WikiService integration
+
+Target: 20+ tests, no real LLM calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import tempfile
+import warnings
+from pathlib import Path
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from llmwikify.apps.chat.agent.service import (
+    AgentContext,
+    ChatEvent,
+    ChatService,
+)
+
+
+def _run_async(coro: Any) -> Any:
+    """Run async coroutine."""
+    return asyncio.run(coro)
+
+
+# ─── Mock WikiService ─────────────────────────────────────────────
+
+
+class MockWikiService:
+    """Mock WikiService for ChatService tests."""
+
+    def __init__(self) -> None:
+        self.llm = MagicMock()
+        self.llm.astream_chat = MagicMock()
+        self.default_wiki_id = "test_wiki"
+        self.wiki = MagicMock(name="Wiki")
+        self.tool_registry = MagicMock()
+        self.tool_registry.list_tools = MagicMock(return_value=[])
+        # execute is async, so use AsyncMock
+        self.tool_registry.execute = AsyncMock(
+            return_value={"result": "ok"}
+        )
+        # ChatService calls wiki_service.approve_confirmation
+        self.approve_confirmation = AsyncMock(
+            return_value={"status": "ok", "result": "done"}
+        )
+        # Keep confirm_execution for backward compat
+        self.confirm_execution = self.approve_confirmation
+
+    def get_default_wiki_id(self) -> str:
+        return self.default_wiki_id
+
+    def get_wiki(self, wiki_id: str | None = None) -> Any:
+        return self.wiki
+
+    def get_llm(self) -> Any:
+        return self.llm
+
+    def reload_llm(self) -> None:
+        self.llm = MagicMock()
+
+    def get_tool_registry(self, wiki_id: str | None = None) -> Any:
+        return self.tool_registry
+
+
+# ─── Fixtures ─────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def data_dir() -> Path:
+    d = Path(tempfile.mkdtemp())
+    yield d
+
+
+@pytest.fixture
+def wiki_service_mock() -> MockWikiService:
+    return MockWikiService()
+
+
+@pytest.fixture
+def chat_service(
+    wiki_service_mock: MockWikiService, data_dir: Path
+) -> ChatService:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        return ChatService(wiki_service_mock, data_dir)
+
+
+# ─── ChatEvent factory ───────────────────────────────────────────
+
+
+class TestChatEvent:
+    def test_message_delta(self) -> None:
+        e = ChatEvent.message_delta("hello")
+        assert e["type"] == "message_delta"
+        assert e["content"] == "hello"
+
+    def test_thinking(self) -> None:
+        e = ChatEvent.thinking("reasoning...")
+        assert e["type"] == "thinking"
+        assert e["content"] == "reasoning..."
+
+    def test_tool_call_start(self) -> None:
+        e = ChatEvent.tool_call_start("search", {"q": "x"})
+        assert e["type"] == "tool_call_start"
+        assert e["tool"] == "search"
+        assert e["args"] == {"q": "x"}
+
+    def test_tool_call_end(self) -> None:
+        e = ChatEvent.tool_call_end("search", {"hits": []})
+        assert e["type"] == "tool_call_end"
+        assert e["tool"] == "search"
+
+    def test_confirmation_required(self) -> None:
+        e = ChatEvent.confirmation_required("conf-1", {"impact": "high"})
+        assert e["type"] == "confirmation_required"
+        assert e["confirmation_id"] == "conf-1"
+
+    def test_done(self) -> None:
+        e = ChatEvent.done("Final answer")
+        assert e["type"] == "done"
+        assert e["final_response"] == "Final answer"
+
+    def test_error(self) -> None:
+        e = ChatEvent.error("Something went wrong")
+        assert e["type"] == "error"
+        assert e["message"] == "Something went wrong"
+
+
+# ─── AgentContext ────────────────────────────────────────────────
+
+
+class TestAgentContext:
+    def test_init_empty(self) -> None:
+        ctx = AgentContext()
+        assert ctx.wiki_id is None
+        assert ctx.messages == []
+        assert ctx.recent_wiki_id is None
+        assert ctx._tool_calls == {}
+
+    def test_add_user_message(self) -> None:
+        ctx = AgentContext()
+        ctx.add_user_message("hello")
+        assert ctx.messages == [{"role": "user", "content": "hello"}]
+
+    def test_add_assistant_message(self) -> None:
+        ctx = AgentContext()
+        ctx.add_assistant_message("hi")
+        assert ctx.messages == [{"role": "assistant", "content": "hi"}]
+
+    def test_get_messages_returns_copy(self) -> None:
+        ctx = AgentContext()
+        ctx.add_user_message("a")
+        msgs = ctx.get_messages()
+        msgs.append({"role": "user", "content": "b"})
+        # Original should be unchanged
+        assert len(ctx.messages) == 1
+
+    def test_set_recent_wiki(self) -> None:
+        ctx = AgentContext()
+        ctx.set_recent_wiki("my_wiki")
+        assert ctx.recent_wiki_id == "my_wiki"
+
+
+# ─── ChatService init ────────────────────────────────────────────
+
+
+class TestChatServiceInit:
+    def test_init(self, chat_service: ChatService) -> None:
+        assert chat_service.wiki_service is not None
+        assert chat_service.db is not None
+        assert chat_service._contexts == {}
+
+    def test_db_creates_tables(
+        self, chat_service: ChatService
+    ) -> None:
+        stats = chat_service.db.get_db_stats()
+        assert "autoresearch_sessions" in stats["tables"]
+        assert "chat_sessions" in stats["tables"]
+
+
+# ─── Private helpers ─────────────────────────────────────────────
+
+
+class TestChatServiceHelpers:
+    def test_parse_wiki_prefix_match(
+        self, chat_service: ChatService
+    ) -> None:
+        wiki_id, msg = chat_service._parse_wiki_prefix(
+            "@my_wiki hello world"
+        )
+        assert wiki_id == "my_wiki"
+        assert msg == "hello world"
+
+    def test_parse_wiki_prefix_no_match(
+        self, chat_service: ChatService
+    ) -> None:
+        wiki_id, msg = chat_service._parse_wiki_prefix("hello world")
+        assert wiki_id is None
+        assert msg == "hello world"
+
+    def test_build_system_prompt_no_wiki(
+        self, chat_service: ChatService
+    ) -> None:
+        prompt = chat_service._build_system_prompt()
+        assert "wiki assistant" in prompt
+
+    def test_build_system_prompt_with_wiki(
+        self, chat_service: ChatService
+    ) -> None:
+        prompt = chat_service._build_system_prompt("my_wiki")
+        assert "my_wiki" in prompt
+
+    def test_truncate_messages_short(
+        self, chat_service: ChatService
+    ) -> None:
+        msgs = [{"role": "system", "content": "sys"}]
+        result = chat_service._truncate_messages(msgs, max_messages=50)
+        assert result == msgs
+
+    def test_truncate_messages_long(
+        self, chat_service: ChatService
+    ) -> None:
+        msgs = [{"role": "system", "content": "sys"}]
+        for i in range(60):
+            msgs.append({"role": "user", "content": f"msg{i}"})
+        result = chat_service._truncate_messages(msgs, max_messages=10)
+        assert len(result) == 12  # system + summary + 10
+
+    def test_get_toolspec_empty(
+        self, chat_service: ChatService
+    ) -> None:
+        # Mock tool_registry returns empty list
+        chat_service.wiki_service.tool_registry.list_tools.return_value = []
+        specs = chat_service._get_toolspec(
+            chat_service.wiki_service.tool_registry
+        )
+        assert specs == []
+
+    def test_get_toolspec_with_tools(
+        self, chat_service: ChatService
+    ) -> None:
+        chat_service.wiki_service.tool_registry.list_tools.return_value = [
+            {
+                "name": "search",
+                "description": "Search wiki",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"q": {"type": "string"}},
+                    "required": ["q"],
+                },
+            }
+        ]
+        specs = chat_service._get_toolspec(
+            chat_service.wiki_service.tool_registry
+        )
+        assert len(specs) == 1
+        assert specs[0]["function"]["name"] == "search"
+
+    def test_get_wiki_for_context_with_id(
+        self, chat_service: ChatService
+    ) -> None:
+        ctx = AgentContext(wiki_id="test_wiki")
+        wiki = chat_service._get_wiki_for_context(ctx)
+        assert wiki is not None
+
+    def test_get_wiki_for_context_recent(
+        self, chat_service: ChatService
+    ) -> None:
+        ctx = AgentContext()
+        ctx.set_recent_wiki("test_wiki")
+        wiki = chat_service._get_wiki_for_context(ctx)
+        assert wiki is not None
+
+    def test_get_wiki_for_context_no_id(
+        self, chat_service: ChatService
+    ) -> None:
+        ctx = AgentContext()
+        wiki = chat_service._get_wiki_for_context(ctx)
+        # Should fall back to default wiki
+        assert wiki is not None
+
+    def test_save_message(
+        self, chat_service: ChatService
+    ) -> None:
+        chat_service._save_message("s1", "user", "hello")
+        msgs = chat_service.db.get_chat_messages("s1")
+        assert len(msgs) == 1
+        assert msgs[0]["role"] == "user"
+        assert msgs[0]["content"] == "hello"
+
+
+# ─── SSE chat flow ───────────────────────────────────────────────
+
+
+class TestSSEChatFlow:
+    @pytest.mark.asyncio
+    async def test_chat_new_session(
+        self, chat_service: ChatService
+    ) -> None:
+        # Mock LLM to return a simple "done" event
+        async def fake_stream(messages, tools=None):
+            yield {"type": "done", "content": "Hello!"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events = []
+        async for event in chat_service.chat(message="hi"):
+            events.append(event)
+
+        # Should have session_created and done events
+        assert any(e.get("type") == "session_created" for e in events)
+        assert any(e.get("type") == "done" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_chat_existing_session(
+        self, chat_service: ChatService
+    ) -> None:
+        # Create a session first
+        sid = chat_service.db.create_chat_session()
+
+        async def fake_stream(messages, tools=None):
+            yield {"type": "done", "content": "Reply!"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events = []
+        async for event in chat_service.chat(
+            message="hi", session_id=sid
+        ):
+            events.append(event)
+
+        # Should NOT have session_created (session already exists)
+        assert not any(
+            e.get("type") == "session_created" for e in events
+        )
+        assert any(e.get("type") == "done" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_chat_wiki_prefix(
+        self, chat_service: ChatService
+    ) -> None:
+        async def fake_stream(messages, tools=None):
+            yield {"type": "done", "content": "ok"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events = []
+        async for event in chat_service.chat(
+            message="@other_wiki hello"
+        ):
+            events.append(event)
+
+        # Check that the session was created with the right wiki_id
+        session_created = next(
+            e for e in events
+            if e.get("type") == "session_created"
+        )
+        sid = session_created["session_id"]
+        session = chat_service.db.get_chat_session(sid)
+        assert session["wiki_id"] == "other_wiki"
+
+    @pytest.mark.asyncio
+    async def test_chat_message_persisted(
+        self, chat_service: ChatService
+    ) -> None:
+        async def fake_stream(messages, tools=None):
+            yield {"type": "done", "content": "reply"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events = []
+        async for event in chat_service.chat(message="user question"):
+            events.append(event)
+
+        sid = next(
+            e["session_id"] for e in events
+            if e.get("type") == "session_created"
+        )
+        msgs = chat_service.db.get_chat_messages(sid)
+        # user + assistant (DESC order, so msgs[0] is assistant)
+        assert len(msgs) == 2
+        assert msgs[0]["role"] == "assistant"
+        assert msgs[1]["role"] == "user"
+        assert msgs[0]["content"] == "reply"
+        assert msgs[1]["content"] == "user question"
+
+    @pytest.mark.asyncio
+    async def test_chat_thinking_event(
+        self, chat_service: ChatService
+    ) -> None:
+        async def fake_stream(messages, tools=None):
+            yield {"type": "thinking", "text": "Let me think..."}
+            yield {"type": "done", "content": "result"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events = []
+        async for event in chat_service.chat(message="hi"):
+            events.append(event)
+
+        assert any(e.get("type") == "thinking" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_chat_tool_call_event(
+        self, chat_service: ChatService
+    ) -> None:
+        async def fake_stream(messages, tools=None):
+            yield {
+                "type": "tool_call",
+                "tool": "wiki_search",
+                "args": '{"q": "test"}',
+            }
+            yield {"type": "done", "content": "ok"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events = []
+        async for event in chat_service.chat(message="search"):
+            events.append(event)
+
+        assert any(
+            e.get("type") == "tool_call_start" for e in events
+        )
+        assert any(
+            e.get("type") == "tool_call_end" for e in events
+        )
+
+    @pytest.mark.asyncio
+    async def test_chat_confirmation_required(
+        self, chat_service: ChatService
+    ) -> None:
+        # Mock tool_registry to return confirmation_required
+        # Use AsyncMock since the code awaits execute()
+        chat_service.wiki_service.tool_registry.execute = AsyncMock(
+            return_value={
+                "status": "confirmation_required",
+                "confirmation_id": "conf-1",
+                "impact": {"risk": "high"},
+            }
+        )
+
+        async def fake_stream(messages, tools=None):
+            yield {
+                "type": "tool_call",
+                "tool": "wiki_write_page",
+                "args": "{}",
+            }
+            yield {"type": "done", "content": "ok"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events = []
+        async for event in chat_service.chat(message="write"):
+            events.append(event)
+
+        assert any(
+            e.get("type") == "confirmation_required" for e in events
+        )
+
+    @pytest.mark.asyncio
+    async def test_chat_error_event(
+        self, chat_service: ChatService
+    ) -> None:
+        async def fake_stream(messages, tools=None):
+            raise RuntimeError("LLM down")
+            yield  # never reached, but needed for async gen
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events = []
+        async for event in chat_service.chat(message="hi"):
+            events.append(event)
+
+        assert any(e.get("type") == "error" for e in events)
+
+
+# ─── Context management ──────────────────────────────────────────
+
+
+class TestContextManagement:
+    def test_get_or_create_context_new(
+        self, chat_service: ChatService
+    ) -> None:
+        ctx = chat_service._get_or_create_context("new-session")
+        assert isinstance(ctx, AgentContext)
+        assert ctx.wiki_id is None
+
+    def test_get_or_create_context_existing(
+        self, chat_service: ChatService
+    ) -> None:
+        ctx1 = chat_service._get_or_create_context("s1")
+        ctx2 = chat_service._get_or_create_context("s1")
+        assert ctx1 is ctx2
+
+    def test_get_or_create_context_restores_messages(
+        self, chat_service: ChatService
+    ) -> None:
+        # Create session + save messages
+        sid = chat_service.db.create_chat_session()
+        chat_service.db.save_chat_message({
+            "session_id": sid, "role": "user", "content": "hi"
+        })
+        chat_service.db.save_chat_message({
+            "session_id": sid, "role": "assistant", "content": "hello"
+        })
+
+        ctx = chat_service._get_or_create_context(sid)
+        assert len(ctx.messages) == 2
+        assert ctx.messages[0]["content"] == "hi"
+        assert ctx.messages[1]["content"] == "hello"
+
+    def test_get_or_create_context_restores_wiki_id(
+        self, chat_service: ChatService
+    ) -> None:
+        sid = chat_service.db.create_chat_session(wiki_id="test_wiki")
+        ctx = chat_service._get_or_create_context(sid)
+        assert ctx.recent_wiki_id == "test_wiki"
+
+
+# ─── Confirmation continue flow ─────────────────────────────────
+
+
+class TestConfirmationContinue:
+    @pytest.mark.asyncio
+    async def test_approve_confirmation_continue_success(
+        self, chat_service: ChatService
+    ) -> None:
+        sid = chat_service.db.create_chat_session(wiki_id="test_wiki")
+
+        async def fake_stream(messages, tools=None):
+            yield {"type": "done", "content": "ok"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events = []
+        async for event in chat_service.approve_confirmation_continue(
+            confirmation_id="conf-1", session_id=sid
+        ):
+            events.append(event)
+
+        assert any(
+            e.get("type") == "tool_call_end" for e in events
+        )
+        assert any(e.get("type") == "done" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_approve_confirmation_continue_error(
+        self, chat_service: ChatService
+    ) -> None:
+        sid = chat_service.db.create_chat_session()
+        # ChatService calls wiki_service.approve_confirmation
+        chat_service.wiki_service.approve_confirmation = AsyncMock(
+            return_value={"status": "error", "error": "rejected"}
+        )
+
+        events = []
+        async for event in chat_service.approve_confirmation_continue(
+            confirmation_id="bad", session_id=sid
+        ):
+            events.append(event)
+
+        assert any(e.get("type") == "error" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_approve_confirmation_continue_no_wiki(
+        self, chat_service: ChatService
+    ) -> None:
+        sid = chat_service.db.create_chat_session()
+        chat_service.wiki_service.default_wiki_id = None
+
+        events = []
+        async for event in chat_service.approve_confirmation_continue(
+            confirmation_id="conf-1", session_id=sid
+        ):
+            events.append(event)
+
+        assert any(e.get("type") == "error" for e in events)
