@@ -61,8 +61,12 @@ class AgentService:
             wiki_registry, self.data_dir, self.app_db.chat,
         )
 
-        # ChatService (SSE chat)
-        self.chat_service = ChatService(self.wiki_service, self.data_dir)
+        # ChatService (SSE chat) — share the same ChatDatabase
+        # instance owned by AppDatabase to avoid duplicate
+        # connections on the same SQLite file (Phase 1.5 / v0.36).
+        self.chat_service = ChatService(
+            self.wiki_service, self.data_dir, chat_db=self.app_db.chat,
+        )
 
         # SkillService (lazy init)
         if skill_service is not None:

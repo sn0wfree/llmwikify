@@ -566,17 +566,27 @@ class TestTextModeToolCallDispatch:
         # LLM streams content that contains a text-mode tool call
         # followed by a done event. The tool should run, and the
         # [TOOL_CALL] markup should not appear in message_delta.
+        # (Phase 1.1 / v0.36: tool results are now fed back to
+        # the LLM in a follow-up call, so we yield an empty
+        # content stream on the second call to terminate cleanly.)
+        call_count = {"n": 0}
+
         async def fake_stream(messages, tools=None):
-            yield {
-                "type": "content",
-                "text": (
-                    'Let me check that page. '
-                    '[TOOL_CALL] {tool => "wiki_read_page", '
-                    'args => { --page_name "overview" }} [/TOOL_CALL] '
-                    'Done.'
-                ),
-            }
-            yield {"type": "done", "content": "Done."}
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                yield {
+                    "type": "content",
+                    "text": (
+                        'Let me check that page. '
+                        '[TOOL_CALL] {tool => "wiki_read_page", '
+                        'args => { --page_name "overview" }} [/TOOL_CALL] '
+                        'Done.'
+                    ),
+                }
+                yield {"type": "done", "content": "Done."}
+            else:
+                # Second (final) call: just a plain done.
+                yield {"type": "done", "content": "Done."}
 
         chat_service.wiki_service.llm.astream_chat = fake_stream
 
@@ -584,7 +594,7 @@ class TestTextModeToolCallDispatch:
         async for event in chat_service.chat(message="read overview"):
             events.append(event)
 
-        # Tool call should have been dispatched.
+        # Tool call should have been dispatched exactly once.
         starts = [e for e in events if e.get("type") == "tool_call_start"]
         ends = [e for e in events if e.get("type") == "tool_call_end"]
         assert len(starts) == 1
@@ -611,14 +621,20 @@ class TestTextModeToolCallDispatch:
         self, chat_service: ChatService
     ) -> None:
         # The text-mode block is split across multiple content chunks.
+        call_count = {"n": 0}
+
         async def fake_stream(messages, tools=None):
-            yield {"type": "content", "text": "Intro [TOOL_CALL] "}
-            yield {
-                "type": "content",
-                "text": '{tool => "wiki_read_page", args => { --page_name "x" }}',
-            }
-            yield {"type": "content", "text": " [/TOOL_CALL] tail"}
-            yield {"type": "done", "content": "ok"}
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                yield {"type": "content", "text": "Intro [TOOL_CALL] "}
+                yield {
+                    "type": "content",
+                    "text": '{tool => "wiki_read_page", args => { --page_name "x" }}',
+                }
+                yield {"type": "content", "text": " [/TOOL_CALL] tail"}
+                yield {"type": "done", "content": "ok"}
+            else:
+                yield {"type": "done", "content": "ok"}
 
         chat_service.wiki_service.llm.astream_chat = fake_stream
 
@@ -644,12 +660,18 @@ class TestTextModeToolCallDispatch:
     ) -> None:
         # A malformed block shouldn't crash; it falls through to the
         # user as text and no tool is invoked.
+        call_count = {"n": 0}
+
         async def fake_stream(messages, tools=None):
-            yield {
-                "type": "content",
-                "text": "[TOOL_CALL] garbage no tool key [/TOOL_CALL]",
-            }
-            yield {"type": "done", "content": "ok"}
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                yield {
+                    "type": "content",
+                    "text": "[TOOL_CALL] garbage no tool key [/TOOL_CALL]",
+                }
+                yield {"type": "done", "content": "ok"}
+            else:
+                yield {"type": "done", "content": "ok"}
 
         chat_service.wiki_service.llm.astream_chat = fake_stream
 
@@ -794,3 +816,253 @@ class TestConfirmationContinue:
             events.append(event)
 
         assert any(e.get("type") == "error" for e in events)
+
+
+# ─── Phase 1.1 — Iterative tool-call loop (v0.36) ──────────────────
+
+
+class TestChatLoopIteration:
+    """Phase 1.1 (v0.36): tool results must be fed back to the LLM
+    in subsequent iterations, breaking the single-pass pattern that
+    silently dropped tool outputs."""
+
+    @staticmethod
+    async def _stream_from(events: list[dict]) -> Any:
+        for e in events:
+            yield e
+
+    @pytest.mark.asyncio
+    async def test_loop_emits_done_after_single_pass_no_tools(
+        self, chat_service: ChatService
+    ) -> None:
+        """Plain chat (no tools) returns a single done event."""
+        sid = chat_service.db.create_chat_session()
+        chat_service.wiki_service.llm.astream_chat = MagicMock(
+            return_value=TestChatLoopIteration._stream_from([
+                {"type": "content", "text": "Hello back"},
+                {"type": "done", "content": "Hello back"},
+            ])
+        )
+
+        events = []
+        async for ev in chat_service.chat("hi", session_id=sid):
+            events.append(ev)
+
+        assert any(e["type"] == "done" for e in events)
+        # Only ONE done event (no extra from the loop).
+        done_events = [e for e in events if e["type"] == "done"]
+        assert len(done_events) == 1
+
+    @pytest.mark.asyncio
+    async def test_loop_iterates_when_llm_emits_tool_call(
+        self, chat_service: ChatService
+    ) -> None:
+        """When the LLM emits a tool_call, the loop calls the LLM
+        a SECOND time so it can use the tool result in its final
+        answer."""
+        sid = chat_service.db.create_chat_session()
+        # First LLM call: emits a tool_call + done-without-content.
+        # Second LLM call: emits the final answer using the tool
+        # result.
+        call_count = {"n": 0}
+
+        async def fake_stream(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                yield {"type": "content", "text": "Let me check."}
+                yield {
+                    "type": "tool_call",
+                    "tool": "wiki_search",
+                    "args": '{"q": "test"}',
+                }
+                yield {"type": "done", "content": "Let me check."}
+            else:
+                yield {
+                    "type": "content",
+                    "text": "Found it.",
+                }
+                yield {
+                    "type": "done",
+                    "content": "Found it.",
+                }
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+        chat_service.wiki_service.tool_registry.execute = AsyncMock(
+            return_value={"result": ["hit1", "hit2"]}
+        )
+
+        events = []
+        async for ev in chat_service.chat("find test", session_id=sid):
+            events.append(ev)
+
+        # LLM was called twice (1st for tool, 2nd for final).
+        assert call_count["n"] == 2
+        # Tool was executed once.
+        assert chat_service.wiki_service.tool_registry.execute.await_count == 1
+        # Final answer is the second LLM's content.
+        done_events = [e for e in events if e["type"] == "done"]
+        assert len(done_events) == 1
+        assert done_events[0]["final_response"] == "Found it."
+
+    @pytest.mark.asyncio
+    async def test_loop_stops_on_confirmation_required(
+        self, chat_service: ChatService
+    ) -> None:
+        """Confirmation-required tools halt the loop after the
+        first iteration (frontend will resume via
+        approve_confirmation_continue)."""
+        sid = chat_service.db.create_chat_session()
+        call_count = {"n": 0}
+
+        async def fake_stream(*args, **kwargs):
+            call_count["n"] += 1
+            yield {"type": "tool_call", "tool": "wiki_write_page", "args": "{}"}
+            yield {"type": "done", "content": ""}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+        chat_service.wiki_service.tool_registry.execute = AsyncMock(
+            return_value={"status": "confirmation_required", "confirmation_id": "c-1"}
+        )
+
+        events = []
+        async for ev in chat_service.chat("write", session_id=sid):
+            events.append(ev)
+
+        # LLM called once only — confirmation pauses the loop.
+        assert call_count["n"] == 1
+        assert any(e["type"] == "confirmation_required" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_loop_respects_max_iterations(
+        self, chat_service: ChatService
+    ) -> None:
+        """Infinite-tool loop is bounded by max_iterations."""
+        sid = chat_service.db.create_chat_session()
+        call_count = {"n": 0}
+
+        async def infinite_tools(*args, **kwargs):
+            call_count["n"] += 1
+            yield {
+                "type": "tool_call",
+                "tool": "wiki_search",
+                "args": '{"q": "x"}',
+            }
+            yield {"type": "done", "content": ""}
+
+        chat_service.wiki_service.llm.astream_chat = infinite_tools
+        chat_service.wiki_service.tool_registry.execute = AsyncMock(
+            return_value={"result": []}
+        )
+        chat_service.DEFAULT_MAX_CHAT_ITERATIONS = 3
+
+        events = []
+        async for ev in chat_service.chat("loop", session_id=sid):
+            events.append(ev)
+
+        # Capped at max_iterations.
+        assert call_count["n"] == 3
+        # Final fallback done emitted.
+        done_events = [e for e in events if e["type"] == "done"]
+        assert len(done_events) == 1
+
+
+# ─── Phase 1.2 — save_message error visibility (v0.36) ──────────────
+
+
+class TestSaveMessageErrors:
+    """Phase 1.2 (v0.36): DB save failures are logged + counted,
+    not silently swallowed."""
+
+    def test_save_error_count_increments_on_failure(
+        self, chat_service: ChatService
+    ) -> None:
+        """Forced DB error increments the counter."""
+        sid = chat_service.db.create_chat_session()
+        # Make save_chat_message raise
+        original = chat_service.db.save_chat_message
+        chat_service.db.save_chat_message = MagicMock(
+            side_effect=RuntimeError("disk full")
+        )
+
+        chat_service._save_message(sid, "user", "hello")
+        chat_service._save_message(sid, "user", "world")
+
+        assert chat_service._save_error_count == 2
+        # Restore
+        chat_service.db.save_chat_message = original
+
+    def test_save_warning_event_factory(self) -> None:
+        e = ChatEvent.save_warning("persistence failed")
+        assert e["type"] == "save_warning"
+        assert "persistence failed" in e["message"]
+
+
+# ─── Phase 1.3 — UUID length + INSERT OR IGNORE (v0.36) ───────────
+
+
+class TestMessageId:
+    """Phase 1.3 (v0.36): full 32-hex uuid; INSERT OR IGNORE."""
+
+    def test_save_message_uses_full_uuid(
+        self, chat_service: ChatService
+    ) -> None:
+        """Generated message ids are 32 hex chars (was 8)."""
+        sid = chat_service.db.create_chat_session()
+        chat_service._save_message(sid, "user", "hi")
+        msgs = chat_service.db.get_chat_messages(sid)
+        assert len(msgs) == 1
+        msg_id = msgs[0].get("id", "")
+        # 32 hex chars (full uuid4().hex) — not the old 8.
+        assert len(msg_id) == 32
+        int(msg_id, 16)  # valid hex
+
+    def test_save_message_ignores_duplicates(
+        self, chat_service: ChatService
+    ) -> None:
+        """INSERT OR IGNORE prevents overwrites on id collision."""
+        sid = chat_service.db.create_chat_session()
+        chat_service.db.save_chat_message({
+            "id": "duplicate-id",
+            "session_id": sid,
+            "role": "user",
+            "content": "first",
+            "tool_calls": None,
+        })
+        chat_service.db.save_chat_message({
+            "id": "duplicate-id",
+            "session_id": sid,
+            "role": "user",
+            "content": "second",
+            "tool_calls": None,
+        })
+        msgs = chat_service.db.get_chat_messages(sid)
+        # The first message survives; the second is dropped.
+        assert any(m.get("content") == "first" for m in msgs)
+        assert not any(m.get("content") == "second" for m in msgs)
+
+
+# ─── Phase 1.5 — Shared ChatDatabase instance (v0.36) ────────────
+
+
+class TestSharedChatDatabase:
+    """Phase 1.5 (v0.36): ChatService accepts an injected
+    ChatDatabase to avoid duplicate connections on the same file."""
+
+    def test_chat_service_uses_injected_db(
+        self, wiki_service_mock: MockWikiService, data_dir: Path
+    ) -> None:
+        from llmwikify.apps.chat.db import ChatDatabase
+        shared_db = ChatDatabase(data_dir)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            svc = ChatService(wiki_service_mock, data_dir, chat_db=shared_db)
+        assert svc.db is shared_db
+
+    def test_chat_service_creates_db_when_not_provided(
+        self, wiki_service_mock: MockWikiService, data_dir: Path
+    ) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            svc = ChatService(wiki_service_mock, data_dir)
+        assert svc.db is not None
+        assert isinstance(svc.db.db_path, Path)

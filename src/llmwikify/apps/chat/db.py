@@ -379,8 +379,13 @@ class ChatDatabase(BaseDatabase):
         content = message.get("content", "")
         tool_calls = json.dumps(message["tool_calls"]) if message.get("tool_calls") else None
         with sqlite3.connect(self.db_path) as conn:
+            # Phase 1.3 (v0.36): switch from INSERT OR REPLACE
+            # (which silently overwrote a message on id collision)
+            # to INSERT OR IGNORE so retrying a save does not
+            # destroy history. Callers can update_tool_call() for
+            # in-place updates.
             conn.execute(
-                """INSERT OR REPLACE INTO chat_messages
+                """INSERT OR IGNORE INTO chat_messages
                    (id, session_id, role, content, tool_calls)
                    VALUES (?, ?, ?, ?, ?)""",
                 (msg_id, session_id, role, content, tool_calls),
