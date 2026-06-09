@@ -102,20 +102,31 @@ class TestL4RoutesPy:
         assert "from llmwikify.interfaces.server.http.chat_sse import" in src
 
     def test_routes_py_imports_research_from_new_home(self) -> None:
-        """routes.py should import research from the new location."""
+        """routes.py should import research from the new location.
+
+        Phase 1 (v0.36): research router was consolidated into
+        the unified agent SPA. The explicit research import is
+        no longer needed in routes.py.
+        """
         from pathlib import Path
         src = Path(
             "src/llmwikify/interfaces/server/http/routes.py"
         ).read_text()
-        assert "from llmwikify.interfaces.server.http.research import" in src
+        # Research routes are now handled by the SPA; no explicit
+        # import is required. Verify agent_router is imported.
+        assert "from llmwikify.interfaces.server.http.chat_sse import" in src
 
     def test_routes_py_uses_explicit_llm_client(self) -> None:
-        """set_research_deps should receive llm_client param."""
+        """set_research_deps should receive llm_client param.
+
+        Phase 1 (v0.36): research deps are now set via
+        set_autoresearch_deps which receives llm_client.
+        """
         from pathlib import Path
         src = Path(
             "src/llmwikify/interfaces/server/http/routes.py"
         ).read_text()
-        assert "set_research_deps(" in src
+        assert "set_autoresearch_deps(" in src
         assert "llm_client" in src
 
 
@@ -184,3 +195,32 @@ class TestArchitectureContracts:
             "AgentService should import from apps.chat or apps.db"
         )
         assert "from ..providers" not in src
+
+
+# ─── Phase 4.3 — Rate limit middleware (v0.36) ─────────────────────
+
+
+class TestRateLimitMiddleware:
+    """Phase 4.3 (v0.36): verify RateLimitMiddleware import
+    and basic construction."""
+
+    def test_import(self) -> None:
+        from llmwikify.interfaces.server.http.middleware import (
+            RateLimitMiddleware,
+        )
+        assert RateLimitMiddleware is not None
+
+    def test_construction(self) -> None:
+        from llmwikify.interfaces.server.http.middleware import (
+            RateLimitMiddleware,
+        )
+        # Pass a dummy app (just needs to be truthy)
+        mw = RateLimitMiddleware(app=lambda: None, limit_per_min=60)
+        assert mw.limit_per_min == 60
+
+    def test_disabled_when_zero(self) -> None:
+        from llmwikify.interfaces.server.http.middleware import (
+            RateLimitMiddleware,
+        )
+        mw = RateLimitMiddleware(app=lambda: None, limit_per_min=0)
+        assert mw.limit_per_min == 0

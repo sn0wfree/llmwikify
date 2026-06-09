@@ -353,13 +353,44 @@ class ChatDatabase(BaseDatabase):
             return [dict(r) for r in rows]
 
     def delete_chat_session(self, session_id: str) -> bool:
+        """Delete a session and ALL related rows (Phase 4.5 / v0.36).
+
+        Deletes chat_messages, tool_calls, context_entries
+        belonging to session_id, then the session itself. Uses
+        a transaction so either all rows are deleted or none.
+        """
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "DELETE FROM chat_sessions WHERE id = ?",
-                (session_id,),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+            # Phase 4.5: enable foreign key enforcement for this
+            # connection. Cascading deletes are still done
+            # manually because SQLite FK support is OFF by default
+            # and not guaranteed at the DB level.
+            conn.execute("PRAGMA foreign_keys = ON")
+            try:
+                conn.execute(
+                    "BEGIN IMMEDIATE",
+                )
+                # Delete in dependency order
+                conn.execute(
+                    "DELETE FROM chat_messages WHERE session_id = ?",
+                    (session_id,),
+                )
+                conn.execute(
+                    "DELETE FROM tool_calls WHERE session_id = ?",
+                    (session_id,),
+                )
+                conn.execute(
+                    "DELETE FROM context_entries WHERE session_id = ?",
+                    (session_id,),
+                )
+                cursor = conn.execute(
+                    "DELETE FROM chat_sessions WHERE id = ?",
+                    (session_id,),
+                )
+                conn.execute("COMMIT")
+                return cursor.rowcount > 0
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
 
     def get_chat_session_title(self, session_id: str) -> str:
         session = self.get_chat_session(session_id)

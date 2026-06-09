@@ -19,6 +19,7 @@ Target: 20+ tests, no real LLM calls.
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import tempfile
 import warnings
 from pathlib import Path
@@ -1164,3 +1165,66 @@ class TestMemoryManagerIntegration:
         assert len(ctx.messages) == 2
         assert ctx.messages[0]["content"] == "what is wiki?"
         assert ctx.messages[1]["content"] == "A wiki is..."
+
+
+# ─── Phase 4 — Reliability (v0.36) ─────────────────────────────────
+
+
+class TestRetryManagers:
+    """Phase 4.1-4.2 (v0.36): verify retry managers work."""
+
+    def test_llm_retry_manager_retries_transient(self):
+        from llmwikify.apps.chat.retry_managers import LLMRetryManager
+        mgr = LLMRetryManager(max_attempts=3, base_delay=0.01)
+        call_count = {"n": 0}
+
+        async def flaky():
+            call_count["n"] += 1
+            if call_count["n"] < 3:
+                raise RuntimeError("rate limit exceeded")
+            return "ok"
+
+        result = asyncio.run(mgr.call(flaky))
+        assert result == "ok"
+        assert call_count["n"] == 3
+
+    def test_llm_retry_manager_fails_fast_on_validation(self):
+        from llmwikify.apps.chat.retry_managers import LLMRetryManager
+        mgr = LLMRetryManager(max_attempts=3, base_delay=0.01)
+
+        async def bad_json():
+            raise ValueError("invalid JSON decode")
+
+        with pytest.raises(ValueError, match="invalid JSON"):
+            asyncio.run(mgr.call(bad_json))
+
+    def test_db_retry_manager_retries_locked(self):
+        from llmwikify.apps.chat.retry_managers import DBRetryManager
+        mgr = DBRetryManager(max_attempts=3, base_delay=0.01)
+        call_count = {"n": 0}
+
+        def flaky():
+            call_count["n"] += 1
+            if call_count["n"] < 3:
+                raise sqlite3.OperationalError("database is locked")
+            return "ok"
+
+        result = mgr.call(flaky)
+        assert result == "ok"
+        assert call_count["n"] == 3
+
+    def test_save_message_uses_db_retry(
+        self, wiki_service_mock: MockWikiService, data_dir: Path
+    ) -> None:
+        """_save_message should use DBRetryManager."""
+        from llmwikify.apps.chat.db import ChatDatabase
+        shared_db = ChatDatabase(data_dir)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            svc = ChatService(
+                wiki_service_mock, data_dir, chat_db=shared_db,
+            )
+        # Should not raise
+        svc._save_message("session-1", "user", "hello")
+        msgs = svc.db.get_chat_messages("session-1")
+        assert len(msgs) == 1

@@ -28,6 +28,7 @@ from typing import Any
 
 from llmwikify.apps.chat.base import ChatBase
 from llmwikify.apps.chat.db import ChatDatabase
+from llmwikify.apps.chat.agent.chat_react import REACT_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +217,11 @@ class AgentContext:
     _recent_tool_entries: list[dict[str, Any]] = field(default_factory=list)
     tool_invocations: int = 0
 
+    # ReAct state tracking (v0.37)
+    react_observations: list[str] = field(default_factory=list)
+    react_thoughts: list[str] = field(default_factory=list)
+    react_round: int = 0
+
     def add_user_message(self, content: str) -> None:
         self.messages.append({"role": "user", "content": content})
 
@@ -227,6 +233,29 @@ class AgentContext:
 
     def set_recent_wiki(self, wiki_id: str) -> None:
         self.recent_wiki_id = wiki_id
+
+    def add_observation(self, observation: str) -> None:
+        """Track a ReAct observation from a tool call result."""
+        self.react_observations.append(observation)
+        # Keep only the last 10 observations to avoid prompt bloat
+        if len(self.react_observations) > 10:
+            self.react_observations = self.react_observations[-10:]
+
+    def add_thought(self, thought: str) -> None:
+        """Track a ReAct thought from the LLM reasoning step."""
+        if thought:
+            self.react_thoughts.append(thought)
+            if len(self.react_thoughts) > 10:
+                self.react_thoughts = self.react_thoughts[-10:]
+
+    def get_observations_summary(self) -> str:
+        """Generate a summary of recent observations for prompt injection."""
+        if not self.react_observations:
+            return ""
+        lines = ["## Recent tool observations"]
+        for i, obs in enumerate(self.react_observations[-5:], 1):
+            lines.append(f"{i}. {obs}")
+        return "\n".join(lines)
 
 
 # ─── ChatService ──────────────────────────────────────────────────
@@ -263,6 +292,22 @@ class ChatService(ChatBase):
         # None, the chat layer falls back to direct ChatDatabase
         # access.
         self.memory_manager = memory_manager
+        # Phase 4.1 (v0.36): LLMRetryManager wraps transient
+        # LLM failures (rate limit, timeout, 5xx) with
+        # exponential backoff. Applied to the initial stream
+        # connection so the first-chunk failure is retried.
+        from llmwikify.apps.chat.retry_managers import (
+            LLMRetryManager,
+            DBRetryManager,
+        )
+        self._llm_retry = LLMRetryManager(
+            max_attempts=3, base_delay=2.0, call_timeout=120.0,
+        )
+        # Phase 4.2 (v0.36): DBRetryManager retries SQLite
+        # 'database is locked' / I/O errors with short backoff.
+        self._db_retry = DBRetryManager(
+            max_attempts=3, base_delay=0.2,
+        )
 
         # Initialize ChatBase with LLM from WikiService
         llm = wiki_service.get_llm()
@@ -328,6 +373,14 @@ class ChatService(ChatBase):
             session_id=session_id,
         )
         raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
+        # ReAct: inject observations from previous tool calls so the
+        # LLM can use them in its reasoning.
+        obs_summary = ctx.get_observations_summary()
+        if obs_summary:
+            raw_messages.insert(-1, {
+                "role": "system",
+                "content": obs_summary,
+            })
         messages_for_llm = self._truncate_messages(raw_messages)
         # Phase 2.3 (v0.36): reset the text-mode buffer so a
         # previous turn's leftover state doesn't leak in.
@@ -459,6 +512,13 @@ class ChatService(ChatBase):
             session_id=session_id,
         )
         raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
+        # ReAct: inject observations
+        obs_summary = ctx.get_observations_summary()
+        if obs_summary:
+            raw_messages.insert(-1, {
+                "role": "system",
+                "content": obs_summary,
+            })
         messages_for_llm = self._truncate_messages(raw_messages)
         # Phase 2.3 (v0.36): reset the text-mode buffer.
         self._reset_text_mode_buffer()
@@ -577,11 +637,12 @@ class ChatService(ChatBase):
              — only when user_message is provided
         """
         parts: list[str] = []
-        # 1. Role + policy
+        # 1. Role + policy + ReAct reasoning pattern
         parts.append(
             "You are a helpful wiki assistant. You have access "
-            "to wiki tools.\nUse the available tools to help the user.\n"
-            "When a user asks to write, modify, or create wiki "
+            "to wiki tools.\n"
+            + REACT_SYSTEM_PROMPT
+            + "\nWhen a user asks to write, modify, or create wiki "
             "pages, you MUST request confirmation first."
         )
         # 2. Wiki context
@@ -720,6 +781,52 @@ class ChatService(ChatBase):
         async for event in llm.astream_chat(messages, tools=tools):
             yield event
 
+    async def _llm_stream_with_retry(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+    ) -> AsyncIterator[dict]:
+        """Wrap the LLM stream with retry on the first chunk
+        (Phase 4.1 / v0.36).
+
+        If the LLM fails to produce the first chunk (e.g.
+        rate limit, timeout, 5xx), the entire stream is
+        retried up to 3 times with exponential backoff. If
+        the first chunk succeeds but a later chunk fails, the
+        error propagates — we cannot safely rewind mid-stream.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(self._llm_retry.max_attempts):
+            try:
+                first = True
+                async for ev in self._astream_with_tools(messages, tools):
+                    first = False
+                    yield ev
+                return  # Stream completed normally
+            except Exception as e:  # noqa: BLE001
+                if first:
+                    # No chunks produced yet — safe to retry
+                    last_exc = e
+                    if not self._llm_retry._is_retriable(e):
+                        raise
+                    if attempt < self._llm_retry.max_attempts - 1:
+                        delay = min(
+                            self._llm_retry.base_delay * (2 ** attempt),
+                            30.0,
+                        )
+                        logger.warning(
+                            "LLM stream failed on attempt %d/%d "
+                            "(no chunks produced): %s. Retrying in %.1fs...",
+                            attempt + 1, self._llm_retry.max_attempts,
+                            e, delay,
+                        )
+                        await asyncio.sleep(delay)
+                else:
+                    # Stream partially delivered — cannot retry
+                    raise
+        if last_exc:
+            raise last_exc
+
     async def _stream_preprocess(
         self, event: dict[str, Any]
     ) -> AsyncIterator[dict[str, Any]]:
@@ -850,6 +957,16 @@ class ChatService(ChatBase):
         entry["status"] = "done"
         yield ChatEvent.tool_call_end(tool_name, result)
 
+        # ReAct observation: track the tool result for the next
+        # reasoning step.  The observation is a concise summary
+        # that the LLM can use to decide its next action.
+        result_summary = json.dumps(
+            result.get("result", result)
+            if isinstance(result, dict) else result,
+            ensure_ascii=False, default=str,
+        )[:500]
+        ctx.add_observation(f"Called {tool_name}: {result_summary}")
+
         # Phase 3.3 (v0.36): persist tool result to
         # MemoryManager.context (best-effort; failures are
         # logged but never block the chat).
@@ -912,19 +1029,24 @@ class ChatService(ChatBase):
         content: str,
         tool_calls: list | None = None,
     ) -> None:
-        # Phase 1.3 (v0.36): use full 32-hex uuid (was 8-hex,
-        # ~4B ID space with non-zero collision risk for
-        # long-running sessions). Errors are now logged + counted
-        # rather than silently swallowed (Phase 1.2).
+        """Persist a chat message with retry (Phase 4.2 / v0.36).
+
+        Uses DBRetryManager to retry SQLite transient errors
+        (database is locked, I/O errors) with exponential
+        backoff. Non-retriable errors are logged and counted
+        (Phase 1.2) but never raise — the chat flow is never
+        interrupted by a persistence failure.
+        """
+        msg = {
+            "id": uuid.uuid4().hex,
+            "session_id": session_id,
+            "role": role,
+            "content": content,
+            "tool_calls": tool_calls,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
         try:
-            self.db.save_chat_message({
-                "id": uuid.uuid4().hex,
-                "session_id": session_id,
-                "role": role,
-                "content": content,
-                "tool_calls": tool_calls,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
+            self._db_retry.call(self.db.save_chat_message, msg)
         except Exception as e:
             logger.error("Failed to save chat message for session %s: %s", session_id, e)
             self._save_error_count += 1

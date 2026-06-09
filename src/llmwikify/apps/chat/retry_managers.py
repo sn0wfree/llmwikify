@@ -212,6 +212,11 @@ class LLMRetryManager:
         self.base_delay = base_delay
         self.call_timeout = call_timeout
 
+    @staticmethod
+    def _is_retriable(exc: Exception) -> bool:
+        """Public wrapper so ChatService can check retriable errors."""
+        return _is_retriable_llm_error(exc)
+
     async def call(
         self,
         func: Callable[..., Any],
@@ -271,11 +276,23 @@ class DBRetryManager:
         self.max_attempts = max_attempts
         self.base_delay = base_delay
 
-    def is_retriable(self, exc: Exception) -> bool:
+    @staticmethod
+    def is_retriable(exc: Exception) -> bool:
+        """Public static wrapper for external callers."""
         if isinstance(exc, sqlite3.OperationalError):
             msg = str(exc).lower()
-            return any(p in msg for p in self.RETRIABLE_SQLITE_ERRORS)
+            return any(p in msg for p in DBRetryManager.RETRIABLE_SQLITE_ERRORS)
         return False
+
+    @staticmethod
+    def _is_retriable(exc: Exception) -> bool:
+        """Alias for ChatService usage."""
+        return DBRetryManager.is_retriable(exc)
+
+    @staticmethod
+    def _is_retriable(exc: Exception) -> bool:
+        """Alias for ChatService usage."""
+        return DBRetryManager.is_retriable(exc)
 
     def call(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """Call a sync DB function with retry on transient SQLite errors.

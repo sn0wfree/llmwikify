@@ -86,6 +86,10 @@ class BaseDatabase:
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        # Phase 4.5 (v0.36): enable foreign key enforcement.
+        # SQLite has FK support OFF by default; this pragma
+        # must be set on every new connection.
+        conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
     def _init_db(self) -> None:

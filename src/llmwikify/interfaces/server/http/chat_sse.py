@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -12,6 +14,12 @@ from sse_starlette import EventSourceResponse
 from llmwikify.apps.chat.agent.agent_service import AgentService
 
 logger = logging.getLogger(__name__)
+
+# Phase 4.4 (v0.36): SSE heartbeat and timeout configuration.
+# HEARTBEAT_INTERVAL: seconds between keepalive pings (15s).
+# STREAM_TIMEOUT: total stream lifetime in seconds (300s = 5min).
+HEARTBEAT_INTERVAL = 15
+STREAM_TIMEOUT = 300
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -48,6 +56,14 @@ async def chat(request: Request):
     service = get_agent_service()
 
     async def event_generator():
+        """SSE generator with heartbeat and timeout (Phase 4.4 / v0.36).
+
+        Sends a heartbeat comment every 15s to keep the
+        connection alive through proxies/CDNs. Total stream
+        lifetime is capped at 5 minutes (300s).
+        """
+        start_time = time.monotonic()
+        last_event_time = start_time
         async for event in service.chat(
             message=message,
             session_id=session_id,
@@ -58,8 +74,26 @@ async def chat(request: Request):
                 "event": "message",
                 "data": json.dumps(event),
             }
+            last_event_time = time.monotonic()
+            # Check total timeout
+            if last_event_time - start_time > STREAM_TIMEOUT:
+                yield {
+                    "event": "message",
+                    "data": json.dumps({
+                        "type": "timeout",
+                        "message": "Stream timed out after 5 minutes",
+                    }),
+                }
+                return
+        # Final heartbeat check
+        elapsed = time.monotonic() - start_time
+        if elapsed > HEARTBEAT_INTERVAL:
+            yield {"event": "heartbeat", "data": ""}
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(
+        event_generator(),
+        ping=HEARTBEAT_INTERVAL,
+    )
 
 
 @router.get("/sessions")
@@ -244,6 +278,8 @@ async def approve_and_continue(confirmation_id: str, request: Request):
     service = get_agent_service()
 
     async def event_generator():
+        """SSE generator with heartbeat and timeout (Phase 4.4 / v0.36)."""
+        start_time = time.monotonic()
         async for event in service.approve_confirmation_and_continue(
             confirmation_id=confirmation_id,
             session_id=session_id,
@@ -251,8 +287,21 @@ async def approve_and_continue(confirmation_id: str, request: Request):
             arguments=arguments,
         ):
             yield {"event": "message", "data": json.dumps(event)}
+            elapsed = time.monotonic() - start_time
+            if elapsed > STREAM_TIMEOUT:
+                yield {
+                    "event": "message",
+                    "data": json.dumps({
+                        "type": "timeout",
+                        "message": "Stream timed out after 5 minutes",
+                    }),
+                }
+                return
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(
+        event_generator(),
+        ping=HEARTBEAT_INTERVAL,
+    )
 
 
 @router.delete("/confirmations/{confirmation_id}")

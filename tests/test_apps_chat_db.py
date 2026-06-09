@@ -34,6 +34,13 @@ def fresh_db() -> ChatDatabase:
 
 
 @pytest.fixture
+def db() -> ChatDatabase:
+    """Alias for fresh_db for shorter test names."""
+    with tempfile.TemporaryDirectory() as tmp:
+        yield ChatDatabase(tmp)
+
+
+@pytest.fixture
 def db_with_session() -> tuple[ChatDatabase, str]:
     """A ChatDatabase with one pre-created session."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -332,3 +339,78 @@ class TestResultJsonEdgeCases:
         db.save_research_state(sid, 0, state)
         loaded = db.load_research_state(sid, 0)
         assert loaded == state
+
+
+# ─── Phase 4.5 — Cascade delete (v0.36) ────────────────────────────
+
+
+class TestCascadeDelete:
+    """Phase 4.5 (v0.36): delete_chat_session cascades to
+    chat_messages, tool_calls, context_entries."""
+
+    def test_cascade_deletes_messages_and_tool_calls(self, db):
+        """Deleting a session removes its messages and tool_calls."""
+        sid = db.create_chat_session()
+        db.save_chat_message({
+            "id": "msg-1",
+            "session_id": sid,
+            "role": "user",
+            "content": "hi",
+        })
+        db.save_chat_message({
+            "id": "msg-2",
+            "session_id": sid,
+            "role": "assistant",
+            "content": "hello",
+        })
+        db.log_tool_call(sid, "search", {"q": "test"}, "executed")
+
+        assert db.delete_chat_session(sid) is True
+        # Verify cascade
+        assert db.get_chat_messages(sid) == []
+        assert db.get_chat_session(sid) is None
+
+    def test_cascade_deletes_context_entries(self, db):
+        """Deleting a session removes context_entries."""
+        sid = db.create_chat_session()
+        # Manually insert a context entry
+        import sqlite3
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                """INSERT INTO context_entries
+                   (id, session_id, entry_type, content)
+                   VALUES (?, ?, ?, ?)""",
+                ("ctx-1", sid, "tool_result", "some output"),
+            )
+            conn.commit()
+
+        assert db.delete_chat_session(sid) is True
+        entries = db.get_chat_messages(sid)  # check no rows left
+        assert entries == []
+
+    def test_delete_nonexistent_returns_false(self, db):
+        """Deleting a non-existent session returns False."""
+        assert db.delete_chat_session("does-not-exist") is False
+
+    def test_delete_only_affects_target_session(self, db):
+        """Deleting session A doesn't affect session B."""
+        sid_a = db.create_chat_session()
+        sid_b = db.create_chat_session()
+        db.save_chat_message({
+            "id": "msg-a",
+            "session_id": sid_a,
+            "role": "user",
+            "content": "from A",
+        })
+        db.save_chat_message({
+            "id": "msg-b",
+            "session_id": sid_b,
+            "role": "user",
+            "content": "from B",
+        })
+
+        assert db.delete_chat_session(sid_a) is True
+        # B should be untouched
+        msgs_b = db.get_chat_messages(sid_b)
+        assert len(msgs_b) == 1
+        assert msgs_b[0]["content"] == "from B"

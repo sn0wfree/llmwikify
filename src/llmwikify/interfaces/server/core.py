@@ -154,6 +154,14 @@ class WikiServer:
         if self.api_key:
             app.add_middleware(AuthMiddleware, api_key=self.api_key)
 
+        # Phase 4.3 (v0.36): Rate limit middleware. Token-bucket
+        # per IP, applied to /api/agent/* routes only. Default
+        # 60 req/min; set RATE_LIMIT_PER_MIN=0 to disable.
+        from llmwikify.interfaces.server.http.middleware import (
+            RateLimitMiddleware,
+        )
+        app.add_middleware(RateLimitMiddleware)
+
         # Request logging middleware - logs every request for debugging
         @app.middleware("http")
         async def log_requests(request: Request, call_next):

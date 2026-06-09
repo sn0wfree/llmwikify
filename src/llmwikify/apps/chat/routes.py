@@ -29,18 +29,23 @@ _LLM_CLIENT: Any = None
 _AUTORESEARCH_CONFIG: dict[str, Any] | None = None
 
 
+_TOOL_REGISTRY: Any = None
+
+
 def set_autoresearch_deps(
     db: AutoResearchDatabase,
     wiki_registry: Any,
     llm_client: Any,
     config: dict[str, Any] | None = None,
+    tool_registry: Any = None,
 ) -> None:
     """Wire up shared deps. Called from server startup."""
-    global _AUTORESEARCH_DB, _WIKI_REGISTRY, _LLM_CLIENT, _AUTORESEARCH_CONFIG
+    global _AUTORESEARCH_DB, _WIKI_REGISTRY, _LLM_CLIENT, _AUTORESEARCH_CONFIG, _TOOL_REGISTRY
     _AUTORESEARCH_DB = db
     _WIKI_REGISTRY = wiki_registry
     _LLM_CLIENT = llm_client
     _AUTORESEARCH_CONFIG = config
+    _TOOL_REGISTRY = tool_registry
 
 
 def _get_db() -> AutoResearchDatabase:
@@ -58,6 +63,20 @@ def _get_wiki(wiki_id: str | None = None) -> Any:
         return _WIKI_REGISTRY.get_default_wiki()
     except (ValueError, KeyError) as e:
         raise ValueError(f"No wiki available: {e}. Configure a wiki in ~/.llmwikify/llmwikify.json or pass wiki_id.") from e
+
+
+def _get_tool_registry(wiki_id: str | None = None) -> Any:
+    """Phase 4.5 (v0.36): get tool registry for a wiki.
+
+    The tool registry is injected via set_autoresearch_deps.
+    When not available, falls back to the wiki registry's
+    get_tool_registry method.
+    """
+    if _TOOL_REGISTRY is not None:
+        return _TOOL_REGISTRY
+    if _WIKI_REGISTRY is None:
+        raise RuntimeError("Wiki registry not initialized")
+    return _WIKI_REGISTRY.get_tool_registry(wiki_id)
 
 
 def _get_engine(wiki_id: str | None = None) -> ResearchEngine:
@@ -253,11 +272,8 @@ async def save_to_wiki(session_id: str, request: Request):
         return JSONResponse({"error": f"Already saved to wiki as: {session['wiki_page_name']}"}, status_code=409)
 
     try:
-        from llmwikify.apps.chat.agent.agent_service import AgentService  # noqa: F401
-        from llmwikify.interfaces.server.http.chat_sse import get_agent_service
-        svc = get_agent_service()
         wiki_id = session.get("wiki_id")
-        registry = svc._get_tool_registry(wiki_id)
+        registry = _get_tool_registry(wiki_id)
     except Exception as e:
         return JSONResponse({"error": f"Cannot access tool registry: {e}"}, status_code=500)
 
