@@ -1,96 +1,38 @@
-"""ChatDatabase — unified SQLite database for all chat-driven state.
+"""ChatDatabase — chat-ops domain facade over the shared .llmwiki_agent.db.
 
-Per v0.32 Phase 3 (🔴 2 weeks, now shipped incrementally):
+Part of the 3-database-facade architecture (v0.32.5+):
 
-This module consolidates the two pre-refactor databases:
+  - ChatDatabase (this file) — chat_sessions, chat_messages,
+    tool_calls, context_entries
+  - ResearchDatabase (apps/research/db.py) — autoresearch_* tables
+  - WikiDatabase (apps/wiki/db.py) — dream/notif/confirm/ingest tables
 
-  - ``apps/agent/core/db.py::AgentDatabase``  (1387 LOC,
-    ``.llmwiki_agent.db`` — 13 tables: chat_sessions,
-    chat_messages, tool_calls, research_sessions,
-    research_sub_queries, research_sources, dream_proposals,
-    notifications, confirmations, ingest_log)
-  - ``apps/chat/db.py::AutoResearchDatabase``   (589 LOC,
-    ``autoresearch.db`` — 3 tables: autoresearch_sessions,
-    autoresearch_sub_queries, autoresearch_sources)
-
-into a single ``ChatDatabase`` class living in one file
-(``apps/chat/db.py``). The two legacy classes are now thin
-shims that re-export the consolidated methods.
-
-The consolidation is **focused on the research tables** (the
-design's 9-table target is a future v0.32.5 goal). The
-non-research AgentDatabase tables (chat_sessions, chat_messages,
-tool_calls, dream_proposals, notifications, confirmations,
-ingest_log, ppt_*) are **NOT** migrated into ChatDatabase —
-they are different business domains (chat UI, dream editor,
-PPT) that don't share data with the research loop. Folding
-them in would violate the Unix philosophy (one file = one
-focus) for ~zero functional gain. They stay in
-``apps/agent/core/db.py::AgentDatabase`` (the shim file) for
-the v0.32 cycle and are revisited in v0.32.5+.
+All three facades share the same physical SQLite file
+(``data_dir/.llmwiki_agent.db``) via BaseDatabase.
 
 Schema
 ------
 
-The new ChatDatabase owns 4 tables (one new, three carried
-over with renaming):
+The ChatDatabase owns 4 tables:
 
-  sessions             (id, wiki_id, query, type, status, ...)
-                       — replaces both ``research_sessions``
-                         (AgentDatabase) and
-                         ``autoresearch_sessions``
-                         (AutoResearchDatabase). Unified
-                         session tracking with ``type`` column
-                         (legacy: 'research' or 'autoresearch').
-
-  research_sub_queries (id, session_id, query, source_type, ...)
-                       — same as before (renamed to drop the
-                         ``autoresearch_`` prefix; both old DBs
-                         had identical schemas here)
-
-  research_sources     (id, session_id, sub_query_id, url, ...)
-                       — same as before (renamed similarly)
-
-  research_steps       (session_id, step_num, status, ...)
-                       — **NEW** (Phase 3 deliverable):
-                         one row per (session, step_num)
-                         for persisting the 15+ ResearchState
-                         fields (round, max_rounds, max_replan,
-                         phase, sub_queries, sources, synthesis,
-                         report_md, review, knowledge_gaps,
-                         contradictions, issues, observations,
-                         _last_thought, cancelled, paused,
-                         budget_remaining).
+  chat_sessions     (id, wiki_id, jwt_token, created_at, updated_at)
+  chat_messages     (id, session_id, role, content, created_at)
+  tool_calls        (id, session_id, tool_name, arguments, result, status)
+  context_entries   (id, session_id, key, value, created_at)
 
 Backward compatibility
 ----------------------
 
-  - ``AutoResearchDatabase`` is now an alias for ChatDatabase.
-    Existing imports
-    (``from llmwikify.apps.chat.db import AutoResearchDatabase``)
-    keep working. The DB file path stays at
-    ``data_dir / "autoresearch.db"`` for backward compat with
-    existing user data.
-  - ``AgentDatabase`` (apps/agent/core/db.py) is a thin shim
-    that delegates to ChatDatabase for the research tables and
-    keeps its own tables for the non-research domain.
-
-Migration
----------
-
-A standalone migration script
-(``scripts/migrate_db_v1_to_v2.py``) reads from the old
-``autoresearch.db`` and ``.llmwiki_agent.db`` files and writes
-to the new ``autoresearch.db`` (with the unified schema). The
-script supports dry-run + backup. ChatDatabase itself does
-NOT auto-migrate (explicit migration is safer; users see what
-changed).
+  - ``AutoResearchDatabase`` is a subclass of ChatDatabase that
+    initializes all 3 facades (for backward compat with tests that
+    use ``AutoResearchDatabase(tmp_path)``).
+  - ``get_chat_db_path()`` delegates to ``get_app_db_path()``.
 
 Design refs
 -----------
 
-  - ``docs/designs/v0.32-skill-restructure.md`` §5 (ChatDatabase merge)
-  - ``docs/designs/v0.32-execution-plan.md`` Phase 3
+  - ``docs/designs/v0.33-service-refactor.md`` — 3-facade DB architecture
+  - ``docs/designs/v0.32-skill-restructure.md`` — original consolidation
 """
 
 from __future__ import annotations
@@ -106,7 +48,7 @@ from llmwikify.apps.db_base import BaseDatabase
 
 logger = logging.getLogger(__name__)
 
-# DB size warning threshold (MB). Independent of AgentDatabase.
+# DB size warning threshold (MB).
 DB_SIZE_WARNING_MB = 100
 
 
@@ -125,39 +67,12 @@ def get_chat_db_path(data_dir: Path | str) -> Path:
 class ChatDatabase(BaseDatabase):
     """Chat facade over the shared .llmwiki_agent.db.
 
-    Consolidates the research-related tables from
-    ``AgentDatabase`` (apps/agent/core/db.py) and
-    ``AutoResearchDatabase`` (pre-Phase-3 versions of this
-    file). The non-research AgentDatabase tables (chat,
-    notifications, PPT, dream) are NOT migrated here — they
-    stay in ``AgentDatabase``.
+    Part of the 3-database-facade architecture. Owns 4 tables:
+    chat_sessions, chat_messages, tool_calls, context_entries.
 
-    Tables owned
-    ------------
-    - ``sessions``            (unified research session tracking)
-    - ``research_sub_queries``(one row per sub-query)
-    - ``research_sources``    (one row per gathered source)
-    - ``research_steps``      (NEW: one row per ReAct/6-step round
-                                for persisting 15+ ResearchState fields)
-
-    Public method names mirror the pre-Phase-3 AgentDatabase
-    research API (``create_research_session``,
-    ``get_research_session``, ``list_research_sessions``,
-    ``update_research_status``, ``save_sub_query``,
-    ``get_sub_queries``, ``update_sub_query``, ``save_source``,
-    ``update_source_analysis``, ``get_sources``,
-    ``update_six_step_fields``, ``get_six_step_fields``,
-    ``append_events``, ``get_events``,
-    ``persist_report``, ``finalize_research``,
-    ``delete_research``) so existing callers in
-    ``apps/research/`` and ``apps/chat/`` can adopt the
-    new class with only an import-path change.
-
-    New research_steps API (Phase 3):
-    - ``save_step(session_id, step_num, status, **fields)``
-    - ``get_step(session_id, step_num)``
-    - ``list_steps(session_id)``
-    - ``delete_steps(session_id)``
+    Also provides thin delegates to ResearchDatabase and
+    WikiDatabase for backward compat (methods like
+    create_research_session, list_research_sessions, etc.).
     """
 
     def __init__(self, data_dir: Path | str):
@@ -379,7 +294,7 @@ class ChatDatabase(BaseDatabase):
     def load_research_state(self, session_id: str, step_num: int) -> dict | None:
         return self._research.load_research_state(session_id, step_num)
 
-    # ─── Chat sessions/messages (migrated from AgentDatabase) ──────
+    # ─── Chat sessions/messages ─────────────────────────────────
 
     def create_chat_session(
         self,

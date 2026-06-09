@@ -24,7 +24,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# DB size warning threshold (MB). Independent of AgentDatabase.
+# DB size warning threshold (MB).
 DB_SIZE_WARNING_MB = 100
 
 # Canonical filename for the shared physical DB file.

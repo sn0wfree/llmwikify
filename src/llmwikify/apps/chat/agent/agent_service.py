@@ -11,8 +11,7 @@ that wires together the 5+1-service architecture:
   - MemoryManager (6 memory stores)
 
 This is the new non-deprecated AgentService. The old
-wrapper at ``apps/agent/core/service.py`` is kept for
-backward compat and will be removed in v0.34.0.
+wrapper was deleted in v0.34.0.
 """
 
 from __future__ import annotations

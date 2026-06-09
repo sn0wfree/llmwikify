@@ -4,8 +4,8 @@ AutoResearchDatabase.__init__ already runs the idempotent
 `CREATE TABLE IF NOT EXISTS` for the 3 tables. This module exposes an
 explicit entry point (`init_autoresearch_db`) and an optional cleanup
 helper (`migrate_research_six_step_columns`) for users who previously
-ran autoresearch against the old shared `AgentDatabase` layout and
-want to drop the 3 leftover JSON columns from `research_sessions`.
+ran autoresearch against the old shared layout and want to drop the
+3 leftover JSON columns from `research_sessions`.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def migrate_research_six_step_columns(
     call this helper to drop the leftover columns.
 
     Args:
-        old_db_path: Path to the shared `AgentDatabase` file.
+        old_db_path: Path to the shared database file.
         drop_columns: If True, actually drop the columns. If False, only
                       report which columns exist (dry-run).
 
