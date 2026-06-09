@@ -1,6 +1,7 @@
 """Backward-compat shim: ``llmwikify.agent.backend.service`` →
-``llmwikify.apps.agent.core.service`` (Batch B4 of the 4-layer refactor).
+``llmwikify.apps.chat.agent.agent_service``
+(Updated for v0.34.0: old apps.agent.core.service removed).
 
-Update your imports. This shim will be removed in v0.33.0.
+Update your imports. This shim will be removed in v0.35.0.
 """
-from llmwikify.apps.agent.core.service import *  # noqa: F401, F403
+from llmwikify.apps.chat.agent.agent_service import AgentService  # noqa: F401

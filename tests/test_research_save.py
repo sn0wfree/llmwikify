@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llmwikify.apps.agent.core.db import AgentDatabase
+from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.apps.agent.tools import WikiToolRegistry
 from llmwikify.core.wiki import Wiki
 
@@ -44,8 +44,8 @@ def wiki(tmp_wiki_root):
 
 @pytest.fixture
 def db(tmp_path):
-    """Create a temp AgentDatabase with a research session row."""
-    database = AgentDatabase(tmp_path / "test_agent.db")
+    """Create a temp ChatDatabase (auto-initializes all 3 facades)."""
+    database = ChatDatabase(tmp_path)
     return database
 
 

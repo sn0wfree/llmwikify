@@ -146,3 +146,43 @@ class TestMemoryManagerInit:
         assert isinstance(mm.preferences, UserPreferenceStore)
         assert mm.knowledge is None
         assert isinstance(mm.index, MemoryIndex)
+
+
+class TestMemorySkillIntegration:
+    """End-to-end: memory_skill via SkillService wired to MemoryManager."""
+
+    def test_add_list_search_via_skill(self, memory_env):
+        import asyncio
+        from llmwikify.apps.chat.skills.base import SkillContext
+        from llmwikify.apps.chat.skills.service import SkillService
+
+        app_db, tmp = memory_env
+        mm = MemoryManager(app_db, wiki=None, data_dir=tmp)
+        svc = SkillService(memory_manager=mm)
+        svc.register_all()
+        sid = app_db.chat.create_chat_session("wiki-1")
+        ctx = SkillContext(db=app_db.chat, config={}, session_id=sid)
+
+        # add
+        r = asyncio.run(svc.execute("memory", "add", {
+            "role": "user", "content": "hello world",
+        }, ctx))
+        assert r.status == "ok"
+        assert r.data["added"] is True
+
+        # list
+        r = asyncio.run(svc.execute("memory", "list", {}, ctx))
+        assert r.status == "ok"
+        assert r.data["count"] == 1
+        assert r.data["entries"][0]["content"] == "hello world"
+
+        # search
+        r = asyncio.run(svc.execute("memory", "search", {
+            "query": "hello",
+        }, ctx))
+        assert r.status == "ok"
+        assert r.data["count"] == 1
+
+        # clear
+        r = asyncio.run(svc.execute("memory", "clear", {}, ctx))
+        assert r.status == "ok"

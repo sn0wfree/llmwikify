@@ -25,9 +25,11 @@ logger = logging.getLogger(__name__)
 class SkillService:
     """Facade over apps/chat/skills/ (Registry + Runtime)."""
 
-    def __init__(self, registry: Any = None, runtime: Any = None):
+    def __init__(self, registry: Any = None, runtime: Any = None,
+                 memory_manager: Any = None):
         self.registry = registry
         self.runtime = runtime
+        self.memory_manager = memory_manager
         self._initialized = False
 
     def initialize(self) -> None:
@@ -130,6 +132,9 @@ class SkillService:
             SkillResult
         """
         self.initialize()
+        # Auto-inject memory_manager into config if available
+        if self.memory_manager and ctx.config is not None:
+            ctx.config.setdefault("memory_manager", self.memory_manager)
         return self.runtime.execute(skill_name, action, args, ctx)
 
     def list_skills(self) -> list[dict]:

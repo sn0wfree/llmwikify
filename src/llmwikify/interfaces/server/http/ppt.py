@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette import EventSourceResponse
 
-from llmwikify.apps.agent.core.db import AgentDatabase
+from llmwikify.apps.db import AppDatabase
 from llmwikify.apps.ppt.engine import PPTEngine
 from llmwikify.apps.ppt.schema import (
     FromChatRequest,
@@ -29,13 +29,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ppt", tags=["ppt"])
 
 # These are set during app startup
-_AGENT_DB: AgentDatabase | None = None
+_AGENT_DB: AppDatabase | None = None
 _WIKI_REGISTRY: Any = None
 _LLM_CLIENT: Any = None
 _PPT_CONFIG: dict[str, Any] | None = None
 
 
-def set_ppt_deps(db: AgentDatabase, wiki_registry: Any, llm_client: Any, config: dict[str, Any] | None = None) -> None:
+def set_ppt_deps(db: AppDatabase, wiki_registry: Any, llm_client: Any, config: dict[str, Any] | None = None) -> None:
     global _AGENT_DB, _WIKI_REGISTRY, _LLM_CLIENT, _PPT_CONFIG
     _AGENT_DB = db
     _WIKI_REGISTRY = wiki_registry
@@ -45,7 +45,7 @@ def set_ppt_deps(db: AgentDatabase, wiki_registry: Any, llm_client: Any, config:
     init_ppt_task_manager(db)
 
 
-def _get_db() -> AgentDatabase:
+def _get_db() -> AppDatabase:
     if _AGENT_DB is None:
         raise RuntimeError("PPT deps not initialized")
     return _AGENT_DB

@@ -253,12 +253,12 @@ class TestArchitectureContracts:
                     )
 
     def test_agent_providers_uses_chat_providers(self) -> None:
-        """Phase 4 fix: apps/agent/core/service.py imports
-        from apps.chat or apps.db (the new homes), not the
+        """Phase 4 fix: AgentService (apps/chat/agent/agent_service.py)
+        imports from apps.chat or apps.db (the new homes), not the
         (deleted) apps.agent.providers."""
         from pathlib import Path
         src = Path(
-            "src/llmwikify/apps/agent/core/service.py"
+            "src/llmwikify/apps/chat/agent/agent_service.py"
         ).read_text()
         # AgentService must import from L3 apps layer, not from itself
         has_chat_import = "from llmwikify.apps.chat" in src
