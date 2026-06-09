@@ -5,6 +5,53 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.5] - 2026-06-09
+
+### Added — Skill Pipeline Split (Phase 12a-d)
+- **`gather_skill` + `report_skill`** — Extracted from `research_skill.py` into dedicated Skill classes. `research_skill` now composes them as `gather` + `report` phases of the 7-step ReAct pipeline.
+- **4 CRUD skills** — `memory_skill`, `notify_skill`, `scheduler_skill`, `dream_skill`. Currently registered in `SkillRegistry` but not wired into any service (dead code, pending v0.33.0 service injection).
+- **`wiki_query_skill`** — 28-action aggregator unifying `WikiToolRegistry` (21 tools) + MCP (29 tools) into a single entry point.
+- **`asyncio_mode=auto`** in `pytest.ini` — 154 async tests unblocked. Mock test isolation fix.
+- 76 new tests (23 gather/report + 36 CRUD + 17 wiki_query).
+
+### Added — 3-Facade Database (Stage A0-E)
+- **`BaseDatabase`** (`apps/db_base.py`) — shared SQLite lifecycle (auto-migration, schema init, size check).
+- **`ResearchDatabase`** (`apps/research/db.py`, 727 lines, 27 methods) — owns 4 research tables.
+- **`WikiDatabase`** (`apps/wiki/db.py`, 403 lines, 17 methods) — owns 4 wiki-ops tables.
+- **`AppDatabase`** (`apps/db.py`, 56 lines) — aggregates 3 facades, single injection point.
+- **`context_entries` table** (NEW) — for v0.33.0 MemoryManager.
+
+### Changed
+- **`ChatDatabase` shrinks to 4 tables** — `chat_sessions`, `chat_messages`, `tool_calls`, `context_entries`. The 17 wiki-domain and 27 research-domain methods are thin delegates (via lazy `self._wiki` and `self._research`).
+- **DB filename: `autoresearch.db` → `.llmwiki_agent.db`** — auto-migrated on first access.
+- **`AgentService` accepts `AppDatabase`** — optional `app_db` parameter; constructs internally if not provided.
+- **`AutoResearchDatabase = ChatDatabase` (subclass)** — initializes all 3 facades for backward compat.
+
+### Removed
+- **PPT archived** — 5 PPT tests deleted (`test_ppt_chat_presentation_persistence.py`). 6 PPT skills, 3 PPT tables, 16 PPT methods removed from `AgentDatabase` wrapper. PPT rewrite deferred to v0.37.
+
+### Fixed
+- **`migrate_db_v1_to_v2`** — test helper uses `autoresearch_sessions` table name; migration script creates target table directly.
+- **Architecture contract** — `test_agent_providers_uses_chat_providers` updated to check new import paths.
+
+### Test Statistics
+| Metric | v0.32.0 | v0.32.5 | Delta |
+|---|---|---|---|
+| Passing tests | 2164 | **2348** | +184 |
+| Pre-existing failures | 13 | 4 | -9 |
+| Architecture contracts | 4/4 | 4/4 | — |
+
+The 4 remaining failures are 3rd-party env issues (pymupdf, youtube_transcript_api), not v0.32.5 regressions.
+
+### Migration
+- DB filename auto-renamed (`autoresearch.db` → `.llmwiki_agent.db`), no action needed.
+- All old import paths still work via deprecation wrappers (removed in v0.33.0).
+- Prefer `AppDatabase` over separate facades in new code.
+
+### Notes
+- Full release notes: `docs/releases/v0.32.5.md`.
+- Next: v0.33.0 (5+1-service architecture, ~14h per `docs/designs/v0.33-service-refactor.md`).
+
 ## [0.32.0] - 2026-06-08
 
 ### Added — Phase 1: Skill framework (`apps/chat/skills/`)
