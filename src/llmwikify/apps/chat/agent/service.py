@@ -32,6 +32,12 @@ from llmwikify.apps.chat.db import ChatDatabase
 logger = logging.getLogger(__name__)
 
 
+# Default user_id for chat-layer preferences (Phase 3.1 / v0.36).
+# The chat layer has no per-user identity; preferences are
+# scoped to the local install / single user.
+DEFAULT_USER_ID = "default"
+
+
 # ─── Text-mode tool-call parsing ────────────────────────────────
 #
 # Some LLMs (especially smaller or non-tool-aware ones) emit tool
@@ -239,6 +245,7 @@ class ChatService(ChatBase):
         wiki_service: Any,
         data_dir: Path,
         chat_db: ChatDatabase | None = None,
+        memory_manager: Any = None,
     ):
         self.wiki_service = wiki_service
         # Phase 1.5 (v0.36): allow caller to inject a shared
@@ -249,6 +256,13 @@ class ChatService(ChatBase):
         # Phase 1.2 (v0.36): track silent DB write failures so
         # they are surfaced to operators via logs / metrics.
         self._save_error_count: int = 0
+        # Phase 3 (v0.36): MemoryManager exposes 6 stores used
+        # by the chat layer (system prompt injection, history
+        # restore, tool result persistence, related-history
+        # retrieval). Optional to keep backward compat — when
+        # None, the chat layer falls back to direct ChatDatabase
+        # access.
+        self.memory_manager = memory_manager
 
         # Initialize ChatBase with LLM from WikiService
         llm = wiki_service.get_llm()
@@ -280,7 +294,7 @@ class ChatService(ChatBase):
                 session_id = self.db.create_chat_session(wiki_id, jwt_token)
                 yield {"type": "session_created", "session_id": session_id}
 
-        ctx = self._get_or_create_context(session_id, wiki_id)
+        ctx = await self._get_or_create_context(session_id, wiki_id)
 
         wiki_id_from_prefix, message = self._parse_wiki_prefix(message)
         if wiki_id_from_prefix:
@@ -306,7 +320,13 @@ class ChatService(ChatBase):
             ctx.wiki_id or self.wiki_service.get_default_wiki_id()
         )
 
-        system_prompt = self._build_system_prompt(ctx.wiki_id)
+        # Phase 3.1 (v0.36): pass user_message + session_id so
+        # the prompt can include related-past-conversations.
+        system_prompt = await self._build_system_prompt(
+            ctx.wiki_id,
+            user_message=message,
+            session_id=session_id,
+        )
         raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
         messages_for_llm = self._truncate_messages(raw_messages)
         # Phase 2.3 (v0.36): reset the text-mode buffer so a
@@ -419,7 +439,7 @@ class ChatService(ChatBase):
 
         yield ChatEvent.tool_call_end("confirmation_approved", result)
 
-        ctx = self._get_or_create_context(session_id, wiki_id)
+        ctx = await self._get_or_create_context(session_id, wiki_id)
         tool_result_str = json.dumps(result.get("result", result))
         ctx.add_assistant_message(
             f"[Confirmation approved] Tool result: {tool_result_str}"
@@ -433,7 +453,11 @@ class ChatService(ChatBase):
         tool_registry = self.wiki_service.get_tool_registry(
             ctx.wiki_id or self.wiki_service.get_default_wiki_id()
         )
-        system_prompt = self._build_system_prompt(ctx.wiki_id)
+        system_prompt = await self._build_system_prompt(
+            ctx.wiki_id,
+            user_message=ctx.messages[-1]["content"] if ctx.messages else None,
+            session_id=session_id,
+        )
         raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
         messages_for_llm = self._truncate_messages(raw_messages)
         # Phase 2.3 (v0.36): reset the text-mode buffer.
@@ -479,16 +503,19 @@ class ChatService(ChatBase):
 
     # ─── Private helpers ─────────────────────────────────────────
 
-    def _get_or_create_context(
+    async def _get_or_create_context(
         self, session_id: str, wiki_id: str | None = None
     ) -> AgentContext:
         if session_id not in self._contexts:
             ctx = AgentContext(wiki_id=wiki_id)
-            # Restore conversation history from DB
-            # get_chat_messages returns DESC (newest first);
-            # reverse to get chronological (ASC) order
-            db_messages = self.db.get_chat_messages(session_id, limit=100)
-            for msg in reversed(db_messages):
+            # Phase 3.2 (v0.36): restore conversation history
+            # through MemoryManager when available, falling
+            # back to direct ChatDatabase access when not.
+            # MemoryManager is preferred because it adds async
+            # I/O wrapping and a unified abstraction over the
+            # 6 stores.
+            db_messages = await self._load_history(session_id)
+            for msg in db_messages:
                 role = msg.get("role", "")
                 content = msg.get("content", "")
                 if role == "user":
@@ -503,6 +530,28 @@ class ChatService(ChatBase):
             self._contexts[session_id] = ctx
         return self._contexts[session_id]
 
+    async def _load_history(self, session_id: str) -> list[dict]:
+        """Load conversation history, preferring MemoryManager
+        when available (Phase 3.2 / v0.36).
+
+        Returns messages in chronological (ASC) order,
+        regardless of whether the underlying store returns
+        DESC — callers depend on chronological order.
+        """
+        if self.memory_manager is not None:
+            # ``alist`` returns DESC (newest first); reverse
+            # to chronological for the in-memory context.
+            return list(reversed(
+                await self.memory_manager.conversation.alist(
+                    session_id, limit=100,
+                )
+            ))
+        # Fallback: direct DB access. ``get_chat_messages``
+        # also returns DESC; reverse for consistency.
+        return list(reversed(
+            self.db.get_chat_messages(session_id, limit=100)
+        ))
+
     def _parse_wiki_prefix(self, message: str) -> tuple[str | None, str]:
         import re
         match = re.match(r"^@(\S+)\s+(.*)$", message, re.DOTALL)
@@ -510,16 +559,120 @@ class ChatService(ChatBase):
             return match.group(1), match.group(2)
         return None, message
 
-    def _build_system_prompt(self, wiki_id: str | None = None) -> str:
-        parts = [
-            "You are a helpful wiki assistant. You have access to wiki tools.",
-            "Use the available tools to help the user.",
-            "When a user asks to write, modify, or create wiki pages, "
-            "you MUST request confirmation first.",
-        ]
+    async def _build_system_prompt(
+        self,
+        wiki_id: str | None = None,
+        user_message: str | None = None,
+        session_id: str | None = None,
+    ) -> str:
+        """Build the system prompt (Phase 3.1 / v0.36).
+
+        Composes multiple sections:
+          1. Role + tool usage policy (always)
+          2. Wiki context (when wiki_id is known)
+          3. User preferences (via MemoryManager.preferences)
+          4. Available tools (from the tool registry)
+          5. Current date
+          6. Related past conversations (via MemoryIndex.search)
+             — only when user_message is provided
+        """
+        parts: list[str] = []
+        # 1. Role + policy
+        parts.append(
+            "You are a helpful wiki assistant. You have access "
+            "to wiki tools.\nUse the available tools to help the user.\n"
+            "When a user asks to write, modify, or create wiki "
+            "pages, you MUST request confirmation first."
+        )
+        # 2. Wiki context
         if wiki_id:
-            parts.append(f"Current wiki context: {wiki_id}")
-        return "\n".join(parts)
+            parts.append(f"## Current wiki context\n{wiki_id}")
+        # 3. User preferences
+        prefs_section = await self._build_preferences_section()
+        if prefs_section:
+            parts.append(prefs_section)
+        # 4. Available tools
+        tools_section = self._build_tools_section()
+        if tools_section:
+            parts.append(tools_section)
+        # 5. Current date
+        from datetime import datetime, timezone
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        parts.append(f"## Today's date (UTC)\n{today}")
+        # 6. Related past conversations
+        if user_message and session_id:
+            related_section = await self._build_related_section(
+                user_message, session_id,
+            )
+            if related_section:
+                parts.append(related_section)
+        return "\n\n".join(parts)
+
+    async def _build_preferences_section(self) -> str | None:
+        """Phase 3.1 (v0.36): inject user preferences as a
+        prompt section."""
+        if self.memory_manager is None:
+            return None
+        try:
+            prefs = await self.memory_manager.preferences.aall(
+                DEFAULT_USER_ID,
+            )
+        except Exception:  # noqa: BLE001
+            return None
+        if not prefs:
+            return None
+        # Render as a markdown list.
+        lines = ["## User preferences"]
+        for k, v in prefs.items():
+            lines.append(f"- **{k}**: {v}")
+        return "\n".join(lines)
+
+    def _build_tools_section(self) -> str | None:
+        """Phase 3.1 (v0.36): summarise available tools in the
+        prompt. Lazy-loaded from the wiki's tool registry.
+        """
+        # Don't bother loading tools here — that's expensive
+        # and the LLM already has the tool schema. We only
+        # render this section if a wiki is available.
+        if not hasattr(self.wiki_service, "list_tool_names"):
+            return None
+        try:
+            tool_names = self.wiki_service.list_tool_names()  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001
+            return None
+        if not tool_names:
+            return None
+        return (
+            "## Available tools\n"
+            + ", ".join(f"`{n}`" for n in tool_names[:20])
+            + (f" (+{len(tool_names) - 20} more)" if len(tool_names) > 20 else "")
+        )
+
+    async def _build_related_section(
+        self,
+        user_message: str,
+        session_id: str,
+    ) -> str | None:
+        """Phase 3.4 (v0.36): surface top-K related past
+        conversations as a prompt section."""
+        if self.memory_manager is None:
+            return None
+        try:
+            results = await self.memory_manager.index.asearch(
+                user_message, session_id=session_id, limit=3,
+            )
+        except Exception:  # noqa: BLE001
+            return None
+        if not results:
+            return None
+        lines = ["## Related past conversations"]
+        for i, r in enumerate(results, 1):
+            content = r.get("content", "")
+            if len(content) > 200:
+                content = content[:200] + "…"
+            source = r.get("source", "unknown")
+            lines.append(f"{i}. [{source}] {content}")
+        return "\n".join(lines)
 
     def _truncate_messages(
         self, messages: list[dict[str, str]], max_messages: int = 50
@@ -678,6 +831,10 @@ class ChatService(ChatBase):
         text-mode ``[TOOL_CALL]...[/TOOL_CALL]`` detection path so
         both sources go through the same confirmation / persistence
         logic.
+
+        Phase 3.3 (v0.36): persists the tool result to
+        ``MemoryManager.context`` so future related-history
+        searches can surface it.
         """
         yield ChatEvent.tool_call_start(tool_name, args)
         entry = {
@@ -692,6 +849,11 @@ class ChatService(ChatBase):
         entry["result"] = result
         entry["status"] = "done"
         yield ChatEvent.tool_call_end(tool_name, result)
+
+        # Phase 3.3 (v0.36): persist tool result to
+        # MemoryManager.context (best-effort; failures are
+        # logged but never block the chat).
+        await self._persist_tool_result(session_id, tool_name, args, result)
 
         if (
             isinstance(result, dict)
@@ -708,6 +870,39 @@ class ChatService(ChatBase):
             )
             ctx.add_assistant_message(
                 f"[TOOL: {tool_name}] Result: {tool_result_str}"
+            )
+
+    async def _persist_tool_result(
+        self,
+        session_id: str,
+        tool_name: str,
+        args: dict,
+        result: Any,
+    ) -> None:
+        """Phase 3.3 (v0.36): persist a tool result to the
+        MemoryManager context store. Best-effort: failures are
+        logged but never raised, so a broken memory store
+        cannot interrupt the chat flow.
+        """
+        if self.memory_manager is None:
+            return
+        try:
+            content = json.dumps(
+                {"tool": tool_name, "args": args, "result": result},
+                ensure_ascii=False, default=str,
+            )
+            # Cap stored content to keep the DB small.
+            if len(content) > 10_000:
+                content = content[:10_000] + "…"
+            await self.memory_manager.context.aadd(
+                session_id,
+                entry_type="tool_result",
+                content=content,
+                metadata={"tool": tool_name},
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "Failed to persist tool result to memory.context: %s", e,
             )
 
     def _save_message(
@@ -895,7 +1090,7 @@ class ChatService(ChatBase):
         turn_start_tools = set(ctx._tool_calls.keys())
 
         for iteration in range(max_iterations):
-            system_prompt = self._build_system_prompt(ctx.wiki_id)
+            system_prompt = await self._build_system_prompt(ctx.wiki_id)
             raw_messages = (
                 [{"role": "system", "content": system_prompt}]
                 + ctx.get_messages()

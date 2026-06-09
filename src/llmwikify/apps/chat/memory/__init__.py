@@ -13,10 +13,18 @@ in the 5+1-service architecture. It exposes 6 stores:
 The MemoryManager provides a single interface for storing
 and retrieving different kinds of memory, backed by the
 appropriate database facades.
+
+Async support (Phase 3.5 / v0.36):
+  Every store exposes an ``a*`` async variant (e.g.
+  ``ConversationStore.alist``, ``ContextStore.aadd``) that
+  wraps the sync method in ``asyncio.to_thread`` so the
+  SQLite-bound work doesn't block the event loop. The
+  sync APIs remain for non-async callers (tests, scripts).
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import sqlite3
@@ -26,6 +34,21 @@ from typing import Any
 from llmwikify.apps.db import AppDatabase
 
 logger = logging.getLogger(__name__)
+
+
+# Default user_id for chat-layer preferences. The chat layer
+# has no per-user identity (no auth); preferences are scoped
+# to the local user / installation.
+DEFAULT_CHAT_USER_ID = "default"
+
+
+def _run_sync(sync_fn: Any, *args: Any, **kwargs: Any) -> Any:
+    """Run a sync callable in a thread pool.
+
+    Centralised helper so the async wrappers below all use
+    the same executor semantics.
+    """
+    return asyncio.to_thread(sync_fn, *args, **kwargs)
 
 
 class ConversationStore:
@@ -80,6 +103,35 @@ class ConversationStore:
             if query.lower() in m.get("content", "").lower()
         ]
         return results[:limit]
+
+    # ── async wrappers (Phase 3.5 / v0.36) ───────────────────
+
+    async def aadd(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        tool_calls: list | None = None,
+    ) -> str:
+        """Async variant of ``add`` (Phase 3.5 / v0.36)."""
+        return await _run_sync(self.add, session_id, role, content, tool_calls)
+
+    async def alist(
+        self,
+        session_id: str,
+        limit: int | None = None,
+    ) -> list[dict]:
+        """Async variant of ``list`` (Phase 3.5 / v0.36)."""
+        return await _run_sync(self.list, session_id, limit)
+
+    async def asearch(
+        self,
+        session_id: str,
+        query: str,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Async variant of ``search`` (Phase 3.5 / v0.36)."""
+        return await _run_sync(self.search, session_id, query, limit)
 
 
 class KnowledgeStore:
@@ -190,6 +242,35 @@ class ContextStore:
             conn.commit()
             return cursor.rowcount
 
+    # ── async wrappers (Phase 3.5 / v0.36) ───────────────────
+
+    async def aadd(
+        self,
+        session_id: str,
+        entry_type: str,
+        content: str,
+        metadata: dict | None = None,
+    ) -> str:
+        """Async variant of ``add`` (Phase 3.5 / v0.36)."""
+        return await _run_sync(
+            self.add, session_id, entry_type, content, metadata,
+        )
+
+    async def alist(
+        self,
+        session_id: str,
+        entry_type: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Async variant of ``list`` (Phase 3.5 / v0.36)."""
+        return await _run_sync(
+            self.list, session_id, entry_type, limit,
+        )
+
+    async def aclear(self, session_id: str) -> int:
+        """Async variant of ``clear`` (Phase 3.5 / v0.36)."""
+        return await _run_sync(self.clear, session_id)
+
 
 class ReActStateStore:
     """Stores ReAct/6-step research state via ResearchDatabase.
@@ -260,6 +341,17 @@ class UserPreferenceStore:
     def all(self, user_id: str) -> dict:
         return self._load().get(user_id, {})
 
+    # ── async wrappers (Phase 3.5 / v0.36) ───────────────────
+
+    async def aget(self, user_id: str, key: str, default: Any = None) -> Any:
+        return await _run_sync(self.get, user_id, key, default)
+
+    async def aset(self, user_id: str, key: str, value: Any) -> None:
+        await _run_sync(self.set, user_id, key, value)
+
+    async def aall(self, user_id: str) -> dict:
+        return await _run_sync(self.all, user_id)
+
 
 class MemoryIndex:
     """In-memory unified search across all stores.
@@ -326,6 +418,17 @@ class MemoryIndex:
                     })
 
         return results[:limit]
+
+    # ── async wrapper (Phase 3.5 / v0.36) ───────────────────
+
+    async def asearch(
+        self,
+        query: str,
+        session_id: str | None = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Async variant of ``search`` (Phase 3.5 / v0.36)."""
+        return await _run_sync(self.search, query, session_id, limit)
 
 
 class MemoryManager:

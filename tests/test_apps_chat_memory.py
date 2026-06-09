@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import tempfile
 
 import pytest
@@ -186,3 +187,42 @@ class TestMemorySkillIntegration:
         # clear
         r = asyncio.run(svc.execute("memory", "clear", {}, ctx))
         assert r.status == "ok"
+
+
+class TestAsyncMemory:
+    """Phase 3.5 (v0.36): verify async wrappers work."""
+
+    def test_async_conversation_store(self, memory_manager):
+        mm, sid = memory_manager
+        async def run():
+            await mm.conversation.aadd(sid, "user", "async hello")
+            msgs = await mm.conversation.alist(sid)
+            assert len(msgs) >= 1
+            assert msgs[0]["content"] == "async hello"
+        asyncio.run(run())
+
+    def test_async_context_store(self, memory_manager):
+        mm, sid = memory_manager
+        async def run():
+            await mm.context.aadd(sid, "tool_result", "tool output async")
+            entries = await mm.context.alist(sid)
+            assert len(entries) >= 1
+        asyncio.run(run())
+
+    def test_async_user_preference_store(self, memory_manager):
+        mm, _ = memory_manager
+        async def run():
+            await mm.preferences.aset("default", "style", "verbose")
+            val = await mm.preferences.aget("default", "style")
+            assert val == "verbose"
+            all_prefs = await mm.preferences.aall("default")
+            assert all_prefs.get("style") == "verbose"
+        asyncio.run(run())
+
+    def test_async_memory_index(self, memory_manager):
+        mm, sid = memory_manager
+        async def run():
+            await mm.conversation.aadd(sid, "user", "test query")
+            results = await mm.index.asearch("test", session_id=sid, limit=5)
+            assert len(results) >= 1
+        asyncio.run(run())

@@ -61,11 +61,31 @@ class AgentService:
             wiki_registry, self.data_dir, self.app_db.chat,
         )
 
+        # MemoryManager (6 memory stores) — must be created
+        # BEFORE ChatService so the chat layer can be wired
+        # with it (Phase 3 / v0.36).
+        if memory_manager is not None:
+            self.memory_manager = memory_manager
+        else:
+            from llmwikify.apps.chat.memory import MemoryManager
+            self.memory_manager = MemoryManager(
+                self.app_db,
+                wiki=None,  # Wired on first skill invocation
+                data_dir=self.data_dir,
+            )
+
         # ChatService (SSE chat) — share the same ChatDatabase
         # instance owned by AppDatabase to avoid duplicate
         # connections on the same SQLite file (Phase 1.5 / v0.36).
+        # Phase 3 (v0.36): also wire MemoryManager so the chat
+        # layer can read/write through the unified 6-store
+        # abstraction (history, system prompt injection, tool
+        # result persistence, related-history search).
         self.chat_service = ChatService(
-            self.wiki_service, self.data_dir, chat_db=self.app_db.chat,
+            self.wiki_service,
+            self.data_dir,
+            chat_db=self.app_db.chat,
+            memory_manager=self.memory_manager,
         )
 
         # SkillService (lazy init)
@@ -83,17 +103,6 @@ class AgentService:
             self.harness_service = HarnessService(
                 config=config,
                 wiki=None,  # Wired on first skill invocation
-            )
-
-        # MemoryManager (6 memory stores)
-        if memory_manager is not None:
-            self.memory_manager = memory_manager
-        else:
-            from llmwikify.apps.chat.memory import MemoryManager
-            self.memory_manager = MemoryManager(
-                self.app_db,
-                wiki=None,  # Wired on first skill invocation
-                data_dir=self.data_dir,
             )
 
         # Wire MemoryManager + WikiService into SkillService for CRUD skills

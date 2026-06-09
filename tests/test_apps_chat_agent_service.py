@@ -220,13 +220,15 @@ class TestChatServiceHelpers:
     def test_build_system_prompt_no_wiki(
         self, chat_service: ChatService
     ) -> None:
-        prompt = chat_service._build_system_prompt()
+        # Phase 3.1 (v0.36): _build_system_prompt is now async.
+        prompt = asyncio.run(chat_service._build_system_prompt())
         assert "wiki assistant" in prompt
 
     def test_build_system_prompt_with_wiki(
         self, chat_service: ChatService
     ) -> None:
-        prompt = chat_service._build_system_prompt("my_wiki")
+        # Phase 3.1 (v0.36): _build_system_prompt is now async.
+        prompt = asyncio.run(chat_service._build_system_prompt("my_wiki"))
         assert "my_wiki" in prompt
 
     def test_truncate_messages_short(
@@ -722,15 +724,16 @@ class TestContextManagement:
     def test_get_or_create_context_new(
         self, chat_service: ChatService
     ) -> None:
-        ctx = chat_service._get_or_create_context("new-session")
+        # Phase 3.2 (v0.36): _get_or_create_context is now async.
+        ctx = asyncio.run(chat_service._get_or_create_context("new-session"))
         assert isinstance(ctx, AgentContext)
         assert ctx.wiki_id is None
 
     def test_get_or_create_context_existing(
         self, chat_service: ChatService
     ) -> None:
-        ctx1 = chat_service._get_or_create_context("s1")
-        ctx2 = chat_service._get_or_create_context("s1")
+        ctx1 = asyncio.run(chat_service._get_or_create_context("s1"))
+        ctx2 = asyncio.run(chat_service._get_or_create_context("s1"))
         assert ctx1 is ctx2
 
     def test_get_or_create_context_restores_messages(
@@ -745,7 +748,7 @@ class TestContextManagement:
             "session_id": sid, "role": "assistant", "content": "hello"
         })
 
-        ctx = chat_service._get_or_create_context(sid)
+        ctx = asyncio.run(chat_service._get_or_create_context(sid))
         assert len(ctx.messages) == 2
         assert ctx.messages[0]["content"] == "hi"
         assert ctx.messages[1]["content"] == "hello"
@@ -754,7 +757,7 @@ class TestContextManagement:
         self, chat_service: ChatService
     ) -> None:
         sid = chat_service.db.create_chat_session(wiki_id="test_wiki")
-        ctx = chat_service._get_or_create_context(sid)
+        ctx = asyncio.run(chat_service._get_or_create_context(sid))
         assert ctx.recent_wiki_id == "test_wiki"
 
 
@@ -1066,3 +1069,98 @@ class TestSharedChatDatabase:
             svc = ChatService(wiki_service_mock, data_dir)
         assert svc.db is not None
         assert isinstance(svc.db.db_path, Path)
+
+
+# ─── Phase 3 — MemoryManager integration (v0.36) ──────────────────
+
+
+class TestMemoryManagerIntegration:
+    """Phase 3 (v0.36): MemoryManager is wired into ChatService
+    for system prompt injection, history restore, tool result
+    persistence, and related-history search."""
+
+    @staticmethod
+    def _make_svc_with_memory(
+        wiki_service_mock: MockWikiService,
+        data_dir: Path,
+    ):
+        from llmwikify.apps.db import AppDatabase
+        from llmwikify.apps.chat.memory import MemoryManager
+
+        app_db = AppDatabase(data_dir)
+        mm = MemoryManager(app_db, wiki=None, data_dir=data_dir)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            svc = ChatService(
+                wiki_service_mock,
+                data_dir,
+                chat_db=app_db.chat,
+                memory_manager=mm,
+            )
+        return svc, mm, app_db
+
+    def test_memory_manager_injected(
+        self, wiki_service_mock: MockWikiService, data_dir: Path
+    ) -> None:
+        svc, mm, _ = self._make_svc_with_memory(wiki_service_mock, data_dir)
+        assert svc.memory_manager is mm
+
+    def test_system_prompt_includes_date(
+        self, wiki_service_mock: MockWikiService, data_dir: Path
+    ) -> None:
+        svc, _, _ = self._make_svc_with_memory(wiki_service_mock, data_dir)
+        prompt = asyncio.run(svc._build_system_prompt())
+        assert "Today's date" in prompt
+        assert "2026" in prompt
+
+    def test_system_prompt_includes_wiki_context(
+        self, wiki_service_mock: MockWikiService, data_dir: Path
+    ) -> None:
+        svc, _, _ = self._make_svc_with_memory(wiki_service_mock, data_dir)
+        prompt = asyncio.run(svc._build_system_prompt("my_wiki"))
+        assert "my_wiki" in prompt
+
+    def test_system_prompt_includes_preferences(
+        self, wiki_service_mock: MockWikiService, data_dir: Path
+    ) -> None:
+        svc, mm, _ = self._make_svc_with_memory(wiki_service_mock, data_dir)
+        # Set a preference
+        mm.preferences.set("default", "style", "verbose")
+        prompt = asyncio.run(svc._build_system_prompt())
+        assert "User preferences" in prompt
+        assert "style" in prompt
+        assert "verbose" in prompt
+
+    def test_tool_result_persisted_to_context(
+        self, wiki_service_mock: MockWikiService, data_dir: Path
+    ) -> None:
+        svc, mm, _ = self._make_svc_with_memory(wiki_service_mock, data_dir)
+        sid = svc.db.create_chat_session()
+
+        async def run():
+            await svc._persist_tool_result(
+                sid, "wiki_read_page",
+                {"page_name": "overview"},
+                {"result": "page content here"},
+            )
+        asyncio.run(run())
+
+        # Verify persisted
+        entries = asyncio.run(mm.context.alist(sid))
+        assert len(entries) == 1
+        assert entries[0]["entry_type"] == "tool_result"
+        assert "wiki_read_page" in entries[0]["content"]
+
+    def test_history_loaded_through_memory_manager(
+        self, wiki_service_mock: MockWikiService, data_dir: Path
+    ) -> None:
+        svc, mm, _ = self._make_svc_with_memory(wiki_service_mock, data_dir)
+        sid = svc.db.create_chat_session()
+        # Add history through the memory manager
+        asyncio.run(mm.conversation.aadd(sid, "user", "what is wiki?"))
+        asyncio.run(mm.conversation.aadd(sid, "assistant", "A wiki is..."))
+
+        ctx = asyncio.run(svc._get_or_create_context(sid))
+        assert len(ctx.messages) == 2
+        assert ctx.messages[0]["content"] == "what is wiki?"
+        assert ctx.messages[1]["content"] == "A wiki is..."
