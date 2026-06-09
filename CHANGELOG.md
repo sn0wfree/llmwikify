@@ -5,6 +5,45 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.0] - 2026-06-09
+
+### Removed — PPT 功能彻底删除
+- **`apps/ppt/`** (11 files) — PPT generation pipeline deleted entirely.
+- **`interfaces/server/http/ppt.py`** (320 LOC) — PPT REST routes deleted.
+- **`agent/backend/ppt.*`** (11 shims) — Legacy PPT shims deleted.
+- PPT rewrite deferred to v0.37.
+
+### Removed — Old Wrappers Deleted
+- **`apps/agent/core/db.py`** (460 LOC) — `AgentDatabase` wrapper deleted.
+  All callers migrated to `ChatDatabase` / `AppDatabase`.
+- **`apps/agent/core/service.py`** (138 LOC) — Old `AgentService` wrapper
+  deleted. All callers migrated to `apps/chat/agent/agent_service.py`.
+
+### Changed — CRUD Skills Wired to MemoryManager
+- **`memory_skill`** rewritten to use `ConversationStore.add/list/search`
+  API via `ctx.config['memory_manager']`.
+- **CRUD skills** (`memory/notify/scheduler/dream`) now receive managers
+  via `SkillService` auto-injection.
+
+### Added — SkillService WikiService Injection
+- **`SkillService`** now accepts `wiki_service` param and auto-injects
+  `dream_editor`, `notification_manager`, `scheduler` into `ctx.config`
+  on each `execute()` call. CRUD skills are now production-ready.
+- **`WikiService`** exposes public `get_dream_editor()`,
+  `get_notification_manager()`, `get_scheduler()` methods.
+
+### Fixed — Runtime HTTP 500 Errors
+- `chat_sse.py`: method names fixed (`list_sessions`→`list_chat_sessions`,
+  `get_session`→`get_chat_session`, `get_messages`→`get_chat_messages`).
+- `research.py`: import paths fixed (`.agent`→`.chat_sse`,
+  `core.service`→`agent.agent_service`).
+- `research/db.py`: `row["c"]`→`row[0]` for sqlite3 tuple results.
+
+### Architecture
+- 36 files changed, -4302 lines net (PPT removal).
+- 4/4 architecture contracts PASS.
+- 2357 tests pass, 8 pre-existing 3rd-party failures.
+
 ## [0.33.0] - 2026-06-09
 
 ### Added — 5+1-Service Architecture
