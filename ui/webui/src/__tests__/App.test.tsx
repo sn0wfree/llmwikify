@@ -14,12 +14,20 @@ vi.mock('../api', () => ({
   },
 }));
 
-vi.mock('../components/Notifications', () => ({
+vi.mock('../components/wiki/Notifications', () => ({
   Notifications: () => <div data-testid="notifications" />,
 }));
 
-vi.mock('../components/HealthStatus', () => ({
+vi.mock('../components/wiki/HealthStatus', () => ({
   HealthStatus: () => <div data-testid="health-status" />,
+}));
+
+vi.mock('../components/wiki/CrossWikiSearch', () => ({
+  CrossWikiSearch: () => <div data-testid="cross-wiki-search" />,
+}));
+
+vi.mock('../components/wiki/WikiSelector', () => ({
+  WikiSelector: () => <div data-testid="wiki-selector" />,
 }));
 
 describe('App', () => {
@@ -43,20 +51,11 @@ describe('App', () => {
     });
   });
 
-  it('should show Search nav button', async () => {
+  it('should show Dashboard nav button', async () => {
     render(<App />);
 
     await waitFor(() => {
-      const buttons = screen.getAllByText('Search');
-      expect(buttons.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  it('should show Health nav button', async () => {
-    render(<App />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Health')).toBeInTheDocument();
+      expect(screen.getByText('Dashboard')).toBeInTheDocument();
     });
   });
 
@@ -68,23 +67,11 @@ describe('App', () => {
     });
   });
 
-  it('should show Growth nav button', async () => {
+  it('should show Agent nav link', async () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('Growth')).toBeInTheDocument();
+      expect(screen.getByText('Agent')).toBeInTheDocument();
     });
-  });
-
-  it('should hide agent features by default', async () => {
-    render(<App />);
-
-    await waitFor(() => {
-      expect(screen.getByText('llmwikify')).toBeInTheDocument();
-    });
-
-    expect(screen.queryByText('Agent Chat')).not.toBeInTheDocument();
-    expect(screen.queryByText('Tasks')).not.toBeInTheDocument();
-    expect(screen.queryByText('Confirmations')).not.toBeInTheDocument();
   });
 });

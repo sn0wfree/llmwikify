@@ -9,7 +9,8 @@ export type ChatStreamEvent =
   | { type: 'tool_call_end'; tool: string; result: unknown }
   | { type: 'tool_call_error'; tool: string; error: string }
   | { type: 'done'; final_response: string; actions: unknown[] }
-  | { type: 'confirmation_required'; confirmation_id: string; details: Record<string, unknown> };
+  | { type: 'confirmation_required'; confirmation_id: string; details: Record<string, unknown> }
+  | { type: 'error'; message: string };
 
 export type ResearchStreamEvent =
   | { type: 'step'; step: string; message: string; session_id?: string }

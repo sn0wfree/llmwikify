@@ -99,8 +99,7 @@ describe('Editor', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Edit')).toBeInTheDocument();
-      expect(screen.getByText('Split')).toBeInTheDocument();
-      expect(screen.getByText('Preview')).toBeInTheDocument();
+      expect(screen.getByText('Graph')).toBeInTheDocument();
     });
   });
 });

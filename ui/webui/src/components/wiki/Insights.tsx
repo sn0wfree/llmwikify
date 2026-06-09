@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api';
+import { Card } from '../ui/card';
+import { Button } from '../ui/Button';
+import { Badge } from '../ui/badge';
+import { cn } from '@/lib/utils';
 
 interface SynthesisResult {
   source: string;
@@ -34,49 +38,32 @@ export function Insights() {
   const [synthesisLoading, setSynthesisLoading] = useState(false);
   const [graphLoading, setGraphLoading] = useState(false);
 
-  useEffect(() => {
-    loadInsights();
-  }, []);
+  useEffect(() => { loadInsights(); }, []);
 
   const loadInsights = async () => {
     setLoading(true);
     try {
       const recs = await api.wiki.recommend() as unknown as Record<string, unknown>;
-      // API returns {missing_pages: [...], orphan_pages: [...], summary: '...'}
-      // Flatten into a single array for display
       const flattened: Array<Record<string, unknown>> = [];
       if (recs && typeof recs === 'object') {
         const missingPages = (recs.missing_pages as Array<Record<string, unknown>>) || [];
         const orphanPages = (recs.orphan_pages as Array<Record<string, unknown>>) || [];
-        missingPages.forEach(p => {
-          flattened.push({ ...p, type: 'missing_page' });
-        });
-        orphanPages.forEach(p => {
-          flattened.push({ ...p, type: 'orphan' });
-        });
+        missingPages.forEach(p => flattened.push({ ...p, type: 'missing_page' }));
+        orphanPages.forEach(p => flattened.push({ ...p, type: 'orphan' }));
       }
       setRecommendations(flattened);
-    } catch {
-      setRecommendations([]);
-    } finally {
-      setLoading(false);
-    }
+    } catch { setRecommendations([]); } finally { setLoading(false); }
   };
 
   const loadSynthesis = async () => {
     setSynthesisLoading(true);
     try {
       const result = await api.wiki.suggestSynthesis() as unknown as Record<string, unknown>;
-      // API returns {suggestions: [...], sources_analyzed: N, ...}
       if (result && typeof result === 'object') {
         const suggestions = (result.suggestions as Array<Record<string, unknown>>) || [];
         setSynthesisResults(suggestions as unknown as SynthesisResult[]);
       }
-    } catch {
-      setSynthesisResults([]);
-    } finally {
-      setSynthesisLoading(false);
-    }
+    } catch { setSynthesisResults([]); } finally { setSynthesisLoading(false); }
   };
 
   const loadGraphAnalysis = async () => {
@@ -84,19 +71,11 @@ export function Insights() {
     try {
       const result = await api.wiki.graphAnalyze();
       setGraphAnalysis(result as unknown as GraphAnalysis);
-    } catch {
-      setGraphAnalysis(null);
-    } finally {
-      setGraphLoading(false);
-    }
+    } catch { setGraphAnalysis(null); } finally { setGraphLoading(false); }
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full text-slate-500">
-        Loading insights...
-      </div>
-    );
+    return <div className="flex items-center justify-center h-full text-muted-foreground">Loading insights...</div>;
   }
 
   return (
@@ -107,16 +86,11 @@ export function Insights() {
         {/* Recommendations */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-blue-400">Recommendations</h3>
-            <button
-              onClick={loadInsights}
-              className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded"
-            >
-              Refresh
-            </button>
+            <h3 className="text-lg font-semibold text-primary">Recommendations</h3>
+            <Button variant="ghost" size="sm" onClick={loadInsights}>Refresh</Button>
           </div>
           {recommendations.length === 0 ? (
-            <p className="text-slate-500 text-sm">No recommendations at this time.</p>
+            <p className="text-muted-foreground text-sm">No recommendations at this time.</p>
           ) : (
             <div className="space-y-2">
               {recommendations.map((rec, i) => {
@@ -128,17 +102,17 @@ export function Insights() {
                   : String(rec.message || rec.observation || recType || 'Recommendation');
 
                 return (
-                  <div key={i} className="p-3 bg-slate-800 rounded border border-slate-700">
+                  <Card key={i} className="p-3">
                     <div className="flex items-start gap-2">
-                      <span className="text-blue-400 mt-0.5">{icon}</span>
+                      <span className="text-primary mt-0.5">{icon}</span>
                       <div>
                         <p className="text-sm">{message}</p>
                         {typeof rec.suggestion !== 'undefined' && rec.suggestion !== null && (
-                          <p className="text-xs text-slate-400 mt-1">→ {String(rec.suggestion)}</p>
+                          <p className="text-xs text-muted-foreground mt-1">→ {String(rec.suggestion)}</p>
                         )}
                       </div>
                     </div>
-                  </div>
+                  </Card>
                 );
               })}
             </div>
@@ -148,39 +122,35 @@ export function Insights() {
         {/* Synthesis */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-purple-400">Synthesis</h3>
-            <button
-              onClick={loadSynthesis}
-              disabled={synthesisLoading}
-              className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded"
-            >
+            <h3 className="text-lg font-semibold text-primary">Synthesis</h3>
+            <Button variant="ghost" size="sm" onClick={loadSynthesis} disabled={synthesisLoading}>
               {synthesisLoading ? 'Loading...' : 'Analyze'}
-            </button>
+            </Button>
           </div>
           {synthesisResults.length === 0 ? (
-            <p className="text-slate-500 text-sm">
+            <p className="text-muted-foreground text-sm">
               Click "Analyze" to run cross-source synthesis. Detects contradictions, gaps, and reinforced claims.
             </p>
           ) : (
             <div className="space-y-3">
               {synthesisResults.map((result, i) => (
-                <div key={i} className="bg-slate-800 rounded border border-slate-700 p-4">
-                  <h4 className="text-sm font-medium text-slate-300 mb-2">{result.source || 'Source Analysis'}</h4>
+                <Card key={i} className="p-4">
+                  <h4 className="text-sm font-medium text-foreground mb-2">{result.source || 'Source Analysis'}</h4>
                   {result.reinforced_claims && result.reinforced_claims.length > 0 && (
                     <div className="mb-3">
-                      <p className="text-xs text-green-400 font-medium mb-1">Reinforced Claims ({result.reinforced_claims.length})</p>
+                      <p className="text-xs text-green-500 font-medium mb-1">Reinforced Claims ({result.reinforced_claims.length})</p>
                       {result.reinforced_claims.slice(0, 3).map((claim, j) => (
-                        <div key={j} className="text-xs text-slate-400 ml-2 mb-1">
-                          • {claim.claim} <span className="text-slate-500">(confidence: {(claim.confidence * 100).toFixed(0)}%)</span>
+                        <div key={j} className="text-xs text-muted-foreground ml-2 mb-1">
+                          • {claim.claim} <span className="text-muted-foreground">(confidence: {(claim.confidence * 100).toFixed(0)}%)</span>
                         </div>
                       ))}
                     </div>
                   )}
                   {result.contradictions && result.contradictions.length > 0 && (
                     <div className="mb-3">
-                      <p className="text-xs text-red-400 font-medium mb-1">Contradictions ({result.contradictions.length})</p>
+                      <p className="text-xs text-destructive font-medium mb-1">Contradictions ({result.contradictions.length})</p>
                       {result.contradictions.slice(0, 3).map((contra, j) => (
-                        <div key={j} className="text-xs text-slate-400 ml-2 mb-1">
+                        <div key={j} className="text-xs text-muted-foreground ml-2 mb-1">
                           • "{contra.claim_a}" vs "{contra.claim_b}"
                         </div>
                       ))}
@@ -188,15 +158,15 @@ export function Insights() {
                   )}
                   {result.knowledge_gaps && result.knowledge_gaps.length > 0 && (
                     <div>
-                      <p className="text-xs text-amber-400 font-medium mb-1">Knowledge Gaps ({result.knowledge_gaps.length})</p>
+                      <p className="text-xs text-yellow-500 font-medium mb-1">Knowledge Gaps ({result.knowledge_gaps.length})</p>
                       {result.knowledge_gaps.slice(0, 3).map((gap, j) => (
-                        <div key={j} className="text-xs text-slate-400 ml-2 mb-1">
+                        <div key={j} className="text-xs text-muted-foreground ml-2 mb-1">
                           • {gap.topic}: {gap.description}
                         </div>
                       ))}
                     </div>
                   )}
-                </div>
+                </Card>
               ))}
             </div>
           )}
@@ -205,22 +175,17 @@ export function Insights() {
         {/* Graph Analysis */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-green-400">Graph Analysis</h3>
-            <button
-              onClick={loadGraphAnalysis}
-              disabled={graphLoading}
-              className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded"
-            >
+            <h3 className="text-lg font-semibold text-primary">Graph Analysis</h3>
+            <Button variant="ghost" size="sm" onClick={loadGraphAnalysis} disabled={graphLoading}>
               {graphLoading ? 'Loading...' : 'Analyze'}
-            </button>
+            </Button>
           </div>
           {!graphAnalysis ? (
-            <p className="text-slate-500 text-sm">
+            <p className="text-muted-foreground text-sm">
               Click "Analyze" to run knowledge graph analysis. Reveals central topics, community structures, and page suggestions.
             </p>
           ) : (
             <div className="space-y-4">
-              {/* Stats */}
               {graphAnalysis.stats && (
                 <div className="grid grid-cols-5 gap-3">
                   <StatCard label="Nodes" value={graphAnalysis.stats.nodes} />
@@ -231,62 +196,55 @@ export function Insights() {
                 </div>
               )}
 
-              {/* PageRank Hubs */}
               {graphAnalysis.centrality?.pagerank && graphAnalysis.centrality.pagerank.length > 0 && (
-                <div className="bg-slate-800 rounded border border-slate-700 p-4">
-                  <h4 className="text-sm font-medium text-blue-400 mb-2">Top Pages (PageRank)</h4>
+                <Card className="p-4">
+                  <h4 className="text-sm font-medium text-primary mb-2">Top Pages (PageRank)</h4>
                   <div className="space-y-1">
                     {graphAnalysis.centrality.pagerank.slice(0, 5).map((item, i) => (
                       <div key={i} className="flex items-center justify-between text-xs">
-                        <span className="text-slate-300">{i + 1}. {item.node}</span>
-                        <span className="text-slate-500">{item.score.toFixed(4)}</span>
+                        <span className="text-foreground">{i + 1}. {item.node}</span>
+                        <span className="text-muted-foreground">{item.score.toFixed(4)}</span>
                       </div>
                     ))}
                   </div>
-                </div>
+                </Card>
               )}
 
-              {/* Communities */}
               {graphAnalysis.communities && (
-                <div className="bg-slate-800 rounded border border-slate-700 p-4">
-                  <h4 className="text-sm font-medium text-purple-400 mb-2">
+                <Card className="p-4">
+                  <h4 className="text-sm font-medium text-primary mb-2">
                     Communities ({graphAnalysis.communities.num_communities})
                   </h4>
-                  <p className="text-xs text-slate-500 mb-2">
+                  <p className="text-xs text-muted-foreground mb-2">
                     Modularity: {graphAnalysis.communities.modularity.toFixed(3)}
                   </p>
                   <div className="space-y-2">
                     {Object.entries(graphAnalysis.communities.communities).slice(0, 5).map(([cid, comm]) => (
-                      <div key={cid} className="text-xs text-slate-400">
-                        <span className="text-slate-300">{comm.label}</span>
-                        <span className="text-slate-500 ml-2">{comm.size} nodes</span>
+                      <div key={cid} className="text-xs text-muted-foreground">
+                        <span className="text-foreground">{comm.label}</span>
+                        <span className="text-muted-foreground ml-2">{comm.size} nodes</span>
                       </div>
                     ))}
                   </div>
-                </div>
+                </Card>
               )}
 
-              {/* Suggestions */}
               {graphAnalysis.suggestions && graphAnalysis.suggestions.length > 0 && (
-                <div className="bg-slate-800 rounded border border-slate-700 p-4">
-                  <h4 className="text-sm font-medium text-amber-400 mb-2">
+                <Card className="p-4">
+                  <h4 className="text-sm font-medium text-primary mb-2">
                     Suggested Pages ({graphAnalysis.suggestions.length})
                   </h4>
                   <div className="space-y-2">
                     {graphAnalysis.suggestions.slice(0, 5).map((sugg, i) => (
                       <div key={i} className="text-xs">
-                        <span className={`px-1.5 py-0.5 rounded mr-2 ${
-                          sugg.priority === 'high' ? 'bg-red-500/20 text-red-400' :
-                          sugg.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-green-500/20 text-green-400'
-                        }`}>
+                        <Badge variant={sugg.priority === 'high' ? 'destructive' : sugg.priority === 'medium' ? 'outline' : 'secondary'} className="mr-2">
                           {sugg.priority}
-                        </span>
-                        <span className="text-slate-300">{sugg.observation}</span>
+                        </Badge>
+                        <span className="text-foreground">{sugg.observation}</span>
                       </div>
                     ))}
                   </div>
-                </div>
+                </Card>
               )}
             </div>
           )}
@@ -298,9 +256,9 @@ export function Insights() {
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-slate-800 rounded border border-slate-700 p-3 text-center">
-      <div className="text-xs text-slate-400">{label}</div>
-      <div className="text-lg font-bold text-slate-200">{value}</div>
-    </div>
+    <Card className="p-3 text-center">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-lg font-bold text-foreground">{value}</div>
+    </Card>
   );
 }

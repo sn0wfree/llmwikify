@@ -266,6 +266,13 @@ export function AgentChat() {
             setTokenEstimate((t) => t + Math.ceil((event.final_response.length + currentThinking.length) / 4));
             setConnectionState('idle');
             break;
+          case 'error':
+            addToast('error', event.message || 'Chat error');
+            setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${event.message}`, timestamp: new Date().toISOString() }]);
+            setCurrentAssistantMsg('');
+            setCurrentToolCalls([]);
+            setConnectionState('error');
+            break;
         }
       }
     } catch (e) {
