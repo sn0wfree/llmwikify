@@ -134,5 +134,5 @@ def build_visualization_data(
             "displayed_nodes": len(result_nodes),
             "mode": display_mode,
         },
-        "all_types": list(type_map.keys()),
+        "all_types": list(type_map.values()),
     }
