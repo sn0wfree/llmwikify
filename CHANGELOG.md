@@ -5,6 +5,41 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0] - 2026-06-09
+
+### Added — 5+1-Service Architecture
+- **`MemoryManager`** (`apps/chat/memory/`) — 6 stores:
+  `ConversationStore`, `KnowledgeStore`, `ContextStore`,
+  `ReActStateStore`, `UserPreferenceStore`, `MemoryIndex`.
+  ~370 LOC, 14 tests.
+- **`SkillService`** (`apps/chat/skills/service.py`) — facade over
+  `SkillRegistry` + `SkillRuntime` with `register_all()` and
+  `execute()` interface. ~120 LOC, 8 tests.
+- **`HarnessService`** (`apps/chat/harness/service.py`) — facade over
+  6 eval primitives (QualityGate, SourceFilter, StructureValidator,
+  ResearchReviewer, ResearchRevisor, SourceAnalyzer) with
+  lazy-init caching. ~110 LOC, 11 tests.
+- **`AgentService`** (`apps/chat/agent/agent_service.py`) — composition
+  root wiring `AppDatabase` + `ChatService` + `WikiService` + 3 new
+  services. ~220 LOC, 10 tests. Backward compat: old methods
+  (`chat`, `run_dream`, `list_notifications`, etc.) all delegate.
+
+### Architecture
+- **Service responsibilities**:
+  | Service | LOC | Role |
+  |---|---|---|
+  | ChatService | 463 | SSE chat + DB + session |
+  | WikiService | 440 | multi-wiki + dream/notify/scheduler/tool |
+  | SkillService (NEW) | 120 | skill facade |
+  | HarnessService (NEW) | 110 | eval facade |
+  | MemoryManager (NEW) | 370 | memory base (6 stores) |
+  | AgentService (NEW) | 220 | composition root |
+
+### Notes
+- Backward compat preserved: `apps/agent/core/{db,service}.py`
+  wrappers kept and will be removed in v0.34.0.
+- Full release notes: `docs/releases/v0.33.0.md`.
+
 ## [0.32.5] - 2026-06-09
 
 ### Added — Skill Pipeline Split (Phase 12a-d)
