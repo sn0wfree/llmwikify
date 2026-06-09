@@ -17,7 +17,7 @@ export const Backdrop = memo(function Backdrop() {
   return (
     <>
       <div aria-hidden className="backdrop-layer backdrop-layer--base" />
-      <div aria-hidden className="backdrop-layer backdrop-layer--filler" />
+      <div aria-hidden className="backdrop-layer backdrop-layer--grid" />
       <div aria-hidden className="backdrop-layer backdrop-layer--vignette" />
       <div aria-hidden className="backdrop-layer backdrop-layer--grain" />
     </>

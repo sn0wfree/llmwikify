@@ -60,7 +60,6 @@
   --animate-fade-in: fade-in 200ms var(--ease-smooth);
   --animate-slide-in: slide-in 300ms var(--ease-smooth);
   --animate-pulse-subtle: pulse-subtle 2s ease-in-out infinite;
-  --animate-aurora: aurora 16s ease-in-out infinite;
   --animate-float: float 6s ease-in-out infinite;
   --animate-shimmer: shimmer 2.4s linear infinite;
   --animate-glow-pulse: glow-pulse 2.5s ease-in-out infinite;
@@ -240,14 +239,6 @@ body {
   background: var(--background);
 }
 
-.backdrop-layer--aurora {
-  z-index: -8;
-  background: var(--gradient-aurora);
-  filter: blur(80px) saturate(140%);
-  animation: var(--animate-aurora);
-  transform-origin: 50% 50%;
-}
-
 .backdrop-layer--grid {
   z-index: -7;
   background-image:
@@ -413,12 +404,6 @@ body {
 @keyframes pulse-subtle {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
-}
-
-@keyframes aurora {
-  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
-  33% { transform: translate(2%, -1%) rotate(0.5deg) scale(1.05); }
-  66% { transform: translate(-1%, 1%) rotate(-0.5deg) scale(0.98); }
 }
 
 @keyframes float {
