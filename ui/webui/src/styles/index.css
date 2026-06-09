@@ -62,7 +62,6 @@
   --animate-pulse-subtle: pulse-subtle 2s ease-in-out infinite;
   --animate-float: float 6s ease-in-out infinite;
   --animate-shimmer: shimmer 2.4s linear infinite;
-  --animate-glow-pulse: glow-pulse 2.5s ease-in-out infinite;
   --animate-message-in: message-in 220ms var(--ease-spring);
   --animate-slide-up: slide-up 240ms var(--ease-smooth);
   --animate-thinking-blink: blink 1.1s step-end infinite;
@@ -294,16 +293,6 @@ body {
   border-radius: 50%;
 }
 
-.status-dot--live::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  background: var(--success);
-  opacity: 0.4;
-  animation: var(--animate-glow-pulse);
-}
-
 /* ── Animations ── */
 
 @keyframes blink {
@@ -414,11 +403,6 @@ body {
 @keyframes shimmer {
   from { background-position: -200% 0; }
   to { background-position: 200% 0; }
-}
-
-@keyframes glow-pulse {
-  0%, 100% { opacity: 0.3; transform: scale(0.95); }
-  50% { opacity: 0.7; transform: scale(1.4); }
 }
 
 .shimmer {
