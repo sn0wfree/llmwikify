@@ -1,10 +1,12 @@
 /**
- * WikiSelector - Dropdown component for switching between wikis.
- * Shows current wiki name, allows switching, and has a "+" button for adding new wikis.
+ * WikiSelector - Dropdown for switching between wikis.
+ * Glass morphism + smooth expand animation.
  */
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { ChevronDown, Plus, Check, BookOpen } from 'lucide-react';
 import { useWikiStore } from '../../stores/wikiStore';
+import { cn } from '@/lib/utils';
 
 interface WikiSelectorProps {
   onOpenManager?: () => void;
@@ -13,46 +15,35 @@ interface WikiSelectorProps {
 export function WikiSelector({ onOpenManager }: WikiSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { wikis, currentWikiId, switchWiki, currentWiki } = useWikiStore();
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const current = currentWiki();
 
-  // No wikis - show prompt to add one
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isOpen]);
+
   if (wikis.length === 0) {
     return (
-      <div className="px-3 py-2">
-        <div className="text-sm font-medium text-slate-200">No Wiki</div>
-        <button
-          onClick={onOpenManager}
-          className="mt-1 text-xs text-primary hover:text-blue-300 flex items-center gap-1"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Wiki
-        </button>
-      </div>
-    );
-  }
-
-  if (wikis.length <= 1) {
-    const current = currentWiki();
-    return (
-      <div className="px-3 py-2">
-        <div className="text-sm font-medium text-slate-200">
-          {current?.name || 'Wiki'}
-        </div>
-        {current?.page_count !== undefined && (
-          <div className="text-xs text-slate-500">
-            {current.page_count} pages
+      <div className="px-3 py-2 m-2 mb-0">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-muted/60 border border-border/40 flex items-center justify-center">
+            <BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
-        )}
+          <div className="text-sm font-medium text-muted-foreground">No wiki</div>
+        </div>
         <button
           onClick={onOpenManager}
-          className="mt-1 text-xs text-primary hover:text-blue-300 flex items-center gap-1"
+          className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
         >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+          <Plus className="w-3 h-3" />
           Add Wiki
         </button>
       </div>
@@ -60,98 +51,97 @@ export function WikiSelector({ onOpenManager }: WikiSelectorProps) {
   }
 
   return (
-    <div className="relative px-2 py-2">
-      {/* Current wiki display */}
+    <div ref={wrapperRef} className="relative px-2 py-2">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-2 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors"
+        className={cn(
+          'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all',
+          'glass hover:bg-white/[0.06]',
+          isOpen && 'bg-white/[0.06] ring-1 ring-primary/30',
+        )}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
       >
-        <div className="text-left">
-          <div className="text-sm font-medium text-slate-200">
+        <div className="w-7 h-7 rounded-md bg-gradient-to-br from-primary/30 to-accent/30 border border-primary/20 flex items-center justify-center shrink-0">
+          <BookOpen className="w-3.5 h-3.5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0 text-left">
+          <div className="text-sm font-medium text-foreground truncate">
             {current?.name || 'Select Wiki'}
           </div>
           {current && (
-            <div className="text-xs text-slate-500">
+            <div className="text-[10px] text-muted-foreground truncate">
               {current.page_count} pages · {current.type}
             </div>
           )}
         </div>
-        <svg
-          className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <ChevronDown
+          className={cn(
+            'w-3.5 h-3.5 text-muted-foreground transition-transform duration-200',
+            isOpen && 'rotate-180',
+          )}
+        />
       </button>
 
-      {/* Dropdown menu */}
       {isOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setIsOpen(false)}
-          />
-
-          {/* Menu */}
-          <div className="absolute left-2 right-2 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50 overflow-hidden">
-            <div className="py-1">
-              {wikis.map((wiki) => (
+        <div
+          className="absolute left-2 right-2 mt-1 glass-strong rounded-lg shadow-elevated z-50 overflow-hidden animate-slide-up"
+          role="listbox"
+        >
+          <div className="py-1 max-h-64 overflow-y-auto">
+            {wikis.map((wiki) => {
+              const isActive = wiki.wiki_id === currentWikiId;
+              return (
                 <button
                   key={wiki.wiki_id}
                   onClick={() => {
                     switchWiki(wiki.wiki_id);
                     setIsOpen(false);
                   }}
-                  className={`w-full px-3 py-2 text-left hover:bg-slate-700 transition-colors ${
-                    wiki.wiki_id === currentWikiId ? 'bg-slate-700' : ''
-                  }`}
+                  className={cn(
+                    'w-full px-3 py-2 text-left transition-colors flex items-center gap-2',
+                    isActive ? 'bg-primary/12' : 'hover:bg-white/[0.04]',
+                  )}
+                  role="option"
+                  aria-selected={isActive}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-medium text-slate-200">
-                        {wiki.name}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {wiki.page_count} pages · {wiki.type}
-                      </div>
+                  <div className="w-6 h-6 rounded-md bg-muted/60 border border-border/40 flex items-center justify-center shrink-0">
+                    <BookOpen className="w-3 h-3 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground truncate">
+                      {wiki.name}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {wiki.is_default && (
-                        <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded">
-                          Default
-                        </span>
-                      )}
-                      {wiki.wiki_id === currentWikiId && (
-                        <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      {wiki.page_count} pages · {wiki.type}
                     </div>
                   </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {wiki.is_default && (
+                      <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/15 text-primary">
+                        Default
+                      </span>
+                    )}
+                    {isActive && <Check className="w-3.5 h-3.5 text-primary" />}
+                  </div>
                 </button>
-              ))}
-            </div>
-
-            {/* Add wiki button */}
-            <div className="border-t border-slate-700 py-1">
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  onOpenManager?.();
-                }}
-                className="w-full px-3 py-2 text-left text-sm text-primary hover:bg-slate-700 transition-colors flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Wiki
-              </button>
-            </div>
+              );
+            })}
           </div>
-        </>
+
+          <div className="border-t border-border/40">
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onOpenManager?.();
+              }}
+              className="w-full px-3 py-2 text-left text-xs text-primary hover:bg-white/[0.04] transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Wiki</span>
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

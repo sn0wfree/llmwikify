@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { Search, Loader2, FileText, Sparkles } from 'lucide-react';
 import { api, SearchResult } from '../../api';
+import { cn } from '@/lib/utils';
 
 interface SearchBarProps {
   onResult?: (page: string) => void;
@@ -59,7 +61,6 @@ export function SearchBar({ onResult, currentWikiId, isMultiWikiMode }: SearchBa
     onResult?.(pageName);
   };
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -73,55 +74,75 @@ export function SearchBar({ onResult, currentWikiId, isMultiWikiMode }: SearchBa
   return (
     <div ref={wrapperRef} className="relative flex-1">
       <form onSubmit={handleSearch}>
-        <div className="flex gap-2">
+        <div className="relative glow-border rounded-lg">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
           <input
             type="text"
             value={query}
             onChange={handleChange}
             onFocus={() => results.length > 0 && setShowDropdown(true)}
-            placeholder="Search wiki..."
-            className="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+            placeholder="Search wiki…"
+            className={cn(
+              'w-full pl-9 pr-20 py-2 text-sm rounded-lg',
+              'bg-white/[0.04] border border-border/50',
+              'text-foreground placeholder:text-muted-foreground',
+              'focus:outline-none focus:bg-white/[0.06]',
+              'transition-colors',
+            )}
           />
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded text-sm text-white"
-          >
-            {loading ? '...' : 'Search'}
-          </button>
+          {loading ? (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
+            </div>
+          ) : (
+            <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded bg-white/[0.06] text-[10px] font-mono text-muted-foreground pointer-events-none">
+              Enter
+            </kbd>
+          )}
         </div>
       </form>
 
       {/* Dropdown results */}
       {showDropdown && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded shadow-xl z-50 max-h-80 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1.5 glass-strong rounded-lg shadow-elevated z-50 max-h-80 overflow-y-auto animate-slide-up">
           {results.map((r, i) => (
-            <div
+            <button
               key={i}
+              type="button"
               onClick={() => handleSelect(r.page_name)}
-              className="p-3 border-b border-slate-700 last:border-b-0 hover:bg-slate-700 cursor-pointer transition-colors"
+              className="w-full text-left p-3 border-b border-border/30 last:border-b-0 hover:bg-white/[0.04] transition-colors"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-blue-400">{r.page_name}</span>
-                <span className="text-xs text-slate-500">score: {r.score?.toFixed(2)}</span>
+              <div className="flex items-center gap-2">
+                <FileText className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span className="text-sm font-medium text-foreground truncate flex-1">
+                  {r.page_name}
+                </span>
+                {r.score !== undefined && (
+                  <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
+                    {r.score.toFixed(2)}
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                {r.snippet || r.content?.substring(0, 150) || ''}
-              </p>
+              {r.snippet && (
+                <p className="text-xs text-muted-foreground mt-1 line-clamp-2 pl-5.5 ml-0.5">
+                  {r.snippet}
+                </p>
+              )}
               {r.has_sink && (
-                <span className="inline-block mt-1 px-1.5 py-0.5 text-xs bg-amber-500/20 text-amber-400 rounded">
+                <span className="inline-flex items-center gap-1 mt-1.5 px-1.5 py-0.5 text-[10px] font-medium bg-warning/15 text-warning rounded">
+                  <Sparkles className="w-2.5 h-2.5" />
                   {r.sink_entries} pending
                 </span>
               )}
-            </div>
+            </button>
           ))}
         </div>
       )}
 
       {/* No results */}
       {showDropdown && results.length === 0 && query && !loading && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded shadow-xl z-50 p-4 text-center text-slate-500 text-sm">
-          No results found
+        <div className="absolute top-full left-0 right-0 mt-1.5 glass-strong rounded-lg shadow-elevated z-50 p-6 text-center animate-slide-up">
+          <div className="text-xs text-muted-foreground">No results for "{query}"</div>
         </div>
       )}
     </div>
