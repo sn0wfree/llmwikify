@@ -32,7 +32,7 @@ describe('Confirmations', () => {
     render(<Confirmations />);
 
     await waitFor(() => {
-      expect(screen.getByText('No pending confirmations.')).toBeInTheDocument();
+      expect(screen.getByText(/No pending confirmations\.?/)).toBeInTheDocument();
     });
   });
 

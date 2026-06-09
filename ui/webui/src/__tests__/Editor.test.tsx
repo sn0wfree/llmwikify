@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { fireEvent } from '@testing-library/react';
 import { render, screen, act, waitFor } from './test-utils';
 import { Editor } from '../components/wiki/Editor';
 import { ToastProvider } from '../components/wiki/Toast';
@@ -79,6 +80,10 @@ describe('Editor', () => {
     });
 
     const saveButton = screen.getByText('Save');
+    // Trigger dirty=true so the Save button is enabled (button is disabled when !dirty).
+    const textarea = screen.getByPlaceholderText(/Start writing markdown/);
+    fireEvent.change(textarea, { target: { value: 'Changed content' } });
+
     await act(async () => {
       saveButton.click();
       await new Promise((r) => setTimeout(r, 100));

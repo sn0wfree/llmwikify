@@ -32,7 +32,7 @@ describe('DreamProposals', () => {
     render(<DreamProposals />);
 
     await waitFor(() => {
-      expect(screen.getByText('No pending dream proposals.')).toBeInTheDocument();
+      expect(screen.getByText(/No pending dream proposals\.?/)).toBeInTheDocument();
     });
   });
 

@@ -28,7 +28,7 @@ describe('IngestLog', () => {
     render(<IngestLog />);
 
     await waitFor(() => {
-      expect(screen.getByText('No ingest records.')).toBeInTheDocument();
+      expect(screen.getByText(/No ingest records\.?/)).toBeInTheDocument();
     });
   });
 

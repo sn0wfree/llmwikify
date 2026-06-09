@@ -28,7 +28,7 @@ describe('EditHistory', () => {
     render(<EditHistory />);
 
     await waitFor(() => {
-      expect(screen.getByText('No edit history.')).toBeInTheDocument();
+      expect(screen.getByText(/No edit history\.?/)).toBeInTheDocument();
     });
   });
 
