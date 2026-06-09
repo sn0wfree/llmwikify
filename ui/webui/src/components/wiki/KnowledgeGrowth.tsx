@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api, WikiStatus, SinkStatus, DreamEdit } from '../../api';
+import { useWikiStore } from '../../stores/wikiStore';
 
 interface GrowthMetrics {
   pages: number;
