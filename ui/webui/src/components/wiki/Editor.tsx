@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Group, Panel, Separator } from 'react-resizable-panels';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import {
   Save, FileText, Network, Eye, PanelLeftClose, PanelLeftOpen,
   Check, AlertCircle, Loader2, Pencil, Hash,
@@ -329,7 +329,7 @@ export function Editor({
               description="Pick a page from the sidebar to start editing, or create a new one."
             />
           ) : mode === 'edit' ? (
-            <Group direction="horizontal" className="h-full">
+            <PanelGroup direction="horizontal" className="h-full">
               <Panel defaultSize={50} minSize={25} className="overflow-hidden">
                 <textarea
                   value={body}
@@ -338,7 +338,7 @@ export function Editor({
                   placeholder="Start writing markdown..."
                 />
               </Panel>
-              <Separator className="w-1 bg-border/40 hover:bg-primary/60 transition-colors cursor-col-resize" />
+              <PanelResizeHandle className="w-1 bg-border/40 hover:bg-primary/60 transition-colors cursor-col-resize" />
               <Panel defaultSize={50} minSize={25} className="overflow-hidden">
                 <div className="w-full h-full overflow-y-auto p-4 markdown-body">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -346,7 +346,7 @@ export function Editor({
                   </ReactMarkdown>
                 </div>
               </Panel>
-            </Group>
+            </PanelGroup>
           ) : mode === 'preview' ? (
             <div className="w-full h-full overflow-y-auto p-6 markdown-body max-w-3xl mx-auto">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -354,7 +354,7 @@ export function Editor({
               </ReactMarkdown>
             </div>
           ) : (
-            <Group direction="horizontal" className="h-full">
+            <PanelGroup direction="horizontal" className="h-full">
               <Panel defaultSize={60} minSize={30} className="overflow-hidden relative">
                 <div className="absolute inset-0">
                   <GraphView
@@ -368,7 +368,7 @@ export function Editor({
                   />
                 </div>
               </Panel>
-              <Separator className="w-1 bg-border/40 hover:bg-primary/60 transition-colors cursor-col-resize" />
+              <PanelResizeHandle className="w-1 bg-border/40 hover:bg-primary/60 transition-colors cursor-col-resize" />
               <Panel defaultSize={40} minSize={20} className="overflow-hidden">
                 <div className="w-full h-full overflow-y-auto p-4 markdown-body">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -376,7 +376,7 @@ export function Editor({
                   </ReactMarkdown>
                 </div>
               </Panel>
-            </Group>
+            </PanelGroup>
           )}
         </div>
       </div>

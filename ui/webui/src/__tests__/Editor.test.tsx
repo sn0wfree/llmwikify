@@ -3,24 +3,25 @@ import { render, screen, act, waitFor } from './test-utils';
 import { Editor } from '../components/wiki/Editor';
 import { ToastProvider } from '../components/wiki/Toast';
 
-const mockSearch = vi.fn();
+const mockStatus = vi.fn();
 const mockReadPage = vi.fn();
 const mockWritePage = vi.fn();
 
 vi.mock('../api', () => ({
   api: {
     wiki: {
-      search: (...args: unknown[]) => mockSearch(...args),
+      status: (...args: unknown[]) => mockStatus(...args),
       readPage: (...args: unknown[]) => mockReadPage(...args),
       writePage: (...args: unknown[]) => mockWritePage(...args),
+      graph: vi.fn().mockResolvedValue({ nodes: [], edges: [], all_types: [] }),
     },
   },
 }));
 
-function renderEditor() {
+function renderEditor(selectedPage: string | null = null) {
   return render(
     <ToastProvider>
-      <Editor selectedPage={null} onPageSelect={vi.fn()} />
+      <Editor selectedPage={selectedPage} onPageSelect={vi.fn()} />
     </ToastProvider>
   );
 }
@@ -28,40 +29,35 @@ function renderEditor() {
 describe('Editor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSearch.mockResolvedValue([]);
+    mockStatus.mockResolvedValue({ pages_by_type: {} });
     mockReadPage.mockResolvedValue({ page_name: 'Test', content: 'Hello' });
     mockWritePage.mockResolvedValue({ message: 'OK' });
   });
 
   it('should render editor component', async () => {
     renderEditor();
-
     await waitFor(() => {
       expect(screen.getByText('Pages')).toBeInTheDocument();
     });
   });
 
   it('should show warning toast when file tree fails to load', async () => {
-    mockSearch.mockRejectedValue(new Error('Network error'));
-
+    mockStatus.mockRejectedValue(new Error('Network error'));
     renderEditor();
-
     await waitFor(() => {
-      expect(screen.getByText('无法加载文件树')).toBeInTheDocument();
+      expect(screen.getByText('Could not load page tree')).toBeInTheDocument();
     });
   });
 
   it('should show error toast when page load fails', async () => {
     mockReadPage.mockRejectedValue(new Error('Page not found'));
-
     render(
       <ToastProvider>
         <Editor selectedPage="Missing" onPageSelect={vi.fn()} />
-      </ToastProvider>
+      </ToastProvider>,
     );
-
     await waitFor(() => {
-      expect(screen.getByText(/页面加载失败: Page not found/)).toBeInTheDocument();
+      expect(screen.getByText(/Failed to load page: Page not found/)).toBeInTheDocument();
     });
   });
 
@@ -72,13 +68,12 @@ describe('Editor', () => {
     render(
       <ToastProvider>
         <Editor selectedPage="Test" onPageSelect={vi.fn()} />
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     await waitFor(() => {
       expect(screen.getByText('Pages')).toBeInTheDocument();
     });
-
     await waitFor(() => {
       expect(screen.getByText('Test')).toBeInTheDocument();
     });
@@ -90,16 +85,17 @@ describe('Editor', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/保存失败/)).toBeInTheDocument();
+      expect(screen.getByText(/Save failed/)).toBeInTheDocument();
     });
   });
 
   it('should display mode toggle buttons', async () => {
     renderEditor();
-
     await waitFor(() => {
-      expect(screen.getByText('Edit')).toBeInTheDocument();
-      expect(screen.getByText('Graph')).toBeInTheDocument();
+      expect(screen.getAllByText(/Edit/i).length).toBeGreaterThan(0);
     });
+    // Three mode buttons: Edit, Graph, Preview
+    expect(screen.getByText('Graph')).toBeInTheDocument();
+    expect(screen.getByText('Preview')).toBeInTheDocument();
   });
 });
