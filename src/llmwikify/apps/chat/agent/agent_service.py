@@ -93,6 +93,9 @@ class AgentService:
                 data_dir=self.data_dir,
             )
 
+        # Wire MemoryManager into SkillService for CRUD skills
+        self.skill_service.memory_manager = self.memory_manager
+
     # ─── DB facade shortcut ─────────────────────────────────────
 
     @property

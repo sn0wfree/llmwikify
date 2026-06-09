@@ -20,7 +20,7 @@ def _run_async(coro):
                 return pool.submit(asyncio.run, coro).result()
         raise
 
-from llmwikify.apps.agent.core.db import AgentDatabase
+from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.apps.research.config import DEFAULT_RESEARCH_CONFIG, merge_research_config
 from llmwikify.apps.research.session import ResearchSessionManager
 from llmwikify.apps.research.web_search import WebSearch, SearchResult
@@ -39,8 +39,8 @@ from llmwikify.apps.research.engine import ResearchEngine
 
 @pytest.fixture
 def db(tmp_path):
-    """Create a temporary AgentDatabase."""
-    return AgentDatabase(tmp_path / "test_agent.db")
+    """Create a temporary ChatDatabase (auto-initializes all 3 facades)."""
+    return ChatDatabase(tmp_path)
 
 
 @pytest.fixture
@@ -255,8 +255,8 @@ class TestResearchDB:
             """)
             conn.commit()
 
-        # Open with AgentDatabase (should migrate)
-        db = AgentDatabase(db_path)
+        # Open with ChatDatabase (should migrate)
+        db = ChatDatabase(db_path.parent)
         session_id = "test1234"
         with sqlite3.connect(str(db_path)) as conn:
             conn.execute(

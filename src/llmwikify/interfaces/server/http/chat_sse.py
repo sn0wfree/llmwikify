@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from sse_starlette import EventSourceResponse
 
-from llmwikify.apps.agent.core.service import AgentService
+from llmwikify.apps.chat.agent.agent_service import AgentService
 
 logger = logging.getLogger(__name__)
 

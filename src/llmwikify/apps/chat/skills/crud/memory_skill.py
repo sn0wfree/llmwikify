@@ -1,14 +1,14 @@
-"""memory_skill — CRUD: append/query/summarize/clear conversation memory.
+"""memory_skill — CRUD: add/list/search/clear conversation memory.
 
-Thin wrapper around ``apps/agent/memory/`` (ConversationMemory +
-SinkMemory). The manager is passed via ``ctx.config['memory_manager']``.
+Thin wrapper around ``apps/chat/memory/`` (ConversationStore).
+The manager is passed via ``ctx.config['memory_manager']``.
 
 Actions:
 
-  - ``append(role, content, metadata)`` — add a conversation entry
-  - ``query(limit)`` — get recent conversation entries
-  - ``summarize()`` — get pending knowledge sink pages
-  - ``clear()`` — delete all conversation history
+  - ``add(session_id, role, content)`` — add a conversation entry
+  - ``list(session_id, limit)`` — get recent conversation entries
+  - ``search(session_id, query, limit)`` — search by content substring
+  - ``clear(session_id)`` — delete all conversation history
 
 Design ref: ``v0.32-skill-restructure.md`` §3.1 (#28)
 """
@@ -28,7 +28,7 @@ from llmwikify.apps.chat.skills.base import (
 logger = logging.getLogger(__name__)
 
 
-def _get_manager(ctx: SkillContext) -> Any:
+def _get_memory(ctx: SkillContext) -> Any | SkillResult:
     mgr = ctx.config.get("memory_manager") if ctx.config else None
     if mgr is None:
         return SkillResult.fail("memory_manager not configured in ctx.config")
@@ -38,89 +38,119 @@ def _get_manager(ctx: SkillContext) -> Any:
 # ─── Action handlers ──────────────────────────────────────────────
 
 
-async def _append(args: dict, ctx: SkillContext) -> SkillResult:
-    mgr = _get_manager(ctx)
+async def _add(args: dict, ctx: SkillContext) -> SkillResult:
+    mgr = _get_memory(ctx)
     if isinstance(mgr, SkillResult):
         return mgr
+    session_id = args.get("session_id") or ctx.session_id
+    if not session_id:
+        return SkillResult.fail("session_id is required")
     role = args.get("role", "user")
     content = args.get("content", "")
     if not content:
         return SkillResult.fail("content is required")
-    metadata = args.get("metadata")
-    mgr.store_conversation(role, content, metadata)
-    return SkillResult.ok({"appended": True, "role": role})
+    msg_id = mgr.conversation.add(session_id, role, content)
+    return SkillResult.ok({"added": True, "id": msg_id, "role": role})
 
 
-async def _query(args: dict, ctx: SkillContext) -> SkillResult:
-    mgr = _get_manager(ctx)
+async def _list(args: dict, ctx: SkillContext) -> SkillResult:
+    mgr = _get_memory(ctx)
     if isinstance(mgr, SkillResult):
         return mgr
-    limit = args.get("limit", 20)
-    entries = mgr.get_context(max_messages=limit)
+    session_id = args.get("session_id") or ctx.session_id
+    if not session_id:
+        return SkillResult.fail("session_id is required")
+    limit = args.get("limit", 50)
+    entries = mgr.conversation.list(session_id, limit=limit)
     return SkillResult.ok({"entries": entries, "count": len(entries)})
 
 
-async def _summarize(args: dict, ctx: SkillContext) -> SkillResult:
-    mgr = _get_manager(ctx)
+async def _search(args: dict, ctx: SkillContext) -> SkillResult:
+    mgr = _get_memory(ctx)
     if isinstance(mgr, SkillResult):
         return mgr
-    pending = mgr.get_pending_work()
-    return SkillResult.ok(pending)
+    session_id = args.get("session_id") or ctx.session_id
+    if not session_id:
+        return SkillResult.fail("session_id is required")
+    query = args.get("query", "")
+    if not query:
+        return SkillResult.fail("query is required")
+    limit = args.get("limit", 10)
+    entries = mgr.conversation.search(session_id, query, limit)
+    return SkillResult.ok({"entries": entries, "count": len(entries)})
 
 
 async def _clear(args: dict, ctx: SkillContext) -> SkillResult:
-    mgr = _get_manager(ctx)
+    mgr = _get_memory(ctx)
     if isinstance(mgr, SkillResult):
         return mgr
-    mgr.conversation.clear()
-    return SkillResult.ok({"cleared": True})
+    session_id = args.get("session_id") or ctx.session_id
+    if not session_id:
+        return SkillResult.fail("session_id is required")
+    # Clear context entries (conversation is append-only log)
+    count = mgr.context.clear(session_id)
+    return SkillResult.ok({"cleared": True, "entries_removed": count})
 
 
 # ─── Skill declaration ─────────────────────────────────────────
 
 
 class MemorySkill(Skill):
-    """CRUD: append/query/summarize/clear conversation memory."""
+    """CRUD: add/list/search/clear conversation memory."""
 
     name = "memory"
-    description = "Manage conversation memory and knowledge sink"
+    description = "Manage conversation memory and context entries"
     actions = {
-        "append": SkillAction(
-            name="append",
-            description="Append a conversation entry (role + content + optional metadata)",
-            handler=_append,
+        "add": SkillAction(
+            name="add",
+            description="Add a conversation entry (role + content)",
+            handler=_add,
             input_schema={
                 "type": "object",
                 "properties": {
+                    "session_id": {"type": "string", "description": "Session ID (defaults to ctx.session_id)"},
                     "role": {"type": "string", "description": "Message role (user/assistant/system)", "default": "user"},
                     "content": {"type": "string", "description": "Message content"},
-                    "metadata": {"type": "object", "description": "Optional metadata dict"},
                 },
                 "required": ["content"],
             },
         ),
-        "query": SkillAction(
-            name="query",
+        "list": SkillAction(
+            name="list",
             description="Get recent conversation entries",
-            handler=_query,
+            handler=_list,
             input_schema={
                 "type": "object",
                 "properties": {
-                    "limit": {"type": "integer", "description": "Max entries to return (default 20)", "default": 20},
+                    "session_id": {"type": "string", "description": "Session ID (defaults to ctx.session_id)"},
+                    "limit": {"type": "integer", "description": "Max entries to return (default 50)", "default": 50},
                 },
             },
         ),
-        "summarize": SkillAction(
-            name="summarize",
-            description="Get pending knowledge sink pages and status",
-            handler=_summarize,
-            input_schema={"type": "object", "properties": {}},
+        "search": SkillAction(
+            name="search",
+            description="Search conversation entries by content substring",
+            handler=_search,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "Session ID (defaults to ctx.session_id)"},
+                    "query": {"type": "string", "description": "Search query (substring match)"},
+                    "limit": {"type": "integer", "description": "Max results (default 10)", "default": 10},
+                },
+                "required": ["query"],
+            },
         ),
         "clear": SkillAction(
             name="clear",
-            description="Delete all conversation history",
+            description="Clear context entries for a session",
             handler=_clear,
-            input_schema={"type": "object", "properties": {}},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "Session ID (defaults to ctx.session_id)"},
+                },
+            },
             action_type="write",
         ),
     }

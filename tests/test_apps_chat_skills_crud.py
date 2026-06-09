@@ -20,7 +20,7 @@ import pytest
 
 from llmwikify.apps.chat.skills import SkillContext, SkillResult
 from llmwikify.apps.chat.skills.crud.dream_skill import DreamSkill, _approve, _get_proposals, _reject, _run, dream_skill
-from llmwikify.apps.chat.skills.crud.memory_skill import MemorySkill, _append, _clear, _query, _summarize, memory_skill
+from llmwikify.apps.chat.skills.crud.memory_skill import MemorySkill, _add, _clear, _list, _search, memory_skill
 from llmwikify.apps.chat.skills.crud.notify_skill import NotifySkill, _list_notifications, _mark_read, _subscribe, notify_skill
 from llmwikify.apps.chat.skills.crud.scheduler_skill import SchedulerSkill, _add_job, _list_jobs, _remove_job, _trigger, scheduler_skill
 
@@ -31,22 +31,49 @@ from llmwikify.apps.chat.skills.crud.scheduler_skill import SchedulerSkill, _add
 class MockMemoryManager:
     def __init__(self) -> None:
         self._entries: list[dict] = []
+        self.conversation = MockConversationStore(self._entries)
+        self.context = MockContextStore()
 
-    def store_conversation(self, role: str, content: str, metadata: dict | None = None) -> None:
-        self._entries.append({"role": role, "content": content, "metadata": metadata})
+    def add(self, session_id: str, role: str, content: str) -> str:
+        import uuid
+        entry_id = str(uuid.uuid4())[:8]
+        self._entries.append({"id": entry_id, "session_id": session_id, "role": role, "content": content})
+        return entry_id
 
-    def get_context(self, max_messages: int = 20) -> list[dict]:
-        return self._entries[-max_messages:]
+    def list(self, session_id: str, limit: int = 50) -> list[dict]:
+        return [e for e in self._entries if e["session_id"] == session_id][-limit:]
 
-    def get_pending_work(self) -> dict:
-        return {"pending_pages": ["page1"], "sink_status": {}}
+    def search(self, session_id: str, query: str, limit: int = 10) -> list[dict]:
+        return [e for e in self._entries
+                if e["session_id"] == session_id and query.lower() in e["content"].lower()][:limit]
 
-    class conversation:
-        _entries: list[dict] = []
 
-        @classmethod
-        def clear(cls) -> None:
-            cls._entries.clear()
+class MockConversationStore:
+    def __init__(self, entries: list[dict]) -> None:
+        self._entries = entries
+
+    def add(self, session_id: str, role: str, content: str) -> str:
+        import uuid
+        entry_id = str(uuid.uuid4())[:8]
+        self._entries.append({"id": entry_id, "session_id": session_id, "role": role, "content": content})
+        return entry_id
+
+    def list(self, session_id: str, limit: int = 50) -> list[dict]:
+        return [e for e in self._entries if e["session_id"] == session_id][-limit:]
+
+    def search(self, session_id: str, query: str, limit: int = 10) -> list[dict]:
+        return [e for e in self._entries
+                if e["session_id"] == session_id and query.lower() in e["content"].lower()][:limit]
+
+    def clear(self, session_id: str) -> int:
+        before = len(self._entries)
+        self._entries[:] = [e for e in self._entries if e["session_id"] != session_id]
+        return before - len(self._entries)
+
+
+class MockContextStore:
+    def clear(self, session_id: str) -> int:
+        return 0
 
 
 class MockNotificationManager:
@@ -134,7 +161,7 @@ class _ProposalManager:
 
 @pytest.fixture
 def ctx_with_memory() -> SkillContext:
-    return SkillContext(config={"memory_manager": MockMemoryManager()})
+    return SkillContext(config={"memory_manager": MockMemoryManager()}, session_id="s1")
 
 
 @pytest.fixture
@@ -165,7 +192,7 @@ class TestMemorySkillMetadata:
         assert memory_skill.name == "memory"
 
     def test_has_4_actions(self) -> None:
-        assert set(memory_skill.actions.keys()) == {"append", "query", "summarize", "clear"}
+        assert set(memory_skill.actions.keys()) == {"add", "list", "search", "clear"}
 
     def test_manifest(self) -> None:
         m = memory_skill.manifest()
@@ -175,27 +202,27 @@ class TestMemorySkillMetadata:
 
 class TestMemorySkillActions:
     @pytest.mark.asyncio
-    async def test_append(self, ctx_with_memory: SkillContext) -> None:
-        r = await _append({"role": "user", "content": "hello"}, ctx_with_memory)
+    async def test_add(self, ctx_with_memory: SkillContext) -> None:
+        r = await _add({"role": "user", "content": "hello"}, ctx_with_memory)
         assert r.status == "ok"
-        assert r.data["appended"] is True
+        assert r.data["added"] is True
 
     @pytest.mark.asyncio
-    async def test_append_empty_content(self, ctx_with_memory: SkillContext) -> None:
-        r = await _append({"content": ""}, ctx_with_memory)
+    async def test_add_empty_content(self, ctx_with_memory: SkillContext) -> None:
+        r = await _add({"content": ""}, ctx_with_memory)
         assert r.status == "error"
 
     @pytest.mark.asyncio
-    async def test_query(self, ctx_with_memory: SkillContext) -> None:
-        r = await _query({"limit": 10}, ctx_with_memory)
+    async def test_list(self, ctx_with_memory: SkillContext) -> None:
+        r = await _list({"limit": 10}, ctx_with_memory)
         assert r.status == "ok"
         assert "entries" in r.data
 
     @pytest.mark.asyncio
-    async def test_summarize(self, ctx_with_memory: SkillContext) -> None:
-        r = await _summarize({}, ctx_with_memory)
+    async def test_search(self, ctx_with_memory: SkillContext) -> None:
+        r = await _search({"query": "test"}, ctx_with_memory)
         assert r.status == "ok"
-        assert "pending_pages" in r.data
+        assert "entries" in r.data
 
     @pytest.mark.asyncio
     async def test_clear(self, ctx_with_memory: SkillContext) -> None:
@@ -205,7 +232,7 @@ class TestMemorySkillActions:
 
     @pytest.mark.asyncio
     async def test_no_manager(self, ctx_empty: SkillContext) -> None:
-        r = await _append({"content": "x"}, ctx_empty)
+        r = await _add({"content": "x"}, ctx_empty)
         assert r.status == "error"
 
 

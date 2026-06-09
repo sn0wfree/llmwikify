@@ -486,7 +486,7 @@ def _load_research_config() -> dict[str, Any] | None:
 
 def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     """Register Agent backend routes (Phase 1)."""
-    from llmwikify.apps.agent.core.service import AgentService
+    from llmwikify.apps.chat.agent.agent_service import AgentService
     from llmwikify.interfaces.server.http.chat_sse import set_agent_service
 
     data_dir = Path.home() / ".llmwikify" / "agent"
@@ -508,15 +508,15 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     research_config = _load_research_config()
 
     set_research_deps(
-        db=agent_service.db,
+        db=agent_service.app_db.chat,
         wiki_registry=registry,
         llm_client=None,
         config=research_config,
     )
-    
+
     # PPT config - currently no PPT-specific config, pass None
     set_ppt_deps(
-        db=agent_service.db,
+        db=agent_service.app_db,
         wiki_registry=registry,
         llm_client=None,
         config=None,
@@ -524,7 +524,7 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
 
     # PPTChat - uses same LLM client as agent service
     set_ppt_chat_deps(
-        db=agent_service.db,
+        db=agent_service.app_db.chat,
         llm_client=None,  # Will fallback to agent service LLM
     )
 

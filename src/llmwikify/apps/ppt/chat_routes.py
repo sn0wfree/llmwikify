@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from sse_starlette import EventSourceResponse
 
-from ..agent.core.db import AgentDatabase
+from ..chat.db import ChatDatabase
 from .chat_router import PPTChatRouter
 from .schema import Presentation
 from .themes import get_theme
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ppt/chat", tags=["ppt-chat"])
 
-_AGENT_DB: AgentDatabase | None = None
+_AGENT_DB: ChatDatabase | None = None
 _ROUTER: PPTChatRouter | None = None
 _LLM_CLIENT: Any = None
 
@@ -36,7 +36,7 @@ def _is_confirmation(message: str) -> bool:
     return msg in CONFIRMATION_KEYWORDS or msg.startswith(tuple(CONFIRMATION_KEYWORDS))
 
 
-def set_ppt_chat_deps(db: AgentDatabase, llm_client: Any = None) -> None:
+def set_ppt_chat_deps(db: ChatDatabase, llm_client: Any = None) -> None:
     """Initialize PPTChat dependencies (called at app startup)."""
     global _AGENT_DB, _ROUTER, _LLM_CLIENT
     _AGENT_DB = db
