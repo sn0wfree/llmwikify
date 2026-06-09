@@ -532,26 +532,9 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
 
 
 def _mount_agent_spa(app: FastAPI) -> None:
-    """Mount Agent SPA to /agent path.
+    """Unified SPA handles /agent routes via client-side routing.
 
-    Per the 4-layer refactor (Batch A2), agent frontend assets
-    live at the top-level ``ui/webui-agent/dist/`` directory.
-    For dev mode, run ``cd ui/webui-agent && npm run build`` first.
+    The SPA at ui/webui/dist/ handles both / and /agent routes.
+    No separate mount is needed — the SPA's BrowserRouter handles routing.
     """
-    from fastapi.staticfiles import StaticFiles
-
-    # routes.py is at: src/llmwikify/interfaces/server/http/routes.py
-    # Up 6 levels: http → server → interfaces → llmwikify → src → repo root
-    repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
-    agent_dist = repo_root / "ui" / "webui-agent" / "dist"
-
-    if agent_dist.exists():
-        app.mount("/agent", StaticFiles(directory=str(agent_dist), html=True), name="agent_static")
-
-        from starlette.responses import RedirectResponse
-
-        @app.get("/agent", include_in_schema=False)
-        async def agent_root_redirect():
-            return RedirectResponse(url="/agent/")
-    else:
-        logger.warning("Agent SPA dist not found at %s; /agent/ will return 404", agent_dist)
+    pass
