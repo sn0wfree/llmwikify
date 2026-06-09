@@ -6,7 +6,7 @@ were moved from ``apps/agent/routes/`` (L3) to
 ``interfaces/server/http/`` (L4). The package-level
 re-exports are preserved by this shim.
 
-Update your imports. This shim will be removed in v0.34.0.
+Update your imports. This shim will be removed in v0.35.0.
 """
 from llmwikify.interfaces.server.http import (  # noqa: F401
     chat_sse,

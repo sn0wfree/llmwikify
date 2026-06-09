@@ -2,7 +2,7 @@
 
 Per Batch B4 of the 4-layer refactor, the agent/backend/
 package moved to apps/agent/ (L3 layer). This shim preserves
-the old import path until v0.33.0.
+the old import path until v0.35.0.
 """
 
 from __future__ import annotations

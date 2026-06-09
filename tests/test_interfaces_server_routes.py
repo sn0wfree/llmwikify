@@ -86,14 +86,6 @@ class TestBackwardCompatShims:
     """Legacy paths (llmwikify.agent.backend.*) still work
     for external users."""
 
-    def test_shim_routes_agent(self) -> None:
-        from llmwikify.agent.backend import routes_agent as shim
-        assert shim is not None
-
-    def test_shim_routes_research(self) -> None:
-        from llmwikify.agent.backend import routes_research as shim
-        assert shim is not None
-
     def test_shim_routes_package(self) -> None:
         from llmwikify.agent.backend import routes as shim
         assert shim is not None

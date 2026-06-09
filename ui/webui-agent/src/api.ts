@@ -521,6 +521,7 @@ export const api = {
   },
 
   research: {
+    stream: (sessionId: string) => _openResearchStream(sessionId),
     start: async (query: string, wikiId?: string): Promise<{ sessionId: string; stream: ReadableStream<ResearchStreamEvent> }> => {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
