@@ -6,8 +6,9 @@
  *   - Sources:  list with evidence_score bars
  *   - 6 步:     6 step result panels (clarify / evidence / reasoning /
  *               structure / report / compliance)
- *   - Report:   reuses ReportDetail for markdown rendering
+ *   - Report:   inline ReportTab markdown rendering
  *
+ * Includes "Save to Wiki" action on completed sessions.
  * Pattern follows PPTSidebar (refreshKey + 5s polling) for UI consistency.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -269,7 +270,7 @@ function NewSessionForm({ onCreated }: { onCreated: (id: string) => void }) {
         <div className="w-full max-w-2xl py-4">
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-primary mb-2">
-            AutoResearch — 6 步逻辑框架
+            Research — 6 步逻辑框架
           </h2>
           <p className="text-sm text-muted-foreground">
             概念澄清 → 建立依据 → 推理严密 → 稳固结构 → 结论输出 → 检查清单
@@ -386,7 +387,7 @@ function SessionHeader({
             <button
               onClick={onResume}
               className="text-xs text-green-400 hover:text-green-300 px-2 py-1 rounded
-                border border-green-500/30 hover:border-green-500/50 transition-color-colors"
+                border border-green-500/30 hover:border-green-500/50 transition-colors"
               title="恢复研究（使用已有资源重新跑一轮）"
             >
               ▶ 恢复
