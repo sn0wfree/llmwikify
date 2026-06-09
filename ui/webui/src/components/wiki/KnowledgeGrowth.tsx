@@ -17,11 +17,14 @@ interface ActivityEntry {
 }
 
 interface KnowledgeGrowthProps {
-  currentWikiId: string | null;
-  isMultiWikiMode: boolean;
+  currentWikiId?: string | null;
+  isMultiWikiMode?: boolean;
 }
 
-export function KnowledgeGrowth({ currentWikiId, isMultiWikiMode }: KnowledgeGrowthProps) {
+export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: propMultiWiki }: KnowledgeGrowthProps) {
+  const { currentWikiId: storeWikiId, isMultiWikiMode: storeMultiWiki } = useWikiStore();
+  const currentWikiId = propWikiId ?? storeWikiId;
+  const isMultiWikiMode = propMultiWiki ?? storeMultiWiki;
   const [wikiStatus, setWikiStatus] = useState<WikiStatus | null>(null);
   const [sinkStatus, setSinkStatus] = useState<SinkStatus | null>(null);
   const [dreamLog, setDreamLog] = useState<DreamEdit[]>([]);

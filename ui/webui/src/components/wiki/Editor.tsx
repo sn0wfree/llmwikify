@@ -9,8 +9,8 @@ import { GraphView } from './GraphView';
 import { PageTree } from './PageTree';
 
 interface EditorProps {
-  selectedPage: string | null;
-  onPageSelect: (page: string) => void;
+  selectedPage?: string | null;
+  handlePageSelect?: (page: string) => void;
   currentWikiId?: string | null;
 }
 
@@ -48,9 +48,10 @@ function buildFrontMatter(metadata: FrontMatterData, body: string): string {
   return `---\n${yaml}\n---\n\n${body}`;
 }
 
-export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProps) {
+export function Editor({ selectedPage: initialPage, handlePageSelect: externalOnSelect, currentWikiId }: EditorProps) {
   const { addToast } = useToast();
   const { isMultiWikiMode } = useWikiStore();
+  const [internalSelectedPage, setInternalSelectedPage] = useState<string | null>(initialPage || null);
   const [page, setPage] = useState<WikiPage | null>(null);
   const [content, setContent] = useState('');
   const [metadata, setMetadata] = useState<FrontMatterData>({});
@@ -64,6 +65,13 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
   const [allTypes, setAllTypes] = useState<string[]>([]);
   const [graphLoading, setGraphLoading] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
+
+  const selectedPage = internalSelectedPage;
+
+  const handlePageSelect = useCallback((pageName: string) => {
+    setInternalSelectedPage(pageName);
+    externalOnSelect?.(pageName);
+  }, [externalOnSelect]);
 
   useEffect(() => {
     loadTree();
@@ -174,7 +182,7 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
             <PageTree
               pagesByType={pagesByType}
               selectedPage={page?.page_name || null}
-              onSelect={onPageSelect}
+              onSelect={handlePageSelect}
             />
           </>
         )}
@@ -251,7 +259,7 @@ export function Editor({ selectedPage, onPageSelect, currentWikiId }: EditorProp
                   edges={graphEdges}
                   allTypes={allTypes}
                   currentNode={page?.page_name || null}
-                  onNodeClick={(nodeId) => onPageSelect(nodeId)}
+                  onNodeClick={(nodeId) => handlePageSelect(nodeId)}
                   showLabels={showLabels}
                   isLoading={graphLoading}
                 />
