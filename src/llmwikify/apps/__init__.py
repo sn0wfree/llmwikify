@@ -11,8 +11,7 @@ Subpackages:
       Replaces the deprecated ``llmwikify.agent`` package.
     - research: the research engine, evolved from
       ``llmwikify.agent.backend.research``.
-    - ppt: the PPT generation pipeline, evolved from
-      ``llmwikify.agent.backend.ppt``.
+    - chat: chat framework (skills, harness, memory, agent_service).
 """
 from .agent import WikiAgent
 

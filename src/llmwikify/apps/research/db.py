@@ -452,7 +452,7 @@ class ResearchDatabase(BaseDatabase):
                 "SELECT COUNT(*) AS c FROM autoresearch_sources WHERE session_id = ?",
                 (session_id,),
             ).fetchone()
-        return row["c"] if row else 0
+        return row[0] if row else 0
 
     # ─── 6-step framework fields ──────────────────────────────
 

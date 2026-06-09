@@ -496,12 +496,8 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     set_agent_service(agent_service)
 
     from llmwikify.interfaces.server.http.chat_sse import router as agent_router
-    from llmwikify.interfaces.server.http.ppt import router as ppt_router
-    from llmwikify.apps.ppt.chat_routes import router as ppt_chat_router
     from llmwikify.interfaces.server.http.research import router as research_router
     from llmwikify.interfaces.server.http.research import set_research_deps
-    from llmwikify.interfaces.server.http.ppt import set_ppt_deps
-    from llmwikify.apps.ppt.chat_routes import set_ppt_chat_deps
     from llmwikify.apps.chat.routes import set_autoresearch_deps, router as autoresearch_router
 
     # Load research config from global config file
@@ -514,22 +510,7 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
         config=research_config,
     )
 
-    # PPT config - currently no PPT-specific config, pass None
-    set_ppt_deps(
-        db=agent_service.app_db,
-        wiki_registry=registry,
-        llm_client=None,
-        config=None,
-    )
-
-    # PPTChat - uses same LLM client as agent service
-    set_ppt_chat_deps(
-        db=agent_service.app_db.chat,
-        llm_client=None,  # Will fallback to agent service LLM
-    )
-
     # AutoResearch - independent 6-step framework engine with its own DB.
-    # No shared schema with research / chat / ppt.
     from llmwikify.apps.chat.db import AutoResearchDatabase
     autoresearch_db = AutoResearchDatabase(data_dir)
     # Phase 9: pass the LLM client explicitly so the L3 chat/
@@ -545,64 +526,9 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
 
     app.include_router(agent_router)
     app.include_router(research_router)
-    app.include_router(ppt_router)
-    app.include_router(ppt_chat_router)
     app.include_router(autoresearch_router)
 
-    # v0.5: PPT task cleanup + recovery startup hook
-    _start_ppt_cleanup_hook(app, agent_service.db)
-
     _mount_agent_spa(app)
-
-
-def _start_ppt_cleanup_hook(app: FastAPI, db: Any) -> None:
-    """Mark orphaned running tasks as error + start 24h cleanup loop (v0.5)."""
-    import asyncio
-
-    cleanup_task: asyncio.Task | None = None
-
-    @app.on_event("startup")
-    async def _ppt_startup():
-        nonlocal cleanup_task
-        # 1. Mark server-restart-orphaned tasks as error
-        try:
-            orphaned = 0
-            for row in db.list_ppt_tasks(limit=1000):
-                if row["status"] in ("pending", "running"):
-                    db.update_ppt_task_status(
-                        row["id"], "error", "Server restarted",
-                    )
-                    orphaned += 1
-            if orphaned:
-                logger.info("Marked %d orphaned PPT tasks as error on startup", orphaned)
-        except Exception as e:
-            logger.error("Failed to mark orphaned PPT tasks: %s", e, exc_info=True)
-
-        # 2. Start periodic cleanup
-        async def _cleanup_loop():
-            while True:
-                try:
-                    await asyncio.sleep(86400)  # 24h
-                    deleted = db.cleanup_old_ppt_tasks(days=30)
-                    if deleted:
-                        logger.info("Cleaned up %d old PPT tasks (>30 days)", deleted)
-                except asyncio.CancelledError:
-                    break
-                except Exception as e:
-                    logger.error("PPT cleanup error: %s", e, exc_info=True)
-
-        cleanup_task = asyncio.create_task(_cleanup_loop())
-        logger.info("PPT cleanup loop started (30-day retention)")
-
-    @app.on_event("shutdown")
-    async def _ppt_shutdown():
-        if cleanup_task and not cleanup_task.done():
-            cleanup_task.cancel()
-            try:
-                await cleanup_task
-            except asyncio.CancelledError:
-                pass
-            logger.info("PPT cleanup loop stopped")
 
 
 def _mount_agent_spa(app: FastAPI) -> None:

@@ -56,8 +56,8 @@ def _get_engine(wiki_id: str | None = None) -> ResearchEngine:
     wiki = _get_wiki(wiki_id)
     llm = _LLM_CLIENT
     if llm is None:
-        from ..core.service import AgentService
-        from .agent import get_agent_service
+        from llmwikify.apps.chat.agent.agent_service import AgentService  # noqa: F401
+        from .chat_sse import get_agent_service
         svc = get_agent_service()
         llm = svc._get_llm()
     return ResearchEngine(wiki=wiki, db=db, llm_client=llm, config=_RESEARCH_CONFIG)
@@ -258,8 +258,8 @@ async def save_to_wiki(research_id: str, request: Request):
         return JSONResponse({"error": f"Already saved to wiki as: {session['wiki_page_name']}"}, status_code=409)
 
     try:
-        from ..core.service import AgentService
-        from .agent import get_agent_service
+        from llmwikify.apps.chat.agent.agent_service import AgentService  # noqa: F401
+        from .chat_sse import get_agent_service
         svc = get_agent_service()
         wiki_id = session.get("wiki_id")
         registry = svc._get_tool_registry(wiki_id)

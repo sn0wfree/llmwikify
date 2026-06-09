@@ -158,7 +158,7 @@ class WikiServer:
         @app.middleware("http")
         async def log_requests(request: Request, call_next):
             response = await call_next(request)
-            if response.status_code >= 400 or request.url.path.startswith("/api/ppt"):
+            if response.status_code >= 400:
                 client = request.client.host if request.client else "?"
                 logger.info(f"[req] {request.method} {request.url.path} → {response.status_code} | client={client}")
             return response

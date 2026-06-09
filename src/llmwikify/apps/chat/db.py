@@ -8,8 +8,7 @@ This module consolidates the two pre-refactor databases:
     ``.llmwiki_agent.db`` — 13 tables: chat_sessions,
     chat_messages, tool_calls, research_sessions,
     research_sub_queries, research_sources, dream_proposals,
-    notifications, confirmations, ingest_log, ppt_tasks,
-    ppt_chat_sessions, ppt_chat_messages)
+    notifications, confirmations, ingest_log)
   - ``apps/chat/db.py::AutoResearchDatabase``   (589 LOC,
     ``autoresearch.db`` — 3 tables: autoresearch_sessions,
     autoresearch_sub_queries, autoresearch_sources)

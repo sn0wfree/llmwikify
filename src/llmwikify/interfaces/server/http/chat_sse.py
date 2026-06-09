@@ -65,7 +65,7 @@ async def chat(request: Request):
 @router.get("/sessions")
 async def list_sessions():
     service = get_agent_service()
-    sessions = service.db.list_sessions()
+    sessions = service.db.list_chat_sessions()
     return {"sessions": sessions}
 
 
@@ -75,14 +75,14 @@ async def create_session(request: Request):
     wiki_id = body.get("wiki_id")
     jwt_token = get_jwt_from_request(request)
     service = get_agent_service()
-    session_id = service.db.create_session(wiki_id, jwt_token)
+    session_id = service.db.create_chat_session(wiki_id, jwt_token)
     return {"session_id": session_id}
 
 
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str):
     service = get_agent_service()
-    session = service.db.get_session(session_id)
+    session = service.db.get_chat_session(session_id)
     if session is None:
         return {"error": "Session not found"}
     return session
@@ -98,7 +98,7 @@ async def get_session_messages(session_id: str, limit: int = 50, before: str | N
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
     service = get_agent_service()
-    deleted = service.db.delete_session(session_id)
+    deleted = service.db.delete_chat_session(session_id)
     return {"deleted": deleted}
 
 
@@ -106,7 +106,7 @@ async def delete_session(session_id: str):
 async def get_recent_wiki(session_id: str | None = None):
     service = get_agent_service()
     if session_id:
-        session = service.db.get_session(session_id)
+        session = service.db.get_chat_session(session_id)
         if session:
             return {"recent_wiki_id": session.get("wiki_id")}
     return {"recent_wiki_id": None}
@@ -115,7 +115,7 @@ async def get_recent_wiki(session_id: str | None = None):
 @router.post("/sessions/recent")
 async def set_recent_wiki(session_id: str, wiki_id: str):
     service = get_agent_service()
-    service.db.update_session_wiki(session_id, wiki_id)
+    service.db.update_chat_session_wiki(session_id, wiki_id)
     return {"updated": True}
 
 
@@ -274,7 +274,7 @@ async def batch_approve(body: dict, request: Request):
 
 @router.get("/config")
 async def get_llm_config():
-    from ..config_manager import get_global_config_manager
+    from llmwikify.apps.agent.core.config_manager import get_global_config_manager
     manager = get_global_config_manager()
     llm_cfg = manager.load_effective_llm_config()
     return manager.mask_api_key(llm_cfg)
@@ -282,7 +282,7 @@ async def get_llm_config():
 
 @router.put("/config")
 async def save_llm_config(request: Request):
-    from ..config_manager import get_global_config_manager
+    from llmwikify.apps.agent.core.config_manager import get_global_config_manager
     body = await request.json()
     manager = get_global_config_manager()
     manager.save_global_config(body)
@@ -292,7 +292,7 @@ async def save_llm_config(request: Request):
 
 @router.post("/config/reload")
 async def reload_llm_config():
-    from ..config_manager import get_global_config_manager
+    from llmwikify.apps.agent.core.config_manager import get_global_config_manager
     manager = get_global_config_manager()
     manager.reload()
     return {"reloaded": True}
