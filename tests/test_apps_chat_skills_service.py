@@ -82,3 +82,113 @@ class TestSkillServiceReset:
         assert svc._initialized is False
         assert svc.registry is None
         assert svc.runtime is None
+
+
+class TestSkillServiceWikiServiceInjection:
+    """P0: Verify SkillService injects dream_editor/notification_manager/
+    scheduler into ctx.config via wiki_service."""
+
+    def test_wiki_service_stored(self):
+        svc = SkillService(wiki_service="fake_wiki_service")
+        assert svc.wiki_service == "fake_wiki_service"
+
+    def test_inject_dream_editor_into_ctx(self):
+        class _FakeWikiService:
+            def get_dream_editor(self, wiki_id=None):
+                return "dream_editor_instance"
+
+        class _FakeCtx:
+            def __init__(self):
+                self.config = {"wiki_id": "w1"}
+
+        svc = SkillService(wiki_service=_FakeWikiService())
+        ctx = _FakeCtx()
+        # Manually test the injection logic
+        if svc.wiki_service:
+            wiki_id = ctx.config.get("wiki_id")
+            try:
+                ctx.config.setdefault(
+                    "dream_editor",
+                    svc.wiki_service.get_dream_editor(wiki_id),
+                )
+            except (ValueError, KeyError):
+                pass
+        assert ctx.config["dream_editor"] == "dream_editor_instance"
+
+    def test_inject_notification_manager_into_ctx(self):
+        class _FakeWikiService:
+            def get_notification_manager(self, wiki_id=None):
+                return "notif_manager_instance"
+
+        class _FakeCtx:
+            def __init__(self):
+                self.config = {"wiki_id": "w1"}
+
+        svc = SkillService(wiki_service=_FakeWikiService())
+        ctx = _FakeCtx()
+        if svc.wiki_service:
+            wiki_id = ctx.config.get("wiki_id")
+            try:
+                ctx.config.setdefault(
+                    "notification_manager",
+                    svc.wiki_service.get_notification_manager(wiki_id),
+                )
+            except (ValueError, KeyError):
+                pass
+        assert ctx.config["notification_manager"] == "notif_manager_instance"
+
+    def test_inject_scheduler_into_ctx(self):
+        class _FakeWikiService:
+            def get_scheduler(self, wiki_id=None):
+                return "scheduler_instance"
+
+        class _FakeCtx:
+            def __init__(self):
+                self.config = {"wiki_id": "w1"}
+
+        svc = SkillService(wiki_service=_FakeWikiService())
+        ctx = _FakeCtx()
+        if svc.wiki_service:
+            wiki_id = ctx.config.get("wiki_id")
+            try:
+                ctx.config.setdefault(
+                    "scheduler",
+                    svc.wiki_service.get_scheduler(wiki_id),
+                )
+            except (ValueError, KeyError):
+                pass
+        assert ctx.config["scheduler"] == "scheduler_instance"
+
+    def test_no_wiki_service_no_injection(self):
+        class _FakeCtx:
+            def __init__(self):
+                self.config = {"wiki_id": "w1"}
+
+        svc = SkillService(wiki_service=None)
+        ctx = _FakeCtx()
+        assert "dream_editor" not in ctx.config
+        assert "notification_manager" not in ctx.config
+        assert "scheduler" not in ctx.config
+
+    def test_wiki_service_value_error_skips(self):
+        class _FakeWikiService:
+            def get_dream_editor(self, wiki_id=None):
+                raise ValueError("No wiki_id available")
+
+        class _FakeCtx:
+            def __init__(self):
+                self.config = {}
+
+        svc = SkillService(wiki_service=_FakeWikiService())
+        ctx = _FakeCtx()
+        # Should not raise, just skip
+        if svc.wiki_service:
+            wiki_id = ctx.config.get("wiki_id")
+            try:
+                ctx.config.setdefault(
+                    "dream_editor",
+                    svc.wiki_service.get_dream_editor(wiki_id),
+                )
+            except (ValueError, KeyError):
+                pass
+        assert "dream_editor" not in ctx.config

@@ -26,10 +26,11 @@ class SkillService:
     """Facade over apps/chat/skills/ (Registry + Runtime)."""
 
     def __init__(self, registry: Any = None, runtime: Any = None,
-                 memory_manager: Any = None):
+                 memory_manager: Any = None, wiki_service: Any = None):
         self.registry = registry
         self.runtime = runtime
         self.memory_manager = memory_manager
+        self.wiki_service = wiki_service
         self._initialized = False
 
     def initialize(self) -> None:
@@ -132,9 +133,33 @@ class SkillService:
             SkillResult
         """
         self.initialize()
-        # Auto-inject memory_manager into config if available
-        if self.memory_manager and ctx.config is not None:
-            ctx.config.setdefault("memory_manager", self.memory_manager)
+        # Auto-inject managers into config for CRUD skills
+        if ctx.config is not None:
+            if self.memory_manager:
+                ctx.config.setdefault("memory_manager", self.memory_manager)
+            if self.wiki_service:
+                wiki_id = ctx.config.get("wiki_id")
+                try:
+                    ctx.config.setdefault(
+                        "dream_editor",
+                        self.wiki_service.get_dream_editor(wiki_id),
+                    )
+                except (ValueError, KeyError):
+                    pass
+                try:
+                    ctx.config.setdefault(
+                        "notification_manager",
+                        self.wiki_service.get_notification_manager(wiki_id),
+                    )
+                except (ValueError, KeyError):
+                    pass
+                try:
+                    ctx.config.setdefault(
+                        "scheduler",
+                        self.wiki_service.get_scheduler(wiki_id),
+                    )
+                except (ValueError, KeyError):
+                    pass
         return self.runtime.execute(skill_name, action, args, ctx)
 
     def list_skills(self) -> list[dict]:

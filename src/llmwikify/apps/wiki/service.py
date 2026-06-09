@@ -119,6 +119,20 @@ class WikiService:
 
     # ─── Factory methods ─────────────────────────────────────────
 
+    def get_dream_editor(self, wiki_id: str | None = None) -> Any:
+        """Get or create DreamEditor for the given wiki."""
+        return self._get_dream_editor(wiki_id)
+
+    def get_notification_manager(
+        self, wiki_id: str | None = None
+    ) -> Any:
+        """Get or create NotificationManager for the given wiki."""
+        return self._get_notification_manager(wiki_id)
+
+    def get_scheduler(self, wiki_id: str | None = None) -> Any:
+        """Get or create WikiScheduler for the given wiki."""
+        return self._get_scheduler(wiki_id)
+
     def _get_dream_editor(self, wiki_id: str | None = None) -> Any:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
