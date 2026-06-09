@@ -77,7 +77,7 @@ export function FrontMatterPanel({ metadata }: FrontMatterPanelProps) {
                       {value.map((tag, i) => (
                         <span
                           key={i}
-                          className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded"
+                          className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-primary rounded"
                         >
                           {tag}
                         </span>

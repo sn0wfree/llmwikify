@@ -82,7 +82,7 @@ function PanelShell({
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="text-xs text-[var(--text-secondary)] italic py-3 text-center">
+    <div className="text-xs text-muted-foreground italic py-3 text-center">
       {message}
     </div>
   );
@@ -102,26 +102,26 @@ function Step1Panel({ data }: { data: SixStepClarification | null }) {
     <PanelShell step={1} title="概念澄清" status="present">
       {data.context && (
         <div className="mb-2">
-          <div className="text-[10px] text-[var(--text-secondary)] mb-0.5">语境</div>
-          <div className="text-xs text-[var(--text-primary)] leading-relaxed">{data.context}</div>
+          <div className="text-[10px] text-muted-foreground mb-0.5">语境</div>
+          <div className="text-xs text-foreground leading-relaxed">{data.context}</div>
         </div>
       )}
       {data.boundaries && (
         <div className="mb-2">
-          <div className="text-[10px] text-[var(--text-secondary)] mb-0.5">边界</div>
-          <div className="text-xs text-[var(--text-primary)] leading-relaxed">{data.boundaries}</div>
+          <div className="text-[10px] text-muted-foreground mb-0.5">边界</div>
+          <div className="text-xs text-foreground leading-relaxed">{data.boundaries}</div>
         </div>
       )}
       {data.position && (
         <div className="mb-2">
-          <div className="text-[10px] text-[var(--text-secondary)] mb-0.5">视角</div>
-          <div className="text-xs text-[var(--text-primary)]">{data.position}</div>
+          <div className="text-[10px] text-muted-foreground mb-0.5">视角</div>
+          <div className="text-xs text-foreground">{data.position}</div>
         </div>
       )}
       {Array.isArray(data.premises) && data.premises.length > 0 && (
         <div className="mb-2">
-          <div className="text-[10px] text-[var(--text-secondary)] mb-1">前提</div>
-          <ul className="text-xs text-[var(--text-primary)] space-y-0.5 list-disc list-inside">
+          <div className="text-[10px] text-muted-foreground mb-1">前提</div>
+          <ul className="text-xs text-foreground space-y-0.5 list-disc list-inside">
             {data.premises.map((p, i) => (
               <li key={i}>{p}</li>
             ))}
@@ -130,7 +130,7 @@ function Step1Panel({ data }: { data: SixStepClarification | null }) {
       )}
       {data.scope_check !== undefined && (
         <div className="mt-2 flex items-center gap-2 text-[10px]">
-          <span className="text-[var(--text-secondary)]">scope_check:</span>
+          <span className="text-muted-foreground">scope_check:</span>
           <span className={data.scope_check ? 'text-green-400' : 'text-red-400'}>
             {data.scope_check ? '✓ true' : '✗ false'}
           </span>
@@ -162,16 +162,16 @@ function Step2Panel({
   const max = Math.max(...values);
   return (
     <PanelShell step={2} title="建立依据" status="present">
-      <div className="text-xs text-[var(--text-primary)] mb-2">
-        <span className="text-[var(--text-secondary)]">{Object.keys(data).length} sources scored</span>
-        <span className="mx-2 text-[var(--text-secondary)]">·</span>
+      <div className="text-xs text-foreground mb-2">
+        <span className="text-muted-foreground">{Object.keys(data).length} sources scored</span>
+        <span className="mx-2 text-muted-foreground">·</span>
         <span>avg <span className="font-mono font-bold">{avg.toFixed(3)}</span></span>
-        <span className="mx-2 text-[var(--text-secondary)]">·</span>
+        <span className="mx-2 text-muted-foreground">·</span>
         <span>min <span className="font-mono text-red-400">{min.toFixed(2)}</span></span>
-        <span className="mx-2 text-[var(--text-secondary)]">·</span>
+        <span className="mx-2 text-muted-foreground">·</span>
         <span>max <span className="font-mono text-green-400">{max.toFixed(2)}</span></span>
       </div>
-      <div className="text-[10px] text-[var(--text-secondary)] mb-2">
+      <div className="text-[10px] text-muted-foreground mb-2">
         vs session sources: {sourceCount}
         {Object.keys(data).length !== sourceCount && (
           <span className="text-yellow-400 ml-1">⚠ count mismatch</span>
@@ -183,10 +183,10 @@ function Step2Panel({
           .slice(0, 10)
           .map(([sid, score]) => (
             <div key={sid} className="flex items-center gap-2 text-[10px]">
-              <span className="font-mono text-[var(--text-secondary)] w-20 truncate">
+              <span className="font-mono text-muted-foreground w-20 truncate">
                 {sid.slice(0, 8)}
               </span>
-              <div className="flex-1 h-1.5 bg-[var(--bg-tertiary)] rounded overflow-hidden">
+              <div className="flex-1 h-1.5 bg-muted rounded overflow-hidden">
                 <div
                   className={`h-full ${
                     score >= 0.7 ? 'bg-green-500' : score >= 0.5 ? 'bg-yellow-500' : 'bg-red-500'
@@ -204,7 +204,7 @@ function Step2Panel({
             </div>
           ))}
         {Object.keys(data).length > 10 && (
-          <div className="text-[10px] text-[var(--text-secondary)] text-center">
+          <div className="text-[10px] text-muted-foreground text-center">
             ... +{Object.keys(data).length - 10} more
           </div>
         )}
@@ -303,7 +303,7 @@ function Step3Panel({ data }: { data: SixStepReasoning | null }) {
         <div className="flex-1 min-w-0 w-full">
           <div className="flex items-baseline gap-2 mb-2">
             <div className={`text-2xl font-bold ${STEP_ACCENTS[3]}`}>{aggPct}%</div>
-            <div className="text-[10px] text-[var(--text-secondary)]">
+            <div className="text-[10px] text-muted-foreground">
               aggregate ({data.method || 'rule_based'})
             </div>
           </div>
@@ -312,14 +312,14 @@ function Step3Panel({ data }: { data: SixStepReasoning | null }) {
               const v = data.scores[d.key] ?? 0;
               return (
                 <div key={d.key} className="flex items-center gap-2 text-[10px]">
-                  <span className="w-20 text-[var(--text-secondary)]">{d.label}</span>
-                  <div className="flex-1 h-1 bg-[var(--bg-tertiary)] rounded overflow-hidden">
+                  <span className="w-20 text-muted-foreground">{d.label}</span>
+                  <div className="flex-1 h-1 bg-muted rounded overflow-hidden">
                     <div
                       className={`h-full ${v >= 0.7 ? 'bg-green-500' : v >= 0.5 ? 'bg-yellow-500' : 'bg-red-500'}`}
                       style={{ width: `${v * 100}%` }}
                     />
                   </div>
-                  <span className="font-mono w-8 text-right text-[var(--text-primary)]">
+                  <span className="font-mono w-8 text-right text-foreground">
                     {v.toFixed(2)}
                   </span>
                 </div>
@@ -328,10 +328,10 @@ function Step3Panel({ data }: { data: SixStepReasoning | null }) {
           </div>
           {data.issues && data.issues.length > 0 && (
             <details className="text-[10px]">
-              <summary className="cursor-pointer text-[var(--text-secondary)]">
+              <summary className="cursor-pointer text-muted-foreground">
                 {data.issues.length} issues
               </summary>
-              <ul className="mt-1 space-y-0.5 text-[var(--text-primary)]">
+              <ul className="mt-1 space-y-0.5 text-foreground">
                 {data.issues.map((it, i) => (
                   <li key={i} className="text-[10px]">
                     <span className={it.severity === 'warning' ? 'text-yellow-400' : 'text-slate-400'}>
@@ -358,14 +358,14 @@ function BarChart({ scores }: { scores: Record<string, number> }) {
         const v = scores[l.key] ?? 0;
         return (
           <div key={l.key} className="flex items-center gap-2 text-[10px]">
-            <span className="w-16 text-[var(--text-secondary)]">{l.label}</span>
-            <div className="flex-1 h-3 bg-[var(--bg-tertiary)] rounded overflow-hidden relative">
+            <span className="w-16 text-muted-foreground">{l.label}</span>
+            <div className="flex-1 h-3 bg-muted rounded overflow-hidden relative">
               <div
                 className={`h-full ${v >= 0.7 ? 'bg-orange-500' : v >= 0.5 ? 'bg-yellow-500' : 'bg-red-500'}`}
                 style={{ width: `${v * 100}%` }}
               />
             </div>
-            <span className="font-mono w-10 text-right text-[var(--text-primary)]">
+            <span className="font-mono w-10 text-right text-foreground">
               {v.toFixed(2)}
             </span>
           </div>
@@ -388,17 +388,17 @@ function Step4Panel({ data }: { data: SixStepStructure | null }) {
     <PanelShell step={4} title="稳固结构" status="present">
       <div className="flex items-baseline gap-2 mb-2">
         <div className={`text-2xl font-bold ${STEP_ACCENTS[4]}`}>{aggPct}%</div>
-        <div className="text-[10px] text-[var(--text-secondary)]">
+        <div className="text-[10px] text-muted-foreground">
           aggregate ({data.method || 'rule_based'})
         </div>
       </div>
       <BarChart scores={data.scores} />
       {data.issues && data.issues.length > 0 && (
         <details className="text-[10px] mt-2">
-          <summary className="cursor-pointer text-[var(--text-secondary)]">
+          <summary className="cursor-pointer text-muted-foreground">
             {data.issues.length} issues
           </summary>
-          <ul className="mt-1 space-y-0.5 text-[var(--text-primary)]">
+          <ul className="mt-1 space-y-0.5 text-foreground">
             {data.issues.map((it, i) => (
               <li key={i} className="text-[10px]">
                 <span className={it.severity === 'warning' ? 'text-yellow-400' : 'text-slate-400'}>
@@ -426,11 +426,11 @@ function Step5Panel({
   return (
     <PanelShell step={5} title="结论输出" status={hasReport ? 'present' : 'missing'}>
       {hasReport ? (
-        <div className="text-xs text-[var(--text-primary)]">
-          ✓ 报告已生成。前往 <span className="text-[var(--accent)] font-bold">报告 tab</span> 查看。
+        <div className="text-xs text-foreground">
+          ✓ 报告已生成。前往 <span className="text-primary font-bold">报告 tab</span> 查看。
         </div>
       ) : hasReview ? (
-        <div className="text-xs text-[var(--text-secondary)]">
+        <div className="text-xs text-muted-foreground">
           报告生成中（review 阶段）
         </div>
       ) : (
@@ -468,7 +468,7 @@ function Step6Panel({
             <span className={c.ok ? 'text-green-400' : 'text-slate-500'}>
               {c.ok ? '✓' : '○'}
             </span>
-            <span className="text-[var(--text-primary)]">{c.label}</span>
+            <span className="text-foreground">{c.label}</span>
           </div>
         ))}
       </div>

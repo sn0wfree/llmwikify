@@ -38,7 +38,7 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const TYPE_BADGE_COLORS: Record<string, string> = {
-  web: 'bg-blue-500/20 text-blue-400',
+  web: 'bg-blue-500/20 text-primary',
   pdf: 'bg-orange-500/20 text-orange-400',
   arxiv: 'bg-purple-500/20 text-purple-400',
   wiki: 'bg-gray-500/20 text-gray-400',
@@ -82,13 +82,13 @@ function MiniStageBar({ currentStep, status }: { currentStep: string; status: st
           <div key={stage} className="flex items-center">
             <div className="relative">
               {isCurrent && status !== 'done' && (
-                <div className="absolute inset-0 rounded-full bg-[var(--accent)]/30 animate-stage-pulse" />
+                <div className="absolute inset-0 rounded-full bg-primary/30 animate-stage-pulse" />
               )}
               <div
                 className={`relative w-4 h-4 rounded-full flex items-center justify-center text-[8px] transition-all ${
-                  isCompleted ? 'bg-[var(--accent)]/40 text-[var(--accent)]' :
-                  isCurrent ? 'bg-[var(--accent)] text-white ring-2 ring-[var(--accent)]/30' :
-                  'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] opacity-30 border border-[var(--border)]'
+                  isCompleted ? 'bg-primary/40 text-primary' :
+                  isCurrent ? 'bg-primary text-white ring-2 ring-primary/30' :
+                  'bg-muted text-muted-foreground opacity-30 border border-border'
                 }`}
                 title={STAGE_LABELS[stage]}
               >
@@ -97,7 +97,7 @@ function MiniStageBar({ currentStep, status }: { currentStep: string; status: st
             </div>
             {idx < STAGES.length - 1 && (
               <div className={`w-2 h-px ${
-                isCompleted ? 'bg-[var(--accent)]/40' : 'bg-[var(--border)]'
+                isCompleted ? 'bg-primary/40' : 'bg-border'
               }`} />
             )}
           </div>
@@ -160,7 +160,7 @@ function SourceCard({ source }: { source: { title: string; url: string; source_t
         source.status === 'done' ? 'border-green-500/40 bg-green-500/10 text-green-400' :
         source.status === 'failed' ? 'border-red-500/40 bg-red-500/10 text-red-400' :
         source.status === 'fetching' ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400' :
-        'border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
+        'border-border bg-muted text-muted-foreground'
       }`}>
         {source.source_type === 'arxiv' ? 'arXiv' : source.source_type === 'pdf' ? '📄' : initial}
       </div>
@@ -169,7 +169,7 @@ function SourceCard({ source }: { source: { title: string; url: string; source_t
       </div>
       {/* Hover tooltip */}
       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50 pointer-events-none">
-        <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1.5 text-[10px] whitespace-nowrap shadow-lg max-w-[220px]">
+        <div className="bg-background border border-border rounded px-2 py-1.5 text-[10px] whitespace-nowrap shadow-lg max-w-[220px]">
           <div className="font-medium truncate mb-0.5">{source.title || domain}</div>
           <div className="flex items-center gap-1">
             <span className={`px-1 py-px rounded text-[8px] ${TYPE_BADGE_COLORS[source.source_type] || 'bg-gray-500/20 text-gray-400'}`}>
@@ -195,7 +195,7 @@ function SubQueryRow({ subQuery }: { subQuery: ResearchSubQuery }) {
     <div className="text-xs">
       <div
         onClick={() => subQuery.status !== 'pending' && setExpanded(e => !e)}
-        className={`flex items-center gap-1.5 py-0.5 px-1 rounded ${subQuery.status !== 'pending' ? 'cursor-pointer hover:bg-[var(--bg-tertiary)]' : 'opacity-60'}`}
+        className={`flex items-center gap-1.5 py-0.5 px-1 rounded ${subQuery.status !== 'pending' ? 'cursor-pointer hover:bg-muted' : 'opacity-60'}`}
       >
         <span className={`w-3.5 text-center text-[10px] ${
           subQuery.status === 'done' ? 'text-green-400' :
@@ -218,9 +218,9 @@ function SubQueryRow({ subQuery }: { subQuery: ResearchSubQuery }) {
         )}
       </div>
       {expanded && subQuery.result != null && (
-        <div className="pl-6 pr-2 py-0.5 text-[10px] text-[var(--text-secondary)] opacity-70 border-l border-[var(--border)]">
+        <div className="pl-6 pr-2 py-0.5 text-[10px] text-muted-foreground opacity-70 border-l border-border">
           {subQuery.url ? (
-            <a href={subQuery.url} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline block truncate">
+            <a href={subQuery.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline block truncate">
               {subQuery.url}
             </a>
           ) : (
@@ -262,7 +262,7 @@ function SourceCardGrid({ sources }: { sources: Array<{ id: string; source_type:
         {!showAll && hidden > 0 && (
           <button
             onClick={(e) => { e.stopPropagation(); setShowAll(true); }}
-            className="w-9 h-9 rounded border border-[var(--border)] bg-[var(--bg-tertiary)] flex items-center justify-center text-[10px] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+            className="w-9 h-9 rounded border border-border bg-muted flex items-center justify-center text-[10px] text-muted-foreground hover:border-primary hover:text-primary transition-colors"
             title={`Show ${hidden} more sources`}
           >
             +{hidden}
@@ -279,19 +279,19 @@ function EmptyState({ onExample }: { onExample: (q: string) => void }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center">
       <div className="text-4xl mb-4 opacity-30">🔍</div>
-      <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-2">No research sessions yet</h3>
-      <p className="text-xs text-[var(--text-secondary)] opacity-60 mb-4 max-w-xs">
+      <h3 className="text-sm font-medium text-muted-foreground mb-2">No research sessions yet</h3>
+      <p className="text-xs text-muted-foreground opacity-60 mb-4 max-w-xs">
         Start a quick research to explore any topic with multi-source analysis
       </p>
       <div className="space-y-2">
-        <div className="text-[10px] text-[var(--text-secondary)] opacity-40 mb-1">Try:</div>
-        <button onClick={() => onExample('Risk parity investing strategies')} className="block text-xs text-[var(--accent)] hover:underline">
+        <div className="text-[10px] text-muted-foreground opacity-40 mb-1">Try:</div>
+        <button onClick={() => onExample('Risk parity investing strategies')} className="block text-xs text-primary hover:underline">
           Risk parity investing strategies
         </button>
-        <button onClick={() => onExample('LLM fine-tuning comparison 2025')} className="block text-xs text-[var(--accent)] hover:underline">
+        <button onClick={() => onExample('LLM fine-tuning comparison 2025')} className="block text-xs text-primary hover:underline">
           LLM fine-tuning comparison 2025
         </button>
-        <button onClick={() => onExample('Quantum computing in finance')} className="block text-xs text-[var(--accent)] hover:underline">
+        <button onClick={() => onExample('Quantum computing in finance')} className="block text-xs text-primary hover:underline">
           Quantum computing in finance
         </button>
       </div>
@@ -310,7 +310,7 @@ function ErrorState({ status, error, onRetry }: { status: string; error?: string
           <div className="text-sm font-medium text-red-400 mb-1">Research failed</div>
           <div className="text-xs text-red-400/70 mb-2">{error || status}</div>
           {onRetry && (
-            <button onClick={onRetry} className="text-xs text-[var(--accent)] hover:underline">Retry</button>
+            <button onClick={onRetry} className="text-xs text-primary hover:underline">Retry</button>
           )}
         </div>
       </div>
@@ -471,22 +471,22 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
             <div
               onClick={() => canExpand && handleToggle(stage)}
               className={`flex items-center gap-1.5 py-0.5 px-1.5 rounded transition-colors ${
-                canExpand ? 'cursor-pointer hover:bg-[var(--bg-tertiary)]' : ''
+                canExpand ? 'cursor-pointer hover:bg-muted' : ''
               }`}
             >
               <span className={`w-3.5 text-center text-[10px] ${
                 stageStatus === 'completed' ? 'text-green-400' :
-                stageStatus === 'current' ? 'text-[var(--accent)]' :
-                'text-[var(--text-secondary)] opacity-30'
+                stageStatus === 'current' ? 'text-primary' :
+                'text-muted-foreground opacity-30'
               }`}>
                 {stageStatus === 'completed' ? '✓' :
                  stageStatus === 'current' ? '●' : '○'}
               </span>
 
               <span className={`text-xs ${
-                stageStatus === 'completed' ? 'text-[var(--text-secondary)]' :
-                stageStatus === 'current' ? 'text-[var(--text-primary)] font-medium' :
-                'text-[var(--text-secondary)] opacity-30'
+                stageStatus === 'completed' ? 'text-muted-foreground' :
+                stageStatus === 'current' ? 'text-foreground font-medium' :
+                'text-muted-foreground opacity-30'
               }`}>
                 {STAGE_LABELS[stage]}
               </span>
@@ -494,14 +494,14 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
               {result && (
                 <>
                   <span className={`text-[10px] ${
-                    stageStatus === 'completed' ? 'text-[var(--text-secondary)] opacity-50' :
-                    stageStatus === 'current' ? 'text-[var(--text-secondary)]' :
-                    'text-[var(--text-secondary)] opacity-20'
+                    stageStatus === 'completed' ? 'text-muted-foreground opacity-50' :
+                    stageStatus === 'current' ? 'text-muted-foreground' :
+                    'text-muted-foreground opacity-20'
                   }`}>─</span>
                   <span className={`text-[11px] ${
-                    stageStatus === 'completed' ? 'text-[var(--text-secondary)]' :
-                    stageStatus === 'current' ? 'text-[var(--text-primary)]' :
-                    'text-[var(--text-secondary)] opacity-30'
+                    stageStatus === 'completed' ? 'text-muted-foreground' :
+                    stageStatus === 'current' ? 'text-foreground' :
+                    'text-muted-foreground opacity-30'
                   }`}>
                     {result}
                   </span>
@@ -509,7 +509,7 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
               )}
 
               {canExpand && (
-                <span className="text-[10px] text-[var(--text-secondary)] opacity-40 ml-auto">
+                <span className="text-[10px] text-muted-foreground opacity-40 ml-auto">
                   {isExpanded ? '▾' : '▸'}
                 </span>
               )}
@@ -521,8 +521,8 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
               <div className="pl-5 pb-0.5 space-y-px">
                 {details.map((detail, i) => (
                   <div key={i} className="flex items-center gap-1.5">
-                    <div className="w-1 h-1 rounded-full bg-[var(--text-secondary)] opacity-25 shrink-0"/>
-                    <span className="text-[11px] text-[var(--text-secondary)] opacity-60 truncate">{detail}</span>
+                    <div className="w-1 h-1 rounded-full bg-muted-foreground opacity-25 shrink-0"/>
+                    <span className="text-[11px] text-muted-foreground opacity-60 truncate">{detail}</span>
                   </div>
                 ))}
               </div>
@@ -530,8 +530,8 @@ export function StagePipeline({ session }: { session: ResearchSession }) {
 
             {!isLast && (
               <div className={`ml-[6px] w-px h-1.5 ${
-                stageStatus === 'completed' ? 'bg-[var(--text-secondary)] opacity-25' :
-                'bg-[var(--text-secondary)] opacity-10'
+                stageStatus === 'completed' ? 'bg-muted-foreground opacity-25' :
+                'bg-muted-foreground opacity-10'
               }`} />
             )}
           </div>
@@ -849,7 +849,7 @@ export function ResearchPanel() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b border-[var(--border)]">
+      <div className="p-4 border-b border-border">
         <h2 className="text-lg font-bold mb-3">Quick Research</h2>
         <div className="flex gap-2">
           <input
@@ -857,13 +857,13 @@ export function ResearchPanel() {
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleStart()}
             placeholder="Research topic..."
-            className="flex-1 px-3 py-2 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded text-sm"
+            className="flex-1 px-3 py-2 bg-muted border border-border rounded text-sm"
             disabled={loading}
           />
           <button
             onClick={handleStart}
             disabled={loading || !query.trim()}
-            className="px-4 py-2 bg-[var(--accent)] text-white rounded text-sm disabled:opacity-50"
+            className="px-4 py-2 bg-primary text-white rounded text-sm disabled:opacity-50"
           >
             {loading ? 'Running...' : 'Start'}
           </button>
@@ -872,14 +872,14 @@ export function ResearchPanel() {
 
       {/* Active Research */}
       {active && (
-        <div className="p-4 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
+        <div className="p-4 border-b border-border bg-card">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 min-w-0">
               <h3 className="font-medium text-sm truncate">{active.query}</h3>
               <span className={`text-xs px-2 py-0.5 rounded shrink-0 ${
                 active.status === 'done' ? 'bg-green-500/20 text-green-400' :
                 active.status === 'error' ? 'bg-red-500/20 text-red-400' :
-                'bg-blue-500/20 text-blue-400'
+                'bg-blue-500/20 text-primary'
               }`}>
                 {active.status}
               </span>
@@ -888,7 +888,7 @@ export function ResearchPanel() {
               {isRunning && (
                 <button onClick={() => active.sessionId && handlePause(active.sessionId)} className="text-xs text-yellow-400 hover:underline">Pause</button>
               )}
-              <button onClick={dismissActive} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">Dismiss</button>
+              <button onClick={dismissActive} className="text-xs text-muted-foreground hover:text-foreground">Dismiss</button>
             </div>
           </div>
 
@@ -900,8 +900,8 @@ export function ResearchPanel() {
           {/* Round + Quality + Reasoning */}
           <div className="flex items-center gap-3 mb-2 text-xs">
             {active.round > 0 && (
-              <span className="text-[var(--text-secondary)]">
-                Round <span className="font-medium text-[var(--text-primary)]">{active.round}</span>/{active.maxRounds}
+              <span className="text-muted-foreground">
+                Round <span className="font-medium text-foreground">{active.round}</span>/{active.maxRounds}
               </span>
             )}
             {active.qualityScore > 0 && (
@@ -914,14 +914,14 @@ export function ResearchPanel() {
               </span>
             )}
             {active.reasoning && (
-              <span className="text-[var(--accent)] opacity-70">
+              <span className="text-primary opacity-70">
                 → {active.reasoning}
               </span>
             )}
           </div>
 
           {/* Stage Status Line */}
-          <div className="text-xs text-[var(--text-secondary)] mb-2 flex items-center gap-2">
+          <div className="text-xs text-muted-foreground mb-2 flex items-center gap-2">
             <StageStatusLine
               step={active.step || active.status}
               status={active.status}
@@ -950,8 +950,8 @@ export function ResearchPanel() {
 
           {/* Sub-queries */}
           {active.subQueries.length > 0 && (
-            <div className="mb-2 max-h-36 overflow-y-auto space-y-0.5 border-l border-[var(--border)] pl-1">
-              <div className="text-[10px] text-[var(--text-secondary)] opacity-50 mb-1 px-1">Sub-queries</div>
+            <div className="mb-2 max-h-36 overflow-y-auto space-y-0.5 border-l border-border pl-1">
+              <div className="text-[10px] text-muted-foreground opacity-50 mb-1 px-1">Sub-queries</div>
               {active.subQueries.map((sq, i) => (
                 <SubQueryRow key={i} subQuery={sq} />
               ))}
@@ -965,7 +965,7 @@ export function ResearchPanel() {
 
           {/* Latest Event (static highlight, not pulse) */}
           {active.latestEvent && isRunning && !hasError && (
-            <div className="text-xs font-medium mb-1 px-2 py-1 rounded bg-[var(--accent)]/5 text-[var(--accent)]">
+            <div className="text-xs font-medium mb-1 px-2 py-1 rounded bg-primary/5 text-primary">
               ▶ {active.latestEvent}
             </div>
           )}
@@ -974,7 +974,7 @@ export function ResearchPanel() {
           {active.events.length > 0 && (
             <div className="max-h-20 overflow-y-auto space-y-0.5 opacity-50">
               {active.events.slice(-5).map((evt, i) => (
-                <div key={i} className="text-[11px] text-[var(--text-secondary)]">{evt}</div>
+                <div key={i} className="text-[11px] text-muted-foreground">{evt}</div>
               ))}
             </div>
           )}
@@ -984,7 +984,7 @@ export function ResearchPanel() {
             <div className="mt-3">
               <button
                 onClick={() => setSelectedSessionId('report:' + active.sessionId)}
-                className="w-full flex items-center justify-between text-xs text-[var(--text-secondary)] hover:text-[var(--accent)] mb-1 px-2 py-1 rounded hover:bg-[var(--bg-tertiary)] transition-colors"
+                className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-primary mb-1 px-2 py-1 rounded hover:bg-muted transition-colors"
               >
                 <span className="font-medium">Report: {active.report.query}</span>
                 <span className="text-[10px]">View Report →</span>
@@ -1008,8 +1008,8 @@ export function ResearchPanel() {
                 <div
                   key={s.id}
                   onClick={() => setSelectedSessionId(s.status === 'done' ? 'report:' + s.id : s.id)}
-                  className={`p-3 bg-[var(--bg-secondary)] rounded border cursor-pointer hover:border-[var(--accent)] transition-colors ${
-                    isError ? 'border-red-500/30' : 'border-[var(--border)]'
+                  className={`p-3 bg-card rounded border cursor-pointer hover:border-primary transition-colors ${
+                    isError ? 'border-red-500/30' : 'border-border'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -1018,7 +1018,7 @@ export function ResearchPanel() {
                       s.status === 'done' ? 'bg-green-500/20 text-green-400' :
                       s.status === 'error' ? 'bg-red-500/20 text-red-400' :
                       s.status === 'paused' ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-blue-500/20 text-blue-400'
+                      'bg-blue-500/20 text-primary'
                     }`}>
                       {s.status}
                     </span>
@@ -1031,7 +1031,7 @@ export function ResearchPanel() {
 
                   {/* Current Stage Status Line */}
                   {isActive && (
-                    <div className="text-xs text-[var(--text-secondary)] mb-2">
+                    <div className="text-xs text-muted-foreground mb-2">
                       <StageStatusLine step={s.current_step} status={s.status} subQueries={s.sub_queries || []} sources={[]} />
                     </div>
                   )}
@@ -1057,7 +1057,7 @@ export function ResearchPanel() {
                   )}
 
                   {/* Time + ID */}
-                  <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     {isActive && (
                       <span title={`Created: ${new Date(s.created_at).toLocaleString()}`}>
                         {formatElapsed(s.created_at)} elapsed
@@ -1074,8 +1074,8 @@ export function ResearchPanel() {
                   <div className="flex gap-2 mt-2" onClick={e => e.stopPropagation()}>
                     {s.status === 'done' && (
                       <>
-                        <button onClick={() => setSelectedSessionId('report:' + s.id)} className="text-xs text-[var(--accent)] hover:underline">View Report</button>
-                        <button onClick={() => setSelectedSessionId('detail:' + s.id)} className="text-xs text-[var(--text-secondary)] hover:underline">View Details</button>
+                        <button onClick={() => setSelectedSessionId('report:' + s.id)} className="text-xs text-primary hover:underline">View Report</button>
+                        <button onClick={() => setSelectedSessionId('detail:' + s.id)} className="text-xs text-muted-foreground hover:underline">View Details</button>
                         {!s.wiki_page_name && (
                           <button onClick={() => { setSaveModalSessionId(s.id); setSaveModalQuery(s.query); }} className="text-xs text-purple-400 hover:underline">Save to Wiki</button>
                         )}

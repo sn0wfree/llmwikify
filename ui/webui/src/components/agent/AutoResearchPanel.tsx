@@ -39,10 +39,10 @@ const SIX_STEPS = [
 ] as const;
 
 const STATUS_LABELS: Record<string, { icon: string; color: string; text: string }> = {
-  clarifying:    { icon: '◌', color: 'text-blue-400',     text: '概念澄清中' },
-  planning:      { icon: '◐', color: 'text-blue-400',     text: '规划中' },
-  gathering:     { icon: '↓', color: 'text-blue-400',     text: '采集中' },
-  analyzing:     { icon: '◍', color: 'text-blue-400',     text: '分析中' },
+  clarifying:    { icon: '◌', color: 'text-primary',     text: '概念澄清中' },
+  planning:      { icon: '◐', color: 'text-primary',     text: '规划中' },
+  gathering:     { icon: '↓', color: 'text-primary',     text: '采集中' },
+  analyzing:     { icon: '◍', color: 'text-primary',     text: '分析中' },
   synthesizing:  { icon: '◑', color: 'text-purple-400',   text: '综合中' },
   report:        { icon: '▤', color: 'text-orange-400',   text: '生成报告' },
   reviewing:     { icon: '✓', color: 'text-yellow-400',   text: '评审中' },
@@ -96,15 +96,15 @@ function MiniSixStepBar({ currentStep, status }: { currentStep: string; status: 
           <div key={step.key} className="flex items-center" title={step.label}>
             <div className="relative">
               {isCurrent && (
-                <div className="absolute inset-0 rounded-full bg-[var(--accent)]/30 animate-stage-pulse" />
+                <div className="absolute inset-0 rounded-full bg-primary/30 animate-stage-pulse" />
               )}
               <div
                 className={`relative w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold transition-all ${
                   isCompleted
-                    ? 'bg-[var(--accent)]/40 text-[var(--accent)]'
+                    ? 'bg-primary/40 text-primary'
                     : isCurrent
-                    ? 'bg-[var(--accent)] text-white ring-2 ring-[var(--accent)]/30'
-                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] opacity-30 border border-[var(--border)]'
+                    ? 'bg-primary text-white ring-2 ring-primary/30'
+                    : 'bg-muted text-muted-foreground opacity-30 border border-border'
                 }`}
               >
                 {isCompleted ? '✓' : step.num}
@@ -113,7 +113,7 @@ function MiniSixStepBar({ currentStep, status }: { currentStep: string; status: 
             {idx < SIX_STEPS.length - 1 && (
               <div
                 className={`w-1.5 h-px ${
-                  isCompleted ? 'bg-[var(--accent)]/40' : 'bg-[var(--border)]'
+                  isCompleted ? 'bg-primary/40' : 'bg-border'
                 }`}
               />
             )}
@@ -176,12 +176,12 @@ function AutoResearchSidebar({
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 border-r border-[var(--border)]">
-      <div className="p-3 border-b border-[var(--border)]">
+    <div className="flex flex-col h-full min-h-0 border-r border-border">
+      <div className="p-3 border-b border-border">
         <button
           onClick={handleNew}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium
-            bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-colors"
+            bg-primary text-white hover:bg-primary/90 transition-colors"
         >
           <span>＋</span>
           <span>新建研究 (6 步)</span>
@@ -190,10 +190,10 @@ function AutoResearchSidebar({
 
       <div className="flex-1 overflow-y-auto">
         {loading && sessions.length === 0 && (
-          <div className="p-3 text-xs text-[var(--text-secondary)] text-center">加载中...</div>
+          <div className="p-3 text-xs text-muted-foreground text-center">加载中...</div>
         )}
         {!loading && sessions.length === 0 && (
-          <div className="p-3 text-xs text-[var(--text-secondary)] text-center">
+          <div className="p-3 text-xs text-muted-foreground text-center">
             暂无研究
             <div className="mt-1 text-[10px] opacity-70">点上方"新建"开始 6 步研究</div>
           </div>
@@ -205,11 +205,11 @@ function AutoResearchSidebar({
             <div
               key={s.id}
               onClick={() => onSelect(s.id)}
-              className={`relative px-3 py-2.5 border-b border-[var(--border)] cursor-pointer transition-colors
-                ${isSelected ? 'bg-[var(--accent)]/10' : 'hover:bg-[var(--bg-tertiary)]'}`}
+              className={`relative px-3 py-2.5 border-b border-border cursor-pointer transition-colors
+                ${isSelected ? 'bg-primary/10' : 'hover:bg-muted'}`}
             >
               {isSelected && (
-                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[var(--accent)]" />
+                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary" />
               )}
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1.5 text-[10px]">
@@ -224,10 +224,10 @@ function AutoResearchSidebar({
                   ✕
                 </button>
               </div>
-              <div className="text-xs text-[var(--text-primary)] line-clamp-2 mb-1">
+              <div className="text-xs text-foreground line-clamp-2 mb-1">
                 {truncate(s.query, 60)}
               </div>
-              <div className="flex items-center justify-between text-[10px] text-[var(--text-secondary)]">
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                 <span className="font-mono">{s.id.slice(0, 8)}</span>
                 <span>{formatRelativeTime(s.updated_at)}</span>
               </div>
@@ -263,29 +263,29 @@ function NewSessionForm({ onCreated }: { onCreated: (id: string) => void }) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[var(--bg-primary)] min-h-0">
+    <div className="flex-1 overflow-y-auto bg-background min-h-0">
       <div className="min-h-full flex flex-col items-center justify-center p-8">
         <div className="w-full max-w-2xl py-4">
         <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-[var(--accent)] mb-2">
+          <h2 className="text-2xl font-bold text-primary mb-2">
             AutoResearch — 6 步逻辑框架
           </h2>
-          <p className="text-sm text-[var(--text-secondary)]">
+          <p className="text-sm text-muted-foreground">
             概念澄清 → 建立依据 → 推理严密 → 稳固结构 → 结论输出 → 检查清单
           </p>
         </div>
-        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg p-6 space-y-4">
+        <div className="bg-card border border-border rounded-lg p-6 space-y-4">
           <div>
-            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-2">
+            <label className="block text-xs font-medium text-muted-foreground mb-2">
               研究问题
             </label>
             <textarea
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="例如：2024 年 LLM 推理优化最新进展是什么？"
-              className="w-full h-32 px-3 py-2 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded
-                text-sm text-[var(--text-primary)] placeholder-[var(--text-secondary)]
-                focus:outline-none focus:border-[var(--accent)] resize-none"
+              className="w-full h-32 px-3 py-2 bg-muted border border-border rounded
+                text-sm text-foreground placeholder-muted-foreground
+                focus:outline-none focus:border-primary resize-none"
               disabled={starting}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -293,7 +293,7 @@ function NewSessionForm({ onCreated }: { onCreated: (id: string) => void }) {
                 }
               }}
             />
-            <div className="text-[10px] text-[var(--text-secondary)] mt-1">
+            <div className="text-[10px] text-muted-foreground mt-1">
               Cmd/Ctrl + Enter 快速开始
             </div>
           </div>
@@ -306,7 +306,7 @@ function NewSessionForm({ onCreated }: { onCreated: (id: string) => void }) {
             onClick={handleStart}
             disabled={!query.trim() || starting}
             className="w-full px-4 py-3 rounded text-sm font-medium
-              bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]
+              bg-primary text-white hover:bg-primary/90
               disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {starting ? '启动中...' : '开始 6 步研究'}
@@ -316,9 +316,9 @@ function NewSessionForm({ onCreated }: { onCreated: (id: string) => void }) {
           {SIX_STEPS.map((s) => (
             <div
               key={s.key}
-              className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded p-2"
+              className="bg-card border border-border rounded p-2"
             >
-              <div className="font-bold text-[var(--accent)]">
+              <div className="font-bold text-primary">
                 ⑥ {s.num}. {s.label}
               </div>
             </div>
@@ -348,18 +348,18 @@ function SessionHeader({
     session.status === 'timeout' ||
     session.status === 'done';
   return (
-    <div className="p-4 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
+    <div className="p-4 border-b border-border bg-card">
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className={`text-sm font-bold ${status.color}`}>
               {status.icon} {status.text}
             </span>
-            <span className="text-[10px] text-[var(--text-secondary)] font-mono">
+            <span className="text-[10px] text-muted-foreground font-mono">
               {session.id.slice(0, 12)}
             </span>
           </div>
-          <div className="text-sm text-[var(--text-primary)] font-medium line-clamp-2">
+          <div className="text-sm text-foreground font-medium line-clamp-2">
             {session.query}
           </div>
         </div>
@@ -376,8 +376,8 @@ function SessionHeader({
           )}
           <button
             onClick={onRefresh}
-            className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1 rounded
-              border border-[var(--border)]"
+            className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded
+              border border-border"
             title="刷新"
           >
             ↻
@@ -419,7 +419,7 @@ function EventLog({ events }: { events: EventLogEntry[] }) {
 
   if (events.length === 0) {
     return (
-      <div className="text-xs text-[var(--text-secondary)] text-center py-8">
+      <div className="text-xs text-muted-foreground text-center py-8">
         等待事件流...
       </div>
     );
@@ -433,8 +433,8 @@ function EventLog({ events }: { events: EventLogEntry[] }) {
           className={`px-2 py-1 rounded ${
             e.type === 'error' ? 'bg-red-500/10 text-red-400' :
             e.type === 'done' ? 'bg-green-500/10 text-green-400' :
-            e.type.endsWith('_complete') ? 'bg-blue-500/10 text-blue-400' :
-            'text-[var(--text-secondary)]'
+            e.type.endsWith('_complete') ? 'bg-blue-500/10 text-primary' :
+            'text-muted-foreground'
           }`}
         >
           <span className="opacity-60">{e.type}</span> {e.message}
@@ -654,27 +654,27 @@ export function AutoResearchPanel() {
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {loading && !session ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-[var(--text-secondary)]">
+          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
             加载中...
           </div>
         ) : session ? (
           <>
             <SessionHeader session={session} onRefresh={handleRefresh} onResume={handleResume} />
 
-            <div className="px-4 border-b border-[var(--border)] flex gap-1">
+            <div className="px-4 border-b border-border flex gap-1">
               {TABS.map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
                   className={`px-3 py-2 text-xs font-medium transition-colors relative ${
                     activeTab === tab.key
-                      ? 'text-[var(--accent)]'
-                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      ? 'text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {tab.icon} {tab.label}
                   {activeTab === tab.key && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent)]" />
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
                   )}
                 </button>
               ))}
@@ -719,7 +719,7 @@ function SourcesTab({
 
   if (sources.length === 0) {
     return (
-      <div className="text-xs text-[var(--text-secondary)] text-center py-8">
+      <div className="text-xs text-muted-foreground text-center py-8">
         暂无来源（等待采集）
       </div>
     );
@@ -727,7 +727,7 @@ function SourcesTab({
 
   return (
     <div className="space-y-2">
-      <div className="text-xs text-[var(--text-secondary)] mb-2">
+      <div className="text-xs text-muted-foreground mb-2">
         {sources.length} sources
         {Object.keys(scores).length > 0 && (
           <span> · avg score {(
@@ -740,10 +740,10 @@ function SourcesTab({
         return (
           <div
             key={s.id}
-            className="p-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded"
+            className="p-2 bg-card border border-border rounded"
           >
             <div className="flex items-center justify-between gap-2 mb-1">
-              <div className="text-xs font-medium text-[var(--text-primary)] truncate flex-1">
+              <div className="text-xs font-medium text-foreground truncate flex-1">
                 {s.title || s.url}
               </div>
               {score !== undefined && (
@@ -757,7 +757,7 @@ function SourcesTab({
               )}
             </div>
             {score !== undefined && (
-              <div className="h-1 bg-[var(--bg-tertiary)] rounded overflow-hidden">
+              <div className="h-1 bg-muted rounded overflow-hidden">
                 <div
                   className={`h-full ${
                     score >= 0.7 ? 'bg-green-500' : score >= 0.5 ? 'bg-yellow-500' : 'bg-red-500'
@@ -766,7 +766,7 @@ function SourcesTab({
                 />
               </div>
             )}
-            <div className="text-[10px] text-[var(--text-secondary)] mt-1 font-mono truncate">
+            <div className="text-[10px] text-muted-foreground mt-1 font-mono truncate">
               {s.url}
             </div>
           </div>
@@ -811,14 +811,14 @@ function ReportTab({ session }: { session: AutoResearchSession }) {
 
   if (!markdown) {
     return (
-      <div className="text-xs text-[var(--text-secondary)] text-center py-8">
+      <div className="text-xs text-muted-foreground text-center py-8">
         研究尚未生成报告
       </div>
     );
   }
 
   return (
-    <div className="text-[12px] text-[var(--text-primary)] font-mono leading-relaxed bg-[var(--bg-secondary)] p-4 rounded border border-[var(--border)] overflow-x-auto">
+    <div className="text-[12px] text-foreground font-mono leading-relaxed bg-card p-4 rounded border border-border overflow-x-auto">
       <pre className="whitespace-pre-wrap break-words">
         {markdown}
       </pre>

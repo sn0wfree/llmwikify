@@ -144,7 +144,7 @@ export function CitationRef({ index, source, onOpenWiki }: CitationRefProps) {
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
           onClick={() => setShowTooltip(p => !p)}
-          className="citation-ref cursor-pointer text-[var(--accent)] hover:underline font-medium text-[10px] leading-none"
+          className="citation-ref cursor-pointer text-primary hover:underline font-medium text-[10px] leading-none"
         >
           {label}
         </span>
@@ -152,15 +152,15 @@ export function CitationRef({ index, source, onOpenWiki }: CitationRefProps) {
 
       {showTooltip && (
         <div
-          className="fixed z-50 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-xl p-2.5 text-xs pointer-events-auto"
+          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl p-2.5 text-xs pointer-events-auto"
           style={{ left: tooltipPos.x, top: tooltipPos.y, transform: 'translateX(-50%)', minWidth: 200, maxWidth: 280 }}
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
         >
-          <div className="font-medium text-[var(--text-primary)] mb-1 leading-snug">
+          <div className="font-medium text-foreground mb-1 leading-snug">
             {source.title || source.url}
           </div>
-          <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
             <span className={`px-1 py-px rounded text-[9px] ${
               source.source_type === 'arxiv' ? 'bg-purple-500/20 text-purple-400' :
               source.source_type === 'pdf' ? 'bg-orange-500/20 text-orange-400' :
@@ -170,13 +170,13 @@ export function CitationRef({ index, source, onOpenWiki }: CitationRefProps) {
             }`}>
               {typeLabel}
             </span>
-            <span className="text-[var(--text-secondary)] truncate max-w-[180px]">
+            <span className="text-muted-foreground truncate max-w-[180px]">
               {isWiki ? 'Local wiki page' : (() => { try { return new URL(source.url).hostname.replace('www.', ''); } catch { return source.url; } })()}
             </span>
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); handleOpen(); }}
-            className="mt-1.5 inline-block text-[10px] text-[var(--accent)] hover:underline"
+            className="mt-1.5 inline-block text-[10px] text-primary hover:underline"
           >
             {isWiki ? 'View Wiki Page →' : 'Open →'}
           </button>
@@ -211,7 +211,7 @@ export function renderInlineCitations(
     if (source) {
       parts.push(<CitationRef key={`c-${match.index}`} index={counter} source={source} onOpenWiki={onOpenWiki} />);
     } else {
-      parts.push(<span key={`c-${match.index}`} className="text-[var(--text-secondary)] text-[10px]">[{counter}]</span>);
+      parts.push(<span key={`c-${match.index}`} className="text-muted-foreground text-[10px]">[{counter}]</span>);
     }
 
     lastIndex = CITATION_RE.lastIndex;

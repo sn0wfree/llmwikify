@@ -23,7 +23,7 @@ export function WikiSelector({ onOpenManager }: WikiSelectorProps) {
         <div className="text-sm font-medium text-slate-200">No Wiki</div>
         <button
           onClick={onOpenManager}
-          className="mt-1 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+          className="mt-1 text-xs text-primary hover:text-blue-300 flex items-center gap-1"
         >
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -48,7 +48,7 @@ export function WikiSelector({ onOpenManager }: WikiSelectorProps) {
         )}
         <button
           onClick={onOpenManager}
-          className="mt-1 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+          className="mt-1 text-xs text-primary hover:text-blue-300 flex items-center gap-1"
         >
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -125,7 +125,7 @@ export function WikiSelector({ onOpenManager }: WikiSelectorProps) {
                         </span>
                       )}
                       {wiki.wiki_id === currentWikiId && (
-                        <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                         </svg>
                       )}
@@ -142,7 +142,7 @@ export function WikiSelector({ onOpenManager }: WikiSelectorProps) {
                   setIsOpen(false);
                   onOpenManager?.();
                 }}
-                className="w-full px-3 py-2 text-left text-sm text-blue-400 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                className="w-full px-3 py-2 text-left text-sm text-primary hover:bg-slate-700 transition-colors flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

@@ -105,13 +105,13 @@ export function Confirmations() {
 
   const totalPending = Object.values(groups).reduce((sum, arr) => sum + arr.length, 0);
 
-  if (loading) return <div className="flex items-center justify-center h-full text-[var(--text-secondary)]">Loading confirmations...</div>;
+  if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground">Loading confirmations...</div>;
   if (totalPending === 0) return <EmptyState icon="✓" title="No pending confirmations" description="Agent operations requiring approval will appear here" />;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-[var(--text-primary)]">Pending Confirmations ({totalPending})</h2>
+        <h2 className="text-xl font-bold text-foreground">Pending Confirmations ({totalPending})</h2>
         <div className="flex gap-2">
           <Button variant="success" size="sm" onClick={approveSelected} disabled={selected.size === 0 || actionLoading}>
             Approve Selected ({selected.size})
@@ -128,28 +128,28 @@ export function Confirmations() {
       <div className="space-y-4">
         {Object.entries(groups).map(([group, confirmations]) => (
           <Card key={group} variant="bordered" padding="none">
-            <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
-              <span className="text-sm font-semibold text-[var(--text-primary)] capitalize">
+            <div className="p-3 border-b border-border flex items-center justify-between">
+              <span className="text-sm font-semibold text-foreground capitalize">
                 {group.replace(/_/g, ' ')} ({confirmations.length})
               </span>
               <button onClick={() => selectGroup(group)}
-                className="text-xs text-[var(--accent)] hover:text-[var(--accent-hover)]">
+                className="text-xs text-primary hover:text-[var(--accent-hover)]">
                 Select All
               </button>
             </div>
-            <div className="divide-y divide-[var(--border)]">
+            <div className="divide-y divide-border">
               {confirmations.map(c => (
                 <div key={c.id}
-                  className="p-3 flex items-center gap-3 cursor-pointer hover:bg-[var(--bg-tertiary)]/50 transition-colors"
+                  className="p-3 flex items-center gap-3 cursor-pointer hover:bg-muted/50 transition-colors"
                   onClick={() => setDetailConfirmation(c)}
                 >
                   <input type="checkbox" checked={selected.has(c.id)}
                     onChange={() => toggleSelect(c.id)}
                     onClick={e => e.stopPropagation()}
-                    className="w-4 h-4 rounded border-[var(--border)] bg-[var(--bg-secondary)]" />
+                    className="w-4 h-4 rounded border-border bg-card" />
                   <div className="flex-1 min-w-0 confirm-row-content">
-                    <div className="text-sm text-[var(--accent)]">{c.tool}</div>
-                    <div className="text-xs text-[var(--text-secondary)]">
+                    <div className="text-sm text-primary">{c.tool}</div>
+                    <div className="text-xs text-muted-foreground">
                       {String(c.impact?.page || c.impact?.source || 'N/A')}
                       {' · '}
                       {c.impact?.chars ? `${c.impact.chars} chars` : String(c.impact?.change_type || '')}

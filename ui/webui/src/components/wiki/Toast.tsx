@@ -65,10 +65,10 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
   }, [toast, onDismiss]);
 
   const colors: Record<ToastType, { bg: string; border: string }> = {
-    success: { bg: 'var(--bg-tertiary)', border: 'var(--success)' },
-    error:   { bg: 'var(--bg-tertiary)', border: 'var(--error)' },
-    warning: { bg: 'var(--bg-tertiary)', border: 'var(--warning)' },
-    info:    { bg: 'var(--bg-tertiary)', border: 'var(--accent)' },
+    success: { bg: 'var(--muted)', border: '#22c55e' },
+    error:   { bg: 'var(--muted)', border: 'var(--destructive)' },
+    warning: { bg: 'var(--muted)', border: '#f59e0b' },
+    info:    { bg: 'var(--muted)', border: 'var(--primary)' },
   };
 
   const icons: Record<ToastType, string> = {
@@ -84,7 +84,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
       display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
     }} onClick={() => onDismiss(toast.id)}>
       <span style={{ fontSize: 18, color: c.border }}>{icons[toast.type]}</span>
-      <span style={{ flex: 1, fontSize: 14, color: 'var(--text-primary)' }}>{toast.message}</span>
+      <span style={{ flex: 1, fontSize: 14, color: 'var(--foreground)' }}>{toast.message}</span>
     </div>
   );
 }

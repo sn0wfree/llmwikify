@@ -30,7 +30,7 @@ export function TaskMonitor() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-[var(--text-secondary)]">
+      <div className="flex items-center justify-center h-full text-muted-foreground">
         Loading tasks...
       </div>
     );
@@ -43,7 +43,7 @@ export function TaskMonitor() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-[var(--text-primary)]">Task Monitor</h2>
+        <h2 className="text-xl font-bold text-foreground">Task Monitor</h2>
         <Button variant="secondary" size="sm" onClick={loadTasks}>
           Refresh
         </Button>
@@ -56,15 +56,15 @@ export function TaskMonitor() {
               <div className="flex items-center gap-2">
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    task.enabled ? 'bg-green-400' : 'bg-[var(--bg-tertiary)]'
+                    task.enabled ? 'bg-green-400' : 'bg-muted'
                   }`}
                 />
-                <span className="font-medium text-[var(--text-primary)]">{task.name}</span>
+                <span className="font-medium text-foreground">{task.name}</span>
               </div>
-              <span className="text-xs text-[var(--text-secondary)]">{task.cron_expr}</span>
+              <span className="text-xs text-muted-foreground">{task.cron_expr}</span>
             </div>
-            <p className="text-sm text-[var(--text-secondary)] mb-2">{task.description}</p>
-            <div className="flex gap-4 text-xs text-[var(--text-secondary)]">
+            <p className="text-sm text-muted-foreground mb-2">{task.description}</p>
+            <div className="flex gap-4 text-xs text-muted-foreground">
               <span>Runs: {task.run_count}</span>
               {task.last_run && <span>Last: {formatTime(task.last_run)}</span>}
               {task.next_run && <span>Next: {formatTime(task.next_run)}</span>}

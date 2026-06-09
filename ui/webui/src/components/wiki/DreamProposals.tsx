@@ -104,7 +104,7 @@ export function DreamProposals() {
   const totalPending = stats.pending || 0;
   const autoApproved = stats.auto_approved || 0;
 
-  if (loading) return <div className="flex items-center justify-center h-full text-[var(--text-secondary)]">Loading proposals...</div>;
+  if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground">Loading proposals...</div>;
   if (totalPending === 0 && autoApproved === 0) return <EmptyState icon="✱" title="No pending dream proposals" description="AI-generated edit proposals will appear here" />;
 
   return (
@@ -112,8 +112,8 @@ export function DreamProposals() {
       {showApplyConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <Card variant="bordered" className="max-w-sm w-full mx-4">
-            <h3 className="text-lg font-bold mb-2 text-[var(--text-primary)]">Apply All Approved?</h3>
-            <p className="text-sm text-[var(--text-secondary)] mb-4">
+            <h3 className="text-lg font-bold mb-2 text-foreground">Apply All Approved?</h3>
+            <p className="text-sm text-muted-foreground mb-4">
               This will apply all approved proposals to the wiki. This action cannot be undone.
             </p>
             <div className="flex gap-2 justify-end">
@@ -129,7 +129,7 @@ export function DreamProposals() {
       )}
 
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-[var(--text-primary)]">Dream Proposals</h2>
+        <h2 className="text-xl font-bold text-foreground">Dream Proposals</h2>
         <div className="flex gap-2 text-xs">
           <Badge variant="warning">{totalPending} pending</Badge>
           <Badge variant="success">{autoApproved} auto-approved</Badge>
@@ -151,28 +151,28 @@ export function DreamProposals() {
       <div className="space-y-4">
         {Object.entries(groups).map(([page, proposals]) => (
           <Card key={page} variant="bordered" padding="none">
-            <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
-              <span className="text-sm font-semibold text-[var(--accent)]">{page}</span>
+            <div className="p-3 border-b border-border flex items-center justify-between">
+              <span className="text-sm font-semibold text-primary">{page}</span>
               <button onClick={() => selectPage(page)}
-                className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+                className="text-xs text-muted-foreground hover:text-foreground">
                 Select All
               </button>
             </div>
-            <div className="divide-y divide-[var(--border)]">
+            <div className="divide-y divide-border">
               {proposals.map(p => (
                 <div key={p.id} className="p-3">
                   <div className="flex items-center gap-3 mb-2">
                     <input type="checkbox" checked={selected.has(p.id)}
                       onChange={() => toggleSelect(p.id)}
-                      className="w-4 h-4 rounded border-[var(--border)] bg-[var(--bg-secondary)]" />
-                    <span className="text-sm text-[var(--text-primary)]">{p.edit_type}</span>
-                    <span className="text-xs text-[var(--text-secondary)]">{p.content_length} chars</span>
+                      className="w-4 h-4 rounded border-border bg-card" />
+                    <span className="text-sm text-foreground">{p.edit_type}</span>
+                    <span className="text-xs text-muted-foreground">{p.content_length} chars</span>
                     <StatusBadge status={p.status} />
                   </div>
-                  <div className="text-xs text-[var(--text-secondary)] mb-2">{p.reason}</div>
-                  <details className="text-xs text-[var(--text-secondary)]">
-                    <summary className="cursor-pointer hover:text-[var(--text-primary)]">Preview content</summary>
-                    <pre className="mt-2 p-2 bg-[var(--bg-tertiary)] rounded overflow-x-auto max-h-32">
+                  <div className="text-xs text-muted-foreground mb-2">{p.reason}</div>
+                  <details className="text-xs text-muted-foreground">
+                    <summary className="cursor-pointer hover:text-foreground">Preview content</summary>
+                    <pre className="mt-2 p-2 bg-muted rounded overflow-x-auto max-h-32">
                       {p.content.slice(0, 500)}{p.content.length > 500 ? '...' : ''}
                     </pre>
                   </details>

@@ -41,22 +41,22 @@ export function SaveToWikiModal({ sessionId, query, onClose, onSaved }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="w-full max-w-md mx-4 bg-[var(--bg-secondary)] rounded-lg shadow-xl border border-[var(--border)] overflow-hidden"
+        className="w-full max-w-md mx-4 bg-card rounded-lg shadow-xl border border-border overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        <div className="px-4 py-3 border-b border-[var(--border)]">
-          <h3 className="text-sm font-medium text-[var(--text-primary)]">Save to Wiki</h3>
-          <p className="text-xs text-[var(--text-secondary)] mt-1">
+        <div className="px-4 py-3 border-b border-border">
+          <h3 className="text-sm font-medium text-foreground">Save to Wiki</h3>
+          <p className="text-xs text-muted-foreground mt-1">
             Report will be saved as a wiki page. Sources and synthesis will also be saved.
           </p>
         </div>
         <div className="p-4 space-y-3">
           <div>
-            <label className="text-xs text-[var(--text-secondary)] mb-1 block">Page Name</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Page Name</label>
             <input
               value={pageName}
               onChange={e => setPageName(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-[var(--bg-tertiary)] border border-[var(--border)] rounded focus:outline-none focus:border-[var(--accent)]"
+              className="w-full px-3 py-2 text-sm bg-muted border border-border rounded focus:outline-none focus:border-primary"
               placeholder="research/my-topic"
             />
           </div>
@@ -70,10 +70,10 @@ export function SaveToWikiModal({ sessionId, query, onClose, onSaved }: Props) {
             </div>
           )}
         </div>
-        <div className="px-4 py-3 border-t border-[var(--border)] flex gap-3 justify-end">
+        <div className="px-4 py-3 border-t border-border flex gap-3 justify-end">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             {result ? 'Close' : 'Cancel'}
           </button>
@@ -81,7 +81,7 @@ export function SaveToWikiModal({ sessionId, query, onClose, onSaved }: Props) {
             <button
               onClick={handleSave}
               disabled={loading || !pageName.trim()}
-              className="px-3 py-1.5 text-xs bg-[var(--accent)] text-white rounded hover:opacity-90 disabled:opacity-50"
+              className="px-3 py-1.5 text-xs bg-primary text-white rounded hover:opacity-90 disabled:opacity-50"
             >
               {loading ? 'Saving...' : 'Confirm & Save'}
             </button>

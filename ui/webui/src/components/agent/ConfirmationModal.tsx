@@ -27,24 +27,24 @@ function WikiWriteView({ args, editing, editedArgs, setEditedArgs }: {
   return (
     <div className="space-y-3">
       <div>
-        <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">Page</div>
-        <div className="text-sm font-medium text-[var(--accent)]">{pageName}</div>
+        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Page</div>
+        <div className="text-sm font-medium text-primary">{pageName}</div>
       </div>
       <div>
-        <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">
+        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
           Content ({content.length} chars)
         </div>
         {editing ? (
           <textarea
             value={content}
             onChange={e => setEditedArgs({ ...editedArgs, content: e.target.value })}
-            className="w-full h-64 px-3 py-2 text-xs font-mono bg-[var(--bg-tertiary)] border border-[var(--border)] rounded focus:outline-none focus:border-[var(--accent)] resize-y"
+            className="w-full h-64 px-3 py-2 text-xs font-mono bg-muted border border-border rounded focus:outline-none focus:border-primary resize-y"
           />
         ) : (
-          <div className="max-h-64 overflow-y-auto bg-[var(--bg-tertiary)] rounded p-3">
-            <div className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
+          <div className="max-h-64 overflow-y-auto bg-muted rounded p-3">
+            <div className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
               {content.slice(0, 3000)}
-              {content.length > 3000 && <span className="text-[var(--accent)]">... ({content.length - 3000} more chars)</span>}
+              {content.length > 3000 && <span className="text-primary">... ({content.length - 3000} more chars)</span>}
             </div>
           </div>
         )}
@@ -82,44 +82,44 @@ function ResearchSaveView({ args }: { args: Record<string, unknown> }) {
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <div>
-          <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">Target Page</div>
-          <div className="text-sm font-medium text-[var(--accent)]">{pageName}</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Target Page</div>
+          <div className="text-sm font-medium text-primary">{pageName}</div>
         </div>
         {sessionData?.query && (
           <div className="flex-1">
-            <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">Research Query</div>
-            <div className="text-sm text-[var(--text-primary)]">{String(sessionData.query)}</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Research Query</div>
+            <div className="text-sm text-foreground">{String(sessionData.query)}</div>
           </div>
         )}
       </div>
 
-      {loading && <div className="text-xs text-[var(--text-secondary)]">Loading report...</div>}
+      {loading && <div className="text-xs text-muted-foreground">Loading report...</div>}
       {error && <div className="text-xs text-red-400">{error}</div>}
 
       {result && (
         <>
           {result.quality_score !== undefined && (
             <div className="flex items-center gap-4 text-xs">
-              <span className="text-[var(--text-secondary)]">Quality:</span>
+              <span className="text-muted-foreground">Quality:</span>
               <span className={`font-bold ${Number(result.quality_score) >= 7 ? 'text-green-400' : Number(result.quality_score) >= 5 ? 'text-yellow-400' : 'text-red-400'}`}>
                 {String(result.quality_score)}/10
               </span>
               {result.rounds !== undefined && (
-                <span className="text-[var(--text-secondary)]">Rounds: {String(result.rounds)}</span>
+                <span className="text-muted-foreground">Rounds: {String(result.rounds)}</span>
               )}
             </div>
           )}
 
           {result.markdown && (
             <div>
-              <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">
+              <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
                 Report ({String(result.markdown).length} chars)
               </div>
-              <div className="max-h-48 overflow-y-auto bg-[var(--bg-tertiary)] rounded p-3">
-                <div className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
+              <div className="max-h-48 overflow-y-auto bg-muted rounded p-3">
+                <div className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
                   {String(result.markdown).slice(0, 4000)}
                   {String(result.markdown).length > 4000 && (
-                    <span className="text-[var(--accent)]">... (truncated)</span>
+                    <span className="text-primary">... (truncated)</span>
                   )}
                 </div>
               </div>
@@ -128,16 +128,16 @@ function ResearchSaveView({ args }: { args: Record<string, unknown> }) {
 
           {result.sources && Array.isArray(result.sources) && result.sources.length > 0 && (
             <div>
-              <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">
+              <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
                 Sources ({result.sources.length})
               </div>
               <div className="max-h-24 overflow-y-auto space-y-1">
                 {result.sources.map((src: Record<string, unknown>, i: number) => (
-                  <div key={i} className="text-xs text-[var(--text-secondary)] flex items-center gap-2">
+                  <div key={i} className="text-xs text-muted-foreground flex items-center gap-2">
                     <span className="w-4 text-center shrink-0">{i + 1}.</span>
                     <span className="truncate">{String(src.title || src.url || '')}</span>
                     {src.source_type && (
-                      <span className="px-1 py-px rounded text-[9px] bg-blue-500/20 text-blue-400 shrink-0">
+                      <span className="px-1 py-px rounded text-[9px] bg-blue-500/20 text-primary shrink-0">
                         {String(src.source_type)}
                       </span>
                     )}
@@ -149,8 +149,8 @@ function ResearchSaveView({ args }: { args: Record<string, unknown> }) {
 
           {result.synthesis_summary && (
             <div>
-              <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">Synthesis Summary</div>
-              <div className="text-xs text-[var(--text-secondary)] bg-[var(--bg-tertiary)] rounded p-2 max-h-20 overflow-y-auto whitespace-pre-wrap">
+              <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Synthesis Summary</div>
+              <div className="text-xs text-muted-foreground bg-muted rounded p-2 max-h-20 overflow-y-auto whitespace-pre-wrap">
                 {String(result.synthesis_summary)}
               </div>
             </div>
@@ -175,46 +175,46 @@ function SynthesizeView({ args, editing, editedArgs, setEditedArgs }: {
   return (
     <div className="space-y-3">
       <div>
-        <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">Target Page</div>
-        <div className="text-sm font-medium text-[var(--accent)]">{pageName}</div>
+        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Target Page</div>
+        <div className="text-sm font-medium text-primary">{pageName}</div>
       </div>
       <div>
-        <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">Query</div>
+        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Query</div>
         {editing ? (
           <input
             value={query}
             onChange={e => setEditedArgs({ ...editedArgs, query: e.target.value })}
-            className="w-full px-3 py-2 text-sm bg-[var(--bg-tertiary)] border border-[var(--border)] rounded focus:outline-none focus:border-[var(--accent)]"
+            className="w-full px-3 py-2 text-sm bg-muted border border-border rounded focus:outline-none focus:border-primary"
           />
         ) : (
-          <div className="text-sm text-[var(--text-primary)]">{query}</div>
+          <div className="text-sm text-foreground">{query}</div>
         )}
       </div>
       <div>
-        <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">
+        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
           Answer ({answer.length} chars)
         </div>
         {editing ? (
           <textarea
             value={answer}
             onChange={e => setEditedArgs({ ...editedArgs, answer: e.target.value })}
-            className="w-full h-40 px-3 py-2 text-xs font-mono bg-[var(--bg-tertiary)] border border-[var(--border)] rounded focus:outline-none focus:border-[var(--accent)] resize-y"
+            className="w-full h-40 px-3 py-2 text-xs font-mono bg-muted border border-border rounded focus:outline-none focus:border-primary resize-y"
           />
         ) : (
-          <div className="max-h-40 overflow-y-auto bg-[var(--bg-tertiary)] rounded p-3">
-            <div className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
+          <div className="max-h-40 overflow-y-auto bg-muted rounded p-3">
+            <div className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
               {answer.slice(0, 3000)}
-              {answer.length > 3000 && <span className="text-[var(--accent)]">... (truncated)</span>}
+              {answer.length > 3000 && <span className="text-primary">... (truncated)</span>}
             </div>
           </div>
         )}
       </div>
       {sourcePages.length > 0 && (
         <div>
-          <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">Source Pages</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Source Pages</div>
           <div className="flex flex-wrap gap-1">
             {sourcePages.map((p, i) => (
-              <span key={i} className="text-xs px-1.5 py-0.5 bg-[var(--bg-tertiary)] rounded text-[var(--text-secondary)]">{p}</span>
+              <span key={i} className="text-xs px-1.5 py-0.5 bg-muted rounded text-muted-foreground">{p}</span>
             ))}
           </div>
         </div>
@@ -231,17 +231,17 @@ function DefaultView({ args, editing, editedArgs, setEditedArgs }: {
 }) {
   return (
     <div>
-      <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">Arguments</div>
+      <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Arguments</div>
       {editing ? (
         <textarea
           value={JSON.stringify(editedArgs, null, 2)}
           onChange={e => {
             try { setEditedArgs(JSON.parse(e.target.value)); } catch { /* ignore */ }
           }}
-          className="w-full h-48 px-3 py-2 text-xs font-mono bg-[var(--bg-tertiary)] border border-[var(--border)] rounded focus:outline-none focus:border-[var(--accent)] resize-y"
+          className="w-full h-48 px-3 py-2 text-xs font-mono bg-muted border border-border rounded focus:outline-none focus:border-primary resize-y"
         />
       ) : (
-        <pre className="text-xs font-mono bg-[var(--bg-tertiary)] rounded p-2 max-h-48 overflow-y-auto text-[var(--text-secondary)] whitespace-pre-wrap">
+        <pre className="text-xs font-mono bg-muted rounded p-2 max-h-48 overflow-y-auto text-muted-foreground whitespace-pre-wrap">
           {JSON.stringify(args, null, 2)}
         </pre>
       )}
@@ -262,9 +262,9 @@ function ImpactSummary({ impact }: { impact: Record<string, unknown> }) {
 
   if (items.length === 0) return null;
   return (
-    <div className="bg-[var(--bg-tertiary)] rounded p-2 space-y-0.5">
+    <div className="bg-muted rounded p-2 space-y-0.5">
       {items.map((item, i) => (
-        <div key={i} className="text-xs text-[var(--text-secondary)]">
+        <div key={i} className="text-xs text-muted-foreground">
           <span className="font-medium">{item.label}:</span> {item.value}
         </div>
       ))}
@@ -312,19 +312,19 @@ export function ConfirmationModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onReject}>
-      <div className="w-full max-w-lg mx-4 bg-[var(--bg-secondary)] rounded-lg shadow-xl border border-[var(--border)] overflow-hidden max-h-[85vh] flex flex-col"
+      <div className="w-full max-w-lg mx-4 bg-card rounded-lg shadow-xl border border-border overflow-hidden max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}>
-        <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--warning)]/10 shrink-0">
+        <div className="px-4 py-3 border-b border-border bg-yellow-500/10 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-base">⚠️</span>
-              <span className="text-sm font-semibold text-[var(--warning)]">Confirmation Required</span>
+              <span className="text-sm font-semibold text-yellow-500">Confirmation Required</span>
             </div>
             <div className="flex items-center gap-2">
               {editing && (
                 <button
                   onClick={() => { setEditedArgs(args); setEditing(false); }}
-                  className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  className="text-xs text-muted-foreground hover:text-foreground"
                 >
                   Reset
                 </button>
@@ -332,14 +332,14 @@ export function ConfirmationModal({
               {canEdit && (
                 <button
                   onClick={() => setEditing(!editing)}
-                  className={`text-xs px-2 py-0.5 rounded ${editing ? 'bg-[var(--accent)] text-white' : 'text-[var(--accent)] hover:bg-[var(--accent)]/10'}`}
+                  className={`text-xs px-2 py-0.5 rounded ${editing ? 'bg-primary text-white' : 'text-primary hover:bg-primary/10'}`}
                 >
                   {editing ? 'Editing' : 'Edit'}
                 </button>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-3 mt-1 ml-6 text-xs text-[var(--text-secondary)]">
+          <div className="flex items-center gap-3 mt-1 ml-6 text-xs text-muted-foreground">
             {group && <span>Group: {group.replace(/_/g, ' ')}</span>}
             {createdAt && <span>· {new Date(createdAt).toLocaleString()}</span>}
           </div>
@@ -347,9 +347,9 @@ export function ConfirmationModal({
 
         <div className="p-4 space-y-4 overflow-y-auto flex-1">
           <div>
-            <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">Tool</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Tool</div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-[var(--accent)]">{tool}</span>
+              <span className="text-sm font-medium text-primary">{tool}</span>
               <Badge variant="warning">requires approval</Badge>
               {hasChanges && <Badge variant="info">modified</Badge>}
             </div>
@@ -358,12 +358,12 @@ export function ConfirmationModal({
           {renderToolView()}
 
           <div>
-            <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-1">Impact</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Impact</div>
             <ImpactSummary impact={impact} />
           </div>
         </div>
 
-        <div className="px-4 py-3 border-t border-[var(--border)] flex gap-3 justify-end shrink-0">
+        <div className="px-4 py-3 border-t border-border flex gap-3 justify-end shrink-0">
           <Button onClick={onReject} disabled={loading} variant="secondary">
             Reject
           </Button>

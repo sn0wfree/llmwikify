@@ -146,7 +146,7 @@ export function LLMSettings() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-[var(--text-secondary)]">
+      <div className="flex items-center justify-center h-full text-muted-foreground">
         Loading...
       </div>
     );
@@ -156,7 +156,7 @@ export function LLMSettings() {
     <div className="flex flex-col h-full">
       <Panel border="top">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[var(--accent)]">LLM Settings</h2>
+          <h2 className="text-sm font-semibold text-primary">LLM Settings</h2>
         </div>
       </Panel>
 
@@ -165,7 +165,7 @@ export function LLMSettings() {
           <Card variant="bordered" padding="md">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-[var(--text-primary)]">Enable LLM</span>
+                <span className="text-sm font-medium text-foreground">Enable LLM</span>
                 <Toggle
                   checked={config.enabled}
                   onChange={(checked) => setConfig((prev) => ({ ...prev, enabled: checked }))}
@@ -174,7 +174,7 @@ export function LLMSettings() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Provider</label>
+                  <label className="block text-xs text-muted-foreground mb-1.5">Provider</label>
                   <Select
                     value={config.provider}
                     onChange={handleProviderChange}
@@ -182,7 +182,7 @@ export function LLMSettings() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Model</label>
+                  <label className="block text-xs text-muted-foreground mb-1.5">Model</label>
                   <Select
                     value={config.model}
                     onChange={(e) => setConfig((prev) => ({ ...prev, model: e.target.value }))}
@@ -192,27 +192,27 @@ export function LLMSettings() {
               </div>
 
               <div>
-                <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Base URL</label>
+                <label className="block text-xs text-muted-foreground mb-1.5">Base URL</label>
                 <input
                   type="text"
                   value={config.base_url}
                   onChange={(e) => setConfig((prev) => ({ ...prev, base_url: e.target.value }))}
-                  className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-md px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/40"
+                  className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/40"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-[var(--text-secondary)] mb-1.5">API Key</label>
+                <label className="block text-xs text-muted-foreground mb-1.5">API Key</label>
                 <div className="flex items-center gap-2 mb-2">
                   <button
                     onClick={() => setApiKeyMode('direct')}
-                    className={`text-xs px-2 py-1 rounded ${apiKeyMode === 'direct' ? 'bg-[var(--accent)]/20 text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}
+                    className={`text-xs px-2 py-1 rounded ${apiKeyMode === 'direct' ? 'bg-primary/20 text-primary' : 'text-muted-foreground'}`}
                   >
                     Direct
                   </button>
                   <button
                     onClick={() => setApiKeyMode('env')}
-                    className={`text-xs px-2 py-1 rounded ${apiKeyMode === 'env' ? 'bg-[var(--accent)]/20 text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}
+                    className={`text-xs px-2 py-1 rounded ${apiKeyMode === 'env' ? 'bg-primary/20 text-primary' : 'text-muted-foreground'}`}
                   >
                     env:VAR_NAME
                   </button>
@@ -223,31 +223,31 @@ export function LLMSettings() {
                     value={inputValue}
                     onChange={(e) => handleApiKeyChange(e.target.value)}
                     placeholder={apiKeyMode === 'env' ? 'env:MY_API_KEY' : 'sk-...'}
-                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-md px-3 py-2 pr-20 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/40"
+                    className="w-full bg-card border border-border rounded-md px-3 py-2 pr-20 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/40"
                   />
                   <button
                     onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-secondary)] hover:text-[var(--accent)]"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-primary"
                   >
                     {showApiKey ? 'Hide' : 'Show'}
                   </button>
                 </div>
                 {originalApiKey && (
-                  <div className="mt-1 text-xs text-[var(--text-secondary)]">
+                  <div className="mt-1 text-xs text-muted-foreground">
                     Current: {displayApiKey}
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="block text-xs text-[var(--text-secondary)] mb-1.5">Timeout (seconds)</label>
+                <label className="block text-xs text-muted-foreground mb-1.5">Timeout (seconds)</label>
                 <input
                   type="number"
                   value={config.timeout}
                   onChange={(e) => setConfig((prev) => ({ ...prev, timeout: parseInt(e.target.value) || 120 }))}
                   min={10}
                   max={300}
-                  className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-md px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/40"
+                  className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/40"
                 />
               </div>
             </div>
@@ -259,9 +259,9 @@ export function LLMSettings() {
             </Button>
           </div>
 
-          <div className="text-xs text-[var(--text-secondary)] space-y-1">
-            <p>Config stored globally at <code className="bg-[var(--bg-tertiary)] px-1 rounded">~/.llmwikify/llmwikify.json</code></p>
-            <p>Per-wiki config overrides: <code className="bg-[var(--bg-tertiary)] px-1 rounded">.wiki-config.yaml</code></p>
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p>Config stored globally at <code className="bg-muted px-1 rounded">~/.llmwikify/llmwikify.json</code></p>
+            <p>Per-wiki config overrides: <code className="bg-muted px-1 rounded">.wiki-config.yaml</code></p>
           </div>
         </div>
       </div>

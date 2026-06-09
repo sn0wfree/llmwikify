@@ -28,7 +28,7 @@ export function DreamLog() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-[var(--text-secondary)]">
+      <div className="flex items-center justify-center h-full text-muted-foreground">
         Loading dream log...
       </div>
     );
@@ -41,7 +41,7 @@ export function DreamLog() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-[var(--text-primary)]">Dream Edit Log</h2>
+        <h2 className="text-xl font-bold text-foreground">Dream Edit Log</h2>
         <Button variant="secondary" size="sm" onClick={loadEdits}>
           Refresh
         </Button>
@@ -51,12 +51,12 @@ export function DreamLog() {
         <div className="space-y-4">
           {edits.map((edit, i) => (
             <Card key={i} variant="bordered" padding="none">
-              <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
-                <span className="text-sm font-medium text-[var(--text-primary)]">
+              <div className="p-3 border-b border-border flex items-center justify-between">
+                <span className="text-sm font-medium text-foreground">
                   {formatTime(edit.timestamp)}
                 </span>
                 <div className="flex gap-3 text-xs">
-                  <span className="text-[var(--text-secondary)]">
+                  <span className="text-muted-foreground">
                     {edit.sinks_processed} sinks
                   </span>
                   <span className="text-green-400">
@@ -68,9 +68,9 @@ export function DreamLog() {
                 <div className="p-3">
                   {edit.edits.map((e, j) => (
                     <div key={j} className="flex items-center justify-between py-1">
-                      <span className="text-sm text-[var(--accent)]">{e.page}</span>
+                      <span className="text-sm text-primary">{e.page}</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-[var(--text-secondary)]">
+                        <span className="text-xs text-muted-foreground">
                           {e.edit_count} changes
                         </span>
                         <StatusBadge status={e.status} />

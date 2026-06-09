@@ -33,13 +33,13 @@ export function EditHistory() {
     loadHistory();
   }, [loadHistory]);
 
-  if (loading) return <div className="flex items-center justify-center h-full text-[var(--text-secondary)]">Loading edit history...</div>;
+  if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground">Loading edit history...</div>;
   if (edits.length === 0) return <EmptyState icon="✎" title="No edit history" description="Agent edit operations will appear here" />;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-[var(--text-primary)]">Edit History</h2>
+        <h2 className="text-xl font-bold text-foreground">Edit History</h2>
         <Button variant="secondary" size="sm" onClick={loadHistory}>
           Refresh
         </Button>
@@ -51,8 +51,8 @@ export function EditHistory() {
             <div className="flex items-center gap-3">
               <div className={`w-2 h-2 rounded-full ${edit.success ? 'bg-green-400' : 'bg-red-400'}`} />
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-[var(--text-primary)]">{edit.tool}</div>
-                <div className="text-xs text-[var(--text-secondary)]">
+                <div className="text-sm text-foreground">{edit.tool}</div>
+                <div className="text-xs text-muted-foreground">
                   {formatTime(edit.timestamp)}
                   {edit.confirmation_id && ` · ID: ${edit.confirmation_id}`}
                 </div>

@@ -26,13 +26,13 @@ export function IngestLog() {
     loadLog();
   }, [loadLog]);
 
-  if (loading) return <div className="flex items-center justify-center h-full text-[var(--text-secondary)]">Loading ingest log...</div>;
+  if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground">Loading ingest log...</div>;
   if (entries.length === 0) return <EmptyState icon="↓" title="No ingest records" description="Content ingestion history will appear here" />;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-[var(--text-primary)]">Ingest History</h2>
+        <h2 className="text-xl font-bold text-foreground">Ingest History</h2>
         <Button variant="secondary" size="sm" onClick={loadLog}>
           Refresh
         </Button>
@@ -42,14 +42,14 @@ export function IngestLog() {
         {entries.map(entry => (
           <Card key={entry.id} variant="bordered" padding="md">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-[var(--accent)]">
+              <span className="text-sm font-medium text-primary">
                 {String(entry.arguments?.source || entry.tool)}
               </span>
-              <span className="text-xs text-[var(--text-secondary)]">
+              <span className="text-xs text-muted-foreground">
                 {formatTime(entry.timestamp)}
               </span>
             </div>
-            <div className="text-xs text-[var(--text-secondary)] mb-2">
+            <div className="text-xs text-muted-foreground mb-2">
               {String(entry.result_summary).slice(0, 200)}
               {String(entry.result_summary).length > 200 ? '...' : ''}
             </div>

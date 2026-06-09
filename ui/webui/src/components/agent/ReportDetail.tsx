@@ -183,7 +183,7 @@ function renderBlock(block: MdBlock, sourceMap: Map<string, ReportSource>, openW
       const Tag = `h${block.level}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
       const sizeClass = block.level === 1 ? 'text-xl' : block.level === 2 ? 'text-lg' : 'text-base';
       return (
-        <Tag key={block.text} className={`${sizeClass} font-bold mt-6 mb-2 text-[var(--text-primary)]`}>
+        <Tag key={block.text} className={`${sizeClass} font-bold mt-6 mb-2 text-foreground`}>
           {renderInlineCitations(block.text, sourceMap, openWiki)}
         </Tag>
       );
@@ -192,7 +192,7 @@ function renderBlock(block: MdBlock, sourceMap: Map<string, ReportSource>, openW
       return block.ordered ? (
         <ol key={block.items[0]} className="list-decimal pl-6 my-2 space-y-1">
           {block.items.map((item, i) => (
-            <li key={i} className="text-sm text-[var(--text-primary)] leading-relaxed">
+            <li key={i} className="text-sm text-foreground leading-relaxed">
               {renderInlineMath(item, sourceMap, openWiki)}
             </li>
           ))}
@@ -200,7 +200,7 @@ function renderBlock(block: MdBlock, sourceMap: Map<string, ReportSource>, openW
       ) : (
         <ul key={block.items[0]} className="list-disc pl-6 my-2 space-y-1">
           {block.items.map((item, i) => (
-            <li key={i} className="text-sm text-[var(--text-primary)] leading-relaxed">
+            <li key={i} className="text-sm text-foreground leading-relaxed">
               {renderInlineMath(item, sourceMap, openWiki)}
             </li>
           ))}
@@ -208,13 +208,13 @@ function renderBlock(block: MdBlock, sourceMap: Map<string, ReportSource>, openW
       );
     case 'blockquote':
       return (
-        <blockquote key={block.text} className="border-l-4 border-[var(--accent)]/30 pl-4 my-3 text-sm text-[var(--text-secondary)] italic">
+        <blockquote key={block.text} className="border-l-4 border-primary/30 pl-4 my-3 text-sm text-muted-foreground italic">
           {renderInlineMath(block.text, sourceMap, openWiki)}
         </blockquote>
       );
     case 'code':
       return (
-        <pre key={block.text} className="bg-[var(--bg-tertiary)] p-3 rounded-lg overflow-x-auto my-3 text-[12px] text-[var(--text-primary)] font-mono">
+        <pre key={block.text} className="bg-muted p-3 rounded-lg overflow-x-auto my-3 text-[12px] text-foreground font-mono">
           <code>{block.text}</code>
         </pre>
       );
@@ -229,9 +229,9 @@ function renderBlock(block: MdBlock, sourceMap: Map<string, ReportSource>, openW
         <div key={block.headers.join('|')} className="my-4 overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="border-b border-[var(--border)]">
+              <tr className="border-b border-border">
                 {block.headers.map((h, hi) => (
-                  <th key={hi} className="px-3 py-2 text-left text-[var(--text-secondary)] font-medium text-xs">
+                  <th key={hi} className="px-3 py-2 text-left text-muted-foreground font-medium text-xs">
                     {renderInlineCitations(h, sourceMap, openWiki)}
                   </th>
                 ))}
@@ -239,9 +239,9 @@ function renderBlock(block: MdBlock, sourceMap: Map<string, ReportSource>, openW
             </thead>
             <tbody>
               {block.rows.map((row, ri) => (
-                <tr key={ri} className="border-b border-[var(--border)]/50">
+                <tr key={ri} className="border-b border-border/50">
                   {row.map((cell, ci) => (
-                    <td key={ci} className="px-3 py-2 text-[var(--text-primary)]">
+                    <td key={ci} className="px-3 py-2 text-foreground">
                       {renderInlineCitations(cell, sourceMap, openWiki)}
                     </td>
                   ))}
@@ -252,10 +252,10 @@ function renderBlock(block: MdBlock, sourceMap: Map<string, ReportSource>, openW
         </div>
       );
     case 'hr':
-      return <hr key="hr" className="border-[var(--border)] my-6" />;
+      return <hr key="hr" className="border-border my-6" />;
     case 'paragraph':
       return (
-        <p key={block.text} className="text-sm leading-relaxed my-2 text-[var(--text-primary)]">
+        <p key={block.text} className="text-sm leading-relaxed my-2 text-foreground">
           {renderInlineMath(block.text, sourceMap, openWiki)}
         </p>
       );
@@ -263,11 +263,11 @@ function renderBlock(block: MdBlock, sourceMap: Map<string, ReportSource>, openW
 }
 
 function StatCard({ label, value, color }: { label: string; value: string | number; color?: string }) {
-  const colorClass = color || 'text-[var(--text-primary)]';
+  const colorClass = color || 'text-foreground';
   return (
-    <div className="flex flex-col items-center justify-center px-3 py-2 bg-[var(--bg-tertiary)] rounded border border-[var(--border)] min-w-[4rem]">
+    <div className="flex flex-col items-center justify-center px-3 py-2 bg-muted rounded border border-border min-w-[4rem]">
       <span className={`text-lg font-bold leading-none ${colorClass}`}>{value}</span>
-      <span className="text-[10px] text-[var(--text-secondary)] opacity-60 mt-1 leading-tight">{label}</span>
+      <span className="text-[10px] text-muted-foreground opacity-60 mt-1 leading-tight">{label}</span>
     </div>
   );
 }
@@ -329,7 +329,7 @@ export function ReportDetail({ sessionId, onBack }: Props) {
     return (
       <div className="h-full flex flex-col">
         <Header onBack={onBack} />
-        <div className="flex-1 flex items-center justify-center text-sm text-[var(--text-secondary)]">Loading report...</div>
+        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Loading report...</div>
       </div>
     );
   }
@@ -355,7 +355,7 @@ export function ReportDetail({ sessionId, onBack }: Props) {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6">
           <div className="report-body relative">
-            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[var(--accent)]/40 via-[var(--accent)]/20 to-transparent pointer-events-none" />
+            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-primary/40 via-primary/20 to-transparent pointer-events-none" />
             <div className="pl-4">
               <div className="flex flex-wrap gap-2 mb-6">
                 <StatCard label="质量" value={`${qualityScore}/10`} color={qualityColor} />
@@ -370,29 +370,29 @@ export function ReportDetail({ sessionId, onBack }: Props) {
               {blocks.length > 0 ? (
                 <div>{blocks.map((b, i) => renderBlock(b, sourceMap, openWiki))}</div>
               ) : (
-                <div className="text-sm text-[var(--text-secondary)]">No report content.</div>
+                <div className="text-sm text-muted-foreground">No report content.</div>
               )}
 
               {sources.length > 0 && (
-                <div className="mt-8 pt-4 border-t border-[var(--border)]">
-                  <div className="text-xs font-medium text-[var(--text-secondary)] mb-3 uppercase tracking-wide opacity-60">
+                <div className="mt-8 pt-4 border-t border-border">
+                  <div className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide opacity-60">
                     References ({sources.length})
                   </div>
                   <div className="space-y-1.5">
                     {sources.map((src, i) => (
                       <div key={src.id} className="flex items-start gap-2 text-xs">
-                        <span className="text-[var(--text-secondary)] w-4 text-center shrink-0 mt-0.5">{i + 1}.</span>
+                        <span className="text-muted-foreground w-4 text-center shrink-0 mt-0.5">{i + 1}.</span>
                         {src.source_type === 'wiki' ? (
                           <button
                             onClick={() => openWiki(src.title || src.url.replace('wiki://', ''))}
-                            className="text-[var(--accent)] hover:underline flex-1 truncate text-left"
+                            className="text-primary hover:underline flex-1 truncate text-left"
                             title={src.url}
                           >
                             {src.title || src.url}
                           </button>
                         ) : (
                           <a href={src.url} target="_blank" rel="noopener noreferrer"
-                            className="text-[var(--accent)] hover:underline flex-1 truncate" title={src.url}>
+                            className="text-primary hover:underline flex-1 truncate" title={src.url}>
                             {src.title || src.url}
                           </a>
                         )}
@@ -401,7 +401,7 @@ export function ReportDetail({ sessionId, onBack }: Props) {
                           src.source_type === 'pdf' ? 'bg-orange-500/20 text-orange-400' :
                           src.source_type === 'wiki' ? 'bg-purple-500/20 text-purple-400' :
                           src.source_type === 'youtube' ? 'bg-red-500/20 text-red-400' :
-                          'bg-blue-500/20 text-blue-400'
+                          'bg-blue-500/20 text-primary'
                         }`}>
                           {src.source_type === 'arxiv' ? 'arXiv' : src.source_type === 'pdf' ? 'PDF' : src.source_type === 'wiki' ? 'Wiki' : src.source_type}
                         </span>
@@ -441,8 +441,8 @@ function Header({ onBack, query, qualityScore, onSaveToWiki }: {
   onSaveToWiki?: () => void;
 }) {
   return (
-    <div className="px-4 py-3 border-b border-[var(--border)] flex items-center gap-3">
-      <button onClick={onBack} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] shrink-0">
+    <div className="px-4 py-3 border-b border-border flex items-center gap-3">
+      <button onClick={onBack} className="text-muted-foreground hover:text-foreground shrink-0">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M11 2L5 8l6 6" />
         </svg>
@@ -458,7 +458,7 @@ function Header({ onBack, query, qualityScore, onSaveToWiki }: {
       {onSaveToWiki && (
         <button
           onClick={onSaveToWiki}
-          className="text-xs px-2 py-1 rounded text-[var(--accent)] hover:bg-[var(--accent)]/10 shrink-0"
+          className="text-xs px-2 py-1 rounded text-primary hover:bg-primary/10 shrink-0"
         >
           Save to Wiki
         </button>
