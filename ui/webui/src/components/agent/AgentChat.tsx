@@ -11,6 +11,7 @@ import { Panel } from '../ui/Panel';
 import { SessionSidebar } from './SessionSidebar';
 import { ToolsRail } from './ToolsRail';
 import { ConfirmationModal } from './ConfirmationModal';
+import { cn } from '@/lib/utils';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -37,9 +38,7 @@ function parseToolCalls(raw: unknown): ToolCall[] | undefined {
     try {
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? (parsed as ToolCall[]) : undefined;
-    } catch {
-      return undefined;
-    }
+    } catch { return undefined; }
   }
   return undefined;
 }
@@ -47,21 +46,19 @@ function parseToolCalls(raw: unknown): ToolCall[] | undefined {
 type ConnectionState = 'idle' | 'live' | 'error';
 
 const STATE_TONE: Record<ConnectionState, string> = {
-  idle: 'text-text-secondary',
-  live: 'text-[var(--success)]',
-  error: 'text-[var(--error)]',
+  idle: 'text-muted-foreground',
+  live: 'text-green-500',
+  error: 'text-destructive',
 };
 
 const STATE_DOT: Record<ConnectionState, string> = {
-  idle: 'bg-text-secondary/40',
-  live: 'bg-[var(--success)]',
-  error: 'bg-[var(--error)]',
+  idle: 'bg-muted-foreground/40',
+  live: 'bg-green-500',
+  error: 'bg-destructive',
 };
 
 const STATE_LABEL: Record<ConnectionState, string> = {
-  idle: 'idle',
-  live: 'live',
-  error: 'error',
+  idle: 'idle', live: 'live', error: 'error',
 };
 
 interface PendingConfirmation {
@@ -105,17 +102,10 @@ export function AgentChat() {
 
   useEffect(() => {
     let mounted = true;
-    api.agent
-      .getConfig()
-      .then((cfg: { model?: string }) => {
-        if (mounted && cfg?.model) setModelName(cfg.model);
-      })
-      .catch(() => {
-        /* model fetch is best-effort */
-      });
-    return () => {
-      mounted = false;
-    };
+    api.agent.getConfig().then((cfg: { model?: string }) => {
+      if (mounted && cfg?.model) setModelName(cfg.model);
+    }).catch(() => {});
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
@@ -165,15 +155,12 @@ export function AgentChat() {
       setCurrentToolCalls([]);
 
       const reader = api.confirmations.approveAndContinue(
-        pendingConfirmation.confirmationId,
-        currentSessionId,
-        currentWikiId || undefined
+        pendingConfirmation.confirmationId, currentSessionId, currentWikiId || undefined
       ).getReader();
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         const event = value as ChatStreamEvent;
         switch (event.type) {
           case 'message_delta':
@@ -183,37 +170,17 @@ export function AgentChat() {
             setCurrentThinking((prev) => prev + event.content);
             break;
           case 'tool_call_start':
-            setCurrentToolCalls((prev) => [
-              ...prev,
-              { tool: event.tool, args: event.args, status: 'streaming', startedAt: Date.now() },
-            ]);
+            setCurrentToolCalls((prev) => [...prev, { tool: event.tool, args: event.args, status: 'streaming', startedAt: Date.now() }]);
             break;
           case 'tool_call_end':
-            setCurrentToolCalls((prev) =>
-              prev.map((tc) =>
-                tc.tool === event.tool ? { ...tc, result: event.result, status: 'done', finishedAt: Date.now() } : tc
-              )
-            );
+            setCurrentToolCalls((prev) => prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done', finishedAt: Date.now() } : tc));
             break;
           case 'confirmation_required':
-            setCurrentToolCalls((prev) =>
-              prev.map((tc) =>
-                tc.tool === 'confirmation_required' ? { ...tc, status: 'done', finishedAt: Date.now() } : tc
-              )
-            );
-            setPendingConfirmation({
-              confirmationId: event.confirmation_id,
-              tool: 'confirmation_required',
-              args: {},
-              impact: (event.details || {}) as Record<string, unknown>,
-              group: undefined,
-            });
+            setCurrentToolCalls((prev) => prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done', finishedAt: Date.now() } : tc));
+            setPendingConfirmation({ confirmationId: event.confirmation_id, tool: 'confirmation_required', args: {}, impact: (event.details || {}) as Record<string, unknown>, group: undefined });
             break;
           case 'done':
-            setMessages((prev) => [
-              ...prev,
-              { role: 'assistant', content: event.final_response, thinking: currentThinking || undefined, timestamp: new Date().toISOString(), toolCalls: currentToolCalls },
-            ]);
+            setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: currentThinking || undefined, timestamp: new Date().toISOString(), toolCalls: currentToolCalls }]);
             setCurrentAssistantMsg('');
             setCurrentThinking('');
             setCurrentToolCalls([]);
@@ -265,7 +232,6 @@ export function AgentChat() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         const event = value as ChatStreamEvent;
 
         switch (event.type) {
@@ -273,58 +239,27 @@ export function AgentChat() {
             setCurrentSessionId(event.session_id);
             setSidebarRefreshKey((k) => k + 1);
             break;
-
           case 'message_delta':
             setCurrentAssistantMsg((prev) => prev + event.content);
             break;
-
           case 'thinking':
             setCurrentThinking((prev) => prev + event.content);
             break;
-
           case 'tool_call_start':
-            setCurrentToolCalls((prev) => [
-              ...prev,
-              { tool: event.tool, args: event.args, status: 'streaming', startedAt: Date.now() },
-            ]);
+            setCurrentToolCalls((prev) => [...prev, { tool: event.tool, args: event.args, status: 'streaming', startedAt: Date.now() }]);
             break;
-
           case 'tool_call_end':
-            setCurrentToolCalls((prev) =>
-              prev.map((tc) =>
-                tc.tool === event.tool ? { ...tc, result: event.result, status: 'done', finishedAt: Date.now() } : tc
-              )
-            );
+            setCurrentToolCalls((prev) => prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done', finishedAt: Date.now() } : tc));
             break;
-
           case 'tool_call_error':
-            setCurrentToolCalls((prev) =>
-              prev.map((tc) =>
-                tc.tool === event.tool ? { ...tc, error: event.error, status: 'error', finishedAt: Date.now() } : tc
-              )
-            );
+            setCurrentToolCalls((prev) => prev.map((tc) => tc.tool === event.tool ? { ...tc, error: event.error, status: 'error', finishedAt: Date.now() } : tc));
             break;
-
           case 'confirmation_required':
-            setCurrentToolCalls((prev) =>
-              prev.map((tc) =>
-                tc.tool === 'confirmation_required' ? { ...tc, status: 'done', finishedAt: Date.now() } : tc
-              )
-            );
-            setPendingConfirmation({
-              confirmationId: event.confirmation_id,
-              tool: 'confirmation_required',
-              args: {},
-              impact: (event.details || {}) as Record<string, unknown>,
-              group: undefined,
-            });
+            setCurrentToolCalls((prev) => prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done', finishedAt: Date.now() } : tc));
+            setPendingConfirmation({ confirmationId: event.confirmation_id, tool: 'confirmation_required', args: {}, impact: (event.details || {}) as Record<string, unknown>, group: undefined });
             break;
-
           case 'done':
-            setMessages((prev) => [
-              ...prev,
-              { role: 'assistant', content: event.final_response, thinking: currentThinking || undefined, timestamp: new Date().toISOString(), toolCalls: currentToolCalls },
-            ]);
+            setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: currentThinking || undefined, timestamp: new Date().toISOString(), toolCalls: currentToolCalls }]);
             setCurrentAssistantMsg('');
             setCurrentThinking('');
             setCurrentToolCalls([]);
@@ -336,10 +271,7 @@ export function AgentChat() {
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : 'Unknown error';
       addToast('error', `Chat error: ${errMsg}`);
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: `Error: ${errMsg}`, timestamp: new Date().toISOString() },
-      ]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${errMsg}`, timestamp: new Date().toISOString() }]);
       setCurrentAssistantMsg('');
       setCurrentToolCalls([]);
       setConnectionState('error');
@@ -349,21 +281,12 @@ export function AgentChat() {
   }, [input, loading, addToast, currentToolCalls, currentWikiId, currentSessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-    if (e.key === 'Escape') {
-      setInput('');
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === 'Escape') setInput('');
   };
 
   const formatTime = (iso: string) => {
-    try {
-      return new Date(iso).toLocaleTimeString();
-    } catch {
-      return '';
-    }
+    try { return new Date(iso).toLocaleTimeString(); } catch { return ''; }
   };
 
   return (
@@ -392,56 +315,42 @@ export function AgentChat() {
         )}
 
         <div className="flex flex-col flex-1 min-w-0">
-          <Panel border="top">
+          <Panel border="bottom">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <h2 className="text-sm font-semibold text-[var(--accent)] shrink-0">Agent Chat</h2>
+                <h2 className="text-sm font-semibold text-primary shrink-0">Agent Chat</h2>
                 {modelName && (
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[var(--bg-tertiary)]/40 border border-[var(--border)]/40 text-xs text-[var(--text-secondary)]">
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/40 border border-border/40 text-xs text-muted-foreground">
                     <Cpu className="w-3 h-3" />
-                    <span className="font-mono text-[11px] truncate max-w-[120px]" title={modelName}>
-                      {modelName}
-                    </span>
+                    <span className="font-mono text-[11px] truncate max-w-[120px]" title={modelName}>{modelName}</span>
                   </div>
                 )}
-                <div
-                  className={`flex items-center gap-1.5 text-xs ${STATE_TONE[connectionState]}`}
-                  title={`Connection: ${STATE_LABEL[connectionState]}`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${STATE_DOT[connectionState]}`} />
+                <div className={cn('flex items-center gap-1.5 text-xs', STATE_TONE[connectionState])} title={`Connection: ${STATE_LABEL[connectionState]}`}>
+                  <span className={cn('w-1.5 h-1.5 rounded-full', STATE_DOT[connectionState])} />
                   <Wifi className="w-3 h-3" />
                   <span className="hidden sm:inline">{STATE_LABEL[connectionState]}</span>
                 </div>
                 {currentSessionId && (
-                  <span className="text-xs text-[var(--text-secondary)] font-mono hidden md:inline">
-                    #{currentSessionId.slice(0, 8)}
-                  </span>
+                  <span className="text-xs text-muted-foreground font-mono hidden md:inline">#{currentSessionId.slice(0, 8)}</span>
                 )}
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 {tokenEstimate > 0 && (
-                  <div
-                    className="flex items-center gap-1 text-xs text-[var(--text-secondary)]"
-                    title="Approximate token usage (chars/4)"
-                  >
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground" title="Approximate token usage">
                     <Coins className="w-3 h-3" />
-                    <span className="font-mono">
-                      {tokenEstimate < 1000
-                        ? tokenEstimate
-                        : `${(tokenEstimate / 1000).toFixed(1)}k`}
-                    </span>
+                    <span className="font-mono">{tokenEstimate < 1000 ? tokenEstimate : `${(tokenEstimate / 1000).toFixed(1)}k`}</span>
                   </div>
                 )}
                 <button
                   onClick={() => setShowSidebar(!showSidebar)}
-                  className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors p-1 rounded hover:bg-[var(--bg-tertiary)]/40 hidden md:inline-flex"
+                  className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-md hover:bg-muted hidden md:inline-flex"
                   title={showSidebar ? 'Hide session sidebar' : 'Show session sidebar'}
                 >
                   {showSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
                 </button>
                 <button
                   onClick={() => setShowRail(!showRail)}
-                  className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors p-1 rounded hover:bg-[var(--bg-tertiary)]/40 hidden lg:inline-flex"
+                  className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-md hover:bg-muted hidden lg:inline-flex"
                   title={showRail ? 'Hide tools rail' : 'Show tools rail'}
                 >
                   {showRail ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
@@ -480,21 +389,11 @@ export function AgentChat() {
             ))}
 
             {loading && currentAssistantMsg && (
-              <MessageBubble
-                role="assistant"
-                content={currentAssistantMsg}
-                thinking={currentThinking || undefined}
-                streaming
-              />
+              <MessageBubble role="assistant" content={currentAssistantMsg} thinking={currentThinking || undefined} streaming />
             )}
 
             {loading && !currentAssistantMsg && currentThinking && (
-              <MessageBubble
-                role="assistant"
-                content=""
-                thinking={currentThinking}
-                streaming
-              />
+              <MessageBubble role="assistant" content="" thinking={currentThinking} streaming />
             )}
 
             {loading && currentToolCalls.length > 0 && (
@@ -507,11 +406,8 @@ export function AgentChat() {
 
             {loading && !currentAssistantMsg && currentToolCalls.length === 0 && (
               <div className="flex justify-start">
-                <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-                  <span className="text-base">🤖</span>
-                  <div className="thinking-dots">
-                    <span>·</span><span>·</span><span>·</span>
-                  </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <span className="thinking-dots"><span>·</span><span>·</span><span>·</span></span>
                 </div>
               </div>
             )}
