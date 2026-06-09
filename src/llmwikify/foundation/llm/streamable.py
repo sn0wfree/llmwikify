@@ -20,12 +20,101 @@ Pass ``_prompt_name="..."`` in generation_params to label calls in logs.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
 from ..llm_client import LLMClient
 from .budget_decorator import check_token_budget
 from .token_budget import TokenBudgetChecker, TokenBudgetConfig
+
+
+class LLMRequestError(RuntimeError):
+    """Raised when the LLM provider returns a 4xx/5xx response.
+
+    Unlike ``httpx.HTTPStatusError`` or ``requests.HTTPError`` (which
+    only embed the status line and URL), this exception carries the
+    provider's error body so the user can see *why* the call failed —
+    e.g. MiniMax's ``{"error":{"message":"invalid params, messages
+    is empty (2013)"}}`` instead of a bare ``400 Bad Request``.
+    """
+
+    def __init__(self, status_code: int, url: str, body: str):
+        self.status_code = status_code
+        self.url = url
+        self.body = body
+        # Truncate body to keep logs readable
+        preview = body[:500] + ("…" if len(body) > 500 else "")
+        super().__init__(
+            f"LLM API returned {status_code} for {url}: {preview}"
+        )
+
+
+def _validate_request(
+    messages: list[dict[str, Any]] | None,
+    generation_params: dict[str, Any] | None = None,
+) -> None:
+    """Pre-flight validation for chat completion requests.
+
+    Catches the most common provider-side rejections *before* they
+    cost a network round-trip:
+
+      - Empty ``messages`` (MiniMax error 2013)
+      - ``top_p`` outside the OpenAI-compatible (0, 1] range
+      - ``temperature`` outside [0, 2] (Anthropic-compatible ceiling)
+
+    Provider-specific quirks (e.g. MiniMax reasoning_split + tools
+    combinations) are not validated here — they will surface as
+    ``LLMRequestError`` with the full body, which is informative
+    enough to diagnose.
+    """
+    if not messages:
+        raise ValueError(
+            "messages must be a non-empty list of role/content dicts; "
+            "got empty list. Add at least one system or user message "
+            "before calling the LLM."
+        )
+    params = generation_params or {}
+    if "top_p" in params:
+        top_p = params["top_p"]
+        if not isinstance(top_p, (int, float)) or not (0.0 < top_p <= 1.0):
+            raise ValueError(
+                f"top_p must be a number in (0, 1]; got {top_p!r}"
+            )
+    if "temperature" in params:
+        temp = params["temperature"]
+        if not isinstance(temp, (int, float)) or not (0.0 <= temp <= 2.0):
+            raise ValueError(
+                f"temperature must be a number in [0, 2]; got {temp!r}"
+            )
+
+
+def _format_http_error(
+    status_code: int,
+    url: str,
+    body: bytes | str | None,
+) -> LLMRequestError:
+    """Build an ``LLMRequestError`` with a best-effort decoded body."""
+    if isinstance(body, bytes):
+        try:
+            text = body.decode("utf-8")
+        except UnicodeDecodeError:
+            text = repr(body[:200])
+    else:
+        text = body or ""
+    # Try to extract the message from common OpenAI-compatible shapes
+    # so the preview is more useful than the full JSON blob.
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            err = parsed.get("error") or parsed.get("message")
+            if isinstance(err, dict) and "message" in err:
+                text = str(err["message"])
+            elif isinstance(err, str):
+                text = err
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return LLMRequestError(status_code, url, text)
 
 
 class StreamableLLMClient(LLMClient):
@@ -142,6 +231,8 @@ class StreamableLLMClient(LLMClient):
         except ImportError:
             raise ImportError("requests is required")
 
+        _validate_request(messages, generation_params)
+
         url = f"{self.base_url}/v1/chat/completions"
         headers = self._build_headers()
         payload: dict[str, Any] = {
@@ -157,7 +248,8 @@ class StreamableLLMClient(LLMClient):
                 payload[key] = generation_params[key]
 
         resp = requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_seconds)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            raise _format_http_error(resp.status_code, url, resp.content)
         data = resp.json()
         return data["choices"][0]["message"]["content"]
 
@@ -178,6 +270,8 @@ class StreamableLLMClient(LLMClient):
         except ImportError:
             raise ImportError("requests is required")
 
+        _validate_request(messages, generation_params)
+
         url = f"{self.base_url}/v1/chat/completions"
         headers = self._build_headers()
         payload: dict[str, Any] = {
@@ -193,7 +287,8 @@ class StreamableLLMClient(LLMClient):
                 payload[key] = generation_params[key]
 
         resp = requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_seconds)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            raise _format_http_error(resp.status_code, url, resp.content)
         data = resp.json()
         message = data["choices"][0]["message"]
 
@@ -227,6 +322,8 @@ class StreamableLLMClient(LLMClient):
         except ImportError:
             raise ImportError("requests is required")
 
+        _validate_request(messages, generation_params)
+
         url = f"{self.base_url}/v1/chat/completions"
         headers = self._build_headers()
         payload: dict[str, Any] = {
@@ -243,7 +340,11 @@ class StreamableLLMClient(LLMClient):
                 payload[key] = generation_params[key]
 
         with requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_seconds, stream=True) as resp:
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                # Drain body so we can include it in the error.
+                body = resp.content
+                resp.close()
+                raise _format_http_error(resp.status_code, url, body)
             accumulated = ""
             for line in resp.iter_lines():
                 if not line:
@@ -308,6 +409,8 @@ class StreamableLLMClient(LLMClient):
         """
         import httpx
 
+        _validate_request(messages, generation_params)
+
         url = f"{self.base_url}/v1/chat/completions"
         headers = self._build_headers()
         payload: dict[str, Any] = {
@@ -325,7 +428,11 @@ class StreamableLLMClient(LLMClient):
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.request_timeout_seconds, read=60)) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
-                resp.raise_for_status()
+                if resp.status_code >= 400:
+                    # Drain the body so we can include the API's
+                    # diagnostic in the raised error.
+                    body = await resp.aread()
+                    raise _format_http_error(resp.status_code, url, body)
                 accumulated = ""
                 async for line in resp.aiter_lines():
                     if not line:
@@ -384,6 +491,8 @@ class StreamableLLMClient(LLMClient):
         """Async non-streaming chat completion using httpx."""
         import httpx
 
+        _validate_request(messages, generation_params)
+
         url = f"{self.base_url}/v1/chat/completions"
         headers = self._build_headers()
         payload: dict[str, Any] = {
@@ -400,6 +509,7 @@ class StreamableLLMClient(LLMClient):
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.request_timeout_seconds, read=60)) as client:
             resp = await client.post(url, headers=headers, json=payload)
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                raise _format_http_error(resp.status_code, url, resp.content)
             data = resp.json()
             return data["choices"][0]["message"]["content"]
