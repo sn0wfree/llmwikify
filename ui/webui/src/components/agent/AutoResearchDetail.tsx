@@ -11,7 +11,7 @@ import {
   type SixStepClarification,
   type SixStepReasoning,
   type SixStepStructure,
-} from '../lib/autoresearch-api';
+} from '../../lib/autoresearch-api';
 
 const REASONING_DIMS = [
   { key: 'conclusion_evidence_alignment', label: '结论-证据' },
