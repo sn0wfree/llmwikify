@@ -29,7 +29,7 @@ const LLMSettings = lazy(() =>
 );
 
 function Loading() {
-  return <div className="p-6 text-[var(--text-secondary)]">Loading...</div>;
+  return <div className="p-6 text-muted-foreground">Loading...</div>;
 }
 
 function App() {

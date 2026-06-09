@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { MessageSquare, Search, Zap, CheckSquare, Settings, ArrowLeft, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { WikiSelector } from '../wiki/WikiSelector';
-import { Badge } from '../ui/Badge';
+import { Badge } from '../ui/badge';
 import { Backdrop } from './Backdrop';
 import { useWikiStore } from '../../stores/wikiStore';
 import { api } from '../../api';
+import { cn } from '@/lib/utils';
 
 interface BadgeCounts {
   confirmations: number;
@@ -33,9 +35,7 @@ export function AgentLayout() {
           proposals: proposalsCount || 0,
           notifications: status.unread_notifications || 0,
         });
-      } catch {
-        /* silent */
-      }
+      } catch { /* silent */ }
     };
     fetchBadges();
     const interval = setInterval(fetchBadges, 30000);
@@ -43,64 +43,83 @@ export function AgentLayout() {
   }, [currentWikiId]);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `w-full text-left px-3 py-2 rounded text-sm transition-colors relative ${
+    cn(
+      'flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm transition-colors relative',
       isActive
-        ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
-        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
-    }`;
+        ? 'bg-primary/15 text-primary font-medium'
+        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+    );
 
   return (
-    <div className="flex h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+    <div className="flex h-screen bg-background text-foreground">
       {sidebarOpen && (
-        <aside className="w-64 bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col">
-          <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
-            <h1 className="text-lg font-bold text-[var(--accent)]">llmwikify Agent</h1>
+        <aside className="w-60 bg-sidebar border-r border-sidebar-border flex flex-col shrink-0">
+          <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center">
+                <span className="text-primary font-bold text-sm">A</span>
+              </div>
+              <h1 className="text-sm font-semibold text-sidebar-foreground">Agent</h1>
+            </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="text-[var(--text-secondary)] hover:text-[var(--accent)]"
+              className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition-colors"
             >
-              ×
+              <PanelLeftClose className="w-4 h-4" />
             </button>
           </div>
 
           <WikiSelector />
 
-          <nav className="p-2 space-y-1 overflow-y-auto flex-1">
-            <div className="text-xs text-[var(--text-secondary)] px-3 py-1 mt-2">Agent</div>
+          <nav className="p-2 space-y-0.5 overflow-y-auto flex-1">
+            <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-3 py-2">Agent</div>
             <NavLink to="/agent/chat" className={linkClass} end>
-              <span className="ml-1">Agent Chat</span>
+              <MessageSquare className="w-4 h-4 shrink-0" />
+              <span>Chat</span>
             </NavLink>
             <NavLink to="/agent/research" className={linkClass}>
-              <span className="ml-1">Research</span>
+              <Search className="w-4 h-4 shrink-0" />
+              <span>Research</span>
             </NavLink>
             <NavLink to="/agent/autoresearch" className={linkClass}>
-              <span className="ml-1">AutoResearch</span>
+              <Zap className="w-4 h-4 shrink-0" />
+              <span>AutoResearch</span>
             </NavLink>
 
-            <div className="text-xs text-[var(--text-secondary)] px-3 py-1 mt-3">System</div>
+            <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-3 py-2 mt-3">System</div>
             <NavLink to="/agent/tasks" className={linkClass}>
-              <span className="ml-1">Tasks</span>
+              <CheckSquare className="w-4 h-4 shrink-0" />
+              <span>Tasks</span>
             </NavLink>
             <NavLink to="/agent/settings" className={linkClass}>
-              <span className="ml-1">LLM Settings</span>
+              <Settings className="w-4 h-4 shrink-0" />
+              <span>Settings</span>
             </NavLink>
 
-            <div className="border-t border-[var(--border)] my-2" />
+            <div className="border-t border-sidebar-border my-2" />
             <NavLink to="/" className={linkClass}>
-              <span className="ml-1">← Wiki</span>
+              <ArrowLeft className="w-4 h-4 shrink-0" />
+              <span>Wiki</span>
             </NavLink>
 
-            <div className="border-t border-[var(--border)] my-2" />
-            <div className="text-xs text-[var(--text-secondary)] px-3 py-1">Activity</div>
-            <div className="px-3 py-1 text-sm text-[var(--text-secondary)]">
-              Confirmations: <Badge variant="error">{badges.confirmations}</Badge>
-            </div>
-            <div className="px-3 py-1 text-sm text-[var(--text-secondary)]">
-              Proposals: <Badge variant="warning">{badges.proposals}</Badge>
-            </div>
-            <div className="px-3 py-1 text-sm text-[var(--text-secondary)]">
-              Notifications: <Badge>{badges.notifications}</Badge>
-            </div>
+            {(badges.confirmations > 0 || badges.proposals > 0 || badges.notifications > 0) && (
+              <>
+                <div className="border-t border-sidebar-border my-2" />
+                <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-3 py-2">Activity</div>
+                <div className="px-3 py-1 text-sm text-muted-foreground flex items-center justify-between">
+                  <span>Confirmations</span>
+                  <Badge variant="destructive">{badges.confirmations}</Badge>
+                </div>
+                <div className="px-3 py-1 text-sm text-muted-foreground flex items-center justify-between">
+                  <span>Proposals</span>
+                  <Badge variant="outline">{badges.proposals}</Badge>
+                </div>
+                <div className="px-3 py-1 text-sm text-muted-foreground flex items-center justify-between">
+                  <span>Notifications</span>
+                  <Badge>{badges.notifications}</Badge>
+                </div>
+              </>
+            )}
           </nav>
         </aside>
       )}
@@ -108,9 +127,9 @@ export function AgentLayout() {
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
-          className="absolute top-4 left-4 z-10 px-3 py-1 bg-[var(--bg-secondary)] rounded text-sm"
+          className="absolute top-4 left-4 z-10 p-2 bg-card border border-border rounded-lg shadow-sm hover:bg-muted transition-colors"
         >
-          ☰ Menu
+          <PanelLeftOpen className="w-4 h-4 text-muted-foreground" />
         </button>
       )}
 
