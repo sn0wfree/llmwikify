@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bot, User, Copy, Check, RefreshCw, Quote } from 'lucide-react';
+import { Bot, User, Copy, Check, RefreshCw, Quote, Brain } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { cn } from '@/lib/utils';
 
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
@@ -18,7 +19,7 @@ export function MessageBubble({
   role, content, thinking, timestamp, streaming = false,
   className = '', onRegenerate, onQuote,
 }: MessageBubbleProps) {
-  const [thinkingExpanded, setThinkingExpanded] = useState(false);
+  const [thinkingExpanded, setThinkingExpanded] = useState(true);
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle');
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasContent = content && content.trim().length > 0;
@@ -40,105 +41,144 @@ export function MessageBubble({
 
   if (isUser) {
     return (
-      <div className={`flex justify-end gap-2 animate-chat-fade-in ${className}`}>
-        <div className="max-w-[75%] flex flex-col items-end">
-          <div className="flex items-center gap-1.5 mb-1 text-xs text-muted-foreground">
-            <span className="font-medium">You</span>
+      <div className={cn('flex justify-end gap-2.5 animate-message-in', className)}>
+        <div className="max-w-[80%] flex flex-col items-end gap-1">
+          <div
+            className="rounded-3xl rounded-tr-md px-4 py-2.5 text-sm text-foreground shadow-soft"
+            style={{ background: 'var(--gradient-user-bubble)' }}
+          >
+            <div className="whitespace-pre-wrap break-words leading-relaxed">
+              {content}
+            </div>
           </div>
-          <div className="rounded-2xl rounded-br-md px-4 py-2.5 text-sm bg-primary text-primary-foreground shadow-sm">
-            <pre className="whitespace-pre-wrap font-sans">{content}</pre>
-            {timestamp && <div className="text-xs mt-1 opacity-70">{timestamp}</div>}
-          </div>
+          {timestamp && (
+            <div className="text-[10px] text-muted-foreground/70 px-1">{timestamp}</div>
+          )}
         </div>
-        <div className="shrink-0 w-7 h-7 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
-          <Avatar className="w-4 h-4 text-primary" />
+        <div className="shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-soft">
+          <Avatar className="w-3.5 h-3.5 text-primary-foreground" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`flex justify-start gap-2 animate-chat-fade-in ${className}`}>
-      <div className="shrink-0 w-7 h-7 rounded-full bg-muted border border-border flex items-center justify-center">
-        <Avatar className="w-4 h-4 text-muted-foreground" />
+    <div className={cn('flex justify-start gap-2.5 animate-message-in', className)}>
+      <div className="shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-primary/30 to-accent/30 border border-primary/20 flex items-center justify-center">
+        <Avatar className="w-3.5 h-3.5 text-primary" />
       </div>
-      <div className="max-w-[88%] w-full space-y-1 group/bubble">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="font-medium">Assistant</span>
+      <div className="max-w-[88%] w-full space-y-1.5 group/bubble min-w-0">
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground px-1">
+          <span className="font-semibold uppercase tracking-wider">Assistant</span>
+          {streaming && (
+            <span className="flex items-center gap-1 text-primary/80">
+              <span className="thinking-dots scale-75 origin-left"><span /><span /><span /></span>
+              <span>streaming</span>
+            </span>
+          )}
         </div>
 
         {thinking && (
-          <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
+          <div className="rounded-lg border border-thinking/30 bg-thinking/5 overflow-hidden">
             <button
               onClick={() => setThinkingExpanded(!thinkingExpanded)}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+              className="flex items-center gap-2 px-3 py-1.5 text-xs text-thinking hover:text-foreground transition-colors w-full text-left"
             >
-              <span className="text-[10px]">{thinkingExpanded ? '\u25BC' : '\u25B6'}</span>
-              <span className="font-medium">{streaming ? 'Thinking...' : 'Thinking'}</span>
-              {streaming && <span className="thinking-dots ml-1" />}
+              <Brain className="w-3.5 h-3.5 shrink-0" />
+              <span className="font-semibold italic">
+                {streaming ? 'Reasoning…' : 'Reasoning'}
+              </span>
+              {streaming && !thinkingExpanded && (
+                <span className="thinking-dots scale-75 origin-left"><span /><span /><span /></span>
+              )}
+              <span className="ml-auto text-[10px] text-muted-foreground/70">
+                {thinkingExpanded ? '▾' : '▸'}
+              </span>
             </button>
             {thinkingExpanded && (
-              <div className="px-3 pb-3 pt-0">
-                <pre className="whitespace-pre-wrap font-sans text-xs text-muted-foreground leading-relaxed">{thinking}</pre>
+              <div className="px-3 pb-3 pt-1 animate-slide-up">
+                <pre className="whitespace-pre-wrap font-sans text-xs italic text-thinking/90 leading-relaxed">
+                  {thinking}
+                </pre>
               </div>
             )}
           </div>
         )}
 
         {hasContent ? (
-          <div className="rounded-lg bg-card border border-border px-4 py-3 relative">
+          <div className="rounded-lg px-1 py-1 relative">
             <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none
-              prose-headings:mt-2 prose-headings:mb-1
-              prose-p:my-1 prose-ul:my-1 prose-ol:my-1
-              prose-li:my-0 prose-pre:my-2
-              prose-code:text-xs prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded
-              prose-pre:bg-muted prose-pre:rounded prose-pre:p-2
-              prose-a:text-primary prose-a:underline
+              prose-headings:mt-2 prose-headings:mb-1 prose-headings:font-semibold
+              prose-p:my-1.5 prose-p:leading-relaxed
+              prose-ul:my-1.5 prose-ol:my-1.5
+              prose-li:my-0.5
+              prose-pre:my-2 prose-pre:rounded-lg prose-pre:border prose-pre:border-border
+              prose-code:text-xs prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:before:content-none prose-code:after:content-none
+              prose-pre:bg-muted/60 prose-pre:p-3
+              prose-a:text-primary prose-a:no-underline hover:prose-a:underline
               prose-table:text-xs prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1
-              prose-blockquote:border-l-2 prose-blockquote:border-border prose-blockquote:pl-2 prose-blockquote:italic
+              prose-blockquote:border-l-2 prose-blockquote:border-primary prose-blockquote:pl-3 prose-blockquote:italic prose-blockquote:text-muted-foreground
+              prose-hr:border-border
             ">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
             </div>
-            {streaming && <span className="streaming-cursor text-primary" />}
+            {streaming && <span className="streaming-cursor" />}
           </div>
         ) : streaming && thinking ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground italic px-1">
-            <span className="thinking-dots" />
-            <span>Waiting for response...</span>
+            <span className="thinking-dots"><span /><span /><span /></span>
+            <span>Waiting for response…</span>
           </div>
         ) : null}
 
         <div className="flex items-center justify-between gap-2 px-1 min-h-[20px]">
           {timestamp && (
-            <div className="text-xs text-muted-foreground opacity-0 group-hover/bubble:opacity-100 transition-opacity">
+            <div className="text-[10px] text-muted-foreground/70 opacity-0 group-hover/bubble:opacity-100 transition-opacity">
               {timestamp}
             </div>
           )}
           {hasContent && !streaming && (
-            <div className="flex items-center gap-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity ml-auto">
-              <button onClick={handleCopy}
-                className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-muted/60 transition-colors"
-                title="Copy message" aria-label="Copy message">
-                {copyState === 'copied' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
+            <div className="flex items-center gap-0.5 opacity-0 group-hover/bubble:opacity-100 transition-opacity ml-auto">
+              <ActionButton
+                onClick={handleCopy}
+                title="Copy"
+                aria-label="Copy message"
+              >
+                {copyState === 'copied' ? (
+                  <Check className="w-3.5 h-3.5 text-success" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </ActionButton>
               {onRegenerate && (
-                <button onClick={onRegenerate}
-                  className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-muted/60 transition-colors"
-                  title="Regenerate response" aria-label="Regenerate response">
+                <ActionButton onClick={onRegenerate} title="Regenerate" aria-label="Regenerate response">
                   <RefreshCw className="w-3.5 h-3.5" />
-                </button>
+                </ActionButton>
               )}
               {onQuote && (
-                <button onClick={() => onQuote(content)}
-                  className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-muted/60 transition-colors"
-                  title="Quote in next message" aria-label="Quote in next message">
+                <ActionButton onClick={() => onQuote(content)} title="Quote" aria-label="Quote in next message">
                   <Quote className="w-3.5 h-3.5" />
-                </button>
+                </ActionButton>
               )}
             </div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+function ActionButton({
+  children, onClick, title, ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors"
+      {...rest}
+    >
+      {children}
+    </button>
   );
 }

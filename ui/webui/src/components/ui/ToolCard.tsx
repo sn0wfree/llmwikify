@@ -3,8 +3,9 @@ import {
   Search, FileText, Pencil, FileEdit, FilePlus, Trash2,
   Brain, Link2, AlertTriangle, Wrench, Loader2,
   CheckCircle2, XCircle, ChevronDown, ChevronRight, Hash,
+  Copy, Check,
 } from 'lucide-react';
-import { Badge } from './badge';
+import { cn } from '@/lib/utils';
 
 type ToolStatus = 'pending' | 'streaming' | 'done' | 'error';
 
@@ -30,18 +31,25 @@ const STATUS_ICON: Record<ToolStatus, typeof Loader2> = {
 };
 
 const statusColorMap: Record<ToolStatus, string> = {
-  pending: 'border-yellow-500/50',
+  pending: 'border-warning/40',
   streaming: 'border-primary/50',
-  done: 'border-green-500/50',
+  done: 'border-success/40',
   error: 'border-destructive/50',
 };
 
 const statusBadgeVariant: Record<ToolStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  pending: 'outline', streaming: 'outline', done: 'secondary', error: 'destructive',
+  pending: 'outline', streaming: 'default', done: 'secondary', error: 'destructive',
 };
 
 const statusText: Record<ToolStatus, string> = {
   pending: 'pending', streaming: 'running', done: 'done', error: 'error',
+};
+
+const statusDotColor: Record<ToolStatus, string> = {
+  pending: 'bg-warning',
+  streaming: 'bg-primary animate-stage-pulse',
+  done: 'bg-success',
+  error: 'bg-destructive',
 };
 
 function truncateJson(obj: unknown, maxLen = 200): string {
@@ -59,10 +67,31 @@ function useElapsedMs(startedAt?: number, finishedAt?: number): number {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!startedAt || finishedAt) return;
-    const t = setInterval(() => setNow(Date.now()), 200);
+    const t = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(t);
   }, [startedAt, finishedAt]);
   return startedAt ? (finishedAt ?? now) - startedAt : 0;
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* */ }
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors"
+      title="Copy"
+      aria-label="Copy JSON"
+    >
+      {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+    </button>
+  );
 }
 
 export function ToolCard({ tool, args, status, result, error, startedAt, finishedAt }: ToolCardProps) {
@@ -83,56 +112,94 @@ export function ToolCard({ tool, args, status, result, error, startedAt, finishe
   const isSpinning = status === 'streaming' || status === 'pending';
 
   return (
-    <div className={`bg-card/60 rounded border-l-2 ${statusColorMap[status]} px-3 py-2 space-y-1.5`}>
-      <div className="flex items-center gap-2 flex-wrap">
-        <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-        <span className="text-sm font-mono text-foreground">{tool}</span>
-        <Badge variant={statusBadgeVariant[status]}>
-          <span className="flex items-center gap-1">
-            <StatusIcon className={`w-3 h-3 ${isSpinning ? 'animate-spin' : ''}`} />
-            {statusText[status]}
+    <div className={cn(
+      'relative pl-5 py-1 animate-slide-up',
+    )}>
+      {/* Timeline line */}
+      <div className="absolute left-[5px] top-2 bottom-0 w-px bg-border" />
+      {/* Status dot */}
+      <div className={cn(
+        'absolute left-0 top-2 w-2.5 h-2.5 rounded-full ring-2 ring-background',
+        statusDotColor[status],
+      )} />
+
+      <div className={cn(
+        'rounded-lg border bg-card/40 backdrop-blur-sm overflow-hidden',
+        statusColorMap[status],
+      )}>
+        {/* Header */}
+        <div className="flex items-center gap-2 px-3 py-2">
+          <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span className="text-xs font-mono text-foreground flex-1 truncate">{tool}</span>
+          <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-border/60 bg-background/40">
+            <StatusIcon className={cn('w-2.5 h-2.5', isSpinning && 'animate-spin')} />
+            <span className="text-muted-foreground">{statusText[status]}</span>
           </span>
-        </Badge>
-        {startedAt && (status === 'streaming' || status === 'done' || status === 'error') && (
-          <span className={`text-[10px] font-mono tabular-nums ${status === 'streaming' ? 'text-primary' : 'text-muted-foreground'}`}>
-            · {formatMs(elapsed)}
-          </span>
+          {startedAt && (
+            <span className={cn(
+              'text-[10px] font-mono tabular-nums',
+              status === 'streaming' ? 'text-primary' : 'text-muted-foreground',
+            )}>
+              {formatMs(elapsed)}
+            </span>
+          )}
+        </div>
+
+        {/* Args */}
+        <div className="border-t border-border/30">
+          <button
+            onClick={() => setArgsExpanded(!argsExpanded)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+          >
+            {argsExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            <Hash className="w-3 h-3" />
+            <span className="font-semibold uppercase tracking-wider">Args</span>
+            {argsTruncated && !argsExpanded && <span className="text-muted-foreground/60">({argsStr.length} chars)</span>}
+            <span className="ml-auto">
+              <CopyButton text={argsStr} />
+            </span>
+          </button>
+          {argsExpanded && (
+            <pre className="font-mono text-[11px] text-muted-foreground whitespace-pre-wrap break-all bg-muted/40 px-3 py-2 max-h-48 overflow-y-auto border-t border-border/30">
+              {argsDisplay}
+            </pre>
+          )}
+        </div>
+
+        {/* Result / Error */}
+        {(status === 'done' || status === 'error') && (
+          <div className="border-t border-border/30">
+            <button
+              onClick={() => setResultExpanded(!resultExpanded)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+            >
+              {resultExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              <span className="font-semibold uppercase tracking-wider">
+                {status === 'error' ? 'Error' : 'Result'}
+              </span>
+              {status === 'error' && error && !resultExpanded && (
+                <span className="text-destructive truncate ml-1 max-w-[200px]">{error}</span>
+              )}
+              {resultTruncated && !resultExpanded && status !== 'error' && (
+                <span className="text-muted-foreground/60">({resultStr.length} chars)</span>
+              )}
+              <span className="ml-auto">
+                <CopyButton text={status === 'error' ? (error || '') : resultStr} />
+              </span>
+            </button>
+            {resultExpanded && (
+              <pre className={cn(
+                'font-mono text-[11px] whitespace-pre-wrap break-all px-3 py-2 max-h-64 overflow-y-auto border-t border-border/30',
+                status === 'error'
+                  ? 'text-destructive bg-destructive/5'
+                  : 'text-muted-foreground bg-muted/40',
+              )}>
+                {status === 'error' ? error : resultDisplay}
+              </pre>
+            )}
+          </div>
         )}
       </div>
-
-      <details className="text-xs" onToggle={(e) => setArgsExpanded((e.target as HTMLDetailsElement).open)}>
-        <summary className="flex items-center gap-1.5 cursor-pointer text-muted-foreground hover:text-foreground select-none list-none">
-          {argsExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-          <Hash className="w-3 h-3" />
-          <span className="font-medium uppercase tracking-wider text-[10px]">Args</span>
-          {argsTruncated && !argsExpanded && <span className="text-[10px] text-muted-foreground ml-1">(truncated)</span>}
-        </summary>
-        <pre className="mt-1.5 font-mono text-[11px] text-muted-foreground whitespace-pre-wrap break-all bg-muted/60 rounded p-2 max-h-48 overflow-y-auto">
-          {argsDisplay}
-        </pre>
-      </details>
-
-      {(status === 'done' || status === 'error') && (
-        <details className="text-xs" onToggle={(e) => setResultExpanded((e.target as HTMLDetailsElement).open)}>
-          <summary className="flex items-center gap-1.5 cursor-pointer text-muted-foreground hover:text-foreground select-none list-none">
-            {resultExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-            <span className="font-medium uppercase tracking-wider text-[10px]">
-              {status === 'error' ? 'Error' : 'Result'}
-            </span>
-            {status === 'error' && error && !resultExpanded && (
-              <span className="text-[10px] text-destructive truncate ml-1 max-w-[200px]">{error}</span>
-            )}
-            {resultTruncated && !resultExpanded && status !== 'error' && (
-              <span className="text-[10px] text-muted-foreground ml-1">(truncated)</span>
-            )}
-          </summary>
-          <pre className={`mt-1.5 font-mono text-[11px] whitespace-pre-wrap break-all rounded p-2 max-h-64 overflow-y-auto ${
-            status === 'error' ? 'text-destructive bg-muted/60 border border-destructive/30' : 'text-muted-foreground bg-muted/60'
-          }`}>
-            {status === 'error' ? error : resultDisplay}
-          </pre>
-        </details>
-      )}
     </div>
   );
 }

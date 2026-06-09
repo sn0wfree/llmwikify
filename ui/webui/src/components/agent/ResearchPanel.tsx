@@ -72,7 +72,7 @@ function MiniStageBar({ currentStep, status }: { currentStep: string; status: st
   const currentIdx = STAGES.indexOf(status === 'done' ? 'done' : currentStep);
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-1">
       {STAGES.map((stage, idx) => {
         const stageIdx = STAGES.indexOf(stage);
         const isCompleted = stageIdx < currentIdx;
@@ -82,23 +82,34 @@ function MiniStageBar({ currentStep, status }: { currentStep: string; status: st
           <div key={stage} className="flex items-center">
             <div className="relative">
               {isCurrent && status !== 'done' && (
-                <div className="absolute inset-0 rounded-full bg-primary/30 animate-stage-pulse" />
+                <>
+                  <div className="absolute inset-0 rounded-full bg-primary/30 animate-stage-pulse" />
+                  <div className="absolute -inset-1 rounded-full bg-primary/20 blur-md" />
+                </>
               )}
               <div
-                className={`relative w-4 h-4 rounded-full flex items-center justify-center text-[8px] transition-all ${
-                  isCompleted ? 'bg-primary/40 text-primary' :
-                  isCurrent ? 'bg-primary text-white ring-2 ring-primary/30' :
-                  'bg-muted text-muted-foreground opacity-30 border border-border'
+                className={`relative w-2.5 h-2.5 rounded-full flex items-center justify-center transition-all duration-300 ${
+                  isCompleted ? 'bg-primary shadow-[0_0_8px_var(--primary)]' :
+                  isCurrent ? 'bg-primary ring-2 ring-primary/30 scale-125' :
+                  'bg-muted-foreground/30 border border-border'
                 }`}
                 title={STAGE_LABELS[stage]}
               >
-                {isCompleted ? '✓' : isCurrent ? '●' : '○'}
+                {isCompleted && <span className="absolute inset-0 flex items-center justify-center text-[6px] text-primary-foreground">✓</span>}
               </div>
             </div>
             {idx < STAGES.length - 1 && (
-              <div className={`w-2 h-px ${
-                isCompleted ? 'bg-primary/40' : 'bg-border'
-              }`} />
+              <div className="relative w-3 h-0.5 mx-0.5 overflow-hidden rounded-full bg-muted-foreground/20">
+                <div
+                  className={`absolute inset-y-0 left-0 transition-all duration-500 ${
+                    isCompleted
+                      ? 'w-full bg-primary'
+                      : isCurrent
+                      ? 'w-1/2 bg-gradient-to-r from-primary to-primary/0 shimmer'
+                      : 'w-0'
+                  }`}
+                />
+              </div>
             )}
           </div>
         );

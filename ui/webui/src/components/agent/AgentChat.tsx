@@ -3,11 +3,8 @@ import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen, PanelRightClose, Panel
 import { chatStream, ChatStreamEvent, api } from '../../api';
 import { useToast } from '../wiki/Toast';
 import { useWikiStore } from '../../stores/wikiStore';
-import { Button } from '../ui/Button';
 import { MessageBubble } from '../ui/MessageBubble';
 import { ToolCard } from '../ui/ToolCard';
-import { Input } from '../ui/Input';
-import { Panel } from '../ui/Panel';
 import { SessionSidebar } from './SessionSidebar';
 import { ToolsRail } from './ToolsRail';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -322,121 +319,186 @@ export function AgentChat() {
         )}
 
         <div className="flex flex-col flex-1 min-w-0">
-          <Panel border="bottom">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <h2 className="text-sm font-semibold text-primary shrink-0">Agent Chat</h2>
-                {modelName && (
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/40 border border-border/40 text-xs text-muted-foreground">
-                    <Cpu className="w-3 h-3" />
-                    <span className="font-mono text-[11px] truncate max-w-[120px]" title={modelName}>{modelName}</span>
-                  </div>
-                )}
-                <div className={cn('flex items-center gap-1.5 text-xs', STATE_TONE[connectionState])} title={`Connection: ${STATE_LABEL[connectionState]}`}>
-                  <span className={cn('w-1.5 h-1.5 rounded-full', STATE_DOT[connectionState])} />
-                  <Wifi className="w-3 h-3" />
-                  <span className="hidden sm:inline">{STATE_LABEL[connectionState]}</span>
+          {/* Top bar — glass */}
+          <div className="px-4 py-2.5 border-b border-border/50 flex items-center justify-between gap-3 glass">
+            <div className="flex items-center gap-3 min-w-0">
+              <h2 className="text-sm font-semibold text-foreground shrink-0">Chat</h2>
+              {modelName && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-xs text-foreground/80">
+                  <Cpu className="w-3 h-3 text-primary" />
+                  <span className="font-mono text-[11px] truncate max-w-[120px]" title={modelName}>{modelName}</span>
                 </div>
-                {currentSessionId && (
-                  <span className="text-xs text-muted-foreground font-mono hidden md:inline">#{currentSessionId.slice(0, 8)}</span>
-                )}
+              )}
+              <div className={cn('flex items-center gap-1.5 text-xs', STATE_TONE[connectionState])} title={`Connection: ${STATE_LABEL[connectionState]}`}>
+                <span className={cn(
+                  'w-1.5 h-1.5 rounded-full',
+                  STATE_DOT[connectionState],
+                  connectionState === 'live' && 'status-dot--live',
+                )} />
+                <Wifi className="w-3 h-3" />
+                <span className="hidden sm:inline">{STATE_LABEL[connectionState]}</span>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                {tokenEstimate > 0 && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground" title="Approximate token usage">
-                    <Coins className="w-3 h-3" />
-                    <span className="font-mono">{tokenEstimate < 1000 ? tokenEstimate : `${(tokenEstimate / 1000).toFixed(1)}k`}</span>
-                  </div>
-                )}
-                <button
-                  onClick={() => setShowSidebar(!showSidebar)}
-                  className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-md hover:bg-muted hidden md:inline-flex"
-                  title={showSidebar ? 'Hide session sidebar' : 'Show session sidebar'}
-                >
-                  {showSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={() => setShowRail(!showRail)}
-                  className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-md hover:bg-muted hidden lg:inline-flex"
-                  title={showRail ? 'Hide tools rail' : 'Show tools rail'}
-                >
-                  {showRail ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
-                </button>
-              </div>
+              {currentSessionId && (
+                <span className="text-xs text-muted-foreground font-mono hidden md:inline">#{currentSessionId.slice(0, 8)}</span>
+              )}
             </div>
-          </Panel>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((msg, i) => (
-              <div key={i}>
-                <MessageBubble
-                  role={msg.role}
-                  content={msg.content}
-                  thinking={msg.thinking}
-                  timestamp={formatTime(msg.timestamp)}
-                  onRegenerate={i === messages.length - 1 && msg.role === 'assistant' ? () => {
-                    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-                    if (lastUser) {
-                      setInput(lastUser.content);
-                      setMessages((prev) => prev.slice(0, prev.length - 1));
-                    }
-                  } : undefined}
-                  onQuote={msg.role === 'assistant' ? (text) => {
-                    setInput((prev) => prev ? `${prev}\n\n> ${text.split('\n').join('\n> ')}` : `> ${text.split('\n').join('\n> ')}`);
-                  } : undefined}
-                />
-                {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div className="mt-2 space-y-2 ml-9">
-                    {msg.toolCalls.map((tc, j) => (
-                      <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} startedAt={tc.startedAt} finishedAt={tc.finishedAt} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {loading && currentAssistantMsg && (
-              <MessageBubble role="assistant" content={currentAssistantMsg} thinking={currentThinking || undefined} streaming />
-            )}
-
-            {loading && !currentAssistantMsg && currentThinking && (
-              <MessageBubble role="assistant" content="" thinking={currentThinking} streaming />
-            )}
-
-            {loading && currentToolCalls.length > 0 && (
-              <div className="space-y-2">
-                {currentToolCalls.map((tc, j) => (
-                  <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} />
-                ))}
-              </div>
-            )}
-
-            {loading && !currentAssistantMsg && currentToolCalls.length === 0 && (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="thinking-dots"><span>·</span><span>·</span><span>·</span></span>
+            <div className="flex items-center gap-2 shrink-0">
+              {tokenEstimate > 0 && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground px-2 py-0.5 rounded-md bg-white/[0.04]" title="Approximate token usage">
+                  <Coins className="w-3 h-3" />
+                  <span className="font-mono tabular-nums">{tokenEstimate < 1000 ? tokenEstimate : `${(tokenEstimate / 1000).toFixed(1)}k`}</span>
                 </div>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
+              )}
+              <button
+                onClick={() => setShowSidebar(!showSidebar)}
+                className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-white/[0.06] transition-colors hidden md:inline-flex"
+                title={showSidebar ? 'Hide session sidebar' : 'Show session sidebar'}
+                aria-label="Toggle session sidebar"
+              >
+                {showSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={() => setShowRail(!showRail)}
+                className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-white/[0.06] transition-colors hidden lg:inline-flex"
+                title={showRail ? 'Hide tools rail' : 'Show tools rail'}
+                aria-label="Toggle tools rail"
+              >
+                {showRail ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
-          <Panel border="top">
-            <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
-              <div className="flex-1">
-                <Input
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+              {messages.length === 1 && messages[0].role === 'assistant' && !loading && (
+                <WelcomeScreen
+                  onPromptClick={(p) => setInput(p)}
+                  wikiName={currentWikiId || undefined}
+                />
+              )}
+
+              {messages.map((msg, i) => (
+                <div key={i} className="animate-message-in">
+                  <MessageBubble
+                    role={msg.role}
+                    content={msg.content}
+                    thinking={msg.thinking}
+                    timestamp={formatTime(msg.timestamp)}
+                    onRegenerate={i === messages.length - 1 && msg.role === 'assistant' ? () => {
+                      const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+                      if (lastUser) {
+                        setInput(lastUser.content);
+                        setMessages((prev) => prev.slice(0, prev.length - 1));
+                      }
+                    } : undefined}
+                    onQuote={msg.role === 'assistant' ? (text) => {
+                      setInput((prev) => prev ? `${prev}\n\n> ${text.split('\n').join('\n> ')}` : `> ${text.split('\n').join('\n> ')}`);
+                    } : undefined}
+                  />
+                  {msg.toolCalls && msg.toolCalls.length > 0 && (
+                    <div className="mt-2 space-y-2 ml-9">
+                      {msg.toolCalls.map((tc, j) => (
+                        <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} startedAt={tc.startedAt} finishedAt={tc.finishedAt} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {loading && currentAssistantMsg && (
+                <div className="animate-message-in">
+                  <MessageBubble role="assistant" content={currentAssistantMsg} thinking={currentThinking || undefined} streaming />
+                </div>
+              )}
+
+              {loading && !currentAssistantMsg && currentThinking && (
+                <div className="animate-message-in">
+                  <MessageBubble role="assistant" content="" thinking={currentThinking} streaming />
+                </div>
+              )}
+
+              {loading && currentToolCalls.length > 0 && (
+                <div className="space-y-2 ml-9">
+                  {currentToolCalls.map((tc, j) => (
+                    <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} />
+                  ))}
+                </div>
+              )}
+
+              {loading && !currentAssistantMsg && currentToolCalls.length === 0 && (
+                <div className="flex justify-start ml-9">
+                  <div className="flex items-center gap-2 text-muted-foreground text-xs px-3 py-2 rounded-full glass-strong">
+                    <span className="thinking-dots"><span /><span /><span /></span>
+                    <span>Thinking…</span>
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
+
+          {/* Input area — bottom centered */}
+          <div className="px-4 pb-5 pt-2">
+            <form
+              onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
+              className="max-w-3xl mx-auto"
+            >
+              <div className="glow-border relative flex items-end gap-2 p-2 rounded-2xl glass-strong shadow-elevated">
+                <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask me anything about your wiki..."
+                  placeholder="Message llmwikify…"
+                  rows={1}
+                  className={cn(
+                    'flex-1 resize-none bg-transparent border-0 outline-none',
+                    'px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground',
+                    'max-h-32 min-h-[40px] leading-relaxed',
+                  )}
+                  style={{
+                    height: 'auto',
+                    minHeight: '40px',
+                  }}
+                  onInput={(e) => {
+                    const target = e.target as HTMLTextAreaElement;
+                    target.style.height = 'auto';
+                    target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
+                  }}
                 />
+                <button
+                  type="submit"
+                  disabled={loading || !input.trim()}
+                  className={cn(
+                    'shrink-0 w-9 h-9 rounded-xl flex items-center justify-center',
+                    'bg-gradient-to-br from-primary to-accent text-primary-foreground',
+                    'transition-all duration-200 shadow-soft',
+                    'hover:brightness-110 hover:shadow-glow active:scale-95',
+                    'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100 disabled:hover:shadow-soft',
+                  )}
+                  aria-label="Send message"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 19V5M5 12l7-7 7 7" />
+                  </svg>
+                </button>
               </div>
-              <Button type="submit" disabled={loading || !input.trim()}>
-                ↑
-              </Button>
+              <div className="mt-1.5 text-center text-[10px] text-muted-foreground/70">
+                Press <kbd className="px-1 py-0.5 rounded bg-white/[0.06] text-foreground/80 font-mono text-[9px]">Enter</kbd> to send · <kbd className="px-1 py-0.5 rounded bg-white/[0.06] text-foreground/80 font-mono text-[9px]">Shift+Enter</kbd> for newline
+              </div>
             </form>
-          </Panel>
+          </div>
         </div>
 
         {showRail && (
@@ -449,6 +511,94 @@ export function AgentChat() {
             tokenEstimate={tokenEstimate}
           />
         )}
+      </div>
+    </div>
+  );
+}
+
+interface WelcomeScreenProps {
+  onPromptClick: (prompt: string) => void;
+  wikiName?: string;
+}
+
+const STARTER_PROMPTS = [
+  {
+    icon: '🔍',
+    title: 'Search the wiki',
+    description: 'Find pages by topic, tag, or content',
+    prompt: 'Search my wiki for pages about ',
+  },
+  {
+    icon: '📝',
+    title: 'Summarize a page',
+    description: 'Get a quick overview of any page',
+    prompt: 'Summarize the page ',
+  },
+  {
+    icon: '🧠',
+    title: 'Research a topic',
+    description: 'Multi-source deep research with citations',
+    prompt: 'Research ',
+  },
+  {
+    icon: '✨',
+    title: 'Write new content',
+    description: 'Create a new wiki page from scratch',
+    prompt: 'Help me write a new wiki page about ',
+  },
+];
+
+function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] py-8 animate-slide-up">
+      <div className="relative mb-6">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-glow">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-primary-foreground"
+          >
+            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+            <path d="M2 17l10 5 10-5" />
+            <path d="M2 12l10 5 10-5" />
+          </svg>
+        </div>
+        <div className="absolute -inset-2 rounded-3xl bg-gradient-to-br from-primary/30 to-accent/0 blur-2xl -z-10" />
+      </div>
+      <h1 className="text-2xl font-semibold text-foreground tracking-tight mb-1">
+        How can I help you today?
+      </h1>
+      <p className="text-sm text-muted-foreground mb-8">
+        Start a conversation or pick a quick action below.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-2xl">
+        {STARTER_PROMPTS.map((p, i) => (
+          <button
+            key={i}
+            onClick={() => onPromptClick(p.prompt)}
+            className={cn(
+              'group text-left p-4 rounded-xl glass',
+              'hover:bg-white/[0.04] hover:border-primary/30 hover:shadow-soft',
+              'transition-all duration-200',
+            )}
+            style={{ animationDelay: `${i * 60}ms` }}
+          >
+            <div className="text-xl mb-2">{p.icon}</div>
+            <div className="text-sm font-medium text-foreground mb-0.5 group-hover:text-primary transition-colors">
+              {p.title}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {p.description}
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );
