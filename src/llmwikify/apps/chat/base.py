@@ -415,6 +415,281 @@ class ChatBase:
             sess.add("assistant", reply)
             yield reply
 
+    # ── async tool-call loop (Phase 2 / v0.36) ─────────────────
+    #
+    # The synchronous ``ask_with_tools`` above calls the LLM
+    # once and waits for the full reply. The async streaming
+    # variant below iterates ``astream_chat`` (the OpenAI-style
+    # streaming tool-call format) so the LLM can be re-called
+    # with tool results on subsequent turns. This is the async
+    # version of the tool-call loop used by the agent chat SSE
+    # stream (ChatService).
+    #
+    # Yields ``dict`` events with a ``type`` field compatible
+    # with ChatService's SSE event shape so the two layers
+    # share the same event vocabulary. Event types:
+    #   - ``message_delta`` — incremental content chunk
+    #   - ``thinking``       — incremental reasoning chunk
+    #   - ``tool_call_start``/``tool_call_end`` — tool lifecycle
+    #   - ``done``           — final answer (only once per call)
+    #   - ``error``          — failure
+    #
+    # Args:
+    #   messages: the message list to send (incl. system +
+    #     history). Will be MUTATED in place — tool messages
+    #     are appended in-place so the caller can re-send the
+    #     same list on a follow-up iteration.
+    #   tools: OpenAI-style tool schema list. ``None`` means
+    #     no tools (plain chat).
+    #   max_iterations: cap on LLM re-calls. Default 4.
+    #   on_tool_event: optional async callback for tool
+    #     lifecycle events. Receives the same dicts that
+    #     ``tool_call_start``/``tool_call_end`` would yield.
+    #   invoke_tool: optional async callable that takes
+    #     ``(tool_name, args)`` and returns a JSON-serializable
+    #     result. If None, uses ``ainvoke_tool`` (the default
+    #     Skill-based tool caller).
+    #
+    # Returns nothing — the answer is yielded as a ``done`` event.
+
+    async def aask_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        *,
+        max_iterations: int = DEFAULT_MAX_TOOL_ITERATIONS,
+        on_tool_event: Any = None,
+        invoke_tool: Any = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Async streaming tool-call loop (Phase 2 / v0.36).
+
+        Iterates ``astream_chat`` with tool feedback until the
+        LLM produces a final answer (no tool calls in the
+        iteration) or ``max_iterations`` is hit.
+
+        Mutates ``messages`` in place by appending tool
+        results so the LLM sees them on the next iteration.
+        """
+        # Tool invocations this call. Used to detect "did this
+        # iteration dispatch new tools?".
+        invocations: list[dict[str, Any]] = []
+
+        async def default_invoke(name: str, args: dict) -> Any:
+            skill_ctx = SkillContext()
+            res = await self.ainvoke_tool(name, args, skill_ctx)
+            if hasattr(res, "to_dict"):
+                return res.to_dict()
+            return res
+
+        tool_caller = invoke_tool or default_invoke
+
+        async def emit(ev: dict[str, Any]) -> None:
+            if on_tool_event is not None:
+                cb = on_tool_event(ev)
+                if hasattr(cb, "__await__"):
+                    await cb
+
+        for iteration in range(max_iterations):
+            pre_count = len(invocations)
+            accumulated = ""
+            emitted_text = ""
+            emitted_thinking = ""
+            iter_tool_calls: list[dict[str, Any]] = []
+
+            # Stream from the LLM
+            async for ev in self._astream_with_tools(messages, tools):
+                kind = ev.get("type")
+                if kind == "content":
+                    chunk = ev.get("text", "")
+                    accumulated += chunk
+                    emitted_text += chunk
+                    yield {
+                        "type": "message_delta",
+                        "content": chunk,
+                    }
+                elif kind == "thinking":
+                    chunk = ev.get("text", "")
+                    emitted_thinking += chunk
+                    yield {"type": "thinking", "content": chunk}
+                elif kind == "tool_call":
+                    tool_name = ev.get("tool", "")
+                    raw_args = ev.get("args", "{}")
+                    if isinstance(raw_args, str):
+                        try:
+                            args = json.loads(raw_args)
+                        except json.JSONDecodeError:
+                            args = {"raw": raw_args}
+                    else:
+                        args = raw_args
+                    iter_tool_calls.append({
+                        "name": tool_name, "args": args,
+                    })
+                    # If a custom invoke_tool callback was
+                    # provided, it's expected to emit
+                    # ``tool_call_start`` itself. Only emit from
+                    # the loop when using the default callback
+                    # (Skill-based, no extra events).
+                    if invoke_tool is None:
+                        yield {
+                            "type": "tool_call_start",
+                            "tool": tool_name,
+                            "args": args,
+                        }
+                    await emit({
+                        "type": "tool_call_start",
+                        "tool": tool_name,
+                        "args": args,
+                    })
+                elif kind == "done":
+                    final = ev.get("content", accumulated)
+                    break
+            else:
+                # Stream ended without explicit done; treat
+                # accumulated text as the final answer.
+                final = accumulated
+
+            # If this iteration dispatched tools, execute them
+            # and feed results back into ``messages`` for the
+            # next iteration.
+            if iter_tool_calls:
+                for call in iter_tool_calls:
+                    name = call["name"]
+                    args = call["args"]
+                    invocations.append({
+                        "tool": name, "args": args,
+                    })
+                    try:
+                        result = await tool_caller(name, args)
+                    except Exception as exc:  # noqa: BLE001
+                        result = {"status": "error", "error": str(exc)}
+                    invocations[-1]["result"] = result
+                    invocations[-1]["status"] = "done"
+                    # Append a tool result message so the LLM
+                    # sees it on the next iteration.
+                    messages.append({
+                        "role": "tool",
+                        "name": name,
+                        "content": json.dumps(
+                            result, ensure_ascii=False, default=str,
+                        ),
+                    })
+                    # If a custom invoke_tool was provided, it's
+                    # expected to emit ``tool_call_end`` itself.
+                    if invoke_tool is None:
+                        yield {
+                            "type": "tool_call_end",
+                            "tool": name,
+                            "result": result,
+                        }
+                    await emit({
+                        "type": "tool_call_end",
+                        "tool": name,
+                        "result": result,
+                    })
+
+                # If a tool returned confirmation_required, stop
+                # the loop — the caller will resume via
+                # approve_confirmation_continue.
+                last = invocations[-1]
+                if (
+                    isinstance(last.get("result"), dict)
+                    and last["result"].get("status")
+                    == "confirmation_required"
+                ):
+                    return
+
+                # No confirmation — re-call the LLM with the
+                # tool results in context. Continue to the next
+                # iteration of the outer for-loop.
+                continue
+
+            # No tool calls in this iteration. The LLM's done
+            # is the FINAL answer. Yield done and return.
+            yield {
+                "type": "done",
+                "final_response": final,
+                "thinking": emitted_thinking,
+            }
+            return
+
+        # Iteration cap — emit a fallback done.
+        logger.warning(
+            "aask_with_tools hit max_iterations=%d, emitting fallback",
+            max_iterations,
+        )
+        yield {
+            "type": "done",
+            "final_response": accumulated,
+            "thinking": emitted_thinking,
+        }
+
+    async def _astream_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Stream from the LLM with tool support (Phase 2 / v0.36).
+
+        Wraps ``llm_client.astream_chat`` so the same event
+        vocabulary is exposed regardless of LLM client. The
+        expected event shape is::
+
+            {"type": "content", "text": "..."}
+            {"type": "thinking", "text": "..."}
+            {"type": "tool_call", "tool": "...", "args": "..."}
+            {"type": "done", "content": "..."}
+
+        This matches the existing ``StreamableLLMClient.astream_chat``
+        output, so no translation is needed.
+
+        Subclasses can override ``_stream_preprocess`` to
+        transform the event stream (e.g. text-mode tool-call
+        conversion in ChatService).
+        """
+        if hasattr(self.llm_client, "astream_chat"):
+            async for ev in self.llm_client.astream_chat(
+                messages, tools=tools,
+            ):
+                async for transformed in self._stream_preprocess(ev):
+                    yield transformed
+            return
+        # Fallback: synchronous chat (no streaming). Wrap into
+        # the same event shape.
+        try:
+            reply = self.llm_client.chat(messages, tools=tools)
+        except TypeError:
+            reply = self.llm_client.chat(messages)
+        content, tool_calls = self._extract_content_and_tool_calls(reply)
+        if content:
+            async for transformed in self._stream_preprocess(
+                {"type": "content", "text": content}
+            ):
+                yield transformed
+        for call in tool_calls:
+            fn = call.get("function", {}) if isinstance(call, dict) else {}
+            async for transformed in self._stream_preprocess({
+                "type": "tool_call",
+                "tool": fn.get("name", ""),
+                "args": fn.get("arguments", "{}"),
+            }):
+                yield transformed
+        async for transformed in self._stream_preprocess(
+            {"type": "done", "content": content}
+        ):
+            yield transformed
+
+    async def _stream_preprocess(
+        self, event: dict[str, Any]
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Hook for subclasses to transform LLM stream events
+        (Phase 2.3 / v0.36). Default: pass-through.
+
+        Used by ChatService to convert text-mode
+        ``[TOOL_CALL]...[/TOOL_CALL]`` blocks in ``content``
+        events into native ``tool_call`` events.
+        """
+        yield event
+
     # ── internals ────────────────────────────────────────────
 
     def _call_llm_with_tools(

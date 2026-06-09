@@ -263,7 +263,14 @@ class ChatService(ChatBase):
         wiki_id: str | None = None,
         jwt_token: str | None = None,
     ) -> AsyncIterator[dict]:
-        """Stream a chat response as SSE events."""
+        """Stream a chat response as SSE events.
+
+        Phase 2 (v0.36): delegates the iterative tool-call loop
+        to ``ChatBase.aask_with_tools``. ChatService still owns
+        the SSE event shape, wiki prefix parsing, session
+        persistence, and text-mode ``[TOOL_CALL]`` parsing (via
+        a custom ``invoke_tool`` callback).
+        """
         if session_id is None:
             session_id = self.db.create_chat_session(wiki_id, jwt_token)
             yield {"type": "session_created", "session_id": session_id}
@@ -302,17 +309,80 @@ class ChatService(ChatBase):
         system_prompt = self._build_system_prompt(ctx.wiki_id)
         raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
         messages_for_llm = self._truncate_messages(raw_messages)
+        # Phase 2.3 (v0.36): reset the text-mode buffer so a
+        # previous turn's leftover state doesn't leak in.
+        self._reset_text_mode_buffer()
+
+        # Inject any tool calls already dispatched in previous
+        # iterations as ``tool`` role messages so the LLM sees
+        # them when iterating.
+        # (Phase 2.2 / v0.36: the loop appends to messages_for_llm
+        # in place via the ``invoke_tool`` callback.)
 
         try:
-            llm = self.wiki_service.get_llm()
-            # Phase 1.1 (v0.36): delegate to the iterative
-            # tool-call loop so tool results are fed back to the
-            # LLM in subsequent turns. The previous flow only
-            # called the LLM once and discarded tool outputs.
-            async for ev in self._run_chat_loop(
-                llm, ctx, tool_registry, session_id,
+            # Phase 2.2 (v0.36): delegate the iterative loop to
+            # ChatBase.aask_with_tools. The ``invoke_tool``
+            # callback preserves the existing text-mode parsing,
+            # confirmation handling, and DB persistence. The
+            # callback yields its own events (tool_call_start,
+            # tool_call_end, confirmation_required) which we
+            # forward to the SSE stream in order.
+            extra_events: list[dict] = []
+
+            async def invoke(name: str, args: dict) -> Any:
+                """Tool callback: run dispatch, append events,
+                return the result so ChatBase can feed it back.
+
+                The callback's emitted events are forwarded to
+                the SSE stream before each aask_with_tools
+                event so the natural ordering is preserved
+                (tool_call_start → tool_call_end →
+                confirmation_required).
+                """
+                result: Any = None
+                async for ev in self._dispatch_tool_call(
+                    name, args, tool_registry, session_id, ctx,
+                ):
+                    extra_events.append(ev)
+                    if ev.get("type") == "tool_call_end":
+                        result = ev.get("result")
+                return result
+
+            async for ev in self.aask_with_tools(
+                messages_for_llm,
+                tools=self._get_toolspec(tool_registry),
+                max_iterations=self.DEFAULT_MAX_CHAT_ITERATIONS,
+                invoke_tool=invoke,
             ):
+                # Forward all events queued by the callback
+                # BEFORE yielding aask_with_tools' own event.
+                # This keeps ordering: tool_call_start (aask)
+                # → tool_call_end (callback) → next event
+                while extra_events:
+                    yield extra_events.pop(0)
+                kind = ev.get("type")
+                if kind == "done":
+                    final = ev.get("final_response", "")
+                    thinking = ev.get("thinking", "")
+                    if thinking:
+                        ctx._thinking = thinking
+                    ctx.add_assistant_message(final)
+                    self._save_message(
+                        session_id, "assistant", final,
+                        tool_calls=list(ctx._tool_calls.values())
+                        if ctx._tool_calls else None,
+                    )
+                    if self._save_error_count > 0:
+                        yield ChatEvent.save_warning(
+                            f"已丢弃 {self._save_error_count} 条消息的持久化失败"
+                        )
+                    yield ChatEvent.done(final)
+                    continue
                 yield ev
+            # Final drain in case aask_with_tools ended
+            # without a follow-up event.
+            while extra_events:
+                yield extra_events.pop(0)
 
         except Exception as e:
             logger.exception("Chat error")
@@ -327,7 +397,13 @@ class ChatService(ChatBase):
         wiki_id: str | None = None,
         arguments: dict | None = None,
     ) -> AsyncIterator[dict]:
-        """Approve a confirmation, execute tool, feed result back to LLM."""
+        """Approve a confirmation, execute tool, feed result back to LLM.
+
+        Phase 2.2 (v0.36): uses ChatBase.aask_with_tools so
+        the post-confirmation LLM follow-up also benefits from
+        the iterative loop (a confirmation-approved tool may
+        trigger further tool calls).
+        """
         wiki_id = wiki_id or self.wiki_service.get_default_wiki_id()
         if not wiki_id:
             yield ChatEvent.error("No wiki_id available")
@@ -360,38 +436,43 @@ class ChatService(ChatBase):
         system_prompt = self._build_system_prompt(ctx.wiki_id)
         raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
         messages_for_llm = self._truncate_messages(raw_messages)
+        # Phase 2.3 (v0.36): reset the text-mode buffer.
+        self._reset_text_mode_buffer()
 
         try:
-            llm = self.wiki_service.get_llm()
-            tool_specs = self._get_toolspec(tool_registry)
-            accumulated = ""
-            async for event in self._stream_llm(llm, messages_for_llm, tool_specs):
-                event_type = event.get("type")
-                if event_type == "thinking":
-                    yield ChatEvent.thinking(event["text"])
-                elif event_type == "content":
-                    accumulated += event["text"]
-                    yield ChatEvent.message_delta(event["text"])
-                elif event_type == "tool_call":
-                    tool_name = event["tool"]
-                    raw_args = event.get("args", "{}")
-                    if isinstance(raw_args, str):
-                        try:
-                            args = json.loads(raw_args)
-                        except json.JSONDecodeError:
-                            args = {"raw": raw_args}
-                    else:
-                        args = raw_args
-                    async for ev in self._dispatch_tool_call(
-                        tool_name, args, tool_registry,
-                        session_id, ctx,
-                    ):
-                        yield ev
-                elif event_type == "done":
-                    final = event.get("content", accumulated)
+            extra_events: list[dict] = []
+
+            async def invoke(name: str, args: dict) -> Any:
+                result: Any = None
+                async for ev in self._dispatch_tool_call(
+                    name, args, tool_registry, session_id, ctx,
+                ):
+                    extra_events.append(ev)
+                    if ev.get("type") == "tool_call_end":
+                        result = ev.get("result")
+                return result
+
+            async for ev in self.aask_with_tools(
+                messages_for_llm,
+                tools=self._get_toolspec(tool_registry),
+                max_iterations=self.DEFAULT_MAX_CHAT_ITERATIONS,
+                invoke_tool=invoke,
+            ):
+                while extra_events:
+                    yield extra_events.pop(0)
+                if ev.get("type") == "done":
+                    final = ev.get("final_response", "")
                     ctx.add_assistant_message(final)
                     self._save_message(session_id, "assistant", final)
+                    if self._save_error_count > 0:
+                        yield ChatEvent.save_warning(
+                            f"已丢弃 {self._save_error_count} 条消息的持久化失败"
+                        )
                     yield ChatEvent.done(final)
+                    continue
+                yield ev
+            while extra_events:
+                yield extra_events.pop(0)
         except Exception as e:
             logger.exception("Confirmation continue error")
             yield ChatEvent.error(str(e))
@@ -477,8 +558,76 @@ class ChatService(ChatBase):
     async def _stream_llm(
         self, llm: Any, messages: list[dict], tools: list[dict] | None = None
     ) -> AsyncIterator[dict]:
+        """Backward-compat wrapper around the LLM stream.
+
+        Kept for legacy callers. New code uses ChatBase's
+        aask_with_tools, which calls _stream_preprocess for
+        text-mode conversion.
+        """
         async for event in llm.astream_chat(messages, tools=tools):
             yield event
+
+    async def _stream_preprocess(
+        self, event: dict[str, Any]
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Override ChatBase's hook to convert text-mode
+        ``[TOOL_CALL]...[/TOOL_CALL]`` blocks in ``content``
+        events into native ``tool_call`` events
+        (Phase 2.3 / v0.36).
+
+        Maintains per-instance buffer state (a regex match may
+        straddle two content chunks). Callers should reset
+        the buffer at the start of each chat turn via
+        ``_reset_text_mode_buffer``.
+
+        On any non-content event (thinking, tool_call, done,
+        error), the remaining buffer is flushed as a single
+        ``content`` event so trailing text reaches the user.
+        """
+        if not hasattr(self, "_text_mode_buffer"):
+            self._text_mode_buffer = ""
+        if event.get("type") != "content":
+            # Flush remaining buffered text before yielding
+            # the non-content event. (End-of-iteration signal
+            # from the LLM is implicit in the stream ending;
+            # done is the explicit signal.)
+            if self._text_mode_buffer and event.get("type") in (
+                "done", "thinking", "tool_call", "error",
+            ):
+                yield {
+                    "type": "content",
+                    "text": self._text_mode_buffer,
+                }
+                self._text_mode_buffer = ""
+            yield event
+            return
+        chunk = event.get("text", "")
+        self._text_mode_buffer += chunk
+        while True:
+            m = _TOOL_CALL_RE.search(self._text_mode_buffer)
+            if not m:
+                break
+            prefix = self._text_mode_buffer[: m.start()]
+            if prefix:
+                yield {"type": "content", "text": prefix}
+            body = m.group(1)
+            parsed = _parse_text_tool_call(body)
+            if parsed is None:
+                # Unparseable — pass through as text.
+                yield {"type": "content", "text": m.group(0)}
+            else:
+                tool_name, args = parsed
+                yield {
+                    "type": "tool_call",
+                    "tool": tool_name,
+                    "args": json.dumps(args, ensure_ascii=False),
+                }
+            self._text_mode_buffer = self._text_mode_buffer[m.end():]
+
+    def _reset_text_mode_buffer(self) -> None:
+        """Reset the text-mode buffer at the start of a new
+        chat iteration. (Phase 2.3 / v0.36)"""
+        self._text_mode_buffer = ""
 
     async def _execute_tool(
         self,

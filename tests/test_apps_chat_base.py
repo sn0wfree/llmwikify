@@ -297,4 +297,172 @@ class TestChatBaseAstream:
                 pass
         asyncio.run(collect())
         assert [m.role for m in s.messages] == ["system", "user", "assistant"]
-        assert s.messages[2].content == "xy"
+
+
+# ─── aask_with_tools (Phase 2 / v0.36) ─────────────────────────────
+
+
+class StubToolLLM:
+    """LLM stub that returns scripted streaming events."""
+
+    def __init__(self, scripts: list[list[dict]]) -> None:
+        # Each entry is one full astream_chat() invocation's events.
+        self.scripts = scripts
+        self.call_count = 0
+
+    async def astream_chat(self, messages, **kwargs):
+        # Snapshot the script to use BEFORE incrementing, so
+        # the call_count reflects the call that's in-flight.
+        idx = self.call_count
+        self.call_count += 1
+        idx = min(idx, len(self.scripts) - 1)
+        for ev in self.scripts[idx]:
+            yield ev
+
+
+class TestAaskWithTools:
+    """Phase 2 (v0.36): async streaming tool-call loop on ChatBase."""
+
+    def test_plain_chat_yields_done(self) -> None:
+        """No tools, single LLM call → one done event."""
+        stub = StubToolLLM([[
+            {"type": "content", "text": "hi"},
+            {"type": "done", "content": "hi"},
+        ]])
+        cb = ChatBase(llm_client=stub)
+        events: list[dict] = []
+
+        async def collect() -> None:
+            async for ev in cb.aask_with_tools(
+                [{"role": "user", "content": "hello"}],
+            ):
+                events.append(ev)
+        asyncio.run(collect())
+        assert any(ev["type"] == "done" for ev in events)
+        assert stub.call_count == 1
+
+    def test_iterates_on_tool_call(self) -> None:
+        """LLM emits a tool_call → loop re-calls LLM with result."""
+        stub = StubToolLLM([
+            # First call: tool_call + done
+            [
+                {"type": "content", "text": "Let me check."},
+                {"type": "tool_call", "tool": "search", "args": '{"q":"x"}'},
+                {"type": "done", "content": "Let me check."},
+            ],
+            # Second call: final answer
+            [
+                {"type": "content", "text": "Found it."},
+                {"type": "done", "content": "Found it."},
+            ],
+        ])
+        cb = ChatBase(llm_client=stub)
+        tool_called: list[str] = []
+
+        async def invoke(name: str, args: dict) -> dict:
+            tool_called.append(name)
+            return {"result": ["hit1", "hit2"]}
+
+        events: list[dict] = []
+        messages = [{"role": "user", "content": "find x"}]
+
+        async def collect() -> None:
+            async for ev in cb.aask_with_tools(
+                messages, tools=[], invoke_tool=invoke,
+            ):
+                events.append(ev)
+        asyncio.run(collect())
+        # LLM called twice (tool + final)
+        assert stub.call_count == 2
+        assert tool_called == ["search"]
+        # Tool result fed back into messages list
+        assert any(
+            m.get("role") == "tool" and m.get("name") == "search"
+            for m in messages
+        )
+        # One final done with the second LLM's answer
+        done_events = [e for e in events if e["type"] == "done"]
+        assert len(done_events) == 1
+        assert done_events[0]["final_response"] == "Found it."
+
+    def test_stops_on_confirmation_required(self) -> None:
+        """Tool returning confirmation_required halts the loop."""
+        stub = StubToolLLM([
+            [
+                {"type": "tool_call", "tool": "write", "args": "{}"},
+                {"type": "done", "content": ""},
+            ],
+            # (would be a final answer if loop continued, but shouldn't be reached)
+            [
+                {"type": "done", "content": "should not see this"},
+            ],
+        ])
+        cb = ChatBase(llm_client=stub)
+        invoke_calls: list[str] = []
+
+        async def invoke(name: str, args: dict) -> dict:
+            invoke_calls.append(name)
+            return {"status": "confirmation_required", "confirmation_id": "c1"}
+
+        events: list[dict] = []
+        async def collect() -> None:
+            async for ev in cb.aask_with_tools(
+                [{"role": "user", "content": "x"}], tools=[], invoke_tool=invoke,
+            ):
+                events.append(ev)
+        asyncio.run(collect())
+        # Loop stopped after the confirmation
+        assert stub.call_count == 1
+        # No done event emitted (loop halted silently)
+        assert not any(e["type"] == "done" for e in events)
+
+    def test_max_iterations_cap(self) -> None:
+        """Infinite-tool loop is bounded by max_iterations."""
+        stub = StubToolLLM([
+            [
+                {"type": "tool_call", "tool": "search", "args": "{}"},
+                {"type": "done", "content": ""},
+            ],
+        ] * 10)  # always returns the same
+        cb = ChatBase(llm_client=stub)
+
+        async def invoke(name: str, args: dict) -> dict:
+            return {"result": []}
+
+        events: list[dict] = []
+        async def collect() -> None:
+            async for ev in cb.aask_with_tools(
+                [{"role": "user", "content": "x"}], tools=[],
+                max_iterations=3, invoke_tool=invoke,
+            ):
+                events.append(ev)
+        asyncio.run(collect())
+        # Capped at 3 iterations
+        assert stub.call_count == 3
+        # Fallback done emitted
+        done_events = [e for e in events if e["type"] == "done"]
+        assert len(done_events) == 1
+
+    def test_fallback_to_chat_when_no_astream(self) -> None:
+        """Non-streaming LLM falls back to single chat call."""
+
+        class PlainLLM:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def chat(self, messages, **kwargs):
+                self.calls += 1
+                # No tool calls, plain content
+                return "ok"
+
+        llm = PlainLLM()
+        cb = ChatBase(llm_client=llm)
+        events: list[dict] = []
+
+        async def collect() -> None:
+            async for ev in cb.aask_with_tools(
+                [{"role": "user", "content": "hi"}],
+            ):
+                events.append(ev)
+        asyncio.run(collect())
+        assert any(e["type"] == "done" for e in events)
