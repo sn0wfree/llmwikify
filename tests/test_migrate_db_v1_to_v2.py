@@ -26,7 +26,7 @@ SCRIPT = (
 
 
 def _create_source_db(path: Path, sessions: list[dict]) -> None:
-    """Create a pre-Phase-3 ``.llmwiki_agent.db`` with N research_sessions rows.
+    """Create a ``.llmwiki_agent.db`` with N autoresearch_sessions rows.
 
     Re-runnable: deletes existing rows first.
     """
@@ -34,7 +34,7 @@ def _create_source_db(path: Path, sessions: list[dict]) -> None:
     with sqlite3.connect(path) as conn:
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS research_sessions (
+            CREATE TABLE IF NOT EXISTS autoresearch_sessions (
                 id TEXT PRIMARY KEY,
                 wiki_id TEXT NOT NULL,
                 query TEXT NOT NULL,
@@ -56,12 +56,12 @@ def _create_source_db(path: Path, sessions: list[dict]) -> None:
             )
             """
         )
-        conn.execute("DELETE FROM research_sessions")
+        conn.execute("DELETE FROM autoresearch_sessions")
         for s in sessions:
             cols = ", ".join(s.keys())
             placeholders = ", ".join("?" for _ in s)
             conn.execute(
-                f"INSERT INTO research_sessions ({cols}) VALUES ({placeholders})",
+                f"INSERT INTO autoresearch_sessions ({cols}) VALUES ({placeholders})",
                 list(s.values()),
             )
         conn.commit()

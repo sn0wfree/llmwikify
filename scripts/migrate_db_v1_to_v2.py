@@ -95,24 +95,33 @@ def backup_file(path: Path) -> Path:
 
 
 def fetch_source_research_sessions(source_path: Path) -> list[dict]:
-    """Read all rows from the source ``research_sessions`` table."""
+    """Read all rows from the source research sessions table.
+
+    Checks for both ``research_sessions`` (pre-v0.33.0) and
+    ``autoresearch_sessions`` (v0.33.0+) table names.
+    """
     if not source_path.exists():
         logger.info("Source DB %s does not exist, nothing to migrate", source_path)
         return []
     rows: list[dict] = []
     with sqlite3.connect(source_path) as conn:
         conn.row_factory = sqlite3.Row
-        # Check if research_sessions table exists
         tables = {
             r[0]
             for r in conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'"
             ).fetchall()
         }
-        if "research_sessions" not in tables:
-            logger.info("Source DB has no research_sessions table")
+        # Support both old and new table names
+        source_table = None
+        if "research_sessions" in tables:
+            source_table = "research_sessions"
+        elif "autoresearch_sessions" in tables:
+            source_table = "autoresearch_sessions"
+        if source_table is None:
+            logger.info("Source DB has no research sessions table")
             return []
-        for row in conn.execute("SELECT * FROM research_sessions").fetchall():
+        for row in conn.execute(f"SELECT * FROM {source_table}").fetchall():
             rows.append(dict(row))
     return rows
 
@@ -164,13 +173,41 @@ def migrate_research_sessions(
     # Apply: back up source first
     backup_file(source_path)
 
-    # Open target in RW; this also creates the schema via
-    # ChatDatabase (lazy: we import the class but don't
-    # instantiate it, since we want to control the migration
-    # transaction).
-    from llmwikify.apps.chat.db import ChatDatabase
-
-    ChatDatabase(target_path.parent)
+    # Open target in RW; ensure autoresearch_sessions table exists.
+    # We create it directly rather than using ChatDatabase because
+    # ChatDatabase normalises to .llmwiki_agent.db, but the
+    # migration target may be a different filename (autoresearch.db).
+    with sqlite3.connect(target_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS autoresearch_sessions (
+                id TEXT PRIMARY KEY,
+                wiki_id TEXT NOT NULL,
+                query TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'planning',
+                current_step TEXT,
+                progress REAL,
+                result TEXT,
+                wiki_page_name TEXT,
+                iteration_round INTEGER,
+                max_rounds INTEGER,
+                max_replan INTEGER,
+                quality_score INTEGER,
+                synthesis_json TEXT,
+                review_json TEXT,
+                clarification_json TEXT,
+                reasoning_json TEXT,
+                structure_json TEXT,
+                self_loop_counts_json TEXT,
+                self_loop_history_json TEXT,
+                evidence_scores_json TEXT,
+                events_json TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.commit()
 
     with sqlite3.connect(target_path) as conn:
         for row in source_rows:
