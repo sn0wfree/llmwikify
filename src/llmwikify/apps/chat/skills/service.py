@@ -87,13 +87,15 @@ class SkillService:
             self.registry.register(dream_skill)
         except ImportError:
             logger.debug("CRUD skills not available")
-        # 2 pipelines
+        # 3 pipelines
         try:
             from llmwikify.apps.chat.skills.pipelines import (
                 gather_skill,
+                ingest_skill,
                 report_skill,
             )
             self.registry.register(gather_skill)
+            self.registry.register(ingest_skill)
             self.registry.register(report_skill)
         except ImportError:
             logger.debug("Pipeline skills not available")

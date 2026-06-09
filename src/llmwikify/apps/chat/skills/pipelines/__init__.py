@@ -1,4 +1,4 @@
-"""Pipeline skills — Phase 12: multi-step orchestration.
+"""Pipeline skills — multi-step orchestration.
 
 Per ``v0.32-execution-plan.md`` Phase 12, pipeline skills
 are extracted from ``research_skill.py`` (Phase 6) to become
@@ -8,12 +8,14 @@ Pipelines compose actions via direct Python calls (NOT
 through the LLM), per the Unix philosophy (``docs/designs/
 principles/unix-philosophy.md``).
 
-Current pipelines (v0.32.5):
+Current pipelines (v0.35.0):
 
   1. ``gather_skill`` — search/extract sources for sub-queries
      (extracted from ``research_skill._act_gather``)
   2. ``report_skill`` — write final markdown report from
      synthesis + sources (extracted from ``research_skill._act_report``)
+  3. ``ingest_skill`` — extract + write + read orchestration
+     (new in v0.35.0)
 
 These pipelines can be called:
 
@@ -29,6 +31,10 @@ from llmwikify.apps.chat.skills.pipelines.gather_skill import (
     GatherSkill,
     gather_skill,
 )
+from llmwikify.apps.chat.skills.pipelines.ingest_skill import (
+    IngestSkill,
+    ingest_skill,
+)
 from llmwikify.apps.chat.skills.pipelines.report_skill import (
     ReportSkill,
     report_skill,
@@ -37,6 +43,8 @@ from llmwikify.apps.chat.skills.pipelines.report_skill import (
 __all__ = [
     "GatherSkill",
     "gather_skill",
+    "IngestSkill",
+    "ingest_skill",
     "ReportSkill",
     "report_skill",
 ]
