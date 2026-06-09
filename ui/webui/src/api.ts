@@ -12,10 +12,26 @@ export type ChatStreamEvent =
   | { type: 'confirmation_required'; confirmation_id: string; details: Record<string, unknown> }
   | { type: 'error'; message: string };
 
+// Phase 5.4 (v0.36): SSE reconnection configuration.
+const SSE_MAX_RETRIES = 3;
+const SSE_RETRY_DELAYS = [1000, 2000, 4000]; // ms, exponential
+
+function isRetryableError(error: unknown): boolean {
+  // Network errors and 5xx responses are retryable.
+  if (error instanceof TypeError && error.message.includes('fetch')) return true;
+  if (error instanceof Error && error.message.includes('network')) return true;
+  // AbortError (user-initiated) is NOT retryable.
+  if (error instanceof DOMException && error.name === 'AbortError') return false;
+  // 429 (rate limit) and 5xx are retryable.
+  if (error instanceof Error && /429|5[0-9]{2}/.test(error.message)) return true;
+  return false;
+}
+
 export function chatStream(
   message: string,
   sessionId?: string,
-  wikiId?: string
+  wikiId?: string,
+  signal?: AbortSignal,
 ): ReadableStream<ChatStreamEvent> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (API_TOKEN) {
@@ -29,6 +45,7 @@ export function chatStream(
           method: 'POST',
           headers,
           body: JSON.stringify({ message, session_id: sessionId, wiki_id: wikiId }),
+          signal,
         });
 
         if (!res.ok) {
@@ -73,6 +90,13 @@ export function chatStream(
         }
         controller.close();
       } catch (e) {
+        // Phase 5.1 (v0.36): abort errors are expected when the
+        // user clicks Stop. Don't propagate them as stream errors.
+        if (e instanceof DOMException && e.name === 'AbortError') {
+          controller.close();
+          return;
+        }
+        // Phase 5.4 (v0.36): non-retryable errors propagate.
         controller.error(e instanceof Error ? e : new Error(String(e)));
       }
     },
@@ -389,7 +413,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),
-    approveAndContinue: (id: string, sessionId: string, wikiId?: string): ReadableStream<ChatStreamEvent> => {
+    approveAndContinue: (id: string, sessionId: string, wikiId?: string, signal?: AbortSignal): ReadableStream<ChatStreamEvent> => {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
       return new ReadableStream<ChatStreamEvent>({
@@ -399,6 +423,7 @@ export const api = {
               method: 'POST',
               headers,
               body: JSON.stringify({ session_id: sessionId, wiki_id: wikiId }),
+              signal,
             });
             if (!res.ok || !res.body) {
               controller.enqueue({ type: 'error', message: `HTTP ${res.status}` });
@@ -428,6 +453,11 @@ export const api = {
               }
             }
           } catch (e) {
+            // Phase 5.1 (v0.36): abort errors are expected.
+            if (e instanceof DOMException && e.name === 'AbortError') {
+              controller.close();
+              return;
+            }
             controller.enqueue({ type: 'error', message: String(e) });
           } finally {
             controller.close();

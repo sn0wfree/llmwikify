@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, StopCircle } from 'lucide-react';
 import { chatStream, ChatStreamEvent, api } from '../../api';
 import { useToast } from '../wiki/Toast';
 import { useWikiStore } from '../../stores/wikiStore';
@@ -98,6 +98,8 @@ export function AgentChat() {
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [tokenEstimate, setTokenEstimate] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Phase 5.1 (v0.36): AbortController for cancelling SSE streams.
+  const abortControllerRef = useRef<AbortController | null>(null);
   const { addToast } = useToast();
   const { currentWikiId } = useWikiStore();
 
@@ -131,6 +133,7 @@ export function AgentChat() {
 
   const handleSelectSession = useCallback(async (sessionId: string) => {
     setCurrentSessionId(sessionId);
+    setTokenEstimate(0);
     await loadMessages(sessionId);
   }, [loadMessages]);
 
@@ -143,88 +146,109 @@ export function AgentChat() {
       setCurrentSessionId(null);
     }
     setMessages([{ role: 'assistant', content: "Hello! I'm your wiki assistant. How can I help?", timestamp: new Date().toISOString() }]);
+    setTokenEstimate(0);
     setInput('');
   }, [currentWikiId]);
 
   const handleApproveConfirmation = useCallback(async () => {
     if (!pendingConfirmation || !currentSessionId) return;
     setConfirmingLoading(true);
-    try {
-      setPendingConfirmation(null);
-      setLoading(true);
-      setCurrentAssistantMsg('');
-      setCurrentToolCalls([]);
-      // Phase 1.4 (v0.36): reset refs in lock-step with state.
-      currentThinkingRef.current = '';
-      currentToolCallsRef.current = [];
+    setPendingConfirmation(null);
+    setLoading(true);
+    setCurrentAssistantMsg('');
+    setCurrentToolCalls([]);
+    currentThinkingRef.current = '';
+    currentToolCallsRef.current = '';
 
-      const reader = api.confirmations.approveAndContinue(
-        pendingConfirmation.confirmationId, currentSessionId, currentWikiId || undefined
-      ).getReader();
+    // Phase 5.1 (v0.36): create AbortController for cancellation.
+    const ac = new AbortController();
+    abortControllerRef.current = ac;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const event = value as ChatStreamEvent;
-        switch (event.type) {
-          case 'message_delta':
-            setCurrentAssistantMsg((prev) => prev + event.content);
-            break;
-          case 'thinking':
-            setCurrentThinking((prev) => {
-              currentThinkingRef.current = prev + event.content;
-              return prev + event.content;
-            });
-            break;
-          case 'tool_call_start': {
-            setCurrentToolCalls((prev) => {
-              const next = [...prev, { tool: event.tool, args: event.args, status: 'streaming' as const, startedAt: Date.now() }];
-              currentToolCallsRef.current = next;
-              return next;
-            });
-            break;
+    // Phase 5.4 (v0.36): retry logic for confirmation flow.
+    const MAX_RETRIES = 2;
+    const RETRY_DELAYS = [1000, 2000];
+    let attempt = 0;
+    let gotFirstChunk = false;
+
+    while (attempt <= MAX_RETRIES) {
+      try {
+        const reader = api.confirmations.approveAndContinue(
+          pendingConfirmation.confirmationId, currentSessionId, currentWikiId || undefined, ac.signal
+        ).getReader();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          gotFirstChunk = true;
+          const event = value as ChatStreamEvent;
+          switch (event.type) {
+            case 'message_delta':
+              setCurrentAssistantMsg((prev) => prev + event.content);
+              break;
+            case 'thinking':
+              setCurrentThinking((prev) => {
+                currentThinkingRef.current = prev + event.content;
+                return prev + event.content;
+              });
+              break;
+            case 'tool_call_start': {
+              setCurrentToolCalls((prev) => {
+                const next = [...prev, { tool: event.tool, args: event.args, status: 'streaming' as const, startedAt: Date.now() }];
+                currentToolCallsRef.current = next;
+                return next;
+              });
+              break;
+            }
+            case 'tool_call_end': {
+              setCurrentToolCalls((prev) => {
+                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
+                currentToolCallsRef.current = next;
+                return next;
+              });
+              break;
+            }
+            case 'confirmation_required':
+              setCurrentToolCalls((prev) => {
+                const next = prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
+                currentToolCallsRef.current = next;
+                return next;
+              });
+              setPendingConfirmation({ confirmationId: event.confirmation_id, tool: 'confirmation_required', args: {}, impact: (event.details || {}) as Record<string, unknown>, group: undefined });
+              break;
+            case 'done': {
+              const thinkingSnapshot = currentThinkingRef.current;
+              const toolCallsSnapshot = currentToolCallsRef.current;
+              setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
+              setCurrentAssistantMsg('');
+              setCurrentThinking('');
+              setCurrentToolCalls([]);
+              currentThinkingRef.current = '';
+              currentToolCallsRef.current = [];
+              break;
+            }
+            case 'error':
+              addToast('error', event.message || 'Confirmation error');
+              break;
           }
-          case 'tool_call_end': {
-            setCurrentToolCalls((prev) => {
-              const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
-              currentToolCallsRef.current = next;
-              return next;
-            });
-            break;
-          }
-          case 'confirmation_required':
-            setCurrentToolCalls((prev) => {
-              const next = prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
-              currentToolCallsRef.current = next;
-              return next;
-            });
-            setPendingConfirmation({ confirmationId: event.confirmation_id, tool: 'confirmation_required', args: {}, impact: (event.details || {}) as Record<string, unknown>, group: undefined });
-            break;
-          case 'done': {
-            // Phase 1.4 (v0.36): read the latest tool_calls /
-            // thinking from refs to avoid stale closure.
-            const thinkingSnapshot = currentThinkingRef.current;
-            const toolCallsSnapshot = currentToolCallsRef.current;
-            setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
-            setCurrentAssistantMsg('');
-            setCurrentThinking('');
-            setCurrentToolCalls([]);
-            currentThinkingRef.current = '';
-            currentToolCallsRef.current = [];
-            break;
-          }
-          case 'error':
-            addToast('error', event.message || 'Confirmation error');
-            break;
         }
+        addToast('success', 'Action approved and executed');
+        break;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') break;
+        if (!gotFirstChunk && attempt < MAX_RETRIES) {
+          const delay = RETRY_DELAYS[attempt] || 2000;
+          addToast('info', `Connection lost, retrying in ${delay / 1000}s...`);
+          await new Promise((r) => setTimeout(r, delay));
+          attempt++;
+          continue;
+        }
+        addToast('error', `Failed to approve: ${e instanceof Error ? e.message : 'Unknown error'}`);
+        break;
       }
-      addToast('success', 'Action approved and executed');
-    } catch (e) {
-      addToast('error', `Failed to approve: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    } finally {
-      setConfirmingLoading(false);
-      setLoading(false);
     }
+    setConfirmingLoading(false);
+    setLoading(false);
+    abortControllerRef.current = null;
   }, [pendingConfirmation, currentSessionId, currentWikiId, addToast]);
 
   const handleRejectConfirmation = useCallback(async () => {
@@ -240,6 +264,23 @@ export function AgentChat() {
       setConfirmingLoading(false);
     }
   }, [pendingConfirmation, currentWikiId, addToast]);
+
+  // Phase 5.1 (v0.36): abort the current SSE stream.
+  const handleStop = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setLoading(false);
+    setConnectionState('idle');
+    // Flush any buffered text into the message history.
+    setCurrentAssistantMsg((prev) => {
+      if (prev) {
+        setMessages((m) => [...m, { role: 'assistant', content: prev, timestamp: new Date().toISOString() }]);
+      }
+      return '';
+    });
+    setCurrentThinking('');
+    setCurrentToolCalls([]);
+  }, []);
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || loading) return;
@@ -257,96 +298,125 @@ export function AgentChat() {
     setConnectionState('live');
     setTokenEstimate((t) => t + Math.ceil(input.length / 4));
 
-    const reader = chatStream(input, currentSessionId || undefined, currentWikiId || undefined).getReader();
+    // Phase 5.1 (v0.36): create AbortController for cancellation.
+    const ac = new AbortController();
+    abortControllerRef.current = ac;
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const event = value as ChatStreamEvent;
+    // Phase 5.4 (v0.36): SSE auto-reconnect with exponential backoff.
+    // The retry loop re-opens the stream if the first chunk was never
+    // received (network error, timeout, 5xx). Once events start
+    // flowing, we don't retry (partial state is already visible).
+    const MAX_RETRIES = 3;
+    const RETRY_DELAYS = [1000, 2000, 4000];
+    let attempt = 0;
+    let gotFirstChunk = false;
 
-        switch (event.type) {
-          case 'session_created':
-            setCurrentSessionId(event.session_id);
-            setSidebarRefreshKey((k) => k + 1);
-            break;
-          case 'message_delta':
-            setCurrentAssistantMsg((prev) => prev + event.content);
-            break;
-          case 'thinking':
-            setCurrentThinking((prev) => {
-              currentThinkingRef.current = prev + event.content;
-              return prev + event.content;
-            });
-            break;
-          case 'tool_call_start': {
-            setCurrentToolCalls((prev) => {
-              const next = [...prev, { tool: event.tool, args: event.args, status: 'streaming' as const, startedAt: Date.now() }];
-              currentToolCallsRef.current = next;
-              return next;
-            });
-            break;
+    while (attempt <= MAX_RETRIES) {
+      try {
+        const reader = chatStream(input, currentSessionId || undefined, currentWikiId || undefined, ac.signal).getReader();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          gotFirstChunk = true;
+          const event = value as ChatStreamEvent;
+
+          switch (event.type) {
+            case 'session_created':
+              setCurrentSessionId(event.session_id);
+              setSidebarRefreshKey((k) => k + 1);
+              break;
+            case 'message_delta':
+              setCurrentAssistantMsg((prev) => prev + event.content);
+              break;
+            case 'thinking':
+              setCurrentThinking((prev) => {
+                currentThinkingRef.current = prev + event.content;
+                return prev + event.content;
+              });
+              break;
+            case 'tool_call_start': {
+              setCurrentToolCalls((prev) => {
+                const next = [...prev, { tool: event.tool, args: event.args, status: 'streaming' as const, startedAt: Date.now() }];
+                currentToolCallsRef.current = next;
+                return next;
+              });
+              break;
+            }
+            case 'tool_call_end': {
+              setCurrentToolCalls((prev) => {
+                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
+                currentToolCallsRef.current = next;
+                return next;
+              });
+              break;
+            }
+            case 'tool_call_error': {
+              setCurrentToolCalls((prev) => {
+                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now() } : tc);
+                currentToolCallsRef.current = next;
+                return next;
+              });
+              break;
+            }
+            case 'confirmation_required':
+              setCurrentToolCalls((prev) => {
+                const next = prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
+                currentToolCallsRef.current = next;
+                return next;
+              });
+              setPendingConfirmation({ confirmationId: event.confirmation_id, tool: 'confirmation_required', args: {}, impact: (event.details || {}) as Record<string, unknown>, group: undefined });
+              break;
+            case 'done': {
+              const thinkingSnapshot = currentThinkingRef.current;
+              const toolCallsSnapshot = currentToolCallsRef.current;
+              setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
+              setCurrentAssistantMsg('');
+              setCurrentThinking('');
+              setCurrentToolCalls([]);
+              currentThinkingRef.current = '';
+              currentToolCallsRef.current = [];
+              setTokenEstimate((t) => t + Math.ceil((event.final_response.length + thinkingSnapshot.length) / 4));
+              setConnectionState('idle');
+              break;
+            }
+            case 'error':
+              addToast('error', event.message || 'Chat error');
+              setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${event.message}`, timestamp: new Date().toISOString() }]);
+              setCurrentAssistantMsg('');
+              setCurrentToolCalls([]);
+              currentToolCallsRef.current = [];
+              setConnectionState('error');
+              break;
           }
-          case 'tool_call_end': {
-            setCurrentToolCalls((prev) => {
-              const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
-              currentToolCallsRef.current = next;
-              return next;
-            });
-            break;
-          }
-          case 'tool_call_error': {
-            setCurrentToolCalls((prev) => {
-              const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now() } : tc);
-              currentToolCallsRef.current = next;
-              return next;
-            });
-            break;
-          }
-          case 'confirmation_required':
-            setCurrentToolCalls((prev) => {
-              const next = prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
-              currentToolCallsRef.current = next;
-              return next;
-            });
-            setPendingConfirmation({ confirmationId: event.confirmation_id, tool: 'confirmation_required', args: {}, impact: (event.details || {}) as Record<string, unknown>, group: undefined });
-            break;
-          case 'done': {
-            // Phase 1.4 (v0.36): read the latest tool_calls /
-            // thinking from refs to avoid stale closure.
-            const thinkingSnapshot = currentThinkingRef.current;
-            const toolCallsSnapshot = currentToolCallsRef.current;
-            setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
-            setCurrentAssistantMsg('');
-            setCurrentThinking('');
-            setCurrentToolCalls([]);
-            currentThinkingRef.current = '';
-            currentToolCallsRef.current = [];
-            setTokenEstimate((t) => t + Math.ceil((event.final_response.length + thinkingSnapshot.length) / 4));
-            setConnectionState('idle');
-            break;
-          }
-          case 'error':
-            addToast('error', event.message || 'Chat error');
-            setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${event.message}`, timestamp: new Date().toISOString() }]);
-            setCurrentAssistantMsg('');
-            setCurrentToolCalls([]);
-            currentToolCallsRef.current = [];
-            setConnectionState('error');
-            break;
         }
+        // Stream completed successfully — no retry needed.
+        break;
+      } catch (e) {
+        // Phase 5.1 (v0.36): abort errors are expected.
+        if (e instanceof DOMException && e.name === 'AbortError') break;
+        // Phase 5.4 (v0.36): retry if no events were received yet.
+        if (!gotFirstChunk && attempt < MAX_RETRIES) {
+          const delay = RETRY_DELAYS[attempt] || 4000;
+          setConnectionState('error');
+          addToast('info', `Connection lost, retrying in ${delay / 1000}s...`);
+          await new Promise((r) => setTimeout(r, delay));
+          attempt++;
+          continue;
+        }
+        // Non-retryable or events already delivered — show error.
+        const errMsg = e instanceof Error ? e.message : 'Unknown error';
+        addToast('error', `Chat error: ${errMsg}`);
+        setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${errMsg}`, timestamp: new Date().toISOString() }]);
+        setCurrentAssistantMsg('');
+        setCurrentToolCalls([]);
+        currentToolCallsRef.current = [];
+        setConnectionState('error');
+        break;
       }
-    } catch (e) {
-      const errMsg = e instanceof Error ? e.message : 'Unknown error';
-      addToast('error', `Chat error: ${errMsg}`);
-      setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${errMsg}`, timestamp: new Date().toISOString() }]);
-      setCurrentAssistantMsg('');
-      setCurrentToolCalls([]);
-      currentToolCallsRef.current = [];
-      setConnectionState('error');
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
+    abortControllerRef.current = null;
   }, [input, loading, addToast, currentWikiId, currentSessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -450,11 +520,22 @@ export function AgentChat() {
                     content={msg.content}
                     thinking={msg.thinking}
                     timestamp={formatTime(msg.timestamp)}
-                    onRegenerate={i === messages.length - 1 && msg.role === 'assistant' ? () => {
-                      const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-                      if (lastUser) {
-                        setInput(lastUser.content);
-                        setMessages((prev) => prev.slice(0, prev.length - 1));
+                    // Phase 5.3 (v0.36): regenerate is available on
+                    // ANY assistant message (not just the last).
+                    // Truncates the history at the preceding user
+                    // message and puts it in the input for re-send.
+                    onRegenerate={msg.role === 'assistant' ? () => {
+                      // Find the user message before this assistant message.
+                      let precedingUserIdx = -1;
+                      for (let j = i - 1; j >= 0; j--) {
+                        if (messages[j].role === 'user') {
+                          precedingUserIdx = j;
+                          break;
+                        }
+                      }
+                      if (precedingUserIdx >= 0) {
+                        setInput(messages[precedingUserIdx].content);
+                        setMessages((prev) => prev.slice(0, precedingUserIdx));
                       }
                     } : undefined}
                     onQuote={msg.role === 'assistant' ? (text) => {
@@ -532,32 +613,49 @@ export function AgentChat() {
                     target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
                   }}
                 />
-                <button
-                  type="submit"
-                  disabled={loading || !input.trim()}
-                  className={cn(
-                    'shrink-0 w-9 h-9 rounded-xl flex items-center justify-center',
-                    'bg-gradient-to-br from-primary to-accent text-primary-foreground',
-                    'transition-all duration-200 shadow-soft',
-                    'hover:brightness-110 hover:shadow-glow',
-                    'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100 disabled:hover:shadow-soft',
-                  )}
-                  aria-label="Send message"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                {loading ? (
+                  <button
+                    type="button"
+                    onClick={handleStop}
+                    className={cn(
+                      'shrink-0 w-9 h-9 rounded-xl flex items-center justify-center',
+                      'bg-destructive text-destructive-foreground',
+                      'transition-all duration-200 shadow-soft',
+                      'hover:brightness-110 hover:shadow-glow',
+                    )}
+                    aria-label="Stop response"
+                    title="Stop response"
                   >
-                    <path d="M12 19V5M5 12l7-7 7 7" />
-                  </svg>
-                </button>
+                    <StopCircle className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={!input.trim()}
+                    className={cn(
+                      'shrink-0 w-9 h-9 rounded-xl flex items-center justify-center',
+                      'bg-gradient-to-br from-primary to-accent text-primary-foreground',
+                      'transition-all duration-200 shadow-soft',
+                      'hover:brightness-110 hover:shadow-glow',
+                      'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100 disabled:hover:shadow-soft',
+                    )}
+                    aria-label="Send message"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12 19V5M5 12l7-7 7 7" />
+                    </svg>
+                  </button>
+                )}
               </div>
               <div className="mt-1.5 text-center text-[10px] text-muted-foreground/70">
                 Press <kbd className="px-1 py-0.5 rounded bg-white/[0.06] text-foreground/80 font-mono text-[9px]">Enter</kbd> to send · <kbd className="px-1 py-0.5 rounded bg-white/[0.06] text-foreground/80 font-mono text-[9px]">Shift+Enter</kbd> for newline
