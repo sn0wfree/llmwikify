@@ -17,6 +17,13 @@ from starlette.responses import FileResponse, Response
 
 logger = logging.getLogger(__name__)
 
+# index.html must always revalidate so users get the latest chunk refs
+# after a new build (Vite hashes chunks, but stale index.html → stale chunks)
+INDEX_HTML_CACHE_CONTROL = "no-cache, must-revalidate"
+
+# Hashed assets under /assets/* are content-addressed and safe to cache forever
+HASHED_ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
 
 def find_webui_dist() -> Path | None:
     """Find the WebUI dist directory at the top-level ``ui/webui/dist``.
@@ -32,11 +39,32 @@ def find_webui_dist() -> Path | None:
     return None
 
 
+class _CacheControlledStaticFiles(StaticFiles):
+    """StaticFiles subclass that sets long-lived cache headers for hashed assets.
+
+    Vite/Rollup emits filenames like ``Editor-BKfmafmn.js`` whose hash
+    changes whenever the content changes. A ``max-age=1y, immutable``
+    header is safe because a new build produces a new hash, forcing the
+    browser (and any CDN in front) to fetch the updated file by name.
+    """
+
+    async def get_response(self, path, scope):  # type: ignore[override]
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = HASHED_ASSET_CACHE_CONTROL
+        return response
+
+
 class SPAFallbackMiddleware(BaseHTTPMiddleware):
     """Middleware that returns index.html for 404s on non-API routes.
 
     This enables client-side routing (React Router) so paths like /agent,
     /edit, /dashboard all serve the SPA entry point.
+
+    index.html is served with ``Cache-Control: no-cache, must-revalidate``
+    so browsers and proxies always revalidate it. A new build replaces
+    index.html in place; if the cached copy is stale it would still
+    reference now-deleted chunk hashes (e.g. ``Editor-rXkTDZD7.js``),
+    causing the dynamic-import failures users saw.
     """
 
     def __init__(self, app, index_html: Path, dist_dir: Path):
@@ -68,14 +96,21 @@ class SPAFallbackMiddleware(BaseHTTPMiddleware):
             return response
 
         # SPA fallback: serve index.html for client-side routes
-        return FileResponse(str(self.index_html))
+        response = FileResponse(str(self.index_html))
+        response.headers["Cache-Control"] = INDEX_HTML_CACHE_CONTROL
+        return response
 
 
 def mount_webui(app: FastAPI) -> None:
     """Mount WebUI static files to a FastAPI app.
 
     Sets up SPA fallback routing so client-side routes like /agent, /edit,
-    /dashboard all return index.html.
+    /dashboard all return index.html. Cache policy:
+
+      - ``/assets/*`` (hashed chunks) — long-lived, immutable
+      - ``index.html`` (entry point)  — ``no-cache, must-revalidate``
+        so a new build is picked up immediately and the browser never
+        references a chunk that was deleted by the latest build.
 
     Args:
         app: FastAPI application to mount WebUI onto
@@ -89,7 +124,11 @@ def mount_webui(app: FastAPI) -> None:
     # Mount static files (css/js/images) — NOT at / to avoid swallowing all routes
     assets_dir = dist_dir / "assets"
     if assets_dir.exists():
-        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+        app.mount(
+            "/assets",
+            _CacheControlledStaticFiles(directory=str(assets_dir)),
+            name="assets",
+        )
 
     # SPA fallback middleware: intercepts 404s for non-API routes
     index_html = dist_dir / "index.html"
