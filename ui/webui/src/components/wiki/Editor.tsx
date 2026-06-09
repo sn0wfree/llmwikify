@@ -7,6 +7,8 @@ import { useToast } from './Toast';
 import { FrontMatterPanel, FrontMatterData } from './FrontMatterPanel';
 import { GraphView } from './GraphView';
 import { PageTree } from './PageTree';
+import { Button } from '../ui/Button';
+import { cn } from '@/lib/utils';
 
 interface EditorProps {
   selectedPage?: string | null;
@@ -73,9 +75,7 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
     externalOnSelect?.(pageName);
   }, [externalOnSelect]);
 
-  useEffect(() => {
-    loadTree();
-  }, []);
+  useEffect(() => { loadTree(); }, []);
 
   useEffect(() => {
     if (selectedPage) {
@@ -85,9 +85,7 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
   }, [selectedPage, currentWikiId]);
 
   useEffect(() => {
-    if (currentWikiId) {
-      loadTree(currentWikiId);
-    }
+    if (currentWikiId) loadTree(currentWikiId);
   }, [currentWikiId]);
 
   const loadGraphData = useCallback(async (currentPage: string, wikiId?: string) => {
@@ -174,11 +172,14 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
 
   return (
     <div className="flex h-full">
-      {/* Page Tree */}
-      <div className={`${sidebarCollapsed ? 'w-10' : 'w-40'} bg-slate-800/50 border-r border-slate-700 overflow-y-auto transition-all duration-200`}>
+      {/* File Tree Sidebar */}
+      <div className={cn(
+        'bg-sidebar border-r border-sidebar-border overflow-y-auto transition-all duration-200',
+        sidebarCollapsed ? 'w-10' : 'w-44',
+      )}>
         {!sidebarCollapsed && (
           <>
-            <div className="p-2 text-xs font-semibold text-slate-400 uppercase">Pages</div>
+            <div className="px-3 py-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Pages</div>
             <PageTree
               pagesByType={pagesByType}
               selectedPage={page?.page_name || null}
@@ -189,25 +190,26 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
       </div>
 
       {/* Editor Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
-        <div className="h-10 bg-slate-800 border-b border-slate-700 flex items-center px-4 gap-2">
+        <div className="h-10 bg-background border-b border-border flex items-center px-3 gap-2 shrink-0">
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="text-slate-400 hover:text-slate-200 text-sm"
+            className="text-muted-foreground hover:text-foreground text-sm p-1 rounded hover:bg-muted transition-colors"
             title={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
           >
             {sidebarCollapsed ? '▶' : '◀'}
           </button>
-          {page && <span className="text-sm text-slate-300">{page.page_name}</span>}
+          {page && <span className="text-sm text-foreground font-medium truncate">{page.page_name}</span>}
           <div className="ml-auto flex gap-1">
             {(['edit', 'graph'] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
-                className={`px-2 py-1 text-xs rounded ${
-                  mode === m ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700'
-                }`}
+                className={cn(
+                  'px-2.5 py-1 text-xs rounded-md transition-colors font-medium',
+                  mode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
               >
                 {m === 'graph' ? 'Graph' : m.charAt(0).toUpperCase() + m.slice(1)}
               </button>
@@ -215,18 +217,23 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
             {mode === 'graph' && (
               <button
                 onClick={() => setShowLabels(!showLabels)}
-                className={`px-2 py-1 text-xs rounded ${showLabels ? 'bg-slate-600 text-white' : 'text-slate-400 hover:bg-slate-700'}`}
+                className={cn(
+                  'px-2.5 py-1 text-xs rounded-md transition-colors font-medium',
+                  showLabels ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
               >
                 Labels
               </button>
             )}
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={savePage}
               disabled={saving || !page}
-              className="ml-2 px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded text-white"
+              className="ml-1"
             >
               {saving ? 'Saving...' : 'Save'}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -240,7 +247,7 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
               <textarea
                 value={body}
                 onChange={(e) => handleBodyChange(e.target.value)}
-                className="w-1/2 h-full bg-slate-900 text-slate-100 p-4 font-mono text-sm resize-none focus:outline-none border-r border-slate-700"
+                className="w-1/2 h-full bg-background text-foreground p-4 font-mono text-sm resize-none focus:outline-none border-r border-border"
                 placeholder="Select a page or start writing..."
               />
               <div className="w-1/2 h-full overflow-y-auto p-4 markdown-body">
@@ -253,7 +260,7 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
           {mode === 'graph' && (
             <div className="flex h-full">
               {/* Graph area */}
-              <div className="w-1/2 h-full relative border-r border-slate-700">
+              <div className="w-1/2 h-full relative border-r border-border">
                 <GraphView
                   nodes={graphNodes}
                   edges={graphEdges}
