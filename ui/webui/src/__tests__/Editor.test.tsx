@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act, waitFor } from '@testing-library/react';
-import { Editor } from '../components/Editor';
-import { ToastProvider } from '../components/Toast';
+import { render, screen, act, waitFor } from './test-utils';
+import { Editor } from '../components/wiki/Editor';
+import { ToastProvider } from '../components/wiki/Toast';
 
 const mockSearch = vi.fn();
 const mockReadPage = vi.fn();

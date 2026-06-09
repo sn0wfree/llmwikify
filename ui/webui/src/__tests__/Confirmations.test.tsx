@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { Confirmations } from '../components/Confirmations';
+import { render, screen, waitFor } from './test-utils';
+import { Confirmations } from '../components/wiki/Confirmations';
 
 const mockList = vi.fn();
 const mockApprove = vi.fn();

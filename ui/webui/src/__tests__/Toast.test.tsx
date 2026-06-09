@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
-import { ToastProvider, useToast } from '../components/Toast';
+import { ToastProvider, useToast } from '../components/wiki/Toast';
 
 function TestComponent() {
   const { addToast } = useToast();

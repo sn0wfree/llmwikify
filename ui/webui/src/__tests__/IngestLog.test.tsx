@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { IngestLog } from '../components/IngestLog';
+import { render, screen, waitFor } from './test-utils';
+import { IngestLog } from '../components/wiki/IngestLog';
 
 const mockLog = vi.fn();
 

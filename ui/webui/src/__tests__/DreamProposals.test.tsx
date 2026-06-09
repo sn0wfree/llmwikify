@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { DreamProposals } from '../components/DreamProposals';
+import { render, screen, waitFor } from './test-utils';
+import { DreamProposals } from '../components/wiki/DreamProposals';
 
 const mockProposals = vi.fn();
 const mockApprove = vi.fn();

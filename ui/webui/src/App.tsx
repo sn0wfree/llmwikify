@@ -1,152 +1,168 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import { FileTree } from './components/FileTree';
-import { Editor } from './components/Editor';
-import { HealthStatus } from './components/HealthStatus';
-import { Insights } from './components/Insights';
-import { Notifications } from './components/Notifications';
-import { ToastProvider } from './components/Toast';
-import { WikiSelector } from './components/WikiSelector';
-import { CrossWikiSearch } from './components/CrossWikiSearch';
-import { WikiManager } from './components/WikiManager';
+import { Editor } from './components/wiki/Editor';
+import { Insights } from './components/wiki/Insights';
+import { Notifications } from './components/wiki/Notifications';
+import { HealthStatus } from './components/wiki/HealthStatus';
+import { WikiSelector } from './components/wiki/WikiSelector';
+import { CrossWikiSearch } from './components/wiki/CrossWikiSearch';
+import { WikiManager } from './components/wiki/WikiManager';
+import { TaskMonitor } from './components/wiki/TaskMonitor';
+import { Confirmations } from './components/wiki/Confirmations';
+import { DreamProposals } from './components/wiki/DreamProposals';
+import { DreamLog } from './components/wiki/DreamLog';
+import { IngestLog } from './components/wiki/IngestLog';
+import { EditHistory } from './components/wiki/EditHistory';
+import { AgentChat } from './components/agent/AgentChat';
+import { ResearchPanel } from './components/agent/ResearchPanel';
+import { AutoResearchPanel } from './components/agent/AutoResearchPanel';
+import { LLMSettings } from './components/agent/LLMSettings';
+import { Backdrop } from './components/agent/Backdrop';
+import { Badge } from './components/ui/Badge';
 import { useWikiStore } from './stores/wikiStore';
-import { api, WikiStatus, SinkStatus } from './api';
+import { api } from './api';
 
-const KnowledgeGrowth = lazy(() => import('./components/KnowledgeGrowth').then(m => ({ default: m.KnowledgeGrowth })));
+const KnowledgeGrowth = lazy(() =>
+  import('./components/wiki/KnowledgeGrowth').then(m => ({ default: m.KnowledgeGrowth }))
+);
 
-type ViewMode = 'edit' | 'dashboard' | 'insights';
+type ViewMode =
+  | 'edit' | 'dashboard' | 'insights'
+  | 'chat' | 'research' | 'autoresearch'
+  | 'tasks' | 'settings';
 
-function LazyWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <Suspense fallback={<div className="flex items-center justify-center h-full text-slate-500">Loading...</div>}>
-      {children}
-    </Suspense>
-  );
+interface BadgeCounts {
+  confirmations: number;
+  proposals: number;
+  notifications: number;
 }
 
 function App() {
-  const [status, setStatus] = useState<WikiStatus | null>(null);
-  const [sinkStatus, setSinkStatus] = useState<SinkStatus | null>(null);
   const [view, setView] = useState<ViewMode>('edit');
-  const [selectedPage, setSelectedPage] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [showWikiManager, setShowWikiManager] = useState(false);
-
-  const { loadWikis, currentWikiId, isMultiWikiMode, switchWiki, updateWikiPageCount } = useWikiStore();
+  const [showManager, setShowManager] = useState(false);
+  const [badges, setBadges] = useState<BadgeCounts>({ confirmations: 0, proposals: 0, notifications: 0 });
+  const { wikis, currentWikiId, loadWikis } = useWikiStore();
 
   useEffect(() => {
     loadWikis();
   }, [loadWikis]);
 
-  const loadStatus = useCallback(async () => {
-    try {
-      let s: WikiStatus;
-      if (isMultiWikiMode && currentWikiId) {
-        s = await api.wiki.scoped.status(currentWikiId);
-      } else {
-        s = await api.wiki.status();
-      }
-      setStatus(s);
-      if (currentWikiId) {
-        updateWikiPageCount(currentWikiId, s.page_count);
-      }
-    } catch {
-      // API not available
-    }
-
-    try {
-      const sk = await api.wiki.sinkStatus();
-      setSinkStatus(sk);
-    } catch {
-      setSinkStatus(null);
-    }
-  }, [currentWikiId, isMultiWikiMode]);
-
   useEffect(() => {
-    loadStatus();
-    const interval = setInterval(loadStatus, 30000);
+    const fetchBadges = async () => {
+      try {
+        const status = await api.agent.status(currentWikiId || undefined);
+        const proposalsCount = Object.values(status.dream_proposals || {}).reduce(
+          (a: number, b) => a + (Number(b) || 0), 0
+        ) as number;
+        setBadges({
+          confirmations: status.pending_confirmations || 0,
+          proposals: proposalsCount || 0,
+          notifications: status.unread_notifications || 0,
+        });
+      } catch {
+        /* silent */
+      }
+    };
+    fetchBadges();
+    const interval = setInterval(fetchBadges, 30000);
     return () => clearInterval(interval);
-  }, [loadStatus]);
-
-  const handleSearchResult = useCallback((pageName: string, wikiId: string) => {
-    if (wikiId !== currentWikiId) {
-      switchWiki(wikiId);
-    }
-    setSelectedPage(pageName);
-    setView('edit');
-  }, [currentWikiId, switchWiki]);
+  }, [currentWikiId]);
 
   return (
-    <ToastProvider>
-    <div className="flex h-screen bg-slate-900 text-slate-100">
-      <aside
-        className={`${
-          sidebarOpen ? 'w-64' : 'w-0'
-        } transition-all duration-200 bg-slate-800 border-r border-slate-700 flex flex-col overflow-hidden`}
-      >
-        <div className="border-b border-slate-700">
-          <div className="p-4">
-            <div className="flex items-baseline gap-2">
-              <h1 className="text-lg font-bold text-blue-400">llmwikify</h1>
-              {status?.version && (
-                <span className="text-xs text-slate-600">v{status.version}</span>
-              )}
+    <div className="flex h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      {sidebarOpen && (
+        <aside className="w-64 bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col">
+          <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
+            <h1 className="text-lg font-bold text-[var(--accent)]">llmwikify</h1>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="text-[var(--text-secondary)] hover:text-[var(--accent)]"
+            >
+              ×
+            </button>
+          </div>
+
+          <WikiSelector onOpenManager={() => setShowManager(true)} />
+
+          <nav className="p-2 space-y-1 overflow-y-auto flex-1">
+            <div className="text-xs text-[var(--text-secondary)] px-3 py-1 mt-2">Wiki</div>
+            <NavButton active={view === 'edit'} onClick={() => setView('edit')}>
+              Editor
+            </NavButton>
+            <NavButton active={view === 'dashboard'} onClick={() => setView('dashboard')}>
+              Dashboard
+            </NavButton>
+            <NavButton active={view === 'insights'} onClick={() => setView('insights')}>
+              Insights
+            </NavButton>
+
+            <div className="text-xs text-[var(--text-secondary)] px-3 py-1 mt-3">Agent</div>
+            <NavButton active={view === 'chat'} onClick={() => setView('chat')}>
+              Agent Chat
+            </NavButton>
+            <NavButton active={view === 'research'} onClick={() => setView('research')}>
+              Research
+            </NavButton>
+            <NavButton active={view === 'autoresearch'} onClick={() => setView('autoresearch')}>
+              AutoResearch
+            </NavButton>
+
+            <div className="text-xs text-[var(--text-secondary)] px-3 py-1 mt-3">System</div>
+            <NavButton active={view === 'tasks'} onClick={() => setView('tasks')}>
+              Tasks
+            </NavButton>
+            <NavButton active={view === 'settings'} onClick={() => setView('settings')}>
+              LLM Settings
+            </NavButton>
+
+            <div className="border-t border-[var(--border)] my-2" />
+            <div className="text-xs text-[var(--text-secondary)] px-3 py-1">Activity</div>
+            <div className="px-3 py-1 text-sm text-[var(--text-secondary)]">
+              Confirmations: <Badge variant="error">{badges.confirmations}</Badge>
             </div>
-          </div>
-          <WikiSelector onOpenManager={() => setShowWikiManager(true)} />
-        </div>
+            <div className="px-3 py-1 text-sm text-[var(--text-secondary)]">
+              Proposals: <Badge variant="warning">{badges.proposals}</Badge>
+            </div>
+            <div className="px-3 py-1 text-sm text-[var(--text-secondary)]">
+              Notifications: <Badge>{badges.notifications}</Badge>
+            </div>
+          </nav>
 
-        <nav className="p-2 space-y-1">
-          <NavButton active={view === 'edit'} onClick={() => setView('edit')}>
-            Editor
-          </NavButton>
-          <NavButton active={view === 'dashboard'} onClick={() => setView('dashboard')}>
-            Dashboard
-          </NavButton>
-          <NavButton active={view === 'insights'} onClick={() => setView('insights')}>
-            Insights
-          </NavButton>
-        </nav>
+          <HealthStatus />
+        </aside>
+      )}
 
-        <div className="mt-auto p-4 border-t border-slate-700">
-          <HealthStatus status={status} sinkStatus={sinkStatus} />
-          <div className="mt-2 text-xs text-slate-500">
-            <a href="/agent" className="hover:text-blue-400">→ Agent UI</a>
-          </div>
-        </div>
-      </aside>
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="absolute top-4 left-4 z-10 px-3 py-1 bg-[var(--bg-secondary)] rounded text-sm"
+        >
+          ☰ Menu
+        </button>
+      )}
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-12 bg-slate-800 border-b border-slate-700 flex items-center px-4 gap-2">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1.5 rounded hover:bg-slate-700 text-slate-400"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <CrossWikiSearch onResult={handleSearchResult} />
+        <Backdrop />
+        <div className="p-3 border-b border-[var(--border)] flex items-center gap-3">
+          <CrossWikiSearch />
           <Notifications />
-        </header>
-
-        <div className="flex-1 overflow-hidden">
-          {view === 'edit' && (
-            <Editor
-              selectedPage={selectedPage}
-              onPageSelect={setSelectedPage}
-              currentWikiId={currentWikiId}
-            />
-          )}
-          {view === 'dashboard' && <LazyWrapper><KnowledgeGrowth currentWikiId={currentWikiId} isMultiWikiMode={isMultiWikiMode} /></LazyWrapper>}
-          {view === 'insights' && <Insights />}
+        </div>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Suspense fallback={<div className="p-6 text-[var(--text-secondary)]">Loading...</div>}>
+            {view === 'edit' && <Editor />}
+            {view === 'dashboard' && <KnowledgeGrowth />}
+            {view === 'insights' && <Insights />}
+            {view === 'chat' && <AgentChat />}
+            {view === 'research' && <ResearchPanel />}
+            {view === 'autoresearch' && <AutoResearchPanel />}
+            {view === 'tasks' && <TaskMonitor />}
+            {view === 'settings' && <LLMSettings />}
+          </Suspense>
         </div>
       </main>
 
-      {showWikiManager && (
-        <WikiManager onClose={() => setShowWikiManager(false)} />
-      )}
+      {showManager && <WikiManager onClose={() => setShowManager(false)} />}
     </div>
-    </ToastProvider>
   );
 }
 
@@ -162,13 +178,14 @@ function NavButton({
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+      className={`w-full text-left px-3 py-2 rounded text-sm transition-colors relative ${
         active
-          ? 'bg-blue-600/20 text-blue-400'
-          : 'text-slate-300 hover:bg-slate-700'
+          ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
       }`}
     >
-      {children}
+      {active && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[var(--accent)] rounded-r" />}
+      <span>{children}</span>
     </button>
   );
 }
