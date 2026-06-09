@@ -26,6 +26,7 @@ import {
 } from '../../lib/autoresearch-api';
 import { useWikiStore } from '../../stores/wikiStore';
 import { AutoResearchDetail } from './AutoResearchDetail';
+import { SaveToWikiModal } from './SaveToWikiModal';
 
 // ─── Constants ────────────────────────────────────────────────
 
@@ -336,10 +337,12 @@ function SessionHeader({
   session,
   onRefresh,
   onResume,
+  onSaveToWiki,
 }: {
   session: AutoResearchSession;
   onRefresh: () => void;
   onResume: () => void;
+  onSaveToWiki: () => void;
 }) {
   const status = STATUS_LABELS[session.status] || STATUS_LABELS.error;
   const canResume =
@@ -364,11 +367,26 @@ function SessionHeader({
           </div>
         </div>
         <div className="flex gap-1">
+          {session.status === 'done' && !session.wiki_page_name && (
+            <button
+              onClick={onSaveToWiki}
+              className="text-xs text-purple-400 hover:text-purple-300 px-2 py-1 rounded
+                border border-purple-500/30 hover:border-purple-500/50 transition-colors"
+              title="保存到 Wiki"
+            >
+              保存到 Wiki
+            </button>
+          )}
+          {session.wiki_page_name && (
+            <span className="text-xs text-green-400/70 px-2 py-1">
+              ✓ 已保存: {session.wiki_page_name}
+            </span>
+          )}
           {canResume && (
             <button
               onClick={onResume}
               className="text-xs text-green-400 hover:text-green-300 px-2 py-1 rounded
-                border border-green-500/30 hover:border-green-500/50 transition-colors"
+                border border-green-500/30 hover:border-green-500/50 transition-color-colors"
               title="恢复研究（使用已有资源重新跑一轮）"
             >
               ▶ 恢复
@@ -457,6 +475,8 @@ export function AutoResearchPanel() {
   const [eventLog, setEventLog] = useState<EventLogEntry[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const [saveModalSessionId, setSaveModalSessionId] = useState<string | null>(null);
+  const [saveModalQuery, setSaveModalQuery] = useState('');
 
   // Load session details
   const loadSession = useCallback(async (id: string) => {
@@ -659,7 +679,15 @@ export function AutoResearchPanel() {
           </div>
         ) : session ? (
           <>
-            <SessionHeader session={session} onRefresh={handleRefresh} onResume={handleResume} />
+            <SessionHeader
+              session={session}
+              onRefresh={handleRefresh}
+              onResume={handleResume}
+              onSaveToWiki={() => {
+                setSaveModalSessionId(session.id);
+                setSaveModalQuery(session.query);
+              }}
+            />
 
             <div className="px-4 border-b border-border flex gap-1">
               {TABS.map((tab) => (
@@ -701,6 +729,15 @@ export function AutoResearchPanel() {
           </div>
         )}
       </div>
+
+      {saveModalSessionId && (
+        <SaveToWikiModal
+          sessionId={saveModalSessionId}
+          query={saveModalQuery}
+          onClose={() => { setSaveModalSessionId(null); setSaveModalQuery(''); }}
+          onSaved={() => { setSaveModalSessionId(null); setSaveModalQuery(''); loadSession(selectedId!); }}
+        />
+      )}
     </div>
   );
 }

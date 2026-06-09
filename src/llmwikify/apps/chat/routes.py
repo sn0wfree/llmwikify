@@ -230,3 +230,66 @@ async def cancel_autoresearch(session_id: str):
         return {"cancelled": deleted, "session_id": session_id}
     db.update_research_status(session_id, "cancelling", session.get("current_step"))
     return {"cancelled": True, "session_id": session_id}
+
+
+# ─── Save to Wiki ──────────────────────────────────────────────────
+
+
+@router.post("/{session_id}/save-to-wiki")
+async def save_to_wiki(session_id: str, request: Request):
+    """Save research results to wiki via confirmation flow."""
+    from fastapi.responses import JSONResponse
+
+    body = await request.json()
+    page_name = body.get("page_name")
+
+    db = _get_db()
+    session = db.get_research_session(session_id)
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    if session["status"] != "done":
+        return JSONResponse({"error": "Session not done yet"}, status_code=400)
+    if session.get("wiki_page_name"):
+        return JSONResponse({"error": f"Already saved to wiki as: {session['wiki_page_name']}"}, status_code=409)
+
+    try:
+        from llmwikify.apps.chat.agent.agent_service import AgentService  # noqa: F401
+        from llmwikify.interfaces.server.http.chat_sse import get_agent_service
+        svc = get_agent_service()
+        wiki_id = session.get("wiki_id")
+        registry = svc._get_tool_registry(wiki_id)
+    except Exception as e:
+        return JSONResponse({"error": f"Cannot access tool registry: {e}"}, status_code=500)
+
+    result = await registry.execute("research_save_to_wiki", {
+        "session_id": session_id,
+        "page_name": page_name,
+        "include_sources": body.get("include_sources", True),
+    })
+
+    return result
+
+
+# ─── Rate Sources ──────────────────────────────────────────────────
+
+
+@router.post("/{session_id}/rate")
+async def rate_research(session_id: str, request: Request):
+    """Rate sources from a research session."""
+    body = await request.json()
+    rating = body.get("rating", 0)
+    source_ratings = body.get("source_ratings", {})
+    feedback = body.get("feedback")
+
+    db = _get_db()
+    session = db.get_research_session(session_id)
+    if not session:
+        return {"error": "Session not found"}
+
+    for source_id, source_rating in source_ratings.items():
+        try:
+            db.rate_source(source_id, int(source_rating))
+        except Exception as e:
+            logger.warning("Failed to rate source %s: %s", source_id, e)
+
+    return {"rated": True, "session_id": session_id, "rating": rating, "feedback": feedback}

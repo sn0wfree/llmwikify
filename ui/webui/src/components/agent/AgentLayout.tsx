@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
-  MessageSquare, Search, Zap, CheckSquare, Settings, ArrowLeft,
+  MessageSquare, Search, CheckSquare, Settings, ArrowLeft,
   PanelLeftClose, PanelLeftOpen, Sparkles, Bot, Activity,
 } from 'lucide-react';
 import { WikiSelector } from '../wiki/WikiSelector';
@@ -19,8 +19,7 @@ interface BadgeCounts {
 
 const NAV_PRIMARY = [
   { to: '/agent/chat', label: 'Chat', icon: MessageSquare },
-  { to: '/agent/research', label: 'Research', icon: Search },
-  { to: '/agent/autoresearch', label: 'AutoResearch', icon: Zap },
+  { to: '/agent/autoresearch', label: 'Research', icon: Search },
 ] as const;
 
 const NAV_SECONDARY = [

@@ -12,78 +12,6 @@ export type ChatStreamEvent =
   | { type: 'confirmation_required'; confirmation_id: string; details: Record<string, unknown> }
   | { type: 'error'; message: string };
 
-export type ResearchStreamEvent =
-  | { type: 'step'; step: string; message: string; session_id?: string }
-  | { type: 'reasoning'; action: string; round: number; phase: string }
-  | { type: 'round_max'; round: number; message: string }
-  | { type: 'gap_detected'; gaps: string[]; round: number }
-  | { type: 'sub_query_created'; sub_query_id: string; query: string; source_type: string; url?: string }
-  | { type: 'sub_query_done'; sub_query_id: string; status: string }
-  | { type: 'sub_query_failed'; sub_query_id: string; error: string }
-  | { type: 'source_gathered'; source_id: string; source_type: string; title: string; url: string }
-  | { type: 'source_analyzed'; source_id: string; title: string }
-  | { type: 'source_analysis_failed'; source_id: string; error: string }
-  | { type: 'progress'; progress: number; message: string }
-  | { type: 'synthesis_complete'; synthesis: Record<string, number> }
-  | { type: 'review_passed'; round: number; score: number; feedback: string }
-  | { type: 'review_issues'; round: number; score: number; issues: string[] }
-  | { type: 'review_max_rounds'; message: string }
-  | { type: 'done'; report: ResearchReport }
-  | { type: 'error'; error: string };
-
-export interface ResearchReport {
-  query: string;
-  markdown: string;
-  sources: Array<{ id: string; title: string; url: string; source_type: string }>;
-  synthesis_summary?: Record<string, number>;
-  rounds?: number;
-  quality_score?: number;
-}
-
-export interface ResearchSession {
-  id: string;
-  wiki_id: string;
-  query: string;
-  status: string;
-  current_step: string;
-  progress: number;
-  result: string | null;
-  wiki_page_name: string | null;
-  created_at: string;
-  updated_at: string;
-  sub_queries?: ResearchSubQuery[];
-  sources?: ResearchSource[];
-  sub_query_count?: number;
-  source_count?: number;
-}
-
-export interface ResearchSubQuery {
-  id: string;
-  session_id: string;
-  query: string;
-  source_type: string;
-  url: string | null;
-  status: string;
-  result: unknown;
-  error: string | null;
-  created_at: string;
-  completed_at: string | null;
-}
-
-export interface ResearchSource {
-  id: string;
-  session_id: string;
-  sub_query_id: string;
-  source_type: string;
-  url: string;
-  title: string;
-  content_length: number;
-  content_preview: string;
-  analysis: unknown;
-  rating: number | null;
-  created_at: string;
-}
-
 export function chatStream(
   message: string,
   sessionId?: string,
@@ -316,69 +244,6 @@ export interface LLMConfig {
   timeout: number;
 }
 
-function _openResearchStream(sessionId: string, maxRetries = 3): ReadableStream<ResearchStreamEvent> {
-  const headers: Record<string, string> = {};
-  if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
-  
-  let retryCount = 0;
-  
-  async function connectStream(controller: ReadableStreamDefaultController<ResearchStreamEvent>): Promise<void> {
-    try {
-      const res = await fetch(`${API_BASE}/research/${sessionId}/stream`, { headers });
-      if (!res.ok || !res.body) {
-        if (retryCount < maxRetries) {
-          retryCount++;
-          const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 10000);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          return connectStream(controller);
-        }
-        controller.enqueue({ type: 'error', error: `HTTP ${res.status} after ${maxRetries} retries` });
-        controller.close();
-        return;
-      }
-      
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6)) as ResearchStreamEvent;
-              controller.enqueue(event);
-            } catch { /* skip malformed */ }
-          }
-        }
-      }
-      
-      // Stream completed normally
-      controller.close();
-    } catch (e) {
-      // Network error - retry with backoff
-      if (retryCount < maxRetries) {
-        retryCount++;
-        const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 10000);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return connectStream(controller);
-      }
-      controller.enqueue({ type: 'error', error: String(e) });
-      controller.close();
-    }
-  }
-
-  return new ReadableStream<ResearchStreamEvent>({
-    async start(controller) {
-      await connectStream(controller);
-    },
-  });
-}
-
 export const api = {
   wiki: {
     status: () => request<WikiStatus>('/wiki/status'),
@@ -576,50 +441,5 @@ export const api = {
     log: (limit = 20, wikiId?: string) => request<IngestLogEntry[]>(`/agent/ingest/log?limit=${limit}${wikiId ? `&wiki_id=${wikiId}` : ''}`),
     changes: (id: string) => request<IngestLogEntry>(`/agent/ingest/log/${id}`),
     revert: (id: string) => request<Record<string, unknown>>(`/agent/ingest/log/${id}/revert`, { method: 'POST' }),
-  },
-
-  research: {
-    stream: (sessionId: string) => _openResearchStream(sessionId),
-    start: async (query: string, wikiId?: string): Promise<{ sessionId: string; stream: ReadableStream<ResearchStreamEvent> }> => {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
-      const res = await fetch(`${API_BASE}/research/start`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ query, wiki_id: wikiId }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `HTTP ${res.status}`);
-      }
-      const { session_id } = await res.json();
-      return { sessionId: session_id, stream: _openResearchStream(session_id) };
-    },
-    list: (wikiId?: string) => request<{ research_sessions: ResearchSession[] }>(`/research/${wikiId ? `?wiki_id=${wikiId}` : ''}`),
-    get: (id: string) => request<ResearchSession>(`/research/${id}`),
-    pause: (id: string) => request<{ paused: boolean }>(`/research/${id}/pause`, { method: 'POST' }),
-    resume: async (id: string): Promise<{ sessionId: string; stream: ReadableStream<ResearchStreamEvent> }> => {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
-      const res = await fetch(`${API_BASE}/research/${id}/resume`, { method: 'POST', headers });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `HTTP ${res.status}`);
-      }
-      return { sessionId: id, stream: _openResearchStream(id) };
-    },
-    delete: (id: string) => request<{ cancelled: boolean }>(`/research/${id}`, { method: 'DELETE' }),
-    sources: (id: string) => request<{ sources: ResearchSource[] }>(`/research/${id}/sources`),
-    subQueries: (id: string) => request<{ sub_queries: ResearchSubQuery[] }>(`/research/${id}/sub-queries`),
-    rate: (id: string, rating: number, sourceRatings?: Record<string, number>, feedback?: string) =>
-      request<{ rated: boolean }>(`/research/${id}/rate`, {
-        method: 'POST',
-        body: JSON.stringify({ rating, source_ratings: sourceRatings, feedback }),
-      }),
-    saveToWiki: (id: string, pageName?: string) =>
-      request<{ status: string; confirmation_id?: string; impact?: Record<string, unknown>; error?: string }>(
-        `/research/${id}/save-to-wiki`,
-        { method: 'POST', body: JSON.stringify({ page_name: pageName }) }
-      ),
   },
 };

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api } from '../../api';
+import { getAutoResearch } from '../../lib/autoresearch-api';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 
@@ -63,8 +63,8 @@ function ResearchSaveView({ args }: { args: Record<string, unknown> }) {
   useEffect(() => {
     if (!sessionId) { setLoading(false); return; }
     setLoading(true);
-    api.research.get(sessionId)
-      .then(data => {
+    getAutoResearch(sessionId)
+      .then(({ session: data }) => {
         let result = data.result;
         if (typeof result === 'string') {
           try { result = JSON.parse(result); } catch { /* keep as string */ }

@@ -496,36 +496,23 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     set_agent_service(agent_service)
 
     from llmwikify.interfaces.server.http.chat_sse import router as agent_router
-    from llmwikify.interfaces.server.http.research import router as research_router
-    from llmwikify.interfaces.server.http.research import set_research_deps
     from llmwikify.apps.chat.routes import set_autoresearch_deps, router as autoresearch_router
 
     # Load research config from global config file
     research_config = _load_research_config()
 
-    set_research_deps(
-        db=agent_service.app_db.chat,
-        wiki_registry=registry,
-        llm_client=None,
-        config=research_config,
-    )
-
-    # AutoResearch - independent 6-step framework engine with its own DB.
+    # AutoResearch — the unified 6-step research framework.
     from llmwikify.apps.chat.db import AutoResearchDatabase
     autoresearch_db = AutoResearchDatabase(data_dir)
-    # Phase 9: pass the LLM client explicitly so the L3 chat/
-    # routes module doesn't need an L3→L4 import to the agent
-    # service (which would violate the layered architecture).
     set_autoresearch_deps(
         db=autoresearch_db,
         wiki_registry=registry,
         llm_client=agent_service._get_llm(),
-        config=research_config,  # Inherit base config; 6-step config in module defaults
+        config=research_config,
     )
     logger.info("AutoResearch DB initialized at: %s", autoresearch_db.db_path)
 
     app.include_router(agent_router)
-    app.include_router(research_router)
     app.include_router(autoresearch_router)
 
     _mount_agent_spa(app)

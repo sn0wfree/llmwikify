@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { api } from '../../api';
+import { saveToWiki } from '../../lib/autoresearch-api';
 
 interface Props {
   sessionId: string;
@@ -21,14 +21,14 @@ export function SaveToWikiModal({ sessionId, query, onClose, onSaved }: Props) {
   const [pageName, setPageName] = useState(() => generatePageName(query || ''));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<{ message: string; confirmation_id?: string } | null>(null);
+  const [result, setResult] = useState<{ status: string; confirmation_id?: string } | null>(null);
 
   const handleSave = useCallback(async () => {
     if (!pageName.trim()) return;
     setLoading(true);
     setError('');
     try {
-      const res = await api.research.saveToWiki(sessionId, pageName.trim());
+      const res = await saveToWiki(sessionId, pageName.trim());
       setResult(res);
       onSaved?.();
     } catch (e) {

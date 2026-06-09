@@ -15,9 +15,6 @@ const Insights = lazy(() =>
 const AgentChat = lazy(() =>
   import('./components/agent/AgentChat').then(m => ({ default: m.AgentChat }))
 );
-const ResearchPanel = lazy(() =>
-  import('./components/agent/ResearchPanel').then(m => ({ default: m.ResearchPanel }))
-);
 const AutoResearchPanel = lazy(() =>
   import('./components/agent/AutoResearchPanel').then(m => ({ default: m.AutoResearchPanel }))
 );
@@ -49,7 +46,7 @@ function App() {
           <Route path="/agent" element={<AgentLayout />}>
             <Route index element={<Navigate to="/agent/chat" replace />} />
             <Route path="chat" element={<AgentChat />} />
-            <Route path="research" element={<ResearchPanel />} />
+            <Route path="research" element={<Navigate to="/agent/autoresearch" replace />} />
             <Route path="autoresearch" element={<AutoResearchPanel />} />
             <Route path="tasks" element={<TaskMonitor />} />
             <Route path="settings" element={<LLMSettings />} />
