@@ -2,7 +2,7 @@
 
 C1 establishes the rule-based refactor of WikiAnalyzer. The
 8 ``_detect_X`` methods are now small, focused ``Rule`` classes
-in ``llmwikify.core.lint.rules``, and ``LintEngine`` aggregates
+in ``llmwikify.kernel.wiki.lint.rules``, and ``LintEngine`` aggregates
 their results.
 
 These tests validate:
@@ -36,8 +36,8 @@ import pytest
 
 
 def test_rule_base_class_is_importable():
-    """The Rule base class can be imported from llmwikify.core.lint."""
-    from llmwikify.core.lint import Rule
+    """The Rule base class can be imported from llmwikify.kernel.wiki.lint."""
+    from llmwikify.kernel.wiki.lint import Rule
 
     assert Rule is not None
     assert hasattr(Rule, "name")
@@ -45,15 +45,15 @@ def test_rule_base_class_is_importable():
 
 
 def test_lint_engine_is_importable():
-    """LintEngine is importable from llmwikify.core.lint."""
-    from llmwikify.core.lint import LintEngine
+    """LintEngine is importable from llmwikify.kernel.wiki.lint."""
+    from llmwikify.kernel.wiki.lint import LintEngine
 
     assert LintEngine is not None
 
 
 def test_lint_engine_requires_rule_names():
     """LintEngine raises ValueError if a rule has no name."""
-    from llmwikify.core.lint import LintEngine, Rule
+    from llmwikify.kernel.wiki.lint import LintEngine, Rule
 
     class NamelessRule(Rule):
         name = ""
@@ -67,7 +67,7 @@ def test_lint_engine_requires_rule_names():
 
 def test_lint_engine_rejects_duplicate_names():
     """LintEngine raises ValueError on duplicate rule names."""
-    from llmwikify.core.lint import LintEngine, Rule
+    from llmwikify.kernel.wiki.lint import LintEngine, Rule
 
     class Rule1(Rule):
         name = "dup"
@@ -83,7 +83,7 @@ def test_lint_engine_rejects_duplicate_names():
 
 def test_lint_engine_run_rule_returns_empty_for_unknown():
     """Unknown rule name returns [] (no exception, no error)."""
-    from llmwikify.core.lint import LintEngine
+    from llmwikify.kernel.wiki.lint import LintEngine
 
     engine = LintEngine(wiki=None, rules=[])
     assert engine.run_rule("nonexistent_rule") == []
@@ -91,7 +91,7 @@ def test_lint_engine_run_rule_returns_empty_for_unknown():
 
 def test_lint_engine_property_rule_names_is_sorted():
     """LintEngine.rule_names returns a sorted list of registered names."""
-    from llmwikify.core.lint import LintEngine, Rule
+    from llmwikify.kernel.wiki.lint import LintEngine, Rule
 
     class RuleZ(Rule):
         name = "z_rule"
@@ -109,7 +109,7 @@ def test_lint_engine_skips_failing_rule(caplog):
     """A rule that raises is caught and skipped (no crash)."""
     import logging
 
-    from llmwikify.core.lint import LintEngine, Rule
+    from llmwikify.kernel.wiki.lint import LintEngine, Rule
 
     class BrokenRule(Rule):
         name = "broken"
@@ -125,7 +125,7 @@ def test_lint_engine_skips_failing_rule(caplog):
 
 def test_lint_engine_aggregates_multiple_rules():
     """run_all() concatenates results from every rule."""
-    from llmwikify.core.lint import LintEngine, Rule
+    from llmwikify.kernel.wiki.lint import LintEngine, Rule
 
     class RuleA(Rule):
         name = "a"
@@ -160,7 +160,7 @@ RULE_NAMES = [
 
 def test_all_eight_rules_are_importable():
     """All 8 Rule subclasses are importable from core.lint.rules."""
-    from llmwikify.core.lint.rules import (
+    from llmwikify.kernel.wiki.lint.rules import (
         DataGapsRule,
         DatedClaimsRule,
         KnowledgeGapsRule,
@@ -187,7 +187,7 @@ def test_all_eight_rules_are_importable():
 
 def test_each_rule_has_unique_name():
     """No two rules share the same ``name`` attribute."""
-    from llmwikify.core.lint.rules import RULES
+    from llmwikify.kernel.wiki.lint.rules import RULES
 
     names = [r.name for r in RULES]
     assert len(names) == len(set(names)), f"duplicate rule names: {names}"
@@ -195,7 +195,7 @@ def test_each_rule_has_unique_name():
 
 def test_all_rule_names_match_documented_set():
     """The 8 rule names are exactly the documented set."""
-    from llmwikify.core.lint.rules import RULES
+    from llmwikify.kernel.wiki.lint.rules import RULES
 
     actual = {r.name for r in RULES}
     expected = set(RULE_NAMES)
@@ -206,14 +206,14 @@ def test_all_rule_names_match_documented_set():
 
 def test_rules_list_has_exactly_eight_entries():
     """There are exactly 8 rules in the canonical RULES list."""
-    from llmwikify.core.lint.rules import RULES
+    from llmwikify.kernel.wiki.lint.rules import RULES
 
     assert len(RULES) == 8
 
 
 def test_each_rule_class_has_run_method():
     """Every rule class implements ``run(wiki) -> list[dict]``."""
-    from llmwikify.core.lint.rules import RULES
+    from llmwikify.kernel.wiki.lint.rules import RULES
 
     for rule in RULES:
         assert callable(rule.run), f"{type(rule).__name__}.run is not callable"
@@ -226,8 +226,8 @@ def test_each_rule_class_has_run_method():
 
 def test_wiki_analyzer_has_lint_engine():
     """WikiAnalyzer now holds a LintEngine instance."""
-    from llmwikify.core.lint import LintEngine
-    from llmwikify.core.wiki_analyzer import WikiAnalyzer
+    from llmwikify.kernel.wiki.lint import LintEngine
+    from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
 
     # We can't easily instantiate WikiAnalyzer without a Wiki, so
     # inspect the source for the integration.
@@ -240,7 +240,7 @@ def test_wiki_analyzer_has_lint_engine():
 
 def test_each_detect_method_is_one_line_delegate():
     """Each ``_detect_X`` method is now a 1-line delegate to ``_run_rule``."""
-    from llmwikify.core.wiki_analyzer import WikiAnalyzer
+    from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
 
     for name in (
         "_detect_dated_claims",
@@ -268,7 +268,7 @@ def test_each_detect_method_is_one_line_delegate():
 
 def test_wiki_analyzer_lint_uses_run_all_rules():
     """The lint() method's investigations section uses _run_all_rules()."""
-    from llmwikify.core.wiki_analyzer import WikiAnalyzer
+    from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
 
     src = inspect.getsource(WikiAnalyzer.lint)
     assert "_run_all_rules" in src, (
@@ -297,7 +297,7 @@ def test_wiki_analyzer_lint_uses_run_all_rules():
 @pytest.fixture
 def temp_wiki(tmp_path):
     """A minimal Wiki with one markdown page that has a 2020 year mention."""
-    from llmwikify.core.wiki import Wiki
+    from llmwikify.kernel.wiki.wiki import Wiki
 
     wiki = Wiki(tmp_path)
     wiki.init()
@@ -312,7 +312,7 @@ def temp_wiki(tmp_path):
 
 def test_dated_claim_rule_against_real_wiki(temp_wiki):
     """DatedClaimsRule fires when page year (2020) is 3+ years behind source (2024)."""
-    from llmwikify.core.lint.rules import DatedClaimsRule
+    from llmwikify.kernel.wiki.lint.rules import DatedClaimsRule
 
     rule = DatedClaimsRule()
     issues = rule.run(temp_wiki)
@@ -324,8 +324,8 @@ def test_dated_claim_rule_against_real_wiki(temp_wiki):
 
 def test_dated_claim_rule_no_sources_returns_empty(tmp_path):
     """If there are no sources, the rule returns no issues (no baseline)."""
-    from llmwikify.core.lint.rules import DatedClaimsRule
-    from llmwikify.core.wiki import Wiki
+    from llmwikify.kernel.wiki.lint.rules import DatedClaimsRule
+    from llmwikify.kernel.wiki.wiki import Wiki
 
     wiki = Wiki(tmp_path)
     wiki.init()
@@ -339,8 +339,8 @@ def test_dated_claim_rule_no_sources_returns_empty(tmp_path):
 
 def test_lint_engine_run_all_against_real_wiki(temp_wiki):
     """LintEngine.run_all() runs every rule against a real Wiki without crashing."""
-    from llmwikify.core.lint import LintEngine
-    from llmwikify.core.lint.rules import RULES
+    from llmwikify.kernel.wiki.lint import LintEngine
+    from llmwikify.kernel.wiki.lint.rules import RULES
 
     engine = LintEngine(temp_wiki, rules=RULES)
     issues = engine.run_all()
@@ -351,8 +351,8 @@ def test_lint_engine_run_all_against_real_wiki(temp_wiki):
 
 def test_lint_engine_run_specific_rule(temp_wiki):
     """LintEngine.run_rule('dated_claim') returns the dated-claim issues."""
-    from llmwikify.core.lint import LintEngine
-    from llmwikify.core.lint.rules import RULES
+    from llmwikify.kernel.wiki.lint import LintEngine
+    from llmwikify.kernel.wiki.lint.rules import RULES
 
     engine = LintEngine(temp_wiki, rules=RULES)
     issues = engine.run_rule("dated_claim")

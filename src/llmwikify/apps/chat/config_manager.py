@@ -16,7 +16,7 @@ GLOBAL_CONFIG_FILE = GLOBAL_CONFIG_DIR / "llmwikify.json"
 DEFAULT_LLM_CONFIG: dict[str, Any] = {
     "enabled": True,
     "provider": "minimax",
-    "model": "MiniMax-M2.7",
+    "model": "MiniMax-M3",
     "base_url": "https://api.minimaxi.com/v1",
     "api_key": "",
     "timeout": 120,

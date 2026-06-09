@@ -5,9 +5,9 @@ import logging
 from pathlib import Path
 from typing import Any
 from fastapi import APIRouter, FastAPI, Request, HTTPException, Depends
-from llmwikify.core import Wiki
-from llmwikify.core.wiki_instance import WikiType
-from llmwikify.core.wiki_registry import WikiRegistry
+from llmwikify.kernel import Wiki
+from llmwikify.kernel.multi_wiki.instance import WikiType
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ def _register_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
         wiki: Wiki = Depends(get_wiki),
     ):
         """Return graph data optimized for visualization."""
-        from llmwikify.core.graph_visualizer import build_visualization_data
+        from llmwikify.kernel.graph.visualizer import build_visualization_data
         return build_visualization_data(wiki.index, wiki, current_page, mode)
 
     app.include_router(wiki_router)
@@ -344,7 +344,7 @@ def _register_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
         """Get graph data for a specific wiki."""
         try:
             wiki = get_wiki_by_id(wiki_id)
-            from llmwikify.core.graph_visualizer import build_visualization_data
+            from llmwikify.kernel.graph.visualizer import build_visualization_data
             return build_visualization_data(wiki.index, wiki, current_page, mode)
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")

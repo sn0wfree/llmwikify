@@ -50,7 +50,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
         has_wikis_config = wikis_config.get("local") or wikis_config.get("remote")
 
         if multi_wiki or has_wikis_config:
-            from llmwikify.core.wiki_registry import WikiRegistry
+            from llmwikify.kernel.multi_wiki.registry import WikiRegistry
             registry = WikiRegistry(config)
             registry.initialize()
 

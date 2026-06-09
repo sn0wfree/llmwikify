@@ -536,7 +536,7 @@ class TestLLMClientIntegration:
 
 class TestStreamableLLMClientIntegration:
     def test_streamable_client_has_budget_checker(self):
-        from llmwikify._legacy.adapters import StreamableLLMClient
+        from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
         client = StreamableLLMClient(
             provider="openai",
@@ -548,7 +548,7 @@ class TestStreamableLLMClientIntegration:
         assert isinstance(client._budget_checker, TokenBudgetChecker)
 
     def test_streamable_client_custom_context_window(self):
-        from llmwikify._legacy.adapters import StreamableLLMClient
+        from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
         client = StreamableLLMClient(
             provider="openai",

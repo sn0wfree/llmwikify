@@ -18,7 +18,7 @@ class TestUnifiedServer:
 
     def test_web_server_imports(self):
         """Web server wrapper should import without errors."""
-        from llmwikify.web.server import main
+        from llmwikify.interfaces.web.server import main
         assert main is not None
 
     def test_webui_static_files_exist(self):

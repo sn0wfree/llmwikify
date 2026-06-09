@@ -2,7 +2,7 @@
 
 Phase 1 #3 — extract the 8 ``_detect_X`` rule methods from
 ``WikiAnalyzer`` (929 LOC) into small, focused rule classes
-under ``llmwikify.core.lint.rules``. ``LintEngine`` runs all
+under ``llmwikify.kernel.wiki.lint.rules``. ``LintEngine`` runs all
 rules and aggregates their results, replacing the inline
 detection logic in ``WikiAnalyzer.lint()``.
 

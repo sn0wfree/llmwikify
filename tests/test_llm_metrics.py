@@ -36,7 +36,7 @@ from llmwikify.apps.chat.llm_step import run_prompt
 @pytest.fixture(autouse=True)
 def _mock_prompt_registry():
     with patch(
-        "llmwikify.core.prompt_registry.PromptRegistry.get_messages",
+        "llmwikify.kernel.wiki.prompt_registry.PromptRegistry.get_messages",
         return_value=[
             {"role": "system", "content": "system prompt"},  # 13 chars
             {"role": "user", "content": "user prompt"},  # 11 chars

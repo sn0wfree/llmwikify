@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from llmwikify.core.watcher import (
+from llmwikify.kernel.storage.watcher import (
     SUPPORTED_EXTENSIONS,
     FileSystemWatcher,
     install_git_hook,

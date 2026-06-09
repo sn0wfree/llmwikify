@@ -26,7 +26,7 @@ class ResearchSynthesizer:
         - rating 1: weight 0.25x
         - no rating: weight 1.0x
         """
-        from llmwikify.core.synthesis_engine import SynthesisEngine
+        from llmwikify.kernel.wiki.engines.synthesis import SynthesisEngine
 
         # Sort by rating (highest first) for weighted consideration
         rated_sources = sorted(sources, key=lambda s: s.get("rating") or 0, reverse=True)

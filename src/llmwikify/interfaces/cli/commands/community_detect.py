@@ -19,7 +19,7 @@ def run_community_detect(wiki: Any, args: Any) -> int:
     Returns:
         0 on success.
     """
-    from llmwikify.core.graph_export import detect_communities
+    from llmwikify.kernel.graph.export import detect_communities
 
     result = detect_communities(
         wiki.index,

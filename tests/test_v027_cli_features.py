@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 from llmwikify.interfaces.cli.commands import WikiCLI
-from llmwikify.core.wiki import Wiki
+from llmwikify.kernel.wiki.wiki import Wiki
 
 
 class Args:

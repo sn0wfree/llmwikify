@@ -19,7 +19,7 @@ import pytest
 
 from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.apps.agent.tools import WikiToolRegistry
-from llmwikify.core.wiki import Wiki
+from llmwikify.kernel.wiki.wiki import Wiki
 
 
 # ─── Fixtures ──────────────────────────────────────────────────────────

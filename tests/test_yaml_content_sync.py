@@ -266,7 +266,7 @@ class TestNoInlinePromptResidue:
         """All 6 step prompts (clarify, plan, replan, reason, report,
         review, revise) should resolve via PromptRegistry without
         FileNotFoundError."""
-        from llmwikify.core.prompt_registry import PromptRegistry
+        from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
         registry = PromptRegistry(provider="openai")
         for name in (
             "research_clarify", "research_plan", "research_replan",

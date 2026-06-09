@@ -14,8 +14,8 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from llmwikify.core import Wiki
-from llmwikify.core.wiki_registry import WikiRegistry
+from llmwikify.kernel import Wiki
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 from llmwikify.interfaces.server.constants import DEFAULT_HOST, DEFAULT_PORT
 
 from ..mcp.adapter import MCPAdapter
@@ -87,7 +87,7 @@ class WikiServer:
             self.registry = wiki
         else:
             # Single wiki mode: create a registry and auto-register the wiki
-            from llmwikify.core.wiki_instance import WikiType
+            from llmwikify.kernel.multi_wiki.instance import WikiType
             self.registry = WikiRegistry(config={})
             wiki_id = str(wiki.root).split('/')[-1] or 'default'
             self.registry.register_wiki(

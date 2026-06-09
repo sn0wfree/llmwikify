@@ -9,7 +9,7 @@ Based on Karpathy's LLM Wiki Principles:
 - Bidirectional reference tracking
 """
 
-__version__ = "0.31.0"
+__version__ = "0.35.0"
 __author__ = "sn0wfree"
 __email__ = "linlu1234567@sina.com"
 __license__ = "MIT"
@@ -25,11 +25,11 @@ from .foundation.config import (
 )
 
 # Import main components from modules
-from .core import Wiki, WikiIndex
-from .core.remote_wiki import RemoteWiki
-from .core.wiki_discovery import WikiDiscovery
-from .core.wiki_instance import WikiInstance, WikiStatus, WikiType
-from .core.wiki_registry import WikiRegistry
+from .kernel import Wiki, WikiIndex
+from .kernel.multi_wiki.remote import RemoteWiki
+from .kernel.multi_wiki.discovery import WikiDiscovery
+from .kernel.multi_wiki.instance import WikiInstance, WikiStatus, WikiType
+from .kernel.multi_wiki.registry import WikiRegistry
 from .foundation.extractors import ExtractedContent, Link
 from .interfaces.mcp import create_mcp_server, serve_mcp
 

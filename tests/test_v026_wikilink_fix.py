@@ -3,8 +3,8 @@
 import tempfile
 from pathlib import Path
 
-from llmwikify.core.index import WikiIndex
-from llmwikify.core.wiki import Wiki
+from llmwikify.kernel.storage.index import WikiIndex
+from llmwikify.kernel.wiki.wiki import Wiki
 
 
 class TestResolveByName:

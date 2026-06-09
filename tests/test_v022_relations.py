@@ -7,8 +7,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from llmwikify.core.index import WikiIndex
-from llmwikify.core.relation_engine import (
+from llmwikify.kernel.storage.index import WikiIndex
+from llmwikify.kernel.wiki.engines.relation import (
     CONFIDENCE_LEVELS,
     DEFAULT_RELATION_TYPES,
     RelationEngine,

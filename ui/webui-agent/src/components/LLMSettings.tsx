@@ -17,6 +17,7 @@ const PROVIDERS = [
 
 const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
   minimax: [
+    { value: 'MiniMax-M3', label: 'MiniMax-M3 (204800 context)' },
     { value: 'MiniMax-M2.7', label: 'MiniMax-M2.7 (204800 context)' },
     { value: 'MiniMax-M2.7-highspeed', label: 'MiniMax-M2.7-highspeed (204800 context)' },
     { value: 'MiniMax-M2.5', label: 'MiniMax-M2.5 (204800 context)' },
@@ -61,7 +62,7 @@ const BASE_URL_DEFAULTS: Record<string, string> = {
 const EMPTY_CONFIG: LLMConfig = {
   enabled: true,
   provider: 'minimax',
-  model: 'MiniMax-M2.7',
+  model: 'MiniMax-M3',
   base_url: 'https://api.minimaxi.com/v1',
   api_key: '',
   timeout: 120,

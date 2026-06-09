@@ -362,7 +362,7 @@ class GoldenTestRunner:
         """Create a temporary Wiki instance for testing."""
         import tempfile
 
-        from llmwikify.core.wiki import Wiki
+        from llmwikify.kernel.wiki.wiki import Wiki
 
         tmp_dir = Path(tempfile.mkdtemp())
         wiki = Wiki(tmp_dir)

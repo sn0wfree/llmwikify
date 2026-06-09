@@ -5,7 +5,7 @@ import json
 import pytest
 import yaml
 
-from llmwikify.core.prompt_registry import PromptRegistry, PromptTemplate
+from llmwikify.kernel.wiki.prompt_registry import PromptRegistry, PromptTemplate
 
 
 @pytest.fixture

@@ -29,7 +29,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import llmwikify
-from llmwikify.core import Wiki
+from llmwikify.kernel import Wiki
 
 
 # ============================================================
@@ -66,7 +66,7 @@ class TestVersionConsistency:
 class TestDeadCodeRemoval:
     def test_no_unreachable_code_after_raise(self):
         """_call_llm_with_retry should not have unreachable code after raise."""
-        wiki_path = Path(__file__).parent.parent / 'src/llmwikify/core/wiki.py'
+        wiki_path = Path(__file__).parent.parent / 'src/llmwikify/kernel/wiki/wiki.py'
         content = wiki_path.read_text()
 
         # Find the raise statement in _call_llm_with_retry

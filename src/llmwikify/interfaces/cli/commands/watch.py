@@ -25,7 +25,7 @@ def run_watch(wiki: Any, wiki_root: Path, args: Any) -> int:
     Returns:
         0 on success, 1 on errors.
     """
-    from llmwikify.core.watcher import (
+    from llmwikify.kernel.storage.watcher import (
         FileSystemWatcher,
         install_git_hook,
         uninstall_git_hook,

@@ -18,7 +18,7 @@ def run_report(wiki: Any, args: Any) -> int:
     Returns:
         0 on success.
     """
-    from llmwikify.core.graph_export import detect_communities, generate_report
+    from llmwikify.kernel.graph.export import detect_communities, generate_report
 
     comm_result = detect_communities(wiki.index)
     communities = comm_result.get("communities", {})

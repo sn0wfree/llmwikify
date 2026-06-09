@@ -12,9 +12,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
-from llmwikify.core.principle_checker import PrincipleChecker
-from llmwikify.core.prompt_registry import PromptRegistry
-from llmwikify.core.wiki import Wiki
+from llmwikify.kernel.principle_checker import PrincipleChecker
+from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
+from llmwikify.kernel.wiki.wiki import Wiki
 
 # Load mock_llm_framework directly
 _framework_path = Path(__file__).parent / "fixtures" / "golden_sources" / "mock_llm_framework.py"

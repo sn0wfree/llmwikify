@@ -79,18 +79,6 @@ class TestRouterAttributes:
         assert len(r.routes) > 0
 
 
-# ─── Backward-compat shims ────────────────────────────────────────
-
-
-class TestBackwardCompatShims:
-    """Legacy paths (llmwikify.agent.backend.*) still work
-    for external users."""
-
-    def test_shim_routes_package(self) -> None:
-        from llmwikify.agent.backend import routes as shim
-        assert shim is not None
-
-
 # ─── L4 routes.py integrity ──────────────────────────────────────
 
 

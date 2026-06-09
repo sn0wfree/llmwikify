@@ -12,7 +12,7 @@ from .._output import print_error
 def _wikis_list(config: dict, cli_config: Any) -> int:
     """List all registered wikis."""
     from llmwikify.foundation.config import get_wikis_config
-    from llmwikify.core.wiki_registry import WikiRegistry
+    from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
     wikis_config = get_wikis_config(config)
     registry = WikiRegistry(config)
@@ -41,7 +41,7 @@ def _wikis_list(config: dict, cli_config: Any) -> int:
 
 def _wikis_add(config: dict, args: Any) -> int:
     """Register a new wiki."""
-    from llmwikify.core.wiki_registry import WikiRegistry
+    from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
     wiki_id = args.wiki_id
     name = getattr(args, "name", None) or wiki_id.replace("-", " ").replace("_", " ").title()
@@ -89,7 +89,7 @@ def _wikis_add(config: dict, args: Any) -> int:
 
 def _wikis_remove(config: dict, args: Any) -> int:
     """Unregister a wiki."""
-    from llmwikify.core.wiki_registry import WikiRegistry
+    from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
     wiki_id = args.wiki_id
 
@@ -112,7 +112,7 @@ def _wikis_remove(config: dict, args: Any) -> int:
 
 def _wikis_scan(config: dict, args: Any) -> int:
     """Scan directories for wikis."""
-    from llmwikify.core.wiki_registry import WikiRegistry
+    from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
     paths = getattr(args, "paths", ["."])
     depth = getattr(args, "depth", 2)

@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llmwikify.core.prompt_registry import PromptRegistry
-from llmwikify.core.wiki import Wiki
+from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
+from llmwikify.kernel.wiki.wiki import Wiki
 
 
 class TestWikiSynthesizeTemplate:

@@ -4,7 +4,7 @@
 import pytest
 import yaml
 
-from llmwikify.core.principle_checker import (
+from llmwikify.kernel.principle_checker import (
     PRINCIPLE_DEFINITIONS,
     PrincipleChecker,
     PrincipleCheckResult,
@@ -100,7 +100,7 @@ class TestPrincipleCheckerCheckTemplate:
         return PrincipleChecker()
 
     def test_analyze_source_passes(self, checker):
-        from llmwikify.core.prompt_registry import PromptRegistry
+        from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
         registry = PromptRegistry()
         template = registry._load_template("analyze_source")
         data = {
@@ -114,7 +114,7 @@ class TestPrincipleCheckerCheckTemplate:
         assert result.is_pass is True
 
     def test_generate_wiki_ops_passes(self, checker):
-        from llmwikify.core.prompt_registry import PromptRegistry
+        from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
         registry = PromptRegistry()
         template = registry._load_template("generate_wiki_ops")
         data = {

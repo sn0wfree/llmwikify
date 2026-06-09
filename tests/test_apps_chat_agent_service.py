@@ -31,6 +31,8 @@ from llmwikify.apps.chat.agent.service import (
     AgentContext,
     ChatEvent,
     ChatService,
+    _parse_perl_args,
+    _parse_text_tool_call,
 )
 
 
@@ -489,6 +491,206 @@ class TestSSEChatFlow:
             events.append(event)
 
         assert any(e.get("type") == "error" for e in events)
+
+
+# ─── Text-mode tool-call parsing ────────────────────────────────
+
+
+class TestParseTextToolCall:
+    def test_basic_user_example(self) -> None:
+        # The exact example from the bug report.
+        body = (
+            '{tool => "wiki_read_page", '
+            'args => { --page_name "overview" }}'
+        )
+        parsed = _parse_text_tool_call(body)
+        assert parsed is not None
+        name, args = parsed
+        assert name == "wiki_read_page"
+        assert args == {"page_name": "overview"}
+
+    def test_quoted_key_value(self) -> None:
+        body = (
+            '{tool => "search", '
+            'args => { "q" => "hello world" }}'
+        )
+        parsed = _parse_text_tool_call(body)
+        assert parsed is not None
+        name, args = parsed
+        assert name == "search"
+        assert args == {"q": "hello world"}
+
+    def test_mixed_keyword_and_arrow(self) -> None:
+        body = (
+            '{tool => "x", '
+            'args => { --a 1, --b "two words", --c three }}'
+        )
+        parsed = _parse_text_tool_call(body)
+        assert parsed is not None
+        _, args = parsed
+        assert args == {"a": "1", "b": "two words", "c": "three"}
+
+    def test_no_args_block(self) -> None:
+        parsed = _parse_text_tool_call('{tool => "ping"}')
+        assert parsed is not None
+        name, args = parsed
+        assert name == "ping"
+        assert args == {}
+
+    def test_unparseable_returns_none(self) -> None:
+        assert _parse_text_tool_call("not a tool call") is None
+        assert _parse_text_tool_call("") is None
+        assert _parse_text_tool_call('{no_tool_key => "x"}') is None
+
+    def test_nested_braces(self) -> None:
+        body = (
+            '{tool => "x", '
+            'args => { --config { --a 1 } }}'
+        )
+        parsed = _parse_text_tool_call(body)
+        assert parsed is not None
+        _, args = parsed
+        assert args["config"] == "{ --a 1 }"
+
+    def test_perl_args_basic(self) -> None:
+        assert _parse_perl_args('{ --a 1, --b "two"}') == {
+            "a": "1", "b": "two",
+        }
+
+
+class TestTextModeToolCallDispatch:
+    @pytest.mark.asyncio
+    async def test_text_mode_tool_call_executes(
+        self, chat_service: ChatService
+    ) -> None:
+        # LLM streams content that contains a text-mode tool call
+        # followed by a done event. The tool should run, and the
+        # [TOOL_CALL] markup should not appear in message_delta.
+        async def fake_stream(messages, tools=None):
+            yield {
+                "type": "content",
+                "text": (
+                    'Let me check that page. '
+                    '[TOOL_CALL] {tool => "wiki_read_page", '
+                    'args => { --page_name "overview" }} [/TOOL_CALL] '
+                    'Done.'
+                ),
+            }
+            yield {"type": "done", "content": "Done."}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events: list[dict] = []
+        async for event in chat_service.chat(message="read overview"):
+            events.append(event)
+
+        # Tool call should have been dispatched.
+        starts = [e for e in events if e.get("type") == "tool_call_start"]
+        ends = [e for e in events if e.get("type") == "tool_call_end"]
+        assert len(starts) == 1
+        assert starts[0]["tool"] == "wiki_read_page"
+        assert starts[0]["args"] == {"page_name": "overview"}
+        assert len(ends) == 1
+
+        # Tool registry should have been called with the right args.
+        chat_service.wiki_service.tool_registry.execute.assert_awaited_once_with(
+            "wiki_read_page", {"page_name": "overview"},
+        )
+
+        # The [TOOL_CALL] markup must NOT appear in any message_delta.
+        deltas = [e["content"] for e in events if e.get("type") == "message_delta"]
+        joined = "".join(deltas)
+        assert "[TOOL_CALL]" not in joined
+        assert "[/TOOL_CALL]" not in joined
+        # But the surrounding text should still flow.
+        assert "Let me check that page." in joined
+        assert "Done." in joined
+
+    @pytest.mark.asyncio
+    async def test_text_mode_split_across_chunks(
+        self, chat_service: ChatService
+    ) -> None:
+        # The text-mode block is split across multiple content chunks.
+        async def fake_stream(messages, tools=None):
+            yield {"type": "content", "text": "Intro [TOOL_CALL] "}
+            yield {
+                "type": "content",
+                "text": '{tool => "wiki_read_page", args => { --page_name "x" }}',
+            }
+            yield {"type": "content", "text": " [/TOOL_CALL] tail"}
+            yield {"type": "done", "content": "ok"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events: list[dict] = []
+        async for event in chat_service.chat(message="hi"):
+            events.append(event)
+
+        assert any(
+            e.get("type") == "tool_call_start" for e in events
+        )
+        deltas = [
+            e["content"] for e in events
+            if e.get("type") == "message_delta"
+        ]
+        joined = "".join(deltas)
+        assert "[TOOL_CALL]" not in joined
+        assert "Intro" in joined
+        assert "tail" in joined
+
+    @pytest.mark.asyncio
+    async def test_text_mode_unparseable_passes_through(
+        self, chat_service: ChatService
+    ) -> None:
+        # A malformed block shouldn't crash; it falls through to the
+        # user as text and no tool is invoked.
+        async def fake_stream(messages, tools=None):
+            yield {
+                "type": "content",
+                "text": "[TOOL_CALL] garbage no tool key [/TOOL_CALL]",
+            }
+            yield {"type": "done", "content": "ok"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events: list[dict] = []
+        async for event in chat_service.chat(message="hi"):
+            events.append(event)
+
+        chat_service.wiki_service.tool_registry.execute.assert_not_awaited()
+        deltas = [
+            e["content"] for e in events
+            if e.get("type") == "message_delta"
+        ]
+        joined = "".join(deltas)
+        assert "[TOOL_CALL]" in joined
+
+    @pytest.mark.asyncio
+    async def test_native_tool_call_still_works(
+        self, chat_service: ChatService
+    ) -> None:
+        # Regression check: the refactor must not break the native
+        # tool_call event path.
+        async def fake_stream(messages, tools=None):
+            yield {
+                "type": "tool_call",
+                "tool": "wiki_search",
+                "args": '{"q": "test"}',
+            }
+            yield {"type": "done", "content": "ok"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream
+
+        events: list[dict] = []
+        async for event in chat_service.chat(message="search"):
+            events.append(event)
+
+        assert any(
+            e.get("type") == "tool_call_start" for e in events
+        )
+        assert any(
+            e.get("type") == "tool_call_end" for e in events
+        )
 
 
 # ─── Context management ──────────────────────────────────────────

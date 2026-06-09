@@ -7,14 +7,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from llmwikify.core.graph_export import (
+from llmwikify.kernel.graph.export import (
     _build_networkx,
     build_graph,
     compute_surprise_score,
     detect_communities,
     generate_report,
 )
-from llmwikify.core.index import WikiIndex
+from llmwikify.kernel.storage.index import WikiIndex
 
 
 @pytest.fixture

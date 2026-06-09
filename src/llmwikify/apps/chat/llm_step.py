@@ -212,7 +212,7 @@ async def run_prompt(
         client = _resolve_llm_client(ctx, spec.llm_role)
 
         # 2. Render messages
-        from llmwikify.core.prompt_registry import PromptRegistry
+        from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
         registry = PromptRegistry(provider=getattr(client, "provider", "openai"))
         messages = registry.get_messages(name, **vars)
 

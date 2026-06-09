@@ -43,7 +43,7 @@ import pytest
 
 def test_wiki_analyzer_class_docstring_mentions_aggregator_role():
     """WikiAnalyzer's class docstring describes its new aggregator role."""
-    from llmwikify.core.wiki_analyzer import WikiAnalyzer
+    from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
 
     docstring = inspect.getdoc(WikiAnalyzer) or ""
     assert "Health check" in docstring, (
@@ -56,7 +56,7 @@ def test_wiki_analyzer_does_not_define_inline_detection_rules():
     """WikiAnalyzer has no inline detection logic — all 8 _detect_X
     methods are 1-line delegates (no body beyond the return statement).
     """
-    from llmwikify.core.wiki_analyzer import WikiAnalyzer
+    from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
 
     detect_methods = [
         "_detect_dated_claims",
@@ -98,7 +98,7 @@ def test_wiki_analyzer_lint_method_partitions_results_by_type():
     """The lint() method's investigations block uses type-based partitioning
     (the Phase 1 #3 pattern), not 5 individual _detect_X calls.
     """
-    from llmwikify.core.wiki_analyzer import WikiAnalyzer
+    from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
 
     src = inspect.getsource(WikiAnalyzer.lint)
     # Must use _run_all_rules
@@ -126,7 +126,7 @@ def test_wiki_analyzer_lint_method_partitions_results_by_type():
 
 def test_wiki_mixin_lint_methods_all_delegate_to_wiki_analyzer():
     """Each public/private method on WikiLintMixin delegates to WikiAnalyzer."""
-    from llmwikify.core.wiki_mixin_lint import WikiLintMixin
+    from llmwikify.kernel.wiki.mixins.analysis.lint import WikiLintMixin
 
     delegate_methods = [
         "_detect_dated_claims",
@@ -155,7 +155,7 @@ def test_wiki_mixin_lint_methods_all_delegate_to_wiki_analyzer():
 
 def test_wiki_mixin_lint_is_pure_delegation():
     """WikiLintMixin methods are 1-line delegates (no inline logic)."""
-    from llmwikify.core.wiki_mixin_lint import WikiLintMixin
+    from llmwikify.kernel.wiki.mixins.analysis.lint import WikiLintMixin
 
     delegate_methods = [
         "_detect_dated_claims",
@@ -209,7 +209,7 @@ def test_wiki_mixin_lint_is_pure_delegation():
 
 def test_wiki_mixin_lint_class_docstring_says_aggregator():
     """WikiLintMixin's docstring describes its thin delegator role."""
-    from llmwikify.core.wiki_mixin_lint import WikiLintMixin
+    from llmwikify.kernel.wiki.mixins.analysis.lint import WikiLintMixin
 
     docstring = inspect.getdoc(WikiLintMixin) or ""
     assert "delegat" in docstring.lower(), (
@@ -257,7 +257,7 @@ def test_full_lint_pipeline_uses_lint_engine(tmp_path):
     → each Rule.run) produces a valid lint result with the
     expected top-level keys.
     """
-    from llmwikify.core.wiki import Wiki
+    from llmwikify.kernel.wiki.wiki import Wiki
 
     wiki = Wiki(tmp_path)
     wiki.init()

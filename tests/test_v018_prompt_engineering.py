@@ -3,7 +3,7 @@
 import pytest
 import yaml
 
-from llmwikify.core.prompt_registry import PromptRegistry
+from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
 
 
 @pytest.fixture

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.core.wiki import Wiki
-from llmwikify.core.synthesis_engine import SynthesisEngine
+from llmwikify.kernel.wiki.wiki import Wiki
+from llmwikify.kernel.wiki.engines.synthesis import SynthesisEngine
 
 
 @pytest.fixture

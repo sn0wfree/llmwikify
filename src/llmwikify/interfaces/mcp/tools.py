@@ -6,8 +6,8 @@ import json
 
 from fastmcp import FastMCP
 
-from llmwikify.core import Wiki
-from llmwikify.core.graph_visualizer import build_visualization_data
+from llmwikify.kernel import Wiki
+from llmwikify.kernel.graph.visualizer import build_visualization_data
 
 
 def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
@@ -252,7 +252,7 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
         mcp: FastMCP server instance
         registry: WikiRegistry instance
     """
-    from llmwikify.core.wiki_instance import WikiType
+    from llmwikify.kernel.multi_wiki.instance import WikiType
 
     @mcp.tool
     def wiki_list() -> str:
@@ -368,7 +368,7 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
         """
         if wiki_id:
             try:
-                from llmwikify.core.wiki_instance import WikiType
+                from llmwikify.kernel.multi_wiki.instance import WikiType
                 instance = registry.get_wiki_instance(wiki_id)
                 if instance.wiki_type == WikiType.REMOTE:
                     client = registry._remote_clients.get(wiki_id)

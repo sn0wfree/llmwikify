@@ -44,7 +44,7 @@ Helpers exported:
 
 The prompt YAMLs themselves live in
 ``llmwikify/prompts/_defaults/research_*.yaml`` and are loaded by
-``llmwikify.core.prompt_registry.PromptRegistry`` at call time. This
+``llmwikify.kernel.wiki.prompt_registry.PromptRegistry`` at call time. This
 module is purely declarative; it never calls an LLM.
 """
 

@@ -20,7 +20,7 @@ def run_export_graph(wiki: Any, args: Any) -> int:
     Returns:
         0 on success, 1 on failure.
     """
-    from llmwikify.core.graph_export import (
+    from llmwikify.kernel.graph.export import (
         build_graph,
         export_graphml,
         export_html,

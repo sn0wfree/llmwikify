@@ -50,7 +50,7 @@ def _qmd_install(wiki: Any, args: Any) -> int:
     if qmd:
         print(qmd.get_install_guide())
     else:
-        from llmwikify.core.qmd_client import QmdClient
+        from llmwikify.kernel.search.qmd_client import QmdClient
         client = QmdClient()
         print(client.get_install_guide())
     return 0

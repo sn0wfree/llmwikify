@@ -306,7 +306,7 @@ async def _graph(args: dict, ctx: SkillContext) -> SkillResult:
     wiki = _wiki(ctx)
     if isinstance(wiki, SkillResult):
         return wiki
-    from llmwikify.core.graph_visualizer import build_visualization_data
+    from llmwikify.kernel.graph.visualizer import build_visualization_data
     result = build_visualization_data(
         wiki.index, wiki,
         args.get("current_page"),
@@ -423,7 +423,7 @@ async def _wiki_search_by_id(args: dict, ctx: SkillContext) -> SkillResult:
     limit = args.get("limit", 10)
     try:
         if wiki_id:
-            from llmwikify.core.wiki_instance import WikiType
+            from llmwikify.kernel.multi_wiki.instance import WikiType
             instance = registry.get_wiki_instance(wiki_id)
             if instance.wiki_type == WikiType.REMOTE:
                 client = registry._remote_clients.get(wiki_id)

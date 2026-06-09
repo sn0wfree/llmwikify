@@ -2,8 +2,8 @@
 
 import pytest
 
-from llmwikify.core import WikiIndex
-from llmwikify.core.relation_engine import RelationEngine, DEFAULT_RELATION_TYPES, CONFIDENCE_LEVELS
+from llmwikify.kernel import WikiIndex
+from llmwikify.kernel.wiki.engines.relation import RelationEngine, DEFAULT_RELATION_TYPES, CONFIDENCE_LEVELS
 
 
 class TestRelationEngineInit:

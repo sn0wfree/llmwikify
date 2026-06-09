@@ -35,7 +35,7 @@ def _run_async(coro):
 
 
 from llmwikify.interfaces.cli import WikiCLI
-from llmwikify.core import Wiki
+from llmwikify.kernel import Wiki
 from llmwikify.interfaces.mcp.server import create_mcp_server, serve_mcp
 
 

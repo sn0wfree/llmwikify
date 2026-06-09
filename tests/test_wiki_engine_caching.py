@@ -24,8 +24,8 @@ import pytest
 
 def test_wiki_caches_analyzer_in_init():
     """Wiki.__init__ sets self._analyzer = WikiAnalyzer(self)."""
-    from llmwikify.core import Wiki
-    from llmwikify.core.wiki_analyzer import WikiAnalyzer
+    from llmwikify.kernel import Wiki
+    from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
 
     # We use a tmp path with the standard wiki root structure
     import tempfile
@@ -53,7 +53,7 @@ def test_wiki_caches_analyzer_in_init():
 
 def test_lint_mixin_uses_cached_analyzer():
     """WikiLintMixin methods reference self._analyzer (not WikiAnalyzer(self))."""
-    from llmwikify.core.wiki_mixin_lint import WikiLintMixin
+    from llmwikify.kernel.wiki.mixins.analysis.lint import WikiLintMixin
 
     delegate_methods = [
         "_detect_dated_claims",
@@ -85,7 +85,7 @@ def test_lint_mixin_uses_cached_analyzer():
 
 def test_status_mixin_uses_cached_analyzer():
     """WikiStatusMixin.recommend and .hint reference self._analyzer."""
-    from llmwikify.core.wiki_mixin_status import WikiStatusMixin
+    from llmwikify.kernel.wiki.mixins.analysis.status import WikiStatusMixin
 
     for name in ("recommend", "hint"):
         method = getattr(WikiStatusMixin, name)
@@ -102,7 +102,7 @@ def test_status_mixin_uses_cached_analyzer():
 
 def test_llm_mixin_uses_cached_analyzer():
     """WikiLLMMixin lint helpers reference self._analyzer (not WikiAnalyzer(self))."""
-    from llmwikify.core.wiki_mixin_llm import WikiLLMMixin
+    from llmwikify.kernel.wiki.mixins.analysis.llm import WikiLLMMixin
 
     delegate_methods = [
         "_llm_generate_investigations",
@@ -126,7 +126,7 @@ def test_llm_mixin_uses_cached_analyzer():
 
 def test_wiki_protocol_declares_analyzer_attribute():
     """WikiProtocol declares the _analyzer attribute for type resolution."""
-    from llmwikify.core.protocols import WikiProtocol
+    from llmwikify.kernel.wiki.protocols import WikiProtocol
 
     # WikiProtocol uses annotation-style declarations (not
     # class attributes) — they live in __annotations__.
@@ -144,9 +144,9 @@ def test_no_redundant_WikiAnalyzer_self_in_mixins():
     ``Wiki.__init__``. If a future commit adds a new mixin
     method that re-instantiates, this test fails.
     """
-    from llmwikify.core.wiki_mixin_lint import WikiLintMixin
-    from llmwikify.core.wiki_mixin_status import WikiStatusMixin
-    from llmwikify.core.wiki_mixin_llm import WikiLLMMixin
+    from llmwikify.kernel.wiki.mixins.analysis.lint import WikiLintMixin
+    from llmwikify.kernel.wiki.mixins.analysis.status import WikiStatusMixin
+    from llmwikify.kernel.wiki.mixins.analysis.llm import WikiLLMMixin
 
     for mixin_cls in (WikiLintMixin, WikiStatusMixin, WikiLLMMixin):
         for name in dir(mixin_cls):

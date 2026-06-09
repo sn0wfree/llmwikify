@@ -20,7 +20,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from llmwikify.core import Wiki
+from llmwikify.kernel import Wiki
 
 
 # Phase 3 #6 — emit the deprecation warning on import (preserves

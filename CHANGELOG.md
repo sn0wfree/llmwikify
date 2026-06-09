@@ -5,6 +5,21 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.0] - 2026-06-09
+
+### Fixed
+- **pyproject.toml version** updated from 0.31.0 to 0.35.0 (was missed in prior releases).
+
+### Removed — Legacy Shims Cleanup
+- **`core/`** directory (37 files) — backward-compat shims removed. All callers migrated to `kernel/`.
+- **`web/`** directory (2 files) — backward-compat shim removed.
+- **`_legacy/`** directory (4 files) — deprecated adapters/autoresearch/mcp shims removed.
+- **`agent/backend/`** — remaining 7 shim files removed (routes.py, providers/, __init__.py).
+- **`apps/agent/core/`** — `config_manager.py` and `runner.py` removed.
+
+### Added
+- **`ingest_skill` pipeline** — extract+write+read orchestration skill.
+
 ## [0.34.0] - 2026-06-09
 
 ### Removed — PPT 功能彻底删除

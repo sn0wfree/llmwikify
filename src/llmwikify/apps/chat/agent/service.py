@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -29,6 +30,115 @@ from llmwikify.apps.chat.base import ChatBase
 from llmwikify.apps.chat.db import ChatDatabase
 
 logger = logging.getLogger(__name__)
+
+
+# ─── Text-mode tool-call parsing ────────────────────────────────
+#
+# Some LLMs (especially smaller or non-tool-aware ones) emit tool
+# calls as inline text instead of using the OpenAI-style structured
+# ``tool_calls`` field. The most common pattern is::
+#
+#     [TOOL_CALL] {tool => "wiki_read_page",
+#                  args => { --page_name "overview" }} [/TOOL_CALL]
+#
+# We detect and execute these blocks the same way as native tool
+# calls, suppressing the leaked markup from the user-visible stream.
+
+_TOOL_CALL_RE = re.compile(
+    r"\[TOOL_CALL\]\s*(.*?)\s*\[/TOOL_CALL\]",
+    re.DOTALL,
+)
+
+
+def _parse_perl_args(body: str) -> dict[str, str]:
+    """Parse a Perl-style ``{key => value, ...}`` hash into a dict.
+
+    Supports::
+        tool => "wiki_read_page"
+        "page_name" => "overview"
+        --page_name "overview"
+    """
+    out: dict[str, str] = {}
+    s = body.strip()
+    if s.startswith("{") and s.endswith("}"):
+        s = s[1:-1]
+    for part in re.split(r",\s*", s):
+        part = part.strip()
+        if not part:
+            continue
+        m = re.match(r"--(\w+)\s+(.+)$", part, re.DOTALL)
+        if m:
+            out[m.group(1)] = _unquote(m.group(2).strip())
+            continue
+        m = re.match(
+            r'(?:"(\w+)"|(\w+))\s*=>\s*(.+)$',
+            part,
+            re.DOTALL,
+        )
+        if m:
+            key = m.group(1) or m.group(2)
+            val = m.group(3).strip().rstrip(",").strip()
+            out[key] = _unquote(val)
+    return out
+
+
+def _unquote(s: str) -> str:
+    """Strip a single layer of matching surrounding quotes."""
+    if len(s) >= 2 and (
+        (s.startswith('"') and s.endswith('"'))
+        or (s.startswith("'") and s.endswith("'"))
+    ):
+        return s[1:-1]
+    return s
+
+
+def _parse_text_tool_call(body: str) -> tuple[str, dict[str, str]] | None:
+    """Extract ``(tool_name, args)`` from the body of a [TOOL_CALL] block.
+
+    Returns ``None`` if the body is not a recognisable tool-call form,
+    in which case the caller should pass the text through verbatim.
+    """
+    m = re.search(r'tool\s*=>\s*"([^"]+)"', body)
+    if not m:
+        return None
+    tool_name = m.group(1).strip()
+    args = _extract_args_block(body)
+    return tool_name, args
+
+
+def _extract_args_block(body: str) -> dict[str, str]:
+    """Find ``args => { ... }`` in ``body`` and parse the inner hash.
+
+    Counts nested braces so we capture the full inner hash even when
+    argument values themselves contain braces. Returns an empty dict
+    if no ``args =>`` block is found.
+    """
+    m = re.search(r"args\s*=>\s*\{", body)
+    if not m:
+        return {}
+    start = m.end()  # position right after the opening '{'
+    depth = 1
+    i = start
+    in_str: str | None = None
+    while i < len(body):
+        ch = body[i]
+        if in_str:
+            if ch == "\\" and i + 1 < len(body):
+                i += 2
+                continue
+            if ch == in_str:
+                in_str = None
+        else:
+            if ch in ('"', "'"):
+                in_str = ch
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return _parse_perl_args(body[start:i])
+        i += 1
+    return {}
 
 
 # ─── SSE event factory ────────────────────────────────────────────
@@ -169,6 +279,7 @@ class ChatService(ChatBase):
             tool_specs = self._get_toolspec(tool_registry)
 
             accumulated = ""
+            text_buffer = ""
             async for event in self._stream_llm(llm, messages_for_llm, tool_specs):
                 event_type = event.get("type")
 
@@ -176,8 +287,33 @@ class ChatService(ChatBase):
                     yield ChatEvent.thinking(event["text"])
 
                 elif event_type == "content":
-                    accumulated += event["text"]
-                    yield ChatEvent.message_delta(event["text"])
+                    chunk = event.get("text", "")
+                    accumulated += chunk
+                    # Buffer the chunk; extract any complete
+                    # [TOOL_CALL]...[/TOOL_CALL] block and dispatch
+                    # it as a real tool call. Text outside the block
+                    # continues to flow to the user.
+                    text_buffer += chunk
+                    while True:
+                        m = _TOOL_CALL_RE.search(text_buffer)
+                        if not m:
+                            break
+                        prefix = text_buffer[: m.start()]
+                        if prefix:
+                            yield ChatEvent.message_delta(prefix)
+                        body = m.group(1)
+                        parsed = _parse_text_tool_call(body)
+                        if parsed is None:
+                            # Unparseable block — pass through as text.
+                            yield ChatEvent.message_delta(m.group(0))
+                        else:
+                            tool_name, args = parsed
+                            async for ev in self._dispatch_tool_call(
+                                tool_name, args, tool_registry,
+                                session_id, ctx,
+                            ):
+                                yield ev
+                        text_buffer = text_buffer[m.end():]
 
                 elif event_type == "tool_call":
                     tool_name = event["tool"]
@@ -190,32 +326,17 @@ class ChatService(ChatBase):
                     else:
                         args = raw_args
 
-                    yield ChatEvent.tool_call_start(tool_name, args)
-                    ctx._tool_calls[tool_name] = {
-                        "tool": tool_name, "args": args, "status": "pending"
-                    }
-                    result = await self._execute_tool(
-                        tool_name, args, tool_registry, session_id, ctx
-                    )
-                    ctx._tool_calls[tool_name]["result"] = result
-                    ctx._tool_calls[tool_name]["status"] = "done"
-                    yield ChatEvent.tool_call_end(tool_name, result)
-
-                    if isinstance(result, dict) and result.get("status") == "confirmation_required":
-                        conf_id = result.get("confirmation_id", "")
-                        yield ChatEvent.confirmation_required(
-                            conf_id, result.get("impact", {})
-                        )
-                    else:
-                        tool_result_str = json.dumps(
-                            result.get("result", result)
-                            if isinstance(result, dict) else result
-                        )
-                        ctx.add_assistant_message(
-                            f"[TOOL: {tool_name}] Result: {tool_result_str}"
-                        )
+                    async for ev in self._dispatch_tool_call(
+                        tool_name, args, tool_registry,
+                        session_id, ctx,
+                    ):
+                        yield ev
 
                 elif event_type == "done":
+                    # Flush any trailing buffered text before done.
+                    if text_buffer:
+                        yield ChatEvent.message_delta(text_buffer)
+                        text_buffer = ""
                     final = event.get("content", accumulated)
                     ctx.add_assistant_message(final)
                     self._save_message(
@@ -293,22 +414,11 @@ class ChatService(ChatBase):
                             args = {"raw": raw_args}
                     else:
                         args = raw_args
-                    yield ChatEvent.tool_call_start(tool_name, args)
-                    tool_result = await self._execute_tool(
-                        tool_name, args, tool_registry, session_id, ctx
-                    )
-                    yield ChatEvent.tool_call_end(tool_name, tool_result)
-                    if isinstance(tool_result, dict) and tool_result.get("status") == "confirmation_required":
-                        conf_id = tool_result.get("confirmation_id", "")
-                        yield ChatEvent.confirmation_required(
-                            conf_id, tool_result.get("impact", {})
-                        )
-                    else:
-                        trs = json.dumps(
-                            tool_result.get("result", tool_result)
-                            if isinstance(tool_result, dict) else tool_result
-                        )
-                        ctx.add_assistant_message(f"[TOOL: {tool_name}] Result: {trs}")
+                    async for ev in self._dispatch_tool_call(
+                        tool_name, args, tool_registry,
+                        session_id, ctx,
+                    ):
+                        yield ev
                 elif event_type == "done":
                     final = event.get("content", accumulated)
                     ctx.add_assistant_message(final)
@@ -436,6 +546,49 @@ class ChatService(ChatBase):
         except Exception as e:
             self.db.update_tool_call(call_id, {"error": str(e)}, "error")
             return {"status": "error", "error": str(e)}
+
+    async def _dispatch_tool_call(
+        self,
+        tool_name: str,
+        args: dict,
+        tool_registry: Any,
+        session_id: str,
+        ctx: AgentContext,
+    ) -> AsyncIterator[dict]:
+        """Run a single tool call and yield the matching SSE events.
+
+        Used by both the native ``tool_call`` event path and the
+        text-mode ``[TOOL_CALL]...[/TOOL_CALL]`` detection path so
+        both sources go through the same confirmation / persistence
+        logic.
+        """
+        yield ChatEvent.tool_call_start(tool_name, args)
+        ctx._tool_calls[tool_name] = {
+            "tool": tool_name, "args": args, "status": "pending",
+        }
+        result = await self._execute_tool(
+            tool_name, args, tool_registry, session_id, ctx,
+        )
+        ctx._tool_calls[tool_name]["result"] = result
+        ctx._tool_calls[tool_name]["status"] = "done"
+        yield ChatEvent.tool_call_end(tool_name, result)
+
+        if (
+            isinstance(result, dict)
+            and result.get("status") == "confirmation_required"
+        ):
+            conf_id = result.get("confirmation_id", "")
+            yield ChatEvent.confirmation_required(
+                conf_id, result.get("impact", {}),
+            )
+        else:
+            tool_result_str = json.dumps(
+                result.get("result", result)
+                if isinstance(result, dict) else result
+            )
+            ctx.add_assistant_message(
+                f"[TOOL: {tool_name}] Result: {tool_result_str}"
+            )
 
     def _save_message(
         self,

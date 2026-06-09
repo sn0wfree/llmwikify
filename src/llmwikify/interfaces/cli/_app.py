@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ...core import Wiki
+from ...kernel import Wiki
 from .commands.analyze_source import run_analyze_source
 from .commands.batch import run_batch
 from .commands.build_index import run_build_index

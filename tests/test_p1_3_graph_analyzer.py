@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.core.wiki import Wiki
-from llmwikify.core.graph_analyzer import GraphAnalyzer
+from llmwikify.kernel.wiki.wiki import Wiki
+from llmwikify.kernel.graph.analyzer import GraphAnalyzer
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from llmwikify.core import Wiki
+from llmwikify.kernel import Wiki
 
 
 @pytest.fixture

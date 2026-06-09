@@ -8,8 +8,8 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from llmwikify.core import Wiki
-from llmwikify.core.wiki_registry import WikiRegistry
+from llmwikify.kernel import Wiki
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
 from .tools import register_wiki_tools, register_multi_wiki_tools
 

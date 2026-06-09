@@ -22,7 +22,7 @@ def run_init(wiki: Any, wiki_root: Any, args: Any) -> int:
     Returns:
         0 on success or "already exists", 1 on invalid agent.
     """
-    from llmwikify.core.wiki import VALID_AGENTS
+    from llmwikify.kernel.wiki.wiki import VALID_AGENTS
 
     overwrite = getattr(args, "overwrite", False)
     agent = getattr(args, "agent", None)

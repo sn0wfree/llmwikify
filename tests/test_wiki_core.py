@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llmwikify.core import Wiki
+from llmwikify.kernel import Wiki
 
 
 class TestWiki:
@@ -217,7 +217,7 @@ class TestWiki:
             title="Test Article",
             metadata={"url": "https://example.com/article"}
         )
-        from llmwikify.core import wiki_mixin_ingest as ingest_module
+        from llmwikify.kernel.wiki.mixins.io import ingest as ingest_module
         orig_extract = ingest_module.extract
         ingest_module.extract = lambda *a, **k: mock_result
 
@@ -251,7 +251,7 @@ class TestWiki:
             title="Test Article",
             metadata={"url": "https://example.com/article"}
         )
-        from llmwikify.core import wiki_mixin_ingest as ingest_module
+        from llmwikify.kernel.wiki.mixins.io import ingest as ingest_module
         orig_extract = ingest_module.extract
         ingest_module.extract = lambda *a, **k: mock_result
 

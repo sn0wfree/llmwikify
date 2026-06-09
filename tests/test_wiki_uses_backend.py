@@ -18,8 +18,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from llmwikify.core import Wiki
-from llmwikify.core.wiki_backend import LocalFileBackend
+from llmwikify.kernel import Wiki
+from llmwikify.kernel.storage.backend import LocalFileBackend
 
 
 @pytest.fixture
@@ -45,8 +45,8 @@ def test_wiki_accepts_custom_backend(wiki_root):
     class MockBackend:
         def __init__(self, root):
             from llmwikify.foundation.config import load_config
-            from llmwikify.core.index import WikiIndex
-            from llmwikify.core.wiki_backend import LocalFileBackend as _LFB
+            from llmwikify.kernel.storage.index import WikiIndex
+            from llmwikify.kernel.storage.backend import LocalFileBackend as _LFB
             self.root = root.resolve()
             self.wiki_dir = _LFB(root, load_config(root)).wiki_dir
             self.raw_dir = _LFB(root, load_config(root)).raw_dir

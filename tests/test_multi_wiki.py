@@ -4,10 +4,10 @@ import pytest
 from pathlib import Path
 from datetime import datetime
 
-from llmwikify.core.wiki_instance import WikiInstance, WikiType, WikiStatus
-from llmwikify.core.wiki_discovery import WikiDiscovery
-from llmwikify.core.remote_wiki import RemoteWiki
-from llmwikify.core.wiki_registry import WikiRegistry
+from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType, WikiStatus
+from llmwikify.kernel.multi_wiki.discovery import WikiDiscovery
+from llmwikify.kernel.multi_wiki.remote import RemoteWiki
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
 
 class TestWikiInstance:

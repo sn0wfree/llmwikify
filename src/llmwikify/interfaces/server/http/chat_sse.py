@@ -274,7 +274,7 @@ async def batch_approve(body: dict, request: Request):
 
 @router.get("/config")
 async def get_llm_config():
-    from llmwikify.apps.agent.core.config_manager import get_global_config_manager
+    from llmwikify.apps.chat.config_manager import get_global_config_manager
     manager = get_global_config_manager()
     llm_cfg = manager.load_effective_llm_config()
     return manager.mask_api_key(llm_cfg)
@@ -282,7 +282,7 @@ async def get_llm_config():
 
 @router.put("/config")
 async def save_llm_config(request: Request):
-    from llmwikify.apps.agent.core.config_manager import get_global_config_manager
+    from llmwikify.apps.chat.config_manager import get_global_config_manager
     body = await request.json()
     manager = get_global_config_manager()
     manager.save_global_config(body)
@@ -292,7 +292,7 @@ async def save_llm_config(request: Request):
 
 @router.post("/config/reload")
 async def reload_llm_config():
-    from llmwikify.apps.agent.core.config_manager import get_global_config_manager
+    from llmwikify.apps.chat.config_manager import get_global_config_manager
     manager = get_global_config_manager()
     manager.reload()
     return {"reloaded": True}

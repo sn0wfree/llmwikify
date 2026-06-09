@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.core import Wiki
+from llmwikify.kernel import Wiki
 
 
 class TestQmdConfig:
@@ -94,26 +94,26 @@ class TestQmdClient:
 
     def test_client_can_be_imported(self):
         """QmdClient should be importable."""
-        from llmwikify.core.qmd_client import QmdClient
+        from llmwikify.kernel.search.qmd_client import QmdClient
         assert QmdClient is not None
 
     def test_client_init_with_defaults(self):
         """QmdClient should initialize with default host/port."""
-        from llmwikify.core.qmd_client import QmdClient
+        from llmwikify.kernel.search.qmd_client import QmdClient
         client = QmdClient()
         assert client.host == "127.0.0.1"
         assert client.port == 8181
 
     def test_client_init_with_custom_host_port(self):
         """QmdClient should accept custom host/port."""
-        from llmwikify.core.qmd_client import QmdClient
+        from llmwikify.kernel.search.qmd_client import QmdClient
         client = QmdClient(host="localhost", port=8080)
         assert client.host == "localhost"
         assert client.port == 8080
 
     def test_is_available_returns_false_when_not_running(self):
         """QmdClient.is_available() should return False when QMD not running."""
-        from llmwikify.core.qmd_client import QmdClient
+        from llmwikify.kernel.search.qmd_client import QmdClient
         client = QmdClient(port=9999)  # Use unlikely port
         result = client.is_available()
         # Should not raise, and return False since QMD not running
@@ -121,14 +121,14 @@ class TestQmdClient:
 
     def test_health_returns_dict(self):
         """QmdClient.health() should return dict even when not available."""
-        from llmwikify.core.qmd_client import QmdClient
+        from llmwikify.kernel.search.qmd_client import QmdClient
         client = QmdClient(port=9999)
         result = client.health()
         assert isinstance(result, dict)
 
     def test_get_install_guide(self):
         """QmdClient should provide installation instructions."""
-        from llmwikify.core.qmd_client import QmdClient
+        from llmwikify.kernel.search.qmd_client import QmdClient
         guide = QmdClient.get_install_guide(QmdClient())
         assert isinstance(guide, str)
         assert "QMD" in guide
@@ -145,14 +145,14 @@ class TestQmdIndex:
 
     def test_qmd_index_init(self, wiki_root):
         """QmdIndex should initialize correctly."""
-        from llmwikify.core.qmd_index import QmdIndex
+        from llmwikify.kernel.search.qmd_index import QmdIndex
         qmd = QmdIndex(wiki_root)
         assert qmd.host == "127.0.0.1"
         assert qmd.port == 8181
 
     def test_qmd_index_with_custom_config(self, wiki_root):
         """QmdIndex should use custom config values."""
-        from llmwikify.core.qmd_index import QmdIndex
+        from llmwikify.kernel.search.qmd_index import QmdIndex
         config = {
             "search": {
                 "qmd": {
@@ -167,14 +167,14 @@ class TestQmdIndex:
 
     def test_search_returns_empty_list_when_not_available(self, wiki_root):
         """QmdIndex.search() should return empty list when QMD not available."""
-        from llmwikify.core.qmd_index import QmdIndex
+        from llmwikify.kernel.search.qmd_index import QmdIndex
         qmd = QmdIndex(wiki_root)
         results = qmd.search("test")
         assert results == []
 
     def test_embed_returns_dict(self, wiki_root):
         """QmdIndex.embed() should return dict even when not available."""
-        from llmwikify.core.qmd_index import QmdIndex
+        from llmwikify.kernel.search.qmd_index import QmdIndex
         qmd = QmdIndex(wiki_root)
         result = qmd.embed()
         assert isinstance(result, dict)

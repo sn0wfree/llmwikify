@@ -17,10 +17,11 @@ class MiniMaxProvider(BaseLLMProvider):
         return "https://api.minimaxi.com/v1"
 
     def default_model(self) -> str:
-        return "MiniMax-M2.7"
+        return "MiniMax-M3"
 
     def supported_models(self) -> list[str]:
         return [
+            "MiniMax-M3",
             "MiniMax-M2.7",
             "MiniMax-M2.7-highspeed",
             "MiniMax-M2.5",

@@ -10,7 +10,7 @@ import pytest
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from llmwikify.core import Wiki
+from llmwikify.kernel import Wiki
 from llmwikify.foundation.extractors import ExtractedContent
 
 

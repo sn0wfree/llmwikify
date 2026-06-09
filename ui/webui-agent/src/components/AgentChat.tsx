@@ -30,6 +30,20 @@ interface ToolCall {
   finishedAt?: number;
 }
 
+function parseToolCalls(raw: unknown): ToolCall[] | undefined {
+  if (raw == null) return undefined;
+  if (Array.isArray(raw)) return raw as ToolCall[];
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as ToolCall[]) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 type ConnectionState = 'idle' | 'live' | 'error';
 
 const STATE_TONE: Record<ConnectionState, string> = {
@@ -117,7 +131,7 @@ export function AgentChat({ onExportToPpt }: { onExportToPpt?: (type: 'research'
           role: m.role as 'user' | 'assistant',
           content: m.content,
           timestamp: m.created_at,
-          toolCalls: m.tool_calls as ToolCall[] | undefined,
+          toolCalls: parseToolCalls(m.tool_calls),
         }));
         setMessages(loaded);
       }

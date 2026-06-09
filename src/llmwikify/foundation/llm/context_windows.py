@@ -34,6 +34,7 @@ CONTEXT_WINDOWS: dict[str, int] = {
     "mistral": 32_768,
     "phi3": 131_072,
     # MiniMax
+    "MiniMax-M3": 1_000_000,
     "MiniMax-M2.7": 1_000_000,
     "MiniMax-M2.5": 1_000_000,
     # Fallback

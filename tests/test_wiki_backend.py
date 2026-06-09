@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from llmwikify.core.wiki_backend import LocalFileBackend, WikiBackend
+from llmwikify.kernel.storage.backend import LocalFileBackend, WikiBackend
 
 
 @pytest.fixture

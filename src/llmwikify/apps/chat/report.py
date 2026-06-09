@@ -130,7 +130,7 @@ class ReportGenerator:
         ``generate`` method now uses ``run_prompt`` instead and does
         not call this method.
         """
-        from llmwikify.core.prompt_registry import PromptRegistry
+        from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
         from llmwikify.apps.chat.engine_helpers import resolve_llm_params
         from llmwikify.apps.chat.prompts import render_framework_block
 

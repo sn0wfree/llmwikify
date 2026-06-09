@@ -282,7 +282,7 @@ def test_output_unpacks_into_chat_json_kwargs():
 
 def test_with_real_prompt_registry_research_plan(tmp_path, monkeypatch):
     """Smoke test: real PromptRegistry loading a built-in prompt."""
-    from llmwikify.core.prompt_registry import PromptRegistry
+    from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
 
     # Use the default prompts directory (no custom dir)
     registry = PromptRegistry(provider="openai")

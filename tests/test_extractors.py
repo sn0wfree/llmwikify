@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llmwikify.core.index import WikiIndex
+from llmwikify.kernel.storage.index import WikiIndex
 from llmwikify.foundation.extractors import detect_source_type, extract, extract_text_file
 from llmwikify.foundation.extractors.base import ExtractedContent
 

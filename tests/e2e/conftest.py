@@ -71,7 +71,7 @@ def server_port():
 @pytest.fixture(scope="session", autouse=True)
 def start_server(test_wiki, server_port):
     """Start Unified Server for all tests."""
-    from llmwikify.core import Wiki
+    from llmwikify.kernel import Wiki
     from llmwikify.interfaces.mcp.server import create_unified_server
 
     wiki = Wiki(test_wiki)
