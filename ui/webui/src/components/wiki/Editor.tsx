@@ -192,7 +192,7 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
       {/* Editor Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
-        <div className="h-10 bg-background border-b border-border flex items-center px-3 gap-2 shrink-0">
+        <div className="h-12 bg-background border-b border-border flex items-center px-4 gap-3 shrink-0">
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             className="text-muted-foreground hover:text-foreground text-sm p-1 rounded hover:bg-muted transition-colors"
@@ -207,7 +207,7 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
                 key={m}
                 onClick={() => setMode(m)}
                 className={cn(
-                  'px-2.5 py-1 text-xs rounded-md transition-colors font-medium',
+                  'px-3 py-1.5 text-sm rounded-lg transition-colors font-medium',
                   mode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
               >
@@ -218,7 +218,7 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
               <button
                 onClick={() => setShowLabels(!showLabels)}
                 className={cn(
-                  'px-2.5 py-1 text-xs rounded-md transition-colors font-medium',
+                  'px-3 py-1.5 text-sm rounded-lg transition-colors font-medium',
                   showLabels ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
               >

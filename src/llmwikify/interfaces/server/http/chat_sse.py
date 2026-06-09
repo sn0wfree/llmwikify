@@ -285,6 +285,12 @@ async def save_llm_config(request: Request):
     from llmwikify.apps.chat.config_manager import get_global_config_manager
     body = await request.json()
     manager = get_global_config_manager()
+    # Preserve real api_key: if the incoming key is masked (contains ***),
+    # keep the original value from the existing config.
+    incoming_key = body.get("api_key", "")
+    if incoming_key and "***" in incoming_key:
+        current = manager.load_effective_llm_config()
+        body["api_key"] = current.get("api_key", incoming_key)
     manager.save_global_config(body)
     manager.reload()
     return {"saved": True}

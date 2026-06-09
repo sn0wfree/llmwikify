@@ -92,7 +92,7 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
       </div>
 
       {/* Metrics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
         <MetricCard label="Pages" value={metrics.pages} color="teal" />
         <MetricCard label="Sink Entries" value={metrics.sinkEntries} color="amber" />
         <MetricCard label="Active Sinks" value={metrics.sinkCount} color="blue" />
@@ -202,8 +202,8 @@ function MetricCard({ label, value, color }: { label: string; value: number; col
   };
 
   return (
-    <Card className={cn('p-3 border-l-2', colorMap[color])}>
-      <div className="text-xs text-muted-foreground mb-1">{label}</div>
+    <Card className={cn('p-4 border-l-2', colorMap[color])}>
+      <div className="text-xs text-muted-foreground mb-1.5">{label}</div>
       <div className={cn('text-2xl font-bold', textColorMap[color])}>{value}</div>
     </Card>
   );

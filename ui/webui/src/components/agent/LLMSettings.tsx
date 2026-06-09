@@ -123,6 +123,11 @@ export function LLMSettings() {
   }, [apiKeyMode]);
 
   const handleSave = useCallback(async () => {
+    if (config.api_key && "***" in config.api_key) {
+      if (!window.confirm('API Key appears to be masked (contains ***). The real key will be preserved.\n\nIf you need to change the key, paste the new real key first.\n\nProceed with save?')) {
+        return;
+      }
+    }
     setSaving(true);
     try {
       await api.agent.saveConfig(config);
@@ -234,7 +239,11 @@ export function LLMSettings() {
                 </div>
                 {originalApiKey && (
                   <div className="mt-1 text-xs text-muted-foreground">
-                    Current: {displayApiKey}
+                    {originalApiKey.includes('***') ? (
+                      <span className="text-yellow-500">Key is masked — real key is preserved on save. Paste new key to change.</span>
+                    ) : (
+                      <span>Current: {displayApiKey}</span>
+                    )}
                   </div>
                 )}
               </div>

@@ -20,7 +20,7 @@ export function WikiLayout() {
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
-      'flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm transition-colors relative',
+      'flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm transition-colors relative',
       isActive
         ? 'bg-primary/15 text-primary font-medium'
         : 'text-muted-foreground hover:bg-muted hover:text-foreground',
