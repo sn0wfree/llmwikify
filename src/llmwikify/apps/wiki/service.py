@@ -53,12 +53,16 @@ class WikiService:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db = db
 
-        # Create an AgentDatabase wrapper for subsystems that
-        # still use the old method names (get_proposals,
-        # save_proposal, list_notifications, etc.)
-        from llmwikify.apps.agent.core.db import AgentDatabase
+        # WikiDatabase facade for subsystems that only need
+        # wiki-domain methods (dream/notif/confirm/ingest).
+        from llmwikify.apps.wiki.db import WikiDatabase
 
-        self._agent_db = AgentDatabase(self.data_dir / ".llmwiki_agent.db")
+        self._wiki_db = WikiDatabase(self.data_dir)
+
+        # ChatDatabase (passed in) is used for WikiToolRegistry
+        # which needs both wiki methods AND research methods
+        # (get_research_session, get_sources, etc.).
+        self._agent_db = db
 
         # Lazy-initialized subsystem managers (per wiki)
         self._dream_editors: dict[str, Any] = {}
@@ -126,7 +130,7 @@ class WikiService:
             self._dream_editors[wiki_id] = DreamEditor(
                 wiki=wiki,
                 data_dir=self.data_dir / wiki_id,
-                db=self._agent_db,
+                db=self._wiki_db,
                 wiki_id=wiki_id,
             )
         return self._dream_editors[wiki_id]
@@ -144,7 +148,7 @@ class WikiService:
 
             self._notification_managers[wiki_id] = NotificationManager(
                 max_size=100,
-                db=self._agent_db,
+                db=self._wiki_db,
                 wiki_id=wiki_id,
             )
         return self._notification_managers[wiki_id]

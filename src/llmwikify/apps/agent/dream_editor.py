@@ -33,12 +33,12 @@ class ProposalManager:
         self.db = db
         self.wiki_id = wiki_id
         if db and wiki_id:
-            self._proposals = db.get_proposals(wiki_id, status=None)
+            self._proposals = db.get_dream_proposals(wiki_id, status=None)
 
     def _sync_to_db(self, proposal: dict) -> None:
         if self.db and self.wiki_id:
             proposal["wiki_id"] = self.wiki_id
-            self.db.save_proposal(proposal)
+            self.db.save_dream_proposal(proposal)
 
     def _add_proposal(self, proposal: dict) -> dict:
         self._proposals.append(proposal)
@@ -125,7 +125,7 @@ class ProposalManager:
 
     def get_stats(self) -> dict:
         if self.db and self.wiki_id:
-            return self.db.get_proposal_stats(self.wiki_id)
+            return self.db.get_dream_proposal_stats(self.wiki_id)
         stats = {"pending": 0, "approved": 0, "rejected": 0, "auto_approved": 0, "applied": 0}
         for p in self._proposals:
             status = p.get("status", "pending")
