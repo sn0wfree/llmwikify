@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .backend import is_path_excluded
+
 
 class WikiIndex:
     """Unified index manager for full-text search and reference tracking."""
@@ -301,7 +303,7 @@ class WikiIndex:
         self._execute("DELETE FROM pages")
 
         # Process all markdown files
-        md_files = list(wiki_dir.rglob("*.md"))
+        md_files = [p for p in wiki_dir.rglob("*.md") if not is_path_excluded(p)]
         total = len(md_files)
 
         for i, md_file in enumerate(md_files):

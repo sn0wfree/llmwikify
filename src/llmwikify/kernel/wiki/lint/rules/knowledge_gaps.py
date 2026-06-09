@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from llmwikify.kernel.storage.backend import is_path_excluded
+
 from .. import Rule
 
 if TYPE_CHECKING:
@@ -52,6 +54,8 @@ class KnowledgeGapsRule(Rule):
         sources_dir = wiki.wiki_dir / "sources"
         if sources_dir.exists():
             for source_page in sources_dir.rglob("*.md"):
+                if is_path_excluded(source_page):
+                    continue
                 page_name = wiki._page_display_name(source_page)
                 content = source_page.read_text()
                 wikilinks = re.findall(r'\[\[(.*?)\]\]', content)

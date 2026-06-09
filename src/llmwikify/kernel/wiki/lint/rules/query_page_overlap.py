@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
+from llmwikify.kernel.storage.backend import is_path_excluded
+
 from ...constants import (
     JACCARD_OVERLAP_THRESHOLD,
     MAX_QUERY_OVERLAP_HINTS,
@@ -34,6 +36,8 @@ class QueryPageOverlapRule(Rule):
         query_pages = []
         for page in wiki.wiki_dir.rglob("*.md"):
             if '.sink' in str(page):
+                continue
+            if is_path_excluded(page):
                 continue
             page_name = page.stem
             if not page_name.startswith("Query:"):

@@ -8,6 +8,8 @@ Design principle: "LLM does grunt work, human makes decisions"
 
 import logging
 
+from llmwikify.kernel.storage.backend import is_path_excluded
+
 from .export import build_graph, detect_communities
 
 logger = logging.getLogger(__name__)
@@ -341,6 +343,8 @@ class GraphAnalyzer:
             return False
 
         for md_file in self.wiki.wiki_dir.rglob("*.md"):
+            if is_path_excluded(md_file):
+                continue
             page_name = str(md_file.relative_to(self.wiki.wiki_dir))[:-3]
             if page_name == node:
                 return True

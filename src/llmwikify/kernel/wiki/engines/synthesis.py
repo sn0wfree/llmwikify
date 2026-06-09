@@ -15,6 +15,8 @@ from ..constants import (
     MAX_SUGGESTED_UPDATES,
 )
 
+from llmwikify.kernel.storage.backend import is_path_excluded
+
 
 class SynthesisEngine:
     """Analyze new sources against existing wiki content and generate suggestions.
@@ -74,6 +76,8 @@ class SynthesisEngine:
             return analyses
 
         for source_page in sources_dir.rglob("*.md"):
+            if is_path_excluded(source_page):
+                continue
             content = source_page.read_text()
             analysis = self._extract_analysis_from_page(content)
             if analysis:
@@ -135,6 +139,8 @@ class SynthesisEngine:
             return entities
 
         for page in entities_dir.rglob("*.md"):
+            if is_path_excluded(page):
+                continue
             page_name = str(page.relative_to(self.wiki.wiki_dir))[:-3]
             entities.add(page_name)
 

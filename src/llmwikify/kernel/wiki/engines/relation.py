@@ -6,6 +6,8 @@ import re
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from llmwikify.kernel.storage.backend import is_path_excluded
+
 from ...storage.index import WikiIndex
 
 logger = logging.getLogger(__name__)
@@ -125,9 +127,11 @@ class RelationEngine:
         wiki_dir = self.wiki_root / "wiki"
         if not wiki_dir.exists():
             return []
-        
+
         pages = []
         for page in wiki_dir.rglob("*.md"):
+            if is_path_excluded(page):
+                continue
             page_name = str(page.relative_to(wiki_dir).with_suffix(""))
             pages.append(page_name)
         return pages

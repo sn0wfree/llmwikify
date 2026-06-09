@@ -28,6 +28,9 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
+
+
 import re
 import shutil
 from datetime import datetime, timezone
@@ -40,6 +43,28 @@ if TYPE_CHECKING:
     from .index import WikiIndex
 
 logger = logging.getLogger(__name__)
+
+# Directory names to exclude from wiki scans.
+# Filters Jupyter checkpoint directories, VCS metadata, and other
+# hidden/system folders that should never be indexed as wiki pages.
+EXCLUDED_DIR_NAMES: frozenset[str] = frozenset({
+    ".ipynb_checkpoints",
+    ".git",
+    ".hg",
+    ".svn",
+    ".DS_Store",
+    ".vscode",
+    ".idea",
+})
+
+
+def is_path_excluded(path: Path) -> bool:
+    """Return True if any part of `path` is in EXCLUDED_DIR_NAMES.
+
+    Used to filter wiki scans so that Jupyter checkpoint dirs and other
+    hidden/system directories don't pollute the page index.
+    """
+    return any(part in EXCLUDED_DIR_NAMES for part in path.parts)
 
 
 class WikiBackend(Protocol):
@@ -145,7 +170,7 @@ class LocalFileBackend:
     def list_page_paths(self) -> list[Path]:
         if not self.wiki_dir.exists():
             return []
-        return sorted(self.wiki_dir.rglob("*.md"))
+        return sorted(p for p in self.wiki_dir.rglob("*.md") if not is_path_excluded(p))
 
     # === Index (2 methods) ===
     def get_index(self) -> str:

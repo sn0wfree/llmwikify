@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from llmwikify.kernel.storage.backend import is_path_excluded
+
 if TYPE_CHECKING:
     from ...prompt_registry import PromptRegistry
 
@@ -115,7 +117,8 @@ class WikiUtilityMixin(WikiProtocol):
             return 0
         return len([p for p in self.wiki_dir.rglob("*.md")
                     if p.stem not in (self._index_page_name, self._log_page_name)
-                    and '.sink' not in str(p)])
+                    and '.sink' not in str(p)
+                    and not is_path_excluded(p)])
 
     def _get_existing_page_names(self) -> list[str]:
         """Return list of existing wiki page names (relative to wiki_dir)."""
@@ -123,7 +126,8 @@ class WikiUtilityMixin(WikiProtocol):
             return []
         return [str(p.relative_to(self.wiki_dir)) for p in self.wiki_dir.rglob("*.md")
                 if p.stem not in (self._index_page_name, self._log_page_name)
-                and '.sink' not in str(p)]
+                and '.sink' not in str(p)
+                and not is_path_excluded(p)]
 
     def _wiki_pages(self) -> list[Path]:
         """Return all wiki pages recursively, excluding index, log, and .sink/."""
@@ -131,7 +135,8 @@ class WikiUtilityMixin(WikiProtocol):
             return []
         return [p for p in self.wiki_dir.rglob("*.md")
                 if p.stem not in (self._index_page_name, self._log_page_name)
-                and '.sink' not in str(p)]
+                and '.sink' not in str(p)
+                and not is_path_excluded(p)]
 
     def _page_display_name(self, page: Path) -> str:
         """Return display name for a page (relative path without .md)."""

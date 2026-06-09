@@ -4,6 +4,8 @@ import hashlib
 import logging
 from pathlib import Path
 
+from llmwikify.kernel.storage.backend import is_path_excluded
+
 from ...protocols import WikiProtocol
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,8 @@ class WikiSourceAnalysisMixin(WikiProtocol):
 
         source_ref = f"(raw/{Path(source_path).name})"
         for page in sources_dir.rglob("*.md"):
+            if is_path_excluded(page):
+                continue
             content = page.read_text()
             if source_ref in content or source_path in content:
                 return page
