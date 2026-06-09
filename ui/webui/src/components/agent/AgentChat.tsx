@@ -84,6 +84,10 @@ export function AgentChat() {
   const [currentAssistantMsg, setCurrentAssistantMsg] = useState('');
   const [currentThinking, setCurrentThinking] = useState('');
   const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
+  // Phase 1.4 (v0.36): mirrors of the streaming state used by
+  // the ``done`` handler to avoid stale closure captures.
+  const currentThinkingRef = useRef('');
+  const currentToolCallsRef = useRef<ToolCall[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
   const [showSidebar, setShowSidebar] = useState(true);
@@ -150,6 +154,9 @@ export function AgentChat() {
       setLoading(true);
       setCurrentAssistantMsg('');
       setCurrentToolCalls([]);
+      // Phase 1.4 (v0.36): reset refs in lock-step with state.
+      currentThinkingRef.current = '';
+      currentToolCallsRef.current = [];
 
       const reader = api.confirmations.approveAndContinue(
         pendingConfirmation.confirmationId, currentSessionId, currentWikiId || undefined
@@ -164,24 +171,48 @@ export function AgentChat() {
             setCurrentAssistantMsg((prev) => prev + event.content);
             break;
           case 'thinking':
-            setCurrentThinking((prev) => prev + event.content);
+            setCurrentThinking((prev) => {
+              currentThinkingRef.current = prev + event.content;
+              return prev + event.content;
+            });
             break;
-          case 'tool_call_start':
-            setCurrentToolCalls((prev) => [...prev, { tool: event.tool, args: event.args, status: 'streaming', startedAt: Date.now() }]);
+          case 'tool_call_start': {
+            setCurrentToolCalls((prev) => {
+              const next = [...prev, { tool: event.tool, args: event.args, status: 'streaming' as const, startedAt: Date.now() }];
+              currentToolCallsRef.current = next;
+              return next;
+            });
             break;
-          case 'tool_call_end':
-            setCurrentToolCalls((prev) => prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done', finishedAt: Date.now() } : tc));
+          }
+          case 'tool_call_end': {
+            setCurrentToolCalls((prev) => {
+              const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
+              currentToolCallsRef.current = next;
+              return next;
+            });
             break;
+          }
           case 'confirmation_required':
-            setCurrentToolCalls((prev) => prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done', finishedAt: Date.now() } : tc));
+            setCurrentToolCalls((prev) => {
+              const next = prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
+              currentToolCallsRef.current = next;
+              return next;
+            });
             setPendingConfirmation({ confirmationId: event.confirmation_id, tool: 'confirmation_required', args: {}, impact: (event.details || {}) as Record<string, unknown>, group: undefined });
             break;
-          case 'done':
-            setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: currentThinking || undefined, timestamp: new Date().toISOString(), toolCalls: currentToolCalls }]);
+          case 'done': {
+            // Phase 1.4 (v0.36): read the latest tool_calls /
+            // thinking from refs to avoid stale closure.
+            const thinkingSnapshot = currentThinkingRef.current;
+            const toolCallsSnapshot = currentToolCallsRef.current;
+            setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
             setCurrentAssistantMsg('');
             setCurrentThinking('');
             setCurrentToolCalls([]);
+            currentThinkingRef.current = '';
+            currentToolCallsRef.current = [];
             break;
+          }
           case 'error':
             addToast('error', event.message || 'Confirmation error');
             break;
@@ -194,7 +225,7 @@ export function AgentChat() {
       setConfirmingLoading(false);
       setLoading(false);
     }
-  }, [pendingConfirmation, currentSessionId, currentWikiId, currentToolCalls, addToast]);
+  }, [pendingConfirmation, currentSessionId, currentWikiId, addToast]);
 
   const handleRejectConfirmation = useCallback(async () => {
     if (!pendingConfirmation) return;
@@ -220,6 +251,9 @@ export function AgentChat() {
     setCurrentAssistantMsg('');
     setCurrentThinking('');
     setCurrentToolCalls([]);
+    // Phase 1.4 (v0.36): reset refs in lock-step with state.
+    currentThinkingRef.current = '';
+    currentToolCallsRef.current = [];
     setConnectionState('live');
     setTokenEstimate((t) => t + Math.ceil(input.length / 4));
 
@@ -240,34 +274,64 @@ export function AgentChat() {
             setCurrentAssistantMsg((prev) => prev + event.content);
             break;
           case 'thinking':
-            setCurrentThinking((prev) => prev + event.content);
+            setCurrentThinking((prev) => {
+              currentThinkingRef.current = prev + event.content;
+              return prev + event.content;
+            });
             break;
-          case 'tool_call_start':
-            setCurrentToolCalls((prev) => [...prev, { tool: event.tool, args: event.args, status: 'streaming', startedAt: Date.now() }]);
+          case 'tool_call_start': {
+            setCurrentToolCalls((prev) => {
+              const next = [...prev, { tool: event.tool, args: event.args, status: 'streaming' as const, startedAt: Date.now() }];
+              currentToolCallsRef.current = next;
+              return next;
+            });
             break;
-          case 'tool_call_end':
-            setCurrentToolCalls((prev) => prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done', finishedAt: Date.now() } : tc));
+          }
+          case 'tool_call_end': {
+            setCurrentToolCalls((prev) => {
+              const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
+              currentToolCallsRef.current = next;
+              return next;
+            });
             break;
-          case 'tool_call_error':
-            setCurrentToolCalls((prev) => prev.map((tc) => tc.tool === event.tool ? { ...tc, error: event.error, status: 'error', finishedAt: Date.now() } : tc));
+          }
+          case 'tool_call_error': {
+            setCurrentToolCalls((prev) => {
+              const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now() } : tc);
+              currentToolCallsRef.current = next;
+              return next;
+            });
             break;
+          }
           case 'confirmation_required':
-            setCurrentToolCalls((prev) => prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done', finishedAt: Date.now() } : tc));
+            setCurrentToolCalls((prev) => {
+              const next = prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
+              currentToolCallsRef.current = next;
+              return next;
+            });
             setPendingConfirmation({ confirmationId: event.confirmation_id, tool: 'confirmation_required', args: {}, impact: (event.details || {}) as Record<string, unknown>, group: undefined });
             break;
-          case 'done':
-            setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: currentThinking || undefined, timestamp: new Date().toISOString(), toolCalls: currentToolCalls }]);
+          case 'done': {
+            // Phase 1.4 (v0.36): read the latest tool_calls /
+            // thinking from refs to avoid stale closure.
+            const thinkingSnapshot = currentThinkingRef.current;
+            const toolCallsSnapshot = currentToolCallsRef.current;
+            setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
             setCurrentAssistantMsg('');
             setCurrentThinking('');
             setCurrentToolCalls([]);
-            setTokenEstimate((t) => t + Math.ceil((event.final_response.length + currentThinking.length) / 4));
+            currentThinkingRef.current = '';
+            currentToolCallsRef.current = [];
+            setTokenEstimate((t) => t + Math.ceil((event.final_response.length + thinkingSnapshot.length) / 4));
             setConnectionState('idle');
             break;
+          }
           case 'error':
             addToast('error', event.message || 'Chat error');
             setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${event.message}`, timestamp: new Date().toISOString() }]);
             setCurrentAssistantMsg('');
             setCurrentToolCalls([]);
+            currentToolCallsRef.current = [];
             setConnectionState('error');
             break;
         }
@@ -278,11 +342,12 @@ export function AgentChat() {
       setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${errMsg}`, timestamp: new Date().toISOString() }]);
       setCurrentAssistantMsg('');
       setCurrentToolCalls([]);
+      currentToolCallsRef.current = [];
       setConnectionState('error');
     } finally {
       setLoading(false);
     }
-  }, [input, loading, addToast, currentToolCalls, currentWikiId, currentSessionId]);
+  }, [input, loading, addToast, currentWikiId, currentSessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
