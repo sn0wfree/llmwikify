@@ -1,27 +1,25 @@
-import { ReactNode } from 'react';
+import { Card as ShadcnCard } from './card';
+import { cn } from '@/lib/utils';
 
-interface CardProps {
-  children: ReactNode;
+interface LegacyCardProps {
+  children: React.ReactNode;
   className?: string;
   variant?: 'default' | 'bordered';
   padding?: 'none' | 'sm' | 'md' | 'lg';
 }
 
-export function Card({
-  children,
-  className = '',
-  variant = 'default',
-  padding = 'md',
-}: CardProps) {
-  const paddingMap = { none: '', sm: 'p-2', md: 'p-3', lg: 'p-4' };
+const paddingMap = { none: '', sm: 'p-2', md: '', lg: 'p-6' };
+
+export function Card({ children, className = '', variant = 'default', padding = 'md' }: LegacyCardProps) {
   return (
-    <div className={`
-      bg-[var(--bg-secondary)] rounded-lg
-      ${variant === 'bordered' ? 'border border-[var(--border)]' : ''}
-      ${paddingMap[padding]}
-      ${className}
-    `}>
+    <ShadcnCard
+      className={cn(
+        variant === 'bordered' && 'ring-border',
+        paddingMap[padding],
+        className,
+      )}
+    >
       {children}
-    </div>
+    </ShadcnCard>
   );
 }

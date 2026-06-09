@@ -1,52 +1,38 @@
-import { ReactNode, MouseEvent } from 'react';
+import { Button as ShadcnButton, type ButtonProps as ShadcnButtonProps } from './button';
 
-interface ButtonProps {
-  children: ReactNode;
-  onClick?: (e: MouseEvent<HTMLButtonElement>) => void;
+type LegacyVariant = 'primary' | 'success' | 'danger' | 'secondary' | 'ghost';
+type LegacySize = 'sm' | 'md';
+
+const variantMap: Record<LegacyVariant, ShadcnButtonProps['variant']> = {
+  primary: 'default',
+  success: 'default',
+  danger: 'destructive',
+  secondary: 'secondary',
+  ghost: 'ghost',
+};
+
+const sizeMap: Record<LegacySize, ShadcnButtonProps['size']> = {
+  sm: 'sm',
+  md: 'default',
+};
+
+interface LegacyButtonProps {
+  children: React.ReactNode;
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   type?: 'button' | 'submit';
-  variant?: 'primary' | 'success' | 'danger' | 'secondary' | 'ghost';
-  size?: 'sm' | 'md';
+  variant?: LegacyVariant;
+  size?: LegacySize;
   disabled?: boolean;
   className?: string;
 }
 
-const variantMap = {
-  primary: 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white',
-  success: 'bg-green-600 hover:bg-green-700 text-white',
-  danger: 'bg-red-600 hover:bg-red-700 text-white',
-  secondary: 'bg-[var(--bg-tertiary)] hover:opacity-80 text-[var(--text-primary)]',
-  ghost: 'bg-transparent hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)]',
-};
-
-const sizeMap = {
-  sm: 'px-2 py-1 text-xs',
-  md: 'px-3 py-1.5 text-sm',
-};
-
-export function Button({
-  children,
-  onClick,
-  type = 'button',
-  variant = 'primary',
-  size = 'md',
-  disabled = false,
-  className = '',
-}: ButtonProps) {
+export function Button({ variant = 'primary', size = 'md', className, ...props }: LegacyButtonProps) {
   return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={`
-        ${variantMap[variant]}
-        ${sizeMap[size]}
-        rounded text-sm
-        disabled:opacity-50
-        transition-all hover:scale-105 active:scale-95
-        ${className}
-      `}
-    >
-      {children}
-    </button>
+    <ShadcnButton
+      variant={variantMap[variant]}
+      size={sizeMap[size]}
+      className={className}
+      {...props}
+    />
   );
 }

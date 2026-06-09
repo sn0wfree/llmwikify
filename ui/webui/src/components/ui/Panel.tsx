@@ -1,25 +1,21 @@
-import { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 
 interface PanelProps {
-  children: ReactNode;
-  className?: string;
+  children: React.ReactNode;
   border?: 'top' | 'bottom' | 'all' | 'none';
+  className?: string;
 }
 
-const borderMap = {
-  top: 'border-t border-[var(--border)]',
-  bottom: 'border-b border-[var(--border)]',
-  all: 'border border-[var(--border)]',
-  none: '',
-};
+export function Panel({ children, border = 'none', className }: PanelProps) {
+  const borderClass = {
+    top: 'border-t',
+    bottom: 'border-b',
+    all: 'border',
+    none: '',
+  }[border];
 
-export function Panel({ children, className = '', border = 'top' }: PanelProps) {
   return (
-    <div className={`
-      bg-[var(--bg-secondary)] ${borderMap[border]}
-      p-3
-      ${className}
-    `}>
+    <div className={cn('px-4 py-2', borderClass, 'border-border', className)}>
       {children}
     </div>
   );

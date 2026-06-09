@@ -1,39 +1,28 @@
-import { ChangeEvent } from 'react';
+import { cn } from '@/lib/utils';
 
-interface SelectOption {
-  value: string;
-  label: string;
-}
-
-interface SelectProps {
-  value: string;
-  onChange: (e: ChangeEvent<HTMLSelectElement>) => void;
-  options: SelectOption[];
-  disabled?: boolean;
+interface LegacySelectProps {
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  children: React.ReactNode;
   className?: string;
+  disabled?: boolean;
 }
 
-export function Select({ value, onChange, options, disabled = false, className = '' }: SelectProps) {
+export function Select({ value, onChange, children, className, disabled }: LegacySelectProps) {
   return (
     <select
       value={value}
       onChange={onChange}
       disabled={disabled}
-      className={`
-        w-full bg-[var(--bg-secondary)] border border-[var(--border)]
-        rounded-md px-3 py-2.5 text-sm text-[var(--text-primary)]
-        focus:outline-none focus:border-[var(--accent)]
-        focus:ring-2 focus:ring-[var(--accent)]/40
-        transition-all duration-200
-        disabled:opacity-50
-        ${className}
-      `}
+      className={cn(
+        'h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none',
+        'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50',
+        'disabled:cursor-not-allowed disabled:opacity-50',
+        'dark:bg-input/30',
+        className,
+      )}
     >
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
+      {children}
     </select>
   );
 }
