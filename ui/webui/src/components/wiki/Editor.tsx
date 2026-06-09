@@ -1,13 +1,18 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Group, Panel, Separator } from 'react-resizable-panels';
+import {
+  Save, FileText, Network, Eye, PanelLeftClose, PanelLeftOpen,
+  Check, AlertCircle, Loader2, Pencil, Hash,
+} from 'lucide-react';
 import { api, WikiPage, GraphNode, GraphEdge } from '../../api';
 import { useWikiStore } from '../../stores/wikiStore';
 import { useToast } from './Toast';
+import { EmptyState, LoadingState } from '../ui/states';
 import { FrontMatterPanel, FrontMatterData } from './FrontMatterPanel';
 import { GraphView } from './GraphView';
 import { PageTree } from './PageTree';
-import { Button } from '../ui/Button';
 import { cn } from '@/lib/utils';
 
 interface EditorProps {
@@ -15,6 +20,8 @@ interface EditorProps {
   handlePageSelect?: (page: string) => void;
   currentWikiId?: string | null;
 }
+
+type ViewMode = 'edit' | 'graph' | 'preview';
 
 function parseFrontMatter(content: string): { metadata: FrontMatterData; body: string } {
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
@@ -37,20 +44,18 @@ function parseFrontMatter(content: string): { metadata: FrontMatterData; body: s
 
 function buildFrontMatter(metadata: FrontMatterData, body: string): string {
   if (Object.keys(metadata).length === 0) return body;
-
   const yaml = Object.entries(metadata)
     .map(([key, value]) => {
-      if (Array.isArray(value)) {
-        return `${key}: [${value.join(', ')}]`;
-      }
+      if (Array.isArray(value)) return `${key}: [${value.join(', ')}]`;
       return `${key}: ${value}`;
     })
     .join('\n');
-
   return `---\n${yaml}\n---\n\n${body}`;
 }
 
-export function Editor({ selectedPage: initialPage, handlePageSelect: externalOnSelect, currentWikiId }: EditorProps) {
+export function Editor({
+  selectedPage: initialPage, handlePageSelect: externalOnSelect, currentWikiId,
+}: EditorProps) {
   const { addToast } = useToast();
   const { isMultiWikiMode } = useWikiStore();
   const [internalSelectedPage, setInternalSelectedPage] = useState<string | null>(initialPage || null);
@@ -58,9 +63,11 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
   const [content, setContent] = useState('');
   const [metadata, setMetadata] = useState<FrontMatterData>({});
   const [body, setBody] = useState('');
-  const [mode, setMode] = useState<'edit' | 'graph'>('graph');
+  const [mode, setMode] = useState<ViewMode>('edit');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [dirty, setDirty] = useState(false);
   const [pagesByType, setPagesByType] = useState<Record<string, string[]>>({});
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
@@ -71,9 +78,14 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
   const selectedPage = internalSelectedPage;
 
   const handlePageSelect = useCallback((pageName: string) => {
+    if (dirty) {
+      const ok = window.confirm('You have unsaved changes. Discard and switch?');
+      if (!ok) return;
+    }
     setInternalSelectedPage(pageName);
+    setDirty(false);
     externalOnSelect?.(pageName);
-  }, [externalOnSelect]);
+  }, [externalOnSelect, dirty]);
 
   useEffect(() => { loadTree(); }, []);
 
@@ -81,6 +93,11 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
     if (selectedPage) {
       loadPage(selectedPage, currentWikiId || undefined);
       loadGraphData(selectedPage, currentWikiId || undefined);
+    } else {
+      setPage(null);
+      setContent('');
+      setMetadata({});
+      setBody('');
     }
   }, [selectedPage, currentWikiId]);
 
@@ -97,8 +114,8 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
       } else {
         data = await api.wiki.graph(currentPage);
       }
-      setGraphNodes(data.nodes);
-      setGraphEdges(data.edges);
+      setGraphNodes(data.nodes || []);
+      setGraphEdges(data.edges || []);
       if (data.all_types) setAllTypes(data.all_types);
     } catch {
       setGraphNodes([]);
@@ -106,7 +123,7 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
     } finally {
       setGraphLoading(false);
     }
-  }, []);
+  }, [isMultiWikiMode]);
 
   const loadTree = useCallback(async (wikiId?: string) => {
     try {
@@ -118,9 +135,9 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
       }
       setPagesByType(status.pages_by_type || {});
     } catch {
-      addToast('warning', '无法加载文件树');
+      addToast('warning', 'Could not load page tree');
     }
-  }, []);
+  }, [addToast, isMultiWikiMode]);
 
   const loadPage = useCallback(async (name: string, wikiId?: string) => {
     try {
@@ -135,19 +152,22 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
       const { metadata: fm, body: b } = parseFrontMatter(data.content);
       setMetadata(fm);
       setBody(b);
+      setDirty(false);
+      setSavedAt(null);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '未知错误';
-      addToast('error', `页面加载失败: ${msg}`);
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      addToast('error', `Failed to load page: ${msg}`);
       setPage(null);
       setContent('');
       setMetadata({});
       setBody('');
     }
-  }, []);
+  }, [addToast, isMultiWikiMode]);
 
   const handleBodyChange = useCallback((newBody: string) => {
     setBody(newBody);
     setContent(buildFrontMatter(metadata, newBody));
+    setDirty(true);
   }, [metadata]);
 
   const savePage = useCallback(async () => {
@@ -159,27 +179,67 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
       } else {
         await api.wiki.writePage(page.page_name, content);
       }
-      addToast('success', '页面已保存');
+      addToast('success', 'Page saved');
+      setDirty(false);
+      setSavedAt(Date.now());
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '未知错误';
-      addToast('error', `保存失败: ${msg}`);
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      addToast('error', `Save failed: ${msg}`);
     } finally {
       setSaving(false);
     }
-  }, [page, content, addToast]);
+  }, [page, content, addToast, isMultiWikiMode, currentWikiId]);
+
+  // ⌘S / Ctrl+S to save
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (page && dirty && !saving) savePage();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [page, dirty, saving, savePage]);
 
   const hasMetadata = Object.keys(metadata).length > 0;
 
   return (
     <div className="flex h-full">
       {/* File Tree Sidebar */}
-      <div className={cn(
-        'bg-sidebar border-r border-sidebar-border overflow-y-auto transition-all duration-200',
-        sidebarCollapsed ? 'w-10' : 'w-44',
-      )}>
-        {!sidebarCollapsed && (
+      <div
+        className={cn(
+          'border-r border-border/50 overflow-y-auto shrink-0',
+          'transition-[width] duration-200 ease-out',
+        )}
+        style={{ width: sidebarCollapsed ? 44 : 220 }}
+      >
+        {sidebarCollapsed ? (
+          <div className="flex flex-col items-center py-2">
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors"
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+            >
+              <PanelLeftOpen className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
           <>
-            <div className="px-3 py-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Pages</div>
+            <div className="px-2 py-2 flex items-center justify-between">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.12em] px-1.5">
+                Pages
+              </span>
+              <button
+                onClick={() => setSidebarCollapsed(true)}
+                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors"
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
+              >
+                <PanelLeftClose className="w-3.5 h-3.5" />
+              </button>
+            </div>
             <PageTree
               pagesByType={pagesByType}
               selectedPage={page?.page_name || null}
@@ -192,48 +252,68 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
       {/* Editor Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
-        <div className="h-12 bg-background border-b border-border flex items-center px-4 gap-3 shrink-0">
-          <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="text-muted-foreground hover:text-foreground text-sm p-1 rounded hover:bg-muted transition-colors"
-            title={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
-          >
-            {sidebarCollapsed ? '▶' : '◀'}
-          </button>
-          {page && <span className="text-sm text-foreground font-medium truncate">{page.page_name}</span>}
-          <div className="ml-auto flex gap-1">
-            {(['edit', 'graph'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={cn(
-                  'px-3 py-1.5 text-sm rounded-lg transition-colors font-medium',
-                  mode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-              >
-                {m === 'graph' ? 'Graph' : m.charAt(0).toUpperCase() + m.slice(1)}
-              </button>
-            ))}
-            {mode === 'graph' && (
-              <button
-                onClick={() => setShowLabels(!showLabels)}
-                className={cn(
-                  'px-3 py-1.5 text-sm rounded-lg transition-colors font-medium',
-                  showLabels ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-              >
-                Labels
-              </button>
-            )}
-            <Button
-              variant="primary"
-              size="sm"
+        <div className="h-12 px-3 border-b border-border/50 flex items-center gap-2 shrink-0 glass" style={{ background: 'color-mix(in srgb, var(--background) 80%, transparent)' }}>
+          {page ? (
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="text-sm text-foreground font-medium truncate">{page.page_name}</span>
+              {dirty && (
+                <span className="text-[10px] text-warning font-medium shrink-0">●</span>
+              )}
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground">No page selected</span>
+          )}
+
+          <div className="flex items-center gap-1 ml-auto">
+            {/* Mode toggle */}
+            <div className="inline-flex p-0.5 rounded-md bg-white/[0.04] border border-border/40">
+              {(['edit', 'graph', 'preview'] as const).map((m) => {
+                const Icon = m === 'edit' ? Pencil : m === 'graph' ? Network : Eye;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    disabled={!page && m !== 'edit'}
+                    className={cn(
+                      'flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors',
+                      mode === m
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground disabled:opacity-40',
+                    )}
+                  >
+                    <Icon className="w-3 h-3" />
+                    <span className="hidden md:inline">{m === 'edit' ? 'Edit' : m === 'graph' ? 'Graph' : 'Preview'}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Save button */}
+            <button
               onClick={savePage}
-              disabled={saving || !page}
-              className="ml-1"
+              disabled={!page || saving || !dirty}
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all',
+                'shadow-soft',
+                !page || !dirty
+                  ? 'bg-white/[0.04] text-muted-foreground cursor-not-allowed'
+                  : 'bg-gradient-to-br from-primary to-accent text-primary-foreground hover:brightness-110 hover:shadow-glow',
+                saving && 'opacity-60',
+              )}
+              title="Save (⌘S)"
             >
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
+              {saving ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : savedAt && !dirty ? (
+                <Check className="w-3.5 h-3.5" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              <span className="hidden sm:inline">
+                {saving ? 'Saving' : savedAt && !dirty ? 'Saved' : 'Save'}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -242,42 +322,61 @@ export function Editor({ selectedPage: initialPage, handlePageSelect: externalOn
 
         {/* Content */}
         <div className="flex-1 overflow-hidden">
-          {mode === 'edit' && (
-            <div className="flex h-full">
-              <textarea
-                value={body}
-                onChange={(e) => handleBodyChange(e.target.value)}
-                className="w-1/2 h-full bg-background text-foreground p-4 font-mono text-sm resize-none focus:outline-none border-r border-border"
-                placeholder="Select a page or start writing..."
-              />
-              <div className="w-1/2 h-full overflow-y-auto p-4 markdown-body">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {body || '*No content*'}
-                </ReactMarkdown>
-              </div>
-            </div>
-          )}
-          {mode === 'graph' && (
-            <div className="flex h-full">
-              {/* Graph area */}
-              <div className="w-1/2 h-full relative border-r border-border">
-                <GraphView
-                  nodes={graphNodes}
-                  edges={graphEdges}
-                  allTypes={allTypes}
-                  currentNode={page?.page_name || null}
-                  onNodeClick={(nodeId) => handlePageSelect(nodeId)}
-                  showLabels={showLabels}
-                  isLoading={graphLoading}
+          {!page ? (
+            <EmptyState
+              icon={<FileText className="w-6 h-6" />}
+              title="No page selected"
+              description="Pick a page from the sidebar to start editing, or create a new one."
+            />
+          ) : mode === 'edit' ? (
+            <Group direction="horizontal" className="h-full">
+              <Panel defaultSize={50} minSize={25} className="overflow-hidden">
+                <textarea
+                  value={body}
+                  onChange={(e) => handleBodyChange(e.target.value)}
+                  className="w-full h-full bg-background text-foreground p-4 font-mono text-sm resize-none focus:outline-none border-0"
+                  placeholder="Start writing markdown..."
                 />
-              </div>
-              {/* Preview area */}
-              <div className="w-1/2 h-full overflow-y-auto p-4 markdown-body">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {body || '*No content*'}
-                </ReactMarkdown>
-              </div>
+              </Panel>
+              <Separator className="w-1 bg-border/40 hover:bg-primary/60 transition-colors cursor-col-resize" />
+              <Panel defaultSize={50} minSize={25} className="overflow-hidden">
+                <div className="w-full h-full overflow-y-auto p-4 markdown-body">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {body || '*No content*'}
+                  </ReactMarkdown>
+                </div>
+              </Panel>
+            </Group>
+          ) : mode === 'preview' ? (
+            <div className="w-full h-full overflow-y-auto p-6 markdown-body max-w-3xl mx-auto">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {body || '*No content*'}
+              </ReactMarkdown>
             </div>
+          ) : (
+            <Group direction="horizontal" className="h-full">
+              <Panel defaultSize={60} minSize={30} className="overflow-hidden relative">
+                <div className="absolute inset-0">
+                  <GraphView
+                    nodes={graphNodes}
+                    edges={graphEdges}
+                    allTypes={allTypes}
+                    currentNode={page?.page_name || null}
+                    onNodeClick={(nodeId) => handlePageSelect(nodeId)}
+                    showLabels={showLabels}
+                    isLoading={graphLoading}
+                  />
+                </div>
+              </Panel>
+              <Separator className="w-1 bg-border/40 hover:bg-primary/60 transition-colors cursor-col-resize" />
+              <Panel defaultSize={40} minSize={20} className="overflow-hidden">
+                <div className="w-full h-full overflow-y-auto p-4 markdown-body">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {body || '*No content*'}
+                  </ReactMarkdown>
+                </div>
+              </Panel>
+            </Group>
           )}
         </div>
       </div>
