@@ -474,7 +474,7 @@ export function AgentChat() {
                     'shrink-0 w-9 h-9 rounded-xl flex items-center justify-center',
                     'bg-gradient-to-br from-primary to-accent text-primary-foreground',
                     'transition-all duration-200 shadow-soft',
-                    'hover:brightness-110 hover:shadow-glow active:scale-95',
+                    'hover:brightness-110 hover:shadow-glow',
                     'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100 disabled:hover:shadow-soft',
                   )}
                   aria-label="Send message"
