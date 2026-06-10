@@ -1,7 +1,7 @@
-"""apps/chat/skills/actions/ — Phase 5: 23 base actions.
+"""apps/chat/skills/actions/ — Phase 5: 26 base actions.
 
-Per ``v0.32-skill-restructure.md`` §3.1, the v0.32.0 base
-actions are 23 in total:
+Per ``v0.32-skill-restructure.md`` §3.1 + ``v0.39-web-search-skill.md``,
+the v0.32.0 base actions are 26 in total:
 
   14 base actions (#1-#14)
     1.  search_skill
@@ -32,9 +32,14 @@ actions are 23 in total:
   1 clarify action (#23)
     23. clarify_skill
 
+  3 web search actions (#24-#26, v0.39)
+    24. web_search_skill.search_web
+    25. web_search_skill.search_youtube
+    26. web_search_skill.search_news
+
 This ``__init__.py``:
-  1. Imports all 23 Skill instances
-  2. Exposes ``ALL_ACTIONS`` (the list of 23 Skill objects)
+  1. Imports all 26 Skill instances
+  2. Exposes ``ALL_ACTIONS`` (the list of 26 Skill objects)
   3. Exposes ``register_all_actions(registry)`` for the
      default registration at app startup
   4. Exposes ``unregister_all_actions(registry)`` for tests
@@ -43,14 +48,14 @@ This ``__init__.py``:
 Why a single import point
 -------------------------
 
-The SkillRegistry needs a way to discover all 23 actions
+The SkillRegistry needs a way to discover all 26 actions
 without each application site remembering to import them.
 The Phase 6 (research_skill) and Phase 7 (harness eval
-classes) work will rely on these 23 actions being
+classes) work will rely on these 26 actions being
 registered by default when the framework boots.
 
-The list is also a **contract**: Phase 5 ships exactly
-23 actions; any deviation (e.g. 24th action) requires a
+The list is also a **contract**: the framework ships exactly
+26 actions; any deviation (e.g. 27th action) requires a
 design update, not a silent addition.
 """
 
@@ -73,6 +78,7 @@ from llmwikify.apps.chat.skills.actions.revise_action import revise_skill
 from llmwikify.apps.chat.skills.actions.score_action import score_skill
 from llmwikify.apps.chat.skills.actions.search_action import search_skill
 from llmwikify.apps.chat.skills.actions.summarize_action import summarize_skill
+from llmwikify.apps.chat.skills.actions.web_search_action import web_search_skill
 from llmwikify.apps.chat.skills.actions.write_action import write_skill
 from llmwikify.apps.chat.skills.registry import SkillRegistry
 
@@ -97,18 +103,23 @@ _BASE_ACTIONS = [
 # 1 clarify action
 _CLARIFY_ACTIONS = [clarify_skill]
 
-ALL_ACTIONS = _BASE_ACTIONS + _CLARIFY_ACTIONS + ALL_DETECT_SKILLS
+# 3 web search actions (v0.39)
+_WEB_SEARCH_ACTIONS = [web_search_skill]
 
-assert len(ALL_ACTIONS) == 23, (
-    f"Phase 5 contract violation: expected exactly 23 base "
+ALL_ACTIONS = (
+    _BASE_ACTIONS + _CLARIFY_ACTIONS + ALL_DETECT_SKILLS + _WEB_SEARCH_ACTIONS
+)
+
+assert len(ALL_ACTIONS) == 26, (
+    f"Phase 5 contract violation: expected exactly 26 base "
     f"actions, got {len(ALL_ACTIONS)}. Update the inventory."
 )
 
 
 def register_all_actions(registry: SkillRegistry) -> int:
-    """Register all 23 base actions into ``registry``.
+    """Register all 26 base actions into ``registry``.
 
-    Returns the count registered (23). Safe to call on a
+    Returns the count registered (26). Safe to call on a
     registry that already has some of these — the
     registry's ``register(replace=True)`` default will
     overwrite, and the Skill instances' ``setup()`` will
@@ -120,7 +131,7 @@ def register_all_actions(registry: SkillRegistry) -> int:
 
 
 def unregister_all_actions(registry: SkillRegistry) -> int:
-    """Unregister all 23 base actions. Returns the count removed.
+    """Unregister all 26 base actions. Returns the count removed.
 
     Used by tests that need registry isolation.
     """
@@ -152,5 +163,6 @@ __all__ = [
     "reason_skill",
     "observe_skill",
     "clarify_skill",
+    "web_search_skill",
     "ALL_DETECT_SKILLS",
 ]

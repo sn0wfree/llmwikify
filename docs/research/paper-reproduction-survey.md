@@ -1,6 +1,7 @@
 # 论文 / 研报 策略复现 — 业界调研
 
 > 创建时间：2026-06-10
+> 最后更新：2026-06-10（已与 v0.4.0-rc 实施版同步）
 > 状态：调研报告
 > 目的：梳理业界主流方案、关键工具、典型数据流，给实施计划提供依据。
 
@@ -126,8 +127,127 @@ Markdown 全文
 | 代码生成正确性 | LLM 多次 + 单元测试 + nbconvert execute | **预写策略优先**，不满足时 LLM 生成 + subprocess 执行 |
 | 回测结果复现度 | 固定数据源 + 固定手续费/滑点 + 明确披露 | config 强约束，结果页 + 「已知偏差」声明 |
 | LLM 不可重现 | 固定 seed + low temperature + 显式 prompt 版本 | PromptRegistry 已支持 |
-| 数据源授权 | AKShare（主）+ iFinD（补），不用 Tushare | AKShare（主）+ iFinD（补）|
+| 数据源授权 | AKShare（主）+ iFinD（补），不用 Tushare | v0.4.0 改为 **Cache → ClickHouse → AKShare → SynthProvider**（实测 AKShare 不可达，详见 3.5 节）|
 | 券商研报 (中文+图片) | PaddleOCR + 多模态 LLM | Phase 3 评估中 |
+
+---
+
+### 3.5 数据源验证（本项目实际环境实测，2026-06-10）
+
+> v0.4.0 设计调整：放弃"AKShare 主"假设，改为链式 fallback（Cache → ClickHouse → AKShare → SynthProvider）。
+
+| 数据源 | 可达性 | 数据范围 | 推荐度 |
+|---|---|---|---|
+| **ClickHouse `quote.cn_stock`** | ✅ 可用 | 5535 只 A 股，2008-2024，日 OHLCV | **★★★★★ 首选** |
+| **AKShare `stock_zh_a_hist`** | ❌ 不可用（RemoteDisconnected） | A 股日线 | ★★☆☆☆ 备用 |
+| **iFinD `ifind-py`** | ❌ 未安装 token | 全市场多频率 | 推迟到 v0.5.0 |
+| **Tushare** | — | A 股（积分限制）| ✗ 不使用 |
+
+**ClickHouse 实测连接信息**（仅读，详见测试代码）：
+- 协议：`clickhouse://default:Imsn0wfree@0.0.0.0:8123/quote`
+- 端口：`9000`（native），`8123`（HTTP）
+- driver：`clickhouse-driver` 0.2.10（已通过 pipx 安装）
+- 表：`cn_stock`（schema 见下）
+
+```sql
+cn_stock schema:
+  ts_code      LowCardinality(String)  -- e.g. "600660.SH"
+  trade_date   DateTime
+  open         Float64
+  high         Float64
+  low          Float64
+  close        Float64
+  pre_close    Float64
+  change       Float64
+  pct_chg      Float64
+  vol          Float64
+  amount       Float64
+```
+
+**数据 Cache 设计要点**：
+- Cache 表 key：`(source, symbol, start, end)` 哈希
+- Cache 表 value：序列化 DataFrame（parquet / pickle）
+- 写入时机：ClickHouse / AKShare 成功获取后立即写入
+- 读取时机：每次请求先查 Cache，未命中才走 ClickHouse
+
+---
+
+### 4.5 backtrader 兼容性 gotchas（实测发现，2026-06-10）
+
+> 这些 gotchas 在 POC 测试 1-3 中实际遇到，必须在实施时显式处理。
+
+| # | Gotcha | 解决方案 | 影响范围 |
+|---|---|---|---|
+| 1 | `DrawDown` analyzer 的 `.max.drawdown` **属性访问报错** | 改用 `analyzer.get_analysis()["max"]["drawdown"]` | backtest.py:99-100 |
+| 2 | `bt.indicators.Constant` **不存在**（本 backtrader 版本未实现） | 用算术运算代替（如 `data.close - data.close`）| backtest.py:265 |
+| 3 | `PandasData` feed 要求 **datetime 作 index**（不是 column） | backtest.py 自动 set_index | backtest.py:71-75 |
+| 4 | `SharpeRatio` 无交易时返回 None | 显式判 None 转 0.0 | backtest.py:91-96 |
+| 5 | `SharpeRatio` 默认年化为年；不传 timeframe 则年化错误 | 显式传 `timeframe=bt.TimeFrame.Days` | backtest.py:82 |
+| 6 | `TradeAnalyzer.get()` **不存在** | 用 `.get_analysis()["total"]["closed"]` | backtest.py:97-100 |
+| 7 | backtrader `_runonce` 模式下 indicator 预计算时机严格 | 必须在 `__init__` 中预计算（构造 Line 对象）| backtest.py:158 |
+| 8 | `array index out of range` 当 indicator 周期未到 | 用 `DivByZero` 保护 | backtest.py:225 |
+
+**经验总结**：
+- backtrader API 文档与实现有偏差，必须实测验证
+- 所有 analyzer 调用统一走 `get_analysis()` 方法，避免属性访问
+- 数据预处理要在框架层兜底（set_index、列名映射）
+
+---
+
+### 5.x LLM 行为观察（MiniMax-M2.7 实测，2026-06-10）
+
+> v0.4.0 默认 LLM 为项目配置的 `MiniMax-M2.7`（`~/.llmwikify/llmwikify.json`）。该模型有几个独特行为需在 prompt 设计和框架层显式处理。
+
+#### 行为 1：大量 thinking-block 输出
+
+- **现象**：M2.7 在生成代码前会输出长达数千 token 的 `<think>...</think>` 推理块
+- **数据**：`/tmp/opencode/inspect_llm.py` 实测，一次 prompt 生成 6708 字符，其中 ~50% 是 thinking
+- **影响**：容易触发 `max_tokens` 截断，导致有效代码缺失
+- **缓解**：
+  1. 框架层 `strip_thinking_blocks()` 用正则 `<think>.*?(</think>|$)` 剥离
+  2. Prompt 显式禁止：`Output ONLY the Python code (no thinking, no markdown, no commentary)`
+  3. `max_tokens` 至少设 4000（覆盖 thinking + code）
+
+#### 行为 2：偏好 `self.p.xxx` 而非 `self.params.xxx`
+
+- **现象**：backtrader 文档推荐 `self.params.xxx`，但 LLM 经常写成 `self.p.xxx`
+- **数据**：测试 3 中 2/2 次生成的代码都用 `self.p`
+- **影响**：Path B 代码运行时会抛 AttributeError
+- **缓解**：
+  1. Prompt 显式约束：`禁用 self.p.xxx，统一用 self.params.xxx`
+  2. 框架层可在 codegen 后做 AST 改写：`self.p.xxx` → `self.params.xxx`（v0.4.0 未实现，作为 v0.5.0 增强）
+
+#### 行为 3：经常覆盖 `data` 变量
+
+- **现象**：LLM 经常生成 `data = pd.read_csv('data.csv', ...)`，覆盖框架传入的 DataFrame
+- **数据**：测试 3a 中第一版输出包含 `data = pd.read_csv(...)`
+- **缓解**：exec 后强制恢复 `namespace["data"] = data`（已在 backtest.py:283 实现）
+
+#### 行为 4：经常违反"不调用 cerebro.run()"约束
+
+- **现象**：即使 prompt 明确禁止，LLM 经常自动调用 `cerebro.run()` 并 `print()` 结果
+- **缓解**：框架层 catch 异常 + 容忍模式：先尝试 `cerebro.run()`，失败则取 `namespace["results"]`
+
+#### 行为 5：base_url 双 `/v1` 问题
+
+- **现象**：`https://api.minimaxi.com/v1` 已经是完整 base_url，但 LLMClient 默认还会拼 `/v1/chat/completions`，导致 URL 变 `https://api.minimaxi.com/v1/v1/chat/completions`
+- **缓解**：调用方在使用 LLMClient 时需 strip `/v1` 后缀：
+  ```python
+  base_url = llm_cfg.get("base_url", "").rstrip("/")
+  if base_url.endswith("/v1"):
+      base_url = base_url[:-3]
+  ```
+
+#### 经验总结
+
+| 维度 | 经验 | 设计含义 |
+|---|---|---|
+| Prompt | 必须显式禁止 thinking-block | repro_codegen.yaml 第一条 system 约束 |
+| Prompt | 必须列出"禁止 import"清单 | 否则 LLM 必引入 pandas/numpy |
+| 框架 | 必须 strip thinking-block | `strip_thinking_blocks()` 公共函数 |
+| 框架 | 必须 force `namespace["data"] = data` | 防止 LLM 覆盖 |
+| 框架 | 必须容忍 `cerebro.run()` 已调用 | try/except + fallback to namespace["results"] |
+| 框架 | `max_tokens=4000` 是安全下限 | 默认配置建议 |
 
 ---
 
@@ -153,6 +273,7 @@ Markdown 全文
 | 缺失项 | 优先级 |
 |---|---|---|
 | strategy/reproduction 目录和核心模块 | P0 |
+| 已改为 `src/llmwikify/reproduction/` 模块路径（v0.4.0 同步）| — |
 | arXiv/DOI 输入适配 | P1 |
 | 复现专用 Prompt YAML（3 个）| P0 |
 | backtrader 集成（预写策略）| P0 |

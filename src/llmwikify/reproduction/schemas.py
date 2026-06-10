@@ -1,4 +1,7 @@
-"""Schemas for reproduction module."""
+"""Schemas for reproduction module.
+
+Merged schema: our 12 fields + QuantNodes summary/config/security_status/nodes.
+"""
 
 from __future__ import annotations
 
@@ -10,10 +13,13 @@ from typing import Any
 class BacktestResult:
     """Result of a backtest run.
 
-    Aligned with QuantNodes' BacktestResult schema for consistency.
+    Unified schema combining:
+      - llmwikify fields (status/error/statistics/trades/signal_type/params + final_cash/total_return/sharpe/max_dd/win_rate)
+      - QuantNodes fields (summary/config/security_status/nodes)
     """
 
-    status: str  # "success" | "error"
+    # llmwikify fields
+    status: str = "success"  # "success" | "error"
     error: str | None = None
     statistics: dict[str, float] = field(default_factory=dict)
     trades: list[dict[str, Any]] = field(default_factory=list)
@@ -24,6 +30,12 @@ class BacktestResult:
     win_rate: float = 0.0
     signal_type: str = ""
     params: dict[str, Any] = field(default_factory=dict)
+
+    # QuantNodes fields (optional, only populated when going through QuantNodes path)
+    summary: dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
+    security_status: str = "unknown"
+    nodes: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -38,4 +50,8 @@ class BacktestResult:
             "win_rate": self.win_rate,
             "signal_type": self.signal_type,
             "params": self.params,
+            "summary": self.summary,
+            "config": self.config,
+            "security_status": self.security_status,
+            "nodes": self.nodes,
         }
