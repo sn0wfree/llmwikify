@@ -6,11 +6,13 @@ previously coexisted (the "Triple ReAct Loop" problem
 identified in v0.33):
 
   1. ``ReactLoop``     (agent/react_loop.py)  — generic framework
-  2. ``ResearchEngine._react_loop`` (engine.py) — research-specific
-  3. ``apps/research/engine.py``              — legacy
+  2. ``ResearchEngine._react_loop`` (apps/chat/engine.py) — research-specific
+  3. ``apps/research/engine.py::ResearchEngine._react_loop`` — legacy
 
-Both ``ResearchEngine`` and ``ChatService`` delegate to this
-engine.  ``ReactLoop`` is now a thin backward-compat wrapper.
+All three now delegate to this engine. ``ReactLoop`` is a thin
+backward-compat wrapper; ``ResearchEngine`` in both ``apps/chat/``
+and ``apps/research/`` builds a ``ReActConfig`` via
+``_build_react_config()`` and drives ``ReActEngine.run()``.
 
 Design goals
 ------------

@@ -3,6 +3,13 @@
 Replaces the fixed 7-stage sequential flow with an adaptive ReAct
 (Reason → Act → Observe → loop) agent that dynamically decides what
 to do next based on intermediate results.
+
+This engine now delegates its ReAct core to ``ReActEngine`` via
+``_build_react_config()`` (mirroring the pattern in
+``apps/chat/engine.py::ResearchEngine``). The domain actions
+(``_action_plan``, ``_action_gather``, etc.) and supporting
+methods (``_reason``, ``_observe``, ``_evaluate_gate``, ...) are
+preserved here and wired into ``SkillAction`` handlers.
 """
 
 from __future__ import annotations
@@ -17,6 +24,13 @@ from typing import Any
 from llmwikify.foundation.llm.streamable import StreamableLLMClient
 from ..chat.db import ChatDatabase
 from ..chat.providers.registry import create_llm
+from llmwikify.apps.chat.agent.react_engine import (
+    ReActConfig,
+    ReActEngine,
+    SkillAction,
+    SkillContext,
+    SkillResult,
+)
 from .analyzer import SourceAnalyzer
 from .config import merge_research_config
 from .gatherer import SourceGatherer
@@ -230,140 +244,170 @@ class ResearchEngine:
         """Execute the ReAct research loop, yielding SSE events."""
         self.session_manager.session_id = session_id
         self._start_time = time.monotonic()
-        
+
         # Initialize metrics (DR-13)
         self._metrics = SessionMetrics(session_id=session_id)
         self._metrics.start()
 
+        # Build action dispatch table (action_name → bound method).
+        self._action_dispatch = {
+            "plan":       self._action_plan,
+            "gather":     self._action_gather,
+            "analyze":    self._action_analyze,
+            "synthesize": self._action_synthesize,
+            "report":     self._action_report,
+            "review":     self._action_review,
+            "revise":     self._action_revise,
+            "done":       self._action_done,
+        }
+
+        # Build initial state
+        state = ResearchState(
+            session_id=session_id,
+            query=query,
+            max_rounds=self._max_react_rounds,
+        )
+        if resume:
+            self._load_resume_state(state)
+
+        # Build ReActConfig wired to ResearchEngine's domain logic
+        config = self._build_react_config(state)
+        engine = ReActEngine(config)
+
         try:
-            async for event in self._react_loop(session_id, query, resume):
-                self._check_timeout()
-                yield event
+            async for event in engine.run(SkillContext(
+                session_id=session_id,
+                wiki=self.wiki,
+                db=self.db,
+                llm_client=self._default_llm,
+                config=self.config,
+                metrics=self._metrics,
+            )):
+                # Emit domain-specific events that ReActEngine doesn't produce
+                event_type = event.get("type")
+                if event_type == "phase":
+                    phase = event.get("phase")
+                    reason = event.get("reason")
+                    if phase == "cancelled":
+                        yield {"type": "cancelled", "round": state.round, "phase": state.phase}
+                        self.session_manager.update_status(session_id, "cancelled", state.phase, -1)
+                    elif phase == "paused":
+                        yield {"type": "paused", "round": state.round, "phase": state.phase}
+                        self.session_manager.update_status(session_id, "paused", state.phase, state.round)
+                    elif phase == "timeout":
+                        yield {"type": "error", "error": f"Research timed out after {self._timeout_seconds}s"}
+                        self.session_manager.update_status(session_id, "timeout", state.phase, -1)
+                    elif phase == "done" and reason == "max_rounds":
+                        yield {"type": "round_max", "round": state.round, "message": f"Reached max rounds ({state.max_rounds})"}
+                    elif phase == "done" and reason == "reason_returned_done":
+                        # Legacy behavior: when reason returns "done",
+                        # call _action_done to emit the final report event
+                        async for done_ev in self._action_done(state):
+                            yield done_ev
+                elif event_type == "reasoning":
+                    # Add phase to reasoning events (ReActEngine doesn't know about phases)
+                    event["phase"] = state.phase
+                    yield event
+                else:
+                    yield event
         except TimeoutError:
             self.session_manager.update_status(session_id, "timeout", "timeout", -1)
             yield {"type": "error", "error": f"Research timed out after {self._timeout_seconds}s"}
-        except Exception:
-            raise
+        except Exception as e:
+            logger.error("ReAct loop error for session %s: %s", session_id, e, exc_info=True)
+            self.session_manager.update_status(session_id, "error", state.phase or "unknown", -1)
+            yield {"type": "error", "error": str(e)}
         finally:
             # Finalize metrics and log summary
             if self._metrics:
                 self._metrics.finish()
                 logger.info("Research metrics:\n%s", self._metrics.summary())
 
-    # ─── ReAct Core Loop ───────────────────────────────────────────────
+    def _build_react_config(self, state: ResearchState) -> ReActConfig:
+        """Build a ReActConfig wired to ResearchEngine's domain logic."""
+        engine_ref = self
 
-    async def _react_loop(
-        self, session_id: str, query: str, resume: bool
-    ) -> AsyncIterator[dict[str, Any]]:
-        """Main ReAct loop: Reason → Act → Observe → repeat."""
-        state = ResearchState(
-            session_id=session_id,
-            query=query,
-            max_rounds=self._max_react_rounds,
-        )
+        # Build SkillAction wrappers for each action in the dispatch table
+        def _make_action_handler(action_name: str):
+            async def handler(args, ctx):
+                dispatch = engine_ref._action_dispatch.get(action_name)
+                if dispatch is None:
+                    return SkillResult.fail(f"Unknown action: {action_name}")
+                events = []
+                async for ev in dispatch(state):
+                    events.append(ev)
+                return SkillResult.ok({"_events": events, "action": action_name})
+            return handler
 
-        # Load existing state on resume
-        if resume:
-            self._load_resume_state(state)
+        action_names = [
+            "plan", "gather", "analyze", "synthesize",
+            "report", "review", "revise", "done",
+        ]
+        skill_actions = [
+            SkillAction(
+                name=name,
+                description=f"Research action: {name}",
+                handler=_make_action_handler(name),
+                input_schema={"type": "object", "properties": {}, "required": []},
+            )
+            for name in action_names
+        ]
 
-        try:
-            while state.phase != "done":
-                self._check_timeout()
-                elapsed = time.monotonic() - self._start_time
-                state.budget_remaining = max(0, 1 - elapsed / self._timeout_seconds)
+        # Reason callback: budget + control signals + delegate to _reason
+        async def reason(state, ctx, emit):
+            # Update budget
+            elapsed = time.monotonic() - engine_ref._start_time
+            state.budget_remaining = max(0, 1 - elapsed / engine_ref._timeout_seconds)
 
-                # ── Check cancel/pause signals from DB ──
-                self._check_control_signals(state)
-                if state.cancelled:
-                    yield {"type": "cancelled", "round": state.round, "phase": state.phase}
-                    self.session_manager.update_status(session_id, "cancelled", state.phase, -1)
-                    break
-                if state.paused:
-                    yield {"type": "paused", "round": state.round, "phase": state.phase}
-                    self.session_manager.update_status(session_id, "paused", state.phase, state.round)
-                    break
+            # Check control signals
+            engine_ref._check_control_signals(state)
 
-                # ── REASON: decide next action (ReAct Thought) ──
-                action = await self._reason(state)
-                thought = getattr(state, "_last_thought", "")
-                yield {
-                    "type": "reasoning",
-                    "action": action,
-                    "thought": thought,
-                    "round": state.round,
-                    "phase": state.phase,
-                }
+            # Ask reasoner for next action
+            action = await engine_ref._reason(state)
+            thought = getattr(state, "_last_thought", "")
 
-                # ── ACT: execute action ──
-                if action == "plan":
-                    async for event in self._action_plan(state):
-                        yield event
-                elif action == "gather":
-                    async for event in self._action_gather(state):
-                        yield event
-                elif action == "analyze":
-                    async for event in self._action_analyze(state):
-                        yield event
-                elif action == "synthesize":
-                    async for event in self._action_synthesize(state):
-                        yield event
-                elif action == "report":
-                    async for event in self._action_report(state):
-                        yield event
-                elif action == "review":
-                    async for event in self._action_review(state):
-                        yield event
-                elif action == "revise":
-                    async for event in self._action_revise(state):
-                        yield event
-                elif action == "done":
-                    async for event in self._action_done(state):
-                        yield event
-                    break
-                else:
-                    # Unknown action → default to done
-                    logger.warning("Unknown action %s, defaulting to done", action)
-                    async for event in self._action_done(state):
-                        yield event
-                    break
+            return {"action": action, "thought": thought}
 
-                # ── OBSERVE: update state from DB ──
-                self._observe(state)
-
-                # ── Quality gate check ──
-                if self.config.get("gate_enabled", True):
-                    gate_result = self._evaluate_gate(state)
-                    if gate_result:
+        # Observe callback: delegates to _observe + quality gate
+        async def observe(state, ctx):
+            engine_ref._observe(state)
+            # Quality gate check
+            if engine_ref.config.get("gate_enabled", True):
+                gate_result = engine_ref._evaluate_gate(state)
+                if gate_result:
+                    state.observations.append(
+                        f"[质量门禁] {gate_result.gate_name}: {gate_result.summary}"
+                    )
+                    if not gate_result.passed:
                         state.observations.append(
-                            f"[质量门禁] {gate_result.gate_name}: {gate_result.summary}"
+                            f"⚠ 门禁未通过，建议: {gate_result.suggestion}"
                         )
-                        if not gate_result.passed:
-                            state.observations.append(
-                                f"⚠ 门禁未通过，建议: {gate_result.suggestion}"
-                            )
-                            # Force transition: if gate fails after gathering and we have sources,
-                            # override action to analyze instead of stuck in gather loop
-                            if (state.phase == "gathering"
-                                    and len(state.sources) >= self.config.get("gate_min_sources", 3)
-                                    and action == "gather"):
-                                action = "analyze"
-                                logger.info("Gate %s failed, forcing analyze (have %d sources)",
-                                            gate_result.gate_name, len(state.sources))
+            return {"observations": state.observations}
 
-                # ── Track iteration count ──
-                state.round += 1
+        # Done condition: check phase + special states
+        def done_condition(s):
+            phase = getattr(s, "phase", "") if hasattr(s, "phase") else s.get("phase", "")
+            return (
+                phase == "done"
+                or getattr(s, "cancelled", False)
+                or getattr(s, "paused", False)
+            )
 
-                # ── Evaluate: check exit conditions ──
-                if state.round >= state.max_rounds:
-                    yield {"type": "round_max", "round": state.round, "message": f"Reached max rounds ({state.max_rounds})"}
-                    async for event in self._action_done(state):
-                        yield event
-                    break
-        except Exception as e:
-            # Catch-all: ensure DB status is always updated on unexpected errors
-            logger.error("ReAct loop error for session %s: %s", session_id, e, exc_info=True)
-            self.session_manager.update_status(session_id, "error", state.phase or "unknown", -1)
-            yield {"type": "error", "error": str(e)}
+        # on_after_act: metrics tracking
+        def on_after_act(state, action_name, result):
+            if engine_ref._metrics:
+                engine_ref._metrics.finish()
+
+        return ReActConfig(
+            actions=skill_actions,
+            initial_state=state,
+            reason=reason,
+            done_condition=done_condition,
+            max_rounds=self._max_react_rounds,
+            timeout_seconds=self._timeout_seconds,
+            observe=observe,
+            on_after_act=on_after_act,
+        )
 
     # ─── Reason Step ───────────────────────────────────────────────────
 
