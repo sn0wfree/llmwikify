@@ -151,7 +151,7 @@ export const useWikiStore = create<WikiState>((set, get) => ({
   scanWikis: async (scanPath?: string) => {
     set({ loading: true, error: null });
     try {
-      await api.wikis.scan(scanPath ? [scanPath] : undefined);
+      await api.wikis.scan(scanPath || undefined);
       await get().loadWikis();
     } catch (err) {
       set({
