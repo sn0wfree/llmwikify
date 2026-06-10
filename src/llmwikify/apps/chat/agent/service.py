@@ -29,6 +29,7 @@ from typing import Any
 from llmwikify.apps.chat.base import ChatBase
 from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.apps.chat.agent.chat_react import REACT_SYSTEM_PROMPT
+from llmwikify.apps.chat.agent._error_logging import log_exception_returning
 from llmwikify.apps.chat.agent.text_mode_tool import (
     TOOL_CALL_RE,
     parse_text_tool_call,
@@ -597,7 +598,7 @@ class ChatService(ChatBase):
         if prefs_section:
             parts.append(prefs_section)
         # 4. Available tools
-        tools_section = self._build_tools_section()
+        tools_section = await self._build_tools_section()
         if tools_section:
             parts.append(tools_section)
         # 5. Current date
@@ -612,17 +613,15 @@ class ChatService(ChatBase):
                 parts.append(related_section)
         return "\n\n".join(parts)
 
+    @log_exception_returning(default=None, msg="Failed to load user preferences")
     async def _build_preferences_section(self) -> str | None:
         """Phase 3.1 (v0.36): inject user preferences as a
         prompt section."""
         if self.memory_manager is None:
             return None
-        try:
-            prefs = await self.memory_manager.preferences.aall(
-                DEFAULT_USER_ID,
-            )
-        except Exception:  # noqa: BLE001
-            return None
+        prefs = await self.memory_manager.preferences.aall(
+            DEFAULT_USER_ID,
+        )
         if not prefs:
             return None
         # Render as a markdown list.
@@ -635,15 +634,17 @@ class ChatService(ChatBase):
         """Phase 3.1 (v0.36): summarise available tools in the
         prompt. Lazy-loaded from the wiki's tool registry.
         """
-        # Don't bother loading tools here — that's expensive
-        # and the LLM already has the tool schema. We only
-        # render this section if a wiki is available.
+    @log_exception_returning(default=None, msg="Failed to list tool names")
+    async def _build_tools_section(self) -> str | None:
+        """Build a section listing available tools for the prompt.
+
+        We don't bother loading tools here — that's expensive
+        and the LLM already has the tool schema. We only
+        render this section if a wiki is available.
+        """
         if not hasattr(self.wiki_service, "list_tool_names"):
             return None
-        try:
-            tool_names = self.wiki_service.list_tool_names()  # type: ignore[attr-defined]
-        except Exception:  # noqa: BLE001
-            return None
+        tool_names = self.wiki_service.list_tool_names()  # type: ignore[attr-defined]
         if not tool_names:
             return None
         return (
@@ -652,6 +653,7 @@ class ChatService(ChatBase):
             + (f" (+{len(tool_names) - 20} more)" if len(tool_names) > 20 else "")
         )
 
+    @log_exception_returning(default=None, msg="Failed to search related conversations")
     async def _build_related_section(
         self,
         user_message: str,
@@ -661,12 +663,9 @@ class ChatService(ChatBase):
         conversations as a prompt section."""
         if self.memory_manager is None:
             return None
-        try:
-            results = await self.memory_manager.index.asearch(
-                user_message, session_id=session_id, limit=3,
-            )
-        except Exception:  # noqa: BLE001
-            return None
+        results = await self.memory_manager.index.asearch(
+            user_message, session_id=session_id, limit=3,
+        )
         if not results:
             return None
         lines = ["## Related past conversations"]

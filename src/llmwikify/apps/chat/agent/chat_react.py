@@ -296,12 +296,13 @@ class ChatReActBridge:
             try:
                 full_messages = chat._truncate_messages(full_messages)
             except Exception:
-                pass
+                logger.warning("Failed to truncate messages", exc_info=True)
 
             # 3. Get tool schemas
             try:
                 tools = chat._get_toolspec(tool_registry)
             except Exception:
+                logger.warning("Failed to get tool spec", exc_info=True)
                 tools = []
 
             # 4. Stream with retry + text-mode parsing
@@ -519,6 +520,7 @@ class ChatReActBridge:
                         tool_name, args, tool_registry, session_id, ctx,
                     )
                 except Exception as e:
+                    logger.warning("Tool %s execution failed", tool_name, exc_info=True)
                     result = {"status": "error", "error": str(e)}
 
                 entry["result"] = result
@@ -549,8 +551,8 @@ class ChatReActBridge:
                     await chat._persist_tool_result(
                         session_id, tool_name, args, result,
                     )
-                except Exception as e:
-                    logger.debug("_persist_tool_result failed: %s", e)
+                except Exception:
+                    logger.warning("_persist_tool_result failed", exc_info=True)
 
                 # Generate observation
                 truncate = self._chat_service._chat_config["summary_truncate_chars"]
