@@ -375,6 +375,7 @@ class ChatBase:
                     try:
                         result = await tool_caller(name, args)
                     except Exception as exc:  # noqa: BLE001
+                        logger.warning("Tool %s failed", name, exc_info=True)
                         result = {"status": "error", "error": str(exc)}
                     invocations[-1]["result"] = result
                     invocations[-1]["status"] = "done"
