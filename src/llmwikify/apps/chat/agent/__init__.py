@@ -3,9 +3,10 @@
 This subpackage is the new home for cross-skill agent glue code
 that lives "above" the skills/ framework:
 
-  - ``react_loop.py`` (Phase 8) — generic Reason → Act → Observe
-    loop with 9 configurable hooks. Drives research_skill
-    (Phase 6) and any future ReAct-style skill.
+  - ``react_engine.py`` — unified ``ReActEngine`` (Reason → Act →
+    Observe loop with 9 configurable hooks). Drives
+    ``research_skill`` and any future ReAct-style skill.
+    ``react_loop.py`` is a backward-compat re-export wrapper.
 
 What does NOT live here
 -----------------------

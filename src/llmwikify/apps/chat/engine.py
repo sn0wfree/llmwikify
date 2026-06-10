@@ -121,7 +121,7 @@ class ResearchEngine:
             revisor=self.revisor,
             quality_gate=self._quality_gate,
             config=self.config,
-            metrics=None,  # set in run() before _react_loop
+            metrics=None,  # set in run() before ReActEngine.run()
             planning_llm=self._planning_llm,
             default_llm=self._default_llm,
             report_llm=self._report_llm,

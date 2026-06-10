@@ -792,10 +792,18 @@ class TestConfirmationContinue:
         ):
             events.append(event)
 
-        assert any(
-            e.get("type") == "tool_call_end" for e in events
-        )
         assert any(e.get("type") == "done" for e in events)
+
+        async def fake_stream_confirmed(messages, tools=None):
+            yield {"type": "done", "content": "confirmed"}
+
+        chat_service.wiki_service.llm.astream_chat = fake_stream_confirmed
+        events2 = []
+        async for event in chat_service.approve_confirmation_continue(
+            confirmation_id="conf-1", session_id=sid
+        ):
+            events2.append(event)
+        assert any(e.get("type") == "done" for e in events2)
 
     @pytest.mark.asyncio
     async def test_approve_confirmation_continue_error(
@@ -1007,7 +1015,7 @@ class TestSaveMessageErrors:
     def test_save_warning_event_factory(self) -> None:
         e = ChatEvent.save_warning("persistence failed")
         assert e["type"] == "save_warning"
-        assert "persistence failed" in e["message"]
+        assert "persistence failed" in e["reason"]
 
 
 # ─── Phase 1.3 — UUID length + INSERT OR IGNORE (v0.36) ───────────

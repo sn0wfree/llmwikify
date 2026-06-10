@@ -2,8 +2,8 @@
 
 Per v0.32 Phase 6 (3 weeks, scaled to single session): this
 module replaces the 1178-LOC ``apps/research/engine.py``
-ReAct loop with a thin ReactLoop wrapper (Phase 8's
-``ReactConfig``) that orchestrates 7 research-specific
+ReAct loop backed by ``ReActEngine`` (via the backward-compat
+``ReactLoop`` alias) that orchestrates 7 research-specific
 actions (Phase 5's 23 base actions).
 
 Pipeline structure
@@ -33,11 +33,11 @@ This is much smaller than the original engine.py:
   - Pre-Phase 6: 1178 LOC (one file, 8 _action_* methods,
     600 LOC of in-memory state machine, ~200 LOC of
     ReAct orchestration)
-  - Post-Phase 6: ~280 LOC (this file) + ReactLoop (~340
+  - Post-Phase 6: ~280 LOC (this file) + ReActEngine (~340
     LOC, shared) + 23 actions (Phase 5, already shipped)
 
 The state machine is now a dict (15+ fields) instead of a
-dataclass, because the framework's ``ReactLoop.run``
+dataclass, because the framework's ``ReActEngine`` drives
 mutates a single state dict. Phase 6 persists this dict
 via the new ``ChatDatabase.save_research_state`` (Phase 3).
 
@@ -55,7 +55,7 @@ Design refs
 -----------
 
   - ``v0.32-skill-restructure.md`` §19.4 (research_skill
-    ReactLoop config)
+    ReActEngine config)
   - ``v0.32-execution-plan.md`` Phase 6
 """
 
@@ -117,8 +117,8 @@ Decision rules (apply in order):
 
 
 # ─── 7 action handlers ────────────────────────────────────────────
-# Each handler is the ReactLoop "Act" step. It mutates the
-# state dict in place; ReactLoop folds the returned data
+# Each handler is the ReActEngine "Act" step. It mutates the
+# state dict in place; ReActEngine folds the returned data
 # into state (state.update(result.data)).
 
 
@@ -337,7 +337,7 @@ def _make_check_control_signals(db: Any) -> "Any":
     """Build the on_before_act hook for cancel/pause signals.
 
     Reads the DB session's status field; if "cancelling" or
-    "pausing", sets state flags. ReactLoop's done_condition
+    "pausing", sets state flags. ReActEngine's done_condition
     picks these up next round.
     """
     def check_control_signals(state: dict, action_name: str) -> None:
@@ -494,6 +494,10 @@ def _make_research_config(args: dict, ctx: SkillContext) -> ReactConfig:
     # to LLM via ctx.llm_client).
 
     async def reason_for_research(state: dict, ctx: SkillContext) -> dict:
+        # Quality gate intervention: honour forced redirect
+        forced = state.pop("_forced_next_action", None)
+        if forced is not None:
+            return {"action": forced, "thought": f"gate forced {forced}"}
         # Try LLM-driven reason first if available
         llm = getattr(ctx, "llm_client", None)
         if llm is not None and state.get("reason_prompt"):
@@ -538,7 +542,6 @@ def _make_research_config(args: dict, ctx: SkillContext) -> ReactConfig:
             s.get("phase") == "done"
             or s.get("cancelled", False)
             or s.get("paused", False)
-            or s.get("_forced_next_action") is not None
         ),
         reason=reason_for_research,
         max_rounds=args.get("max_rounds", 5),
@@ -566,7 +569,7 @@ async def run_research(args: dict, ctx: SkillContext) -> SkillResult:
         gathered sources (default 3)
 
     Returns a SkillResult whose data is the list of events
-    yielded by the ReactLoop (``reasoning``, ``round_complete``,
+    yielded by the ReActEngine (``reasoning``, ``round_complete``,
     ``phase``). The final state is in ``ctx.config['final_state']``
     or, if ``persist_final`` is set, in the DB.
     """
@@ -623,7 +626,7 @@ class ResearchSkill(Skill):
 
     Composes the 7 action handlers (plan/gather/analyze/
     synthesize/score/revise/report) into a single
-    ReactLoop-driven pipeline. The skill exposes 3 actions
+    ReActEngine-driven pipeline. The skill exposes 3 actions
     to the LLM:
 
       - run_research  — start a new session
@@ -631,8 +634,8 @@ class ResearchSkill(Skill):
       - cancel_research — mark a session for cancellation
 
     The internal ReAct orchestration (reason → act →
-    observe, with 6 hooks) is delegated to ReactLoop
-    (``apps/chat/agent/react_loop.py``).
+    observe, with 6 hooks) is delegated to ReActEngine
+    (``apps/chat/agent/react_engine.py``).
     """
 
     name = "research"
