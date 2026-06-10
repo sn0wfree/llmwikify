@@ -17,14 +17,14 @@ const PROVIDERS = [
 
 const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
   minimax: [
-    { value: 'MiniMax-M3', label: 'MiniMax-M3 (204800 context)' },
-    { value: 'MiniMax-M2.7', label: 'MiniMax-M2.7 (204800 context)' },
-    { value: 'MiniMax-M2.7-highspeed', label: 'MiniMax-M2.7-highspeed (204800 context)' },
-    { value: 'MiniMax-M2.5', label: 'MiniMax-M2.5 (204800 context)' },
-    { value: 'MiniMax-M2.5-highspeed', label: 'MiniMax-M2.5-highspeed (204800 context)' },
-    { value: 'MiniMax-M2.1', label: 'MiniMax-M2.1 (204800 context)' },
-    { value: 'MiniMax-M2.1-highspeed', label: 'MiniMax-M2.1-highspeed (204800 context)' },
-    { value: 'MiniMax-M2', label: 'MiniMax-M2 (204800 context)' },
+    { value: 'MiniMax-M3', label: 'MiniMax-M3' },
+    { value: 'MiniMax-M2.7', label: 'MiniMax-M2.7' },
+    { value: 'MiniMax-M2.7-highspeed', label: 'MiniMax-M2.7-highspeed' },
+    { value: 'MiniMax-M2.5', label: 'MiniMax-M2.5' },
+    { value: 'MiniMax-M2.5-highspeed', label: 'MiniMax-M2.5-highspeed' },
+    { value: 'MiniMax-M2.1', label: 'MiniMax-M2.1' },
+    { value: 'MiniMax-M2.1-highspeed', label: 'MiniMax-M2.1-highspeed' },
+    { value: 'MiniMax-M2', label: 'MiniMax-M2' },
   ],
   openai: [
     { value: 'gpt-4o', label: 'GPT-4o' },
@@ -40,14 +40,14 @@ const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: 'qwen2', label: 'Qwen 2' },
   ],
   lmstudio: [
-    { value: 'local-model', label: 'Local Model (LM Studio)' },
+    { value: 'local-model', label: 'Local Model' },
   ],
   xiaomi: [
-    { value: 'mimo-v2.5-pro', label: 'MiMo-V2.5 Pro (1M context, 128K output)' },
-    { value: 'mimo-v2.5', label: 'MiMo-V2.5 Omni (1M context, multimodal)' },
-    { value: 'mimo-v2-flash', label: 'MiMo-V2 Flash (256K context, fast)' },
+    { value: 'mimo-v2.5-pro', label: 'MiMo-V2.5 Pro' },
+    { value: 'mimo-v2.5', label: 'MiMo-V2.5 Omni' },
+    { value: 'mimo-v2-flash', label: 'MiMo-V2 Flash' },
     { value: 'mimo-v2-pro', label: 'MiMo-V2 Pro' },
-    { value: 'mimo-v2-omni', label: 'MiMo-V2 Omni (256K context)' },
+    { value: 'mimo-v2-omni', label: 'MiMo-V2 Omni' },
   ],
 };
 
@@ -166,7 +166,7 @@ export function LLMSettings() {
       </Panel>
 
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-lg space-y-6">
+        <div className="max-w-2xl space-y-6">
           <Card variant="bordered" padding="md">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -184,6 +184,7 @@ export function LLMSettings() {
                     value={config.provider}
                     onChange={handleProviderChange}
                     options={PROVIDERS}
+                    className="w-full"
                   />
                 </div>
                 <div>
@@ -192,6 +193,7 @@ export function LLMSettings() {
                     value={config.model}
                     onChange={(e) => setConfig((prev) => ({ ...prev, model: e.target.value }))}
                     options={MODEL_OPTIONS[config.provider] || []}
+                    className="w-full"
                   />
                 </div>
               </div>
