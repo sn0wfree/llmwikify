@@ -1,0 +1,81 @@
+version: 1
+workflow:
+  name: llmwikify-research
+  description: >
+    7-step research pipeline: plan, gather (parallel), verify, synthesize.
+    Returns a cited report suitable for writing into the wiki.
+  triggers:
+    keywords: ["research this", "deep research", "ultracode: research"]
+  inputs:
+    type: object
+    properties:
+      question:
+        type: string
+        description: "The research question to investigate."
+    required: [question]
+  budget:
+    max_total_tokens: 800000
+    max_concurrent_agents: 6
+    on_exceed: halt
+  actors:
+    planner:
+      prompt_file: actor_prompts/wikify-research-planner.md
+      model: opus
+      tools: [Read, Grep, Glob]
+    researcher:
+      prompt_file: actor_prompts/wikify-phase-researcher.md
+      model: sonnet
+      isolation: worktree
+      tools: [Read, Grep, Glob, WebFetch, WebSearch]
+    verifier:
+      prompt_file: actor_prompts/wikify-adversarial-verifier.md
+      model: sonnet
+      tools: [Read, WebFetch]
+    synthesizer:
+      prompt_file: actor_prompts/wikify-synthesizer.md
+      model: opus
+      permission_mode: acceptEdits
+      tools: [Read, Grep, Glob, Write, Edit, Bash]
+  phases:
+    - id: plan
+      actor: planner
+      inputs:
+        question: $inputs.question
+      outputs: plan
+      retry_attempts: 1
+    # Fan-out: one researcher per phase in the plan.
+    # The runtime expands this AFTER `plan` completes; until then
+    # this is just a template node.
+    - id: gather
+      actor: researcher
+      needs: [plan]
+      fan_out:
+        from: $plan.phases
+        id_prefix: gather_
+        actor: researcher
+        inputs:
+          phase: $item
+      skip_if: len($plan.phases) < 1
+    - id: verify
+      actor: verifier
+      needs: [gather]
+      inputs:
+        question: $inputs.question
+        # `gather_results.findings` is built at runtime by
+        # flattening the per-instance outputs.
+        claims: $gather.findings
+      outputs: review
+    - id: synthesize
+      actor: synthesizer
+      needs: [verify]
+      inputs:
+        question: $inputs.question
+        plan: $plan
+        filtered_findings: $gather.filtered_findings
+        review_summary: $review.summary
+        synthesis_criteria: $plan.synthesis_criteria
+      outputs: final_report
+  limits:
+    max_total_agents: 50
+    max_phase_timeout_seconds: 1500
+    max_wallclock_seconds: 7200
