@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import {
   MessageSquare, Search, CheckSquare, Settings, ArrowLeft,
   PanelLeftClose, PanelLeftOpen, Sparkles, Bot, Activity,
+  Beaker,
 } from 'lucide-react';
 import { WikiSelector } from '../wiki/WikiSelector';
 import { Badge } from '../ui/badge';
@@ -20,6 +21,7 @@ interface BadgeCounts {
 const NAV_PRIMARY = [
   { to: '/agent/chat', label: 'Chat', icon: MessageSquare },
   { to: '/agent/autoresearch', label: 'Research', icon: Search },
+  { to: '/agent/reproduction', label: 'Reproduction', icon: Beaker },
 ] as const;
 
 const NAV_SECONDARY = [
