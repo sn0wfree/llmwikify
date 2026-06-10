@@ -1294,7 +1294,7 @@ class _ReactMockWikiService:
 
 
 class TestReActEnginePath:
-    """Tests for the dual-track chat(): use_react_engine=True path.
+    """Tests for the ChatReActBridge + ReActEngine chat path.
 
     Verifies the ReAct path produces the same SSE event vocabulary
     as the aask_with_tools path.
@@ -1309,7 +1309,7 @@ class TestReActEnginePath:
         )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            return ChatService(wiki, data_dir, use_react_engine=True)
+            return ChatService(wiki, data_dir)
 
     @pytest.mark.asyncio
     async def test_react_default_enabled(self, data_dir: Path) -> None:
@@ -1317,7 +1317,6 @@ class TestReActEnginePath:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             svc = ChatService(wiki, data_dir)
-        assert svc.use_react_engine is True
 
     @pytest.mark.asyncio
     async def test_react_path_yields_done_for_final_answer(
@@ -1375,7 +1374,7 @@ class TestReActEnginePath:
         wiki.llm.astream_chat = _astream
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            chat = ChatService(wiki, data_dir, use_react_engine=True)
+            chat = ChatService(wiki, data_dir)
 
         out: list[dict] = []
         async for ev in chat.chat(message="search", session_id="s1"):
@@ -1415,7 +1414,7 @@ class TestReActEnginePath:
         )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            chat = ChatService(wiki, data_dir, use_react_engine=True)
+            chat = ChatService(wiki, data_dir)
 
         out: list[dict] = []
         async for ev in chat.chat(message="write", session_id="s1"):
@@ -1467,7 +1466,7 @@ class TestReActEnginePath:
         wiki.llm.astream_chat = _astream
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            chat = ChatService(wiki, data_dir, use_react_engine=True)
+            chat = ChatService(wiki, data_dir)
 
         out: list[dict] = []
         async for ev in chat.chat(message="do stuff", session_id="s1"):
@@ -1499,7 +1498,7 @@ class TestReActEnginePath:
         wiki.get_wiki = MagicMock(return_value=None)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            chat = ChatService(wiki, data_dir, use_react_engine=True)
+            chat = ChatService(wiki, data_dir)
 
         out: list[dict] = []
         async for ev in chat.chat(message="hi", session_id="s1"):
@@ -1514,7 +1513,7 @@ class TestReActEnginePath:
         wiki = _ReactMockWikiService()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            chat = ChatService(wiki, data_dir, use_react_engine=True)
+            chat = ChatService(wiki, data_dir)
         ctx = AgentContext(wiki_id="w1")
 
         # Internal events should return None
@@ -1533,7 +1532,7 @@ class TestReActEnginePath:
         wiki = _ReactMockWikiService()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            chat = ChatService(wiki, data_dir, use_react_engine=True)
+            chat = ChatService(wiki, data_dir)
         ctx = AgentContext(wiki_id="w1")
 
         result = chat._translate_react_event(
