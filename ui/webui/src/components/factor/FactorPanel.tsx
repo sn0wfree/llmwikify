@@ -14,7 +14,8 @@ import { cn } from '@/lib/utils';
 import { Button } from '../ui/Button';
 import { FactorSelector } from '../shared/FactorSelector';
 import { MetricCards } from '../shared/MetricCards';
-import { LineChart } from '../shared/LineChart';
+import { ICChart } from '../shared/ICChart';
+import { QuantileCurves } from '../shared/QuantileCurves';
 import type { Metric } from '../shared/MetricCards';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -42,6 +43,8 @@ interface BacktestResult {
   slug: string;
   factor: FactorDef;
   metrics: FactorMetrics;
+  ic_series?: Array<{ date: string; ic: number }>;
+  quantile_curves?: Record<string, Array<{ date: string; value: number }>>;
   status: string;
 }
 
@@ -202,26 +205,58 @@ export function FactorPanel() {
           <MetricCards metrics={metrics} columns={6} />
         )}
 
-        {/* IC Time Series placeholder */}
-        {result && (
+        {/* IC Time Series + Distribution */}
+        {result && result.ic_series && result.ic_series.length > 0 && (
+          <section>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              IC 分析
+            </h3>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <ICChart
+                icSeries={result.ic_series.map((pt: { date: string; ic: number }) => ({
+                  date: pt.date,
+                  ic: pt.ic,
+                }))}
+                height={300}
+              />
+            </div>
+          </section>
+        )}
+
+        {/* Quantile Curves */}
+        {result && result.quantile_curves && Object.keys(result.quantile_curves).length > 0 && (
+          <section>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              分层净值曲线
+            </h3>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <QuantileCurves
+                groups={result.quantile_curves}
+                height={280}
+              />
+            </div>
+          </section>
+        )}
+
+        {/* Fallback placeholders when no chart data */}
+        {result && (!result.ic_series || result.ic_series.length === 0) && (
           <section>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               IC 时间序列
             </h3>
             <div className="bg-card border border-border rounded-lg p-4 h-48 flex items-center justify-center text-xs text-muted-foreground">
-              IC chart — Phase 5 待实现
+              IC chart — 需要因子回测引擎 (Phase 2.4) 提供数据
             </div>
           </section>
         )}
 
-        {/* Quantile Curves placeholder */}
-        {result && (
+        {result && (!result.quantile_curves || Object.keys(result.quantile_curves).length === 0) && (
           <section>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               分层净值曲线
             </h3>
             <div className="bg-card border border-border rounded-lg p-4 h-48 flex items-center justify-center text-xs text-muted-foreground">
-              Quantile curves — Phase 5 待实现
+              Quantile curves — 需要因子回测引擎 (Phase 2.4) 提供数据
             </div>
           </section>
         )}

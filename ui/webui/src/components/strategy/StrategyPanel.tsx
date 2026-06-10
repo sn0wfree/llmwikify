@@ -16,6 +16,7 @@ import { StrategySelector } from '../shared/StrategySelector';
 import { MetricCards } from '../shared/MetricCards';
 import { LineChart } from '../shared/LineChart';
 import { HeatMap } from '../shared/HeatMap';
+import { DrawdownChart } from '../shared/DrawdownChart';
 import type { Metric } from '../shared/MetricCards';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -235,7 +236,23 @@ export function StrategyPanel() {
               净值曲线
             </h3>
             <div className="bg-card border border-border rounded-lg p-4 h-48 flex items-center justify-center text-xs text-muted-foreground">
-              Equity curve — Phase 6 待实现
+              Equity curve — 需要 trades 日期数据
+            </div>
+          </section>
+        )}
+
+        {/* Drawdown Chart */}
+        {result && result.metrics.max_drawdown > 0 && (
+          <section>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              回撤分析
+            </h3>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <DrawdownChart
+                data={[{ date: new Date(), drawdown: -result.metrics.max_drawdown }]}
+                height={160}
+                topN={1}
+              />
             </div>
           </section>
         )}
