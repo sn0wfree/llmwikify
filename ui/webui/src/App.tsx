@@ -24,6 +24,9 @@ const TaskMonitor = lazy(() =>
 const LLMSettings = lazy(() =>
   import('./components/agent/LLMSettings').then(m => ({ default: m.LLMSettings }))
 );
+const ReproductionPanel = lazy(() =>
+  import('./components/reproduction/ReproductionPanel').then(m => ({ default: m.ReproductionPanel }))
+);
 
 function Loading() {
   return <div className="p-6 text-muted-foreground">Loading...</div>;
@@ -48,6 +51,7 @@ function App() {
             <Route path="chat" element={<AgentChat />} />
             <Route path="research" element={<Navigate to="/agent/autoresearch" replace />} />
             <Route path="autoresearch" element={<AutoResearchPanel />} />
+            <Route path="reproduction" element={<ReproductionPanel />} />
             <Route path="tasks" element={<TaskMonitor />} />
             <Route path="settings" element={<LLMSettings />} />
           </Route>
