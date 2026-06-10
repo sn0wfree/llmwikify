@@ -56,6 +56,20 @@ _SIX_STEP_EXTRAS: dict[str, Any] = {
     "db_retry_base_delay": 1.0,
     "db_retry_max_retries": 3,
 
+    # ─── Chat service parameters (v0.38) ───
+    "max_chat_rounds": 4,
+    "max_messages": 50,
+    "observation_limit": 10,
+    "observation_summary_limit": 5,
+    "summary_truncate_chars": 500,
+    "content_truncate_chars": 10_000,
+    "llm_retry_max_attempts": 3,
+    "llm_retry_base_delay": 2.0,
+    "llm_retry_call_timeout": 120.0,
+    "llm_retry_max_delay": 30.0,
+    "chat_db_retry_max_attempts": 3,
+    "chat_db_retry_base_delay": 0.2,
+
     # ─── LLM call params per prompt (overridable, fed to resolve_llm_params) ───
     # Each section is a per-prompt dict. Priority chain:
     #   1. this config → 2. prompt YAML → 3. DEFAULT_LLM_PARAMS safety net.
