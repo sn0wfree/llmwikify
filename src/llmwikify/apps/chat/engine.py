@@ -27,6 +27,7 @@ from llmwikify.apps.chat.agent.react_engine import (
     SkillContext,
     SkillResult,
 )
+from llmwikify.apps.chat.agent.research_bridge import translate_react_events
 from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
 from llmwikify.apps.chat.config import merge_six_step_config
 from llmwikify.apps.chat.gatherer import SourceGatherer
@@ -239,33 +240,21 @@ class ResearchEngine:
         engine = ReActEngine(config)
 
         try:
-            async for event in engine.run(SkillContext(
+            async for event in translate_react_events(
+                engine.run(SkillContext(
+                    session_id=session_id,
+                    wiki=self.wiki,
+                    db=self.db,
+                    llm_client=self._default_llm,
+                    config=self.config,
+                    metrics=self._metrics,
+                )),
+                state=state,
                 session_id=session_id,
-                wiki=self.wiki,
-                db=self.db,
-                llm_client=self._default_llm,
-                config=self.config,
-                metrics=self._metrics,
-            )):
-                # Emit domain-specific events that ReActEngine doesn't produce
-                event_type = event.get("type")
-                if event_type == "phase":
-                    phase = event.get("phase")
-                    if phase == "cancelled":
-                        yield {"type": "cancelled", "round": state.round, "phase": state.phase}
-                        self.session_manager.update_status(session_id, "cancelled", state.phase, -1)
-                    elif phase == "paused":
-                        yield {"type": "paused", "round": state.round, "phase": state.phase}
-                        self.session_manager.update_status(session_id, "paused", state.phase, state.round)
-                    elif phase == "timeout":
-                        yield {"type": "error", "error": f"Research timed out after {self._timeout_seconds}s"}
-                        self.session_manager.update_status(session_id, "timeout", state.phase, -1)
-                elif event_type == "reasoning":
-                    # Add phase to reasoning events (ReActEngine doesn't know about phases)
-                    event["phase"] = state.phase
-                    yield event
-                else:
-                    yield event
+                timeout_seconds=self._timeout_seconds,
+                update_status=self.session_manager.update_status,
+            ):
+                yield event
         except Exception as e:
             logger.error("ReAct loop error for session %s: %s", session_id, e, exc_info=True)
             self.session_manager.update_status(session_id, "error", state.phase or "unknown", -1)
