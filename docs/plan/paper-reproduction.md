@@ -76,6 +76,19 @@
 - 沙箱测试：用 subprocess mock
 - 端到端测试：可选（烧 token，仅 CI 中跑）
 
+### 原则 7：少即是多（Less is More）
+
+**能不做就不做，能简单就简单，能复用就不新建。**
+
+- 能用现有 prompt 的，不新建 YAML
+- 能用现有 API 的，不新建 MCP 工具
+- 能用 wiki 页的，不新建数据库字段
+- 能用 Skill 注册的，不新建引擎
+- 能用 prompt 解决的分析，不写分析代码
+- 能用 3 行解决的，不写 10 行
+
+**判断标准**：每次新增文件/函数/字段/工具时，先问「这个真的需要吗？能不能用已有的替代？」。如果犹豫，就不加。
+
 ---
 
 ## 版本兼容性
@@ -137,17 +150,14 @@
 │                                                              │
 │ 主流程（方式 A，确定性）：                                    │
 │   Skill: repro.generate → 读取 wiki → 生成代码              │
-│   Skill: repro.validate → 静态校验 + 语法检查               │
+│   Skill: repro.sandbox → 验证语法 + 执行                    │
 │                                                              │
 │ 修复循环（方式 B，LLM 驱动）：                               │
-│   校验失败 → ChatBase.aask_with_tools()                     │
-│   LLM 自主决策调用 repro.fix → 重新校验                     │
+│   sandbox 失败 → ChatBase.aask_with_tools()                 │
+│   LLM 自主决策调用 repro.generate(errors) → 重新 sandbox    │
 │   循环 ≤3 轮 或通过                                         │
 │                                                              │
-│ 执行（方式 A）：                                             │
-│   Skill: repro.sandbox → KernelGateway 执行                 │
-│                                                              │
-│ 路径：apps/chat/skills/actions/repro_action.py（~350行）    │
+│ 路径：apps/chat/skills/actions/repro_action.py（~200行）    │
 └──────────────────────────┬──────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -312,8 +322,6 @@ class ReproSkill(Skill):
     name = "repro"
     actions = {
         "generate": SkillAction(handler=generate_handler, ...),
-        "validate": SkillAction(handler=validate_handler, ...),
-        "fix":      SkillAction(handler=fix_handler, ...),
         "sandbox":  SkillAction(handler=sandbox_handler, ...),
     }
 
@@ -327,15 +335,15 @@ async def reproduce(wiki, paper_id):
     result = await runtime.execute("repro", "generate", {"pages": pages}, ctx)
     code = result.data["code"]
 
-    # ── 方式 A：直接校验 ──
-    result = await runtime.execute("repro", "validate", {"code": code}, ctx)
+    # ── 方式 A：直接执行（含验证）──
+    result = await runtime.execute("repro", "sandbox", {"code": code}, ctx)
 
-    # ── 方式 B：LLM 驱动修复循环（校验失败时）──
-    if result.status == "error":
+    # ── 方式 B：LLM 驱动修复循环（sandbox 失败时）──
+    if not result.data["success"]:
         chat = ChatBase(llm_client=llm, skill_registry=registry)
         messages = [
-            {"role": "system", "content": "你是代码修复助手。校验失败，请修复代码。"},
-            {"role": "user", "content": f"代码：\n{code}\n\n错误：\n{result.error}"},
+            {"role": "system", "content": "你是代码修复助手。代码执行失败，请修复。"},
+            {"role": "user", "content": f"代码：\n{code}\n\n错误：\n{result.data['error']}"},
         ]
         async for event in chat.aask_with_tools(
             messages,
@@ -363,12 +371,12 @@ async def reproduce(wiki, paper_id):
 ### 4.3.2 修复循环（方式 B）
 
 ```
-校验失败
+sandbox 执行失败
   ↓
 ChatBase.aask_with_tools()
   ↓ LLM 读取错误信息
-  ↓ 调用 repro.fix（修改代码）
-  ↓ 重新校验
+  ↓ 调用 repro.generate(errors)（修改代码）
+  ↓ 重新 sandbox
   ↓
   ├─ 通过 → 继续执行
   └─ 再次失败 → 最多重试 3 轮
@@ -686,70 +694,28 @@ user: |
 
 ## 七、SkillAction 精确设计
 
-### 7.1 4 个 SkillAction
+### 7.1 2 个 SkillAction（Less is More）
 
 ```python
-# 1. repro.generate
+# 1. repro.generate — 生成代码 或 修复代码（二合一）
 class GenerateAction(SkillAction):
     name = "generate"
-    description = "根据 wiki 知识库生成 backtrader 策略代码"
+    description = "从 wiki 知识生成 backtrader 代码，或修复已有代码"
     input_schema = {
         "type": "object",
         "properties": {
-            "pages": {
-                "type": "object",
-                "description": "wiki 页面内容 {logic, data, steps, factors, model}"
-            }
+            "pages": {"type": "object", "description": "wiki 页面内容"},
+            "existing_code": {"type": "string", "description": "待修复的代码（可选）"},
+            "errors": {"type": "array", "description": "上一轮的错误（可选）"}
         },
         "required": ["pages"]
     }
-    output_schema = {
-        "type": "object",
-        "properties": {
-            "code": {"type": "string"},
-            "language": {"type": "string"}
-        }
-    }
-    handler = generate_handler  # 调用 repro_codegen.yaml prompt
+    handler = generate_handler  # 有 errors → repro_fix.yaml，无 → repro_codegen.yaml
 
-# 2. repro.validate
-class ValidateAction(SkillAction):
-    name = "validate"
-    description = "校验生成的代码是否可运行"
-    input_schema = {
-        "type": "object",
-        "properties": {
-            "code": {"type": "string"}
-        },
-        "required": ["code"]
-    }
-    output_schema = {
-        "type": "object",
-        "properties": {
-            "status": {"type": "string", "enum": ["ok", "error"]},
-            "errors": {"type": "array"}
-        }
-    }
-    handler = validate_handler  # ruff + AST + import 白名单
-
-# 3. repro.fix
-class FixAction(SkillAction):
-    name = "fix"
-    description = "修复校验失败的代码"
-    input_schema = {
-        "type": "object",
-        "properties": {
-            "code": {"type": "string"},
-            "errors": {"type": "array"}
-        },
-        "required": ["code", "errors"]
-    }
-    handler = fix_handler  # 调用 repro_fix.yaml prompt
-
-# 4. repro.sandbox
+# 2. repro.sandbox — 验证 + 执行（二合一）
 class SandboxAction(SkillAction):
     name = "sandbox"
-    description = "在沙箱中执行代码"
+    description = "验证代码语法 + 在沙箱中执行"
     input_schema = {
         "type": "object",
         "properties": {
@@ -757,16 +723,7 @@ class SandboxAction(SkillAction):
         },
         "required": ["code"]
     }
-    output_schema = {
-        "type": "object",
-        "properties": {
-            "status": {"type": "string"},
-            "outputs": {"type": "array"},
-            "errors": {"type": "array"},
-            "execution_time": {"type": "number"}
-        }
-    }
-    handler = sandbox_handler  # KernelGateway 执行
+    handler = sandbox_handler  # AST检查 + KernelGateway 执行
 ```
 
 ---
@@ -887,13 +844,17 @@ CREATE TABLE reproduction_events (
 ### 方式 1：MCP 工具（Agent 调用）
 
 ```python
-# MCP 工具 handler
+# MCP 工具 handler（2 个：start + report）
 async def wiki_paper_repro_start(wiki_id, source_type, source_ref):
     """启动复现会话"""
     session_id = db.create_session(wiki_id, source_type, source_ref)
-    # 异步执行：ingest → extract → reproduce → backtest
     asyncio.create_task(run_reproduction(session_id))
     return {"session_id": session_id, "status": "pending"}
+
+async def wiki_paper_repro_report(session_id):
+    """返回全部信息（status + artifacts + code + backtest）"""
+    # 见十六、MCP 工具实现
+    ...
 ```
 
 ### 方式 2：REST API（WebUI 调用）
@@ -1010,7 +971,7 @@ async def run_reproduction(session_id):
 | 测试文件 | 覆盖 | 行数 |
 |---|---|---|
 | `tests/strategy/reproduction/test_extract.py` | 论文结构化抽取 | ~100 |
-| `tests/strategy/reproduction/test_skills.py` | 4 个 SkillAction | ~150 |
+| `tests/strategy/reproduction/test_skills.py` | 2 个 SkillAction | ~80 |
 | `tests/strategy/reproduction/test_backtest.py` | backtrader 封装 | ~100 |
 | `tests/strategy/data/test_router.py` | DataRouter | ~80 |
 | `tests/strategy/data/test_akshare.py` | AKShare Provider | ~60 |
@@ -1079,48 +1040,37 @@ def inject_papers_template(wiki_root):
 
 ## 十六、MCP 工具实现
 
-### 5 个 MCP 工具
+> 原则 7（Less is More）：只暴露 2 个工具，不拆分细粒度 API。
+
+### 2 个 MCP 工具（Less is More）
 
 ```python
-# 1. wiki_paper_repro_start
+# 1. wiki_paper_repro_start — 触发复现
 async def handle_start(wiki_id, source_type, source_ref):
     session_id = db.create_session(wiki_id, source_type, source_ref)
     asyncio.create_task(run_reproduction(session_id))
     return {"session_id": session_id, "status": "pending"}
 
-# 2. wiki_paper_repro_status
-async def handle_status(session_id):
+# 2. wiki_paper_repro_report — 返回全部信息（status + artifacts + code + backtest）
+async def handle_report(session_id):
     session = db.get_session(session_id)
     artifacts = db.get_artifacts(session_id)
-    return {
+    wiki = Wiki(session.wiki_id)
+
+    result = {
         "status": session.status,
         "progress": session.progress,
-        "artifacts": [{"kind": a.kind, "wiki_page": a.wiki_page, "score": a.score} for a in artifacts],
+        "paper_title": session.paper_title,
+        "artifacts": [],
     }
 
-# 3. wiki_paper_repro_report
-async def handle_report(session_id):
-    """从 wiki 页读取抽取结果（不从 DB 读）"""
-    session = db.get_session(session_id)
-    wiki = Wiki(session.wiki_id)
-    extraction_page = f"Papers/{session.paper_title}/Logic"  # 示例
-    return {"extraction": wiki.read_page(extraction_page)}
+    for a in artifacts:
+        item = {"kind": a.kind, "wiki_page": a.wiki_page, "score": a.score}
+        if a.wiki_page:
+            item["content"] = wiki.read_page(a.wiki_page)
+        result["artifacts"].append(item)
 
-# 4. wiki_paper_repro_code
-async def handle_code(session_id):
-    """从 wiki 页读取代码（不从 DB 读）"""
-    session = db.get_session(session_id)
-    wiki = Wiki(session.wiki_id)
-    code_page = f"Papers/{session.paper_title}/Code"
-    return {"code": wiki.read_page(code_page)}
-
-# 5. wiki_paper_repro_backtest
-async def handle_backtest(session_id):
-    """从 wiki 页读取回测结果（不从 DB 读）"""
-    session = db.get_session(session_id)
-    wiki = Wiki(session.wiki_id)
-    backtest_page = session.backtest_wiki_page
-    return {"backtest": wiki.read_page(backtest_page) if backtest_page else None}
+    return result
 ```
 
 ---
@@ -1185,7 +1135,7 @@ async def extract_broker_report(pdf_path: str) -> str:
 | `strategy/reproduction/backtest.py` | ~250 | backtrader 薄封装 |
 | `strategy/reproduction/wiki_template.py` | ~50 | wiki.md 模板注入 |
 | `strategy/data/router.py` | ~120 | AKShare + iFinD 路由 |
-| `apps/chat/skills/actions/repro_action.py` | ~350 | 4 个 SkillAction（generate/validate/fix/sandbox）|
+| `apps/chat/skills/actions/repro_action.py` | ~200 | 2 个 SkillAction（generate + sandbox）|
 | `prompts/_defaults/repro_extract.yaml` | ~80 | 结构化抽取 |
 | `prompts/_defaults/repro_analyze_strategy.yaml` | ~60 | 策略优劣分析 |
 | `prompts/_defaults/repro_codegen.yaml` | ~100 | 代码生成 |
@@ -1197,7 +1147,7 @@ async def extract_broker_report(pdf_path: str) -> str:
 | `web/webui/src/pages/Reproduction/Detail.tsx` | ~200 | 详情（5个tab）|
 | `web/webui/src/components/BacktestChart.tsx` | ~100 | 净值曲线 |
 | `web/webui/src/components/ReadinessBadge.tsx` | ~50 | 就绪度徽章 |
-| **合计** | **~1980** | **Python ~980 + YAML ~430 + TS ~700** |
+| **合计** | **~1910** | **Python ~910 + YAML ~430 + TS ~700** |
 
 ---
 
@@ -1248,13 +1198,10 @@ ifind = [
 
 ## 二十二、MCP 工具列表
 
-| 工具名 | 输入 | 输出 |
+| 工具名 | 参数 | 返回 |
 |---|---|---|
 | `wiki_paper_repro_start` | wiki_id, source_type, source_ref | session_id |
-| `wiki_paper_repro_status` | session_id | status, progress |
-| `wiki_paper_repro_report` | session_id | 抽取结果 |
-| `wiki_paper_repro_code` | session_id | notebook 路径 |
-| `wiki_paper_repro_backtest` | session_id, symbol, start, end | metrics, curves |
+| `wiki_paper_repro_report` | session_id | status, progress, artifacts (全部内容) |
 
 ---
 

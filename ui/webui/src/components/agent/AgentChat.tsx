@@ -226,6 +226,13 @@ export function AgentChat() {
               currentToolCallsRef.current = [];
               break;
             }
+            case 'tool_call_error':
+              setCurrentToolCalls((prev) => {
+                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now() } : tc);
+                currentToolCallsRef.current = next;
+                return next;
+              });
+              break;
             case 'error':
               addToast('error', event.message || 'Confirmation error');
               break;
@@ -380,6 +387,9 @@ export function AgentChat() {
               setConnectionState('idle');
               break;
             }
+            case 'save_warning':
+              addToast('warning', event.reason || 'Save incomplete');
+              break;
             case 'error':
               addToast('error', event.message || 'Chat error');
               setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${event.message}`, timestamp: new Date().toISOString() }]);
