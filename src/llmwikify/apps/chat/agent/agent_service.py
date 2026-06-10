@@ -86,10 +86,6 @@ class AgentService:
             self.data_dir,
             chat_db=self.app_db.chat,
             memory_manager=self.memory_manager,
-            # Phase 6 (v0.37): default to ReActEngine path.
-            # The aask_with_tools path is preserved as a fallback
-            # by passing use_react_engine=False.
-            use_react_engine=True,
         )
 
         # SkillService (lazy init)

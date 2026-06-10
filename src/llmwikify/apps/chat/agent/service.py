@@ -175,7 +175,6 @@ class ChatService(ChatBase):
         data_dir: Path,
         chat_db: ChatDatabase | None = None,
         memory_manager: Any | None = None,
-        use_react_engine: bool = True,
     ):
         self.wiki_service = wiki_service
         # Phase 1.5 (v0.36): allow caller to inject a shared
@@ -218,12 +217,6 @@ class ChatService(ChatBase):
         # Initialize ChatBase with LLM from WikiService
         llm = wiki_service.get_llm()
         super().__init__(llm_client=llm)
-        # Phase 6 (v0.37): dual-track support. When True, chat()
-        # delegates the iterative loop to ChatReActBridge + ReActEngine
-        # instead of ChatBase.aask_with_tools. Default off during
-        # rollout; can be flipped via constructor kwarg.
-        self.use_react_engine = use_react_engine
-
     # ─── SSE chat ────────────────────────────────────────────────
 
     async def chat(
@@ -304,83 +297,15 @@ class ChatService(ChatBase):
         # in place via the ``invoke_tool`` callback.)
 
         try:
-            if self.use_react_engine:
-                # Phase 6 (v0.37): delegate to ChatReActBridge +
-                # ReActEngine. Same SSE event vocabulary as
-                # aask_with_tools path.
-                async for event in self._chat_via_react(
-                    messages_for_llm=messages_for_llm,
-                    system_prompt=system_prompt,
-                    tool_registry=tool_registry,
-                    session_id=session_id,
-                    ctx=ctx,
-                ):
-                    yield event
-                return
-
-            # Phase 2.2 (v0.36): delegate the iterative loop to
-            # ChatBase.aask_with_tools. The ``invoke_tool``
-            # callback preserves the existing text-mode parsing,
-            # confirmation handling, and DB persistence. The
-            # callback yields its own events (tool_call_start,
-            # tool_call_end, confirmation_required) which we
-            # forward to the SSE stream in order.
-            extra_events: list[dict] = []
-
-            async def invoke(name: str, args: dict) -> Any:
-                """Tool callback: run dispatch, append events,
-                return the result so ChatBase can feed it back.
-
-                The callback's emitted events are forwarded to
-                the SSE stream before each aask_with_tools
-                event so the natural ordering is preserved
-                (tool_call_start → tool_call_end →
-                confirmation_required).
-                """
-                result: Any = None
-                async for ev in self._dispatch_tool_call(
-                    name, args, tool_registry, session_id, ctx,
-                ):
-                    extra_events.append(ev)
-                    if ev.get("type") == "tool_call_end":
-                        result = ev.get("result")
-                return result
-
-            async for ev in self.aask_with_tools(
-                messages_for_llm,
-                tools=self._get_toolspec(tool_registry),
-                max_iterations=self._chat_config["max_chat_rounds"],
-                invoke_tool=invoke,
+            # Delegate to ChatReActBridge + ReActEngine.
+            async for event in self._chat_via_react(
+                messages_for_llm=messages_for_llm,
+                system_prompt=system_prompt,
+                tool_registry=tool_registry,
+                session_id=session_id,
+                ctx=ctx,
             ):
-                # Forward all events queued by the callback
-                # BEFORE yielding aask_with_tools' own event.
-                # This keeps ordering: tool_call_start (aask)
-                # → tool_call_end (callback) → next event
-                while extra_events:
-                    yield extra_events.pop(0)
-                kind = ev.get("type")
-                if kind == "done":
-                    final = ev.get("final_response", "")
-                    thinking = ev.get("thinking", "")
-                    if thinking:
-                        ctx._thinking = thinking
-                    ctx.add_assistant_message(final)
-                    self._save_message(
-                        session_id, "assistant", final,
-                        tool_calls=list(ctx._tool_calls.values())
-                        if ctx._tool_calls else None,
-                    )
-                    if self._save_error_count > 0:
-                        yield ChatEvent.save_warning(
-                            f"已丢弃 {self._save_error_count} 条消息的持久化失败"
-                        )
-                    yield ChatEvent.done(final)
-                    continue
-                yield ev
-            # Final drain in case aask_with_tools ended
-            # without a follow-up event.
-            while extra_events:
-                yield extra_events.pop(0)
+                yield event
 
         except Exception as e:
             logger.exception("Chat error")
@@ -397,13 +322,7 @@ class ChatService(ChatBase):
     ) -> AsyncIterator[dict]:
         """Approve a confirmation, execute tool, feed result back to LLM.
 
-        Phase 2.2 (v0.36): uses ChatBase.aask_with_tools so
-        the post-confirmation LLM follow-up also benefits from
-        the iterative loop (a confirmation-approved tool may
-        trigger further tool calls).
-
-        Phase 6 (v0.37): when use_react_engine=True, delegates
-        to ChatReActBridge + ReActEngine via _chat_via_react.
+        Delegates to ChatReActBridge + ReActEngine via _chat_via_react.
         """
         wiki_id = wiki_id or self.wiki_service.get_default_wiki_id()
         if not wiki_id:
@@ -450,55 +369,15 @@ class ChatService(ChatBase):
         messages_for_llm = self._truncate_messages(raw_messages)
 
         try:
-            if self.use_react_engine:
-                # Phase 6 (v0.37): use the ReAct path
-                async for event in self._chat_via_react(
-                    messages_for_llm=messages_for_llm,
-                    system_prompt=system_prompt,
-                    tool_registry=tool_registry,
-                    session_id=session_id,
-                    ctx=ctx,
-                ):
-                    yield event
-                return
-
-            # Phase 2.2 (v0.36): aask_with_tools path (legacy)
-            # Phase 2.3 (v0.36): reset the text-mode buffer.
-            self._reset_text_mode_buffer()
-
-            extra_events: list[dict] = []
-
-            async def invoke(name: str, args: dict) -> Any:
-                result: Any = None
-                async for ev in self._dispatch_tool_call(
-                    name, args, tool_registry, session_id, ctx,
-                ):
-                    extra_events.append(ev)
-                    if ev.get("type") == "tool_call_end":
-                        result = ev.get("result")
-                return result
-
-            async for ev in self.aask_with_tools(
-                messages_for_llm,
-                tools=self._get_toolspec(tool_registry),
-                max_iterations=self._chat_config["max_chat_rounds"],
-                invoke_tool=invoke,
+            # Delegate to ChatReActBridge + ReActEngine.
+            async for event in self._chat_via_react(
+                messages_for_llm=messages_for_llm,
+                system_prompt=system_prompt,
+                tool_registry=tool_registry,
+                session_id=session_id,
+                ctx=ctx,
             ):
-                while extra_events:
-                    yield extra_events.pop(0)
-                if ev.get("type") == "done":
-                    final = ev.get("final_response", "")
-                    ctx.add_assistant_message(final)
-                    self._save_message(session_id, "assistant", final)
-                    if self._save_error_count > 0:
-                        yield ChatEvent.save_warning(
-                            f"已丢弃 {self._save_error_count} 条消息的持久化失败"
-                        )
-                    yield ChatEvent.done(final)
-                    continue
-                yield ev
-            while extra_events:
-                yield extra_events.pop(0)
+                yield event
         except Exception as e:
             logger.exception("Confirmation continue error")
             yield ChatEvent.error(str(e))
