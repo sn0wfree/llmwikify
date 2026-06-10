@@ -1,25 +1,25 @@
-"""apps/chat/skills/actions/ — Phase 5: 26 base actions.
+"""apps/chat/skills/actions/ — 24 base Skills (26 actions).
 
 Per ``v0.32-skill-restructure.md`` §3.1 + ``v0.39-web-search-skill.md``,
-the v0.32.0 base actions are 26 in total:
+the v0.32.0 base skills are 24 in total, exposing 26 actions:
 
-  14 base actions (#1-#14)
-    1.  search_skill
-    2.  extract_skill
-    3.  read_skill
-    4.  write_skill
-    5.  lint_skill
-    6.  plan_skill
-    7.  analyze_skill
-    8.  summarize_skill
-    9.  score_skill
-    10. revise_skill
-    11. filter_skill
-    12. graph_skill
-    13. reason_skill
-    14. observe_skill
+  14 base Skills (single-action each, #1-#14)
+    1.  search_skill       → search
+    2.  extract_skill      → extract
+    3.  read_skill         → read
+    4.  write_skill        → write
+    5.  lint_skill         → lint
+    6.  plan_skill         → plan
+    7.  analyze_skill      → analyze
+    8.  summarize_skill    → summarize
+    9.  score_skill        → score
+    10. revise_skill       → revise
+    11. filter_skill       → filter
+    12. graph_skill        → graph
+    13. reason_skill       → reason
+    14. observe_skill      → observe
 
-  8 detect actions (#15-#22)
+  8 detect Skills (single-action each, #15-#22)
     15. detect_knowledge_gaps_skill
     16. detect_data_gaps_skill
     17. detect_outdated_pages_skill
@@ -29,17 +29,15 @@ the v0.32.0 base actions are 26 in total:
     21. detect_potential_contradictions_skill
     22. detect_redundancy_skill
 
-  1 clarify action (#23)
-    23. clarify_skill
+  1 clarify Skill (#23)
+    23. clarify_skill      → clarify
 
-  3 web search actions (#24-#26, v0.39)
-    24. web_search_skill.search_web
-    25. web_search_skill.search_youtube
-    26. web_search_skill.search_news
+  1 web search Skill (3 actions, #24, v0.39)
+    24. web_search_skill   → search_web, search_youtube, search_news
 
 This ``__init__.py``:
-  1. Imports all 26 Skill instances
-  2. Exposes ``ALL_ACTIONS`` (the list of 26 Skill objects)
+  1. Imports all 24 Skill instances
+  2. Exposes ``ALL_ACTIONS`` (the list of 24 Skill objects)
   3. Exposes ``register_all_actions(registry)`` for the
      default registration at app startup
   4. Exposes ``unregister_all_actions(registry)`` for tests
@@ -48,15 +46,16 @@ This ``__init__.py``:
 Why a single import point
 -------------------------
 
-The SkillRegistry needs a way to discover all 26 actions
+The SkillRegistry needs a way to discover all 24 skills
 without each application site remembering to import them.
 The Phase 6 (research_skill) and Phase 7 (harness eval
-classes) work will rely on these 26 actions being
+classes) work will rely on these 24 skills being
 registered by default when the framework boots.
 
 The list is also a **contract**: the framework ships exactly
-26 actions; any deviation (e.g. 27th action) requires a
-design update, not a silent addition.
+24 skills (26 actions including web_search's 3 sub-actions);
+any deviation (e.g. 25th skill) requires a design update,
+not a silent addition.
 """
 
 from __future__ import annotations
@@ -110,16 +109,17 @@ ALL_ACTIONS = (
     _BASE_ACTIONS + _CLARIFY_ACTIONS + ALL_DETECT_SKILLS + _WEB_SEARCH_ACTIONS
 )
 
-assert len(ALL_ACTIONS) == 26, (
-    f"Phase 5 contract violation: expected exactly 26 base "
-    f"actions, got {len(ALL_ACTIONS)}. Update the inventory."
+assert len(ALL_ACTIONS) == 24, (
+    f"Phase 5 contract violation: expected exactly 24 base "
+    f"skills (26 actions including web_search's 3 sub-actions), "
+    f"got {len(ALL_ACTIONS)} Skills. Update the inventory."
 )
 
 
 def register_all_actions(registry: SkillRegistry) -> int:
-    """Register all 26 base actions into ``registry``.
+    """Register all 24 base Skills into ``registry``.
 
-    Returns the count registered (26). Safe to call on a
+    Returns the count registered (24). Safe to call on a
     registry that already has some of these — the
     registry's ``register(replace=True)`` default will
     overwrite, and the Skill instances' ``setup()`` will
@@ -131,7 +131,7 @@ def register_all_actions(registry: SkillRegistry) -> int:
 
 
 def unregister_all_actions(registry: SkillRegistry) -> int:
-    """Unregister all 26 base actions. Returns the count removed.
+    """Unregister all 24 base Skills. Returns the count removed.
 
     Used by tests that need registry isolation.
     """
