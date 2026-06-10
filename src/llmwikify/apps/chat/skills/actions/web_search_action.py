@@ -77,9 +77,9 @@ async def _search_web(args: dict[str, Any], ctx: SkillContext) -> SkillResult:
     if not query:
         return SkillResult.fail("query is required")
 
-    num_results = int(args.get("num_results") or 5)
-    if num_results < 1 or num_results > 50:
-        return SkillResult.fail("num_results must be between 1 and 50")
+    num_results = _validate_num_results(args)
+    if isinstance(num_results, SkillResult):
+        return num_results
 
     return await _do_search(query, num_results, ctx, prefix=None)
 
@@ -99,9 +99,9 @@ async def _search_youtube(args: dict[str, Any], ctx: SkillContext) -> SkillResul
     if not query:
         return SkillResult.fail("query is required")
 
-    num_results = int(args.get("num_results") or 5)
-    if num_results < 1 or num_results > 50:
-        return SkillResult.fail("num_results must be between 1 and 50")
+    num_results = _validate_num_results(args)
+    if isinstance(num_results, SkillResult):
+        return num_results
 
     return await _do_search(
         f"site:youtube.com {query}", num_results, ctx, prefix="youtube",
@@ -127,13 +127,32 @@ async def _search_news(args: dict[str, Any], ctx: SkillContext) -> SkillResult:
     if not query:
         return SkillResult.fail("query is required")
 
-    num_results = int(args.get("num_results") or 5)
-    if num_results < 1 or num_results > 50:
-        return SkillResult.fail("num_results must be between 1 and 50")
+    num_results = _validate_num_results(args)
+    if isinstance(num_results, SkillResult):
+        return num_results
 
     return await _do_search(
         f"site:news.google.com {query}", num_results, ctx, prefix="news",
     )
+
+
+def _validate_num_results(args: dict[str, Any]) -> int | SkillResult:
+    """Extract and validate ``num_results`` arg.
+
+    Returns the validated int on success, or a SkillResult.fail
+    on error. Defaults to 5 when ``num_results`` is missing or
+    None (NOT when it's 0 — explicit 0 is rejected).
+    """
+    raw = args.get("num_results")
+    if raw is None:
+        return 5
+    try:
+        num_results = int(raw)
+    except (TypeError, ValueError):
+        return SkillResult.fail(f"num_results must be an integer, got {raw!r}")
+    if num_results < 1 or num_results > 50:
+        return SkillResult.fail("num_results must be between 1 and 50")
+    return num_results
 
 
 async def _do_search(
