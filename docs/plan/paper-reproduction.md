@@ -9,7 +9,7 @@
 
 ## 零、设计原则
 
-实现本功能时，以下 6 条原则指导所有决策。遇到分歧时，回溯原则。
+实现本功能时，以下 7 条原则指导所有决策。遇到分歧时，回溯原则。
 
 ### 原则 1：Wiki 优先（Wiki-First）
 
@@ -48,12 +48,13 @@
 **每层都有降级路径，不因单点失败阻塞全链路。**
 
 | 层 | 降级路径 |
-|---|---|
+|---|---|---|
 | 输入 | 格式不支持 → 提示用户换格式 |
 | 理解 | LLM 抽取失败 → 重试 2 次 → 标记 error |
-| 复现 | 代码校验失败 → 修复循环 ≤3 轮 → 保存当前代码 |
-| 验证 | KernelGateway 失败 → 降级 subprocess |
-| 数据 | AKShare 不可用 → 合成数据 + 声明 |
+| 理解 | 策略类型无法映射 → 标记 unknown，用户手动选择 |
+| 复现 | 参数配置错误 → 验证合法性，报具体字段 |
+| 验证 | 回测超时 → 终止，标注超时 |
+| 数据 | AKShare 不可用 → DataCache → SynthProvider |
 | 分析 | LLM 分析失败 → 跳过，标注未完成 |
 
 ### 原则 5：最小侵入（Minimal Invasiveness）
@@ -105,11 +106,13 @@
 ## 一、决策汇总
 
 | 决策项 | 选择 |
-|---|---|
+|---|---|---|
 | M4（券商研报 + arXiv）| 不砍，全做 |
 | 数据源 | AKShare（主）+ iFinD（补），不用 Tushare |
-| 代码沙箱 | KernelGateway（安全隔离，~200行）|
-| 复现层调用方式 | A+B 结合：主流程 SkillRuntime.execute()（确定性）+ 修复循环 ChatBase.aask_with_tools()（灵活）|
+| AKShare 缓存 | 首次获取后存入本地 SQLite，后续优先读缓存 |
+| 代码生成 | **不要 LLM 生成代码**，预写通用 backtrader 策略 + 参数化调用 |
+| 执行沙箱 | **不隔离**（预写代码，无需沙箱），直接在当前进程执行 |
+| 复现层调用 | 函数式直接调用（不经过 Skill 系统），`extract.py → backtest.py` |
 | WebUI | 新增独立 Reproduction 页面（与 Research 平级）|
 | 分支 | 当前不切，规划完成后再切 |
 | 目标版本 | v0.4.0 |
@@ -146,34 +149,29 @@
 └──────────────────────────┬──────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ ③ 复现层（A+B 结合）                                        │
+│ ③ 复现层（参数直调）                                        │
 │                                                              │
-│ 主流程（方式 A，确定性）：                                    │
-│   Skill: repro.generate → 读取 wiki → 生成代码              │
-│   Skill: repro.sandbox → 验证语法 + 执行                    │
+│ extract.py 读取 wiki 页 → 映射到预定义策略类型               │
+│   + 抽取参数 {strategy_type, params, data_config}            │
 │                                                              │
-│ 修复循环（方式 B，LLM 驱动）：                               │
-│   sandbox 失败 → ChatBase.aask_with_tools()                 │
-│   LLM 自主决策调用 repro.generate(errors) → 重新 sandbox    │
-│   循环 ≤3 轮 或通过                                         │
+│ backtest.py 用参数实例化预写策略（非 LLM 生成代码）           │
+│   ThresholdStrategy / FactorRankingStrategy / ...             │
 │                                                              │
-│ 路径：apps/chat/skills/actions/repro_action.py（~200行）    │
+│ 路径：strategy/reproduction/backtest.py（~350行）            │
+│ 路径：strategy/reproduction/extract.py（~80行）              │
 └──────────────────────────┬──────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
 │ ④ 验证层（回测）                                            │
 │                                                              │
-│ Skill: repro.sandbox                                        │
-│   KernelGateway 执行 .ipynb                                 │
-│   超时 120s / 隔离执行                                       │
-│                                                              │
-│ backtrader + DataRouter（AKShare / iFinD）                  │
-│   数据获取 → 回测执行 → 指标计算                              │
+│ backtrader + DataRouter（AKShare / iFinD / DataCache）      │
+│   数据获取（缓存优先）→ 回测执行 → 指标计算                   │
 │   净值曲线 + 交易记录 + 已知偏差                              │
 │                                                              │
 │ 产出：wiki Backtest.md + Optimization.md                    │
-│ 路径：strategy/reproduction/backtest.py（~250行）           │
+│ 路径：strategy/reproduction/backtest.py（~350行）           │
 │ 路径：strategy/data/router.py（~120行）                      │
+│ 路径：strategy/data/cache.py（～100行）                     │
 └──────────────────────────┬──────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -312,86 +310,97 @@ async def extract_paper_structure(wiki, source_summary_page):
     wiki.write_relations(relations)
 ```
 
-### 4.3 复现层（A+B 结合）
+### 4.3 复现层（参数化直调）
 
-主流程用方式 A（确定性），修复循环用方式 B（LLM 驱动）：
+**不生成代码，不用沙箱，不经过 Skill 系统。** 复现层只有 2 个函数：
 
 ```python
-# 注册 Skill
-class ReproSkill(Skill):
-    name = "repro"
-    actions = {
-        "generate": SkillAction(handler=generate_handler, ...),
-        "sandbox":  SkillAction(handler=sandbox_handler, ...),
-    }
+# strategy/reproduction/backtest.py（~350行）
 
-# A+B 结合调用
-async def reproduce(wiki, paper_id):
-    runtime = SkillRuntime.default()
-    ctx = SkillContext(wiki=wiki, llm_client=llm)
+# 预写通用策略（不下车，不生成代码）
+class GenericStrategy(bt.Strategy):
+    """单一策略类，signal_type 决定逻辑分支"""
+    params = (
+        ('signal_type', 'ma_cross'),       # 策略类型
+        ('params', {}),                     # 信号参数字典
+        ('position_pct', 0.1),             # 仓位比例
+        ('stop_loss', None),               # 止损
+    )
 
-    # ── 方式 A：直接调用（固定流程）──
+    def next(self):
+        signal = self._compute_signal()
+        if signal > 0 and not self.position:
+            self.buy(size=self._calc_size())
+        elif signal < 0 and self.position:
+            self.close()
+
+    def _compute_signal(self) -> float:
+        st = self.params.signal_type
+        p = self.params.params
+        if st == 'ma_cross':
+            fast = bt.indicators.SMA(self.data.close, period=p['fast'])
+            slow = bt.indicators.SMA(self.data.close, period=p['slow'])
+            return (fast[0] - slow[0]) / slow[0]
+        elif st == 'rsi':
+            rsi = bt.indicators.RSI(self.data.close, period=p.get('period', 14))
+            return (50 - rsi[0]) / 50
+        elif st == 'factor_rank':
+            # 多标的因子排名
+            ...
+        return 0.0
+
+
+# strategy/reproduction/extract.py（~80行）
+
+async def extract_paper_structure(wiki, paper_id):
+    """读取 wiki 页，返回策略参数"""
     pages = read_wiki_pages(wiki, paper_id)
-    result = await runtime.execute("repro", "generate", {"pages": pages}, ctx)
-    code = result.data["code"]
+    result = await LLM.aask("repro_extract", {"pages": pages})
+    # LLM 返回：{signal_type, params, data_config, position_pct, ...}
+    return result
 
-    # ── 方式 A：直接执行（含验证）──
-    result = await runtime.execute("repro", "sandbox", {"code": code}, ctx)
 
-    # ── 方式 B：LLM 驱动修复循环（sandbox 失败时）──
-    if not result.data["success"]:
-        chat = ChatBase(llm_client=llm, skill_registry=registry)
-        messages = [
-            {"role": "system", "content": "你是代码修复助手。代码执行失败，请修复。"},
-            {"role": "user", "content": f"代码：\n{code}\n\n错误：\n{result.data['error']}"},
-        ]
-        async for event in chat.aask_with_tools(
-            messages,
-            tools=chat.tools_schema(),
-            max_iterations=3,
-        ):
-            if event["type"] == "tool_call_end":
-                code = event["result"].data["code"]
-
-    # ── 方式 A：直接执行 ──
-    result = await runtime.execute("repro", "sandbox", {"code": code}, ctx)
-    wiki.write_page(f"Papers/{paper_id}/Backtest", result.data["report"])
+# run_reproduction 主流程
+async def run_reproduction(wiki_id, paper_id):
+    wiki = Wiki(wiki_id)
+    # 1. 提取参数
+    config = await extract_paper_structure(wiki, paper_id)
+    # 2. 获取数据（缓存优先）
+    data = await DataRouter.get(config['data_config'])
+    # 3. 回测
+    result = BacktestRunner.run(GenericStrategy, config, data)
+    # 4. 写回 wiki
+    wiki.write_page(f"Papers/{paper_id}/Backtest", result['report'])
 ```
 
-### 4.3.1 方式选择逻辑
+### 4.4 验证层（backtrader + DataCache）
 
-| 阶段 | 方式 | 原因 |
-|---|---|---|
-| 读取 wiki 知识库 | A（直接调用）| 固定流程 |
-| 生成代码 | A（直接调用）| 固定输入 → 固定输出 |
-| 校验 | A（直接调用）| 规则检查 |
-| **代码修复** | **B（LLM 驱动）**| 校验失败时 LLM 自主判断怎么修 |
-| 执行回测 | A（直接调用）| 固定流程 |
-
-### 4.3.2 修复循环（方式 B）
-
-```
-sandbox 执行失败
-  ↓
-ChatBase.aask_with_tools()
-  ↓ LLM 读取错误信息
-  ↓ 调用 repro.generate(errors)（修改代码）
-  ↓ 重新 sandbox
-  ↓
-  ├─ 通过 → 继续执行
-  └─ 再次失败 → 最多重试 3 轮
-```
-
-### 4.4 验证层（backtrader）
+数据获取流程：**Cache Hit → AKShare → iFinD → SynthProvider**
 
 ```python
-# strategy/reproduction/backtest.py（~250行）
+# strategy/data/cache.py（~100行）
+
+class DataCache:
+    """AKShare 数据本地缓存"""
+    DB_PATH = "~/.llmwikify/data_cache.db"
+
+    def get(self, symbol, start, end) -> pd.DataFrame | None:
+        """命中返回 DataFrame，未命中返回 None"""
+        ...
+
+    def set(self, symbol, start, end, df: pd.DataFrame):
+        """写入缓存"""
+        ...
+
+
+# strategy/reproduction/backtest.py
 
 class BacktestRunner:
-    def run(self, code, data, config):
-        """执行 backtrader 回测"""
+    def run(self, strategy_cls, config, data):
+        """执行回测"""
         cerebro = bt.Cerebro()
-        # ... 加载策略、数据、配置
+        cerebro.addstrategy(strategy_cls, **config)
+        cerebro.adddata(data)
         results = cerebro.run()
         return {
             "metrics": {sharpe, mdd, total_return, ...},
@@ -444,13 +453,18 @@ pages = {
 ### ③ 复现层 → 验证层
 
 ```python
-# repro.generate 产出
-code: str  # Python backtrader 策略代码
-
-# repro.validate 产出
-validation_result: {
-  status: "ok" | "error",
-  errors: [{line: int, message: str, severity: str}]
+# extract.py 产出（参数配置）
+strategy_config: {
+  signal_type: str,            # "ma_cross" / "rsi" / "factor_rank" / ...
+  params: dict,                 # 信号参数 {fast: 5, slow: 20, ...}
+  position_pct: float,         # 仓位比例
+  stop_loss: float | None,     # 止损
+  data_config: {               # 数据配置
+    symbols: list[str],
+    start: str,
+    end: str,
+    freq: str,                 # "1d" / "1h"
+  }
 }
 ```
 
@@ -500,22 +514,24 @@ optimization_result: {
 
 ### 6.1 repro_extract.yaml（结构化抽取）
 
-**输入**：Source Summary 页内容
-**输出**：结构化 JSON（9 个字段）
+**输入**：wiki 页面内容（Logic/Data/Steps/Factors/Model）
+**输出**：结构化 JSON（9 个 wiki 字段 + strategy_config）
 
 关键约束：
 - 必须从原文中抽取，不能编造
 - 每个字段标注 confidence（HIGH/MEDIUM/LOW）
 - 公式必须保留 LaTeX 格式
 - 步骤必须有明确的输入→输出
+- **必须映射到预定义策略类型**（ma_cross / rsi / factor_rank / ...）
 
 ```yaml
 name: repro_extract
-description: "从论文中抽取策略复现所需的 9 类结构化信息"
+description: "从论文中抽取策略复现所需的 9 类结构化信息 + 策略参数"
 
 system: |
-  你是一个量化论文结构化抽取器。从给定文档中提取以下 9 类信息：
-  
+  你是一个量化论文结构化抽取器。从给定文档中提取：
+
+  A) 9 类 wiki 信息：
   1. Logic（策略逻辑）— 核心假设、市场逻辑、收益来源、适用条件
   2. Data（数据需求）— 字段列表、时间粒度、标的范围、数据来源
   3. Steps（操作步骤）— 信号/仓位/换仓/止损/成本，每步有输入→输出
@@ -525,102 +541,19 @@ system: |
   7. Datasets（数据集）— 名称、来源、时间范围、处理方式
   8. Risks（风险）— 局限、假设风险、实现偏差、数据局限
   9. References（参考）— 原文引用、相关论文、代码仓库
-  
-  对每类信息标注 confidence: HIGH（文中明确）/ MEDIUM（可推断）/ LOW（需假设）
-  
-  返回 JSON，key 为上述 9 类名称。
 
-user: |
-  论文全文：
-  {{ paper_content }}
-  
-  Source Summary：
-  {{ source_summary }}
-```
+  B) strategy_config（回测配置）：
+  将论文策略映射到以下预定义信号类型之一：
+  - ma_cross: 均线交叉（需 fast/slow 周期）
+  - rsi: RSI 阈值（需 period/overbought/oversold）
+  - factor_rank: 多标的因子排名（需 factor 列名/窗口/头寸数）
+  - volatility: 波动率策略（需 lookback/rebalance 周期）
+  - momentum: 动量策略（需 lookback/holding 周期）
+  - signal_composite: 多信号组合（需各信号权重）
 
-### 6.2 repro_codegen.yaml（代码生成）
+  返回 JSON，包含 "wiki"（9 个字段）+ "strategy_config"（signal_type + params）。
 
-**输入**：wiki 5 个页面（Logic/Data/Steps/Factors/Model）
-**输出**：可运行的 Python 代码
-
-```yaml
-name: repro_codegen
-description: "根据论文结构化信息生成 backtrader 策略代码"
-
-system: |
-  根据以下论文信息，生成完整的 backtrader 回测代码。
-  
-  硬性约束：
-  1. 必须使用 bt.Strategy.next() 接口
-  2. 必须有 params 类属性（超参与论文一致）
-  3. 数据获取用 akshare（import akshare as ak）
-  4. 输出 metrics dict: {sharpe, mdd, total_return, annual_return, sortino, calmar, win_rate}
-  5. 禁止 import: requests, urllib, socket, subprocess, os.system
-  6. 代码必须包含：数据获取、指标计算、bt.Strategy、bt.Cerebro、回测执行、指标输出
-  
-  代码结构：
-  ```python
-  import backtrader as bt
-  import akshare as ak
-  import pandas as pd
-  
-  class PaperStrategy(bt.Strategy):
-      params = (...)  # 超参与论文一致
-      
-      def __init__(self): ...
-      def next(self): ...
-  
-  if __name__ == "__main__":
-      # 数据获取
-      data = ...
-      # Cerebro 配置
-      cerebro = bt.Cerebro()
-      cerebro.addstrategy(PaperStrategy)
-      cerebro.adddata(data)
-      # 执行
-      results = cerebro.run()
-      # 输出指标
-      metrics = {...}
-      print(metrics)
-  ```
-
-user: |
-  策略逻辑：{{ logic }}
-  数据需求：{{ data }}
-  操作步骤：{{ steps }}
-  因子/指标：{{ factors }}
-  模型/框架：{{ model }}
-```
-
-### 6.3 repro_fix.yaml（代码修复）
-
-**输入**：代码 + 校验错误
-**输出**：修复后的代码
-
-```yaml
-name: repro_fix
-description: "修复校验失败的代码"
-
-system: |
-  你是一个 Python 代码修复专家。请修复以下代码中的错误。
-  
-  规则：
-  1. 只修复报错部分，保持其余代码不变
-  2. 不能引入新的 import
-  3. 不能改变策略逻辑
-  4. 修复后必须通过 ruff 检查
-  
-  返回修复后的完整代码。
-
-user: |
-  原始代码：
-  {{ code }}
-  
-  校验错误：
-  {{ errors }}
-```
-
-### 6.4 repro_analyze_strategy.yaml（策略优劣分析）
+### 6.2 repro_analyze_strategy.yaml（策略优劣分析）
 
 **输入**：抽取结果 JSON
 **输出**：分析报告 markdown
@@ -643,7 +576,7 @@ user: |
   策略信息：{{ extraction_json }}
 ```
 
-### 6.5 repro_analyze_backtest.yaml（回测结果分析）
+### 6.3 repro_analyze_backtest.yaml（回测结果分析）
 
 **输入**：回测指标 + 策略分析
 **输出**：分析报告 markdown
@@ -668,90 +601,8 @@ user: |
   已知偏差：{{ deviations }}
 ```
 
-### 6.6 repro_plan.yaml（执行步骤拆解）
 
-**输入**：wiki 知识库内容
-**输出**：执行步骤列表
-
-```yaml
-name: repro_plan
-description: "拆解策略复现的执行步骤"
-
-system: |
-  根据论文信息，拆解为具体的执行步骤。
-  每个步骤包含：
-  - order: 执行顺序
-  - action: 做什么
-  - input: 输入什么
-  - output: 输出什么
-  - dependency: 依赖哪个前置步骤
-
-user: |
-  策略信息：{{ extraction_json }}
-```
-
----
-
-## 七、SkillAction 精确设计
-
-### 7.1 2 个 SkillAction（Less is More）
-
-```python
-# 1. repro.generate — 生成代码 或 修复代码（二合一）
-class GenerateAction(SkillAction):
-    name = "generate"
-    description = "从 wiki 知识生成 backtrader 代码，或修复已有代码"
-    input_schema = {
-        "type": "object",
-        "properties": {
-            "pages": {"type": "object", "description": "wiki 页面内容"},
-            "existing_code": {"type": "string", "description": "待修复的代码（可选）"},
-            "errors": {"type": "array", "description": "上一轮的错误（可选）"}
-        },
-        "required": ["pages"]
-    }
-    handler = generate_handler  # 有 errors → repro_fix.yaml，无 → repro_codegen.yaml
-
-# 2. repro.sandbox — 验证 + 执行（二合一）
-class SandboxAction(SkillAction):
-    name = "sandbox"
-    description = "验证代码语法 + 在沙箱中执行"
-    input_schema = {
-        "type": "object",
-        "properties": {
-            "code": {"type": "string"}
-        },
-        "required": ["code"]
-    }
-    handler = sandbox_handler  # AST检查 + KernelGateway 执行
-```
-
----
-
-## 八、KernelGateway 沙箱流程
-
-```
-repro.sandbox 被调用
-  ↓
-sandbox.py:
-  1. 用 nbformat 将 code 转为 .ipynb
-  2. 启动 KernelGateway 子进程（127.0.0.1:8899）
-  3. 通过 jupyter_client 连接 kernel
-  4. 执行 notebook，超时 120s
-  5. 捕获输出（stdout/stderr/png）
-  6. 销毁 kernel + 停止 gateway
-  7. 返回结果
-
-安全约束：
-  - Gateway 不暴露公网，仅 127.0.0.1
-  - 静态扫描禁网（requests/urllib/socket 列入 DENYLIST）
-  - 输出单元格大小限制 1MB
-  - 每次复现新建 Kernel，用完销毁
-```
-
----
-
-## 九、待确认细节
+## 七、待确认细节
 
 | # | 问题 | 影响 |
 |---|---|---|
@@ -761,23 +612,27 @@ sandbox.py:
 | 4 | 代码生成粒度：单文件 vs 多文件？ | 生成策略 |
 | 5 | 知识图谱边类型：策略→因子 用什么 relation type？ | 图谱设计 |
 | 6 | WebUI：独立路由还是嵌入 Research？ | 前端工作量 |
+| 7 | LLM 成本：每篇 ~7-10 次调用（~50K-100K tokens），用户需知情 | 用户体验 |
+| 8 | 错误后恢复：重试/从失败 phase 恢复/中断清理？ | Session 管理 |
+| 9 | 用户反馈循环：调参重跑/多策略比较/导出.py？ | 功能范围 |
 
 ---
 
-## 十、简化备选方案
+## 八、简化备选方案
 
 如果 M0 POC 发现某些环节不可行：
 
 | 环节 | 可行时 | 简化方案 |
 |---|---|---|
-| KernelGateway | 用 Gateway | 降级为 subprocess + nbformat（~50行）|
-| AKShare 数据 | AKShare 全覆盖 | 降级为合成数据（SynthProvider）|
+| 数据路由 | AKShare 全覆盖 | 降级为合成数据（SynthProvider）|
 | iFinD 集成 | iFinD 可用 | 砍掉，只用 AKShare |
-| 修复循环 | 方式 B（LLM 驱动）| 降级为方式 A（固定 3 轮重试）|
+| 策略映射 | LLM 能映射到预定义信号类型 | 降级为手动填写参数 |
+| Wiki 模板 | 自动注入模板 | 降级为手动粘贴 |
+| 分析层 | LLM 分析可用 | 跳过，不阻塞回测 |
 
 ---
 
-## 十一、Session/DB 管理
+## 九、Session/DB 管理
 
 ### 复现会话表
 
@@ -788,7 +643,7 @@ CREATE TABLE reproduction_sessions (
     source_type TEXT NOT NULL,       -- pdf / url / arxiv / doi
     source_ref TEXT NOT NULL,        -- 文件路径 / URL / arXiv ID
     paper_title TEXT,
-    status TEXT NOT NULL DEFAULT 'pending',  -- pending/extracting/reproducing/validating/backtesting/done/error
+    status TEXT NOT NULL DEFAULT 'pending',  -- pending/extracting/reproducing/backtesting/done/error
     current_phase TEXT,
     progress REAL DEFAULT 0.0,
     config_json TEXT,                -- 回测配置（手续费/滑点/初始资金）
@@ -806,7 +661,7 @@ CREATE TABLE reproduction_sessions (
 CREATE TABLE reproduction_artifacts (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
-    kind TEXT NOT NULL,              -- extraction / code / validation / backtest / analysis
+    kind TEXT NOT NULL,              -- extraction / code / backtest / analysis
     wiki_page TEXT,                  -- 对应的 wiki 页名称（如 "Papers/<id>/Backtest"）
     file_path TEXT,                  -- 本地文件路径（.ipynb / .py，可选）
     score REAL,                     -- 就绪度评分 / 质量评分
@@ -837,7 +692,7 @@ CREATE TABLE reproduction_events (
 
 ---
 
-## 十二、触发机制
+## 十、触发机制
 
 复现有 3 种方式触发复现：
 
@@ -853,7 +708,7 @@ async def wiki_paper_repro_start(wiki_id, source_type, source_ref):
 
 async def wiki_paper_repro_report(session_id):
     """返回全部信息（status + artifacts + code + backtest）"""
-    # 见十六、MCP 工具实现
+    # 见十四、MCP 工具实现
     ...
 ```
 
@@ -897,22 +752,22 @@ async def run_reproduction(session_id):
         wiki.ingest_source(source)
         wiki.analyze_source(source)
 
-        # Phase 2: 论文结构化抽取 → 写入 wiki 页
-        extract_paper_structure(wiki, session.paper_title)
+        # Phase 2: 论文结构化抽取 → 写入 wiki 页 + 获取策略参数
+        db.update_status(session_id, "extracting")
+        config = await extract_paper_structure(wiki, session.paper_title)
         db.create_artifact(session_id, "extraction",
                           wiki_page=f"Papers/{session.paper_title}/Logic")
 
-        # Phase 3: 复现（A+B 结合）→ 代码写入 wiki 页
-        db.update_status(session_id, "reproducing")
-        code = await reproduce(wiki, session.paper_title)
-        wiki.write_page(f"Papers/{session.paper_title}/Code", code)
-        db.create_artifact(session_id, "code",
-                          wiki_page=f"Papers/{session.paper_title}/Code")
+        # Phase 3: 数据获取（缓存优先）
+        db.update_status(session_id, "fetching_data")
+        data = await DataRouter.get(config['data_config'])
 
-        # Phase 4: 验证（回测）→ 结果写入 wiki 页
+        # Phase 4: 回测 → 结果写入 wiki 页
         db.update_status(session_id, "backtesting")
-        backtest_result = await run_backtest(wiki, session.paper_title, code)
-        wiki.write_page(f"Papers/{session.paper_title}/Backtest", backtest_result["report"])
+        backtest_result = BacktestRunner.run(
+            GenericStrategy, config, data
+        )
+        wiki.write_page(f"Papers/{session.paper_title}/Backtest", backtest_result['report'])
         db.update_session(session_id, backtest_wiki_page=f"Papers/{session.paper_title}/Backtest")
         db.create_artifact(session_id, "backtest",
                           wiki_page=f"Papers/{session.paper_title}/Backtest")
@@ -931,7 +786,7 @@ async def run_reproduction(session_id):
 
 ---
 
-## 十三、错误处理策略
+## 十一、错误处理策略
 
 ### 每层失败处理
 
@@ -941,12 +796,11 @@ async def run_reproduction(session_id):
 | 输入层 | 文件损坏/空文件 | 返回错误，提示用户检查文件 |
 | 理解层 | LLM 抽取失败 | 重试 2 次，失败则标记 session 为 error |
 | 理解层 | 抽取结果不完整 | 按已有内容写入，标注缺失字段 |
-| 复现层 | 代码生成失败 | 重试 1 次，失败则标记 session 为 error |
-| 复现层 | 校验失败 | 方式 B 修复循环（≤3 轮）|
-| 复现层 | 修复循环耗尽 | 保存当前代码，标注未通过校验 |
-| 验证层 | KernelGateway 启动失败 | 降级为 subprocess（备选方案）|
+| 理解层 | LLM 无法映射到已知策略类型 | 标记 strategy_type 为 unknown，提示用户手动指定 |
+| 复现层 | 策略参数配置错误 | 验证参数合法性，报具体字段错误 |
 | 验证层 | 回测执行超时 | 终止执行，标注超时 |
-| 验证层 | AKShare 数据不可用 | fallback 到 SynthProvider |
+| 验证层 | AKShare 数据不可用 | fallback 到 DataCache，再 fallback 到 SynthProvider |
+| 验证层 | 数据缓存查不到 | 同 AKShare fallback 流程 |
 | 分析层 | LLM 分析失败 | 跳过分析，标注未完成 |
 
 ### 全局错误处理
@@ -964,36 +818,33 @@ async def run_reproduction(session_id):
 
 ---
 
-## 十四、测试策略
+## 十二、测试策略
 
 ### 单元测试（每个模块独立）
 
 | 测试文件 | 覆盖 | 行数 |
 |---|---|---|
 | `tests/strategy/reproduction/test_extract.py` | 论文结构化抽取 | ~100 |
-| `tests/strategy/reproduction/test_skills.py` | 2 个 SkillAction | ~80 |
-| `tests/strategy/reproduction/test_backtest.py` | backtrader 封装 | ~100 |
+| `tests/strategy/reproduction/test_backtest.py` | 预写策略 + backtrader 封装 | ~120 |
+| `tests/strategy/reproduction/test_config.py` | 配置验证 | ~40 |
 | `tests/strategy/data/test_router.py` | DataRouter | ~80 |
-| `tests/strategy/data/test_akshare.py` | AKShare Provider | ~60 |
+| `tests/strategy/data/test_cache.py` | 数据缓存 | ~80 |
 
 ### 集成测试（端到端）
 
 | 测试 | 内容 | 耗时 |
 |---|---|---|
 | `test_e2e_extract` | PDF → wiki 页面 | ~30s |
-| `test_e2e_reproduce` | wiki → 代码生成 | ~60s |
-| `test_e2e_backtest` | 代码 → 回测报告 | ~60s |
-| `test_e2e_full` | PDF → 回测报告（全链路）| ~120s |
+| `test_e2e_full` | PDF → 抽取 → 回测 → 报告（全链路）| ~90s |
 
 ### Mock 策略
 
 - LLM 调用：用固定返回值 mock（不烧 token）
-- AKShare：用缓存的 DataFrame mock
-- KernelGateway：用 subprocess mock
+- AKShare：用缓存的 DataFrame mock（无网络调用）
 
 ---
 
-## 十五、wiki.md 集成方式
+## 十三、wiki.md 集成方式
 
 ### 方案：用户手动写入（Phase 1）
 
@@ -1038,7 +889,7 @@ def inject_papers_template(wiki_root):
 
 ---
 
-## 十六、MCP 工具实现
+## 十四、MCP 工具实现
 
 > 原则 7（Less is More）：只暴露 2 个工具，不拆分细粒度 API。
 
@@ -1075,7 +926,7 @@ async def handle_report(session_id):
 
 ---
 
-## 十七、arXiv/DOI 输入适配
+## 十五、arXiv/DOI 输入适配
 
 ### arXiv
 
@@ -1126,57 +977,55 @@ async def extract_broker_report(pdf_path: str) -> str:
 
 ---
 
-## 十八、文件清单
+## 十六、文件清单
 
 | 文件 | 行数 | 说明 |
 |---|---|---|
 | `strategy/reproduction/config.py` | ~50 | AKShare/iFinD/backtest 配置 |
 | `strategy/reproduction/extract.py` | ~80 | 论文结构化抽取（调 LLM + write_page）|
-| `strategy/reproduction/backtest.py` | ~250 | backtrader 薄封装 |
+| `strategy/reproduction/backtest.py` | ~350 | 预写通用策略 + backtrader 封装 |
 | `strategy/reproduction/wiki_template.py` | ~50 | wiki.md 模板注入 |
 | `strategy/data/router.py` | ~120 | AKShare + iFinD 路由 |
-| `apps/chat/skills/actions/repro_action.py` | ~200 | 2 个 SkillAction（generate + sandbox）|
-| `prompts/_defaults/repro_extract.yaml` | ~80 | 结构化抽取 |
+| `strategy/data/cache.py` | ~100 | AKShare 数据本地缓存 |
+| `prompts/_defaults/repro_extract.yaml` | ~80 | 结构化抽取（含策略类型映射）|
 | `prompts/_defaults/repro_analyze_strategy.yaml` | ~60 | 策略优劣分析 |
-| `prompts/_defaults/repro_codegen.yaml` | ~100 | 代码生成 |
-| `prompts/_defaults/repro_fix.yaml` | ~60 | 代码修复 |
 | `prompts/_defaults/repro_analyze_backtest.yaml` | ~80 | 回测分析 |
-| `prompts/_defaults/repro_plan.yaml` | ~50 | 执行步骤拆解 |
 | `web/webui/src/pages/Reproduction/index.tsx` | ~200 | 主页面 |
 | `web/webui/src/pages/Reproduction/NewSession.tsx` | ~150 | 新建会话 |
 | `web/webui/src/pages/Reproduction/Detail.tsx` | ~200 | 详情（5个tab）|
 | `web/webui/src/components/BacktestChart.tsx` | ~100 | 净值曲线 |
 | `web/webui/src/components/ReadinessBadge.tsx` | ~50 | 就绪度徽章 |
-| **合计** | **~1910** | **Python ~910 + YAML ~430 + TS ~700** |
+| **合计** | **~1690** | **Python ~910 + YAML ~220 + TS ~700** |
 
 ---
 
-## 十九、时间线
+## 十七、时间线
 
 | 周 | 里程碑 | 交付 |
 |---|---|---|
-| W1 | M0 骨架 | config + 路由 + Skill 注册 + POC 验证 |
-| W2-3 | M1 理解层 | 3 篇论文端到端 → wiki 页 + 图谱 + 策略分析 |
-| W4-5 | M2 复现层 | Skill 生成代码 + sandbox 跑通 |
-| W6-7 | M3 验证层 | AKShare/iFinD + 回测报告 + 偏差声明 |
+| W1 | M0 骨架 | config + backtest.py 骨架 + DataCache + 路由 + POC |
+| W2-3 | M1 理解层 | 3 篇论文端到端 → wiki 页 + 策略类型映射 |
+| W4-5 | M2 复现层 | backtest.py 预写策略 + extract.py 参数直调 |
+| W6-7 | M3 验证层 | DataCache + AKShare/iFinD + 回测报告 |
 | W8 | M4 分析层 | 结果分析 + 优化建议 + 全链路串通 |
 | W9-10 | M5 Multi-input | arXiv/DOI/券商研报 |
-| W11-12 | M6 测试 + RC | e2e 30+、性能、文档、v0.4.0-rc |
+| W11-12 | M6 测试 + RC | e2e 20+、性能、文档、v0.4.0-rc |
 | W13-16 | 缓冲 | bug fix、边缘场景、优化 |
 
 ---
 
-## 二十、M0 POC 验证（3 个快速验证）
+## 十八、M0 POC 验证（4 个快速验证）
 
 | POC | 内容 | 耗时 | 目的 |
 |---|---|---|---|
 | AKShare 数据 | 能否拿到 A 股日线？期货？期权？ | 30min | 验证数据源可用性 |
-| wiki.md 模板 | repro_extract prompt 能否从 Source Summary 生成正确页面？ | 1h | 验证抽取可行性 |
-| KernelGateway | 能否启动 + 执行简单 notebook？ | 30min | 验证沙箱可行性 |
+| DataCache | 缓存读写 + 与 AKShare 集成 | 30min | 验证缓存机制 |
+| wiki.md 模板 | repro_extract prompt 能否从 Source Summary 生成正确参数？ | 1h | 验证抽取可行性 |
+| **最小 E2E** | Source Summary → repro_extract → 参数 → backtest.py 执行 + AKShare → 输出指标 | **2h** | 验证全链路无断裂点 |
 
 ---
 
-## 二十一、依赖
+## 十九、依赖
 
 ```toml
 [project.optional-dependencies]
@@ -1196,7 +1045,7 @@ ifind = [
 
 ---
 
-## 二十二、MCP 工具列表
+## 二十、MCP 工具列表
 
 | 工具名 | 参数 | 返回 |
 |---|---|---|
@@ -1205,13 +1054,15 @@ ifind = [
 
 ---
 
-## 二十三、风险与缓解
+## 二十一、风险与缓解
 
 | 风险 | 缓解 |
-|---|---|
+|---|---|---|
 | 论文回测数字对不上 | UI「已知偏差」模板 + 逻辑一致 ≠ 数字一致 |
-| KernelGateway 复杂度 | M0 POC 验证，失败则降级为 subprocess |
 | LLM 不可重现 | seed + low temp + prompt 版本号 |
 | iFinD 无 token | fallback 到 AKShare |
 | 券商研报 OCR 成本 | 仅按需触发 |
-| 代码生成质量 | 三层校验 + smoke test |
+| 策略类型映射失败 | LLM 无法映射到已知类型 → 标记 unknown，提示用户手动选择 |
+| AKShare 数据不可靠 | DataCache 缓存 + SynthProvider 兜底 |
+| **LLM 调用成本** | **~3-4 次/篇（提取 + 策略分析 + 回测分析），比代码生成方案减少 ~50%** |
+| **WebUI 复杂度** | **M0 评估砍掉 ReadinessBadge，合并页面** |

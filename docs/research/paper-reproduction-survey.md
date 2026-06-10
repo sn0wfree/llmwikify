@@ -127,7 +127,7 @@ Markdown 全文
 | 代码生成正确性 | LLM 多次 + 单元测试 + nbconvert execute | 静态校验 + smoke test + sandbox |
 | 回测结果复现度 | 固定数据源 + 固定手续费/滑点 + 明确披露 | config 强约束，结果页 + 「已知偏差」声明 |
 | LLM 不可重现 | 固定 seed + low temperature + 显式 prompt 版本 | PromptRegistry 已支持 |
-| 数据源授权 | Tushare + AKShare + iFinD 三级 fallback | AKShare（主）+ iFinD（补）|
+| 数据源授权 | AKShare（主）+ iFinD（补），不用 Tushare | AKShare（主）+ iFinD（补）|
 | 券商研报 (中文+图片) | PaddleOCR + 多模态 LLM | Phase 3 评估中 |
 
 ---

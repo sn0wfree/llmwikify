@@ -89,14 +89,14 @@ class ChatEvent:
         return {"type": "error", "message": message}
 
     @staticmethod
-    def save_warning(message: str) -> dict:
-        """Non-fatal DB persistence warning (Phase 1.2 / v0.36).
+    def save_warning(reason: str) -> dict:
+        """Non-fatal DB persistence warning.
 
         Returned alongside the chat flow so the frontend can
         optionally surface persistence issues without aborting
         the user-visible response.
         """
-        return {"type": "save_warning", "message": message}
+        return {"type": "save_warning", "reason": reason}
 
 
 # ─── Per-session conversation state ───────────────────────────────
@@ -336,8 +336,6 @@ class ChatService(ChatBase):
         if result.get("status") == "error":
             yield ChatEvent.error(result.get("error", "Confirmation failed"))
             return
-
-        yield ChatEvent.tool_call_end("confirmation_approved", result)
 
         ctx = await self._get_or_create_context(session_id, wiki_id)
         tool_result_str = json.dumps(result.get("result", result))
@@ -653,7 +651,7 @@ class ChatService(ChatBase):
         if kind == "round_complete":
             return None  # internal — not sent to frontend
         if kind == "observation_error":
-            return ChatEvent.error(event.get("error", "observation failed"))
+            return ChatEvent.save_warning(event.get("error", "observation failed"))
         if kind == "action_error":
             return {
                 "type": "tool_call_error",
@@ -712,10 +710,17 @@ class ChatService(ChatBase):
             if phase == "timeout":
                 return ChatEvent.error("ReAct loop timed out")
             if phase == "incomplete":
-                return ChatEvent.done(
-                    final_state.get("final_answer", "")
-                    if isinstance(final_state, dict) else "",
-                )
+                msg = "研究未完成所有阶段"
+                if isinstance(final_state, dict):
+                    if final_state.get("synthesis"):
+                        msg = "研究分析已完成，但未生成完整报告"
+                    elif final_state.get("sources"):
+                        msg = f"已收集 {len(final_state.get('sources', []))} 个来源，但未完成分析"
+                    elif final_state.get("sub_queries"):
+                        msg = "已规划子查询，但未收集到来源"
+                    elif final_state.get("final_answer"):
+                        msg = final_state["final_answer"]
+                return ChatEvent.done(msg)
         # Pass through: message_delta, thinking, tool_call_start,
         # tool_call_end, confirmation_required, error, save_warning
         return event
@@ -880,70 +885,6 @@ class ChatService(ChatBase):
         except Exception as e:
             self.db.update_tool_call(call_id, {"error": str(e)}, "error")
             return {"status": "error", "error": str(e)}
-
-    async def _dispatch_tool_call(
-        self,
-        tool_name: str,
-        args: dict,
-        tool_registry: Any,
-        session_id: str,
-        ctx: AgentContext,
-    ) -> AsyncIterator[dict]:
-        """Run a single tool call and yield the matching SSE events.
-
-        Used by both the native ``tool_call`` event path and the
-        text-mode ``[TOOL_CALL]...[/TOOL_CALL]`` detection path so
-        both sources go through the same confirmation / persistence
-        logic.
-
-        Phase 3.3 (v0.36): persists the tool result to
-        ``MemoryManager.context`` so future related-history
-        searches can surface it.
-        """
-        yield ChatEvent.tool_call_start(tool_name, args)
-        entry = {
-            "tool": tool_name, "args": args, "status": "pending",
-        }
-        ctx._tool_calls[tool_name] = entry
-        result = await self._execute_tool(
-            tool_name, args, tool_registry, session_id, ctx,
-        )
-        entry["result"] = result
-        entry["status"] = "done"
-        yield ChatEvent.tool_call_end(tool_name, result)
-
-        # ReAct observation: track the tool result for the next
-        # reasoning step.  The observation is a concise summary
-        # that the LLM can use to decide its next action.
-        result_summary = json.dumps(
-            result.get("result", result)
-            if isinstance(result, dict) else result,
-            ensure_ascii=False, default=str,
-        )[:self._chat_config["summary_truncate_chars"]]
-        ctx.add_observation(f"Called {tool_name}: {result_summary}")
-
-        # Phase 3.3 (v0.36): persist tool result to
-        # MemoryManager.context (best-effort; failures are
-        # logged but never block the chat).
-        await self._persist_tool_result(session_id, tool_name, args, result)
-
-        if (
-            isinstance(result, dict)
-            and result.get("status") == "confirmation_required"
-        ):
-            conf_id = result.get("confirmation_id", "")
-            yield ChatEvent.confirmation_required(
-                conf_id, tool_name, args,
-                result.get("impact", {}),
-            )
-        else:
-            tool_result_str = json.dumps(
-                result.get("result", result)
-                if isinstance(result, dict) else result
-            )
-            ctx.add_assistant_message(
-                f"[TOOL: {tool_name}] Result: {tool_result_str}"
-            )
 
     async def _persist_tool_result(
         self,
