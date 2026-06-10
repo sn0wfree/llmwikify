@@ -87,7 +87,9 @@ document: |
 
   | Type | Location | Purpose |
   |------|----------|---------|
-  | *(add your custom types here)* | `wiki/{subdir}/{pattern}.md` | *(describe purpose)* |
+  | TradingStrategy | `wiki/trading/{slug}.md` | Trading strategy extracted from a paper. Frontmatter must include `signal_type` (e.g. `ma_cross`, `rsi`, `momentum`, `volatility`, `factor_rank`, `signal_composite`) and `signal_params` (dict of strategy parameters). |
+  | BacktestResult | `wiki/backtest/{slug}.md` | Backtest outcome for a TradingStrategy. Frontmatter must include `strategy_ref` (slug), `symbol`, `start`, `end`, and metrics: `sharpe_ratio`, `max_drawdown`, `win_rate`, `total_return`, `final_cash`. |
+  | Optimization | `wiki/optimization/{slug}.md` | Parameter-sensitivity or hyperparameter sweep notes for a strategy. Frontmatter must include `strategy_ref`, `parameter_grid`, `best_params`. |
 
   ## Core Tools
 
