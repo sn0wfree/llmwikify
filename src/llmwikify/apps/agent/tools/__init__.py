@@ -682,7 +682,11 @@ class WikiToolRegistry:
     async def execute(self, name: str, arguments: dict[str, Any]) -> Any:
         tool = self._tools.get(name)
         if tool is None:
-            raise ValueError(f"Unknown tool: {name}")
+            available = ", ".join(sorted(self._tools.keys()))
+            raise ValueError(
+                f"Unknown tool: {name!r}. "
+                f"Available tools: [{available}]"
+            )
 
         confirmation_mode = tool.get("requires_confirmation", False)
 

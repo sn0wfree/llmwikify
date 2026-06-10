@@ -521,6 +521,19 @@ class ChatReActBridge:
                 tool_name = call["name"]
                 args = call.get("args", {}) or {}
 
+                # Skip malformed tool calls with empty names — these
+                # are streaming artifacts (incomplete tool_call deltas)
+                # and should not be dispatched or appended to the
+                # conversation, as they would confuse the LLM on the
+                # next round.
+                if not tool_name:
+                    await emit({
+                        "type": "tool_call_error",
+                        "tool": "",
+                        "error": "Skipped malformed tool call with empty name",
+                    })
+                    continue
+
                 # Update AgentContext (mirrors _dispatch_tool_call)
                 await emit({
                     "type": "tool_call_start",

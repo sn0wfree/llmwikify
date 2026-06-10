@@ -346,6 +346,7 @@ class StreamableLLMClient(LLMClient):
                 resp.close()
                 raise _format_http_error(resp.status_code, url, body)
             accumulated = ""
+            tool_call_buffer: dict[int, dict] = {}
             for line in resp.iter_lines():
                 if not line:
                     continue
@@ -374,18 +375,34 @@ class StreamableLLMClient(LLMClient):
 
                 if "tool_calls" in delta:
                     for tc in delta["tool_calls"]:
+                        idx = tc.get("index", 0)
+                        if idx not in tool_call_buffer:
+                            tool_call_buffer[idx] = {
+                                "id": tc.get("id", ""),
+                                "name": "",
+                                "args_parts": [],
+                            }
+                        entry = tool_call_buffer[idx]
+                        if "id" in tc and tc["id"]:
+                            entry["id"] = tc["id"]
                         func = tc.get("function", {})
-                        yield {
-                            "type": "tool_call",
-                            "tool": func.get("name", ""),
-                            "args": func.get("arguments", ""),
-                        }
+                        if "name" in func and func["name"]:
+                            entry["name"] = func["name"]
+                        if "arguments" in func and func["arguments"]:
+                            entry["args_parts"].append(func["arguments"])
 
                 finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
                 # "length" must also emit "done" — otherwise callers waiting
                 # for the done event would hang when the model hits
                 # max_tokens mid-stream.
                 if finish in ("stop", "tool_calls", "length"):
+                    for entry in tool_call_buffer.values():
+                        yield {
+                            "type": "tool_call",
+                            "tool": entry["name"],
+                            "args": "".join(entry["args_parts"]),
+                        }
+                    tool_call_buffer.clear()
                     yield {
                         "type": "done",
                         "content": accumulated,
@@ -434,6 +451,7 @@ class StreamableLLMClient(LLMClient):
                     body = await resp.aread()
                     raise _format_http_error(resp.status_code, url, body)
                 accumulated = ""
+                tool_call_buffer: dict[int, dict] = {}
                 async for line in resp.aiter_lines():
                     if not line:
                         continue
@@ -462,18 +480,34 @@ class StreamableLLMClient(LLMClient):
 
                     if "tool_calls" in delta:
                         for tc in delta["tool_calls"]:
+                            idx = tc.get("index", 0)
+                            if idx not in tool_call_buffer:
+                                tool_call_buffer[idx] = {
+                                    "id": tc.get("id", ""),
+                                    "name": "",
+                                    "args_parts": [],
+                                }
+                            entry = tool_call_buffer[idx]
+                            if "id" in tc and tc["id"]:
+                                entry["id"] = tc["id"]
                             func = tc.get("function", {})
-                            yield {
-                                "type": "tool_call",
-                                "tool": func.get("name", ""),
-                                "args": func.get("arguments", ""),
-                            }
+                            if "name" in func and func["name"]:
+                                entry["name"] = func["name"]
+                            if "arguments" in func and func["arguments"]:
+                                entry["args_parts"].append(func["arguments"])
 
                     finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
                     # "length" must also emit "done" — otherwise callers waiting
                     # for the done event would hang when the model hits
                     # max_tokens mid-stream.
                     if finish in ("stop", "tool_calls", "length"):
+                        for entry in tool_call_buffer.values():
+                            yield {
+                                "type": "tool_call",
+                                "tool": entry["name"],
+                                "args": "".join(entry["args_parts"]),
+                            }
+                        tool_call_buffer.clear()
                         yield {
                             "type": "done",
                             "content": accumulated,
