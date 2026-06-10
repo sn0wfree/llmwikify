@@ -1,0 +1,96 @@
+name: repro_extract
+description: "Extract structured information from a paper/research report for strategy reproduction."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "repro_extract"
+
+params:
+  max_tokens: 4096
+  temperature: 0.1
+  max_content_chars: 32000
+
+system: |
+  You are a quantitative research analyst. Extract structured information from
+  academic papers and research reports for strategy reproduction.
+
+  Your task: Given a paper's content, extract 8 categories of structured information
+  and output them as JSON. Be precise, factual, and concise.
+
+  禁止事项:
+  - Do NOT fabricate information not present in the source
+  - Do NOT add speculative content — mark uncertain items as "TBD"
+  - Use English for technical terms, Chinese for descriptions
+
+  Output format: strict JSON with the following structure.
+
+user: |
+  Extract structured information from this paper for strategy reproduction.
+
+  Paper ID: {{ paper_id }}
+  Source type: {{ source_type }}
+  Source reference: {{ source_ref }}
+
+  Paper content:
+  ---
+  {{ paper_content }}
+  ---
+
+  Extract the following 8 categories and output as JSON:
+
+  ```json
+  {
+    "strategy_logic": {
+      "core_hypothesis": "string - the core hypothesis of the strategy",
+      "market_logic": "string - why this strategy should work",
+      "alpha_source": "string - where does the alpha come from",
+      "applicable_conditions": "string - market conditions where this works"
+    },
+    "data_requirements": {
+      "fields": ["list of required data fields"],
+      "frequency": "string - daily/hourly/minute",
+      "universe": "string - stock universe",
+      "data_source": "string - where to get the data"
+    },
+    "operation_steps": {
+      "signal_generation": "string - how signals are generated",
+      "position_sizing": "string - position sizing rules",
+      "rebalance_frequency": "string - how often to rebalance",
+      "stop_loss": "string - stop loss rules",
+      "transaction_cost": "string - cost assumptions"
+    },
+    "model_framework": {
+      "model_type": "string - technical/fundamental/quantitative",
+      "framework": "string - specific framework used",
+      "validation": "string - how to validate",
+      "evaluation_metrics": ["list of evaluation metrics"]
+    },
+    "strengths_weaknesses": {
+      "strengths": ["list of advantages"],
+      "weaknesses": ["list of disadvantages"],
+      "improvement_directions": ["list of possible improvements"]
+    },
+    "datasets": {
+      "name": "string - dataset name",
+      "source": "string - where to get it",
+      "time_range": "string - date range used",
+      "processing": "string - any data processing applied"
+    },
+    "risks": {
+      "known_limitations": ["list of known limitations"],
+      "assumption_risks": ["list of assumptions that may fail"],
+      "implementation_gaps": ["list of gaps between theory and practice"]
+    },
+    "references": {
+      "original_paper": "string - paper citation",
+      "related_papers": ["list of related papers"],
+      "code_repositories": ["list of code repos if any"]
+    },
+    "suggested_signal": {
+      "signal_type": "string - one of: ma_cross, rsi, momentum, volatility, factor_rank, signal_composite, unknown",
+      "signal_params": {"key": "value pairs for the suggested signal"},
+      "confidence": "string - high/medium/low",
+      "reasoning": "string - why this signal type was chosen"
+    }
+  }
+  ```
