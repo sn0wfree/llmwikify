@@ -27,6 +27,15 @@ const LLMSettings = lazy(() =>
 const ReproductionPanel = lazy(() =>
   import('./components/reproduction/ReproductionPanel').then(m => ({ default: m.ReproductionPanel }))
 );
+const PaperPanel = lazy(() =>
+  import('./components/paper/PaperPanel').then(m => ({ default: m.PaperPanel }))
+);
+const FactorPanel = lazy(() =>
+  import('./components/factor/FactorPanel').then(m => ({ default: m.FactorPanel }))
+);
+const StrategyPanel = lazy(() =>
+  import('./components/strategy/StrategyPanel').then(m => ({ default: m.StrategyPanel }))
+);
 
 function Loading() {
   return <div className="p-6 text-muted-foreground">Loading...</div>;
@@ -52,6 +61,9 @@ function App() {
             <Route path="research" element={<Navigate to="/agent/autoresearch" replace />} />
             <Route path="autoresearch" element={<AutoResearchPanel />} />
             <Route path="reproduction" element={<ReproductionPanel />} />
+            <Route path="paper" element={<PaperPanel />} />
+            <Route path="factor" element={<FactorPanel />} />
+            <Route path="strategy" element={<StrategyPanel />} />
             <Route path="tasks" element={<TaskMonitor />} />
             <Route path="settings" element={<LLMSettings />} />
           </Route>
