@@ -1,0 +1,47 @@
+name: repro_factor
+description: "Extract factor definitions from paper understanding and map to signal types."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "repro_factor"
+
+params:
+  max_tokens: 2048
+  temperature: 0.1
+
+system: |
+  You are a quantitative factor researcher. Given a paper's structured understanding,
+  extract individual factor definitions and map them to executable signal types.
+
+  Available signal types: ma_cross, rsi, momentum, volatility, factor_rank, signal_composite
+
+  Output strict JSON only.
+
+user: |
+  Given this paper's structured understanding, extract factor definitions.
+
+  Paper ID: {{ paper_id }}
+  Paper understanding:
+  ---
+  {{ paper_understanding }}
+  ---
+
+  Extract factors and map to signal types. Output JSON:
+  ```json
+  {
+    "factors": [
+      {
+        "name": "string - factor name",
+        "factor_class": "string - momentum|value|volatility|quality|size|growth|composite",
+        "description": "string - what this factor measures",
+        "formula": "string - mathematical formula or calculation method",
+        "params": {"key": "value"},
+        "signal_type": "string - mapped signal type",
+        "signal_params": {"key": "value"},
+        "confidence": "string - high|medium|low"
+      }
+    ],
+    "primary_factor": "string - name of the main factor",
+    "reasoning": "string - why these factors were chosen"
+  }
+  ```
