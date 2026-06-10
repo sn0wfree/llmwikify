@@ -209,11 +209,11 @@ export function AgentChat() {
             }
             case 'confirmation_required':
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
-              setPendingConfirmation({ confirmationId: event.confirmation_id, tool: 'confirmation_required', args: {}, impact: (event.details || {}) as Record<string, unknown>, group: undefined });
+              setPendingConfirmation({ confirmationId: event.confirmation_id, tool: event.tool, args: event.args, impact: (event.impact || {}) as Record<string, unknown>, group: undefined });
               break;
             case 'done': {
               const thinkingSnapshot = currentThinkingRef.current;
@@ -361,11 +361,11 @@ export function AgentChat() {
             }
             case 'confirmation_required':
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.tool === 'confirmation_required' ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
-              setPendingConfirmation({ confirmationId: event.confirmation_id, tool: 'confirmation_required', args: {}, impact: (event.details || {}) as Record<string, unknown>, group: undefined });
+              setPendingConfirmation({ confirmationId: event.confirmation_id, tool: event.tool, args: event.args, impact: (event.impact || {}) as Record<string, unknown>, group: undefined });
               break;
             case 'done': {
               const thinkingSnapshot = currentThinkingRef.current;

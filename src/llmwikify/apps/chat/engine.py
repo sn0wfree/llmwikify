@@ -20,6 +20,13 @@ from llmwikify.apps.chat.db import AutoResearchDatabase
 from llmwikify.apps.chat.providers.registry import create_llm
 from llmwikify.apps.chat import actions
 from llmwikify.apps.chat.actions import ActionContext
+from llmwikify.apps.chat.agent.react_engine import (
+    ReActConfig,
+    ReActEngine,
+    SkillAction,
+    SkillContext,
+    SkillResult,
+)
 from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
 from llmwikify.apps.chat.config import merge_six_step_config
 from llmwikify.apps.chat.gatherer import SourceGatherer
@@ -213,314 +220,221 @@ class ResearchEngine:
             "done":       partial(actions.action_done, self._action_ctx),
         }
 
-        try:
-            async for event in self._react_loop(session_id, query, resume):
-                self._check_timeout()
-                yield event
-        except TimeoutError:
-            self.session_manager.update_status(session_id, "timeout", "timeout", -1)
-            yield {"type": "error", "error": f"Research timed out after {self._timeout_seconds}s"}
-        except Exception:
-            raise
-        finally:
-            # Finalize metrics and log summary
-            if self._metrics:
-                self._metrics.finish()
-                logger.info("Research metrics:\n%s", self._metrics.summary())
-
-    # ─── ReAct Core Loop ───────────────────────────────────────────────
-
-    async def _react_loop(
-        self, session_id: str, query: str, resume: bool
-    ) -> AsyncIterator[dict[str, Any]]:
-        """Main ReAct loop: Reason → Act → Observe → repeat."""
+        # Build initial state
         state = ResearchState(
             session_id=session_id,
             query=query,
             max_rounds=self._max_react_rounds,
         )
-
-        # Load existing state on resume
         if resume:
             self._load_resume_state(state)
 
-        # ─── 6-step framework: run clarify before the first plan ───
+        # Pre-loop: run clarify before the first plan
         if not resume and state.clarification is None:
             async for event in self._action_dispatch["clarify"](state):
                 yield event
 
+        # Build ReActConfig wired to ResearchEngine's domain logic
+        config = self._build_react_config(state)
+        engine = ReActEngine(config)
+
         try:
-            while state.phase != "done":
-                self._check_timeout()
-                elapsed = time.monotonic() - self._start_time
-                state.budget_remaining = max(0, 1 - elapsed / self._timeout_seconds)
-
-                # ── Check cancel/pause signals from DB ──
-                self._check_control_signals(state)
-                if state.cancelled:
-                    yield {"type": "cancelled", "round": state.round, "phase": state.phase}
-                    self.session_manager.update_status(session_id, "cancelled", state.phase, -1)
-                    break
-                if state.paused:
-                    yield {"type": "paused", "round": state.round, "phase": state.phase}
-                    self.session_manager.update_status(session_id, "paused", state.phase, state.round)
-                    break
-
-                # ── REASON: decide next action (ReAct Thought) ──
-                action = await self._reason(state)
-                thought = getattr(state, "_last_thought", "")
-                yield {
-                    "type": "reasoning",
-                    "action": action,
-                    "thought": thought,
-                    "round": state.round,
-                    "phase": state.phase,
-                }
-
-                # ── Framework compliance gate: block 'done' if any 6-step
-                #    framework field is missing. Either redirect to the
-                #    missing action (if budget allows) or mark incomplete.
-                #    When strict_exit=True (default v6), also enforce quality
-                #    thresholds (review approved, quality_score, gaps, sources).
-                if action == "done":
-                    if self.config.get("strict_exit", True):
-                        non_compliant = self._check_quality_compliance(state)
-                        redirect_type = "quality_redirect"
-                        gate_label = "Strict exit gate"
-                    else:
-                        non_compliant = self._check_framework_compliance(state)
-                        redirect_type = "framework_redirect"
-                        gate_label = "Framework compliance gate"
-                    if non_compliant is not None:
-                        if self._can_replan(state):
-                            logger.info(
-                                "%s: %s → redirecting done→%s",
-                                gate_label, non_compliant["reason"], non_compliant["missing"],
-                            )
-                            yield {
-                                "type": redirect_type,
-                                "from": "done",
-                                "to": non_compliant["missing"],
-                                "reason": non_compliant["reason"],
-                                "round": state.round,
-                            }
-                            action = non_compliant["missing"]
-                        else:
-                            logger.warning(
-                                "%s failed and no budget: %s",
-                                gate_label, non_compliant["reason"],
-                            )
-                            async for ev in self._action_incomplete(
-                                state, non_compliant["reason"],
-                            ):
-                                yield ev
-                            break
-
-                # ── ACT: execute action via dispatch table ──
-                action_method = self._action_dispatch.get(action)
-                if action_method is None:
-                    # Unknown action → default to done (safe fallback)
-                    logger.warning("Unknown action %s, defaulting to done", action)
-                    action_method = self._action_dispatch["done"]
-                async for event in action_method(state):
+            async for event in engine.run(SkillContext(
+                session_id=session_id,
+                wiki=self.wiki,
+                db=self.db,
+                llm_client=self._default_llm,
+                config=self.config,
+                metrics=self._metrics,
+            )):
+                # Emit domain-specific events that ReActEngine doesn't produce
+                event_type = event.get("type")
+                if event_type == "phase":
+                    phase = event.get("phase")
+                    if phase == "cancelled":
+                        yield {"type": "cancelled", "round": state.round, "phase": state.phase}
+                        self.session_manager.update_status(session_id, "cancelled", state.phase, -1)
+                    elif phase == "paused":
+                        yield {"type": "paused", "round": state.round, "phase": state.phase}
+                        self.session_manager.update_status(session_id, "paused", state.phase, state.round)
+                    elif phase == "timeout":
+                        yield {"type": "error", "error": f"Research timed out after {self._timeout_seconds}s"}
+                        self.session_manager.update_status(session_id, "timeout", state.phase, -1)
+                elif event_type == "reasoning":
+                    # Add phase to reasoning events (ReActEngine doesn't know about phases)
+                    event["phase"] = state.phase
                     yield event
-                if action == "done":
-                    break
-
-                # ── OBSERVE: update state from DB ──
-                self._observe(state)
-
-                # ── Quality gate check ──
-                if self.config.get("gate_enabled", True):
-                    gate_result = self._evaluate_gate(state)
-                    if gate_result:
-                        state.observations.append(
-                            f"[质量门禁] {gate_result.gate_name}: {gate_result.summary}"
-                        )
-                        if not gate_result.passed:
-                            state.observations.append(
-                                f"⚠ 门禁未通过，建议: {gate_result.suggestion}"
-                            )
-                            # Force transition: if gate fails after gathering and we have sources,
-                            # override action to analyze instead of stuck in gather loop
-                            if (state.phase == "gathering"
-                                    and len(state.sources) >= self.config.get("gate_min_sources", 3)
-                                    and action == "gather"):
-                                action = "analyze"
-                                logger.info("Gate %s failed, forcing analyze (have %d sources)",
-                                            gate_result.gate_name, len(state.sources))
-
-                # ── Track iteration count ──
-                state.round += 1
-
-                # ── Evaluate: check exit conditions ──
-                if state.round >= state.max_rounds:
-                    # Framework compliance gate: do not exit to 'done' if
-                    # any 6-step field is missing — mark incomplete instead.
-                    # When strict_exit=True, also block on quality thresholds.
-                    if self.config.get("strict_exit", True):
-                        non_compliant = self._check_quality_compliance(state)
-                        gate_label = "Strict exit gate"
-                    else:
-                        non_compliant = self._check_framework_compliance(state)
-                        gate_label = "Framework compliance gate"
-                    if non_compliant is not None:
-                        logger.warning(
-                            "Max rounds reached, %s failed: %s",
-                            gate_label, non_compliant["reason"],
-                        )
-                        yield {
-                            "type": "round_max",
-                            "round": state.round,
-                            "message": (
-                                f"Reached max rounds ({state.max_rounds}) "
-                                f"with {gate_label} failing"
-                            ),
-                        }
-                        async for ev in self._action_incomplete(
-                            state, f"max_rounds: {non_compliant['reason']}",
-                        ):
-                            yield ev
-                        break
-                    yield {
-                        "type": "round_max",
-                        "round": state.round,
-                        "message": f"Reached max rounds ({state.max_rounds})",
-                    }
-                    async for event in self._action_done(state):
-                        yield event
-                    break
+                else:
+                    yield event
         except Exception as e:
-            # Catch-all: ensure DB status is always updated on unexpected errors
             logger.error("ReAct loop error for session %s: %s", session_id, e, exc_info=True)
             self.session_manager.update_status(session_id, "error", state.phase or "unknown", -1)
             yield {"type": "error", "error": str(e)}
+        finally:
+            if self._metrics:
+                self._metrics.finish()
+                logger.info("Research metrics:\n%s", self._metrics.summary())
 
-    # ─── Reason Step (Phase 2 #5 / C1) ────────────────────────────────
-    # The 3 reason methods are now thin 1-line delegates to
-    # ``self.reasoner`` (see ``engine/reasoner.py``). The
-    # methods stay on ResearchEngine for backward compat with
-    # existing tests and any external code that may call them
-    # via ``engine._reason(state)`` etc.
+    def _build_react_config(self, state: ResearchState) -> ReActConfig:
+        """Build a ReActConfig wired to ResearchEngine's domain logic."""
+        engine_ref = self  # capture for closures
+
+        # Build SkillAction wrappers for each action in the dispatch table
+        def _make_action_handler(action_name: str):
+            async def handler(args, ctx):
+                dispatch = engine_ref._action_dispatch.get(action_name)
+                if dispatch is None:
+                    return SkillResult.fail(f"Unknown action: {action_name}")
+                events = []
+                async for ev in dispatch(state):
+                    events.append(ev)
+                return SkillResult.ok({"_events": events, "action": action_name})
+            return handler
+
+        action_names = [
+            "plan", "gather", "analyze", "synthesize",
+            "report", "review", "revise", "done",
+        ]
+        skill_actions = [
+            SkillAction(
+                name=name,
+                description=f"Research action: {name}",
+                handler=_make_action_handler(name),
+                input_schema={"type": "object", "properties": {}, "required": []},
+            )
+            for name in action_names
+        ]
+
+        # Reason callback: wraps ResearchReasoner with compliance gate
+        async def reason(state, ctx, emit):
+            # Update budget
+            elapsed = time.monotonic() - engine_ref._start_time
+            state.budget_remaining = max(0, 1 - elapsed / engine_ref._timeout_seconds)
+
+            # Check control signals
+            engine_ref._check_control_signals(state)
+
+            # Ask reasoner for next action
+            action = await engine_ref._reason(state)
+            thought = getattr(state, "_last_thought", "")
+
+            # Framework compliance gate: intercept "done"
+            if action == "done":
+                if engine_ref.config.get("strict_exit", True):
+                    non_compliant = engine_ref._check_quality_compliance(state)
+                    gate_label = "Strict exit gate"
+                else:
+                    non_compliant = engine_ref._check_framework_compliance(state)
+                    gate_label = "Framework compliance gate"
+                if non_compliant is not None:
+                    if engine_ref._can_replan(state):
+                        logger.info(
+                            "%s: %s → redirecting done→%s",
+                            gate_label, non_compliant["reason"], non_compliant["missing"],
+                        )
+                        action = non_compliant["missing"]
+                    else:
+                        # No budget: mark incomplete and signal done
+                        state.phase = "incomplete"
+                        return {"action": "done", "thought": f"{gate_label} failed: {non_compliant['reason']}"}
+
+            return {"action": action, "thought": thought}
+
+        # Observe callback: delegates to ResearchObserver + quality gate
+        async def observe(state, ctx):
+            engine_ref._observe(state)
+            # Quality gate check
+            if engine_ref.config.get("gate_enabled", True):
+                gate_result = engine_ref._evaluate_gate(state)
+                if gate_result:
+                    state.observations.append(
+                        f"[质量门禁] {gate_result.gate_name}: {gate_result.summary}"
+                    )
+                    if not gate_result.passed:
+                        state.observations.append(
+                            f"⚠ 门禁未通过，建议: {gate_result.suggestion}"
+                        )
+            return {"observations": state.observations}
+
+        # Done condition: check phase + special states
+        def done_condition(s):
+            phase = getattr(s, "phase", "") if hasattr(s, "phase") else s.get("phase", "")
+            return (
+                phase == "done"
+                or phase == "incomplete"
+                or getattr(s, "cancelled", False)
+                or getattr(s, "paused", False)
+            )
+
+        # on_after_act: metrics tracking + gate intervention
+        def on_after_act(state, action_name, result):
+            if engine_ref._metrics:
+                engine_ref._metrics.finish()
+
+        return ReActConfig(
+            actions=skill_actions,
+            initial_state=state,
+            reason=reason,
+            done_condition=done_condition,
+            max_rounds=self._max_react_rounds,
+            timeout_seconds=self._timeout_seconds,
+            observe=observe,
+            on_after_act=on_after_act,
+        )
+
+    # ─── Backward-compat delegators ───────────────────────────────────────
+    # These methods are kept for backward compat with existing tests
+    # and any external code that may call them directly.
 
     async def _reason(self, state: ResearchState) -> str:
-        """Decide next action based on current state.
-
-        Delegates to ``self.reasoner.reason()`` (Phase 2 #5 / C1).
-        Uses LLM for reasoning (ReAct Thought step), falls back
-        to deterministic rules.
-        """
+        """Decide next action based on current state."""
         return await self.reasoner.reason(state)
 
     def _rule_based_reason(self, state: ResearchState) -> str | None:
-        """Deterministic decision rules as fallback.
-
-        Delegates to ``self.reasoner.rule_based()``.
-        """
+        """Deterministic decision rules as fallback."""
         return self.reasoner.rule_based(state)
 
     async def _llm_reason(self, state: ResearchState) -> str:
-        """LLM-based reasoning via run_prompt.
-
-        Delegates to ``self.reasoner._llm_reason()``.
-        """
+        """LLM-based reasoning via run_prompt."""
         return await self.reasoner._llm_reason(state)
 
-    # ─── Control Signal Check ─────────────────────────────────────────
-
-    # ─── Gates (Phase 2 #5 / C2) ─────────────────────────────────────────
-    # The 5 gate methods (control signals / framework compliance /
-    # quality compliance / can_replan / evaluate_gate) plus the
-    # synthesis_to_text helper are now thin 1-line delegators to
-    # ``self.gates`` (see ``gates.py``). The methods stay on
-    # ResearchEngine for backward compat with existing tests
-    # and any external code that may call them via
-    # ``engine._check_*()`` etc.
-
     def _check_control_signals(self, state: ResearchState) -> None:
-        """Check DB for cancel/pause signals from API layer.
-
-        Delegates to ``self.gates.check_control_signals()``.
-        """
+        """Check DB for cancel/pause signals from API layer."""
         self.gates.check_control_signals(state)
 
     def _check_framework_compliance(self, state: ResearchState) -> dict | None:
-        """Return None if all 6-step framework fields are present, else
-        {missing: action_name, reason: human_readable}.
-
-        Delegates to ``self.gates.check_framework_compliance()``.
-        """
+        """Return None if all 6-step framework fields are present."""
         return self.gates.check_framework_compliance(state)
 
     def _check_quality_compliance(self, state: ResearchState) -> dict | None:
-        """Layered check: 6-step presence + quality thresholds.
-
-        Delegates to ``self.gates.check_quality_compliance()``.
-        """
+        """Layered check: 6-step presence + quality thresholds."""
         return self.gates.check_quality_compliance(state)
 
     def _can_replan(self, state: ResearchState) -> bool:
-        """Return True if the engine has budget for one more action.
-
-        Delegates to ``self.gates.can_replan()``.
-        """
+        """Return True if the engine has budget for one more action."""
         return self.gates.can_replan(state)
 
     def _evaluate_gate(self, state: ResearchState):
-        """Evaluate quality gate based on current phase.
-
-        Delegates to ``self.gates.evaluate_gate()``.
-        """
+        """Evaluate quality gate based on current phase."""
         return self.gates.evaluate_gate(state)
 
     @staticmethod
     def _synthesis_to_text(synthesis: dict | None) -> str:
-        """Flatten synthesis dict to plain text for gate scoring.
-
-        Delegates to ``ResearchGates.synthesis_to_text()``
-        (Phase 2 #5 / C2). Kept as a static method on
-        ResearchEngine for backward compat with code that
-        calls engine._synthesis_to_text.
-        """
+        """Flatten synthesis dict to plain text for gate scoring."""
         return ResearchGates.synthesis_to_text(synthesis)
 
     async def _action_incomplete(
         self, state: ResearchState, reason: str,
     ):
-        """Async-gen wrapper around actions.action_incomplete.
-
-        Lets the main loop yield incomplete events inline.
-        """
+        """Async-gen wrapper around actions.action_incomplete."""
         async for ev in actions.action_incomplete(self._action_ctx, state, reason):
             yield ev
 
-    # ─── Observe Step (Phase 2 #5 / C3) ────────────────────────────────
-    # The 1 observe method is now a 1-line delegator to
-    # ``self.observer`` (see ``observer.py``). The method
-    # stays on ResearchEngine for backward compat with
-    # existing tests and any external code that may call
-    # ``engine._observe(state)`` directly.
-
     def _observe(self, state: ResearchState) -> None:
-        """Refresh state from DB and generate interpreted observations.
-
-        Delegates to ``self.observer.observe()``
-        (Phase 2 #5 / C3).
-        """
+        """Refresh state from DB and generate interpreted observations."""
         self.observer.observe(state)
 
-    # ─── Resume Helpers (Phase 2 #5 / C3) ──────────────────────────────
-    # The 1 resume-state loader method is now a 1-line
-    # delegator to ``self.resume_loader`` (see ``resume.py``).
-    # The method stays on ResearchEngine for backward compat
-    # with existing tests and any external code that may call
-    # ``engine._load_resume_state(state)`` directly.
-
     def _load_resume_state(self, state: ResearchState) -> None:
-        """Load existing session state for resume.
-
-        Delegates to ``self.resume_loader.load()``
-        (Phase 2 #5 / C3).
-        """
+        """Load existing session state for resume."""
         self.resume_loader.load(state)
 

@@ -19,6 +19,7 @@ Target: 20+ tests, no real LLM calls.
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
 import tempfile
 import warnings
@@ -131,9 +132,15 @@ class TestChatEvent:
         assert e["tool"] == "search"
 
     def test_confirmation_required(self) -> None:
-        e = ChatEvent.confirmation_required("conf-1", {"impact": "high"})
+        e = ChatEvent.confirmation_required(
+            "conf-1", "wiki_write_page",
+            {"page": "Foo"}, {"impact": "high"},
+        )
         assert e["type"] == "confirmation_required"
         assert e["confirmation_id"] == "conf-1"
+        assert e["tool"] == "wiki_write_page"
+        assert e["args"] == {"page": "Foo"}
+        assert e["impact"] == {"impact": "high"}
 
     def test_done(self) -> None:
         e = ChatEvent.done("Final answer")
@@ -1228,3 +1235,310 @@ class TestRetryManagers:
         svc._save_message("session-1", "user", "hello")
         msgs = svc.db.get_chat_messages("session-1")
         assert len(msgs) == 1
+
+
+# ─── ReActEngine path (v0.37) ────────────────────────────────────
+
+
+class _ReactMockWikiService:
+    """Local MockWikiService for ReAct path tests."""
+
+    def __init__(
+        self,
+        llm_events: list[dict] | None = None,
+        tool_result: Any = None,
+    ) -> None:
+        self.llm = MagicMock()
+        self.llm_events = llm_events or []
+        events = self.llm_events
+
+        async def _astream(messages, tools=None):
+            for ev in events:
+                yield ev
+        self.llm.astream_chat = _astream
+        self.default_wiki_id = "test_wiki"
+        self.wiki = MagicMock(name="Wiki")
+        self.tool_registry = MagicMock()
+        self.tool_registry.list_tools = MagicMock(return_value=[
+            {
+                "name": "search",
+                "description": "Search",
+                "parameters": {"type": "object", "properties": {}},
+            },
+            {
+                "name": "write",
+                "description": "Write",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        ])
+        self.tool_registry.execute = AsyncMock(
+            return_value=tool_result or {"result": "ok"},
+        )
+        self.approve_confirmation = AsyncMock(
+            return_value={"status": "ok", "result": "done"},
+        )
+
+    def get_default_wiki_id(self) -> str:
+        return self.default_wiki_id
+
+    def get_wiki(self, wiki_id: str | None = None) -> Any:
+        return self.wiki
+
+    def get_llm(self) -> Any:
+        return self.llm
+
+    def get_tool_registry(self, wiki_id: str | None = None) -> Any:
+        return self.tool_registry
+
+
+class TestReActEnginePath:
+    """Tests for the dual-track chat(): use_react_engine=True path.
+
+    Verifies the ReAct path produces the same SSE event vocabulary
+    as the aask_with_tools path.
+    """
+
+    def _make_react_chat(
+        self, data_dir: Path, llm_events: list[dict],
+        tool_result: Any = None,
+    ) -> ChatService:
+        wiki = _ReactMockWikiService(
+            llm_events=llm_events, tool_result=tool_result,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            return ChatService(wiki, data_dir, use_react_engine=True)
+
+    @pytest.mark.asyncio
+    async def test_react_default_enabled(self, data_dir: Path) -> None:
+        wiki = _ReactMockWikiService()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            svc = ChatService(wiki, data_dir)
+        assert svc.use_react_engine is True
+
+    @pytest.mark.asyncio
+    async def test_react_path_yields_done_for_final_answer(
+        self, data_dir: Path,
+    ) -> None:
+        events = [
+            {"type": "content", "text": "Hello! "},
+            {"type": "content", "text": "How can I help?"},
+            {"type": "done", "content": "Hello! How can I help?"},
+        ]
+        chat = self._make_react_chat(data_dir, events)
+        out: list[dict] = []
+        async for ev in chat.chat(message="hi", session_id="s1"):
+            out.append(ev)
+
+        # Should have session_created, content events, and done
+        types = [e.get("type") for e in out]
+        assert "session_created" in types
+        assert "done" in types
+        # Final response should be set
+        done_event = next(e for e in out if e.get("type") == "done")
+        assert done_event["final_response"] == "Hello! How can I help?"
+
+    @pytest.mark.asyncio
+    async def test_react_path_yields_tool_events(
+        self, data_dir: Path,
+    ) -> None:
+        first = [
+            {"type": "content", "text": "Searching. "},
+            {
+                "type": "tool_call",
+                "tool": "search",
+                "args": json.dumps({"q": "x"}),
+            },
+            {"type": "done", "content": ""},
+        ]
+        second = [
+            {"type": "content", "text": "Found."},
+            {"type": "done", "content": ""},
+        ]
+
+        # Use call-counting LLM
+        call_count = {"n": 0}
+
+        async def _astream(messages, tools=None):
+            idx = call_count["n"]
+            response = [first, second][idx] if idx < 2 else [
+                {"type": "done", "content": ""}
+            ]
+            call_count["n"] += 1
+            for ev in response:
+                yield ev
+
+        wiki = _ReactMockWikiService(llm_events=[], tool_result={"result": "ok"})
+        wiki.llm.astream_chat = _astream
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            chat = ChatService(wiki, data_dir, use_react_engine=True)
+
+        out: list[dict] = []
+        async for ev in chat.chat(message="search", session_id="s1"):
+            out.append(ev)
+
+        types = [e.get("type") for e in out]
+        # Should have tool_call_start and tool_call_end
+        assert types.count("tool_call_start") >= 1
+        assert types.count("tool_call_end") >= 1
+        # Should have done at the end
+        assert types[-1] == "done"
+        # Tool was executed
+        wiki.tool_registry.execute.assert_called_with(
+            "search", {"q": "x"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_react_path_handles_confirmation(
+        self, data_dir: Path,
+    ) -> None:
+        events = [
+            {"type": "content", "text": "Writing. "},
+            {
+                "type": "tool_call",
+                "tool": "write",
+                "args": json.dumps({"content": "x"}),
+            },
+            {"type": "done", "content": ""},
+        ]
+        confirmation_result = {
+            "status": "confirmation_required",
+            "confirmation_id": "conf-1",
+            "impact": {"desc": "writing"},
+        }
+        wiki = _ReactMockWikiService(
+            llm_events=events, tool_result=confirmation_result,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            chat = ChatService(wiki, data_dir, use_react_engine=True)
+
+        out: list[dict] = []
+        async for ev in chat.chat(message="write", session_id="s1"):
+            out.append(ev)
+
+        types = [e.get("type") for e in out]
+        conf_events = [e for e in out if e.get("type") == "confirmation_required"]
+        assert len(conf_events) == 1
+        assert conf_events[0]["confirmation_id"] == "conf-1"
+
+    @pytest.mark.asyncio
+    async def test_react_path_multi_round(
+        self, data_dir: Path,
+    ) -> None:
+        """Three-round ReAct: tool → tool → final answer.
+
+        Verifies that after a tool call the LLM is invoked again
+        (not just terminated) and can dispatch a follow-up tool
+        before producing the final answer.
+        """
+        r1 = [
+            {"type": "content", "text": "Searching. "},
+            {"type": "tool_call", "tool": "search",
+             "args": json.dumps({"q": "hello"})},
+            {"type": "done", "content": ""},
+        ]
+        r2 = [
+            {"type": "content", "text": "Writing. "},
+            {"type": "tool_call", "tool": "write",
+             "args": json.dumps({"content": "hello"})},
+            {"type": "done", "content": ""},
+        ]
+        r3 = [
+            {"type": "content", "text": "Done."},
+            {"type": "done", "content": "Done."},
+        ]
+
+        call_count = {"n": 0}
+        async def _astream(messages, tools=None):
+            idx = call_count["n"]
+            response = [r1, r2, r3][idx] if idx < 3 else [
+                {"type": "done", "content": ""}
+            ]
+            call_count["n"] += 1
+            for ev in response:
+                yield ev
+
+        wiki = _ReactMockWikiService(llm_events=[], tool_result={"result": "ok"})
+        wiki.llm.astream_chat = _astream
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            chat = ChatService(wiki, data_dir, use_react_engine=True)
+
+        out: list[dict] = []
+        async for ev in chat.chat(message="do stuff", session_id="s1"):
+            out.append(ev)
+
+        # LLM was called 3 times
+        assert call_count["n"] == 3
+
+        # Two tool_call_start events (search + write)
+        starts = [e for e in out if e.get("type") == "tool_call_start"]
+        assert len(starts) == 2
+        assert starts[0]["tool"] == "search"
+        assert starts[1]["tool"] == "write"
+
+        # Two tool_call_end events
+        ends = [e for e in out if e.get("type") == "tool_call_end"]
+        assert len(ends) == 2
+
+        # Done event with the final answer
+        done_events = [e for e in out if e.get("type") == "done"]
+        assert len(done_events) == 1
+        assert done_events[0]["final_response"] == "Done."
+
+    @pytest.mark.asyncio
+    async def test_react_path_handles_no_wiki(
+        self, data_dir: Path,
+    ) -> None:
+        wiki = _ReactMockWikiService(llm_events=[])
+        wiki.get_wiki = MagicMock(return_value=None)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            chat = ChatService(wiki, data_dir, use_react_engine=True)
+
+        out: list[dict] = []
+        async for ev in chat.chat(message="hi", session_id="s1"):
+            out.append(ev)
+
+        types = [e.get("type") for e in out]
+        assert "error" in types
+
+    def test_translate_react_event_filters_internals(
+        self, data_dir: Path,
+    ) -> None:
+        wiki = _ReactMockWikiService()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            chat = ChatService(wiki, data_dir, use_react_engine=True)
+        ctx = AgentContext(wiki_id="w1")
+
+        # Internal events should return None
+        assert chat._translate_react_event(
+            {"type": "reasoning", "action": "x", "thought": "y"},
+            ctx, "s1",
+        ) is None
+        assert chat._translate_react_event(
+            {"type": "round_complete", "round": 0, "action": "x"},
+            ctx, "s1",
+        ) is None
+
+    def test_translate_react_event_action_error(
+        self, data_dir: Path,
+    ) -> None:
+        wiki = _ReactMockWikiService()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            chat = ChatService(wiki, data_dir, use_react_engine=True)
+        ctx = AgentContext(wiki_id="w1")
+
+        result = chat._translate_react_event(
+            {"type": "action_error", "action": "search", "error": "boom"},
+            ctx, "s1",
+        )
+        assert result is not None
+        assert result["type"] == "tool_call_error"
+        assert result["tool"] == "search"
+        assert result["error"] == "boom"

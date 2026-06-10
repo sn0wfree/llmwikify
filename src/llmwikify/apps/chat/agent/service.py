@@ -29,6 +29,12 @@ from typing import Any
 from llmwikify.apps.chat.base import ChatBase
 from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.apps.chat.agent.chat_react import REACT_SYSTEM_PROMPT
+from llmwikify.apps.chat.agent.text_mode_tool import (
+    TOOL_CALL_RE as _TOOL_CALL_RE,
+    parse_text_tool_call as _parse_text_tool_call,
+    parse_perl_args as _parse_perl_args,
+    TextModeParser,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -171,10 +177,14 @@ class ChatEvent:
         return {"type": "tool_call_end", "tool": tool, "result": result}
 
     @staticmethod
-    def confirmation_required(conf_id: str, impact: dict) -> dict:
+    def confirmation_required(
+        conf_id: str, tool: str, args: dict, impact: dict,
+    ) -> dict:
         return {
             "type": "confirmation_required",
             "confirmation_id": conf_id,
+            "tool": tool,
+            "args": args,
             "impact": impact,
         }
 
@@ -221,6 +231,8 @@ class AgentContext:
     react_observations: list[str] = field(default_factory=list)
     react_thoughts: list[str] = field(default_factory=list)
     react_round: int = 0
+    # Thinking snapshot from the last LLM turn (ReAct "Thought")
+    _thinking: str = ""
 
     def add_user_message(self, content: str) -> None:
         self.messages.append({"role": "user", "content": content})
@@ -274,7 +286,8 @@ class ChatService(ChatBase):
         wiki_service: Any,
         data_dir: Path,
         chat_db: ChatDatabase | None = None,
-        memory_manager: Any = None,
+        memory_manager: Any | None = None,
+        use_react_engine: bool = True,
     ):
         self.wiki_service = wiki_service
         # Phase 1.5 (v0.36): allow caller to inject a shared
@@ -312,6 +325,11 @@ class ChatService(ChatBase):
         # Initialize ChatBase with LLM from WikiService
         llm = wiki_service.get_llm()
         super().__init__(llm_client=llm)
+        # Phase 6 (v0.37): dual-track support. When True, chat()
+        # delegates the iterative loop to ChatReActBridge + ReActEngine
+        # instead of ChatBase.aask_with_tools. Default off during
+        # rollout; can be flipped via constructor kwarg.
+        self.use_react_engine = use_react_engine
 
     # ─── SSE chat ────────────────────────────────────────────────
 
@@ -393,6 +411,20 @@ class ChatService(ChatBase):
         # in place via the ``invoke_tool`` callback.)
 
         try:
+            if self.use_react_engine:
+                # Phase 6 (v0.37): delegate to ChatReActBridge +
+                # ReActEngine. Same SSE event vocabulary as
+                # aask_with_tools path.
+                async for event in self._chat_via_react(
+                    messages_for_llm=messages_for_llm,
+                    system_prompt=system_prompt,
+                    tool_registry=tool_registry,
+                    session_id=session_id,
+                    ctx=ctx,
+                ):
+                    yield event
+                return
+
             # Phase 2.2 (v0.36): delegate the iterative loop to
             # ChatBase.aask_with_tools. The ``invoke_tool``
             # callback preserves the existing text-mode parsing,
@@ -476,6 +508,9 @@ class ChatService(ChatBase):
         the post-confirmation LLM follow-up also benefits from
         the iterative loop (a confirmation-approved tool may
         trigger further tool calls).
+
+        Phase 6 (v0.37): when use_react_engine=True, delegates
+        to ChatReActBridge + ReActEngine via _chat_via_react.
         """
         wiki_id = wiki_id or self.wiki_service.get_default_wiki_id()
         if not wiki_id:
@@ -520,10 +555,24 @@ class ChatService(ChatBase):
                 "content": obs_summary,
             })
         messages_for_llm = self._truncate_messages(raw_messages)
-        # Phase 2.3 (v0.36): reset the text-mode buffer.
-        self._reset_text_mode_buffer()
 
         try:
+            if self.use_react_engine:
+                # Phase 6 (v0.37): use the ReAct path
+                async for event in self._chat_via_react(
+                    messages_for_llm=messages_for_llm,
+                    system_prompt=system_prompt,
+                    tool_registry=tool_registry,
+                    session_id=session_id,
+                    ctx=ctx,
+                ):
+                    yield event
+                return
+
+            # Phase 2.2 (v0.36): aask_with_tools path (legacy)
+            # Phase 2.3 (v0.36): reset the text-mode buffer.
+            self._reset_text_mode_buffer()
+
             extra_events: list[dict] = []
 
             async def invoke(name: str, args: dict) -> Any:
@@ -750,6 +799,152 @@ class ChatService(ChatBase):
             }
             return [system, summary_note] + recent
         return [system] + recent
+
+    async def _chat_via_react(
+        self,
+        messages_for_llm: list[dict[str, str]],
+        system_prompt: str,
+        tool_registry: Any,
+        session_id: str,
+        ctx: AgentContext,
+    ) -> AsyncIterator[dict]:
+        """ReAct path for chat() (Phase 6 / v0.37).
+
+        Builds a ``ChatReActBridge`` config and runs ``ReActEngine``
+        on the same messages, tool registry, and AgentContext that
+        ``aask_with_tools`` would have used. Yields the same SSE
+        event vocabulary the frontend expects.
+        """
+        from llmwikify.apps.chat.agent.chat_react import ChatReActBridge
+        from llmwikify.apps.chat.agent.react_engine import ReActEngine
+        from llmwikify.apps.chat.skills.base import SkillContext
+
+        bridge = ChatReActBridge(chat_service=self)
+        config = bridge.build_config(
+            session_id=session_id,
+            wiki_id=ctx.wiki_id,
+            tool_registry=tool_registry,
+            user_message="",
+            system_prompt=system_prompt,
+            messages=messages_for_llm,
+            ctx=ctx,
+            max_iterations=self.DEFAULT_MAX_CHAT_ITERATIONS,
+        )
+        engine = ReActEngine(config)
+
+        # Build a SkillContext so the engine has the LLM client and DB.
+        skill_ctx = SkillContext(
+            session_id=session_id,
+            wiki=self.wiki_service.get_wiki(ctx.wiki_id),
+            db=self.db,
+            llm_client=self.wiki_service.get_llm(),
+            config={},
+            metrics=None,
+        )
+
+        # Forward events to the SSE stream, translate ReActEngine
+        # internals to the frontend vocabulary.
+        try:
+            async for event in engine.run(skill_ctx):
+                translated = self._translate_react_event(event, ctx, session_id)
+                if translated is None:
+                    continue
+                # If the translator returned a list, yield each one.
+                if isinstance(translated, list):
+                    for item in translated:
+                        yield item
+                else:
+                    yield translated
+        except Exception as e:
+            logger.exception("ReAct chat error")
+            yield ChatEvent.error(str(e))
+
+    def _translate_react_event(
+        self,
+        event: dict[str, Any],
+        ctx: AgentContext,
+        session_id: str,
+    ) -> dict | None:
+        """Translate a ReActEngine event to a frontend SSE event.
+
+        ReActEngine internal events (``reasoning``, ``round_complete``,
+        ``observation_error``, ``phase=cancelled/paused/timeout``)
+        are filtered. ``phase=done`` triggers a ``done`` event with
+        the final answer. ``action_error`` is mapped to
+        ``tool_call_error``.
+        """
+        kind = event.get("type")
+        if kind == "reasoning":
+            return None  # internal — not sent to frontend
+        if kind == "round_complete":
+            return None  # internal — not sent to frontend
+        if kind == "observation_error":
+            return ChatEvent.error(event.get("error", "observation failed"))
+        if kind == "action_error":
+            return {
+                "type": "tool_call_error",
+                "tool": event.get("action", ""),
+                "error": event.get("error", ""),
+            }
+        if kind == "timeout":
+            return ChatEvent.error(
+                f"ReAct loop timed out after {event.get('limit', 0):.0f}s"
+            )
+        if kind == "phase":
+            phase = event.get("phase")
+            final_state = event.get("final_state")
+            if phase == "done":
+                # The engine emits phase=done twice: once as an
+                # intermediate signal (no final_state) and once as
+                # the terminal event (with final_state). Only emit
+                # a frontend ``done`` for the terminal event.
+                if not isinstance(final_state, dict):
+                    return None
+                # Persist and emit done with the final answer
+                final = final_state.get("final_answer") or ""
+                if not final:
+                    final = final_state.get("llm_content", "")
+                if not final:
+                    final = ""
+                # If the reason callback caught an LLM exception
+                # (state["final_answer"] is prefixed with "[error]"),
+                # surface an ``error`` event to the frontend.
+                if final.startswith("[error]"):
+                    err_msg = final[len("[error]"):].strip()
+                    return ChatEvent.error(err_msg or "LLM stream failed")
+                thinking = ""
+                if hasattr(ctx, "_thinking"):
+                    thinking = ctx._thinking
+                if thinking:
+                    ctx._thinking = thinking
+                ctx.add_assistant_message(final)
+                self._save_message(
+                    session_id, "assistant", final,
+                    tool_calls=list(ctx._tool_calls.values())
+                    if ctx._tool_calls else None,
+                )
+                if self._save_error_count > 0:
+                    return [
+                        ChatEvent.save_warning(
+                            f"已丢弃 {self._save_error_count} 条消息的持久化失败"
+                        ),
+                        ChatEvent.done(final),
+                    ]
+                return ChatEvent.done(final)
+            if phase == "cancelled":
+                return None  # internal — terminate SSE
+            if phase == "paused":
+                return None
+            if phase == "timeout":
+                return ChatEvent.error("ReAct loop timed out")
+            if phase == "incomplete":
+                return ChatEvent.done(
+                    final_state.get("final_answer", "")
+                    if isinstance(final_state, dict) else "",
+                )
+        # Pass through: message_delta, thinking, tool_call_start,
+        # tool_call_end, confirmation_required, error, save_warning
+        return event
 
     def _get_toolspec(self, tool_registry: Any) -> list[dict[str, Any]]:
         tools = tool_registry.list_tools()
@@ -978,7 +1173,8 @@ class ChatService(ChatBase):
         ):
             conf_id = result.get("confirmation_id", "")
             yield ChatEvent.confirmation_required(
-                conf_id, result.get("impact", {}),
+                conf_id, tool_name, args,
+                result.get("impact", {}),
             )
         else:
             tool_result_str = json.dumps(
@@ -1057,226 +1253,12 @@ class ChatService(ChatBase):
             return self.wiki_service.get_wiki(wiki_id)
         return self.wiki_service.get_wiki()
 
-    # ─── Iterative tool-call loop (Phase 1.1 / v0.36) ────────────
+    # ─── Iterative tool-call loop (Phase 6 / v0.37) ──────────────
     #
-    # The previous flow called ``_stream_llm`` once and yielded the
-    # result, never feeding tool outputs back. This meant the LLM
-    # could not use tool results in its final answer, breaking the
-    # ReAct / agent pattern. The new ``_run_chat_iteration`` method
-    # does ONE LLM stream-and-dispatch pass; ``_run_chat_loop`` calls
-    # it repeatedly until the LLM returns a plain ``done`` (no more
-    # tool calls) or the iteration cap is hit.
-    #
-    # Backward-compat: the existing single-pass call shape is
-    # preserved when max_iterations=1.
+    # Phase 6 (v0.37): the iterative tool-call loop is now
+    # implemented by ChatReActBridge + ReActEngine. The legacy
+    # ``_run_chat_iteration`` and ``_run_chat_loop`` methods
+    # (Phase 1.1 / v0.36) have been removed in favor of the
+    # unified ReAct framework.
 
     DEFAULT_MAX_CHAT_ITERATIONS = 4
-
-    async def _run_chat_iteration(
-        self,
-        llm: Any,
-        messages_for_llm: list[dict],
-        tool_specs: list[dict],
-        tool_registry: Any,
-        session_id: str,
-        ctx: AgentContext,
-    ) -> AsyncIterator[dict]:
-        """Run a single LLM stream + tool dispatch pass.
-
-        Yields SSE events (message_delta, thinking, tool_call_*,
-        confirmation_required, done, error) and returns. The
-        outer ``_run_chat_loop`` decides whether to call again
-        to feed tool results back.
-
-        The ``done`` event is SUPPRESSED when this iteration
-        dispatched new tool calls — in that case the LLM's
-        "done" is intermediate and the user-visible final
-        answer will come from a follow-up iteration.
-        """
-        accumulated = ""
-        text_buffer = ""
-        # Snapshot of ctx.tool_invocations at the START of this
-        # iteration. The number of NEW invocations added during
-        # this iteration determines whether ``done`` is the
-        # final answer or an intermediate signal.
-        iteration_pre_invocations = ctx.tool_invocations
-        async for event in self._stream_llm(llm, messages_for_llm, tool_specs):
-            event_type = event.get("type")
-
-            if event_type == "thinking":
-                yield ChatEvent.thinking(event["text"])
-
-            elif event_type == "content":
-                chunk = event.get("text", "")
-                accumulated += chunk
-                # Buffer chunks; extract any complete
-                # [TOOL_CALL]...[/TOOL_CALL] block and dispatch it
-                # as a real tool call. Text outside the block
-                # continues to flow to the user.
-                text_buffer += chunk
-                while True:
-                    m = _TOOL_CALL_RE.search(text_buffer)
-                    if not m:
-                        break
-                    prefix = text_buffer[: m.start()]
-                    if prefix:
-                        yield ChatEvent.message_delta(prefix)
-                    body = m.group(1)
-                    parsed = _parse_text_tool_call(body)
-                    if parsed is None:
-                        # Unparseable block — pass through as text.
-                        yield ChatEvent.message_delta(m.group(0))
-                    else:
-                        tool_name, args = parsed
-                        async for ev in self._dispatch_tool_call(
-                            tool_name, args, tool_registry,
-                            session_id, ctx,
-                        ):
-                            yield ev
-                    text_buffer = text_buffer[m.end():]
-
-            elif event_type == "tool_call":
-                tool_name = event["tool"]
-                raw_args = event.get("args", "{}")
-                if isinstance(raw_args, str):
-                    try:
-                        args = json.loads(raw_args)
-                    except json.JSONDecodeError:
-                        args = {"raw": raw_args}
-                else:
-                    args = raw_args
-
-                async for ev in self._dispatch_tool_call(
-                    tool_name, args, tool_registry,
-                    session_id, ctx,
-                ):
-                    yield ev
-
-            elif event_type == "done":
-                # Flush any trailing buffered text before done.
-                if text_buffer:
-                    yield ChatEvent.message_delta(text_buffer)
-                    text_buffer = ""
-                final = event.get("content", accumulated)
-                # Determine whether this iteration produced new
-                # tool invocations. If so, suppress the ``done``
-                # event — it's intermediate; the user-visible
-                # final answer will come from a follow-up
-                # iteration.
-                new_invocations = (
-                    ctx.tool_invocations - iteration_pre_invocations
-                )
-                if new_invocations > 0:
-                    # Intermediate done — don't yield it. The
-                    # outer loop will iterate and call the LLM
-                    # again with the tool results in ctx.messages.
-                    return
-                # No new tools in this iteration — this IS the
-                # final answer. Save and yield done.
-                ctx.add_assistant_message(final)
-                self._save_message(
-                    session_id, "assistant", final,
-                    tool_calls=list(ctx._tool_calls.values())
-                    if ctx._tool_calls else None,
-                )
-                # Surface silent save failures (Phase 1.2).
-                if self._save_error_count > 0:
-                    yield ChatEvent.save_warning(
-                        f"已丢弃 {self._save_error_count} 条消息的持久化失败"
-                    )
-                yield ChatEvent.done(final)
-                return
-
-    async def _run_chat_loop(
-        self,
-        llm: Any,
-        ctx: AgentContext,
-        tool_registry: Any,
-        session_id: str,
-        max_iterations: int | None = None,
-    ) -> AsyncIterator[dict]:
-        """Run the iterative tool-call loop (Phase 1.1 / v0.36).
-
-        Iterates the LLM call + tool dispatch + result-feedback
-        cycle until the LLM produces a final ``done`` (no pending
-        tool calls) or the iteration cap is hit. Each iteration
-        rebuilds the message list from ``ctx`` so tool results
-        are visible to the LLM on the next pass.
-        """
-        if max_iterations is None:
-            max_iterations = self.DEFAULT_MAX_CHAT_ITERATIONS
-        tool_specs = self._get_toolspec(tool_registry)
-        # Snapshot of tool names seen at the start of this turn;
-        # used to distinguish "new tool call in this iteration"
-        # from "stale tool call from a prior turn".
-        turn_start_tools = set(ctx._tool_calls.keys())
-
-        for iteration in range(max_iterations):
-            system_prompt = await self._build_system_prompt(ctx.wiki_id)
-            raw_messages = (
-                [{"role": "system", "content": system_prompt}]
-                + ctx.get_messages()
-            )
-            messages_for_llm = self._truncate_messages(raw_messages)
-            # Track tool *invocations* by a monotonic counter so
-            # re-calls of the same tool name are still detected
-            # as "new tools in this iteration".
-            pre_call_invocations = ctx.tool_invocations
-
-            # Yield events from this iteration. ``_run_chat_iteration``
-            # emits at most one ``done`` per call, and only when
-            # this iteration did NOT dispatch new tool calls.
-            got_done = False
-            async for ev in self._run_chat_iteration(
-                llm, messages_for_llm, tool_specs,
-                tool_registry, session_id, ctx,
-            ):
-                yield ev
-                if ev.get("type") == "done":
-                    got_done = True
-
-            if got_done:
-                # The LLM produced a final answer in this iteration.
-                return
-
-            # No final done. Check whether this iteration dispatched
-            # any new tool invocations. If not, the LLM stream ended
-            # without done and without tools — defensive emit.
-            new_invocations = ctx.tool_invocations - pre_call_invocations
-            if new_invocations == 0:
-                logger.warning(
-                    "Chat loop iteration %d ended with no "
-                    "done and no tools",
-                    iteration,
-                )
-                yield ChatEvent.done("")
-                return
-
-            # New tool invocations this iteration. Check whether
-            # the latest one needs confirmation — if so, stop
-            # iterating; the frontend will resume via
-            # approve_confirmation_continue.
-            new_tool_entries = ctx._recent_tool_entries[-new_invocations:]
-            if new_tool_entries:
-                last_result = new_tool_entries[-1].get("result")
-                if (
-                    isinstance(last_result, dict)
-                    and last_result.get("status")
-                    == "confirmation_required"
-                ):
-                    return
-
-            # Otherwise, loop and call the LLM again with the
-            # tool results now in ctx.messages.
-
-        # Iteration cap — emit final done with the accumulated
-        # content from the last assistant message in ctx.
-        logger.warning(
-            "Chat loop hit max_iterations=%d; emitting fallback done",
-            max_iterations,
-        )
-        last_assistant = next(
-            (m for m in reversed(ctx.messages) if m.get("role") == "assistant"),
-            None,
-        )
-        yield ChatEvent.done(last_assistant["content"] if last_assistant else "")
