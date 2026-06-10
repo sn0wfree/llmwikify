@@ -24,12 +24,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/paper", tags=["paper"])
 
 _WIKI_REGISTRY: Any = None
+_LLM_CLIENT: Any = None
 
 
-def set_paper_deps(wiki_registry: Any) -> None:
-    """Set dependencies during app startup."""
-    global _WIKI_REGISTRY
+def set_paper_deps(wiki_registry: Any, llm_client: Any = None) -> None:
+    """Set dependencies during app startup.
+
+    Args:
+        wiki_registry: Multi-wiki registry.
+        llm_client: Optional LLM client. When provided, paper extraction
+            actually calls the LLM via repro_extract.yaml; when None,
+            extraction returns ``{}`` (legacy offline behavior).
+    """
+    global _WIKI_REGISTRY, _LLM_CLIENT
     _WIKI_REGISTRY = wiki_registry
+    _LLM_CLIENT = llm_client
 
 
 def _get_wiki(wiki_id: str | None = None) -> Any:
@@ -61,6 +70,7 @@ async def start_paper_extraction(req: PaperStartRequest) -> dict[str, Any]:
         paper_id=req.paper_id,
         source_type=req.source_type,
         source_ref=req.source_ref,
+        llm_client=_LLM_CLIENT,
     )
 
     pages = build_paper_pages(extraction, req.paper_id)

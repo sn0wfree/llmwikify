@@ -113,31 +113,43 @@ def extract_from_page(content: str) -> Optional[dict[str, Any]]:
     }
 
 
-def _iter_trading_pages(wiki: Any) -> Iterable[str]:
-    """Yield page contents under wiki/trading/."""
-    trading_dir = wiki.wiki_dir / "trading"
-    if not trading_dir.is_dir():
+def _iter_strategy_pages(wiki: Any, subdir: str) -> Iterable[tuple[str, str]]:
+    """Yield ``(subdir, content)`` tuples under ``wiki/{subdir}/``.
+
+    Pairs the originating subdir so callers can record the source for
+    traceability when the same logical page may live under either
+    ``wiki/trading/`` (legacy TradingStrategy) or ``wiki/strategy/``
+    (newly written by ``extract_paper.build_paper_pages``).
+    """
+    page_dir = wiki.wiki_dir / subdir
+    if not page_dir.is_dir():
         return
-    for md in sorted(trading_dir.glob("*.md")):
+    for md in sorted(page_dir.glob("*.md")):
         try:
-            yield md.read_text(encoding="utf-8")
+            yield subdir, md.read_text(encoding="utf-8")
         except OSError as exc:
             logger.warning("could not read %s: %s", md, exc)
 
 
 def extract_strategy_config(wiki: Any) -> dict[str, Any]:
-    """Pull the first TradingStrategy page and assemble strategy_config.
+    """Pull the first recognized strategy page and assemble strategy_config.
+
+    Scans both ``wiki/strategy/`` (newly written by Paper extraction via
+    ``extract_paper.build_paper_pages``) and ``wiki/trading/`` (legacy
+    TradingStrategy pages). Preference order: ``strategy`` first because
+    paper-extracted pages carry richer frontmatter (factor_refs, etc.).
 
     Returns:
         {"signal_type": "...", "signal_params": {...}, "wiki_page": "..."}
         or {"signal_type": "unknown", "signal_params": {}, "wiki_page": None}
     """
-    for content in _iter_trading_pages(wiki):
-        cfg = extract_from_page(content)
-        if cfg is None:
-            continue
-        cfg["wiki_page"] = "trading"
-        return cfg
+    for subdir in ("strategy", "trading"):
+        for origin, content in _iter_strategy_pages(wiki, subdir):
+            cfg = extract_from_page(content)
+            if cfg is None:
+                continue
+            cfg["wiki_page"] = origin
+            return cfg
     return {"signal_type": "unknown", "signal_params": {}, "wiki_page": None}
 
 

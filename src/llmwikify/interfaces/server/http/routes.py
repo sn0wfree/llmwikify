@@ -524,7 +524,57 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     app.include_router(agent_router)
     app.include_router(autoresearch_router)
 
+    _register_reproduction_routes(app, registry, agent_service)
+
     _mount_agent_spa(app)
+
+
+def _register_reproduction_routes(
+    app: FastAPI,
+    registry: WikiRegistry,
+    agent_service: Any,
+) -> None:
+    """Register paper/factor/strategy/reproduction routers and inject deps.
+
+    Lives here (not in ``_register_wiki_routes``) because the reproduction
+    routers need access to the LLM client and the reproduction session DB
+    that the agent service owns. v0.4.0 — end-to-end reproduction pipeline.
+    """
+    from llmwikify.interfaces.server.http.paper import (
+        router as paper_router,
+        set_paper_deps,
+    )
+    from llmwikify.interfaces.server.http.factor import (
+        router as factor_router,
+        set_factor_deps,
+    )
+    from llmwikify.interfaces.server.http.strategy import (
+        router as strategy_router,
+        set_strategy_deps,
+    )
+    from llmwikify.interfaces.server.http.reproduction import (
+        router as reproduction_router,
+        set_repro_deps,
+    )
+    from llmwikify.reproduction.sessions import ReproductionDatabase
+
+    data_dir = Path.home() / ".llmwikify" / "agent"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    repro_db = ReproductionDatabase(data_dir / "reproduction.db")
+    logger.info("Reproduction DB initialized at: %s", repro_db.db_path)
+
+    set_paper_deps(wiki_registry=registry, llm_client=agent_service._get_llm())
+    set_factor_deps(wiki_registry=registry)
+    set_strategy_deps(wiki_registry=registry)
+    set_repro_deps(db=repro_db, wiki_registry=registry)
+
+    app.include_router(paper_router)
+    app.include_router(factor_router)
+    app.include_router(strategy_router)
+    app.include_router(reproduction_router)
+    logger.info(
+        "Reproduction routers registered: paper, factor, strategy, reproduction"
+    )
 
 
 def _mount_agent_spa(app: FastAPI) -> None:

@@ -244,7 +244,18 @@ async def revert_ingest(ingest_id: str):
 async def agent_status(request: Request):
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    return service.get_agent_status(wiki_id)
+    try:
+        return service.get_agent_status(wiki_id)
+    except (KeyError, ValueError):
+        return {
+            "state": "idle",
+            "scheduler_tasks": [],
+            "pending_work": {},
+            "action_log": [],
+            "pending_confirmations": 0,
+            "dream_proposals": {},
+            "unread_notifications": 0,
+        }
 
 
 # --- Confirmations endpoints ---
