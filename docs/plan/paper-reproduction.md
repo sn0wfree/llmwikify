@@ -7,6 +7,88 @@
 
 ---
 
+## 零、设计原则
+
+实现本功能时，以下 6 条原则指导所有决策。遇到分歧时，回溯原则。
+
+### 原则 1：Wiki 优先（Wiki-First）
+
+**一切产出都写回 wiki，不创建平行数据存储。**
+
+- 论文结构化信息 → wiki 页（Logic/Data/Steps/Factors/Model）
+- 生成的代码 → wiki 页（Code）+ 本地文件（.ipynb）
+- 回测结果 → wiki 页（Backtest/Optimization）
+- 知识图谱 → wiki 的 relation 表
+- 会话状态 → DB（仅会话元数据，不存业务数据）
+
+**反模式**：在 strategy/reproduction/ 下维护独立的 JSON/SQLite 存业务数据。
+
+### 原则 2：逻辑一致 > 数字一致
+
+**复现的价值在于「理解论文逻辑」，不在于「复现论文数字」。**
+
+- 回测数字对不上是常态（数据源/滑点/复权/税费差异）
+- UI 必须显式声明「已知偏差」
+- 分析层重点评估「逻辑是否正确实现」而非「数字是否匹配」
+- 如果逻辑正确但数字差异大，这是「已知偏差」，不是 bug
+
+### 原则 3：Prompt 优先于代码（Prompt-Over-Code）
+
+**能用 prompt 解决的，不写代码模块。**
+
+- 理解层：不写 understand.py，用 wiki.md + prompt 驱动
+- 分析层：不写 analyze.py，用 prompt 驱动
+- 代码生成：不写 codegen.py，用 prompt 驱动
+- 只在「必须执行」的环节写代码（回测/沙箱/数据路由）
+
+**判断标准**：如果一个功能的输入是文本、输出也是文本，用 prompt；如果需要执行/计算/IO，写代码。
+
+### 原则 4：优雅降级（Graceful Degradation）
+
+**每层都有降级路径，不因单点失败阻塞全链路。**
+
+| 层 | 降级路径 |
+|---|---|
+| 输入 | 格式不支持 → 提示用户换格式 |
+| 理解 | LLM 抽取失败 → 重试 2 次 → 标记 error |
+| 复现 | 代码校验失败 → 修复循环 ≤3 轮 → 保存当前代码 |
+| 验证 | KernelGateway 失败 → 降级 subprocess |
+| 数据 | AKShare 不可用 → 合成数据 + 声明 |
+| 分析 | LLM 分析失败 → 跳过，标注未完成 |
+
+### 原则 5：最小侵入（Minimal Invasiveness）
+
+**不修改现有模块的核心逻辑，只在边缘扩展。**
+
+- 不改 `analyze_source()` 的 prompt（用 Phase 2 补充抽取）
+- 不改 `ReActEngine`（用 Skill 扩展能力）
+- 不改 `SkillRuntime`（用新 Skill 注册）
+- 不改 `PromptRegistry`（用新 YAML 文件）
+- 改动仅限于：新增文件 + 在现有注册点追加 1-2 行
+
+### 原则 6：可测试（Testable）
+
+**每个模块可独立测试，不依赖 LLM/网络/沙箱。**
+
+- Prompt 测试：用 mock LLM 返回值
+- Skill 测试：用 mock handler
+- 回测测试：用缓存的 DataFrame
+- 沙箱测试：用 subprocess mock
+- 端到端测试：可选（烧 token，仅 CI 中跑）
+
+---
+
+## 版本兼容性
+
+- **v0.4.0 新增功能**，不影响现有 wiki 结构
+- wiki.md 模板是**追加**，不是替换：现有 wiki.md 内容不变，只追加 `Papers/` 页面类型
+- 现有 `ingest → analyze_source → write_page` 链路**零修改**
+- 现有 Skill 系统**零修改**（只注册新 Skill）
+- 现有 PromptRegistry **零修改**（只新增 YAML 文件）
+- 现有 WebUI **零修改**（只新增 Reproduction 页面）
+
+---
+
 ## 一、决策汇总
 
 | 决策项 | 选择 |
@@ -753,11 +835,13 @@ CREATE TABLE reproduction_sessions (
     current_phase TEXT,
     progress REAL DEFAULT 0.0,
     config_json TEXT,                -- 回测配置（手续费/滑点/初始资金）
-    result_json TEXT,                -- 最终结果
+    backtest_wiki_page TEXT,         -- 回测报告 wiki 页名称（如 "Papers/<id>/Backtest"）
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
 );
 ```
+
+> **原则 1 约束**：sessions 表只存会话元数据，**不存业务数据**。回测结果等业务数据存 wiki 页，通过 `backtest_wiki_page` 字段引用。
 
 ### 复现产物表
 
@@ -766,13 +850,15 @@ CREATE TABLE reproduction_artifacts (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
     kind TEXT NOT NULL,              -- extraction / code / validation / backtest / analysis
-    path TEXT,                       -- 文件路径（.ipynb / .py）
-    content TEXT,                    -- 文本内容（wiki 页 / JSON）
+    wiki_page TEXT,                  -- 对应的 wiki 页名称（如 "Papers/<id>/Backtest"）
+    file_path TEXT,                  -- 本地文件路径（.ipynb / .py，可选）
     score REAL,                     -- 就绪度评分 / 质量评分
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (session_id) REFERENCES reproduction_sessions(id)
 );
 ```
+
+> **原则 1 约束**：artifacts 表只存元数据（kind/wiki_page/file_path/score），**不存业务内容**。所有业务内容（抽取结果/代码/回测报告）存 wiki 页。
 
 ### 复现事件表（SSE 重启用）
 
@@ -850,23 +936,35 @@ async def run_reproduction(session_id):
         wiki.ingest_source(source)
         wiki.analyze_source(source)
 
-        # Phase 2: 论文结构化抽取
+        # Phase 2: 论文结构化抽取 → 写入 wiki 页
         extract_paper_structure(wiki, session.paper_title)
+        db.create_artifact(session_id, "extraction",
+                          wiki_page=f"Papers/{session.paper_title}/Logic")
 
-        # Phase 3: 复现（A+B 结合）
+        # Phase 3: 复现（A+B 结合）→ 代码写入 wiki 页
         db.update_status(session_id, "reproducing")
         code = await reproduce(wiki, session.paper_title)
+        wiki.write_page(f"Papers/{session.paper_title}/Code", code)
+        db.create_artifact(session_id, "code",
+                          wiki_page=f"Papers/{session.paper_title}/Code")
 
-        # Phase 4: 验证（回测）
+        # Phase 4: 验证（回测）→ 结果写入 wiki 页
         db.update_status(session_id, "backtesting")
         backtest_result = await run_backtest(wiki, session.paper_title, code)
+        wiki.write_page(f"Papers/{session.paper_title}/Backtest", backtest_result["report"])
+        db.update_session(session_id, backtest_wiki_page=f"Papers/{session.paper_title}/Backtest")
+        db.create_artifact(session_id, "backtest",
+                          wiki_page=f"Papers/{session.paper_title}/Backtest")
 
-        # Phase 5: 分析
+        # Phase 5: 分析 → 优化建议写入 wiki 页
         db.update_status(session_id, "analyzing")
         await analyze_results(wiki, session.paper_title, backtest_result)
+        db.create_artifact(session_id, "analysis",
+                          wiki_page=f"Papers/{session.paper_title}/Optimization")
 
         db.update_status(session_id, "done")
     except Exception as e:
+        logger.error(f"Reproduction {session_id} failed: {e}")
         db.update_status(session_id, "error", error=str(e))
 ```
 
@@ -997,23 +1095,32 @@ async def handle_status(session_id):
     return {
         "status": session.status,
         "progress": session.progress,
-        "artifacts": [{"kind": a.kind, "path": a.path, "score": a.score} for a in artifacts],
+        "artifacts": [{"kind": a.kind, "wiki_page": a.wiki_page, "score": a.score} for a in artifacts],
     }
 
 # 3. wiki_paper_repro_report
 async def handle_report(session_id):
-    artifacts = db.get_artifacts(session_id, kind="extraction")
-    return {"extraction": artifacts[0].content if artifacts else None}
+    """从 wiki 页读取抽取结果（不从 DB 读）"""
+    session = db.get_session(session_id)
+    wiki = Wiki(session.wiki_id)
+    extraction_page = f"Papers/{session.paper_title}/Logic"  # 示例
+    return {"extraction": wiki.read_page(extraction_page)}
 
 # 4. wiki_paper_repro_code
 async def handle_code(session_id):
-    artifacts = db.get_artifacts(session_id, kind="code")
-    return {"code": artifacts[0].content if artifacts else None, "path": artifacts[0].path if artifacts else None}
+    """从 wiki 页读取代码（不从 DB 读）"""
+    session = db.get_session(session_id)
+    wiki = Wiki(session.wiki_id)
+    code_page = f"Papers/{session.paper_title}/Code"
+    return {"code": wiki.read_page(code_page)}
 
 # 5. wiki_paper_repro_backtest
 async def handle_backtest(session_id):
-    artifacts = db.get_artifacts(session_id, kind="backtest")
-    return {"backtest": artifacts[0].content if artifacts else None}
+    """从 wiki 页读取回测结果（不从 DB 读）"""
+    session = db.get_session(session_id)
+    wiki = Wiki(session.wiki_id)
+    backtest_page = session.backtest_wiki_page
+    return {"backtest": wiki.read_page(backtest_page) if backtest_page else None}
 ```
 
 ---
@@ -1076,6 +1183,7 @@ async def extract_broker_report(pdf_path: str) -> str:
 | `strategy/reproduction/config.py` | ~50 | AKShare/iFinD/backtest 配置 |
 | `strategy/reproduction/extract.py` | ~80 | 论文结构化抽取（调 LLM + write_page）|
 | `strategy/reproduction/backtest.py` | ~250 | backtrader 薄封装 |
+| `strategy/reproduction/wiki_template.py` | ~50 | wiki.md 模板注入 |
 | `strategy/data/router.py` | ~120 | AKShare + iFinD 路由 |
 | `apps/chat/skills/actions/repro_action.py` | ~350 | 4 个 SkillAction（generate/validate/fix/sandbox）|
 | `prompts/_defaults/repro_extract.yaml` | ~80 | 结构化抽取 |
@@ -1089,7 +1197,7 @@ async def extract_broker_report(pdf_path: str) -> str:
 | `web/webui/src/pages/Reproduction/Detail.tsx` | ~200 | 详情（5个tab）|
 | `web/webui/src/components/BacktestChart.tsx` | ~100 | 净值曲线 |
 | `web/webui/src/components/ReadinessBadge.tsx` | ~50 | 就绪度徽章 |
-| **合计** | **~1830** | **Python ~850 + YAML ~430 + TS ~700** |
+| **合计** | **~1980** | **Python ~980 + YAML ~430 + TS ~700** |
 
 ---
 
