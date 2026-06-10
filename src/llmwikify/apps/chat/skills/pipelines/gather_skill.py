@@ -11,7 +11,11 @@ Pipeline structure
   2. Collect matching pages as source dicts
   3. (Optional) call ``extract_skill`` for full content
      (when ``extract_content=True``)
-  4. Return the collected sources
+  4. (Optional, v0.39) When ``enable_web_search=True`` AND
+     wiki returned nothing for the sub-query, fall back to
+     ``WebSearch`` (DuckDuckGo/Tavily/SearXNG/MiniMax) via
+     ``apps/research/web_search.py``.
+  5. Return the collected sources
 
 Can be called:
 
@@ -69,6 +73,7 @@ async def _gather(args: dict, ctx: SkillContext) -> SkillResult:
 
     max_per_query = args.get("max_sources_per_query", 3)
     extract_content = args.get("extract_content", False)
+    enable_web_search = bool(args.get("enable_web_search", False))
 
     wiki = wiki_from_ctx(ctx)
     sources_collected: list[dict] = list(args.get("sources", []))
@@ -92,6 +97,9 @@ async def _gather(args: dict, ctx: SkillContext) -> SkillResult:
             })
             new_sources += 1
             continue
+
+        # Track sources added for this sub-query to detect wiki-miss
+        sources_before = len(sources_collected)
 
         try:
             r = wiki.search(query, limit=max_per_query)
@@ -124,6 +132,35 @@ async def _gather(args: dict, ctx: SkillContext) -> SkillResult:
                                 s["content"] = er.data.get("content", "")
                         except Exception as e:
                             logger.debug("extract failed for %s: %s", s["url"], e)
+
+            # Fallback to web search when wiki yielded nothing for this query
+            # and the caller opted in via enable_web_search=True.
+            if (
+                enable_web_search
+                and len(sources_collected) == sources_before
+            ):
+                try:
+                    from llmwikify.apps.research.web_search import WebSearch
+                    searcher = WebSearch(ctx.config or {})
+                    web_results = await searcher.search(
+                        query, num_results=max_per_query,
+                    )
+                    for wr in web_results:
+                        if not wr.url or wr.url in existing_urls:
+                            continue
+                        sources_collected.append({
+                            "url": wr.url,
+                            "title": wr.title or wr.url,
+                            "source_type": "web",
+                            "sub_query": query,
+                            "content_preview": wr.snippet or "",
+                        })
+                        existing_urls.add(wr.url)
+                        new_sources += 1
+                except Exception as e:
+                    logger.debug(
+                        "web_search fallback failed for %s: %s", query, e,
+                    )
 
         except Exception as e:
             logger.warning("gather failed for sub_query %s: %s", query, e)
@@ -181,6 +218,16 @@ class GatherSkill(Skill):
                     "extract_content": {
                         "type": "boolean",
                         "description": "If True, extract full content from each URL (slow)",
+                        "default": False,
+                    },
+                    "enable_web_search": {
+                        "type": "boolean",
+                        "description": (
+                            "If True, fall back to external web search "
+                            "(DuckDuckGo/Tavily/SearXNG/MiniMax) when the "
+                            "local wiki returns no results for a sub-query. "
+                            "Default False to preserve wiki-first behavior."
+                        ),
                         "default": False,
                     },
                 },
