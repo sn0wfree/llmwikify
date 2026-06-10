@@ -8,7 +8,8 @@ export type ChatStreamEvent =
   | { type: 'tool_call_start'; tool: string; args: Record<string, unknown> }
   | { type: 'tool_call_end'; tool: string; result: unknown }
   | { type: 'tool_call_error'; tool: string; error: string }
-  | { type: 'done'; final_response: string; actions: unknown[] }
+  | { type: 'done'; final_response: string }
+  | { type: 'save_warning'; reason: string }
   | { type: 'confirmation_required'; confirmation_id: string; tool: string; args: Record<string, unknown>; impact: Record<string, unknown> }
   | { type: 'error'; message: string };
 
