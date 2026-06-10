@@ -51,7 +51,7 @@
 |---|---|---|
 | 输入 | 格式不支持 → 提示用户换格式 |
 | 理解 | LLM 抽取失败 → 重试 2 次 → 标记 error |
-| 理解 | 策略类型无法映射 → 标记 unknown，用户手动选择 |
+| 理解 | 策略类型无法映射 → 标记 unknown → 自动降级到路径 B（LLM 代码生成）|
 | 复现 | 参数配置错误 → 验证合法性，报具体字段 |
 | 验证 | 回测超时 → 终止，标注超时 |
 | 数据 | AKShare 不可用 → DataCache → SynthProvider |
@@ -110,8 +110,8 @@
 | M4（券商研报 + arXiv）| 不砍，全做 |
 | 数据源 | AKShare（主）+ iFinD（补），不用 Tushare |
 | AKShare 缓存 | 首次获取后存入本地 SQLite，后续优先读缓存 |
-| 代码生成 | **不要 LLM 生成代码**，预写通用 backtrader 策略 + 参数化调用 |
-| 执行沙箱 | **不隔离**（预写代码，无需沙箱），直接在当前进程执行 |
+| 代码生成 | **默认不走 LLM 生成**，预写通用策略 + 参数化调用优先；预写策略不满足时自动降级到 LLM 生成 |
+| 执行沙箱 | 主路径无需沙箱（预写代码），降级路径用 subprocess 执行 LLM 生成的代码 |
 | 复现层调用 | 函数式直接调用（不经过 Skill 系统），`extract.py → backtest.py` |
 | WebUI | 新增独立 Reproduction 页面（与 Research 平级）|
 | 分支 | 当前不切，规划完成后再切 |
@@ -149,13 +149,17 @@
 └──────────────────────────┬──────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ ③ 复现层（参数直调）                                        │
+│ ③ 复现层（双路径）                                          │
 │                                                              │
-│ extract.py 读取 wiki 页 → 映射到预定义策略类型               │
-│   + 抽取参数 {strategy_type, params, data_config}            │
+│ 路径 A（主路径）：参数化直调                                 │
+│   extract.py 读取 wiki 页 → 映射到预定义策略类型             │
+│   → {signal_type, params, data_config}                       │
+│   → backtest.py 实例化预写策略（无需 LLM 生成）              │
 │                                                              │
-│ backtest.py 用参数实例化预写策略（非 LLM 生成代码）           │
-│   ThresholdStrategy / FactorRankingStrategy / ...             │
+│ 路径 B（降级路径）：自动代码生成                             │
+│   预写策略无匹配 → LLM 生成完整策略代码                      │
+│   → subprocess 执行（无需沙箱基础设施）                      │
+│   （无人介入，全自动降级）                                   │
 │                                                              │
 │ 路径：strategy/reproduction/backtest.py（~350行）            │
 │ 路径：strategy/reproduction/extract.py（~80行）              │
@@ -310,21 +314,21 @@ async def extract_paper_structure(wiki, source_summary_page):
     wiki.write_relations(relations)
 ```
 
-### 4.3 复现层（参数化直调）
+### 4.3 复现层（双路径）
 
-**不生成代码，不用沙箱，不经过 Skill 系统。** 复现层只有 2 个函数：
+**主路径（A）**：预写策略 + 参数化调用。**降级路径（B）**：自动 LLM 代码生成 + subprocess 执行。无人介入。
 
 ```python
 # strategy/reproduction/backtest.py（~350行）
 
-# 预写通用策略（不下车，不生成代码）
+# ── 路径 A：预写通用策略 ──
 class GenericStrategy(bt.Strategy):
     """单一策略类，signal_type 决定逻辑分支"""
     params = (
-        ('signal_type', 'ma_cross'),       # 策略类型
-        ('params', {}),                     # 信号参数字典
-        ('position_pct', 0.1),             # 仓位比例
-        ('stop_loss', None),               # 止损
+        ('signal_type', 'ma_cross'),
+        ('params', {}),
+        ('position_pct', 0.1),
+        ('stop_loss', None),
     )
 
     def next(self):
@@ -345,31 +349,48 @@ class GenericStrategy(bt.Strategy):
             rsi = bt.indicators.RSI(self.data.close, period=p.get('period', 14))
             return (50 - rsi[0]) / 50
         elif st == 'factor_rank':
-            # 多标的因子排名
             ...
         return 0.0
 
 
-# strategy/reproduction/extract.py（~80行）
-
+# extract.py（~80行）
 async def extract_paper_structure(wiki, paper_id):
-    """读取 wiki 页，返回策略参数"""
+    """读取 wiki 页，返回策略参数或标记需要代码生成"""
     pages = read_wiki_pages(wiki, paper_id)
     result = await LLM.aask("repro_extract", {"pages": pages})
-    # LLM 返回：{signal_type, params, data_config, position_pct, ...}
+    # result.signal_type == "unknown" → 降级到路径 B
     return result
+
+
+# ── 路径 B：自动降级到 LLM 代码生成（预写策略不满足时）──
+async def generate_and_run_custom(wiki, config, data):
+    """LLM 生成完整策略代码 + subprocess 执行"""
+    code = await LLM.aask("repro_codegen", {
+        "pages": read_wiki_pages(wiki, config['paper_id']),
+        "strategy_config": config,
+    })
+    # 写入临时 .py 文件，subprocess 执行
+    with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as f:
+        f.write(code)
+        f.flush()
+        result = subprocess.run([sys.executable, f.name],
+                               capture_output=True, text=True, timeout=120)
+    return json.loads(result.stdout)
 
 
 # run_reproduction 主流程
 async def run_reproduction(wiki_id, paper_id):
     wiki = Wiki(wiki_id)
-    # 1. 提取参数
     config = await extract_paper_structure(wiki, paper_id)
-    # 2. 获取数据（缓存优先）
     data = await DataRouter.get(config['data_config'])
-    # 3. 回测
-    result = BacktestRunner.run(GenericStrategy, config, data)
-    # 4. 写回 wiki
+
+    if config.get('signal_type') != 'unknown':
+        # 路径 A：参数化直调
+        result = BacktestRunner.run(GenericStrategy, config, data)
+    else:
+        # 路径 B：LLM 生成 + 执行
+        result = await generate_and_run_custom(wiki, config, data)
+
     wiki.write_page(f"Papers/{paper_id}/Backtest", result['report'])
 ```
 
@@ -550,8 +571,16 @@ system: |
   - volatility: 波动率策略（需 lookback/rebalance 周期）
   - momentum: 动量策略（需 lookback/holding 周期）
   - signal_composite: 多信号组合（需各信号权重）
+  - unknown: 以上均不匹配，需 LLM 生成自定义代码
 
   返回 JSON，包含 "wiki"（9 个字段）+ "strategy_config"（signal_type + params）。
+
+  如果论文策略无法映射到任何预定义类型，设 signal_type = "unknown"，
+  框架会自动降级到 LLM 代码生成路径。
+
+user: |
+  wiki 页面内容：
+  {{ pages }}
 
 ### 6.2 repro_analyze_strategy.yaml（策略优劣分析）
 
@@ -601,6 +630,30 @@ user: |
   已知偏差：{{ deviations }}
 ```
 
+### 6.4 repro_codegen.yaml（代码生成 — 降级路径）
+
+**输入**：wiki 页面 + 策略配置
+**输出**：完整可运行的 Python 回测脚本
+
+```yaml
+name: repro_codegen
+description: "预写策略无法满足时，LLM 生成自定义回测代码"
+
+system: |
+  根据论文信息生成完整的 backtrader 回测代码。
+
+  硬性约束：
+  1. 使用 bt.Strategy.next() 接口
+  2. 数据获取用 akshare
+  3. 输出 metrics dict: {sharpe, mdd, total_return, ...}
+  4. 代码必须可独立运行（python xxx.py）
+  5. 禁止 import: requests, urllib, socket, subprocess, os
+
+user: |
+  wiki 页面：{{ pages }}
+  策略配置：{{ strategy_config }}
+```
+
 
 ## 七、待确认细节
 
@@ -608,13 +661,11 @@ user: |
 |---|---|---|
 | 1 | AKShare A 股日线复权方式：前复权/后复权/不复权？ | 回测准确性 |
 | 2 | backtrader data feed 格式：AKShare DataFrame 需怎么转换？ | backtest.py 复杂度 |
-| 3 | KernelGateway：每次新建子进程 vs 常驻进程？ | 资源管理 |
-| 4 | 代码生成粒度：单文件 vs 多文件？ | 生成策略 |
-| 5 | 知识图谱边类型：策略→因子 用什么 relation type？ | 图谱设计 |
-| 6 | WebUI：独立路由还是嵌入 Research？ | 前端工作量 |
-| 7 | LLM 成本：每篇 ~7-10 次调用（~50K-100K tokens），用户需知情 | 用户体验 |
-| 8 | 错误后恢复：重试/从失败 phase 恢复/中断清理？ | Session 管理 |
-| 9 | 用户反馈循环：调参重跑/多策略比较/导出.py？ | 功能范围 |
+| 3 | 知识图谱边类型：策略→因子 用什么 relation type？ | 图谱设计 |
+| 4 | WebUI：独立路由还是嵌入 Research？ | 前端工作量 |
+| 5 | LLM 成本：每篇 ~3-4 次调用（~30K-50K tokens），用户需知情 | 用户体验 |
+| 6 | 错误后恢复：重试/从失败 phase 恢复/中断清理？ | Session 管理 |
+| 7 | 用户反馈循环：调参重跑/多策略比较/导出.py？ | 功能范围 |
 
 ---
 
@@ -762,11 +813,14 @@ async def run_reproduction(session_id):
         db.update_status(session_id, "fetching_data")
         data = await DataRouter.get(config['data_config'])
 
-        # Phase 4: 回测 → 结果写入 wiki 页
+        # Phase 4: 回测（双路径）
         db.update_status(session_id, "backtesting")
-        backtest_result = BacktestRunner.run(
-            GenericStrategy, config, data
-        )
+        if config.get('signal_type') != 'unknown':
+            # 路径 A：预写策略 + 参数化调用
+            backtest_result = BacktestRunner.run(GenericStrategy, config, data)
+        else:
+            # 路径 B：LLM 生成代码 + subprocess 执行（自动降级）
+            backtest_result = await generate_and_run_custom(wiki, config, data)
         wiki.write_page(f"Papers/{session.paper_title}/Backtest", backtest_result['report'])
         db.update_session(session_id, backtest_wiki_page=f"Papers/{session.paper_title}/Backtest")
         db.create_artifact(session_id, "backtest",
@@ -988,6 +1042,7 @@ async def extract_broker_report(pdf_path: str) -> str:
 | `strategy/data/router.py` | ~120 | AKShare + iFinD 路由 |
 | `strategy/data/cache.py` | ~100 | AKShare 数据本地缓存 |
 | `prompts/_defaults/repro_extract.yaml` | ~80 | 结构化抽取（含策略类型映射）|
+| `prompts/_defaults/repro_codegen.yaml` | ~80 | 降级路径：LLM 生成代码 |
 | `prompts/_defaults/repro_analyze_strategy.yaml` | ~60 | 策略优劣分析 |
 | `prompts/_defaults/repro_analyze_backtest.yaml` | ~80 | 回测分析 |
 | `web/webui/src/pages/Reproduction/index.tsx` | ~200 | 主页面 |
@@ -995,7 +1050,7 @@ async def extract_broker_report(pdf_path: str) -> str:
 | `web/webui/src/pages/Reproduction/Detail.tsx` | ~200 | 详情（5个tab）|
 | `web/webui/src/components/BacktestChart.tsx` | ~100 | 净值曲线 |
 | `web/webui/src/components/ReadinessBadge.tsx` | ~50 | 就绪度徽章 |
-| **合计** | **~1690** | **Python ~910 + YAML ~220 + TS ~700** |
+| **合计** | **~1770** | **Python ~910 + YAML ~300 + TS ~700** |
 
 ---
 
@@ -1030,9 +1085,6 @@ async def extract_broker_report(pdf_path: str) -> str:
 ```toml
 [project.optional-dependencies]
 repro = [
-  "jupyter-kernel-gateway>=2.5",
-  "jupyter-client>=8.6",
-  "nbformat>=5.10",
   "akshare>=1.16",
   "backtrader>=1.9.78",
   "arxiv>=2.1",
@@ -1062,7 +1114,7 @@ ifind = [
 | LLM 不可重现 | seed + low temp + prompt 版本号 |
 | iFinD 无 token | fallback 到 AKShare |
 | 券商研报 OCR 成本 | 仅按需触发 |
-| 策略类型映射失败 | LLM 无法映射到已知类型 → 标记 unknown，提示用户手动选择 |
+| 策略类型映射失败 | LLM 无法映射到已知类型 → 自动降级到路径 B（LLM 代码生成 + 输出验证）|
 | AKShare 数据不可靠 | DataCache 缓存 + SynthProvider 兜底 |
 | **LLM 调用成本** | **~3-4 次/篇（提取 + 策略分析 + 回测分析），比代码生成方案减少 ~50%** |
 | **WebUI 复杂度** | **M0 评估砍掉 ReadinessBadge，合并页面** |

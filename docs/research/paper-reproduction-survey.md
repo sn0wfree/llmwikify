@@ -108,9 +108,8 @@ Markdown 全文
 
 ```
 报告 + 公式 + 参数
-  → LLM 代码生成
-    数据获取 → 信号计算 → 仓位/换仓规则 → backtrader Strategy
-  → 静态检查（ruff / mypy / nbconvert --execute）
+  → LLM 结构化抽取（非代码生成）
+     signal_type + params → 预写 backtrader 策略
   → backtrader 回测
   → 指标（Sharpe / MDD / Calmar / IR）+ 净值曲线
 ```
@@ -124,7 +123,7 @@ Markdown 全文
 | PDF 公式识别 | Nougat / Pix2Text / Mathpix | Phase 1 仅做 LaTeX 文本保留，Phase 4 视需求加 Nougat |
 | 研报图表 OCR | vision-LLM 描述 + 数据重绘 | Phase 3 引入，按页预算 ≤2 页/篇 |
 | 多步推理漂移 | 多 Agent 辩论 + 显式 6 步框架 | autoresearch 框架就位，直接复用 |
-| 代码生成正确性 | LLM 多次 + 单元测试 + nbconvert execute | 静态校验 + smoke test + sandbox |
+| 代码生成正确性 | LLM 多次 + 单元测试 + nbconvert execute | **预写策略优先**，不满足时 LLM 生成 + subprocess 执行 |
 | 回测结果复现度 | 固定数据源 + 固定手续费/滑点 + 明确披露 | config 强约束，结果页 + 「已知偏差」声明 |
 | LLM 不可重现 | 固定 seed + low temperature + 显式 prompt 版本 | PromptRegistry 已支持 |
 | 数据源授权 | AKShare（主）+ iFinD（补），不用 Tushare | AKShare（主）+ iFinD（补）|
@@ -152,13 +151,12 @@ Markdown 全文
 ### 5.2 缺失 / 需新增
 
 | 缺失项 | 优先级 |
-|---|---|
+|---|---|---|
 | strategy/reproduction 目录和核心模块 | P0 |
 | arXiv/DOI 输入适配 | P1 |
-| 复现专用 Prompt YAML | P0 |
-| backtrader 集成 | P0 |
-| 数据源（AKShare + iFinD）| P0 |
-| KernelGateway 沙箱 | P1 |
+| 复现专用 Prompt YAML（3 个）| P0 |
+| backtrader 集成（预写策略）| P0 |
+| 数据源（AKShare + iFinD + DataCache）| P0 |
 | Reproduction WebUI 面板 | P1 |
 | 分析层（策略分析 + 回测分析）| P0 |
 
@@ -193,6 +191,6 @@ Markdown 全文
 
 1. **完全复用 llmwikify 现有链路**：输入 + 通用理解零新代码。
 2. **wiki.md 驱动结构化抽取**：只写 prompt，不写理解层模块。
-3. **ChatBase + Skill 驱动复现**：程序化调用，不造新引擎。
-4. **backtrader 回测 + AKShare/iFinD 数据**：薄封装。
+3. **预写策略优先，LLM 代码生成为降级**：通用模式参数化调用，边缘情况自动生成。
+4. **backtrader 回测 + AKShare/iFinD/DataCache**：数据缓存优先，减少网络依赖。
 5. **知识图谱 + LLM prompt 驱动分析**：前置 + 后置。
