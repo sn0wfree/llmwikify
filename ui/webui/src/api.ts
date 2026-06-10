@@ -341,7 +341,7 @@ export const api = {
     scan: (path?: string) =>
       request<{ wikis: unknown[] }>('/wikis/scan', {
         method: 'POST',
-        body: JSON.stringify({ path }),
+        body: JSON.stringify({ scan_paths: path ? [path] : undefined }),
       }),
   },
 

@@ -20,6 +20,7 @@ export function WikiManager({ onClose }: WikiManagerProps) {
     scanWikis,
     setDefaultWiki,
     loading,
+    error,
   } = useWikiStore();
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -77,6 +78,13 @@ export function WikiManager({ onClose }: WikiManagerProps) {
 
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[60vh]">
+          {/* Error banner */}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded p-2 mb-4">
+              {error}
+            </div>
+          )}
+
           {/* Wiki list */}
           <div className="space-y-3 mb-6">
             {wikis.map((wiki) => (
