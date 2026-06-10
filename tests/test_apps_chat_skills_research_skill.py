@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from llmwikify.apps.chat.agent.react_loop import (
+from llmwikify.apps.chat.agent.react_engine import (
     EVENT_ACTION_ERROR,
     EVENT_OBSERVATION_ERROR,
     EVENT_PHASE,
