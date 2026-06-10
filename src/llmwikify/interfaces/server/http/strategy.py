@@ -1,0 +1,200 @@
+"""Strategy REST endpoints.
+
+Thin FastAPI router for strategy tracking. Matches the pattern of
+reproduction.py: global deps set during app startup via set_strategy_deps().
+
+Endpoints:
+    GET  /api/strategy/list              — list all Strategy wiki pages
+    GET  /api/strategy/{slug}            — get Strategy definition
+    POST /api/strategy/{slug}/backtest   — run strategy backtest
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from typing import Any
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/strategy", tags=["strategy"])
+
+_WIKI_REGISTRY: Any = None
+
+
+def set_strategy_deps(wiki_registry: Any) -> None:
+    """Set dependencies during app startup."""
+    global _WIKI_REGISTRY
+    _WIKI_REGISTRY = wiki_registry
+
+
+def _get_wiki(wiki_id: str | None = None) -> Any:
+    if _WIKI_REGISTRY is None:
+        raise RuntimeError("Wiki registry not initialized")
+    if wiki_id:
+        return _WIKI_REGISTRY.get_wiki(wiki_id)
+    return _WIKI_REGISTRY.get_default_wiki()
+
+
+def _parse_frontmatter(content: str) -> dict[str, Any]:
+    """Parse YAML-ish frontmatter from wiki page content."""
+    import re
+    m = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
+    if not m:
+        return {}
+    out: dict[str, Any] = {}
+    for line in m.group(1).splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if value.startswith("[") and value.endswith("]"):
+            inner = value[1:-1].strip()
+            out[key] = [v.strip().strip('"').strip("'") for v in inner.split(",") if v.strip()]
+        elif value.startswith("{") and value.endswith("}"):
+            inner = value[1:-1].strip()
+            as_dict: dict[str, Any] = {}
+            for pair in inner.split(","):
+                if ":" not in pair:
+                    continue
+                k, _, v = pair.partition(":")
+                as_dict[k.strip()] = v.strip().strip('"').strip("'")
+            out[key] = as_dict
+        else:
+            out[key] = value.strip('"').strip("'")
+    return out
+
+
+def _read_strategy_from_wiki(wiki: Any, slug: str) -> dict[str, Any] | None:
+    """Read a Strategy page from wiki directory."""
+    strategy_dir = wiki.wiki_dir / "strategy"
+    if not strategy_dir.is_dir():
+        return None
+    md_path = strategy_dir / f"{slug}.md"
+    if not md_path.exists():
+        return None
+    try:
+        content = md_path.read_text(encoding="utf-8")
+        return _parse_frontmatter(content)
+    except OSError:
+        return None
+
+
+@router.get("/list")
+async def list_strategies() -> dict[str, Any]:
+    """List all Strategy pages in the wiki."""
+    wiki = _get_wiki()
+    strategy_dir = wiki.wiki_dir / "strategy"
+    if not strategy_dir.is_dir():
+        return {"strategies": []}
+
+    results = []
+    for md in sorted(strategy_dir.glob("*.md")):
+        try:
+            content = md.read_text(encoding="utf-8")
+            fm = _parse_frontmatter(content)
+            if fm:
+                fm["_slug"] = md.stem
+                results.append(fm)
+        except OSError as exc:
+            logger.warning("could not read %s: %s", md, exc)
+
+    return {"strategies": results}
+
+
+@router.get("/{slug}")
+async def get_strategy(slug: str) -> dict[str, Any]:
+    """Get a Strategy page's definition."""
+    wiki = _get_wiki()
+    strategy = _read_strategy_from_wiki(wiki, slug)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail=f"Strategy '{slug}' not found")
+    return {"slug": slug, "strategy": strategy}
+
+
+class StrategyBacktestRequest(BaseModel):
+    symbol: str = "600660.SH"
+    start_date: str = Field(default="2024-01-01", pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str = Field(default="2024-03-31", pattern=r"^\d{4}-\d{2}-\d{2}$")
+    initial_cash: float = 1_000_000.0
+    commission: float = 0.001
+    benchmark_code: str = "000300.SH"
+
+
+@router.post("/{slug}/backtest")
+async def backtest_strategy(slug: str, req: StrategyBacktestRequest) -> dict[str, Any]:
+    """Run strategy backtest using existing run_backtest pipeline."""
+    from llmwikify.reproduction.backtest import run_backtest
+    from llmwikify.reproduction.metrics import compute_extended_metrics, compute_monthly_returns
+    from llmwikify.reproduction.router import DataRouter
+
+    wiki = _get_wiki()
+    strategy = _read_strategy_from_wiki(wiki, slug)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail=f"Strategy '{slug}' not found")
+
+    signal_type = strategy.get("signal_type", "unknown")
+    signal_params = strategy.get("signal_params", {})
+
+    # Fetch data
+    router = DataRouter(use_cache=True)
+    data, source = await asyncio.to_thread(
+        router.get, req.symbol, req.start_date, req.end_date
+    )
+
+    # Fetch benchmark
+    benchmark_df = await asyncio.to_thread(
+        router.get_benchmark, req.start_date, req.end_date, req.benchmark_code
+    )
+    benchmark_returns = None
+    if benchmark_df is not None and "close" in benchmark_df.columns:
+        closes = benchmark_df["close"].values
+        benchmark_returns = [
+            (closes[i] - closes[i-1]) / closes[i-1] if closes[i-1] != 0 else 0.0
+            for i in range(1, len(closes))
+        ]
+
+    # Run backtest
+    result = await asyncio.to_thread(
+        run_backtest,
+        strategy=signal_type,
+        data=data,
+        config={
+            "signal_params": signal_params,
+            "initial_cash": req.initial_cash,
+            "commission": req.commission,
+        },
+    )
+
+    # Compute extended metrics
+    extended = compute_extended_metrics(
+        trades=result.trades,
+        initial_cash=req.initial_cash,
+        final_cash=result.final_cash,
+        benchmark_returns=benchmark_returns,
+    )
+
+    # Compute monthly returns
+    monthly = compute_monthly_returns(result.trades, req.initial_cash)
+
+    return {
+        "slug": slug,
+        "strategy": strategy,
+        "symbol": req.symbol,
+        "start_date": req.start_date,
+        "end_date": req.end_date,
+        "data_source": source,
+        "status": result.status,
+        "error": result.error,
+        "metrics": extended,
+        "monthly_returns": monthly,
+        "trades_count": len(result.trades),
+    }
