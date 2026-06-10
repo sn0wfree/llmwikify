@@ -145,6 +145,7 @@ class TestResearchAgentIntegration:
         assert report.results[0].passed is True
         assert report.summary() == "1/1 passed (100%)"
 
+    @pytest.mark.skip(reason="v0.38: ChatBase.ask() sync method removed")
     def test_research_via_chat_interface(self) -> None:
         """Smoke test: ``agent.ask()`` from ChatBase still works on a
         ResearchAgent — confirms the inheritance."""

@@ -136,12 +136,12 @@ class TestChatBaseConstruction:
         cb = ChatBase(llm_client=stub, system_prompt="sys")
         assert cb.llm_client is stub
         assert cb._default_system_prompt == "sys"
-        assert cb.tools == {}
 
     def test_default_system_prompt_empty(self) -> None:
         cb = ChatBase(llm_client=StubLLM())
         assert cb._default_system_prompt == ""
 
+    @pytest.mark.skip(reason="v0.38: tools property removed")
     def test_tools_is_a_copy(self) -> None:
         """``tools`` property should return a copy, not the live dict."""
         cb = ChatBase(llm_client=StubLLM())
@@ -176,6 +176,7 @@ class TestChatBaseNewSession:
 # ─── tool registration ──────────────────────────────────────────
 
 
+@pytest.mark.skip(reason="v0.38: register_tool / tools dict removed")
 class TestChatBaseRegisterTool:
     def test_register_and_retrieve(self) -> None:
         cb = ChatBase(llm_client=StubLLM())
@@ -197,6 +198,7 @@ class TestChatBaseRegisterTool:
 # ─── ask() ──────────────────────────────────────────────────────
 
 
+@pytest.mark.skip(reason="v0.38: ask() sync method removed")
 class TestChatBaseAsk:
     def test_ask_returns_reply(self) -> None:
         stub = StubLLM(reply="the answer is 42")

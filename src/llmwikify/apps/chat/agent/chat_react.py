@@ -104,7 +104,6 @@ class ChatReActState:
     round: int = 0
 
     final_answer: str = ""
-    pending_tool_calls: list[dict[str, Any]] = field(default_factory=list)
     llm_content: str = ""
     llm_thinking: str = ""
 
@@ -204,12 +203,10 @@ class ChatReActBridge:
             "phase": "",
             "cancelled": False,
             "paused": False,
-            "pending_tool_calls": [],
             "llm_content": "",
             "llm_thinking": "",
         }
 
-        actions = self._build_actions(tool_registry)
 
         # MUTABLE message list (Phase 6.1 / v0.37): the reason
         # callback and the action handler both close over this
@@ -221,7 +218,7 @@ class ChatReActBridge:
         conversation_messages: list[dict[str, Any]] = list(messages)
 
         return ReActConfig(
-            actions=actions,
+            actions=[],
             initial_state=initial_state,
             reason=self._make_reason_callback(
                 conversation_messages=conversation_messages,
@@ -240,34 +237,6 @@ class ChatReActBridge:
             on_after_act=self._make_after_act_hook(),
         )
 
-    def _build_actions(self, tool_registry: Any) -> list[SkillAction]:
-        """Build SkillAction stubs from the tool registry.
-
-        These are used by ReActEngine for action dispatch. In chat
-        mode the actual execution goes through ``action_handler``,
-        so the handler bodies are no-ops here.
-        """
-        actions: list[SkillAction] = []
-        try:
-            tools = tool_registry.list_tools()
-            for tool in tools:
-                name = tool.get("name", "")
-                if not name:
-                    continue
-                actions.append(SkillAction(
-                    name=name,
-                    description=tool.get("description", ""),
-                    handler=lambda args, ctx: SkillResult.ok({}),
-                    input_schema=tool.get("parameters", {
-                        "type": "object",
-                        "properties": {},
-                    }),
-                ))
-        except Exception as e:
-            logger.warning("Failed to build actions from tool registry: %s", e)
-        return actions
-
-    # ─── reason callback ──────────────────────────────────────
 
     def _make_reason_callback(
         self,
@@ -485,8 +454,7 @@ class ChatReActBridge:
         pending tool call:
 
         - Emits ``tool_call_start``.
-        - Updates ``ctx._tool_calls`` / ``_recent_tool_entries`` /
-          ``tool_invocations``.
+        - Updates ``ctx._tool_calls``.
         - Calls ``chat_service._execute_tool`` (DB log + ingest log
           + tool registry execution + confirmation flow).
         - **Appends a ``{role: "tool", name, content}`` message to
@@ -543,10 +511,6 @@ class ChatReActBridge:
                 entry = {"tool": tool_name, "args": args, "status": "pending"}
                 if hasattr(ctx, "_tool_calls"):
                     ctx._tool_calls[tool_name] = entry
-                if hasattr(ctx, "_recent_tool_entries"):
-                    ctx._recent_tool_entries.append(entry)
-                if hasattr(ctx, "tool_invocations"):
-                    ctx.tool_invocations += 1
 
                 # Execute tool (handles DB log + ingest log)
                 try:

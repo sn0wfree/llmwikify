@@ -47,7 +47,6 @@ from llmwikify.apps.chat.base import (
     ChatBase,
     ChatMessage,
     ChatSession,
-    _SkillToolProxy as SkillToolProxy,
 )
 
 
@@ -149,6 +148,7 @@ class TestConstruction:
 
 
 class TestRegisterSkills:
+    @pytest.mark.skip(reason="v0.38: _tools dict removed; register_skills now count-only")
     def test_register_bulk_creates_qualified_names(self, chat: ChatBase) -> None:
         n = chat.register_skills()
         assert n == 26
@@ -157,6 +157,7 @@ class TestRegisterSkills:
         assert "search.search" in chat.tools
         assert "filter.filter" in chat.tools
 
+    @pytest.mark.skip(reason="v0.38: _tools dict removed; register_skills now count-only")
     def test_register_skills_with_specific_registry(
         self, chat: ChatBase, fresh_registry: SkillRegistry
     ) -> None:
@@ -167,6 +168,7 @@ class TestRegisterSkills:
         assert n == 26
         assert len(chat.tools) == before + 26
 
+    @pytest.mark.skip(reason="v0.38: _SkillToolProxy removed")
     def test_register_skills_uses_skilltoolproxy(
         self, chat: ChatBase
     ) -> None:
@@ -176,6 +178,7 @@ class TestRegisterSkills:
         assert proxy._skill_name == "research"
         assert proxy._action_name == "run_research"
 
+    @pytest.mark.skip(reason="v0.38: _tools dict removed; register_skills now count-only")
     def test_register_skills_replaces_existing(self, chat: ChatBase) -> None:
         n1 = chat.register_skills()
         n2 = chat.register_skills()
@@ -238,6 +241,7 @@ class TestToolsSchema:
 # ─── invoke_tool (Phase 10 core) ─────────────────────────────────
 
 
+@pytest.mark.skip(reason="v0.38: invoke_tool sync method removed")
 class TestInvokeTool:
     def test_qualified_name_routing(self, chat: ChatBase) -> None:
         r = chat.invoke_tool("clarify.clarify", {"query": "What is X?"})
@@ -276,6 +280,7 @@ class TestInvokeTool:
 # ─── ask_with_tools (Phase 10 core) ──────────────────────────────
 
 
+@pytest.mark.skip(reason="v0.38: ask_with_tools sync method removed")
 class TestAskWithTools:
     def test_no_tools_returns_string_reply(self, chat: ChatBase) -> None:
         reply = chat.ask_with_tools("Hello")
@@ -398,6 +403,7 @@ class TestAskWithTools:
 # ─── _call_llm_with_tools (internal) ────────────────────────────
 
 
+@pytest.mark.skip(reason="v0.38: _call_llm_with_tools removed")
 class TestCallLLMWithTools:
     def test_openai_style_with_tools_kwarg(self, chat: ChatBase) -> None:
         tools = [{"type": "function", "function": {"name": "x"}}]
@@ -508,6 +514,7 @@ class TestExtractContentAndToolCalls:
 # ─── SkillToolProxy ──────────────────────────────────────────────
 
 
+@pytest.mark.skip(reason="v0.38: _SkillToolProxy removed")
 class TestSkillToolProxy:
     def test_repr(self, fresh_registry: SkillRegistry) -> None:
         proxy = SkillToolProxy(
@@ -532,6 +539,7 @@ class TestSkillToolProxy:
 # ─── End-to-end (the actual use case) ───────────────────────────
 
 
+@pytest.mark.skip(reason="v0.38: ask_with_tools sync method removed")
 class TestEndToEndSkillChat:
     def test_clarify_then_search_then_final(
         self, chat: ChatBase

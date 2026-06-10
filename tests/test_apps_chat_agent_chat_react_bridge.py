@@ -306,6 +306,7 @@ class TestBridgeBuildConfig:
         assert config.initial_state["session_id"] == "s1"
         assert config.initial_state["user_message"] == "hello"
 
+    @pytest.mark.skip(reason="v0.38: _build_actions removed; chat mode uses action_handler")
     def test_build_config_builds_actions(self, chat_service: ChatService) -> None:
         bridge = ChatReActBridge(chat_service)
         config = bridge.build_config(
@@ -428,7 +429,6 @@ class TestEndToEndToolCall:
 
         # Verify ctx was updated
         assert "search" in ctx._tool_calls
-        assert ctx.tool_invocations == 1
 
         # Verify observation was added
         assert any("search" in obs for obs in ctx.react_observations)

@@ -33,8 +33,10 @@ from llmwikify.apps.chat.agent.service import (
     AgentContext,
     ChatEvent,
     ChatService,
-    _parse_perl_args,
-    _parse_text_tool_call,
+)
+from llmwikify.apps.chat.agent.text_mode_tool import (
+    parse_perl_args as _parse_perl_args,
+    parse_text_tool_call as _parse_text_tool_call,
 )
 
 

@@ -30,9 +30,9 @@ from llmwikify.apps.chat.base import ChatBase
 from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.apps.chat.agent.chat_react import REACT_SYSTEM_PROMPT
 from llmwikify.apps.chat.agent.text_mode_tool import (
-    TOOL_CALL_RE as _TOOL_CALL_RE,
-    parse_text_tool_call as _parse_text_tool_call,
-    parse_perl_args as _parse_perl_args,
+    TOOL_CALL_RE,
+    parse_text_tool_call,
+    parse_perl_args,
     TextModeParser,
 )
 
@@ -43,115 +43,6 @@ logger = logging.getLogger(__name__)
 # The chat layer has no per-user identity; preferences are
 # scoped to the local install / single user.
 DEFAULT_USER_ID = "default"
-
-
-# ─── Text-mode tool-call parsing ────────────────────────────────
-#
-# Some LLMs (especially smaller or non-tool-aware ones) emit tool
-# calls as inline text instead of using the OpenAI-style structured
-# ``tool_calls`` field. The most common pattern is::
-#
-#     [TOOL_CALL] {tool => "wiki_read_page",
-#                  args => { --page_name "overview" }} [/TOOL_CALL]
-#
-# We detect and execute these blocks the same way as native tool
-# calls, suppressing the leaked markup from the user-visible stream.
-
-_TOOL_CALL_RE = re.compile(
-    r"\[TOOL_CALL\]\s*(.*?)\s*\[/TOOL_CALL\]",
-    re.DOTALL,
-)
-
-
-def _parse_perl_args(body: str) -> dict[str, str]:
-    """Parse a Perl-style ``{key => value, ...}`` hash into a dict.
-
-    Supports::
-        tool => "wiki_read_page"
-        "page_name" => "overview"
-        --page_name "overview"
-    """
-    out: dict[str, str] = {}
-    s = body.strip()
-    if s.startswith("{") and s.endswith("}"):
-        s = s[1:-1]
-    for part in re.split(r",\s*", s):
-        part = part.strip()
-        if not part:
-            continue
-        m = re.match(r"--(\w+)\s+(.+)$", part, re.DOTALL)
-        if m:
-            out[m.group(1)] = _unquote(m.group(2).strip())
-            continue
-        m = re.match(
-            r'(?:"(\w+)"|(\w+))\s*=>\s*(.+)$',
-            part,
-            re.DOTALL,
-        )
-        if m:
-            key = m.group(1) or m.group(2)
-            val = m.group(3).strip().rstrip(",").strip()
-            out[key] = _unquote(val)
-    return out
-
-
-def _unquote(s: str) -> str:
-    """Strip a single layer of matching surrounding quotes."""
-    if len(s) >= 2 and (
-        (s.startswith('"') and s.endswith('"'))
-        or (s.startswith("'") and s.endswith("'"))
-    ):
-        return s[1:-1]
-    return s
-
-
-def _parse_text_tool_call(body: str) -> tuple[str, dict[str, str]] | None:
-    """Extract ``(tool_name, args)`` from the body of a [TOOL_CALL] block.
-
-    Returns ``None`` if the body is not a recognisable tool-call form,
-    in which case the caller should pass the text through verbatim.
-    """
-    m = re.search(r'tool\s*=>\s*"([^"]+)"', body)
-    if not m:
-        return None
-    tool_name = m.group(1).strip()
-    args = _extract_args_block(body)
-    return tool_name, args
-
-
-def _extract_args_block(body: str) -> dict[str, str]:
-    """Find ``args => { ... }`` in ``body`` and parse the inner hash.
-
-    Counts nested braces so we capture the full inner hash even when
-    argument values themselves contain braces. Returns an empty dict
-    if no ``args =>`` block is found.
-    """
-    m = re.search(r"args\s*=>\s*\{", body)
-    if not m:
-        return {}
-    start = m.end()  # position right after the opening '{'
-    depth = 1
-    i = start
-    in_str: str | None = None
-    while i < len(body):
-        ch = body[i]
-        if in_str:
-            if ch == "\\" and i + 1 < len(body):
-                i += 2
-                continue
-            if ch == in_str:
-                in_str = None
-        else:
-            if ch in ('"', "'"):
-                in_str = ch
-            elif ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    return _parse_perl_args(body[start:i])
-        i += 1
-    return {}
 
 
 # ─── SSE event factory ────────────────────────────────────────────
@@ -218,14 +109,7 @@ class AgentContext:
     messages: list[dict[str, str]] = field(default_factory=list)
     recent_wiki_id: str | None = None
     # Phase 1.1 (v0.36): tool call registry keyed by tool name.
-    # ``_recent_tool_entries`` is an ordered list that records
-    # *every* invocation (even if the same tool runs again with
-    # different args). ``tool_invocations`` is a monotonic counter
-    # used by the chat loop to detect "did this iteration dispatch
-    # new tools?".
     _tool_calls: dict[str, Any] = field(default_factory=dict)
-    _recent_tool_entries: list[dict[str, Any]] = field(default_factory=list)
-    tool_invocations: int = 0
 
     # ReAct state tracking (v0.37)
     react_observations: list[str] = field(default_factory=list)
@@ -662,7 +546,6 @@ class ChatService(ChatBase):
         ))
 
     def _parse_wiki_prefix(self, message: str) -> tuple[str | None, str]:
-        import re
         match = re.match(r"^@(\S+)\s+(.*)$", message, re.DOTALL)
         if match:
             return match.group(1), match.group(2)
@@ -706,7 +589,6 @@ class ChatService(ChatBase):
         if tools_section:
             parts.append(tools_section)
         # 5. Current date
-        from datetime import datetime, timezone
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         parts.append(f"## Today's date (UTC)\n{today}")
         # 6. Related past conversations
@@ -964,18 +846,6 @@ class ChatService(ChatBase):
             for t in tools
         ]
 
-    async def _stream_llm(
-        self, llm: Any, messages: list[dict], tools: list[dict] | None = None
-    ) -> AsyncIterator[dict]:
-        """Backward-compat wrapper around the LLM stream.
-
-        Kept for legacy callers. New code uses ChatBase's
-        aask_with_tools, which calls _stream_preprocess for
-        text-mode conversion.
-        """
-        async for event in llm.astream_chat(messages, tools=tools):
-            yield event
-
     async def _llm_stream_with_retry(
         self,
         messages: list[dict],
@@ -1059,14 +929,14 @@ class ChatService(ChatBase):
         chunk = event.get("text", "")
         self._text_mode_buffer += chunk
         while True:
-            m = _TOOL_CALL_RE.search(self._text_mode_buffer)
+            m = TOOL_CALL_RE.search(self._text_mode_buffer)
             if not m:
                 break
             prefix = self._text_mode_buffer[: m.start()]
             if prefix:
                 yield {"type": "content", "text": prefix}
             body = m.group(1)
-            parsed = _parse_text_tool_call(body)
+            parsed = parse_text_tool_call(body)
             if parsed is None:
                 # Unparseable — pass through as text.
                 yield {"type": "content", "text": m.group(0)}
@@ -1143,8 +1013,6 @@ class ChatService(ChatBase):
             "tool": tool_name, "args": args, "status": "pending",
         }
         ctx._tool_calls[tool_name] = entry
-        ctx._recent_tool_entries.append(entry)
-        ctx.tool_invocations += 1
         result = await self._execute_tool(
             tool_name, args, tool_registry, session_id, ctx,
         )
@@ -1252,13 +1120,5 @@ class ChatService(ChatBase):
         if wiki_id:
             return self.wiki_service.get_wiki(wiki_id)
         return self.wiki_service.get_wiki()
-
-    # ─── Iterative tool-call loop (Phase 6 / v0.37) ──────────────
-    #
-    # Phase 6 (v0.37): the iterative tool-call loop is now
-    # implemented by ChatReActBridge + ReActEngine. The legacy
-    # ``_run_chat_iteration`` and ``_run_chat_loop`` methods
-    # (Phase 1.1 / v0.36) have been removed in favor of the
-    # unified ReAct framework.
 
     DEFAULT_MAX_CHAT_ITERATIONS = 4

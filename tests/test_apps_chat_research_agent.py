@@ -74,6 +74,7 @@ class TestResearchAgentConstruction:
         from llmwikify.apps.chat.base import ChatBase
         assert issubclass(ResearchAgent, ChatBase)
 
+    @pytest.mark.skip(reason="v0.38: register_tool / tools dict removed")
     def test_inherits_tools_dict(self) -> None:
         """Tools registered on the agent are stored in the ChatBase dict."""
         llm = StubLLM()
