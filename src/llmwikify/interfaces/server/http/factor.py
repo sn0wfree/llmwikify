@@ -70,31 +70,59 @@ class FactorBacktestRequest(BaseModel):
 
 @router.post("/{slug}/backtest")
 async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, Any]:
-    """Run factor backtest. Stub — returns placeholder until Phase 2.4."""
+    """Run factor backtest using factor_backtest engine."""
+    import asyncio
     from llmwikify.reproduction.extract_factors import read_factor_from_wiki
+    from llmwikify.reproduction.factor_backtest import run_factor_backtest
+    from llmwikify.reproduction.router import DataRouter
 
     wiki = _get_wiki()
     factor = read_factor_from_wiki(wiki, slug)
     if factor is None:
         raise HTTPException(status_code=404, detail=f"Factor '{slug}' not found")
 
-    # Stub: return factor definition + placeholder metrics
+    factor_class = factor.get("factor_class", "momentum")
+    factor_params = factor.get("factor_params", {})
+    if isinstance(factor_params, str):
+        import json
+        try:
+            factor_params = json.loads(factor_params)
+        except (json.JSONDecodeError, TypeError):
+            factor_params = {}
+
+    # Fetch data
+    router = DataRouter(use_cache=True)
+    data, source = await asyncio.to_thread(
+        router.get, req.symbol, req.start_date, req.end_date
+    )
+
+    # Run factor backtest
+    result = await asyncio.to_thread(
+        run_factor_backtest,
+        data=data,
+        factor_class=factor_class,
+        factor_params=factor_params,
+    )
+
     return {
         "slug": slug,
         "factor": factor,
         "symbol": req.symbol,
         "start_date": req.start_date,
         "end_date": req.end_date,
-        "status": "stub",
-        "message": "Factor backtest engine not yet implemented (Phase 2.4)",
+        "data_source": source,
+        "status": "success",
         "metrics": {
-            "ic_mean": 0.0,
-            "ic_std": 0.0,
-            "icir": 0.0,
-            "t_stat": 0.0,
-            "win_rate": 0.0,
-            "annual_return": 0.0,
-            "max_drawdown": 0.0,
-            "turnover": 0.0,
+            "ic_mean": result.ic_mean,
+            "ic_std": result.ic_std,
+            "icir": result.icir,
+            "t_stat": result.t_stat,
+            "win_rate": result.win_rate,
+            "annual_return": result.annual_return,
+            "max_drawdown": result.max_drawdown,
+            "turnover": result.turnover,
         },
+        "ic_series": result.ic_series,
+        "quantile_returns": result.quantile_returns,
+        "quantile_curves": result.quantile_curves,
     }
