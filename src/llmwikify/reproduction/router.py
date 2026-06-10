@@ -244,6 +244,7 @@ class DataRouter:
     """
 
     DEFAULT_CH_PASSWORD = "Imsn0wfree"
+    DEFAULT_BENCHMARK = "000300.SH"  # CSI 300
 
     def __init__(
         self,
@@ -290,6 +291,26 @@ class DataRouter:
         if last_exc is not None:
             logger.error("all sources failed for %s: %s", symbol, last_exc)
         return self._sources[-1].get(symbol, start, end), self._sources[-1].name
+
+    def get_benchmark(
+        self,
+        start: str,
+        end: str,
+        benchmark_code: Optional[str] = None,
+    ) -> Optional[pd.DataFrame]:
+        """Fetch benchmark data (default: CSI 300).
+
+        Returns DataFrame with 'date' and 'close' columns, or None if unavailable.
+        Used for Alpha/Beta computation in strategy backtests.
+        """
+        code = benchmark_code or self.DEFAULT_BENCHMARK
+        try:
+            df, _ = self.get(code, start, end)
+            if df is not None and not df.empty:
+                return df
+        except Exception as exc:
+            logger.warning("benchmark fetch failed for %s: %s", code, exc)
+        return None
 
 
 __all__ = [
