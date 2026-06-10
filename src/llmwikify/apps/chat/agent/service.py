@@ -118,6 +118,10 @@ class AgentContext:
     # Thinking snapshot from the last LLM turn (ReAct "Thought")
     _thinking: str = ""
 
+    # Config-driven limits (v0.38)
+    _observation_limit: int = 10
+    _observation_summary_limit: int = 5
+
     def add_user_message(self, content: str) -> None:
         self.messages.append({"role": "user", "content": content})
 
@@ -133,23 +137,22 @@ class AgentContext:
     def add_observation(self, observation: str) -> None:
         """Track a ReAct observation from a tool call result."""
         self.react_observations.append(observation)
-        # Keep only the last 10 observations to avoid prompt bloat
-        if len(self.react_observations) > 10:
-            self.react_observations = self.react_observations[-10:]
+        if len(self.react_observations) > self._observation_limit:
+            self.react_observations = self.react_observations[-self._observation_limit:]
 
     def add_thought(self, thought: str) -> None:
         """Track a ReAct thought from the LLM reasoning step."""
         if thought:
             self.react_thoughts.append(thought)
-            if len(self.react_thoughts) > 10:
-                self.react_thoughts = self.react_thoughts[-10:]
+            if len(self.react_thoughts) > self._observation_limit:
+                self.react_thoughts = self.react_thoughts[-self._observation_limit:]
 
     def get_observations_summary(self) -> str:
         """Generate a summary of recent observations for prompt injection."""
         if not self.react_observations:
             return ""
         lines = ["## Recent tool observations"]
-        for i, obs in enumerate(self.react_observations[-5:], 1):
+        for i, obs in enumerate(self.react_observations[-self._observation_summary_limit:], 1):
             lines.append(f"{i}. {obs}")
         return "\n".join(lines)
 
@@ -197,13 +200,18 @@ class ChatService(ChatBase):
             LLMRetryManager,
             DBRetryManager,
         )
+        from llmwikify.apps.chat.config import merge_six_step_config
+        self._chat_config = merge_six_step_config()
         self._llm_retry = LLMRetryManager(
-            max_attempts=3, base_delay=2.0, call_timeout=120.0,
+            max_attempts=self._chat_config["llm_retry_max_attempts"],
+            base_delay=self._chat_config["llm_retry_base_delay"],
+            call_timeout=self._chat_config["llm_retry_call_timeout"],
         )
         # Phase 4.2 (v0.36): DBRetryManager retries SQLite
         # 'database is locked' / I/O errors with short backoff.
         self._db_retry = DBRetryManager(
-            max_attempts=3, base_delay=0.2,
+            max_attempts=self._chat_config["chat_db_retry_max_attempts"],
+            base_delay=self._chat_config["chat_db_retry_base_delay"],
         )
 
         # Initialize ChatBase with LLM from WikiService
@@ -340,7 +348,7 @@ class ChatService(ChatBase):
             async for ev in self.aask_with_tools(
                 messages_for_llm,
                 tools=self._get_toolspec(tool_registry),
-                max_iterations=self.DEFAULT_MAX_CHAT_ITERATIONS,
+                max_iterations=self._chat_config["max_chat_rounds"],
                 invoke_tool=invoke,
             ):
                 # Forward all events queued by the callback
@@ -472,7 +480,7 @@ class ChatService(ChatBase):
             async for ev in self.aask_with_tools(
                 messages_for_llm,
                 tools=self._get_toolspec(tool_registry),
-                max_iterations=self.DEFAULT_MAX_CHAT_ITERATIONS,
+                max_iterations=self._chat_config["max_chat_rounds"],
                 invoke_tool=invoke,
             ):
                 while extra_events:
@@ -500,7 +508,11 @@ class ChatService(ChatBase):
         self, session_id: str, wiki_id: str | None = None
     ) -> AgentContext:
         if session_id not in self._contexts:
-            ctx = AgentContext(wiki_id=wiki_id)
+            ctx = AgentContext(
+                wiki_id=wiki_id,
+                _observation_limit=self._chat_config["observation_limit"],
+                _observation_summary_limit=self._chat_config["observation_summary_limit"],
+            )
             # Phase 3.2 (v0.36): restore conversation history
             # through MemoryManager when available, falling
             # back to direct ChatDatabase access when not.
@@ -667,8 +679,10 @@ class ChatService(ChatBase):
         return "\n".join(lines)
 
     def _truncate_messages(
-        self, messages: list[dict[str, str]], max_messages: int = 50
+        self, messages: list[dict[str, str]], max_messages: int | None = None
     ) -> list[dict[str, str]]:
+        if max_messages is None:
+            max_messages = self._chat_config["max_messages"]
         if len(messages) <= max_messages + 1:
             return messages
         system = messages[0]
@@ -710,7 +724,7 @@ class ChatService(ChatBase):
             system_prompt=system_prompt,
             messages=messages_for_llm,
             ctx=ctx,
-            max_iterations=self.DEFAULT_MAX_CHAT_ITERATIONS,
+            max_iterations=self._chat_config["max_chat_rounds"],
         )
         engine = ReActEngine(config)
 
@@ -980,7 +994,7 @@ class ChatService(ChatBase):
                     "wiki_id": ctx.wiki_id or "default",
                     "tool": tool_name,
                     "arguments": args,
-                    "result_summary": str(result)[:500] if result else "",
+                    "result_summary": str(result)[:self._chat_config["summary_truncate_chars"]] if result else "",
                     "status": "executed",
                 })
 
@@ -1027,7 +1041,7 @@ class ChatService(ChatBase):
             result.get("result", result)
             if isinstance(result, dict) else result,
             ensure_ascii=False, default=str,
-        )[:500]
+        )[:self._chat_config["summary_truncate_chars"]]
         ctx.add_observation(f"Called {tool_name}: {result_summary}")
 
         # Phase 3.3 (v0.36): persist tool result to
@@ -1073,8 +1087,8 @@ class ChatService(ChatBase):
                 ensure_ascii=False, default=str,
             )
             # Cap stored content to keep the DB small.
-            if len(content) > 10_000:
-                content = content[:10_000] + "…"
+            if len(content) > self._chat_config["content_truncate_chars"]:
+                content = content[:self._chat_config["content_truncate_chars"]] + "…"
             await self.memory_manager.context.aadd(
                 session_id,
                 entry_type="tool_result",
@@ -1121,4 +1135,3 @@ class ChatService(ChatBase):
             return self.wiki_service.get_wiki(wiki_id)
         return self.wiki_service.get_wiki()
 
-    DEFAULT_MAX_CHAT_ITERATIONS = 4

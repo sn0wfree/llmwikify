@@ -175,7 +175,7 @@ class ChatReActBridge:
         system_prompt: str,
         messages: list[dict[str, str]],
         ctx: Any,
-        max_iterations: int = 4,
+        max_iterations: int | None = None,
     ) -> ReActConfig:
         """Build a ReActConfig for one chat turn.
 
@@ -233,7 +233,7 @@ class ChatReActBridge:
             ),
             observe=self._make_observe_callback(),
             done_condition=lambda s: s.get("phase") == "done",
-            max_rounds=max_iterations,
+            max_rounds=max_iterations or self._chat_service._chat_config["max_chat_rounds"],
             on_after_act=self._make_after_act_hook(),
         )
 
@@ -393,7 +393,8 @@ class ChatReActBridge:
             # 6. Persist accumulated content as the final answer
             state["llm_content"] = accumulated
             state["llm_thinking"] = thinking
-            thought = (thinking[:500] if thinking else accumulated[:200])
+            truncate = self._chat_service._chat_config["summary_truncate_chars"]
+            thought = (thinking[:truncate] if thinking else accumulated[:200])
 
             if hasattr(ctx, "_thinking"):
                 ctx._thinking = thinking
@@ -552,11 +553,12 @@ class ChatReActBridge:
                     logger.debug("_persist_tool_result failed: %s", e)
 
                 # Generate observation
+                truncate = self._chat_service._chat_config["summary_truncate_chars"]
                 result_summary = json.dumps(
                     result.get("result", result)
                     if isinstance(result, dict) else result,
                     ensure_ascii=False, default=str,
-                )[:500]
+                )[:truncate]
                 observation = f"Called {tool_name}: {result_summary}"
 
                 state.setdefault("observations", []).append(observation)
@@ -651,7 +653,8 @@ class ChatReActBridge:
         """
         async def observe(state: dict, ctx: SkillContext) -> dict:
             observations = state.get("observations", [])
-            recent = observations[-5:] if observations else []
+            limit = self._chat_service._chat_config["observation_summary_limit"]
+            recent = observations[-limit:] if observations else []
             summary_lines = ["## Recent tool results"]
             for obs in recent:
                 summary_lines.append(f"- {obs}")

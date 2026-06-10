@@ -966,7 +966,7 @@ class TestChatLoopIteration:
         chat_service.wiki_service.tool_registry.execute = AsyncMock(
             return_value={"result": []}
         )
-        chat_service.DEFAULT_MAX_CHAT_ITERATIONS = 3
+        chat_service._chat_config["max_chat_rounds"] = 3
 
         events = []
         async for ev in chat_service.chat("loop", session_id=sid):
