@@ -141,7 +141,7 @@ def test_factor_get_missing(factor_client):
     assert r.status_code == 404
 
 
-def test_factor_backtest_stub(factor_client):
+def test_factor_backtest(factor_client):
     client, wiki = factor_client
     # Create a factor page
     factor_dir = wiki.wiki_dir / "factor"
@@ -157,8 +157,11 @@ def test_factor_backtest_stub(factor_client):
     })
     assert r.status_code == 200
     body = r.json()
-    assert body["status"] == "stub"
+    assert body["status"] == "success"
     assert body["factor"]["factor_class"] == "momentum"
+    assert "metrics" in body
+    assert "ic_series" in body
+    assert "quantile_curves" in body
 
 
 # ── Strategy tests ──
