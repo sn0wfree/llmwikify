@@ -252,8 +252,9 @@ class ReproductionDatabase:
         result = []
         for r in rows:
             d = dict(r)
-            # Parse payload_json into a usable 'payload' key
-            raw = d.pop("payload_json", None)
+            # Keep payload_json for frontend JSON.parse() compatibility
+            # Also add parsed payload dict for direct access
+            raw = d.get("payload_json")
             try:
                 d["payload"] = json.loads(raw) if raw else {}
             except (json.JSONDecodeError, TypeError):
