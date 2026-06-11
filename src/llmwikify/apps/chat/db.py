@@ -172,6 +172,20 @@ class ChatDatabase(BaseDatabase):
                 ON context_entries(session_id, entry_type)
                 """
             )
+            # ─── v0.40: reverted column for session revert ──────
+            try:
+                conn.execute(
+                    "ALTER TABLE chat_messages ADD COLUMN reverted INTEGER DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass  # column already exists
+            # ─── v0.40: title column for session auto-naming ───
+            try:
+                conn.execute(
+                    "ALTER TABLE chat_sessions ADD COLUMN title TEXT"
+                )
+            except sqlite3.OperationalError:
+                pass  # column already exists
             conn.commit()
 
     def _check_db_size(self) -> None:
@@ -332,6 +346,18 @@ class ChatDatabase(BaseDatabase):
             )
             conn.commit()
 
+    def update_chat_session_title(
+        self, session_id: str, title: str
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE chat_sessions
+                   SET title = ?, updated_at = datetime('now')
+                   WHERE id = ?""",
+                (title, session_id),
+            )
+            conn.commit()
+
     def update_chat_session_jwt(
         self, session_id: str, jwt_token: str
     ) -> None:
@@ -396,12 +422,50 @@ class ChatDatabase(BaseDatabase):
         session = self.get_chat_session(session_id)
         if not session:
             return ""
+        # Prefer stored title
+        stored = session.get("title")
+        if stored:
+            return stored
+        # Fallback: derive from first user message
         messages = self.get_chat_messages(session_id, limit=2)
         for m in messages:
             if m.get("role") == "user":
                 content = m.get("content", "")
                 return content[:100] if content else ""
         return ""
+
+    def revert_to_message(self, session_id: str, message_id: str) -> int:
+        """Mark all messages after message_id as reverted.
+
+        Uses rowid ordering for reliable comparison even when
+        messages share the same created_at timestamp.
+        Returns the number of messages reverted.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+            # Find the rowid of the target message
+            row = conn.execute(
+                "SELECT rowid FROM chat_messages WHERE id = ? AND session_id = ?",
+                (message_id, session_id),
+            ).fetchone()
+            if not row:
+                return 0
+            target_rowid = row[0]
+            # Mark all messages after this rowid as reverted
+            cursor = conn.execute(
+                """UPDATE chat_messages
+                   SET reverted = 1
+                   WHERE session_id = ? AND rowid > ? AND reverted = 0""",
+                (session_id, target_rowid),
+            )
+            # Also revert tool_calls created after this point
+            conn.execute(
+                """DELETE FROM tool_calls
+                   WHERE session_id = ? AND rowid > ?""",
+                (session_id, target_rowid),
+            )
+            conn.commit()
+            return cursor.rowcount
 
     def save_chat_message(self, message: dict) -> None:
         msg_id = message.get("id", uuid.uuid4().hex)
@@ -428,20 +492,22 @@ class ChatDatabase(BaseDatabase):
         session_id: str,
         limit: int = 50,
         before: str | None = None,
+        include_reverted: bool = False,
     ) -> list[dict]:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
+            reverted_clause = "" if include_reverted else " AND reverted = 0"
             if before:
                 rows = conn.execute(
-                    """SELECT * FROM chat_messages
-                       WHERE session_id = ? AND created_at < ?
+                    f"""SELECT * FROM chat_messages
+                       WHERE session_id = ? AND created_at < ?{reverted_clause}
                        ORDER BY created_at DESC LIMIT ?""",
                     (session_id, before, limit),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    """SELECT * FROM chat_messages
-                       WHERE session_id = ?
+                    f"""SELECT * FROM chat_messages
+                       WHERE session_id = ?{reverted_clause}
                        ORDER BY created_at DESC LIMIT ?""",
                     (session_id, limit),
                 ).fetchall()
