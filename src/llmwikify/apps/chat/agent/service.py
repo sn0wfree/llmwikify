@@ -228,6 +228,9 @@ class ChatService(ChatBase):
         # Initialize ChatBase with LLM from WikiService
         llm = wiki_service.get_llm()
         super().__init__(llm_client=llm)
+        # v0.40: session status tracking + abort mechanism
+        self._session_status: dict[str, str] = {}  # session_id -> "idle"|"busy"
+        self._abort_events: dict[str, asyncio.Event] = {}
     # ─── SSE chat ────────────────────────────────────────────────
 
     async def chat(
@@ -245,79 +248,90 @@ class ChatService(ChatBase):
         persistence, and text-mode ``[TOOL_CALL]`` parsing (via
         a custom ``invoke_tool`` callback).
         """
-        if session_id is None:
-            session_id = self.db.create_chat_session(wiki_id, jwt_token)
-            yield {"type": "session_created", "session_id": session_id}
-        else:
-            session = self.db.get_chat_session(session_id)
-            if session is None:
-                session_id = self.db.create_chat_session(wiki_id, jwt_token)
-                yield {"type": "session_created", "session_id": session_id}
-
-        ctx = await self._get_or_create_context(session_id, wiki_id)
-
-        wiki_id_from_prefix, message = self._parse_wiki_prefix(message)
-        if wiki_id_from_prefix:
-            ctx.set_recent_wiki(wiki_id_from_prefix)
-            self.db.update_chat_session_wiki(session_id, wiki_id_from_prefix)
-
-        if wiki_id and not wiki_id_from_prefix:
-            ctx.set_recent_wiki(wiki_id)
-            self.db.update_chat_session_wiki(session_id, wiki_id)
-
-        if jwt_token:
-            self.db.update_chat_session_jwt(session_id, jwt_token)
-
-        ctx.add_user_message(message)
-        self._save_message(session_id, "user", message)
-
-        # v0.40: auto-set session title from first user message
-        session = self.db.get_chat_session(session_id)
-        if session and not session.get("title"):
-            title = message[:100].strip()
-            if title:
-                self.db.update_chat_session_title(session_id, title)
-
-        wiki = self._get_wiki_for_context(ctx)
-        if wiki is None:
-            yield ChatEvent.error("No wiki available")
-            return
-
-        tool_registry = self.wiki_service.get_tool_registry(
-            ctx.wiki_id or self.wiki_service.get_default_wiki_id()
-        )
-
-        # Phase 3.1 (v0.36): pass user_message + session_id so
-        # the prompt can include related-past-conversations.
-        system_prompt = await self._build_system_prompt(
-            ctx.wiki_id,
-            user_message=message,
-            session_id=session_id,
-        )
-        raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
-        # ReAct: inject observations from previous tool calls so the
-        # LLM can use them in its reasoning.
-        obs_summary = ctx.get_observations_summary()
-        if obs_summary:
-            raw_messages.insert(-1, {
-                "role": "system",
-                "content": obs_summary,
-            })
-        # v0.39 P1-1: compact old messages when near capacity,
-        # then truncate to hard limit.
-        raw_messages = await self._compact_messages(raw_messages)
-        messages_for_llm = self._truncate_messages(raw_messages)
-        # Phase 2.3 (v0.36): reset the text-mode buffer so a
-        # previous turn's leftover state doesn't leak in.
-        self._reset_text_mode_buffer()
-
-        # Inject any tool calls already dispatched in previous
-        # iterations as ``tool`` role messages so the LLM sees
-        # them when iterating.
-        # (Phase 2.2 / v0.36: the loop appends to messages_for_llm
-        # in place via the ``invoke_tool`` callback.)
+        # v0.40: set session status to busy
+        self._session_status[session_id or "new"] = "busy"
+        abort_event = asyncio.Event()
+        if session_id:
+            self._abort_events[session_id] = abort_event
 
         try:
+            if session_id is None:
+                session_id = self.db.create_chat_session(wiki_id, jwt_token)
+                yield {"type": "session_created", "session_id": session_id}
+            else:
+                session = self.db.get_chat_session(session_id)
+                if session is None:
+                    session_id = self.db.create_chat_session(wiki_id, jwt_token)
+                    yield {"type": "session_created", "session_id": session_id}
+
+            ctx = await self._get_or_create_context(session_id, wiki_id)
+
+            wiki_id_from_prefix, message = self._parse_wiki_prefix(message)
+            if wiki_id_from_prefix:
+                ctx.set_recent_wiki(wiki_id_from_prefix)
+                self.db.update_chat_session_wiki(session_id, wiki_id_from_prefix)
+
+            if wiki_id and not wiki_id_from_prefix:
+                ctx.set_recent_wiki(wiki_id)
+                self.db.update_chat_session_wiki(session_id, wiki_id)
+
+            if jwt_token:
+                self.db.update_chat_session_jwt(session_id, jwt_token)
+
+            ctx.add_user_message(message)
+            self._save_message(session_id, "user", message)
+
+            # v0.40: auto-set session title from first user message
+            session = self.db.get_chat_session(session_id)
+            if session and not session.get("title"):
+                title = message[:100].strip()
+                if title:
+                    self.db.update_chat_session_title(session_id, title)
+
+            wiki = self._get_wiki_for_context(ctx)
+            if wiki is None:
+                yield ChatEvent.error("No wiki available")
+                return
+
+            tool_registry = self.wiki_service.get_tool_registry(
+                ctx.wiki_id or self.wiki_service.get_default_wiki_id()
+            )
+
+            # Phase 3.1 (v0.36): pass user_message + session_id so
+            # the prompt can include related-past-conversations.
+            system_prompt = await self._build_system_prompt(
+                ctx.wiki_id,
+                user_message=message,
+                session_id=session_id,
+            )
+            raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
+            # ReAct: inject observations from previous tool calls so the
+            # LLM can use them in its reasoning.
+            obs_summary = ctx.get_observations_summary()
+            if obs_summary:
+                raw_messages.insert(-1, {
+                    "role": "system",
+                    "content": obs_summary,
+                })
+            # v0.39 P1-1: compact old messages when near capacity,
+            # then truncate to hard limit.
+            raw_messages = await self._compact_messages(raw_messages)
+            messages_for_llm = self._truncate_messages(raw_messages)
+            # Phase 2.3 (v0.36): reset the text-mode buffer so a
+            # previous turn's leftover state doesn't leak in.
+            self._reset_text_mode_buffer()
+
+            # Inject any tool calls already dispatched in previous
+            # iterations as ``tool`` role messages so the LLM sees
+            # them when iterating.
+            # (Phase 2.2 / v0.36: the loop appends to messages_for_llm
+            # in place via the ``invoke_tool`` callback.)
+
+            # Check if already aborted
+            if abort_event.is_set():
+                yield ChatEvent.error("Session aborted")
+                return
+
             # Delegate to ChatReActBridge + ReActEngine.
             async for event in self._chat_via_react(
                 messages_for_llm=messages_for_llm,
@@ -326,11 +340,19 @@ class ChatService(ChatBase):
                 session_id=session_id,
                 ctx=ctx,
             ):
+                # Check abort between events
+                if abort_event.is_set():
+                    yield ChatEvent.error("Session aborted")
+                    return
                 yield event
 
         except Exception as e:
             logger.exception("Chat error")
             yield ChatEvent.error(str(e))
+        finally:
+            # v0.40: reset session status to idle
+            self._session_status[session_id] = "idle"
+            self._abort_events.pop(session_id, None)
 
     # ─── Confirmation continue (calls WikiService) ───────────────
 
@@ -424,6 +446,24 @@ class ChatService(ChatBase):
     def edit_message(self, message_id: str, new_content: str) -> bool:
         """Edit a message's content in-place."""
         return self.db.update_chat_message(message_id, new_content)
+
+    def abort_session(self, session_id: str) -> bool:
+        """Abort a running session. Returns True if abort was requested."""
+        if self._session_status.get(session_id) != "busy":
+            return False
+        event = self._abort_events.get(session_id)
+        if event:
+            event.set()
+            return True
+        return False
+
+    def get_session_status(self, session_id: str) -> str:
+        """Get session status: 'idle' or 'busy'."""
+        return self._session_status.get(session_id, "idle")
+
+    def get_all_session_status(self) -> dict[str, str]:
+        """Get status for all active sessions."""
+        return dict(self._session_status)
 
     # ─── Private helpers ─────────────────────────────────────────
 
