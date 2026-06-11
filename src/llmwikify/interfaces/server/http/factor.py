@@ -16,7 +16,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +63,8 @@ async def get_factor(slug: str) -> dict[str, Any]:
 
 class FactorBacktestRequest(BaseModel):
     symbol: str = "600660.SH"
-    start_date: str = "2024-01-01"
-    end_date: str = "2024-03-31"
+    start_date: str = Field(default="2024-01-01", pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str = Field(default="2024-03-31", pattern=r"^\d{4}-\d{2}-\d{2}$")
     benchmark_code: str = "000300.SH"
 
 

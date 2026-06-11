@@ -51,6 +51,14 @@ def run_backtest(
 
     if strategy in SIGNAL_NODE_REGISTRY:
         return _run_prewritten(strategy, data, cfg)
+    if strategy == "unknown" or strategy == "codegen":
+        return BacktestResult(
+            status="error",
+            error=f"Cannot run backtest for signal_type='{strategy}'. "
+                  "Provide a valid signal_type or LLM-generated code.",
+            signal_type=strategy,
+            params=cfg,
+        )
     return _run_codegen(strategy, data, cfg)
 
 

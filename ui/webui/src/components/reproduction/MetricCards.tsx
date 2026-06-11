@@ -1,11 +1,12 @@
 /**
- * MetricCards — render BacktestResult metrics in a 2x3 grid.
+ * MetricCards — render BacktestResult metrics using shared MetricCards.
  *
- * Sharpe / MDD / Win Rate / Total Return / Final Cash / Trades
+ * Wraps shared/MetricCards with ReproductionMetrics → Metric[] mapping.
  */
 
-import { Card } from '../ui/Card';
 import { TrendingUp, TrendingDown, Activity, Target, Wallet, BarChart3 } from 'lucide-react';
+import { MetricCards as SharedMetricCards } from '../shared/MetricCards';
+import type { Metric } from '../shared/MetricCards';
 import type { ReproductionMetrics } from '../../lib/reproduction-api';
 
 interface MetricCardsProps {
@@ -15,15 +16,13 @@ interface MetricCardsProps {
 export function MetricCards({ metrics }: MetricCardsProps) {
   if (!metrics) {
     return (
-      <Card padding="md">
-        <div className="text-xs text-muted-foreground text-center py-8">
-          暂无回测结果
-        </div>
-      </Card>
+      <div className="text-xs text-muted-foreground text-center py-8">
+        暂无回测结果
+      </div>
     );
   }
 
-  const cards = [
+  const items: Metric[] = [
     {
       label: 'Sharpe',
       value: metrics.sharpe_ratio.toFixed(4),
@@ -70,24 +69,5 @@ export function MetricCards({ metrics }: MetricCardsProps) {
     },
   ];
 
-  return (
-    <div className="grid grid-cols-3 gap-3">
-      {cards.map(({ label, value, icon: Icon, color, bg }) => (
-        <div
-          key={label}
-          className="bg-card border border-border rounded-lg p-3 transition-all hover:border-primary/30"
-        >
-          <div className="flex items-start justify-between mb-2">
-            <div className="text-[11px] text-muted-foreground">{label}</div>
-            <div className={`w-7 h-7 rounded-md ${bg} flex items-center justify-center`}>
-              <Icon className={`w-3.5 h-3.5 ${color}`} />
-            </div>
-          </div>
-          <div className={`text-xl font-semibold tabular-nums ${color}`}>
-            {value}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <SharedMetricCards metrics={items} columns={3} />;
 }

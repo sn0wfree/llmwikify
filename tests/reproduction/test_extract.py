@@ -13,8 +13,8 @@ from llmwikify.reproduction.extract import (
     VALID_SIGNAL_TYPES,
     extract_from_page,
     extract_strategy_config,
-    _parse_frontmatter,
 )
+from llmwikify.reproduction.utils import parse_frontmatter as _parse_frontmatter
 
 
 PAGE_MA_CROSS = """---
