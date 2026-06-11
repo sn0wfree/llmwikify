@@ -60,7 +60,7 @@ export function PaperForm({ onSubmit, className }: PaperFormProps) {
         setRawFiles(d.files || []);
         setRawDir(d.raw_dir);
         if (d.files && d.files.length > 0 && !sourceRef) {
-          setSourceRef(d.files[0].filename);
+          setSourceRef(d.files[0].path);
         }
       })
       .catch(() => {
@@ -217,14 +217,14 @@ export function PaperForm({ onSubmit, className }: PaperFormProps) {
                 <button
                   key={f.filename}
                   onClick={() => {
-                    setSourceRef(f.filename);
+                    setSourceRef(f.path);
                     if (!paperId.trim()) {
                       setPaperId(f.filename.replace(/\.pdf$/i, ''));
                     }
                   }}
                   className={cn(
                     'px-2.5 py-1 rounded text-xs font-mono transition-colors',
-                    sourceRef === f.filename
+                    sourceRef === f.path
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-background text-foreground hover:bg-primary/20',
                   )}
