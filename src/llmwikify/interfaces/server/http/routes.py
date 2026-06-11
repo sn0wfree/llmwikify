@@ -563,7 +563,17 @@ def _register_reproduction_routes(
     repro_db = ReproductionDatabase(data_dir / "reproduction.db")
     logger.info("Reproduction DB initialized at: %s", repro_db.db_path)
 
-    set_paper_deps(wiki_registry=registry, llm_client=agent_service._get_llm())
+    raw_dir = Path(__file__).resolve().parents[5] / "raw"
+    upload_dir = Path.home() / ".llmwikify" / "papers"
+    logger.info("paper raw_dir: %s, upload_dir: %s", raw_dir, upload_dir)
+
+    set_paper_deps(
+        wiki_registry=registry,
+        llm_client=agent_service._get_llm(),
+        db=repro_db,
+        raw_dir=raw_dir,
+        upload_dir=upload_dir,
+    )
     set_factor_deps(wiki_registry=registry)
     set_strategy_deps(wiki_registry=registry)
     set_repro_deps(db=repro_db, wiki_registry=registry)
