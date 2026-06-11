@@ -243,17 +243,36 @@ async def _run_paper_extraction(
         if signal_type != "unknown":
             _DB.record_event(session_id, "backtest.started", symbol=symbol)
             try:
-                from llmwikify.reproduction.factor_backtest import run_factor_backtest
+                from llmwikify.reproduction.factor_backtest import run_factor_backtest_universe
                 from llmwikify.reproduction.backtest import run_backtest
                 from llmwikify.reproduction.router import DataRouter
+                from llmwikify.reproduction.universe import resolve_universe
 
                 router = DataRouter(use_cache=True)
-                data, source = await asyncio.to_thread(
-                    router.get, symbol, start_date, end_date
+
+                # Prefer universe from data_requirements if available
+                universe_spec = (
+                    extraction.get("data_requirements", {}).get("universe", "HS300")
+                    or "HS300"
+                )
+                # Resolve to actual stock list
+                symbols = await asyncio.to_thread(resolve_universe, universe_spec)
+                # Fall back to single symbol if universe resolution fails
+                if not symbols:
+                    symbols = [symbol] if symbol else ["000001.SZ"]
+
+                merged_df, source = await asyncio.to_thread(
+                    router.get_universe, symbols, start_date, end_date
                 )
 
-                if data is not None and not data.empty:
-                    # Factor backtest
+                if merged_df is not None and not merged_df.empty:
+                    # Pivot to wide format [date × Code]
+                    close_wide = merged_df.pivot_table(
+                        index="date", columns="Code", values="close", aggfunc="last"
+                    )
+                    close_wide = close_wide.sort_index().dropna(how="all")
+
+                    # Factor backtest (cross-section)
                     factor_slug = None
                     for p in pages:
                         if p.get("page_type") == "Factor":
@@ -264,21 +283,29 @@ async def _run_paper_extraction(
                         factor_class = signal_type
                         factor_params = suggested.get("signal_params", {})
                         fb_result = await asyncio.to_thread(
-                            run_factor_backtest,
-                            data=data,
+                            run_factor_backtest_universe,
+                            close_wide=close_wide,
                             factor_class=factor_class,
                             factor_params=factor_params,
+                            adj_mode="M-end",
+                            n_groups=5,
+                            universe=universe_spec,
                         )
                         backtest_results.append({
                             "type": "factor",
                             "slug": factor_slug,
                             "ic_mean": fb_result.ic_mean,
+                            "rank_ic_mean": fb_result.rank_ic_mean,
                             "icir": fb_result.icir,
                             "annual_return": fb_result.annual_return,
+                            "longshort_ann_return": fb_result.longshort_ann_return,
                             "max_drawdown": fb_result.max_drawdown,
                         })
 
-                    # Strategy backtest
+                    # Strategy backtest (single stock for now)
+                    data, _ = await asyncio.to_thread(
+                        router.get, symbol, start_date, end_date
+                    )
                     strategy_class = suggested.get("strategy_class", "trend_following")
                     sb_result = await asyncio.to_thread(
                         run_backtest,
