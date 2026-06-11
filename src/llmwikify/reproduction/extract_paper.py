@@ -15,9 +15,16 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
+import yaml
+from jinja2 import BaseLoader, Environment
+
 from .utils import generate_slug, parse_frontmatter
 
 logger = logging.getLogger(__name__)
+
+_jinja_env = Environment(loader=BaseLoader(), trim_blocks=True, lstrip_blocks=True)
+
+_API_PARAM_KEYS = {"temperature", "max_tokens", "top_p", "top_k"}
 
 
 def _fetch_content(source_ref: str, source_type: str, paper_id: str) -> str:
@@ -61,8 +68,8 @@ def _fetch_content(source_ref: str, source_type: str, paper_id: str) -> str:
             logger.warning("failed to fetch URL content from %s: %s", source_ref, exc)
             return ""
 
-    if source_type == "pdf" and not source_ref.startswith(("http://", "https://")):
-        # Local PDF file
+    if source_type in ("pdf", "raw") and not source_ref.startswith(("http://", "https://")):
+        # Local PDF file (pdf or raw source type)
         try:
             from llmwikify.foundation.extractors.pdf import extract_pdf
 
@@ -78,8 +85,12 @@ def _fetch_content(source_ref: str, source_type: str, paper_id: str) -> str:
     return ""
 
 
-def _load_prompt() -> str:
-    """Load the repro_extract.yaml prompt template."""
+def _load_prompt() -> tuple[str, str, dict[str, Any]]:
+    """Load the repro_extract.yaml prompt template.
+
+    Returns:
+        (system_text, user_template, params) tuple.
+    """
     prompt_path = (
         Path(__file__).parent.parent
         / "foundation"
@@ -89,8 +100,9 @@ def _load_prompt() -> str:
     )
     if not prompt_path.exists():
         logger.warning("repro_extract.yaml not found at %s", prompt_path)
-        return ""
-    return prompt_path.read_text(encoding="utf-8")
+        return ("", "", {})
+    raw = yaml.safe_load(prompt_path.read_text(encoding="utf-8"))
+    return (raw.get("system", ""), raw.get("user", ""), raw.get("params", {}))
 
 
 def extract_paper_structure(
@@ -124,29 +136,33 @@ def extract_paper_structure(
         return {}
 
     # Load prompt template
-    prompt_text = _load_prompt()
-    if not prompt_text:
-        logger.error("repro_extract.yaml not found")
+    system_text, user_template, params = _load_prompt()
+    if not user_template:
+        logger.error("repro_extract.yaml not found or empty")
         return {}
 
-    # Build user message with variables filled
-    user_msg = (
-        f"Extract structured information from this paper for strategy reproduction.\n\n"
-        f"Paper ID: {paper_id}\n"
-        f"Source type: {source_type}\n"
-        f"Source reference: {source_ref}\n\n"
-        f"Paper content:\n---\n{paper_content[:32000]}\n---\n\n"
-        f"Extract the 8 categories and output as JSON."
+    # Render user message with Jinja2 variables
+    tmpl = _jinja_env.from_string(user_template)
+    user_msg = tmpl.render(
+        paper_id=paper_id,
+        source_type=source_type,
+        source_ref=source_ref,
+        paper_content=paper_content[:32000],
     )
 
     try:
-        messages = [
-            {"role": "system", "content": "You are a quantitative research analyst."},
-            {"role": "user", "content": user_msg},
-        ]
-        response = llm_client.chat(messages)
-        # Try to parse JSON from response
-        json_match = re.search(r"\{.*\}", response, re.DOTALL)
+        messages = []
+        if system_text.strip():
+            messages.append({"role": "system", "content": system_text})
+        messages.append({"role": "user", "content": user_msg})
+
+        api_params = {k: v for k, v in params.items() if k in _API_PARAM_KEYS}
+        response = llm_client.chat(messages, **api_params)
+
+        # Parse JSON — strip markdown code fences first
+        cleaned = re.sub(r"```(?:json)?\s*", "", response)
+        cleaned = re.sub(r"```\s*$", "", cleaned)
+        json_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if json_match:
             return json.loads(json_match.group())
         logger.warning("no JSON found in LLM response for %s", paper_id)

@@ -75,7 +75,7 @@ class FakeLLMClient:
             },
         })
 
-    def chat(self, user_msg: str, system: str = "") -> str:
+    def chat(self, messages, **kwargs):
         return self._response
 
 
