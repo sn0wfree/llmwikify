@@ -524,7 +524,7 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     app.include_router(agent_router)
     app.include_router(autoresearch_router)
 
-    _register_reproduction_routes(app, registry, agent_service)
+    _register_reproduction_routes(app, registry, agent_service, data_dir=data_dir)
 
     _mount_agent_spa(app)
 
@@ -533,6 +533,7 @@ def _register_reproduction_routes(
     app: FastAPI,
     registry: WikiRegistry,
     agent_service: Any,
+    data_dir: Path | None = None,
 ) -> None:
     """Register paper/factor/strategy/reproduction routers and inject deps.
 
@@ -558,12 +559,17 @@ def _register_reproduction_routes(
     )
     from llmwikify.reproduction.sessions import ReproductionDatabase
 
-    data_dir = Path.home() / ".llmwikify" / "agent"
+    if data_dir is None:
+        data_dir = Path.home() / ".llmwikify" / "agent"
     data_dir.mkdir(parents=True, exist_ok=True)
     repro_db = ReproductionDatabase(data_dir / "reproduction.db")
     logger.info("Reproduction DB initialized at: %s", repro_db.db_path)
 
-    raw_dir = Path(__file__).resolve().parents[5] / "raw"
+    # raw_dir: use the default wiki's raw directory, not the code repo path
+    try:
+        raw_dir = registry.get_default_wiki().raw_dir
+    except Exception:
+        raw_dir = Path.home() / ".llmwikify" / "raw"
     upload_dir = Path.home() / ".llmwikify" / "papers"
     logger.info("paper raw_dir: %s, upload_dir: %s", raw_dir, upload_dir)
 
