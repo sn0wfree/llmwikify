@@ -379,6 +379,26 @@ export const api = {
       }),
     reloadConfig: () =>
       request<{ reloaded: boolean }>('/agent/config/reload', { method: 'POST' }),
+    // v0.40: session revert, edit, abort, status
+    revertSession: (sessionId: string, messageId: string) =>
+      request<{ reverted: number; session_id: string }>(
+        `/agent/sessions/${sessionId}/revert`,
+        { method: 'POST', body: JSON.stringify({ message_id: messageId }) }
+      ),
+    editMessage: (sessionId: string, messageId: string, content: string) =>
+      request<{ updated: boolean; message_id: string }>(
+        `/agent/sessions/${sessionId}/messages/${messageId}`,
+        { method: 'PUT', body: JSON.stringify({ content }) }
+      ),
+    abortSession: (sessionId: string) =>
+      request<{ aborted: boolean; session_id: string }>(
+        `/agent/sessions/${sessionId}/abort`,
+        { method: 'POST' }
+      ),
+    getSessionStatus: (sessionId: string) =>
+      request<{ session_id: string; status: string }>(
+        `/agent/sessions/${sessionId}/status`
+      ),
   },
 
   dream: {
