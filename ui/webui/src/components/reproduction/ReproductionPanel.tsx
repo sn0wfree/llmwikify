@@ -23,6 +23,7 @@ import {
   eventToPhase,
   getReproduction,
   listReproductionArtifacts,
+  listReproductionSessions,
   parseParams,
   type ReproductionArtifact,
   type ReproductionEvent,
@@ -64,9 +65,30 @@ interface SessionSidebarProps {
 }
 
 function SessionSidebar({ selectedId, onSelect }: SessionSidebarProps) {
-  // The reproduction API doesn't expose a /list endpoint yet (v0.4.0 minimal).
-  // We keep the sidebar pattern for future expansion but render only the
-  // "new session" button for now.
+  const [sessions, setSessions] = useState<ReproductionSession[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const loadSessions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await listReproductionSessions();
+      setSessions(data.sessions || []);
+    } catch {
+      setSessions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  // Refresh list when a session completes
+  useEffect(() => {
+    if (!selectedId) return;
+    const interval = setInterval(loadSessions, 5000);
+    return () => clearInterval(interval);
+  }, [selectedId, loadSessions]);
+
   return (
     <div className="flex flex-col h-full min-h-0 border-r border-border">
       <div className="p-3 border-b border-border">
@@ -80,10 +102,41 @@ function SessionSidebar({ selectedId, onSelect }: SessionSidebarProps) {
         </button>
       </div>
       <div className="flex-1 overflow-y-auto">
-        <div className="p-3 text-xs text-muted-foreground text-center">
-          <div className="mb-1">暂无历史会话</div>
-          <div className="text-[10px] opacity-70">点上方"新建"开始 5 阶段复现</div>
-        </div>
+        {loading && sessions.length === 0 ? (
+          <div className="p-3 text-xs text-muted-foreground text-center">加载中...</div>
+        ) : sessions.length === 0 ? (
+          <div className="p-3 text-xs text-muted-foreground text-center">
+            <div className="mb-1">暂无历史会话</div>
+            <div className="text-[10px] opacity-70">点上方"新建"开始 5 阶段复现</div>
+          </div>
+        ) : (
+          sessions.map((s) => {
+            const status = STATUS_LABELS[s.status] || STATUS_LABELS.error;
+            return (
+              <button
+                key={s.id}
+                onClick={() => onSelect(s.id)}
+                className={cn(
+                  'w-full text-left px-3 py-2.5 border-b border-border transition-colors',
+                  selectedId === s.id
+                    ? 'bg-primary/10'
+                    : 'hover:bg-muted/50'
+                )}
+              >
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className={cn('text-[11px]', status.color)}>{status.icon}</span>
+                  <span className="text-xs font-medium truncate">{s.paper_id}</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground font-mono truncate">
+                  {s.symbol} · {s.start_date}→{s.end_date}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  {formatRelativeTime(s.created_at)}
+                </div>
+              </button>
+            );
+          })
+        )}
       </div>
     </div>
   );
