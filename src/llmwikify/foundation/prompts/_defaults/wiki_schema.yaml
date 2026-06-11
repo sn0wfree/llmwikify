@@ -90,9 +90,10 @@ document: |
   | TradingStrategy | `wiki/trading/{slug}.md` | Trading strategy extracted from a paper. Frontmatter must include `signal_type` (e.g. `ma_cross`, `rsi`, `momentum`, `volatility`, `factor_rank`, `signal_composite`) and `signal_params` (dict of strategy parameters). |
   | BacktestResult | `wiki/backtest/{slug}.md` | Backtest outcome for a TradingStrategy. Frontmatter must include `strategy_ref` (slug), `symbol`, `start`, `end`, and metrics: `sharpe_ratio`, `max_drawdown`, `win_rate`, `total_return`, `final_cash`. |
   | Optimization | `wiki/optimization/{slug}.md` | Parameter-sensitivity or hyperparameter sweep notes for a strategy. Frontmatter must include `strategy_ref`, `parameter_grid`, `best_params`. |
-  | Factor | `wiki/factor/{slug}.md` | Quantitative factor definition. Frontmatter must include `factor_class` (e.g. `momentum`, `value`, `volatility`, `quality`, `size`, `growth`, `composite`) and `factor_params` (dict of factor construction parameters). |
+  | Factor | `wiki/factor/{slug}.md` | Quantitative factor definition. Frontmatter must include `factor_class` (e.g. `momentum`, `value`, `volatility`, `quality`, `size`, `growth`, `signal_composite`) and `factor_params` (dict of factor construction parameters). |
   | Strategy | `wiki/strategy/{slug}.md` | High-level trading strategy or framework. Frontmatter must include `strategy_class` (e.g. `trend_following`, `factor_ranking`, `stat_arb`, `mean_reversion`, `composite`), `signal_type`, `signal_params`, and optional `factor_refs` (list of Factor page slugs). |
   | FactorBacktest | `wiki/factor-backtest/{slug}.md` | Backtest outcome for a Factor. Frontmatter must include `factor_ref` (slug), `symbol`, `start`, `end`, and metrics: `ic_mean`, `icir`, `win_rate`, `annual_return`, `max_drawdown`. |
+  | Codegen | `wiki/codegen/{slug}.md` | LLM-generated strategy code (Path B). Frontmatter must include `codegen_version` (int), `codegen_hash` (SHA256 prefix), `strategy_ref`. Body contains the full Python code in a markdown code block. |
 
   ## Core Tools
 

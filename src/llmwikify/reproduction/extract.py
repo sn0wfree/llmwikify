@@ -113,20 +113,18 @@ def extract_from_page(content: str) -> Optional[dict[str, Any]]:
     }
 
 
-def _iter_strategy_pages(wiki: Any, subdir: str) -> Iterable[tuple[str, str]]:
-    """Yield ``(subdir, content)`` tuples under ``wiki/{subdir}/``.
+def _iter_strategy_pages(wiki: Any, subdir: str) -> Iterable[tuple[str, str, str]]:
+    """Yield ``(subdir, stem, content)`` tuples under ``wiki/{subdir}/``.
 
-    Pairs the originating subdir so callers can record the source for
-    traceability when the same logical page may live under either
-    ``wiki/trading/`` (legacy TradingStrategy) or ``wiki/strategy/``
-    (newly written by ``extract_paper.build_paper_pages``).
+    ``stem`` is the filename without directory prefix or ``.md`` extension,
+    i.e. the full page slug (e.g. ``strategy-arxiv-2024-momentum``).
     """
     page_dir = wiki.wiki_dir / subdir
     if not page_dir.is_dir():
         return
     for md in sorted(page_dir.glob("*.md")):
         try:
-            yield subdir, md.read_text(encoding="utf-8")
+            yield subdir, md.stem, md.read_text(encoding="utf-8")
         except OSError as exc:
             logger.warning("could not read %s: %s", md, exc)
 
@@ -144,11 +142,11 @@ def extract_strategy_config(wiki: Any) -> dict[str, Any]:
         or {"signal_type": "unknown", "signal_params": {}, "wiki_page": None}
     """
     for subdir in ("strategy", "trading"):
-        for origin, content in _iter_strategy_pages(wiki, subdir):
+        for origin, stem, content in _iter_strategy_pages(wiki, subdir):
             cfg = extract_from_page(content)
             if cfg is None:
                 continue
-            cfg["wiki_page"] = origin
+            cfg["wiki_page"] = stem
             return cfg
     return {"signal_type": "unknown", "signal_params": {}, "wiki_page": None}
 

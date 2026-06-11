@@ -38,6 +38,10 @@ class BacktestResult:
     security_status: str = "unknown"
     nodes: dict[str, Any] = field(default_factory=dict)
 
+    # Equity curve and monthly returns (populated by backtest engine)
+    equity_curve: list[dict[str, Any]] = field(default_factory=list)  # [{date, value}, ...]
+    monthly_returns: dict[str, float] = field(default_factory=dict)   # {"2024-01": 2.3, ...}
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "status": self.status,
@@ -55,6 +59,8 @@ class BacktestResult:
             "config": self.config,
             "security_status": self.security_status,
             "nodes": self.nodes,
+            "equity_curve": self.equity_curve,
+            "monthly_returns": self.monthly_returns,
         }
 
 
@@ -63,7 +69,7 @@ class WikiFactor:
     """Factor definition extracted from paper or user-defined."""
 
     name: str = ""
-    factor_class: str = ""        # momentum | value | volatility | quality | size | growth | composite
+    factor_class: str = ""        # momentum | value | volatility | quality | size | growth | signal_composite
     factor_params: dict[str, Any] = field(default_factory=dict)
     factor_source: str = ""       # paper reference or "user-defined"
     status: str = "draft"         # draft | validated | deprecated

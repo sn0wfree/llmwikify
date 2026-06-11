@@ -260,46 +260,43 @@ def compute_extended_metrics(
 
 
 def compute_monthly_returns(
+    equity_curve: List[Dict[str, Any]],
     trades: List[Any],
     initial_cash: float,
-) -> Dict[int, Dict[int, float]]:
-    """Compute monthly return matrix from trades.
+) -> Dict[str, float]:
+    """Compute monthly returns from equity curve time series.
+
+    Args:
+        equity_curve: Daily equity values [{date: "YYYY-MM-DD", value: float}, ...].
+        trades: Trade objects (unused, kept for backward compat).
+        initial_cash: Starting cash.
 
     Returns:
-        Dict {year: {month: return_pct}} for heatmap visualization.
+        Dict {"YYYY-MM": return_pct} for heatmap visualization.
     """
-    if not trades:
+    if not equity_curve:
         return {}
 
-    pnls = _pair_trades_to_pnls(trades)
-    if not pnls:
+    # Group equity by year-month, take last equity value per month
+    monthly_equity: Dict[str, float] = {}
+    for pt in equity_curve:
+        date_str = pt.get("date", "")
+        value = pt.get("value", 0.0)
+        if len(date_str) >= 7:
+            ym = date_str[:7]  # "YYYY-MM"
+            monthly_equity[ym] = value
+
+    if len(monthly_equity) < 2:
         return {}
 
-    # Group pnls by year/month (approximate: use trade index as time proxy)
-    # Since trades lack date fields, we distribute evenly across the period
-    monthly: Dict[int, Dict[int, float]] = {}
-    equity = initial_cash
-    n = len(pnls)
+    # Sort by year-month and compute returns
+    sorted_months = sorted(monthly_equity.keys())
+    result: Dict[str, float] = {}
+    prev_equity = initial_cash
+    for ym in sorted_months:
+        cur_equity = monthly_equity[ym]
+        ret = (cur_equity - prev_equity) / prev_equity if prev_equity > 0 else 0.0
+        result[ym] = round(ret * 100, 2)
+        prev_equity = cur_equity
 
-    for i, pnl in enumerate(pnls):
-        # Approximate year/month from index (assume daily trades over 1 year)
-        month = (i * 12 // max(n, 1)) + 1
-        year = 2024  # default year
-        if month > 12:
-            month = 12
-
-        if year not in monthly:
-            monthly[year] = {}
-        if month not in monthly[year]:
-            monthly[year][month] = 0.0
-
-        ret = pnl / equity if equity > 0 else 0.0
-        monthly[year][month] += ret
-        equity += pnl
-
-    # Convert to percentages
-    for year in monthly:
-        for month in monthly[year]:
-            monthly[year][month] = round(monthly[year][month] * 100, 2)
-
-    return monthly
+    return result
