@@ -20,6 +20,64 @@ from .utils import generate_slug, parse_frontmatter
 logger = logging.getLogger(__name__)
 
 
+def _fetch_content(source_ref: str, source_type: str, paper_id: str) -> str:
+    """Fetch paper content from URL or PDF file when paper_content is empty."""
+    if not source_ref:
+        return ""
+
+    if source_type == "pdf" and source_ref.startswith(("http://", "https://")):
+        # Download PDF to temp file, extract text
+        try:
+            import tempfile
+            import requests
+            from llmwikify.foundation.extractors.pdf import extract_pdf
+
+            resp = requests.get(source_ref, timeout=30, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; ResearchBot/1.0)",
+            }, allow_redirects=True)
+            resp.raise_for_status()
+
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                tmp.write(resp.content)
+                tmp_path = Path(tmp.name)
+
+            result = extract_pdf(tmp_path)
+            tmp_path.unlink(missing_ok=True)
+            logger.info("fetched PDF content for %s: %d chars", paper_id, len(result.text))
+            return result.text
+        except Exception as exc:
+            logger.warning("failed to fetch PDF from %s: %s", source_ref, exc)
+            return ""
+
+    if source_type == "url" or source_ref.startswith(("http://", "https://")):
+        # Fetch URL content via trafilatura
+        try:
+            from llmwikify.foundation.extractors.web import extract_url
+
+            result = extract_url(source_ref)
+            logger.info("fetched URL content for %s: %d chars", paper_id, len(result.text))
+            return result.text
+        except Exception as exc:
+            logger.warning("failed to fetch URL content from %s: %s", source_ref, exc)
+            return ""
+
+    if source_type == "pdf" and not source_ref.startswith(("http://", "https://")):
+        # Local PDF file
+        try:
+            from llmwikify.foundation.extractors.pdf import extract_pdf
+
+            pdf_path = Path(source_ref)
+            if pdf_path.exists():
+                result = extract_pdf(pdf_path)
+                logger.info("read local PDF for %s: %d chars", paper_id, len(result.text))
+                return result.text
+        except Exception as exc:
+            logger.warning("failed to read local PDF %s: %s", source_ref, exc)
+            return ""
+
+    return ""
+
+
 def _load_prompt() -> str:
     """Load the repro_extract.yaml prompt template."""
     prompt_path = (
@@ -55,8 +113,11 @@ def extract_paper_structure(
         Dict with 8 categories of extracted information, or empty dict on failure.
     """
     if not paper_content or not paper_content.strip():
-        logger.warning("empty paper content for %s", paper_id)
-        return {}
+        # Try to fetch content from source_ref
+        paper_content = _fetch_content(source_ref, source_type, paper_id)
+        if not paper_content:
+            logger.warning("empty paper content for %s", paper_id)
+            return {}
 
     if llm_client is None:
         logger.info("no LLM client provided, returning empty extraction for %s", paper_id)
@@ -79,7 +140,11 @@ def extract_paper_structure(
     )
 
     try:
-        response = llm_client.chat(user_msg, system="You are a quantitative research analyst.")
+        messages = [
+            {"role": "system", "content": "You are a quantitative research analyst."},
+            {"role": "user", "content": user_msg},
+        ]
+        response = llm_client.chat(messages)
         # Try to parse JSON from response
         json_match = re.search(r"\{.*\}", response, re.DOTALL)
         if json_match:
