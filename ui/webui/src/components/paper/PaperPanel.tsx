@@ -18,13 +18,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft,
   FileText,
   Beaker,
   TrendingUp,
   ExternalLink,
   RefreshCw,
+  RotateCw,
   X,
+  CheckCircle2,
+  AlertTriangle,
+  Lightbulb,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaperForm } from './PaperForm';
@@ -52,6 +56,11 @@ interface ExtractionPayload {
   strategy_logic?: Record<string, string>;
   data_requirements?: Record<string, unknown>;
   risks?: Record<string, string[]>;
+  operation_steps?: Record<string, string>;
+  model_framework?: Record<string, unknown>;
+  strengths_weaknesses?: Record<string, string[]>;
+  datasets?: Record<string, string>;
+  references?: Record<string, unknown>;
   suggested_signal?: Record<string, unknown>;
 }
 
@@ -70,6 +79,7 @@ export function PaperPanel() {
   const [detail, setDetail] = useState<PaperDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [rerunning, setRerunning] = useState(false);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ─── Polling lifecycle ──────────────────────────────────────
@@ -91,13 +101,6 @@ export function PaperPanel() {
           if (payload && typeof payload === 'object' && 'extraction' in payload) {
             extraction = payload.extraction as ExtractionPayload;
           }
-        } catch { /* ignore */ }
-      }
-      // Fallback: read wiki page if extraction not in event
-      if (!extraction) {
-        try {
-          // Try reading the most recent wiki page for this session
-          extraction = null;
         } catch { /* ignore */ }
       }
       setDetail({
@@ -185,6 +188,27 @@ export function PaperPanel() {
     if (selectedId) loadDetail(selectedId);
   };
 
+  const handleRerun = async () => {
+    if (!detail || rerunning) return;
+    setRerunning(true);
+    setSubmitError(null);
+    try {
+      const res = await startPaper({
+        paper_id: detail.session.paper_id,
+        source_type: detail.session.source_type,
+        source_ref: detail.session.source_ref,
+        paper_content: '',
+      });
+      setSelectedId(res.session_id);
+      setDetail(null);
+      startPolling(res.session_id);
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRerunning(false);
+    }
+  };
+
   // ─── Render: sidebar + main ────────────────────────────────
   return (
     <div className="flex h-full min-h-0">
@@ -197,9 +221,21 @@ export function PaperPanel() {
         ) : detail === null ? (
           <LoadingState />
         ) : detail.session.status === 'done' ? (
-          <ResultsState detail={detail} onReset={handleReset} onRefresh={handleRefresh} />
+          <ResultsState
+            detail={detail}
+            onReset={handleReset}
+            onRefresh={handleRefresh}
+            onRerun={handleRerun}
+            rerunning={rerunning}
+          />
         ) : detail.session.status === 'error' ? (
-          <ErrorState detail={detail} onReset={handleReset} onRefresh={handleRefresh} />
+          <ErrorState
+            detail={detail}
+            onReset={handleReset}
+            onRefresh={handleRefresh}
+            onRerun={handleRerun}
+            rerunning={rerunning}
+          />
         ) : (
           <ProgressState detail={detail} onReset={handleReset} />
         )}
@@ -326,20 +362,35 @@ function ResultsState({
   detail,
   onReset,
   onRefresh,
+  onRerun,
+  rerunning,
 }: {
   detail: PaperDetail;
   onReset: () => void;
   onRefresh: () => void;
+  onRerun: () => void;
+  rerunning: boolean;
 }) {
   const extraction = detail.extraction || ({} as ExtractionPayload);
   const logic = extraction.strategy_logic;
   const data = extraction.data_requirements;
   const risks = extraction.risks;
+  const ops = extraction.operation_steps;
+  const model = extraction.model_framework;
+  const sw = extraction.strengths_weaknesses;
+  const datasets = extraction.datasets;
+  const refs = extraction.references;
   const suggested = extraction.suggested_signal;
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <SessionHeader detail={detail} onReset={onReset} onRefresh={onRefresh} />
+      <SessionHeader
+        detail={detail}
+        onReset={onReset}
+        onRefresh={onRefresh}
+        onRerun={onRerun}
+        rerunning={rerunning}
+      />
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {logic && (
           <section>
@@ -371,6 +422,169 @@ function ResultsState({
                   </span>
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {ops && (
+          <section>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              运营步骤
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(ops).map(([key, value]) => (
+                <div key={key} className="bg-card border border-border rounded-lg p-3">
+                  <div className="text-[10px] text-muted-foreground mb-1">{key}</div>
+                  <div className="text-xs text-foreground">{value}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {model && (
+          <section>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              模型框架
+            </h3>
+            <div className="bg-card border border-border rounded-lg p-3 space-y-1.5">
+              {model.model_type !== undefined && (
+                <div className="flex items-start gap-2 text-xs">
+                  <span className="text-muted-foreground shrink-0 w-20">model_type:</span>
+                  <span className="text-foreground">{String(model.model_type)}</span>
+                </div>
+              )}
+              {model.framework !== undefined && (
+                <div className="flex items-start gap-2 text-xs">
+                  <span className="text-muted-foreground shrink-0 w-20">framework:</span>
+                  <span className="text-foreground">{String(model.framework)}</span>
+                </div>
+              )}
+              {model.validation !== undefined && (
+                <div className="flex items-start gap-2 text-xs">
+                  <span className="text-muted-foreground shrink-0 w-20">validation:</span>
+                  <span className="text-foreground">{String(model.validation)}</span>
+                </div>
+              )}
+              {Array.isArray(model.evaluation_metrics) && model.evaluation_metrics.length > 0 && (
+                <div className="flex items-start gap-2 text-xs">
+                  <span className="text-muted-foreground shrink-0 w-20">metrics:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {model.evaluation_metrics.map((m, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-mono">
+                        {String(m)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {sw && (
+          <section>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              优缺点与改进
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-card border border-border rounded-lg p-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+                  <div className="text-[10px] font-semibold text-green-400 uppercase tracking-wider">Strengths</div>
+                </div>
+                <div className="space-y-1">
+                  {(sw.strengths || []).map((item, i) => (
+                    <div key={i} className="text-xs text-foreground">- {item}</div>
+                  ))}
+                  {(!sw.strengths || sw.strengths.length === 0) && (
+                    <div className="text-[10px] text-muted-foreground">无</div>
+                  )}
+                </div>
+              </div>
+              <div className="bg-card border border-border rounded-lg p-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <AlertTriangle className="w-3.5 h-3.5 text-yellow-400" />
+                  <div className="text-[10px] font-semibold text-yellow-400 uppercase tracking-wider">Weaknesses</div>
+                </div>
+                <div className="space-y-1">
+                  {(sw.weaknesses || []).map((item, i) => (
+                    <div key={i} className="text-xs text-foreground">- {item}</div>
+                  ))}
+                  {(!sw.weaknesses || sw.weaknesses.length === 0) && (
+                    <div className="text-[10px] text-muted-foreground">无</div>
+                  )}
+                </div>
+              </div>
+              <div className="bg-card border border-border rounded-lg p-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Lightbulb className="w-3.5 h-3.5 text-blue-400" />
+                  <div className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider">Improvements</div>
+                </div>
+                <div className="space-y-1">
+                  {(sw.improvement_directions || []).map((item, i) => (
+                    <div key={i} className="text-xs text-foreground">- {item}</div>
+                  ))}
+                  {(!sw.improvement_directions || sw.improvement_directions.length === 0) && (
+                    <div className="text-[10px] text-muted-foreground">无</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {datasets && (
+          <section>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              数据集
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(datasets).map(([key, value]) => (
+                <div key={key} className="bg-card border border-border rounded-lg p-3">
+                  <div className="text-[10px] text-muted-foreground mb-1">{key}</div>
+                  <div className="text-xs text-foreground">{value}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {refs && (
+          <section>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              参考文献
+            </h3>
+            <div className="bg-card border border-border rounded-lg p-3 space-y-2">
+              {refs.original_paper !== undefined && refs.original_paper && (
+                <div className="text-xs text-foreground">
+                  <span className="text-muted-foreground">Original: </span>
+                  {String(refs.original_paper)}
+                </div>
+              )}
+              {Array.isArray(refs.related_papers) && refs.related_papers.length > 0 && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">Related Papers</div>
+                  <div className="space-y-0.5">
+                    {refs.related_papers.map((p, i) => (
+                      <div key={i} className="text-xs text-foreground pl-2">- {String(p)}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {Array.isArray(refs.code_repositories) && refs.code_repositories.length > 0 && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">Code Repositories</div>
+                  <div className="space-y-1">
+                    {refs.code_repositories.map((repo, i) => (
+                      <div key={i} className="flex items-center gap-1.5 text-xs text-foreground font-mono bg-muted px-2 py-1 rounded">
+                        <LinkIcon className="w-3 h-3 text-primary shrink-0" />
+                        <span className="truncate">{String(repo)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -466,14 +680,24 @@ function ErrorState({
   detail,
   onReset,
   onRefresh,
+  onRerun,
+  rerunning,
 }: {
   detail: PaperDetail;
   onReset: () => void;
   onRefresh: () => void;
+  onRerun: () => void;
+  rerunning: boolean;
 }) {
   return (
     <div className="flex flex-col h-full min-h-0">
-      <SessionHeader detail={detail} onReset={onReset} onRefresh={onRefresh} />
+      <SessionHeader
+        detail={detail}
+        onReset={onReset}
+        onRefresh={onRefresh}
+        onRerun={onRerun}
+        rerunning={rerunning}
+      />
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <section>
           <h3 className="text-xs font-semibold text-destructive uppercase tracking-wider mb-2">
@@ -497,12 +721,17 @@ function SessionHeader({
   detail,
   onReset,
   onRefresh,
+  onRerun,
+  rerunning,
 }: {
   detail: PaperDetail;
   onReset: () => void;
   onRefresh: () => void;
+  onRerun?: () => void;
+  rerunning?: boolean;
 }) {
   const status = PAPER_STATUS_LABELS[detail.session.status] || PAPER_STATUS_LABELS.error;
+  const isTerminal = detail.session.status === 'done' || detail.session.status === 'error';
   return (
     <div className="p-4 border-b border-border bg-card">
       <div className="flex items-start justify-between gap-3">
@@ -527,7 +756,20 @@ function SessionHeader({
             {detail.pages_written} pages · {detail.events.length} events
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
+          {onRerun && isTerminal && (
+            <Button
+              onClick={onRerun}
+              variant="primary"
+              size="sm"
+              className="text-xs"
+              disabled={rerunning}
+              title="重新跑一次 LLM 提取（同 paper_id 生成新 session）"
+            >
+              <RotateCw className={cn('w-3 h-3 mr-1', rerunning && 'animate-spin')} />
+              {rerunning ? '提交中...' : '重新提取'}
+            </Button>
+          )}
           <button
             onClick={onRefresh}
             className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded
