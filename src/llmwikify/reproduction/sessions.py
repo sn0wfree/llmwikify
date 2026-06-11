@@ -249,7 +249,17 @@ class ReproductionDatabase:
                 """,
                 (session_id,),
             ).fetchall()
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            d = dict(r)
+            # Parse payload_json into a usable 'payload' key
+            raw = d.pop("payload_json", None)
+            try:
+                d["payload"] = json.loads(raw) if raw else {}
+            except (json.JSONDecodeError, TypeError):
+                d["payload"] = {}
+            result.append(d)
+        return result
 
     def list_sessions(self, status: Optional[str] = None) -> list[Session]:
         sql = "SELECT * FROM reproduction_sessions"
