@@ -265,6 +265,8 @@ class ReproductionDatabase:
     def delete_session(self, session_id: str) -> bool:
         """Delete a session and cascade to events/artifacts (FK ON)."""
         with self._connect() as conn:
+            conn.execute("DELETE FROM reproduction_events WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM reproduction_artifacts WHERE session_id = ?", (session_id,))
             conn.execute("DELETE FROM reproduction_sessions WHERE id = ?", (session_id,))
             return conn.total_changes > 0
 
