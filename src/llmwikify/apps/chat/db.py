@@ -199,6 +199,16 @@ class ChatDatabase(BaseDatabase):
                 )
             except sqlite3.OperationalError:
                 pass
+            # ─── v0.40: token/cost columns for chat_messages ───
+            for col in ("tokens_input", "tokens_output", "tokens_reasoning",
+                        "tokens_cache_read", "tokens_cache_write", "cost"):
+                try:
+                    default = "0" if col != "cost" else "0.0"
+                    conn.execute(
+                        f"ALTER TABLE chat_messages ADD COLUMN {col} INTEGER DEFAULT {default}"
+                    )
+                except sqlite3.OperationalError:
+                    pass
             conn.commit()
 
     def _check_db_size(self) -> None:
@@ -486,17 +496,22 @@ class ChatDatabase(BaseDatabase):
         role = message.get("role", "")
         content = message.get("content", "")
         tool_calls = json.dumps(message["tool_calls"]) if message.get("tool_calls") else None
+        tokens_input = message.get("tokens_input", 0)
+        tokens_output = message.get("tokens_output", 0)
+        tokens_reasoning = message.get("tokens_reasoning", 0)
+        tokens_cache_read = message.get("tokens_cache_read", 0)
+        tokens_cache_write = message.get("tokens_cache_write", 0)
+        cost = message.get("cost", 0.0)
         with sqlite3.connect(self.db_path) as conn:
-            # Phase 1.3 (v0.36): switch from INSERT OR REPLACE
-            # (which silently overwrote a message on id collision)
-            # to INSERT OR IGNORE so retrying a save does not
-            # destroy history. Callers can update_tool_call() for
-            # in-place updates.
             conn.execute(
                 """INSERT OR IGNORE INTO chat_messages
-                   (id, session_id, role, content, tool_calls)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (msg_id, session_id, role, content, tool_calls),
+                   (id, session_id, role, content, tool_calls,
+                    tokens_input, tokens_output, tokens_reasoning,
+                    tokens_cache_read, tokens_cache_write, cost)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (msg_id, session_id, role, content, tool_calls,
+                 tokens_input, tokens_output, tokens_reasoning,
+                 tokens_cache_read, tokens_cache_write, cost),
             )
             conn.commit()
 

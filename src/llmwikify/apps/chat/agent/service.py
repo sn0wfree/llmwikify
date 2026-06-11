@@ -886,10 +886,17 @@ class ChatService(ChatBase):
                 if thinking:
                     ctx._thinking = thinking
                 ctx.add_assistant_message(final)
+                # Estimate token usage for the assistant message
+                from llmwikify.foundation.llm.token_estimator import count_tokens
+                model_name = getattr(
+                    getattr(self, "llm_client", None), "model", "gpt-4o"
+                ) if self.llm_client else "gpt-4o"
+                tokens_output = count_tokens(final, model_name)
                 self._save_message(
                     session_id, "assistant", final,
                     tool_calls=list(ctx._tool_calls.values())
                     if ctx._tool_calls else None,
+                    tokens_output=tokens_output,
                 )
                 if self._save_error_count > 0:
                     return [
@@ -1121,6 +1128,12 @@ class ChatService(ChatBase):
         role: str,
         content: str,
         tool_calls: list | None = None,
+        tokens_input: int = 0,
+        tokens_output: int = 0,
+        tokens_reasoning: int = 0,
+        tokens_cache_read: int = 0,
+        tokens_cache_write: int = 0,
+        cost: float = 0.0,
     ) -> None:
         """Persist a chat message with retry (Phase 4.2 / v0.36).
 
@@ -1137,6 +1150,12 @@ class ChatService(ChatBase):
             "content": content,
             "tool_calls": tool_calls,
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "tokens_input": tokens_input,
+            "tokens_output": tokens_output,
+            "tokens_reasoning": tokens_reasoning,
+            "tokens_cache_read": tokens_cache_read,
+            "tokens_cache_write": tokens_cache_write,
+            "cost": cost,
         }
         try:
             self._db_retry.call(self.db.save_chat_message, msg)
