@@ -20,12 +20,11 @@ Output schema (consumed by run_reproduction):
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any, Iterable, Optional
 
-logger = logging.getLogger(__name__)
+from .utils import parse_frontmatter, FRONTMATTER_RE
 
-FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+logger = logging.getLogger(__name__)
 
 VALID_SIGNAL_TYPES = {
     "ma_cross",
@@ -36,38 +35,6 @@ VALID_SIGNAL_TYPES = {
     "signal_composite",
     "unknown",
 }
-
-
-def _parse_frontmatter(content: str) -> dict[str, Any]:
-    """Pull YAML-ish key:value frontmatter out of a markdown page."""
-    m = FRONTMATTER_RE.match(content)
-    if not m:
-        return {}
-    out: dict[str, Any] = {}
-    for line in m.group(1).splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" not in line:
-            continue
-        key, _, value = line.partition(":")
-        key = key.strip()
-        value = value.strip()
-        if value.startswith("[") and value.endswith("]"):
-            inner = value[1:-1].strip()
-            out[key] = [v.strip().strip('"').strip("'") for v in inner.split(",") if v.strip()]
-        elif value.startswith("{") and value.endswith("}"):
-            inner = value[1:-1].strip()
-            as_dict: dict[str, Any] = {}
-            for pair in inner.split(","):
-                if ":" not in pair:
-                    continue
-                k, _, v = pair.partition(":")
-                as_dict[k.strip()] = v.strip().strip('"').strip("'")
-            out[key] = as_dict
-        else:
-            out[key] = value.strip('"').strip("'")
-    return out
 
 
 def _to_signal_params(raw: Any) -> dict[str, Any]:
@@ -95,7 +62,7 @@ def _to_signal_params(raw: Any) -> dict[str, Any]:
 
 def extract_from_page(content: str) -> Optional[dict[str, Any]]:
     """Extract a strategy_config from one wiki page's content."""
-    fm = _parse_frontmatter(content)
+    fm = parse_frontmatter(content)
     if not fm:
         return None
     signal_type = fm.get("signal_type", "").strip().lower()

@@ -195,12 +195,6 @@ export function FactorPanel() {
 
       {/* Results */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {result && result.status === 'stub' && (
-          <div className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg p-2">
-            因子回测引擎尚未实现 (Phase 2.4)，当前返回占位数据
-          </div>
-        )}
-
         {metrics.length > 0 && (
           <MetricCards metrics={metrics} columns={6} />
         )}
@@ -234,29 +228,6 @@ export function FactorPanel() {
                 groups={result.quantile_curves}
                 height={280}
               />
-            </div>
-          </section>
-        )}
-
-        {/* Fallback placeholders when no chart data */}
-        {result && (!result.ic_series || result.ic_series.length === 0) && (
-          <section>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              IC 时间序列
-            </h3>
-            <div className="bg-card border border-border rounded-lg p-4 h-48 flex items-center justify-center text-xs text-muted-foreground">
-              IC chart — 需要因子回测引擎 (Phase 2.4) 提供数据
-            </div>
-          </section>
-        )}
-
-        {result && (!result.quantile_curves || Object.keys(result.quantile_curves).length === 0) && (
-          <section>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              分层净值曲线
-            </h3>
-            <div className="bg-card border border-border rounded-lg p-4 h-48 flex items-center justify-center text-xs text-muted-foreground">
-              Quantile curves — 需要因子回测引擎 (Phase 2.4) 提供数据
             </div>
           </section>
         )}

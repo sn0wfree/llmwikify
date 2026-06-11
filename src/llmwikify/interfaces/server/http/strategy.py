@@ -19,6 +19,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from llmwikify.reproduction.utils import parse_frontmatter
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/strategy", tags=["strategy"])
@@ -40,39 +42,6 @@ def _get_wiki(wiki_id: str | None = None) -> Any:
     return _WIKI_REGISTRY.get_default_wiki()
 
 
-def _parse_frontmatter(content: str) -> dict[str, Any]:
-    """Parse YAML-ish frontmatter from wiki page content."""
-    import re
-    m = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
-    if not m:
-        return {}
-    out: dict[str, Any] = {}
-    for line in m.group(1).splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" not in line:
-            continue
-        key, _, value = line.partition(":")
-        key = key.strip()
-        value = value.strip()
-        if value.startswith("[") and value.endswith("]"):
-            inner = value[1:-1].strip()
-            out[key] = [v.strip().strip('"').strip("'") for v in inner.split(",") if v.strip()]
-        elif value.startswith("{") and value.endswith("}"):
-            inner = value[1:-1].strip()
-            as_dict: dict[str, Any] = {}
-            for pair in inner.split(","):
-                if ":" not in pair:
-                    continue
-                k, _, v = pair.partition(":")
-                as_dict[k.strip()] = v.strip().strip('"').strip("'")
-            out[key] = as_dict
-        else:
-            out[key] = value.strip('"').strip("'")
-    return out
-
-
 def _read_strategy_from_wiki(wiki: Any, slug: str) -> dict[str, Any] | None:
     """Read a Strategy page from wiki directory."""
     strategy_dir = wiki.wiki_dir / "strategy"
@@ -83,7 +52,7 @@ def _read_strategy_from_wiki(wiki: Any, slug: str) -> dict[str, Any] | None:
         return None
     try:
         content = md_path.read_text(encoding="utf-8")
-        return _parse_frontmatter(content)
+        return parse_frontmatter(content)
     except OSError:
         return None
 
