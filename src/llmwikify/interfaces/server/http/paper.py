@@ -90,7 +90,7 @@ def _safe_filename(paper_id: str) -> str:
 
 
 class PaperStartRequest(BaseModel):
-    wiki_id: str = "default"
+    wiki_id: str | None = None
     paper_id: str
     source_type: str = Field(default="pdf", pattern=r"^(pdf|url|raw)$")
     source_ref: str
@@ -110,8 +110,18 @@ async def start_paper_extraction(req: PaperStartRequest) -> dict[str, Any]:
     if _DB is None:
         raise HTTPException(status_code=503, detail="Reproduction DB not initialized")
 
+    # Resolve wiki_id: None → use default wiki's id
+    wiki_id = req.wiki_id
+    if not wiki_id and _WIKI_REGISTRY is not None:
+        try:
+            wiki_id = _WIKI_REGISTRY.get_default_wiki_id() or "default"
+        except Exception:
+            wiki_id = "default"
+    elif not wiki_id:
+        wiki_id = "default"
+
     sid = _DB.create_session(
-        wiki_id=req.wiki_id,
+        wiki_id=wiki_id,
         paper_id=req.paper_id,
         source_type=req.source_type,
         source_ref=req.source_ref,
@@ -130,7 +140,7 @@ async def start_paper_extraction(req: PaperStartRequest) -> dict[str, Any]:
             source_type=req.source_type,
             source_ref=req.source_ref,
             paper_content=req.paper_content,
-            wiki_id=req.wiki_id,
+            wiki_id=wiki_id,
             symbol=req.symbol,
             start_date=req.start_date,
             end_date=req.end_date,

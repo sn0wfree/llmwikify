@@ -52,7 +52,7 @@ def _get_wiki(wiki_id: str | None = None) -> Any:
 
 
 class StartRequest(BaseModel):
-    wiki_id: str = "default"
+    wiki_id: str | None = None
     paper_id: str
     source_type: str = "pdf"
     source_ref: str
@@ -75,8 +75,17 @@ async def list_sessions(status: str | None = None) -> dict[str, Any]:
 async def start_reproduction(req: StartRequest) -> dict[str, Any]:
     db = _get_db()
     wiki = _get_wiki(req.wiki_id)
+    # Resolve wiki_id for DB storage
+    wiki_id = req.wiki_id
+    if not wiki_id and _WIKI_REGISTRY is not None:
+        try:
+            wiki_id = _WIKI_REGISTRY.get_default_wiki_id() or "default"
+        except Exception:
+            wiki_id = "default"
+    elif not wiki_id:
+        wiki_id = "default"
     sid = db.create_session(
-        wiki_id=req.wiki_id,
+        wiki_id=wiki_id,
         paper_id=req.paper_id,
         source_type=req.source_type,
         source_ref=req.source_ref,
