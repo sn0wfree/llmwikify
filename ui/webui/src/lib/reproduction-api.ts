@@ -166,6 +166,15 @@ export async function listReproductionArtifacts(
   return response.json();
 }
 
+/** Delete a reproduction session. */
+export async function deleteReproductionSession(sessionId: string): Promise<{ ok: boolean }> {
+  const response = await fetchWithRetry(`${API_BASE}/${sessionId}`, {
+    method: 'DELETE',
+    headers: { ...authHeaders() },
+  }, 'DELETE');
+  return response.json();
+}
+
 /** List all reproduction sessions. */
 export async function listReproductionSessions(
   status?: string,

@@ -262,6 +262,12 @@ class ReproductionDatabase:
             rows = conn.execute(sql, params).fetchall()
         return [Session(**dict(r)) for r in rows]
 
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a session and cascade to events/artifacts (FK ON)."""
+        with self._connect() as conn:
+            conn.execute("DELETE FROM reproduction_sessions WHERE id = ?", (session_id,))
+            return conn.total_changes > 0
+
 
 __all__ = [
     "ReproductionDatabase",
