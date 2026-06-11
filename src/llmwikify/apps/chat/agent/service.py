@@ -30,12 +30,14 @@ from llmwikify.apps.chat.base import ChatBase
 from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.apps.chat.agent.chat_react import REACT_SYSTEM_PROMPT
 from llmwikify.apps.chat.agent._error_logging import log_exception_returning
+from llmwikify.apps.chat.agent.context_store import ContextStore
 from llmwikify.apps.chat.agent.text_mode_tool import (
     TOOL_CALL_RE,
     parse_text_tool_call,
     parse_perl_args,
     TextModeParser,
 )
+from llmwikify.foundation.llm.token_estimator import count_messages
 
 logger = logging.getLogger(__name__)
 
@@ -61,16 +63,16 @@ class ChatEvent:
         return {"type": "thinking", "content": content}
 
     @staticmethod
-    def tool_call_start(tool: str, args: dict) -> dict:
-        return {"type": "tool_call_start", "tool": tool, "args": args}
+    def tool_call_start(tool: str, args: dict, call_id: str = "") -> dict:
+        return {"type": "tool_call_start", "tool": tool, "args": args, "call_id": call_id}
 
     @staticmethod
-    def tool_call_end(tool: str, result: Any) -> dict:
-        return {"type": "tool_call_end", "tool": tool, "result": result}
+    def tool_call_end(tool: str, result: Any, call_id: str = "") -> dict:
+        return {"type": "tool_call_end", "tool": tool, "result": result, "call_id": call_id}
 
     @staticmethod
     def confirmation_required(
-        conf_id: str, tool: str, args: dict, impact: dict,
+        conf_id: str, tool: str, args: dict, impact: dict, call_id: str = "",
     ) -> dict:
         return {
             "type": "confirmation_required",
@@ -78,6 +80,7 @@ class ChatEvent:
             "tool": tool,
             "args": args,
             "impact": impact,
+            "call_id": call_id,
         }
 
     @staticmethod
@@ -181,7 +184,6 @@ class ChatService(ChatBase):
         # ChatDatabase instance to avoid opening two connections
         # against the same .llmwiki_agent.db file.
         self.db = chat_db if chat_db is not None else ChatDatabase(data_dir)
-        self._contexts: dict[str, AgentContext] = {}
         # Phase 1.2 (v0.36): track silent DB write failures so
         # they are surfaced to operators via logs / metrics.
         self._save_error_count: int = 0
@@ -202,6 +204,11 @@ class ChatService(ChatBase):
         )
         from llmwikify.apps.chat.config import merge_six_step_config
         self._chat_config = merge_six_step_config()
+        # v0.39 P0-1: bounded LRU store replaces unbounded dict.
+        self._contexts = ContextStore(
+            max_size=self._chat_config.get("context_store_max_size", 200),
+            ttl_seconds=self._chat_config.get("context_store_ttl_seconds", 1800),
+        )
         self._llm_retry = LLMRetryManager(
             max_attempts=self._chat_config["llm_retry_max_attempts"],
             base_delay=self._chat_config["llm_retry_base_delay"],
@@ -285,6 +292,9 @@ class ChatService(ChatBase):
                 "role": "system",
                 "content": obs_summary,
             })
+        # v0.39 P1-1: compact old messages when near capacity,
+        # then truncate to hard limit.
+        raw_messages = await self._compact_messages(raw_messages)
         messages_for_llm = self._truncate_messages(raw_messages)
         # Phase 2.3 (v0.36): reset the text-mode buffer so a
         # previous turn's leftover state doesn't leak in.
@@ -364,6 +374,7 @@ class ChatService(ChatBase):
                 "role": "system",
                 "content": obs_summary,
             })
+        raw_messages = await self._compact_messages(raw_messages)
         messages_for_llm = self._truncate_messages(raw_messages)
 
         try:
@@ -380,12 +391,20 @@ class ChatService(ChatBase):
             logger.exception("Confirmation continue error")
             yield ChatEvent.error(str(e))
 
+    # ─── Session management ──────────────────────────────────────
+
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a session from DB and evict its in-memory context."""
+        self._contexts.remove(session_id)
+        return self.db.delete_chat_session(session_id)
+
     # ─── Private helpers ─────────────────────────────────────────
 
     async def _get_or_create_context(
         self, session_id: str, wiki_id: str | None = None
     ) -> AgentContext:
-        if session_id not in self._contexts:
+        ctx = self._contexts.get(session_id)
+        if ctx is None:
             ctx = AgentContext(
                 wiki_id=wiki_id,
                 _observation_limit=self._chat_config["observation_limit"],
@@ -410,8 +429,8 @@ class ChatService(ChatBase):
                 session = self.db.get_chat_session(session_id)
                 if session and session.get("wiki_id"):
                     ctx.set_recent_wiki(session["wiki_id"])
-            self._contexts[session_id] = ctx
-        return self._contexts[session_id]
+            self._contexts.set(session_id, ctx)
+        return self._contexts.get(session_id)
 
     async def _load_history(self, session_id: str) -> list[dict]:
         """Load conversation history, preferring MemoryManager
@@ -554,23 +573,172 @@ class ChatService(ChatBase):
             lines.append(f"{i}. [{source}] {content}")
         return "\n".join(lines)
 
+    async def _compact_messages(
+        self, messages: list[dict[str, str]]
+    ) -> list[dict[str, str]]:
+        """Summarize older messages when context is near capacity.
+
+        Takes the oldest conversation messages (after system prompt),
+        sends them to the LLM for summarization, and replaces them
+        with a single summary message. Falls back to no-op on error.
+        """
+        if not self._chat_config.get("compaction_enabled", True):
+            return messages
+
+        if len(messages) <= self._chat_config.get("compaction_min_messages", 6):
+            return messages
+
+        # Get token budget
+        model = getattr(self, "llm_client", None)
+        model_name = getattr(model, "model", "gpt-4o") if model else "gpt-4o"
+        reserve = self._chat_config.get("context_reserve_tokens", 4096)
+        override = self._chat_config.get("context_window_override", 0)
+        if override > 0:
+            budget = override - reserve
+        else:
+            budget_checker = getattr(
+                getattr(self, "llm_client", None), "_budget_checker", None
+            )
+            if budget_checker is not None:
+                budget = budget_checker.config.context_window - reserve
+            else:
+                budget = 128_000 - reserve
+
+        current_tokens = count_messages(messages, model_name)
+        threshold = budget * self._chat_config.get("compaction_threshold_ratio", 0.8)
+
+        if current_tokens < threshold:
+            return messages  # No compaction needed
+
+        # Split: system prompt + old messages to compact + recent messages to keep
+        system = messages[0]
+        # Keep the last 4 messages untouched (most recent context)
+        keep_recent = 4
+        if len(messages) <= keep_recent + 1:
+            return messages
+
+        old_messages = messages[1:-(keep_recent)]
+        recent_messages = messages[-(keep_recent):]
+
+        # Limit compaction chunk size
+        max_compact_tokens = self._chat_config.get("compaction_max_tokens", 4000)
+        compact_text_parts: list[str] = []
+        compact_tokens = 0
+        for msg in old_messages:
+            msg_text = f"{msg['role']}: {msg['content']}"
+            msg_tokens = count_messages([msg], model_name)
+            if compact_tokens + msg_tokens > max_compact_tokens:
+                break
+            compact_text_parts.append(msg_text)
+            compact_tokens += msg_tokens
+
+        if not compact_text_parts:
+            return messages
+
+        compact_text = "\n".join(compact_text_parts)
+
+        # Call LLM to summarize
+        try:
+            summary_prompt = [
+                {"role": "system", "content": (
+                    "Summarize the following conversation into a concise brief. "
+                    "Preserve key facts, decisions, and context. "
+                    "Output ONLY the summary, no preamble."
+                )},
+                {"role": "user", "content": compact_text},
+            ]
+            llm_client = self.wiki_service.get_llm()
+            response = await llm_client.achat(
+                messages=summary_prompt,
+                temperature=0.1,
+                max_tokens=1024,
+            )
+            summary_content = response.get("content", "")
+            if not summary_content:
+                return messages  # LLM returned empty, skip compaction
+
+            summary_msg = {
+                "role": "system",
+                "content": f"[Conversation summary]\n{summary_content}",
+            }
+            logger.info(
+                "Compacted %d messages (%d tokens) into summary (%d tokens)",
+                len(compact_text_parts),
+                compact_tokens,
+                count_messages([summary_msg], model_name),
+            )
+            return [system, summary_msg] + recent_messages
+
+        except Exception:
+            logger.warning("Compaction failed, falling back to truncation", exc_info=True)
+            return messages
+
     def _truncate_messages(
         self, messages: list[dict[str, str]], max_messages: int | None = None
     ) -> list[dict[str, str]]:
-        if max_messages is None:
-            max_messages = self._chat_config["max_messages"]
-        if len(messages) <= max_messages + 1:
+        """Truncate messages to fit within the model's context window.
+
+        Uses token-aware truncation when possible (via tiktoken),
+        falling back to message-count truncation for safety.
+        """
+        if not messages:
             return messages
+
+        # Get model name for token counting
+        model = getattr(self, "llm_client", None)
+        model_name = getattr(model, "model", "gpt-4o") if model else "gpt-4o"
+
+        # Determine context window budget
+        reserve = self._chat_config.get("context_reserve_tokens", 4096)
+        override = self._chat_config.get("context_window_override", 0)
+        if override > 0:
+            budget = override - reserve
+        else:
+            # Try to get from LLM client's budget checker
+            budget_checker = getattr(
+                getattr(self, "llm_client", None), "_budget_checker", None
+            )
+            if budget_checker is not None:
+                budget = budget_checker.config.context_window - reserve
+            else:
+                budget = 128_000 - reserve  # safe default
+
+        # Always keep system prompt (index 0)
         system = messages[0]
-        recent = messages[-(max_messages):]
-        dropped = len(messages) - 1 - max_messages
+        system_tokens = count_messages([system], model_name)
+
+        # If system prompt alone exceeds budget, return just system
+        if system_tokens >= budget:
+            return [system]
+
+        # Find how many recent messages fit within the remaining budget
+        remaining = budget - system_tokens
+        kept: list[dict[str, str]] = []
+        kept_tokens = 0
+        # Walk from newest to oldest
+        for msg in reversed(messages[1:]):
+            msg_tokens = count_messages([msg], model_name)
+            if kept_tokens + msg_tokens > remaining:
+                break
+            kept.append(msg)
+            kept_tokens += msg_tokens
+
+        kept.reverse()
+        dropped = len(messages) - 1 - len(kept)
+
+        # Fallback: if token-aware found nothing, keep at least max_messages
+        if not kept and len(messages) > 1 and dropped > 0:
+            max_msgs = max_messages or self._chat_config["max_messages"]
+            kept = messages[-(max_msgs):]
+            dropped = len(messages) - 1 - len(kept)
+
         if dropped > 0:
             summary_note = {
                 "role": "system",
                 "content": f"[Note: {dropped} earlier messages omitted for context window management]",
             }
-            return [system, summary_note] + recent
-        return [system] + recent
+            return [system, summary_note] + kept
+        return [system] + kept
 
     async def _chat_via_react(
         self,
@@ -657,6 +825,7 @@ class ChatService(ChatBase):
                 "type": "tool_call_error",
                 "tool": event.get("action", ""),
                 "error": event.get("error", ""),
+                "call_id": event.get("call_id", ""),
             }
         if kind == "timeout":
             return ChatEvent.error(
