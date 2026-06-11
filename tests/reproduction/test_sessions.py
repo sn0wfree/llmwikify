@@ -95,8 +95,8 @@ def test_record_event_and_get_events(db: ReproductionDatabase):
     events = db.get_events(sid)
     assert len(events) == 2
     assert events[0]["event_type"] == "phase.start"
-    assert json.loads(events[0]["payload_json"])["phase"] == "extracting"
-    assert json.loads(events[1]["payload_json"])["rows"] == 22
+    assert events[0]["payload"]["phase"] == "extracting"
+    assert events[1]["payload"]["rows"] == 22
 
 
 def test_create_artifact_and_get_artifacts(db: ReproductionDatabase):

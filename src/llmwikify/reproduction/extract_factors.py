@@ -159,7 +159,9 @@ def read_factor_from_wiki(wiki: Any, slug: str) -> Optional[dict[str, Any]]:
     Returns:
         Parsed factor dict, or None if not found.
     """
-    factor_dir = wiki.wiki_dir / "factor"
+    factor_dir = wiki.wiki_dir / "factors"
+    if not factor_dir.is_dir():
+        factor_dir = wiki.wiki_dir / "factor"
     if not factor_dir.is_dir():
         return None
     md_path = factor_dir / f"{slug}.md"
@@ -178,7 +180,10 @@ def list_factors(wiki: Any) -> list[dict[str, Any]]:
     Returns:
         List of parsed frontmatter dicts.
     """
-    factor_dir = wiki.wiki_dir / "factor"
+    # Try plural first (wiki convention), fall back to singular
+    factor_dir = wiki.wiki_dir / "factors"
+    if not factor_dir.is_dir():
+        factor_dir = wiki.wiki_dir / "factor"
     if not factor_dir.is_dir():
         return []
     results = []

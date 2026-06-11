@@ -44,7 +44,10 @@ def _get_wiki(wiki_id: str | None = None) -> Any:
 
 def _read_strategy_from_wiki(wiki: Any, slug: str) -> dict[str, Any] | None:
     """Read a Strategy page from wiki directory."""
-    strategy_dir = wiki.wiki_dir / "strategy"
+    # Try plural first (wiki convention), fall back to singular
+    strategy_dir = wiki.wiki_dir / "strategies"
+    if not strategy_dir.is_dir():
+        strategy_dir = wiki.wiki_dir / "strategy"
     if not strategy_dir.is_dir():
         return None
     md_path = strategy_dir / f"{slug}.md"
@@ -61,7 +64,10 @@ def _read_strategy_from_wiki(wiki: Any, slug: str) -> dict[str, Any] | None:
 async def list_strategies() -> dict[str, Any]:
     """List all Strategy pages in the wiki."""
     wiki = _get_wiki()
-    strategy_dir = wiki.wiki_dir / "strategy"
+    # Try plural first (wiki convention), fall back to singular
+    strategy_dir = wiki.wiki_dir / "strategies"
+    if not strategy_dir.is_dir():
+        strategy_dir = wiki.wiki_dir / "strategy"
     if not strategy_dir.is_dir():
         return {"strategies": []}
 

@@ -177,7 +177,8 @@ async def _run_paper_extraction(
         )
 
         # Resolve raw filenames to full paths using _RAW_DIR
-        if source_type == "raw" and _RAW_DIR is not None:
+        # Skip if source_ref is already an absolute path
+        if source_type == "raw" and _RAW_DIR is not None and not Path(source_ref).is_absolute():
             source_ref = str(_RAW_DIR / source_ref)
 
         extraction = await asyncio.to_thread(
