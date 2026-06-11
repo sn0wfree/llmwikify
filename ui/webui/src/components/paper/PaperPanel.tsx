@@ -160,6 +160,9 @@ export function PaperPanel() {
     source_type: 'pdf' | 'url' | 'raw';
     source_ref: string;
     paper_content: string;
+    symbol: string;
+    start_date: string;
+    end_date: string;
   }) => {
     setSubmitError(null);
     try {
@@ -168,6 +171,9 @@ export function PaperPanel() {
         source_type: req.source_type,
         source_ref: req.source_ref,
         paper_content: req.paper_content,
+        symbol: req.symbol,
+        start_date: req.start_date,
+        end_date: req.end_date,
       });
       setSelectedId(res.session_id);
       setDetail(null);
