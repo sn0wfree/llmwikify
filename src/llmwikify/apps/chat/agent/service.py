@@ -579,7 +579,11 @@ class ChatService(ChatBase):
     @log_exception_returning(default=None, msg="Failed to load user preferences")
     async def _build_preferences_section(self) -> str | None:
         """Phase 3.1 (v0.36): inject user preferences as a
-        prompt section."""
+        prompt section.
+
+        v0.40: special-cases ``system_prompt`` key as a
+        dedicated section (not rendered as a generic preference).
+        """
         if self.memory_manager is None:
             return None
         prefs = await self.memory_manager.preferences.aall(
@@ -587,11 +591,18 @@ class ChatService(ChatBase):
         )
         if not prefs:
             return None
-        # Render as a markdown list.
-        lines = ["## User preferences"]
-        for k, v in prefs.items():
-            lines.append(f"- **{k}**: {v}")
-        return "\n".join(lines)
+        parts: list[str] = []
+        # v0.40: render system_prompt as its own section
+        if "system_prompt" in prefs and prefs["system_prompt"]:
+            parts.append("## Custom instructions\n" + str(prefs["system_prompt"]))
+        # Render other preferences as a markdown list
+        other_prefs = {k: v for k, v in prefs.items() if k != "system_prompt"}
+        if other_prefs:
+            lines = ["## User preferences"]
+            for k, v in other_prefs.items():
+                lines.append(f"- **{k}**: {v}")
+            parts.append("\n".join(lines))
+        return "\n\n".join(parts) if parts else None
 
     def _build_tools_section(self) -> str | None:
         """Phase 3.1 (v0.36): summarise available tools in the

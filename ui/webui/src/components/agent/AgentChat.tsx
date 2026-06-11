@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, StopCircle, History, ThumbsUp, ThumbsDown, Pencil, GitBranch, Paperclip, X } from 'lucide-react';
+import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, StopCircle, History, ThumbsUp, ThumbsDown, Pencil, GitBranch, Paperclip, X, Settings } from 'lucide-react';
 import { chatStream, ChatStreamEvent, api } from '../../api';
 import { useToast } from '../wiki/Toast';
 import { useWikiStore } from '../../stores/wikiStore';
@@ -113,6 +113,9 @@ export function AgentChat() {
   // v0.40: file attachments
   const [attachments, setAttachments] = useState<Array<{ name: string; mime: string; data: string; preview?: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // v0.40: settings dialog (system prompt editor)
+  const [showSettings, setShowSettings] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // Phase 5.1 (v0.36): AbortController for cancelling SSE streams.
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -426,6 +429,25 @@ export function AgentChat() {
     setAttachments((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
+  // v0.40: settings dialog (system prompt)
+  const openSettings = useCallback(async () => {
+    try {
+      const cfg = await api.agent.getConfig();
+      setSystemPrompt(cfg.system_prompt || '');
+    } catch { /* silent */ }
+    setShowSettings(true);
+  }, []);
+
+  const saveSystemPrompt = useCallback(async () => {
+    try {
+      await api.agent.saveConfig({ system_prompt: systemPrompt } as any);
+      addToast('success', 'System prompt saved');
+      setShowSettings(false);
+    } catch (e) {
+      addToast('error', `Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+  }, [systemPrompt, addToast]);
+
   const sendMessage = useCallback(async () => {
     if (!input.trim() || loading) return;
 
@@ -591,6 +613,49 @@ export function AgentChat() {
         />
       )}
 
+      {/* v0.40: Settings dialog for custom system prompt */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowSettings(false)}>
+          <div className="bg-card border border-border rounded-lg shadow-elevated w-full max-w-2xl max-h-[80vh] flex flex-col m-4" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <h2 className="text-base font-semibold">Custom system prompt</h2>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="p-1 rounded hover:bg-muted transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 flex-1 overflow-y-auto">
+              <p className="text-xs text-muted-foreground mb-2">
+                This prompt is added to every chat turn. Use it to set persona, language, tone, or domain-specific instructions.
+              </p>
+              <textarea
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder="E.g. Always respond in Chinese. Be concise. Use markdown."
+                className="w-full h-64 px-3 py-2 text-sm font-mono bg-muted/40 border border-border rounded-md outline-none focus:border-primary/50 resize-none text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            <div className="p-4 border-t border-border flex gap-3 justify-end">
+              <button
+                onClick={() => setShowSettings(false)}
+                className="px-3 py-1.5 text-sm rounded-md text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveSystemPrompt}
+                className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:brightness-110"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         {showSidebar && (
           <SessionSidebar
@@ -647,6 +712,15 @@ export function AgentChat() {
                 aria-label="Toggle tools rail"
               >
                 {showRail ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
+              </button>
+              {/* v0.40: settings button */}
+              <button
+                onClick={openSettings}
+                className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-white/[0.06] transition-colors"
+                title="Settings (system prompt)"
+                aria-label="Open settings"
+              >
+                <Settings className="w-4 h-4" />
               </button>
             </div>
           </div>

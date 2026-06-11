@@ -54,3 +54,4 @@ class SaveConfigRequest(BaseModel):
     base_url: str | None = None
     temperature: float | None = None
     max_tokens: int | None = None
+    system_prompt: str | None = None  # v0.40: custom system prompt
