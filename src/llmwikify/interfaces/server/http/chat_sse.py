@@ -154,6 +154,22 @@ async def revert_session(session_id: str, request: Request):
     return {"reverted": count, "session_id": session_id}
 
 
+@router.put("/sessions/{session_id}/messages/{message_id}")
+async def edit_message(session_id: str, message_id: str, request: Request):
+    """Edit a user message's content in-place."""
+    body = await request.json()
+    new_content = body.get("content", "")
+    if not new_content:
+        return {"error": "content is required"}
+    service = get_agent_service()
+    ok = service.edit_message(message_id, new_content)
+    if not ok:
+        return {"error": "message not found"}
+    # Evict context so next chat() reloads from DB
+    service._contexts.remove(session_id)
+    return {"updated": True, "message_id": message_id}
+
+
 @router.get("/sessions/recent")
 async def get_recent_wiki(session_id: str | None = None):
     service = get_agent_service()

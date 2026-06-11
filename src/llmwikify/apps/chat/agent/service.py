@@ -417,6 +417,10 @@ class ChatService(ChatBase):
         self._contexts.remove(session_id)
         return count
 
+    def edit_message(self, message_id: str, new_content: str) -> bool:
+        """Edit a message's content in-place."""
+        return self.db.update_chat_message(message_id, new_content)
+
     # ─── Private helpers ─────────────────────────────────────────
 
     async def _get_or_create_context(
