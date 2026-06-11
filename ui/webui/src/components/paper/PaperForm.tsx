@@ -26,6 +26,9 @@ interface PaperFormProps {
     source_type: SourceType;
     source_ref: string;
     paper_content: string;
+    symbol: string;
+    start_date: string;
+    end_date: string;
   }) => Promise<void>;
   className?: string;
 }
@@ -37,6 +40,9 @@ export function PaperForm({ onSubmit, className }: PaperFormProps) {
   const [sourceType, setSourceType] = useState<SourceType>('pdf');
   const [sourceRef, setSourceRef] = useState('');
   const [paperContent, setPaperContent] = useState('');
+  const [symbol, setSymbol] = useState('000300.SH');
+  const [startDate, setStartDate] = useState('2023-01-01');
+  const [endDate, setEndDate] = useState('2025-12-31');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,6 +86,9 @@ export function PaperForm({ onSubmit, className }: PaperFormProps) {
         source_type: sourceType,
         source_ref: sourceRef.trim(),
         paper_content: paperContent,
+        symbol: symbol.trim() || '000300.SH',
+        start_date: startDate || '2023-01-01',
+        end_date: endDate || '2025-12-31',
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -258,6 +267,41 @@ export function PaperForm({ onSubmit, className }: PaperFormProps) {
           focus:outline-none focus:border-primary resize-none font-mono"
         disabled={submitting || uploading}
       />
+
+      {/* Auto-backtest params */}
+      <div className="grid grid-cols-12 gap-2">
+        <input
+          type="text"
+          value={symbol}
+          onChange={(e) => setSymbol(e.target.value)}
+          placeholder="标的代码 (000300.SH)"
+          className="col-span-4 px-3 py-1.5 bg-muted border border-border rounded-lg
+            text-xs text-foreground placeholder-muted-foreground font-mono
+            focus:outline-none focus:border-primary"
+          disabled={submitting || uploading}
+        />
+        <input
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          className="col-span-3 px-3 py-1.5 bg-muted border border-border rounded-lg
+            text-xs text-foreground font-mono
+            focus:outline-none focus:border-primary"
+          disabled={submitting || uploading}
+        />
+        <input
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+          className="col-span-3 px-3 py-1.5 bg-muted border border-border rounded-lg
+            text-xs text-foreground font-mono
+            focus:outline-none focus:border-primary"
+          disabled={submitting || uploading}
+        />
+        <div className="col-span-2 flex items-center justify-center text-[10px] text-muted-foreground">
+          自动回测
+        </div>
+      </div>
 
       {error && (
         <div className="text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-lg p-2">

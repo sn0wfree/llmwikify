@@ -60,7 +60,7 @@ def set_paper_deps(
     # Sweep stuck sessions from previous run
     if _DB is not None:
         try:
-            for status in ("pending", "extracting", "wiki_building"):
+            for status in ("pending", "extracting", "analyzing"):
                 stuck = _DB.list_sessions(status=status)
                 for s in stuck:
                     if s.paper_id or s.source_type in ("pdf", "url", "raw"):
@@ -95,6 +95,10 @@ class PaperStartRequest(BaseModel):
     source_type: str = Field(default="pdf", pattern=r"^(pdf|url|raw)$")
     source_ref: str
     paper_content: str = ""
+    # Auto-backtest params (optional)
+    symbol: str = "000300.SH"
+    start_date: str = Field(default="2023-01-01", pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str = Field(default="2025-12-31", pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
 # ─── POST /api/paper/start ───────────────────────────────────
@@ -111,9 +115,9 @@ async def start_paper_extraction(req: PaperStartRequest) -> dict[str, Any]:
         paper_id=req.paper_id,
         source_type=req.source_type,
         source_ref=req.source_ref,
-        symbol="",
-        start_date="",
-        end_date="",
+        symbol=req.symbol,
+        start_date=req.start_date,
+        end_date=req.end_date,
     )
     _DB.record_event(sid, "extract.started", paper_id=req.paper_id)
     logger.info("paper session %s created for %s", sid, req.paper_id)
@@ -127,6 +131,9 @@ async def start_paper_extraction(req: PaperStartRequest) -> dict[str, Any]:
             source_ref=req.source_ref,
             paper_content=req.paper_content,
             wiki_id=req.wiki_id,
+            symbol=req.symbol,
+            start_date=req.start_date,
+            end_date=req.end_date,
         )
     )
 
@@ -144,8 +151,11 @@ async def _run_paper_extraction(
     source_ref: str,
     paper_content: str,
     wiki_id: str,
+    symbol: str = "000300.SH",
+    start_date: str = "2023-01-01",
+    end_date: str = "2025-12-31",
 ) -> None:
-    """Background task: extract → build pages → write wiki → mark done."""
+    """Background task: extract → build pages → write wiki → auto-backtest → done."""
     try:
         _DB.update_status(session_id, "extracting")
         _DB.record_event(session_id, "extract.llm_called")
@@ -188,7 +198,7 @@ async def _run_paper_extraction(
             logger.info("paper session %s: empty extraction, done", session_id)
             return
 
-        _DB.update_status(session_id, "wiki_building")
+        _DB.update_status(session_id, "analyzing")
         pages = build_paper_pages(extraction, paper_id)
         wiki = _get_wiki(wiki_id)
         written: list[str] = []
@@ -213,10 +223,91 @@ async def _run_paper_extraction(
         _DB.record_event(
             session_id, "wiki.written", pages_written=len(written)
         )
+
+        # Auto-backtest: run factor + strategy backtests if signal was extracted
+        suggested = extraction.get("suggested_signal", {})
+        signal_type = suggested.get("signal_type", "unknown")
+        backtest_results: list[dict[str, Any]] = []
+
+        if signal_type != "unknown":
+            _DB.record_event(session_id, "backtest.started", symbol=symbol)
+            try:
+                from llmwikify.reproduction.factor_backtest import run_factor_backtest
+                from llmwikify.reproduction.backtest import run_backtest
+                from llmwikify.reproduction.router import DataRouter
+
+                router = DataRouter(use_cache=True)
+                data, source = await asyncio.to_thread(
+                    router.get, symbol, start_date, end_date
+                )
+
+                if data is not None and not data.empty:
+                    # Factor backtest
+                    factor_slug = None
+                    for p in pages:
+                        if p.get("page_type") == "Factor":
+                            factor_slug = p["page_name"]
+                            break
+
+                    if factor_slug:
+                        factor_class = signal_type
+                        factor_params = suggested.get("signal_params", {})
+                        fb_result = await asyncio.to_thread(
+                            run_factor_backtest,
+                            data=data,
+                            factor_class=factor_class,
+                            factor_params=factor_params,
+                        )
+                        backtest_results.append({
+                            "type": "factor",
+                            "slug": factor_slug,
+                            "ic_mean": fb_result.ic_mean,
+                            "icir": fb_result.icir,
+                            "annual_return": fb_result.annual_return,
+                            "max_drawdown": fb_result.max_drawdown,
+                        })
+
+                    # Strategy backtest
+                    strategy_class = suggested.get("strategy_class", "trend_following")
+                    sb_result = await asyncio.to_thread(
+                        run_backtest,
+                        strategy=signal_type,
+                        data=data,
+                        config={
+                            "signal_params": suggested.get("signal_params", {}),
+                            "initial_cash": 1_000_000,
+                            "commission": 0.001,
+                        },
+                    )
+                    backtest_results.append({
+                        "type": "strategy",
+                        "status": sb_result.status,
+                        "trades_count": len(sb_result.trades),
+                        "final_cash": sb_result.final_cash,
+                    })
+
+                    _DB.record_event(
+                        session_id, "backtest.done",
+                        results=backtest_results, source=source,
+                    )
+                    logger.info("paper %s: auto-backtest done (%s)", session_id, source)
+                else:
+                    _DB.record_event(session_id, "backtest.skipped", reason="no data")
+                    logger.warning("paper %s: no data for backtest (%s)", session_id, symbol)
+
+            except Exception as bt_exc:
+                logger.warning("paper %s: auto-backtest failed: %s", session_id, bt_exc)
+                _DB.record_event(session_id, "backtest.error", error=str(bt_exc))
+
         _DB.update_status(session_id, "done")
-        _DB.record_event(session_id, "finalize.done", pages_written=len(written))
+        _DB.record_event(
+            session_id, "finalize.done",
+            pages_written=len(written),
+            backtest_results=backtest_results,
+        )
         logger.info(
-            "paper session %s done: %d pages written", session_id, len(written)
+            "paper session %s done: %d pages, %d backtests",
+            session_id, len(written), len(backtest_results),
         )
 
     except Exception as exc:

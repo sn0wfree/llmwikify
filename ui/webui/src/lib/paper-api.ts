@@ -48,7 +48,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 export type PaperStatus =
   | 'pending'
   | 'extracting'
-  | 'wiki_building'
+  | 'analyzing'
   | 'done'
   | 'error';
 
@@ -105,6 +105,9 @@ export interface PaperStartRequest {
   source_ref: string;
   paper_content?: string;
   wiki_id?: string;
+  symbol?: string;
+  start_date?: string;
+  end_date?: string;
 }
 
 export interface PaperStartResponse {
@@ -190,13 +193,14 @@ export const PAPER_FIVE_PHASES = [
   { key: 'extract',      label: 'LLM 提取', num: 1, desc: '调用 LLM 解析论文结构' },
   { key: 'wiki_building', label: '构建页面', num: 2, desc: '生成 Source/Factor/Strategy 页' },
   { key: 'wiki_written',  label: '写入 Wiki', num: 3, desc: 'wiki.write_page × N' },
-  { key: 'finalize',      label: '归档',     num: 4, desc: '标记完成' },
+  { key: 'backtest',      label: '自动回测', num: 4, desc: '因子 IC + 策略回测' },
+  { key: 'finalize',      label: '归档',     num: 5, desc: '标记完成' },
 ] as const;
 
 export const PAPER_STATUS_LABELS: Record<PaperStatus, { icon: string; color: string; text: string }> = {
   pending:      { icon: '◌', color: 'text-muted-foreground',  text: '待启动' },
   extracting:   { icon: '↓', color: 'text-primary',          text: 'LLM 提取中' },
-  wiki_building: { icon: '◐', color: 'text-primary',          text: '构建页面中' },
+  analyzing:    { icon: '◐', color: 'text-primary',          text: '构建+回测中' },
   done:         { icon: '✓', color: 'text-green-400',        text: '已完成' },
   error:        { icon: '✗', color: 'text-red-400',          text: '失败' },
 };
@@ -204,8 +208,8 @@ export const PAPER_STATUS_LABELS: Record<PaperStatus, { icon: string; color: str
 /** Map a backend event_type to the front-end phase it represents. */
 export function paperEventToPhase(eventType: string): typeof PAPER_FIVE_PHASES[number]['key'] | null {
   if (eventType === 'extract.started' || eventType === 'extract.llm_called' || eventType === 'extract.llm_done') return 'extract';
-  if (eventType === 'wiki.building') return 'wiki_building';
   if (eventType === 'wiki.written') return 'wiki_written';
+  if (eventType === 'backtest.started' || eventType === 'backtest.done') return 'backtest';
   if (eventType === 'finalize.done') return 'finalize';
   return null;
 }
