@@ -63,6 +63,20 @@ _SIX_STEP_EXTRAS: dict[str, Any] = {
     "observation_summary_limit": 5,
     "summary_truncate_chars": 500,
     "content_truncate_chars": 10_000,
+
+    # ─── Context store limits (v0.39 P0-1) ───
+    "context_store_max_size": 200,
+    "context_store_ttl_seconds": 1800,  # 30 minutes
+
+    # ─── Token-aware truncation (v0.39 P0-2) ───
+    "context_reserve_tokens": 4096,  # reserve for LLM output
+    "context_window_override": 0,    # 0 = use model's actual context window
+
+    # ─── Message compaction (v0.39 P1-1) ───
+    "compaction_enabled": True,
+    "compaction_threshold_ratio": 0.8,  # trigger at 80% of budget
+    "compaction_min_messages": 6,        # need at least 6 messages to compact
+    "compaction_max_tokens": 4000,       # max tokens to summarize at once
     "llm_retry_max_attempts": 3,
     "llm_retry_base_delay": 2.0,
     "llm_retry_call_timeout": 120.0,

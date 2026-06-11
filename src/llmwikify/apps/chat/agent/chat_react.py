@@ -43,6 +43,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -490,6 +491,7 @@ class ChatReActBridge:
             for idx, call in enumerate(pending):
                 tool_name = call["name"]
                 args = call.get("args", {}) or {}
+                call_id = f"call_{uuid.uuid4().hex[:8]}"
 
                 # Skip malformed tool calls with empty names — these
                 # are streaming artifacts (incomplete tool_call deltas)
@@ -501,6 +503,7 @@ class ChatReActBridge:
                         "type": "tool_call_error",
                         "tool": "",
                         "error": "Skipped malformed tool call with empty name",
+                        "call_id": call_id,
                     })
                     continue
 
@@ -509,6 +512,7 @@ class ChatReActBridge:
                     "type": "tool_call_start",
                     "tool": tool_name,
                     "args": args,
+                    "call_id": call_id,
                 })
                 entry = {"tool": tool_name, "args": args, "status": "pending"}
                 if hasattr(ctx, "_tool_calls"):
@@ -538,12 +542,14 @@ class ChatReActBridge:
                         "type": "tool_call_error",
                         "tool": tool_name,
                         "error": str(result.get("error", "")),
+                        "call_id": call_id,
                     })
                 else:
                     await emit({
                         "type": "tool_call_end",
                         "tool": tool_name,
                         "result": result,
+                        "call_id": call_id,
                     })
 
                 # Persist to MemoryManager.context
@@ -627,6 +633,7 @@ class ChatReActBridge:
                         "tool": tool_name,
                         "args": args,
                         "impact": result.get("impact", {}),
+                        "call_id": call_id,
                     })
                     confirmation_required_result = result
                     break

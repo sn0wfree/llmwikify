@@ -19,6 +19,7 @@ interface Message {
 }
 
 interface ToolCall {
+  call_id: string;
   tool: string;
   args: Record<string, unknown>;
   result?: unknown;
@@ -193,7 +194,7 @@ export function AgentChat() {
               break;
             case 'tool_call_start': {
               setCurrentToolCalls((prev) => {
-                const next = [...prev, { tool: event.tool, args: event.args, status: 'streaming' as const, startedAt: Date.now() }];
+                const next = [...prev, { call_id: event.call_id, tool: event.tool, args: event.args, status: 'streaming' as const, startedAt: Date.now() }];
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -201,7 +202,7 @@ export function AgentChat() {
             }
             case 'tool_call_end': {
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -209,7 +210,7 @@ export function AgentChat() {
             }
             case 'confirmation_required':
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -228,7 +229,7 @@ export function AgentChat() {
             }
             case 'tool_call_error':
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now() } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -344,7 +345,7 @@ export function AgentChat() {
               break;
             case 'tool_call_start': {
               setCurrentToolCalls((prev) => {
-                const next = [...prev, { tool: event.tool, args: event.args, status: 'streaming' as const, startedAt: Date.now() }];
+                const next = [...prev, { call_id: event.call_id, tool: event.tool, args: event.args, status: 'streaming' as const, startedAt: Date.now() }];
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -352,7 +353,7 @@ export function AgentChat() {
             }
             case 'tool_call_end': {
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -360,7 +361,7 @@ export function AgentChat() {
             }
             case 'tool_call_error': {
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now() } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -368,7 +369,7 @@ export function AgentChat() {
             }
             case 'confirmation_required':
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.tool === event.tool ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });

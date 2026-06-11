@@ -12,6 +12,15 @@ from fastapi import APIRouter, Request
 from sse_starlette import EventSourceResponse
 
 from llmwikify.apps.chat.agent.agent_service import AgentService
+from llmwikify.interfaces.server.http._models import (
+    ChatRequest,
+    CreateSessionRequest,
+    ApprovalRequest,
+    BatchApproveRequest,
+    BatchApproveProposalsRequest,
+    ApplyProposalsRequest,
+    SaveConfigRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +57,7 @@ def get_wiki_id(request: Request) -> str | None:
 @router.post("/chat")
 async def chat(request: Request):
     body = await request.json()
-    message = body.get("message", "")
-    session_id = body.get("session_id")
-    wiki_id = body.get("wiki_id")
-
+    req = ChatRequest(**body)
     jwt_token = get_jwt_from_request(request)
     service = get_agent_service()
 
@@ -65,9 +71,9 @@ async def chat(request: Request):
         start_time = time.monotonic()
         last_event_time = start_time
         async for event in service.chat(
-            message=message,
-            session_id=session_id,
-            wiki_id=wiki_id,
+            message=req.message,
+            session_id=req.session_id,
+            wiki_id=req.wiki_id,
             jwt_token=jwt_token,
         ):
             yield {
@@ -106,10 +112,10 @@ async def list_sessions():
 @router.post("/sessions")
 async def create_session(request: Request):
     body = await request.json()
-    wiki_id = body.get("wiki_id")
+    req = CreateSessionRequest(**body)
     jwt_token = get_jwt_from_request(request)
     service = get_agent_service()
-    session_id = service.db.create_chat_session(wiki_id, jwt_token)
+    session_id = service.db.create_chat_session(req.wiki_id, jwt_token)
     return {"session_id": session_id}
 
 
@@ -132,7 +138,7 @@ async def get_session_messages(session_id: str, limit: int = 50, before: str | N
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
     service = get_agent_service()
-    deleted = service.db.delete_chat_session(session_id)
+    deleted = service.delete_session(session_id)
     return {"deleted": deleted}
 
 
@@ -189,18 +195,19 @@ async def reject_proposal(proposal_id: str):
 
 
 @router.post("/dream/proposals/batch-approve")
-async def batch_approve_proposals(body: dict):
-    ids = body.get("ids", [])
+async def batch_approve_proposals(request: Request):
+    body = await request.json()
+    req = BatchApproveProposalsRequest(**body)
     service = get_agent_service()
-    return service.batch_approve_proposals(ids)
+    return service.batch_approve_proposals(req.ids)
 
 
 @router.post("/dream/proposals/apply")
-async def apply_proposals(body: dict):
-    wiki_id = body.get("wiki_id")
-    ids = body.get("ids")
+async def apply_proposals(request: Request):
+    body = await request.json()
+    req = ApplyProposalsRequest(**body)
     service = get_agent_service()
-    return await service.apply_proposals(wiki_id, ids)
+    return await service.apply_proposals(req.wiki_id, req.ids)
 
 
 # --- Notifications endpoints ---
@@ -283,9 +290,7 @@ async def approve_confirmation(confirmation_id: str, request: Request):
 async def approve_and_continue(confirmation_id: str, request: Request):
     """Approve confirmation, execute tool, and stream LLM follow-up."""
     body = await request.json()
-    session_id = body.get("session_id", "")
-    wiki_id = body.get("wiki_id") or get_wiki_id(request)
-    arguments = body.get("arguments")
+    req = ApprovalRequest(**body)
     service = get_agent_service()
 
     async def event_generator():
@@ -293,9 +298,9 @@ async def approve_and_continue(confirmation_id: str, request: Request):
         start_time = time.monotonic()
         async for event in service.approve_confirmation_and_continue(
             confirmation_id=confirmation_id,
-            session_id=session_id,
-            wiki_id=wiki_id,
-            arguments=arguments,
+            session_id=req.session_id,
+            wiki_id=req.wiki_id,
+            arguments=req.arguments,
         ):
             yield {"event": "message", "data": json.dumps(event)}
             elapsed = time.monotonic() - start_time
@@ -323,11 +328,12 @@ async def reject_confirmation(confirmation_id: str, request: Request):
 
 
 @router.post("/confirmations/batch")
-async def batch_approve(body: dict, request: Request):
-    ids = body.get("ids", [])
+async def batch_approve(request: Request):
+    body = await request.json()
+    req = BatchApproveRequest(**body)
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    return await service.batch_approve_confirmations(ids, wiki_id)
+    return await service.batch_approve_confirmations(req.ids, wiki_id)
 
 
 # --- Config endpoints ---
@@ -344,14 +350,16 @@ async def get_llm_config():
 async def save_llm_config(request: Request):
     from llmwikify.apps.chat.config_manager import get_global_config_manager
     body = await request.json()
+    req = SaveConfigRequest(**body)
     manager = get_global_config_manager()
     # Preserve real api_key: if the incoming key is masked (contains ***),
     # keep the original value from the existing config.
-    incoming_key = body.get("api_key", "")
+    config_dict = req.model_dump(exclude_none=True)
+    incoming_key = config_dict.get("api_key", "")
     if incoming_key and "***" in incoming_key:
         current = manager.load_effective_llm_config()
-        body["api_key"] = current.get("api_key", incoming_key)
-    manager.save_global_config(body)
+        config_dict["api_key"] = current.get("api_key", incoming_key)
+    manager.save_global_config(config_dict)
     manager.reload()
     return {"saved": True}
 

@@ -18,6 +18,7 @@ type ToolStatus = 'pending' | 'streaming' | 'done' | 'error';
 type ConnectionState = 'idle' | 'live' | 'error';
 
 interface ToolCall {
+  call_id: string;
   tool: string;
   args: Record<string, unknown>;
   result?: unknown;
