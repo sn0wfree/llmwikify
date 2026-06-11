@@ -170,6 +170,29 @@ async def edit_message(session_id: str, message_id: str, request: Request):
     return {"updated": True, "message_id": message_id}
 
 
+@router.post("/sessions/{session_id}/abort")
+async def abort_session(session_id: str):
+    """Abort a running session's LLM stream."""
+    service = get_agent_service()
+    aborted = service.abort_session(session_id)
+    return {"aborted": aborted, "session_id": session_id}
+
+
+@router.get("/sessions/{session_id}/status")
+async def get_session_status(session_id: str):
+    """Get session status: idle or busy."""
+    service = get_agent_service()
+    status = service.get_session_status(session_id)
+    return {"session_id": session_id, "status": status}
+
+
+@router.get("/sessions/status")
+async def get_all_session_status():
+    """Get status for all active sessions."""
+    service = get_agent_service()
+    return {"sessions": service.get_all_session_status()}
+
+
 @router.get("/sessions/recent")
 async def get_recent_wiki(session_id: str | None = None):
     service = get_agent_service()
