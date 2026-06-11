@@ -10,7 +10,7 @@ export type ChatStreamEvent =
   | { type: 'tool_call_error'; tool: string; error: string; call_id: string; duration_ms: number }
   | { type: 'done'; final_response: string }
   | { type: 'save_warning'; reason: string }
-  | { type: 'confirmation_required'; confirmation_id: string; tool: string; args: Record<string, unknown>; impact: Record<string, unknown>; call_id: string }
+  | { type: 'confirmation_required'; confirmation_id: string; tool: string; args: Record<string, unknown>; impact: Record<string, unknown>; call_id: string; duration_ms: number }
   | { type: 'error'; message: string };
 
 // Phase 5.4 (v0.36): SSE reconnection configuration.

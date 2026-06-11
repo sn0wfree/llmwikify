@@ -179,7 +179,7 @@ export function AgentChat() {
     setCurrentAssistantMsg('');
     setCurrentToolCalls([]);
     currentThinkingRef.current = '';
-    currentToolCallsRef.current = '';
+    currentToolCallsRef.current = [];
 
     // Phase 5.1 (v0.36): create AbortController for cancellation.
     const ac = new AbortController();
