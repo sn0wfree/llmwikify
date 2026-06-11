@@ -206,7 +206,87 @@ def build_paper_pages(
             content += f"- **Gap:** {item}\n"
         pages.append({"page_name": f"paper-{paper_id}-risks", "content": content, "page_type": "Source"})
 
-    # 4. Factor page (from suggested_signal)
+    # 4. Operation Steps page
+    ops = extraction.get("operation_steps", {})
+    if ops:
+        content = f"---\ntitle: Operation Steps — {paper_id}\npage_type: Source\n---\n\n"
+        content += f"# Operation Steps\n\n"
+        labels = {
+            "signal_generation": "Signal Generation",
+            "position_sizing": "Position Sizing",
+            "rebalance_frequency": "Rebalance Frequency",
+            "stop_loss": "Stop Loss",
+            "transaction_cost": "Transaction Cost",
+        }
+        for key, label in labels.items():
+            value = ops.get(key, "TBD")
+            content += f"**{label}:** {value}\n\n"
+        pages.append({"page_name": f"paper-{paper_id}-operations", "content": content, "page_type": "Source"})
+
+    # 5. Model Framework page
+    model = extraction.get("model_framework", {})
+    if model:
+        content = f"---\ntitle: Model Framework — {paper_id}\npage_type: Source\n---\n\n"
+        content += f"# Model Framework\n\n"
+        content += f"**Model Type:** {model.get('model_type', 'TBD')}\n\n"
+        content += f"**Framework:** {model.get('framework', 'TBD')}\n\n"
+        content += f"**Validation:** {model.get('validation', 'TBD')}\n\n"
+        metrics = model.get("evaluation_metrics", [])
+        if metrics:
+            content += f"**Evaluation Metrics:** {', '.join(metrics)}\n"
+        pages.append({"page_name": f"paper-{paper_id}-model", "content": content, "page_type": "Source"})
+
+    # 6. Strengths & Weaknesses page
+    sw = extraction.get("strengths_weaknesses", {})
+    if sw:
+        content = f"---\ntitle: Strengths & Weaknesses — {paper_id}\npage_type: Source\n---\n\n"
+        content += f"# Strengths & Weaknesses\n\n"
+        if sw.get("strengths"):
+            content += f"## Strengths\n\n"
+            for item in sw["strengths"]:
+                content += f"- {item}\n"
+            content += "\n"
+        if sw.get("weaknesses"):
+            content += f"## Weaknesses\n\n"
+            for item in sw["weaknesses"]:
+                content += f"- {item}\n"
+            content += "\n"
+        if sw.get("improvement_directions"):
+            content += f"## Improvement Directions\n\n"
+            for item in sw["improvement_directions"]:
+                content += f"- {item}\n"
+        pages.append({"page_name": f"paper-{paper_id}-sw", "content": content, "page_type": "Source"})
+
+    # 7. Datasets page
+    datasets = extraction.get("datasets", {})
+    if datasets:
+        content = f"---\ntitle: Datasets — {paper_id}\npage_type: Source\n---\n\n"
+        content += f"# Datasets\n\n"
+        content += f"**Name:** {datasets.get('name', 'TBD')}\n\n"
+        content += f"**Source:** {datasets.get('source', 'TBD')}\n\n"
+        content += f"**Time Range:** {datasets.get('time_range', 'TBD')}\n\n"
+        content += f"**Processing:** {datasets.get('processing', 'TBD')}\n"
+        pages.append({"page_name": f"paper-{paper_id}-datasets", "content": content, "page_type": "Source"})
+
+    # 8. References page
+    refs = extraction.get("references", {})
+    if refs:
+        content = f"---\ntitle: References — {paper_id}\npage_type: Source\n---\n\n"
+        content += f"# References\n\n"
+        if refs.get("original_paper"):
+            content += f"## Original Paper\n\n{refs['original_paper']}\n\n"
+        if refs.get("related_papers"):
+            content += f"## Related Papers\n\n"
+            for item in refs["related_papers"]:
+                content += f"- {item}\n"
+            content += "\n"
+        if refs.get("code_repositories"):
+            content += f"## Code Repositories\n\n"
+            for item in refs["code_repositories"]:
+                content += f"```\n{item}\n```\n"
+        pages.append({"page_name": f"paper-{paper_id}-references", "content": content, "page_type": "Source"})
+
+    # 9. Factor page (from suggested_signal)
     suggested = extraction.get("suggested_signal", {})
     signal_type = suggested.get("signal_type", "unknown")
     if signal_type != "unknown":

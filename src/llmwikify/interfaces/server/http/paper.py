@@ -169,6 +169,7 @@ async def _run_paper_extraction(
             "extract.llm_done",
             has_extraction=bool(extraction),
             keys=list(extraction.keys()) if extraction else [],
+            extraction=extraction,
         )
 
         if not extraction:
@@ -336,7 +337,10 @@ async def list_paper_artifacts(paper_id: str) -> dict[str, Any]:
     wiki = _get_wiki()
     artifacts = []
 
-    for suffix in ["logic", "data", "risks"]:
+    for suffix in [
+        "logic", "data", "risks", "operations", "model",
+        "sw", "datasets", "references",
+    ]:
         page_name = f"paper-{paper_id}-{suffix}"
         try:
             wiki.read_page(page_name)
