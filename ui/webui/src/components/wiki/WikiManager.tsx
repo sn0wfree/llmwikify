@@ -33,21 +33,42 @@ export function WikiManager({ onClose }: WikiManagerProps) {
     url: '',
     api_key: '',
   });
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleAdd = async () => {
-    if (!formData.wiki_id) return;
+    const wikiId = formData.wiki_id.trim();
+    const root = formData.root.trim();
+    const url = formData.url.trim();
 
-    await registerWiki({
-      wiki_id: formData.wiki_id,
-      name: formData.name || formData.wiki_id,
-      type: addType,
-      root: addType === 'local' ? formData.root : undefined,
-      url: addType === 'remote' ? formData.url : undefined,
-      api_key: formData.api_key || undefined,
-    });
+    if (!wikiId) {
+      setFormError('Wiki ID is required');
+      return;
+    }
+    if (addType === 'local' && !root) {
+      setFormError('Root Path is required for local wiki');
+      return;
+    }
+    if (addType === 'remote' && !url) {
+      setFormError('Server URL is required for remote wiki');
+      return;
+    }
 
-    setShowAddForm(false);
-    setFormData({ wiki_id: '', name: '', root: '', url: '', api_key: '' });
+    setFormError(null);
+    try {
+      await registerWiki({
+        wiki_id: wikiId,
+        name: formData.name.trim() || wikiId,
+        type: addType,
+        root: addType === 'local' ? root : undefined,
+        url: addType === 'remote' ? url : undefined,
+        api_key: formData.api_key.trim() || undefined,
+      });
+
+      setShowAddForm(false);
+      setFormData({ wiki_id: '', name: '', root: '', url: '', api_key: '' });
+    } catch {
+      return;
+    }
   };
 
   const handleRemove = async (wikiId: string) => {
@@ -79,9 +100,9 @@ export function WikiManager({ onClose }: WikiManagerProps) {
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[60vh]">
           {/* Error banner */}
-          {error && (
+          {(formError || error) && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded p-2 mb-4">
-              {error}
+              {formError || error}
             </div>
           )}
 
@@ -191,14 +212,17 @@ export function WikiManager({ onClose }: WikiManagerProps) {
               {/* Actions */}
               <div className="flex justify-end gap-2 mt-4">
                 <button
-                  onClick={() => setShowAddForm(false)}
+                  onClick={() => {
+                    setFormError(null);
+                    setShowAddForm(false);
+                  }}
                   className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleAdd}
-                  disabled={!formData.wiki_id || loading}
+                  disabled={!formData.wiki_id.trim() || (addType === 'local' && !formData.root.trim()) || (addType === 'remote' && !formData.url.trim()) || loading}
                   className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {loading ? 'Adding...' : 'Add Wiki'}

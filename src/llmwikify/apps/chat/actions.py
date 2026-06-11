@@ -344,6 +344,8 @@ async def action_clarify(
         )
         ctx.db.update_six_step_fields(
             state.session_id, clarification=clarification,
+            self_loop_counts=state.self_loop_counts,
+            self_loop_history=state.self_loop_history,
         )
     except Exception as e:
         logger.warning("Clarification persist: %s", e)
@@ -653,10 +655,16 @@ async def action_review(
         )
     except Exception as e:
         logger.error("Report review failed: %s", e)
-        # DR-4: Skip review on LLM failure instead of creating fake bad review
+        # DR-4: Skip review on LLM failure. Mark as NOT approved and
+        # `skipped=True` so the quality-compliance gate can detect the
+        # skip and route the engine to `revise` (which is also LLM-
+        # bound and will fail identically, ultimately falling into
+        # `incomplete` if the budget is exhausted). This is the
+        # honest outcome: a session whose review was never actually
+        # run should not be marked `done` with a fabricated score.
         state.review = {
-            "approved": True,
-            "score": 7,
+            "approved": False,
+            "score": 0,
             "issues": [],
             "feedback": "",
             "skipped": True,

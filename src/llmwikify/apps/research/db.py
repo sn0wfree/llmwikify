@@ -41,6 +41,43 @@ class ResearchDatabase(BaseDatabase):
     accessed via the other facades.
     """
 
+    def _connect(self) -> sqlite3.Connection:
+        """Open a connection with the project's standard pragmas.
+
+        - ``journal_mode=WAL`` lets readers proceed while a writer
+          holds the lock, eliminating most ``database is locked``
+          errors.
+        - ``busy_timeout=5000`` makes SQLite block for up to 5s
+          waiting for the lock instead of failing immediately.
+        - ``row_factory=sqlite3.Row`` so callers can use ``row["col"]``
+          syntax (the v0.34.0 CHANGELOG entry notes a tuple-index
+          bug from missing row_factory in some methods).
+        - ``synchronous=NORMAL`` is the safe-for-WAL mode that gives
+          the durability of FULL with the throughput of OFF.
+
+        Note: ``foreign_keys`` is intentionally NOT enabled. The
+        pre-existing schema has 3 FK constraints and the test
+        suite has fixtures that violate them (e.g. ``save_source``
+        with a sub_query_id that hasn't been inserted yet). Turning
+        FK enforcement on would surface latent data-integrity bugs
+        that need to be fixed separately. Use raw ``sqlite3``
+        connections and ``PRAGMA foreign_keys = ON`` explicitly
+        in tests that need it.
+
+        All call sites that open ``sqlite3.connect(self.db_path)``
+        should go through this helper.
+        """
+        conn = sqlite3.connect(
+            self.db_path,
+            timeout=5.0,
+            isolation_level=None,  # autocommit; we manage txns explicitly
+        )
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA synchronous = NORMAL")
+        conn.execute("PRAGMA busy_timeout = 5000")
+        return conn
+
     def _init_db(self) -> None:
         """Idempotently create the 4 research tables.
 
@@ -49,7 +86,7 @@ class ResearchDatabase(BaseDatabase):
         are created by their respective facades when they
         construct.
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
         """
         CREATE TABLE IF NOT EXISTS autoresearch_sessions (
@@ -169,7 +206,7 @@ class ResearchDatabase(BaseDatabase):
         (the first 6-step stage).
         """
         session_id = uuid.uuid4().hex
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """INSERT INTO autoresearch_sessions
                    (id, wiki_id, query, status, current_step)
@@ -180,7 +217,7 @@ class ResearchDatabase(BaseDatabase):
         return session_id
 
     def get_research_session(self, session_id: str) -> dict | None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT * FROM autoresearch_sessions WHERE id = ?",
@@ -191,7 +228,7 @@ class ResearchDatabase(BaseDatabase):
     def list_research_sessions(
         self, wiki_id: str | None = None, session_type: str | None = None
     ) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             sql = """SELECT s.*,
                        (SELECT COUNT(*) FROM autoresearch_sub_queries
@@ -219,7 +256,7 @@ class ResearchDatabase(BaseDatabase):
         synthesis_json: str | None = None,
         review_json: str | None = None,
     ) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             sets = ["status = ?", "updated_at = datetime('now')"]
             params: list[Any] = [status]
             if step:
@@ -247,7 +284,7 @@ class ResearchDatabase(BaseDatabase):
         progress: float,
         wiki_page_name: str | None = None,
     ) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             if wiki_page_name:
                 conn.execute(
                     """UPDATE autoresearch_sessions
@@ -269,7 +306,7 @@ class ResearchDatabase(BaseDatabase):
         self, session_id: str, result: str | None = None
     ) -> None:
         """Persist report data without changing status."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """UPDATE autoresearch_sessions
                    SET result = ?, updated_at = datetime('now')
@@ -284,7 +321,7 @@ class ResearchDatabase(BaseDatabase):
         result: str | None = None,
         wiki_page_name: str | None = None,
     ) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """UPDATE autoresearch_sessions
                    SET status = 'done', result = ?, wiki_page_name = ?,
@@ -296,7 +333,7 @@ class ResearchDatabase(BaseDatabase):
 
     def delete_research(self, session_id: str) -> bool:
         """Delete a session and cascade-delete its sub_queries, sources, and steps."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 "DELETE FROM autoresearch_sources WHERE session_id = ?",
                 (session_id,),
@@ -326,7 +363,7 @@ class ResearchDatabase(BaseDatabase):
         url: str | None = None,
     ) -> str:
         sq_id = uuid.uuid4().hex
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """INSERT INTO autoresearch_sub_queries
                    (id, session_id, query, source_type, url)
@@ -344,7 +381,7 @@ class ResearchDatabase(BaseDatabase):
         error: str | None = None,
     ) -> None:
         result_json = json.dumps(result) if result is not None else None
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             if status == "done":
                 conn.execute(
                     """UPDATE autoresearch_sub_queries
@@ -362,7 +399,7 @@ class ResearchDatabase(BaseDatabase):
             conn.commit()
 
     def get_sub_queries(self, session_id: str) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """SELECT * FROM autoresearch_sub_queries
@@ -395,7 +432,7 @@ class ResearchDatabase(BaseDatabase):
         content: str | None = None,
     ) -> str:
         source_id = uuid.uuid4().hex
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """INSERT INTO autoresearch_sources
                    (id, session_id, sub_query_id, source_type, url, title,
@@ -411,7 +448,7 @@ class ResearchDatabase(BaseDatabase):
 
     def update_source_analysis(self, source_id: str, analysis: dict) -> None:
         analysis_json = json.dumps(analysis, ensure_ascii=False)
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 "UPDATE autoresearch_sources SET analysis = ? WHERE id = ?",
                 (analysis_json, source_id),
@@ -419,7 +456,7 @@ class ResearchDatabase(BaseDatabase):
             conn.commit()
 
     def get_sources(self, session_id: str) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """SELECT * FROM autoresearch_sources
@@ -439,7 +476,7 @@ class ResearchDatabase(BaseDatabase):
         return out
 
     def rate_source(self, source_id: str, rating: int) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 "UPDATE autoresearch_sources SET rating = ? WHERE id = ?",
                 (rating, source_id),
@@ -447,7 +484,7 @@ class ResearchDatabase(BaseDatabase):
             conn.commit()
 
     def get_source_count(self, session_id: str) -> int:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 "SELECT COUNT(*) AS c FROM autoresearch_sources WHERE session_id = ?",
                 (session_id,),
@@ -492,7 +529,7 @@ class ResearchDatabase(BaseDatabase):
             sets.append("evidence_scores_json = ?")
             params.append(json.dumps(evidence_scores, ensure_ascii=False))
         params.append(session_id)
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 f"UPDATE autoresearch_sessions SET {', '.join(sets)} WHERE id = ?",
                 params,
@@ -504,7 +541,7 @@ class ResearchDatabase(BaseDatabase):
 
         Missing fields are returned as None.
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """SELECT clarification_json, reasoning_json, structure_json,
@@ -544,7 +581,7 @@ class ResearchDatabase(BaseDatabase):
 
     def append_events(self, session_id: str, events: list[dict]) -> int:
         """Append a batch of events to the session's persisted event log."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
@@ -571,7 +608,7 @@ class ResearchDatabase(BaseDatabase):
 
     def get_events(self, session_id: str) -> list[dict]:
         """Return all persisted events for a session, in insertion order."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
@@ -617,7 +654,7 @@ class ResearchDatabase(BaseDatabase):
         """
         step_id = uuid.uuid4().hex
         result_json = json.dumps(result, ensure_ascii=False) if result is not None else None
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO research_steps
                    (id, session_id, step_num, action, thought, status,
@@ -633,7 +670,7 @@ class ResearchDatabase(BaseDatabase):
 
     def get_step(self, session_id: str, step_num: int) -> dict | None:
         """Return a single step by (session_id, step_num)."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """SELECT * FROM research_steps
@@ -646,7 +683,7 @@ class ResearchDatabase(BaseDatabase):
 
     def list_steps(self, session_id: str) -> list[dict]:
         """Return all steps for a session, ordered by step_num."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """SELECT * FROM research_steps
@@ -658,7 +695,7 @@ class ResearchDatabase(BaseDatabase):
 
     def delete_steps(self, session_id: str) -> int:
         """Delete all steps for a session. Returns count deleted."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             cur = conn.execute(
                 "DELETE FROM research_steps WHERE session_id = ?",
                 (session_id,),
@@ -669,7 +706,7 @@ class ResearchDatabase(BaseDatabase):
     def update_step_status(
         self, session_id: str, step_num: int, status: str
     ) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """UPDATE research_steps
                    SET status = ?

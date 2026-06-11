@@ -143,10 +143,16 @@ class ResearchReasoner:
             return "synthesize"
 
         # Knowledge gaps detected + budget allows + replan attempts
-        # left → replan
+        # left → replan.
+        # Once a report has been written, replanning only produces
+        # 0 new sub-queries (all deduped) and the engine spins on
+        # the planning→planning transition. The correct path after
+        # the report exists is report→review→done (or revise on
+        # review failure).
         if (state.knowledge_gaps
                 and state.budget_remaining > 0.15
-                and state.round < self._max_replan + 1):
+                and state.round < self._max_replan + 1
+                and state.report_md is None):
             return "plan"
 
         # No report yet → report

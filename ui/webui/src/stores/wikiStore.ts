@@ -132,6 +132,7 @@ export const useWikiStore = create<WikiState>((set, get) => ({
         error: err instanceof Error ? err.message : 'Failed to register wiki',
         loading: false,
       });
+      throw err;
     }
   },
 

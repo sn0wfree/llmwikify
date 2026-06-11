@@ -178,6 +178,109 @@ def test_rule_based_returns_done_for_fully_complete_state():
     assert r.rule_based(state) == "done"
 
 
+def test_rule_based_does_not_replan_after_report():
+    """Regression: when a report exists, gaps+round+budget must NOT
+    redirect back to 'plan' — that would spin on the planning→planning
+    transition. The correct next step is 'review' (or 'done'/'revise').
+    """
+    from llmwikify.apps.chat.reasoner import ResearchReasoner
+
+    class FakeDB:
+        def get_sources(self, session_id):
+            return []
+
+    class FakeEngine:
+        db = FakeDB()
+        config = {}
+        _action_ctx = None
+        _max_replan = 2
+
+    r = ResearchReasoner(FakeEngine())
+    state = ResearchState(
+        round=0,
+        max_rounds=5,
+        clarification={"q": "x"},
+        sub_queries=[{"id": 1}],
+        sources=[{"sub_query_id": 1, "analysis": {}}],
+        synthesis={"text": "s", "knowledge_gaps": ["gap1", "gap2"]},
+        report_md="# Report",
+        review=None,  # not reviewed yet
+    )
+    state.knowledge_gaps = ["gap1", "gap2"]  # gaps present
+    state.budget_remaining = 0.9  # plenty of budget
+    # round=0 < _max_replan+1 (=3): pre-fix, this would return "plan"
+    result = r.rule_based(state)
+    assert result != "plan", (
+        f"rule_based should not replan after report_md is set, got {result!r}"
+    )
+    # Should fall through to the review branch (report exists, review missing)
+    assert result == "review", f"expected 'review', got {result!r}"
+
+
+def test_rule_based_replans_before_report():
+    """When no report exists yet, gaps+round+budget → 'plan' (replan)."""
+    from llmwikify.apps.chat.reasoner import ResearchReasoner
+
+    class FakeDB:
+        def get_sources(self, session_id):
+            return []
+
+    class FakeEngine:
+        db = FakeDB()
+        config = {}
+        _action_ctx = None
+        _max_replan = 2
+
+    r = ResearchReasoner(FakeEngine())
+    state = ResearchState(
+        round=0,
+        max_rounds=5,
+        clarification={"q": "x"},
+        sub_queries=[{"id": 1}],
+        sources=[{"sub_query_id": 1, "analysis": {}}],
+        synthesis={"text": "s", "knowledge_gaps": ["gap1"]},
+        report_md=None,  # no report yet → replan is still useful
+    )
+    state.knowledge_gaps = ["gap1"]
+    state.budget_remaining = 0.9
+    assert r.rule_based(state) == "plan"
+
+
+def test_rule_based_does_not_replan_when_budget_low():
+    """When budget is low, the replan guard must skip 'plan' even before
+    a report exists — fall through to the report/review chain."""
+    from llmwikify.apps.chat.reasoner import ResearchReasoner
+
+    class FakeDB:
+        def get_sources(self, session_id):
+            return []
+
+    class FakeEngine:
+        db = FakeDB()
+        config = {}
+        _action_ctx = None
+        _max_replan = 2
+
+    r = ResearchReasoner(FakeEngine())
+    state = ResearchState(
+        round=0,
+        max_rounds=5,
+        clarification={"q": "x"},
+        sub_queries=[{"id": 1}],
+        sources=[{"sub_query_id": 1, "analysis": {}}],
+        synthesis={"text": "s", "knowledge_gaps": ["gap1"]},
+        report_md=None,
+    )
+    state.knowledge_gaps = ["gap1"]
+    state.budget_remaining = 0.05  # below 0.15 threshold
+    result = r.rule_based(state)
+    assert result != "plan", (
+        f"low budget should suppress replan, got {result!r}"
+    )
+    # No report yet → falls through to 'report'
+    assert result == "report", f"expected 'report', got {result!r}"
+
+
 def test_valid_actions_allowlist_matches_engine_legacy_set():
     """The reasoner's VALID_ACTIONS set matches the legacy inline set."""
     from llmwikify.apps.chat.reasoner import VALID_ACTIONS

@@ -81,13 +81,51 @@ function truncate(s: string, n: number): string {
 
 // ─── Mini 6-step progress bar ─────────────────────────────────
 
-function MiniSixStepBar({ currentStep, status }: { currentStep: string; status: string }) {
-  // Map status to step index
-  let activeIdx = SIX_STEPS.findIndex(s => s.key === currentStep);
-  if (activeIdx < 0) {
-    if (status === 'done') activeIdx = SIX_STEPS.length;
-    else if (status === 'error' || status === 'timeout') activeIdx = -1;
+// Map engine step/status → UI 6-step concept. The engine emits
+// `current_step` values like `clarifying | planning | gathering |
+// analyzing | synthesizing | reporting | reviewing | revise | done`
+// (and variants), but the UI's SIX_STEPS keys are the higher-level
+// 6-step concepts: clarification | evidence | reasoning | structure
+// | report | compliance. Translate one into the other so the bar
+// highlights the correct concept.
+function stepToSixStepKey(currentStep: string, status: string): string | null {
+  // Terminal statuses: caller has special handling.
+  if (status === 'done') return '__done__';
+  if (status === 'error' || status === 'timeout' || status === 'cancelled') return null;
+
+  switch (currentStep) {
+    case 'clarifying':
+    case 'planning':
+      return 'clarification';
+    case 'gathering':
+    case 'analyzing':
+      return 'evidence';
+    case 'synthesizing':
+      return 'reasoning';
+    case 'reporting':
+    case 'report':
+      return 'report';
+    case 'reviewing':
+    case 'revise':
+      return 'compliance';
+    default:
+      // Unrecognized — fall through to status-based hint.
+      if (status === 'paused' || status === 'pausing' || status === 'cancelling'
+          || status === 'incomplete') {
+        return null;
+      }
+      return null;
   }
+}
+
+function MiniSixStepBar({ currentStep, status }: { currentStep: string; status: string }) {
+  // Map engine currentStep → UI 6-step concept key.
+  const mapped = stepToSixStepKey(currentStep, status);
+  let activeIdx = mapped === '__done__'
+    ? SIX_STEPS.length
+    : mapped
+      ? SIX_STEPS.findIndex(s => s.key === mapped)
+      : -1;
 
   return (
     <div className="flex items-center gap-0.5">

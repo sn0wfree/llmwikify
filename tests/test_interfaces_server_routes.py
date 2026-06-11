@@ -2,14 +2,22 @@
 
 Covers:
 
-  - 2 routers are at the new home (interfaces/server/http/)
-  - All 2 routers are importable (chat_sse, research)
+  - 1 router is at the new home (interfaces/server/http/chat_sse)
+  - The chat_sse router is importable
   - Backward-compat shims (4 paths) re-export correctly
   - The L4 routes.py uses the new home (no apps.agent.routes refs)
   - The L3→L4 dependency in apps/chat/routes.py was removed
   - Architecture contracts stay green
 
 Target: 30+ tests, no I/O, no real FastAPI server.
+
+v0.36 update: the legacy ``research`` router was consolidated into
+the unified agent SPA (see ``chat_sse.py``); the orphaned
+``interfaces/server/http/research.py`` was removed along with the
+rest of the dead legacy ``apps/research/`` engine. The tests that
+asserted the research router's existence were updated to assert
+that the consolidated chat_sse router is the single source of
+truth instead.
 """
 
 from __future__ import annotations
@@ -17,12 +25,16 @@ from __future__ import annotations
 import pytest
 
 
-# ─── New home: 2 routers importable ─────────────────────────────
+# ─── New home: routers importable ─────────────────────────────
 
 
 class TestNewHomeImports:
-    """All 2 migrated route modules are importable from
-    ``llmwikify.interfaces.server.http``."""
+    """The migrated chat_sse router is importable from
+    ``llmwikify.interfaces.server.http``.
+
+    v0.36 update: the legacy ``research`` router was consolidated
+    into the unified agent SPA and its module was removed.
+    """
 
     def test_chat_sse_imports(self) -> None:
         from llmwikify.interfaces.server.http.chat_sse import (
@@ -34,13 +46,12 @@ class TestNewHomeImports:
         assert callable(set_agent_service)
         assert callable(get_agent_service)
 
-    def test_research_imports(self) -> None:
-        from llmwikify.interfaces.server.http.research import (
-            router,
-            set_research_deps,
-        )
-        assert router is not None
-        assert callable(set_research_deps)
+    def test_research_router_removed(self) -> None:
+        """The orphaned /api/research router was removed in v0.36;
+        research functionality lives in the unified agent SPA."""
+        import importlib
+        with pytest.raises(ImportError):
+            importlib.import_module("llmwikify.interfaces.server.http.research")
 
     def test_no_apps_agent_routes_remain(self) -> None:
         """apps/agent/routes/ should be GONE after the migration."""
@@ -55,28 +66,21 @@ class TestNewHomeImports:
             importlib.import_module("llmwikify.apps.agent.routes.research")
 
 
-# ─── Router attributes (APIRouter + prefix) ──────────────────────
+# ─── Router attributes (APIRouter + prefix) ─────────────────────
 
 
 class TestRouterAttributes:
-    """Each router has the expected APIRouter prefix and tags."""
+    """The chat_sse router has the expected APIRouter prefix and tags."""
 
     def test_chat_sse_router_prefix(self) -> None:
         from llmwikify.interfaces.server.http.chat_sse import router
         assert router.prefix == "/api/agent"
         assert "agent" in router.tags
 
-    def test_research_router_prefix(self) -> None:
-        from llmwikify.interfaces.server.http.research import router
-        assert router.prefix == "/api/research"
-        assert "research" in router.tags
-
     def test_routers_have_routes(self) -> None:
-        """Each router should have at least 1 registered route."""
+        """The chat_sse router should have at least 1 registered route."""
         from llmwikify.interfaces.server.http.chat_sse import router as c
-        from llmwikify.interfaces.server.http.research import router as r
         assert len(c.routes) > 0
-        assert len(r.routes) > 0
 
 
 # ─── L4 routes.py integrity ──────────────────────────────────────

@@ -157,6 +157,27 @@ class ResearchResumeLoader:
             except (json.JSONDecodeError, TypeError):
                 pass
 
+        # Restore self-loop metadata so the self-correction budget
+        # is preserved across resume. Without this, a session that
+        # already burned 2 of 3 clarify retries would get 3 fresh
+        # retries on resume.
+        self_loop_counts_raw = session.get("self_loop_counts_json")
+        if self_loop_counts_raw:
+            try:
+                loaded = json.loads(self_loop_counts_raw)
+                if isinstance(loaded, dict):
+                    state.self_loop_counts = loaded
+            except (json.JSONDecodeError, TypeError):
+                pass
+        self_loop_history_raw = session.get("self_loop_history_json")
+        if self_loop_history_raw:
+            try:
+                loaded = json.loads(self_loop_history_raw)
+                if isinstance(loaded, list):
+                    state.self_loop_history = loaded
+            except (json.JSONDecodeError, TypeError):
+                pass
+
         logger.info(
             "Resuming session %s from %s (round %d)",
             state.session_id, current_step, state.round,

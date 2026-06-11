@@ -39,7 +39,6 @@ from llmwikify.apps.chat.llm_step import run_prompt
 from llmwikify.apps.chat.state import (
     MetricsCollector,
     ResearchState,
-    VALID_TRANSITIONS,
 )
 from llmwikify.apps.chat.report import ReportGenerator
 from llmwikify.apps.chat.harness.review import ResearchReviewer, ResearchRevisor
@@ -170,29 +169,6 @@ class ResearchEngine:
             elapsed = time.monotonic() - self._start_time
             if elapsed > self._timeout_seconds:
                 raise TimeoutError(f"Research timed out after {elapsed:.0f}s (limit: {self._timeout_seconds}s)")
-
-    def _validate_transition(self, from_phase: str, to_phase: str) -> bool:
-        """Validate state transition is allowed.
-
-        Args:
-            from_phase: Current phase
-            to_phase: Target phase
-
-        Returns:
-            True if transition is valid, False otherwise. First run
-            (from_phase == "" or None) is always allowed.
-        """
-        # First run or uninitialized state → always allow
-        if not from_phase:
-            return True
-        valid_targets = VALID_TRANSITIONS.get(from_phase, [])
-        if to_phase not in valid_targets:
-            logger.warning(
-                "Invalid state transition: %s → %s (valid: %s)",
-                from_phase, to_phase, valid_targets or "none"
-            )
-            return False
-        return True
 
     async def run(self, session_id: str, query: str, resume: bool = False) -> AsyncIterator[dict[str, Any]]:
         """Execute the ReAct research loop, yielding SSE events."""
