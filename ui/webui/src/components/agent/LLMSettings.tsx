@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
 import { api, LLMConfig } from '../../api';
 import { useToast } from '../wiki/Toast';
 import { Button } from '../ui/Button';
@@ -123,7 +123,7 @@ export function LLMSettings() {
   }, [apiKeyMode]);
 
   const handleSave = useCallback(async () => {
-    if (config.api_key && "***" in config.api_key) {
+    if (config.api_key && config.api_key.includes('***')) {
       if (!window.confirm('API Key appears to be masked (contains ***). The real key will be preserved.\n\nIf you need to change the key, paste the new real key first.\n\nProceed with save?')) {
         return;
       }
