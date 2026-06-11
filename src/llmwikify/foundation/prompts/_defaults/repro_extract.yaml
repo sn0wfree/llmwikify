@@ -89,6 +89,7 @@ user: |
     "suggested_signal": {
       "signal_type": "string - one of: ma_cross, rsi, momentum, volatility, factor_rank, signal_composite, unknown",
       "signal_params": {"key": "value pairs for the suggested signal"},
+      "strategy_class": "string - one of: trend_following, factor_ranking, mean_reversion, stat_arb, composite",
       "confidence": "string - high/medium/low",
       "reasoning": "string - why this signal type was chosen"
     }

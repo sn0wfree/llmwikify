@@ -61,6 +61,16 @@ class StartRequest(BaseModel):
     end_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
+@router.get("/list")
+async def list_sessions(status: str | None = None) -> dict[str, Any]:
+    """List all reproduction sessions, optionally filtered by status."""
+    db = _get_db()
+    sessions = db.list_sessions(status=status)
+    return {
+        "sessions": [s.to_dict() for s in sessions],
+    }
+
+
 @router.post("/start")
 async def start_reproduction(req: StartRequest) -> dict[str, Any]:
     db = _get_db()

@@ -15,9 +15,9 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
+from .utils import generate_slug, parse_frontmatter
 
-FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+logger = logging.getLogger(__name__)
 
 
 def _load_prompt() -> str:
@@ -33,38 +33,6 @@ def _load_prompt() -> str:
         logger.warning("repro_extract.yaml not found at %s", prompt_path)
         return ""
     return prompt_path.read_text(encoding="utf-8")
-
-
-def _parse_frontmatter(content: str) -> dict[str, Any]:
-    """Pull YAML-ish key:value frontmatter out of a markdown page."""
-    m = FRONTMATTER_RE.match(content)
-    if not m:
-        return {}
-    out: dict[str, Any] = {}
-    for line in m.group(1).splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" not in line:
-            continue
-        key, _, value = line.partition(":")
-        key = key.strip()
-        value = value.strip()
-        if value.startswith("[") and value.endswith("]"):
-            inner = value[1:-1].strip()
-            out[key] = [v.strip().strip('"').strip("'") for v in inner.split(",") if v.strip()]
-        elif value.startswith("{") and value.endswith("}"):
-            inner = value[1:-1].strip()
-            as_dict: dict[str, Any] = {}
-            for pair in inner.split(","):
-                if ":" not in pair:
-                    continue
-                k, _, v = pair.partition(":")
-                as_dict[k.strip()] = v.strip().strip('"').strip("'")
-            out[key] = as_dict
-        else:
-            out[key] = value.strip('"').strip("'")
-    return out
 
 
 def extract_paper_structure(
@@ -179,32 +147,40 @@ def build_paper_pages(
     if signal_type != "unknown":
         params = suggested.get("signal_params", {})
         params_str = json.dumps(params) if isinstance(params, dict) else str(params)
+        factor_name = suggested.get("reasoning", f"Factor — {paper_id}")
+        factor_slug = generate_slug(factor_name)
+        page_name = f"factor-{paper_id}-{factor_slug}"
         content = f"---\ntitle: Factor — {paper_id}\n"
+        content += f"type: Factor\n"
         content += f"factor_class: {signal_type}\n"
         content += f"factor_params: {params_str}\n"
         content += f"factor_source: paper/{paper_id}\n"
+        content += f"signal_type: {signal_type}\n"
+        content += f"signal_params: {params_str}\n"
         content += f"status: draft\n---\n\n"
         content += f"# Factor — {paper_id}\n\n"
         content += f"**Signal Type:** {signal_type}\n\n"
         content += f"**Parameters:** {params_str}\n\n"
         content += f"**Confidence:** {suggested.get('confidence', 'low')}\n\n"
         content += f"**Reasoning:** {suggested.get('reasoning', 'TBD')}\n"
-        pages.append({"page_name": f"factor-{paper_id}", "content": content, "page_type": "Factor"})
+        pages.append({"page_name": page_name, "content": content, "page_type": "Factor"})
 
     # 5. Strategy page (from suggested_signal)
     if signal_type != "unknown":
         params = suggested.get("signal_params", {})
         params_str = json.dumps(params) if isinstance(params, dict) else str(params)
+        strategy_class = suggested.get("strategy_class", "trend_following")
         content = f"---\ntitle: Strategy — {paper_id}\n"
-        content += f"strategy_class: trend_following\n"
+        content += f"type: Strategy\n"
+        content += f"strategy_class: {strategy_class}\n"
         content += f"signal_type: {signal_type}\n"
         content += f"signal_params: {params_str}\n"
-        content += f"factor_refs: [factor-{paper_id}]\n"
+        content += f"factor_refs: [factor-{paper_id}-{factor_slug}]\n"
         content += f"status: draft\n---\n\n"
         content += f"# Strategy — {paper_id}\n\n"
         content += f"**Signal Type:** {signal_type}\n\n"
         content += f"**Parameters:** {params_str}\n\n"
-        content += f"**Factor Reference:** [[factor-{paper_id}]]\n"
+        content += f"**Factor Reference:** [[factor-{paper_id}-{factor_slug}]]\n"
         pages.append({"page_name": f"strategy-{paper_id}", "content": content, "page_type": "Strategy"})
 
     return pages

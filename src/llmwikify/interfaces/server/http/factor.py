@@ -68,6 +68,58 @@ class FactorBacktestRequest(BaseModel):
     benchmark_code: str = "000300.SH"
 
 
+def _build_factor_backtest_page(
+    factor_slug: str,
+    factor: dict[str, Any],
+    req: FactorBacktestRequest,
+    result: Any,
+    source: str,
+) -> str:
+    """Render FactorBacktestResult → markdown page content."""
+    lines = [
+        "---",
+        f"title: Factor Backtest — {factor_slug}",
+        f"type: FactorBacktest",
+        f"factor_ref: {factor_slug}",
+        f"symbol: {req.symbol}",
+        f"start: {req.start_date}",
+        f"end: {req.end_date}",
+        f"ic_mean: {result.ic_mean}",
+        f"icir: {result.icir}",
+        f"win_rate: {result.win_rate}",
+        f"annual_return: {result.annual_return}",
+        f"max_drawdown: {result.max_drawdown}",
+        f"data_source: {source}",
+        f"status: success",
+        "---",
+        "",
+        f"# Factor Backtest — {factor_slug}",
+        "",
+        f"- Symbol: `{req.symbol}`",
+        f"- Window: {req.start_date} → {req.end_date}",
+        f"- Data source: {source}",
+        "",
+        "## IC Analysis",
+        "",
+        f"| Metric | Value |",
+        f"|---|---|",
+        f"| IC Mean | {result.ic_mean:.4f} |",
+        f"| IC Std | {result.ic_std:.4f} |",
+        f"| ICIR | {result.icir:.4f} |",
+        f"| t-stat | {result.t_stat:.4f} |",
+        f"| Win Rate | {result.win_rate:.4f} |",
+        "",
+        "## Quantile Returns",
+        "",
+        f"| Group | Annual Return |",
+        f"|---|---|",
+    ]
+    for group, ret in result.quantile_returns.items():
+        lines.append(f"| {group} | {ret:.4f} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
 @router.post("/{slug}/backtest")
 async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, Any]:
     """Run factor backtest using factor_backtest engine."""
@@ -104,6 +156,14 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
         factor_params=factor_params,
     )
 
+    # Auto-write FactorBacktest page to wiki
+    backtest_slug = f"factor-{slug}"
+    backtest_md = _build_factor_backtest_page(slug, factor, req, result, source)
+    try:
+        wiki.write_page(backtest_slug, backtest_md, page_type="FactorBacktest")
+    except Exception as exc:
+        logger.warning("FactorBacktest wiki write failed: %s", exc)
+
     return {
         "slug": slug,
         "factor": factor,
@@ -112,6 +172,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
         "end_date": req.end_date,
         "data_source": source,
         "status": "success",
+        "wiki_page": f"wiki/factor-backtest/{backtest_slug}.md",
         "metrics": {
             "ic_mean": result.ic_mean,
             "ic_std": result.ic_std,

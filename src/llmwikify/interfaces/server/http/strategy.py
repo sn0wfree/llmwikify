@@ -133,7 +133,7 @@ class StrategyBacktestRequest(BaseModel):
 async def backtest_strategy(slug: str, req: StrategyBacktestRequest) -> dict[str, Any]:
     """Run strategy backtest using existing run_backtest pipeline."""
     from llmwikify.reproduction.backtest import run_backtest
-    from llmwikify.reproduction.metrics import compute_extended_metrics, compute_monthly_returns
+    from llmwikify.reproduction.metrics import compute_extended_metrics
     from llmwikify.reproduction.router import DataRouter
 
     wiki = _get_wiki()
@@ -182,8 +182,9 @@ async def backtest_strategy(slug: str, req: StrategyBacktestRequest) -> dict[str
         benchmark_returns=benchmark_returns,
     )
 
-    # Compute monthly returns
-    monthly = compute_monthly_returns(result.trades, req.initial_cash)
+    # Use equity_curve and monthly_returns from BacktestResult
+    equity_curve = result.equity_curve
+    monthly = result.monthly_returns
 
     return {
         "slug": slug,
@@ -195,6 +196,7 @@ async def backtest_strategy(slug: str, req: StrategyBacktestRequest) -> dict[str
         "status": result.status,
         "error": result.error,
         "metrics": extended,
+        "equity_curve": equity_curve,
         "monthly_returns": monthly,
         "trades_count": len(result.trades),
     }

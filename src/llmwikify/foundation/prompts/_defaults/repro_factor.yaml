@@ -32,7 +32,7 @@ user: |
     "factors": [
       {
         "name": "string - factor name",
-        "factor_class": "string - momentum|value|volatility|quality|size|growth|composite",
+        "factor_class": "string - momentum|value|volatility|quality|size|growth|signal_composite",
         "description": "string - what this factor measures",
         "formula": "string - mathematical formula or calculation method",
         "params": {"key": "value"},

@@ -114,7 +114,7 @@ def test_extract_strategy_config_from_wiki(tmp_path):
     cfg = extract_strategy_config(wiki)
     assert cfg["signal_type"] == "ma_cross"
     assert cfg["signal_params"]["fast"] == 5
-    assert cfg["wiki_page"] == "trading"
+    assert cfg["wiki_page"] == "01-ma-cross"
 
 
 def test_extract_strategy_config_empty_wiki(tmp_path):
