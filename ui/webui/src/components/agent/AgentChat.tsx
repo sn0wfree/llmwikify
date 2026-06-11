@@ -287,6 +287,26 @@ export function AgentChat() {
     }
   }, [pendingConfirmation, currentWikiId, addToast]);
 
+  // v0.40: simple approve (no continue) with "once" or "always" response
+  const handleSimpleApprove = useCallback(async (response: 'once' | 'always') => {
+    if (!pendingConfirmation) return;
+    setConfirmingLoading(true);
+    try {
+      await api.confirmations.approve(
+        pendingConfirmation.confirmationId,
+        currentWikiId || undefined,
+        undefined,
+        response,
+      );
+      addToast('success', response === 'always' ? 'Always approved' : 'Approved');
+      setPendingConfirmation(null);
+    } catch (e) {
+      addToast('error', `Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setConfirmingLoading(false);
+    }
+  }, [pendingConfirmation, currentWikiId, addToast]);
+
   // Phase 5.1 (v0.36): abort the current SSE stream.
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();

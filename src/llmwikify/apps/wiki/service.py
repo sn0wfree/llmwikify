@@ -311,14 +311,32 @@ class WikiService:
         confirmation_id: str,
         wiki_id: str | None = None,
         arguments: dict | None = None,
+        response: str = "once",
     ) -> dict:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             return {"status": "error", "error": "No wiki_id available"}
+        # v0.40: get tool name BEFORE confirming (for permission save)
+        tool_name = None
+        try:
+            conf = self.db.get_confirmation(confirmation_id)
+            if conf:
+                tool_name = conf.get("tool")
+        except Exception:
+            pass
         registry = self.get_tool_registry(wiki_id)
-        return registry.confirm_execution(
+        result = registry.confirm_execution(
             confirmation_id, arguments=arguments
         )
+        # v0.40: if response="always", save permission for future auto-approval
+        if response == "always" and tool_name and result.get("status") != "error":
+            self.db.save_permission(
+                tool_name=tool_name,
+                response="always",
+                session_id=None,  # global permission
+            )
+            result["permission_saved"] = "always"
+        return result
 
     async def reject_confirmation(
         self, confirmation_id: str, wiki_id: str | None = None
