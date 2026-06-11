@@ -43,6 +43,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -518,7 +519,8 @@ class ChatReActBridge:
                 if hasattr(ctx, "_tool_calls"):
                     ctx._tool_calls[tool_name] = entry
 
-                # Execute tool (handles DB log + ingest log)
+                # Execute tool with timing
+                started_at = time.monotonic()
                 try:
                     result = await chat._execute_tool(
                         tool_name, args, tool_registry, session_id, ctx,
@@ -526,14 +528,18 @@ class ChatReActBridge:
                 except Exception as e:
                     logger.warning("Tool %s execution failed", tool_name, exc_info=True)
                     result = {"status": "error", "error": str(e)}
+                finished_at = time.monotonic()
+                duration_ms = round((finished_at - started_at) * 1000)
 
                 entry["result"] = result
                 entry["status"] = "done"
+                entry["duration_ms"] = duration_ms
                 results_summary.append({
                     "tool": tool_name, "args": args, "result": result,
+                    "duration_ms": duration_ms,
                 })
 
-                # Emit appropriate end event
+                # Emit appropriate end event with timing
                 if (
                     isinstance(result, dict)
                     and result.get("status") == "error"
@@ -543,6 +549,7 @@ class ChatReActBridge:
                         "tool": tool_name,
                         "error": str(result.get("error", "")),
                         "call_id": call_id,
+                        "duration_ms": duration_ms,
                     })
                 else:
                     await emit({
@@ -550,6 +557,7 @@ class ChatReActBridge:
                         "tool": tool_name,
                         "result": result,
                         "call_id": call_id,
+                        "duration_ms": duration_ms,
                     })
 
                 # Persist to MemoryManager.context

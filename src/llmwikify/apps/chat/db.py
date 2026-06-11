@@ -186,6 +186,19 @@ class ChatDatabase(BaseDatabase):
                 )
             except sqlite3.OperationalError:
                 pass  # column already exists
+            # ─── v0.40: timing columns for tool_calls ──────────
+            try:
+                conn.execute(
+                    "ALTER TABLE tool_calls ADD COLUMN started_at TEXT"
+                )
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute(
+                    "ALTER TABLE tool_calls ADD COLUMN finished_at TEXT"
+                )
+            except sqlite3.OperationalError:
+                pass
             conn.commit()
 
     def _check_db_size(self) -> None:
@@ -531,30 +544,32 @@ class ChatDatabase(BaseDatabase):
         tool_name: str,
         arguments: dict,
         status: str = "pending",
+        started_at: str | None = None,
     ) -> str:
         call_id = uuid.uuid4().hex
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT INTO tool_calls
-                   (id, session_id, tool_name, arguments, status)
-                   VALUES (?, ?, ?, ?, ?)""",
+                   (id, session_id, tool_name, arguments, status, started_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
                 (call_id, session_id, tool_name,
-                 json.dumps(arguments, ensure_ascii=False), status),
+                 json.dumps(arguments, ensure_ascii=False), status, started_at),
             )
             conn.commit()
         return call_id
 
     def update_tool_call(
-        self, call_id: str, result: Any, status: str
+        self, call_id: str, result: Any, status: str,
+        finished_at: str | None = None,
     ) -> None:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """UPDATE tool_calls
-                   SET result = ?, status = ?
+                   SET result = ?, status = ?, finished_at = ?
                    WHERE id = ?""",
                 (json.dumps(result, ensure_ascii=False)
                  if not isinstance(result, str) else result,
-                 status, call_id),
+                 status, finished_at, call_id),
             )
             conn.commit()
 

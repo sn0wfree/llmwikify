@@ -67,8 +67,12 @@ class ChatEvent:
         return {"type": "tool_call_start", "tool": tool, "args": args, "call_id": call_id}
 
     @staticmethod
-    def tool_call_end(tool: str, result: Any, call_id: str = "") -> dict:
-        return {"type": "tool_call_end", "tool": tool, "result": result, "call_id": call_id}
+    def tool_call_end(tool: str, result: Any, call_id: str = "", duration_ms: int = 0) -> dict:
+        return {"type": "tool_call_end", "tool": tool, "result": result, "call_id": call_id, "duration_ms": duration_ms}
+
+    @staticmethod
+    def tool_call_error(tool: str, error: str, call_id: str = "", duration_ms: int = 0) -> dict:
+        return {"type": "tool_call_error", "tool": tool, "error": error, "call_id": call_id, "duration_ms": duration_ms}
 
     @staticmethod
     def confirmation_required(

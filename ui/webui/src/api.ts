@@ -6,8 +6,8 @@ export type ChatStreamEvent =
   | { type: 'message_delta'; content: string }
   | { type: 'thinking'; content: string }
   | { type: 'tool_call_start'; tool: string; args: Record<string, unknown>; call_id: string }
-  | { type: 'tool_call_end'; tool: string; result: unknown; call_id: string }
-  | { type: 'tool_call_error'; tool: string; error: string; call_id: string }
+  | { type: 'tool_call_end'; tool: string; result: unknown; call_id: string; duration_ms: number }
+  | { type: 'tool_call_error'; tool: string; error: string; call_id: string; duration_ms: number }
   | { type: 'done'; final_response: string }
   | { type: 'save_warning'; reason: string }
   | { type: 'confirmation_required'; confirmation_id: string; tool: string; args: Record<string, unknown>; impact: Record<string, unknown>; call_id: string }
