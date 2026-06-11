@@ -161,6 +161,14 @@ export async function listRawPapers(): Promise<PaperListRawResponse> {
   });
 }
 
+/** Delete a paper session. */
+export async function deletePaperSession(sessionId: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`${API_BASE}/${sessionId}`, {
+    method: 'DELETE',
+    headers: { ...authHeaders() },
+  });
+}
+
 /** Upload a PDF file. Saves to ~/.llmwikify/papers/{safe(paper_id)}.pdf. */
 export async function uploadPaperFile(
   paperId: string,

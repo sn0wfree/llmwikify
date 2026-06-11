@@ -122,3 +122,13 @@ async def list_artifacts(session_id: str) -> dict[str, Any]:
             for a in artifacts
         ],
     }
+
+
+@router.delete("/{session_id}")
+async def delete_reproduction_session(session_id: str) -> dict[str, Any]:
+    """Delete a reproduction session and its events/artifacts."""
+    db = _get_db()
+    ok = db.delete_session(session_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"ok": True}

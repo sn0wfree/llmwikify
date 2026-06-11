@@ -365,3 +365,14 @@ async def list_paper_artifacts(paper_id: str) -> dict[str, Any]:
             pass
 
     return {"paper_id": paper_id, "artifacts": artifacts}
+
+
+@router.delete("/{session_id}")
+async def delete_paper_session(session_id: str) -> dict[str, Any]:
+    """Delete a paper session and its events/artifacts."""
+    if _DB is None:
+        raise HTTPException(status_code=500, detail="DB not initialized")
+    ok = _DB.delete_session(session_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"ok": True}
