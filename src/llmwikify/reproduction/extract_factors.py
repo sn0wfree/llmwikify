@@ -71,7 +71,11 @@ def extract_factors(
     )
 
     try:
-        response = llm_client.chat(user_msg, system="You are a quantitative factor researcher.")
+        messages = [
+            {"role": "system", "content": "You are a quantitative factor researcher."},
+            {"role": "user", "content": user_msg},
+        ]
+        response = llm_client.chat(messages)
         json_match = re.search(r"\{.*\}", response, re.DOTALL)
         if json_match:
             result = json.loads(json_match.group())
