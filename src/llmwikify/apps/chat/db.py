@@ -209,6 +209,25 @@ class ChatDatabase(BaseDatabase):
                     )
                 except sqlite3.OperationalError:
                     pass
+            # ─── v0.40: permissions table for "always" grants ───
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS chat_permissions (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT,
+                    tool_name TEXT NOT NULL,
+                    pattern TEXT,
+                    response TEXT NOT NULL DEFAULT 'once',
+                    created_at TEXT DEFAULT (datetime('now'))
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_chat_permissions_tool
+                ON chat_permissions(tool_name, response)
+                """
+            )
             conn.commit()
 
     def _check_db_size(self) -> None:
@@ -598,6 +617,41 @@ class ChatDatabase(BaseDatabase):
                 (session_id,),
             ).fetchall()
             return [dict(r) for r in rows]
+
+    # ─── Permissions ─────────────────────────────────────────────
+
+    def save_permission(
+        self,
+        tool_name: str,
+        response: str,
+        session_id: str | None = None,
+        pattern: str | None = None,
+    ) -> str:
+        """Save a permission grant. Returns the permission id."""
+        perm_id = uuid.uuid4().hex
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO chat_permissions
+                   (id, session_id, tool_name, pattern, response)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (perm_id, session_id, tool_name, pattern, response),
+            )
+            conn.commit()
+        return perm_id
+
+    def has_always_permission(
+        self, tool_name: str, session_id: str | None = None
+    ) -> bool:
+        """Check if there's an "always" permission for this tool."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """SELECT COUNT(*) as cnt FROM chat_permissions
+                   WHERE tool_name = ? AND response = 'always'
+                   AND (session_id IS NULL OR session_id = ? OR session_id = '')""",
+                (tool_name, session_id),
+            ).fetchone()
+            return row["cnt"] > 0
 
     # ════════════════════════════════════════════════════════════
     # DEPRECATED: Wiki-domain methods

@@ -334,7 +334,14 @@ async def approve_confirmation(confirmation_id: str, request: Request):
     if raw:
         body = json.loads(raw)
     arguments = body.get("arguments")
-    return await service.approve_confirmation(confirmation_id, wiki_id, arguments=arguments)
+    # v0.40: response can be "once", "always", or default "once"
+    response = body.get("response", "once")
+    if response not in ("once", "always", "reject"):
+        response = "once"
+    return await service.approve_confirmation(
+        confirmation_id, wiki_id,
+        arguments=arguments, response=response,
+    )
 
 
 @router.post("/confirmations/{confirmation_id}/approve-and-continue")

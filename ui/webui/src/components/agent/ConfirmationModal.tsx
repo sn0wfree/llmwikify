@@ -10,7 +10,7 @@ interface ConfirmationModalProps {
   impact: Record<string, unknown>;
   group?: string;
   createdAt?: string;
-  onApprove: (editedArgs?: Record<string, unknown>) => void;
+  onApprove: (editedArgs?: Record<string, unknown>, response?: 'once' | 'always') => void;
   onReject: () => void;
   loading?: boolean;
 }
@@ -366,6 +366,14 @@ export function ConfirmationModal({
         <div className="px-4 py-3 border-t border-border flex gap-3 justify-end shrink-0">
           <Button onClick={onReject} disabled={loading} variant="secondary">
             Reject
+          </Button>
+          <Button
+            onClick={() => onApprove(hasChanges ? editedArgs : undefined, 'always')}
+            disabled={loading}
+            variant="outline"
+            title="Approve this and all future calls of this tool in the current session"
+          >
+            {loading ? 'Approving...' : 'Always'}
           </Button>
           <Button onClick={handleApprove} disabled={loading}>
             {loading ? 'Approving...' : hasChanges ? 'Approve & Save Edits' : 'Approve'}
