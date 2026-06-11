@@ -267,6 +267,13 @@ class ChatService(ChatBase):
         ctx.add_user_message(message)
         self._save_message(session_id, "user", message)
 
+        # v0.40: auto-set session title from first user message
+        session = self.db.get_chat_session(session_id)
+        if session and not session.get("title"):
+            title = message[:100].strip()
+            if title:
+                self.db.update_chat_session_title(session_id, title)
+
         wiki = self._get_wiki_for_context(ctx)
         if wiki is None:
             yield ChatEvent.error("No wiki available")
@@ -397,6 +404,18 @@ class ChatService(ChatBase):
         """Delete a session from DB and evict its in-memory context."""
         self._contexts.remove(session_id)
         return self.db.delete_chat_session(session_id)
+
+    def revert_session(self, session_id: str, message_id: str) -> int:
+        """Revert session to a specific message.
+
+        Marks all messages after message_id as reverted and
+        evicts the in-memory context so the next chat() call
+        reloads from DB.
+        """
+        count = self.db.revert_to_message(session_id, message_id)
+        # Evict context so next chat() reloads from DB
+        self._contexts.remove(session_id)
+        return count
 
     # ─── Private helpers ─────────────────────────────────────────
 

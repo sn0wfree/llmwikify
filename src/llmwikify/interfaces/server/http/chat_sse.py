@@ -142,6 +142,18 @@ async def delete_session(session_id: str):
     return {"deleted": deleted}
 
 
+@router.post("/sessions/{session_id}/revert")
+async def revert_session(session_id: str, request: Request):
+    """Revert session to a specific message. All messages after it are marked reverted."""
+    body = await request.json()
+    message_id = body.get("message_id", "")
+    if not message_id:
+        return {"error": "message_id is required"}
+    service = get_agent_service()
+    count = service.revert_session(session_id, message_id)
+    return {"reverted": count, "session_id": session_id}
+
+
 @router.get("/sessions/recent")
 async def get_recent_wiki(session_id: str | None = None):
     service = get_agent_service()
