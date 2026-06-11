@@ -156,6 +156,10 @@ async def _run_paper_extraction(
             extract_paper_structure,
         )
 
+        # Resolve raw filenames to full paths using _RAW_DIR
+        if source_type == "raw" and _RAW_DIR is not None:
+            source_ref = str(_RAW_DIR / source_ref)
+
         extraction = await asyncio.to_thread(
             extract_paper_structure,
             paper_content=paper_content,
