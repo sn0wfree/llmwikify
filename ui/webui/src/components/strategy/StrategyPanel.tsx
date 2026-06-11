@@ -46,7 +46,8 @@ interface BacktestResult {
   slug: string;
   strategy: StrategyDef;
   metrics: StrategyMetrics;
-  monthly_returns: Record<string, Record<string, number>>;
+  equity_curve: Array<{ date: string; value: number }>;
+  monthly_returns: Record<string, number>;
   trades_count: number;
   status: string;
   data_source: string;
@@ -129,23 +130,41 @@ export function StrategyPanel() {
     { label: '交易数', value: String(result.trades_count) },
   ] : [];
 
-  // Parse monthly returns for heatmap
+  // Parse monthly returns for heatmap: {"YYYY-MM": value} → {year: {month: value}}
   const heatmapRows: string[] = [];
   const heatmapCols: string[] = [];
   const heatmapData: Record<string, Record<number, number>> = {};
 
   if (result?.monthly_returns) {
-    const years = Object.keys(result.monthly_returns).sort();
+    const nested: Record<number, Record<number, number>> = {};
+    for (const [ym, val] of Object.entries(result.monthly_returns)) {
+      const parts = ym.split('-');
+      if (parts.length === 2) {
+        const y = parseInt(parts[0]);
+        const m = parseInt(parts[1]);
+        if (!isNaN(y) && !isNaN(m)) {
+          if (!nested[y]) nested[y] = {};
+          nested[y][m] = val;
+        }
+      }
+    }
+    const years = Object.keys(nested).sort();
     const months = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
     heatmapRows.push(...years);
     heatmapCols.push(...months);
     for (const year of years) {
-      heatmapData[year] = {};
-      for (const [month, value] of Object.entries(result.monthly_returns[year] || {})) {
-        heatmapData[year][parseInt(month) - 1] = value;
-      }
+      heatmapData[year] = nested[parseInt(year)] || {};
     }
   }
+
+  // Compute drawdown series from equity curve
+  const drawdownData = result?.equity_curve ? (() => {
+    let peak = result.equity_curve[0]?.value ?? 0;
+    return result.equity_curve.map((pt) => {
+      if (pt.value > peak) peak = pt.value;
+      return { date: new Date(pt.date), drawdown: peak > 0 ? (pt.value - peak) / peak : 0 };
+    });
+  })() : [];
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -229,29 +248,38 @@ export function StrategyPanel() {
           <MetricCards metrics={kpiMetrics} columns={6} />
         )}
 
-        {/* Equity Curve placeholder */}
-        {result && (
+        {/* Equity Curve */}
+        {result && result.equity_curve && result.equity_curve.length > 0 && (
           <section>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               净值曲线
             </h3>
-            <div className="bg-card border border-border rounded-lg p-4 h-48 flex items-center justify-center text-xs text-muted-foreground">
-              Equity curve — 需要 trades 日期数据
+            <div className="bg-card border border-border rounded-lg p-4">
+              <LineChart
+                series={[{
+                  id: 'equity',
+                  label: 'Equity',
+                  data: result.equity_curve.map((pt) => ({ date: pt.date, value: pt.value })),
+                }]}
+                height={200}
+                showArea
+                yFormat={(n) => `${(n / 10000).toFixed(1)}万`}
+              />
             </div>
           </section>
         )}
 
         {/* Drawdown Chart */}
-        {result && result.metrics.max_drawdown > 0 && (
+        {result && drawdownData.length > 0 && (
           <section>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               回撤分析
             </h3>
             <div className="bg-card border border-border rounded-lg p-4">
               <DrawdownChart
-                data={[{ date: new Date(), drawdown: -result.metrics.max_drawdown }]}
+                data={drawdownData}
                 height={160}
-                topN={1}
+                topN={3}
               />
             </div>
           </section>

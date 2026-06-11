@@ -166,6 +166,18 @@ export async function listReproductionArtifacts(
   return response.json();
 }
 
+/** List all reproduction sessions. */
+export async function listReproductionSessions(
+  status?: string,
+): Promise<{ sessions: ReproductionSession[] }> {
+  const url = status ? `${API_BASE}/list?status=${status}` : `${API_BASE}/list`;
+  const response = await fetchWithRetry(url, {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  }, 'GET');
+  return response.json();
+}
+
 // ─── Helpers ──────────────────────────────────────────────────
 
 export function parseParams(json: string): Record<string, unknown> {
