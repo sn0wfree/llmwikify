@@ -33,6 +33,7 @@ export function chatStream(
   sessionId?: string,
   wikiId?: string,
   signal?: AbortSignal,
+  attachments?: Array<{ name: string; mime: string; data: string }>,
 ): ReadableStream<ChatStreamEvent> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (API_TOKEN) {
@@ -45,7 +46,7 @@ export function chatStream(
         const res = await fetch(`${API_BASE}/agent/chat`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ message, session_id: sessionId, wiki_id: wikiId }),
+          body: JSON.stringify({ message, session_id: sessionId, wiki_id: wikiId, attachments }),
           signal,
         });
 
