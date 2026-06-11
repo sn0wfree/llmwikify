@@ -300,3 +300,116 @@ def compute_monthly_returns(
         prev_equity = cur_equity
 
     return result
+
+
+def cal_net_simple(net: Any, adj_dates: list) -> Any:
+    """Convert compound (复利) net value to simple-interest (单利) net value.
+
+    For each holding period between two consecutive adjustment dates, the
+    simple net is reset to ``period_net - period_net.iloc[0] + 1`` so that
+    the period's return is added on top of the previous period's end value.
+    This makes the metric evaluation ``evaluation()`` period-based, not
+    compounded.
+
+    Args:
+        net: pd.Series indexed by date.
+        adj_dates: list of adjustment dates (must lie within net.index).
+
+    Returns:
+        pd.Series of same length as net, with simple-interest values.
+    """
+    import pandas as pd
+
+    if net is None or len(net) == 0 or not adj_dates:
+        return net
+
+    if not isinstance(net, pd.Series):
+        return net
+
+    # Filter adj_dates to those that exist in net.index
+    valid_adj = [d for d in adj_dates if d in net.index]
+    if len(valid_adj) < 2:
+        return net
+
+    data = net.to_frame("net").copy()
+    data["simp"] = data["net"]
+
+    # Pre-first-adj segment: keep compound net unchanged (no period yet)
+    first_adj = valid_adj[0]
+    benchmark_i = data.loc[first_adj, "net"]
+
+    for i in range(1, len(valid_adj)):
+        t_i = valid_adj[i - 1]
+        t_ii = valid_adj[i]
+        if t_i not in data.index or t_ii not in data.index:
+            continue
+        period = data.loc[t_i:t_ii, "net"]
+        if len(period) < 2:
+            continue
+        period_ret = period / period.iloc[0] - 1
+        new_vals = period_ret + benchmark_i
+        data.loc[t_i:t_ii, "simp"] = new_vals.values
+        benchmark_i = data.loc[t_ii, "simp"]
+
+    return data["simp"]
+
+
+def evaluation(net: Any, adj_dates: list, trading_days: int = 252) -> dict:
+    """Evaluate a simple-interest net value curve.
+
+    Returns a dict with: annual_return, sharpe, max_drawdown, win_rate,
+    accum_return, calmar.
+
+    Adapted from ``QuantNodes.research.factor_test.utils.performance_metrics``
+    and ``~/Public/单因子回测/factor_performance.py:evaluation()``.
+    """
+    import numpy as np
+    import pandas as pd
+
+    if net is None or len(net) < 2 or not adj_dates:
+        return {
+            "annual_return": 0.0, "sharpe": 0.0, "max_drawdown": 0.0,
+            "win_rate": 0.0, "accum_return": 0.0, "calmar": 0.0,
+        }
+
+    net = net.copy() if isinstance(net, pd.Series) else pd.Series(net)
+    net.name = "net"
+
+    simp = cal_net_simple(net, adj_dates)
+    simp = simp.dropna()
+    if simp.empty or len(simp) < 2:
+        return {
+            "annual_return": 0.0, "sharpe": 0.0, "max_drawdown": 0.0,
+            "win_rate": 0.0, "accum_return": 0.0, "calmar": 0.0,
+        }
+
+    # Daily returns from simple net
+    daily_ret = simp.pct_change().fillna(0.0)
+    # Per-period returns
+    valid_adj = [d for d in adj_dates if d in simp.index]
+    if len(valid_adj) < 2:
+        period_ret = pd.Series(dtype=float)
+    else:
+        period_ret = simp.loc[valid_adj].diff()
+
+    accum = float(simp.iloc[-1] / simp.iloc[0] - 1) if simp.iloc[0] > 0 else 0.0
+    adj_cycle = max(1, len(simp) / max(1, len(valid_adj) - 1)) if len(valid_adj) > 1 else len(simp)
+    annual_ret = (period_ret.dropna().mean() / adj_cycle * trading_days) if len(period_ret.dropna()) > 0 else 0.0
+    annu_std = daily_ret.std(ddof=1) * np.sqrt(trading_days) if daily_ret.std(ddof=1) > 0 else 0.0
+    sharpe = float(annual_ret / annu_std) if annu_std > 0 else 0.0
+
+    # Max drawdown from compound curve
+    cmp = (daily_ret + 1).cumprod()
+    cmp = cmp / cmp.cummax()
+    mdd = float((1 - cmp).max()) if len(cmp) else 0.0
+    win_rate = float((period_ret.dropna() > 0).mean()) if len(period_ret.dropna()) > 0 else 0.0
+    calmar = float(annual_ret / mdd) if mdd > 0 else 0.0
+
+    return {
+        "annual_return": round(float(annual_ret), 6),
+        "sharpe": round(sharpe, 6),
+        "max_drawdown": round(mdd, 6),
+        "win_rate": round(win_rate, 6),
+        "accum_return": round(accum, 6),
+        "calmar": round(calmar, 6),
+    }
