@@ -69,7 +69,7 @@ async def list_strategies() -> dict[str, Any]:
     for md in sorted(strategy_dir.glob("*.md")):
         try:
             content = md.read_text(encoding="utf-8")
-            fm = _parse_frontmatter(content)
+            fm = parse_frontmatter(content)
             if fm:
                 fm["_slug"] = md.stem
                 results.append(fm)
