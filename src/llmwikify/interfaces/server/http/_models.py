@@ -14,6 +14,8 @@ class ChatRequest(BaseModel):
     message: str = Field(default="", min_length=0, max_length=100_000)
     session_id: str | None = None
     wiki_id: str | None = None
+    # v0.40: file attachments (base64-encoded)
+    attachments: list[dict] = Field(default_factory=list)
 
 
 class CreateSessionRequest(BaseModel):

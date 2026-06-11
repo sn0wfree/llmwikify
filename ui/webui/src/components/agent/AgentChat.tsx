@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, StopCircle, History, ThumbsUp, ThumbsDown, Pencil, GitBranch } from 'lucide-react';
+import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, StopCircle, History, ThumbsUp, ThumbsDown, Pencil, GitBranch, Paperclip, X } from 'lucide-react';
 import { chatStream, ChatStreamEvent, api } from '../../api';
 import { useToast } from '../wiki/Toast';
 import { useWikiStore } from '../../stores/wikiStore';
@@ -110,6 +110,9 @@ export function AgentChat() {
   // v0.40: edit state
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
+  // v0.40: file attachments
+  const [attachments, setAttachments] = useState<Array<{ name: string; mime: string; data: string; preview?: string }>>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // Phase 5.1 (v0.36): AbortController for cancelling SSE streams.
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -401,6 +404,28 @@ export function AgentChat() {
     setFeedback((prev) => ({ ...prev, [msgId]: type }));
   }, []);
 
+  // v0.40: file upload handler
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const newAttachments: Array<{ name: string; mime: string; data: string; preview?: string }> = [];
+    for (const file of files) {
+      if (file.size > 10 * 1024 * 1024) {
+        addToast('error', `File too large: ${file.name} (max 10MB)`);
+        continue;
+      }
+      const data = await fileToBase64(file);
+      const preview = file.type.startsWith('image/') ? data : undefined;
+      newAttachments.push({ name: file.name, mime: file.type, data, preview });
+    }
+    setAttachments((prev) => [...prev, ...newAttachments]);
+    e.target.value = ''; // Reset input
+  }, [addToast]);
+
+  const handleRemoveAttachment = useCallback((idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
+
   const sendMessage = useCallback(async () => {
     if (!input.trim() || loading) return;
 
@@ -432,7 +457,7 @@ export function AgentChat() {
 
     while (attempt <= MAX_RETRIES) {
       try {
-        const reader = chatStream(input, currentSessionId || undefined, currentWikiId || undefined, ac.signal).getReader();
+        const reader = chatStream(input, currentSessionId || undefined, currentWikiId || undefined, ac.signal, attachments).getReader();
 
         while (true) {
           const { done, value } = await reader.read();
@@ -539,6 +564,7 @@ export function AgentChat() {
     }
     setLoading(false);
     abortControllerRef.current = null;
+    setAttachments([]); // v0.40: clear attachments after send
   }, [input, loading, addToast, currentWikiId, currentSessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -804,7 +830,49 @@ export function AgentChat() {
               onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
               className="max-w-3xl mx-auto"
             >
+              {/* v0.40: attachment previews */}
+              {attachments.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {attachments.map((att, idx) => (
+                    <div key={idx} className="relative group/att flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/60 border border-border/40 text-xs">
+                      {att.preview ? (
+                        <img src={`data:${att.mime};base64,${att.data}`} alt={att.name} className="w-8 h-8 object-cover rounded" />
+                      ) : (
+                        <Paperclip className="w-4 h-4 text-muted-foreground" />
+                      )}
+                      <span className="truncate max-w-[120px]">{att.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttachment(idx)}
+                        className="p-0.5 rounded hover:bg-muted-foreground/20 transition-colors"
+                        aria-label="Remove attachment"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="glow-border relative flex items-end gap-2 p-2 rounded-2xl glass-strong shadow-elevated">
+                {/* v0.40: file upload button */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf,.txt,.md,.json,.py,.js,.ts,.tsx"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={loading}
+                  className="shrink-0 p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 rounded-md transition-colors"
+                  title="Attach files"
+                  aria-label="Attach files"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -978,4 +1046,19 @@ function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
       </div>
     </div>
   );
+}
+
+// v0.40: helper to convert File to base64
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Strip "data:xxx;base64," prefix
+      const commaIdx = result.indexOf(',');
+      resolve(commaIdx >= 0 ? result.slice(commaIdx + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
