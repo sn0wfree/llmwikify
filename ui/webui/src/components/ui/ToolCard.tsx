@@ -17,6 +17,7 @@ interface ToolCardProps {
   error?: string;
   startedAt?: number;
   finishedAt?: number;
+  duration_ms?: number;
 }
 
 const TOOL_ICONS: Record<string, typeof Wrench> = {
@@ -94,10 +95,12 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function ToolCard({ tool, args, status, result, error, startedAt, finishedAt }: ToolCardProps) {
+export function ToolCard({ tool, args, status, result, error, startedAt, finishedAt, duration_ms }: ToolCardProps) {
   const [argsExpanded, setArgsExpanded] = useState(false);
   const [resultExpanded, setResultExpanded] = useState(false);
-  const elapsed = useElapsedMs(startedAt, finishedAt);
+  // Prefer backend-reported duration_ms; fall back to local elapsed calculation
+  const localElapsed = useElapsedMs(startedAt, finishedAt);
+  const elapsed = duration_ms ?? localElapsed;
 
   const argsStr = JSON.stringify(args, null, 2);
   const argsTruncated = argsStr.length > 200;

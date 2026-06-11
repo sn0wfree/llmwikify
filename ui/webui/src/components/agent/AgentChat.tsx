@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, StopCircle } from 'lucide-react';
+import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, StopCircle, History, ThumbsUp, ThumbsDown, Pencil, GitBranch } from 'lucide-react';
 import { chatStream, ChatStreamEvent, api } from '../../api';
 import { useToast } from '../wiki/Toast';
 import { useWikiStore } from '../../stores/wikiStore';
@@ -16,6 +16,8 @@ interface Message {
   thinking?: string;
   timestamp: string;
   toolCalls?: ToolCall[];
+  tokensOutput?: number;
+  messageId?: string;
 }
 
 interface ToolCall {
@@ -27,6 +29,7 @@ interface ToolCall {
   status: 'pending' | 'streaming' | 'done' | 'error';
   startedAt?: number;
   finishedAt?: number;
+  duration_ms?: number;
 }
 
 function parseToolCalls(raw: unknown): ToolCall[] | undefined {
@@ -74,6 +77,8 @@ interface DbMessage {
   content: string;
   tool_calls: unknown[] | null;
   created_at: string;
+  tokens_output?: number;
+  reverted?: number;
 }
 
 export function AgentChat() {
@@ -98,6 +103,13 @@ export function AgentChat() {
   const [modelName, setModelName] = useState<string>('');
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [tokenEstimate, setTokenEstimate] = useState(0);
+  // v0.40: server-side session status (idle/busy)
+  const [serverStatus, setServerStatus] = useState<'idle' | 'busy'>('idle');
+  // v0.40: per-message feedback
+  const [feedback, setFeedback] = useState<Record<string, 'up' | 'down'>>({});
+  // v0.40: edit state
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // Phase 5.1 (v0.36): AbortController for cancelling SSE streams.
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -126,6 +138,8 @@ export function AgentChat() {
           content: m.content,
           timestamp: m.created_at,
           toolCalls: parseToolCalls(m.tool_calls),
+          tokensOutput: m.tokens_output,
+          messageId: m.id,
         }));
         setMessages(loaded);
       }
@@ -202,7 +216,7 @@ export function AgentChat() {
             }
             case 'tool_call_end': {
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now(), duration_ms: event.duration_ms } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -210,7 +224,7 @@ export function AgentChat() {
             }
             case 'confirmation_required':
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, status: 'done' as const, finishedAt: Date.now(), duration_ms: event.duration_ms } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -229,7 +243,7 @@ export function AgentChat() {
             }
             case 'tool_call_error':
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now(), duration_ms: event.duration_ms } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -288,6 +302,83 @@ export function AgentChat() {
     });
     setCurrentThinking('');
     setCurrentToolCalls([]);
+  }, []);
+
+  // v0.40: abort session via server-side mechanism
+  const handleAbort = useCallback(async () => {
+    if (!currentSessionId) return;
+    // First abort the client stream
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    // Then call server-side abort
+    try {
+      await api.agent.abortSession(currentSessionId);
+      addToast('info', 'Session aborted');
+    } catch { /* silent */ }
+    setLoading(false);
+    setServerStatus('idle');
+    setConnectionState('idle');
+  }, [currentSessionId, addToast]);
+
+  // v0.40: revert session to a specific user message
+  const handleRevert = useCallback(async (messageId: string) => {
+    if (!currentSessionId || !messageId) return;
+    try {
+      const result = await api.agent.revertSession(currentSessionId, messageId);
+      addToast('success', `Reverted ${result.reverted} message(s)`);
+      setSidebarRefreshKey((k) => k + 1);
+      await loadMessages(currentSessionId);
+    } catch (e) {
+      addToast('error', `Failed to revert: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+  }, [currentSessionId, addToast, loadMessages]);
+
+  // v0.40: edit a user message
+  const handleStartEdit = useCallback((msg: Message) => {
+    if (!msg.messageId) return;
+    setEditingMessageId(msg.messageId);
+    setEditingContent(msg.content);
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingMessageId(null);
+    setEditingContent('');
+  }, []);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!currentSessionId || !editingMessageId || !editingContent.trim()) return;
+    try {
+      await api.agent.editMessage(currentSessionId, editingMessageId, editingContent);
+      setEditingMessageId(null);
+      setEditingContent('');
+      await loadMessages(currentSessionId);
+      addToast('success', 'Message updated');
+    } catch (e) {
+      addToast('error', `Failed to edit: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+  }, [currentSessionId, editingMessageId, editingContent, addToast, loadMessages]);
+
+  // v0.40: fork session at a specific message (uses revert + creates new session)
+  const handleFork = useCallback(async (messageId: string, content: string) => {
+    if (!currentSessionId || !messageId) return;
+    try {
+      // Revert in current session
+      await api.agent.revertSession(currentSessionId, messageId);
+      // Create a new session
+      const { session_id } = await api.agent.createSession(currentWikiId || undefined);
+      setCurrentSessionId(session_id);
+      setSidebarRefreshKey((k) => k + 1);
+      setMessages([{ role: 'assistant', content: "Forked conversation. Send a message to continue.", timestamp: new Date().toISOString() }]);
+      setInput(content);
+      addToast('success', 'Forked into new session');
+    } catch (e) {
+      addToast('error', `Failed to fork: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+  }, [currentSessionId, currentWikiId, addToast]);
+
+  // v0.40: message feedback
+  const handleFeedback = useCallback((msgId: string, type: 'up' | 'down') => {
+    setFeedback((prev) => ({ ...prev, [msgId]: type }));
   }, []);
 
   const sendMessage = useCallback(async () => {
@@ -353,7 +444,7 @@ export function AgentChat() {
             }
             case 'tool_call_end': {
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, result: event.result, status: 'done' as const, finishedAt: Date.now(), duration_ms: event.duration_ms } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -361,7 +452,7 @@ export function AgentChat() {
             }
             case 'tool_call_error': {
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, error: event.error, status: 'error' as const, finishedAt: Date.now(), duration_ms: event.duration_ms } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -369,7 +460,7 @@ export function AgentChat() {
             }
             case 'confirmation_required':
               setCurrentToolCalls((prev) => {
-                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, status: 'done' as const, finishedAt: Date.now() } : tc);
+                const next = prev.map((tc) => tc.call_id === event.call_id ? { ...tc, status: 'done' as const, finishedAt: Date.now(), duration_ms: event.duration_ms } : tc);
                 currentToolCallsRef.current = next;
                 return next;
               });
@@ -526,37 +617,128 @@ export function AgentChat() {
 
               {messages.map((msg, i) => (
                 <div key={i} className="animate-message-in">
-                  <MessageBubble
-                    role={msg.role}
-                    content={msg.content}
-                    thinking={msg.thinking}
-                    timestamp={formatTime(msg.timestamp)}
-                    // Phase 5.3 (v0.36): regenerate is available on
-                    // ANY assistant message (not just the last).
-                    // Truncates the history at the preceding user
-                    // message and puts it in the input for re-send.
-                    onRegenerate={msg.role === 'assistant' ? () => {
-                      // Find the user message before this assistant message.
-                      let precedingUserIdx = -1;
-                      for (let j = i - 1; j >= 0; j--) {
-                        if (messages[j].role === 'user') {
-                          precedingUserIdx = j;
-                          break;
+                  {editingMessageId === msg.messageId ? (
+                    <div className="flex justify-end gap-2.5">
+                      <div className="max-w-[80%] w-full flex flex-col items-end gap-1">
+                        <textarea
+                          value={editingContent}
+                          onChange={(e) => setEditingContent(e.target.value)}
+                          className="w-full rounded-2xl rounded-tr-md px-4 py-2.5 text-sm bg-white/[0.06] border border-primary/30 outline-none resize-none text-foreground"
+                          rows={Math.max(2, editingContent.split('\n').length)}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEdit(); }
+                            if (e.key === 'Escape') { e.preventDefault(); handleCancelEdit(); }
+                          }}
+                        />
+                        <div className="flex gap-2 mt-1">
+                          <button
+                            onClick={handleSaveEdit}
+                            className="px-3 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:brightness-110"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="px-3 py-1 text-xs rounded-md text-muted-foreground hover:text-foreground"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <MessageBubble
+                      role={msg.role}
+                      content={msg.content}
+                      thinking={msg.thinking}
+                      timestamp={formatTime(msg.timestamp)}
+                      // Phase 5.3 (v0.36): regenerate is available on
+                      // ANY assistant message (not just the last).
+                      // Truncates the history at the preceding user
+                      // message and puts it in the input for re-send.
+                      onRegenerate={msg.role === 'assistant' ? () => {
+                        // Find the user message before this assistant message.
+                        let precedingUserIdx = -1;
+                        for (let j = i - 1; j >= 0; j--) {
+                          if (messages[j].role === 'user') {
+                            precedingUserIdx = j;
+                            break;
+                          }
                         }
-                      }
-                      if (precedingUserIdx >= 0) {
-                        setInput(messages[precedingUserIdx].content);
-                        setMessages((prev) => prev.slice(0, precedingUserIdx));
-                      }
-                    } : undefined}
-                    onQuote={msg.role === 'assistant' ? (text) => {
-                      setInput((prev) => prev ? `${prev}\n\n> ${text.split('\n').join('\n> ')}` : `> ${text.split('\n').join('\n> ')}`);
-                    } : undefined}
-                  />
+                        if (precedingUserIdx >= 0) {
+                          setInput(messages[precedingUserIdx].content);
+                          setMessages((prev) => prev.slice(0, precedingUserIdx));
+                        }
+                      } : undefined}
+                      onQuote={msg.role === 'assistant' ? (text) => {
+                        setInput((prev) => prev ? `${prev}\n\n> ${text.split('\n').join('\n> ')}` : `> ${text.split('\n').join('\n> ')}`);
+                      } : undefined}
+                    />
+                  )}
+                  {/* v0.40: Action buttons row for each message */}
+                  {msg.messageId && editingMessageId !== msg.messageId && (
+                    <div className="flex items-center gap-1 px-9 mt-1 opacity-0 group-hover:animate-message-in hover:opacity-100 transition-opacity">
+                      {msg.role === 'user' && (
+                        <>
+                          <button
+                            onClick={() => handleStartEdit(msg)}
+                            className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground rounded transition-colors"
+                            title="Edit message"
+                          >
+                            <Pencil className="w-3 h-3" /> Edit
+                          </button>
+                          <button
+                            onClick={() => msg.messageId && handleRevert(msg.messageId)}
+                            className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground rounded transition-colors"
+                            title="Revert to here"
+                          >
+                            <History className="w-3 h-3" /> Revert
+                          </button>
+                          <button
+                            onClick={() => msg.messageId && handleFork(msg.messageId, msg.content)}
+                            className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground rounded transition-colors"
+                            title="Fork from here"
+                          >
+                            <GitBranch className="w-3 h-3" /> Fork
+                          </button>
+                        </>
+                      )}
+                      {msg.role === 'assistant' && (
+                        <>
+                          <button
+                            onClick={() => msg.messageId && handleFeedback(msg.messageId, 'up')}
+                            className={cn(
+                              'p-0.5 rounded transition-colors',
+                              feedback[msg.messageId] === 'up' ? 'text-success' : 'text-muted-foreground hover:text-foreground'
+                            )}
+                            title="Good response"
+                          >
+                            <ThumbsUp className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => msg.messageId && handleFeedback(msg.messageId, 'down')}
+                            className={cn(
+                              'p-0.5 rounded transition-colors',
+                              feedback[msg.messageId] === 'down' ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'
+                            )}
+                            title="Bad response"
+                          >
+                            <ThumbsDown className="w-3 h-3" />
+                          </button>
+                          {msg.tokensOutput && (
+                            <span className="text-[10px] text-muted-foreground/70 ml-1">
+                              {msg.tokensOutput} tokens
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                   {msg.toolCalls && msg.toolCalls.length > 0 && (
                     <div className="mt-2 space-y-2 ml-9">
                       {msg.toolCalls.map((tc, j) => (
-                        <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} startedAt={tc.startedAt} finishedAt={tc.finishedAt} />
+                        <ToolCard key={j} tool={tc.tool} args={tc.args} status={tc.status} result={tc.result} error={tc.error} startedAt={tc.startedAt} finishedAt={tc.finishedAt} duration_ms={tc.duration_ms} />
                       ))}
                     </div>
                   )}
@@ -627,7 +809,7 @@ export function AgentChat() {
                 {loading ? (
                   <button
                     type="button"
-                    onClick={handleStop}
+                    onClick={handleAbort}
                     className={cn(
                       'shrink-0 w-9 h-9 rounded-xl flex items-center justify-center',
                       'bg-destructive text-destructive-foreground',
