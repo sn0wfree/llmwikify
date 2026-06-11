@@ -312,6 +312,106 @@ class DataRouter:
             logger.warning("benchmark fetch failed for %s: %s", code, exc)
         return None
 
+    def get_universe(
+        self,
+        symbols: list[str],
+        start: str,
+        end: str,
+    ) -> tuple[Optional[pd.DataFrame], str]:
+        """Batch fetch OHLCV for a list of symbols.
+
+        Iterates ``symbols`` and concatenates per-stock DataFrames into a
+        single long-format DataFrame with a ``Code`` column. The source name
+        is taken from the first successful fetch (sources can vary per
+        symbol depending on cache state).
+
+        Args:
+            symbols: List of 6-digit stock codes, e.g. ["000001", "600519"].
+                The router will add ".SH"/".SZ" suffix based on the first
+                digit (6 → SH, 0/3 → SZ, etc.).
+            start: Start date YYYY-MM-DD.
+            end: End date YYYY-MM-DD.
+
+        Returns:
+            Tuple of (DataFrame, source_name). DataFrame columns:
+            [date, Code, open, high, low, close, volume] in long format.
+            Returns (None, source_name) if no symbol yields data.
+        """
+        if not symbols:
+            return None, ""
+
+        frames: list[pd.DataFrame] = []
+        first_source = ""
+        suffix_map = self._ts_code_suffix_map()
+
+        for sym in symbols:
+            ts_code = f"{sym}.{suffix_map.get(sym[0], 'SH')}" if sym else sym
+            try:
+                df, source = self.get(ts_code, start, end)
+            except Exception as exc:
+                logger.warning("get_universe failed for %s: %s", ts_code, exc)
+                continue
+            if df is None or df.empty:
+                continue
+            if not first_source:
+                first_source = source
+            d = df.copy()
+            if "Code" not in d.columns:
+                d["Code"] = ts_code
+            frames.append(d)
+
+        if not frames:
+            return None, first_source
+
+        merged = pd.concat(frames, ignore_index=True)
+        keep = [c for c in ["date", "Code", "open", "high", "low", "close", "volume"] if c in merged.columns]
+        merged = merged[keep].sort_values(["date", "Code"]).reset_index(drop=True)
+        return merged, first_source
+
+    @staticmethod
+    def _ts_code_suffix_map() -> dict[str, str]:
+        """Map first digit of 6-digit code to exchange suffix."""
+        return {
+            "6": "SH",   # 600xxx, 601xxx, 603xxx, 605xxx → 上交所
+            "9": "SH",   # 9xxxxx B 股
+            "0": "SZ",   # 000xxx, 002xxx, 003xxx → 深交所主板/中小
+            "3": "SZ",   # 300xxx, 301xxx → 深交所创业板
+            "2": "SZ",   # 2xxxxx B 股
+            "4": "BJ",   # 4xxxxx, 8xxxxx → 北交所
+            "8": "BJ",
+        }
+
+    def get_index_close(
+        self,
+        index_code: str,
+        start: str,
+        end: str,
+    ) -> Optional[pd.Series]:
+        """Fetch close price series for an index.
+
+        Args:
+            index_code: Full ts_code, e.g. "000300.SH".
+            start: Start date YYYY-MM-DD.
+            end: End date YYYY-MM-DD.
+
+        Returns:
+            pd.Series indexed by date with close prices, or None on failure.
+        """
+        try:
+            df, _ = self.get(index_code, start, end)
+        except Exception as exc:
+            logger.warning("get_index_close(%s) failed: %s", index_code, exc)
+            return None
+        if df is None or df.empty or "close" not in df.columns:
+            return None
+        if "date" in df.columns:
+            s = df.set_index("date")["close"]
+        else:
+            s = df["close"]
+        s = s.sort_index()
+        s.name = index_code
+        return s
+
 
 __all__ = [
     "DataSource",
