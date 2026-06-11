@@ -268,6 +268,7 @@ export interface LLMConfig {
   base_url: string;
   api_key: string;
   timeout: number;
+  system_prompt?: string;  // v0.40
 }
 
 export const api = {

@@ -401,7 +401,16 @@ async def get_llm_config():
     from llmwikify.apps.chat.config_manager import get_global_config_manager
     manager = get_global_config_manager()
     llm_cfg = manager.load_effective_llm_config()
-    return manager.mask_api_key(llm_cfg)
+    result = manager.mask_api_key(llm_cfg)
+    # v0.40: include custom system prompt from user preferences
+    try:
+        service = get_agent_service()
+        if service.memory_manager:
+            prefs = await service.memory_manager.preferences.aall("default")
+            result["system_prompt"] = prefs.get("system_prompt", "")
+    except Exception:
+        result["system_prompt"] = ""
+    return result
 
 
 @router.put("/config")
@@ -417,8 +426,19 @@ async def save_llm_config(request: Request):
     if incoming_key and "***" in incoming_key:
         current = manager.load_effective_llm_config()
         config_dict["api_key"] = current.get("api_key", incoming_key)
+    # v0.40: system_prompt is stored in user preferences, not LLM config
+    system_prompt = config_dict.pop("system_prompt", None)
     manager.save_global_config(config_dict)
     manager.reload()
+    if system_prompt is not None:
+        try:
+            service = get_agent_service()
+            if service.memory_manager:
+                await service.memory_manager.preferences.aset(
+                    "default", "system_prompt", system_prompt,
+                )
+        except Exception as e:
+            logger.warning("Failed to save system prompt: %s", e)
     return {"saved": True}
 
 
