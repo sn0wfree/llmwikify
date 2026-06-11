@@ -487,6 +487,16 @@ class ChatDatabase(BaseDatabase):
             )
             conn.commit()
 
+    def update_chat_message(self, message_id: str, content: str) -> bool:
+        """Update a message's content in-place. Returns True if updated."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "UPDATE chat_messages SET content = ? WHERE id = ?",
+                (content, message_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
     def get_chat_messages(
         self,
         session_id: str,
