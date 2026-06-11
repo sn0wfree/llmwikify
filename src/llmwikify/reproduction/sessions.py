@@ -27,7 +27,7 @@ from typing import Any, Iterable, Optional
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DB_PATH = Path.home() / ".llmwikify" / "reproduction.db"
+DEFAULT_DB_PATH = Path.home() / ".llmwikify" / "agent" / "reproduction.db"
 
 VALID_STATUSES = {
     "pending",

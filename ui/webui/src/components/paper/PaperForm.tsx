@@ -216,7 +216,12 @@ export function PaperForm({ onSubmit, className }: PaperFormProps) {
               {rawFiles.map((f) => (
                 <button
                   key={f.filename}
-                  onClick={() => setSourceRef(f.filename)}
+                  onClick={() => {
+                    setSourceRef(f.filename);
+                    if (!paperId.trim()) {
+                      setPaperId(f.filename.replace(/\.pdf$/i, ''));
+                    }
+                  }}
                   className={cn(
                     'px-2.5 py-1 rounded text-xs font-mono transition-colors',
                     sourceRef === f.filename
