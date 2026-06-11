@@ -15,13 +15,24 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
+import yaml
+from jinja2 import BaseLoader, Environment
+
 from .utils import generate_slug, parse_frontmatter
 
 logger = logging.getLogger(__name__)
 
+_jinja_env = Environment(loader=BaseLoader(), trim_blocks=True, lstrip_blocks=True)
 
-def _load_prompt() -> str:
-    """Load the repro_factor.yaml prompt template."""
+_API_PARAM_KEYS = {"temperature", "max_tokens", "top_p", "top_k"}
+
+
+def _load_prompt() -> tuple[str, str, dict[str, Any]]:
+    """Load the repro_factor.yaml prompt template.
+
+    Returns:
+        (system_text, user_template, params) tuple.
+    """
     prompt_path = (
         Path(__file__).parent.parent
         / "foundation"
@@ -31,8 +42,9 @@ def _load_prompt() -> str:
     )
     if not prompt_path.exists():
         logger.warning("repro_factor.yaml not found at %s", prompt_path)
-        return ""
-    return prompt_path.read_text(encoding="utf-8")
+        return ("", "", {})
+    raw = yaml.safe_load(prompt_path.read_text(encoding="utf-8"))
+    return (raw.get("system", ""), raw.get("user", ""), raw.get("params", {}))
 
 
 def extract_factors(
@@ -58,25 +70,31 @@ def extract_factors(
         logger.info("no LLM client, returning empty factor list for %s", paper_id)
         return []
 
-    prompt_text = _load_prompt()
-    if not prompt_text:
-        logger.error("repro_factor.yaml not found")
+    system_text, user_template, params = _load_prompt()
+    if not user_template:
+        logger.error("repro_factor.yaml not found or empty")
         return []
 
-    user_msg = (
-        f"Given this paper's structured understanding, extract factor definitions.\n\n"
-        f"Paper ID: {paper_id}\n"
-        f"Paper understanding:\n---\n{json.dumps(paper_understanding, indent=2)}\n---\n\n"
-        f"Extract factors and map to signal types. Output JSON."
+    # Render user message with Jinja2 variables
+    tmpl = _jinja_env.from_string(user_template)
+    user_msg = tmpl.render(
+        paper_id=paper_id,
+        paper_understanding=json.dumps(paper_understanding, indent=2),
     )
 
     try:
-        messages = [
-            {"role": "system", "content": "You are a quantitative factor researcher."},
-            {"role": "user", "content": user_msg},
-        ]
-        response = llm_client.chat(messages)
-        json_match = re.search(r"\{.*\}", response, re.DOTALL)
+        messages = []
+        if system_text.strip():
+            messages.append({"role": "system", "content": system_text})
+        messages.append({"role": "user", "content": user_msg})
+
+        api_params = {k: v for k, v in params.items() if k in _API_PARAM_KEYS}
+        response = llm_client.chat(messages, **api_params)
+
+        # Parse JSON — strip markdown code fences first
+        cleaned = re.sub(r"```(?:json)?\s*", "", response)
+        cleaned = re.sub(r"```\s*$", "", cleaned)
+        json_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if json_match:
             result = json.loads(json_match.group())
             return result.get("factors", [])
