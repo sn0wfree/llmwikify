@@ -651,16 +651,18 @@ def _compute_cross_section_groups(
     if factor_wide is None or factor_wide.empty or return_wide is None or return_wide.empty:
         return {"quantile_returns": {}, "quantile_curves": {}, "group_n_periods": {}}
 
-    valid_adj = [d for d in adj_dates if d in factor_wide.index and d in return_wide.index]
+    valid_adj = [d for d in adj_dates if d in factor_wide.index]
     if len(valid_adj) < 2:
         return {"quantile_returns": {}, "quantile_curves": {}, "group_n_periods": {}}
 
     # Period returns per group: list of {group: mean_ret} at each adj date
-    period_group_ret: list[dict[str, float]] = []
+    period_group_ret: list[dict[str, Any]] = []
     # Group membership at each adj date: {adj_date: {code: group}}
     memberships: dict[Any, dict[str, int]] = {}
 
-    for i, d in enumerate(valid_adj):
+    # Process all adj_dates EXCEPT the last one (no forward return for last date)
+    for i in range(len(valid_adj) - 1):
+        d = valid_adj[i]
         f = factor_wide.loc[d].dropna()
         r = return_wide.loc[d].dropna()
         common = f.index.intersection(r.index)
