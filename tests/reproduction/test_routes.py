@@ -286,6 +286,7 @@ def test_factor_backtest(factor_client):
         encoding="utf-8",
     )
     r = client.post("/api/factor/test-factor/backtest", json={
+        "universe": "single",
         "symbol": "600660.SH",
         "start_date": "2024-01-01",
         "end_date": "2024-03-31",
