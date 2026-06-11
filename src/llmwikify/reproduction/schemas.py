@@ -114,7 +114,11 @@ class WikiStrategy:
 
 @dataclass
 class FactorBacktestResult:
-    """Result of a single-factor backtest."""
+    """Result of a single-factor backtest.
+
+    Supports both single-stock (legacy) and cross-section (universe) modes.
+    New fields default to zero / empty so existing callers remain compatible.
+    """
 
     ic_mean: float = 0.0
     ic_std: float = 0.0
@@ -127,6 +131,20 @@ class FactorBacktestResult:
     quantile_returns: dict[str, float] = field(default_factory=dict)  # {group: annual_return}
     ic_series: list[dict[str, Any]] = field(default_factory=list)     # [{date, ic}]
     quantile_curves: dict[str, list[dict[str, Any]]] = field(default_factory=dict)  # {group: [{date, value}]}
+
+    # Cross-section (universe) mode fields — populated by
+    # run_factor_backtest_universe(). Zero/empty for single-stock mode.
+    rank_ic_mean: float = 0.0     # Spearman Rank IC mean
+    rank_ic_std: float = 0.0
+    rank_icir: float = 0.0        # rank_ic_mean / rank_ic_std
+    rank_ic_pos_ratio: float = 0.0  # fraction of rank_ic > 0
+    longshort_ann_return: float = 0.0
+    longshort_sharpe: float = 0.0
+    longshort_mdd: float = 0.0
+    longshort_curve: list[dict[str, Any]] = field(default_factory=list)  # [{date, value}]
+    universe: str = ""            # e.g. "HS300"
+    adj_mode: str = "D"           # "D" / "M-end"
+    n_stocks_per_date: list[int] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -141,4 +159,15 @@ class FactorBacktestResult:
             "quantile_returns": self.quantile_returns,
             "ic_series": self.ic_series,
             "quantile_curves": self.quantile_curves,
+            "rank_ic_mean": self.rank_ic_mean,
+            "rank_ic_std": self.rank_ic_std,
+            "rank_icir": self.rank_icir,
+            "rank_ic_pos_ratio": self.rank_ic_pos_ratio,
+            "longshort_ann_return": self.longshort_ann_return,
+            "longshort_sharpe": self.longshort_sharpe,
+            "longshort_mdd": self.longshort_mdd,
+            "longshort_curve": self.longshort_curve,
+            "universe": self.universe,
+            "adj_mode": self.adj_mode,
+            "n_stocks_per_date": self.n_stocks_per_date,
         }

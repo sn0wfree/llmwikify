@@ -371,5 +371,592 @@ def run_factor_backtest(
 
 __all__ = [
     "run_factor_backtest",
+    "run_factor_backtest_universe",
     "_compute_factor_values",
+    "_compute_factor_matrix",
+    "_compute_cross_section_ic",
+    "_compute_cross_section_groups",
+    "_compute_long_short",
+    "generate_adj_dates",
 ]
+
+
+# ════════════════════════════════════════════════════════════════
+#  Cross-section (multi-stock universe) factor backtest
+# ════════════════════════════════════════════════════════════════
+#
+# References:
+#   - ~/Public/单因子回测/factor_performance.py
+#   - QuantNodes/research/factor_test/nodes/{ic,group,long_short}_analyzer_node.py
+#   - QuantNodes/research/factor_test/pipeline_runner.py
+#
+# Data shapes:
+#   close_wide: pd.DataFrame indexed by date, columns are stock codes
+#               (e.g. "000001.SZ", "600519.SH"). Each cell is close price.
+#   factor_wide: same shape as close_wide, values are factor values.
+#   return_wide: same shape, values are forward N-day returns.
+#
+# Pipeline:
+#   close_wide → _compute_factor_matrix → factor_wide
+#   close_wide → _compute_return_matrix → return_wide
+#   (factor_wide, return_wide) → _compute_cross_section_ic → ic_result
+#   (factor_wide, return_wide, adj_dates) → _compute_cross_section_groups → group_result
+#   group_result → _compute_long_short → longshort_result
+#   assemble → FactorBacktestResult
+# ════════════════════════════════════════════════════════════════
+
+
+def generate_adj_dates(
+    date_index: pd.DatetimeIndex,
+    adj_mode: str = "D",
+) -> list:
+    """Generate rebalance dates from a date index.
+
+    Args:
+        date_index: Sorted datetime index of available trading days.
+        adj_mode:
+            - "D"      : all trading days (daily rebalance)
+            - "M-end"  : last trading day of each month
+            - "W-end"  : last trading day of each week (Friday)
+            - "M-begin": first trading day of each month
+
+    Returns:
+        List of pd.Timestamp (subset of date_index).
+    """
+    if date_index is None or len(date_index) == 0:
+        return []
+    if adj_mode == "D":
+        return list(date_index)
+
+    if not isinstance(date_index, pd.DatetimeIndex):
+        date_index = pd.DatetimeIndex(date_index)
+    df = pd.DataFrame(index=date_index)
+    if adj_mode == "M-end":
+        return list(df.resample("M").last().dropna().index)
+    if adj_mode == "M-begin":
+        return list(df.resample("MS").first().dropna().index)
+    if adj_mode == "W-end":
+        return list(df.resample("W-FRI").last().dropna().index)
+    if adj_mode == "W-begin":
+        return list(df.resample("W-MON").first().dropna().index)
+    # Default: all dates
+    return list(date_index)
+
+
+def _compute_factor_matrix(
+    close_wide: pd.DataFrame,
+    factor_class: str,
+    factor_params: dict[str, Any],
+) -> pd.DataFrame:
+    """Compute factor values for every stock in the universe.
+
+    Iterates columns of ``close_wide`` and applies ``_compute_factor_values``
+    to each stock's close series. Returns a wide DataFrame with same shape.
+
+    Args:
+        close_wide: pd.DataFrame [date × Code] of close prices.
+        factor_class: Factor type (momentum, volatility, etc.).
+        factor_params: Factor parameters.
+
+    Returns:
+        pd.DataFrame [date × Code] of factor values.
+    """
+    if close_wide is None or close_wide.empty:
+        return pd.DataFrame()
+
+    # Ensure DatetimeIndex is preserved through to the output
+    date_index = close_wide.index
+    is_dt = isinstance(date_index, pd.DatetimeIndex)
+    cols: dict[str, pd.Series] = {}
+    for code in close_wide.columns:
+        s = close_wide[code].dropna()
+        if len(s) < 5:
+            continue
+        try:
+            df_one = pd.DataFrame({"date": s.index, "close": s.values})
+            fv = _compute_factor_values(df_one, factor_class, factor_params)
+            if fv is None or len(fv) == 0:
+                continue
+            # Reindex fv to use the original date index from s.index
+            fv.index = s.index[: len(fv)]
+            cols[code] = fv
+        except Exception as exc:
+            logger.warning("factor %s failed for %s: %s", factor_class, code, exc)
+            continue
+
+    if not cols:
+        return pd.DataFrame()
+
+    out = pd.DataFrame(cols)
+    # Defensive: cast index to DatetimeIndex
+    if is_dt and not isinstance(out.index, pd.DatetimeIndex):
+        out.index = pd.DatetimeIndex(out.index)
+    return out
+
+
+def _compute_return_matrix(
+    close_wide: pd.DataFrame,
+    forward_days: int = 1,
+) -> pd.DataFrame:
+    """Compute forward N-day returns for every stock.
+
+    Args:
+        close_wide: pd.DataFrame [date × Code] of close prices.
+        forward_days: Forward window (default 1).
+
+    Returns:
+        pd.DataFrame [date × Code] of forward returns, shifted up.
+    """
+    if close_wide is None or close_wide.empty:
+        return pd.DataFrame()
+    return close_wide.pct_change(forward_days).shift(-forward_days)
+
+
+def _compute_cross_section_ic(
+    factor_wide: pd.DataFrame,
+    return_wide: pd.DataFrame,
+    adj_dates: list,
+) -> dict[str, Any]:
+    """Compute cross-sectional Spearman Rank IC at each adjustment date.
+
+    Adapted from ``~/Public/单因子回测/factor_performance.py:cal_ic()`` and
+    ``QuantNodes/research/factor_test/nodes/ic_analyzer_node.py``.
+
+    At each ``adj_date``:
+        - factor_t = factor_wide.loc[t].dropna()
+        - return_t = return_wide.loc[t].dropna()
+        - align on stock codes
+        - ic = spearmanr(factor, return) [rank IC]
+        - pearson_ic = factor.corr(return) [Pearson IC for compatibility]
+
+    Returns dict with:
+        ic_mean, ic_std, icir, t_stat, win_rate (Pearson, for back-compat),
+        rank_ic_mean, rank_ic_std, rank_icir, rank_ic_pos_ratio,
+        ic_series: list of {date, ic, rank_ic, n_stocks}.
+    """
+    if factor_wide is None or factor_wide.empty or return_wide is None or return_wide.empty:
+        return _empty_ic_result()
+
+    ic_series: list[dict[str, Any]] = []
+    ic_values: list[float] = []
+    rank_ic_values: list[float] = []
+    n_stocks_list: list[int] = []
+
+    for d in adj_dates:
+        if d not in factor_wide.index or d not in return_wide.index:
+            continue
+        f = factor_wide.loc[d].dropna()
+        r = return_wide.loc[d].dropna()
+        common = f.index.intersection(r.index)
+        if len(common) < 5:
+            continue
+        f_al = f.loc[common]
+        r_al = r.loc[common]
+        try:
+            pearson = float(f_al.corr(r_al))
+            if pd.isna(pearson):
+                continue
+        except Exception:
+            continue
+        try:
+            rank_ic = float(f_al.rank().corr(r_al.rank()))
+            if pd.isna(rank_ic):
+                rank_ic = pearson
+        except Exception:
+            rank_ic = pearson
+
+        ic_values.append(pearson)
+        rank_ic_values.append(rank_ic)
+        n_stocks_list.append(len(common))
+        ic_series.append({
+            "date": str(d)[:10] if hasattr(d, "isoformat") else str(d),
+            "ic": round(pearson, 6),
+            "rank_ic": round(rank_ic, 6),
+            "n_stocks": len(common),
+        })
+
+    if not ic_values:
+        return _empty_ic_result()
+
+    import numpy as np
+    ic_arr = np.array(ic_values)
+    rank_arr = np.array(rank_ic_values)
+    n = len(ic_arr)
+
+    ic_mean = float(ic_arr.mean())
+    ic_std = float(ic_arr.std(ddof=1)) if n > 1 else 0.0
+    icir = ic_mean / ic_std if ic_std > 0 else 0.0
+    t_stat = ic_mean * np.sqrt(n) / ic_std if ic_std > 0 else 0.0
+    win_rate = float((ic_arr > 0).sum() / n) if n > 0 else 0.0
+
+    ric_mean = float(rank_arr.mean())
+    ric_std = float(rank_arr.std(ddof=1)) if n > 1 else 0.0
+    rank_icir = ric_mean / ric_std if ric_std > 0 else 0.0
+    rank_pos = float((rank_arr > 0).sum() / n) if n > 0 else 0.0
+
+    return {
+        "ic_mean": ic_mean,
+        "ic_std": ic_std,
+        "icir": icir,
+        "t_stat": t_stat,
+        "win_rate": win_rate,
+        "rank_ic_mean": ric_mean,
+        "rank_ic_std": ric_std,
+        "rank_icir": rank_icir,
+        "rank_ic_pos_ratio": rank_pos,
+        "ic_series": ic_series,
+        "n_stocks_per_date": n_stocks_list,
+    }
+
+
+def _empty_ic_result() -> dict[str, Any]:
+    return {
+        "ic_mean": 0.0, "ic_std": 0.0, "icir": 0.0, "t_stat": 0.0, "win_rate": 0.0,
+        "rank_ic_mean": 0.0, "rank_ic_std": 0.0, "rank_icir": 0.0,
+        "rank_ic_pos_ratio": 0.0,
+        "ic_series": [], "n_stocks_per_date": [],
+    }
+
+
+def _compute_cross_section_groups(
+    factor_wide: pd.DataFrame,
+    return_wide: pd.DataFrame,
+    adj_dates: list,
+    n_groups: int = 5,
+    close_wide: Optional[pd.DataFrame] = None,
+) -> dict[str, Any]:
+    """Compute N-group cross-section quantile analysis.
+
+    For each ``adj_date``:
+        1. Rank stocks by factor value
+        2. Assign each stock to one of N quantile groups
+        3. Compute equal-weight average forward return per group
+        4. Build group daily NAV curves (between consecutive adj_dates)
+
+    Adapted from ``~/Public/单因子回测/factor_performance.py:cal_group_ret()``
+    and ``QuantNodes/research/factor_test/nodes/group_analyzer_node.py``.
+
+    Args:
+        factor_wide: [date × Code] factor values.
+        return_wide: [date × Code] forward returns (next period).
+        adj_dates: list of rebalance dates.
+        n_groups: number of quantile groups.
+        close_wide: optional [date × Code] close prices for daily NAV curves.
+
+    Returns dict with:
+        quantile_returns: {G1: ann_return, ...}
+        quantile_curves: {G1: [{date, value}, ...], ...}
+        group_n_periods: {G1: int, ...}
+    """
+    if factor_wide is None or factor_wide.empty or return_wide is None or return_wide.empty:
+        return {"quantile_returns": {}, "quantile_curves": {}, "group_n_periods": {}}
+
+    valid_adj = [d for d in adj_dates if d in factor_wide.index and d in return_wide.index]
+    if len(valid_adj) < 2:
+        return {"quantile_returns": {}, "quantile_curves": {}, "group_n_periods": {}}
+
+    # Period returns per group: list of {group: mean_ret} at each adj date
+    period_group_ret: list[dict[str, float]] = []
+    # Group membership at each adj date: {adj_date: {code: group}}
+    memberships: dict[Any, dict[str, int]] = {}
+
+    for i, d in enumerate(valid_adj):
+        f = factor_wide.loc[d].dropna()
+        r = return_wide.loc[d].dropna()
+        common = f.index.intersection(r.index)
+        if len(common) < n_groups:
+            continue
+        f_al = f.loc[common].rank(method="first")
+        try:
+            groups = pd.qcut(f_al, n_groups, labels=range(1, n_groups + 1), duplicates="drop")
+        except Exception:
+            # Fallback: equal-frequency by rank percentile
+            groups = ((f_al.rank(pct=True) * n_groups).astype(int) + 1).clip(1, n_groups)
+        groups = groups.astype(int)
+        memberships[d] = groups.to_dict()
+
+        # Period return: mean of fwd returns per group
+        ret_per_group = {}
+        for g in range(1, n_groups + 1):
+            members = groups[groups == g].index
+            if len(members) == 0:
+                continue
+            ret_per_group[f"G{g}"] = float(r.loc[members].mean())
+        period_group_ret.append({"date": d, **ret_per_group})
+
+    if not period_group_ret:
+        return {"quantile_returns": {}, "quantile_curves": {}, "group_n_periods": {}}
+
+    # Build per-group daily NAV curves
+    quantile_curves: dict[str, list[dict[str, Any]]] = {f"G{g}": [] for g in range(1, n_groups + 1)}
+    quantile_returns: dict[str, float] = {}
+    group_n_periods: dict[str, int] = {}
+
+    for g in range(1, n_groups + 1):
+        gl = f"G{g}"
+        nav = 1.0
+        curve: list[dict[str, Any]] = []
+        for entry in period_group_ret:
+            d = entry["date"]
+            ret = entry.get(gl, 0.0)
+            # First adj date: nav starts at 1.0
+            curve.append({
+                "date": str(d)[:10] if hasattr(d, "isoformat") else str(d),
+                "value": round(nav, 6),
+            })
+            nav *= (1 + ret)
+        # Add final point after last period
+        if period_group_ret:
+            last_d = period_group_ret[-1]["date"]
+            curve.append({
+                "date": str(last_d)[:10] if hasattr(last_d, "isoformat") else str(last_d),
+                "value": round(nav, 6),
+            })
+        quantile_curves[gl] = curve
+
+        # Annual return: simple extrapolation
+        n_periods = len(period_group_ret)
+        if n_periods > 0:
+            # Use calendar day count for accurate annualization
+            from datetime import datetime
+            d0 = period_group_ret[0]["date"]
+            dn = period_group_ret[-1]["date"]
+            if isinstance(d0, str):
+                d0 = pd.Timestamp(d0)
+            if isinstance(dn, str):
+                dn = pd.Timestamp(dn)
+            days = max((dn - d0).days, 1)
+            years = days / 365.25
+            ann_ret = (nav ** (1 / years) - 1) if years > 0 and nav > 0 else 0.0
+            quantile_returns[gl] = float(ann_ret)
+            group_n_periods[gl] = n_periods
+
+    return {
+        "quantile_returns": quantile_returns,
+        "quantile_curves": quantile_curves,
+        "group_n_periods": group_n_periods,
+    }
+
+
+def _compute_long_short(
+    group_curves: dict[str, list[dict[str, Any]]],
+    adj_dates: list,
+    factor_direction: int = 1,
+    trading_days: int = 252,
+) -> dict[str, Any]:
+    """Build long-short pair from group quantile curves.
+
+    Args:
+        group_curves: {G1: [{date, value}], ...} from _compute_cross_section_groups.
+        adj_dates: list of rebalance dates (aligned with curve dates).
+        factor_direction: 1 = larger factor → higher group is long (G_n long);
+            -1 = smaller factor → lower group is long (G_1 long).
+        trading_days: annualization factor.
+
+    Returns dict with:
+        longshort_ann_return, longshort_sharpe, longshort_mdd,
+        longshort_curve: [{date, value}, ...].
+    """
+    if not group_curves:
+        return {
+            "longshort_ann_return": 0.0, "longshort_sharpe": 0.0,
+            "longshort_mdd": 0.0, "longshort_curve": [],
+        }
+
+    n_groups = len(group_curves)
+    long_g = f"G{n_groups}" if factor_direction == 1 else "G1"
+    short_g = "G1" if factor_direction == 1 else f"G{n_groups}"
+
+    long_curve = group_curves.get(long_g, [])
+    short_curve = group_curves.get(short_g, [])
+
+    if not long_curve or not short_curve:
+        return {
+            "longshort_ann_return": 0.0, "longshort_sharpe": 0.0,
+            "longshort_mdd": 0.0, "longshort_curve": [],
+        }
+
+    # Build aligned NAV series
+    long_s = pd.Series(
+        [pt["value"] for pt in long_curve],
+        index=[pd.Timestamp(pt["date"]) for pt in long_curve],
+    )
+    short_s = pd.Series(
+        [pt["value"] for pt in short_curve],
+        index=[pd.Timestamp(pt["date"]) for pt in short_curve],
+    )
+    common = long_s.index.intersection(short_s.index)
+    if len(common) < 2:
+        return {
+            "longshort_ann_return": 0.0, "longshort_sharpe": 0.0,
+            "longshort_mdd": 0.0, "longshort_curve": [],
+        }
+    long_s = long_s.loc[common]
+    short_s = short_s.loc[common]
+
+    # Long-short simple interest: long - short + 1
+    ls_simp = long_s - short_s + 1
+    # Reindexed to include daily frequency from close prices isn't strictly
+    # required here; we use period-level returns for evaluation.
+
+    # Compute metrics via metrics.evaluation
+    from .metrics import evaluation
+
+    # adj_dates aligned to ls_simp.index
+    valid_adj = [d for d in adj_dates if d in ls_simp.index]
+    metrics = evaluation(ls_simp, valid_adj, trading_days=trading_days)
+
+    ls_curve = [{"date": str(d)[:10], "value": round(float(v), 6)} for d, v in ls_simp.items()]
+
+    return {
+        "longshort_ann_return": metrics["annual_return"],
+        "longshort_sharpe": metrics["sharpe"],
+        "longshort_mdd": metrics["max_drawdown"],
+        "longshort_curve": ls_curve,
+    }
+
+
+def run_factor_backtest_universe(
+    close_wide: pd.DataFrame,
+    factor_class: str,
+    factor_params: dict[str, Any],
+    index_close: Optional[pd.Series] = None,
+    adj_mode: str = "D",
+    n_groups: int = 5,
+    factor_direction: int = 1,
+    forward_days: int = 1,
+    universe: str = "",
+) -> FactorBacktestResult:
+    """Cross-section (universe) factor backtest.
+
+    Args:
+        close_wide: pd.DataFrame [date × Code] of close prices.
+        factor_class: Factor type (momentum, volatility, ma_cross, etc.).
+        factor_params: Factor construction parameters.
+        index_close: Optional pd.Series of benchmark close prices (for hedging).
+            Currently stored but hedge PnL computation is not yet implemented;
+            reserved for future use.
+        adj_mode: "D" (daily) or "M-end" (month-end rebalance) or "W-end".
+        n_groups: Number of quantile groups (default 5).
+        factor_direction: 1 = higher factor → long, -1 = reverse.
+        forward_days: Forward return period (default 1).
+        universe: Universe label for the result metadata.
+
+    Returns:
+        FactorBacktestResult with all multi-stock metrics populated.
+    """
+    if close_wide is None or close_wide.empty:
+        logger.warning("empty close_wide for universe backtest")
+        return FactorBacktestResult(universe=universe, adj_mode=adj_mode)
+
+    # 1. Factor matrix
+    factor_wide = _compute_factor_matrix(close_wide, factor_class, factor_params)
+    if factor_wide.empty:
+        logger.warning("factor matrix empty for class=%s", factor_class)
+        return FactorBacktestResult(universe=universe, adj_mode=adj_mode)
+
+    # 2. Return matrix
+    return_wide = _compute_return_matrix(close_wide, forward_days)
+
+    # 3. Adjustment dates (subset of factor_wide.index)
+    date_index = factor_wide.index.sort_values()
+    adj_dates = generate_adj_dates(date_index, adj_mode)
+    if len(adj_dates) < 2:
+        logger.warning("not enough adj dates: %d", len(adj_dates))
+        return FactorBacktestResult(universe=universe, adj_mode=adj_mode)
+
+    # 4. Cross-section IC
+    ic_res = _compute_cross_section_ic(factor_wide, return_wide, adj_dates)
+
+    # 5. Cross-section groups
+    group_res = _compute_cross_section_groups(
+        factor_wide, return_wide, adj_dates, n_groups=n_groups, close_wide=close_wide
+    )
+
+    # 6. Long-short pair
+    ls_res = _compute_long_short(
+        group_res["quantile_curves"], adj_dates,
+        factor_direction=factor_direction,
+    )
+
+    # 7. Top group annual return → existing annual_return field
+    n_groups_actual = len(group_res.get("quantile_returns", {}))
+    if n_groups_actual:
+        long_g = f"G{n_groups_actual}" if factor_direction == 1 else "G1"
+        top_ann = group_res["quantile_returns"].get(long_g, 0.0)
+        # For MDD/turnover, pick long group's curve
+        top_curve = group_res["quantile_curves"].get(long_g, [])
+    else:
+        top_ann = 0.0
+        top_curve = []
+
+    # Convert group quantile curves: {G1: [{date, value}]} — pass through
+    qc_out: dict[str, list[dict[str, Any]]] = group_res.get("quantile_curves", {})
+
+    # 8. Turnover: simple proxy — fraction of stocks in long group that change
+    # between consecutive adj dates. Use period returns list as proxy.
+    turnover = _compute_group_turnover(close_wide, factor_wide, adj_dates, n_groups, factor_direction)
+
+    return FactorBacktestResult(
+        ic_mean=ic_res["ic_mean"],
+        ic_std=ic_res["ic_std"],
+        icir=ic_res["icir"],
+        t_stat=ic_res["t_stat"],
+        win_rate=ic_res["win_rate"],
+        annual_return=top_ann,
+        max_drawdown=0.0,  # computed below for long group if needed
+        turnover=turnover,
+        quantile_returns=group_res.get("quantile_returns", {}),
+        ic_series=ic_res["ic_series"],
+        quantile_curves=qc_out,
+        rank_ic_mean=ic_res["rank_ic_mean"],
+        rank_ic_std=ic_res["rank_ic_std"],
+        rank_icir=ic_res["rank_icir"],
+        rank_ic_pos_ratio=ic_res["rank_ic_pos_ratio"],
+        longshort_ann_return=ls_res["longshort_ann_return"],
+        longshort_sharpe=ls_res["longshort_sharpe"],
+        longshort_mdd=ls_res["longshort_mdd"],
+        longshort_curve=ls_res["longshort_curve"],
+        universe=universe,
+        adj_mode=adj_mode,
+        n_stocks_per_date=ic_res["n_stocks_per_date"],
+    )
+
+
+def _compute_group_turnover(
+    close_wide: pd.DataFrame,
+    factor_wide: pd.DataFrame,
+    adj_dates: list,
+    n_groups: int = 5,
+    factor_direction: int = 1,
+) -> float:
+    """Average turnover of the long (top) group across rebalance periods.
+
+    Turnover = average fraction of stocks in the long group at time t
+    that are NOT in the long group at time t-1.
+    """
+    valid_adj = [d for d in adj_dates if d in factor_wide.index]
+    if len(valid_adj) < 2:
+        return 0.0
+
+    long_label = f"G{n_groups}" if factor_direction == 1 else "G1"
+    prev_long: Optional[set] = None
+    turnovers: list[float] = []
+
+    for d in valid_adj:
+        f = factor_wide.loc[d].dropna()
+        if len(f) < n_groups:
+            continue
+        try:
+            groups = pd.qcut(f.rank(method="first"), n_groups, labels=range(1, n_groups + 1), duplicates="drop").astype(int)
+        except Exception:
+            continue
+        cur_long = set(groups[groups == (n_groups if factor_direction == 1 else 1)].index)
+        if prev_long is not None and cur_long:
+            changed = len(cur_long.symmetric_difference(prev_long))
+            total = len(cur_long | prev_long)
+            if total > 0:
+                turnovers.append(changed / total)
+        prev_long = cur_long
+
+    return float(np.mean(turnovers)) if turnovers else 0.0
