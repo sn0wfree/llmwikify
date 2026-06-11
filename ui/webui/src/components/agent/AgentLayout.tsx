@@ -6,6 +6,7 @@ import {
   Beaker, FileText, TrendingUp,
 } from 'lucide-react';
 import { WikiSelector } from '../wiki/WikiSelector';
+import { WikiManager } from '../wiki/WikiManager';
 import { Badge } from '../ui/badge';
 import { Backdrop } from './Backdrop';
 import { useWikiStore } from '../../stores/wikiStore';
@@ -36,6 +37,7 @@ const NAV_SECONDARY = [
 
 export function AgentLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showManager, setShowManager] = useState(false);
   const [badges, setBadges] = useState<BadgeCounts>({ confirmations: 0, proposals: 0, notifications: 0 });
   const { loadWikis, currentWikiId, wikis } = useWikiStore();
 
@@ -71,7 +73,7 @@ export function AgentLayout() {
     );
 
   const totalActivity = badges.confirmations + badges.proposals + badges.notifications;
-  const currentWiki = wikis.find((w) => w.id === currentWikiId);
+  const currentWiki = wikis.find((w) => w.wiki_id === currentWikiId);
 
   return (
     <div className="flex h-screen bg-background text-foreground relative">
@@ -107,7 +109,7 @@ export function AgentLayout() {
             </button>
           </div>
 
-          <WikiSelector />
+          <WikiSelector onOpenManager={() => setShowManager(true)} />
 
           {/* Primary nav */}
           <nav className="px-2 pt-2 space-y-0.5">
@@ -229,6 +231,8 @@ export function AgentLayout() {
           <Outlet />
         </div>
       </main>
+
+      {showManager && <WikiManager onClose={() => setShowManager(false)} />}
     </div>
   );
 }

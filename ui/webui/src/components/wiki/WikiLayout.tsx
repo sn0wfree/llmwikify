@@ -102,7 +102,7 @@ export function WikiLayout() {
         : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
     );
 
-  const currentWiki = wikis.find((w) => w.id === currentWikiId);
+  const currentWiki = wikis.find((w) => w.wiki_id === currentWikiId);
 
   return (
     <div className="flex h-screen bg-background text-foreground relative">

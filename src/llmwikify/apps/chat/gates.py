@@ -135,6 +135,16 @@ class ResearchGates:
 
         # Layer 2: quality thresholds
         review = state.review or {}
+        # A review that was skipped (LLM failed) must NOT be treated
+        # as approved. The `skipped` flag is set by `action_review` /
+        # `action_revise` when the LLM call raises. Sending the
+        # engine to `revise` here is honest: revise is also LLM-
+        # bound and will fall into `incomplete` if it also fails.
+        if review.get("skipped"):
+            return {
+                "missing": "revise",
+                "reason": f"review was skipped (LLM failed): {review.get('skip_reason', '')}",
+            }
         if not review.get("approved"):
             return {
                 "missing": "revise",
@@ -150,8 +160,11 @@ class ResearchGates:
 
         max_gaps = self._config.get("gate_max_knowledge_gaps", 3)
         if len(state.knowledge_gaps) > max_gaps:
+            # Redirect to `plan` (gap-replan path), NOT `synthesize`.
+            # Re-running synthesis with the same sources would just
+            # reproduce the same gaps and burn the round budget.
             return {
-                "missing": "synthesize",
+                "missing": "plan",
                 "reason": f"knowledge_gaps={len(state.knowledge_gaps)} > max={max_gaps}",
             }
 

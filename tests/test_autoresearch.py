@@ -2072,6 +2072,24 @@ class TestStrictExit:
         assert result["missing"] == "revise"
         assert "not approved" in result["reason"]
 
+    def test_strict_exit_blocks_skipped_review(self, mock_wiki, mock_llm, db, config):
+        """Review that was skipped (LLM failed) must NOT pass even
+        if `approved=True` was fabricated. The gate must route the
+        engine to `revise`, which will also fail and ultimately
+        end the session as `incomplete`.
+        """
+        config["strict_exit"] = True
+        engine = ResearchEngine(mock_wiki, db, mock_llm, config)
+        state = self._compliant_state()
+        state.review = {
+            "approved": True, "score": 8, "issues": [],
+            "skipped": True, "skip_reason": "Review LLM failed: timeout",
+        }
+        result = engine._check_quality_compliance(state)
+        assert result is not None
+        assert result["missing"] == "revise"
+        assert "skipped" in result["reason"].lower()
+
     def test_strict_exit_blocks_low_quality_score(self, mock_wiki, mock_llm, db, config):
         """quality_score < threshold → returns {'missing': 'revise'}."""
         config["strict_exit"] = True
@@ -2086,7 +2104,14 @@ class TestStrictExit:
         assert "quality_score=5" in result["reason"]
 
     def test_strict_exit_blocks_too_many_gaps(self, mock_wiki, mock_llm, db, config):
-        """Too many knowledge gaps → returns {'missing': 'synthesize'}."""
+        """Too many knowledge gaps → returns {'missing': 'plan'}.
+
+        Redirecting to `plan` (gap-replan path) — NOT `synthesize` —
+        is the correct behavior: re-running synthesize with the same
+        sources would just reproduce the same gaps and burn the round
+        budget. The replan path generates new sub-queries targeting
+        the gaps.
+        """
         config["strict_exit"] = True
         config["gate_max_knowledge_gaps"] = 3
         engine = ResearchEngine(mock_wiki, db, mock_llm, config)
@@ -2094,7 +2119,7 @@ class TestStrictExit:
         state.knowledge_gaps = ["gap1", "gap2", "gap3", "gap4"]
         result = engine._check_quality_compliance(state)
         assert result is not None
-        assert result["missing"] == "synthesize"
+        assert result["missing"] == "plan"
         assert "gaps=4" in result["reason"]
 
     def test_strict_exit_blocks_too_few_sources(self, mock_wiki, mock_llm, db, config):

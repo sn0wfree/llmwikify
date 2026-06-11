@@ -257,3 +257,100 @@ def test_legacy_observe_and_resume_logic_not_in_engine():
         "engine.py. Phase 2 #5 / C3 extracted it to "
         "resume.py."
     )
+
+
+def test_resume_loader_restores_self_loop_metadata():
+    """Regression: self_loop_counts and self_loop_history are persisted
+    by action_clarify and must be restored by resume_loader so a
+    session that already burned 2 of 3 retries doesn't get 3 fresh
+    retries on resume.
+    """
+    import json
+    from llmwikify.apps.chat.resume import ResearchResumeLoader
+    from llmwikify.apps.chat.state import ResearchState
+
+    session_row = {
+        "max_rounds": 5,
+        "quality_score": 0,
+        "current_step": "planning",
+        "self_loop_counts_json": json.dumps({"clarify": 2, "gather": 0}),
+        "self_loop_history_json": json.dumps([
+            {"step": "clarify", "attempt": 1, "reason": "scope_check fail"},
+            {"step": "clarify", "attempt": 2, "reason": "scope_check fail"},
+        ]),
+    }
+
+    class FakeDB:
+        def get_research_session(self, session_id):
+            return session_row
+
+        def get_sub_queries(self, session_id):
+            return []
+
+        def get_sources(self, session_id):
+            return []
+
+    class FakeEngine:
+        db = FakeDB()
+        _max_react_rounds = 5
+
+    rl = ResearchResumeLoader(FakeEngine())
+    state = ResearchState(session_id="s1")
+    rl.load(state)
+    assert state.self_loop_counts == {"clarify": 2, "gather": 0}
+    assert len(state.self_loop_history) == 2
+    assert state.self_loop_history[0]["step"] == "clarify"
+
+
+def test_resume_loader_tolerates_missing_self_loop_fields():
+    """resume_loader must not crash if self_loop_*_json columns are
+    NULL or malformed (forward-compat with sessions written by
+    pre-fix engine versions)."""
+    import json
+    from llmwikify.apps.chat.resume import ResearchResumeLoader
+    from llmwikify.apps.chat.state import ResearchState
+
+    session_row = {
+        "max_rounds": 5,
+        "quality_score": 0,
+        "current_step": "planning",
+        "self_loop_counts_json": "not valid json",
+        "self_loop_history_json": None,
+    }
+
+    class FakeDB:
+        def get_research_session(self, session_id):
+            return session_row
+
+        def get_sub_queries(self, session_id):
+            return []
+
+        def get_sources(self, session_id):
+            return []
+
+    class FakeEngine:
+        db = FakeDB()
+        _max_react_rounds = 5
+
+    rl = ResearchResumeLoader(FakeEngine())
+    state = ResearchState(session_id="s1")
+    rl.load(state)
+    # Malformed values are silently ignored; defaults from ResearchState remain.
+    assert state.self_loop_counts == {}
+    assert state.self_loop_history == []
+
+
+def test_action_clarify_persists_self_loop_fields():
+    """Regression: action_clarify must pass self_loop_counts and
+    self_loop_history to update_six_step_fields so they survive
+    across pause/resume.
+    """
+    from llmwikify.apps.chat import actions
+
+    src = inspect.getsource(actions.action_clarify)
+    assert "self_loop_counts=state.self_loop_counts" in src, (
+        "action_clarify must persist state.self_loop_counts to DB"
+    )
+    assert "self_loop_history=state.self_loop_history" in src, (
+        "action_clarify must persist state.self_loop_history to DB"
+    )

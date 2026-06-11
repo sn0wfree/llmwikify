@@ -289,11 +289,6 @@ class DBRetryManager:
         """Alias for ChatService usage."""
         return DBRetryManager.is_retriable(exc)
 
-    @staticmethod
-    def _is_retriable(exc: Exception) -> bool:
-        """Alias for ChatService usage."""
-        return DBRetryManager.is_retriable(exc)
-
     def call(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """Call a sync DB function with retry on transient SQLite errors.
 
