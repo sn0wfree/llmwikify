@@ -18,6 +18,9 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from llmwikify.reproduction.config import config
+from llmwikify.reproduction.run_id import generate_run_id, sanitize_run_id
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/factor", tags=["factor"])
@@ -63,10 +66,10 @@ async def get_factor(slug: str) -> dict[str, Any]:
 
 class FactorBacktestRequest(BaseModel):
     # Universe mode (default): cross-section backtest over a stock pool
-    universe: str = "HS300"
+    universe: str = Field(default_factory=lambda: config.get("universe.default", "synth"))
     adj_mode: str = Field(default="D", description="D / M-end / W-end")
     hedge: str = Field(default="equal", description="equal / HS300 / ZZ500 / SZ50")
-    n_groups: int = Field(default=5, ge=2, le=10)
+    n_groups: int = Field(default_factory=lambda: int(config.get("backtest.n_groups", 5)), ge=2, le=10)
     factor_direction: int = Field(default=1, description="1 or -1")
 
     # Date window
@@ -84,6 +87,7 @@ def _build_factor_backtest_page(
     req: FactorBacktestRequest,
     result: Any,
     source: str,
+    run_id: str,
 ) -> str:
     """Render FactorBacktestResult → markdown page content."""
     lines = [
@@ -96,6 +100,7 @@ def _build_factor_backtest_page(
         f"hedge: {req.hedge}",
         f"start: {req.start_date}",
         f"end: {req.end_date}",
+        f"run_id: {run_id}",
         f"ic_mean: {result.ic_mean:.4f}",
         f"rank_ic_mean: {result.rank_ic_mean:.4f}",
         f"icir: {result.icir:.4f}",
@@ -108,7 +113,7 @@ def _build_factor_backtest_page(
         f"status: success",
         "---",
         "",
-        f"# Factor Backtest — {factor_slug}",
+        f"# Factor Backtest — {factor_slug} ({run_id})",
         "",
         f"- Universe: `{req.universe}`",
         f"- Adj mode: `{req.adj_mode}`",
@@ -147,6 +152,63 @@ def _build_factor_backtest_page(
     return "\n".join(lines)
 
 
+def _persist_factor_result(
+    db: Any,
+    wiki: Any,
+    run_id: str,
+    slug: str,
+    req: FactorBacktestRequest,
+    result: Any,
+    source: str,
+    factor: dict[str, Any],
+) -> Optional[str]:
+    """Persist factor backtest result to DB and Wiki.
+
+    All-or-nothing semantics: DB write is committed first, then Wiki.
+    If DB write fails, raises; Wiki failure is logged but does not roll back
+    DB (Wiki is a mirror, not a source of truth).
+
+    Returns:
+        wiki_page path on success, None on wiki failure.
+    """
+    db.create_result(
+        run_id=run_id,
+        result_type="factor_backtest",
+        factor_ref=slug,
+        universe=req.universe,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        status="success",
+        adj_mode=req.adj_mode,
+        hedge=req.hedge,
+        data_source=source,
+        ic_mean=result.ic_mean,
+        rank_ic_mean=getattr(result, "rank_ic_mean", 0.0),
+        icir=result.icir,
+        rank_icir=getattr(result, "rank_icir", 0.0),
+        win_rate=result.win_rate,
+        annual_return=result.annual_return,
+        longshort_ann_return=result.longshort_ann_return,
+        longshort_sharpe=result.longshort_sharpe,
+        longshort_max_dd=getattr(result, "longshort_mdd", 0.0),
+        n_stocks_per_date=getattr(result, "n_stocks_per_date", []),
+        ic_series=getattr(result, "ic_series", []),
+        group_metrics=getattr(result, "group_metrics", {}),
+    )
+    db.commit()
+
+    backtest_slug = f"factor-{slug}-{sanitize_run_id(run_id)}"
+    backtest_md = _build_factor_backtest_page(slug, factor, req, result, source, run_id)
+    wiki_page = None
+    try:
+        wiki.write_page(backtest_slug, backtest_md, page_type="FactorBacktest")
+        wiki_page = f"wiki/factor/{backtest_slug}.md"
+    except Exception as exc:
+        logger.warning("FactorBacktest wiki write failed: %s", exc)
+
+    return wiki_page
+
+
 @router.post("/{slug}/backtest")
 async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, Any]:
     """Run factor backtest.
@@ -155,9 +217,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
     - ``universe == "single"``: legacy single-stock mode using ``run_factor_backtest``.
     """
     import asyncio
-    import uuid
     from llmwikify.reproduction.extract_factors import read_factor_from_wiki
-    from llmwikify.reproduction.paths import WIKI_DIR_FACTOR, result_path, result_dir
     from llmwikify.reproduction.router import DataRouter
     from llmwikify.reproduction.sessions import ReproductionDatabase
     from llmwikify.reproduction.universe import (
@@ -180,61 +240,157 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             factor_params = {}
 
     data_router = DataRouter(use_cache=True)
+    run_id = generate_run_id(start=req.start_date, end=req.end_date)
+    default_source = config.get("backtest.default_source", "user")
 
-    # ── Legacy single-stock mode ──────────────────────────────────
-    if req.universe == "single":
-        data, source = await asyncio.to_thread(
-            data_router.get, req.symbol, req.start_date, req.end_date
+    try:
+        # ── Legacy single-stock mode ──────────────────────────────
+        if req.universe == "single":
+            data, source = await asyncio.to_thread(
+                data_router.get, req.symbol, req.start_date, req.end_date
+            )
+            from llmwikify.reproduction.factor_backtest import run_factor_backtest
+            result = await asyncio.to_thread(
+                run_factor_backtest,
+                data=data,
+                factor_class=factor_class,
+                factor_params=factor_params,
+            )
+
+            try:
+                db = ReproductionDatabase()
+                wiki_page = _persist_factor_result(
+                    db=db,
+                    wiki=wiki,
+                    run_id=run_id,
+                    slug=slug,
+                    req=req,
+                    result=result,
+                    source=source,
+                    factor=factor,
+                )
+            except Exception as exc:
+                logger.warning("DB write failed (single mode): %s", exc)
+                wiki_page = None
+
+            return {
+                "slug": slug,
+                "factor": factor,
+                "symbol": req.symbol,
+                "start_date": req.start_date,
+                "end_date": req.end_date,
+                "data_source": source,
+                "status": "success",
+                "run_id": run_id,
+                "wiki_page": wiki_page,
+                "metrics": {
+                    "ic_mean": result.ic_mean,
+                    "ic_std": result.ic_std,
+                    "icir": result.icir,
+                    "t_stat": result.t_stat,
+                    "win_rate": result.win_rate,
+                    "annual_return": result.annual_return,
+                    "max_drawdown": result.max_drawdown,
+                    "turnover": result.turnover,
+                    "rank_ic_mean": 0.0,
+                    "longshort_ann_return": 0.0,
+                    "longshort_sharpe": 0.0,
+                },
+                "ic_series": result.ic_series,
+                "quantile_returns": result.quantile_returns,
+                "quantile_curves": result.quantile_curves,
+                "longshort_curve": [],
+                "universe": "single",
+                "adj_mode": req.adj_mode,
+                "n_stocks_per_date": [],
+                "group_metrics": {},
+                "total_rebalances": 0,
+                "valid_rebalances": 0,
+                "source": default_source,
+            }
+
+        # ── Cross-section (universe) mode ─────────────────────────
+        from llmwikify.reproduction.factor_backtest import run_factor_backtest_universe
+
+        # 1. Resolve stock universe
+        symbols = await asyncio.to_thread(resolve_universe, req.universe)
+        if not symbols:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot resolve universe '{req.universe}' (no constituents found)",
+            )
+
+        # 2. Batch fetch OHLCV
+        merged_df, source = await asyncio.to_thread(
+            data_router.get_universe, symbols, req.start_date, req.end_date
         )
-        from llmwikify.reproduction.factor_backtest import run_factor_backtest
+        if merged_df is None or merged_df.empty:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No data returned for universe '{req.universe}' ({len(symbols)} stocks)",
+            )
+
+        # 3. Pivot to wide format [date × Code]
+        close_wide = merged_df.pivot_table(
+            index="date", columns="Code", values="close", aggfunc="last"
+        )
+        close_wide = close_wide.sort_index().dropna(how="all")
+
+        # 4. Fetch hedge index close (optional, for future use)
+        index_close = None
+        if req.hedge in HEDGE_INDEX_CODE:
+            hedge_code = HEDGE_INDEX_CODE[req.hedge]
+            index_close = await asyncio.to_thread(
+                data_router.get_index_close, hedge_code, req.start_date, req.end_date
+            )
+
+        # 5. Run cross-section backtest
         result = await asyncio.to_thread(
-            run_factor_backtest,
-            data=data,
+            run_factor_backtest_universe,
+            close_wide=close_wide,
             factor_class=factor_class,
             factor_params=factor_params,
+            index_close=index_close,
+            adj_mode=req.adj_mode,
+            n_groups=req.n_groups,
+            factor_direction=req.factor_direction,
+            universe=req.universe,
         )
-        run_id = f"{req.start_date.replace('-', '')}-{req.end_date.replace('-', '')}"
-        backtest_slug = f"factor-{slug}"
 
-        # Write to DB
+        # 6. Persist to DB + Wiki (with rollback on error)
         try:
             db = ReproductionDatabase()
-            db.create_result(
+            wiki_page = _persist_factor_result(
+                db=db,
+                wiki=wiki,
                 run_id=run_id,
-                result_type="factor_backtest",
-                factor_ref=slug,
-                universe="single",
-                start_date=req.start_date,
-                end_date=req.end_date,
-                status="success",
-                adj_mode=req.adj_mode,
-                data_source=source,
-                ic_mean=result.ic_mean,
-                win_rate=result.win_rate,
-                annual_return=result.annual_return,
-                longshort_ann_return=0.0,
-                longshort_sharpe=0.0,
+                slug=slug,
+                req=req,
+                result=result,
+                source=source,
+                factor=factor,
             )
         except Exception as exc:
-            logger.warning("DB write failed: %s", exc)
-
-        # Write wiki page
-        backtest_md = _build_factor_backtest_page(slug, factor, req, result, source)
-        try:
-            wiki.write_page(backtest_slug, backtest_md, page_type="FactorBacktest")
-        except Exception as exc:
-            logger.warning("FactorBacktest wiki write failed: %s", exc)
+            logger.error("Persist failed, rolling back: %s", exc)
+            try:
+                db.rollback()
+            except Exception as rb_exc:
+                logger.error("Rollback failed: %s", rb_exc)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to persist factor backtest result: {exc}",
+            )
 
         return {
             "slug": slug,
             "factor": factor,
-            "symbol": req.symbol,
+            "symbol": f"universe:{req.universe}",
             "start_date": req.start_date,
             "end_date": req.end_date,
             "data_source": source,
             "status": "success",
             "run_id": run_id,
-            "wiki_page": f"wiki/factor-backtest/{backtest_slug}.md",
+            "wiki_page": wiki_page,
             "metrics": {
                 "ic_mean": result.ic_mean,
                 "ic_std": result.ic_std,
@@ -244,143 +400,30 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
                 "annual_return": result.annual_return,
                 "max_drawdown": result.max_drawdown,
                 "turnover": result.turnover,
-                "rank_ic_mean": 0.0,
-                "longshort_ann_return": 0.0,
-                "longshort_sharpe": 0.0,
+                "rank_ic_mean": result.rank_ic_mean,
+                "rank_ic_std": result.rank_ic_std,
+                "rank_icir": result.rank_icir,
+                "longshort_ann_return": result.longshort_ann_return,
+                "longshort_sharpe": result.longshort_sharpe,
+                "longshort_mdd": result.longshort_mdd,
             },
             "ic_series": result.ic_series,
             "quantile_returns": result.quantile_returns,
             "quantile_curves": result.quantile_curves,
-            "longshort_curve": [],
-            "universe": "single",
-            "adj_mode": req.adj_mode,
-            "n_stocks_per_date": [],
-            "group_metrics": {},
+            "longshort_curve": result.longshort_curve,
+            "universe": req.universe,
+            "adj_mode": result.adj_mode,
+            "n_stocks_per_date": result.n_stocks_per_date,
+            "group_metrics": result.group_metrics,
+            "total_rebalances": result.total_rebalances,
+            "valid_rebalances": result.valid_rebalances,
+            "source": default_source,
         }
-
-    # ── Cross-section (universe) mode ─────────────────────────────
-    from llmwikify.reproduction.factor_backtest import run_factor_backtest_universe
-
-    # 1. Resolve stock universe
-    symbols = await asyncio.to_thread(resolve_universe, req.universe)
-    if not symbols:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot resolve universe '{req.universe}' (no constituents found)",
-        )
-
-    # 2. Batch fetch OHLCV
-    merged_df, source = await asyncio.to_thread(
-        data_router.get_universe, symbols, req.start_date, req.end_date
-    )
-    if merged_df is None or merged_df.empty:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No data returned for universe '{req.universe}' ({len(symbols)} stocks)",
-        )
-
-    # 3. Pivot to wide format [date × Code]
-    close_wide = merged_df.pivot_table(
-        index="date", columns="Code", values="close", aggfunc="last"
-    )
-    close_wide = close_wide.sort_index().dropna(how="all")
-
-    # 4. Fetch hedge index close (optional, for future use)
-    index_close = None
-    if req.hedge in HEDGE_INDEX_CODE:
-        hedge_code = HEDGE_INDEX_CODE[req.hedge]
-        index_close = await asyncio.to_thread(
-            data_router.get_index_close, hedge_code, req.start_date, req.end_date
-        )
-
-    # 5. Run cross-section backtest
-    result = await asyncio.to_thread(
-        run_factor_backtest_universe,
-        close_wide=close_wide,
-        factor_class=factor_class,
-        factor_params=factor_params,
-        index_close=index_close,
-        adj_mode=req.adj_mode,
-        n_groups=req.n_groups,
-        factor_direction=req.factor_direction,
-        universe=req.universe,
-    )
-
-    # 6. Generate run_id and write to DB
-    run_id = f"{req.start_date.replace('-', '')}-{req.end_date.replace('-', '')}"
-
-    # Write to DB
-    try:
-        db = ReproductionDatabase()
-        db.create_result(
-            run_id=run_id,
-            result_type="factor_backtest",
-            factor_ref=slug,
-            universe=req.universe,
-            start_date=req.start_date,
-            end_date=req.end_date,
-            status="success",
-            adj_mode=req.adj_mode,
-            hedge=req.hedge,
-            data_source=source,
-            ic_mean=result.ic_mean,
-            rank_ic_mean=result.rank_ic_mean,
-            icir=result.icir,
-            rank_icir=result.rank_icir,
-            win_rate=result.win_rate,
-            annual_return=result.annual_return,
-            longshort_ann_return=result.longshort_ann_return,
-            longshort_sharpe=result.longshort_sharpe,
-            longshort_max_dd=result.longshort_mdd,
-            n_stocks_per_date=result.n_stocks_per_date,
-            ic_series=result.ic_series,
-            group_metrics=result.group_metrics,
-        )
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.warning("DB write failed: %s", exc)
-
-    # 7. Write wiki page
-    backtest_slug = f"factor-{slug}"
-    backtest_md = _build_factor_backtest_page(slug, factor, req, result, source)
-    try:
-        wiki.write_page(backtest_slug, backtest_md, page_type="FactorBacktest")
-    except Exception as exc:
-        logger.warning("FactorBacktest wiki write failed: %s", exc)
-
-    return {
-        "slug": slug,
-        "factor": factor,
-        "symbol": f"universe:{req.universe}",
-        "start_date": req.start_date,
-        "end_date": req.end_date,
-        "data_source": source,
-        "status": "success",
-        "run_id": run_id,
-        "wiki_page": f"wiki/factor-backtest/{backtest_slug}.md",
-        "metrics": {
-            "ic_mean": result.ic_mean,
-            "ic_std": result.ic_std,
-            "icir": result.icir,
-            "t_stat": result.t_stat,
-            "win_rate": result.win_rate,
-            "annual_return": result.annual_return,
-            "max_drawdown": result.max_drawdown,
-            "turnover": result.turnover,
-            "rank_ic_mean": result.rank_ic_mean,
-            "rank_ic_std": result.rank_ic_std,
-            "rank_icir": result.rank_icir,
-            "longshort_ann_return": result.longshort_ann_return,
-            "longshort_sharpe": result.longshort_sharpe,
-            "longshort_mdd": result.longshort_mdd,
-        },
-        "ic_series": result.ic_series,
-        "quantile_returns": result.quantile_returns,
-        "quantile_curves": result.quantile_curves,
-        "longshort_curve": result.longshort_curve,
-        "universe": req.universe,
-        "adj_mode": result.adj_mode,
-        "n_stocks_per_date": result.n_stocks_per_date,
-        "group_metrics": result.group_metrics,
-        "total_rebalances": result.total_rebalances,
-        "valid_rebalances": result.valid_rebalances,
-    }
+        logger.exception("Factor backtest failed: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Factor backtest failed: {exc}",
+        )

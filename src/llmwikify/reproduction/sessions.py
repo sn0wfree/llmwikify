@@ -537,6 +537,22 @@ class ReproductionDatabase:
             conn.execute("DELETE FROM reproduction_results WHERE run_id = ?", (run_id,))
             return conn.total_changes > 0
 
+    # ─── Transaction control ──────────────────────────────────
+
+    def commit(self) -> None:
+        """No-op for sqlite3 (auto-commits per call), kept for API symmetry.
+
+        Provided so callers can use try/commit/rollback pattern uniformly.
+        """
+        return None
+
+    def rollback(self) -> None:
+        """No-op for sqlite3 (each call is its own transaction), kept for API symmetry.
+
+        Provided so callers can use try/commit/rollback pattern uniformly.
+        """
+        return None
+
 
 __all__ = [
     "ReproductionDatabase",
