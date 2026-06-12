@@ -144,7 +144,12 @@ class FactorBacktestResult:
     longshort_curve: list[dict[str, Any]] = field(default_factory=list)  # [{date, value}]
     universe: str = ""            # e.g. "HS300"
     adj_mode: str = "D"           # "D" / "M-end"
-    n_stocks_per_date: list[int] = field(default_factory=list)
+    n_stocks_per_date: list[dict[str, Any]] = field(default_factory=list)  # [{date, n}, ...]
+    # Per-group metrics from cross-section quantile analysis.
+    # {G1: {sharpe, max_drawdown, win_rate, turnover, n_stocks}, ...}
+    group_metrics: dict[str, dict[str, float]] = field(default_factory=dict)
+    total_rebalances: int = 0     # Total number of rebalance dates
+    valid_rebalances: int = 0     # Number of successful IC calculations
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -170,4 +175,7 @@ class FactorBacktestResult:
             "universe": self.universe,
             "adj_mode": self.adj_mode,
             "n_stocks_per_date": self.n_stocks_per_date,
+            "group_metrics": self.group_metrics,
+            "total_rebalances": self.total_rebalances,
+            "valid_rebalances": self.valid_rebalances,
         }

@@ -155,8 +155,11 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
     - ``universe == "single"``: legacy single-stock mode using ``run_factor_backtest``.
     """
     import asyncio
+    import uuid
     from llmwikify.reproduction.extract_factors import read_factor_from_wiki
+    from llmwikify.reproduction.paths import WIKI_DIR_FACTOR, result_path, result_dir
     from llmwikify.reproduction.router import DataRouter
+    from llmwikify.reproduction.sessions import ReproductionDatabase
     from llmwikify.reproduction.universe import (
         HEDGE_INDEX_CODE,
         get_index_constituents,
@@ -176,12 +179,12 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
         except (json.JSONDecodeError, TypeError):
             factor_params = {}
 
-    router = DataRouter(use_cache=True)
+    data_router = DataRouter(use_cache=True)
 
     # ── Legacy single-stock mode ──────────────────────────────────
     if req.universe == "single":
         data, source = await asyncio.to_thread(
-            router.get, req.symbol, req.start_date, req.end_date
+            data_router.get, req.symbol, req.start_date, req.end_date
         )
         from llmwikify.reproduction.factor_backtest import run_factor_backtest
         result = await asyncio.to_thread(
@@ -190,7 +193,32 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             factor_class=factor_class,
             factor_params=factor_params,
         )
+        run_id = f"{req.start_date.replace('-', '')}-{req.end_date.replace('-', '')}"
         backtest_slug = f"factor-{slug}"
+
+        # Write to DB
+        try:
+            db = ReproductionDatabase()
+            db.create_result(
+                run_id=run_id,
+                result_type="factor_backtest",
+                factor_ref=slug,
+                universe="single",
+                start_date=req.start_date,
+                end_date=req.end_date,
+                status="success",
+                adj_mode=req.adj_mode,
+                data_source=source,
+                ic_mean=result.ic_mean,
+                win_rate=result.win_rate,
+                annual_return=result.annual_return,
+                longshort_ann_return=0.0,
+                longshort_sharpe=0.0,
+            )
+        except Exception as exc:
+            logger.warning("DB write failed: %s", exc)
+
+        # Write wiki page
         backtest_md = _build_factor_backtest_page(slug, factor, req, result, source)
         try:
             wiki.write_page(backtest_slug, backtest_md, page_type="FactorBacktest")
@@ -205,6 +233,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             "end_date": req.end_date,
             "data_source": source,
             "status": "success",
+            "run_id": run_id,
             "wiki_page": f"wiki/factor-backtest/{backtest_slug}.md",
             "metrics": {
                 "ic_mean": result.ic_mean,
@@ -226,6 +255,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             "universe": "single",
             "adj_mode": req.adj_mode,
             "n_stocks_per_date": [],
+            "group_metrics": {},
         }
 
     # ── Cross-section (universe) mode ─────────────────────────────
@@ -241,7 +271,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
 
     # 2. Batch fetch OHLCV
     merged_df, source = await asyncio.to_thread(
-        router.get_universe, symbols, req.start_date, req.end_date
+        data_router.get_universe, symbols, req.start_date, req.end_date
     )
     if merged_df is None or merged_df.empty:
         raise HTTPException(
@@ -260,7 +290,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
     if req.hedge in HEDGE_INDEX_CODE:
         hedge_code = HEDGE_INDEX_CODE[req.hedge]
         index_close = await asyncio.to_thread(
-            router.get_index_close, hedge_code, req.start_date, req.end_date
+            data_router.get_index_close, hedge_code, req.start_date, req.end_date
         )
 
     # 5. Run cross-section backtest
@@ -276,7 +306,40 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
         universe=req.universe,
     )
 
-    # 6. Write wiki page
+    # 6. Generate run_id and write to DB
+    run_id = f"{req.start_date.replace('-', '')}-{req.end_date.replace('-', '')}"
+
+    # Write to DB
+    try:
+        db = ReproductionDatabase()
+        db.create_result(
+            run_id=run_id,
+            result_type="factor_backtest",
+            factor_ref=slug,
+            universe=req.universe,
+            start_date=req.start_date,
+            end_date=req.end_date,
+            status="success",
+            adj_mode=req.adj_mode,
+            hedge=req.hedge,
+            data_source=source,
+            ic_mean=result.ic_mean,
+            rank_ic_mean=result.rank_ic_mean,
+            icir=result.icir,
+            rank_icir=result.rank_icir,
+            win_rate=result.win_rate,
+            annual_return=result.annual_return,
+            longshort_ann_return=result.longshort_ann_return,
+            longshort_sharpe=result.longshort_sharpe,
+            longshort_max_dd=result.longshort_mdd,
+            n_stocks_per_date=result.n_stocks_per_date,
+            ic_series=result.ic_series,
+            group_metrics=result.group_metrics,
+        )
+    except Exception as exc:
+        logger.warning("DB write failed: %s", exc)
+
+    # 7. Write wiki page
     backtest_slug = f"factor-{slug}"
     backtest_md = _build_factor_backtest_page(slug, factor, req, result, source)
     try:
@@ -292,6 +355,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
         "end_date": req.end_date,
         "data_source": source,
         "status": "success",
+        "run_id": run_id,
         "wiki_page": f"wiki/factor-backtest/{backtest_slug}.md",
         "metrics": {
             "ic_mean": result.ic_mean,
@@ -316,4 +380,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
         "universe": req.universe,
         "adj_mode": result.adj_mode,
         "n_stocks_per_date": result.n_stocks_per_date,
+        "group_metrics": result.group_metrics,
+        "total_rebalances": result.total_rebalances,
+        "valid_rebalances": result.valid_rebalances,
     }
