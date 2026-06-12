@@ -25,7 +25,7 @@ def _make_service(
     }
     llm = MagicMock()
     llm.model = "gpt-4o"
-    llm._budget_checker.config.context_window = context_window
+    llm._budget_checker.context_window = context_window
     svc.llm_client = llm
     svc.wiki_service = MagicMock()
     svc._compact_messages = ChatService._compact_messages.__get__(svc)

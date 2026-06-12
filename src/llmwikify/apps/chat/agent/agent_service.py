@@ -43,7 +43,7 @@ class AgentService:
         config: Any = None,
     ):
         from llmwikify.apps.db import AppDatabase
-        from llmwikify.apps.chat.agent.service import ChatService
+        from llmwikify.apps.chat.agent.orchestrator import ChatOrchestrator
         from llmwikify.apps.wiki.service import WikiService
 
         self.data_dir = Path(data_dir)
@@ -62,8 +62,8 @@ class AgentService:
         )
 
         # MemoryManager (6 memory stores) — must be created
-        # BEFORE ChatService so the chat layer can be wired
-        # with it (Phase 3 / v0.36).
+        # BEFORE ChatOrchestrator so the chat layer can be wired
+        # with it.
         if memory_manager is not None:
             self.memory_manager = memory_manager
         else:
@@ -74,16 +74,11 @@ class AgentService:
                 data_dir=self.data_dir,
             )
 
-        # ChatService (SSE chat) — share the same ChatDatabase
+        # ChatOrchestrator (SSE chat) — share the same ChatDatabase
         # instance owned by AppDatabase to avoid duplicate
-        # connections on the same SQLite file (Phase 1.5 / v0.36).
-        # Phase 3 (v0.36): also wire MemoryManager so the chat
-        # layer can read/write through the unified 6-store
-        # abstraction (history, system prompt injection, tool
-        # result persistence, related-history search).
-        self.chat_service = ChatService(
-            self.wiki_service,
-            self.data_dir,
+        # connections on the same SQLite file.
+        self.chat_service = ChatOrchestrator(
+            wiki_service=self.wiki_service,
             chat_db=self.app_db.chat,
             memory_manager=self.memory_manager,
         )

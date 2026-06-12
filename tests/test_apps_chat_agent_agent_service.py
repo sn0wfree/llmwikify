@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from llmwikify.apps.chat.agent.agent_service import AgentService
-from llmwikify.apps.chat.agent.service import ChatService
+from llmwikify.apps.chat.agent.orchestrator import ChatOrchestrator
 from llmwikify.apps.chat.harness.service import HarnessService
 from llmwikify.apps.chat.memory import MemoryManager
 from llmwikify.apps.chat.skills.service import SkillService
@@ -54,7 +54,7 @@ class TestAgentServiceInit:
     def test_creates_all_components(self, agent_service):
         assert isinstance(agent_service.app_db, AppDatabase)
         assert isinstance(agent_service.wiki_service, WikiService)
-        assert isinstance(agent_service.chat_service, ChatService)
+        assert isinstance(agent_service.chat_service, ChatOrchestrator)
         assert isinstance(agent_service.skill_service, SkillService)
         assert isinstance(agent_service.harness_service, HarnessService)
         assert isinstance(agent_service.memory_manager, MemoryManager)
