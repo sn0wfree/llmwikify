@@ -8,6 +8,7 @@ Schema:
     reproduction_sessions  — one row per "reproduce this paper" run
     reproduction_artifacts — wiki pages generated during a session
     reproduction_events    — append-only event log for debugging
+    reproduction_results   — backtest results (factor/strategy)
 
 Status state machine:
     pending -> extracting -> backtesting -> done
@@ -80,6 +81,67 @@ class Artifact:
     created_at: str = ""
 
 
+@dataclass
+class Result:
+    """Backtest result record."""
+    run_id: str
+    session_id: str | None = None
+    type: str = "factor_backtest"  # factor_backtest | strategy_backtest | reproduction
+    factor_ref: str | None = None
+    strategy_ref: str | None = None
+    universe: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    created_at: str = ""
+    status: str = "success"  # success | error
+    error: str | None = None
+
+    # factor_backtest fields
+    ic_mean: float | None = None
+    rank_ic_mean: float | None = None
+    icir: float | None = None
+    rank_icir: float | None = None
+    win_rate: float | None = None
+    annual_return: float | None = None
+    longshort_ann_return: float | None = None
+    longshort_sharpe: float | None = None
+    longshort_max_dd: float | None = None
+    n_stocks_per_date: str | None = None  # JSON string
+    ic_series: str | None = None  # JSON string
+    group_metrics: str | None = None  # JSON string
+
+    # strategy_backtest fields
+    equity_curve: str | None = None  # JSON string
+    monthly_returns: str | None = None  # JSON string
+    total_return: float | None = None
+    final_cash: float | None = None
+    total_trades: int | None = None
+
+    # reproduction fields
+    paper_ref: str | None = None
+    factor_run_id: str | None = None
+    strategy_run_id: str | None = None
+
+    # common fields
+    wiki_path: str | None = None
+    adj_mode: str | None = None
+    hedge: str | None = None
+    data_source: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dict with JSON parsing for complex fields."""
+        d = asdict(self)
+        # Parse JSON fields
+        for field in ("n_stocks_per_date", "ic_series", "group_metrics", "equity_curve", "monthly_returns"):
+            val = d.get(field)
+            if val and isinstance(val, str):
+                try:
+                    d[field] = json.loads(val)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        return d
+
+
 class ReproductionDatabase:
     """SQLite-backed session store. Independent file from main app DB."""
 
@@ -141,6 +203,62 @@ class ReproductionDatabase:
                 );
                 CREATE INDEX IF NOT EXISTS idx_repro_events_session
                     ON reproduction_events(session_id, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS reproduction_results (
+                    run_id TEXT PRIMARY KEY,
+                    session_id TEXT,
+                    type TEXT CHECK(type IN ('factor_backtest','strategy_backtest','reproduction')),
+                    factor_ref TEXT,
+                    strategy_ref TEXT,
+                    universe TEXT,
+                    start_date TEXT,
+                    end_date TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    status TEXT CHECK(status IN ('success','error')),
+                    error TEXT,
+
+                    -- factor_backtest fields
+                    ic_mean REAL,
+                    rank_ic_mean REAL,
+                    icir REAL,
+                    rank_icir REAL,
+                    win_rate REAL,
+                    annual_return REAL,
+                    longshort_ann_return REAL,
+                    longshort_sharpe REAL,
+                    longshort_max_dd REAL,
+                    n_stocks_per_date TEXT,
+                    ic_series TEXT,
+                    group_metrics TEXT,
+
+                    -- strategy_backtest fields
+                    equity_curve TEXT,
+                    monthly_returns TEXT,
+                    total_return REAL,
+                    final_cash REAL,
+                    total_trades INTEGER,
+
+                    -- reproduction fields
+                    paper_ref TEXT,
+                    factor_run_id TEXT,
+                    strategy_run_id TEXT,
+
+                    -- common fields
+                    wiki_path TEXT,
+                    adj_mode TEXT,
+                    hedge TEXT,
+                    data_source TEXT,
+
+                    FOREIGN KEY (session_id) REFERENCES reproduction_sessions(id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_repro_results_factor_ref
+                    ON reproduction_results(factor_ref);
+                CREATE INDEX IF NOT EXISTS idx_repro_results_strategy_ref
+                    ON reproduction_results(strategy_ref);
+                CREATE INDEX IF NOT EXISTS idx_repro_results_session_id
+                    ON reproduction_results(session_id);
+                CREATE INDEX IF NOT EXISTS idx_repro_results_created_at
+                    ON reproduction_results(created_at DESC);
                 """
             )
 
@@ -286,7 +404,137 @@ class ReproductionDatabase:
         with self._connect() as conn:
             conn.execute("DELETE FROM reproduction_events WHERE session_id = ?", (session_id,))
             conn.execute("DELETE FROM reproduction_artifacts WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM reproduction_results WHERE session_id = ?", (session_id,))
             conn.execute("DELETE FROM reproduction_sessions WHERE id = ?", (session_id,))
+            return conn.total_changes > 0
+
+    # ─── Result CRUD ──────────────────────────────────────────
+
+    def create_result(
+        self,
+        run_id: str,
+        result_type: str = "factor_backtest",
+        session_id: str | None = None,
+        factor_ref: str | None = None,
+        strategy_ref: str | None = None,
+        universe: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        status: str = "success",
+        error: str | None = None,
+        wiki_path: str | None = None,
+        adj_mode: str | None = None,
+        hedge: str | None = None,
+        data_source: str | None = None,
+        **metrics: Any,
+    ) -> str:
+        """Create a backtest result record."""
+        # Serialize JSON fields
+        json_fields = {}
+        for field in ("n_stocks_per_date", "ic_series", "group_metrics", "equity_curve", "monthly_returns"):
+            if field in metrics:
+                val = metrics.pop(field)
+                if isinstance(val, (list, dict)):
+                    json_fields[field] = json.dumps(val, ensure_ascii=False)
+                else:
+                    json_fields[field] = val
+
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO reproduction_results
+                    (run_id, session_id, type, factor_ref, strategy_ref,
+                     universe, start_date, end_date, status, error,
+                     wiki_path, adj_mode, hedge, data_source,
+                     ic_mean, rank_ic_mean, icir, rank_icir, win_rate,
+                     annual_return, longshort_ann_return, longshort_sharpe, longshort_max_dd,
+                     n_stocks_per_date, ic_series, group_metrics,
+                     equity_curve, monthly_returns, total_return, final_cash, total_trades,
+                     paper_ref, factor_run_id, strategy_run_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?,
+                        ?, ?, ?, ?, ?,
+                        ?, ?, ?)
+                """,
+                (
+                    run_id, session_id, result_type, factor_ref, strategy_ref,
+                    universe, start_date, end_date, status, error,
+                    wiki_path, adj_mode, hedge, data_source,
+                    metrics.get("ic_mean"), metrics.get("rank_ic_mean"),
+                    metrics.get("icir"), metrics.get("rank_icir"), metrics.get("win_rate"),
+                    metrics.get("annual_return"), metrics.get("longshort_ann_return"),
+                    metrics.get("longshort_sharpe"), metrics.get("longshort_max_dd"),
+                    json_fields.get("n_stocks_per_date"), json_fields.get("ic_series"),
+                    json_fields.get("group_metrics"),
+                    json_fields.get("equity_curve"), json_fields.get("monthly_returns"),
+                    metrics.get("total_return"), metrics.get("final_cash"), metrics.get("total_trades"),
+                    metrics.get("paper_ref"), metrics.get("factor_run_id"), metrics.get("strategy_run_id"),
+                ),
+            )
+        return run_id
+
+    def get_result(self, run_id: str) -> Optional[Result]:
+        """Get a result by run_id."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM reproduction_results WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return Result(**dict(row))
+
+    def list_results(
+        self,
+        factor_ref: str | None = None,
+        strategy_ref: str | None = None,
+        session_id: str | None = None,
+        limit: int = 100,
+    ) -> list[Result]:
+        """List results with optional filters."""
+        conditions = []
+        params: list[Any] = []
+
+        if factor_ref:
+            conditions.append("factor_ref = ?")
+            params.append(factor_ref)
+        if strategy_ref:
+            conditions.append("strategy_ref = ?")
+            params.append(strategy_ref)
+        if session_id:
+            conditions.append("session_id = ?")
+            params.append(session_id)
+
+        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        sql = f"SELECT * FROM reproduction_results{where} ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [Result(**dict(r)) for r in rows]
+
+    def update_result_status(
+        self,
+        run_id: str,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        """Update result status."""
+        if status not in ("success", "error"):
+            raise ValueError(f"invalid status {status!r}")
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE reproduction_results SET status = ?, error = ? WHERE run_id = ?",
+                (status, error, run_id),
+            )
+
+    def delete_result(self, run_id: str) -> bool:
+        """Delete a result."""
+        with self._connect() as conn:
+            conn.execute("DELETE FROM reproduction_results WHERE run_id = ?", (run_id,))
             return conn.total_changes > 0
 
 
@@ -294,6 +542,7 @@ __all__ = [
     "ReproductionDatabase",
     "Session",
     "Artifact",
+    "Result",
     "VALID_STATUSES",
     "TERMINAL_STATUSES",
     "DEFAULT_DB_PATH",
