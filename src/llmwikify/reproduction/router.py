@@ -14,9 +14,12 @@ If all sources fail, the last exception is re-raised.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Optional, Protocol
 
 import pandas as pd
+
+from .config import config
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +40,20 @@ class DataSource(Protocol):
 class SynthDataSource:
     """Deterministic synthetic OHLCV — last-resort fallback.
 
-    Produces a 60-day random-walk series seeded by symbol name so results are
+    Produces a random-walk series seeded by symbol name so results are
     stable across runs. Schema matches what run_backtest expects (date index
     or column, OHLCV columns).
     """
 
     name = "synth"
 
-    def __init__(self, n_days: int = 60, base_price: float = 10.0):
-        self.n_days = n_days
-        self.base_price = base_price
+    def __init__(
+        self,
+        n_days: int | None = None,
+        base_price: float | None = None,
+    ):
+        self.n_days = n_days if n_days is not None else config.get("synth.n_days", 60)
+        self.base_price = base_price if base_price is not None else config.get("synth.base_price", 10.0)
 
     def get(
         self,
@@ -86,8 +93,8 @@ class AKShareDataSource:
 
     name = "akshare"
 
-    def __init__(self, timeout_s: float = 5.0):
-        self.timeout_s = timeout_s
+    def __init__(self, timeout_s: float | None = None):
+        self.timeout_s = timeout_s if timeout_s is not None else config.get("akshare.timeout_s", 5.0)
 
     def get(
         self,
@@ -136,20 +143,26 @@ class ClickHouseDataSource:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",
-        port: int = 8123,
-        user: str = "default",
-        passwd: str = "",
-        database: str = "quote",
-        table: str = "cn_stock",
+        host: str | None = None,
+        port: int | None = None,
+        user: str | None = None,
+        passwd: str | None = None,
+        database: str | None = None,
+        table: str | None = None,
     ):
-        self._table = f"{database}.{table}"
+        self._host = host if host is not None else config.get("clickhouse.host", "0.0.0.0")
+        self._port = port if port is not None else config.get("clickhouse.port", 8123)
+        self._user = user if user is not None else config.get("clickhouse.user", "default")
+        self._passwd = passwd if passwd is not None else config.get("clickhouse.password", "")
+        self._database = database if database is not None else config.get("clickhouse.database", "quote")
+        self._table_name = table if table is not None else config.get("clickhouse.table", "cn_stock")
+        self._table = f"{self._database}.{self._table_name}"
         self._conn_kwargs = dict(
-            host=host,
-            port=port,
-            user=user,
-            passwd=passwd,
-            database=database,
+            host=self._host,
+            port=self._port,
+            user=self._user,
+            passwd=self._passwd,
+            database=self._database,
         )
 
     def get(
@@ -235,6 +248,28 @@ class CachedClickHouseDataSource:
             return None
 
 
+def _load_ch_passwd() -> str:
+    """Load ClickHouse password from config or legacy file.
+
+    Priority: config > legacy file > empty string.
+    """
+    # 1. Check config
+    pwd = config.get("clickhouse.password", "")
+    if pwd:
+        return pwd
+
+    # 2. Check legacy file
+    ch_cfg = Path.home() / ".llmwikify" / "clickhouse.yaml"
+    if ch_cfg.exists():
+        try:
+            import yaml
+            cfg = yaml.safe_load(ch_cfg.read_text(encoding="utf-8"))
+            return cfg.get("passwd", "")
+        except Exception:
+            pass
+    return ""
+
+
 class DataRouter:
     """Chained-fallback data router.
 
@@ -242,9 +277,6 @@ class DataRouter:
     explicit cache layer is disabled (`use_cache=False`) it is skipped.
     SynthDataSource always returns non-None so it acts as a hard floor.
     """
-
-    DEFAULT_CH_PASSWORD = ""
-    DEFAULT_BENCHMARK = "000300.SH"  # CSI 300
 
     def __init__(
         self,
@@ -255,7 +287,7 @@ class DataRouter:
         if sources is not None:
             self._sources = list(sources)
             return
-        pwd = clickhouse_passwd if clickhouse_passwd is not None else self.DEFAULT_CH_PASSWORD
+        pwd = clickhouse_passwd if clickhouse_passwd is not None else _load_ch_passwd()
         if use_cache:
             self._sources = [
                 CachedClickHouseDataSource(ClickHouseDataSource(passwd=pwd)),
@@ -303,7 +335,8 @@ class DataRouter:
         Returns DataFrame with 'date' and 'close' columns, or None if unavailable.
         Used for Alpha/Beta computation in strategy backtests.
         """
-        code = benchmark_code or self.DEFAULT_BENCHMARK
+        default_benchmark = config.get("backtest.default_benchmark", "000300.SH")
+        code = benchmark_code or default_benchmark
         try:
             df, _ = self.get(code, start, end)
             if df is not None and not df.empty:

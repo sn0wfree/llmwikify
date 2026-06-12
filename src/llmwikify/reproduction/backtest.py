@@ -14,6 +14,7 @@ from typing import Any
 
 import pandas as pd
 
+from .config import config
 from .metrics import compute_metrics_from_trades, compute_monthly_returns
 from .schemas import BacktestResult
 from .strategies import SIGNAL_NODE_REGISTRY, get_strategy_node
@@ -27,7 +28,7 @@ CODE_FENCE_RE = re.compile(r"```(?:python)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
 def run_backtest(
     strategy: str,
     data: pd.DataFrame,
-    config: dict[str, Any] | None = None,
+    backtest_config: dict[str, Any] | None = None,
 ) -> BacktestResult:
     """Run a backtest with the given strategy.
 
@@ -36,17 +37,21 @@ def run_backtest(
             ("ma_cross", "rsi", "factor_rank", "volatility", "momentum", "signal_composite")
             or a Python code string for fallback path.
         data: OHLCV DataFrame. Will be normalized to QuantNodes convention (date, Code, Close).
-        config: Optional dict with keys:
+        backtest_config: Optional dict with keys:
             - signal_params: dict of signal parameters
-            - initial_cash: starting cash (default 1,000,000)
-            - commission: commission rate (default 0.001)
+            - initial_cash: starting cash (default from config)
+            - commission: commission rate (default from config)
             - code: ts_code to assign to "Code" column (default "DEFAULT")
     """
+    # Get defaults from config
+    default_initial_cash = config.get("backtest.initial_cash", 1_000_000.0)
+    default_commission = config.get("backtest.commission", 0.001)
+
     cfg = {
         "signal_params": {},
-        "initial_cash": 1_000_000.0,
-        "commission": 0.001,
-        **(config or {}),
+        "initial_cash": default_initial_cash,
+        "commission": default_commission,
+        **(backtest_config or {}),
     }
 
     if strategy in SIGNAL_NODE_REGISTRY:

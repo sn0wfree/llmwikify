@@ -17,33 +17,47 @@ from typing import Optional, Union
 
 import pandas as pd
 
+from .config import config
+
 logger = logging.getLogger(__name__)
 
 
-INDEX_ALIASES: dict[str, str] = {
-    # 沪深 300
-    "HS300": "000300", "hs300": "000300", "000300": "000300",
-    "000300.SH": "000300", "沪深300": "000300", "沪深三百": "000300",
-    "CSI300": "000300", "csi300": "000300",
-    # 中证 500
-    "ZZ500": "000905", "zz500": "000905", "000905": "000905",
-    "000905.SH": "000905", "中证500": "000905", "中证五百": "000905",
-    "CSI500": "000905", "csi500": "000905",
-    # 上证 50
-    "SZ50": "000016", "sz50": "000016", "000016": "000016",
-    "000016.SH": "000016", "上证50": "000016", "上证五十": "000016",
-    "SSE50": "000016", "sse50": "000016",
-    # 中证 1000
-    "ZZ1000": "000852", "zz1000": "000852", "000852": "000852",
-    "000852.SH": "000852", "中证1000": "000852", "中证一千": "000852",
-    "CSI1000": "000852", "csi1000": "000852",
-    # 中证 800
-    "ZZ800": "000906", "zz800": "000906", "000906": "000906",
-    "000906.SH": "000906", "中证800": "000906",
-    # 创业板指
-    "399006": "399006", "399006.SZ": "399006", "创业板指": "399006",
-    "ChiNext": "399006", "chinext": "399006",
-}
+def _get_index_aliases() -> dict[str, str]:
+    """Get index aliases from config or use defaults."""
+    # Default aliases
+    default_aliases = {
+        # 沪深 300
+        "HS300": "000300", "hs300": "000300", "000300": "000300",
+        "000300.SH": "000300", "沪深300": "000300", "沪深三百": "000300",
+        "CSI300": "000300", "csi300": "000300",
+        # 中证 500
+        "ZZ500": "000905", "zz500": "000905", "000905": "000905",
+        "000905.SH": "000905", "中证500": "000905", "中证五百": "000905",
+        "CSI500": "000905", "csi500": "000905",
+        # 上证 50
+        "SZ50": "000016", "sz50": "000016", "000016": "000016",
+        "000016.SH": "000016", "上证50": "000016", "上证五十": "000016",
+        "SSE50": "000016", "sse50": "000016",
+        # 中证 1000
+        "ZZ1000": "000852", "zz1000": "000852", "000852": "000852",
+        "000852.SH": "000852", "中证1000": "000852", "中证一千": "000852",
+        "CSI1000": "000852", "csi1000": "000852",
+        # 中证 800
+        "ZZ800": "000906", "zz800": "000906", "000906": "000906",
+        "000906.SH": "000906", "中证800": "000906",
+        # 创业板指
+        "399006": "399006", "399006.SZ": "399006", "创业板指": "399006",
+        "ChiNext": "399006", "chinext": "399006",
+    }
+    # Merge with config aliases
+    config_aliases = config.get("universe.aliases", {})
+    if config_aliases:
+        default_aliases.update(config_aliases)
+    return default_aliases
+
+
+# Get aliases (lazy initialization)
+INDEX_ALIASES: dict[str, str] = _get_index_aliases()
 
 
 # In-memory cache: index_code -> list of 6-digit codes
@@ -161,18 +175,28 @@ def resolve_universe(spec: Union[str, list[str], None]) -> list[str]:
     return []
 
 
+def _get_hedge_index_code() -> dict[str, str]:
+    """Get hedge index code mapping from config or use defaults."""
+    default_hedge = {
+        "HS300": "000300.SH",
+        "000300.SH": "000300.SH",
+        "CSI300": "000300.SH",
+        "ZZ500": "000905.SH",
+        "000905.SH": "000905.SH",
+        "CSI500": "000905.SH",
+        "SZ50": "000016.SH",
+        "000016.SH": "000016.SH",
+        "SSE50": "000016.SH",
+    }
+    # Merge with config hedge aliases
+    config_hedge = config.get("universe.hedge_aliases", {})
+    if config_hedge:
+        default_hedge.update(config_hedge)
+    return default_hedge
+
+
 # Mapping from hedge name to index code used by get_index_close_series
-HEDGE_INDEX_CODE: dict[str, str] = {
-    "HS300": "000300.SH",
-    "000300.SH": "000300.SH",
-    "CSI300": "000300.SH",
-    "ZZ500": "000905.SH",
-    "000905.SH": "000905.SH",
-    "CSI500": "000905.SH",
-    "SZ50": "000016.SH",
-    "000016.SH": "000016.SH",
-    "SSE50": "000016.SH",
-}
+HEDGE_INDEX_CODE: dict[str, str] = _get_hedge_index_code()
 
 
 def get_index_close_series(
