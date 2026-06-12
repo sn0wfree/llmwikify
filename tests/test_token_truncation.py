@@ -19,7 +19,7 @@ def _make_service(context_window: int = 128_000) -> ChatService:
     # Mock LLM client with budget checker
     llm = MagicMock()
     llm.model = "gpt-4o"
-    llm._budget_checker.config.context_window = context_window
+    llm._budget_checker.context_window = context_window
     svc.llm_client = llm
     # Bind the real method
     svc._truncate_messages = ChatService._truncate_messages.__get__(svc)

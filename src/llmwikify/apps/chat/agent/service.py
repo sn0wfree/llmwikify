@@ -16,6 +16,7 @@ Design ref: ``v0.32-execution-plan.md`` Phase 13e
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -604,10 +605,6 @@ class ChatService(ChatBase):
             parts.append("\n".join(lines))
         return "\n\n".join(parts) if parts else None
 
-    def _build_tools_section(self) -> str | None:
-        """Phase 3.1 (v0.36): summarise available tools in the
-        prompt. Lazy-loaded from the wiki's tool registry.
-        """
     @log_exception_returning(default=None, msg="Failed to list tool names")
     async def _build_tools_section(self) -> str | None:
         """Build a section listing available tools for the prompt.
@@ -678,7 +675,7 @@ class ChatService(ChatBase):
                 getattr(self, "llm_client", None), "_budget_checker", None
             )
             if budget_checker is not None:
-                budget = budget_checker.config.context_window - reserve
+                budget = budget_checker.context_window - reserve
             else:
                 budget = 128_000 - reserve
 
@@ -777,7 +774,7 @@ class ChatService(ChatBase):
                 getattr(self, "llm_client", None), "_budget_checker", None
             )
             if budget_checker is not None:
-                budget = budget_checker.config.context_window - reserve
+                budget = budget_checker.context_window - reserve
             else:
                 budget = 128_000 - reserve  # safe default
 

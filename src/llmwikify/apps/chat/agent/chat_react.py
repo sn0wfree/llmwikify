@@ -165,8 +165,9 @@ class ChatReActBridge:
     fallback, same DB persistence.
     """
 
-    def __init__(self, chat_service: Any) -> None:
+    def __init__(self, chat_service: Any, config: dict | None = None) -> None:
         self._chat_service = chat_service
+        self._config = config or getattr(chat_service, "config", {})
 
     def build_config(
         self,
@@ -235,7 +236,7 @@ class ChatReActBridge:
             ),
             observe=self._make_observe_callback(),
             done_condition=lambda s: s.get("phase") == "done",
-            max_rounds=max_iterations or self._chat_service._chat_config["max_chat_rounds"],
+            max_rounds=max_iterations or self._config.get("max_chat_rounds", 10),
             on_after_act=self._make_after_act_hook(),
         )
 
@@ -396,7 +397,7 @@ class ChatReActBridge:
             # 6. Persist accumulated content as the final answer
             state["llm_content"] = accumulated
             state["llm_thinking"] = thinking
-            truncate = self._chat_service._chat_config["summary_truncate_chars"]
+            truncate = self._config.get("summary_truncate_chars", 500)
             thought = (thinking[:truncate] if thinking else accumulated[:200])
 
             if hasattr(ctx, "_thinking"):
@@ -569,7 +570,7 @@ class ChatReActBridge:
                     logger.warning("_persist_tool_result failed", exc_info=True)
 
                 # Generate observation
-                truncate = self._chat_service._chat_config["summary_truncate_chars"]
+                truncate = self._config.get("summary_truncate_chars", 500)
                 result_summary = json.dumps(
                     result.get("result", result)
                     if isinstance(result, dict) else result,
@@ -670,7 +671,7 @@ class ChatReActBridge:
         """
         async def observe(state: dict, ctx: SkillContext) -> dict:
             observations = state.get("observations", [])
-            limit = self._chat_service._chat_config["observation_summary_limit"]
+            limit = self._config.get("observation_summary_limit", 5)
             recent = observations[-limit:] if observations else []
             summary_lines = ["## Recent tool results"]
             for obs in recent:

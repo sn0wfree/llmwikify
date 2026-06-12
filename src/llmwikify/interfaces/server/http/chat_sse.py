@@ -166,7 +166,7 @@ async def edit_message(session_id: str, message_id: str, request: Request):
     if not ok:
         return {"error": "message not found"}
     # Evict context so next chat() reloads from DB
-    service._contexts.remove(session_id)
+    service.chat_service.context_manager.remove(session_id)
     return {"updated": True, "message_id": message_id}
 
 
