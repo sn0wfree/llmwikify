@@ -1,0 +1,46 @@
+# 因子库索引
+# 包含所有因子的摘要信息
+
+factors:
+  # === 价量因子 ===
+  - name: stock_price_momentum_20d
+    name_cn: 股票20日动量
+    asset_type: stock
+    category: price
+    subcategory: momentum
+    status: 待验证
+    definition: 过去20个交易日的涨跌幅
+    validation_status: 待验证
+    risk_level: 未知
+    last_updated: 2024-07-19
+    file: stock/price/momentum_20d.yaml
+
+  # === 基本面因子 ===
+  - name: stock_fundamental_value_60d
+    name_cn: 股票60日估值因子
+    asset_type: stock
+    category: fundamental
+    subcategory: value
+    status: 待验证
+    definition: 当前价格相对于60日均线的偏离程度
+    validation_status: 待验证
+    risk_level: 未知
+    last_updated: 2024-07-19
+    file: stock/fundamental/value_60d.yaml
+
+# 因子统计
+statistics:
+  total: 2
+  by_asset_type:
+    stock: 2
+    futures: 0
+    options: 0
+  by_category:
+    price: 1
+    fundamental: 1
+    composite: 0
+  by_status:
+    已注册: 0
+    待验证: 2
+    已通过: 0
+    失败: 0

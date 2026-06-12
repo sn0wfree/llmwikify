@@ -1,0 +1,152 @@
+factor:
+  # === 元数据 ===
+  name: stock_price_momentum_20d
+  name_cn: 股票20日动量
+  asset_type: stock
+  category: price
+  subcategory: momentum
+  version: 1
+  created_at: 2024-01-01
+  updated_at: 2024-07-19
+  status: 已注册
+
+  # === L1 逻辑层 ===
+  l1:
+    definition: 过去20个交易日的涨跌幅
+    formula: f_t = close_t / close_{t-20} - 1
+    input_columns: [close]
+    frequency: 日频
+    output_schema: "[date × Code]"
+    nan_meaning: 早期数据不足20日
+    default_params: { period: 20 }
+    param_constraints: { period: "≥5" }
+    business_constraints: 个股上市不足period日时不可算
+    code_location: factor_backtest.py:_compute_factor_values
+
+  # === L2 计算定义层 ===
+  l2:
+    calculation_steps:
+      - step: 1
+        description: 取close序列
+        input: close_wide [date × Code]
+        output: close_series [date × scalar]
+      - step: 2
+        description: 计算20日收益率
+        input: close_series
+        output: factor_wide [date × Code]
+        formula: f_t = close_t / close_{t-20} - 1
+    edge_case_handling: 前20个日期输出NaN
+    missing_value_handling: 保持NaN（不插值）
+    data_alignment: 因子日期 = 价格日期（同一天）
+    complexity: O(T × N)
+
+  # === L3 金融理解层 ===
+  l3:
+    financial_intuition: 过去20天市场对该股票的认可程度
+    market_behavior: 价格相对于近期均值的偏离
+    theoretical_basis: 行为金融学的锚定效应、动量效应
+    historical_effectiveness: 短期动量在A股2010-2020年有效
+    related_factors: 与反转因子方向相反；与波动率因子无直接关系
+
+  # === L4 因子含义层 ===
+  l4:
+    hypotheses:
+      - id: H1
+        name: 动量延续
+        description: 高动量→未来继续涨
+        expected_ic_sign: 正
+        source: 行为金融学动量效应
+        priority: 主假设
+        status: 未验证
+      - id: H2
+        name: 反转回落
+        description: 高动量→未来反而跌（过热）
+        expected_ic_sign: 负
+        source: 过度反应理论
+        priority: 辅助假设
+        status: 未验证
+      - id: H3
+        name: 波动放大
+        description: 高动量→波动率增大
+        expected_ic_sign: 正（与波动率因子相关）
+        source: 市场微观结构
+        priority: 辅助假设
+        status: 未验证
+    hypothesis_limit: 5
+    archived_hypotheses: []
+    meaning_summary: |
+      20日动量因子捕捉股票在近20个交易日内的价格趋势。
+      - 如果H1成立：趋势跟随信号
+      - 如果H2成立：反转信号
+      - 实际含义取决于L5验证结果
+    key_insights:
+      - 短期动量在A股可能表现为反转（与美股不同）
+      - 动量与波动率因子可能存在交互效应
+    uncertainty: |
+      因子含义尚不明确，需L5验证后确定：
+      1. 如果H1成立：趋势跟随因子
+      2. 如果H2成立：反转因子
+      3. 如果H3成立：波动放大因子
+    final_meaning: null  # L5验证后回填
+
+  # === L5 验证层 ===
+  l5:
+    factor_analysis:
+      ic_analysis:
+        ic_mean: -0.044
+        ic_std: 0.05
+        icir: -0.88
+        rank_ic_mean: -0.044
+        rank_ic_std: 0.05
+        rank_icir: -0.88
+      group_analysis:
+        group_returns: {G1: 0.05, G2: 0.03, G3: 0.01, G4: -0.02, G5: -0.05}
+        group_monotonicity: G1>G2>G3>G4>G5
+        ls_ann_return: -0.538
+        ls_sharpe: -2.132
+        ls_max_drawdown: 0.15
+      return_analysis:
+        ann_return: -0.538
+        ann_volatility: 0.25
+        sharpe: -2.132
+        max_drawdown: 0.15
+        calmar: -3.587
+        sortino: -2.8
+      turnover_analysis:
+        avg_turnover: 0.35
+        turnover_std: 0.1
+      stability_analysis:
+        yearly: {2024: {rank_ic: -0.04, ls_return: -0.5}}
+        industry: {金融: {rank_ic: -0.06}, 消费: {rank_ic: -0.03}}
+        market_cap: {大盘: {rank_ic: -0.05}, 中盘: {rank_ic: -0.04}, 小盘: {rank_ic: -0.03}}
+      oos_analysis:
+        oos_rank_ic: -0.039
+        oos_ls_return: -0.45
+        oos_sharpe: -1.8
+      cost_analysis:
+        cost_bps: 15
+        net_ann_return: -0.65
+        cost_sensitivity: {5bp: -0.58, 10bp: -0.62, 15bp: -0.65, 20bp: -0.68}
+    hypothesis_testing:
+      - hypothesis_id: H1
+        conclusion: 不支持（反向）
+      - hypothesis_id: H2
+        conclusion: 支持
+      - hypothesis_id: H3
+        conclusion: 支持
+    overall_assessment:
+      score: 45
+      status: 待更新
+      final_meaning: 反转因子（H2成立）
+    validation_date: 2024-01-01~2024-07-19
+
+  # === L6 风险层 ===
+  l6:
+    window_sensitivity: {5: -0.02, 20: -0.04, 60: -0.06}
+    regime_sensitivity: {bull: 有效, bear: 失效, sideways: 中性}
+    style_exposure: {size: 0.3, value: 0.1, momentum: 0.0}
+    industry_concentration: 中等
+    crowding_level: 中等
+    decay_analysis: {1d: 有效, 5d: 有效, 20d: 衰减, 60d: 失效}
+    failure_conditions: 市场剧烈反转时、流动性危机时
+    risk_notes: 可能暴露于系统性风险
