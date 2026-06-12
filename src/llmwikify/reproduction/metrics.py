@@ -10,6 +10,8 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
+from .config import config
+
 
 def _safe_div(a: float, b: float, default: float = 0.0) -> float:
     return a / b if b != 0 else default
@@ -103,7 +105,7 @@ def compute_metrics_from_trades(
     trades: List[Any],
     initial_cash: float,
     final_cash: float,
-    trading_days: int = 252,
+    trading_days: int | None = None,
 ) -> Dict[str, float]:
     """Compute sharpe_ratio, max_drawdown, win_rate, total_return from trades.
 
@@ -116,11 +118,13 @@ def compute_metrics_from_trades(
         trades: List of QuantNodes Trade objects (or dicts).
         initial_cash: Starting capital.
         final_cash: Ending capital (from broker).
-        trading_days: Annualization factor (default 252 for daily).
+        trading_days: Annualization factor (default from config).
 
     Returns:
         Dict with sharpe_ratio, max_drawdown, win_rate, total_return.
     """
+    if trading_days is None:
+        trading_days = config.get("backtest.trading_days", 252)
     if initial_cash <= 0:
         return {"sharpe_ratio": 0.0, "max_drawdown": 0.0, "win_rate": 0.0, "total_return": 0.0}
 
@@ -179,9 +183,9 @@ def compute_extended_metrics(
     trades: List[Any],
     initial_cash: float,
     final_cash: float,
-    trading_days: int = 252,
+    trading_days: int | None = None,
     benchmark_returns: Optional[List[float]] = None,
-    risk_free_rate: float = 0.03,
+    risk_free_rate: float | None = None,
 ) -> Dict[str, float]:
     """Compute extended metrics: CAGR, Sortino, Alpha, Beta.
 
@@ -189,13 +193,18 @@ def compute_extended_metrics(
         trades: List of QuantNodes Trade objects (or dicts).
         initial_cash: Starting capital.
         final_cash: Ending capital (from broker).
-        trading_days: Annualization factor (default 252 for daily).
+        trading_days: Annualization factor (default from config).
         benchmark_returns: List of daily benchmark returns (for Alpha/Beta).
-        risk_free_rate: Annual risk-free rate (default 3%).
+        risk_free_rate: Annual risk-free rate (default from config).
 
     Returns:
         Dict with cagr, sortino_ratio, alpha, beta (in addition to base metrics).
     """
+    if trading_days is None:
+        trading_days = config.get("backtest.trading_days", 252)
+    if risk_free_rate is None:
+        risk_free_rate = config.get("backtest.risk_free_rate", 0.03)
+
     base = compute_metrics_from_trades(trades, initial_cash, final_cash, trading_days)
 
     # CAGR
@@ -334,11 +343,21 @@ def cal_net_simple(net: Any, adj_dates: list) -> Any:
     data = net.to_frame("net").copy()
     data["simp"] = data["net"]
 
-    # Pre-first-adj segment: keep compound net unchanged (no period yet)
-    first_adj = valid_adj[0]
-    benchmark_i = data.loc[first_adj, "net"]
+    # Find first adj_date with valid (non-NaN) net value
+    first_adj = None
+    benchmark_i = 1.0
+    for d in valid_adj:
+        v = data.loc[d, "net"]
+        if pd.notna(v) and v > 0:
+            first_adj = d
+            benchmark_i = float(v)
+            break
+    if first_adj is None:
+        return data["simp"]
 
-    for i in range(1, len(valid_adj)):
+    # Start loop from the first valid adj_date
+    start_idx = valid_adj.index(first_adj) if first_adj in valid_adj else 0
+    for i in range(start_idx + 1, len(valid_adj)):
         t_i = valid_adj[i - 1]
         t_ii = valid_adj[i]
         if t_i not in data.index or t_ii not in data.index:
@@ -354,7 +373,7 @@ def cal_net_simple(net: Any, adj_dates: list) -> Any:
     return data["simp"]
 
 
-def evaluation(net: Any, adj_dates: list, trading_days: int = 252) -> dict:
+def evaluation(net: Any, adj_dates: list, trading_days: int | None = None) -> dict:
     """Evaluate a simple-interest net value curve.
 
     Returns a dict with: annual_return, sharpe, max_drawdown, win_rate,
@@ -365,6 +384,9 @@ def evaluation(net: Any, adj_dates: list, trading_days: int = 252) -> dict:
     """
     import numpy as np
     import pandas as pd
+
+    if trading_days is None:
+        trading_days = config.get("backtest.trading_days", 252)
 
     if net is None or len(net) < 2 or not adj_dates:
         return {

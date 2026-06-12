@@ -25,9 +25,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+from .config import config
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_DB_PATH = Path.home() / ".llmwikify" / "agent" / "reproduction.db"
+
+def _get_default_db_path() -> Path:
+    """Get default DB path from config."""
+    return Path(config.get("db.path", "~/.llmwikify/agent/reproduction.db")).expanduser()
+
+
+DEFAULT_DB_PATH = _get_default_db_path()
 
 VALID_STATUSES = {
     "pending",
