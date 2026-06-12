@@ -119,6 +119,30 @@ async def create_session(request: Request):
     return {"session_id": session_id}
 
 
+@router.get("/sessions/status")
+async def get_all_session_status():
+    """Get status for all active sessions."""
+    service = get_agent_service()
+    return {"sessions": service.get_all_session_status()}
+
+
+@router.get("/sessions/recent")
+async def get_recent_wiki(session_id: str | None = None):
+    service = get_agent_service()
+    if session_id:
+        session = service.db.get_chat_session(session_id)
+        if session:
+            return {"recent_wiki_id": session.get("wiki_id")}
+    return {"recent_wiki_id": None}
+
+
+@router.post("/sessions/recent")
+async def set_recent_wiki(session_id: str, wiki_id: str):
+    service = get_agent_service()
+    service.db.update_chat_session_wiki(session_id, wiki_id)
+    return {"updated": True}
+
+
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str):
     service = get_agent_service()
@@ -133,6 +157,14 @@ async def get_session_messages(session_id: str, limit: int = 50, before: str | N
     service = get_agent_service()
     messages = service.db.get_chat_messages(session_id, limit=limit, before=before)
     return {"messages": messages, "session_id": session_id}
+
+
+@router.get("/sessions/{session_id}/events")
+async def get_session_events(session_id: str):
+    """Get event log for a session (for debugging/replay)."""
+    service = get_agent_service()
+    events = service.chat_service.event_log.get_events(session_id)
+    return {"events": events, "session_id": session_id}
 
 
 @router.delete("/sessions/{session_id}")
@@ -184,30 +216,6 @@ async def get_session_status(session_id: str):
     service = get_agent_service()
     status = service.get_session_status(session_id)
     return {"session_id": session_id, "status": status}
-
-
-@router.get("/sessions/status")
-async def get_all_session_status():
-    """Get status for all active sessions."""
-    service = get_agent_service()
-    return {"sessions": service.get_all_session_status()}
-
-
-@router.get("/sessions/recent")
-async def get_recent_wiki(session_id: str | None = None):
-    service = get_agent_service()
-    if session_id:
-        session = service.db.get_chat_session(session_id)
-        if session:
-            return {"recent_wiki_id": session.get("wiki_id")}
-    return {"recent_wiki_id": None}
-
-
-@router.post("/sessions/recent")
-async def set_recent_wiki(session_id: str, wiki_id: str):
-    service = get_agent_service()
-    service.db.update_chat_session_wiki(session_id, wiki_id)
-    return {"updated": True}
 
 
 # --- Dream endpoints ---

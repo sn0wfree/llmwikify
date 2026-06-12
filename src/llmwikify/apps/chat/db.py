@@ -228,6 +228,25 @@ class ChatDatabase(BaseDatabase):
                 ON chat_permissions(tool_name, response)
                 """
             )
+            # ─── v0.41: event_log for debugging/replay ─────────
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    payload TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_event_log_session
+                ON event_log(session_id, created_at)
+                """
+            )
             conn.commit()
 
     def _check_db_size(self) -> None:
