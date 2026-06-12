@@ -733,10 +733,43 @@ def _compute_cross_section_groups(
             quantile_returns[gl] = float(ann_ret)
             group_n_periods[gl] = n_periods
 
+    # Per-group metrics: sharpe / max_drawdown / win_rate / turnover / n_stocks
+    from .metrics import evaluation
+    group_metrics: dict[str, dict[str, float]] = {}
+    for g in range(1, n_groups + 1):
+        gl = f"G{g}"
+        curve = quantile_curves.get(gl, [])
+        sharpe = 0.0
+        max_dd = 0.0
+        win_rate = 0.0
+        if len(curve) >= 2:
+            net = pd.Series(
+                [pt["value"] for pt in curve],
+                index=[pd.Timestamp(pt["date"]) for pt in curve],
+            )
+            ev = evaluation(net, list(net.index), trading_days=252)
+            sharpe = float(ev.get("sharpe", 0.0))
+            max_dd = float(ev.get("max_drawdown", 0.0))
+            win_rate = float(ev.get("win_rate", 0.0))
+        n_stocks = 0
+        if memberships and valid_adj:
+            first_d = valid_adj[0]
+            if first_d in memberships:
+                n_stocks = sum(1 for c, gg in memberships[first_d].items() if gg == g)
+        turnover = _compute_single_group_turnover(memberships, valid_adj, g)
+        group_metrics[gl] = {
+            "sharpe": round(sharpe, 6),
+            "max_drawdown": round(max_dd, 6),
+            "win_rate": round(win_rate, 6),
+            "turnover": round(turnover, 6),
+            "n_stocks": n_stocks,
+        }
+
     return {
         "quantile_returns": quantile_returns,
         "quantile_curves": quantile_curves,
         "group_n_periods": group_n_periods,
+        "group_metrics": group_metrics,
     }
 
 
@@ -818,6 +851,13 @@ def _compute_long_short(
     }
 
 
+class _DummyLoader:
+    """Minimal QN loader stub — all data provided via context already."""
+    @staticmethod
+    def load_h5(*args, **kwargs):
+        return None
+
+
 def run_factor_backtest_universe(
     close_wide: pd.DataFrame,
     factor_class: str,
@@ -828,6 +868,7 @@ def run_factor_backtest_universe(
     factor_direction: int = 1,
     forward_days: int = 1,
     universe: str = "",
+    tradable: dict[str, pd.DataFrame] | None = None,
 ) -> FactorBacktestResult:
     """Cross-section (universe) factor backtest.
 
@@ -861,72 +902,169 @@ def run_factor_backtest_universe(
     # 2. Convert to QuantNodes format (int64 yyyymmdd, int codes)
     from .quantnodes_adapter import (
         build_code_map,
+        build_qn_context,
         convert_wide_to_qn,
         extract_group_result,
         extract_ic_result,
         extract_longshort_result,
     )
 
-    code_map = build_code_map(close_wide.columns)
-    # Align price to factor's valid date range (drop NaN rows from factor)
-    factor_valid = factor_wide.dropna(how="all")
+    factor_valid = factor_wide.dropna(how="all").dropna(axis=1, how="all")
+    code_map = build_code_map(factor_valid.columns)
     common_dates = close_wide.index.intersection(factor_valid.index)
-    price_aligned = close_wide.loc[common_dates]
+    price_aligned = close_wide.loc[common_dates, factor_valid.columns]
     price_qn = convert_wide_to_qn(price_aligned, code_map)
     factor_qn = convert_wide_to_qn(factor_valid.loc[common_dates], code_map)
 
-    # 3. IC analysis (QuantNodes ICAnalyzerNode)
-    from QuantNodes.research.factor_test.nodes.ic_analyzer_node import ICAnalyzerNode
+    # 2b. TradabilityFilter + FactorPreprocess (full QN pipeline)
+    # Only runs when real tradable data is provided. The processed factor
+    # has NaN for non-tradable stocks, so we use our own IC/Group/LongShort
+    # implementations (which handle sparse factors via index intersection)
+    # instead of QuantNodes' nodes (which fail on sparse factors).
+    use_qn_analysis = True
+    if tradable is not None:
+        adj_dates = list(factor_valid.loc[common_dates].index)
+        ctx = build_qn_context(
+            factor_wide=factor_valid.loc[common_dates],
+            close_wide=price_aligned,
+            adj_dates=adj_dates,
+            index_close=index_close,
+            tradable=tradable,
+        )
+        ctx["LoadData"]["_loader"] = _DummyLoader()
 
-    ic_node = ICAnalyzerNode(config={"min_group_size": 5})
-    ic_raw = ic_node._calc_ic(factor_qn, price_qn, n_groups)
-    ic_res = extract_ic_result(ic_raw["ic_result"], ic_raw["rank_ic_result"])
+        # TradabilityFilterNode: marks non-tradable as NaN
+        from QuantNodes.research.factor_test.nodes.tradability_filter_node import (
+            TradabilityFilterNode,
+        )
 
-    # Build ic_series from raw IC series
-    ic_series: list[dict[str, Any]] = []
-    if "ic" in ic_raw and hasattr(ic_raw["ic"], "items"):
-        for d, v in ic_raw["ic"].items():
-            if pd.notna(v):
-                ic_series.append({"date": str(d)[:10], "ic": round(float(v), 6)})
+        tf_node = TradabilityFilterNode(config={
+            "tradable": {"no_st": True, "no_suspended": True, "no_up_down_limit": True, "min_ipo_days": 60},
+        })
+        tradable_mask = tf_node.execute(context=ctx)
+        ctx["TradabilityFilter"] = tradable_mask
 
-    # 4. Group analysis (QuantNodes GroupAnalyzerNode)
-    from QuantNodes.research.factor_test.nodes.group_analyzer_node import GroupAnalyzerNode
+        # FactorPreprocessNode: fill NaN, winsorize, standardize
+        from QuantNodes.research.factor_test.nodes.factor_preprocess_node import (
+            FactorPreprocessNode,
+        )
 
-    ga_node = GroupAnalyzerNode(config={
-        "groups": n_groups,
-        "factor_direction": factor_direction,
-        "floor_mode": "group",
-        "hedge": "equal",
-    })
+        fp_node = FactorPreprocessNode(config={
+            "missing": "ind_avg",
+            "extreme": "pct_shrink",
+            "norm": "zscore",
+        })
+        processed_qn = fp_node.execute(context=ctx)
+        # Convert back to DatetimeIndex+str-codes for our own IC/Group/LongShort
+        from .quantnodes_adapter import _qn_date_to_str
+        proc_str_idx = [_qn_date_to_str(d) for d in processed_qn.index]
+        proc_date_idx = pd.DatetimeIndex(proc_str_idx)
+        # Map int code columns back to str codes
+        inv_code_map = {v: k for k, v in code_map.items()}
+        str_cols = [inv_code_map.get(c, str(c)) for c in processed_qn.columns]
+        processed_wide = pd.DataFrame(
+            processed_qn.values, index=proc_date_idx, columns=str_cols,
+        )
+        # Compute return matrix from price_aligned (DatetimeIndex)
+        # Match processed_wide dates only
+        return_wide = _compute_return_matrix(price_aligned, forward_days)
+        common_proc_dates = processed_wide.index.intersection(return_wide.index)
+        proc_factor_w = processed_wide.loc[common_proc_dates]
+        proc_return_w = return_wide.loc[common_proc_dates]
 
-    # Pass index_cp if available (for hedge benchmarks)
-    index_cp_qn = None
-    if index_close is not None and not index_close.empty:
-        from .quantnodes_adapter import dates_to_int
-        idx_int = dates_to_int(index_close.index)
-        index_cp_qn = pd.DataFrame({0: index_close.values}, index=idx_int)
+        # Use our own IC/Group/LongShort (handles NaN from tradability filter)
+        adj_qn = generate_adj_dates(common_proc_dates, adj_mode)
+        ic_res_full = _compute_cross_section_ic(proc_factor_w, proc_return_w, adj_qn)
+        group_res_full = _compute_cross_section_groups(
+            proc_factor_w, proc_return_w, adj_qn, n_groups, price_aligned,
+        )
+        ls_res_full = _compute_long_short(
+            group_res_full.get("quantile_curves", {}), adj_qn, factor_direction,
+        )
 
-    ga_raw = ga_node._calc_group_return(
-        factor_qn, price_qn, index_cp_qn,
-        n_groups, factor_direction, "group", "equal", None,
+        # Assemble result
+        quantile_returns = group_res_full.get("quantile_returns", {})
+        n_groups_actual = n_groups
+        if quantile_returns:
+            long_g = f"G{n_groups}" if factor_direction == 1 else "G1"
+            top_ann = quantile_returns.get(long_g, 0.0)
+        else:
+            top_ann = 0.0
+
+        # Compute turnover from our group analysis
+        turnover = _compute_group_turnover(price_aligned, factor_wide, adj_dates, n_groups, factor_direction) if factor_wide is not None else 0.0
+
+        # Build ic_series for extract_group_result
+        ic_series = ic_res_full.get("ic_series", [])
+
+        # Convert n_stocks_per_date to list of dicts
+        n_stocks_raw = ic_res_full.get("n_stocks_per_date", [])
+        ic_series_full = ic_res_full.get("ic_series", [])
+        n_stocks_per_date = []
+        for i, n in enumerate(n_stocks_raw):
+            date_str = ic_series_full[i]["date"] if i < len(ic_series_full) else ""
+            n_stocks_per_date.append({"date": date_str, "n": n})
+
+        return FactorBacktestResult(
+            ic_mean=ic_res_full["ic_mean"],
+            ic_std=ic_res_full["ic_std"],
+            icir=ic_res_full["icir"],
+            t_stat=ic_res_full["t_stat"],
+            win_rate=ic_res_full["win_rate"],
+            annual_return=top_ann,
+            max_drawdown=0.0,
+            turnover=turnover,
+            quantile_returns=quantile_returns,
+            ic_series=ic_series,
+            quantile_curves=group_res_full.get("quantile_curves", {}),
+            rank_ic_mean=ic_res_full["rank_ic_mean"],
+            rank_ic_std=ic_res_full["rank_ic_std"],
+            rank_icir=ic_res_full["rank_icir"],
+            rank_ic_pos_ratio=ic_res_full["rank_ic_pos_ratio"],
+            longshort_ann_return=ls_res_full["longshort_ann_return"],
+            longshort_sharpe=ls_res_full["longshort_sharpe"],
+            longshort_mdd=ls_res_full["longshort_mdd"],
+            longshort_curve=ls_res_full["longshort_curve"],
+            universe=universe,
+            adj_mode=adj_mode,
+            n_stocks_per_date=n_stocks_per_date,
+            group_metrics=group_res_full.get("group_metrics", {}),
+            total_rebalances=len(adj_dates),
+            valid_rebalances=len(ic_series),
+        )
+
+    # 3. IC / Group / LongShort — use our own implementations (handle NaN correctly)
+    return_wide = _compute_return_matrix(price_aligned, forward_days)
+    adj_dates = generate_adj_dates(close_wide.index, adj_mode)
+    # Filter adj_dates to only those present in all relevant DataFrames
+    adj_dates = [d for d in adj_dates if d in return_wide.index and d in factor_wide.index]
+
+    ic_res = _compute_cross_section_ic(factor_wide, return_wide, adj_dates)
+    ic_series = ic_res.get("ic_series", [])
+
+    group_res = _compute_cross_section_groups(
+        factor_wide, return_wide, adj_dates, n_groups, price_aligned,
     )
-    group_res = extract_group_result(ga_raw, ic_series)
+    ls_res = _compute_long_short(
+        group_res.get("quantile_curves", {}), adj_dates, factor_direction,
+    )
 
-    # 5. Long-short (QuantNodes LongShortNode)
-    from QuantNodes.research.factor_test.nodes.long_short_node import LongShortNode
-
-    ls_node = LongShortNode(config={"factor_direction": factor_direction})
-    ls_raw = ls_node._calc_longshort(ga_raw, factor_direction)
-    ls_res = extract_longshort_result(ls_raw)
-
-    # 6. Top group annual return
+    # Top group annual return
     quantile_returns = group_res.get("quantile_returns", {})
-    n_groups_actual = group_res.get("n_groups", n_groups)
+    n_groups_actual = n_groups
     if quantile_returns:
-        long_g = f"G{n_groups_actual}" if factor_direction == 1 else "G1"
+        long_g = f"G{n_groups}" if factor_direction == 1 else "G1"
         top_ann = quantile_returns.get(long_g, 0.0)
     else:
         top_ann = 0.0
+
+    # Convert n_stocks_per_date to list of dicts
+    n_stocks_raw = ic_res.get("n_stocks_per_date", [])
+    ic_series_data = ic_res.get("ic_series", [])
+    n_stocks_per_date = []
+    for i, n in enumerate(n_stocks_raw):
+        date_str = ic_series_data[i]["date"] if i < len(ic_series_data) else ""
+        n_stocks_per_date.append({"date": date_str, "n": n})
 
     return FactorBacktestResult(
         ic_mean=ic_res["ic_mean"],
@@ -936,21 +1074,24 @@ def run_factor_backtest_universe(
         win_rate=ic_res["win_rate"],
         annual_return=top_ann,
         max_drawdown=0.0,
-        turnover=group_res.get("turnover", 0.0),
+        turnover=_compute_group_turnover(price_aligned, factor_wide, adj_dates, n_groups, factor_direction),
         quantile_returns=quantile_returns,
         ic_series=ic_series,
         quantile_curves=group_res.get("quantile_curves", {}),
         rank_ic_mean=ic_res["rank_ic_mean"],
         rank_ic_std=ic_res["rank_ic_std"],
         rank_icir=ic_res["rank_icir"],
-        rank_ic_pos_ratio=ic_res["rank_ic_pos_ratio"],
+        rank_ic_pos_ratio=ic_res.get("rank_ic_pos_ratio", 0.0),
         longshort_ann_return=ls_res["longshort_ann_return"],
         longshort_sharpe=ls_res["longshort_sharpe"],
         longshort_mdd=ls_res["longshort_mdd"],
         longshort_curve=ls_res["longshort_curve"],
         universe=universe,
         adj_mode=adj_mode,
-        n_stocks_per_date=ic_res.get("n_stocks_per_date", []),
+        n_stocks_per_date=n_stocks_per_date,
+        group_metrics=group_res.get("group_metrics", {}),
+        total_rebalances=len(adj_dates),
+        valid_rebalances=len(ic_series),
     )
 
 
@@ -990,4 +1131,31 @@ def _compute_group_turnover(
                 turnovers.append(changed / total)
         prev_long = cur_long
 
+    return float(np.mean(turnovers)) if turnovers else 0.0
+
+
+def _compute_single_group_turnover(
+    memberships: dict[Any, dict[str, int]],
+    valid_adj: list,
+    group_num: int,
+) -> float:
+    """Turnover for one specific group, using pre-computed memberships.
+
+    Avoids re-running qcut; uses the memberships dict produced by
+    ``_compute_cross_section_groups``.
+    """
+    if len(valid_adj) < 2:
+        return 0.0
+    prev_members: Optional[set] = None
+    turnovers: list[float] = []
+    for d in valid_adj:
+        if d not in memberships:
+            continue
+        cur_members = {c for c, g in memberships[d].items() if g == group_num}
+        if prev_members is not None and cur_members:
+            changed = len(cur_members.symmetric_difference(prev_members))
+            total = len(cur_members | prev_members)
+            if total > 0:
+                turnovers.append(changed / total)
+        prev_members = cur_members
     return float(np.mean(turnovers)) if turnovers else 0.0
