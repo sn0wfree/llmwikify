@@ -201,8 +201,12 @@ def _persist_factor_result(
     backtest_md = _build_factor_backtest_page(slug, factor, req, result, source, run_id)
     wiki_page = None
     try:
-        wiki.write_page(backtest_slug, backtest_md, page_type="FactorBacktest")
-        wiki_page = f"wiki/factor/{backtest_slug}.md"
+        write_result = wiki.write_page(backtest_slug, backtest_md, page_type="FactorBacktest")
+        # write_page returns "Created page: <dir>/<slug>" or "Updated page: <dir>/<slug>"
+        if "page:" in write_result:
+            wiki_page = f"wiki/{write_result.split('page:', 1)[1].strip()}.md"
+        else:
+            wiki_page = f"wiki/factor/{backtest_slug}.md"
     except Exception as exc:
         logger.warning("FactorBacktest wiki write failed: %s", exc)
 
