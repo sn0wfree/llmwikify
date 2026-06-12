@@ -97,6 +97,7 @@ class ChatOrchestrator:
         from llmwikify.apps.chat.agent.prompt_builder import PromptBuilder
         from llmwikify.apps.chat.agent.context_manager import ContextManager
         from llmwikify.apps.chat.agent.tool_executor import ToolExecutor
+        from llmwikify.apps.chat.agent.event_log import EventLog
 
         self.wiki_service = wiki_service
         self.db = chat_db
@@ -110,6 +111,7 @@ class ChatOrchestrator:
             memory_manager=memory_manager,
             config=self.config,
         )
+        self.event_log = EventLog(chat_db)
 
         self._session_status: dict[str, str] = {}
         self._abort_events: dict[str, asyncio.Event] = {}
@@ -138,6 +140,8 @@ class ChatOrchestrator:
                 if session is None:
                     session_id = self.db.create_chat_session(wiki_id, jwt_token)
                     yield {"type": "session_created", "session_id": session_id}
+
+            self.event_log.log(session_id, {"type": "user_message", "content": message[:200]})
 
             ctx = await self.context_manager.get_or_create(
                 session_id, wiki_id,
@@ -211,11 +215,16 @@ class ChatOrchestrator:
                 if abort_event.is_set():
                     yield ChatEvent.error("Session aborted")
                     return
+                # Log non-streaming events (skip message_delta for volume)
+                if event.get("type") != "message_delta":
+                    self.event_log.log(session_id, event)
                 yield event
 
         except Exception as e:
             logger.exception("Chat error")
-            yield ChatEvent.error(str(e))
+            err_event = ChatEvent.error(str(e))
+            self.event_log.log(session_id, err_event)
+            yield err_event
         finally:
             self._session_status[session_id] = "idle"
             self._abort_events.pop(session_id, None)
