@@ -701,19 +701,14 @@ def _compute_cross_section_groups(
         for entry in period_group_ret:
             d = entry["date"]
             ret = entry.get(gl, 0.0)
-            # First adj date: nav starts at 1.0
+            # Append NAV at the START of this period. period_group_ret has N entries
+            # (one per rebalance date, excluding the last which has no forward return),
+            # so the curve gets exactly N points — one per rebalance date.
             curve.append({
                 "date": str(d)[:10] if hasattr(d, "isoformat") else str(d),
                 "value": round(nav, 6),
             })
             nav *= (1 + ret)
-        # Add final point after last period
-        if period_group_ret:
-            last_d = period_group_ret[-1]["date"]
-            curve.append({
-                "date": str(last_d)[:10] if hasattr(last_d, "isoformat") else str(last_d),
-                "value": round(nav, 6),
-            })
         quantile_curves[gl] = curve
 
         # Annual return: simple extrapolation
