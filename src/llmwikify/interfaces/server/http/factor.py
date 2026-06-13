@@ -51,6 +51,38 @@ async def list_factors() -> dict[str, Any]:
     return {"categories": categories}
 
 
+# ─── Factor Library endpoints (6-layer YAML) ────────────────
+# These MUST be defined before /{slug} to avoid route conflicts.
+
+@router.get("/library/list")
+async def list_factor_library() -> dict[str, Any]:
+    """List all factors from the factor library (quant/factors/)."""
+    from llmwikify.reproduction.factor_library import list_factors_by_category
+
+    categories = list_factors_by_category()
+    return {"categories": categories}
+
+
+@router.get("/library/{name:path}")
+async def get_factor_library(name: str) -> dict[str, Any]:
+    """Get a factor's full 6-layer YAML definition."""
+    from llmwikify.reproduction.factor_library import read_factor_yaml
+
+    factor = read_factor_yaml(name)
+    if factor is None:
+        raise HTTPException(status_code=404, detail=f"Factor '{name}' not found in library")
+    return {"name": name, "factor": factor}
+
+
+@router.put("/library/{name:path}")
+async def update_factor_library(name: str, data: dict[str, Any]) -> dict[str, Any]:
+    """Update a factor's YAML definition."""
+    from llmwikify.reproduction.factor_library import write_factor_yaml
+
+    result = write_factor_yaml(name, data)
+    return {"status": "ok", "message": result}
+
+
 @router.get("/{slug}")
 async def get_factor(slug: str) -> dict[str, Any]:
     """Get a factor's definition from the factor library."""
@@ -431,34 +463,3 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             status_code=500,
             detail=f"Factor backtest failed: {exc}",
         )
-
-
-# ─── Factor Library endpoints (6-layer YAML) ────────────────
-
-@router.get("/library/list")
-async def list_factor_library() -> dict[str, Any]:
-    """List all factors from the factor library (quant/factors/)."""
-    from llmwikify.reproduction.factor_library import list_factors_by_category
-
-    categories = list_factors_by_category()
-    return {"categories": categories}
-
-
-@router.get("/library/{name:path}")
-async def get_factor_library(name: str) -> dict[str, Any]:
-    """Get a factor's full 6-layer YAML definition."""
-    from llmwikify.reproduction.factor_library import read_factor_yaml
-
-    factor = read_factor_yaml(name)
-    if factor is None:
-        raise HTTPException(status_code=404, detail=f"Factor '{name}' not found in library")
-    return {"name": name, "factor": factor}
-
-
-@router.put("/library/{name:path}")
-async def update_factor_library(name: str, data: dict[str, Any]) -> dict[str, Any]:
-    """Update a factor's YAML definition."""
-    from llmwikify.reproduction.factor_library import write_factor_yaml
-
-    result = write_factor_yaml(name, data)
-    return {"status": "ok", "message": result}
