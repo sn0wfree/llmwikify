@@ -43,45 +43,18 @@ def _get_wiki(wiki_id: str | None = None) -> Any:
 
 
 def _read_strategy_from_wiki(wiki: Any, slug: str) -> dict[str, Any] | None:
-    """Read a Strategy page from wiki directory."""
-    # Try plural first (wiki convention), fall back to singular
-    strategy_dir = wiki.wiki_dir / "strategies"
-    if not strategy_dir.is_dir():
-        strategy_dir = wiki.wiki_dir / "strategy"
-    if not strategy_dir.is_dir():
-        return None
-    md_path = strategy_dir / f"{slug}.md"
-    if not md_path.exists():
-        return None
-    try:
-        content = md_path.read_text(encoding="utf-8")
-        return parse_frontmatter(content)
-    except OSError:
-        return None
+    """Read a Strategy page from quant/strategies/ directory."""
+    from llmwikify.reproduction.quant_wiki import get_quant_wiki
+    quant = get_quant_wiki()
+    return quant.read_page(slug, page_type="strategies")
 
 
 @router.get("/list")
 async def list_strategies() -> dict[str, Any]:
-    """List all Strategy pages in the wiki."""
-    wiki = _get_wiki()
-    # Try plural first (wiki convention), fall back to singular
-    strategy_dir = wiki.wiki_dir / "strategies"
-    if not strategy_dir.is_dir():
-        strategy_dir = wiki.wiki_dir / "strategy"
-    if not strategy_dir.is_dir():
-        return {"strategies": []}
-
-    results = []
-    for md in sorted(strategy_dir.glob("*.md")):
-        try:
-            content = md.read_text(encoding="utf-8")
-            fm = parse_frontmatter(content)
-            if fm:
-                fm["_slug"] = md.stem
-                results.append(fm)
-        except OSError as exc:
-            logger.warning("could not read %s: %s", md, exc)
-
+    """List all Strategy pages from quant/."""
+    from llmwikify.reproduction.quant_wiki import get_quant_wiki
+    quant = get_quant_wiki()
+    results = quant.list_pages("strategies")
     return {"strategies": results}
 
 
