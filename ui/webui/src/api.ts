@@ -495,4 +495,14 @@ export const api = {
     changes: (id: string) => request<IngestLogEntry>(`/agent/ingest/log/${id}`),
     revert: (id: string) => request<Record<string, unknown>>(`/agent/ingest/log/${id}/revert`, { method: 'POST' }),
   },
+
+  factorLibrary: {
+    list: () => request<{ categories: Record<string, unknown[]> }>('/factor/library/list'),
+    get: (name: string) => request<{ name: string; factor: Record<string, unknown> }>(`/factor/library/${encodeURIComponent(name)}`),
+    update: (name: string, data: Record<string, unknown>) =>
+      request<{ status: string; message: string }>(`/factor/library/${encodeURIComponent(name)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+  },
 };

@@ -33,6 +33,9 @@ const PaperPanel = lazy(() =>
 const FactorPanel = lazy(() =>
   import('./components/factor/FactorPanel').then(m => ({ default: m.FactorPanel }))
 );
+const FactorDetail = lazy(() =>
+  import('./components/factor/FactorDetail').then(m => ({ default: m.FactorDetail }))
+);
 const StrategyPanel = lazy(() =>
   import('./components/strategy/StrategyPanel').then(m => ({ default: m.StrategyPanel }))
 );
@@ -63,6 +66,8 @@ function App() {
             <Route path="reproduction" element={<ReproductionPanel />} />
             <Route path="paper" element={<PaperPanel />} />
             <Route path="factor" element={<FactorPanel />} />
+            <Route path="factor-library" element={<FactorDetail />} />
+            <Route path="factor-library/:name" element={<FactorDetail />} />
             <Route path="strategy" element={<StrategyPanel />} />
             <Route path="tasks" element={<TaskMonitor />} />
             <Route path="settings" element={<LLMSettings />} />
