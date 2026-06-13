@@ -37,6 +37,65 @@ _RAW_DIR: Optional[Path] = None
 _UPLOAD_DIR: Optional[Path] = None
 
 
+def _extract_factor_from_page(page: dict, paper_id: str) -> dict:
+    """Convert a factor wiki page to 6-layer YAML structure.
+
+    Extracts factor_class, factor_params, signal_type, etc. from the
+    wiki page content and wraps them in a minimal 6-layer structure.
+    """
+    from llmwikify.reproduction.utils import parse_frontmatter
+    from llmwikify.reproduction.utils import generate_slug
+
+    fm = parse_frontmatter(page.get("content", ""))
+
+    factor_class = fm.get("factor_class", fm.get("signal_type", "unknown"))
+    signal_params = fm.get("signal_params", fm.get("factor_params", {}))
+    if isinstance(signal_params, str):
+        import json
+        try:
+            signal_params = json.loads(signal_params)
+        except (json.JSONDecodeError, TypeError):
+            signal_params = {}
+
+    name = fm.get("title", page.get("page_name", f"factor-{paper_id}"))
+    slug = generate_slug(name)
+
+    return {
+        "name": f"factor_{paper_id}_{slug}",
+        "name_cn": name,
+        "asset_type": "stock",
+        "category": "price",
+        "subcategory": factor_class,
+        "version": 1,
+        "status": "已注册",
+        "l1": {
+            "definition": fm.get("reasoning", f"Factor extracted from {paper_id}"),
+            "formula": f"{factor_class}({signal_params})",
+            "input_columns": ["close"],
+            "frequency": "日频",
+            "output_schema": "[date × Code]",
+            "default_params": signal_params,
+            "code_location": f"paper/{paper_id}",
+        },
+        "l2": {
+            "calculation_steps": [
+                {"step": 1, "description": f"计算 {factor_class} 因子"},
+            ],
+            "complexity": "O(T × N)",
+        },
+        "l3": {
+            "financial_intuition": fm.get("reasoning", "TBD"),
+            "theoretical_basis": f"Extracted from {paper_id}",
+        },
+        "l4": {
+            "hypotheses": [],
+            "meaning_summary": fm.get("reasoning", "TBD"),
+        },
+        "l5": {},
+        "l6": {},
+    }
+
+
 def set_paper_deps(
     wiki_registry: Any,
     llm_client: Any = None,
@@ -210,17 +269,32 @@ async def _run_paper_extraction(
         _DB.update_status(session_id, "analyzing")
         pages = build_paper_pages(extraction, paper_id)
         wiki = _get_wiki(wiki_id)
+
+        # Import quant storage
+        from llmwikify.reproduction.quant_wiki import get_quant_wiki
+        from llmwikify.reproduction.factor_library import write_factor_yaml
+        quant = get_quant_wiki()
+
         written: list[str] = []
         for page in pages:
             try:
-                wiki.write_page(
-                    page["page_name"],
-                    page["content"],
-                    page_type=page.get("page_type"),
-                )
+                pt = page.get("page_type", "Source")
+                if pt == "Factor":
+                    # Convert factor wiki page to 6-layer YAML
+                    factor_data = _extract_factor_from_page(page, paper_id)
+                    factor_name = factor_data.get("_name", page["page_name"])
+                    write_factor_yaml(factor_name, {"factor": factor_data})
+                else:
+                    # Source → quant/papers/, Strategy → quant/strategies/
+                    quant_page_type = "papers" if pt == "Source" else "strategies"
+                    quant.write_page(
+                        page["page_name"],
+                        page["content"],
+                        page_type=quant_page_type,
+                    )
                 _DB.create_artifact(
                     session_id=session_id,
-                    kind=page.get("page_type", "Source"),
+                    kind=pt,
                     wiki_page=page["page_name"],
                 )
                 written.append(page["page_name"])
