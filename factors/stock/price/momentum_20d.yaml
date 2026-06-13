@@ -21,7 +21,6 @@ factor:
     default_params: { period: 20 }
     param_constraints: { period: "≥5" }
     business_constraints: 个股上市不足period日时不可算
-    code_location: factor_backtest.py:_compute_factor_values
 
   # === L2 计算定义层 ===
   l2:
@@ -37,8 +36,9 @@ factor:
         formula: f_t = close_t / close_{t-20} - 1
     edge_case_handling: 前20个日期输出NaN
     missing_value_handling: 保持NaN（不插值）
-    data_alignment: 因子日期 = 价格日期（同一天）
+    data_alignment: 默认 T+1：T日信号→T+1日调仓
     complexity: O(T × N)
+    code_location: factor_backtest.py:_compute_factor_values
 
   # === L3 金融理解层 ===
   l3:
