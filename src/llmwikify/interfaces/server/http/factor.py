@@ -44,21 +44,19 @@ def _get_wiki(wiki_id: str | None = None) -> Any:
 
 @router.get("/list")
 async def list_factors() -> dict[str, Any]:
-    """List all Factor pages in the wiki."""
-    from llmwikify.reproduction.extract_factors import list_factors as _list_factors
+    """List all factors from the factor library."""
+    from llmwikify.reproduction.factor_library import list_factors_by_category
 
-    wiki = _get_wiki()
-    factors = _list_factors(wiki)
-    return {"factors": factors}
+    categories = list_factors_by_category()
+    return {"categories": categories}
 
 
 @router.get("/{slug}")
 async def get_factor(slug: str) -> dict[str, Any]:
-    """Get a Factor page's definition."""
-    from llmwikify.reproduction.extract_factors import read_factor_from_wiki
+    """Get a factor's definition from the factor library."""
+    from llmwikify.reproduction.factor_library import read_factor_yaml
 
-    wiki = _get_wiki()
-    factor = read_factor_from_wiki(wiki, slug)
+    factor = read_factor_yaml(slug)
     if factor is None:
         raise HTTPException(status_code=404, detail=f"Factor '{slug}' not found")
     return {"slug": slug, "factor": factor}
@@ -201,14 +199,15 @@ def _persist_factor_result(
     backtest_md = _build_factor_backtest_page(slug, factor, req, result, source, run_id)
     wiki_page = None
     try:
-        write_result = wiki.write_page(backtest_slug, backtest_md, page_type="FactorBacktest")
-        # write_page returns "Created page: <dir>/<slug>" or "Updated page: <dir>/<slug>"
-        if "page:" in write_result:
-            wiki_page = f"wiki/{write_result.split('page:', 1)[1].strip()}.md"
+        from llmwikify.reproduction.quant_wiki import get_quant_wiki
+        quant = get_quant_wiki()
+        write_result = quant.write_page(backtest_slug, backtest_md, page_type="factorbacktest")
+        if "Created" in write_result or "Updated" in write_result:
+            wiki_page = f"quant/factorbacktest/{backtest_slug}.md"
         else:
-            wiki_page = f"wiki/factor/{backtest_slug}.md"
+            wiki_page = f"quant/factorbacktest/{backtest_slug}.md"
     except Exception as exc:
-        logger.warning("FactorBacktest wiki write failed: %s", exc)
+        logger.warning("FactorBacktest write failed: %s", exc)
 
     return wiki_page
 
@@ -221,7 +220,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
     - ``universe == "single"``: legacy single-stock mode using ``run_factor_backtest``.
     """
     import asyncio
-    from llmwikify.reproduction.extract_factors import read_factor_from_wiki
+    from llmwikify.reproduction.factor_library import read_factor_yaml
     from llmwikify.reproduction.router import DataRouter
     from llmwikify.reproduction.sessions import ReproductionDatabase
     from llmwikify.reproduction.universe import (
@@ -231,12 +230,13 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
     )
 
     wiki = _get_wiki()
-    factor = read_factor_from_wiki(wiki, slug)
-    if factor is None:
+    factor_data = read_factor_yaml(slug)
+    if factor_data is None:
         raise HTTPException(status_code=404, detail=f"Factor '{slug}' not found")
+    factor = factor_data.get("factor", factor_data)
 
-    factor_class = factor.get("factor_class", "momentum")
-    factor_params = factor.get("factor_params", {})
+    factor_class = factor.get("subcategory", factor.get("factor_class", "momentum"))
+    factor_params = factor.get("l1", {}).get("default_params", factor.get("factor_params", {}))
     if isinstance(factor_params, str):
         try:
             factor_params = json.loads(factor_params)
