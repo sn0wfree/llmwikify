@@ -54,8 +54,6 @@ def set_paper_deps(
 
     if _RAW_DIR is not None:
         _RAW_DIR.mkdir(parents=True, exist_ok=True)
-    if _UPLOAD_DIR is not None:
-        _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
     # Sweep stuck sessions from previous run
     if _DB is not None:
@@ -404,7 +402,7 @@ async def upload_paper(
     paper_id: str = Form(...),
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
-    """Upload a PDF file, save to upload_dir/{safe(paper_id)}.pdf."""
+    """Upload a PDF file, save to raw/{safe(paper_id)}.pdf."""
     if _UPLOAD_DIR is None:
         raise HTTPException(status_code=503, detail="Upload dir not initialized")
 

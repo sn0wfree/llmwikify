@@ -570,7 +570,7 @@ def _register_reproduction_routes(
         raw_dir = registry.get_default_wiki().raw_dir
     except Exception:
         raw_dir = Path.home() / ".llmwikify" / "raw"
-    upload_dir = Path.home() / ".llmwikify" / "papers"
+    upload_dir = raw_dir
     logger.info("paper raw_dir: %s, upload_dir: %s", raw_dir, upload_dir)
 
     set_paper_deps(
