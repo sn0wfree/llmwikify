@@ -528,9 +528,10 @@ async def get_paper_status(session_id: str) -> dict[str, Any]:
 @router.get("/{paper_id}")
 async def get_paper(paper_id: str) -> dict[str, Any]:
     """Legacy: read paper logic page by paper_id."""
-    wiki = _get_wiki()
+    from llmwikify.reproduction.quant_wiki import get_quant_wiki
+    quant = get_quant_wiki()
     try:
-        logic = wiki.read_page(f"paper-{paper_id}-logic")
+        logic = quant.read_page(f"paper-{paper_id}-logic", page_type="papers")
     except Exception:
         logic = None
     return {"paper_id": paper_id, "logic_page": logic}
@@ -538,8 +539,9 @@ async def get_paper(paper_id: str) -> dict[str, Any]:
 
 @router.get("/{paper_id}/artifacts")
 async def list_paper_artifacts(paper_id: str) -> dict[str, Any]:
-    """Legacy: list wiki pages produced for a paper_id."""
-    wiki = _get_wiki()
+    """Legacy: list pages produced for a paper_id from quant/."""
+    from llmwikify.reproduction.quant_wiki import get_quant_wiki
+    quant = get_quant_wiki()
     artifacts = []
 
     for suffix in [
@@ -547,27 +549,34 @@ async def list_paper_artifacts(paper_id: str) -> dict[str, Any]:
         "sw", "datasets", "references",
     ]:
         page_name = f"paper-{paper_id}-{suffix}"
-        try:
-            wiki.read_page(page_name)
+        result = quant.read_page(page_name, page_type="papers")
+        if result is not None:
             artifacts.append({
                 "kind": "Source",
                 "wiki_page": page_name,
                 "page_type": "Source",
             })
-        except Exception:
-            pass
 
     for prefix, kind in (("factor-", "Factor"), ("strategy-", "Strategy")):
         page_name = f"{prefix}{paper_id}"
-        try:
-            wiki.read_page(page_name)
-            artifacts.append({
-                "kind": kind,
-                "wiki_page": page_name,
-                "page_type": kind,
-            })
-        except Exception:
-            pass
+        if kind == "Factor":
+            # Check if factor YAML exists
+            from llmwikify.reproduction.factor_library import read_factor_yaml
+            factor = read_factor_yaml(f"factor_{paper_id}_{page_name}")
+            if factor is not None:
+                artifacts.append({
+                    "kind": kind,
+                    "wiki_page": page_name,
+                    "page_type": kind,
+                })
+        else:
+            result = quant.read_page(page_name, page_type="strategies")
+            if result is not None:
+                artifacts.append({
+                    "kind": kind,
+                    "wiki_page": page_name,
+                    "page_type": kind,
+                })
 
     return {"paper_id": paper_id, "artifacts": artifacts}
 
