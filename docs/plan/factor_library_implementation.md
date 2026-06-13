@@ -111,21 +111,60 @@ def list_factors_by_category() -> dict:
 
 ### 目标
 
-Paper 提取结果写入 quant/，不写入 wiki/。
+- PDF 上传存入 `raw/`（取消 `~/.llmwikify/papers/`）
+- 提取结果写入 `quant/`，不写入 `wiki/`
 
 ### 修改文件
 
 | 文件 | 变更 |
 |---|---|
-| `src/llmwikify/interfaces/server/http/paper.py` | wiki.write_page → quant_wiki.write_page |
-| `src/llmwikify/reproduction/extract_factors.py` | 生成 6 层 YAML 而非 wiki markdown |
+| `src/llmwikify/interfaces/server/http/routes.py` | upload_dir 改为 raw_dir |
+| `src/llmwikify/interfaces/server/http/paper.py` | 写入重定向到 quant_wiki |
 
-### 关键变更
+### 3.1 PDF 上传存入 raw/
 
-- `_run_paper_extraction()` 中 `wiki.write_page()` → `quant_wiki.write_page()`
-- `build_paper_pages()` 写入 `quant/papers/`
-- `build_factor_pages()` 生成 6 层 YAML 到 `quant/factors/`
-- 策略提取结果写入 `quant/strategies/`
+**修改** `routes.py:573`
+
+```python
+# 当前
+upload_dir = Path.home() / ".llmwikify" / "papers"
+
+# 改为
+upload_dir = raw_dir
+```
+
+**修改** `paper.py` upload 端点（第 407-430 行）
+
+- 上传的 PDF 存入 `raw/` 而非 `~/.llmwikify/papers/`
+- 删除 `mkdir(upload_dir)` 逻辑（`raw/` 由 `llmwikify init` 创建）
+
+### 3.2 提取结果写入 quant/
+
+**修改** `_run_paper_extraction()` 第 216-232 行
+
+```python
+# 当前：所有 page 写入 wiki/
+for page in pages:
+    wiki.write_page(page["page_name"], page["content"], page_type=page.get("page_type"))
+
+# 改为：按 page_type 分流
+for page in pages:
+    pt = page.get("page_type", "Source")
+    if pt == "Source":
+        quant_wiki.write_page(page["page_name"], page["content"], page_type="papers")
+    elif pt == "Factor":
+        factor_library.write_factor_yaml(factor_name, factor_data)
+    elif pt == "Strategy":
+        quant_wiki.write_page(page["page_name"], page["content"], page_type="strategies")
+```
+
+### 3.3 读取重定向
+
+**修改** `get_paper()` 和 `list_paper_artifacts()`（旧端点）
+
+| 当前 | 改为 |
+|---|---|
+| `wiki.read_page(name)` | `quant_wiki.read_page(name, page_type="papers")` |
 
 ---
 
@@ -133,22 +172,65 @@ Paper 提取结果写入 quant/，不写入 wiki/。
 
 ### 目标
 
-Factor 读写从 quant/ 获取。
+Factor 读写全部从 `quant/` 获取。
 
 ### 修改文件
 
 | 文件 | 变更 |
 |---|---|
 | `src/llmwikify/interfaces/server/http/factor.py` | API 从 quant/factors/ 读取 |
-| `src/llmwikify/reproduction/extract_factors.py` | 删除 wiki 读取函数 |
+| `src/llmwikify/reproduction/extract_factors.py` | 标记旧函数废弃 |
 
-### 关键变更
+### 4.1 回测结果写入 quant/
 
-- `GET /api/factor/list` → 从 `quant/factors/index.yaml` 读取
-- `GET /api/factor/{slug}` → 从 `quant/factors/` 读取 YAML
-- `_persist_factor_result()` → 写入 `quant/factorbacktest/`
-- 新增 `/api/factor-library/*` 端点
-- 删除 `read_factor_from_wiki()` / `list_factors()`
+**修改** `_persist_factor_result()` 第 204 行
+
+| 当前 | 改为 |
+|---|---|
+| `wiki.write_page(slug, md, page_type="FactorBacktest")` | `quant_wiki.write_page(slug, md, page_type="factorbacktest")` |
+
+同时修改第 207/209 行硬编码路径：
+
+```python
+# 当前
+wiki_page = f"wiki/factor/{backtest_slug}.md"
+# 改为
+wiki_page = f"quant/factorbacktest/{backtest_slug}.md"
+```
+
+### 4.2 因子列表读取
+
+**修改** `GET /api/factor/list` 端点
+
+| 当前 | 改为 |
+|---|---|
+| `_list_factors(wiki)` 扫描 `wiki/factor/*.md` | `factor_library.list_factors()` 读取 `quant/factors/index.yaml` |
+
+### 4.3 因子详情读取
+
+**修改** `GET /api/factor/{slug}` 端点
+
+| 当前 | 改为 |
+|---|---|
+| `read_factor_from_wiki(wiki, slug)` 读取 `wiki/factor/{slug}.md` | `factor_library.read_factor_yaml(slug)` 读取 `quant/factors/{slug}.yaml` |
+
+### 4.4 回测时读取因子
+
+**修改** `backtest_factor()` 第 234 行
+
+| 当前 | 改为 |
+|---|---|
+| `read_factor_from_wiki(wiki, slug)` | `factor_library.read_factor_yaml(slug)` |
+
+从 YAML 中提取 `factor_class` 和 `factor_params`。
+
+### 4.5 extract_factors.py 废弃旧函数
+
+| 函数 | 处理 |
+|---|---|
+| `read_factor_from_wiki()` | 标记废弃，内部调用 `factor_library.read_factor_yaml()` |
+| `list_factors()` | 标记废弃，内部调用 `factor_library.list_factors()` |
+| `build_factor_pages()` | 改为生成 6 层 YAML 结构 |
 
 ---
 
@@ -156,7 +238,7 @@ Factor 读写从 quant/ 获取。
 
 ### 目标
 
-Strategy 从 quant/ 读取。
+Strategy 从 `quant/strategies/` 读取。
 
 ### 修改文件
 
@@ -164,11 +246,21 @@ Strategy 从 quant/ 读取。
 |---|---|
 | `src/llmwikify/interfaces/server/http/strategy.py` | 从 quant/strategies/ 读取 |
 
-### 关键变更
+### 5.1 列表读取
 
-- `GET /api/strategy/list` → 从 `quant/strategies/` 读取
-- `GET /api/strategy/{slug}` → 从 `quant/strategies/` 读取
-- `_read_strategy_from_wiki()` → 从 quant wiki 读取
+**修改** `GET /api/strategy/list` 端点
+
+| 当前 | 改为 |
+|---|---|
+| `wiki.wiki_dir / "strategies"` 文件系统扫描 | `quant_wiki.list_pages("strategies")` |
+
+### 5.2 详情读取
+
+**修改** `_read_strategy_from_wiki()` 函数
+
+| 当前 | 改为 |
+|---|---|
+| `wiki.wiki_dir / "strategies" / f"{slug}.md"` 直接读取 | `quant_wiki.read_page(slug, page_type="strategies")` |
 
 ---
 
@@ -211,9 +303,23 @@ Phase 0 → Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5 → Phase 6
 | Phase 0 | `quant_init_cmd.py` | `commands/__init__.py` |
 | Phase 1 | `quant_wiki.py` | |
 | Phase 2 | `factor_library.py` | |
-| Phase 3 | | `paper.py`, `extract_factors.py` |
+| Phase 3 | | `paper.py`, `routes.py` |
 | Phase 4 | | `factor.py`, `extract_factors.py` |
 | Phase 5 | | `strategy.py` |
 | Phase 6 | `FactorDetail.tsx` + 3 子组件 | `App.tsx`, `api.ts` |
 
 **不动的文件**：知识库核心代码、共享组件、回测引擎。
+
+---
+
+## 已完成状态
+
+| 阶段 | 状态 | 说明 |
+|---|---|---|
+| Phase 0 | ✅ | quant-init CLI 命令 |
+| Phase 1 | ✅ | quant_wiki.py 存储模块 |
+| Phase 2 | ✅ | factor_library.py YAML 读写 |
+| Phase 3 | ⏳ | 待执行 |
+| Phase 4 | ⏳ | 待执行 |
+| Phase 5 | ⏳ | 待执行 |
+| Phase 6 | ✅ | 因子详情页 UI |
