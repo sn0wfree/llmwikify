@@ -10,6 +10,7 @@ wraps the existing ``llmwikify.foundation.llm.LLMClient``.
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import os
@@ -26,6 +27,14 @@ from llmwikify.apps.chat.skills.workflows.subagent_runner import (
 logger = logging.getLogger(__name__)
 
 
+# Context var so LlmClientDriver (called from within the
+# run_subagent request) can access the current request without
+# changing the AgentDriver.complete signature.
+_request_ctx: contextvars.ContextVar[SubagentRequest | None] = (
+    contextvars.ContextVar("subagent_request", default=None)
+)
+
+
 # ─── Public: entry point ────────────────────────────────────────
 
 
@@ -37,6 +46,10 @@ def run_subagent(request: SubagentRequest) -> SubagentResult:
     Falls back to ``output={'raw_text': ...}`` when the model emits
     prose instead of JSON (the LLM is told JSON-only, but we don't
     trust that contract).
+
+    LAL: sets the ``_request_ctx`` contextvar so
+    ``LlmClientDriver.complete`` can access the request (for the
+    inherited ``LLMSpec``) without changing the driver interface.
     """
     start = time.monotonic()
     driver = _build_driver(request)
@@ -46,19 +59,23 @@ def run_subagent(request: SubagentRequest) -> SubagentResult:
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
+    token = _request_ctx.set(request)
     try:
-        raw_text, tokens = driver.complete(
-            messages=messages,
-            model=request.actor_model,
-        )
-    except Exception as e:
-        return SubagentResult(
-            status="error",
-            output={},
-            tokens_used=0,
-            duration_seconds=time.monotonic() - start,
-            error=f"driver.complete failed: {type(e).__name__}: {e}",
-        )
+        try:
+            raw_text, tokens = driver.complete(
+                messages=messages,
+                model=request.actor_model,
+            )
+        except Exception as e:
+            return SubagentResult(
+                status="error",
+                output={},
+                tokens_used=0,
+                duration_seconds=time.monotonic() - start,
+                error=f"driver.complete failed: {type(e).__name__}: {e}",
+            )
+    finally:
+        _request_ctx.reset(token)
     output = _try_parse_json(raw_text)
     return SubagentResult(
         status="ok",
@@ -170,23 +187,42 @@ class AgentDriver(ABC):
 
 
 class LlmClientDriver(AgentDriver):
-    """Production driver that delegates to ``LLMClient``."""
+    """Production driver that delegates to ``LLMClient``.
+
+    LAL (PR 2): the driver uses the request's ``LLMSpec`` to
+    construct the client. It no longer reads env vars or
+    config dicts. ``actor.model`` is treated as an optional
+    override applied on top of the spec's model, with
+    validation against the provider's supported models.
+
+    Gradient switch ``LLM_SUBAGENT_INHERIT``:
+      - ``true`` (default after wiring): require ``request.llm``
+        to be set; raise if missing.
+      - ``false``: fall back to env-based construction
+        (``LLMClient.from_config({})``) for back-compat with
+        workflows that don't yet inject the spec.
+    """
 
     def __init__(self) -> None:
         # Lazy import so tests that use MockDriver don't pull in the
         # whole foundation.llm stack.
+        from llmwikify.foundation.llm.provider_models import get_supported_models
+        from llmwikify.foundation.llm.spec import LLMSpec
+        from llmwikify.foundation.llm.streamable import StreamableLLMClient
         from llmwikify.foundation.llm_client import LLMClient
 
         self._client_factory = LLMClient
+        self._streamable_factory = StreamableLLMClient
+        self._spec_cls = LLMSpec
+        self._get_supported_models = get_supported_models
 
     def complete(
         self,
         messages: list[dict[str, str]],
         model: str,
     ) -> tuple[str, int]:
-        # Honor inherit → keep the parent's model
-        resolved_model = model if model != "inherit" else None
-        client = self._client_factory() if resolved_model is None else self._client_factory(model=resolved_model)
+        request = _current_request()
+        client = self._build_client(request, model)
         result = client.chat(messages=messages)
         # ``LLMClient.chat`` returns either a dict with ``content``+``usage``,
         # or a string. Normalize.
@@ -198,6 +234,77 @@ class LlmClientDriver(AgentDriver):
             text = str(result)
             tokens = 0
         return text, tokens
+
+    def _build_client(self, request: SubagentRequest | None, model: str):
+        """Build the LLM client honoring LAL contract.
+
+        Resolution order:
+          1. If ``request.llm`` is set: build from spec, applying
+             ``model`` override (validated against supported models).
+          2. Else if ``LLM_SUBAGENT_INHERIT=true``: raise.
+          3. Else (gradient switch off): fall back to env-based
+             ``LLMClient.from_config({})`` for back-compat.
+        """
+        from llmwikify.foundation.llm.resolver import resolver_enabled
+
+        inherit_required = resolver_enabled_subagent()
+
+        if request is not None and request.llm is not None:
+            return self._build_from_spec(request.llm, model)
+
+        if not inherit_required:
+            # Back-compat: use env vars via from_config.
+            return self._client_factory.from_config({})
+
+        # LAL mode: must have inherited spec.
+        raise RuntimeError(
+            "subagent received no LLMSpec from parent and "
+            "LLM_SUBAGENT_INHERIT is enabled; inject llm_spec from "
+            "the executor/ChatOrchestrator before calling run_subagent"
+        )
+
+    def _build_from_spec(self, spec, model: str):
+        """Build a client from a spec, applying the model override."""
+        # Treat "inherit" as a no-op alias (back-compat for existing
+        # YAMLs; PR 3 will reject it). Empty / None also means
+        # "use spec.model".
+        actor_model = (model or "").strip()
+        if actor_model and actor_model != "inherit":
+            supported = self._get_supported_models(spec.provider)
+            if supported and actor_model not in supported:
+                # Validation failure — we DO NOT silently fall back
+                # to spec.model. Raise with a clear message.
+                raise ValueError(
+                    f"actor.model={actor_model!r} is not in the "
+                    f"supported models list for provider "
+                    f"{spec.provider!r}. Supported: {supported}"
+                )
+            spec = spec.with_model_override(actor_model)
+        # Build client from (possibly overridden) spec.
+        return self._streamable_factory.from_spec(spec)
+
+
+def _current_request() -> SubagentRequest | None:
+    """Return the SubagentRequest currently being processed, if any.
+
+    Set by ``run_subagent`` via a contextvar so ``LlmClientDriver``
+    can see the request without changing the ``AgentDriver.complete``
+    signature. Returns ``None`` outside the subagent context
+    (e.g. direct unit tests of the driver).
+    """
+    return _request_ctx.get()
+
+
+def resolver_enabled_subagent() -> bool:
+    """Return True if subagents must inherit an ``LLMSpec`` from parent.
+
+    Set the env var ``LLM_SUBAGENT_INHERIT=false`` to fall back to
+    the env-based ``LLMClient.from_config({})`` path. Default is
+    ``true`` (require inherited spec).
+    """
+    import os
+    val = os.environ.get("LLM_SUBAGENT_INHERIT", "true").strip().lower()
+    return val not in ("false", "0", "no", "off", "")
 
 
 class MockDriver(AgentDriver):

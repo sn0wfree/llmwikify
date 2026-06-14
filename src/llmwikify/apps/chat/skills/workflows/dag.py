@@ -54,7 +54,12 @@ PermissionMode = Literal[
     "default", "acceptEdits", "auto", "dontAsk", "bypassPermissions", "plan"
 ]
 IsolationMode = Literal["none", "worktree"]
-ActorModel = Literal["opus", "sonnet", "haiku", "inherit"] | str
+# LAL (PR 2): removed the "inherit" alias. The semantics is now
+# "empty / missing = use the parent LLMSpec.model" (i.e. inheritance
+# is the default). The alias is still accepted as a string for
+# back-compat with existing YAMLs and is normalized to "" in
+# LlmClientDriver; PR 3 will reject it entirely.
+ActorModel = Literal["opus", "sonnet", "haiku"] | str
 OnExceedPolicy = Literal["halt", "continue"]
 
 
@@ -66,7 +71,7 @@ class ActorSpec:
     """
 
     name: str
-    model: ActorModel = "inherit"
+    model: ActorModel = ""
     tools: tuple[str, ...] = ()
     isolation: IsolationMode = "none"
     permission_mode: PermissionMode = "default"

@@ -41,7 +41,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from llmwikify.apps.chat.skills.workflows.dag import (
     Dag,
@@ -54,6 +54,9 @@ from llmwikify.apps.chat.skills.workflows.subagent_runner import (
     SubagentResult,
     run_subagent,
 )
+
+if TYPE_CHECKING:
+    from llmwikify.foundation.llm.spec import LLMSpec
 
 logger = logging.getLogger(__name__)
 
@@ -250,6 +253,7 @@ class WorkflowExecutor:
         session_id: str = "",
         run_store: RunStore | None = None,
         on_progress: ProgressListener | None = None,
+        llm_spec: LLMSpec | None = None,
     ) -> None:
         self.spec = spec
         self.dag = build_dag(spec)
@@ -261,6 +265,10 @@ class WorkflowExecutor:
         self._listeners: list[ProgressListener] = []
         if on_progress is not None:
             self._listeners.append(on_progress)
+        # LAL (PR 2): parent-resolved LLM config. When set, every
+        # spawned subagent receives it via SubagentRequest.llm so
+        # the child process doesn't need to re-parse env vars.
+        self.llm_spec = llm_spec
         # Runtime state
         self._outputs: dict[str, Any] = {}
         self._completed: set[str] = set()
@@ -282,7 +290,7 @@ class WorkflowExecutor:
         *,
         run_store: RunStore | None = None,
         on_progress: ProgressListener | None = None,
-    ) -> "WorkflowExecutor":
+    ) -> WorkflowExecutor:
         store = run_store or RunStore.default()
         state = store.load(run_id)
         if state is None:
@@ -442,6 +450,7 @@ class WorkflowExecutor:
                 base_dir=self.base_dir,
                 worktree_path=None,  # TODO: worktree handling in v1.1
                 timeout_seconds=per_phase_budget["max_phase_timeout_seconds"],
+                llm_spec=self.llm_spec,
             )
             self._total_tokens += result.tokens_used
             self._total_agents += 1
@@ -824,7 +833,7 @@ def _wait_first(
 ) -> tuple[set[Future[Any]], set[Future[Any]]]:
     """Cross-version wait for first future to complete."""
     try:
-        from concurrent.futures import wait, FIRST_COMPLETED
+        from concurrent.futures import FIRST_COMPLETED, wait
         done, not_done = wait(futures, timeout=timeout, return_when=FIRST_COMPLETED)
         return set(done), set(not_done)
     except ImportError:  # pragma: no cover
