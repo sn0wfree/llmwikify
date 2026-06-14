@@ -293,9 +293,10 @@ def _parse_actor(name: str, raw: Mapping[str, Any]) -> ActorSpec:
         raise WorkflowParseError(
             f"actor {name!r}: isolation must be 'none' or 'worktree', got {isolation!r}"
         )
+    # LAL (PR 3): default model is "" (= inherit parent LLMSpec).
     return ActorSpec(
         name=name,
-        model=raw.get("model", "inherit"),
+        model=raw.get("model", ""),
         tools=tuple(tools),
         isolation=isolation,
         permission_mode=raw.get("permission_mode", "default"),
@@ -527,9 +528,13 @@ def validate_workflow(spec: WorkflowSpec) -> None:
     6. Fan-out ``from_ref`` path is plausible (root key exists in
        upstream phase's outputs schema — runtime-resolved, but we
        at least catch obvious typos here).
+    7. LAL (PR 3): ``actor.model`` is not a legacy alias
+       (``sonnet`` / ``opus`` / ``haiku``) unless the gradient
+       switch ``LLM_ALLOW_ALIAS_MODEL`` is enabled.
     """
     actor_names = set(spec.actors.keys())
     phase_ids = {p.id for p in spec.phases}
+    _check_actor_models(spec)
     for phase in spec.phases:
         if phase.actor not in actor_names:
             raise WorkflowValidationError(
@@ -580,6 +585,49 @@ def validate_workflow(spec: WorkflowSpec) -> None:
             available_outputs,
             available_fanout_templates,
         )
+
+
+# LAL (PR 3): model aliases that are NOT real model names but
+# provider-specific nicknames (e.g. Anthropic family names). These
+# are rejected by the workflow validator unless the gradient
+# switch ``LLM_ALLOW_ALIAS_MODEL`` is enabled.
+_LEGACY_MODEL_ALIASES: frozenset[str] = frozenset({"sonnet", "opus", "haiku"})
+
+
+def _alias_model_allowed() -> bool:
+    """Return True if the gradient switch lets alias models through.
+
+    Set ``LLM_ALLOW_ALIAS_MODEL=true`` to allow legacy model
+    aliases (sonnet/opus/haiku) in workflow YAMLs. Default is
+    ``false``; the validator rejects them with a clear message.
+    """
+    import os
+    val = os.environ.get("LLM_ALLOW_ALIAS_MODEL", "false").strip().lower()
+    return val in ("true", "1", "yes", "on")
+
+
+def _check_actor_models(spec: WorkflowSpec) -> None:
+    """Reject legacy model aliases unless the gradient switch allows.
+
+    Layered with the runtime check in ``LlmClientDriver``: this
+    catches typos at workflow load time; the driver validates
+    the actual model name against the provider's supported list
+    at spawn time.
+    """
+    if _alias_model_allowed():
+        return
+    for name, actor in spec.actors.items():
+        model = (actor.model or "").strip()
+        if not model:
+            continue  # empty = inherit parent LLMSpec, always allowed
+        if model in _LEGACY_MODEL_ALIASES:
+            raise WorkflowValidationError(
+                f"actor {name!r}: model {model!r} is a legacy alias and "
+                f"is no longer supported. Remove the 'model:' line to "
+                f"inherit the parent's LLMSpec, or set model to a "
+                f"concrete model name. Set LLM_ALLOW_ALIAS_MODEL=true "
+                f"to temporarily allow legacy aliases."
+            )
 
 
 def _check_dag_acyclic(spec: WorkflowSpec) -> None:

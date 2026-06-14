@@ -20,20 +20,16 @@ workflow:
   actors:
     planner:
       prompt_file: actor_prompts/wikify-research-planner.md
-      model: opus
       tools: [Read, Grep, Glob]
     researcher:
       prompt_file: actor_prompts/wikify-phase-researcher.md
-      model: sonnet
       isolation: worktree
       tools: [Read, Grep, Glob, WebFetch, WebSearch]
     verifier:
       prompt_file: actor_prompts/wikify-adversarial-verifier.md
-      model: sonnet
       tools: [Read, WebFetch]
     synthesizer:
       prompt_file: actor_prompts/wikify-synthesizer.md
-      model: opus
       permission_mode: acceptEdits
       tools: [Read, Grep, Glob, Write, Edit, Bash]
   phases:
