@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .base import BaseLLMProvider
 
+if TYPE_CHECKING:
+    from llmwikify.foundation.llm.streamable import StreamableLLMClient
+
 
 class MiniMaxProvider(BaseLLMProvider):
-    """MiniMax provider using OpenAI-compatible API."""
+    """MiniMax provider using OpenAI-compatible API.
+
+    LAL: ``from_config`` delegates to the single resolver when
+    ``LLM_USE_RESOLVER`` is enabled, ensuring provider-internal
+    defaults stay aligned with the rest of the LAL surface.
+    """
 
     def provider_name(self) -> str:
         return "minimax"
@@ -17,22 +25,33 @@ class MiniMaxProvider(BaseLLMProvider):
         return "https://api.minimaxi.com/v1"
 
     def default_model(self) -> str:
-        return "MiniMax-M3"
+        return "minimax-M3"
 
     def supported_models(self) -> list[str]:
         return [
-            "MiniMax-M3",
-            "MiniMax-M2.7",
-            "MiniMax-M2.7-highspeed",
-            "MiniMax-M2.5",
-            "MiniMax-M2.5-highspeed",
-            "MiniMax-M2.1",
-            "MiniMax-M2.1-highspeed",
-            "MiniMax-M2",
+            "minimax-M3",
+            "minimax-M2.7",
+            "minimax-M2.7-highspeed",
+            "minimax-M2.5",
+            "minimax-M2.5-highspeed",
+            "minimax-M2.1",
+            "minimax-M2.1-highspeed",
+            "minimax-M2",
         ]
 
-    def from_config(self, config: dict) -> "StreamableLLMClient":
+    def from_config(self, config: dict) -> StreamableLLMClient:
+        from llmwikify.foundation.llm.resolver import resolve_chat_llm, resolver_enabled
         from llmwikify.foundation.llm.streamable import StreamableLLMClient
+
+        if resolver_enabled():
+            # Inject provider id so the resolver does not fall back
+            # to the openai default.
+            wrapped = dict(config)
+            wrapped.setdefault("provider", self.provider_name())
+            spec = resolve_chat_llm({"llm": wrapped})
+            if not spec.api_key:
+                raise ValueError("MiniMax API key not configured.")
+            return StreamableLLMClient.from_spec(spec)
 
         api_key = self._resolve_api_key(config)
         if not api_key:

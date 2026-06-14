@@ -10,6 +10,8 @@ file), which defers the import to break the cycle with the legacy
 
     from llmwikify.foundation.llm import StreamableLLMClient   # canonical
     from llmwikify.foundation.llm import LLMClient              # base class (lazy)
+    from llmwikify.foundation.llm import LLMSpec                # LAL spec
+    from llmwikify.foundation.llm import resolve_chat_llm       # LAL resolver
 """
 
 from .budget_decorator import check_token_budget
@@ -19,6 +21,13 @@ from .context_windows import (
     probe_provider_api,
     resolve_context_window,
 )
+from .resolver import (
+    PROVIDER_ALIASES,
+    apply_provider_alias,
+    resolve_chat_llm,
+    resolver_enabled,
+)
+from .spec import LLMSpec
 from .token_budget import (
     TokenBudgetChecker,
     TokenBudgetConfig,
@@ -50,6 +59,12 @@ __all__ = [
     # Clients (lazy re-exports via __getattr__)
     "LLMClient",
     "StreamableLLMClient",
+    # LAL (LLM Access Layer)
+    "LLMSpec",
+    "resolve_chat_llm",
+    "resolver_enabled",
+    "apply_provider_alias",
+    "PROVIDER_ALIASES",
     # Decorator
     "check_token_budget",
     # Context windows
