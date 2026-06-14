@@ -15,7 +15,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Beaker, CheckCircle2, XCircle, AlertTriangle,
   Loader2, BookOpen, Calculator, TrendingUp, HelpCircle,
-  BarChart3, Shield, ChevronRight,
+  BarChart3, Shield, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '../ui/badge';
@@ -23,6 +23,8 @@ import { Button } from '../ui/Button';
 import { HypothesisList } from './HypothesisList';
 import { OverallAssessment } from './OverallAssessment';
 import { RiskRadar } from './RiskRadar';
+import { ICChart } from '../shared/ICChart';
+import { GroupReturnBar } from '../shared/GroupReturnBar';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -191,7 +193,7 @@ export function FactorDetail() {
         {activeLayer === 'l2' && <L2Content data={l2} />}
         {activeLayer === 'l3' && <L3Content data={l3} />}
         {activeLayer === 'l4' && <L4Content data={l4} />}
-        {activeLayer === 'l5' && <L5Content data={l5} />}
+        {activeLayer === 'l5' && <L5Content data={l5} factorName={factor.name} />}
         {activeLayer === 'l6' && <L6Content data={l6} />}
       </div>
     </div>
@@ -369,15 +371,116 @@ function L4Content({ data }: { data: Record<string, unknown> | undefined }) {
 
 // ─── L5: Validation Layer ───────────────────────────────────
 
-function L5Content({ data }: { data: Record<string, unknown> | undefined }) {
-  if (!data) return <EmptyLayer />;
+interface BacktestRun {
+  run_id: string;
+  created_at: string;
+  status: string;
+  universe: string;
+  start_date: string;
+  end_date: string;
+  metrics: {
+    ic_mean: number;
+    rank_ic_mean: number;
+    icir: number;
+    rank_icir: number;
+    win_rate: number;
+    annual_return: number;
+    longshort_ann_return: number;
+    longshort_sharpe: number;
+    longshort_max_dd: number;
+  };
+  ic_series: Array<{ date: string; ic: number; rank_ic?: number; n_stocks?: number }>;
+  group_metrics: Record<string, { annual_return: number; sharpe?: number }>;
+}
 
-  const assessment = data.overall_assessment as Record<string, unknown> | undefined;
-  const hypothesisTesting = data.hypothesis_testing as Array<Record<string, unknown>> | undefined;
+function L5Content({ data, factorName }: { data: Record<string, unknown> | undefined; factorName?: string }) {
+  const [backtestRuns, setBacktestRuns] = useState<BacktestRun[]>([]);
+  const [btLoading, setBtLoading] = useState(false);
+  const [btError, setBtError] = useState<string | null>(null);
+
+  const fetchBacktest = () => {
+    if (!factorName) return;
+    setBtLoading(true);
+    setBtError(null);
+    fetch(`/api/factor/${encodeURIComponent(factorName)}/backtest?limit=5`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => setBacktestRuns(d.runs || []))
+      .catch((e) => setBtError(e.message))
+      .finally(() => setBtLoading(false));
+  };
+
+  useEffect(() => { fetchBacktest(); }, [factorName]);
+
+  const assessment = data?.overall_assessment as Record<string, unknown> | undefined;
+  const hypothesisTesting = data?.hypothesis_testing as Array<Record<string, unknown>> | undefined;
+  const latestRun = backtestRuns[0];
 
   return (
     <div className="space-y-6 max-w-3xl">
       {assessment && <OverallAssessment assessment={assessment} />}
+
+      {/* Backtest Charts */}
+      <Section title="回测结果">
+        {btLoading && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" /> 加载回测数据...
+          </div>
+        )}
+        {btError && (
+          <p className="text-sm text-destructive">{btError}</p>
+        )}
+        {!btLoading && !btError && backtestRuns.length === 0 && (
+          <div className="text-sm text-muted-foreground">
+            暂无回测结果。
+            <Button variant="ghost" size="sm" className="ml-2" onClick={fetchBacktest}>
+              <RefreshCw className="w-3 h-3 mr-1" /> 重试
+            </Button>
+          </div>
+        )}
+        {latestRun && (
+          <div className="space-y-4">
+            {/* Metrics Summary */}
+            <div className="grid grid-cols-4 gap-3">
+              <MetricCard label="IC Mean" value={latestRun.metrics.ic_mean.toFixed(4)} />
+              <MetricCard label="ICIR" value={latestRun.metrics.icir.toFixed(4)} />
+              <MetricCard label="Rank IC" value={latestRun.metrics.rank_ic_mean.toFixed(4)} />
+              <MetricCard label="Win Rate" value={`${(latestRun.metrics.win_rate * 100).toFixed(1)}%`} />
+              <MetricCard label="年化收益" value={`${(latestRun.metrics.annual_return * 100).toFixed(1)}%`} />
+              <MetricCard label="多空年化" value={`${(latestRun.metrics.longshort_ann_return * 100).toFixed(1)}%`} />
+              <MetricCard label="多空Sharpe" value={latestRun.metrics.longshort_sharpe.toFixed(2)} />
+              <MetricCard label="多空MaxDD" value={`${(latestRun.metrics.longshort_max_dd * 100).toFixed(1)}%`} />
+            </div>
+
+            {/* IC Time Series */}
+            {latestRun.ic_series.length > 0 && (
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground mb-2">IC 时序</h4>
+                <ICChart icSeries={latestRun.ic_series} height={280} />
+              </div>
+            )}
+
+            {/* Group Returns */}
+            {Object.keys(latestRun.group_metrics).length > 0 && (
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground mb-2">分组年化收益</h4>
+                <GroupReturnBar
+                  groups={Object.fromEntries(
+                    Object.entries(latestRun.group_metrics).map(([k, v]) => [k, v.annual_return])
+                  )}
+                  height={160}
+                />
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              数据区间: {latestRun.start_date} → {latestRun.end_date} | 宇宙: {latestRun.universe} | {latestRun.created_at}
+            </p>
+          </div>
+        )}
+      </Section>
 
       {hypothesisTesting && (
         <Section title="假设检验结果">
@@ -402,11 +505,20 @@ function L5Content({ data }: { data: Record<string, unknown> | undefined }) {
         </Section>
       )}
 
-      {str(data.validation_date) && (
+      {str(data?.validation_date) && (
         <Section title="验证日期">
-          <span className="text-sm text-muted-foreground">{str(data.validation_date)}</span>
+          <span className="text-sm text-muted-foreground">{str(data?.validation_date)}</span>
         </Section>
       )}
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="p-2 bg-muted rounded-md">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-sm font-mono font-medium">{value}</div>
     </div>
   );
 }
