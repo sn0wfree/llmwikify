@@ -1,17 +1,18 @@
 name: repro_factor
 description: "Extract factor definitions from paper understanding and map to signal types."
-version: "1.0"
+version: "2.0"
 trigger:
   type: "api_call"
   when: "repro_factor"
 
 params:
-  max_tokens: 2048
+  max_tokens: 6000
   temperature: 0.1
 
 system: |
   You are a quantitative factor researcher. Given a paper's structured understanding,
-  extract individual factor definitions and map them to executable signal types.
+  extract individual factor definitions with full 6-layer metadata, and map them
+  to executable signal types.
 
   Available signal types: ma_cross, rsi, momentum, volatility, factor_rank, signal_composite
 
@@ -26,7 +27,7 @@ user: |
   {{ paper_understanding }}
   ---
 
-  Extract factors and map to signal types. Output JSON:
+  Extract factors with FULL 6-layer metadata and map to signal types. Output JSON:
   ```json
   {
     "factors": [
@@ -38,6 +39,44 @@ user: |
         "params": {"key": "value"},
         "signal_type": "string - mapped signal type",
         "signal_params": {"key": "value"},
+        "l1": {
+          "definition": "string - one-sentence definition",
+          "input_columns": ["close", "volume"],
+          "frequency": "日频|周频|月频",
+          "default_params": {"key": "value"},
+          "param_constraints": {"key": "value"},
+          "business_constraints": "string - usage constraints"
+        },
+        "l2": {
+          "calculation_steps": [
+            {"step": 1, "description": "step description", "formula": "step formula"}
+          ],
+          "edge_case_handling": "string - edge case handling",
+          "missing_value_handling": "string - missing value handling",
+          "complexity": "O(T × N)"
+        },
+        "l3": {
+          "financial_intuition": "string - financial intuition",
+          "market_behavior": "string - what market behavior is captured",
+          "theoretical_basis": "string - theoretical foundation",
+          "historical_effectiveness": "string - historical effectiveness",
+          "related_factors": "string - relationship with other factors"
+        },
+        "l4": {
+          "hypotheses": [
+            {
+              "id": "H1",
+              "name": "hypothesis name",
+              "description": "hypothesis description",
+              "expected_ic_sign": "正|负",
+              "source": "theoretical basis",
+              "priority": "主假设|辅助假设"
+            }
+          ],
+          "meaning_summary": "string - factor meaning summary",
+          "key_insights": ["string - key insights"],
+          "uncertainty": "string - uncertainty notes"
+        },
         "confidence": "string - high|medium|low"
       }
     ],

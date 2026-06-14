@@ -1,0 +1,63 @@
+factor:
+  name: stock_price_
+  name_cn: 市场超额收益因子
+  asset_type: stock
+  category: price
+  subcategory: signal
+  version: 1
+  status: 已注册
+  l1:
+    definition: 市场投资组合收益率与无风险利率之差，捕捉系统性市场风险溢价
+    formula: MKT_t = R_{m,t} - R_{f,t}
+    input_columns:
+    - market_return
+    - risk_free_rate
+    frequency: 月频
+    output_schema: '[date × Code]'
+    nan_meaning: TBD
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 使用完整市场指数（NYSE、AMEX、NASDAQ加权指数），需扣除无风险利率
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算市场加权组合收益率
+      formula: R_{m,t} = \sum_{i=1}^{N} w_i R_{i,t}
+    - step: 2
+      description: 获取无风险利率（如国库券利率）
+      formula: R_{f,t}
+    - step: 3
+      description: 计算市场超额收益
+      formula: MKT_t = R_{m,t} - R_{f,t}
+    edge_case_handling: 无交易日期使用前一日利率；市场指数缺失时使用等权重组合
+    missing_value_handling: 无风险利率缺失使用上一个可用值
+    data_alignment: T+1
+    complexity: O(T)
+  l3:
+    financial_intuition: 投资者承担系统性市场风险应获得的风险溢价补偿，反映整体经济状态和投资者风险偏好
+    market_behavior: 捕捉大盘整体走势，在市场上涨时为正，下跌时为负，与经济周期高度相关
+    theoretical_basis: CAPM理论核心，Sharpe-Lintner定价模型
+    historical_effectiveness: 1963-1991年月均0.40%，年化4.8%，t统计量3.5，统计显著
+    related_factors: 是三因子模型的基础因子，与SMB、HML共同构成系统性风险来源
+  l4:
+    hypotheses:
+    - id: H1
+      name: 市场溢价假设
+      description: 市场超额收益MKT应与股票预期收益正相关，高市场溢价时期股票平均收益更高
+      expected_ic_sign: 正
+      source: CAPM理论：系统性风险越高，预期收益越高
+      priority: 主假设
+    - id: H2
+      name: β定价假设
+      description: 股票的β系数应能解释其横截面收益差异，高β股票收益更高
+      expected_ic_sign: 正
+      source: Sharpe-Lintner CAPM
+      priority: 辅助假设
+    meaning_summary: MKT是三因子模型的核心因子，代表整体市场风险暴露，是所有股票共有因子载荷
+    key_insights:
+    - 市场因子解释了大部分股票收益率的共同变动
+    - 危机时期市场因子波动剧烈，导致股票齐跌
+    - 三因子模型中MKT alone解释约75-85%的收益率变动
+    uncertainty: CAPM的β是否能完全解释收益仍存争议；三因子模型后仍发现异常收益
+  l5: {}
+  l6: {}

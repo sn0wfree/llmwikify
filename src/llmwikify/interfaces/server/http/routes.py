@@ -580,7 +580,10 @@ def _register_reproduction_routes(
         raw_dir=raw_dir,
         upload_dir=upload_dir,
     )
-    set_factor_deps(wiki_registry=registry)
+    set_factor_deps(
+        wiki_registry=registry,
+        llm_client=agent_service._get_llm(),
+    )
     set_strategy_deps(wiki_registry=registry)
     set_repro_deps(db=repro_db, wiki_registry=registry)
 

@@ -1,0 +1,460 @@
+{
+  "factors": [
+    {
+      "name": "Market Excess Return (MKT)",
+      "factor_class": "signal_composite",
+      "description": "The excess return of the market portfolio over the risk-free rate, representing systematic market risk premium",
+      "formula": "MKT_t = Rm_t - Rf_t",
+      "params": {
+        "market_index": "value-weighted NYSE/AMEX/NASDAQ index",
+        "rf_rate_source": "1-month Treasury bill rate",
+        "frequency": "monthly"
+      },
+      "signal_type": "factor_rank",
+      "signal_params": {
+        "rebalance_frequency": "monthly",
+        "universe": "all stocks",
+        "weighting": "value-weighted"
+      },
+      "l1": {
+        "definition": "Market excess return is the return difference between the broad market index and the risk-free rate, capturing systematic market risk premium",
+        "input_columns": [
+          "market_return",
+          "risk_free_rate"
+        ],
+        "frequency": "月频",
+        "default_params": {
+          "market_proxy": "CRSP value-weighted index",
+          "rf_proxy": "1-month T-bill rate"
+        },
+        "param_constraints": {
+          "market_proxy": "Must be broad market index covering NYSE/AMEX/NASDAQ",
+          "rf_proxy": "Must be short-term government securities"
+        },
+        "business_constraints": "Used as benchmark factor in all three-factor model applications; cannot be isolated for trading without hedging other exposures"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "Compute value-weighted market portfolio return",
+            "formula": "Rm_t = Σ(w_i × R_i_t) where w_i = MV_i / ΣMV_i"
+          },
+          {
+            "step": 2,
+            "description": "Obtain risk-free rate from Treasury bills",
+            "formula": "Rf_t = annualized T-bill rate / 12"
+          },
+          {
+            "step": 3,
+            "description": "Calculate excess return",
+            "formula": "MKT_t = Rm_t - Rf_t"
+          }
+        ],
+        "edge_case_handling": "Use stale prices for suspended stocks; holidays aligned with CRSP calendar",
+        "missing_value_handling": "Interpolate if T-bill data missing; use prior month if necessary",
+        "complexity": "O(N) for N stocks in universe"
+      },
+      "l3": {
+        "financial_intuition": "Investors require compensation for bearing systematic market risk that cannot be diversified away. The market risk premium reflects aggregate risk aversion and economic uncertainty",
+        "market_behavior": "MKT loads on beta > 0 for all stocks; high-beta portfolios load more on MKT. During market downturns, MKT is negative and high-beta stocks underperform more",
+        "theoretical_basis": "CAPM predicts all cross-sectional variation in expected returns is explained by market beta. MKT is the sole priced risk factor in CAPM",
+        "historical_effectiveness": "Average MKT premium of 4.8% annualized (1963-1991) with t-statistic > 3.0. Explains approximately 70% of individual stock return variation",
+        "related_factors": "Foundation for SMB and HML factors; interaction with value and size factors creates the three-factor model"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "Market Beta Pricing",
+            "description": "Higher market beta should command higher expected returns in equilibrium",
+            "expected_ic_sign": "正",
+            "source": "CAPM (Sharpe, 1964; Lintner, 1965)",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "Systematic Risk Dominance",
+            "description": "Market risk is the primary source of cross-sectional return variation",
+            "expected_ic_sign": "正",
+            "source": "CAPM theory",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "MKT measures the reward for bearing aggregate market risk; foundational factor that explains most but not all cross-sectional return variation",
+        "key_insights": [
+          "Market beta alone under-explains returns for small-cap and value stocks",
+          "MKT premium is time-varying and positively correlated with volatility",
+          "MKT is orthogonal to size and value factors by construction"
+        ],
+        "uncertainty": "Market risk premium is not stable over time; equity premium puzzle remains unresolved"
+      },
+      "confidence": "high"
+    },
+    {
+      "name": "SMB (Small Minus Big)",
+      "factor_class": "size",
+      "description": "Return spread between small-capitalization and large-capitalization stocks, capturing size-based risk premium",
+      "formula": "SMB_t = (S/L + S/M + S/H)_t / 3 - (B/L + B/M + B/H)_t / 3",
+      "params": {
+        "size_threshold": 0.5,
+        "portfolio_weighting": "equal-weighted",
+        "num_size_portfolios": 2,
+        "rebalance_frequency": "annual"
+      },
+      "signal_type": "factor_rank",
+      "signal_params": {
+        "sorting_dimensions": [
+          "market_cap"
+        ],
+        "num_portfolios": 6,
+        "size_threshold": 0.5,
+        "bm_percentiles": [
+          0.3,
+          0.7
+        ],
+        "long_portfolio": "small_cap",
+        "short_portfolio": "big_cap"
+      },
+      "l1": {
+        "definition": "SMB is the average return on three small-stock portfolios minus the average return on three big-stock portfolios, isolating the size effect",
+        "input_columns": [
+          "monthly_return",
+          "market_cap"
+        ],
+        "frequency": "月频",
+        "default_params": {
+          "size_threshold": "median market cap at June-end",
+          "breakpoints": "NYSE median for market cap",
+          "rebalance_month": "June"
+        },
+        "param_constraints": {
+          "size_threshold": "Median-based split (50th percentile) is standard; other splits may be used",
+          "breakpoints": "Must use NYSE breakpoints for comparability with academic literature"
+        },
+        "business_constraints": "Size sorting requires market cap data; must account for listing exchange differences. SMB is zero-investment portfolio by construction"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "Sort all stocks by market cap at June-end; split at NYSE median",
+            "formula": "Small = stocks with MV < NYSE_median_MV; Big = stocks with MV >= NYSE_median_MV"
+          },
+          {
+            "step": 2,
+            "description": "Form 6 value-weighted portfolios from 2 × 3 sorts (size × B/M)",
+            "formula": "S/L, S/M, S/H, B/L, B/M, B/H"
+          },
+          {
+            "step": 3,
+            "description": "Calculate monthly returns for each portfolio",
+            "formula": "R_p,t = Σ(w_i × R_i,t)"
+          },
+          {
+            "step": 4,
+            "description": "Compute SMB as average small minus average big",
+            "formula": "SMB_t = (R_S/L,t + R_S/M,t + R_S/H,t)/3 - (R_B/L,t + R_B/M,t + R_B/H,t)/3"
+          }
+        ],
+        "edge_case_handling": "IPO stocks require minimum 6 months of data; delisted stocks use CRSP delisting return; REITs excluded",
+        "missing_value_handling": "Exclude stocks with missing market cap; require 24 months of returns for portfolio inclusion",
+        "complexity": "O(T × N) for time-series of portfolio calculations"
+      },
+      "l3": {
+        "financial_intuition": "Small firms are riskier due to lower liquidity, higher financial distress probability, and less analyst coverage. Investors demand premium for bearing this residual risk not captured by market beta",
+        "market_behavior": "Small stocks underperform during economic contractions and credit crunches; outperform during economic recoveries. High beta but also high idiosyncratic volatility",
+        "theoretical_basis": "Banz (1981) discovered size effect; interpreted as either risk premium (distress costs) or market inefficiency (limited attention, information asymmetry)",
+        "historical_effectiveness": "SMB premium of 3.0% annualized (1963-1991) with t-statistic ~2.8. Premium has weakened post-1990s due to increased arbitrage",
+        "related_factors": "Negatively correlated with HML (~-0.3); value stocks tend to be small, creating confound. Independent once controlling for B/M"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "Size Risk Premium",
+            "description": "Small-cap stocks earn higher returns than large-cap stocks after controlling for market beta",
+            "expected_ic_sign": "正",
+            "source": "Banz (1981), Reinganum (1981)",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "Financial Distress Channel",
+            "description": "Small firms face higher probability of financial distress, commanding risk premium",
+            "expected_ic_sign": "正",
+            "source": "Fama-French (1993) risk interpretation",
+            "priority": "辅助假设"
+          },
+          {
+            "id": "H3",
+            "name": "Liquidity Premium",
+            "description": "Small stocks have lower liquidity, requiring compensation for trading costs",
+            "expected_ic_sign": "正",
+            "source": "Amihud & Mendelson (1986)",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "SMB captures systematic risk related to firm size that is not explained by market beta alone; premium varies with economic conditions",
+        "key_insights": [
+          "Size effect is robust to market beta controls but not to value controls",
+          "SMB premium concentrated in micro-cap stocks (bottom 10%)",
+          "Premium has largely disappeared in post-publication period (post-1993)"
+        ],
+        "uncertainty": "Whether SMB represents true risk premium or behavioral anomaly remains debated. Factor decay suggests arbitrage has largely eliminated the anomaly"
+      },
+      "confidence": "medium"
+    },
+    {
+      "name": "HML (High Minus Low)",
+      "factor_class": "value",
+      "description": "Return spread between high book-to-market (value) stocks and low book-to-market (growth) stocks, capturing value premium",
+      "formula": "HML_t = (S/H + B/H)_t / 2 - (S/L + B/L)_t / 2",
+      "params": {
+        "bm_low_threshold": 0.3,
+        "bm_high_threshold": 0.7,
+        "portfolio_weighting": "equal-weighted",
+        "rebalance_frequency": "annual"
+      },
+      "signal_type": "factor_rank",
+      "signal_params": {
+        "sorting_dimensions": [
+          "book_to_market"
+        ],
+        "num_portfolios": 6,
+        "size_threshold": 0.5,
+        "bm_low_percentile": 0.3,
+        "bm_high_percentile": 0.7,
+        "long_portfolio": "high_bm_value",
+        "short_portfolio": "low_bm_growth"
+      },
+      "l1": {
+        "definition": "HML is the average return on two high B/M (value) portfolios minus the average return on two low B/M (growth) portfolios, isolating the value effect",
+        "input_columns": [
+          "monthly_return",
+          "book_to_market_ratio"
+        ],
+        "frequency": "月频",
+        "default_params": {
+          "bm_breakpoints": "30th and 70th percentiles of NYSE stocks",
+          "book_value_source": "Compustat: book equity = total assets - total liabilities - preferred stock + deferred taxes",
+          "fiscal_year_lag": "Use fiscal year-end B/M from prior year (minimum 6-month lag)"
+        },
+        "param_constraints": {
+          "bm_breakpoints": "Must use NYSE breakpoints; bottom 30% = low, top 30% = high",
+          "book_value_lag": "Minimum 6 months between fiscal year-end and portfolio formation to avoid look-ahead bias"
+        },
+        "business_constraints": "Book value must be positive; negative B/M stocks excluded from value sort. B/M calculated as fiscal year-end book equity / June market cap"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "Calculate B/M ratio using Compustat book equity and June-end market cap",
+            "formula": "B/M_i = Book_Equity_i / Market_Cap_i (fiscal year-end)"
+          },
+          {
+            "step": 2,
+            "description": "Sort stocks into B/M thirds at NYSE breakpoints (30th, 70th percentile)",
+            "formula": "Low_BM = bottom 30%, Mid_BM = middle 40%, High_BM = top 30%"
+          },
+          {
+            "step": 3,
+            "description": "Form 6 value-weighted portfolios from 2 × 3 sorts (size × B/M)",
+            "formula": "S/L, S/M, S/H, B/L, B/M, B/H"
+          },
+          {
+            "step": 4,
+            "description": "Calculate HML as average high B/M minus average low B/M",
+            "formula": "HML_t = (R_S/H,t + R_B/H,t)/2 - (R_S/L,t + R_B/L,t)/2"
+          }
+        ],
+        "edge_case_handling": "Exclude financial firms (SIC 6000-6999) due to leverage normalization issues; negative book equity firms placed in bottom B/M decile",
+        "missing_value_handling": "Require 12 months of prior returns; missing book equity handled with cross-sectional imputation from industry peers",
+        "complexity": "O(T × N) for time-series of portfolio calculations"
+      },
+      "l3": {
+        "financial_intuition": "High B/M firms are financially distressed, out-of-favor, or restructuring. They carry higher fundamental risk (earnings distress, analyst neglect) that is not captured by market beta. Low B/M (growth) firms have bright prospects but are priced optimistically",
+        "market_behavior": "Value stocks outperform during economic recoveries and high-inflation regimes; growth stocks outperform during speculative bubbles and low-interest-rate environments. HML negatively correlated with market return direction",
+        "theoretical_basis": "Fama-French (1993) interpret HML as distress risk premium. Alternative: Lakonishok, Shleifer, Vishny (1994) argue HML reflects mispricing rather than risk",
+        "historical_effectiveness": "HML premium of 5.0% annualized (1963-1991) with t-statistic > 4.0. One of the most robust factor premiums in academic literature",
+        "related_factors": "Correlated with earnings quality (RMW), investment patterns (CMA). Value-growth cycle is opposite to momentum; HML negatively correlated with market at short horizons"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "Value Risk Premium",
+            "description": "High book-to-market (value) stocks earn higher returns than low book-to-market (growth) stocks after controlling for market beta",
+            "expected_ic_sign": "正",
+            "source": "Fama-French (1993)",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "Distress Risk Channel",
+            "description": "Value firms face higher probability of financial distress or business decline, requiring risk premium",
+            "expected_ic_sign": "正",
+            "source": "Fama-French (1993) risk interpretation",
+            "priority": "主假设"
+          },
+          {
+            "id": "H3",
+            "name": "Cash Flow Duration",
+            "description": "Growth stocks have longer cash flow duration; discount rate changes affect them more, creating negative HML-beta correlation",
+            "expected_ic_sign": "负",
+            "source": "Campbell & Vuolteenaho (2004)",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "HML captures systematic risk related to fundamental value/growth characteristics; value premium reflects either distress risk compensation or investor overreaction to bad news",
+        "key_insights": [
+          "HML is the strongest factor in the three-factor model with highest t-statistic",
+          "Value premium concentrated in small-cap value stocks (S/H portfolio)",
+          "HML premium has weakened substantially post-2007, with growth outperforming during 2010-2020"
+        ],
+        "uncertainty": "Whether HML represents true risk premium or market inefficiency is unresolved. Post-2007 factor decay raises concerns about arbitrage-based explanations"
+      },
+      "confidence": "high"
+    },
+    {
+      "name": "Fama-French Three-Factor Model Portfolio",
+      "factor_class": "signal_composite",
+      "description": "Combined long-short portfolio implementing the full three-factor model: long value-growth spread (HML) and size spread (SMB) while neutralizing market exposure",
+      "formula": "R_i,t - Rf,t = α_i + β_i MKT_t + s_i SMB_t + h_i HML_t + ε_i,t",
+      "params": {
+        "factors": [
+          "MKT",
+          "SMB",
+          "HML"
+        ],
+        "factor_source": "Kenneth French Data Library",
+        "portfolio_construction": "6-portfolio intersection sort",
+        "weighting": "equal-weighted within B/M legs"
+      },
+      "signal_type": "factor_rank",
+      "signal_params": {
+        "sorting_dimensions": [
+          "market_cap",
+          "book_to_market"
+        ],
+        "num_portfolios": 6,
+        "size_threshold": 0.5,
+        "bm_low_percentile": 0.3,
+        "bm_high_percentile": 0.7,
+        "long_portfolio": "S/H (small-cap value)",
+        "short_portfolio": "B/L (large-cap growth)",
+        "rebalance_frequency": "annual"
+      },
+      "l1": {
+        "definition": "Combined factor portfolio that implements long-short strategies based on both size and value characteristics, capturing premiums from both SMB and HML simultaneously",
+        "input_columns": [
+          "monthly_return",
+          "market_cap",
+          "book_to_market"
+        ],
+        "frequency": "月频",
+        "default_params": {
+          "universe": "NYSE/AMEX/NASDAQ common stocks",
+          "data_sources": [
+            "CRSP",
+            "Compustat"
+          ],
+          "breakpoints": "NYSE size and B/M percentiles",
+          "formation_month": "June (using prior fiscal year book equity)"
+        },
+        "param_constraints": {
+          "universe": "Exclude REITs, ADRs, stocks with price < $5",
+          "look_ahead": "Book equity must be lagged minimum 6 months from fiscal year-end"
+        },
+        "business_constraints": "Factor construction requires simultaneous access to CRSP and Compustat; factors available for download from French Data Library. Transaction costs from annual rebalancing must be considered"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "Obtain June-end market cap and prior fiscal year-end book equity for all stocks",
+            "formula": "B/M_i = Book_Equity_i / Market_Cap_i (June-end)"
+          },
+          {
+            "step": 2,
+            "description": "Sort stocks by size (median NYSE) and B/M (30th/70th NYSE percentiles)",
+            "formula": "6 portfolios: S/L, S/M, S/H, B/L, B/M, B/H"
+          },
+          {
+            "step": 3,
+            "description": "Calculate monthly value-weighted returns for each portfolio",
+            "formula": "R_p,t = Σ(MV_i / MV_p) × R_i,t"
+          },
+          {
+            "step": 4,
+            "description": "Compute factor returns",
+            "formula": "SMB = avg(S/L,S/M,S/H) - avg(B/L,B/M,B/H); HML = avg(S/H,B/H) - avg(S/L,B/L)"
+          },
+          {
+            "step": 5,
+            "description": "Form long-short trading portfolio (e.g., long S/H, short B/L)",
+            "formula": "Factor_Portfolio_t = R_S/H,t - R_B/L,t"
+          }
+        ],
+        "edge_case_handling": "Delisted stocks use CRSP delisting return; M&A survivors use surviving firm returns; stock splits adjusted via CRSP adjustment factors",
+        "missing_value_handling": "Exclude stocks with < 24 months of returns; missing book equity replaced with industry median",
+        "complexity": "O(T × N × K) where K is number of portfolios (6)"
+      },
+      "l3": {
+        "financial_intuition": "The combined factor portfolio exploits systematic return patterns related to firm characteristics (size and value) that are not explained by market beta alone. Long small-cap value, short large-cap growth captures both size and value premiums simultaneously",
+        "market_behavior": "Factor portfolio earns positive returns when value stocks outperform growth and small stocks outperform large. Correlation with market is low by construction (factors are orthogonalized). Performance peaks during economic recoveries and value up-cycles",
+        "theoretical_basis": "Fama-French (1993) demonstrate that MKT, SMB, and HML jointly explain 90%+ of diversified portfolio variation. Combined factors explain cross-sectional returns better than CAPM alone",
+        "historical_effectiveness": "Combined S/H - B/L portfolio earned approximately 8-10% annualized excess return (1963-1991). R² of factor model ~ 0.90 vs. ~ 0.70 for CAPM. GRS test rejects CAPM at 1% level",
+        "related_factors": "Foundation for Fama-French Five-Factor Model (adds RMW, CMA). Basis for Carhart Four-Factor Model (adds momentum). Extends to quality-factor and profitability-factor models"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "Three-Factor Pricing",
+            "description": "MKT, SMB, and HML jointly explain cross-sectional variation in expected stock returns",
+            "expected_ic_sign": "正",
+            "source": "Fama-French (1993)",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "Factor Portfolio Alpha",
+            "description": "Well-constructed factor portfolios (long SMB/HML, short opposite) should have alpha close to zero",
+            "expected_ic_sign": "正",
+            "source": "Fama-French (1993)",
+            "priority": "主假设"
+          },
+          {
+            "id": "H3",
+            "name": "Explanatory Power",
+            "description": "Three-factor model explains significantly more return variation than CAPM alone",
+            "expected_ic_sign": "正",
+            "source": "Fama-French (1993)",
+            "priority": "辅助假设"
+          },
+          {
+            "id": "H4",
+            "name": "Bond Market Integration",
+            "description": "Same three factors explain cross-sectional variation in bond returns",
+            "expected_ic_sign": "正",
+            "source": "Fama-French (1993) bond paper",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "Combined factor portfolio implementing the Fama-French three-factor model, capturing systematic premiums from size and value characteristics while controlling for market risk",
+        "key_insights": [
+          "Three factors explain ~90% of diversified portfolio variance vs. ~70% for CAPM",
+          "Factor premiums are time-varying and regime-dependent",
+          "Factor decay is documented post-publication, suggesting arbitrage pressure",
+          "Model is foundational for modern factor investing and asset pricing research"
+        ],
+        "uncertainty": "Whether factors represent risk premia or behavioral anomalies remains debated. Factor decay post-1993 raises questions about economic interpretation. Hundreds of proposed factors create 'factor zoo' problem"
+      },
+      "confidence": "high"
+    }
+  ],
+  "primary_factor": "Fama-French Three-Factor Model Portfolio",
+  "reasoning": "The Fama-French 1993 paper introduces three core factors (MKT, SMB, HML) that collectively explain cross-sectional stock return variation. While MKT is the foundational market factor, SMB and HML are the novel contributions that extend CAPM. The combined three-factor model portfolio (long S/H, short B/L) represents the full implementation of the paper's methodology, capturing both size and value premiums. All factors map to 'factor_rank' signal type since the methodology involves sorting stocks by characteristics and forming long-short portfolios. The paper is foundational for modern quantitative factor investing with high confidence in historical effectiveness, though factor decay post-publication reduces forward-looking expectations."
+}

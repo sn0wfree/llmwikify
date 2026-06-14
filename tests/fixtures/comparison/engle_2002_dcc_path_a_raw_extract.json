@@ -1,0 +1,93 @@
+{
+  "strategy_logic": {
+    "core_hypothesis": "Correlations between assets are time-varying and can be modeled dynamically rather than assumed constant",
+    "market_logic": "During normal times correlations are low and stable, but in stressed times correlations rise significantly. This dynamic nature can be exploited.",
+    "alpha_source": "From better estimation of true time-varying correlations that reveal regime changes earlier than constant correlation models",
+    "applicable_conditions": "Works best in markets with clear regime changes, particularly during crisis periods when correlation breakdown occurs"
+  },
+  "data_requirements": {
+    "fields": [
+      "Price returns",
+      "Volatility",
+      "Standardized residuals"
+    ],
+    "frequency": "Daily",
+    "universe": "Multi-asset: stocks, bonds, currencies",
+    "data_source": "Financial market data providers"
+  },
+  "operation_steps": {
+    "signal_generation": "Monitor DCC correlations and detect when they exceed historical thresholds or show sudden regime shifts",
+    "position_sizing": "Based on dynamic correlation estimates to adjust portfolio exposure",
+    "rebalance_frequency": "Daily to capture correlation dynamics",
+    "stop_loss": "TBD - paper focuses on modeling rather than specific trading rules",
+    "transaction_cost": "TBD - paper does not specify"
+  },
+  "model_framework": {
+    "model_type": "Quantitative/Statistical",
+    "framework": "Two-step estimation: univariate GARCH first, then DCC for correlation dynamics",
+    "validation": "Empirical tests on stocks, bonds, currencies",
+    "evaluation_metrics": [
+      "Positive definiteness",
+      "Parameter efficiency",
+      "Computational feasibility"
+    ]
+  },
+  "strengths_weaknesses": {
+    "strengths": [
+      "Parsimonious - reduces parameters from O(N^4) to O(N^2 + 2)",
+      "Guarantees positive definite correlation matrices",
+      "Computationally feasible for large systems",
+      "Captures time-varying correlations"
+    ],
+    "weaknesses": [
+      "Does not directly provide trading signals",
+      "Parameter sensitivity to estimation window",
+      "Assumes symmetric correlation response to shocks"
+    ],
+    "improvement_directions": [
+      "Asymmetric DCC (ADCC) for differential response to positive/negative shocks",
+      "Exogenous DCC to incorporate external factors",
+      "Group-specific DCC for heterogeneous asset classes"
+    ]
+  },
+  "datasets": {
+    "name": "Multi-asset portfolio (stocks, bonds, currencies)",
+    "source": "Financial market data providers",
+    "time_range": "1990s-2000s empirical application",
+    "processing": "Two-step estimation approach for scalability"
+  },
+  "risks": {
+    "known_limitations": [
+      "Limited to correlation modeling, not direct strategy",
+      "May miss extreme correlation spikes in crisis periods"
+    ],
+    "assumption_risks": [
+      "Assumes symmetric correlation response",
+      "Relies on GARCH model adequacy for individual assets"
+    ],
+    "implementation_gaps": [
+      "Need robust estimation procedures for large systems"
+    ]
+  },
+  "references": {
+    "original_paper": "Engle, R.F. (2002). Dynamic conditional correlation: A simple class of multivariate GARCH models. Journal of Business and Economic Statistics, 20, 339-350.",
+    "related_papers": [
+      "Engle (2003) Nobel Prize work",
+      "Various subsequent DCC extensions"
+    ],
+    "code_repositories": [
+      "R: rmgarch package",
+      "Python: arch library with custom implementation"
+    ]
+  },
+  "suggested_signal": {
+    "signal_type": "volatility",
+    "signal_params": {
+      "alpha_range": "0.05-0.10",
+      "beta_range": "0.85-0.95"
+    },
+    "strategy_class": "composite",
+    "confidence": "medium",
+    "reasoning": "DCC-GARCH models dynamic correlations and volatility, making it suitable for a composite signal that combines correlation dynamics with volatility measures for portfolio optimization and risk management applications."
+  }
+}

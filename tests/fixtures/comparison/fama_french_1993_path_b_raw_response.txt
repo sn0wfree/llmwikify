@@ -1,0 +1,253 @@
+<think>The user wants me to extract factor definitions from the Fama-French 1993 paper and format them in a 6-layer structure as JSON. Let me identify the factors in this paper:
+
+1. **Market Excess Return (MKT)** - The market risk premium factor
+2. **SMB (Small Minus Big)** - Size factor
+3. **HML (High Minus Low)** - Value factor
+
+Let me extract each factor's definition and build the complete 6-layer structure.
+
+**Factor 1: Market Excess Return (MKT)**
+- Definition: The excess return of the market portfolio over the risk-free rate
+- Formula: R_m - R_f
+- Input columns: Market return, risk-free rate
+- Frequency: Monthly
+
+**Factor 2: SMB (Small Minus Big)**
+- Definition: Return spread between small-cap and large-cap stocks
+- Formula: (S/L + S/M + S/H)/3 - (B/L + B/M + B/H)/3
+- Construction steps are well described
+- Frequency: Monthly
+
+**Factor 3: HML (High Minus Low)**
+- Definition: Return spread between high book-to-market (value) and low book-to-market (growth) stocks
+- Formula: (S/H + B/H)/2 - (S/L + B/L)/2
+- Construction steps are well described
+- Frequency: Monthly
+
+Now let me format this into the 6-layer structure as requested.
+</think>
+
+```json
+{
+  "factors": [
+    {
+      "name_cn": "市场超额收益因子",
+      "category": "price",
+      "subcategory": "signal",
+      "l1": {
+        "definition": "市场投资组合收益率与无风险利率之差，捕捉系统性市场风险溢价",
+        "formula": "MKT_t = R_{m,t} - R_{f,t}",
+        "input_columns": ["market_return", "risk_free_rate"],
+        "frequency": "月频",
+        "default_params": {},
+        "param_constraints": {},
+        "business_constraints": "使用完整市场指数（NYSE、AMEX、NASDAQ加权指数），需扣除无风险利率"
+      },
+      "l2": {
+        "calculation_steps": [
+          {"step": 1, "description": "计算市场加权组合收益率", "formula": "R_{m,t} = \\sum_{i=1}^{N} w_i R_{i,t}"},
+          {"step": 2, "description": "获取无风险利率（如国库券利率）", "formula": "R_{f,t}"},
+          {"step": 3, "description": "计算市场超额收益", "formula": "MKT_t = R_{m,t} - R_{f,t}"}
+        ],
+        "edge_case_handling": "无交易日期使用前一日利率；市场指数缺失时使用等权重组合",
+        "missing_value_handling": "无风险利率缺失使用上一个可用值",
+        "complexity": "O(T)"
+      },
+      "l3": {
+        "financial_intuition": "投资者承担系统性市场风险应获得的风险溢价补偿，反映整体经济状态和投资者风险偏好",
+        "market_behavior": "捕捉大盘整体走势，在市场上涨时为正，下跌时为负，与经济周期高度相关",
+        "theoretical_basis": "CAPM理论核心，Sharpe-Lintner定价模型",
+        "historical_effectiveness": "1963-1991年月均0.40%，年化4.8%，t统计量3.5，统计显著",
+        "related_factors": "是三因子模型的基础因子，与SMB、HML共同构成系统性风险来源"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "市场溢价假设",
+            "description": "市场超额收益MKT应与股票预期收益正相关，高市场溢价时期股票平均收益更高",
+            "expected_ic_sign": "正",
+            "source": "CAPM理论：系统性风险越高，预期收益越高",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "β定价假设",
+            "description": "股票的β系数应能解释其横截面收益差异，高β股票收益更高",
+            "expected_ic_sign": "正",
+            "source": "Sharpe-Lintner CAPM",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "MKT是三因子模型的核心因子，代表整体市场风险暴露，是所有股票共有因子载荷",
+        "key_insights": [
+          "市场因子解释了大部分股票收益率的共同变动",
+          "危机时期市场因子波动剧烈，导致股票齐跌",
+          "三因子模型中MKT alone解释约75-85%的收益率变动"
+        ],
+        "uncertainty": "CAPM的β是否能完全解释收益仍存争议；三因子模型后仍发现异常收益"
+      },
+      "confidence": "high",
+      "reasoning": "市场超额收益是CAPM和三因子模型的基础因子，定义清晰、计算直接、历史验证充分"
+    },
+    {
+      "name_cn": "规模因子（小市值因子）",
+      "category": "fundamental",
+      "subcategory": "size",
+      "l1": {
+        "definition": "小市值股票组合收益率与大市值股票组合收益率之差，捕捉小公司溢价",
+        "formula": "SMB_t = \\frac{S/L_t + S/M_t + S/H_t}{3} - \\frac{B/L_t + B/M_t + B/H_t}{3}",
+        "input_columns": ["market_cap", "book_to_market", "monthly_return"],
+        "frequency": "月频",
+        "default_params": {
+          "size_median_split": true,
+          "bm_percentiles": [30, 70],
+          "num_portfolios": 6
+        },
+        "param_constraints": {
+          "size_split_point": "必须使用中位数划分",
+          "bm_quintiles": "30/70分位数划分Low/Medium/High"
+        },
+        "business_constraints": "仅使用 NYSE、AMEX、NASDAQ 已上市股票；剔除交易天数不足的股票；市值使用期初值"
+      },
+      "l2": {
+        "calculation_steps": [
+          {"step": 1, "description": "按市值中位数将股票划分为Small和Big两组", "formula": "Small: MCap_i < Median; Big: MCap_i \\geq Median"},
+          {"step": 2, "description": "按B/M的30%和70%分位数将股票划分为Low、Medium、High三组", "formula": "Low: B/M \\leq P30; High: B/M \\geq P70; Medium: P30 < B/M < P70"},
+          {"step": 3, "description": "构建6个交集组合（S/L, S/M, S/H, B/L, B/M, B/H）", "formula": "组合收益率 = 等权重平均组合内股票收益率"},
+          {"step": 4, "description": "计算Small组均值（大市值组合）", "formula": "S_t = (S/L_t + S/M_t + S/H_t)/3"},
+          {"step": 5, "description": "计算Big组均值（小市值组合）", "formula": "B_t = (B/L_t + B/M_t + B/H_t)/3"},
+          {"step": 6, "description": "SMB为Small组与Big组之差", "formula": "SMB_t = S_t - B_t"}
+        ],
+        "edge_case_handling": "市值中位数仅用NYSE股票计算；B/M缺失使用上一个财报数据；IPO不满一年不纳入",
+        "missing_value_handling": "B/M缺失时归入Medium组；市值缺失剔除该股票",
+        "complexity": "O(T × N)"
+      },
+      "l3": {
+        "financial_intuition": "小市值股票因流动性差、信息透明度低、破产风险高而要求更高收益补偿，反映规模溢价",
+        "market_behavior": "刻画小盘股与大盘股的相对表现，在经济复苏期小盘股往往表现更好，与经济周期相关",
+        "theoretical_basis": "Banz (1981)发现的规模效应，套利定价理论(APT)多因子框架",
+        "historical_effectiveness": "1963-1991年月均0.25%，年化3.0%，t统计量2.8，统计显著；SMB在组合排序中载荷明显",
+        "related_factors": "与HML因子独立（相关系数接近0）；共同受市场因子驱动"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "规模溢价假设",
+            "description": "小市值股票组合收益率应显著高于大市值股票组合，即SMB>0",
+            "expected_ic_sign": "正",
+            "source": "规模效应：小公司因高风险要求更高回报",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "SMB因子暴露假设",
+            "description": "小市值股票应有正的SMB因子载荷（s_i>0），解释其高收益",
+            "expected_ic_sign": "正",
+            "source": "三因子模型框架",
+            "priority": "辅助假设"
+          },
+          {
+            "id": "H3",
+            "name": "IC时变性假设",
+            "description": "SMB因子的IC随经济周期变化，经济扩张期SMB溢价更大",
+            "expected_ic_sign": "正",
+            "source": "规模效应的周期性",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "SMB捕捉了小市值股票的系统性风险溢价，代表流动性差和信息不透明的风险补偿",
+        "key_insights": [
+          "SMB独立于市场因子和价值因子，构成独立的风险维度",
+          "小盘股在股市繁荣期表现更优，但波动也更大",
+          "三因子模型后SMB载荷显著为正的组合α接近零",
+          "2010年后规模溢价有所减弱"
+        ],
+        "uncertainty": "规模溢价是否真实风险补偿还是投资者行为偏差仍有争议；后样本期溢价减弱"
+      },
+      "confidence": "high",
+      "reasoning": "SMB是三因子模型的核心因子之一，构造方法规范（Fama-French标准）、经济含义明确、历史验证充分"
+    },
+    {
+      "name_cn": "价值因子（高账面市值比因子）",
+      "category": "fundamental",
+      "subcategory": "value",
+      "l1": {
+        "definition": "高账面市值比（价值型）股票组合与低账面市值比（成长型）股票组合收益率之差，捕捉价值溢价",
+        "formula": "HML_t = \\frac{S/H_t + B/H_t}{2} - \\frac{S/L_t + B/L_t}{2}",
+        "input_columns": ["market_cap", "book_to_market", "monthly_return"],
+        "frequency": "月频",
+        "default_params": {
+          "bm_percentiles": [30, 70],
+          "size_median_split": true
+        },
+        "param_constraints": {
+          "bm_quintiles": "必须使用30/70分位数划分",
+          "book_value": "使用最新财报的账面权益"
+        },
+        "business_constraints": "账面市值比使用最近财年数据；剔除金融公司和财务异常公司；市值使用期初值"
+      },
+      "l2": {
+        "calculation_steps": [
+          {"step": 1, "description": "按市值中位数划分为Small和Big两组", "formula": "Small: MCap_i < Median; Big: MCap_i \\geq Median"},
+          {"step": 2, "description": "按B/M的30%和70%分位数划分为Low、Medium、High三组", "formula": "Low: B/M \\leq P30; High: B/M \\geq P70"},
+          {"step": 3, "description": "构建6个交集组合", "formula": "S/L, S/M, S/H, B/L, B/M, B/H"},
+          {"step": 4, "description": "计算High B/M组均值", "formula": "H_t = (S/H_t + B/H_t)/2"},
+          {"step": 5, "description": "计算Low B/M组均值", "formula": "L_t = (S/L_t + B/L_t)/2"},
+          {"step": 6, "description": "HML为High组与Low组之差", "formula": "HML_t = H_t - L_t"}
+        ],
+        "edge_case_handling": "B/M缺失或负值剔除；账面权益为负归入High组；金融公司特殊处理",
+        "missing_value_handling": "B/M缺失剔除该股票；财报更新滞后使用上一期",
+        "complexity": "O(T × N)"
+      },
+      "l3": {
+        "financial_intuition": "高B/M股票因财务困境风险高、投资者过度悲观而定价偏低，提供更高的长期风险溢价补偿",
+        "market_behavior": "刻画价值股与成长股的相对表现，价值股在经济衰退期或市场下跌时表现相对抗跌",
+        "theoretical_basis": "Basu (1977)发现的市盈率效应，APT多因子框架，行为金融学错误定价理论",
+        "historical_effectiveness": "1963-1991年月均0.42%，年化5.0%，t统计量4.2，是三因子中溢价最高的",
+        "related_factors": "与SMB正交（独立）；与市场因子相关性较弱；价值股往往也是小市值股"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "价值溢价假设",
+            "description": "高账面市值比股票组合收益率应显著高于低账面市值比股票组合，即HML>0",
+            "expected_ic_sign": "正",
+            "source": "价值效应：高B/M股票被低估，要求更高回报",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "HML因子载荷假设",
+            "description": "价值股应有正的HML载荷（h_i>0），成长股应有负的HML载荷（h_i<0）",
+            "expected_ic_sign": "正",
+            "source": "三因子模型框架",
+            "priority": "辅助假设"
+          },
+          {
+            "id": "H3",
+            "name": "价值-成长轮动假设",
+            "description": "HML与市场周期相关，市场下跌时价值股相对抗跌，HML为正；市场上涨时成长股更优，HML可能为负",
+            "expected_ic_sign": "不确定",
+            "source": "价值溢价的周期性",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "HML捕捉了价值股相对成长股的风险溢价，代表财务困境风险和投资者过度反应的补偿",
+        "key_insights": [
+          "HML是三因子中溢价最高的（年化5.0%）",
+          "价值股和成长股的相对表现在经济周期中呈现轮动特征",
+          "三因子模型后价值组合的α接近零",
+          "价值效应在2000年后明显减弱（尤其是科技泡沫后）"
+        ],
+        "uncertainty": "价值溢价是风险补偿还是市场错误定价仍有争议；后样本期表现不稳定"
+      },
+      "confidence": "high",
+      "reasoning": "HML是三因子模型的核心因子，构造方法规范、经济含义丰富（连接基本面）、历史验证最充分（t=4.2）"
+    }
+  ],
+  "primary_factor": "SMB (Small Minus Big) / HML (High Minus Low) — 三因子模型中规模与价值因子共同构成对CAPM的扩展"
+}
+```

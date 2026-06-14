@@ -1,0 +1,117 @@
+factor:
+  name: stock_fundamental_fama_french_three_factor_model_portfolio
+  name_cn: Fama-French Three-Factor Model Portfolio
+  asset_type: stock
+  category: price
+  subcategory: signal_composite
+  version: 1
+  status: 已注册
+  l1:
+    definition: Combined factor portfolio that implements long-short strategies based
+      on both size and value characteristics, capturing premiums from both SMB and
+      HML simultaneously
+    formula: R_i,t - Rf,t = α_i + β_i MKT_t + s_i SMB_t + h_i HML_t + ε_i,t
+    input_columns:
+    - monthly_return
+    - market_cap
+    - book_to_market
+    frequency: 月频
+    output_schema: '[date × Code]'
+    nan_meaning: TBD
+    default_params:
+      universe: NYSE/AMEX/NASDAQ common stocks
+      data_sources:
+      - CRSP
+      - Compustat
+      breakpoints: NYSE size and B/M percentiles
+      formation_month: June (using prior fiscal year book equity)
+    param_constraints:
+      universe: Exclude REITs, ADRs, stocks with price < $5
+      look_ahead: Book equity must be lagged minimum 6 months from fiscal year-end
+    business_constraints: Factor construction requires simultaneous access to CRSP
+      and Compustat; factors available for download from French Data Library. Transaction
+      costs from annual rebalancing must be considered
+  l2:
+    calculation_steps:
+    - step: 1
+      description: Obtain June-end market cap and prior fiscal year-end book equity
+        for all stocks
+      formula: B/M_i = Book_Equity_i / Market_Cap_i (June-end)
+    - step: 2
+      description: Sort stocks by size (median NYSE) and B/M (30th/70th NYSE percentiles)
+      formula: '6 portfolios: S/L, S/M, S/H, B/L, B/M, B/H'
+    - step: 3
+      description: Calculate monthly value-weighted returns for each portfolio
+      formula: R_p,t = Σ(MV_i / MV_p) × R_i,t
+    - step: 4
+      description: Compute factor returns
+      formula: SMB = avg(S/L,S/M,S/H) - avg(B/L,B/M,B/H); HML = avg(S/H,B/H) - avg(S/L,B/L)
+    - step: 5
+      description: Form long-short trading portfolio (e.g., long S/H, short B/L)
+      formula: Factor_Portfolio_t = R_S/H,t - R_B/L,t
+    edge_case_handling: Delisted stocks use CRSP delisting return; M&A survivors use
+      surviving firm returns; stock splits adjusted via CRSP adjustment factors
+    missing_value_handling: Exclude stocks with < 24 months of returns; missing book
+      equity replaced with industry median
+    data_alignment: T+1
+    complexity: O(T × N × K) where K is number of portfolios (6)
+  l3:
+    financial_intuition: The combined factor portfolio exploits systematic return
+      patterns related to firm characteristics (size and value) that are not explained
+      by market beta alone. Long small-cap value, short large-cap growth captures
+      both size and value premiums simultaneously
+    market_behavior: Factor portfolio earns positive returns when value stocks outperform
+      growth and small stocks outperform large. Correlation with market is low by
+      construction (factors are orthogonalized). Performance peaks during economic
+      recoveries and value up-cycles
+    theoretical_basis: Fama-French (1993) demonstrate that MKT, SMB, and HML jointly
+      explain 90%+ of diversified portfolio variation. Combined factors explain cross-sectional
+      returns better than CAPM alone
+    historical_effectiveness: Combined S/H - B/L portfolio earned approximately 8-10%
+      annualized excess return (1963-1991). R² of factor model ~ 0.90 vs. ~ 0.70 for
+      CAPM. GRS test rejects CAPM at 1% level
+    related_factors: Foundation for Fama-French Five-Factor Model (adds RMW, CMA).
+      Basis for Carhart Four-Factor Model (adds momentum). Extends to quality-factor
+      and profitability-factor models
+  l4:
+    hypotheses:
+    - id: H1
+      name: Three-Factor Pricing
+      description: MKT, SMB, and HML jointly explain cross-sectional variation in
+        expected stock returns
+      expected_ic_sign: 正
+      source: Fama-French (1993)
+      priority: 主假设
+    - id: H2
+      name: Factor Portfolio Alpha
+      description: Well-constructed factor portfolios (long SMB/HML, short opposite)
+        should have alpha close to zero
+      expected_ic_sign: 正
+      source: Fama-French (1993)
+      priority: 主假设
+    - id: H3
+      name: Explanatory Power
+      description: Three-factor model explains significantly more return variation
+        than CAPM alone
+      expected_ic_sign: 正
+      source: Fama-French (1993)
+      priority: 辅助假设
+    - id: H4
+      name: Bond Market Integration
+      description: Same three factors explain cross-sectional variation in bond returns
+      expected_ic_sign: 正
+      source: Fama-French (1993) bond paper
+      priority: 辅助假设
+    meaning_summary: Combined factor portfolio implementing the Fama-French three-factor
+      model, capturing systematic premiums from size and value characteristics while
+      controlling for market risk
+    key_insights:
+    - Three factors explain ~90% of diversified portfolio variance vs. ~70% for CAPM
+    - Factor premiums are time-varying and regime-dependent
+    - Factor decay is documented post-publication, suggesting arbitrage pressure
+    - Model is foundational for modern factor investing and asset pricing research
+    uncertainty: Whether factors represent risk premia or behavioral anomalies remains
+      debated. Factor decay post-1993 raises questions about economic interpretation.
+      Hundreds of proposed factors create 'factor zoo' problem
+  l5: {}
+  l6: {}

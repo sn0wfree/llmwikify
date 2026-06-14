@@ -1,0 +1,92 @@
+name: repro_factor_full
+description: "Extract complete 6-layer factor definition from a paper in a single LLM call."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "repro_factor_full"
+
+params:
+  max_tokens: 6000
+  temperature: 0.1
+
+system: |
+  You are a quantitative factor researcher. Given a paper's content,
+  extract complete factor definitions in 6-layer structure and output as JSON.
+
+  6-Layer Structure:
+  - L1 (Logic): definition, formula, input columns, frequency, constraints
+  - L2 (Calculation): step-by-step calculation pipeline, complexity, edge cases
+  - L3 (Financial Understanding): intuition, market behavior, theory
+  - L4 (Meaning): testable hypotheses with expected IC sign, uncertainty
+
+  禁止事项:
+  - Do NOT fabricate mathematical formulas — base on the paper
+  - If information is unavailable, use "TBD"
+  - Use English for technical terms, Chinese for descriptions
+  - For L4 hypotheses, propose testable hypotheses based on paper's claims
+  - Use factor_class enum: momentum, reversal, volatility, liquidity,
+    value, growth, quality, size, signal, composite
+
+user: |
+  Extract factor definitions from this paper in complete 6-layer structure.
+
+  Paper ID: {{ paper_id }}
+  Paper content:
+  ---
+  {{ paper_content }}
+  ---
+
+  For EACH factor found, output JSON:
+  ```json
+  {
+    "factors": [
+      {
+        "name_cn": "中文因子名",
+        "category": "price|fundamental|composite",
+        "subcategory": "momentum|reversal|volatility|liquidity|value|growth|quality|size|signal",
+        "l1": {
+          "definition": "一句话定义",
+          "formula": "数学公式（LaTeX 或文字描述）",
+          "input_columns": ["close", "volume"],
+          "frequency": "日频|周频|月频",
+          "default_params": {"key": "value"},
+          "param_constraints": {"key": "value"},
+          "business_constraints": "使用限制"
+        },
+        "l2": {
+          "calculation_steps": [
+            {"step": 1, "description": "步骤描述", "formula": "该步骤公式"}
+          ],
+          "edge_case_handling": "边界处理",
+          "missing_value_handling": "缺失值处理",
+          "complexity": "O(T × N)"
+        },
+        "l3": {
+          "financial_intuition": "金融直觉",
+          "market_behavior": "刻画什么市场行为",
+          "theoretical_basis": "基于什么金融理论",
+          "historical_effectiveness": "历史有效性",
+          "related_factors": "与相关因子的关系"
+        },
+        "l4": {
+          "hypotheses": [
+            {
+              "id": "H1",
+              "name": "假设名称",
+              "description": "假设描述",
+              "expected_ic_sign": "正|负",
+              "source": "基于什么理论",
+              "priority": "主假设|辅助假设"
+            }
+          ],
+          "meaning_summary": "因子含义总结",
+          "key_insights": ["关键洞察"],
+          "uncertainty": "不确定性说明"
+        },
+        "confidence": "high|medium|low",
+        "reasoning": "为什么选择这个因子"
+      }
+    ],
+    "primary_factor": "主要因子名称"
+  }
+  ```

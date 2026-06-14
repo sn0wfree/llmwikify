@@ -1,0 +1,86 @@
+factor:
+  name: stock_signal_dcc
+  name_cn: 动态条件相关系数 (DCC)
+  asset_type: stock
+  category: signal
+  subcategory: volatility
+  version: 1
+  status: 已注册
+  l1:
+    definition: 基于DCC-GARCH模型估计的时变条件相关系数，捕捉资产间相关性随市场状态动态变化的特征
+    formula: R_t = diag(Q_t)^{-1/2} Q_t diag(Q_t)^{-1/2}, Q_t = (1-\alpha-\beta)\bar{Q}
+      + \alpha u_{t-1}u_{t-1}' + \beta Q_{t-1}
+    input_columns:
+    - 多资产收益率序列
+    frequency: 日频
+    output_schema: '[date × Code]'
+    nan_meaning: TBD
+    default_params:
+      garch_order:
+      - 1
+      - 1
+      dcc_order:
+      - 1
+      - 1
+      alpha: 0.07
+      beta: 0.9
+    param_constraints:
+      alpha: ≥ 0
+      beta: ≥ 0
+      alpha + beta: < 1 (保证平稳性)
+    business_constraints: 需要至少500-1000个观测点估计GARCH参数；仅适用于存在条件异方差性的资产
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对每个资产i单独拟合GARCH(1,1)模型
+      formula: \sigma_{i,t}^2 = \omega_i + \alpha_i \epsilon_{i,t-1}^2 + \beta_i \sigma_{i,t-1}^2
+    - step: 2
+      description: 计算标准化残差
+      formula: u_{i,t} = \epsilon_{i,t} / \sigma_{i,t}
+    - step: 3
+      description: 使用两步法估计DCC参数(α, β)
+      formula: Q_t = (1-\alpha-\beta)\bar{Q} + \alpha u_{t-1}u_{t-1}' + \beta Q_{t-1}
+    - step: 4
+      description: 将Q矩阵标准化为相关系数矩阵
+      formula: R_t = diag(Q_t)^{-1/2} Q_t diag(Q_t)^{-1/2}
+    - step: 5
+      description: 提取任意资产对(i,j)的DCC相关系数
+      formula: \rho_{ij,t} = R_{t,ij}
+    edge_case_handling: 当资产收益接近常数时GARCH方差可能退化；Q矩阵可能数值不稳定需检查特征根
+    missing_value_handling: 对缺失值采用成对删除或前向填充；重新拟合时需足够连续数据
+    data_alignment: T+1
+    complexity: O(N²T) 其中N为资产数，T为时间序列长度
+  l3:
+    financial_intuition: 资产相关性并非固定常数，而是在市场平静期较低、在压力期升高——即'危机相关'现象。投资者分散化收益在最需要时反而减少
+    market_behavior: 刻画了金融市场的两个关键现象：1) 正常市场下相关性低且稳定；2) 危机时期相关性急剧上升趋近于1
+    theoretical_basis: 基于Bollerslev (1990) CCC模型的扩展，通过两步估计避免VEVH模型参数爆炸，同时保证正定性
+    historical_effectiveness: 2008年金融危机期间DCC成功捕捉到股票-债券相关性从负转正的关键转折点
+    related_factors: 与Diebold-Yilmaz溢出指数相关但侧重相关结构而非波动溢出；与协方差矩阵估计中的因子模型互补
+  l4:
+    hypotheses:
+    - id: H1
+      name: DCC相关系数可作为危机预警信号
+      description: 当系统平均DCC相关系数超过历史阈值时，预示市场即将进入风险共振状态
+      expected_ic_sign: 正
+      source: 论文中'DCC detects correlation breakdown'部分
+      priority: 主假设
+    - id: H2
+      name: 相关性参数α+β接近1时预示高相关性持续
+      description: 高持续性参数意味着相关性冲击消退缓慢，市场处于'粘性相关'状态
+      expected_ic_sign: 正
+      source: 论文参数估计结果(α+β≈0.95)
+      priority: 辅助假设
+    - id: H3
+      name: 基于DCC权重的资产网络结构变化预测收益
+      description: DCC相关矩阵可构建动态网络，社团结构变化预示未来收益分化
+      expected_ic_sign: 待验证
+      source: 论文'Dynamic Network Construction'应用
+      priority: 辅助假设
+    meaning_summary: DCC提供了一种计算上可行且理论上严谨的时变相关性度量，可嵌入资产定价、风险管理和组合优化系统
+    key_insights:
+    - DCC将相关性问题与波动率问题分离估计，降低计算复杂度至O(N²)
+    - 通过diag(Q_t)^(-1/2)变换保证任意时刻R_t均为合法相关矩阵
+    - α参数捕捉短期冲击效应(典型值0.05-0.10)，β捕捉长期持续性(典型值0.85-0.95)
+    uncertainty: 两步估计法为伪似然估计，参数标准误可能低估；不适用于资产数量极大(N>100)的系统
+  l5: {}
+  l6: {}

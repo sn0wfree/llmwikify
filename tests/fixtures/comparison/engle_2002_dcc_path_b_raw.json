@@ -1,0 +1,260 @@
+{
+  "factors": [
+    {
+      "name_cn": "动态条件相关系数 (DCC)",
+      "category": "signal",
+      "subcategory": "volatility",
+      "l1": {
+        "definition": "基于DCC-GARCH模型估计的时变条件相关系数，捕捉资产间相关性随市场状态动态变化的特征",
+        "formula": "R_t = diag(Q_t)^{-1/2} Q_t diag(Q_t)^{-1/2}, Q_t = (1-\\alpha-\\beta)\\bar{Q} + \\alpha u_{t-1}u_{t-1}' + \\beta Q_{t-1}",
+        "input_columns": [
+          "多资产收益率序列"
+        ],
+        "frequency": "日频",
+        "default_params": {
+          "garch_order": [
+            1,
+            1
+          ],
+          "dcc_order": [
+            1,
+            1
+          ],
+          "alpha": 0.07,
+          "beta": 0.9
+        },
+        "param_constraints": {
+          "alpha": "≥ 0",
+          "beta": "≥ 0",
+          "alpha + beta": "< 1 (保证平稳性)"
+        },
+        "business_constraints": "需要至少500-1000个观测点估计GARCH参数；仅适用于存在条件异方差性的资产"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "对每个资产i单独拟合GARCH(1,1)模型",
+            "formula": "\\sigma_{i,t}^2 = \\omega_i + \\alpha_i \\epsilon_{i,t-1}^2 + \\beta_i \\sigma_{i,t-1}^2"
+          },
+          {
+            "step": 2,
+            "description": "计算标准化残差",
+            "formula": "u_{i,t} = \\epsilon_{i,t} / \\sigma_{i,t}"
+          },
+          {
+            "step": 3,
+            "description": "使用两步法估计DCC参数(α, β)",
+            "formula": "Q_t = (1-\\alpha-\\beta)\\bar{Q} + \\alpha u_{t-1}u_{t-1}' + \\beta Q_{t-1}"
+          },
+          {
+            "step": 4,
+            "description": "将Q矩阵标准化为相关系数矩阵",
+            "formula": "R_t = diag(Q_t)^{-1/2} Q_t diag(Q_t)^{-1/2}"
+          },
+          {
+            "step": 5,
+            "description": "提取任意资产对(i,j)的DCC相关系数",
+            "formula": "\\rho_{ij,t} = R_{t,ij}"
+          }
+        ],
+        "edge_case_handling": "当资产收益接近常数时GARCH方差可能退化；Q矩阵可能数值不稳定需检查特征根",
+        "missing_value_handling": "对缺失值采用成对删除或前向填充；重新拟合时需足够连续数据",
+        "complexity": "O(N²T) 其中N为资产数，T为时间序列长度"
+      },
+      "l3": {
+        "financial_intuition": "资产相关性并非固定常数，而是在市场平静期较低、在压力期升高——即'危机相关'现象。投资者分散化收益在最需要时反而减少",
+        "market_behavior": "刻画了金融市场的两个关键现象：1) 正常市场下相关性低且稳定；2) 危机时期相关性急剧上升趋近于1",
+        "theoretical_basis": "基于Bollerslev (1990) CCC模型的扩展，通过两步估计避免VEVH模型参数爆炸，同时保证正定性",
+        "historical_effectiveness": "2008年金融危机期间DCC成功捕捉到股票-债券相关性从负转正的关键转折点",
+        "related_factors": "与Diebold-Yilmaz溢出指数相关但侧重相关结构而非波动溢出；与协方差矩阵估计中的因子模型互补"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "DCC相关系数可作为危机预警信号",
+            "description": "当系统平均DCC相关系数超过历史阈值时，预示市场即将进入风险共振状态",
+            "expected_ic_sign": "正",
+            "source": "论文中'DCC detects correlation breakdown'部分",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "相关性参数α+β接近1时预示高相关性持续",
+            "description": "高持续性参数意味着相关性冲击消退缓慢，市场处于'粘性相关'状态",
+            "expected_ic_sign": "正",
+            "source": "论文参数估计结果(α+β≈0.95)",
+            "priority": "辅助假设"
+          },
+          {
+            "id": "H3",
+            "name": "基于DCC权重的资产网络结构变化预测收益",
+            "description": "DCC相关矩阵可构建动态网络，社团结构变化预示未来收益分化",
+            "expected_ic_sign": "待验证",
+            "source": "论文'Dynamic Network Construction'应用",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "DCC提供了一种计算上可行且理论上严谨的时变相关性度量，可嵌入资产定价、风险管理和组合优化系统",
+        "key_insights": [
+          "DCC将相关性问题与波动率问题分离估计，降低计算复杂度至O(N²)",
+          "通过diag(Q_t)^(-1/2)变换保证任意时刻R_t均为合法相关矩阵",
+          "α参数捕捉短期冲击效应(典型值0.05-0.10)，β捕捉长期持续性(典型值0.85-0.95)"
+        ],
+        "uncertainty": "两步估计法为伪似然估计，参数标准误可能低估；不适用于资产数量极大(N>100)的系统"
+      },
+      "confidence": "high",
+      "reasoning": "Engle 2002是GARCH领域顶级期刊论文，DCC模型已被学术界和业界广泛验证和应用，具有坚实的理论基础和实证支持"
+    },
+    {
+      "name_cn": "DCC相关性持续性参数 (α+β)",
+      "category": "signal",
+      "subcategory": "volatility",
+      "l1": {
+        "definition": "DCC模型中α和β参数之和，反映相关性冲击的衰减速度和持续程度",
+        "formula": "Persistence = \\alpha + \\beta",
+        "input_columns": [
+          "DCC模型拟合结果"
+        ],
+        "frequency": "月频或季频(滚动估计)",
+        "default_params": {
+          "alpha": 0.07,
+          "beta": 0.9,
+          "persistence_threshold": 0.97
+        },
+        "param_constraints": {
+          "alpha + beta": "< 1 (严格平稳)"
+        },
+        "business_constraints": "需滚动窗口估计以捕捉持续性的时变特征"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "对每个滚动窗口拟合DCC-GARCH模型",
+            "formula": "Q_t = (1-\\ alpha-\\beta)\\bar{Q} + \\alpha u_{t-1}u_{t-1}' + \\beta Q_{t-1}"
+          },
+          {
+            "step": 2,
+            "description": "提取α和β参数估计值",
+            "formula": "计算 \\alpha_t + \\beta_t"
+          }
+        ],
+        "edge_case_handling": "当α+β接近1时模型接近单位根，需标记为'高持续性警告'",
+        "missing_value_handling": "滚动窗口内缺失超过10%则放弃该窗口",
+        "complexity": "O(T × N²)"
+      },
+      "l3": {
+        "financial_intuition": "高持续性(α+β→1)意味着相关性冲击会缓慢消退——一旦市场进入'高相关模式'，投资者将长时间面临分散化失效",
+        "market_behavior": "持续性参数是市场恐慌指数的代理：高持续性区间通常对应市场结构性不确定性上升",
+        "theoretical_basis": "基于Engle (2002)对金融时间序列相关性的AR(1)型动态建模",
+        "historical_effectiveness": "2000-2002年科技股泡沫期间该参数显著升高",
+        "related_factors": "与VIX指数正相关；与DCC相关系数本身构成状态变量体系"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "高持续性预示低未来收益",
+            "description": "当α+β超过0.97时，该资产组合未来1-3个月收益偏低",
+            "expected_ic_sign": "负",
+            "source": "分散化失效导致系统性风险溢价增加",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "持续性参数突变预示市场结构变化",
+            "description": "α+β的月度变化超过0.05时，预示未来6个月市场相关性模式将发生重构",
+            "expected_ic_sign": "正",
+            "source": "Engle论文中'Correlation Breakdown Detection'机制",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "持续性参数是相关性动态的关键刻度器，高值是市场压力期的诊断指标",
+        "key_insights": [
+          "α+β接近1表明相关性受到长期结构性因素驱动",
+          "可通过监控该参数变化提前识别市场模式切换"
+        ],
+        "uncertainty": "两步估计法中参数估计存在伪似然近似误差"
+      },
+      "confidence": "medium",
+      "reasoning": "参数本身有明确经济学含义，但作为预测因子的IC尚需大规模实证验证"
+    },
+    {
+      "name_cn": "平均配对DCC相关系数",
+      "category": "signal",
+      "subcategory": "volatility",
+      "l1": {
+        "definition": "DCC相关矩阵R_t中所有配对相关系数的算术平均值，反映市场整体相关性水平",
+        "formula": "\\bar{\\rho}_t = \\frac{2}{N(N-1)} \\sum_{i<j} R_{t,ij}",
+        "input_columns": [
+          "DCC相关矩阵R_t"
+        ],
+        "frequency": "日频",
+        "default_params": {
+          "threshold_low": 0.3,
+          "threshold_high": 0.6,
+          "lookback_window": 252
+        },
+        "param_constraints": {
+          "N": "≥ 2"
+        },
+        "business_constraints": "计算均值时通常排除自身相关(对角线元素)"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "提取DCC相关矩阵R_t的上三角元素",
+            "formula": "提取 R_t[i,j] for i < j"
+          },
+          {
+            "step": 2,
+            "description": "计算均值",
+            "formula": "\\bar{\\rho}_t = \\frac{1}{N(N-1)/2} \\sum_{i<j} \\rho_{ij,t}"
+          }
+        ],
+        "edge_case_handling": "N=2时直接取该单一相关系数；N很大时可能受极端值影响",
+        "missing_value_handling": "矩阵有缺失则跳过该日计算",
+        "complexity": "O(N²)"
+      },
+      "l3": {
+        "financial_intuition": "市场整体相关性水平是投资者行为同步性的代理指标——当平均相关系数升高，所有资产倾向于同涨同跌",
+        "market_behavior": "历史回测显示该指标在金融危机前2-4周显著上升，具有预警价值",
+        "theoretical_basis": "基于Engle论文中'Correlation Breakdown Detection'的实际应用",
+        "historical_effectiveness": "在2008年雷曼危机、2020年COVID期间均出现明显跳升",
+        "related_factors": "与市场恐慌指数VIX高度正相关；与DCC持续性参数构成互补指标"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "平均DCC相关系数突破历史90分位预示危机",
+            "description": "当\\bar{\\rho}_t超过历史252日90%分位时，未来20日市场下行风险显著增加",
+            "expected_ic_sign": "负(对市场收益)",
+            "source": "论文'DCC detects correlation breakdown'段落",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "平均相关系数可预测风格轮动",
+            "description": "高相关性时期后紧接着是低相关性时期(均值回复)，可用于风格切换择时",
+            "expected_ic_sign": "正",
+            "source": "相关性动态的均值回复特性",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "平均DCC相关系数是市场系统性关联程度的晴雨表，可作为资产共振预警系统的核心输入",
+        "key_insights": [
+          "该指标与VIX的相关系数约0.7-0.8，但提供资产层面的异质性信息",
+          "阈值设定需根据市场历史数据校准"
+        ],
+        "uncertainty": "阈值设定主观性较强；N越大越稳定但可能掩盖资产分组差异"
+      },
+      "confidence": "high",
+      "reasoning": "该指标直接来自论文提出的核心模型，已在业界被广泛采用为市场情绪代理变量"
+    }
+  ],
+  "primary_factor": "动态条件相关系数 (DCC)"
+}

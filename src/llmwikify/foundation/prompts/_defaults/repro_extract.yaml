@@ -1,12 +1,12 @@
 name: repro_extract
 description: "Extract structured information from a paper/research report for strategy reproduction."
-version: "1.0"
+version: "2.0"
 trigger:
   type: "api_call"
   when: "repro_extract"
 
 params:
-  max_tokens: 4096
+  max_tokens: 6000
   temperature: 0.1
   max_content_chars: 32000
 
@@ -15,7 +15,7 @@ system: |
   academic papers and research reports for strategy reproduction.
 
   Your task: Given a paper's content, extract 8 categories of structured information
-  and output them as JSON. Be precise, factual, and concise.
+  AND a 6-layer factor metadata block, output as JSON. Be precise, factual, and concise.
 
   禁止事项:
   - Do NOT fabricate information not present in the source
@@ -36,7 +36,7 @@ user: |
   {{ paper_content }}
   ---
 
-  Extract the following 8 categories and output as JSON:
+  Extract the following 8 categories AND a 6-layer factor metadata block:
 
   ```json
   {
@@ -53,7 +53,7 @@ user: |
       "data_source": "string - where to get the data"
     },
     "operation_steps": {
-      "signal_generation": "string - how signals are generated",
+      "signal_generation": "string - detailed step-by-step signal generation",
       "position_sizing": "string - position sizing rules",
       "rebalance_frequency": "string - how often to rebalance",
       "stop_loss": "string - stop loss rules",
@@ -92,6 +92,50 @@ user: |
       "strategy_class": "string - one of: trend_following, factor_ranking, mean_reversion, stat_arb, composite",
       "confidence": "string - high/medium/low",
       "reasoning": "string - why this signal type was chosen"
+    },
+    "factor_metadata": {
+      "asset_type": "string - stock|futures|options (default: stock)",
+      "category": "string - price|fundamental|composite (default: price)",
+      "subcategory": "string - momentum|reversal|volatility|liquidity|value|growth|quality|size|signal",
+      "l1": {
+        "definition": "string - one-sentence definition in Chinese",
+        "formula": "string - mathematical formula in LaTeX or text",
+        "input_columns": ["list of input column names"],
+        "frequency": "string - 日频|周频|月频",
+        "default_params": {"key": "value"},
+        "param_constraints": {"key": "constraint description"},
+        "business_constraints": "string - usage limitations"
+      },
+      "l2": {
+        "calculation_steps": [
+          {"step": 1, "description": "step description", "formula": "step formula"}
+        ],
+        "edge_case_handling": "string - edge case handling",
+        "missing_value_handling": "string - missing value strategy",
+        "complexity": "string - e.g., O(T × N)"
+      },
+      "l3": {
+        "financial_intuition": "string - what this factor intuitively measures",
+        "market_behavior": "string - what market behavior it captures",
+        "theoretical_basis": "string - underlying financial theory",
+        "historical_effectiveness": "string - historical performance notes",
+        "related_factors": "string - relationship with other factors"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "hypothesis name in Chinese",
+            "description": "hypothesis description in Chinese",
+            "expected_ic_sign": "正|负",
+            "source": "theoretical or empirical source",
+            "priority": "主假设|辅助假设"
+          }
+        ],
+        "meaning_summary": "string - factor meaning summary in Chinese",
+        "key_insights": ["list of key insights"],
+        "uncertainty": "string - what remains uncertain"
+      }
     }
   }
   ```

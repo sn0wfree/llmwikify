@@ -26,12 +26,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/factor", tags=["factor"])
 
 _WIKI_REGISTRY: Any = None
+_LLM_CLIENT: Any = None
 
 
-def set_factor_deps(wiki_registry: Any) -> None:
+def set_factor_deps(wiki_registry: Any, llm_client: Any = None) -> None:
     """Set dependencies during app startup."""
-    global _WIKI_REGISTRY
+    global _WIKI_REGISTRY, _LLM_CLIENT
     _WIKI_REGISTRY = wiki_registry
+    _LLM_CLIENT = llm_client
 
 
 def _get_wiki(wiki_id: str | None = None) -> Any:
@@ -555,7 +557,7 @@ async def validate_factor(slug: str, req: L5ValidateRequest) -> dict[str, Any]:
     result = await asyncio.to_thread(
         run_l5_pipeline,
         factor_name=slug,
-        llm_client=None,  # LLM step skipped for now
+        llm_client=_LLM_CLIENT,
         cost_bps=req.cost_bps,
         backtest_params=bt_params,
     )

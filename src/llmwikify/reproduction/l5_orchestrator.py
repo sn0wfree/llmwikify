@@ -232,12 +232,43 @@ def run_l5_pipeline(
     if final_meaning:
         factor_data.setdefault("l4", {})["final_meaning"] = final_meaning
 
-    # Update validation_date
-    l5_data["validation_date"] = datetime.now().strftime("%Y-%m-%d")
+    # 5b. Sync L4 hypothesis status from L5 hypothesis_testing results.
+    # If LLM concluded H1=H2 as 支持/不支持/部分支持, update L4.
+    l4 = factor_data.setdefault("l4", {})
+    hypothesis_testing = l5_data.get("hypothesis_testing", [])
+    if hypothesis_testing and l4.get("hypotheses"):
+        for ht in hypothesis_testing:
+            hyp_id = ht.get("hypothesis_id", "")
+            conclusion = ht.get("conclusion", "")
+            # Find matching L4 hypothesis and update status
+            for h in l4["hypotheses"]:
+                if h.get("id") == hyp_id:
+                    # Map LLM conclusion to L4 status (order matters!)
+                    # "不支持" must be checked before "支持" since "不" is a substring
+                    if "部分" in conclusion:
+                        h["status"] = "部分支持"
+                    elif "不支持" in conclusion or "反向" in conclusion:
+                        h["status"] = "不支持"
+                    elif "支持" in conclusion:
+                        h["status"] = "支持"
+                    else:
+                        h["status"] = "已验证"
+                    h["conclusion"] = conclusion
+                    h["reasoning"] = ht.get("reasoning", "")
+                    break
 
-    # Version bump
-    factor_data["version"] = factor_data.get("version", 1) + 1
-    factor_data["updated_at"] = datetime.now().strftime("%Y-%m-%d")
+    # 5c. Update validation_date as range (design requirement)
+    start_date = bt_params.get("start_date", "")
+    end_date = bt_params.get("end_date", "")
+    if start_date and end_date:
+        l5_data["validation_date"] = f"{start_date}~{end_date}"
+    else:
+        l5_data["validation_date"] = datetime.now().strftime("%Y-%m-%d")
+
+    # Version bump (only if L5 data actually changed)
+    if l5_data.get("score") is not None:
+        factor_data["version"] = factor_data.get("version", 1) + 1
+        factor_data["updated_at"] = datetime.now().strftime("%Y-%m-%d")
 
     write_factor_yaml(factor_name, factor)
 

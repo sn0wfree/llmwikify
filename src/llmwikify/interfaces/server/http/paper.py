@@ -37,11 +37,12 @@ _RAW_DIR: Optional[Path] = None
 _UPLOAD_DIR: Optional[Path] = None
 
 
-def _extract_factor_from_page(page: dict, paper_id: str) -> dict:
+def _extract_factor_from_page(page: dict, paper_id: str, extraction: dict | None = None) -> dict:
     """Convert a factor wiki page to 6-layer YAML structure.
 
-    Extracts factor_class, factor_params, signal_type, etc. from the
-    wiki page content and wraps them in a minimal 6-layer structure.
+    Uses LLM-extracted factor_metadata (when extraction is provided) for
+    full 6-layer population. Falls back to wiki frontmatter + defaults
+    when extraction is unavailable.
 
     Returns dict with keys:
         name: factor path relative to quant/factors/ (e.g., 'stock/price/momentum_20d')
@@ -51,6 +52,7 @@ def _extract_factor_from_page(page: dict, paper_id: str) -> dict:
     from llmwikify.reproduction.utils import generate_slug
 
     fm = parse_frontmatter(page.get("content", ""))
+    metadata = (extraction or {}).get("factor_metadata", {})
 
     factor_class = fm.get("factor_class", fm.get("signal_type", "unknown"))
     signal_params = fm.get("signal_params", fm.get("factor_params", {}))
@@ -64,45 +66,88 @@ def _extract_factor_from_page(page: dict, paper_id: str) -> dict:
     title = fm.get("title", page.get("page_name", f"factor-{paper_id}"))
     slug = generate_slug(title)
 
-    # Determine category from factor_class
-    category = fm.get("category", "price")
-    asset_type = fm.get("asset_type", "stock")
+    # Path: prefer metadata, fall back to fm/frontmatter
+    asset_type = metadata.get("asset_type") or fm.get("asset_type") or "stock"
+    category = metadata.get("category") or fm.get("category") or "price"
+    subcategory = metadata.get("subcategory") or factor_class
 
-    # Build a proper factor path: {asset_type}/{category}/{slug}
-    # e.g., stock/price/momentum_20d
     factor_name = f"{asset_type}/{category}/{slug}"
 
+    # L1: prefer metadata.l1, fall back to frontmatter + defaults
+    meta_l1 = metadata.get("l1", {})
+    l1 = {
+        "definition": meta_l1.get("definition") or fm.get("reasoning") or f"Factor extracted from {paper_id}",
+        "formula": meta_l1.get("formula") or "TBD",
+        "input_columns": meta_l1.get("input_columns") or ["close"],
+        "frequency": meta_l1.get("frequency") or "日频",
+        "output_schema": "[date × Code]",
+        "nan_meaning": "TBD",
+        "default_params": meta_l1.get("default_params") or signal_params or {},
+        "param_constraints": meta_l1.get("param_constraints") or "TBD",
+        "business_constraints": meta_l1.get("business_constraints") or "TBD",
+    }
+
+    # L2: prefer metadata.l2, fall back to generic step
+    meta_l2 = metadata.get("l2", {})
+    meta_steps = meta_l2.get("calculation_steps") or []
+    if not meta_steps:
+        sig_gen = (extraction or {}).get("operation_steps", {}).get("signal_generation", "")
+        if sig_gen:
+            meta_steps = [
+                {"step": i + 1, "description": s.strip()}
+                for i, s in enumerate(sig_gen.split("\n")) if s.strip()
+            ]
+        else:
+            meta_steps = [{"step": 1, "description": f"计算 {factor_class} 因子"}]
+    l2 = {
+        "calculation_steps": meta_steps,
+        "edge_case_handling": meta_l2.get("edge_case_handling", "TBD"),
+        "missing_value_handling": meta_l2.get("missing_value_handling", "TBD"),
+        "data_alignment": "T+1",
+        "complexity": meta_l2.get("complexity", "O(T × N)"),
+    }
+
+    # L3: prefer metadata.l3, fall back to strategy_logic
+    meta_l3 = metadata.get("l3", {})
+    strategy_logic = (extraction or {}).get("strategy_logic", {})
+    l3 = {
+        "financial_intuition": meta_l3.get("financial_intuition") or fm.get("reasoning", "TBD"),
+        "market_behavior": meta_l3.get("market_behavior") or strategy_logic.get("alpha_source", "TBD"),
+        "theoretical_basis": meta_l3.get("theoretical_basis") or strategy_logic.get("core_hypothesis", "TBD"),
+        "historical_effectiveness": meta_l3.get("historical_effectiveness") or strategy_logic.get("market_logic", "TBD"),
+        "related_factors": meta_l3.get("related_factors", "TBD"),
+    }
+
+    # L4: prefer metadata.l4, fall back to improvement_directions as insights
+    meta_l4 = metadata.get("l4", {})
+    improvement_dirs = (extraction or {}).get("strengths_weaknesses", {}).get("improvement_directions", [])
+    hypotheses = meta_l4.get("hypotheses", [])
+    # Mark hypotheses as unverified (just registered)
+    for h in hypotheses:
+        if "status" not in h:
+            h["status"] = "未验证"
+    l4 = {
+        "hypotheses": hypotheses,
+        "hypothesis_limit": 5,
+        "archived_hypotheses": [],
+        "meaning_summary": meta_l4.get("meaning_summary") or fm.get("reasoning", "TBD"),
+        "key_insights": meta_l4.get("key_insights", improvement_dirs),
+        "uncertainty": meta_l4.get("uncertainty", "TBD"),
+        "final_meaning": None,
+    }
+
     factor_dict = {
-        "name": factor_name.replace("/", "_"),  # flat name for display
+        "name": factor_name.replace("/", "_"),
         "name_cn": title,
         "asset_type": asset_type,
         "category": category,
-        "subcategory": factor_class,
+        "subcategory": subcategory,
         "version": 1,
         "status": "已注册",
-        "l1": {
-            "definition": fm.get("reasoning", f"Factor extracted from {paper_id}"),
-            "formula": f"{factor_class}({signal_params})",
-            "input_columns": ["close"],
-            "frequency": "日频",
-            "output_schema": "[date × Code]",
-            "default_params": signal_params,
-            "code_location": f"paper/{paper_id}",
-        },
-        "l2": {
-            "calculation_steps": [
-                {"step": 1, "description": f"计算 {factor_class} 因子"},
-            ],
-            "complexity": "O(T × N)",
-        },
-        "l3": {
-            "financial_intuition": fm.get("reasoning", "TBD"),
-            "theoretical_basis": f"Extracted from {paper_id}",
-        },
-        "l4": {
-            "hypotheses": [],
-            "meaning_summary": fm.get("reasoning", "TBD"),
-        },
+        "l1": l1,
+        "l2": l2,
+        "l3": l3,
+        "l4": l4,
         "l5": {},
         "l6": {},
     }
@@ -294,8 +339,9 @@ async def _run_paper_extraction(
             try:
                 pt = page.get("page_type", "Source")
                 if pt == "Factor":
-                    # Convert factor wiki page to 6-layer YAML
-                    extracted = _extract_factor_from_page(page, paper_id)
+                    # Convert factor wiki page to 6-layer YAML using
+                    # LLM-extracted factor_metadata from the paper extraction
+                    extracted = _extract_factor_from_page(page, paper_id, extraction=extraction)
                     factor_name = extracted["name"]
                     factor_data = extracted["factor"]
                     write_factor_yaml(factor_name, {"factor": factor_data})
@@ -556,6 +602,7 @@ async def get_paper(paper_id: str) -> dict[str, Any]:
 async def list_paper_artifacts(paper_id: str) -> dict[str, Any]:
     """Legacy: list pages produced for a paper_id from quant/."""
     from llmwikify.reproduction.quant_wiki import get_quant_wiki
+    from llmwikify.reproduction.factor_library import list_factors as lib_list_factors
     quant = get_quant_wiki()
     artifacts = []
 
@@ -572,26 +619,27 @@ async def list_paper_artifacts(paper_id: str) -> dict[str, Any]:
                 "page_type": "Source",
             })
 
-    for prefix, kind in (("factor-", "Factor"), ("strategy-", "Strategy")):
-        page_name = f"{prefix}{paper_id}"
-        if kind == "Factor":
-            # Check if factor YAML exists
-            from llmwikify.reproduction.factor_library import read_factor_yaml
-            factor = read_factor_yaml(f"factor_{paper_id}_{page_name}")
-            if factor is not None:
-                artifacts.append({
-                    "kind": kind,
-                    "wiki_page": page_name,
-                    "page_type": kind,
-                })
-        else:
-            result = quant.read_page(page_name, page_type="strategies")
-            if result is not None:
-                artifacts.append({
-                    "kind": kind,
-                    "wiki_page": page_name,
-                    "page_type": kind,
-                })
+    # Factor: scan the index for any factor whose source references this paper.
+    # We don't have a direct paper_ref in the factor YAML, so we look for
+    # factors with names that include the paper_id (legacy heuristic).
+    all_factors = lib_list_factors()
+    for entry in all_factors:
+        if paper_id in entry.get("file", "") or paper_id in entry.get("name", ""):
+            artifacts.append({
+                "kind": "Factor",
+                "wiki_page": entry.get("file", ""),
+                "page_type": "Factor",
+            })
+
+    # Strategy: look in quant/strategies/ for strategy-{paper_id}
+    strategy_page = f"strategy-{paper_id}"
+    result = quant.read_page(strategy_page, page_type="strategies")
+    if result is not None:
+        artifacts.append({
+            "kind": "Strategy",
+            "wiki_page": strategy_page,
+            "page_type": "Strategy",
+        })
 
     return {"paper_id": paper_id, "artifacts": artifacts}
 
