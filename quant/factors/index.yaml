@@ -1,20 +1,26 @@
-# 因子库索引
-# 由 llmwikify quant-init 自动生成
-
-factors: []
-
+factors:
+- name: stock_fundamental_value_60d
+  name_cn: 股票60日估值因子
+  asset_type: stock
+  category: fundamental
+  subcategory: value
+  status: 已注册
+  definition: 当前价格相对于60日均线的偏离程度
+  file: stock/fundamental/value_60d.yaml
+- name: stock_price_momentum_20d
+  name_cn: 股票20日动量
+  asset_type: stock
+  category: price
+  subcategory: momentum
+  status: 已注册
+  definition: 过去20个交易日的涨跌幅
+  file: stock/price/momentum_20d.yaml
 statistics:
-  total: 0
+  total: 2
   by_asset_type:
-    stock: 0
-    futures: 0
-    options: 0
+    stock: 2
   by_category:
-    price: 0
-    fundamental: 0
-    composite: 0
+    fundamental: 1
+    price: 1
   by_status:
-    已注册: 0
-    待验证: 0
-    已通过: 0
-    失败: 0
+    已注册: 2

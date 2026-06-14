@@ -72,7 +72,7 @@ def read_factor_yaml(name: str, project_root: Path | None = None) -> dict[str, A
 
 
 def write_factor_yaml(name: str, data: dict, project_root: Path | None = None) -> str:
-    """Write a factor YAML file.
+    """Write a factor YAML file and update index.yaml.
 
     Args:
         name: Factor path relative to factors/
@@ -88,6 +88,12 @@ def write_factor_yaml(name: str, data: dict, project_root: Path | None = None) -
     yaml_path.parent.mkdir(parents=True, exist_ok=True)
     content = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
     yaml_path.write_text(content, encoding="utf-8")
+
+    # Keep index.yaml in sync
+    try:
+        update_index(project_root)
+    except Exception as exc:
+        logger.warning("index.yaml update failed after writing %s: %s", name, exc)
 
     action = "Created" if is_new else "Updated"
     return f"{action}: factors/{name}.yaml"

@@ -694,3 +694,202 @@ class TestPaperEdgeCases:
         assert r.json()["paper_id"] == "test-paper"
         # Verify file is in the upload dir
         assert r.json()["filename"] == "test-paper.pdf"
+
+
+# ═══════════════════════════════════════════════════════════════
+# L5 Validation Engine Tests
+# ═══════════════════════════════════════════════════════════════
+
+class TestL5Validation:
+    """Tests for L5 automated validation engine."""
+
+    def _make_result(self, **overrides):
+        """Create a mock FactorBacktestResult."""
+        from dataclasses import dataclass, field
+
+        @dataclass
+        class MockResult:
+            ic_mean: float = 0.04
+            ic_std: float = 0.05
+            icir: float = 0.8
+            t_stat: float = 2.5
+            win_rate: float = 0.55
+            annual_return: float = 0.15
+            max_drawdown: float = 0.12
+            turnover: float = 0.3
+            quantile_returns: dict = field(default_factory=lambda: {"G1": 0.20, "G2": 0.15, "G3": 0.10, "G4": 0.05, "G5": -0.05})
+            ic_series: list = field(default_factory=lambda: [
+                {"date": "2024-01-01", "ic": 0.05, "rank_ic": 0.04},
+                {"date": "2024-02-01", "ic": 0.03, "rank_ic": 0.02},
+                {"date": "2024-03-01", "ic": -0.01, "rank_ic": -0.02},
+                {"date": "2024-04-01", "ic": 0.06, "rank_ic": 0.05},
+            ])
+            quantile_curves: dict = field(default_factory=dict)
+            rank_ic_mean: float = 0.04
+            rank_ic_std: float = 0.05
+            rank_icir: float = 0.8
+            rank_ic_pos_ratio: float = 0.75
+            longshort_ann_return: float = 0.25
+            longshort_sharpe: float = 1.2
+            longshort_mdd: float = 0.08
+            longshort_curve: list = field(default_factory=lambda: [
+                {"date": "2024-01-01", "value": 1.0},
+                {"date": "2024-02-01", "value": 1.02},
+                {"date": "2024-03-01", "value": 1.01},
+                {"date": "2024-04-01", "value": 1.05},
+            ])
+            universe: str = "HS300"
+            adj_mode: str = "D"
+            n_stocks_per_date: list = field(default_factory=list)
+            group_metrics: dict = field(default_factory=lambda: {
+                "G1": {"sharpe": 1.5, "max_drawdown": 0.05, "turnover": 0.3},
+                "G2": {"sharpe": 1.0, "max_drawdown": 0.08, "turnover": 0.25},
+            })
+            total_rebalances: int = 100
+            valid_rebalances: int = 95
+
+        r = MockResult()
+        for k, v in overrides.items():
+            setattr(r, k, v)
+        return r
+
+    def test_analyze_ic(self):
+        from llmwikify.reproduction.l5_validation import analyze_ic
+        result = self._make_result()
+        ic = analyze_ic(result)
+        assert "ic_mean" in ic
+        assert "icir" in ic
+        assert "rank_ic_mean" in ic
+        assert "win_rate" in ic
+        assert ic["win_rate"] == 0.75  # 3 of 4 > 0
+
+    def test_analyze_ic_empty(self):
+        from llmwikify.reproduction.l5_validation import analyze_ic
+        result = self._make_result(ic_series=[])
+        assert analyze_ic(result) == {}
+
+    def test_analyze_groups(self):
+        from llmwikify.reproduction.l5_validation import analyze_groups
+        result = self._make_result()
+        ga = analyze_groups(result)
+        assert ga["ls_ann_return"] == 0.25
+        assert ga["ls_sharpe"] == 1.2
+        assert "G1>G2" in ga["group_monotonicity"]
+
+    def test_analyze_returns(self):
+        from llmwikify.reproduction.l5_validation import analyze_returns
+        result = self._make_result()
+        ra = analyze_returns(result)
+        assert ra["ann_return"] == 0.25
+        assert ra["sharpe"] > 0
+
+    def test_analyze_turnover(self):
+        from llmwikify.reproduction.l5_validation import analyze_turnover
+        result = self._make_result()
+        ta = analyze_turnover(result)
+        assert ta["avg_turnover"] > 0
+
+    def test_analyze_turnover_fallback(self):
+        from llmwikify.reproduction.l5_validation import analyze_turnover
+        result = self._make_result(group_metrics={})
+        ta = analyze_turnover(result)
+        assert ta["avg_turnover"] == 0.3
+
+    def test_analyze_stability(self):
+        from llmwikify.reproduction.l5_validation import analyze_stability
+        result = self._make_result()
+        sa = analyze_stability(result)
+        assert "yearly" in sa
+        assert len(sa["yearly"]) > 0
+
+    def test_analyze_oos(self):
+        from llmwikify.reproduction.l5_validation import analyze_oos
+        result = self._make_result()
+        oa = analyze_oos(result)
+        assert "oos_rank_ic" in oa
+        assert "oos_ls_return" in oa
+
+    def test_analyze_cost(self):
+        from llmwikify.reproduction.l5_validation import analyze_cost
+        result = self._make_result()
+        ca = analyze_cost(result, cost_bps=15)
+        assert ca["cost_bps"] == 15
+        assert "net_ann_return" in ca
+        assert "cost_sensitivity" in ca
+
+    def test_compute_score_pass(self):
+        from llmwikify.reproduction.l5_validation import compute_score
+        result = self._make_result()
+        from llmwikify.reproduction.l5_validation import (
+            analyze_ic, analyze_groups, analyze_returns,
+            analyze_turnover, analyze_stability, analyze_oos, analyze_cost,
+        )
+        ic = analyze_ic(result)
+        ga = analyze_groups(result)
+        ra = analyze_returns(result)
+        ta = analyze_turnover(result)
+        sa = analyze_stability(result)
+        oa = analyze_oos(result)
+        ca = analyze_cost(result)
+        score = compute_score(ic, ga, ra, ta, sa, oa, ca)
+        assert score["score"] > 0
+        assert score["pass_threshold"] == 60
+        assert score["status"] in ("通过", "失败", "待更新")
+        assert "breakdown" in score
+
+    def test_run_l5_validation(self):
+        from llmwikify.reproduction.l5_validation import run_l5_validation
+        result = self._make_result()
+        l5 = run_l5_validation(result)
+        assert "factor_analysis" in l5
+        assert "overall_assessment" in l5
+        assert "hypothesis_testing" in l5
+        assert l5["overall_assessment"]["score"] > 0
+
+
+class TestL5Orchestrator:
+    """Tests for L5 orchestrator (non-backtest parts)."""
+
+    def test_parse_llm_response_valid(self):
+        from llmwikify.reproduction.l5_orchestrator import _parse_llm_response
+        resp = '''```json
+{
+  "hypothesis_testing": [
+    {"hypothesis_id": "H1", "conclusion": "支持", "reasoning": "IC为正"}
+  ],
+  "final_meaning": "动量因子"
+}```'''
+        parsed = _parse_llm_response(resp)
+        assert "hypothesis_testing" in parsed
+        assert parsed["hypothesis_testing"][0]["conclusion"] == "支持"
+        assert parsed["final_meaning"] == "动量因子"
+
+    def test_parse_llm_response_invalid(self):
+        from llmwikify.reproduction.l5_orchestrator import _parse_llm_response
+        parsed = _parse_llm_response("not json at all")
+        assert parsed == {}
+
+    def test_build_hypothesis_prompt(self):
+        from llmwikify.reproduction.l5_orchestrator import _build_hypothesis_prompt
+        factor = {
+            "name": "test_factor",
+            "category": "price",
+            "subcategory": "momentum",
+            "l1": {"definition": "test definition"},
+            "l4": {"hypotheses": [{"id": "H1", "name": "test"}]},
+        }
+        l5_data = {
+            "factor_analysis": {
+                "ic_analysis": {"ic_mean": 0.05, "icir": 1.0, "rank_ic_mean": 0.04, "win_rate": 0.6},
+                "group_analysis": {"group_returns": {"G1": 0.1}, "group_monotonicity": "G1", "ls_ann_return": 0.2, "ls_sharpe": 1.0},
+                "return_analysis": {"ann_return": 0.2, "sharpe": 1.0, "calmar": 0.5, "sortino": 1.2},
+                "turnover_analysis": {"avg_turnover": 0.3},
+                "oos_analysis": {"oos_rank_ic": 0.03, "oos_sharpe": 0.8},
+                "cost_analysis": {"net_ann_return": 0.15},
+            },
+            "overall_assessment": {"score": 75},
+        }
+        prompt = _build_hypothesis_prompt(factor, l5_data)
+        assert "test_factor" in prompt
+        assert "H1" in prompt
+        assert "0.05" in prompt

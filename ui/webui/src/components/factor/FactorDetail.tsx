@@ -76,6 +76,8 @@ export function FactorDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeLayer, setActiveLayer] = useState<LayerId>('l1');
+  const [validating, setValidating] = useState(false);
+  const [validateResult, setValidateResult] = useState<string | null>(null);
 
   useEffect(() => {
     if (!name) return;
@@ -90,6 +92,32 @@ export function FactorDetail() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [name]);
+
+  const handleValidate = async () => {
+    if (!name) return;
+    setValidating(true);
+    setValidateResult(null);
+    try {
+      const res = await fetch(`/api/factor/${encodeURIComponent(name)}/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      setValidateResult(data.message);
+      // Refresh factor data
+      const refreshed = await fetch(`/api/factor/library/${encodeURIComponent(name)}`);
+      if (refreshed.ok) {
+        const d = await refreshed.json();
+        setFactor(d.factor);
+      }
+    } catch (e: any) {
+      setValidateResult(`Error: ${e.message}`);
+    } finally {
+      setValidating(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -161,8 +189,30 @@ export function FactorDetail() {
             {factor.version && (
               <span className="text-xs text-muted-foreground">v{factor.version}</span>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleValidate}
+              disabled={validating}
+              className="ml-2"
+            >
+              {validating ? (
+                <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> 验证中...</>
+              ) : (
+                <><Beaker className="w-3 h-3 mr-1" /> 验证因子</>
+              )}
+            </Button>
           </div>
         </div>
+
+        {validateResult && (
+          <div className={cn(
+            'mx-6 mb-2 px-3 py-2 rounded-md text-sm',
+            validateResult.startsWith('Error') ? 'bg-destructive/10 text-destructive' : 'bg-emerald-500/10 text-emerald-600'
+          )}>
+            {validateResult}
+          </div>
+        )}
 
         {/* Layer Tabs */}
         <div className="flex gap-1 px-6 pb-2">
