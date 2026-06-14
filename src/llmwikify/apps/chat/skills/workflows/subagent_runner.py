@@ -48,9 +48,12 @@ import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from llmwikify.apps.chat.skills.workflows.dag import ActorSpec
+
+if TYPE_CHECKING:
+    from llmwikify.foundation.llm.spec import LLMSpec
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +63,15 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class SubagentRequest:
-    """What the parent sends to a child subagent process."""
+    """What the parent sends to a child subagent process.
+
+    LAL (PR 2): the ``llm`` field carries a fully-resolved
+    ``LLMSpec`` from the parent. The subagent process MUST NOT
+    re-parse env vars or config; it uses the spec to construct its
+    LLM client. ``actor_model`` is an optional override applied on
+    top of ``llm.model`` (validated against the provider's supported
+    models at the driver level).
+    """
 
     actor_name: str
     actor_prompt_source: str       # "file:<path>" or "inline:<truncated>"
@@ -72,8 +83,25 @@ class SubagentRequest:
     budget: dict[str, Any]
     session_id: str
     worktree_path: str | None      # if isolation == "worktree", path inside worktree
+    llm: LLMSpec | None = None   # LAL: parent-resolved LLM config (None for back-compat)
 
     def to_json(self) -> str:
+        from llmwikify.foundation.llm.spec import LLMSpec
+        llm_dict = None
+        if self.llm is not None:
+            llm_dict = {
+                "provider": self.llm.provider,
+                "base_url": self.llm.base_url,
+                "api_key": self.llm.api_key,
+                "model": self.llm.model,
+                "context_window": self.llm.context_window,
+                "timeout": self.llm.timeout,
+                "reasoning_split": self.llm.reasoning_split,
+                "auth_scheme": self.llm.auth_scheme,
+                "budget_on_exceed": self.llm.budget_on_exceed,
+                "extra_headers": dict(self.llm.extra_headers),
+                "source": self.llm.source,
+            }
         return json.dumps(
             {
                 "actor_name": self.actor_name,
@@ -86,12 +114,30 @@ class SubagentRequest:
                 "budget": self.budget,
                 "session_id": self.session_id,
                 "worktree_path": self.worktree_path,
+                "llm": llm_dict,
             }
         )
 
     @classmethod
-    def from_json(cls, text: str) -> "SubagentRequest":
+    def from_json(cls, text: str) -> SubagentRequest:
+        from llmwikify.foundation.llm.spec import LLMSpec
         d = json.loads(text)
+        llm = None
+        llm_dict = d.get("llm")
+        if llm_dict:
+            llm = LLMSpec(
+                provider=llm_dict["provider"],
+                base_url=llm_dict["base_url"],
+                api_key=llm_dict["api_key"],
+                model=llm_dict["model"],
+                context_window=llm_dict.get("context_window"),
+                timeout=llm_dict.get("timeout", 120.0),
+                reasoning_split=llm_dict.get("reasoning_split", False),
+                auth_scheme=llm_dict.get("auth_scheme", "bearer"),
+                budget_on_exceed=llm_dict.get("budget_on_exceed", "warn"),
+                extra_headers=llm_dict.get("extra_headers", {}) or {},
+                source=llm_dict.get("source", "config"),
+            )
         return cls(
             actor_name=d["actor_name"],
             actor_prompt_source=d["actor_prompt_source"],
@@ -103,6 +149,7 @@ class SubagentRequest:
             budget=d["budget"],
             session_id=d["session_id"],
             worktree_path=d.get("worktree_path"),
+            llm=llm,
         )
 
 
@@ -130,7 +177,7 @@ class SubagentResult:
         )
 
     @classmethod
-    def from_json(cls, text: str) -> "SubagentResult":
+    def from_json(cls, text: str) -> SubagentResult:
         d = json.loads(text)
         return cls(
             status=d.get("status", "error"),
@@ -222,6 +269,7 @@ def _build_request(
     session_id: str,
     worktree_path: str | None,
     base_dir: Path | None,
+    llm_spec: LLMSpec | None = None,
 ) -> SubagentRequest:
     prompt_text = _resolve_actor_prompt(actor, base_dir)
     return SubagentRequest(
@@ -235,6 +283,7 @@ def _build_request(
         budget=budget,
         session_id=session_id,
         worktree_path=worktree_path,
+        llm=llm_spec,
     )
 
 
@@ -254,7 +303,6 @@ def _spawn_subprocess(
     We always pass the writable end to the child, and use the
     readable end ourselves.
     """
-    import multiprocessing as mp
 
     ctx = mp.get_context("spawn")
     # Pipe(duplex=False) returns (r, w).  We use r locally, w in child.
@@ -308,7 +356,6 @@ def _spawn_subprocess_duplex(
     start: float,
 ) -> SubagentResult:
     """Spawn via a single duplex Pipe (parent writes request, reads reply)."""
-    import multiprocessing as mp
 
     ctx = mp.get_context("spawn")
     parent_end, child_end = ctx.Pipe(duplex=True)
@@ -464,10 +511,17 @@ def run_subagent(
     base_dir: Path | None,
     worktree_path: str | None = None,
     timeout_seconds: int = 1800,
+    llm_spec: LLMSpec | None = None,
 ) -> SubagentResult:
     """Spawn a subprocess for `actor` and return its result.
 
     This is the public entry point used by the workflow executor.
+
+    LAL (PR 2): ``llm_spec`` is the parent-resolved LLM config.
+    When provided, the subagent process uses it instead of
+    constructing a client from env vars. The gradient switch
+    ``LLM_SUBAGENT_INHERIT`` controls behaviour when ``llm_spec``
+    is None.
     """
     request = _build_request(
         actor=actor,
@@ -476,12 +530,14 @@ def run_subagent(
         session_id=session_id,
         worktree_path=worktree_path,
         base_dir=base_dir,
+        llm_spec=llm_spec,
     )
     logger.info(
-        "spawning subagent: actor=%s model=%s session=%s",
+        "spawning subagent: actor=%s model=%s session=%s llm_spec=%s",
         actor.name,
         actor.model,
         session_id,
+        "inherited" if llm_spec is not None else "none",
     )
     return _spawn_subprocess(request, timeout_seconds)
 
