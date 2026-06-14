@@ -492,13 +492,19 @@ class TestExtractFactorFromPage:
             ),
         }
         result = _extract_factor_from_page(page, "test-paper")
-        # generate_slug("Momentum Factor") = "momentum-factor"
-        assert result["name"] == "factor_test-paper_momentum-factor"
-        assert result["l1"]["definition"] == "Factor extracted from test-paper"
+        # Returns {"name": path, "factor": dict}
+        assert "name" in result
+        assert "factor" in result
+        # Name is a proper path: stock/price/momentum-factor
+        assert result["name"] == "stock/price/momentum-factor"
+        factor = result["factor"]
+        assert factor["l1"]["definition"] == "Factor extracted from test-paper"
         # frontmatter may parse as string or int depending on YAML parser
-        params = result["l1"]["default_params"]
+        params = factor["l1"]["default_params"]
         assert params["lookback"] == 20 or params["lookback"] == "20"
-        assert result["l2"]["complexity"] == "O(T × N)"
+        assert factor["l2"]["complexity"] == "O(T × N)"
+        assert factor["asset_type"] == "stock"
+        assert factor["category"] == "price"
 
     def test_extract_factor_string_params(self):
         from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
@@ -513,7 +519,7 @@ class TestExtractFactorFromPage:
             ),
         }
         result = _extract_factor_from_page(page, "test")
-        assert result["l1"]["default_params"] == {"period": 14}
+        assert result["factor"]["l1"]["default_params"] == {"period": 14}
 
     def test_extract_factor_missing_fields(self):
         from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
@@ -524,9 +530,9 @@ class TestExtractFactorFromPage:
         }
         result = _extract_factor_from_page(page, "test")
         # generate_slug("Unknown") = "unknown"
-        assert result["name"] == "factor_test_unknown"
-        assert result["l1"]["definition"] == "Factor extracted from test"
-        assert result["l1"]["default_params"] == {}
+        assert result["name"] == "stock/price/unknown"
+        assert result["factor"]["l1"]["definition"] == "Factor extracted from test"
+        assert result["factor"]["l1"]["default_params"] == {}
 
 
 # ── QuantWiki / FactorLibrary Edge Case Tests ────────────────
@@ -893,3 +899,93 @@ class TestL5Orchestrator:
         assert "test_factor" in prompt
         assert "H1" in prompt
         assert "0.05" in prompt
+
+
+# ═══════════════════════════════════════════════════════════════
+# Factor Value Store Tests
+# ═══════════════════════════════════════════════════════════════
+
+class TestFactorValueStore:
+    """Tests for DuckDB factor value storage."""
+
+    def test_store_and_query(self, tmp_path):
+        import pandas as pd
+        from llmwikify.reproduction.factor_value_store import store_factor_values, query_factor_values
+
+        db_path = tmp_path / "test.duckdb"
+        dates = pd.date_range("2024-01-01", periods=5)
+        stocks = ["000001.SZ", "000002.SZ"]
+        data = pd.DataFrame(
+            [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6], [0.7, 0.8], [0.9, 1.0]],
+            index=dates,
+            columns=stocks,
+        )
+
+        count = store_factor_values(data, "test_factor", db_path)
+        assert count == 10  # 5 dates × 2 stocks
+
+        result = query_factor_values("test_factor", db_path=db_path)
+        assert len(result) == 10
+        assert "date" in result.columns
+        assert "stock" in result.columns
+        assert "value" in result.columns
+
+    def test_store_empty(self, tmp_path):
+        import pandas as pd
+        from llmwikify.reproduction.factor_value_store import store_factor_values
+
+        db_path = tmp_path / "test.duckdb"
+        data = pd.DataFrame()
+        count = store_factor_values(data, "empty_factor", db_path)
+        assert count == 0
+
+    def test_upsert(self, tmp_path):
+        import pandas as pd
+        from llmwikify.reproduction.factor_value_store import store_factor_values, query_factor_values
+
+        db_path = tmp_path / "test.duckdb"
+        dates = pd.date_range("2024-01-01", periods=3)
+        data1 = pd.DataFrame({"A": [1.0, 2.0, 3.0]}, index=dates)
+        data2 = pd.DataFrame({"A": [4.0, 5.0, 6.0]}, index=dates)
+
+        store_factor_values(data1, "upsert_test", db_path)
+        store_factor_values(data2, "upsert_test", db_path)  # Should replace
+
+        result = query_factor_values("upsert_test", db_path=db_path)
+        assert len(result) == 3
+        assert result["value"].max() == 6.0  # Should have new values
+
+    def test_list_stored_factors(self, tmp_path):
+        import pandas as pd
+        from llmwikify.reproduction.factor_value_store import store_factor_values, list_stored_factors
+
+        db_path = tmp_path / "test.duckdb"
+        dates = pd.date_range("2024-01-01", periods=3)
+        data = pd.DataFrame({"A": [1.0, 2.0, 3.0]}, index=dates)
+
+        store_factor_values(data, "factor_a", db_path)
+        store_factor_values(data, "factor_b", db_path)
+
+        factors = list_stored_factors(db_path)
+        assert len(factors) == 2
+        names = [f["factor_name"] for f in factors]
+        assert "factor_a" in names
+        assert "factor_b" in names
+
+    def test_query_with_date_filter(self, tmp_path):
+        import pandas as pd
+        from llmwikify.reproduction.factor_value_store import store_factor_values, query_factor_values
+
+        db_path = tmp_path / "test.duckdb"
+        dates = pd.date_range("2024-01-01", periods=10)
+        data = pd.DataFrame({"A": range(10)}, index=dates, dtype=float)
+
+        store_factor_values(data, "date_filter_test", db_path)
+
+        result = query_factor_values(
+            "date_filter_test",
+            start_date="2024-01-03",
+            end_date="2024-01-07",
+            db_path=db_path,
+        )
+        assert len(result) == 5  # Jan 3-7
