@@ -121,11 +121,16 @@ class TestStreamableLLMClientAuthHeader:
         assert headers["api-key"] == "tp-test-key"
         assert "Authorization" not in headers
 
-    def test_xiaomi_default_url(self):
+    def test_xiaomi_default_url(self, monkeypatch):
+        # LAL (PR 4): legacy fallback for default-URL test.
+        monkeypatch.setenv("LLM_LEGACY_FALLBACK", "true")
         client = StreamableLLMClient(provider="xiaomi", api_key="tp-test")
         assert "xiaomimimo.com" in client.base_url
 
-    def test_base_url_strips_v1(self):
+    def test_base_url_strips_v1(self, monkeypatch):
+        # LAL (PR 4): the test omits model; use legacy fallback to
+        # keep the URL-strip behaviour observable.
+        monkeypatch.setenv("LLM_LEGACY_FALLBACK", "true")
         client = StreamableLLMClient(
             provider="xiaomi",
             base_url="https://token-plan-cn.xiaomimimo.com/v1",

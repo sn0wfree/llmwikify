@@ -6,9 +6,22 @@ import re
 from typing import Any
 
 from .llm.budget_decorator import check_token_budget
+from .llm.errors import LLMNotConfiguredError
 from .llm.resolver import resolve_chat_llm, resolver_enabled
 from .llm.spec import LLMSpec
 from .llm.token_budget import TokenBudgetChecker, TokenBudgetConfig
+
+
+def _legacy_fallback_enabled() -> bool:
+    """Return True if the historical gpt-4o / openai defaults are accepted.
+
+    Set ``LLM_LEGACY_FALLBACK=true`` to keep the old behaviour
+    where ``LLMClient()`` constructs with default provider/model
+    even when no config is provided. Default is ``false`` —
+    ``LLMClient()`` raises ``LLMNotConfiguredError`` instead.
+    """
+    val = os.environ.get("LLM_LEGACY_FALLBACK", "false").strip().lower()
+    return val in ("true", "1", "yes", "on")
 
 
 class LLMClient:
@@ -23,14 +36,33 @@ class LLMClient:
 
     def __init__(
         self,
-        provider: str = "openai",
+        provider: str | None = None,
         base_url: str = "",
         api_key: str = "",
-        model: str = "gpt-4o",
+        model: str | None = None,
         context_window: int | None = None,
         budget_on_exceed: str = "warn",
         request_timeout_seconds: float = 120,
     ):
+        # LAL (PR 4): default provider/model are None. LAL raises
+        # LLMNotConfiguredError on missing config; the historical
+        # gpt-4o / openai defaults are removed. Set
+        # LLM_LEGACY_FALLBACK=true to keep the old behaviour for
+        # one release as a kill switch.
+        if not _legacy_fallback_enabled():
+            if provider is None:
+                raise LLMNotConfiguredError(
+                    "LLMClient() requires a provider; pass provider=... "
+                    "or use LLMClient.from_spec(LLMSpec(...))."
+                )
+            if model is None:
+                raise LLMNotConfiguredError(
+                    "LLMClient() requires a model; pass model=... or "
+                    "use LLMClient.from_spec(LLMSpec(...))."
+                )
+        else:
+            provider = provider or "openai"
+            model = model or "gpt-4o"
         self.provider = provider
         self.base_url = base_url.rstrip("/") if base_url else self._default_base_url(provider)
         self.api_key = api_key

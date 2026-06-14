@@ -27,17 +27,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from llmwikify.apps.chat.base import ChatBase
-from llmwikify.apps.chat.db import ChatDatabase
-from llmwikify.apps.chat.agent.chat_react import REACT_SYSTEM_PROMPT
 from llmwikify.apps.chat.agent._error_logging import log_exception_returning
+from llmwikify.apps.chat.agent.chat_react import REACT_SYSTEM_PROMPT
 from llmwikify.apps.chat.agent.context_store import ContextStore
 from llmwikify.apps.chat.agent.text_mode_tool import (
     TOOL_CALL_RE,
-    parse_text_tool_call,
-    parse_perl_args,
     TextModeParser,
+    parse_perl_args,
+    parse_text_tool_call,
 )
+from llmwikify.apps.chat.base import ChatBase
+from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.foundation.llm.token_estimator import count_messages
 
 logger = logging.getLogger(__name__)
@@ -203,11 +203,11 @@ class ChatService(ChatBase):
         # LLM failures (rate limit, timeout, 5xx) with
         # exponential backoff. Applied to the initial stream
         # connection so the first-chunk failure is retried.
-        from llmwikify.apps.chat.retry_managers import (
-            LLMRetryManager,
-            DBRetryManager,
-        )
         from llmwikify.apps.chat.config import merge_six_step_config
+        from llmwikify.apps.chat.retry_managers import (
+            DBRetryManager,
+            LLMRetryManager,
+        )
         self._chat_config = merge_six_step_config()
         # v0.39 P0-1: bounded LRU store replaces unbounded dict.
         self._contexts = ContextStore(
@@ -663,9 +663,18 @@ class ChatService(ChatBase):
         if len(messages) <= self._chat_config.get("compaction_min_messages", 6):
             return messages
 
-        # Get token budget
+        # Get token budget. LAL (PR 4): no silent fallback to
+        # gpt-4o; if the LLM isn't configured we use a safe
+        # 'unknown' model name for token estimation. The estimate
+        # may be less accurate but never wrong in a misleading way.
         model = getattr(self, "llm_client", None)
-        model_name = getattr(model, "model", "gpt-4o") if model else "gpt-4o"
+        model_name = getattr(model, "model", None) if model else None
+        if model_name is None:
+            logger.warning(
+                "LLM not configured; using 'unknown' for token "
+                "estimation. Accuracy may be reduced."
+            )
+            model_name = "unknown"
         reserve = self._chat_config.get("context_reserve_tokens", 4096)
         override = self._chat_config.get("context_window_override", 0)
         if override > 0:
@@ -759,9 +768,13 @@ class ChatService(ChatBase):
         if not messages:
             return messages
 
-        # Get model name for token counting
+        # Get model name for token counting. LAL (PR 4): no
+        # silent gpt-4o fallback; 'unknown' is the safe choice
+        # when LLM is not configured.
         model = getattr(self, "llm_client", None)
-        model_name = getattr(model, "model", "gpt-4o") if model else "gpt-4o"
+        model_name = getattr(model, "model", None) if model else None
+        if model_name is None:
+            model_name = "unknown"
 
         # Determine context window budget
         reserve = self._chat_config.get("context_reserve_tokens", 4096)
@@ -934,11 +947,15 @@ class ChatService(ChatBase):
                 if thinking:
                     ctx._thinking = thinking
                 ctx.add_assistant_message(final)
-                # Estimate token usage for the assistant message
+                # Estimate token usage for the assistant message.
+                # LAL (PR 4): no silent gpt-4o fallback; 'unknown'
+                # is the safe choice when LLM is not configured.
                 from llmwikify.foundation.llm.token_estimator import count_tokens
                 model_name = getattr(
-                    getattr(self, "llm_client", None), "model", "gpt-4o"
-                ) if self.llm_client else "gpt-4o"
+                    getattr(self, "llm_client", None), "model", None
+                ) if self.llm_client else None
+                if model_name is None:
+                    model_name = "unknown"
                 tokens_output = count_tokens(final, model_name)
                 self._save_message(
                     session_id, "assistant", final,

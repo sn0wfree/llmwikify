@@ -13,8 +13,9 @@ Manages:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from llmwikify.apps.chat.agent.context_store import ContextStore
 from llmwikify.foundation.llm.token_estimator import count_messages
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 class AgentContext:
     """In-memory conversation state for one session."""
 
+    session_id: str = ""
     wiki_id: str | None = None
     messages: list[dict[str, str]] = field(default_factory=list)
     recent_wiki_id: str | None = None
@@ -120,6 +122,7 @@ class ContextManager:
         ctx = self._contexts.get(session_id)
         if ctx is None:
             ctx = AgentContext(
+                session_id=session_id,
                 wiki_id=wiki_id,
                 _observation_limit=self.config.get("observation_limit", 10),
                 _observation_summary_limit=self.config.get("observation_summary_limit", 5),
@@ -289,9 +292,14 @@ class ContextManager:
     # ─── Internal helpers ──────────────────────────────────────
 
     def _get_model_name(self) -> str:
+        # LAL (PR 4): no silent gpt-4o fallback. 'unknown' is the
+        # safe choice when LLM is not configured; token estimation
+        # uses the 'unknown' heuristic in that case.
         if self._llm_client is not None:
-            return getattr(self._llm_client, "model", "gpt-4o")
-        return "gpt-4o"
+            name = getattr(self._llm_client, "model", None)
+            if name is not None:
+                return name
+        return "unknown"
 
     def _compute_budget(self) -> int:
         """Compute available token budget (shared by compact/truncate)."""

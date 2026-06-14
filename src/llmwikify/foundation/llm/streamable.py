@@ -24,8 +24,9 @@ import json
 import os
 from typing import Any
 
-from ..llm_client import LLMClient
+from ..llm_client import LLMClient, _legacy_fallback_enabled
 from .budget_decorator import check_token_budget
+from .errors import LLMNotConfiguredError
 from .resolver import resolve_chat_llm, resolver_enabled
 from .spec import LLMSpec
 from .token_budget import TokenBudgetChecker, TokenBudgetConfig
@@ -149,16 +150,33 @@ class StreamableLLMClient(LLMClient):
 
     def __init__(
         self,
-        provider: str = "openai",
+        provider: str | None = None,
         base_url: str = "",
         api_key: str = "",
-        model: str = "gpt-4o",
+        model: str | None = None,
         reasoning_split: bool = False,
         auth_header: str = "bearer",
         context_window: int | None = None,
         budget_on_exceed: str = "warn",
         request_timeout_seconds: float = 120,
     ):
+        # LAL (PR 4): default provider/model are None. When neither
+        # is supplied, raise LLMNotConfiguredError unless the
+        # historical fallback kill-switch is on.
+        if not _legacy_fallback_enabled():
+            if provider is None:
+                raise LLMNotConfiguredError(
+                    "StreamableLLMClient() requires a provider; pass "
+                    "provider=... or use StreamableLLMClient.from_spec()."
+                )
+            if model is None:
+                raise LLMNotConfiguredError(
+                    "StreamableLLMClient() requires a model; pass "
+                    "model=... or use StreamableLLMClient.from_spec()."
+                )
+        else:
+            provider = provider or "openai"
+            model = model or "gpt-4o"
         self.provider = provider
         raw_base = base_url if base_url else self._default_base_url(provider)
         self.base_url = raw_base.rstrip("/").removesuffix("/v1")
