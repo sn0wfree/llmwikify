@@ -504,3 +504,56 @@ async def get_factor_backtest_results(slug: str, limit: int = 10) -> dict[str, A
         })
 
     return {"slug": slug, "runs": runs, "total": len(runs)}
+
+
+class L5ValidateRequest(BaseModel):
+    universe: str = Field(default_factory=lambda: config.get("universe.default", "synth"))
+    start_date: str = Field(default="2023-01-01", pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str = Field(default="2024-12-31", pattern=r"^\d{4}-\d{2}-\d{2}$")
+    adj_mode: str = Field(default="D")
+    n_groups: int = Field(default=5, ge=2, le=10)
+    factor_direction: int = Field(default=1)
+    cost_bps: float = Field(default=15.0, ge=0, le=100)
+
+
+@router.post("/{slug}/validate")
+async def validate_factor(slug: str, req: L5ValidateRequest) -> dict[str, Any]:
+    """Run L5 automated validation pipeline for a factor.
+
+    Executes: backtest → 7 analysis modules → scoring → (LLM hypothesis testing) → write YAML.
+    """
+    import asyncio
+    from llmwikify.reproduction.l5_orchestrator import run_l5_pipeline
+
+    factor = read_factor_yaml(slug)
+    if factor is None:
+        raise HTTPException(status_code=404, detail=f"Factor '{slug}' not found")
+
+    bt_params = {
+        "universe": req.universe,
+        "start_date": req.start_date,
+        "end_date": req.end_date,
+        "adj_mode": req.adj_mode,
+        "n_groups": req.n_groups,
+        "factor_direction": req.factor_direction,
+    }
+
+    # Run in thread pool to avoid blocking
+    result = await asyncio.to_thread(
+        run_l5_pipeline,
+        factor_name=slug,
+        llm_client=None,  # LLM step skipped for now
+        cost_bps=req.cost_bps,
+        backtest_params=bt_params,
+    )
+
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result.get("error", "Validation failed"))
+
+    return {
+        "slug": slug,
+        "status": result["status"],
+        "score": result["score"],
+        "breakdown": result["breakdown"],
+        "message": f"Validation complete: {result['status']} ({result['score']}/100)",
+    }
