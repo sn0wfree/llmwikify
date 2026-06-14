@@ -1,0 +1,159 @@
+factor:
+  # === 元数据 ===
+  name: stock_fundamental_value_60d
+  name_cn: 股票60日估值因子
+  asset_type: stock
+  category: fundamental
+  subcategory: value
+  version: 1
+  created_at: 2024-01-01
+  updated_at: 2024-07-19
+  status: 已注册
+
+  # === L1 逻辑层 ===
+  l1:
+    definition: 当前价格相对于60日均线的偏离程度
+    formula: f_t = close_t / MA(close, 60) - 1
+    input_columns: [close]
+    frequency: 日频
+    output_schema: "[date × Code]"
+    nan_meaning: 早期数据不足60日
+    default_params: { period: 60 }
+    param_constraints: { period: "≥20" }
+    business_constraints: 个股上市不足period日时不可算
+
+  # === L2 计算定义层 ===
+  l2:
+    calculation_steps:
+      - step: 1
+        description: 取close序列
+        input: close_wide [date × Code]
+        output: close_series [date × scalar]
+      - step: 2
+        description: 计算60日简单移动平均
+        input: close_series
+        output: ma_series [date × scalar]
+        formula: MA_t = (close_t + close_{t-1} + ... + close_{t-59}) / 60
+      - step: 3
+        description: 计算价格偏离度
+        input: close_series, ma_series
+        output: factor_wide [date × Code]
+        formula: f_t = close_t / MA_t - 1
+    edge_case_handling: 前60个日期输出NaN
+    missing_value_handling: 保持NaN（不插值）
+    data_alignment: 默认 T+1：T日信号→T+1日调仓
+    complexity: O(T × N)
+    code_location: factor_backtest.py:_compute_factor_values
+
+  # === L3 金融理解层 ===
+  l3:
+    financial_intuition: 当前价格相对于市场认可的合理价格水平的偏离
+    market_behavior: 价格均值回归倾向
+    theoretical_basis: 有效市场假说的均值回归修正；DeBondt & Thaler (1985) 过度反应理论
+    historical_effectiveness: 价值因子在A股长期有效，但短期可能失效
+    related_factors: 与动量因子方向相反（价值 vs 成长）；与波动率因子可能负相关
+
+  # === L4 因子含义层 ===
+  l4:
+    hypotheses:
+      - id: H1
+        name: 均值回归
+        description: 高偏离→未来回归均值（价格下跌）
+        expected_ic_sign: 负
+        source: 均值回归理论
+        priority: 主假设
+        status: 未验证
+      - id: H2
+        name: 趋势延续
+        description: 高偏离→未来继续偏离（动量效应）
+        expected_ic_sign: 正
+        source: 动量效应理论
+        priority: 辅助假设
+        status: 未验证
+      - id: H3
+        name: 价值发现
+        description: 低偏离→未来上涨（被低估）
+        expected_ic_sign: 正（反向）
+        source: 价值投资理论
+        priority: 辅助假设
+        status: 未验证
+    hypothesis_limit: 5
+    archived_hypotheses: []
+    meaning_summary: |
+      60日估值因子衡量当前价格相对于60日均线的偏离程度。
+      - 如果H1成立：均值回归信号（高偏离→未来下跌）
+      - 如果H2成立：趋势延续信号（高偏离→未来继续上涨）
+      - 如果H3成立：价值发现信号（低偏离→未来上涨）
+      - 实际含义取决于L5验证结果
+    key_insights:
+      - 价值因子在A股长期有效，但短期可能失效
+      - 与动量因子可能存在互补关系
+      - 不同市场环境下表现可能不同
+    uncertainty: |
+      因子含义尚不明确，需L5验证后确定：
+      1. 如果H1成立：均值回归因子
+      2. 如果H2成立：动量因子
+      3. 如果H3成立：价值因子
+    final_meaning: null  # L5验证后回填
+
+  # === L5 验证层 ===
+  l5:
+    factor_analysis:
+      ic_analysis:
+        ic_mean: 0.0
+        ic_std: 0.0
+        icir: 0.0
+        rank_ic_mean: 0.0
+        rank_ic_std: 0.0
+        rank_icir: 0.0
+      group_analysis:
+        group_returns: {}
+        group_monotonicity: null
+        ls_ann_return: 0.0
+        ls_sharpe: 0.0
+        ls_max_drawdown: 0.0
+      return_analysis:
+        ann_return: 0.0
+        ann_volatility: 0.0
+        sharpe: 0.0
+        max_drawdown: 0.0
+        calmar: 0.0
+        sortino: 0.0
+      turnover_analysis:
+        avg_turnover: 0.0
+        turnover_std: 0.0
+      stability_analysis:
+        yearly: {}
+        industry: {}
+        market_cap: {}
+      oos_analysis:
+        oos_rank_ic: 0.0
+        oos_ls_return: 0.0
+        oos_sharpe: 0.0
+      cost_analysis:
+        cost_bps: 15
+        net_ann_return: 0.0
+        cost_sensitivity: {}
+    hypothesis_testing:
+      - hypothesis_id: H1
+        conclusion: 待验证
+      - hypothesis_id: H2
+        conclusion: 待验证
+      - hypothesis_id: H3
+        conclusion: 待验证
+    overall_assessment:
+      score: 0
+      status: 待验证
+      final_meaning: null
+    validation_date: null
+
+  # === L6 风险层 ===
+  l6:
+    window_sensitivity: {}
+    regime_sensitivity: {}
+    style_exposure: {}
+    industry_concentration: 未知
+    crowding_level: 未知
+    decay_analysis: {}
+    failure_conditions: 待分析
+    risk_notes: 待分析
