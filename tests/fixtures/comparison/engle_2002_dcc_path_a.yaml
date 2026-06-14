@@ -1,0 +1,95 @@
+factor:
+  name: stock_fundamental_dcc_correlation
+  name_cn: DCC_Correlation
+  asset_type: stock
+  category: price
+  subcategory: volatility
+  version: 1
+  status: 已注册
+  l1:
+    definition: Dynamic conditional correlation that evolves over time based on past
+      standardized residuals, capturing correlation regime changes
+    formula: Q_t = (1 - a - b) * Q_bar + a * (e_{t-1} * e_{t-1}') + b * Q_{t-1}; R_t
+      = diag(Q_t)^{-1/2} * Q_t * diag(Q_t)^{-1/2}
+    input_columns:
+    - returns
+    - standardized_residuals
+    frequency: 日频
+    output_schema: '[date × Code]'
+    nan_meaning: TBD
+    default_params:
+      a: 0.06
+      b: 0.94
+      window: 500
+    param_constraints:
+      a: '>= 0, < 1'
+      b: '>= 0, < 1'
+      a + b: < 1 (ensures stationarity)
+    business_constraints: Requires univariate GARCH estimation first; computationally
+      feasible for N <= 100 assets
+  l2:
+    calculation_steps:
+    - step: 1
+      description: Fit univariate GARCH(1,1) to each asset
+      formula: σ_i,t² = ω_i + α_i * ε_i,t-1² + β_i * σ_i,t-1²
+    - step: 2
+      description: Compute standardized residuals
+      formula: e_i,t = r_i,t / σ_i,t
+    - step: 3
+      description: Estimate unconditional correlation matrix
+      formula: Q_bar = T^(-1) * Σ(e_t * e_t')
+    - step: 4
+      description: Recursively update DCC correlation matrix
+      formula: Q_t = (1-a-b) * Q_bar + a * (e_{t-1} * e_{t-1}') + b * Q_{t-1}
+    - step: 5
+      description: Normalize to obtain correlation matrix
+      formula: R_t = diag(Q_t)^{-1/2} * Q_t * diag(Q_t)^{-1/2}
+    edge_case_handling: Ensure positive definiteness via Q_bar initialization; use
+      near-benchmark correlation if matrix becomes non-positive definite
+    missing_value_handling: Listwise deletion within rolling window; require minimum
+      60% data coverage
+    data_alignment: T+1
+    complexity: O(T × N²) for N assets and T time periods
+  l3:
+    financial_intuition: Correlations are not constant but rise during market stress.
+      DCC captures this by making correlations respond to shock innovations while
+      maintaining persistence from historical patterns.
+    market_behavior: 'Detects correlation regime shifts: low stable correlations during
+      normal periods, rapid correlation spikes during crises'
+    theoretical_basis: Engle (2002) DCC-GARCH model extending Bollerslev (1990) CCC
+      framework with time-varying correlations
+    historical_effectiveness: Empirically validated on stocks, bonds, currencies;
+      outperforms constant correlation models in crisis periods
+    related_factors: Related to implied correlation, VIX, cross-asset correlation
+      metrics; complements volatility factor for portfolio construction
+  l4:
+    hypotheses:
+    - id: H1
+      name: Correlation Regime Shift Hypothesis
+      description: DCC correlations detect regime changes earlier than constant correlation
+        models
+      expected_ic_sign: 正
+      source: DCC model captures time-varying nature of correlations
+      priority: 主假设
+    - id: H2
+      name: Crisis Correlation Spike Hypothesis
+      description: DCC correlations increase significantly during market stress periods
+      expected_ic_sign: 正
+      source: Engle 2002 empirical findings
+      priority: 主假设
+    - id: H3
+      name: Correlation Mean Reversion Hypothesis
+      description: DCC correlations revert toward long-term average after shock dissipation
+      expected_ic_sign: 正
+      source: DCC structure with (1-a-b)Q_bar term
+      priority: 辅助假设
+    meaning_summary: Captures the dynamic, regime-dependent nature of inter-asset
+      correlations enabling better portfolio risk estimation and dynamic hedging
+    key_insights:
+    - 'Parsimonious: reduces parameters from O(N^4) to O(N^2 + 2) for N assets'
+    - Guarantees positive definite correlation matrices
+    - Two-step estimation enables scalability to large asset universes
+    uncertainty: Parameter sensitivity to estimation window; assumes symmetric response
+      to positive/negative shocks
+  l5: {}
+  l6: {}

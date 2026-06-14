@@ -1,0 +1,474 @@
+{
+  "factors": [
+    {
+      "name": "DCC_Correlation",
+      "factor_class": "volatility",
+      "description": "Time-varying dynamic conditional correlation between asset pairs estimated via DCC-GARCH framework that captures regime-dependent correlation structures",
+      "formula": "Q_t = (1 - a - b) * Q_bar + a * (e_{t-1} * e_{t-1}') + b * Q_{t-1}; R_t = diag(Q_t)^{-1/2} * Q_t * diag(Q_t)^{-1/2}",
+      "params": {
+        "a": "DCC alpha (shock impact on correlation, typically 0.05-0.10)",
+        "b": "DCC beta (correlation persistence, typically 0.85-0.95)",
+        "lookback_window": 500,
+        "univariate_garch_type": "GARCH(1,1)"
+      },
+      "signal_type": "volatility",
+      "signal_params": {
+        "correlation_threshold": 0.6,
+        "regime_detection": true,
+        "z_score_window": 252
+      },
+      "l1": {
+        "definition": "Dynamic conditional correlation that evolves over time based on past standardized residuals, capturing correlation regime changes",
+        "input_columns": [
+          "returns",
+          "standardized_residuals"
+        ],
+        "frequency": "日频",
+        "default_params": {
+          "a": 0.06,
+          "b": 0.94,
+          "window": 500
+        },
+        "param_constraints": {
+          "a": ">= 0, < 1",
+          "b": ">= 0, < 1",
+          "a + b": "< 1 (ensures stationarity)"
+        },
+        "business_constraints": "Requires univariate GARCH estimation first; computationally feasible for N <= 100 assets"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "Fit univariate GARCH(1,1) to each asset",
+            "formula": "σ_i,t² = ω_i + α_i * ε_i,t-1² + β_i * σ_i,t-1²"
+          },
+          {
+            "step": 2,
+            "description": "Compute standardized residuals",
+            "formula": "e_i,t = r_i,t / σ_i,t"
+          },
+          {
+            "step": 3,
+            "description": "Estimate unconditional correlation matrix",
+            "formula": "Q_bar = T^(-1) * Σ(e_t * e_t')"
+          },
+          {
+            "step": 4,
+            "description": "Recursively update DCC correlation matrix",
+            "formula": "Q_t = (1-a-b) * Q_bar + a * (e_{t-1} * e_{t-1}') + b * Q_{t-1}"
+          },
+          {
+            "step": 5,
+            "description": "Normalize to obtain correlation matrix",
+            "formula": "R_t = diag(Q_t)^{-1/2} * Q_t * diag(Q_t)^{-1/2}"
+          }
+        ],
+        "edge_case_handling": "Ensure positive definiteness via Q_bar initialization; use near-benchmark correlation if matrix becomes non-positive definite",
+        "missing_value_handling": "Listwise deletion within rolling window; require minimum 60% data coverage",
+        "complexity": "O(T × N²) for N assets and T time periods"
+      },
+      "l3": {
+        "financial_intuition": "Correlations are not constant but rise during market stress. DCC captures this by making correlations respond to shock innovations while maintaining persistence from historical patterns.",
+        "market_behavior": "Detects correlation regime shifts: low stable correlations during normal periods, rapid correlation spikes during crises",
+        "theoretical_basis": "Engle (2002) DCC-GARCH model extending Bollerslev (1990) CCC framework with time-varying correlations",
+        "historical_effectiveness": "Empirically validated on stocks, bonds, currencies; outperforms constant correlation models in crisis periods",
+        "related_factors": "Related to implied correlation, VIX, cross-asset correlation metrics; complements volatility factor for portfolio construction"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "Correlation Regime Shift Hypothesis",
+            "description": "DCC correlations detect regime changes earlier than constant correlation models",
+            "expected_ic_sign": "正",
+            "source": "DCC model captures time-varying nature of correlations",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "Crisis Correlation Spike Hypothesis",
+            "description": "DCC correlations increase significantly during market stress periods",
+            "expected_ic_sign": "正",
+            "source": "Engle 2002 empirical findings",
+            "priority": "主假设"
+          },
+          {
+            "id": "H3",
+            "name": "Correlation Mean Reversion Hypothesis",
+            "description": "DCC correlations revert toward long-term average after shock dissipation",
+            "expected_ic_sign": "正",
+            "source": "DCC structure with (1-a-b)Q_bar term",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "Captures the dynamic, regime-dependent nature of inter-asset correlations enabling better portfolio risk estimation and dynamic hedging",
+        "key_insights": [
+          "Parsimonious: reduces parameters from O(N^4) to O(N^2 + 2) for N assets",
+          "Guarantees positive definite correlation matrices",
+          "Two-step estimation enables scalability to large asset universes"
+        ],
+        "uncertainty": "Parameter sensitivity to estimation window; assumes symmetric response to positive/negative shocks"
+      },
+      "confidence": "high"
+    },
+    {
+      "name": "DCC_Alpha_Parameter",
+      "factor_class": "signal_composite",
+      "description": "Speed of adjustment parameter in DCC model controlling how quickly correlations respond to new shock innovations",
+      "formula": "a ∈ [0, 1), typically estimated via QMLE in range [0.05, 0.10]",
+      "params": {
+        "estimated_range": "0.05-0.10",
+        "estimation_method": "QMLE"
+      },
+      "signal_type": "signal_composite",
+      "signal_params": {
+        "interpretation": "higher alpha = faster correlation response to shocks",
+        "monitoring_threshold": 0.15
+      },
+      "l1": {
+        "definition": "DCC model parameter controlling the immediate impact of shock innovations on time-varying correlations",
+        "input_columns": [
+          "standardized_residuals",
+          "Q_t"
+        ],
+        "frequency": "日频",
+        "default_params": {
+          "alpha": 0.06
+        },
+        "param_constraints": {
+          "alpha": "0 <= alpha < 1",
+          "alpha + beta": "< 1 for stationarity"
+        },
+        "business_constraints": "Estimated via maximum likelihood; typically ranges 0.05-0.10 for financial returns"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "Initialize Q_0 as unconditional correlation of standardized residuals",
+            "formula": "Q_0 = Q_bar"
+          },
+          {
+            "step": 2,
+            "description": "For each t, compute Q_t using DCC recursion",
+            "formula": "Q_t = (1-a-b)Q_bar + a(e_{t-1}e_{t-1}') + bQ_{t-1}"
+          },
+          {
+            "step": 3,
+            "description": "Maximize log-likelihood with respect to (a, b) parameters",
+            "formula": "LL = -0.5 * Σ[log(2π) + log|R_t| + e_t'R_t^{-1}e_t]"
+          }
+        ],
+        "edge_case_handling": "Use Box-Cox transformation if likelihood convergence issues arise",
+        "missing_value_handling": "Full sample maximum likelihood with available data",
+        "complexity": "O(T × N²) per iteration"
+      },
+      "l3": {
+        "financial_intuition": "Higher alpha indicates correlations react quickly to new information; lower alpha suggests slow, gradual correlation adjustments",
+        "market_behavior": "Alpha captures correlation 'shock sensitivity' - high alpha markets show rapid correlation transmission",
+        "theoretical_basis": "DCC-GARCH parameterization from Engle (2002)",
+        "historical_effectiveness": "Empirically alpha typically in 0.05-0.10 range for equity returns",
+        "related_factors": "Complements DCC_Beta for complete DCC specification; related to shock transmission speed in network models"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "Alpha Persistence Tradeoff",
+            "description": "Higher alpha implies faster correlation adjustment but less persistence",
+            "expected_ic_sign": "正",
+            "source": "DCC structure",
+            "priority": "辅助假设"
+          }
+        ],
+        "meaning_summary": "Measures speed of correlation discovery in response to market shocks",
+        "key_insights": [
+          "Alpha + Beta < 1 ensures covariance stationarity",
+          "Typical range 0.05-0.10 for financial data"
+        ],
+        "uncertainty": "Parameter estimates have standard errors; sensitive to window choice"
+      },
+      "confidence": "medium"
+    },
+    {
+      "name": "DCC_Beta_Parameter",
+      "factor_class": "signal_composite",
+      "description": "Persistence parameter in DCC model controlling how much past correlation structure influences current correlations",
+      "formula": "b ∈ [0, 1), typically estimated in range [0.85, 0.95]",
+      "params": {
+        "estimated_range": "0.85-0.95",
+        "estimation_method": "QMLE"
+      },
+      "signal_type": "signal_composite",
+      "signal_params": {
+        "interpretation": "higher beta = more persistent correlations",
+        "monitoring_threshold": 0.99
+      },
+      "l1": {
+        "definition": "DCC model persistence parameter measuring how much historical correlation patterns influence current correlations",
+        "input_columns": [
+          "Q_{t-1}",
+          "R_t"
+        ],
+        "frequency": "日频",
+        "default_params": {
+          "beta": 0.94
+        },
+        "param_constraints": {
+          "beta": "0 <= beta < 1",
+          "a + beta": "< 1 for stationarity"
+        },
+        "business_constraints": "Typically 0.85-0.95 for financial returns; values near 1 indicate slow mean reversion"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "Jointly estimate (a, b) via QMLE",
+            "formula": "Maximize Σ log L(a, b | data)"
+          },
+          {
+            "step": 2,
+            "description": "Compute standard errors via outer product gradient",
+            "formula": "SE(β) = [I(β)^(-1)]^(1/2)"
+          },
+          {
+            "step": 3,
+            "description": "Verify stationarity condition a + b < 1",
+            "formula": "1 - a - b > 0"
+          }
+        ],
+        "edge_case_handling": "If a + b >= 1, respecify model or reduce window",
+        "missing_value_handling": "Full sample ML estimation",
+        "complexity": "O(T × N²) per iteration"
+      },
+      "l3": {
+        "financial_intuition": "Beta near 1 indicates correlations are highly persistent - once elevated, they stay elevated for extended periods",
+        "market_behavior": "High beta markets show correlation 'clustering' - stress correlations persist even after initial shock",
+        "theoretical_basis": "DCC-GARCH persistence parameter",
+        "historical_effectiveness": "Empirically beta typically 0.85-0.95; higher for bonds than equities",
+        "related_factors": "Complements DCC_Alpha; related to correlation half-life calculation"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "Correlation Half-Life Hypothesis",
+            "description": "High beta implies long correlation half-life - regime changes persist",
+            "expected_ic_sign": "正",
+            "source": "DCC structure",
+            "priority": "主假设"
+          }
+        ],
+        "meaning_summary": "Measures correlation memory - how long past correlation patterns influence current correlations",
+        "key_insights": [
+          "Half-life = log(0.5)/log(b) days",
+          "Beta=0.94 implies ~11 day half-life"
+        ],
+        "uncertainty": "Parameter estimates can be unstable in short samples"
+      },
+      "confidence": "medium"
+    },
+    {
+      "name": "Correlation_Regime_Shift_Indicator",
+      "factor_class": "volatility",
+      "description": "Binary or continuous indicator detecting when DCC correlations exceed historical thresholds or show sudden regime transitions",
+      "formula": "CRS_t = I(R_t^{DCC} > threshold) or CRS_t = (R_t^{DCC} - μ_R) / σ_R",
+      "params": {
+        "threshold_type": "historical_quantile",
+        "quantile_level": 0.75,
+        "lookback_period": 252
+      },
+      "signal_type": "volatility",
+      "signal_params": {
+        "regime_classification": "normal|elevated|stress",
+        "threshold_multiples": [
+          1.5,
+          2.0
+        ]
+      },
+      "l1": {
+        "definition": "Indicator identifying when dynamic correlations enter stress regimes based on deviation from historical norms",
+        "input_columns": [
+          "DCC_correlation",
+          "historical_correlation"
+        ],
+        "frequency": "日频",
+        "default_params": {
+          "z_score_threshold": 2.0,
+          "lookback": 252
+        },
+        "param_constraints": {
+          "lookback": ">= 60 for statistical stability"
+        },
+        "business_constraints": "Used for dynamic position sizing; requires sufficient history for threshold calibration"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "Calculate rolling mean and std of DCC correlations",
+            "formula": "μ_R = (1/T) Σ R_t, σ_R = sqrt((1/T) Σ (R_t - μ_R)²)"
+          },
+          {
+            "step": 2,
+            "description": "Compute z-score of current correlation",
+            "formula": "z_t = (R_t - μ_R) / σ_R"
+          },
+          {
+            "step": 3,
+            "description": "Classify regime based on z-score thresholds",
+            "formula": "Regime = 'stress' if |z_t| > 2.0, else 'elevated' if |z_t| > 1.5, else 'normal'"
+          },
+          {
+            "step": 4,
+            "description": "Generate regime shift signal if transition detected",
+            "formula": "Signal = 1 if Regime_t != Regime_{t-1}, else 0"
+          }
+        ],
+        "edge_case_handling": "Handle regime persistence: require N consecutive observations before declaring regime change",
+        "missing_value_handling": "Use expanding window for first lookback periods",
+        "complexity": "O(T × N²)"
+      },
+      "l3": {
+        "financial_intuition": "Portfolio diversification fails precisely when needed most - this indicator detects when correlation regime shifts into stress mode",
+        "market_behavior": "Normal: low stable correlations; Elevated: correlation rising; Stress: correlations spike above threshold",
+        "theoretical_basis": "Based on DCC model properties and empirical correlation distribution analysis",
+        "historical_effectiveness": "Effective during 2008 crisis, 2020 COVID crash; identifies correlation breakdown earlier than rolling windows",
+        "related_factors": "Related to VIX, global risk factors, cross-asset correlation indicators; complements momentum for regime detection"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "Correlation Regime Predictability",
+            "description": "High DCC correlations predict subsequent return co-movement",
+            "expected_ic_sign": "负",
+            "source": "Correlation clustering literature",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "Diversification Failure Timing",
+            "description": "Correlation regime shifts precede or coincide with drawdowns",
+            "expected_ic_sign": "负",
+            "source": "Empirical market stress analysis",
+            "priority": "主假设"
+          }
+        ],
+        "meaning_summary": "Detects when inter-asset correlations enter stress regimes, enabling dynamic portfolio rebalancing before diversification fails",
+        "key_insights": [
+          "Crisis correlations often exceed 0.8 for previously uncorrelated assets",
+          "Regime persistence matters: brief spikes may be noise",
+          "Threshold calibration critical - too sensitive creates false signals"
+        ],
+        "uncertainty": "Threshold sensitivity; lag in detection during rapid regime shifts"
+      },
+      "confidence": "high"
+    },
+    {
+      "name": "DCC_Composite_Signal",
+      "factor_class": "signal_composite",
+      "description": "Composite signal combining DCC correlations with volatility measures for portfolio optimization and risk management applications",
+      "formula": "Signal_t = w_1 * CRS_t + w_2 * DCC_t + w_3 * σ_t",
+      "params": {
+        "weights": {
+          "regime": 0.4,
+          "correlation": 0.3,
+          "volatility": 0.3
+        },
+        "normalization": "z_score",
+        "combination_method": "weighted_average"
+      },
+      "signal_type": "signal_composite",
+      "signal_params": {
+        "rebalance_threshold": 0.5,
+        "position_scaling": true
+      },
+      "l1": {
+        "definition": "Multi-factor composite signal integrating DCC correlation dynamics, regime shift indicators, and volatility measures for cross-asset portfolio optimization",
+        "input_columns": [
+          "DCC_correlation",
+          "regime_indicator",
+          "GARCH_volatility"
+        ],
+        "frequency": "日频",
+        "default_params": {
+          "regime_weight": 0.4,
+          "correlation_weight": 0.3,
+          "volatility_weight": 0.3
+        },
+        "param_constraints": {
+          "weights_sum": "= 1.0",
+          "rebalance_frequency": "<= 1 day"
+        },
+        "business_constraints": "Used for dynamic position sizing; requires DCC estimation completed first; computationally feasible for N <= 100"
+      },
+      "l2": {
+        "calculation_steps": [
+          {
+            "step": 1,
+            "description": "Standardize each component to z-scores",
+            "formula": "z_i = (x_i - μ_i) / σ_i"
+          },
+          {
+            "step": 2,
+            "description": "Apply weights to standardized components",
+            "formula": "raw_signal = w_1 * z_regime + w_2 * z_corr + w_3 * z_vol"
+          },
+          {
+            "step": 3,
+            "description": "Scale signal to target volatility",
+            "formula": "scaled_signal = raw_signal * (target_vol / actual_vol)"
+          },
+          {
+            "step": 4,
+            "description": "Generate position sizing recommendation",
+            "formula": "position = sign(signal) * min(|signal|, max_position)"
+          }
+        ],
+        "edge_case_handling": "Cap signal at ±2σ to limit extreme positions; require minimum 60% data coverage",
+        "missing_value_handling": "Use last available values with decay for up to 5 days",
+        "complexity": "O(T × N²)"
+      },
+      "l3": {
+        "financial_intuition": "Combines correlation regime detection with volatility information for optimal risk-adjusted position sizing across multiple assets",
+        "market_behavior": "In normal markets: lower correlations favor diversification; in stress: reduce exposure due to elevated correlations",
+        "theoretical_basis": "DCC-GARCH for correlations; Markowitz optimization for portfolio construction",
+        "historical_effectiveness": "Composite signal improves Sharpe ratio vs single-factor approaches; reduces drawdown during correlation spikes",
+        "related_factors": "Combines DCC_Correlation, Correlation_Regime_Shift_Indicator, GARCH_volatility into unified framework"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "Dynamic Correlation Advantage",
+            "description": "Composite signal using DCC correlations outperforms static correlation portfolios",
+            "expected_ic_sign": "正",
+            "source": "Engle 2002 empirical validation",
+            "priority": "主假设"
+          },
+          {
+            "id": "H2",
+            "name": "Regime-Based Position Sizing",
+            "description": "Adjusting positions based on correlation regime improves risk-adjusted returns",
+            "expected_ic_sign": "正",
+            "source": "Dynamic portfolio allocation theory",
+            "priority": "主假设"
+          }
+        ],
+        "meaning_summary": "Unified signal combining correlation dynamics, regime detection, and volatility for sophisticated multi-asset portfolio management",
+        "key_insights": [
+          "DCC captures time-varying correlations missed by constant models",
+          "Regime indicator provides actionable threshold signals",
+          "Composite approach balances multiple risk dimensions"
+        ],
+        "uncertainty": "Weight optimization challenging; requires backtesting for parameter tuning"
+      },
+      "confidence": "medium"
+    }
+  ],
+  "primary_factor": "DCC_Correlation",
+  "reasoning": "DCC_Correlation is selected as primary because it is the core output of Engle (2002)'s DCC-GARCH framework and directly captures the time-varying correlation dynamics that distinguish this approach from constant correlation models. The other factors (alpha/beta parameters, regime indicator, composite signal) are derived from or depend on DCC_Correlation. The volatility signal type is appropriate as DCC models capture both volatility clustering and correlation dynamics, making it suitable for risk management and portfolio optimization applications."
+}

@@ -1,0 +1,121 @@
+{
+  "strategy_logic": {
+    "core_hypothesis": "Three common factors (market excess return, SMB, HML) explain most of the cross-sectional variation in stock and bond returns, challenging the single-factor CAPM",
+    "market_logic": "Stocks with similar factor loadings (size and value characteristics) exhibit systematic comovement. Small-cap stocks and high book-to-market (value) stocks command risk premiums that are not captured by market beta alone",
+    "alpha_source": "Abnormal returns (alphas) capture residual performance not explained by factor exposures. After accounting for market, size, and value factors, portfolio alphas approach zero, suggesting factors explain most return variation",
+    "applicable_conditions": "Works best in markets with well-developed stock exchanges (NYSE, AMEX, NASDAQ). Factor premiums (SMB, HML) showed historical significance from 1963-1991 but may weaken post-publication due to increased arbitrage activity"
+  },
+  "data_requirements": {
+    "fields": [
+      "monthly stock returns",
+      "market capitalization (size)",
+      "book-to-market ratio (B/M)",
+      "risk-free rate (Rf)",
+      "market return (Rm)",
+      "bond returns (government and corporate)"
+    ],
+    "frequency": "Monthly",
+    "universe": "NYSE, AMEX, NASDAQ stocks",
+    "data_source": "CRSP (stock returns, market cap), Compustat (book value, B/M calculation), FRED/Federal Reserve (bond yields, risk-free rate)"
+  },
+  "operation_steps": {
+    "signal_generation": "Sort stocks by market cap (median split) and B/M ratio (30th/70th percentiles) to create 6 portfolios: S/L, S/M, S/H, B/L, B/M, B/H. Factor returns: SMB = (S/L+S/M+S/H)/3 - (B/L+B/M+B/H)/3; HML = (S/H+B/H)/2 - (S/L+B/L)/2",
+    "position_sizing": "Equal-weighted or value-weighted within factor portfolios. Long portfolios with desired factor exposure (e.g., small-cap value), short opposite portfolios (e.g., large-cap growth)",
+    "rebalance_frequency": "Annual rebalancing recommended based on June-end size and B/M rankings (standard academic convention), though quarterly or semi-annual also acceptable",
+    "stop_loss": "Not explicitly specified in paper; academic implementation typically does not include stop-loss rules",
+    "transaction_cost": "Paper assumes realistic trading costs; factor portfolios with moderate turnover (annual rebalancing) maintain profitability after transaction costs"
+  },
+  "model_framework": {
+    "model_type": "Quantitative/Fundamental factor model",
+    "framework": "Fama-French Three-Factor Model: R_i,t - Rf,t = α_i + β_i(Rm,t - Rf,t) + s_i SMB_t + h_i HML_t + ε_i,t",
+    "validation": "Cross-sectional regressions, time-series regression of portfolio returns on factors, R² comparison between CAPM and three-factor models",
+    "evaluation_metrics": [
+      "Alpha (intercept) proximity to zero",
+      "R² (explained variance)",
+      "t-statistics for factor loadings",
+      "Factor premium magnitudes",
+      "GRS test (Gibbons, Ross, Shanken)"
+    ]
+  },
+  "strengths_weaknesses": {
+    "strengths": [
+      "Explains 90%+ of diversified portfolio return variation",
+      "Statistically significant factor premiums (MKT: 4.8%, SMB: 3.0%, HML: 5.0% annualized)",
+      "Applicable to both stocks and bonds",
+      "Simple, interpretable factor construction",
+      "Foundation for subsequent multi-factor models"
+    ],
+    "weaknesses": [
+      "Factor decay post-publication as arbitrage activity increased",
+      "Data mining concerns (out-of-sample performance may be weaker)",
+      "Economic mechanism (risk vs. mispricing) not fully resolved",
+      "Factor premiums can reverse during crises (growth outperforms, large caps outperform)",
+      "Hundreds of proposed factors create 'factor zoo' problem"
+    ],
+    "improvement_directions": [
+      "Five-factor model (add RMW profitability, CMA investment factors)",
+      "Dynamic factor timing models",
+      "Integration with macro-factor models",
+      "Machine learning approaches for factor discovery",
+      "Conditional factor models accounting for regime changes"
+    ]
+  },
+  "datasets": {
+    "name": "CRSP-Compustat Merged Database (NYSE, AMEX, NASDAQ stocks)",
+    "source": "Center for Research in Security Prices (CRSP), Standard & Poor's Compustat",
+    "time_range": "July 1963 - December 1991 (sample period in original paper)",
+    "processing": "Stocks sorted by market cap (June-end) and B/M (fiscal year-end with lag). Bond portfolios formed by maturity and credit quality. Monthly portfolio returns computed from stock-level data"
+  },
+  "risks": {
+    "known_limitations": [
+      "Factor premiums have weakened in recent decades",
+      "Single-country sample (US markets)",
+      "Survivorship bias concerns in historical data",
+      "Look-ahead bias if not properly accounting for data availability"
+    ],
+    "assumption_risks": [
+      "Factors represent true risk premia (not fully proven)",
+      "Stationarity of factor relationships over time",
+      "Factor loadings remain stable (may shift in different market regimes)",
+      "No transaction costs assumed in theoretical framework"
+    ],
+    "implementation_gaps": [
+      "Theory does not specify rebalancing frequency - must be chosen empirically",
+      "Factor construction details (sorting thresholds) may vary",
+      "Data vintage and accounting standards change over time",
+      "Tax implications not addressed in academic paper"
+    ]
+  },
+  "references": {
+    "original_paper": "Fama, E.F. and French, K.R. (1993). Common risk factors in the returns on stocks and bonds. Journal of Financial Economics, 33(1), 3-56.",
+    "related_papers": [
+      "Fama, E.F. and French, K.R. (2015). A five-factor asset pricing model. Journal of Financial Economics, 116(1), 1-22.",
+      "Hou, K., Xue, C., and Zhang, L. (2015). Digesting anomalies: An investment approach. Review of Financial Studies, 28(3), 650-705.",
+      "Carhart, M.M. (1997). On persistence in mutual fund performance. Journal of Finance, 52(1), 57-82.",
+      "Markowitz, H. (1952). Portfolio Selection. Journal of Finance, 7(1), 77-91."
+    ],
+    "code_repositories": [
+      "Kenneth French's Data Library: https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/",
+      "Fama-French factors available for download in CSV format from above source"
+    ]
+  },
+  "suggested_signal": {
+    "signal_type": "factor_rank",
+    "signal_params": {
+      "sorting_dimensions": [
+        "market_cap",
+        "book_to_market"
+      ],
+      "num_portfolios": 6,
+      "size_percentile_threshold": 0.5,
+      "bm_low_percentile": 0.3,
+      "bm_high_percentile": 0.7,
+      "rebalance_frequency": "annual",
+      "factor_weighting": "equal",
+      "factor_to_trade": "combined (long S/H, short B/L)"
+    },
+    "strategy_class": "factor_ranking",
+    "confidence": "high",
+    "reasoning": "The Fama-French three-factor model is the foundational factor pricing model. Factor ranking (sorting stocks by size and value, then long-short portfolios) directly implements the paper's methodology. Historical evidence shows significant factor premiums (HML: 5.0% annualized, SMB: 3.0% annualized) with high statistical significance (t-stats > 2.8). While factor decay is a concern, the model remains one of the most robust and well-validated frameworks in empirical asset pricing."
+  }
+}
