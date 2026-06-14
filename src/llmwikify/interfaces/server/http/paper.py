@@ -42,6 +42,10 @@ def _extract_factor_from_page(page: dict, paper_id: str) -> dict:
 
     Extracts factor_class, factor_params, signal_type, etc. from the
     wiki page content and wraps them in a minimal 6-layer structure.
+
+    Returns dict with keys:
+        name: factor path relative to quant/factors/ (e.g., 'stock/price/momentum_20d')
+        factor: the 6-layer factor dict
     """
     from llmwikify.reproduction.utils import parse_frontmatter
     from llmwikify.reproduction.utils import generate_slug
@@ -57,14 +61,22 @@ def _extract_factor_from_page(page: dict, paper_id: str) -> dict:
         except (json.JSONDecodeError, TypeError):
             signal_params = {}
 
-    name = fm.get("title", page.get("page_name", f"factor-{paper_id}"))
-    slug = generate_slug(name)
+    title = fm.get("title", page.get("page_name", f"factor-{paper_id}"))
+    slug = generate_slug(title)
 
-    return {
-        "name": f"factor_{paper_id}_{slug}",
-        "name_cn": name,
-        "asset_type": "stock",
-        "category": "price",
+    # Determine category from factor_class
+    category = fm.get("category", "price")
+    asset_type = fm.get("asset_type", "stock")
+
+    # Build a proper factor path: {asset_type}/{category}/{slug}
+    # e.g., stock/price/momentum_20d
+    factor_name = f"{asset_type}/{category}/{slug}"
+
+    factor_dict = {
+        "name": factor_name.replace("/", "_"),  # flat name for display
+        "name_cn": title,
+        "asset_type": asset_type,
+        "category": category,
         "subcategory": factor_class,
         "version": 1,
         "status": "已注册",
@@ -94,6 +106,8 @@ def _extract_factor_from_page(page: dict, paper_id: str) -> dict:
         "l5": {},
         "l6": {},
     }
+
+    return {"name": factor_name, "factor": factor_dict}
 
 
 def set_paper_deps(
@@ -281,8 +295,9 @@ async def _run_paper_extraction(
                 pt = page.get("page_type", "Source")
                 if pt == "Factor":
                     # Convert factor wiki page to 6-layer YAML
-                    factor_data = _extract_factor_from_page(page, paper_id)
-                    factor_name = factor_data.get("_name", page["page_name"])
+                    extracted = _extract_factor_from_page(page, paper_id)
+                    factor_name = extracted["name"]
+                    factor_data = extracted["factor"]
                     write_factor_yaml(factor_name, {"factor": factor_data})
                 else:
                     # Source → quant/papers/, Strategy → quant/strategies/
