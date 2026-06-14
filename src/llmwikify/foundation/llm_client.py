@@ -6,6 +6,8 @@ import re
 from typing import Any
 
 from .llm.budget_decorator import check_token_budget
+from .llm.resolver import resolve_chat_llm, resolver_enabled
+from .llm.spec import LLMSpec
 from .llm.token_budget import TokenBudgetChecker, TokenBudgetConfig
 
 
@@ -56,12 +58,26 @@ class LLMClient:
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> "LLMClient":
-        """Create from merged config (supports env var overrides)."""
+        """Create from merged config (supports env var overrides).
+
+        LAL: delegates to ``resolve_chat_llm`` (the single resolver
+        entry point) when ``LLM_USE_RESOLVER`` is not set to
+        ``"false"``. The original validation rules (``enabled``
+        check, ``api_key`` presence) are preserved unchanged.
+        """
         llm_cfg = config.get("llm", {})
 
         # Check if LLM is enabled
         if not llm_cfg.get("enabled", False):
             raise ValueError("LLM is not enabled. Set llm.enabled=true in config.")
+
+        if resolver_enabled():
+            spec = resolve_chat_llm(config)
+            if not spec.api_key:
+                raise ValueError(
+                    "LLM API key not configured. Set api_key or LLM_API_KEY env var."
+                )
+            return cls.from_spec(spec)
 
         # Resolve API key: env:VAR_NAME syntax or literal value
         api_key = llm_cfg.get("api_key", "")
@@ -86,6 +102,40 @@ class LLMClient:
             context_window=llm_cfg.get("context_window"),
             budget_on_exceed=llm_cfg.get("budget_on_exceed", "warn"),
         )
+
+    @classmethod
+    def from_spec(cls, spec: "LLMSpec") -> "LLMClient":
+        """Build a client from a fully-resolved ``LLMSpec``.
+
+        LAL: this is the canonical construction path for code that
+        has already resolved LLM configuration via
+        ``resolve_chat_llm``. Unlike ``from_config`` it does NOT
+        re-parse env vars, ``enabled`` flags, or validate
+        ``api_key`` — it trusts the spec.
+        """
+        return cls(
+            provider=spec.provider,
+            base_url=spec.base_url,
+            api_key=spec.api_key,
+            model=spec.model,
+            context_window=spec.context_window,
+            request_timeout_seconds=spec.timeout,
+            budget_on_exceed=spec.budget_on_exceed,
+        )
+
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        json_mode: bool = False,
+        **generation_params: Any,
+    ) -> str:
+        """Synchronous non-streaming chat completion (canonical LAL name).
+
+        LAL: this is the canonical sync entry point. It is currently
+        a thin alias for ``chat``; the name is preferred in new code
+        so that the LAL contract is uniform across providers.
+        """
+        return self.chat(messages, json_mode=json_mode, **generation_params)
 
     @check_token_budget(lambda self: self._budget_checker)
     def chat(

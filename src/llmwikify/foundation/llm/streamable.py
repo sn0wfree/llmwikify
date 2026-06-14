@@ -26,6 +26,8 @@ from typing import Any
 
 from ..llm_client import LLMClient
 from .budget_decorator import check_token_budget
+from .resolver import resolve_chat_llm, resolver_enabled
+from .spec import LLMSpec
 from .token_budget import TokenBudgetChecker, TokenBudgetConfig
 
 
@@ -188,7 +190,7 @@ class StreamableLLMClient(LLMClient):
         return defaults.get(provider, "https://api.openai.com")
 
     @classmethod
-    def from_config(cls, config: dict[str, Any]) -> "StreamableLLMClient":
+    def from_config(cls, config: dict[str, Any]) -> StreamableLLMClient:
         """Build a client from the ``llm.*`` section of a wiki config.
 
         This is a pure config-to-constructor translation; it does
@@ -197,7 +199,15 @@ class StreamableLLMClient(LLMClient):
         Callers that need the registry's provider discovery
         should call ``apps.chat.providers.registry.create_llm``
         directly.
+
+        LAL: delegates to ``resolve_chat_llm`` (the single resolver
+        entry point) when ``LLM_USE_RESOLVER`` is not set to
+        ``"false"``. The legacy inline path is preserved as a
+        kill-switch fallback for resolver regressions.
         """
+        if resolver_enabled():
+            spec = resolve_chat_llm(config)
+            return cls.from_spec(spec)
         llm_cfg = config.get("llm", config)
         return cls(
             provider=llm_cfg.get("provider", "openai"),
@@ -208,6 +218,41 @@ class StreamableLLMClient(LLMClient):
             budget_on_exceed=llm_cfg.get("budget_on_exceed", "warn"),
             request_timeout_seconds=llm_cfg.get("timeout", 120),
         )
+
+    @classmethod
+    def from_spec(cls, spec: LLMSpec) -> StreamableLLMClient:
+        """Build a client from a fully-resolved ``LLMSpec``.
+
+        This is the canonical construction path for code that has
+        already resolved LLM configuration via
+        ``resolve_chat_llm``. Unlike ``from_config`` it does NOT
+        re-parse env vars or config dicts — it trusts the spec.
+        """
+        return cls(
+            provider=spec.provider,
+            base_url=spec.base_url,
+            api_key=spec.api_key,
+            model=spec.model,
+            context_window=spec.context_window,
+            reasoning_split=spec.reasoning_split,
+            auth_header=spec.auth_scheme,
+            request_timeout_seconds=spec.timeout,
+            budget_on_exceed=spec.budget_on_exceed,
+        )
+
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        json_mode: bool = False,
+        **generation_params: Any,
+    ) -> str:
+        """Synchronous non-streaming chat completion (canonical LAL name).
+
+        LAL: this is the canonical sync entry point. It is currently
+        a thin alias for ``chat``; the name is preferred in new code
+        so that the LAL contract is uniform across providers.
+        """
+        return self.chat(messages, json_mode=json_mode, **generation_params)
 
     def _build_headers(self) -> dict[str, str]:
         """Build HTTP headers with appropriate auth scheme."""

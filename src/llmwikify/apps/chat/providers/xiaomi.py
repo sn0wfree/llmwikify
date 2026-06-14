@@ -29,7 +29,18 @@ class XiaomiProvider(BaseLLMProvider):
         ]
 
     def from_config(self, config: dict) -> Any:
+        from llmwikify.foundation.llm.resolver import resolve_chat_llm, resolver_enabled
         from llmwikify.foundation.llm.streamable import StreamableLLMClient
+
+        if resolver_enabled():
+            # Inject provider id so the resolver does not fall back
+            # to the openai default.
+            wrapped = dict(config)
+            wrapped.setdefault("provider", self.provider_name())
+            spec = resolve_chat_llm({"llm": wrapped})
+            if not spec.api_key:
+                raise ValueError("Xiaomi MiMo API key not configured.")
+            return StreamableLLMClient.from_spec(spec)
 
         api_key = self._resolve_api_key(config)
         if not api_key:
