@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -92,17 +93,19 @@ class ChatOrchestrator:
         chat_db: Any,
         memory_manager: Any = None,
         config: dict | None = None,
+        skill_service: Any = None,
     ):
-        from llmwikify.apps.chat.config import merge_six_step_config
-        from llmwikify.apps.chat.agent.prompt_builder import PromptBuilder
         from llmwikify.apps.chat.agent.context_manager import ContextManager
-        from llmwikify.apps.chat.agent.tool_executor import ToolExecutor
         from llmwikify.apps.chat.agent.event_log import EventLog
+        from llmwikify.apps.chat.agent.prompt_builder import PromptBuilder
+        from llmwikify.apps.chat.agent.tool_executor import ToolExecutor
+        from llmwikify.apps.chat.config import merge_six_step_config
 
         self.wiki_service = wiki_service
         self.db = chat_db
         self.memory_manager = memory_manager
         self.config = config or merge_six_step_config()
+        self.skill_service = skill_service
 
         self.prompt_builder = PromptBuilder(wiki_service, memory_manager)
         self.context_manager = ContextManager(config=self.config)
@@ -115,8 +118,92 @@ class ChatOrchestrator:
 
         self._session_status: dict[str, str] = {}
         self._abort_events: dict[str, asyncio.Event] = {}
+        self._tool_registries: dict[tuple[str, str], Any] = {}
+
+    def _get_tool_registry(self, ctx: AgentContext, session_id: str | None = None) -> Any:
+        wiki_id = ctx.wiki_id or self.wiki_service.get_default_wiki_id()
+        wiki_registry = self.wiki_service.get_tool_registry(wiki_id)
+        if self.skill_service is None:
+            return wiki_registry
+        cache_key = (session_id or ctx.session_id or "", wiki_id or "")
+        if cache_key in self._tool_registries:
+            return self._tool_registries[cache_key]
+        from llmwikify.apps.agent.tools.skill_adapter import (
+            CompositeToolRegistry,
+            SkillToolAdapter,
+        )
+        registry = CompositeToolRegistry(
+            wiki_registry,
+            SkillToolAdapter(
+                self.skill_service,
+                wiki=self.wiki_service.get_wiki(wiki_id),
+                db=self.db,
+                wiki_id=wiki_id,
+                session_id=session_id or ctx.session_id,
+            ),
+        )
+        self._tool_registries[cache_key] = registry
+        return registry
 
     # ─── SSE chat ────────────────────────────────────────────────
+
+    @staticmethod
+    def _parse_autoresearch_shortcut(message: str) -> dict[str, str] | None:
+        text = message.strip()
+        topic = ""
+        if text.startswith("/study"):
+            topic = text[len("/study"):].strip()
+            topic = re.sub(r"^研究[:：]\s*", "", topic).strip()
+        elif "autoresearch_compound" in text:
+            m = re.search(r"研究[:：]\s*([^，,。\n]+)", text)
+            if m:
+                topic = m.group(1).strip()
+            if not topic:
+                m = re.search(r"autoresearch_compound\s+([^，,。\n]+)", text)
+                if m:
+                    topic = m.group(1).strip()
+        else:
+            return None
+        question = topic or text
+        return {
+            "question": question,
+            "topic": topic,
+            "scope": "只生成 evidence/findings/wiki proposals，不写入 Wiki。",
+        }
+
+    @staticmethod
+    def _format_research_started_message(data: dict, args: dict[str, str]) -> str:
+        timeline = data.get("timeline", []) or []
+        lines = [
+            "AutoResearch 已启动。",
+            "",
+            f"run_id: {data.get('run_id', '')}",
+            f"topic: {args.get('topic') or args.get('question', '')}",
+            "status: running",
+            "",
+            "Research Run Timeline:",
+        ]
+        if timeline:
+            for item in timeline:
+                label = item.get("label") or item.get("phase_id")
+                status = item.get("status", "pending")
+                marker = "x" if status == "complete" else "~" if status == "running" else " "
+                lines.append(f"[{marker}] {label} - {status}")
+        else:
+            lines.extend([
+                "[·] Clarify — pending",
+                "[·] Plan — pending",
+                "[·] Evidence — pending",
+                "[·] Findings — pending",
+                "[·] Wiki Proposals — pending",
+                "[·] Synthesize — pending",
+            ])
+        lines.extend([
+            "",
+            "不会写入 Wiki；完成后会生成 evidence / findings / wiki proposals。",
+            "使用 autoresearch_compound_status 查询进度。",
+        ])
+        return "\n".join(lines)
 
     async def chat(
         self,
@@ -176,9 +263,55 @@ class ChatOrchestrator:
                 yield ChatEvent.error("No wiki available")
                 return
 
-            tool_registry = self.wiki_service.get_tool_registry(
-                ctx.wiki_id or self.wiki_service.get_default_wiki_id()
-            )
+            tool_registry = self._get_tool_registry(ctx, session_id)
+
+            autoresearch_args = self._parse_autoresearch_shortcut(message)
+            if autoresearch_args is not None:
+                result = await self.tool_executor.execute(
+                    "autoresearch_compound_run",
+                    autoresearch_args,
+                    tool_registry,
+                    session_id,
+                    ctx,
+                )
+                if isinstance(result, dict) and result.get("status") == "confirmation_required":
+                    event = ChatEvent.confirmation_required(
+                        result.get("confirmation_id", ""),
+                        "autoresearch_compound_run",
+                        autoresearch_args,
+                        result.get("impact", {}),
+                    )
+                    self.event_log.log(session_id, event)
+                    self.tool_executor.save_message(
+                        session_id,
+                        "assistant",
+                        f"Confirmation required for autoresearch_compound_run: {result.get('confirmation_id', '')}",
+                    )
+                    yield event
+                    return
+                if isinstance(result, dict) and result.get("status") == "error":
+                    message_text = result.get("error", "AutoResearch failed")
+                    self.tool_executor.save_message(session_id, "assistant", f"Error: {message_text}")
+                    yield ChatEvent.error(message_text)
+                    return
+                if isinstance(result, dict) and result.get("status") == "ok":
+                    data = result.get("data", {})
+                    event = {
+                        "type": "research_run_started",
+                        "run_id": data.get("run_id", ""),
+                        "status": data.get("status", "running"),
+                        "workflow_name": data.get("workflow_name", "autoresearch-compound"),
+                        "timeline": data.get("timeline", []),
+                        "writes_wiki": False,
+                        "proposal_only": True,
+                    }
+                    self.event_log.log(session_id, event)
+                    yield event
+                    final = self._format_research_started_message(data, autoresearch_args)
+                    ctx.add_assistant_message(final)
+                    self.tool_executor.save_message(session_id, "assistant", final)
+                    yield ChatEvent.done(final)
+                    return
 
             system_prompt = await self.prompt_builder.build(
                 ctx.wiki_id,
@@ -218,12 +351,26 @@ class ChatOrchestrator:
                 # Log non-streaming events (skip message_delta for volume)
                 if event.get("type") != "message_delta":
                     self.event_log.log(session_id, event)
+                if event.get("type") == "confirmation_required":
+                    tool = event.get("tool", "tool")
+                    self.tool_executor.save_message(
+                        session_id,
+                        "assistant",
+                        f"Confirmation required for {tool}: {event.get('confirmation_id', '')}",
+                    )
+                elif event.get("type") == "error":
+                    self.tool_executor.save_message(
+                        session_id,
+                        "assistant",
+                        f"Error: {event.get('message', '')}",
+                    )
                 yield event
 
         except Exception as e:
             logger.exception("Chat error")
             err_event = ChatEvent.error(str(e))
             self.event_log.log(session_id, err_event)
+            self.tool_executor.save_message(session_id, "assistant", f"Error: {e}")
             yield err_event
         finally:
             self._session_status[session_id] = "idle"
@@ -244,19 +391,25 @@ class ChatOrchestrator:
             yield ChatEvent.error("No wiki_id available")
             return
 
-        result = await self.wiki_service.approve_confirmation(
-            confirmation_id, wiki_id, arguments
-        )
-
-        if result.get("status") == "error":
-            yield ChatEvent.error(result.get("error", "Confirmation failed"))
-            return
-
         ctx = await self.context_manager.get_or_create(
             session_id, wiki_id,
             history_loader=self._load_history,
             db=self.db,
         )
+        result = await self.approve_confirmation(
+            confirmation_id, wiki_id, arguments
+        )
+        if self._is_unknown_confirmation(result):
+            result = await self.wiki_service.approve_confirmation(
+                confirmation_id, wiki_id, arguments
+            )
+
+        if result.get("status") == "error":
+            message = result.get("error", "Confirmation failed")
+            self.tool_executor.save_message(session_id, "assistant", f"Error: {message}")
+            yield ChatEvent.error(message)
+            return
+
         tool_result_str = json.dumps(result.get("result", result))
         ctx.add_assistant_message(
             f"[Confirmation approved] Tool result: {tool_result_str}"
@@ -267,9 +420,7 @@ class ChatOrchestrator:
             yield ChatEvent.error("No wiki available")
             return
 
-        tool_registry = self.wiki_service.get_tool_registry(
-            ctx.wiki_id or self.wiki_service.get_default_wiki_id()
-        )
+        tool_registry = self._get_tool_registry(ctx, session_id)
         system_prompt = await self.prompt_builder.build(
             ctx.wiki_id,
             user_message=ctx.messages[-1]["content"] if ctx.messages else None,
@@ -299,19 +450,82 @@ class ChatOrchestrator:
             logger.exception("Confirmation continue error")
             yield ChatEvent.error(str(e))
 
+    # ─── Confirmations ───────────────────────────────────────────
+
+    @staticmethod
+    def _is_unknown_confirmation(result: Any) -> bool:
+        if not isinstance(result, dict) or result.get("status") != "error":
+            return False
+        error = result.get("error", "")
+        return "Unknown confirmation ID" in error or "Invalid confirmation ID" in error
+
+    def list_confirmations(self, wiki_id: str | None = None) -> dict[str, list[dict]]:
+        grouped: dict[str, list[dict]] = {}
+        for (_, cached_wiki_id), registry in self._tool_registries.items():
+            if wiki_id and cached_wiki_id != wiki_id:
+                continue
+            for group, items in registry.get_pending_by_group().items():
+                grouped.setdefault(group, []).extend(items)
+        return grouped
+
+    async def approve_confirmation(
+        self,
+        confirmation_id: str,
+        wiki_id: str | None = None,
+        arguments: dict | None = None,
+    ) -> dict:
+        for (_, cached_wiki_id), registry in self._tool_registries.items():
+            if wiki_id and cached_wiki_id != wiki_id:
+                continue
+            result = registry.confirm_execution(confirmation_id, arguments)
+            if not self._is_unknown_confirmation(result):
+                return result
+        return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+
+    async def reject_confirmation(
+        self, confirmation_id: str, wiki_id: str | None = None,
+    ) -> dict:
+        for (_, cached_wiki_id), registry in self._tool_registries.items():
+            if wiki_id and cached_wiki_id != wiki_id:
+                continue
+            result = registry.reject_execution(confirmation_id)
+            if not self._is_unknown_confirmation(result):
+                return result
+        return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+
+    async def batch_approve_confirmations(
+        self, confirmation_ids: list[str], wiki_id: str | None = None,
+    ) -> dict:
+        results = [
+            await self.approve_confirmation(cid, wiki_id)
+            for cid in confirmation_ids
+        ]
+        return {"approved": len(results), "results": results}
+
     # ─── Session management ──────────────────────────────────────
 
     def delete_session(self, session_id: str) -> bool:
         """Delete a session from DB and evict its in-memory context."""
         self.context_manager.remove(session_id)
-        self.db.delete_chat_session(session_id)
-        return True
+        return self.db.delete_chat_session(session_id)
 
-    def abort_session(self, session_id: str) -> dict:
+    def revert_session(self, session_id: str, message_id: str) -> int:
+        count = self.db.revert_to_message(session_id, message_id)
+        self.context_manager.remove(session_id)
+        return count
+
+    def edit_message(self, message_id: str, new_content: str) -> bool:
+        return self.db.update_chat_message(message_id, new_content)
+
+    def abort_session(self, session_id: str) -> bool:
         """Signal abort for an active session."""
-        if session_id in self._abort_events:
-            self._abort_events[session_id].set()
-        return {"aborted": True, "session_id": session_id}
+        if self._session_status.get(session_id) != "busy":
+            return False
+        event = self._abort_events.get(session_id)
+        if event:
+            event.set()
+            return True
+        return False
 
     def get_session_status(self, session_id: str) -> str:
         return self._session_status.get(session_id, "idle")
@@ -415,9 +629,10 @@ class ChatOrchestrator:
                 if thinking:
                     ctx._thinking = thinking
                 ctx.add_assistant_message(final)
-                # Save assistant message
+                # Save assistant message. LAL (PR 4): no silent
+                # gpt-4o fallback for token estimation.
                 from llmwikify.foundation.llm.token_estimator import count_tokens
-                model_name = "gpt-4o"
+                model_name = "unknown"
                 tokens_output = count_tokens(final, model_name)
                 self.tool_executor.save_message(
                     session_id, "assistant", final,

@@ -47,11 +47,16 @@ class TestLLMClientConfig:
         monkeypatch.delenv("LLM_API_KEY")
         monkeypatch.delenv("LLM_MODEL")
 
-    def test_default_base_url(self):
+    def test_default_base_url(self, monkeypatch):
+        # LAL (PR 4): opt into the legacy fallback to verify the
+        # historical default-URL behaviour. Without the switch,
+        # LLMClient() raises LLMNotConfiguredError.
+        monkeypatch.setenv("LLM_LEGACY_FALLBACK", "true")
         client = LLMClient(api_key="test")
         assert client.base_url == "https://api.openai.com"
 
-    def test_ollama_default_url(self):
+    def test_ollama_default_url(self, monkeypatch):
+        monkeypatch.setenv("LLM_LEGACY_FALLBACK", "true")
         client = LLMClient(provider="ollama", api_key="test")
         assert client.base_url == "http://localhost:11434/v1"
 

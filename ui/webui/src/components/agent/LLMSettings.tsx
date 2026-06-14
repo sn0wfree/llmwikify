@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
 import { api, LLMConfig } from '../../api';
 import { useToast } from '../wiki/Toast';
-import { Button } from '../ui/Button';
+import { Button } from '../ui/legacy-button';
 import { Panel } from '../ui/Panel';
-import { Select } from '../ui/Select';
+import { Select } from '../ui/native-select';
 import { Toggle } from '../ui/Toggle';
-import { Card } from '../ui/Card';
+import { Card } from '../ui/legacy-card';
 
 const PROVIDERS = [
+  // LAL (PR 4): provider id renamed from `minimax` to `minimax`.
   { value: 'minimax', label: 'MiniMax' },
   { value: 'xiaomi', label: 'Xiaomi MiMo' },
   { value: 'openai', label: 'OpenAI' },
@@ -16,15 +17,17 @@ const PROVIDERS = [
 ];
 
 const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  // LAL (PR 4): model names lowercased to match the canonical
+  // server-side identifiers.
   minimax: [
-    { value: 'MiniMax-M3', label: 'MiniMax-M3' },
-    { value: 'MiniMax-M2.7', label: 'MiniMax-M2.7' },
-    { value: 'MiniMax-M2.7-highspeed', label: 'MiniMax-M2.7-highspeed' },
-    { value: 'MiniMax-M2.5', label: 'MiniMax-M2.5' },
-    { value: 'MiniMax-M2.5-highspeed', label: 'MiniMax-M2.5-highspeed' },
-    { value: 'MiniMax-M2.1', label: 'MiniMax-M2.1' },
-    { value: 'MiniMax-M2.1-highspeed', label: 'MiniMax-M2.1-highspeed' },
-    { value: 'MiniMax-M2', label: 'MiniMax-M2' },
+    { value: 'minimax-M3', label: 'minimax-M3' },
+    { value: 'minimax-M2.7', label: 'minimax-M2.7' },
+    { value: 'minimax-M2.7-highspeed', label: 'minimax-M2.7-highspeed' },
+    { value: 'minimax-M2.5', label: 'minimax-M2.5' },
+    { value: 'minimax-M2.5-highspeed', label: 'minimax-M2.5-highspeed' },
+    { value: 'minimax-M2.1', label: 'minimax-M2.1' },
+    { value: 'minimax-M2.1-highspeed', label: 'minimax-M2.1-highspeed' },
+    { value: 'minimax-M2', label: 'minimax-M2' },
   ],
   openai: [
     { value: 'gpt-4o', label: 'GPT-4o' },
@@ -59,11 +62,16 @@ const BASE_URL_DEFAULTS: Record<string, string> = {
   lmstudio: 'http://localhost:1234/v1',
 };
 
+// LAL (PR 4): EMPTY_CONFIG represents the *unconfigured* state.
+// Previously it carried a default provider/model/api_key,
+// which gave the impression that LLM was already wired up.
+// Now the fields are blank and the UI shows a "未配置"
+// banner until the user explicitly saves a real config.
 const EMPTY_CONFIG: LLMConfig = {
   enabled: true,
-  provider: 'minimax',
-  model: 'MiniMax-M3',
-  base_url: 'https://api.minimaxi.com/v1',
+  provider: '',
+  model: '',
+  base_url: '',
   api_key: '',
   timeout: 120,
 };

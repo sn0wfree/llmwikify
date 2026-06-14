@@ -368,12 +368,21 @@ class TestLLMClientFromConfigCompat:
         assert client.api_key == "env-key"
         assert client.model == "env-model"
 
-    def test_gpt4o_default_kept_for_pr1(self):
-        # PR 1 must NOT remove the historical default. PR 4 will.
+    def test_gpt4o_default_kept_for_pr1(self, monkeypatch):
+        # PR 1 must NOT remove the historical default. PR 4 will
+        # (via the LLM_LEGACY_FALLBACK gradient switch — see
+        # test_foundation_llm_lal_errors.py). This test opts into
+        # the legacy fallback so the gpt-4o default is still
+        # observable for back-compat verification.
+        monkeypatch.setenv("LLM_LEGACY_FALLBACK", "true")
         client = LLMClient(api_key="k")
         assert client.model == "gpt-4o"
 
-    def test_ollama_default_url(self):
+    def test_ollama_default_url(self, monkeypatch):
+        # PR 4 default-off fallback: passing provider=ollama without
+        # model is still a configuration error. Use legacy fallback
+        # to keep the test's intent (verifying the URL default).
+        monkeypatch.setenv("LLM_LEGACY_FALLBACK", "true")
         client = LLMClient(provider="ollama", api_key="k")
         assert client.base_url == "http://localhost:11434/v1"
 

@@ -29,10 +29,14 @@ DEFAULT_CONFIG = {
         "batch_size": 100,
     },
     "llm": {
+        # LAL (PR 4): all fields are None / False by default. The
+        # legacy hardcoded gpt-4 / openai / localhost:11434 values
+        # are removed; LLMNotConfiguredError is raised when LLM
+        # code tries to use these defaults.
         "enabled": False,
-        "provider": "openai",
-        "model": "gpt-4",
-        "base_url": "http://localhost:11434",
+        "provider": None,
+        "model": None,
+        "base_url": None,
         "api_key": "",
         "timeout": 120,
         "context_window": None,
