@@ -463,3 +463,44 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             status_code=500,
             detail=f"Factor backtest failed: {exc}",
         )
+
+
+@router.get("/{slug}/backtest")
+async def get_factor_backtest_results(slug: str, limit: int = 10) -> dict[str, Any]:
+    """Get past backtest results for a factor.
+
+    Returns a list of recent backtest runs with IC series and group metrics,
+    suitable for rendering L5 charts in the UI.
+    """
+    from llmwikify.reproduction.sessions import ReproductionDatabase
+
+    db = ReproductionDatabase()
+    results = db.list_results(factor_ref=slug, limit=limit)
+
+    runs = []
+    for r in results:
+        ic_series = json.loads(r.ic_series) if r.ic_series else []
+        group_metrics = json.loads(r.group_metrics) if r.group_metrics else {}
+        runs.append({
+            "run_id": r.run_id,
+            "created_at": r.created_at,
+            "status": r.status,
+            "universe": r.universe,
+            "start_date": r.start_date,
+            "end_date": r.end_date,
+            "metrics": {
+                "ic_mean": r.ic_mean,
+                "rank_ic_mean": r.rank_ic_mean,
+                "icir": r.icir,
+                "rank_icir": r.rank_icir,
+                "win_rate": r.win_rate,
+                "annual_return": r.annual_return,
+                "longshort_ann_return": r.longshort_ann_return,
+                "longshort_sharpe": r.longshort_sharpe,
+                "longshort_max_dd": r.longshort_max_dd,
+            },
+            "ic_series": ic_series,
+            "group_metrics": group_metrics,
+        })
+
+    return {"slug": slug, "runs": runs, "total": len(runs)}

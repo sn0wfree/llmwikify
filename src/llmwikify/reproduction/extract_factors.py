@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
@@ -111,6 +112,11 @@ def build_factor_pages(
 ) -> list[dict[str, str]]:
     """Convert factor definitions into wiki page content strings.
 
+    .. deprecated::
+        Use ``factor_library.write_factor_yaml()`` instead. This function
+        generates old-style wiki markdown pages which are no longer the
+        canonical factor storage format.
+
     Args:
         factors: Output from extract_factors().
         paper_id: Paper identifier for page naming.
@@ -118,6 +124,11 @@ def build_factor_pages(
     Returns:
         List of dicts with keys: page_name, content, page_type.
     """
+    warnings.warn(
+        "build_factor_pages() is deprecated; use factor_library.write_factor_yaml()",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     pages = []
     for i, factor in enumerate(factors):
         name = factor.get("name", f"Factor {i+1}")
@@ -152,6 +163,11 @@ def build_factor_pages(
 def read_factor_from_wiki(wiki: Any, slug: str) -> Optional[dict[str, Any]]:
     """Read a Factor page from wiki and parse its frontmatter.
 
+    .. deprecated::
+        Use ``factor_library.read_factor_yaml()`` instead. Factor definitions
+        are now stored as 6-layer YAML in ``quant/factors/``, not as wiki
+        markdown frontmatter.
+
     Args:
         wiki: Wiki instance.
         slug: Factor page slug (without wiki/factor/ prefix).
@@ -159,44 +175,33 @@ def read_factor_from_wiki(wiki: Any, slug: str) -> Optional[dict[str, Any]]:
     Returns:
         Parsed factor dict, or None if not found.
     """
-    factor_dir = wiki.wiki_dir / "factors"
-    if not factor_dir.is_dir():
-        factor_dir = wiki.wiki_dir / "factor"
-    if not factor_dir.is_dir():
-        return None
-    md_path = factor_dir / f"{slug}.md"
-    if not md_path.exists():
-        return None
-    try:
-        content = md_path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    return parse_frontmatter(content)
+    warnings.warn(
+        "read_factor_from_wiki() is deprecated; use factor_library.read_factor_yaml()",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from .factor_library import read_factor_yaml
+    return read_factor_yaml(slug)
 
 
 def list_factors(wiki: Any) -> list[dict[str, Any]]:
     """List all Factor pages in the wiki.
 
+    .. deprecated::
+        Use ``factor_library.list_factors()`` instead. Factor definitions
+        are now stored as 6-layer YAML in ``quant/factors/``, not as wiki
+        markdown pages.
+
     Returns:
         List of parsed frontmatter dicts.
     """
-    # Try plural first (wiki convention), fall back to singular
-    factor_dir = wiki.wiki_dir / "factors"
-    if not factor_dir.is_dir():
-        factor_dir = wiki.wiki_dir / "factor"
-    if not factor_dir.is_dir():
-        return []
-    results = []
-    for md in sorted(factor_dir.glob("*.md")):
-        try:
-            content = md.read_text(encoding="utf-8")
-            fm = parse_frontmatter(content)
-            if fm:
-                fm["_slug"] = md.stem
-                results.append(fm)
-        except OSError as exc:
-            logger.warning("could not read %s: %s", md, exc)
-    return results
+    warnings.warn(
+        "list_factors() is deprecated; use factor_library.list_factors()",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from .factor_library import list_factors as lib_list
+    return lib_list()
 
 
 __all__ = [
