@@ -1,0 +1,110 @@
+version: 1
+workflow:
+  name: autoresearch-compound
+  description: >
+    Skill-first AutoResearch workflow that turns a research question into
+    evidence items, findings, wiki update proposals, and a final report draft.
+    It does not write wiki pages; proposals require later human approval.
+  triggers:
+    keywords: ["autoresearch", "auto research", "compound research", "wiki proposals"]
+  inputs:
+    type: object
+    properties:
+      question:
+        type: string
+        description: "The research question to investigate."
+      topic:
+        type: string
+        description: "Optional stable topic slug or title for wiki organization."
+      scope:
+        type: string
+        description: "Optional constraints, audience, depth, or source boundaries."
+    required: [question]
+  budget:
+    max_total_tokens: 900000
+    max_concurrent_agents: 6
+    on_exceed: halt
+  actors:
+    clarifier:
+      prompt_file: actor_prompts/autoresearch-clarifier.md
+      tools: [Read, Grep, Glob]
+    planner:
+      prompt_file: actor_prompts/autoresearch-planner.md
+      tools: [Read, Grep, Glob]
+    evidence_extractor:
+      prompt_file: actor_prompts/autoresearch-evidence-extractor.md
+      isolation: worktree
+      tools: [Read, Grep, Glob, WebFetch, WebSearch]
+    finding_extractor:
+      prompt_file: actor_prompts/autoresearch-finding-extractor.md
+      tools: [Read, Grep, Glob]
+    wiki_proposer:
+      prompt_file: actor_prompts/autoresearch-wiki-proposer.md
+      tools: [Read, Grep, Glob]
+    synthesizer:
+      prompt_file: actor_prompts/autoresearch-synthesizer.md
+      tools: [Read, Grep, Glob]
+  phases:
+    - id: clarify
+      actor: clarifier
+      inputs:
+        question: $inputs.question
+        topic: $inputs.topic
+        scope: $inputs.scope
+      outputs: brief
+      retry_attempts: 1
+    - id: plan
+      actor: planner
+      needs: [clarify]
+      inputs:
+        question: $inputs.question
+        brief: $brief
+      outputs: research_plan
+      retry_attempts: 1
+    - id: gather_evidence
+      actor: evidence_extractor
+      needs: [plan]
+      fan_out:
+        from: $research_plan.investigation_threads
+        id_prefix: evidence_
+        actor: evidence_extractor
+        inputs:
+          question: $inputs.question
+          thread: $item
+          evidence_schema: evidence_items_and_findings
+      skip_if: len($research_plan.investigation_threads) < 1
+      retry_attempts: 1
+    - id: extract_findings
+      actor: finding_extractor
+      needs: [gather_evidence]
+      inputs:
+        question: $inputs.question
+        brief: $brief
+        plan: $research_plan
+        evidence: $gather_evidence.findings
+      outputs: findings
+    - id: propose_wiki_updates
+      actor: wiki_proposer
+      needs: [extract_findings]
+      inputs:
+        question: $inputs.question
+        topic: $inputs.topic
+        brief: $brief
+        findings: $findings
+      outputs: wiki_proposals
+    - id: synthesize
+      actor: synthesizer
+      needs: [propose_wiki_updates]
+      inputs:
+        question: $inputs.question
+        topic: $inputs.topic
+        brief: $brief
+        plan: $research_plan
+        evidence: $gather_evidence.findings
+        findings: $findings
+        wiki_proposals: $wiki_proposals
+      outputs: final_report
+  limits:
+    max_total_agents: 50
+    max_phase_timeout_seconds: 1500
+    max_wallclock_seconds: 7200
