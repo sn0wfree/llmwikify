@@ -989,3 +989,634 @@ class TestFactorValueStore:
             db_path=db_path,
         )
         assert len(result) == 5  # Jan 3-7
+
+
+# ═══════════════════════════════════════════════════════════════
+# Extract Factors Deprecated Function Tests
+# ═══════════════════════════════════════════════════════════════
+
+class TestExtractFactorsDeprecated:
+    """Tests that deprecated functions in extract_factors.py redirect properly."""
+
+    def test_read_factor_from_wiki_redirects(self):
+        import warnings
+        from llmwikify.reproduction.extract_factors import read_factor_from_wiki
+
+        class FakeWiki:
+            def __init__(self):
+                self.wiki_dir = Path("/nonexistent")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = read_factor_from_wiki(FakeWiki(), "test")
+            assert result is None  # factor_library.read_factor_yaml returns None for nonexistent
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "deprecated" in str(w[0].message).lower()
+
+    def test_list_factors_redirects(self):
+        import warnings
+        from llmwikify.reproduction.extract_factors import list_factors
+
+        class FakeWiki:
+            def __init__(self):
+                self.wiki_dir = Path("/nonexistent")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = list_factors(FakeWiki())
+            # factor_library.list_factors reads from real index.yaml
+            # so result depends on cwd. Just verify it returns a list.
+            assert isinstance(result, list)
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+
+    def test_build_factor_pages_warns(self):
+        import warnings
+        from llmwikify.reproduction.extract_factors import build_factor_pages
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = build_factor_pages(
+                [{"name": "test", "factor_class": "momentum"}],
+                "paper1",
+            )
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert len(result) == 1
+            assert result[0]["page_type"] == "Factor"
+
+
+# ═══════════════════════════════════════════════════════════════
+# L5 Validation Edge Case Tests
+# ═══════════════════════════════════════════════════════════════
+
+class TestL5ValidationEdgeCases:
+    """Edge case tests for L5 validation engine."""
+
+    def _mock_result(self, **kwargs):
+        from dataclasses import dataclass, field
+
+        @dataclass
+        class R:
+            ic_mean: float = 0.0
+            ic_std: float = 0.01
+            icir: float = 0.0
+            t_stat: float = 0.0
+            win_rate: float = 0.5
+            annual_return: float = 0.0
+            max_drawdown: float = 0.0
+            turnover: float = 0.0
+            quantile_returns: dict = field(default_factory=dict)
+            ic_series: list = field(default_factory=list)
+            quantile_curves: dict = field(default_factory=dict)
+            rank_ic_mean: float = 0.0
+            rank_ic_std: float = 0.01
+            rank_icir: float = 0.0
+            rank_ic_pos_ratio: float = 0.0
+            longshort_ann_return: float = 0.0
+            longshort_sharpe: float = 0.0
+            longshort_mdd: float = 0.0
+            longshort_curve: list = field(default_factory=list)
+            universe: str = ""
+            adj_mode: str = "D"
+            n_stocks_per_date: list = field(default_factory=list)
+            group_metrics: dict = field(default_factory=dict)
+            total_rebalances: int = 0
+            valid_rebalances: int = 0
+
+        r = R()
+        for k, v in kwargs.items():
+            setattr(r, k, v)
+        return r
+
+    def test_analyze_ic_all_positive(self):
+        from llmwikify.reproduction.l5_validation import analyze_ic
+        result = self._mock_result(
+            ic_series=[
+                {"date": "2024-01", "ic": 0.05, "rank_ic": 0.04},
+                {"date": "2024-02", "ic": 0.06, "rank_ic": 0.05},
+                {"date": "2024-03", "ic": 0.04, "rank_ic": 0.03},
+            ]
+        )
+        ic = analyze_ic(result)
+        assert ic["win_rate"] == 1.0  # all positive
+        assert ic["ic_mean"] > 0
+
+    def test_analyze_ic_all_negative(self):
+        from llmwikify.reproduction.l5_validation import analyze_ic
+        result = self._mock_result(
+            ic_series=[
+                {"date": "2024-01", "ic": -0.05, "rank_ic": -0.04},
+                {"date": "2024-02", "ic": -0.06, "rank_ic": -0.05},
+            ]
+        )
+        ic = analyze_ic(result)
+        assert ic["win_rate"] == 0.0  # none positive
+        assert ic["ic_mean"] < 0
+
+    def test_analyze_groups_reverse_factor(self):
+        """Reverse factor: G5 > G1 (negative IC)."""
+        from llmwikify.reproduction.l5_validation import analyze_groups
+        result = self._mock_result(
+            quantile_returns={"G1": -0.05, "G2": -0.02, "G3": 0.01, "G4": 0.03, "G5": 0.05},
+            longshort_ann_return=-0.10,
+            longshort_sharpe=-0.8,
+            longshort_mdd=0.12,
+        )
+        ga = analyze_groups(result)
+        assert ga["ls_ann_return"] == -0.10
+        assert "G5" in ga["group_monotonicity"]
+
+    def test_analyze_returns_zero_sharpe(self):
+        from llmwikify.reproduction.l5_validation import analyze_returns
+        result = self._mock_result(
+            longshort_ann_return=0.0,
+            longshort_mdd=0.0,
+            longshort_curve=[
+                {"date": "2024-01", "value": 1.0},
+                {"date": "2024-02", "value": 1.0},
+            ],
+        )
+        ra = analyze_returns(result)
+        assert ra["sharpe"] == 0.0 or ra["sharpe"] == 0
+
+    def test_analyze_turnover_high(self):
+        from llmwikify.reproduction.l5_validation import analyze_turnover
+        result = self._mock_result(
+            group_metrics={
+                "G1": {"turnover": 0.9},
+                "G2": {"turnover": 0.85},
+                "G3": {"turnover": 0.8},
+            }
+        )
+        ta = analyze_turnover(result)
+        assert ta["avg_turnover"] > 0.8
+
+    def test_analyze_stability_single_year(self):
+        from llmwikify.reproduction.l5_validation import analyze_stability
+        result = self._mock_result(
+            ic_series=[{"date": "2024-01-01", "ic": 0.05}]
+        )
+        sa = analyze_stability(result)
+        assert len(sa["yearly"]) == 1
+
+    def test_analyze_oos_short_series(self):
+        """OOS with very short IC series (< 10 points)."""
+        from llmwikify.reproduction.l5_validation import analyze_oos
+        result = self._mock_result(
+            ic_series=[{"date": f"2024-0{i}", "ic": 0.01} for i in range(1, 6)]
+        )
+        oa = analyze_oos(result)
+        assert oa["oos_rank_ic"] == 0.0  # Not enough data
+
+    def test_analyze_cost_zero_turnover(self):
+        from llmwikify.reproduction.l5_validation import analyze_cost
+        result = self._mock_result(turnover=0.0, group_metrics={})
+        ca = analyze_cost(result, cost_bps=15)
+        assert ca["net_ann_return"] == 0.0
+
+    def test_score_all_zeros(self):
+        from llmwikify.reproduction.l5_validation import compute_score
+        score = compute_score({}, {}, {}, {}, {}, {}, {})
+        assert score["score"] > 0  # Minimum scores for each dimension
+        assert score["status"] in ("通过", "失败", "待更新")
+
+    def test_score_perfect(self):
+        """Test scoring with excellent metrics."""
+        from llmwikify.reproduction.l5_validation import compute_score
+        score = compute_score(
+            ic_analysis={"ic_mean": 0.08, "icir": 1.5, "rank_ic_mean": 0.07},
+            group_analysis={"ls_sharpe": 2.0, "ls_ann_return": 0.3, "ls_max_drawdown": 0.05,
+                           "group_returns": {"G1": 0.3, "G2": 0.2, "G3": 0.1, "G4": 0.0, "G5": -0.1}},
+            return_analysis={"sharpe": 1.5, "calmar": 1.2, "sortino": 2.0},
+            turnover_analysis={"avg_turnover": 0.1},
+            stability_analysis={"yearly": {"2022": {"rank_ic": 0.05}, "2023": {"rank_ic": 0.06}, "2024": {"rank_ic": 0.04}}},
+            oos_analysis={"oos_rank_ic": 0.05},
+            cost_analysis={"net_ann_return": 0.10},
+        )
+        assert score["score"] >= 80
+        assert score["status"] == "通过"
+
+    def test_score_reverse_factor_low(self):
+        """Reverse factor with all negative metrics scores low."""
+        from llmwikify.reproduction.l5_validation import compute_score
+        score = compute_score(
+            ic_analysis={"ic_mean": -0.05, "icir": -1.0, "rank_ic_mean": -0.04},
+            group_analysis={"ls_sharpe": -1.0, "ls_ann_return": -0.2, "ls_max_drawdown": 0.1,
+                           "group_returns": {"G1": -0.2, "G2": -0.1, "G3": 0.0, "G4": 0.1, "G5": 0.2}},
+            return_analysis={"sharpe": -1.0, "calmar": -0.5, "sortino": -1.2},
+            turnover_analysis={"avg_turnover": 0.3},
+            stability_analysis={"yearly": {"2023": {"rank_ic": -0.04}}},
+            oos_analysis={"oos_rank_ic": -0.03},
+            cost_analysis={"net_ann_return": -0.15},
+        )
+        # Reverse factor scores lower than a perfect factor
+        assert score["score"] < 80
+        assert score["status"] in ("通过", "失败")
+
+
+# ═══════════════════════════════════════════════════════════════
+# L5 Orchestrator Integration Tests
+# ═══════════════════════════════════════════════════════════════
+
+class TestL5OrchestratorIntegration:
+    """Integration tests for L5 orchestrator (non-backtest parts)."""
+
+    def test_parse_llm_response_with_markdown_fences(self):
+        from llmwikify.reproduction.l5_orchestrator import _parse_llm_response
+        resp = '''Here is the result:
+```json
+{
+  "hypothesis_testing": [
+    {"hypothesis_id": "H1", "conclusion": "支持", "reasoning": "IC positive"}
+  ],
+  "final_meaning": "Momentum factor"
+}
+```
+'''
+        parsed = _parse_llm_response(resp)
+        assert "hypothesis_testing" in parsed
+        assert len(parsed["hypothesis_testing"]) == 1
+
+    def test_parse_llm_response_empty_json(self):
+        from llmwikify.reproduction.l5_orchestrator import _parse_llm_response
+        parsed = _parse_llm_response("{}")
+        assert parsed == {}
+
+    def test_parse_llm_response_no_json(self):
+        from llmwikify.reproduction.l5_orchestrator import _parse_llm_response
+        parsed = _parse_llm_response("I cannot determine the answer.")
+        assert parsed == {}
+
+    def test_build_hypothesis_prompt_includes_all_metrics(self):
+        from llmwikify.reproduction.l5_orchestrator import _build_hypothesis_prompt
+        factor = {
+            "name": "test_momentum",
+            "category": "price",
+            "subcategory": "momentum",
+            "l1": {"definition": "20日动量"},
+            "l4": {"hypotheses": [
+                {"id": "H1", "name": "动量延续", "description": "高动量→涨"},
+                {"id": "H2", "name": "反转回落", "description": "高动量→跌"},
+            ]},
+        }
+        l5_data = {
+            "factor_analysis": {
+                "ic_analysis": {"ic_mean": 0.05, "icir": 0.8, "rank_ic_mean": 0.04, "win_rate": 0.6},
+                "group_analysis": {"group_returns": {"G1": 0.2}, "group_monotonicity": "G1>G5",
+                                  "ls_ann_return": 0.25, "ls_sharpe": 1.2},
+                "return_analysis": {"ann_return": 0.25, "sharpe": 1.0, "calmar": 0.8, "sortino": 1.3},
+                "turnover_analysis": {"avg_turnover": 0.3},
+                "oos_analysis": {"oos_rank_ic": 0.03, "oos_sharpe": 0.9},
+                "cost_analysis": {"net_ann_return": 0.18},
+            },
+            "overall_assessment": {"score": 72},
+        }
+        prompt = _build_hypothesis_prompt(factor, l5_data)
+        # Check all key metrics are in the prompt
+        assert "H1" in prompt
+        assert "H2" in prompt
+        assert "0.05" in prompt  # ic_mean
+        assert "0.8" in prompt   # icir
+        assert "72" in prompt    # score
+
+    def test_run_l5_pipeline_factor_not_found(self):
+        from llmwikify.reproduction.l5_orchestrator import run_l5_pipeline
+        result = run_l5_pipeline("nonexistent/factor/path")
+        assert result["success"] is False
+        assert "not found" in result["error"]
+
+
+# ═══════════════════════════════════════════════════════════════
+# Factor Value Store Extended Tests
+# ═══════════════════════════════════════════════════════════════
+
+class TestFactorValueStoreExtended:
+    """Extended tests for factor value store."""
+
+    def test_store_single_stock(self, tmp_path):
+        import pandas as pd
+        from llmwikify.reproduction.factor_value_store import store_factor_values, query_factor_values
+
+        db_path = tmp_path / "test.duckdb"
+        dates = pd.date_range("2024-01-01", periods=3)
+        data = pd.DataFrame({"600000.SH": [0.1, 0.2, 0.3]}, index=dates)
+
+        count = store_factor_values(data, "single_stock", db_path)
+        assert count == 3
+
+        result = query_factor_values("single_stock", db_path=db_path)
+        assert len(result) == 3
+        assert result["stock"].unique() == ["600000.SH"]
+
+    def test_store_many_stocks(self, tmp_path):
+        import pandas as pd
+        from llmwikify.reproduction.factor_value_store import store_factor_values
+
+        db_path = tmp_path / "test.duckdb"
+        dates = pd.date_range("2024-01-01", periods=2)
+        stocks = [f"{i:06d}.SZ" for i in range(1, 51)]
+        data = pd.DataFrame(
+            [[i * 0.01] * 50 for i in range(2)],
+            index=dates,
+            columns=stocks,
+        )
+
+        count = store_factor_values(data, "many_stocks", db_path)
+        assert count == 100  # 2 dates × 50 stocks
+
+    def test_query_with_stock_filter(self, tmp_path):
+        import pandas as pd
+        from llmwikify.reproduction.factor_value_store import store_factor_values, query_factor_values
+
+        db_path = tmp_path / "test.duckdb"
+        dates = pd.date_range("2024-01-01", periods=3)
+        data = pd.DataFrame(
+            {"A": [1.0, 2.0, 3.0], "B": [4.0, 5.0, 6.0]},
+            index=dates,
+        )
+
+        store_factor_values(data, "stock_filter", db_path)
+        result = query_factor_values(
+            "stock_filter",
+            stocks=["A"],
+            db_path=db_path,
+        )
+        assert len(result) == 3
+        assert (result["stock"] == "A").all()
+
+    def test_store_nan_values_excluded(self, tmp_path):
+        import pandas as pd
+        import numpy as np
+        from llmwikify.reproduction.factor_value_store import store_factor_values
+
+        db_path = tmp_path / "test.duckdb"
+        dates = pd.date_range("2024-01-01", periods=4)
+        data = pd.DataFrame(
+            {"A": [0.1, np.nan, 0.3, 0.4]},
+            index=dates,
+        )
+
+        count = store_factor_values(data, "nan_test", db_path)
+        assert count == 3  # NaN excluded
+
+    def test_multiple_factors_same_db(self, tmp_path):
+        import pandas as pd
+        from llmwikify.reproduction.factor_value_store import store_factor_values, list_stored_factors
+
+        db_path = tmp_path / "test.duckdb"
+        dates = pd.date_range("2024-01-01", periods=3)
+
+        for i, name in enumerate(["factor_a", "factor_b", "factor_c"]):
+            data = pd.DataFrame({"X": [float(i)] * 3}, index=dates)
+            store_factor_values(data, name, db_path)
+
+        factors = list_stored_factors(db_path)
+        assert len(factors) == 3
+        names = sorted([f["factor_name"] for f in factors])
+        assert names == ["factor_a", "factor_b", "factor_c"]
+
+    def test_store_empty_wide_df(self, tmp_path):
+        import pandas as pd
+        from llmwikify.reproduction.factor_value_store import store_factor_values
+
+        db_path = tmp_path / "test.duckdb"
+        data = pd.DataFrame(index=pd.date_range("2024-01-01", periods=3))
+        count = store_factor_values(data, "empty_wide", db_path)
+        assert count == 0
+
+
+# ═══════════════════════════════════════════════════════════════
+# Factor Library Write→Index Sync Tests
+# ═══════════════════════════════════════════════════════════════
+
+class TestFactorLibraryIndexSync:
+    """Tests that write_factor_yaml auto-syncs index.yaml."""
+
+    def test_write_creates_index(self, project_root):
+        from llmwikify.reproduction.factor_library import write_factor_yaml, list_factors
+
+        factor_data = {
+            "factor": {
+                "name": "test_sync_factor",
+                "asset_type": "stock",
+                "category": "price",
+                "subcategory": "momentum",
+                "l1": {"definition": "test"},
+            }
+        }
+        write_factor_yaml("stock/price/test_sync", factor_data, project_root)
+
+        # Index should now contain the factor
+        factors = list_factors(project_root)
+        names = [f["name"] for f in factors]
+        assert "test_sync_factor" in names
+
+    def test_write_updates_index_stats(self, project_root):
+        from llmwikify.reproduction.factor_library import write_factor_yaml, list_factors
+
+        # Write two factors
+        for name, cat in [("f1", "price"), ("f2", "fundamental")]:
+            data = {
+                "factor": {
+                    "name": name,
+                    "asset_type": "stock",
+                    "category": cat,
+                    "subcategory": "test",
+                    "l1": {"definition": "test"},
+                }
+            }
+            write_factor_yaml(f"stock/{cat}/{name}", data, project_root)
+
+        factors = list_factors(project_root)
+        assert len(factors) == 2
+
+    def test_write_overwrites_existing(self, project_root):
+        from llmwikify.reproduction.factor_library import write_factor_yaml, read_factor_yaml
+
+        data1 = {"factor": {"name": "overwrite_test", "l1": {"definition": "version1"}}}
+        data2 = {"factor": {"name": "overwrite_test", "l1": {"definition": "version2"}}}
+
+        write_factor_yaml("stock/price/overwrite_test", data1, project_root)
+        write_factor_yaml("stock/price/overwrite_test", data2, project_root)
+
+        result = read_factor_yaml("stock/price/overwrite_test", project_root)
+        assert result["factor"]["l1"]["definition"] == "version2"
+
+
+# ═══════════════════════════════════════════════════════════════
+# Paper Edge Case Tests
+# ═══════════════════════════════════════════════════════════════
+
+class TestPaperExtractEdgeCases:
+    """Edge cases for _extract_factor_from_page."""
+
+    def test_custom_category(self):
+        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
+        page = {
+            "page_name": "factor-test",
+            "content": "---\ntitle: Value Factor\ncategory: fundamental\nsubcategory: value\nasset_type: stock\n---\n",
+        }
+        result = _extract_factor_from_page(page, "test")
+        assert result["name"] == "stock/fundamental/value-factor"
+        assert result["factor"]["category"] == "fundamental"
+        # subcategory comes from factor_class, not frontmatter subcategory
+        assert result["factor"]["subcategory"] == "unknown"
+
+    def test_nested_signal_params(self):
+        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
+        page = {
+            "page_name": "factor-test",
+            "content": (
+                "---\ntitle: Complex Factor\n"
+                "factor_class: momentum\n"
+                "signal_params: '{\"fast\": 5, \"slow\": 20}'\n---\n"
+            ),
+        }
+        result = _extract_factor_from_page(page, "test")
+        params = result["factor"]["l1"]["default_params"]
+        assert params["fast"] == 5 or params["fast"] == "5"
+        assert params["slow"] == 20 or params["slow"] == "20"
+
+    def test_empty_content(self):
+        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
+        page = {"page_name": "factor-test", "content": ""}
+        result = _extract_factor_from_page(page, "test")
+        assert result["name"] == "stock/price/factor-test"
+        assert result["factor"]["l1"]["definition"] == "Factor extracted from test"
+
+    def test_no_frontmatter(self):
+        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
+        page = {"page_name": "factor-test", "content": "Just some content without frontmatter"}
+        result = _extract_factor_from_page(page, "test")
+        assert result["factor"]["subcategory"] == "unknown"
+
+    def test_factor_has_all_six_layers(self):
+        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
+        page = {
+            "page_name": "factor-test",
+            "content": "---\ntitle: Test\ncategory: price\n---\n",
+        }
+        result = _extract_factor_from_page(page, "test")
+        factor = result["factor"]
+        assert "l1" in factor
+        assert "l2" in factor
+        assert "l3" in factor
+        assert "l4" in factor
+        assert "l5" in factor
+        assert "l6" in factor
+
+
+# ═══════════════════════════════════════════════════════════════
+# FactorLibrary read_factor_yaml Edge Cases
+# ═══════════════════════════════════════════════════════════════
+
+class TestFactorLibraryReadEdgeCases:
+    """Edge cases for factor_library.read_factor_yaml."""
+
+    def test_read_nested_path(self, project_root):
+        from llmwikify.reproduction.factor_library import write_factor_yaml, read_factor_yaml
+
+        data = {"factor": {"name": "nested_test", "l1": {"definition": "deep"}}}
+        write_factor_yaml("stock/price/momentum/nested_test", data, project_root)
+
+        result = read_factor_yaml("stock/price/momentum/nested_test", project_root)
+        assert result["factor"]["l1"]["definition"] == "deep"
+
+    def test_read_with_special_chars(self, project_root):
+        from llmwikify.reproduction.factor_library import write_factor_yaml, read_factor_yaml
+
+        data = {"factor": {"name": "special_test", "l1": {"definition": "test with 中文"}}}
+        write_factor_yaml("stock/price/special_test", data, project_root)
+
+        result = read_factor_yaml("stock/price/special_test", project_root)
+        assert result["factor"]["l1"]["definition"] == "test with 中文"
+
+    def test_list_factors_by_category_empty(self, project_root):
+        from llmwikify.reproduction.factor_library import list_factors_by_category
+        result = list_factors_by_category(project_root)
+        assert result == {}
+
+
+# ═══════════════════════════════════════════════════════════════
+# QuantWiki Edge Cases
+# ═══════════════════════════════════════════════════════════════
+
+class TestQuantWikiExtended:
+    """Extended edge cases for quant_wiki."""
+
+    def test_read_page_invalid_type_raises(self, quant_root):
+        from llmwikify.reproduction.quant_wiki import QuantWiki
+        wiki = QuantWiki(quant_root)
+        with pytest.raises(ValueError, match="Unknown page_type"):
+            wiki.read_page("test", page_type="nonexistent")
+
+    def test_list_pages_invalid_type_raises(self, quant_root):
+        from llmwikify.reproduction.quant_wiki import QuantWiki
+        wiki = QuantWiki(quant_root)
+        with pytest.raises(ValueError, match="Unknown page_type"):
+            wiki.list_pages("nonexistent")
+
+    def test_write_page_overwrites_content(self, quant_root):
+        from llmwikify.reproduction.quant_wiki import QuantWiki
+        wiki = QuantWiki(quant_root)
+        wiki.write_page("test", "version1", page_type="papers")
+        wiki.write_page("test", "version2", page_type="papers")
+        result = wiki.read_page("test", page_type="papers")
+        assert result["content"] == "version2"
+
+    def test_write_page_returns_action(self, quant_root):
+        from llmwikify.reproduction.quant_wiki import QuantWiki
+        wiki = QuantWiki(quant_root)
+        result = wiki.write_page("new_page", "content", page_type="papers")
+        assert "Created" in result
+        result2 = wiki.write_page("new_page", "content2", page_type="papers")
+        assert "Updated" in result2
+
+
+# ═══════════════════════════════════════════════════════════════
+# L5 Validation Module Import Tests
+# ═══════════════════════════════════════════════════════════════
+
+class TestModuleImports:
+    """Test that all modules can be imported without errors."""
+
+    def test_import_l5_validation(self):
+        import llmwikify.reproduction.l5_validation as m
+        assert hasattr(m, "analyze_ic")
+        assert hasattr(m, "analyze_groups")
+        assert hasattr(m, "analyze_returns")
+        assert hasattr(m, "analyze_turnover")
+        assert hasattr(m, "analyze_stability")
+        assert hasattr(m, "analyze_oos")
+        assert hasattr(m, "analyze_cost")
+        assert hasattr(m, "compute_score")
+        assert hasattr(m, "run_l5_validation")
+
+    def test_import_l5_orchestrator(self):
+        import llmwikify.reproduction.l5_orchestrator as m
+        assert hasattr(m, "run_l5_pipeline")
+        assert hasattr(m, "_build_hypothesis_prompt")
+        assert hasattr(m, "_parse_llm_response")
+
+    def test_import_factor_value_store(self):
+        import llmwikify.reproduction.factor_value_store as m
+        assert hasattr(m, "store_factor_values")
+        assert hasattr(m, "query_factor_values")
+        assert hasattr(m, "list_stored_factors")
+        assert hasattr(m, "compute_and_store_factor")
+
+    def test_import_factor_library(self):
+        import llmwikify.reproduction.factor_library as m
+        assert hasattr(m, "list_factors")
+        assert hasattr(m, "read_factor_yaml")
+        assert hasattr(m, "write_factor_yaml")
+        assert hasattr(m, "list_factors_by_category")
+        assert hasattr(m, "update_index")
+
+    def test_import_quant_wiki(self):
+        import llmwikify.reproduction.quant_wiki as m
+        assert hasattr(m, "QuantWiki")
+        assert hasattr(m, "get_quant_root")
+        assert hasattr(m, "get_quant_wiki")
