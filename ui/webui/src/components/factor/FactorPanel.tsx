@@ -21,8 +21,8 @@ import {
   Settings2, Info, Loader2, AlertTriangle, Target, Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/badge';
+import { Button } from '../ui/legacy-button';
+import { Badge } from '../ui/legacy-badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { FactorSelector } from '../shared/FactorSelector';
 import { MetricCards } from '../shared/MetricCards';
@@ -511,7 +511,7 @@ function InfoBar({
         <>
           <Sep />
           <span className="font-medium text-muted-foreground">截面平均</span>
-          <span>{Math.round(result.n_stocks_per_date.reduce((a, b) => a + b, 0) / result.n_stocks_per_date.length)} 只/期</span>
+          <span>{Math.round(result.n_stocks_per_date.reduce((a, b) => a + b.n, 0) / result.n_stocks_per_date.length)} 只/期</span>
           <Sep />
           <span className="font-medium text-muted-foreground">调仓</span>
           <span>{result.n_stocks_per_date.length} 次</span>

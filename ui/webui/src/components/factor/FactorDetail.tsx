@@ -18,8 +18,8 @@ import {
   BarChart3, Shield, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Badge } from '../ui/badge';
-import { Button } from '../ui/Button';
+import { Badge } from '../ui/legacy-badge';
+import { Button } from '../ui/legacy-button';
 import { HypothesisList } from './HypothesisList';
 import { OverallAssessment } from './OverallAssessment';
 import { RiskRadar } from './RiskRadar';

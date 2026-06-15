@@ -148,7 +148,7 @@ export function ICChart({ icSeries, height = 300, className }: ICChartProps) {
 
     // X scale for histogram
     const xHist = d3.scaleLinear()
-      .domain([d3.min(icValues) * 1.1, d3.max(icValues) * 1.1])
+      .domain([(d3.min(icValues) ?? 0) * 1.1, (d3.max(icValues) ?? 0) * 1.1])
       .range([0, histW]);
 
     // Histogram bins

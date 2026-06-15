@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileText, Link2, Send, FolderOpen, Upload, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '../ui/Button';
+import { Button } from '../ui/legacy-button';
 import { listRawPapers, uploadPaperFile, type RawFile } from '../../lib/paper-api';
 
 type SourceType = 'pdf' | 'url' | 'raw';

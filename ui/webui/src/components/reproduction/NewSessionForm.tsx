@@ -11,8 +11,8 @@
 
 import { useState } from 'react';
 import { Calendar, FileText, Link2, TrendingUp } from 'lucide-react';
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
+import { Card } from '../ui/legacy-card';
+import { Button } from '../ui/legacy-button';
 import { startReproduction } from '../../lib/reproduction-api';
 
 interface NewSessionFormProps {

@@ -175,7 +175,7 @@ function SessionHeader({
   onRefresh,
 }: {
   session: ReproductionSession;
-  metrics: StartReproductionResponse['metrics'];
+  metrics: StartReproductionResponse['metrics'] | null;
   signalType?: string;
   source?: string;
   onRefresh: () => void;
@@ -257,7 +257,7 @@ export function ReproductionPanel() {
   const [session, setSession] = useState<ReproductionSession | null>(null);
   const [events, setEvents] = useState<ReproductionEvent[]>([]);
   const [artifacts, setArtifacts] = useState<ReproductionArtifact[]>([]);
-  const [metrics, setMetrics] = useState<StartReproductionResponse['metrics']>(null);
+  const [metrics, setMetrics] = useState<StartReproductionResponse['metrics'] | null>(null);
   const [signalType, setSignalType] = useState<string | undefined>();
   const [source, setSource] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
