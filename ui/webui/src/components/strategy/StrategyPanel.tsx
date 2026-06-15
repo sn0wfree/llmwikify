@@ -11,7 +11,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, Play, ArrowLeft, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '../ui/Button';
+import { Button } from '../ui/legacy-button';
 import { StrategySelector } from '../shared/StrategySelector';
 import { MetricCards } from '../shared/MetricCards';
 import { LineChart } from '../shared/LineChart';

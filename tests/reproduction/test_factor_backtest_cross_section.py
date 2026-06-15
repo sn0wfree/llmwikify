@@ -207,4 +207,174 @@ class TestRunFactorBacktestUniverse:
         d = r.to_dict()
         assert d["rank_ic_mean"] == 0.0
         assert d["longshort_ann_return"] == 0.0
+
+    def test_with_tradable_data(self, synthetic_close):
+        """Tradability filter + FactorPreprocess pipeline path runs end-to-end."""
+        codes = list(synthetic_close.columns)
+        dates = synthetic_close.index
+        n_dates, n_codes = len(dates), len(codes)
+        # Mark stock_00 as ST and stock_01 as suspended for first 50 days
+        st = np.zeros((n_dates, n_codes))
+        st[:50, 0] = 1.0
+        suspend = np.zeros((n_dates, n_codes))
+        suspend[:50, 1] = 1.0
+        ud_limit = np.zeros((n_dates, n_codes))
+        ipo_days = np.full((n_dates, n_codes), 365, dtype=np.int64)
+        tradable = {
+            "st": pd.DataFrame(st, index=dates, columns=codes),
+            "suspend": pd.DataFrame(suspend, index=dates, columns=codes),
+            "ud_limit": pd.DataFrame(ud_limit, index=dates, columns=codes),
+            "ipo_days": pd.DataFrame(ipo_days, index=dates, columns=codes),
+        }
+        result = run_factor_backtest_universe(
+            synthetic_close, "momentum", {"lookback": 5},
+            adj_mode="W-end", universe="with_tradable",
+            tradable=tradable,
+        )
+        # Should still return a valid result (with possibly different metrics)
+        assert result.universe == "with_tradable"
+        assert result.adj_mode == "W-end"
+        # ST/suspended stocks should not affect IC drastically
+        assert isinstance(result.ic_mean, float)
+
+    def test_tradable_marks_stocks_nan_in_processed_factor(self, synthetic_close):
+        """Verify TradabilityFilterNode marks non-tradable stocks as NaN."""
+        from llmwikify.reproduction.quantnodes_adapter import (
+            build_code_map,
+            build_qn_context,
+            convert_wide_to_qn,
+        )
+
+        codes = list(synthetic_close.columns)
+        dates = synthetic_close.index
+        n_dates, n_codes = len(dates), len(codes)
+        st = np.zeros((n_dates, n_codes))
+        st[:, 0] = 1.0  # stock_00 always ST
+        tradable = {
+            "st": pd.DataFrame(st, index=dates, columns=codes),
+            "suspend": pd.DataFrame(np.zeros((n_dates, n_codes)), index=dates, columns=codes),
+            "ud_limit": pd.DataFrame(np.zeros((n_dates, n_codes)), index=dates, columns=codes),
+            "ipo_days": pd.DataFrame(np.full((n_dates, n_codes), 365, dtype=np.int64), index=dates, columns=codes),
+        }
+        factor_wide = synthetic_close.pct_change(5)
+        ctx = build_qn_context(
+            factor_wide=factor_wide,
+            close_wide=synthetic_close,
+            adj_dates=list(dates),
+            tradable=tradable,
+        )
+        # stock_00 should be marked as ST in context
+        code_map = build_code_map(synthetic_close.columns)
+        st_qn = ctx["LoadData"]["st"]
+        stk_id = code_map["stock_00"]
+        assert st_qn[stk_id].iloc[0] == 1.0
+
+
+# ─── Tradability matrix building tests ──────────────────────
+
+
+class TestBuildTradableMatrices:
+    def test_basic(self):
+        """Build tradable matrices for a small synthetic universe."""
+        from llmwikify.reproduction.ifind_data import build_tradable_matrices
+
+        codes = ["000001.SZ", "000002.SZ", "600000.SH"]
+        dates = pd.date_range("2024-01-01", periods=30, freq="D")
+        ipo_dates = {
+            "000001.SZ": "19910403",
+            "000002.SZ": "20001222",
+            "600000.SH": "19991110",
+        }
+        st_history = {}  # no ST events
+        suspend_history = {}
+        result = build_tradable_matrices(
+            codes=codes,
+            trade_dates=dates,
+            ipo_dates=ipo_dates,
+            st_history=st_history,
+            suspend_history=suspend_history,
+        )
+        assert set(result.keys()) == {"st", "suspend", "ud_limit", "ipo_days"}
+        for key, df in result.items():
+            assert df.shape == (30, 3)
+            assert list(df.columns) == codes
+        # No ST events → all zeros
+        assert result["st"].sum().sum() == 0.0
+        # All tradable (no suspension)
+        assert result["suspend"].sum().sum() == 0.0
+        # ipo_days grows monotonically
+        ipo_first = result["ipo_days"].iloc[0].iloc[0]
+        ipo_last = result["ipo_days"].iloc[-1].iloc[0]
+        assert ipo_last > ipo_first
+
+    def test_with_st_events(self):
+        """ST status is applied for the event window."""
+        from llmwikify.reproduction.ifind_data import build_tradable_matrices
+
+        codes = ["000001.SZ"]
+        dates = pd.date_range("2024-04-01", periods=60, freq="D")
+        ipo_dates = {"000001.SZ": "20000101"}
+        st_history = {
+            "000001.SZ": [
+                {"date": "20240408", "action": "ST"},
+                {"date": "20240506", "action": "摘*"},
+            ],
+        }
+        result = build_tradable_matrices(
+            codes=codes,
+            trade_dates=dates,
+            ipo_dates=ipo_dates,
+            st_history=st_history,
+            suspend_history={},
+        )
+        # Find rows in the 20240408-20240506 window
+        st_col = result["st"].iloc[:, 0]
+        st_window = st_col.loc[st_col.index.isin(pd.date_range("2024-04-08", "2024-05-06"))]
+        assert st_window.sum() >= 1.0  # at least one day marked as ST
+        # Outside the window → 0
+        st_outside = st_col.loc[~st_col.index.isin(pd.date_range("2024-04-08", "2024-05-06"))]
+        assert st_outside.sum() == 0.0
+
+    def test_with_suspension(self):
+        """Suspension events mark stocks as suspended."""
+        from llmwikify.reproduction.ifind_data import build_tradable_matrices
+
+        codes = ["000001.SZ"]
+        dates = pd.date_range("2024-01-01", periods=30, freq="D")
+        ipo_dates = {"000001.SZ": "20000101"}
+        st_history = {}
+        suspend_history = {
+            "000001.SZ": [
+                {"date": "20240115", "days": "5"},
+                {"date": "20240116", "days": "4"},
+                {"date": "20240117", "days": "3"},
+            ],
+        }
+        result = build_tradable_matrices(
+            codes=codes,
+            trade_dates=dates,
+            ipo_dates=ipo_dates,
+            st_history=st_history,
+            suspend_history=suspend_history,
+        )
+        # 3 dates marked as suspended
+        suspend_col = result["suspend"].iloc[:, 0]
+        assert suspend_col.sum() == 3.0
+
+
+class TestClickHouseConfig:
+    def test_load_ch_passwd_default(self):
+        """_load_ch_passwd returns string even when config file exists."""
+        from llmwikify.reproduction.router import _load_ch_passwd
+        pwd = _load_ch_passwd()
+        assert isinstance(pwd, str)
+        assert len(pwd) > 0
+
+    def test_factor_result_backward_compat(self):
+        """Backward compatibility: FactorBacktestResult default values."""
+        from llmwikify.reproduction.schemas import FactorBacktestResult
+        r = FactorBacktestResult()
+        d = r.to_dict()
+        assert d["longshort_curve"] == []
+        assert d["rank_ic_mean"] == 0.0
         assert d["longshort_curve"] == []

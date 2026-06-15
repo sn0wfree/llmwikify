@@ -29,8 +29,20 @@ interface FactorSelectorProps {
 
 const STATUS_COLORS: Record<string, string> = {
   draft: 'text-muted-foreground',
-  validated: 'text-success',
-  deprecated: 'text-destructive',
+  validated: 'text-emerald-500',
+  deprecated: 'text-rose-500',
+};
+
+const CLASS_COLOR: Record<string, string> = {
+  momentum: 'bg-blue-500',
+  volatility: 'bg-purple-500',
+  value: 'bg-emerald-500',
+  quality: 'bg-amber-500',
+  size: 'bg-cyan-500',
+  growth: 'bg-pink-500',
+  signal_composite: 'bg-violet-500',
+  ma_cross: 'bg-indigo-500',
+  rsi: 'bg-orange-500',
 };
 
 // ─── Component ──────────────────────────────────────────────
@@ -86,19 +98,23 @@ export function FactorSelector({ onSelect, selectedSlug, className }: FactorSele
     <div className={cn('space-y-1', className)}>
       {factors.map((f) => {
         const isSelected = selectedSlug === f._slug;
+        const colorBar = f.factor_class ? CLASS_COLOR[f.factor_class] || 'bg-muted-foreground' : 'bg-muted-foreground';
         return (
           <button
             key={f._slug}
             onClick={() => onSelect(f._slug)}
             className={cn(
-              'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors',
+              'relative w-full text-left pl-3 pr-2.5 py-2 rounded-md text-sm transition-all',
               isSelected
-                ? 'bg-primary/12 text-foreground'
-                : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
+                ? 'bg-primary/10 text-foreground border-l-2 border-primary'
+                : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground border-l-2 border-transparent',
             )}
           >
+            {!isSelected && (
+              <span className={cn('absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full', colorBar)} />
+            )}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <Beaker className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate font-medium">
                   {f.title || f._slug}
@@ -106,12 +122,12 @@ export function FactorSelector({ onSelect, selectedSlug, className }: FactorSele
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {f.factor_class && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                  <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono">
                     {f.factor_class}
                   </span>
                 )}
                 {f.status && (
-                  <span className={cn('text-[10px]', STATUS_COLORS[f.status] || 'text-muted-foreground')}>
+                  <span className={cn('text-[9px] font-medium', STATUS_COLORS[f.status] || 'text-muted-foreground')}>
                     {f.status}
                   </span>
                 )}

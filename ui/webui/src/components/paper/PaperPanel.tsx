@@ -44,7 +44,7 @@ import {
   type PaperSession,
   POLL_INTERVAL_MS,
 } from '../../lib/paper-api';
-import { Button } from '../ui/Button';
+import { Button } from '../ui/legacy-button';
 
 interface Artifact {
   kind: string;
@@ -262,6 +262,9 @@ function EmptyState({
     source_type: 'pdf' | 'url' | 'raw';
     source_ref: string;
     paper_content: string;
+    symbol: string;
+    start_date: string;
+    end_date: string;
   }) => Promise<void>;
   loading: boolean;
   error: string | null;

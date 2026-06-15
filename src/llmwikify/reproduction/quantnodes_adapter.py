@@ -87,6 +87,7 @@ def build_qn_context(
     index_close: pd.Series | None = None,
     id_citic1: pd.DataFrame | None = None,
     mv_float: pd.DataFrame | None = None,
+    tradable: dict[str, pd.DataFrame] | None = None,
 ) -> dict[str, Any]:
     """Build a minimal context dict for QuantNodes analysis nodes.
 
@@ -100,6 +101,9 @@ def build_qn_context(
         index_close: pd.Series of benchmark close prices (optional)
         id_citic1: [date × Code] industry codes (optional, for preprocess)
         mv_float: [date × Code] market cap (optional, for preprocess)
+        tradable: optional dict with keys 'st', 'suspend', 'ud_limit', 'ipo_days'
+                  each a [date×code] DataFrame matching factor_wide shape.
+                  If not provided, defaults to all-tradable.
 
     Returns:
         dict with keys matching QuantNodes context format (int64 index/columns)
@@ -145,13 +149,19 @@ def build_qn_context(
     else:
         load_data["mv_float"] = None
 
-    # Tradability defaults (all tradable)
-    n_dates, n_stocks = factor.shape
-    ones = pd.DataFrame(1.0, index=factor.index, columns=factor.columns)
-    load_data["st"] = pd.DataFrame(0, index=factor.index, columns=factor.columns)
-    load_data["suspend"] = pd.DataFrame(0, index=factor.index, columns=factor.columns)
-    load_data["ud_limit"] = pd.DataFrame(0, index=factor.index, columns=factor.columns)
-    load_data["ipo_days"] = pd.DataFrame(360, index=factor.index, columns=factor.columns)
+    # Tradability: use provided DataFrames or defaults (all tradable)
+    if tradable is not None:
+        for key in ("st", "suspend", "ud_limit", "ipo_days"):
+            df = tradable.get(key)
+            if df is not None and not df.empty:
+                load_data[key] = convert_wide_to_qn(df, code_map)
+            else:
+                load_data[key] = _default_tradable(factor, key)
+    else:
+        load_data["st"] = _default_tradable(factor, "st")
+        load_data["suspend"] = _default_tradable(factor, "suspend")
+        load_data["ud_limit"] = _default_tradable(factor, "ud_limit")
+        load_data["ipo_days"] = _default_tradable(factor, "ipo_days")
 
     ctx["LoadData"] = load_data
 
@@ -169,6 +179,14 @@ def build_qn_context(
                 df.columns = df.columns.astype(np.int64)
 
     return ctx
+
+
+def _default_tradable(factor_qn: pd.DataFrame, key: str) -> pd.DataFrame:
+    """Create default tradability DataFrame (all tradable)."""
+    zero = pd.DataFrame(0, index=factor_qn.index, columns=factor_qn.columns, dtype=np.float64)
+    if key == "ipo_days":
+        return pd.DataFrame(360, index=factor_qn.index, columns=factor_qn.columns, dtype=np.int64)
+    return zero
 
 
 # ─── Result extraction ──────────────────────────────────────
@@ -205,8 +223,10 @@ def extract_group_result(
     quantile_curves: dict[str, list[dict]] = {}
 
     # daily_net_simp: DataFrame [dates × groups] (columns are 1..N)
+    # Contains NaN for non-rebalance dates; forward-fill then fill remaining NaN with 0
     daily_net = ga.get("daily_net_simp")
     if daily_net is not None and not daily_net.empty:
+        daily_net = daily_net.ffill().fillna(0.0)
         for g in range(1, n_groups + 1):
             if g in daily_net.columns:
                 curve = [
@@ -277,10 +297,10 @@ def extract_longshort_result(
         except Exception:
             pass
 
-    # Long-short curve from net DataFrame
+    # Long-short curve from net DataFrame (forward-fill NaN)
     longshort_curve: list[dict] = []
     if net is not None and not net.empty and "多空" in net.columns:
-        ls_series = net["多空"]
+        ls_series = net["多空"].ffill().fillna(0.0)
         longshort_curve = [
             {"date": str(d)[:10], "value": round(float(v), 6)}
             for d, v in ls_series.items()

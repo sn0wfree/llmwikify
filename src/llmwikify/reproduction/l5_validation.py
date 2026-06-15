@@ -331,16 +331,12 @@ def _score_ic(ic_analysis: dict) -> float:
 
 
 def _score_group(group_analysis: dict) -> float:
-    """Score group analysis (0-20).
-
-    Uses |sharpe| to handle reverse factors correctly — for a factor with
-    expected_ic_sign='负', a negative long-short Sharpe is the intended direction.
-    """
+    """Score group analysis (0-20)."""
     ls_sharpe = abs(group_analysis.get("ls_sharpe", 0))
     ls_return = group_analysis.get("ls_ann_return", 0)
     ls_mdd = group_analysis.get("ls_max_drawdown", 0)
 
-    # Long-short Sharpe (0-10) — score by magnitude
+    # Long-short Sharpe (0-10)
     if ls_sharpe > 1.5:
         sharpe_score = 10
     elif ls_sharpe > 0.5:
@@ -363,13 +359,12 @@ def _score_group(group_analysis: dict) -> float:
     else:
         mono_score = 0
 
-    # Max drawdown penalty (0-5) — |MDD| regardless of direction
-    abs_mdd = abs(ls_mdd)
-    if abs_mdd < 0.1:
+    # Max drawdown penalty (0-5)
+    if ls_mdd < 0.1:
         dd_score = 5
-    elif abs_mdd < 0.2:
+    elif ls_mdd < 0.2:
         dd_score = 3
-    elif abs_mdd < 0.3:
+    elif ls_mdd < 0.3:
         dd_score = 1
     else:
         dd_score = 0
@@ -378,16 +373,12 @@ def _score_group(group_analysis: dict) -> float:
 
 
 def _score_return(return_analysis: dict) -> float:
-    """Score return analysis (0-20).
+    """Score return analysis (0-20)."""
+    sharpe = return_analysis.get("sharpe", 0)
+    calmar = return_analysis.get("calmar", 0)
+    sortino = return_analysis.get("sortino", 0)
 
-    Uses |sharpe|, |calmar|, |sortino| to handle reverse factors.
-    A factor with expected_ic_sign='负' has negative Sharpe that is still predictive.
-    """
-    sharpe = abs(return_analysis.get("sharpe", 0))
-    calmar = abs(return_analysis.get("calmar", 0))
-    sortino = abs(return_analysis.get("sortino", 0))
-
-    # Sharpe (0-8) — score by magnitude
+    # Sharpe (0-8)
     if sharpe > 1.0:
         sharpe_score = 8
     elif sharpe > 0.5:
@@ -397,7 +388,7 @@ def _score_return(return_analysis: dict) -> float:
     else:
         sharpe_score = 0
 
-    # Calmar (0-6) — score by magnitude
+    # Calmar (0-6)
     if calmar > 1.0:
         calmar_score = 6
     elif calmar > 0.3:
@@ -407,7 +398,7 @@ def _score_return(return_analysis: dict) -> float:
     else:
         calmar_score = 0
 
-    # Sortino (0-6) — score by magnitude
+    # Sortino (0-6)
     if sortino > 1.5:
         sortino_score = 6
     elif sortino > 0.7:

@@ -135,7 +135,7 @@ export function LineChart({
 
     // Y axis
     g.append('g')
-      .call(d3.axisLeft(y).ticks(5).tickFormat(yFormat).tickSizeOuter(0))
+      .call(d3.axisLeft(y).ticks(5).tickFormat((d) => yFormat(Number(d))).tickSizeOuter(0))
       .call((sel) => sel.selectAll('text').attr('fill', 'var(--muted-foreground)').attr('font-size', '10px'))
       .call((sel) => sel.selectAll('line,path').attr('stroke', 'var(--border)'));
 
