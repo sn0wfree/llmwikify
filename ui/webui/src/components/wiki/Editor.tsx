@@ -112,7 +112,7 @@ export function Editor({
       if (isMultiWikiMode && wikiId) {
         data = await api.wiki.scoped.graph(wikiId, currentPage);
       } else {
-        data = await api.wiki.graph(currentPage);
+        data = await api.wiki.graph({ currentPage });
       }
       setGraphNodes(data.nodes || []);
       setGraphEdges(data.edges || []);

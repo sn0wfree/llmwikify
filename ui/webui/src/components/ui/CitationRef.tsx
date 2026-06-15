@@ -11,20 +11,20 @@ const CITATION_CHARS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱�
 
 function md5(s: string): string {
   function L(k: number, d: number) { return (k << d) | (k >>> (32 - d)); }
-  function K(a: number, b: number, c: number, d: number, x: number, s: number) {
-    a = (a + ((b & c) | (~b & d)) + x) | 0;
+  function K(a: number, b: number, c: number, d: number, x: number, s: number, t: number) {
+    a = (a + ((b & c) | (~b & d)) + x + t) | 0;
     return ((a << s) | (a >>> (32 - s))) + b | 0;
   }
-  function m(a: number, b: number, c: number, d: number, x: number, s: number) {
-    a = (a + ((b & d) | (c & ~d)) + x) | 0;
+  function m(a: number, b: number, c: number, d: number, x: number, s: number, t: number) {
+    a = (a + ((b & d) | (c & ~d)) + x + t) | 0;
     return ((a << s) | (a >>> (32 - s))) + b | 0;
   }
-  function g(a: number, b: number, c: number, d: number, x: number, s: number) {
-    a = (a + (b ^ c ^ d) + x) | 0;
+  function g(a: number, b: number, c: number, d: number, x: number, s: number, t: number) {
+    a = (a + (b ^ c ^ d) + x + t) | 0;
     return ((a << s) | (a >>> (32 - s))) + b | 0;
   }
-  function h(a: number, b: number, c: number, d: number, x: number, s: number) {
-    a = (a + (c ^ (b | ~d)) + x) | 0;
+  function h(a: number, b: number, c: number, d: number, x: number, s: number, t: number) {
+    a = (a + (c ^ (b | ~d)) + x + t) | 0;
     return ((a << s) | (a >>> (32 - s))) + b | 0;
   }
   function cvt(x: number) {
