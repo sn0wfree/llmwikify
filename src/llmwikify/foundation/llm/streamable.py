@@ -21,7 +21,10 @@ Pass ``_prompt_name="..."`` in generation_params to label calls in logs.
 from __future__ import annotations
 
 import json
+import logging
 import os
+import random
+import time
 from typing import Any
 
 from ..llm_client import LLMClient, _legacy_fallback_enabled
@@ -30,6 +33,68 @@ from .errors import LLMNotConfiguredError
 from .resolver import resolve_chat_llm, resolver_enabled
 from .spec import LLMSpec
 from .token_budget import TokenBudgetChecker, TokenBudgetConfig
+
+logger = logging.getLogger(__name__)
+
+
+# ─── Retry configuration ────────────────────────────────────────
+#
+# Retry+backoff for transient network / provider errors:
+#   - ReadTimeout, ConnectionError, Timeout (network-level)
+#   - HTTP 429 (rate limit)
+#   - HTTP 500, 502, 503, 504 (server-side transient)
+#
+# Not retried:
+#   - 4xx (except 429) — client errors that won't be fixed by retry
+#   - 401/403 (auth) — won't change without credential update
+#   - Mid-stream failures (once we start reading response body, the
+#     request is committed; retry would re-bill tokens)
+#
+# Backoff: 1s, 2s, 4s exponential with up to 0.5s jitter to avoid
+# synchronized retries from concurrent callers.
+
+_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
+_DEFAULT_MAX_RETRIES: int = 3
+_DEFAULT_BACKOFF_BASE: float = 1.0
+_DEFAULT_BACKOFF_FACTOR: float = 2.0
+_DEFAULT_BACKOFF_JITTER: float = 0.5
+
+
+def _compute_backoff(attempt: int) -> float:
+    """Exponential backoff with jitter.
+
+    attempt=0 → 1.0–1.5s
+    attempt=1 → 2.0–2.5s
+    attempt=2 → 4.0–4.5s
+    """
+    return (
+        _DEFAULT_BACKOFF_BASE * (_DEFAULT_BACKOFF_FACTOR ** attempt)
+        + random.uniform(0.0, _DEFAULT_BACKOFF_JITTER)
+    )
+
+
+def _is_retryable_status(status_code: int) -> bool:
+    return status_code in _RETRYABLE_STATUS_CODES
+
+
+def _is_retryable_request_exception(exc: BaseException) -> bool:
+    """Check if a requests exception is worth retrying.
+
+    ReadTimeout / ConnectionError / Timeout are transient network
+    conditions that often resolve on retry (e.g. provider throttling
+    during a burst). Other requests exceptions (SSLError, etc.) are
+    configuration / environment issues that retry won't fix.
+    """
+    import requests
+
+    return isinstance(
+        exc,
+        (
+            requests.exceptions.ReadTimeout,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,  # base class; covers ChunkedEncodingError too
+        ),
+    )
 
 
 class LLMRequestError(RuntimeError):
@@ -118,6 +183,161 @@ def _format_http_error(
     except (json.JSONDecodeError, ValueError):
         pass
     return LLMRequestError(status_code, url, text)
+
+
+# ─── Retry-aware HTTP helpers ──────────────────────────────────
+
+
+def _post_with_retry_sync(
+    url: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    *,
+    timeout_seconds: float,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+    stream: bool = False,
+) -> Any:
+    """POST with exponential-backoff retry on transient failures.
+
+    Returns the final ``requests.Response`` (caller is responsible for
+    closing it via ``.close()`` or a ``with`` block). The response is
+    never retryable-status (429/5xx); if the final attempt returns
+    such a status, the response is returned and the caller decides
+    what to do (typically raise via ``_format_http_error``).
+
+    Network exceptions (ReadTimeout / ConnectionError / Timeout) are
+    retried up to ``max_retries`` times. After exhaustion, the last
+    exception is re-raised so the caller's error handling kicks in.
+    """
+    import requests
+
+    last_exc: BaseException | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            resp = requests.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=timeout_seconds,
+                stream=stream,
+            )
+        except Exception as e:
+            if _is_retryable_request_exception(e) and attempt < max_retries:
+                wait = _compute_backoff(attempt)
+                logger.warning(
+                    "LLM POST %s failed with %s (attempt %d/%d), "
+                    "retrying in %.1fs: %s",
+                    url,
+                    type(e).__name__,
+                    attempt + 1,
+                    max_retries + 1,
+                    wait,
+                    e,
+                )
+                last_exc = e
+                time.sleep(wait)
+                continue
+            raise
+
+        # Got a response — check if it's a retryable status
+        if _is_retryable_status(resp.status_code) and attempt < max_retries:
+            wait = _compute_backoff(attempt)
+            logger.warning(
+                "LLM POST %s returned %d (attempt %d/%d), "
+                "retrying in %.1fs",
+                url,
+                resp.status_code,
+                attempt + 1,
+                max_retries + 1,
+                wait,
+            )
+            resp.close()
+            time.sleep(wait)
+            continue
+
+        return resp
+
+    # Loop should always return or raise, but be defensive
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("retry loop exited without returning a response")
+
+
+async def _post_with_retry_async(
+    client: Any,
+    method: str,
+    url: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    *,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+) -> Any:
+    """Async POST with exponential-backoff retry on transient failures.
+
+    Takes an already-constructed ``httpx.AsyncClient`` and reuses it
+    across retries. Returns the final ``httpx.Response``.
+
+    Network exceptions (httpx.ReadTimeout / ConnectError / etc.) and
+    retryable HTTP statuses (429/5xx) trigger backoff + retry.
+    """
+    import httpx
+
+    last_exc: BaseException | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            resp = await client.request(method, url, headers=headers, json=payload)
+        except Exception as e:
+            # httpx exceptions to retry on
+            if (
+                isinstance(
+                    e,
+                    (
+                        httpx.ReadTimeout,
+                        httpx.ConnectError,
+                        httpx.ConnectTimeout,
+                        httpx.NetworkError,
+                    ),
+                )
+                and attempt < max_retries
+            ):
+                wait = _compute_backoff(attempt)
+                logger.warning(
+                    "LLM %s %s failed with %s (attempt %d/%d), "
+                    "retrying in %.1fs: %s",
+                    method,
+                    url,
+                    type(e).__name__,
+                    attempt + 1,
+                    max_retries + 1,
+                    wait,
+                    e,
+                )
+                last_exc = e
+                time.sleep(wait)
+                continue
+            raise
+
+        if _is_retryable_status(resp.status_code) and attempt < max_retries:
+            wait = _compute_backoff(attempt)
+            logger.warning(
+                "LLM %s %s returned %d (attempt %d/%d), "
+                "retrying in %.1fs",
+                method,
+                url,
+                resp.status_code,
+                attempt + 1,
+                max_retries + 1,
+                wait,
+            )
+            await resp.aclose()
+            time.sleep(wait)
+            continue
+
+        return resp
+
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("async retry loop exited without returning a response")
 
 
 class StreamableLLMClient(LLMClient):
@@ -290,7 +510,7 @@ class StreamableLLMClient(LLMClient):
     ) -> str:
         """Non-streaming chat completion."""
         try:
-            import requests
+            import requests  # noqa: F401  (kept for back-compat with monkeypatch)
         except ImportError:
             raise ImportError("requests is required")
 
@@ -310,11 +530,19 @@ class StreamableLLMClient(LLMClient):
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        resp = requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_seconds)
-        if resp.status_code >= 400:
-            raise _format_http_error(resp.status_code, url, resp.content)
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        resp = _post_with_retry_sync(
+            url,
+            headers,
+            payload,
+            timeout_seconds=self.request_timeout_seconds,
+        )
+        try:
+            if resp.status_code >= 400:
+                raise _format_http_error(resp.status_code, url, resp.content)
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+        finally:
+            resp.close()
 
     @check_token_budget(lambda self: self._budget_checker)
     def chat_with_tools(
@@ -329,7 +557,7 @@ class StreamableLLMClient(LLMClient):
             {"content": str, "tool_calls": [{"name": str, "args": dict}] | None}
         """
         try:
-            import requests
+            import requests  # noqa: F401
         except ImportError:
             raise ImportError("requests is required")
 
@@ -349,22 +577,30 @@ class StreamableLLMClient(LLMClient):
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        resp = requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_seconds)
-        if resp.status_code >= 400:
-            raise _format_http_error(resp.status_code, url, resp.content)
-        data = resp.json()
-        message = data["choices"][0]["message"]
+        resp = _post_with_retry_sync(
+            url,
+            headers,
+            payload,
+            timeout_seconds=self.request_timeout_seconds,
+        )
+        try:
+            if resp.status_code >= 400:
+                raise _format_http_error(resp.status_code, url, resp.content)
+            data = resp.json()
+            message = data["choices"][0]["message"]
 
-        result: dict[str, Any] = {"content": message.get("content", "")}
-        if "tool_calls" in message and message["tool_calls"]:
-            result["tool_calls"] = [
-                {
-                    "name": tc["function"]["name"],
-                    "args": tc["function"]["arguments"],
-                }
-                for tc in message["tool_calls"]
-            ]
-        return result
+            result: dict[str, Any] = {"content": message.get("content", "")}
+            if "tool_calls" in message and message["tool_calls"]:
+                result["tool_calls"] = [
+                    {
+                        "name": tc["function"]["name"],
+                        "args": tc["function"]["arguments"],
+                    }
+                    for tc in message["tool_calls"]
+                ]
+            return result
+        finally:
+            resp.close()
 
     @check_token_budget(lambda self: self._budget_checker)
     def stream_chat(
@@ -379,9 +615,13 @@ class StreamableLLMClient(LLMClient):
             dict: {"type": "content", "text": str} or
                   {"type": "tool_call", "tool": str, "args": dict} or
                   {"type": "done", "content": str}
+
+        Retry+backoff is applied to the initial connection. Mid-stream
+        failures are NOT retried (the request has been billed and the
+        caller is consuming the body).
         """
         try:
-            import requests
+            import requests  # noqa: F401
         except ImportError:
             raise ImportError("requests is required")
 
@@ -402,11 +642,17 @@ class StreamableLLMClient(LLMClient):
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        with requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_seconds, stream=True) as resp:
+        resp = _post_with_retry_sync(
+            url,
+            headers,
+            payload,
+            timeout_seconds=self.request_timeout_seconds,
+            stream=True,
+        )
+        try:
             if resp.status_code >= 400:
                 # Drain body so we can include it in the error.
                 body = resp.content
-                resp.close()
                 raise _format_http_error(resp.status_code, url, body)
             accumulated = ""
             tool_call_buffer: dict[int, dict] = {}
@@ -472,6 +718,8 @@ class StreamableLLMClient(LLMClient):
                         "finish_reason": finish,
                     }
                     return
+        finally:
+            resp.close()
 
     @check_token_budget(lambda self: self._budget_checker)
     async def astream_chat(
@@ -486,6 +734,10 @@ class StreamableLLMClient(LLMClient):
             dict: {"type": "content", "text": str} or
                   {"type": "tool_call", "tool": str, "args": dict} or
                   {"type": "done", "content": str}
+
+        Retry+backoff is applied to the initial connection. Mid-stream
+        failures are NOT retried (the request has been billed and the
+        caller is consuming the body).
         """
         import httpx
 
@@ -507,7 +759,64 @@ class StreamableLLMClient(LLMClient):
                 payload[key] = generation_params[key]
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.request_timeout_seconds, read=60)) as client:
-            async with client.stream("POST", url, headers=headers, json=payload) as resp:
+            # Retry on the initial connection / first response. Once
+            # we start iterating the body, the request is committed.
+            for attempt in range(_DEFAULT_MAX_RETRIES + 1):
+                try:
+                    stream_ctx = client.stream("POST", url, headers=headers, json=payload)
+                    resp = await stream_ctx.__aenter__()
+                except Exception as e:
+                    if (
+                        isinstance(
+                            e,
+                            (
+                                httpx.ReadTimeout,
+                                httpx.ConnectError,
+                                httpx.ConnectTimeout,
+                                httpx.NetworkError,
+                            ),
+                        )
+                        and attempt < _DEFAULT_MAX_RETRIES
+                    ):
+                        wait = _compute_backoff(attempt)
+                        logger.warning(
+                            "LLM astream %s failed with %s (attempt %d/%d), "
+                            "retrying in %.1fs: %s",
+                            url,
+                            type(e).__name__,
+                            attempt + 1,
+                            _DEFAULT_MAX_RETRIES + 1,
+                            wait,
+                            e,
+                        )
+                        time.sleep(wait)
+                        continue
+                    raise
+
+                # Got the response object; check status before consuming body
+                if _is_retryable_status(resp.status_code) and attempt < _DEFAULT_MAX_RETRIES:
+                    wait = _compute_backoff(attempt)
+                    logger.warning(
+                        "LLM astream %s returned %d (attempt %d/%d), "
+                        "retrying in %.1fs",
+                        url,
+                        resp.status_code,
+                        attempt + 1,
+                        _DEFAULT_MAX_RETRIES + 1,
+                        wait,
+                    )
+                    await stream_ctx.__aexit__(None, None, None)
+                    time.sleep(wait)
+                    continue
+
+                break
+            else:
+                # Loop fell through (only possible if all attempts raised and
+                # we hit the retry-exhaustion branch without returning). Be
+                # defensive: raise a runtime error.
+                raise RuntimeError("astream retry loop exited unexpectedly")
+
+            try:
                 if resp.status_code >= 400:
                     # Drain the body so we can include the API's
                     # diagnostic in the raised error.
@@ -577,6 +886,8 @@ class StreamableLLMClient(LLMClient):
                             "finish_reason": finish,
                         }
                         return
+            finally:
+                await stream_ctx.__aexit__(None, None, None)
 
     @check_token_budget(lambda self: self._budget_checker)
     async def achat(
@@ -605,8 +916,17 @@ class StreamableLLMClient(LLMClient):
                 payload[key] = generation_params[key]
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.request_timeout_seconds, read=60)) as client:
-            resp = await client.post(url, headers=headers, json=payload)
-            if resp.status_code >= 400:
-                raise _format_http_error(resp.status_code, url, resp.content)
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            resp = await _post_with_retry_async(
+                client,
+                "POST",
+                url,
+                headers,
+                payload,
+            )
+            try:
+                if resp.status_code >= 400:
+                    raise _format_http_error(resp.status_code, url, resp.content)
+                data = resp.json()
+                return data["choices"][0]["message"]["content"]
+            finally:
+                await resp.aclose()
