@@ -362,12 +362,17 @@ def test_skill_status_returns_run_state(tmp_path: Path, monkeypatch):
         )
         run_id = run.data["run_id"]
 
-        # Now status
+        # Now status (default: compact with phases_summary)
         status = skill.actions["status"].handler({"run_id": run_id}, ctx)
         assert status.status == "ok"
         assert status.data["run_id"] == run_id
         assert status.data["status"] in ("ok", "running")
-        assert "phases" in status.data
+        assert "phases_summary" in status.data
+        # include_details=true returns full per-phase outputs
+        status_full = skill.actions["status"].handler(
+            {"run_id": run_id, "include_details": True}, ctx
+        )
+        assert "phases" in status_full.data
     finally:
         skill.teardown()
 

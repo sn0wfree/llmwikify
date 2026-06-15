@@ -1,4 +1,12 @@
-"""MiniMax LLM Provider."""
+"""MiniMax LLM Provider.
+
+LAL (PR 4): provider id renamed from ``minimax`` to
+``minimax`` (lowercased to match the host domain
+``api.minimaxi.com`` and to break the visual confusion with
+a different large-model company). The legacy id is still
+accepted as an alias via ``foundation.llm.resolver`` for
+back-compat with existing wiki configs.
+"""
 
 from __future__ import annotations
 

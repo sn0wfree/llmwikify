@@ -209,6 +209,41 @@ class SkillRegistry:
                         out.append((name, action))
         return out
 
+    # ── trigger aggregation ────────────────────────────────────
+
+    def all_triggers(self) -> list[dict[str, str]]:
+        """Collect all triggers from all registered skills.
+
+        Returns a list of dicts, each containing:
+          - ``trigger``: the trigger string (e.g. ``"/study"``)
+          - ``tool``: the tool name to invoke (``"skill_action"``)
+          - ``param``: the parameter name for the trigger value
+          - ``skill``: the skill name
+          - ``action``: the action name
+          - ``description``: short description
+
+        The LLM-exposed ``get_skill_commands`` tool returns
+        this list so the model can map user commands to tools.
+        """
+        out: list[dict[str, str]] = []
+        with self._lock:
+            names = sorted(self._skills.keys())
+            for name in names:
+                skill = self._skills[name]
+                for action in skill.actions.values():
+                    for trigger in action.triggers:
+                        out.append(
+                            {
+                                "trigger": trigger,
+                                "tool": "skill_action",
+                                "param": action.trigger_param,
+                                "skill": name,
+                                "action": action.name,
+                                "description": action.description[:100],
+                            }
+                        )
+        return out
+
     # ── iteration ─────────────────────────────────────────────
 
     def __iter__(self) -> Iterator[Skill]:

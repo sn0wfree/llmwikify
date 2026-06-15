@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getAutoResearch } from '../../lib/autoresearch-api';
-import { Badge } from '../ui/Badge';
-import { Button } from '../ui/Button';
+import { Badge } from '../ui/legacy-badge';
+import { Button } from '../ui/legacy-button';
 
 interface ConfirmationModalProps {
   confirmationId: string;
@@ -85,7 +85,7 @@ function ResearchSaveView({ args }: { args: Record<string, unknown> }) {
           <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Target Page</div>
           <div className="text-sm font-medium text-primary">{pageName}</div>
         </div>
-        {sessionData?.query && (
+        {sessionData?.query !== undefined && (
           <div className="flex-1">
             <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Research Query</div>
             <div className="text-sm text-foreground">{String(sessionData.query)}</div>
@@ -136,7 +136,7 @@ function ResearchSaveView({ args }: { args: Record<string, unknown> }) {
                   <div key={i} className="text-xs text-muted-foreground flex items-center gap-2">
                     <span className="w-4 text-center shrink-0">{i + 1}.</span>
                     <span className="truncate">{String(src.title || src.url || '')}</span>
-                    {src.source_type && (
+                    {src.source_type !== undefined && (
                       <span className="px-1 py-px rounded text-[9px] bg-blue-500/20 text-primary shrink-0">
                         {String(src.source_type)}
                       </span>

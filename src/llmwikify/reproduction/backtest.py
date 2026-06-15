@@ -14,8 +14,7 @@ from typing import Any
 
 import pandas as pd
 
-from .config import config
-from .metrics import compute_metrics_from_trades, compute_monthly_returns
+from .metrics import compute_metrics_from_trades
 from .schemas import BacktestResult
 from .strategies import SIGNAL_NODE_REGISTRY, get_strategy_node
 
@@ -28,7 +27,7 @@ CODE_FENCE_RE = re.compile(r"```(?:python)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
 def run_backtest(
     strategy: str,
     data: pd.DataFrame,
-    backtest_config: dict[str, Any] | None = None,
+    config: dict[str, Any] | None = None,
 ) -> BacktestResult:
     """Run a backtest with the given strategy.
 
@@ -37,33 +36,21 @@ def run_backtest(
             ("ma_cross", "rsi", "factor_rank", "volatility", "momentum", "signal_composite")
             or a Python code string for fallback path.
         data: OHLCV DataFrame. Will be normalized to QuantNodes convention (date, Code, Close).
-        backtest_config: Optional dict with keys:
+        config: Optional dict with keys:
             - signal_params: dict of signal parameters
-            - initial_cash: starting cash (default from config)
-            - commission: commission rate (default from config)
+            - initial_cash: starting cash (default 1,000,000)
+            - commission: commission rate (default 0.001)
             - code: ts_code to assign to "Code" column (default "DEFAULT")
     """
-    # Get defaults from config
-    default_initial_cash = config.get("backtest.initial_cash", 1_000_000.0)
-    default_commission = config.get("backtest.commission", 0.001)
-
     cfg = {
         "signal_params": {},
-        "initial_cash": default_initial_cash,
-        "commission": default_commission,
-        **(backtest_config or {}),
+        "initial_cash": 1_000_000.0,
+        "commission": 0.001,
+        **(config or {}),
     }
 
     if strategy in SIGNAL_NODE_REGISTRY:
         return _run_prewritten(strategy, data, cfg)
-    if strategy == "unknown" or strategy == "codegen":
-        return BacktestResult(
-            status="error",
-            error=f"Cannot run backtest for signal_type='{strategy}'. "
-                  "Provide a valid signal_type or LLM-generated code.",
-            signal_type=strategy,
-            params=cfg,
-        )
     return _run_codegen(strategy, data, cfg)
 
 
@@ -134,67 +121,6 @@ def _prepare_data(data: pd.DataFrame, code: str) -> pd.DataFrame:
     return df.sort_values("date").reset_index(drop=True)
 
 
-def _reconstruct_equity_curve(
-    trades: list[Any],
-    data: pd.DataFrame,
-    initial_cash: float,
-) -> list[dict[str, Any]]:
-    """Reconstruct daily equity time series from trades and price data.
-
-    Iterates over each bar in ``data``, tracks open position, and computes
-    equity = cash + position * close_price at each bar.
-    """
-    if data.empty:
-        return []
-
-    dates = data["date"].tolist()
-    closes = data["Close"].tolist()
-
-    cash = initial_cash
-    position = 0.0
-    equity_list: list[dict[str, Any]] = []
-
-    # Index trades by date for O(1) lookup
-    trades_by_date: dict[str, list[dict[str, Any]]] = {}
-    for t in trades:
-        t_date = ""
-        if isinstance(t, dict):
-            t_date = str(t.get("date", t.get("create_date", "")))[:10]
-        elif hasattr(t, "date"):
-            t_date = str(getattr(t, "date", ""))[:10]
-        if t_date:
-            trades_by_date.setdefault(t_date, []).append(t)
-
-    for i, (date_str, close) in enumerate(zip(dates, closes)):
-        # Process trades for this bar
-        for t in trades_by_date.get(date_str, []):
-            action = ""
-            qty = 0.0
-            price = 0.0
-            if isinstance(t, dict):
-                action = str(t.get("action", t.get("side", ""))).lower()
-                qty = float(t.get("quantity", t.get("qty", 0)))
-                price = float(t.get("price", 0))
-            elif hasattr(t, "action"):
-                action = str(getattr(t, "action", "")).lower()
-                qty = float(getattr(t, "quantity", 0))
-                price = float(getattr(t, "price", 0))
-
-            if "buy" in action:
-                cost = qty * price
-                if cost <= cash:
-                    cash -= cost
-                    position += qty
-            elif "sell" in action:
-                cash += qty * price
-                position -= qty
-
-        equity = cash + position * close
-        equity_list.append({"date": date_str, "value": round(equity, 2)})
-
-    return equity_list
-
-
 def _run_prewritten(signal_type: str, data: pd.DataFrame, cfg: dict[str, Any]) -> BacktestResult:
     """Path A: pre-written QuantNodes StrategyNode."""
     from QuantNodes.backtest.broker_node import SimulatedBrokerNode
@@ -218,8 +144,6 @@ def _run_prewritten(signal_type: str, data: pd.DataFrame, cfg: dict[str, Any]) -
             initial_cash=cfg["initial_cash"],
             final_cash=final_cash,
         )
-        equity_curve = _reconstruct_equity_curve(trades_list, df, cfg["initial_cash"])
-        monthly_returns = compute_monthly_returns(equity_curve, trade_result.trades, cfg["initial_cash"])
 
         return BacktestResult(
             status="success",
@@ -252,8 +176,6 @@ def _run_prewritten(signal_type: str, data: pd.DataFrame, cfg: dict[str, Any]) -
                 "strategy": strategy_node.__class__.__name__,
                 "broker": broker.__class__.__name__,
             },
-            equity_curve=equity_curve,
-            monthly_returns=monthly_returns,
         )
     except Exception as e:
         logger.exception("Pre-written backtest failed")
@@ -369,8 +291,6 @@ def _run_codegen(code: str, data: pd.DataFrame, cfg: dict[str, Any]) -> Backtest
             initial_cash=cfg["initial_cash"],
             final_cash=final_cash,
         )
-        equity_curve = _reconstruct_equity_curve(trades_serialized, quote_data, cfg["initial_cash"])
-        monthly_returns = compute_monthly_returns(equity_curve, trades_list, cfg["initial_cash"])
 
         return BacktestResult(
             status="success",
@@ -401,8 +321,6 @@ def _run_codegen(code: str, data: pd.DataFrame, cfg: dict[str, Any]) -> Backtest
                 "strategy": strategy.__class__.__name__,
                 "broker": broker.__class__.__name__,
             },
-            equity_curve=equity_curve,
-            monthly_returns=monthly_returns,
         )
     except Exception as e:
         logger.exception("Code-gen backtest failed")

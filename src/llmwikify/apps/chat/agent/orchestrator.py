@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -140,70 +139,13 @@ class ChatOrchestrator:
                 db=self.db,
                 wiki_id=wiki_id,
                 session_id=session_id or ctx.session_id,
+                wiki_service=self.wiki_service,
             ),
         )
         self._tool_registries[cache_key] = registry
         return registry
 
     # ─── SSE chat ────────────────────────────────────────────────
-
-    @staticmethod
-    def _parse_autoresearch_shortcut(message: str) -> dict[str, str] | None:
-        text = message.strip()
-        topic = ""
-        if text.startswith("/study"):
-            topic = text[len("/study"):].strip()
-            topic = re.sub(r"^研究[:：]\s*", "", topic).strip()
-        elif "autoresearch_compound" in text:
-            m = re.search(r"研究[:：]\s*([^，,。\n]+)", text)
-            if m:
-                topic = m.group(1).strip()
-            if not topic:
-                m = re.search(r"autoresearch_compound\s+([^，,。\n]+)", text)
-                if m:
-                    topic = m.group(1).strip()
-        else:
-            return None
-        question = topic or text
-        return {
-            "question": question,
-            "topic": topic,
-            "scope": "只生成 evidence/findings/wiki proposals，不写入 Wiki。",
-        }
-
-    @staticmethod
-    def _format_research_started_message(data: dict, args: dict[str, str]) -> str:
-        timeline = data.get("timeline", []) or []
-        lines = [
-            "AutoResearch 已启动。",
-            "",
-            f"run_id: {data.get('run_id', '')}",
-            f"topic: {args.get('topic') or args.get('question', '')}",
-            "status: running",
-            "",
-            "Research Run Timeline:",
-        ]
-        if timeline:
-            for item in timeline:
-                label = item.get("label") or item.get("phase_id")
-                status = item.get("status", "pending")
-                marker = "x" if status == "complete" else "~" if status == "running" else " "
-                lines.append(f"[{marker}] {label} - {status}")
-        else:
-            lines.extend([
-                "[·] Clarify — pending",
-                "[·] Plan — pending",
-                "[·] Evidence — pending",
-                "[·] Findings — pending",
-                "[·] Wiki Proposals — pending",
-                "[·] Synthesize — pending",
-            ])
-        lines.extend([
-            "",
-            "不会写入 Wiki；完成后会生成 evidence / findings / wiki proposals。",
-            "使用 autoresearch_compound_status 查询进度。",
-        ])
-        return "\n".join(lines)
 
     async def chat(
         self,
@@ -264,54 +206,6 @@ class ChatOrchestrator:
                 return
 
             tool_registry = self._get_tool_registry(ctx, session_id)
-
-            autoresearch_args = self._parse_autoresearch_shortcut(message)
-            if autoresearch_args is not None:
-                result = await self.tool_executor.execute(
-                    "autoresearch_compound_run",
-                    autoresearch_args,
-                    tool_registry,
-                    session_id,
-                    ctx,
-                )
-                if isinstance(result, dict) and result.get("status") == "confirmation_required":
-                    event = ChatEvent.confirmation_required(
-                        result.get("confirmation_id", ""),
-                        "autoresearch_compound_run",
-                        autoresearch_args,
-                        result.get("impact", {}),
-                    )
-                    self.event_log.log(session_id, event)
-                    self.tool_executor.save_message(
-                        session_id,
-                        "assistant",
-                        f"Confirmation required for autoresearch_compound_run: {result.get('confirmation_id', '')}",
-                    )
-                    yield event
-                    return
-                if isinstance(result, dict) and result.get("status") == "error":
-                    message_text = result.get("error", "AutoResearch failed")
-                    self.tool_executor.save_message(session_id, "assistant", f"Error: {message_text}")
-                    yield ChatEvent.error(message_text)
-                    return
-                if isinstance(result, dict) and result.get("status") == "ok":
-                    data = result.get("data", {})
-                    event = {
-                        "type": "research_run_started",
-                        "run_id": data.get("run_id", ""),
-                        "status": data.get("status", "running"),
-                        "workflow_name": data.get("workflow_name", "autoresearch-compound"),
-                        "timeline": data.get("timeline", []),
-                        "writes_wiki": False,
-                        "proposal_only": True,
-                    }
-                    self.event_log.log(session_id, event)
-                    yield event
-                    final = self._format_research_started_message(data, autoresearch_args)
-                    ctx.add_assistant_message(final)
-                    self.tool_executor.save_message(session_id, "assistant", final)
-                    yield ChatEvent.done(final)
-                    return
 
             system_prompt = await self.prompt_builder.build(
                 ctx.wiki_id,
@@ -544,11 +438,25 @@ class ChatOrchestrator:
         ctx: AgentContext,
     ) -> AsyncIterator[dict]:
         """ReAct path for chat()."""
+        from llmwikify.apps.chat.agent.bridge_backend import ChatBridgeBackend
         from llmwikify.apps.chat.agent.chat_react import ChatReActBridge
         from llmwikify.apps.chat.agent.react_engine import ReActEngine
         from llmwikify.apps.chat.skills.base import SkillContext
 
-        bridge = ChatReActBridge(chat_service=self, config=self.config)
+        # Compose the bridge's expected 5-method interface from the
+        # Phase 2 v0.41 extracted components (ToolExecutor +
+        # ContextManager + wiki_service.get_llm()).  Without this
+        # adapter, the bridge would call ``chat._execute_tool`` etc.
+        # on ChatOrchestrator and fail with AttributeError, since
+        # those underscore-prefixed methods live on the old
+        # ChatService that the refactor replaced.
+        bridge_backend = ChatBridgeBackend(
+            tool_executor=self.tool_executor,
+            context_manager=self.context_manager,
+            wiki_service=self.wiki_service,
+            config=self.config,
+        )
+        bridge = ChatReActBridge(chat_service=bridge_backend, config=self.config)
         config = bridge.build_config(
             session_id=session_id,
             wiki_id=ctx.wiki_id,
@@ -566,6 +474,7 @@ class ChatOrchestrator:
             wiki=self.wiki_service.get_wiki(ctx.wiki_id),
             db=self.db,
             llm_client=self.wiki_service.get_llm(),
+            llm_spec=self.wiki_service.get_llm_spec(),
             config={},
             metrics=None,
         )
@@ -666,6 +575,28 @@ class ChatOrchestrator:
                     elif final_state.get("final_answer"):
                         msg = final_state["final_answer"]
                 return ChatEvent.done(msg)
+        # Intercept autoresearch_compound_run tool_call_end → emit research_run_started
+        if kind == "tool_call_end":
+            tool_name = event.get("tool", "")
+            if "autoresearch_compound" in tool_name and "run" in tool_name:
+                result = event.get("result", {})
+                if isinstance(result, dict):
+                    # Unwrap SkillResult envelope
+                    if result.get("status") == "ok":
+                        data = result.get("data", {})
+                    else:
+                        data = result
+                    run_id = data.get("run_id", "")
+                    if run_id:
+                        return {
+                            "type": "research_run_started",
+                            "run_id": run_id,
+                            "status": data.get("status", "running"),
+                            "workflow_name": data.get("workflow_name", "autoresearch-compound"),
+                            "timeline": data.get("timeline", []),
+                            "writes_wiki": False,
+                            "proposal_only": True,
+                        }
         # Pass through: message_delta, thinking, tool_call_start,
         # tool_call_end, confirmation_required, error, save_warning
         return event

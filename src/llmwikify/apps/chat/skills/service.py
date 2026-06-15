@@ -115,8 +115,30 @@ class SkillService:
             self.registry.register(wiki_query_skill)
         except ImportError:
             logger.debug("wiki_query_skill not available")
+        # dynamic_workflow skill (workflow runner)
+        try:
+            from llmwikify.apps.chat.skills.workflows.skill import (
+                DynamicWorkflowSkill,
+            )
+            self.registry.register(DynamicWorkflowSkill())
+        except ImportError:
+            logger.debug("dynamic_workflow skill not available")
+        # autoresearch_compound skill (proposal-only AutoResearch workflow)
+        try:
+            from llmwikify.apps.chat.skills.autoresearch_compound_skill import (
+                autoresearch_compound_skill,
+            )
+            self.registry.register(autoresearch_compound_skill)
+        except ImportError:
+            logger.debug("autoresearch_compound skill not available")
+        # plugin skills (~/.llmwikify/skills/)
+        try:
+            from llmwikify.apps.chat.skills.plugin_loader import load_plugins
+            load_plugins(self.registry)
+        except Exception:
+            logger.debug("plugin loader failed")
 
-    def execute(
+    async def execute(
         self,
         skill_name: str,
         action: str,
@@ -162,7 +184,7 @@ class SkillService:
                     )
                 except (ValueError, KeyError):
                     pass
-        return self.runtime.execute(skill_name, action, args, ctx)
+        return await self.runtime.execute(skill_name, action, args, ctx)
 
     def list_skills(self) -> list[dict]:
         """List all registered skills."""

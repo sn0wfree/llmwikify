@@ -1,30 +1,10 @@
 # 论文研报策略复现 — 实施计划
 
 > 创建时间：2026-06-10
-> 最后更新：2026-06-10（v0.4.0 已实施完成，13 commits, 84/84 测试通过）
-> 状态：v0.4.0 已实施 ✅（详见 `reproduction-frontend-plan.md` 的实施结果章节）
+> 最后更新：2026-06-10（已与 v0.4.0-rc 实施版同步）
+> 状态：实施计划（待切分支后实现）
 > 版本目标：v0.4.0
 > 核心原则：不造新引擎，不造新框架，只做薄适配。
-
----
-
-## 注意
-
-**本文档是 v0.4.0 初始设计稿**。最终实施采用了**三页面架构（Paper / Factor / Strategy）**而非单一 Reproduction 页面，详见 `reproduction-frontend-plan.md`。
-
-关键演进：
-- 原计划：单一 Reproduction 页面 + sidebar + tabs
-- 实际实施：三个独立页面（`/agent/paper`、`/agent/factor`、`/agent/strategy`）
-- 侧边栏：新增 Quant 分组（Paper/Factor/Strategy 三入口）
-- wiki 类型体系：扩展为 Factor / Strategy / FactorBacktest 三种新自定义类型
-- 后端：增加因子回测引擎（`factor_backtest.py`），支持 8 种因子 + IC/分层/换手率计算
-
-后端核心模块仍然按本文档设计实现：
-- `extract_paper.py`、`extract_factors.py`：论文结构化抽取 + 因子提取
-- `backtest.py`：策略回测（保留 5-Phase 编排）
-- `run.py`：保留 5-Phase 编排供 BacktestResult/Optimization wiki 写入
-- `metrics.py`：从 4 个指标扩展到 8 个（含 CAGR/Sortino/Alpha/Beta）
-- `schemas.py`、`sessions.py`、`router.py`：与本文档一致
 
 ---
 

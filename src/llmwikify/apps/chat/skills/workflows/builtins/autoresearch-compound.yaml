@@ -22,7 +22,7 @@ workflow:
     required: [question]
   budget:
     max_total_tokens: 900000
-    max_concurrent_agents: 6
+    max_concurrent_agents: 3
     on_exceed: halt
   actors:
     clarifier:

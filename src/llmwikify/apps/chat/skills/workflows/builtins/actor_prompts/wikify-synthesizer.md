@@ -1,7 +1,6 @@
 ---
 name: wikify-synthesizer
 description: Final synthesis agent. Takes planner output, filtered findings (post-adversarial review), and writes a cited report into the llmwikify wiki. This is the only writer in the workflow.
-model: opus
 permission_mode: acceptEdits
 tools: [Read, Grep, Glob, Write, Edit, Bash]
 ---

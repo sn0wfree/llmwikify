@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Cpu, Wifi, Coins, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, StopCircle, History, ThumbsUp, ThumbsDown, Pencil, GitBranch, Paperclip, X, Settings } from 'lucide-react';
-import { chatStream, ChatStreamEvent, api } from '../../api';
+import { chatStream, ChatStreamEvent, api, ResearchRunStatus } from '../../api';
 import { useToast } from '../wiki/Toast';
 import { useWikiStore } from '../../stores/wikiStore';
 import { MessageBubble } from '../ui/MessageBubble';
@@ -8,6 +8,7 @@ import { ToolCard } from '../ui/ToolCard';
 import { SessionSidebar } from './SessionSidebar';
 import { ToolsRail } from './ToolsRail';
 import { ConfirmationModal } from './ConfirmationModal';
+import { ResearchRunCard } from './ResearchRunCard';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -18,6 +19,7 @@ interface Message {
   toolCalls?: ToolCall[];
   tokensOutput?: number;
   messageId?: string;
+  researchRun?: ResearchRunStatus;
 }
 
 interface ToolCall {
@@ -30,6 +32,19 @@ interface ToolCall {
   startedAt?: number;
   finishedAt?: number;
   duration_ms?: number;
+}
+
+function parseResearchRun(content: string): ResearchRunStatus | undefined {
+  const match = content.match(/run_id:\s*(wf_[^\s]+)/);
+  if (!match) return undefined;
+  const phases = ['Clarify', 'Plan', 'Evidence', 'Findings', 'Wiki Proposals', 'Synthesize'];
+  return {
+    run_id: match[1],
+    status: content.match(/status:\s*([^\n]+)/)?.[1]?.trim() || 'running',
+    timeline: phases.map((label) => ({ phase_id: label.toLowerCase().replace(/\s+/g, '_'), label, status: 'pending' })),
+    writes_wiki: false,
+    proposal_only: true,
+  };
 }
 
 function parseToolCalls(raw: unknown): ToolCall[] | undefined {
@@ -94,6 +109,7 @@ export function AgentChat() {
   // the ``done`` handler to avoid stale closure captures.
   const currentThinkingRef = useRef('');
   const currentToolCallsRef = useRef<ToolCall[]>([]);
+  const currentResearchRunRef = useRef<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
   const [showSidebar, setShowSidebar] = useState(true);
@@ -146,6 +162,7 @@ export function AgentChat() {
           toolCalls: parseToolCalls(m.tool_calls),
           tokensOutput: m.tokens_output,
           messageId: m.id,
+          researchRun: parseResearchRun(m.content),
         }));
         setMessages(loaded);
       }
@@ -533,10 +550,22 @@ export function AgentChat() {
               });
               setPendingConfirmation({ confirmationId: event.confirmation_id, tool: event.tool, args: event.args, impact: (event.impact || {}) as Record<string, unknown>, group: undefined });
               break;
+            case 'research_run_started':
+              currentResearchRunRef.current = event.run_id;
+              setMessages((prev) => [...prev, { role: 'assistant', content: '', timestamp: new Date().toISOString(), researchRun: event }]);
+              setCurrentAssistantMsg('');
+              setCurrentThinking('');
+              setCurrentToolCalls([]);
+              currentThinkingRef.current = '';
+              currentToolCallsRef.current = [];
+              break;
             case 'done': {
               const thinkingSnapshot = currentThinkingRef.current;
               const toolCallsSnapshot = currentToolCallsRef.current;
-              setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
+              if (!currentResearchRunRef.current || !event.final_response.includes(currentResearchRunRef.current)) {
+                setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
+              }
+              currentResearchRunRef.current = null;
               setCurrentAssistantMsg('');
               setCurrentThinking('');
               setCurrentToolCalls([]);
@@ -767,6 +796,8 @@ export function AgentChat() {
                         </div>
                       </div>
                     </div>
+                  ) : msg.researchRun ? (
+                    <ResearchRunCard initial={msg.researchRun} />
                   ) : (
                     <MessageBubble
                       role={msg.role}

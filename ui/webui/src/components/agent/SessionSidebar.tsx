@@ -116,7 +116,9 @@ export function SessionSidebar({ currentSessionId, onSelectSession, onNewChat, r
         if (currentSessionId === sessionId) {
           onNewChat();
         }
-      } catch { /* silent */ }
+      } catch (error) {
+        console.error('Failed to delete chat session', error);
+      }
     },
     [currentSessionId, onNewChat],
   );

@@ -49,7 +49,6 @@ from llmwikify.apps.chat.agent.text_mode_tool import (
 )
 from llmwikify.apps.chat.skills.base import SkillContext
 
-
 # ─── Mock WikiService ───────────────────────────────────────────
 
 
@@ -260,6 +259,18 @@ class TestTextModeParserIntegration:
         assert result[0] == "search"
         assert result[1]["q"] == "hello"
 
+    def test_parse_minimax_tool_call_alias(self) -> None:
+        result = parse_text_tool_call(
+            '<invoke name="autoresearch_compound">'
+            '<parameter name="topic">资产配置</parameter>'
+            '</invoke>'
+        )
+
+        assert result == (
+            "autoresearch_compound_run",
+            {"topic": "资产配置", "question": "资产配置"},
+        )
+
     def test_parser_buffer_straddle(self) -> None:
         """Block can straddle two chunks."""
         async def run() -> list[dict]:
@@ -342,10 +353,6 @@ class TestEndToEndFinalAnswer:
             ctx=ctx,
         )
         engine = ReActEngine(config)
-        # Track events via a wrapper emit that records into a list
-        captured: list[dict] = []
-        original_emit = None  # emit is closure; we patch via monkey-patch below
-
         # Collect via a custom action handler observer: wrap config to
         # intercept by patching reason/handler to record events.
         # Instead, run the engine and capture reasoning/thinking events.
@@ -412,7 +419,7 @@ class TestEndToEndToolCall:
                 out.append(ev)
             return out
 
-        result = asyncio.run(run())
+        asyncio.run(run())
 
         # Verify captured events contain tool_call_start
         start_events = [
@@ -932,10 +939,6 @@ class TestMultiRound:
         assert len(start_events) == 1
         assert len(end_events) == 1
 
-        # Should have 2+ reasoning events (one per round)
-        reasoning_events = [
-            e for e in captured if e.get("type") == "reasoning"
-        ]
         # Note: reasoning events are emitted by ReActEngine itself,
         # not via the emit callback, so they may not appear in captured
         # (they go through engine.run() yield). We check that the

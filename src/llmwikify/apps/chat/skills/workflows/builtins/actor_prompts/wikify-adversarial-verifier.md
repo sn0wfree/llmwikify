@@ -1,7 +1,6 @@
 ---
 name: wikify-adversarial-verifier
 description: Adversarial reviewer for llmwikify research findings. Catches hallucinated, miscited, or weakly-supported claims. Reads claims and sources, returns a score and a list of contested items.
-model: sonnet
 tools: [Read, WebFetch]
 ---
 

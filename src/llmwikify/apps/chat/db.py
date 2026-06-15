@@ -458,6 +458,14 @@ class ChatDatabase(BaseDatabase):
                 )
                 # Delete in dependency order
                 conn.execute(
+                    "DELETE FROM event_log WHERE session_id = ?",
+                    (session_id,),
+                )
+                conn.execute(
+                    "DELETE FROM chat_permissions WHERE session_id = ?",
+                    (session_id,),
+                )
+                conn.execute(
                     "DELETE FROM chat_messages WHERE session_id = ?",
                     (session_id,),
                 )
