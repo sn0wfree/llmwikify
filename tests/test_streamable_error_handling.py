@@ -201,14 +201,10 @@ class TestStreamMethodErrors:
         mock_resp.content = body
         mock_resp.close = MagicMock()
 
-        # The ``with requests.post(...) as resp`` context manager uses
-        # __enter__/__exit__ on the response object, so make the
-        # context manager also return the response.
-        mock_cm = MagicMock()
-        mock_cm.__enter__.return_value = mock_resp
-        mock_cm.__exit__.return_value = False
-
-        with patch("requests.post", return_value=mock_cm):
+        # After the retry refactor, stream_chat calls ``requests.post``
+        # directly (not via a ``with`` block); the helper manages the
+        # stream flag and the caller closes the response.
+        with patch("requests.post", return_value=mock_resp):
             with pytest.raises(LLMRequestError) as exc_info:
                 list(client.stream_chat([{"role": "user", "content": "hi"}]))
             assert exc_info.value.status_code == 400
