@@ -26,6 +26,8 @@ import os
 import random
 import time
 from typing import Any
+import threading
+from dataclasses import dataclass, field
 
 from ..llm_client import LLMClient, _legacy_fallback_enabled
 from .budget_decorator import check_token_budget
@@ -51,25 +53,100 @@ logger = logging.getLogger(__name__)
 #     request is committed; retry would re-bill tokens)
 #
 # Backoff: 1s, 2s, 4s exponential with up to 0.5s jitter to avoid
-# synchronized retries from concurrent callers.
+# synchronized retries from concurrent callers. Override the base
+# with the LLM_RETRY_BACKOFF_BASE environment variable (in seconds).
+# The HTTP Retry-After header (when present on 429/503) takes
+# precedence over the computed backoff.
 
 _RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
 _DEFAULT_MAX_RETRIES: int = 3
 _DEFAULT_BACKOFF_BASE: float = 1.0
 _DEFAULT_BACKOFF_FACTOR: float = 2.0
 _DEFAULT_BACKOFF_JITTER: float = 0.5
+# Cap on Retry-After header value to prevent absurd waits
+# (some providers send values like 3600 for "back off an hour")
+_RETRY_AFTER_MAX_SECONDS: float = 60.0
 
 
-def _compute_backoff(attempt: int) -> float:
+@dataclass(frozen=True)
+class RetryConfig:
+    """Snapshot of retry configuration, read from env at call time.
+
+    Kept frozen so a config can be passed around without risk of
+    accidental mutation. Use ``RetryConfig.from_env()`` to construct.
+    """
+
+    max_retries: int = _DEFAULT_MAX_RETRIES
+    backoff_base: float = _DEFAULT_BACKOFF_BASE
+    backoff_factor: float = _DEFAULT_BACKOFF_FACTOR
+    backoff_jitter: float = _DEFAULT_BACKOFF_JITTER
+    retry_after_max_seconds: float = _RETRY_AFTER_MAX_SECONDS
+
+    @classmethod
+    def from_env(cls) -> "RetryConfig":
+        """Build a config from environment variables.
+
+        Environment variables (all optional):
+          - LLM_RETRY_MAX_RETRIES: int, default 3
+          - LLM_RETRY_BACKOFF_BASE: float seconds, default 1.0
+          - LLM_RETRY_BACKOFF_FACTOR: float, default 2.0
+          - LLM_RETRY_BACKOFF_JITTER: float seconds, default 0.5
+          - LLM_RETRY_AFTER_MAX_SECONDS: float, default 60.0
+        """
+        def _read_float(name: str, default: float) -> float:
+            raw = os.environ.get(name)
+            if raw is None or raw.strip() == "":
+                return default
+            try:
+                return float(raw)
+            except ValueError:
+                logger.warning(
+                    "%s=%r is not a valid float; using default %.1f",
+                    name, raw, default,
+                )
+                return default
+
+        def _read_int(name: str, default: int) -> int:
+            raw = os.environ.get(name)
+            if raw is None or raw.strip() == "":
+                return default
+            try:
+                v = int(raw)
+                if v < 0:
+                    logger.warning(
+                        "%s=%d is negative; using default %d",
+                        name, v, default,
+                    )
+                    return default
+                return v
+            except ValueError:
+                logger.warning(
+                    "%s=%r is not a valid int; using default %d",
+                    name, raw, default,
+                )
+                return default
+
+        return cls(
+            max_retries=_read_int("LLM_RETRY_MAX_RETRIES", _DEFAULT_MAX_RETRIES),
+            backoff_base=_read_float("LLM_RETRY_BACKOFF_BASE", _DEFAULT_BACKOFF_BASE),
+            backoff_factor=_read_float("LLM_RETRY_BACKOFF_FACTOR", _DEFAULT_BACKOFF_FACTOR),
+            backoff_jitter=_read_float("LLM_RETRY_BACKOFF_JITTER", _DEFAULT_BACKOFF_JITTER),
+            retry_after_max_seconds=_read_float(
+                "LLM_RETRY_AFTER_MAX_SECONDS", _RETRY_AFTER_MAX_SECONDS
+            ),
+        )
+
+
+def _compute_backoff(attempt: int, config: RetryConfig) -> float:
     """Exponential backoff with jitter.
 
-    attempt=0 → 1.0–1.5s
-    attempt=1 → 2.0–2.5s
-    attempt=2 → 4.0–4.5s
+    attempt=0 → base–base+jitter (default 1.0–1.5s)
+    attempt=1 → base*factor–base*factor+jitter (default 2.0–2.5s)
+    attempt=2 → base*factor²–... (default 4.0–4.5s)
     """
     return (
-        _DEFAULT_BACKOFF_BASE * (_DEFAULT_BACKOFF_FACTOR ** attempt)
-        + random.uniform(0.0, _DEFAULT_BACKOFF_JITTER)
+        config.backoff_base * (config.backoff_factor ** attempt)
+        + random.uniform(0.0, config.backoff_jitter)
     )
 
 
@@ -95,6 +172,183 @@ def _is_retryable_request_exception(exc: BaseException) -> bool:
             requests.exceptions.Timeout,  # base class; covers ChunkedEncodingError too
         ),
     )
+
+
+def _parse_retry_after(header_value: str, max_seconds: float) -> float | None:
+    """Parse an HTTP Retry-After header value into seconds to wait.
+
+    Per RFC 7231, Retry-After can be either:
+      - A non-negative integer (seconds to wait)
+      - An HTTP-date (we approximate as 0 since we don't have a clock
+        skew budget for this)
+    Returns None if the header is missing, empty, or unparseable.
+    Caps the result at max_seconds to prevent absurd waits.
+    """
+    if not header_value:
+        return None
+    header_value = header_value.strip()
+    # Try seconds (integer or float)
+    try:
+        seconds = float(header_value)
+        if seconds < 0:
+            return None
+        return min(seconds, max_seconds)
+    except ValueError:
+        pass
+    # HTTP-date: just return 0 (we honor the spirit by not retrying
+    # sooner; parsing the date and computing wait would require a
+    # clock skew budget we don't track).
+    return 0.0
+
+
+def _extract_retry_after(resp: Any, max_seconds: float) -> float | None:
+    """Extract Retry-After header from a requests or httpx response."""
+    try:
+        # requests.Response: case-insensitive header access
+        if hasattr(resp, "headers"):
+            headers = resp.headers
+            # requests uses a CaseInsensitiveDict; httpx uses a regular dict
+            value = None
+            if hasattr(headers, "get"):
+                value = headers.get("Retry-After")
+            if value is not None:
+                return _parse_retry_after(value, max_seconds)
+    except Exception:
+        return None
+    return None
+
+
+# ─── Retry metrics ──────────────────────────────────────────────
+
+
+@dataclass
+class RetryMetrics:
+    """Cumulative metrics for LLM retry behavior across the process.
+
+    Thread-safe; counters are updated under a lock. Designed for
+    lightweight in-process observability (no external stats system
+    required). For longer-term monitoring, push to a metrics backend
+    via a separate exporter.
+
+    Fields:
+        total_calls: total LLM POSTs attempted (including retries).
+        calls_completed: total POSTs that returned (any status, after
+            all retries exhausted or 1st-try success).
+        success_first_try: calls that succeeded on attempt 0.
+        success_after_retry: calls that needed 1+ retries to succeed.
+        failed_after_retries: calls that failed on every attempt.
+        total_retries: cumulative retry count across all calls.
+        by_outcome: counts per outcome category ("ok", "client_error",
+            "rate_limit", "server_error", "timeout", "connection").
+        by_retries: histogram of {retry_count: calls_count}, where
+            retry_count is the number of retries needed to reach
+            success (0 for first-try success, max for final failure).
+    """
+
+    total_calls: int = 0
+    calls_completed: int = 0
+    success_first_try: int = 0
+    success_after_retry: int = 0
+    failed_after_retries: int = 0
+    total_retries: int = 0
+    by_outcome: dict[str, int] = field(default_factory=dict)
+    by_retries: dict[int, int] = field(default_factory=dict)
+
+    def record_call(
+        self,
+        *,
+        outcome: str,
+        attempts_used: int,
+    ) -> None:
+        """Record a completed LLM call.
+
+        Args:
+            outcome: one of "ok", "client_error" (4xx not retried),
+                "rate_limit" (429, possibly retried), "server_error"
+                (5xx, possibly retried), "timeout", "connection".
+            attempts_used: total attempts including the final one
+                (1 = no retries needed; max+1 = retries exhausted).
+        """
+        self.calls_completed += 1
+        self.by_outcome[outcome] = self.by_outcome.get(outcome, 0) + 1
+        retries_needed = max(attempts_used - 1, 0)
+        self.by_retries[retries_needed] = (
+            self.by_retries.get(retries_needed, 0) + 1
+        )
+        if outcome == "ok":
+            if retries_needed == 0:
+                self.success_first_try += 1
+            else:
+                self.success_after_retry += 1
+                self.total_retries += retries_needed
+        else:
+            if retries_needed > 0:
+                self.total_retries += retries_needed
+            self.failed_after_retries += 1
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable snapshot of the metrics."""
+        total = max(self.calls_completed, 1)
+        return {
+            "calls_completed": self.calls_completed,
+            "total_retries": self.total_retries,
+            "success_first_try": self.success_first_try,
+            "success_after_retry": self.success_after_retry,
+            "failed_after_retries": self.failed_after_retries,
+            "success_rate": round(
+                (self.success_first_try + self.success_after_retry) / total, 4
+            ),
+            "first_try_rate": round(self.success_first_try / total, 4),
+            "by_outcome": dict(self.by_outcome),
+            "by_retries": {str(k): v for k, v in sorted(self.by_retries.items())},
+        }
+
+
+# Process-wide metrics singleton, protected by a lock so concurrent
+# threads can update safely.
+_retry_metrics_lock = threading.Lock()
+_retry_metrics = RetryMetrics()
+
+
+def get_retry_metrics() -> RetryMetrics:
+    """Return the process-wide RetryMetrics instance.
+
+    Mutate via ``.record_call(...)``. To snapshot for logging,
+    use ``.to_dict()``.
+    """
+    return _retry_metrics
+
+
+def reset_retry_metrics() -> None:
+    """Reset all retry counters to zero. Useful for tests."""
+    global _retry_metrics
+    with _retry_metrics_lock:
+        _retry_metrics = RetryMetrics()
+
+
+def _classify_outcome(
+    *,
+    success: bool,
+    status_code: int | None,
+    exc: BaseException | None,
+) -> str:
+    """Map a (success, status, exc) tuple to an outcome category."""
+    if success:
+        return "ok"
+    if status_code is not None:
+        if status_code == 429:
+            return "rate_limit"
+        if 500 <= status_code < 600:
+            return "server_error"
+        if 400 <= status_code < 500:
+            return "client_error"
+    if exc is not None:
+        name = type(exc).__name__
+        if "Timeout" in name:
+            return "timeout"
+        if "Connection" in name or "Network" in name:
+            return "connection"
+    return "unknown"
 
 
 class LLMRequestError(RuntimeError):
@@ -194,7 +448,7 @@ def _post_with_retry_sync(
     payload: dict[str, Any],
     *,
     timeout_seconds: float,
-    max_retries: int = _DEFAULT_MAX_RETRIES,
+    config: RetryConfig | None = None,
     stream: bool = False,
 ) -> Any:
     """POST with exponential-backoff retry on transient failures.
@@ -206,13 +460,26 @@ def _post_with_retry_sync(
     what to do (typically raise via ``_format_http_error``).
 
     Network exceptions (ReadTimeout / ConnectionError / Timeout) are
-    retried up to ``max_retries`` times. After exhaustion, the last
-    exception is re-raised so the caller's error handling kicks in.
+    retried up to ``config.max_retries`` times. After exhaustion, the
+    last exception is re-raised so the caller's error handling kicks
+    in.
+
+    Honors the ``Retry-After`` HTTP response header (when present on
+    429/503 responses) over the computed exponential backoff, capped
+    at ``config.retry_after_max_seconds``.
+
+    Records outcome to the process-wide ``RetryMetrics`` instance.
     """
     import requests
 
+    if config is None:
+        config = RetryConfig.from_env()
+
     last_exc: BaseException | None = None
-    for attempt in range(max_retries + 1):
+    last_status: int | None = None
+    attempts_used: int = 0
+    for attempt in range(config.max_retries + 1):
+        attempts_used = attempt + 1
         try:
             resp = requests.post(
                 url,
@@ -222,39 +489,91 @@ def _post_with_retry_sync(
                 stream=stream,
             )
         except Exception as e:
-            if _is_retryable_request_exception(e) and attempt < max_retries:
-                wait = _compute_backoff(attempt)
+            if _is_retryable_request_exception(e) and attempt < config.max_retries:
+                wait = _compute_backoff(attempt, config)
                 logger.warning(
                     "LLM POST %s failed with %s (attempt %d/%d), "
                     "retrying in %.1fs: %s",
                     url,
                     type(e).__name__,
                     attempt + 1,
-                    max_retries + 1,
+                    config.max_retries + 1,
                     wait,
                     e,
                 )
                 last_exc = e
                 time.sleep(wait)
                 continue
+            # Final attempt (or non-retryable): record and re-raise
+            with _retry_metrics_lock:
+                _retry_metrics.calls_completed += 1
+                outcome = _classify_outcome(
+                    success=False, status_code=None, exc=e
+                )
+                _retry_metrics.by_outcome[outcome] = (
+                    _retry_metrics.by_outcome.get(outcome, 0) + 1
+                )
+                retries_needed = max(attempts_used - 1, 0)
+                _retry_metrics.by_retries[retries_needed] = (
+                    _retry_metrics.by_retries.get(retries_needed, 0) + 1
+                )
+                if retries_needed > 0:
+                    _retry_metrics.total_retries += retries_needed
+                _retry_metrics.failed_after_retries += 1
             raise
 
         # Got a response — check if it's a retryable status
-        if _is_retryable_status(resp.status_code) and attempt < max_retries:
-            wait = _compute_backoff(attempt)
+        if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
+            retry_after = _extract_retry_after(
+                resp, config.retry_after_max_seconds
+            )
+            if retry_after is not None:
+                wait = retry_after
+                reason = "Retry-After"
+            else:
+                wait = _compute_backoff(attempt, config)
+                reason = "backoff"
             logger.warning(
                 "LLM POST %s returned %d (attempt %d/%d), "
-                "retrying in %.1fs",
+                "retrying in %.1fs (%s)",
                 url,
                 resp.status_code,
                 attempt + 1,
-                max_retries + 1,
+                config.max_retries + 1,
                 wait,
+                reason,
             )
+            last_status = resp.status_code
             resp.close()
             time.sleep(wait)
             continue
 
+        # Success path (or non-retryable status returned to caller)
+        with _retry_metrics_lock:
+            _retry_metrics.calls_completed += 1
+            if 200 <= resp.status_code < 300:
+                outcome = "ok"
+                retries_needed = max(attempts_used - 1, 0)
+                if retries_needed == 0:
+                    _retry_metrics.success_first_try += 1
+                else:
+                    _retry_metrics.success_after_retry += 1
+                    _retry_metrics.total_retries += retries_needed
+            else:
+                # Non-retryable status (e.g. 4xx) returned to caller
+                outcome = _classify_outcome(
+                    success=False,
+                    status_code=resp.status_code,
+                    exc=None,
+                )
+                _retry_metrics.failed_after_retries += 1
+            _retry_metrics.by_outcome[outcome] = (
+                _retry_metrics.by_outcome.get(outcome, 0) + 1
+            )
+            retries_needed = max(attempts_used - 1, 0)
+            _retry_metrics.by_retries[retries_needed] = (
+                _retry_metrics.by_retries.get(retries_needed, 0) + 1
+            )
         return resp
 
     # Loop should always return or raise, but be defensive
@@ -270,7 +589,7 @@ async def _post_with_retry_async(
     headers: dict[str, str],
     payload: dict[str, Any],
     *,
-    max_retries: int = _DEFAULT_MAX_RETRIES,
+    config: RetryConfig | None = None,
 ) -> Any:
     """Async POST with exponential-backoff retry on transient failures.
 
@@ -278,12 +597,21 @@ async def _post_with_retry_async(
     across retries. Returns the final ``httpx.Response``.
 
     Network exceptions (httpx.ReadTimeout / ConnectError / etc.) and
-    retryable HTTP statuses (429/5xx) trigger backoff + retry.
+    retryable HTTP statuses (429/5xx) trigger backoff + retry. Honors
+    the ``Retry-After`` response header over the computed backoff,
+    capped at ``config.retry_after_max_seconds``.
+
+    Records outcome to the process-wide ``RetryMetrics`` instance.
     """
     import httpx
 
+    if config is None:
+        config = RetryConfig.from_env()
+
     last_exc: BaseException | None = None
-    for attempt in range(max_retries + 1):
+    attempts_used: int = 0
+    for attempt in range(config.max_retries + 1):
+        attempts_used = attempt + 1
         try:
             resp = await client.request(method, url, headers=headers, json=payload)
         except Exception as e:
@@ -298,9 +626,9 @@ async def _post_with_retry_async(
                         httpx.NetworkError,
                     ),
                 )
-                and attempt < max_retries
+                and attempt < config.max_retries
             ):
-                wait = _compute_backoff(attempt)
+                wait = _compute_backoff(attempt, config)
                 logger.warning(
                     "LLM %s %s failed with %s (attempt %d/%d), "
                     "retrying in %.1fs: %s",
@@ -308,31 +636,81 @@ async def _post_with_retry_async(
                     url,
                     type(e).__name__,
                     attempt + 1,
-                    max_retries + 1,
+                    config.max_retries + 1,
                     wait,
                     e,
                 )
                 last_exc = e
                 time.sleep(wait)
                 continue
+            # Final attempt (or non-retryable): record and re-raise
+            with _retry_metrics_lock:
+                _retry_metrics.calls_completed += 1
+                outcome = _classify_outcome(
+                    success=False, status_code=None, exc=e
+                )
+                _retry_metrics.by_outcome[outcome] = (
+                    _retry_metrics.by_outcome.get(outcome, 0) + 1
+                )
+                retries_needed = max(attempts_used - 1, 0)
+                _retry_metrics.by_retries[retries_needed] = (
+                    _retry_metrics.by_retries.get(retries_needed, 0) + 1
+                )
+                if retries_needed > 0:
+                    _retry_metrics.total_retries += retries_needed
+                _retry_metrics.failed_after_retries += 1
             raise
 
-        if _is_retryable_status(resp.status_code) and attempt < max_retries:
-            wait = _compute_backoff(attempt)
+        if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
+            retry_after = _extract_retry_after(
+                resp, config.retry_after_max_seconds
+            )
+            if retry_after is not None:
+                wait = retry_after
+                reason = "Retry-After"
+            else:
+                wait = _compute_backoff(attempt, config)
+                reason = "backoff"
             logger.warning(
                 "LLM %s %s returned %d (attempt %d/%d), "
-                "retrying in %.1fs",
+                "retrying in %.1fs (%s)",
                 method,
                 url,
                 resp.status_code,
                 attempt + 1,
-                max_retries + 1,
+                config.max_retries + 1,
                 wait,
+                reason,
             )
             await resp.aclose()
             time.sleep(wait)
             continue
 
+        # Success path (or non-retryable status returned to caller)
+        with _retry_metrics_lock:
+            _retry_metrics.calls_completed += 1
+            if 200 <= resp.status_code < 300:
+                outcome = "ok"
+                retries_needed = max(attempts_used - 1, 0)
+                if retries_needed == 0:
+                    _retry_metrics.success_first_try += 1
+                else:
+                    _retry_metrics.success_after_retry += 1
+                    _retry_metrics.total_retries += retries_needed
+            else:
+                outcome = _classify_outcome(
+                    success=False,
+                    status_code=resp.status_code,
+                    exc=None,
+                )
+                _retry_metrics.failed_after_retries += 1
+            _retry_metrics.by_outcome[outcome] = (
+                _retry_metrics.by_outcome.get(outcome, 0) + 1
+            )
+            retries_needed = max(attempts_used - 1, 0)
+            _retry_metrics.by_retries[retries_needed] = (
+                _retry_metrics.by_retries.get(retries_needed, 0) + 1
+            )
         return resp
 
     if last_exc is not None:
@@ -761,7 +1139,11 @@ class StreamableLLMClient(LLMClient):
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.request_timeout_seconds, read=60)) as client:
             # Retry on the initial connection / first response. Once
             # we start iterating the body, the request is committed.
-            for attempt in range(_DEFAULT_MAX_RETRIES + 1):
+            config = RetryConfig.from_env()
+            astream_attempts_used: int = 0
+            astream_outcome: str = "ok"
+            for attempt in range(config.max_retries + 1):
+                astream_attempts_used = attempt + 1
                 try:
                     stream_ctx = client.stream("POST", url, headers=headers, json=payload)
                     resp = await stream_ctx.__aenter__()
@@ -776,39 +1158,90 @@ class StreamableLLMClient(LLMClient):
                                 httpx.NetworkError,
                             ),
                         )
-                        and attempt < _DEFAULT_MAX_RETRIES
+                        and attempt < config.max_retries
                     ):
-                        wait = _compute_backoff(attempt)
+                        wait = _compute_backoff(attempt, config)
                         logger.warning(
                             "LLM astream %s failed with %s (attempt %d/%d), "
                             "retrying in %.1fs: %s",
                             url,
                             type(e).__name__,
                             attempt + 1,
-                            _DEFAULT_MAX_RETRIES + 1,
+                            config.max_retries + 1,
                             wait,
                             e,
                         )
                         time.sleep(wait)
                         continue
+                    # Final attempt or non-retryable: record and re-raise
+                    with _retry_metrics_lock:
+                        _retry_metrics.calls_completed += 1
+                        astream_outcome = _classify_outcome(
+                            success=False, status_code=None, exc=e
+                        )
+                        _retry_metrics.by_outcome[astream_outcome] = (
+                            _retry_metrics.by_outcome.get(astream_outcome, 0) + 1
+                        )
+                        retries_needed = max(astream_attempts_used - 1, 0)
+                        _retry_metrics.by_retries[retries_needed] = (
+                            _retry_metrics.by_retries.get(retries_needed, 0) + 1
+                        )
+                        if retries_needed > 0:
+                            _retry_metrics.total_retries += retries_needed
+                        _retry_metrics.failed_after_retries += 1
                     raise
 
                 # Got the response object; check status before consuming body
-                if _is_retryable_status(resp.status_code) and attempt < _DEFAULT_MAX_RETRIES:
-                    wait = _compute_backoff(attempt)
+                if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
+                    retry_after = _extract_retry_after(
+                        resp, config.retry_after_max_seconds
+                    )
+                    if retry_after is not None:
+                        wait = retry_after
+                        reason = "Retry-After"
+                    else:
+                        wait = _compute_backoff(attempt, config)
+                        reason = "backoff"
                     logger.warning(
                         "LLM astream %s returned %d (attempt %d/%d), "
-                        "retrying in %.1fs",
+                        "retrying in %.1fs (%s)",
                         url,
                         resp.status_code,
                         attempt + 1,
-                        _DEFAULT_MAX_RETRIES + 1,
+                        config.max_retries + 1,
                         wait,
+                        reason,
                     )
                     await stream_ctx.__aexit__(None, None, None)
                     time.sleep(wait)
                     continue
 
+                # Got a non-retryable (or successful) response on this attempt
+                with _retry_metrics_lock:
+                    _retry_metrics.calls_completed += 1
+                    if 200 <= resp.status_code < 300:
+                        retries_needed = max(astream_attempts_used - 1, 0)
+                        if retries_needed == 0:
+                            _retry_metrics.success_first_try += 1
+                        else:
+                            _retry_metrics.success_after_retry += 1
+                            _retry_metrics.total_retries += retries_needed
+                        astream_outcome = "ok"
+                    else:
+                        # Non-retryable status (e.g. 4xx) returned to caller
+                        astream_outcome = _classify_outcome(
+                            success=False,
+                            status_code=resp.status_code,
+                            exc=None,
+                        )
+                        _retry_metrics.failed_after_retries += 1
+                    _retry_metrics.by_outcome[astream_outcome] = (
+                        _retry_metrics.by_outcome.get(astream_outcome, 0) + 1
+                    )
+                    retries_needed = max(astream_attempts_used - 1, 0)
+                    _retry_metrics.by_retries[retries_needed] = (
+                        _retry_metrics.by_retries.get(retries_needed, 0) + 1
+                    )
                 break
             else:
                 # Loop fell through (only possible if all attempts raised and

@@ -17,6 +17,7 @@ import pytest
 import requests
 
 from llmwikify.foundation.llm.streamable import (
+    RetryConfig,
     StreamableLLMClient,
     _compute_backoff,
     _is_retryable_status,
@@ -57,9 +58,10 @@ def _err_response(status_code: int, body: bytes = b"") -> MagicMock:
 
 class TestBackoffMath:
     def test_backoff_grows_exponentially(self):
-        b0 = _compute_backoff(0)
-        b1 = _compute_backoff(1)
-        b2 = _compute_backoff(2)
+        cfg = RetryConfig()  # default: base=1.0, factor=2.0, jitter=0.5
+        b0 = _compute_backoff(0, cfg)
+        b1 = _compute_backoff(1, cfg)
+        b2 = _compute_backoff(2, cfg)
         # Base is 1.0, factor 2.0 → 1, 2, 4 seconds + 0..0.5 jitter
         assert 1.0 <= b0 < 1.5
         assert 2.0 <= b1 < 2.5
