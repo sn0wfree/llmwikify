@@ -79,6 +79,7 @@ def _handle_run(args: dict[str, Any], ctx: SkillContext) -> SkillResult:
         base_dir=base_dir,
         session_id=getattr(ctx, "session_id", "") or "",
         on_progress=_progress_logger,
+        llm_spec=getattr(ctx, "llm_spec", None),
     )
     logger.info("starting workflow run_id=%s name=%s", executor.run_id, name)
     result = executor.run()
@@ -86,24 +87,45 @@ def _handle_run(args: dict[str, Any], ctx: SkillContext) -> SkillResult:
 
 
 def _handle_status(args: dict[str, Any], ctx: SkillContext) -> SkillResult:
+    """Compact status check. Returns per-phase statuses only.
+
+    Set ``include_details=true`` to also get the full per-phase
+    outputs (used by tests / debugging; the LLM almost never
+    needs this — use the autoresearch status tool for that).
+    """
     run_id = args.get("run_id")
     if not run_id:
         return SkillResult.fail("missing required arg: run_id")
+    include_details = bool(args.get("include_details", False))
     state = RunStore.default().load(run_id)
     if state is None:
         return SkillResult.fail(f"no run with id {run_id!r}")
-    return SkillResult.ok(
-        {
-            "run_id": state.run_id,
-            "workflow_name": state.workflow_name,
-            "status": state.status,
-            "total_tokens_used": state.total_tokens_used,
-            "total_agents_spawned": state.total_agents_spawned,
-            "phases": state.phases,
-            "started_at": state.started_at,
-            "last_updated": state.last_updated,
-        }
-    )
+
+    phases_summary: dict[str, dict[str, Any]] = {}
+    for pid, info in (state.phases or {}).items():
+        if not isinstance(info, dict):
+            phases_summary[pid] = {"status": "unknown"}
+            continue
+        entry: dict[str, Any] = {"status": info.get("status", "pending")}
+        if info.get("status") == "failed":
+            output = info.get("output", {})
+            if isinstance(output, dict) and "_error" in output:
+                entry["error"] = str(output["_error"])[:300]
+        phases_summary[pid] = entry
+
+    response: dict[str, Any] = {
+        "run_id": state.run_id,
+        "workflow_name": state.workflow_name,
+        "status": state.status,
+        "total_tokens_used": state.total_tokens_used,
+        "total_agents_spawned": state.total_agents_spawned,
+        "phases_summary": phases_summary,
+        "started_at": state.started_at,
+        "last_updated": state.last_updated,
+    }
+    if include_details:
+        response["phases"] = state.phases
+    return SkillResult.ok(response)
 
 
 def _handle_resume(args: dict[str, Any], ctx: SkillContext) -> SkillResult:
@@ -220,12 +242,24 @@ class DynamicWorkflowSkill(Skill):
             description=(
                 "Query the status of a workflow run. Returns "
                 "{run_id, status, total_tokens_used, "
-                "total_agents_spawned, phase_summaries}."
+                "total_agents_spawned, phases_summary}. "
+                "Pass include_details=true to also get the full "
+                "per-phase outputs (used by tests / debugging)."
             ),
             handler=_handle_status,
             input_schema={
                 "type": "object",
-                "properties": {"run_id": {"type": "string"}},
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "include_details": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": (
+                            "If true, also include the full per-phase "
+                            "outputs. Default is false (compact summary only)."
+                        ),
+                    },
+                },
                 "required": ["run_id"],
             },
             action_type="read",
