@@ -3,8 +3,8 @@ import { api, Confirmation } from '../../api';
 import { useToast } from './Toast';
 import { useWikiStore } from '../../stores/wikiStore';
 import { EmptyState } from '../agent/StateViews';
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
+import { Card } from '../ui/legacy-card';
+import { Button } from '../ui/legacy-button';
 import { ConfirmationModal } from '../agent/ConfirmationModal';
 
 export function Confirmations() {

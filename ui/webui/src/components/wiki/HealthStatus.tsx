@@ -5,12 +5,12 @@ import { useWikiStore } from '../../stores/wikiStore';
 import { cn } from '@/lib/utils';
 
 interface HealthStatusProps {
-  currentWiki?: { id: string } | undefined;
+  currentWiki?: { id?: string; wiki_id?: string } | undefined;
 }
 
 export function HealthStatus({ currentWiki }: HealthStatusProps) {
   const { currentWikiId: storeWikiId, isMultiWikiMode } = useWikiStore();
-  const currentWikiId = currentWiki?.id || storeWikiId;
+  const currentWikiId = currentWiki?.id || currentWiki?.wiki_id || storeWikiId;
   const [status, setStatus] = useState<WikiStatus | null>(null);
   const [sinkStatus, setSinkStatus] = useState<SinkStatus | null>(null);
   const [loading, setLoading] = useState(true);

@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { api, IngestLogEntry } from '../../api';
 import { useWikiStore } from '../../stores/wikiStore';
 import { EmptyState } from '../agent/StateViews';
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
+import { Card } from '../ui/legacy-card';
+import { Button } from '../ui/legacy-button';
+import { Badge } from '../ui/legacy-badge';
 
 export function IngestLog() {
   const [entries, setEntries] = useState<IngestLogEntry[]>([]);

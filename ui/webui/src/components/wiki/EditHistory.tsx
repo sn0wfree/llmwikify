@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api';
 import { useWikiStore } from '../../stores/wikiStore';
 import { EmptyState } from '../agent/StateViews';
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
+import { Card } from '../ui/legacy-card';
+import { Button } from '../ui/legacy-button';
 
 interface EditEntry {
   tool: string;

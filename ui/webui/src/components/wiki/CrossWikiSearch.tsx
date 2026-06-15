@@ -69,7 +69,7 @@ export function CrossWikiSearch({ onResult }: CrossWikiSearchProps) {
 
       if (searchMode === 'all' && isMultiWikiMode) {
         const response = await api.search.cross(searchQuery, 15);
-        searchResults = response.results.map((r) => ({
+        searchResults = response.map((r) => ({
           page_name: r.page_name as string,
           content: r.content as string || '',
           snippet: r.snippet as string,

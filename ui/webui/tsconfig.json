@@ -21,6 +21,12 @@
     }
   },
   "include": ["src"],
-  "exclude": ["src/__tests__"],
+  "exclude": [
+    "src/__tests__",
+    "src/components/ui/Badge.tsx",
+    "src/components/ui/Button.tsx",
+    "src/components/ui/Card.tsx",
+    "src/components/ui/Select.tsx"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

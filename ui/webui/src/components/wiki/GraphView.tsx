@@ -334,7 +334,7 @@ export function GraphView({
 
     // Pulse animation for current node
     node.filter((d) => !!d.is_current)
-      .select('circle.node-circle')
+      .select<SVGCircleElement>('circle.node-circle')
       .transition()
       .duration(1500)
       .ease(d3.easeCubicInOut)
@@ -342,7 +342,7 @@ export function GraphView({
       .transition()
       .attr('r', (d) => getNodeRadius(d))
       .on('end', function repeat() {
-        d3.select(this)
+        d3.select<SVGCircleElement, SimNode>(this as SVGCircleElement)
           .transition()
           .duration(1500)
           .ease(d3.easeCubicInOut)
