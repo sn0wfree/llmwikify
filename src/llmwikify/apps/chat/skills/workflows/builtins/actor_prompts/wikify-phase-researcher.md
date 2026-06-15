@@ -1,7 +1,6 @@
 ---
 name: wikify-phase-researcher
 description: Investigates a single research phase for llmwikify. Reads sources, returns structured findings with citations. Worktree-isolated by default to allow safe parallel runs.
-model: sonnet
 isolation: worktree
 tools: [Read, Grep, Glob, WebFetch, WebSearch]
 ---

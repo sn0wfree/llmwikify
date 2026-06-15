@@ -21,7 +21,7 @@ export function SaveToWikiModal({ sessionId, query, onClose, onSaved }: Props) {
   const [pageName, setPageName] = useState(() => generatePageName(query || ''));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<{ status: string; confirmation_id?: string } | null>(null);
+  const [result, setResult] = useState<{ status: string; message?: string; confirmation_id?: string } | null>(null);
 
   const handleSave = useCallback(async () => {
     if (!pageName.trim()) return;
@@ -63,7 +63,7 @@ export function SaveToWikiModal({ sessionId, query, onClose, onSaved }: Props) {
           {error && <div className="text-xs text-red-400">{error}</div>}
           {result && (
             <div className="text-xs text-green-400">
-              {result.message}
+              {result.message || result.status}
               {result.confirmation_id && (
                 <span className="ml-1">— Confirmation ID: {result.confirmation_id}</span>
               )}

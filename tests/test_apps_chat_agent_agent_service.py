@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from llmwikify.apps.chat.agent.agent_service import AgentService
+from llmwikify.apps.chat.agent.context_manager import ContextManager
 from llmwikify.apps.chat.agent.orchestrator import ChatOrchestrator
 from llmwikify.apps.chat.harness.service import HarnessService
 from llmwikify.apps.chat.memory import MemoryManager
@@ -103,6 +104,83 @@ class TestAgentServiceDelegation:
         result = agent_service.get_agent_status("wiki-1")
         agent_service.wiki_service.get_agent_status.assert_called_with("wiki-1")
         assert result == {"status": "ok"}
+
+    def test_delete_session_delegates(self, agent_service):
+        agent_service.chat_service.delete_session = MagicMock(return_value=True)
+        result = agent_service.delete_session("session-1")
+        agent_service.chat_service.delete_session.assert_called_once_with("session-1")
+        assert result is True
+
+    def test_session_control_delegates(self, agent_service):
+        agent_service.chat_service.revert_session = MagicMock(return_value=2)
+        agent_service.chat_service.edit_message = MagicMock(return_value=True)
+        agent_service.chat_service.abort_session = MagicMock(return_value=False)
+        agent_service.chat_service.get_session_status = MagicMock(return_value="idle")
+        agent_service.chat_service.get_all_session_status = MagicMock(return_value={"s": "idle"})
+
+        assert agent_service.revert_session("session-1", "message-1") == 2
+        assert agent_service.edit_message("message-1", "updated") is True
+        assert agent_service.abort_session("session-1") is False
+        assert agent_service.get_session_status("session-1") == "idle"
+        assert agent_service.get_all_session_status() == {"s": "idle"}
+
+
+class TestContextManager:
+    @pytest.mark.asyncio
+    async def test_context_tracks_session_id(self):
+        manager = ContextManager(config={"compaction_enabled": False})
+
+        async def load_history(session_id):
+            return []
+
+        ctx = await manager.get_or_create(
+            "session-1", "wiki-1", history_loader=load_history,
+        )
+
+        assert ctx.session_id == "session-1"
+
+
+class TestAgentServiceConfirmations:
+    def test_list_confirmations_merges_chat_and_wiki(self, agent_service):
+        agent_service.wiki_service.list_confirmations = MagicMock(
+            return_value={"wiki": [{"id": "w1"}]},
+        )
+        agent_service.chat_service.list_confirmations = MagicMock(
+            return_value={"skill_actions": [{"id": "s1"}]},
+        )
+
+        result = agent_service.list_confirmations("wiki-1")
+
+        assert result == {
+            "wiki": [{"id": "w1"}],
+            "skill_actions": [{"id": "s1"}],
+        }
+
+    @pytest.mark.asyncio
+    async def test_approve_confirmation_prefers_chat_service(self, agent_service):
+        agent_service.chat_service.approve_confirmation = AsyncMock(
+            return_value={"status": "executed"},
+        )
+        agent_service.wiki_service.approve_confirmation = AsyncMock()
+
+        result = await agent_service.approve_confirmation("s1", "wiki-1")
+
+        assert result == {"status": "executed"}
+        agent_service.wiki_service.approve_confirmation.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_approve_confirmation_falls_back_to_wiki_service(self, agent_service):
+        agent_service.chat_service.approve_confirmation = AsyncMock(
+            return_value={"status": "error", "error": "Invalid confirmation ID: w1"},
+        )
+        agent_service.wiki_service.approve_confirmation = AsyncMock(
+            return_value={"status": "executed"},
+        )
+
+        result = await agent_service.approve_confirmation("w1", "wiki-1")
+
+        assert result == {"status": "executed"}
+        agent_service.wiki_service.approve_confirmation.assert_awaited_once()
 
 
 class TestAgentServiceBackwardCompat:

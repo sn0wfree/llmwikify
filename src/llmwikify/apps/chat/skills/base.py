@@ -178,6 +178,13 @@ class SkillAction:
         ``["crud", "memory"]``, ...). Used by
         ``wiki_query_skill`` to group its 28 actions in
         the manifest.
+    triggers
+        Command strings that invoke this action (e.g.
+        ``["/study", "研究："]``).  Matched against user
+        input by the ``get_skill_commands`` tool.
+    trigger_param
+        Which input parameter the trigger value is mapped to
+        (default ``"question"``).
     """
 
     name: str = ""
@@ -190,6 +197,8 @@ class SkillAction:
     requires_confirmation: ConfirmationPolicy = False
     action_type: str = "read"
     tags: list[str] = field(default_factory=list)
+    triggers: list[str] = field(default_factory=list)
+    trigger_param: str = "question"
 
     def __post_init__(self) -> None:
         if self.handler is None:
@@ -228,6 +237,7 @@ class SkillContext:
     wiki: Any = None
     db: Any = None
     llm_client: Any = None
+    llm_spec: Any = None
     config: dict[str, Any] = field(default_factory=dict)
     metrics: Any = None
     session_id: str = ""
@@ -357,12 +367,67 @@ class SkillManifest:
         }
 
 
+class PromptBasedSkill(Skill):
+    """Skill driven by markdown instructions (Agent Skills standard).
+
+    Compatible with the Agent Skills convention (agentskills.io):
+    ``SKILL.md`` files with YAML frontmatter, filesystem-based
+    discovery, progressive disclosure.  The LLM receives the
+    instructions and executes them using existing tools.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        instructions: str,
+        triggers: list[str] | None = None,
+        allowed_tools: list[str] | None = None,
+    ):
+        self.name = name
+        self.description = description
+        self.instructions = instructions
+        self._triggers = triggers or []
+        self._allowed_tools = allowed_tools or []
+        self.actions = {
+            "execute": SkillAction(
+                handler=self._handle_execute,
+                description=description,
+                triggers=self._triggers,
+                trigger_param="input",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "input": {
+                            "type": "string",
+                            "description": "User input or command arguments.",
+                        },
+                    },
+                },
+                tags=["plugin"],
+            ),
+        }
+        super().__init__()
+
+    async def _handle_execute(
+        self, args: dict[str, Any], ctx: SkillContext
+    ) -> SkillResult:
+        return SkillResult.ok(
+            {
+                "instructions": self.instructions,
+                "allowed_tools": self._allowed_tools,
+                "input": args.get("input", ""),
+            }
+        )
+
+
 __all__ = [
     "Skill",
     "SkillAction",
     "SkillContext",
     "SkillResult",
     "SkillManifest",
+    "PromptBasedSkill",
     "Handler",
     "SyncHandler",
     "AsyncHandler",

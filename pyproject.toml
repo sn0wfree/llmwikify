@@ -223,6 +223,9 @@ python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 asyncio_mode = "auto"
+markers = [
+    "e2e: end-to-end tests that start a real server (run with `pytest -m e2e`)",
+]
 
 [tool.coverage.run]
 branch = true

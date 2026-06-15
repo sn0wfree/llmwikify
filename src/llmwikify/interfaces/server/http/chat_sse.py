@@ -13,12 +13,12 @@ from sse_starlette import EventSourceResponse
 
 from llmwikify.apps.chat.agent.agent_service import AgentService
 from llmwikify.interfaces.server.http._models import (
+    ApplyProposalsRequest,
+    ApprovalRequest,
+    BatchApproveProposalsRequest,
+    BatchApproveRequest,
     ChatRequest,
     CreateSessionRequest,
-    ApprovalRequest,
-    BatchApproveRequest,
-    BatchApproveProposalsRequest,
-    ApplyProposalsRequest,
     SaveConfigRequest,
 )
 
@@ -322,6 +322,14 @@ async def agent_status(request: Request):
             "dream_proposals": {},
             "unread_notifications": 0,
         }
+
+
+# --- Research run endpoints ---
+
+@router.get("/research-runs/{run_id}")
+async def get_research_run(run_id: str):
+    service = get_agent_service()
+    return service.get_research_run_status(run_id)
 
 
 # --- Confirmations endpoints ---

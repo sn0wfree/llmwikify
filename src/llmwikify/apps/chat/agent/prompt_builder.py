@@ -62,6 +62,13 @@ class PromptBuilder:
         tools_section = await self._tools_section()
         if tools_section:
             parts.append(tools_section)
+        # 4b. Skill commands pointer
+        parts.append(
+            "When a user types a slash command (e.g. /study) or a "
+            "Chinese trigger (e.g. 研究：...), first call "
+            "`get_skill_commands` to discover available commands "
+            "and their usage, then call the appropriate skill tool."
+        )
         # 5. Current date
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         parts.append(f"## Today's date (UTC)\n{today}")

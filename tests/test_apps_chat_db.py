@@ -18,9 +18,9 @@ from pathlib import Path
 import pytest
 
 from llmwikify.apps.chat.db import (
+    DB_SIZE_WARNING_MB,
     AutoResearchDatabase,
     ChatDatabase,
-    DB_SIZE_WARNING_MB,
     get_autoresearch_db_path,
     get_chat_db_path,
 )
@@ -95,8 +95,9 @@ class TestSchema:
             assert "context_entries" in tables
 
     def test_research_steps_columns(self, fresh_db: ChatDatabase) -> None:
-        from llmwikify.apps.research.db import ResearchDatabase
         import tempfile
+
+        from llmwikify.apps.research.db import ResearchDatabase
         with tempfile.TemporaryDirectory() as tmp:
             rdb = ResearchDatabase(tmp)
             import sqlite3
@@ -114,8 +115,9 @@ class TestSchema:
             assert expected.issubset(cols)
 
     def test_research_steps_indexes(self, fresh_db: ChatDatabase) -> None:
-        from llmwikify.apps.research.db import ResearchDatabase
         import tempfile
+
+        from llmwikify.apps.research.db import ResearchDatabase
         with tempfile.TemporaryDirectory() as tmp:
             rdb = ResearchDatabase(tmp)
             import sqlite3
@@ -290,7 +292,7 @@ class TestResearchStatePersistence:
 # ─── Cascade delete covers steps ─────────────────────────────────
 
 
-class TestCascadeDelete:
+class TestResearchCascadeDelete:
     def test_delete_research_removes_steps(
         self, db_with_session: tuple[ChatDatabase, str]
     ) -> None:
@@ -387,6 +389,35 @@ class TestCascadeDelete:
         assert db.delete_chat_session(sid) is True
         entries = db.get_chat_messages(sid)  # check no rows left
         assert entries == []
+
+    def test_cascade_deletes_event_log_and_permissions(self, db):
+        sid = db.create_chat_session()
+        import sqlite3
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                """INSERT INTO event_log (session_id, event_type, payload)
+                   VALUES (?, ?, ?)""",
+                (sid, "done", "{}"),
+            )
+            conn.execute(
+                """INSERT INTO chat_permissions (id, session_id, tool_name, response)
+                   VALUES (?, ?, ?, ?)""",
+                ("perm-1", sid, "wiki_edit_page", "always"),
+            )
+            conn.commit()
+
+        assert db.delete_chat_session(sid) is True
+        with sqlite3.connect(db.db_path) as conn:
+            event_count = conn.execute(
+                "SELECT COUNT(*) FROM event_log WHERE session_id = ?",
+                (sid,),
+            ).fetchone()[0]
+            permission_count = conn.execute(
+                "SELECT COUNT(*) FROM chat_permissions WHERE session_id = ?",
+                (sid,),
+            ).fetchone()[0]
+        assert event_count == 0
+        assert permission_count == 0
 
     def test_delete_nonexistent_returns_false(self, db):
         """Deleting a non-existent session returns False."""

@@ -1,7 +1,6 @@
 ---
 name: wikify-research-planner
 description: Expands a short research question into a structured 3-5 phase plan. First phase of a multi-agent research workflow in llmwikify.
-model: opus
 tools: [Read, Grep, Glob]
 ---
 

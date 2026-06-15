@@ -26,6 +26,21 @@ TOOL_CALL_RE = re.compile(
     re.DOTALL,
 )
 
+MINIMAX_TOOL_CALL_RE = re.compile(
+    r"<minimax:tool_call>\s*(.*?)\s*</minimax:tool_call>",
+    re.DOTALL,
+)
+
+MINIMAX_INVOKE_RE = re.compile(
+    r"<invoke\s+name=[\"']([^\"']+)[\"']\s*>\s*(.*?)\s*</invoke>",
+    re.DOTALL,
+)
+
+MINIMAX_PARAM_RE = re.compile(
+    r"<parameter\s+name=[\"']([^\"']+)[\"']\s*>\s*(.*?)\s*</parameter>",
+    re.DOTALL,
+)
+
 
 def _unquote(s: str) -> str:
     """Strip a single layer of matching surrounding quotes."""
@@ -104,16 +119,39 @@ def _extract_args_block(body: str) -> dict[str, str]:
     return {}
 
 
+def _normalize_tool_name(tool_name: str) -> str:
+    if tool_name == "autoresearch_compound":
+        return "autoresearch_compound_run"
+    return tool_name
+
+
+def parse_minimax_tool_call(body: str) -> tuple[str, dict[str, str]] | None:
+    m = MINIMAX_INVOKE_RE.search(body)
+    if not m:
+        return None
+    tool_name = _normalize_tool_name(m.group(1).strip())
+    args = {
+        key.strip(): value.strip()
+        for key, value in MINIMAX_PARAM_RE.findall(m.group(2))
+    }
+    if tool_name == "autoresearch_compound_run" and "question" not in args and "topic" in args:
+        args["question"] = args["topic"]
+    return tool_name, args
+
+
 def parse_text_tool_call(body: str) -> tuple[str, dict[str, str]] | None:
-    """Extract ``(tool_name, args)`` from the body of a [TOOL_CALL] block.
+    """Extract ``(tool_name, args)`` from a text-mode tool-call block.
 
     Returns ``None`` if the body is not a recognisable tool-call form,
     in which case the caller should pass the text through verbatim.
     """
+    minimax = parse_minimax_tool_call(body)
+    if minimax is not None:
+        return minimax
     m = re.search(r'tool\s*=>\s*"([^"]+)"', body)
     if not m:
         return None
-    tool_name = m.group(1).strip()
+    tool_name = _normalize_tool_name(m.group(1).strip())
     args = _extract_args_block(body)
     return tool_name, args
 
@@ -169,9 +207,16 @@ class TextModeParser:
         chunk = event.get("text", "")
         self._buffer += chunk
         while True:
-            m = TOOL_CALL_RE.search(self._buffer)
-            if not m:
+            matches = [
+                m for m in (
+                    TOOL_CALL_RE.search(self._buffer),
+                    MINIMAX_TOOL_CALL_RE.search(self._buffer),
+                )
+                if m is not None
+            ]
+            if not matches:
                 break
+            m = min(matches, key=lambda match: match.start())
             prefix = self._buffer[: m.start()]
             if prefix:
                 yield {"type": "content", "text": prefix}
@@ -199,6 +244,8 @@ class TextModeParser:
 
 __all__ = [
     "TOOL_CALL_RE",
+    "MINIMAX_TOOL_CALL_RE",
+    "parse_minimax_tool_call",
     "parse_text_tool_call",
     "parse_perl_args",
     "TextModeParser",

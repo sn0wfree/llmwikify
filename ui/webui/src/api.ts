@@ -1,6 +1,28 @@
 const API_BASE = '/api';
 const API_TOKEN = import.meta.env.VITE_API_TOKEN;
 
+export interface ResearchRunTimelineItem {
+  phase_id: string;
+  label: string;
+  status: string;
+}
+
+export interface ResearchRunStatus {
+  run_id: string;
+  workflow_name?: string;
+  status: string;
+  timeline: ResearchRunTimelineItem[];
+  artifact_counts?: Record<string, number>;
+  proposal_bundle?: unknown;
+  writes_wiki?: boolean;
+  proposal_only?: boolean;
+  started_at?: number;
+  last_updated?: number;
+  total_tokens_used?: number;
+  total_agents_spawned?: number;
+  error?: string;
+}
+
 export type ChatStreamEvent =
   | { type: 'session_created'; session_id: string }
   | { type: 'message_delta'; content: string }
@@ -11,6 +33,7 @@ export type ChatStreamEvent =
   | { type: 'done'; final_response: string }
   | { type: 'save_warning'; reason: string }
   | { type: 'confirmation_required'; confirmation_id: string; tool: string; args: Record<string, unknown>; impact: Record<string, unknown>; call_id: string; duration_ms: number }
+  | ({ type: 'research_run_started' } & ResearchRunStatus)
   | { type: 'error'; message: string };
 
 // Phase 5.4 (v0.36): SSE reconnection configuration.
@@ -122,6 +145,8 @@ export interface SearchResult {
   has_sink?: boolean;
   sink_entries?: number;
   page_type?: string;
+  wiki_id?: string;
+  wiki_name?: string;
 }
 
 export interface WikiStatus {
@@ -312,7 +337,8 @@ export const api = {
         request<SearchResult[]>(`/wiki/${wikiId}/search?q=${encodeURIComponent(query)}&limit=${limit}`),
       status: (wikiId: string) => request<WikiStatus>(`/wiki/${wikiId}/status`),
       sinkStatus: (wikiId: string) => request<SinkStatus>(`/wiki/${wikiId}/sink/status`),
-      pages: (wikiId: string) => request<Array<{ name: string; path: string }>>(`/wiki/${wikiId}/pages`),
+      pages: (wikiId: string) => request<{ pages: string[] }>(`/wiki/${wikiId}/pages`),
+      graph: (wikiId: string, currentPage?: string) => api.wiki.graph({ wikiId, currentPage }),
     },
   },
 
@@ -401,6 +427,8 @@ export const api = {
       request<{ session_id: string; status: string }>(
         `/agent/sessions/${sessionId}/status`
       ),
+    getResearchRun: (runId: string) =>
+      request<ResearchRunStatus>(`/agent/research-runs/${runId}`),
   },
 
   dream: {

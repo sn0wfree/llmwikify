@@ -602,7 +602,6 @@ async def get_paper(paper_id: str) -> dict[str, Any]:
 async def list_paper_artifacts(paper_id: str) -> dict[str, Any]:
     """Legacy: list pages produced for a paper_id from quant/."""
     from llmwikify.reproduction.quant_wiki import get_quant_wiki
-    from llmwikify.reproduction.factor_library import list_factors as lib_list_factors
     quant = get_quant_wiki()
     artifacts = []
 
@@ -619,27 +618,26 @@ async def list_paper_artifacts(paper_id: str) -> dict[str, Any]:
                 "page_type": "Source",
             })
 
-    # Factor: scan the index for any factor whose source references this paper.
-    # We don't have a direct paper_ref in the factor YAML, so we look for
-    # factors with names that include the paper_id (legacy heuristic).
-    all_factors = lib_list_factors()
-    for entry in all_factors:
-        if paper_id in entry.get("file", "") or paper_id in entry.get("name", ""):
-            artifacts.append({
-                "kind": "Factor",
-                "wiki_page": entry.get("file", ""),
-                "page_type": "Factor",
-            })
-
-    # Strategy: look in quant/strategies/ for strategy-{paper_id}
-    strategy_page = f"strategy-{paper_id}"
-    result = quant.read_page(strategy_page, page_type="strategies")
-    if result is not None:
-        artifacts.append({
-            "kind": "Strategy",
-            "wiki_page": strategy_page,
-            "page_type": "Strategy",
-        })
+    for prefix, kind in (("factor-", "Factor"), ("strategy-", "Strategy")):
+        page_name = f"{prefix}{paper_id}"
+        if kind == "Factor":
+            # Check if factor YAML exists
+            from llmwikify.reproduction.factor_library import read_factor_yaml
+            factor = read_factor_yaml(f"factor_{paper_id}_{page_name}")
+            if factor is not None:
+                artifacts.append({
+                    "kind": kind,
+                    "wiki_page": page_name,
+                    "page_type": kind,
+                })
+        else:
+            result = quant.read_page(page_name, page_type="strategies")
+            if result is not None:
+                artifacts.append({
+                    "kind": kind,
+                    "wiki_page": page_name,
+                    "page_type": kind,
+                })
 
     return {"paper_id": paper_id, "artifacts": artifacts}
 

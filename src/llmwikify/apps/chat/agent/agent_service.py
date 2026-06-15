@@ -42,8 +42,8 @@ class AgentService:
         memory_manager: Any = None,
         config: Any = None,
     ):
-        from llmwikify.apps.db import AppDatabase
         from llmwikify.apps.chat.agent.orchestrator import ChatOrchestrator
+        from llmwikify.apps.db import AppDatabase
         from llmwikify.apps.wiki.service import WikiService
 
         self.data_dir = Path(data_dir)
@@ -103,6 +103,7 @@ class AgentService:
         # Wire MemoryManager + WikiService into SkillService for CRUD skills
         self.skill_service.memory_manager = self.memory_manager
         self.skill_service.wiki_service = self.wiki_service
+        self.chat_service.skill_service = self.skill_service
 
     # ─── DB facade shortcut ─────────────────────────────────────
 
@@ -177,19 +178,52 @@ class AgentService:
         return self.wiki_service.mark_notification_read(notification_id)
 
     def list_confirmations(self, wiki_id: str | None = None) -> dict:
-        return self.wiki_service.list_confirmations(wiki_id)
+        grouped = self.wiki_service.list_confirmations(wiki_id)
+        seen = {
+            item.get("id")
+            for items in grouped.values()
+            for item in items
+            if isinstance(item, dict)
+        }
+        chat_grouped = self.chat_service.list_confirmations(wiki_id)
+        for group, items in chat_grouped.items():
+            bucket = grouped.setdefault(group, [])
+            for item in items:
+                item_id = item.get("id") if isinstance(item, dict) else None
+                if item_id and item_id in seen:
+                    continue
+                if item_id:
+                    seen.add(item_id)
+                bucket.append(item)
+        return grouped
+
+    @staticmethod
+    def _is_unknown_confirmation(result: Any) -> bool:
+        if not isinstance(result, dict) or result.get("status") != "error":
+            return False
+        error = result.get("error", "")
+        return "Unknown confirmation ID" in error or "Invalid confirmation ID" in error
 
     async def approve_confirmation(
         self, confirmation_id: str, wiki_id: str | None = None,
         arguments: dict | None = None,
+        response: str = "once",
     ) -> dict:
-        return await self.wiki_service.approve_confirmation(
+        result = await self.chat_service.approve_confirmation(
             confirmation_id, wiki_id, arguments,
+        )
+        if not self._is_unknown_confirmation(result):
+            return result
+        return await self.wiki_service.approve_confirmation(
+            confirmation_id, wiki_id, arguments, response=response,
         )
 
     async def reject_confirmation(
         self, confirmation_id: str, wiki_id: str | None = None,
     ) -> dict:
+        result = await self.chat_service.reject_confirmation(confirmation_id, wiki_id)
+        if not self._is_unknown_confirmation(result):
+            return result
         return await self.wiki_service.reject_confirmation(
             confirmation_id, wiki_id,
         )
@@ -197,9 +231,11 @@ class AgentService:
     async def batch_approve_confirmations(
         self, confirmation_ids: list[str], wiki_id: str | None = None,
     ) -> dict:
-        return await self.wiki_service.batch_approve_confirmations(
-            confirmation_ids, wiki_id,
-        )
+        results = [
+            await self.approve_confirmation(cid, wiki_id)
+            for cid in confirmation_ids
+        ]
+        return {"approved": len(results), "results": results}
 
     def get_ingest_log(
         self, wiki_id: str | None = None, limit: int = 20,
@@ -211,6 +247,52 @@ class AgentService:
 
     def get_agent_status(self, wiki_id: str | None = None) -> dict:
         return self.wiki_service.get_agent_status(wiki_id)
+
+    def get_research_run_status(self, run_id: str) -> dict:
+        from llmwikify.apps.chat.skills.autoresearch_compound_skill import (
+            _artifact_counts_from_outputs,
+            _timeline_from_state,
+        )
+        from llmwikify.apps.chat.skills.workflows.run_store import RunStore
+
+        state = RunStore.default().load(run_id)
+        if state is None:
+            return {"status": "error", "error": f"no run with id {run_id!r}"}
+        synthesize = state.phases.get("synthesize", {}) if state.phases else {}
+        final_report = synthesize.get("output") if isinstance(synthesize, dict) else None
+        outputs = {"final_report": final_report} if final_report else {}
+        return {
+            "run_id": state.run_id,
+            "workflow_name": state.workflow_name,
+            "status": state.status,
+            "timeline": _timeline_from_state(state),
+            "artifact_counts": _artifact_counts_from_outputs(outputs),
+            "proposal_bundle": final_report,
+            "writes_wiki": False,
+            "proposal_only": True,
+            "started_at": state.started_at,
+            "last_updated": state.last_updated,
+            "total_tokens_used": state.total_tokens_used,
+            "total_agents_spawned": state.total_agents_spawned,
+        }
+
+    def delete_session(self, session_id: str) -> bool:
+        return self.chat_service.delete_session(session_id)
+
+    def revert_session(self, session_id: str, message_id: str) -> int:
+        return self.chat_service.revert_session(session_id, message_id)
+
+    def edit_message(self, message_id: str, new_content: str) -> bool:
+        return self.chat_service.edit_message(message_id, new_content)
+
+    def abort_session(self, session_id: str) -> bool:
+        return self.chat_service.abort_session(session_id)
+
+    def get_session_status(self, session_id: str) -> str:
+        return self.chat_service.get_session_status(session_id)
+
+    def get_all_session_status(self) -> dict[str, str]:
+        return self.chat_service.get_all_session_status()
 
     # ─── Internal access (for backward compat) ─────────────────
 

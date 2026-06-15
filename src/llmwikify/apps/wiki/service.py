@@ -117,6 +117,31 @@ class WikiService:
         """Clear cached LLM so it reloads on next request."""
         self._llm = None
 
+    def get_llm_spec(self):
+        """Return the resolved LLMSpec (frozen LAL config contract)."""
+        from llmwikify.foundation.llm.resolver import resolve_chat_llm
+
+        if self._config_manager is None:
+            from llmwikify.apps.chat.config_manager import (
+                get_global_config_manager,
+            )
+
+            self._config_manager = get_global_config_manager(
+                lambda: self
+            )
+        default_id = self.get_default_wiki_id()
+        wiki_root = None
+        if default_id:
+            wiki_instance = self.wiki_registry.get_wiki_instance(
+                default_id
+            )
+            if wiki_instance and wiki_instance.root:
+                wiki_root = wiki_instance.root
+        config = self._config_manager.load_effective_llm_config(
+            wiki_root
+        )
+        return resolve_chat_llm({"llm": config})
+
     # ─── Factory methods ─────────────────────────────────────────
 
     def get_dream_editor(self, wiki_id: str | None = None) -> Any:
