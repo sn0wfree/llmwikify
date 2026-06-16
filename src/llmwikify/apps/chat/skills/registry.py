@@ -216,11 +216,15 @@ class SkillRegistry:
 
         Returns a list of dicts, each containing:
           - ``trigger``: the trigger string (e.g. ``"/study"``)
-          - ``tool``: the tool name to invoke (``"skill_action"``)
+          - ``tool``: the **real** tool name the LLM must call
+            (e.g. ``"autoresearch_compound_run"``) — matches the
+            LLM-facing tool list built by ``SkillToolAdapter``.
           - ``param``: the parameter name for the trigger value
           - ``skill``: the skill name
           - ``action``: the action name
           - ``description``: short description
+          - ``workflow_name``: the skill's workflow name (for skills
+            backed by YAML workflows)
 
         The LLM-exposed ``get_skill_commands`` tool returns
         this list so the model can map user commands to tools.
@@ -232,14 +236,25 @@ class SkillRegistry:
                 skill = self._skills[name]
                 for action in skill.actions.values():
                     for trigger in action.triggers:
+                        # v0.41: compute the real tool name (same
+                        # algorithm as SkillToolAdapter._tool_name) so
+                        # the LLM doesn't get sent after the
+                        # non-existent "skill_action" tool. See
+                        # regression note in commit bb1e635+1.
+                        tool_name = (
+                            f"{name}_{action.name}"
+                            .replace(".", "_")
+                            .replace("-", "_")
+                        )
                         out.append(
                             {
                                 "trigger": trigger,
-                                "tool": "skill_action",
+                                "tool": tool_name,
                                 "param": action.trigger_param,
                                 "skill": name,
                                 "action": action.name,
                                 "description": action.description[:100],
+                                "workflow_name": name,
                             }
                         )
         return out

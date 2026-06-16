@@ -251,13 +251,17 @@ class AgentService:
     def get_research_run_status(self, run_id: str) -> dict:
         from llmwikify.apps.chat.skills.autoresearch_compound_skill import (
             _artifact_counts_from_outputs,
+            _format_run_not_found,
             _timeline_from_state,
         )
         from llmwikify.apps.chat.skills.workflows.run_store import RunStore
 
         state = RunStore.default().load(run_id)
         if state is None:
-            return {"status": "error", "error": f"no run with id {run_id!r}"}
+            return {
+                "status": "error",
+                "error": _format_run_not_found(run_id, workflow_name="autoresearch-compound"),
+            }
         synthesize = state.phases.get("synthesize", {}) if state.phases else {}
         final_report = synthesize.get("output") if isinstance(synthesize, dict) else None
         outputs = {"final_report": final_report} if final_report else {}

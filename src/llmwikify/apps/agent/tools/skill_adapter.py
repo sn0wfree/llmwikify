@@ -94,6 +94,14 @@ class SkillToolAdapter:
             return await self._get_skill_commands_handler(arguments, None)
         confirmation_mode = self._tools[name].get("requires_confirmation", False)
         if confirmation_mode == "pre":
+            # v0.41: short-circuit if user previously clicked "Always"
+            # for this tool in this session. Without this, the
+            # chat_permissions row written by approve_confirmation()
+            # was dead code (db.has_always_permission() had no caller).
+            if self.db and self.db.has_always_permission(
+                name, session_id=self.session_id,
+            ):
+                return await self._execute_direct(name, arguments)
             confirmation_id = str(uuid.uuid4())[:8]
             confirmation = {
                 "id": confirmation_id,
