@@ -31,7 +31,7 @@ from llmwikify.apps.chat.state import ResearchState
 
 def test_engine_constructs_reasoner():
     """ResearchEngine.__init__ creates a self.reasoner attribute."""
-    from llmwikify.apps.chat.reasoner import ResearchReasoner
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.reasoner import ResearchReasoner
 
     # We can't construct a full engine without deps, so use a
     # mock: assert the attribute is set in __init__.
@@ -45,7 +45,7 @@ def test_engine_constructs_reasoner():
 
 def test_reasoner_holds_back_refs_to_engine_deps():
     """ResearchReasoner caches the engine's db, config, _action_ctx, _max_replan."""
-    from llmwikify.apps.chat.reasoner import ResearchReasoner
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.reasoner import ResearchReasoner
 
     # Mock engine with the required attributes
     class FakeActionCtx:
@@ -113,7 +113,7 @@ def test_engine_llm_reason_delegates_to_reasoner():
 
 def test_rule_based_returns_done_for_error_state():
     """rule_based('error') → 'done' (let LLM override if it wants to retry)."""
-    from llmwikify.apps.chat.reasoner import ResearchReasoner
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.reasoner import ResearchReasoner
 
     class FakeDB:
         def get_sources(self, session_id):
@@ -132,7 +132,7 @@ def test_rule_based_returns_done_for_error_state():
 
 def test_rule_based_returns_plan_for_uninitialized_state():
     """rule_based with no clarification/sub_queries → 'plan'."""
-    from llmwikify.apps.chat.reasoner import ResearchReasoner
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.reasoner import ResearchReasoner
 
     class FakeDB:
         def get_sources(self, session_id):
@@ -152,7 +152,7 @@ def test_rule_based_returns_plan_for_uninitialized_state():
 
 def test_rule_based_returns_done_for_fully_complete_state():
     """rule_based with approved review + report → 'done'."""
-    from llmwikify.apps.chat.reasoner import ResearchReasoner
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.reasoner import ResearchReasoner
 
     class FakeDB:
         def get_sources(self, session_id):
@@ -183,7 +183,7 @@ def test_rule_based_does_not_replan_after_report():
     redirect back to 'plan' — that would spin on the planning→planning
     transition. The correct next step is 'review' (or 'done'/'revise').
     """
-    from llmwikify.apps.chat.reasoner import ResearchReasoner
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.reasoner import ResearchReasoner
 
     class FakeDB:
         def get_sources(self, session_id):
@@ -219,7 +219,7 @@ def test_rule_based_does_not_replan_after_report():
 
 def test_rule_based_replans_before_report():
     """When no report exists yet, gaps+round+budget → 'plan' (replan)."""
-    from llmwikify.apps.chat.reasoner import ResearchReasoner
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.reasoner import ResearchReasoner
 
     class FakeDB:
         def get_sources(self, session_id):
@@ -249,7 +249,7 @@ def test_rule_based_replans_before_report():
 def test_rule_based_does_not_replan_when_budget_low():
     """When budget is low, the replan guard must skip 'plan' even before
     a report exists — fall through to the report/review chain."""
-    from llmwikify.apps.chat.reasoner import ResearchReasoner
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.reasoner import ResearchReasoner
 
     class FakeDB:
         def get_sources(self, session_id):
@@ -283,7 +283,7 @@ def test_rule_based_does_not_replan_when_budget_low():
 
 def test_valid_actions_allowlist_matches_engine_legacy_set():
     """The reasoner's VALID_ACTIONS set matches the legacy inline set."""
-    from llmwikify.apps.chat.reasoner import VALID_ACTIONS
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.reasoner import VALID_ACTIONS
 
     # The legacy engine code had:
     #   valid = {"plan", "gather", "analyze", "synthesize",

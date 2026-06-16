@@ -120,36 +120,31 @@ class TestL4RoutesPy:
         # import is required. Verify agent_router is imported.
         assert "from llmwikify.interfaces.server.http.chat_sse import" in src
 
-    def test_routes_py_uses_explicit_llm_client(self) -> None:
-        """set_research_deps should receive llm_client param.
-
-        Phase 1 (v0.36): research deps are now set via
-        set_autoresearch_deps which receives llm_client.
-        """
-        from pathlib import Path
-        src = Path(
-            "src/llmwikify/interfaces/server/http/routes.py"
-        ).read_text()
-        assert "set_autoresearch_deps(" in src
-        assert "llm_client" in src
-
 
 # ─── L3 chat routes ─────────────────────────────────────────────
 
 
 class TestL3ChatRoutes:
-    """apps/chat/routes.py should not import from interfaces/."""
+    """apps/chat/routes.py should not import from interfaces/.
 
-    def test_chat_routes_does_not_import_interfaces(self) -> None:
+    Note (v0.42): the legacy apps/chat/routes.py was git-mv'd to
+    archive/llmwikify_v0_41_legacy/chat_legacy/routes.py along with
+    the rest of the v0.41 autoresearch layer. The corresponding
+    tests for the legacy layer moved to
+    test_autoresearch.py::TestAutoresearchIntegration. Kept here
+    for back-compat verification of the archive path.
+    """
+
+    def test_chat_routes_archived_does_not_import_interfaces(self) -> None:
         from pathlib import Path
         src = Path(
-            "src/llmwikify/apps/chat/routes.py"
+            "src/llmwikify/archive/llmwikify_v0_41_legacy/chat_legacy/routes.py"
         ).read_text()
         assert "from llmwikify.interfaces" not in src
 
     def test_chat_routes_stores_deps(self) -> None:
         """set_autoresearch_deps should store all deps."""
-        from llmwikify.apps.chat.routes import set_autoresearch_deps
+        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.routes import set_autoresearch_deps
         set_autoresearch_deps(
             db=None, wiki_registry=None,
             llm_client=None, config=None,

@@ -27,7 +27,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from .base import ChatBase
-from .engine import ResearchEngine
+from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import ResearchEngine
 
 
 class ResearchAgent(ChatBase):

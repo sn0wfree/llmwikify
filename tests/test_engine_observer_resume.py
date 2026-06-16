@@ -41,7 +41,7 @@ def test_engine_constructs_observer_and_resume_loader():
 
 def test_observer_holds_back_refs_to_engine_deps():
     """ResearchObserver caches the engine's db."""
-    from llmwikify.apps.chat.observer import ResearchObserver
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.observer import ResearchObserver
 
     class FakeEngine:
         db = "fake_db"
@@ -52,7 +52,7 @@ def test_observer_holds_back_refs_to_engine_deps():
 
 def test_resume_loader_holds_back_refs_to_engine_deps():
     """ResearchResumeLoader caches the engine's db and _max_react_rounds."""
-    from llmwikify.apps.chat.resume import ResearchResumeLoader
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.resume import ResearchResumeLoader
 
     class FakeEngine:
         db = "fake_db"
@@ -86,7 +86,7 @@ def test_engine_load_resume_state_delegates_to_resume_loader():
 
 def test_observer_reloads_sources_and_sub_queries():
     """observer.observe reloads state.sources and state.sub_queries from DB."""
-    from llmwikify.apps.chat.observer import ResearchObserver
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.observer import ResearchObserver
     from llmwikify.apps.chat.state import ResearchState
 
     class FakeDB:
@@ -124,7 +124,7 @@ def test_observer_reloads_sources_and_sub_queries():
 
 def test_observer_populates_observations_on_analyzed_sources():
     """observer.observe builds credibility + type + wiki/web observations."""
-    from llmwikify.apps.chat.observer import ResearchObserver
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.observer import ResearchObserver
     from llmwikify.apps.chat.state import ResearchState
 
     class FakeDB:
@@ -170,7 +170,7 @@ def test_observer_populates_observations_on_analyzed_sources():
 
 def test_resume_loader_returns_silently_for_missing_session():
     """resume_loader.load silently returns if session row is missing."""
-    from llmwikify.apps.chat.resume import ResearchResumeLoader
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.resume import ResearchResumeLoader
     from llmwikify.apps.chat.state import ResearchState
 
     class FakeDB:
@@ -196,7 +196,7 @@ def test_resume_loader_returns_silently_for_missing_session():
 def test_resume_loader_hydrates_knowledge_gaps_from_json():
     """resume_loader.load restores state.knowledge_gaps from JSON column."""
     import json
-    from llmwikify.apps.chat.resume import ResearchResumeLoader
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.resume import ResearchResumeLoader
     from llmwikify.apps.chat.state import ResearchState
 
     session_row = {
@@ -266,7 +266,7 @@ def test_resume_loader_restores_self_loop_metadata():
     retries on resume.
     """
     import json
-    from llmwikify.apps.chat.resume import ResearchResumeLoader
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.resume import ResearchResumeLoader
     from llmwikify.apps.chat.state import ResearchState
 
     session_row = {
@@ -307,7 +307,7 @@ def test_resume_loader_tolerates_missing_self_loop_fields():
     NULL or malformed (forward-compat with sessions written by
     pre-fix engine versions)."""
     import json
-    from llmwikify.apps.chat.resume import ResearchResumeLoader
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.resume import ResearchResumeLoader
     from llmwikify.apps.chat.state import ResearchState
 
     session_row = {

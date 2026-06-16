@@ -767,8 +767,8 @@ class TestFrameworkComplianceGate:
     @pytest.mark.asyncio
     async def test_action_incomplete_sets_status_and_persists(self, mock_wiki, mock_llm, db):
         """action_incomplete marks status='incomplete' and persists partial result."""
-        from llmwikify.apps.chat.actions import action_incomplete
-        from llmwikify.apps.chat.engine import ResearchEngine
+        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.actions import action_incomplete
+        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import ResearchEngine
 
         engine = ResearchEngine(mock_wiki, db, mock_llm, {})
         ctx = engine._action_ctx
@@ -1893,7 +1893,7 @@ class TestResume:
 
     def test_resume_from_incomplete_allows_entry(self, db):
         """routes.py should allow resume from 'incomplete' status."""
-        from llmwikify.apps.chat.routes import resume_autoresearch
+        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.routes import resume_autoresearch
         sid = db.create_research_session("w", "q")
         db.update_research_status(sid, "incomplete", "done", 1.0)
         session = db.get_research_session(sid)
