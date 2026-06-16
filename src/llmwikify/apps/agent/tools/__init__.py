@@ -690,6 +690,16 @@ class WikiToolRegistry:
 
         confirmation_mode = tool.get("requires_confirmation", False)
 
+        # v0.41: short-circuit if user previously clicked "Always" for
+        # this tool. Without this, the chat_permissions row written by
+        # approve_confirmation() was dead code (db.has_always_permission()
+        # had no caller).
+        if confirmation_mode not in (False, "posthoc"):
+            if self.db and self.db.has_always_permission(
+                name, session_id=getattr(self, "wiki_id", None),
+            ):
+                return tool["handler"](arguments)
+
         if confirmation_mode is False:
             # Direct execution
             return tool["handler"](arguments)
