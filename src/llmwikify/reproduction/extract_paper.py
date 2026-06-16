@@ -142,12 +142,13 @@ def extract_paper_structure(
         return {}
 
     # Render user message with Jinja2 variables
+    max_content_chars = params.get("max_content_chars", 100000)
     tmpl = _jinja_env.from_string(user_template)
     user_msg = tmpl.render(
         paper_id=paper_id,
         source_type=source_type,
         source_ref=source_ref,
-        paper_content=paper_content[:32000],
+        paper_content=paper_content[:max_content_chars],
     )
 
     logger.info("[extract] paper=%s content_len=%d calling LLM...", paper_id, len(paper_content))
