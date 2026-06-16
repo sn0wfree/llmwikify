@@ -192,7 +192,7 @@ class LLMClient:
         except ImportError:
             raise ImportError("requests is required for LLM client: pip install requests")
 
-        url = f"{self.base_url}/v1/chat/completions"
+        url = f"{self.base_url}/chat/completions" if self.base_url.endswith("/v1") else f"{self.base_url}/v1/chat/completions"
 
         headers = {
             "Content-Type": "application/json",
