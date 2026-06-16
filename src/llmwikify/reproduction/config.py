@@ -54,6 +54,7 @@ DEFAULTS: dict[str, Any] = {
     "reproduction.run_id_template": "{start}-{end}-{uuid4_short}",
     "reproduction.run_id_uuid_length": 8,
     "universe.default": "synth",
+    "parquet.path": "",
     "factor.momentum.min_history": 60,
     "synth.n_days": 60,
     "synth.base_price": 10.0,
