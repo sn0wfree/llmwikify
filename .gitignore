@@ -95,3 +95,13 @@ scripts/install_opencode_fast.sh
 scripts/install_opencode_manual.sh
 ui/webui/node_modules/
 ui/webui/dist/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Vite generated output
+ui/webui/vite.config.d.ts
+ui/webui/vite.config.js
+
+# DuckDB runtime database
+quant/*.duckdb
