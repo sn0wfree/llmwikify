@@ -398,15 +398,17 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
         # 5b. Store factor values in DuckDB (background, best-effort)
         try:
             from llmwikify.reproduction.factor_value_store import compute_and_store_factor
-            await asyncio.to_thread(
+            stored_rows = await asyncio.to_thread(
                 compute_and_store_factor,
                 close_wide=close_wide,
                 factor_name=slug,
                 factor_class=factor_class,
                 factor_params=factor_params,
             )
+            if stored_rows > 0:
+                logger.info("Stored %d factor values for %s in DuckDB", stored_rows, slug)
         except Exception as exc:
-            logger.warning("Factor value storage failed (non-fatal): %s", exc)
+            logger.warning("Factor value storage failed (non-fatal): %s", exc, exc_info=True)
 
         # 6. Persist to DB + Wiki (with rollback on error)
         try:
