@@ -209,6 +209,16 @@ class ChatDatabase(BaseDatabase):
                     )
                 except sqlite3.OperationalError:
                     pass
+            # ─── v0.41: research_run_id column for /study card reload ─
+            # Fixes: ResearchRunCard disappears after page reload because
+            # the run_id was only in React state. Now bound to the assistant
+            # message at save time so reload can reconstruct the card.
+            try:
+                conn.execute(
+                    "ALTER TABLE chat_messages ADD COLUMN research_run_id TEXT"
+                )
+            except sqlite3.OperationalError:
+                pass  # column already exists
             # ─── v0.40: permissions table for "always" grants ───
             conn.execute(
                 """
@@ -548,16 +558,19 @@ class ChatDatabase(BaseDatabase):
         tokens_cache_read = message.get("tokens_cache_read", 0)
         tokens_cache_write = message.get("tokens_cache_write", 0)
         cost = message.get("cost", 0.0)
+        research_run_id = message.get("research_run_id")
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR IGNORE INTO chat_messages
                    (id, session_id, role, content, tool_calls,
                     tokens_input, tokens_output, tokens_reasoning,
-                    tokens_cache_read, tokens_cache_write, cost)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    tokens_cache_read, tokens_cache_write, cost,
+                    research_run_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (msg_id, session_id, role, content, tool_calls,
                  tokens_input, tokens_output, tokens_reasoning,
-                 tokens_cache_read, tokens_cache_write, cost),
+                 tokens_cache_read, tokens_cache_write, cost,
+                 research_run_id),
             )
             conn.commit()
 

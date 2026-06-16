@@ -121,6 +121,7 @@ class ToolExecutor:
         tokens_cache_read: int = 0,
         tokens_cache_write: int = 0,
         cost: float = 0.0,
+        research_run_id: str | None = None,
     ) -> None:
         """Persist a chat message with retry."""
         msg = {
@@ -136,6 +137,7 @@ class ToolExecutor:
             "tokens_cache_read": tokens_cache_read,
             "tokens_cache_write": tokens_cache_write,
             "cost": cost,
+            "research_run_id": research_run_id,
         }
         try:
             self._db_retry.call(self.db.save_chat_message, msg)
