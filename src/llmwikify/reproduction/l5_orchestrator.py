@@ -266,7 +266,7 @@ def run_l5_pipeline(
         l5_data["validation_date"] = datetime.now().strftime("%Y-%m-%d")
 
     # Version bump (only if L5 data actually changed)
-    if l5_data.get("score") is not None:
+    if l5_data.get("overall_assessment", {}).get("score") is not None:
         factor_data["version"] = factor_data.get("version", 1) + 1
         factor_data["updated_at"] = datetime.now().strftime("%Y-%m-%d")
 

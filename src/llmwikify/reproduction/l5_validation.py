@@ -184,22 +184,26 @@ def analyze_turnover(result: Any) -> dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════
 
 def analyze_stability(result: Any) -> dict[str, Any]:
-    """Compute stability analysis — yearly consistency.
+    """Compute stability analysis — yearly, rolling IC, and IC decay.
 
-    Returns dict with: yearly breakdown of rank_ic and ls_return.
+    Returns dict with:
+      - yearly: yearly breakdown of rank_ic
+      - rolling_ic: rolling IC stability metrics
+      - ic_decay: IC decay analysis over time
     """
     ic_series = getattr(result, "ic_series", [])
     if not ic_series:
-        return {"yearly": {}}
+        return {"yearly": {}, "rolling_ic": {}, "ic_decay": {}}
 
-    # Group IC by year
+    import statistics
+
+    # ── Yearly breakdown ──
     yearly_ics: dict[str, list[float]] = {}
     for pt in ic_series:
         date_str = str(pt.get("date", ""))
         year = date_str[:4] if len(date_str) >= 4 else "unknown"
         yearly_ics.setdefault(year, []).append(pt.get("ic", pt.get("rank_ic", 0)))
 
-    import statistics
     yearly = {}
     for year, ics in sorted(yearly_ics.items()):
         yearly[year] = {
@@ -207,35 +211,81 @@ def analyze_stability(result: Any) -> dict[str, Any]:
             "n_obs": len(ics),
         }
 
-    return {"yearly": yearly}
+    # ── Rolling IC stability (20-day and 60-day windows) ──
+    all_ics = [pt.get("ic", pt.get("rank_ic", 0)) for pt in ic_series]
+    rolling_ic = {}
+    for window in [20, 60]:
+        if len(all_ics) >= window:
+            rolling_means = [
+                statistics.mean(all_ics[i:i + window])
+                for i in range(len(all_ics) - window + 1)
+            ]
+            rolling_ic[f"rolling_{window}d"] = {
+                "mean": round(statistics.mean(rolling_means), 4) if rolling_means else 0.0,
+                "std": round(statistics.stdev(rolling_means), 4) if len(rolling_means) > 1 else 0.0,
+                "min": round(min(rolling_means), 4) if rolling_means else 0.0,
+                "max": round(max(rolling_means), 4) if rolling_means else 0.0,
+                "positive_ratio": round(
+                    sum(1 for v in rolling_means if v > 0) / len(rolling_means), 4
+                ) if rolling_means else 0.0,
+            }
+
+    # ── IC decay analysis (compare first-half vs second-half IC) ──
+    ic_decay = {}
+    if len(all_ics) >= 4:
+        mid = len(all_ics) // 2
+        first_half_ics = all_ics[:mid]
+        second_half_ics = all_ics[mid:]
+        first_half_mean = statistics.mean(first_half_ics)
+        second_half_mean = statistics.mean(second_half_ics)
+        decay_ratio = second_half_mean / first_half_mean if first_half_mean != 0 else 0.0
+        ic_decay = {
+            "first_half_ic": round(first_half_mean, 4),
+            "second_half_ic": round(second_half_mean, 4),
+            "decay_ratio": round(decay_ratio, 4),
+            "is_stable": abs(decay_ratio) > 0.5,  # IC retains >50% in second half
+        }
+
+    return {
+        "yearly": yearly,
+        "rolling_ic": rolling_ic,
+        "ic_decay": ic_decay,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════
 # 6. OOS Analysis
 # ═══════════════════════════════════════════════════════════════
 
-def analyze_oos(result: Any) -> dict[str, Any]:
-    """Compute out-of-sample analysis.
+def analyze_oos(result: Any, n_folds: int = 5) -> dict[str, Any]:
+    """Compute out-of-sample analysis with K-fold cross-validation.
 
-    Split IC series into first 70% (IS) and last 30% (OOS),
-    compare performance.
+    Splits IC series into K folds, each fold serves as OOS once.
+    Also provides the simple 70/30 split for backward compatibility.
+
+    Returns dict with:
+      - oos_rank_ic: OOS RankIC (70/30 split, backward compatible)
+      - oos_ls_return: OOS long-short return
+      - oos_sharpe: OOS Sharpe
+      - kfold: K-fold cross-validation results
     """
     ic_series = getattr(result, "ic_series", [])
     ls_curve = getattr(result, "longshort_curve", [])
 
     if not ic_series or len(ic_series) < 10:
-        return {"oos_rank_ic": 0.0, "oos_ls_return": 0.0, "oos_sharpe": 0.0}
+        return {
+            "oos_rank_ic": 0.0, "oos_ls_return": 0.0, "oos_sharpe": 0.0,
+            "kfold": {},
+        }
 
     import statistics
-    split = int(len(ic_series) * 0.7)
 
-    # IS vs OOS IC
+    # ── Simple 70/30 split (backward compatible) ──
+    split = int(len(ic_series) * 0.7)
     is_ics = [pt.get("ic", pt.get("rank_ic", 0)) for pt in ic_series[:split]]
     oos_ics = [pt.get("ic", pt.get("rank_ic", 0)) for pt in ic_series[split:]]
-
     oos_rank_ic = statistics.mean(oos_ics) if oos_ics else 0.0
 
-    # OOS long-short return (from curve)
     oos_ls_return = 0.0
     oos_sharpe = 0.0
     if ls_curve and len(ls_curve) > split:
@@ -248,10 +298,61 @@ def analyze_oos(result: Any) -> dict[str, Any]:
                 vol = statistics.stdev(daily_rets) * (252 ** 0.5) if len(daily_rets) > 1 else 1.0
                 oos_sharpe = (oos_ls_return * 252 / len(daily_rets)) / vol if vol > 0 else 0.0
 
+    # ── K-fold cross-validation ──
+    kfold = {}
+    all_ics = [pt.get("ic", pt.get("rank_ic", 0)) for pt in ic_series]
+    if len(all_ics) >= n_folds * 2:
+        fold_size = len(all_ics) // n_folds
+        oos_ics_kfold = []
+        oos_sharpes_kfold = []
+
+        for k in range(n_folds):
+            oos_start = k * fold_size
+            oos_end = oos_start + fold_size
+            is_indices = list(range(0, oos_start)) + list(range(oos_end, len(all_ics)))
+            oos_indices = list(range(oos_start, oos_end))
+
+            if not is_indices or not oos_indices:
+                continue
+
+            is_ic_mean = statistics.mean([all_ics[i] for i in is_indices])
+            oos_ic_mean = statistics.mean([all_ics[i] for i in oos_indices])
+            oos_ics_kfold.append(oos_ic_mean)
+
+            # Compute OOS Sharpe for this fold
+            if ls_curve and len(ls_curve) > oos_end:
+                fold_oos_values = [pt.get("value", 1.0) for pt in ls_curve[oos_start:oos_end]]
+                if len(fold_oos_values) > 1:
+                    fold_daily_rets = [
+                        (fold_oos_values[i] / fold_oos_values[i - 1]) - 1
+                        for i in range(1, len(fold_oos_values))
+                        if fold_oos_values[i - 1] != 0
+                    ]
+                    if fold_daily_rets:
+                        fold_return = (fold_oos_values[-1] / fold_oos_values[0]) - 1 if fold_oos_values[0] != 0 else 0.0
+                        fold_vol = statistics.stdev(fold_daily_rets) * (252 ** 0.5) if len(fold_daily_rets) > 1 else 1.0
+                        fold_sharpe = (fold_return * 252 / len(fold_daily_rets)) / fold_vol if fold_vol > 0 else 0.0
+                        oos_sharpes_kfold.append(fold_sharpe)
+
+        if oos_ics_kfold:
+            kfold = {
+                "n_folds": n_folds,
+                "oos_ic_mean": round(statistics.mean(oos_ics_kfold), 4),
+                "oos_ic_std": round(statistics.stdev(oos_ics_kfold), 4) if len(oos_ics_kfold) > 1 else 0.0,
+                "oos_ic_min": round(min(oos_ics_kfold), 4),
+                "oos_ic_max": round(max(oos_ics_kfold), 4),
+                "oos_ic_positive_ratio": round(
+                    sum(1 for v in oos_ics_kfold if v > 0) / len(oos_ics_kfold), 4
+                ),
+                "oos_sharpe_mean": round(statistics.mean(oos_sharpes_kfold), 4) if oos_sharpes_kfold else 0.0,
+                "is_robust": all(v > 0 for v in oos_ics_kfold) if oos_ics_kfold else False,
+            }
+
     return {
         "oos_rank_ic": round(oos_rank_ic, 4),
         "oos_ls_return": round(oos_ls_return, 4),
         "oos_sharpe": round(oos_sharpe, 4),
+        "kfold": kfold,
     }
 
 
@@ -426,39 +527,103 @@ def _score_turnover(turnover_analysis: dict) -> float:
 
 
 def _score_stability(stability_analysis: dict) -> float:
-    """Score stability analysis (0-10)."""
+    """Score stability analysis (0-10).
+
+    Considers:
+      - Yearly IC sign consistency
+      - Rolling IC stability (low std = stable)
+      - IC decay (retains >50% in second half)
+    """
     yearly = stability_analysis.get("yearly", {})
-    if len(yearly) < 2:
-        return 5  # Not enough data, neutral score
+    rolling_ic = stability_analysis.get("rolling_ic", {})
+    ic_decay = stability_analysis.get("ic_decay", {})
 
-    # Check consistency: IC sign should be same across years
-    ics = [v.get("rank_ic", 0) for v in yearly.values()]
-    same_sign = all(v > 0 for v in ics) or all(v < 0 for v in ics)
+    score = 0.0
 
-    if same_sign and len(ics) >= 3:
-        return 10
-    elif same_sign:
-        return 7
+    # Yearly consistency (0-4 points)
+    if len(yearly) >= 2:
+        ics = [v.get("rank_ic", 0) for v in yearly.values()]
+        same_sign = all(v > 0 for v in ics) or all(v < 0 for v in ics)
+        if same_sign and len(ics) >= 3:
+            score += 4
+        elif same_sign:
+            score += 3
+        else:
+            pos_ratio = sum(1 for v in ics if v > 0) / len(ics)
+            if 0.3 < pos_ratio < 0.7:
+                score += 1
+            else:
+                score += 2
     else:
-        # Mixed signs — partial
-        pos_ratio = sum(1 for v in ics if v > 0) / len(ics)
-        if 0.3 < pos_ratio < 0.7:
-            return 3
-        return 5
+        score += 2  # Not enough data, neutral
+
+    # Rolling IC stability (0-3 points)
+    rolling_20 = rolling_ic.get("rolling_20d", {})
+    if rolling_20:
+        positive_ratio = rolling_20.get("positive_ratio", 0)
+        std = rolling_20.get("std", 1)
+        if positive_ratio > 0.7 and std < 0.05:
+            score += 3
+        elif positive_ratio > 0.5:
+            score += 2
+        else:
+            score += 1
+
+    # IC decay (0-3 points)
+    if ic_decay:
+        is_stable = ic_decay.get("is_stable", False)
+        decay_ratio = abs(ic_decay.get("decay_ratio", 0))
+        if is_stable and decay_ratio > 0.7:
+            score += 3
+        elif is_stable:
+            score += 2
+        else:
+            score += 1
+
+    return min(score, 10)
 
 
 def _score_oos(oos_analysis: dict) -> float:
-    """Score OOS analysis (0-10)."""
-    oos_rank_ic = abs(oos_analysis.get("oos_rank_ic", 0))
+    """Score OOS analysis (0-10).
 
+    Considers:
+      - 70/30 split OOS RankIC
+      - K-fold cross-validation robustness
+    """
+    oos_rank_ic = abs(oos_analysis.get("oos_rank_ic", 0))
+    kfold = oos_analysis.get("kfold", {})
+
+    score = 0.0
+
+    # 70/30 split OOS RankIC (0-5 points)
     if oos_rank_ic > 0.03:
-        return 10
+        score += 5
     elif oos_rank_ic > 0.01:
-        return 7
+        score += 3
     elif oos_rank_ic > 0:
-        return 4
+        score += 2
     else:
-        return 1
+        score += 0
+
+    # K-fold robustness (0-5 points)
+    if kfold:
+        is_robust = kfold.get("is_robust", False)
+        oos_ic_positive_ratio = kfold.get("oos_ic_positive_ratio", 0)
+        oos_ic_mean = abs(kfold.get("oos_ic_mean", 0))
+
+        if is_robust and oos_ic_mean > 0.02:
+            score += 5
+        elif is_robust or oos_ic_positive_ratio > 0.8:
+            score += 3
+        elif oos_ic_positive_ratio > 0.5:
+            score += 2
+        else:
+            score += 1
+    else:
+        # No K-fold data, use only 70/30
+        score += 2
+
+    return min(score, 10)
 
 
 def _score_cost(cost_analysis: dict) -> float:
@@ -522,7 +687,7 @@ def compute_score(
 # Full L5 Validation Pipeline
 # ═══════════════════════════════════════════════════════════════
 
-def run_l5_validation(result: Any, cost_bps: float = 15.0) -> dict[str, Any]:
+def run_l5_validation(result: Any, cost_bps: float = 15.0, n_folds: int = 5) -> dict[str, Any]:
     """Run the full L5 validation pipeline on a backtest result.
 
     Executes all 7 analysis modules, computes the score, and
@@ -531,6 +696,7 @@ def run_l5_validation(result: Any, cost_bps: float = 15.0) -> dict[str, Any]:
     Args:
         result: FactorBacktestResult from run_factor_backtest_universe()
         cost_bps: Transaction cost in basis points
+        n_folds: Number of folds for OOS cross-validation
 
     Returns:
         Complete L5 dict ready to write as factor.l5 in YAML.
@@ -540,7 +706,7 @@ def run_l5_validation(result: Any, cost_bps: float = 15.0) -> dict[str, Any]:
     return_analysis = analyze_returns(result)
     turnover_analysis = analyze_turnover(result)
     stability_analysis = analyze_stability(result)
-    oos_analysis = analyze_oos(result)
+    oos_analysis = analyze_oos(result, n_folds=n_folds)
     cost_analysis = analyze_cost(result, cost_bps)
 
     score_result = compute_score(
