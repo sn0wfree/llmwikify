@@ -1,6 +1,3 @@
-# DEPRECATED in v0.42+: archived to archive/llmwikify_v0_41_legacy/. Will be removed in v0.5.
-# Replaced by apps/chat/agent/orchestrator.py::ChatOrchestrator's session resume path.
-# Kept here for git history preservation and emergency rollback. Do not add new callers.
 """Research Resume Loader — hydrate state from DB on resume.
 
 Phase 2 #5 / C3 — extracted from ResearchEngine (~565 LOC

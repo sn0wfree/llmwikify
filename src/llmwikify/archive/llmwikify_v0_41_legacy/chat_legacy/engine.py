@@ -1,6 +1,3 @@
-# DEPRECATED in v0.42+: archived to archive/llmwikify_v0_41_legacy/. Will be removed in v0.5.
-# Replaced by apps/chat/agent/orchestrator.py::ChatOrchestrator + react_engine.py::ReActEngine.
-# Kept here for git history preservation and emergency rollback. Do not add new callers.
 """Research Engine — ReAct loop orchestrator with adaptive reasoning.
 
 Replaces the fixed 7-stage sequential flow with an adaptive ReAct

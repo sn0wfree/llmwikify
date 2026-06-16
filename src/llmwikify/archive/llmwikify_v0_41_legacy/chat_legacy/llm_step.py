@@ -1,6 +1,3 @@
-# DEPRECATED in v0.42+: archived to archive/llmwikify_v0_41_legacy/. Will be removed in v0.5.
-# Replaced by foundation/llm/streamable.py::StreamableLLMClient.
-# Kept here for git history preservation and emergency rollback. Do not add new callers.
 """Unified LLM call layer for the 6-step framework.
 
 This module collapses the 7 distinct LLM call patterns (in

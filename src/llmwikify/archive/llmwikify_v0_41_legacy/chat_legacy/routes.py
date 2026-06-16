@@ -1,6 +1,3 @@
-# DEPRECATED in v0.42+: archived to archive/llmwikify_v0_41_legacy/. Will be removed in v0.5.
-# Replaced by interfaces/server/http/chat_sse.py (/api/agent/*) which uses ChatOrchestrator.
-# Router removed from routes.py:524-525 in this archive commit. Do not re-mount.
 """AutoResearch HTTP routes.
 
 Independent FastAPI router under /api/autoresearch/*. Mirrors the base

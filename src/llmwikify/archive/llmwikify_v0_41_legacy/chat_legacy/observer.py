@@ -1,6 +1,3 @@
-# DEPRECATED in v0.42+: archived to archive/llmwikify_v0_41_legacy/. Will be removed in v0.5.
-# Replaced by apps/chat/agent/research_bridge.py::translate_react_events.
-# Kept here for git history preservation and emergency rollback. Do not add new callers.
 """Research Observer — refresh state from DB after each action.
 
 Phase 2 #5 / C3 — extracted from ResearchEngine (~565 LOC
