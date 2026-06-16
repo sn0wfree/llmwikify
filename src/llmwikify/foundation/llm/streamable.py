@@ -816,7 +816,7 @@ class StreamableLLMClient(LLMClient):
             attempts_used = attempt + 1
             try:
                 resp = httpx.Client(
-                    timeout=httpx.Timeout(self.request_timeout_seconds, read=60),
+                    timeout=httpx.Timeout(connect=30, read=300, write=30),
                 ).stream("POST", url, headers=headers, json=payload).__enter__()
             except Exception as e:
                 if _is_retryable_request_exception(e) and attempt < config.max_retries:
@@ -984,7 +984,7 @@ class StreamableLLMClient(LLMClient):
             attempts_used = attempt + 1
             try:
                 resp = httpx.Client(
-                    timeout=httpx.Timeout(self.request_timeout_seconds, read=60),
+                    timeout=httpx.Timeout(connect=30, read=300, write=30),
                 ).stream("POST", url, headers=headers, json=payload).__enter__()
             except Exception as e:
                 if _is_retryable_request_exception(e) and attempt < config.max_retries:
@@ -1128,7 +1128,7 @@ class StreamableLLMClient(LLMClient):
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(self.request_timeout_seconds, read=60)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=30, read=300, write=30)) as client:
             config = RetryConfig.from_env()
             last_exc: BaseException | None = None
 
@@ -1279,7 +1279,7 @@ class StreamableLLMClient(LLMClient):
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(self.request_timeout_seconds, read=60)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=30, read=300, write=30)) as client:
             resp = await _post_with_retry_async(
                 client,
                 "POST",
