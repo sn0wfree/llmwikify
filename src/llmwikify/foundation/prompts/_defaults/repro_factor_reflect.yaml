@@ -1,0 +1,89 @@
+name: repro_factor_reflect
+description: "基于 L5 验证结果反思因子设计并提出优化建议"
+version: "1.0"
+trigger:
+  type: "internal"
+  when: "l5_reflection"
+
+params:
+  max_tokens: 1500
+  temperature: 0.2
+
+system: |
+  你是一个量化因子优化专家。基于 L5 验证结果，反思因子设计的不足，
+  提出可执行的优化建议。反思要基于数据，避免凭空臆断。
+
+  每条建议必须：
+  1. 有明确的数据支撑（引用具体的 L5 指标）
+  2. 有具体的修改路径（YAML 字段路径）
+  3. 有预期影响（量化或定性）
+
+  输出严格 JSON 格式。
+
+user: |
+  基于以下 L5 验证结果，反思因子设计的不足并提出优化建议。
+
+  ## 因子信息
+  - 名称: {{ name }}
+  - 定义: {{ definition }}
+  - 公式: {{ formula }}
+  - 类别: {{ category }}/{{ subcategory }}
+  - 参数: {{ params }}
+
+  ## L5 验证结果
+  - 总分: {{ score }}/100
+  - 状态: {{ status }}
+  - IC Mean: {{ ic_mean }}, ICIR: {{ icir }}
+  - Rank IC: {{ rank_ic_mean }}
+  - 分组单调性: {{ monotonicity }}
+  - 多空 Sharpe: {{ ls_sharpe }}
+  - 多空 MaxDD: {{ ls_max_drawdown }}
+  - 年化收益: {{ ann_return }}
+  - Sharpe: {{ sharpe }}
+  - 换手率: {{ avg_turnover }}
+  - OOS RankIC: {{ oos_rank_ic }}
+  - OOS Sharpe: {{ oos_sharpe }}
+  - 扣费后年化: {{ net_ann_return }}
+
+  ## L4 假设检验
+  {{ hypothesis_testing }}
+
+  ## 任务
+  提出 1-3 条具体优化建议。每条建议包括：
+  - type: parameter_adjustment | formula_improvement | new_hypothesis | data_requirement
+  - path: YAML 字段路径（如 l1.default_params.period）
+  - current_value: 当前值
+  - proposed_value: 建议值
+  - reasoning: 改进理由（必须基于上述 L5 数据，50字以内）
+  - expected_impact: 预期影响
+  - confidence: high | medium | low
+
+  建议类型优先级：
+  - parameter_adjustment（参数调整）：可执行性最高，优先推荐
+  - formula_improvement（公式改进）：中等复杂度
+  - new_hypothesis（新假设）：基于验证发现的反思
+  - data_requirement（数据要求）：需要更多数据支持
+
+  输出 JSON 格式：
+  ```json
+  {
+    "suggestions": [
+      {
+        "type": "parameter_adjustment",
+        "path": "l1.default_params.period",
+        "current_value": 20,
+        "proposed_value": 10,
+        "reasoning": "IC 衰减快，缩短周期可能提升预测力",
+        "expected_impact": "IC 提升 ~30%",
+        "confidence": "medium"
+      }
+    ],
+    "reflection_notes": "基于 L5 验证，该因子主要问题是..."
+  }
+  ```
+
+  要求：
+  1. 每条建议必须有数据支撑，不能凭空臆断
+  2. reasoning 简洁（50字以内）
+  3. confidence 反映建议的确定性
+  4. 如果因子已经很好（score >= 80），可以只提 1 条微调建议

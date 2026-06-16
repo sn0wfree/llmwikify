@@ -5,9 +5,9 @@ Flow:
   2. Run backtest (cross-section)
   3. Run L5 validation engine (7 modules + scoring)
   4. LLM hypothesis testing
-  5. LLM final meaning generation
-  6. Write results back to YAML
-  7. Generate validation report
+  4b. LLM reflection (propose optimization suggestions)
+  5. Write results back to YAML
+  6. Generate validation report
 
 Trigger modes:
   - auto: on new factor registration
@@ -160,6 +160,139 @@ def _parse_llm_response(response: str) -> dict[str, Any]:
 
 
 # ═══════════════════════════════════════════════════════════════
+# LLM Prompt for Reflection
+# ═══════════════════════════════════════════════════════════════
+
+_REFLECTION_PROMPT = """你是一个量化因子优化专家。基于 L5 验证结果，反思因子设计的不足，提出可执行的优化建议。
+
+## 因子信息
+- 名称: {factor_name}
+- 定义: {definition}
+- 公式: {formula}
+- 类别: {category}/{subcategory}
+- 参数: {params}
+
+## L5 验证结果
+- 总分: {score}/100
+- 状态: {status}
+- IC Mean: {ic_mean}, ICIR: {icir}, Rank IC: {rank_ic_mean}
+- 分组单调性: {monotonicity}
+- 多空 Sharpe: {ls_sharpe}, 多空 MaxDD: {ls_max_drawdown}
+- 年化收益: {ann_return}, Sharpe: {sharpe}
+- 换手率: {avg_turnover}
+- OOS RankIC: {oos_rank_ic}, OOS Sharpe: {oos_sharpe}
+- 扣费后年化: {net_ann_return}
+
+## L4 假设检验
+{hypothesis_testing}
+
+## 任务
+提出 1-3 条具体优化建议。每条建议包括：
+- type: parameter_adjustment | formula_improvement | new_hypothesis | data_requirement
+- path: YAML 字段路径（如 l1.default_params.period）
+- current_value: 当前值
+- proposed_value: 建议值
+- reasoning: 改进理由（必须基于上述 L5 数据，50字以内）
+- expected_impact: 预期影响
+- confidence: high | medium | low
+
+建议类型优先级：parameter_adjustment > formula_improvement > new_hypothesis > data_requirement
+
+请输出 JSON 格式：
+```json
+{{
+  "suggestions": [
+    {{
+      "type": "parameter_adjustment",
+      "path": "l1.default_params.period",
+      "current_value": 20,
+      "proposed_value": 10,
+      "reasoning": "IC 衰减快，缩短周期可能提升预测力",
+      "expected_impact": "IC 提升 ~30%",
+      "confidence": "medium"
+    }}
+  ],
+  "reflection_notes": "基于 L5 验证，该因子主要问题是..."
+}}
+```
+
+要求：
+1. 每条建议必须有数据支撑，不能凭空臆断
+2. reasoning 简洁（50字以内）
+3. 如果因子已经很好（score >= 80），可以只提 1 条微调建议
+"""
+
+
+def _build_reflection_prompt(
+    factor: dict[str, Any],
+    l5_data: dict[str, Any],
+) -> str:
+    """Build the reflection prompt from factor data + L5 analysis."""
+    l1 = factor.get("l1", {})
+    fa = l5_data.get("factor_analysis", {})
+    ic = fa.get("ic_analysis", {})
+    ga = fa.get("group_analysis", {})
+    ra = fa.get("return_analysis", {})
+    ta = fa.get("turnover_analysis", {})
+    sa = fa.get("stability_analysis", {})
+    oa = fa.get("oos_analysis", {})
+    ca = fa.get("cost_analysis", {})
+    assessment = l5_data.get("overall_assessment", {})
+    score = assessment.get("score", 0)
+    status = assessment.get("status", "")
+    hypothesis_testing = l5_data.get("hypothesis_testing", [])
+
+    return _REFLECTION_PROMPT.format(
+        factor_name=factor.get("name", "unknown"),
+        definition=l1.get("definition", ""),
+        formula=l1.get("formula", ""),
+        category=factor.get("category", ""),
+        subcategory=factor.get("subcategory", ""),
+        params=json.dumps(l1.get("default_params", {}), ensure_ascii=False),
+        score=score,
+        status=status,
+        ic_mean=ic.get("ic_mean", "N/A"),
+        icir=ic.get("icir", "N/A"),
+        rank_ic_mean=ic.get("rank_ic_mean", "N/A"),
+        monotonicity=ga.get("group_monotonicity", "N/A"),
+        ls_sharpe=ga.get("ls_sharpe", "N/A"),
+        ls_max_drawdown=ga.get("ls_max_drawdown", "N/A"),
+        ann_return=ra.get("ann_return", "N/A"),
+        sharpe=ra.get("sharpe", "N/A"),
+        avg_turnover=ta.get("avg_turnover", "N/A"),
+        oos_rank_ic=oa.get("oos_rank_ic", "N/A"),
+        oos_sharpe=oa.get("oos_sharpe", "N/A"),
+        net_ann_return=ca.get("net_ann_return", "N/A"),
+        hypothesis_testing=json.dumps(hypothesis_testing, ensure_ascii=False, indent=2),
+    )
+
+
+def _parse_reflection(response: str) -> dict[str, Any]:
+    """Parse LLM reflection response JSON.
+
+    Returns dict with keys: suggestions (list), reflection_notes (str).
+    """
+    import re
+    # Strip think blocks
+    cleaned = re.sub(r"<think>.*?</think>\s*", "", response, flags=re.DOTALL)
+    # Strip code fences
+    cleaned = re.sub(r"```(?:json)?\s*", "", cleaned)
+    cleaned = re.sub(r"```\s*$", "", cleaned)
+    # Extract JSON
+    json_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if json_match:
+        try:
+            parsed = json.loads(json_match.group())
+            return {
+                "suggestions": parsed.get("suggestions", []),
+                "reflection_notes": parsed.get("reflection_notes", ""),
+            }
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse reflection response as JSON")
+    return {"suggestions": [], "reflection_notes": ""}
+
+
+# ═══════════════════════════════════════════════════════════════
 # Orchestrator
 # ═══════════════════════════════════════════════════════════════
 
@@ -222,6 +355,36 @@ def run_l5_pipeline(
                 l5_data["overall_assessment"]["final_meaning"] = parsed["final_meaning"]
         except Exception as exc:
             logger.warning("LLM hypothesis testing failed: %s", exc)
+
+    # 4b. LLM reflection (every validation, after hypothesis testing)
+    if llm_client is not None:
+        try:
+            # Load existing reflections from factor YAML (not from l5_data which is freshly computed)
+            existing_reflections = factor_data.get("l5", {}).get("reflections", [])
+            iteration = len(existing_reflections) + 1
+
+            prompt = _build_reflection_prompt(factor_data, l5_data)
+            response = llm_client.chat(
+                [{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=1500,
+            )
+            parsed = _parse_reflection(response)
+            suggestions = parsed.get("suggestions", [])
+            if suggestions:
+                reflection = {
+                    "iteration": iteration,
+                    "date": datetime.now().strftime("%Y-%m-%d"),
+                    "score_at_time": l5_data["overall_assessment"].get("score"),
+                    "suggestions": suggestions,
+                    "reflection_notes": parsed.get("reflection_notes", ""),
+                    "applied": False,
+                    "applied_date": None,
+                }
+                existing_reflections.append(reflection)
+                l5_data["reflections"] = existing_reflections
+        except Exception as exc:
+            logger.warning("LLM reflection failed: %s", exc)
 
     # 5. Write results back to YAML
     factor_data["l5"] = l5_data
@@ -335,5 +498,7 @@ def _run_backtest(factor_data: dict, bt_params: dict) -> Any:
 __all__ = [
     "run_l5_pipeline",
     "_build_hypothesis_prompt",
+    "_build_reflection_prompt",
     "_parse_llm_response",
+    "_parse_reflection",
 ]
