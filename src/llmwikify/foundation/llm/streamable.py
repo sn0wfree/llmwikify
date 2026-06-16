@@ -767,6 +767,13 @@ class StreamableLLMClient(LLMClient):
         """
         return self.chat(messages, json_mode=json_mode, **generation_params)
 
+    def _chat_url(self) -> str:
+        """Build chat completions URL, avoiding double /v1/v1/."""
+        base = self.base_url.rstrip("/")
+        if base.endswith("/v1"):
+            return f"{base}/chat/completions"
+        return f"{base}/v1/chat/completions"
+
     def _build_headers(self) -> dict[str, str]:
         """Build HTTP headers with appropriate auth scheme."""
         headers = {"Content-Type": "application/json"}
@@ -783,10 +790,10 @@ class StreamableLLMClient(LLMClient):
         json_mode: bool = False,
         **generation_params: Any,
     ) -> str:
-        """Non-streaming chat completion."""
+        """Chat completion — internally uses streaming to avoid timeout."""
         _validate_request(messages, generation_params)
 
-        url = f"{self.base_url}/v1/chat/completions"
+        url = self._chat_url()
         headers = self._build_headers()
         payload: dict[str, Any] = {
             "model": self.model,
@@ -800,17 +807,83 @@ class StreamableLLMClient(LLMClient):
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        resp = _post_with_retry_sync(
-            url,
-            headers,
-            payload,
-            timeout_seconds=self.request_timeout_seconds,
-        )
+        import httpx
+
+        config = RetryConfig.from_env()
+        last_exc: BaseException | None = None
+
+        for attempt in range(config.max_retries + 1):
+            attempts_used = attempt + 1
+            try:
+                resp = httpx.Client(
+                    timeout=httpx.Timeout(self.request_timeout_seconds, read=60),
+                ).stream("POST", url, headers=headers, json=payload).__enter__()
+            except Exception as e:
+                if _is_retryable_request_exception(e) and attempt < config.max_retries:
+                    wait = _compute_backoff(attempt, config)
+                    logger.warning(
+                        "LLM chat %s failed with %s (attempt %d/%d), "
+                        "retrying in %.1fs: %s",
+                        url, type(e).__name__, attempt + 1,
+                        config.max_retries + 1, wait, e,
+                    )
+                    last_exc = e
+                    time.sleep(wait)
+                    continue
+                _record_retry_outcome(
+                    success=False, status_code=None, exc=e,
+                    attempts_used=attempts_used,
+                )
+                raise
+
+            if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
+                retry_after = _extract_retry_after(resp, config.retry_after_max_seconds)
+                wait = retry_after if retry_after is not None else _compute_backoff(attempt, config)
+                reason = "Retry-After" if retry_after is not None else "backoff"
+                logger.warning(
+                    "LLM chat %s returned %d (attempt %d/%d), "
+                    "retrying in %.1fs (%s)",
+                    url, resp.status_code, attempt + 1,
+                    config.max_retries + 1, wait, reason,
+                )
+                resp.close()
+                time.sleep(wait)
+                continue
+
+            _record_retry_outcome(
+                success=200 <= resp.status_code < 300,
+                status_code=resp.status_code, exc=None,
+                attempts_used=attempts_used,
+            )
+            break
+        else:
+            if last_exc is not None:
+                raise last_exc
+            raise RuntimeError("chat retry loop exited unexpectedly")
+
         try:
             if resp.status_code >= 400:
-                raise _format_http_error(resp.status_code, url, resp.content)
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
+                body = resp.read()
+                raise _format_http_error(resp.status_code, url, body)
+            accumulated = ""
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    line = line[6:]
+                if line == "[DONE]":
+                    return accumulated
+                try:
+                    chunk = json.loads(line)
+                except Exception:
+                    continue
+                delta = chunk.get("choices", [{}])[0].get("delta", {})
+                if "content" in delta and delta["content"]:
+                    accumulated += delta["content"]
+                finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
+                if finish in ("stop", "length"):
+                    return accumulated
+            return accumulated
         finally:
             resp.close()
 
@@ -828,7 +901,7 @@ class StreamableLLMClient(LLMClient):
         """
         _validate_request(messages, generation_params)
 
-        url = f"{self.base_url}/v1/chat/completions"
+        url = self._chat_url()
         headers = self._build_headers()
         payload: dict[str, Any] = {
             "model": self.model,
@@ -889,7 +962,7 @@ class StreamableLLMClient(LLMClient):
 
         _validate_request(messages, generation_params)
 
-        url = f"{self.base_url}/v1/chat/completions"
+        url = self._chat_url()
         headers = self._build_headers()
         payload: dict[str, Any] = {
             "model": self.model,
@@ -1040,7 +1113,7 @@ class StreamableLLMClient(LLMClient):
 
         _validate_request(messages, generation_params)
 
-        url = f"{self.base_url}/v1/chat/completions"
+        url = self._chat_url()
         headers = self._build_headers()
         payload: dict[str, Any] = {
             "model": self.model,
@@ -1192,7 +1265,7 @@ class StreamableLLMClient(LLMClient):
 
         _validate_request(messages, generation_params)
 
-        url = f"{self.base_url}/v1/chat/completions"
+        url = self._chat_url()
         headers = self._build_headers()
         payload: dict[str, Any] = {
             "model": self.model,
