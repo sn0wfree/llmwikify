@@ -47,6 +47,21 @@ function parseResearchRun(content: string): ResearchRunStatus | undefined {
   };
 }
 
+// v0.41: build a minimal stub ResearchRunStatus from a persisted
+// research_run_id. The card's existing 3-second polling fills in
+// the real status / timeline / artifact_counts.
+function buildStubResearchRun(runId: string): ResearchRunStatus {
+  return {
+    run_id: runId,
+    status: 'unknown',
+    timeline: [],
+    artifact_counts: {},
+    writes_wiki: false,
+    proposal_only: true,
+    workflow_name: 'autoresearch-compound',
+  };
+}
+
 function parseToolCalls(raw: unknown): ToolCall[] | undefined {
   if (raw == null) return undefined;
   if (Array.isArray(raw)) return raw as ToolCall[];
@@ -94,6 +109,7 @@ interface DbMessage {
   created_at: string;
   tokens_output?: number;
   reverted?: number;
+  research_run_id?: string | null;
 }
 
 export function AgentChat() {
@@ -162,7 +178,12 @@ export function AgentChat() {
           toolCalls: parseToolCalls(m.tool_calls),
           tokensOutput: m.tokens_output,
           messageId: m.id,
-          researchRun: parseResearchRun(m.content),
+          // v0.41: prefer explicit research_run_id from DB (binds the
+          // message to its autoresearch run, survives page reload). Fall
+          // back to the legacy regex heuristic for any old data.
+          researchRun: m.research_run_id
+            ? buildStubResearchRun(m.research_run_id)
+            : parseResearchRun(m.content),
         }));
         setMessages(loaded);
       }

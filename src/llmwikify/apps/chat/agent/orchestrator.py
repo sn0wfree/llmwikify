@@ -532,6 +532,18 @@ class ChatOrchestrator:
                 if final.startswith("[error]"):
                     err_msg = final[len("[error]"):].strip()
                     return ChatEvent.error(err_msg or "LLM stream failed")
+                # ─── Extract research_run_id from tool_calls (v0.41) ──
+                # When /study triggered autoresearch_compound_run, bind the
+                # run_id to the assistant message so reload can reconstruct
+                # the ResearchRunCard. Empty content fallback: if the LLM
+                # produced no natural-language reply, write a stub string
+                # so reload shows meaningful text alongside the card.
+                research_run_id = self._extract_research_run_id(ctx)
+                if research_run_id and not final.strip():
+                    final = (
+                        "研究已启动\n\n"
+                        "研究进行中，可通过下方卡片查看实时进度与结果。"
+                    )
                 thinking = ""
                 if hasattr(ctx, "_thinking"):
                     thinking = ctx._thinking
@@ -548,6 +560,7 @@ class ChatOrchestrator:
                     tool_calls=list(ctx._tool_calls.values())
                     if ctx._tool_calls else None,
                     tokens_output=tokens_output,
+                    research_run_id=research_run_id,
                 )
                 if self.tool_executor._save_error_count > 0:
                     return [
@@ -602,6 +615,35 @@ class ChatOrchestrator:
         return event
 
     # ─── Internal helpers ────────────────────────────────────────
+
+    @staticmethod
+    def _extract_research_run_id(ctx: AgentContext) -> str | None:
+        """Extract the autoresearch run_id from ctx._tool_calls (v0.41).
+
+        Scans the tool calls made during this ReAct round for an
+        ``autoresearch_compound_run`` invocation and returns its
+        ``data.run_id``. Used to bind the run to the assistant message
+        so the frontend can reconstruct the ResearchRunCard on reload.
+
+        Returns None if no autoresearch run was triggered.
+        """
+        tool_calls = getattr(ctx, "_tool_calls", None) or {}
+        for tc in tool_calls.values():
+            if not isinstance(tc, dict):
+                continue
+            name = tc.get("name") or tc.get("tool") or ""
+            if "autoresearch_compound" not in name or "run" not in name:
+                continue
+            result = tc.get("result")
+            if not isinstance(result, dict):
+                continue
+            data = result.get("data") if result.get("status") == "ok" else result
+            if not isinstance(data, dict):
+                continue
+            run_id = data.get("run_id")
+            if isinstance(run_id, str) and run_id:
+                return run_id
+        return None
 
     async def _load_history(self, session_id: str) -> list[dict]:
         """Load conversation history from MemoryManager or DB."""
