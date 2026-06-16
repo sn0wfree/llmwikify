@@ -347,7 +347,103 @@ def build_paper_pages(
     return pages
 
 
+def _extract_factors_from_list(
+    extraction: dict[str, Any],
+    paper_id: str,
+) -> list[dict[str, Any]]:
+    """Convert extraction.factor_list[] to 6-layer factor dicts.
+
+    Each entry in factor_list has L1-L4 fields. This function assembles
+    them into the full 6-layer YAML structure expected by write_factor_yaml().
+
+    Returns list of dicts: {name: "asset/category/slug", factor: {l1..l5}}
+    """
+    from llmwikify.reproduction.utils import generate_slug
+
+    factor_list = extraction.get("factor_list", [])
+    if not factor_list:
+        return []
+
+    results = []
+    for i, fm in enumerate(factor_list):
+        name = fm.get("name", f"alpha_{i+1:03d}")
+        slug = generate_slug(name)
+        asset_type = fm.get("asset_type", "stock")
+        category = fm.get("category", "price")
+        factor_name = f"{asset_type}/{category}/{slug}"
+
+        # L1: definition, formula, inputs, params
+        l1 = {
+            "definition": fm.get("definition") or fm.get("description") or f"Factor from {paper_id}",
+            "formula": fm.get("formula", "TBD"),
+            "input_columns": fm.get("input_columns", ["close"]),
+            "frequency": fm.get("frequency", "日频"),
+            "output_schema": "[date × Code]",
+            "nan_meaning": "TBD",
+            "default_params": fm.get("default_params", {}),
+            "param_constraints": fm.get("param_constraints", "TBD"),
+            "business_constraints": fm.get("business_constraints", "TBD"),
+        }
+
+        # L2: calculation steps
+        steps = fm.get("calculation_steps", [])
+        if not steps:
+            steps = [{"step": 1, "description": f"计算 {name} 因子"}]
+        l2 = {
+            "calculation_steps": steps,
+            "edge_case_handling": fm.get("edge_case_handling", "TBD"),
+            "missing_value_handling": fm.get("missing_value_handling", "TBD"),
+            "data_alignment": "T+1",
+            "complexity": fm.get("complexity", "O(T × N)"),
+        }
+
+        # L3: financial intuition, market behavior, theory
+        l3 = {
+            "financial_intuition": fm.get("financial_intuition", "TBD"),
+            "market_behavior": fm.get("market_behavior", "TBD"),
+            "theoretical_basis": fm.get("theoretical_basis", "TBD"),
+            "historical_effectiveness": fm.get("historical_effectiveness", "TBD"),
+            "related_factors": fm.get("related_factors", "TBD"),
+        }
+
+        # L4: hypotheses
+        hypotheses = fm.get("hypotheses", [])
+        for h in hypotheses:
+            if "status" not in h:
+                h["status"] = "未验证"
+        l4 = {
+            "hypotheses": hypotheses,
+            "hypothesis_limit": 5,
+            "archived_hypotheses": [],
+            "meaning_summary": fm.get("description") or fm.get("financial_intuition", "TBD"),
+            "key_insights": fm.get("key_insights", []),
+            "uncertainty": fm.get("uncertainty", "TBD"),
+            "final_meaning": None,
+        }
+
+        factor_dict = {
+            "name": factor_name.replace("/", "_"),
+            "l1": l1,
+            "l2": l2,
+            "l3": l3,
+            "l4": l4,
+            "l5": {"overall_assessment": {"score": 0, "status": "未验证", "modules": {}}},
+            "metadata": {
+                "created_at": "TBD",
+                "updated_at": "TBD",
+                "version": 1,
+                "source_paper": paper_id,
+                "factor_source": f"paper/{paper_id}",
+            },
+        }
+
+        results.append({"name": factor_name, "factor": factor_dict})
+
+    return results
+
+
 __all__ = [
     "extract_paper_structure",
     "build_paper_pages",
+    "_extract_factors_from_list",
 ]
