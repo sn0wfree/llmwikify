@@ -24,10 +24,10 @@ import json
 import logging
 import os
 import random
-import time
-from typing import Any
 import threading
+import time
 from dataclasses import dataclass, field
+from typing import Any
 
 from ..llm_client import LLMClient, _legacy_fallback_enabled
 from .budget_decorator import check_token_budget
@@ -155,21 +155,22 @@ def _is_retryable_status(status_code: int) -> bool:
 
 
 def _is_retryable_request_exception(exc: BaseException) -> bool:
-    """Check if a requests exception is worth retrying.
+    """Check if an httpx exception is worth retrying.
 
-    ReadTimeout / ConnectionError / Timeout are transient network
+    ReadTimeout / ConnectError / NetworkError are transient network
     conditions that often resolve on retry (e.g. provider throttling
-    during a burst). Other requests exceptions (SSLError, etc.) are
+    during a burst). Other httpx exceptions (SSLError, etc.) are
     configuration / environment issues that retry won't fix.
     """
-    import requests
+    import httpx
 
     return isinstance(
         exc,
         (
-            requests.exceptions.ReadTimeout,
-            requests.exceptions.ConnectionError,
-            requests.exceptions.Timeout,  # base class; covers ChunkedEncodingError too
+            httpx.ReadTimeout,
+            httpx.ConnectError,
+            httpx.ConnectTimeout,
+            httpx.NetworkError,
         ),
     )
 
@@ -442,6 +443,24 @@ def _format_http_error(
 # ─── Retry-aware HTTP helpers ──────────────────────────────────
 
 
+def _record_retry_outcome(
+    *,
+    success: bool,
+    status_code: int | None,
+    exc: BaseException | None,
+    attempts_used: int,
+) -> None:
+    """Record retry outcome to the process-wide RetryMetrics singleton."""
+    outcome = _classify_outcome(
+        success=success, status_code=status_code, exc=exc,
+    )
+    with _retry_metrics_lock:
+        _retry_metrics.record_call(
+            outcome=outcome,
+            attempts_used=attempts_used,
+        )
+
+
 def _post_with_retry_sync(
     url: str,
     headers: dict[str, str],
@@ -449,44 +468,35 @@ def _post_with_retry_sync(
     *,
     timeout_seconds: float,
     config: RetryConfig | None = None,
-    stream: bool = False,
 ) -> Any:
     """POST with exponential-backoff retry on transient failures.
 
-    Returns the final ``requests.Response`` (caller is responsible for
-    closing it via ``.close()`` or a ``with`` block). The response is
-    never retryable-status (429/5xx); if the final attempt returns
-    such a status, the response is returned and the caller decides
-    what to do (typically raise via ``_format_http_error``).
+    Uses ``httpx.Client`` for the HTTP call. Returns the final
+    ``httpx.Response`` (caller is responsible for closing it).
+    The response is never retryable-status (429/5xx); if the final
+    attempt returns such a status, the response is returned and the
+    caller decides what to do (typically raise via
+    ``_format_http_error``).
 
-    Network exceptions (ReadTimeout / ConnectionError / Timeout) are
-    retried up to ``config.max_retries`` times. After exhaustion, the
-    last exception is re-raised so the caller's error handling kicks
-    in.
+    Network exceptions (ReadTimeout / ConnectError / ConnectTimeout /
+    NetworkError) are retried up to ``config.max_retries`` times.
+    After exhaustion, the last exception is re-raised.
 
     Honors the ``Retry-After`` HTTP response header (when present on
     429/503 responses) over the computed exponential backoff, capped
     at ``config.retry_after_max_seconds``.
-
-    Records outcome to the process-wide ``RetryMetrics`` instance.
     """
-    import requests
+    import httpx
 
     if config is None:
         config = RetryConfig.from_env()
 
     last_exc: BaseException | None = None
-    last_status: int | None = None
-    attempts_used: int = 0
     for attempt in range(config.max_retries + 1):
         attempts_used = attempt + 1
         try:
-            resp = requests.post(
-                url,
-                headers=headers,
-                json=payload,
-                timeout=timeout_seconds,
-                stream=stream,
+            resp = httpx.Client(timeout=timeout_seconds).post(
+                url, headers=headers, json=payload,
             )
         except Exception as e:
             if _is_retryable_request_exception(e) and attempt < config.max_retries:
@@ -494,89 +504,39 @@ def _post_with_retry_sync(
                 logger.warning(
                     "LLM POST %s failed with %s (attempt %d/%d), "
                     "retrying in %.1fs: %s",
-                    url,
-                    type(e).__name__,
-                    attempt + 1,
-                    config.max_retries + 1,
-                    wait,
-                    e,
+                    url, type(e).__name__, attempt + 1,
+                    config.max_retries + 1, wait, e,
                 )
                 last_exc = e
                 time.sleep(wait)
                 continue
-            # Final attempt (or non-retryable): record and re-raise
-            with _retry_metrics_lock:
-                _retry_metrics.calls_completed += 1
-                outcome = _classify_outcome(
-                    success=False, status_code=None, exc=e
-                )
-                _retry_metrics.by_outcome[outcome] = (
-                    _retry_metrics.by_outcome.get(outcome, 0) + 1
-                )
-                retries_needed = max(attempts_used - 1, 0)
-                _retry_metrics.by_retries[retries_needed] = (
-                    _retry_metrics.by_retries.get(retries_needed, 0) + 1
-                )
-                if retries_needed > 0:
-                    _retry_metrics.total_retries += retries_needed
-                _retry_metrics.failed_after_retries += 1
+            _record_retry_outcome(
+                success=False, status_code=None, exc=e,
+                attempts_used=attempts_used,
+            )
             raise
 
-        # Got a response — check if it's a retryable status
         if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
-            retry_after = _extract_retry_after(
-                resp, config.retry_after_max_seconds
-            )
-            if retry_after is not None:
-                wait = retry_after
-                reason = "Retry-After"
-            else:
-                wait = _compute_backoff(attempt, config)
-                reason = "backoff"
+            retry_after = _extract_retry_after(resp, config.retry_after_max_seconds)
+            wait = retry_after if retry_after is not None else _compute_backoff(attempt, config)
+            reason = "Retry-After" if retry_after is not None else "backoff"
             logger.warning(
                 "LLM POST %s returned %d (attempt %d/%d), "
                 "retrying in %.1fs (%s)",
-                url,
-                resp.status_code,
-                attempt + 1,
-                config.max_retries + 1,
-                wait,
-                reason,
+                url, resp.status_code, attempt + 1,
+                config.max_retries + 1, wait, reason,
             )
-            last_status = resp.status_code
             resp.close()
             time.sleep(wait)
             continue
 
-        # Success path (or non-retryable status returned to caller)
-        with _retry_metrics_lock:
-            _retry_metrics.calls_completed += 1
-            if 200 <= resp.status_code < 300:
-                outcome = "ok"
-                retries_needed = max(attempts_used - 1, 0)
-                if retries_needed == 0:
-                    _retry_metrics.success_first_try += 1
-                else:
-                    _retry_metrics.success_after_retry += 1
-                    _retry_metrics.total_retries += retries_needed
-            else:
-                # Non-retryable status (e.g. 4xx) returned to caller
-                outcome = _classify_outcome(
-                    success=False,
-                    status_code=resp.status_code,
-                    exc=None,
-                )
-                _retry_metrics.failed_after_retries += 1
-            _retry_metrics.by_outcome[outcome] = (
-                _retry_metrics.by_outcome.get(outcome, 0) + 1
-            )
-            retries_needed = max(attempts_used - 1, 0)
-            _retry_metrics.by_retries[retries_needed] = (
-                _retry_metrics.by_retries.get(retries_needed, 0) + 1
-            )
+        _record_retry_outcome(
+            success=200 <= resp.status_code < 300,
+            status_code=resp.status_code, exc=None,
+            attempts_used=attempts_used,
+        )
         return resp
 
-    # Loop should always return or raise, but be defensive
     if last_exc is not None:
         raise last_exc
     raise RuntimeError("retry loop exited without returning a response")
@@ -603,114 +563,51 @@ async def _post_with_retry_async(
 
     Records outcome to the process-wide ``RetryMetrics`` instance.
     """
-    import httpx
-
     if config is None:
         config = RetryConfig.from_env()
 
     last_exc: BaseException | None = None
-    attempts_used: int = 0
     for attempt in range(config.max_retries + 1):
         attempts_used = attempt + 1
         try:
             resp = await client.request(method, url, headers=headers, json=payload)
         except Exception as e:
-            # httpx exceptions to retry on
-            if (
-                isinstance(
-                    e,
-                    (
-                        httpx.ReadTimeout,
-                        httpx.ConnectError,
-                        httpx.ConnectTimeout,
-                        httpx.NetworkError,
-                    ),
-                )
-                and attempt < config.max_retries
-            ):
+            if _is_retryable_request_exception(e) and attempt < config.max_retries:
                 wait = _compute_backoff(attempt, config)
                 logger.warning(
                     "LLM %s %s failed with %s (attempt %d/%d), "
                     "retrying in %.1fs: %s",
-                    method,
-                    url,
-                    type(e).__name__,
-                    attempt + 1,
-                    config.max_retries + 1,
-                    wait,
-                    e,
+                    method, url, type(e).__name__, attempt + 1,
+                    config.max_retries + 1, wait, e,
                 )
                 last_exc = e
                 time.sleep(wait)
                 continue
-            # Final attempt (or non-retryable): record and re-raise
-            with _retry_metrics_lock:
-                _retry_metrics.calls_completed += 1
-                outcome = _classify_outcome(
-                    success=False, status_code=None, exc=e
-                )
-                _retry_metrics.by_outcome[outcome] = (
-                    _retry_metrics.by_outcome.get(outcome, 0) + 1
-                )
-                retries_needed = max(attempts_used - 1, 0)
-                _retry_metrics.by_retries[retries_needed] = (
-                    _retry_metrics.by_retries.get(retries_needed, 0) + 1
-                )
-                if retries_needed > 0:
-                    _retry_metrics.total_retries += retries_needed
-                _retry_metrics.failed_after_retries += 1
+            _record_retry_outcome(
+                success=False, status_code=None, exc=e,
+                attempts_used=attempts_used,
+            )
             raise
 
         if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
-            retry_after = _extract_retry_after(
-                resp, config.retry_after_max_seconds
-            )
-            if retry_after is not None:
-                wait = retry_after
-                reason = "Retry-After"
-            else:
-                wait = _compute_backoff(attempt, config)
-                reason = "backoff"
+            retry_after = _extract_retry_after(resp, config.retry_after_max_seconds)
+            wait = retry_after if retry_after is not None else _compute_backoff(attempt, config)
+            reason = "Retry-After" if retry_after is not None else "backoff"
             logger.warning(
                 "LLM %s %s returned %d (attempt %d/%d), "
                 "retrying in %.1fs (%s)",
-                method,
-                url,
-                resp.status_code,
-                attempt + 1,
-                config.max_retries + 1,
-                wait,
-                reason,
+                method, url, resp.status_code, attempt + 1,
+                config.max_retries + 1, wait, reason,
             )
             await resp.aclose()
             time.sleep(wait)
             continue
 
-        # Success path (or non-retryable status returned to caller)
-        with _retry_metrics_lock:
-            _retry_metrics.calls_completed += 1
-            if 200 <= resp.status_code < 300:
-                outcome = "ok"
-                retries_needed = max(attempts_used - 1, 0)
-                if retries_needed == 0:
-                    _retry_metrics.success_first_try += 1
-                else:
-                    _retry_metrics.success_after_retry += 1
-                    _retry_metrics.total_retries += retries_needed
-            else:
-                outcome = _classify_outcome(
-                    success=False,
-                    status_code=resp.status_code,
-                    exc=None,
-                )
-                _retry_metrics.failed_after_retries += 1
-            _retry_metrics.by_outcome[outcome] = (
-                _retry_metrics.by_outcome.get(outcome, 0) + 1
-            )
-            retries_needed = max(attempts_used - 1, 0)
-            _retry_metrics.by_retries[retries_needed] = (
-                _retry_metrics.by_retries.get(retries_needed, 0) + 1
-            )
+        _record_retry_outcome(
+            success=200 <= resp.status_code < 300,
+            status_code=resp.status_code, exc=None,
+            attempts_used=attempts_used,
+        )
         return resp
 
     if last_exc is not None:
@@ -887,11 +784,6 @@ class StreamableLLMClient(LLMClient):
         **generation_params: Any,
     ) -> str:
         """Non-streaming chat completion."""
-        try:
-            import requests  # noqa: F401  (kept for back-compat with monkeypatch)
-        except ImportError:
-            raise ImportError("requests is required")
-
         _validate_request(messages, generation_params)
 
         url = f"{self.base_url}/v1/chat/completions"
@@ -934,11 +826,6 @@ class StreamableLLMClient(LLMClient):
         Returns:
             {"content": str, "tool_calls": [{"name": str, "args": dict}] | None}
         """
-        try:
-            import requests  # noqa: F401
-        except ImportError:
-            raise ImportError("requests is required")
-
         _validate_request(messages, generation_params)
 
         url = f"{self.base_url}/v1/chat/completions"
@@ -987,7 +874,7 @@ class StreamableLLMClient(LLMClient):
         tools: list[dict[str, Any]] | None = None,
         **generation_params: Any,
     ):
-        """Streaming chat completion (yield chunks) — sync version using requests.
+        """Streaming chat completion (yield chunks) — sync version using httpx.
 
         Yields:
             dict: {"type": "content", "text": str} or
@@ -998,10 +885,7 @@ class StreamableLLMClient(LLMClient):
         failures are NOT retried (the request has been billed and the
         caller is consuming the body).
         """
-        try:
-            import requests  # noqa: F401
-        except ImportError:
-            raise ImportError("requests is required")
+        import httpx
 
         _validate_request(messages, generation_params)
 
@@ -1020,42 +904,80 @@ class StreamableLLMClient(LLMClient):
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        resp = _post_with_retry_sync(
-            url,
-            headers,
-            payload,
-            timeout_seconds=self.request_timeout_seconds,
-            stream=True,
-        )
+        config = RetryConfig.from_env()
+        last_exc: BaseException | None = None
+
+        for attempt in range(config.max_retries + 1):
+            attempts_used = attempt + 1
+            try:
+                resp = httpx.Client(
+                    timeout=httpx.Timeout(self.request_timeout_seconds, read=60),
+                ).stream("POST", url, headers=headers, json=payload).__enter__()
+            except Exception as e:
+                if _is_retryable_request_exception(e) and attempt < config.max_retries:
+                    wait = _compute_backoff(attempt, config)
+                    logger.warning(
+                        "LLM stream %s failed with %s (attempt %d/%d), "
+                        "retrying in %.1fs: %s",
+                        url, type(e).__name__, attempt + 1,
+                        config.max_retries + 1, wait, e,
+                    )
+                    last_exc = e
+                    time.sleep(wait)
+                    continue
+                _record_retry_outcome(
+                    success=False, status_code=None, exc=e,
+                    attempts_used=attempts_used,
+                )
+                raise
+
+            if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
+                retry_after = _extract_retry_after(resp, config.retry_after_max_seconds)
+                wait = retry_after if retry_after is not None else _compute_backoff(attempt, config)
+                reason = "Retry-After" if retry_after is not None else "backoff"
+                logger.warning(
+                    "LLM stream %s returned %d (attempt %d/%d), "
+                    "retrying in %.1fs (%s)",
+                    url, resp.status_code, attempt + 1,
+                    config.max_retries + 1, wait, reason,
+                )
+                resp.close()
+                time.sleep(wait)
+                continue
+
+            _record_retry_outcome(
+                success=200 <= resp.status_code < 300,
+                status_code=resp.status_code, exc=None,
+                attempts_used=attempts_used,
+            )
+            break
+        else:
+            if last_exc is not None:
+                raise last_exc
+            raise RuntimeError("stream retry loop exited unexpectedly")
+
         try:
             if resp.status_code >= 400:
-                # Drain body so we can include it in the error.
-                body = resp.content
+                body = resp.read()
                 raise _format_http_error(resp.status_code, url, body)
             accumulated = ""
             tool_call_buffer: dict[int, dict] = {}
             for line in resp.iter_lines():
                 if not line:
                     continue
-                if line.startswith(b"data: "):
+                if line.startswith("data: "):
                     line = line[6:]
-                if line == b"[DONE]":
+                if line == "[DONE]":
                     yield {"type": "done", "content": accumulated}
                     return
                 try:
-                    import json as _json
-                    chunk = _json.loads(line)
+                    chunk = json.loads(line)
                 except Exception:
                     continue
 
                 delta = chunk.get("choices", [{}])[0].get("delta", {})
-                # Handle reasoning_content (MiniMax reasoning_split mode).
-                # Chain-of-thought is yielded as a "thinking" event but is
-                # NOT mixed into the final "content" — downstream consumers
-                # that wait for the final string should get only the answer.
                 if "reasoning_content" in delta and delta["reasoning_content"]:
                     yield {"type": "thinking", "text": delta["reasoning_content"]}
-                # Handle regular content (only this goes into accumulated)
                 if "content" in delta and delta["content"]:
                     accumulated += delta["content"]
                     yield {"type": "content", "text": delta["content"]}
@@ -1079,9 +1001,6 @@ class StreamableLLMClient(LLMClient):
                             entry["args_parts"].append(func["arguments"])
 
                 finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
-                # "length" must also emit "done" — otherwise callers waiting
-                # for the done event would hang when the model hits
-                # max_tokens mid-stream.
                 if finish in ("stop", "tool_calls", "length"):
                     for entry in tool_call_buffer.values():
                         yield {
@@ -1137,116 +1056,55 @@ class StreamableLLMClient(LLMClient):
                 payload[key] = generation_params[key]
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.request_timeout_seconds, read=60)) as client:
-            # Retry on the initial connection / first response. Once
-            # we start iterating the body, the request is committed.
             config = RetryConfig.from_env()
-            astream_attempts_used: int = 0
-            astream_outcome: str = "ok"
+            last_exc: BaseException | None = None
+
             for attempt in range(config.max_retries + 1):
-                astream_attempts_used = attempt + 1
+                attempts_used = attempt + 1
                 try:
                     stream_ctx = client.stream("POST", url, headers=headers, json=payload)
                     resp = await stream_ctx.__aenter__()
                 except Exception as e:
-                    if (
-                        isinstance(
-                            e,
-                            (
-                                httpx.ReadTimeout,
-                                httpx.ConnectError,
-                                httpx.ConnectTimeout,
-                                httpx.NetworkError,
-                            ),
-                        )
-                        and attempt < config.max_retries
-                    ):
+                    if _is_retryable_request_exception(e) and attempt < config.max_retries:
                         wait = _compute_backoff(attempt, config)
                         logger.warning(
                             "LLM astream %s failed with %s (attempt %d/%d), "
                             "retrying in %.1fs: %s",
-                            url,
-                            type(e).__name__,
-                            attempt + 1,
-                            config.max_retries + 1,
-                            wait,
-                            e,
+                            url, type(e).__name__, attempt + 1,
+                            config.max_retries + 1, wait, e,
                         )
+                        last_exc = e
                         time.sleep(wait)
                         continue
-                    # Final attempt or non-retryable: record and re-raise
-                    with _retry_metrics_lock:
-                        _retry_metrics.calls_completed += 1
-                        astream_outcome = _classify_outcome(
-                            success=False, status_code=None, exc=e
-                        )
-                        _retry_metrics.by_outcome[astream_outcome] = (
-                            _retry_metrics.by_outcome.get(astream_outcome, 0) + 1
-                        )
-                        retries_needed = max(astream_attempts_used - 1, 0)
-                        _retry_metrics.by_retries[retries_needed] = (
-                            _retry_metrics.by_retries.get(retries_needed, 0) + 1
-                        )
-                        if retries_needed > 0:
-                            _retry_metrics.total_retries += retries_needed
-                        _retry_metrics.failed_after_retries += 1
+                    _record_retry_outcome(
+                        success=False, status_code=None, exc=e,
+                        attempts_used=attempts_used,
+                    )
                     raise
 
-                # Got the response object; check status before consuming body
                 if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
-                    retry_after = _extract_retry_after(
-                        resp, config.retry_after_max_seconds
-                    )
-                    if retry_after is not None:
-                        wait = retry_after
-                        reason = "Retry-After"
-                    else:
-                        wait = _compute_backoff(attempt, config)
-                        reason = "backoff"
+                    retry_after = _extract_retry_after(resp, config.retry_after_max_seconds)
+                    wait = retry_after if retry_after is not None else _compute_backoff(attempt, config)
+                    reason = "Retry-After" if retry_after is not None else "backoff"
                     logger.warning(
                         "LLM astream %s returned %d (attempt %d/%d), "
                         "retrying in %.1fs (%s)",
-                        url,
-                        resp.status_code,
-                        attempt + 1,
-                        config.max_retries + 1,
-                        wait,
-                        reason,
+                        url, resp.status_code, attempt + 1,
+                        config.max_retries + 1, wait, reason,
                     )
                     await stream_ctx.__aexit__(None, None, None)
                     time.sleep(wait)
                     continue
 
-                # Got a non-retryable (or successful) response on this attempt
-                with _retry_metrics_lock:
-                    _retry_metrics.calls_completed += 1
-                    if 200 <= resp.status_code < 300:
-                        retries_needed = max(astream_attempts_used - 1, 0)
-                        if retries_needed == 0:
-                            _retry_metrics.success_first_try += 1
-                        else:
-                            _retry_metrics.success_after_retry += 1
-                            _retry_metrics.total_retries += retries_needed
-                        astream_outcome = "ok"
-                    else:
-                        # Non-retryable status (e.g. 4xx) returned to caller
-                        astream_outcome = _classify_outcome(
-                            success=False,
-                            status_code=resp.status_code,
-                            exc=None,
-                        )
-                        _retry_metrics.failed_after_retries += 1
-                    _retry_metrics.by_outcome[astream_outcome] = (
-                        _retry_metrics.by_outcome.get(astream_outcome, 0) + 1
-                    )
-                    retries_needed = max(astream_attempts_used - 1, 0)
-                    _retry_metrics.by_retries[retries_needed] = (
-                        _retry_metrics.by_retries.get(retries_needed, 0) + 1
-                    )
+                _record_retry_outcome(
+                    success=200 <= resp.status_code < 300,
+                    status_code=resp.status_code, exc=None,
+                    attempts_used=attempts_used,
+                )
                 break
             else:
-                # Loop fell through (only possible if all attempts raised and
-                # we hit the retry-exhaustion branch without returning). Be
-                # defensive: raise a runtime error.
+                if last_exc is not None:
+                    raise last_exc
                 raise RuntimeError("astream retry loop exited unexpectedly")
 
             try:

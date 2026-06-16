@@ -346,9 +346,12 @@ class TestNoSilentGPT4OInBusinessCode:
         # The pre-PR-4 silent fallback pattern was:
         #   getattr(model, "model", "gpt-4o")
         # PR 4 removes this from the listed files.
+        # service.py was archived to archive/llmwikify_v0_41_legacy/ in v0.41+
+        # (god-class decomposition). The test still checks the archive copy
+        # to ensure no regression if it's ever revived.
         repo = Path(__file__).resolve().parent.parent
         files_to_check = (
-            "src/llmwikify/apps/chat/agent/service.py",
+            "archive/llmwikify_v0_41_legacy/service.py",
             "src/llmwikify/apps/chat/agent/orchestrator.py",
             "src/llmwikify/apps/chat/agent/context_manager.py",
         )

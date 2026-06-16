@@ -7,9 +7,11 @@ This test starts a real uvicorn server, POSTs a chat message, and asserts:
 4. Session is created in DB
 5. User message and assistant response are persisted to DB
 
-The original chat was broken because service.py:253 called asyncio.Event()
-without importing asyncio — returning 200 OK with empty SSE body. The
-frontend parser silently dropped empty events, so users saw "no response".
+The original chat was broken because the chat loop in the legacy
+service.py:253 (now archived to archive/llmwikify_v0_41_legacy/) called
+asyncio.Event() without importing asyncio — returning 200 OK with
+empty SSE body. The frontend parser silently dropped empty events,
+so users saw "no response".
 
 This e2e test catches that class of bug because it reads and asserts on
 the actual SSE event flow, not just the HTTP status code.
@@ -126,9 +128,10 @@ def chat_server():
 def test_chat_returns_sse_events(chat_server):
     """POST /api/agent/chat must return 200 + SSE events, not empty body.
 
-    Regression: service.py:253 called asyncio.Event() without importing
-    asyncio → NameError on every request → 200 OK + empty body → frontend
-    silently dropped empty events.
+    Regression: the legacy chat loop in service.py:253 (now archived
+    to archive/llmwikify_v0_41_legacy/) called asyncio.Event() without
+    importing asyncio → NameError on every request → 200 OK + empty
+    body → frontend silently dropped empty events.
     """
     with httpx.Client(timeout=30) as client:
         with client.stream(
