@@ -1,6 +1,3 @@
-# DEPRECATED in v0.42+: archived to archive/llmwikify_v0_41_legacy/. Will be removed in v0.5.
-# Replaced by apps/chat/agent/react_engine.py::ReActEngine's reasoning loop.
-# Kept here for git history preservation and emergency rollback. Do not add new callers.
 """Research Reasoner — ReAct Thought step.
 
 Phase 2 #5 / C1 — extracted from ResearchEngine (885 LOC

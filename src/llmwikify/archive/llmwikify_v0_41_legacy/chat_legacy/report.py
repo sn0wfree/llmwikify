@@ -1,8 +1,5 @@
-# DEPRECATED in v0.42+: archived to archive/llmwikify_v0_41_legacy/. Will be removed in v0.5.
-# Replaced by apps/chat/skills/research_skill.py (research synthesis pipeline).
-# Kept here for git history preservation and emergency rollback. Do not add new callers.
-"""Report generation from research synthesis results."""
 
+"""Report generation from research synthesis results."""
 from __future__ import annotations
 
 import logging

@@ -1,6 +1,3 @@
-# DEPRECATED in v0.42+: archived to archive/llmwikify_v0_41_legacy/. Will be removed in v0.5.
-# Replaced by apps/chat/agent/orchestrator.py::ChatOrchestrator's gate logic.
-# Kept here for git history preservation and emergency rollback. Do not add new callers.
 """Research Gates — framework & quality compliance + control signals.
 
 Phase 2 #5 / C2 — extracted from ResearchEngine (885 LOC
