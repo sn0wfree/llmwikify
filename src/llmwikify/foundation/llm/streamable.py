@@ -790,102 +790,35 @@ class StreamableLLMClient(LLMClient):
         json_mode: bool = False,
         **generation_params: Any,
     ) -> str:
-        """Chat completion — internally uses streaming to avoid timeout."""
+        """Chat completion — sync wrapper around stream_chat().
+
+        Uses streaming internally to avoid timeout for large outputs.
+        Only accumulates "content" events (the actual answer).
+        Falls back to "thinking" events (reasoning_content) if
+        "content" is empty — M2.7 sometimes puts the answer there.
+        """
         _validate_request(messages, generation_params)
-
-        url = self._chat_url()
-        headers = self._build_headers()
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-        }
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
-        if self.reasoning_split:
-            payload["reasoning_split"] = True
-        for key in ("temperature", "max_tokens", "top_p"):
-            if key in generation_params:
-                payload[key] = generation_params[key]
-
-        import httpx
-
-        config = RetryConfig.from_env()
-        last_exc: BaseException | None = None
-
-        for attempt in range(config.max_retries + 1):
-            attempts_used = attempt + 1
-            try:
-                resp = httpx.Client(
-                    timeout=httpx.Timeout(connect=30, read=300, write=30),
-                ).stream("POST", url, headers=headers, json=payload).__enter__()
-            except Exception as e:
-                if _is_retryable_request_exception(e) and attempt < config.max_retries:
-                    wait = _compute_backoff(attempt, config)
-                    logger.warning(
-                        "LLM chat %s failed with %s (attempt %d/%d), "
-                        "retrying in %.1fs: %s",
-                        url, type(e).__name__, attempt + 1,
-                        config.max_retries + 1, wait, e,
-                    )
-                    last_exc = e
-                    time.sleep(wait)
-                    continue
-                _record_retry_outcome(
-                    success=False, status_code=None, exc=e,
-                    attempts_used=attempts_used,
-                )
-                raise
-
-            if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
-                retry_after = _extract_retry_after(resp, config.retry_after_max_seconds)
-                wait = retry_after if retry_after is not None else _compute_backoff(attempt, config)
-                reason = "Retry-After" if retry_after is not None else "backoff"
-                logger.warning(
-                    "LLM chat %s returned %d (attempt %d/%d), "
-                    "retrying in %.1fs (%s)",
-                    url, resp.status_code, attempt + 1,
-                    config.max_retries + 1, wait, reason,
-                )
-                resp.close()
-                time.sleep(wait)
-                continue
-
-            _record_retry_outcome(
-                success=200 <= resp.status_code < 300,
-                status_code=resp.status_code, exc=None,
-                attempts_used=attempts_used,
-            )
-            break
-        else:
-            if last_exc is not None:
-                raise last_exc
-            raise RuntimeError("chat retry loop exited unexpectedly")
-
-        try:
-            if resp.status_code >= 400:
-                body = resp.read()
-                raise _format_http_error(resp.status_code, url, body)
-            accumulated = ""
-            for line in resp.iter_lines():
-                if not line:
-                    continue
-                if line.startswith("data: "):
-                    line = line[6:]
-                if line == "[DONE]":
-                    return accumulated
-                try:
-                    chunk = json.loads(line)
-                except Exception:
-                    continue
-                delta = chunk.get("choices", [{}])[0].get("delta", {})
-                if "content" in delta and delta["content"]:
-                    accumulated += delta["content"]
-                finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
-                if finish in ("stop", "length"):
-                    return accumulated
-            return accumulated
-        finally:
-            resp.close()
+        content = ""
+        thinking = ""
+        for event in self.stream_chat(
+            messages, json_mode=json_mode, **generation_params
+        ):
+            etype = event.get("type")
+            if etype == "content":
+                content += event.get("text", "")
+            elif etype == "thinking":
+                thinking += event.get("text", "")
+            elif etype == "done":
+                done_content = event.get("content", "")
+                if done_content and not content:
+                    content = done_content
+        # Prefer content; fall back to thinking if content is empty
+        result = content if content.strip() else thinking
+        # Strip <think>...</think> tags (some providers embed them in content)
+        import re
+        result = re.sub(r"<think>.*?</think>\s*", "", result, flags=re.DOTALL)
+        result = re.sub(r"<think>.*$", "", result, flags=re.DOTALL)
+        return result.strip()
 
     @check_token_budget(lambda self: self._budget_checker)
     def chat_with_tools(
@@ -979,13 +912,13 @@ class StreamableLLMClient(LLMClient):
 
         config = RetryConfig.from_env()
         last_exc: BaseException | None = None
+        client = httpx.Client(timeout=httpx.Timeout(connect=30, read=300, write=30, pool=30))
 
         for attempt in range(config.max_retries + 1):
             attempts_used = attempt + 1
             try:
-                resp = httpx.Client(
-                    timeout=httpx.Timeout(connect=30, read=300, write=30),
-                ).stream("POST", url, headers=headers, json=payload).__enter__()
+                stream_ctx = client.stream("POST", url, headers=headers, json=payload)
+                resp = stream_ctx.__enter__()
             except Exception as e:
                 if _is_retryable_request_exception(e) and attempt < config.max_retries:
                     wait = _compute_backoff(attempt, config)
@@ -1002,6 +935,7 @@ class StreamableLLMClient(LLMClient):
                     success=False, status_code=None, exc=e,
                     attempts_used=attempts_used,
                 )
+                client.close()
                 raise
 
             if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
@@ -1014,7 +948,7 @@ class StreamableLLMClient(LLMClient):
                     url, resp.status_code, attempt + 1,
                     config.max_retries + 1, wait, reason,
                 )
-                resp.close()
+                stream_ctx.__exit__(None, None, None)
                 time.sleep(wait)
                 continue
 
@@ -1054,6 +988,13 @@ class StreamableLLMClient(LLMClient):
                 if "content" in delta and delta["content"]:
                     accumulated += delta["content"]
                     yield {"type": "content", "text": delta["content"]}
+                # Some providers return full content in first chunk via message.content
+                # (not streaming despite stream=True) or put it in reasoning_content.
+                msg = chunk.get("choices", [{}])[0].get("message", {})
+                msg_content = msg.get("content", "") or msg.get("reasoning_content", "")
+                if msg_content:
+                    accumulated += msg_content
+                    yield {"type": "content", "text": msg_content}
 
                 if "tool_calls" in delta:
                     for tc in delta["tool_calls"]:
@@ -1089,7 +1030,8 @@ class StreamableLLMClient(LLMClient):
                     }
                     return
         finally:
-            resp.close()
+            stream_ctx.__exit__(None, None, None)
+            client.close()
 
     @check_token_budget(lambda self: self._budget_checker)
     async def astream_chat(
@@ -1128,7 +1070,7 @@ class StreamableLLMClient(LLMClient):
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=30, read=300, write=30)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=30, read=300, write=30, pool=30)) as client:
             config = RetryConfig.from_env()
             last_exc: BaseException | None = None
 
@@ -1279,7 +1221,7 @@ class StreamableLLMClient(LLMClient):
             if key in generation_params:
                 payload[key] = generation_params[key]
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=30, read=300, write=30)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=30, read=300, write=30, pool=30)) as client:
             resp = await _post_with_retry_async(
                 client,
                 "POST",
