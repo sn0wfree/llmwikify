@@ -308,6 +308,12 @@ async def _run_paper_extraction(
             source_ref=source_ref,
             llm_client=_LLM_CLIENT,
         )
+        logger.info(
+            "paper %s: extraction done, keys=%s, has_factor_list=%s",
+            paper_id,
+            list(extraction.keys()) if extraction else [],
+            bool(extraction.get("factor_list")) if extraction else False,
+        )
         _DB.record_event(
             session_id,
             "extract.llm_done",
