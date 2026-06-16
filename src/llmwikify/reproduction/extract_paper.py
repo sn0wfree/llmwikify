@@ -150,6 +150,7 @@ def extract_paper_structure(
         paper_content=paper_content[:32000],
     )
 
+    logger.info("[extract] paper=%s content_len=%d calling LLM...", paper_id, len(paper_content))
     try:
         messages = []
         if system_text.strip():
@@ -157,15 +158,21 @@ def extract_paper_structure(
         messages.append({"role": "user", "content": user_msg})
 
         api_params = {k: v for k, v in params.items() if k in _API_PARAM_KEYS}
+        logger.info("[extract] paper=%s api_params=%s, sending request...", paper_id, api_params)
         response = llm_client.chat(messages, **api_params)
+        logger.info("[extract] paper=%s LLM response received, len=%d", paper_id, len(response))
 
         # Parse JSON — strip markdown code fences first
         cleaned = re.sub(r"```(?:json)?\s*", "", response)
         cleaned = re.sub(r"```\s*$", "", cleaned)
         json_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if json_match:
-            return json.loads(json_match.group())
-        logger.warning("no JSON found in LLM response for %s", paper_id)
+            result = json.loads(json_match.group())
+            logger.info("[extract] paper=%s JSON parsed, keys=%s", paper_id, list(result.keys()))
+            if "factor_list" in result:
+                logger.info("[extract] paper=%s factor_list has %d factors", paper_id, len(result["factor_list"]))
+            return result
+        logger.warning("no JSON found in LLM response for %s (response_len=%d)", paper_id, len(response))
         return {}
     except Exception as exc:
         logger.error("LLM extraction failed for %s: %s", paper_id, exc)
