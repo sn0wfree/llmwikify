@@ -37,6 +37,51 @@ class DataSource(Protocol):
     ) -> Optional[pd.DataFrame]: ...
 
 
+class ParquetLocalDataSource:
+    """Local Parquet file data source — fast, no network.
+
+    Reads from a local Parquet file and filters by symbol and date range.
+    Handles both bare codes (e.g. "000001") and suffixed codes (e.g. "000001.SZ").
+    """
+
+    name = "parquet_local"
+
+    def __init__(self, path: str):
+        self._path = path
+        self._df: Optional[pd.DataFrame] = None
+
+    def _load(self) -> pd.DataFrame:
+        if self._df is None:
+            self._df = pd.read_parquet(self._path)
+            if "date" in self._df.columns:
+                self._df["date"] = pd.to_datetime(self._df["date"])
+        return self._df
+
+    def get(
+        self,
+        symbol: str,
+        start: str,
+        end: str,
+    ) -> Optional[pd.DataFrame]:
+        try:
+            df = self._load()
+            # Filter by symbol (handle both "000001" and "000001.SZ")
+            mask = (df["Code"] == symbol) | (df["Code"].str.startswith(symbol + "."))
+            sub = df.loc[mask].copy()
+            if sub.empty:
+                return None
+            # Filter by date range
+            start_dt = pd.Timestamp(start)
+            end_dt = pd.Timestamp(end)
+            sub = sub[(sub["date"] >= start_dt) & (sub["date"] <= end_dt)]
+            if sub.empty:
+                return None
+            return sub[["date", "Code", "open", "high", "low", "close", "volume"]].reset_index(drop=True)
+        except Exception as exc:
+            logger.warning("ParquetLocalDataSource failed for %s: %s", symbol, exc)
+            return None
+
+
 class SynthDataSource:
     """Deterministic synthetic OHLCV — last-resort fallback.
 
@@ -283,24 +328,24 @@ class DataRouter:
         sources: Optional[list[DataSource]] = None,
         use_cache: bool = True,
         clickhouse_passwd: Optional[str] = None,
+        parquet_path: Optional[str] = None,
     ):
         if sources is not None:
             self._sources = list(sources)
             return
         pwd = clickhouse_passwd if clickhouse_passwd is not None else _load_ch_passwd()
+        sources_list: list[DataSource] = []
+        if parquet_path:
+            sources_list.append(ParquetLocalDataSource(parquet_path))
         if use_cache:
-            self._sources = [
+            sources_list.extend([
                 CachedClickHouseDataSource(ClickHouseDataSource(passwd=pwd)),
                 ClickHouseDataSource(passwd=pwd),
-                AKShareDataSource(),
-                SynthDataSource(),
-            ]
+            ])
         else:
-            self._sources = [
-                ClickHouseDataSource(passwd=pwd),
-                AKShareDataSource(),
-                SynthDataSource(),
-            ]
+            sources_list.append(ClickHouseDataSource(passwd=pwd))
+        sources_list.extend([AKShareDataSource(), SynthDataSource()])
+        self._sources = sources_list
 
     def get(
         self,

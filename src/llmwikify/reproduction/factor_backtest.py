@@ -98,10 +98,62 @@ def _compute_factor_values(
         vol = close.pct_change().rolling(slow).std()
         return mom / vol.replace(0, np.nan)
 
+    elif factor_class == "formula":
+        # LLM-generated code execution
+        code = factor_params.get("code", "")
+        if not code:
+            logger.warning("factor_class='formula' but no code provided, falling back to momentum")
+            period = int(factor_params.get("period", 20))
+            return close.pct_change(period)
+        return _compute_factor_from_code(data, code)
+
     else:
         # Default: momentum
         period = int(factor_params.get("lookback", factor_params.get("period", 20)))
         return close.pct_change(period)
+
+
+def _compute_factor_from_code(data: pd.DataFrame, code: str) -> pd.Series:
+    """Execute LLM-generated code to compute factor values.
+
+    Args:
+        data: DataFrame with columns [date, close, ...].
+        code: Python code string defining compute_factor(df) function.
+
+    Returns:
+        Series of factor values.
+    """
+    from QuantNodes.ai.sandbox import CodeSandbox
+
+    sandbox = CodeSandbox(max_code_length=500_000)
+    validation = sandbox.validate(code)
+    if not validation.is_safe:
+        raise ValueError(f"Unsafe factor code: {validation.errors}")
+
+    # Convert date to string for serialization, then parse back in code
+    data_for_exec = data.copy()
+    if "date" in data_for_exec.columns:
+        data_for_exec["date"] = data_for_exec["date"].astype(str)
+
+    # Inject data as a literal and call compute_factor
+    data_records = data_for_exec.to_dict(orient="records")
+    wrapped_code = (
+        code.rstrip()
+        + "\n_df = pd.DataFrame(_DATA_RECORDS)\n"
+        + "_df['date'] = pd.to_datetime(_df['date'])\n"
+        + "_result = compute_factor(_df)\n"
+    )
+
+    namespace = sandbox.validate_and_execute(
+        wrapped_code,
+        {"pd": pd, "np": __import__("numpy"), "_DATA_RECORDS": data_records},
+    )
+    result = namespace.get("_result")
+    if result is None:
+        raise ValueError("compute_factor() did not return a result")
+    if isinstance(result, pd.DataFrame):
+        result = result.iloc[:, 0]
+    return result.astype(float)
 
 
 # ─── IC computation ──────────────────────────────────────────

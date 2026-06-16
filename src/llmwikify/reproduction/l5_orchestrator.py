@@ -450,13 +450,20 @@ def _run_backtest(factor_data: dict, bt_params: dict) -> Any:
     from llmwikify.reproduction.config import config
     from llmwikify.reproduction.router import DataRouter
 
-    factor_class = factor_data.get("subcategory", factor_data.get("factor_class", "momentum"))
-    factor_params = factor_data.get("l1", {}).get("default_params", factor_data.get("factor_params", {}))
-    if isinstance(factor_params, str):
-        try:
-            factor_params = json.loads(factor_params)
-        except (json.JSONDecodeError, TypeError):
-            factor_params = {}
+    # Check if factor has LLM-generated code (formula class)
+    l1 = factor_data.get("l1", {})
+    generated_code = l1.get("code", factor_data.get("generated_code", ""))
+    if generated_code:
+        factor_class = "formula"
+        factor_params = {"code": generated_code}
+    else:
+        factor_class = factor_data.get("subcategory", factor_data.get("factor_class", "momentum"))
+        factor_params = l1.get("default_params", factor_data.get("factor_params", {}))
+        if isinstance(factor_params, str):
+            try:
+                factor_params = json.loads(factor_params)
+            except (json.JSONDecodeError, TypeError):
+                factor_params = {}
 
     universe = bt_params.get("universe", config.get("universe.default", "synth"))
     start_date = bt_params.get("start_date", "2023-01-01")
@@ -465,7 +472,7 @@ def _run_backtest(factor_data: dict, bt_params: dict) -> Any:
     n_groups = bt_params.get("n_groups", 5)
     factor_direction = bt_params.get("factor_direction", 1)
 
-    data_router = DataRouter(use_cache=True)
+    data_router = DataRouter(use_cache=True, parquet_path=config.get("parquet.path"))
 
     # Resolve universe
     from llmwikify.reproduction.universe import resolve_universe
