@@ -2,19 +2,19 @@
 
 Covers the retry behavior added to StreamableLLMClient:
 - ReadTimeout is retried with exponential backoff
-- ConnectionError is retried
+- ConnectError is retried
 - HTTP 429, 500, 502, 503, 504 are retried
 - 4xx (except 429), 401, 403 are NOT retried
 - Successful response is returned unchanged
-- All retries exhausted → last exception re-raised
+- All retries exhausted -> last exception re-raised
 - Backoff timing: 1s, 2s, 4s with up to 0.5s jitter
 """
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
-import requests
 
 from llmwikify.foundation.llm.streamable import (
     RetryConfig,
@@ -87,7 +87,7 @@ class TestBackoffMath:
 class TestChatRetry:
     def test_chat_succeeds_first_try(self):
         client = _make_client()
-        with patch("requests.post", return_value=_ok_response("hi")) as mock_post:
+        with patch("httpx.Client.post", return_value=_ok_response("hi")) as mock_post:
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "hi"
         assert mock_post.call_count == 1
@@ -102,9 +102,9 @@ class TestChatRetry:
 
         ok = _ok_response("recovered")
         with patch(
-            "requests.post",
+            "httpx.Client.post",
             side_effect=[
-                requests.exceptions.ReadTimeout("first attempt timed out"),
+                httpx.ReadTimeout("first attempt timed out"),
                 ok,
             ],
         ) as mock_post:
@@ -119,10 +119,10 @@ class TestChatRetry:
         )
         ok = _ok_response("recovered")
         with patch(
-            "requests.post",
+            "httpx.Client.post",
             side_effect=[
-                requests.exceptions.ConnectionError("ECONNRESET"),
-                requests.exceptions.ConnectionError("ECONNRESET"),
+                httpx.ConnectError("ECONNRESET"),
+                httpx.ConnectError("ECONNRESET"),
                 ok,
             ],
         ) as mock_post:
@@ -137,7 +137,7 @@ class TestChatRetry:
         )
         ok = _ok_response("recovered")
         with patch(
-            "requests.post",
+            "httpx.Client.post",
             side_effect=[_err_response(429, b"rate limited"), ok],
         ) as mock_post:
             result = client.chat([{"role": "user", "content": "hi"}])
@@ -153,7 +153,7 @@ class TestChatRetry:
         for status in (500, 502, 503, 504):
             ok = _ok_response(f"recovered from {status}")
             with patch(
-                "requests.post",
+                "httpx.Client.post",
                 side_effect=[_err_response(status, b"transient"), ok],
             ) as mock_post:
                 result = client.chat([{"role": "user", "content": "hi"}])
@@ -167,7 +167,7 @@ class TestChatRetry:
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         with patch(
-            "requests.post", return_value=_err_response(400, b"bad request")
+            "httpx.Client.post", return_value=_err_response(400, b"bad request")
         ) as mock_post:
             from llmwikify.foundation.llm.streamable import LLMRequestError
 
@@ -183,7 +183,7 @@ class TestChatRetry:
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         with patch(
-            "requests.post", return_value=_err_response(401, b"invalid api key")
+            "httpx.Client.post", return_value=_err_response(401, b"invalid api key")
         ) as mock_post:
             from llmwikify.foundation.llm.streamable import LLMRequestError
 
@@ -198,10 +198,10 @@ class TestChatRetry:
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         with patch(
-            "requests.post",
-            side_effect=requests.exceptions.ReadTimeout("persistent"),
+            "httpx.Client.post",
+            side_effect=httpx.ReadTimeout("persistent"),
         ) as mock_post:
-            with pytest.raises(requests.exceptions.ReadTimeout):
+            with pytest.raises(httpx.ReadTimeout):
                 client.chat([{"role": "user", "content": "hi"}])
         # 1 initial + 3 retries = 4 total attempts
         assert mock_post.call_count == 4
@@ -212,7 +212,7 @@ class TestChatRetry:
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         with patch(
-            "requests.post", return_value=_err_response(503, b"down")
+            "httpx.Client.post", return_value=_err_response(503, b"down")
         ) as mock_post:
             from llmwikify.foundation.llm.streamable import LLMRequestError
 
@@ -221,20 +221,17 @@ class TestChatRetry:
             assert exc_info.value.status_code == 503
         assert mock_post.call_count == 4
 
-    def test_chat_retries_sslerror_via_connection_error(self, monkeypatch):
-        """SSLError is a subclass of ConnectionError in this requests
-        version, so it gets retried. (Cert rotation during a deploy can
-        cause transient SSL failures that resolve on retry.)
-        """
+    def test_chat_retries_connect_error(self, monkeypatch):
+        """ConnectError is retried (covers transient SSL failures)."""
         client = _make_client()
         monkeypatch.setattr(
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         ok = _ok_response("recovered")
         with patch(
-            "requests.post",
+            "httpx.Client.post",
             side_effect=[
-                requests.exceptions.SSLError("cert verify failed"),
+                httpx.ConnectError("cert verify failed"),
                 ok,
             ],
         ) as mock_post:
@@ -260,8 +257,8 @@ class TestChatWithToolsRetry:
             "choices": [{"message": {"content": "hi", "tool_calls": None}}]
         }
         with patch(
-            "requests.post",
-            side_effect=[requests.exceptions.ReadTimeout(), ok],
+            "httpx.Client.post",
+            side_effect=[httpx.ReadTimeout("timeout"), ok],
         ) as mock_post:
             result = client.chat_with_tools([{"role": "user", "content": "hi"}])
         # Mock response has no tool_calls field, so result only has "content"
@@ -279,27 +276,31 @@ class TestStreamChatRetry:
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
 
-        # Successful streaming response
+        # Successful streaming response (httpx iter_lines returns strings)
         ok = MagicMock()
         ok.status_code = 200
-        ok.content = b""
         ok.close = MagicMock()
         ok.iter_lines.return_value = [
-            b'data: {"choices": [{"delta": {"content": "hello"}}]}',
-            b"data: [DONE]",
+            'data: {"choices": [{"delta": {"content": "hello"}}]}',
+            "data: [DONE]",
         ]
 
+        # stream_chat uses httpx.Client.stream(), not .post()
+        stream_ctx = MagicMock()
+        stream_ctx.__enter__ = MagicMock(return_value=ok)
+        stream_ctx.__exit__ = MagicMock(return_value=False)
+
         with patch(
-            "requests.post",
-            side_effect=[requests.exceptions.ReadTimeout(), ok],
-        ) as mock_post:
+            "httpx.Client.stream",
+            side_effect=[httpx.ReadTimeout("timeout"), stream_ctx],
+        ) as mock_stream:
             chunks = list(
                 client.stream_chat([{"role": "user", "content": "hi"}])
             )
         # Got the content + done
         assert any(c.get("text") == "hello" for c in chunks)
         assert any(c.get("type") == "done" for c in chunks)
-        assert mock_post.call_count == 2
+        assert mock_stream.call_count == 2
 
     def test_stream_chat_does_not_retry_400(self, monkeypatch):
         client = _make_client()
@@ -308,14 +309,19 @@ class TestStreamChatRetry:
         )
         bad = MagicMock()
         bad.status_code = 400
-        bad.content = b'{"error":{"message":"bad"}}'
+        bad.read.return_value = b'{"error":{"message":"bad"}}'
         bad.close = MagicMock()
-        with patch("requests.post", return_value=bad) as mock_post:
+
+        stream_ctx = MagicMock()
+        stream_ctx.__enter__ = MagicMock(return_value=bad)
+        stream_ctx.__exit__ = MagicMock(return_value=False)
+
+        with patch("httpx.Client.stream", return_value=stream_ctx) as mock_stream:
             from llmwikify.foundation.llm.streamable import LLMRequestError
 
             with pytest.raises(LLMRequestError):
                 list(client.stream_chat([{"role": "user", "content": "hi"}]))
-        assert mock_post.call_count == 1
+        assert mock_stream.call_count == 1
 
 
 # ─── _post_with_retry_sync direct unit tests ────────────────────
@@ -327,7 +333,7 @@ class TestPostWithRetryDirect:
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         ok = _ok_response()
-        with patch("requests.post", return_value=ok) as mock_post:
+        with patch("httpx.Client.post", return_value=ok) as mock_post:
             resp = _post_with_retry_sync(
                 "http://test/x",
                 {"Content-Type": "application/json"},
@@ -337,30 +343,15 @@ class TestPostWithRetryDirect:
         assert resp is ok
         assert mock_post.call_count == 1
 
-    def test_passes_stream_flag(self):
-        ok = _ok_response()
-        with patch("requests.post", return_value=ok) as mock_post:
-            _post_with_retry_sync(
-                "http://test/x",
-                {},
-                {},
-                timeout_seconds=5,
-                stream=True,
-            )
-        # stream=True should be forwarded to requests.post
-        assert mock_post.call_count == 1
-        kwargs = mock_post.call_args.kwargs
-        assert kwargs.get("stream") is True
-
     def test_raises_after_exhaustion(self, monkeypatch):
         monkeypatch.setattr(
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         with patch(
-            "requests.post",
-            side_effect=requests.exceptions.ReadTimeout(),
+            "httpx.Client.post",
+            side_effect=httpx.ReadTimeout("timeout"),
         ) as mock_post:
-            with pytest.raises(requests.exceptions.ReadTimeout):
+            with pytest.raises(httpx.ReadTimeout):
                 _post_with_retry_sync(
                     "http://test/x", {}, {}, timeout_seconds=5
                 )

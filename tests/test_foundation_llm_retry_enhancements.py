@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
-import requests
 
 from llmwikify.foundation.llm.streamable import (
     RetryConfig,
@@ -21,7 +21,6 @@ from llmwikify.foundation.llm.streamable import (
     get_retry_metrics,
     reset_retry_metrics,
 )
-
 
 # ─── RetryConfig.from_env ────────────────────────────────────────
 
@@ -161,7 +160,7 @@ class TestRetryAfterInLoop:
         # Use a real ok response (with .json attribute)
         ok = _ok_response()
 
-        with patch("requests.post", side_effect=[resp_429, ok]) as mock_post:
+        with patch("httpx.Client.post", side_effect=[resp_429, ok]) as mock_post:
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "ok"
         assert mock_post.call_count == 2
@@ -175,7 +174,7 @@ class TestRetryAfterInLoop:
         resp_503.close = MagicMock()
         ok = _ok_response()
 
-        with patch("requests.post", side_effect=[resp_503, ok]):
+        with patch("httpx.Client.post", side_effect=[resp_503, ok]):
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "ok"
 
@@ -188,7 +187,7 @@ class TestRetryAfterInLoop:
         resp_429.close = MagicMock()
         ok = _ok_response()
 
-        with patch("requests.post", side_effect=[resp_429, ok]):
+        with patch("httpx.Client.post", side_effect=[resp_429, ok]):
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "ok"
 
@@ -284,7 +283,7 @@ class TestMetricsIntegration:
     def test_metrics_record_successful_call(self, monkeypatch):
         reset_retry_metrics()
         client = _make_client()
-        with patch("requests.post", return_value=_ok_response("hi")):
+        with patch("httpx.Client.post", return_value=_ok_response("hi")):
             client.chat([{"role": "user", "content": "hi"}])
         m = get_retry_metrics()
         assert m.calls_completed == 1
@@ -300,8 +299,8 @@ class TestMetricsIntegration:
         client = _make_client()
         ok = _ok_response("hi")
         with patch(
-            "requests.post",
-            side_effect=[requests.exceptions.ReadTimeout(), ok],
+            "httpx.Client.post",
+            side_effect=[httpx.ReadTimeout("timeout"), ok],
         ):
             client.chat([{"role": "user", "content": "hi"}])
         m = get_retry_metrics()
@@ -318,10 +317,10 @@ class TestMetricsIntegration:
         reset_retry_metrics()
         client = _make_client()
         with patch(
-            "requests.post",
-            side_effect=requests.exceptions.ReadTimeout(),
+            "httpx.Client.post",
+            side_effect=httpx.ReadTimeout("timeout"),
         ):
-            with pytest.raises(requests.exceptions.ReadTimeout):
+            with pytest.raises(httpx.ReadTimeout):
                 client.chat([{"role": "user", "content": "hi"}])
         m = get_retry_metrics()
         assert m.calls_completed == 1
@@ -339,7 +338,7 @@ class TestMetricsIntegration:
         from llmwikify.foundation.llm.streamable import LLMRequestError
 
         with patch(
-            "requests.post", return_value=_err_response(400, b"bad")
+            "httpx.Client.post", return_value=_err_response(400, b"bad")
         ):
             with pytest.raises(LLMRequestError):
                 client.chat([{"role": "user", "content": "hi"}])

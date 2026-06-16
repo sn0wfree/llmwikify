@@ -153,7 +153,7 @@ class TestChatMethodErrors:
         mock_resp.status_code = 400
         mock_resp.content = body
 
-        with patch("requests.post", return_value=mock_resp):
+        with patch("httpx.Client.post", return_value=mock_resp):
             with pytest.raises(LLMRequestError) as exc_info:
                 client.chat([{"role": "user", "content": "hi"}])
             assert exc_info.value.status_code == 400
@@ -165,7 +165,7 @@ class TestChatMethodErrors:
         mock_resp.status_code = 401
         mock_resp.content = b'{"error":{"message":"invalid api key"}}'
 
-        with patch("requests.post", return_value=mock_resp):
+        with patch("httpx.Client.post", return_value=mock_resp):
             with pytest.raises(LLMRequestError) as exc_info:
                 client.chat([{"role": "user", "content": "hi"}])
             assert exc_info.value.status_code == 401
@@ -174,14 +174,14 @@ class TestChatMethodErrors:
     def test_chat_rejects_empty_messages_before_request(self):
         """Empty messages raise ValueError, not a network call."""
         client = _make_client()
-        with patch("requests.post") as mock_post:
+        with patch("httpx.Client.post") as mock_post:
             with pytest.raises(ValueError, match="non-empty"):
                 client.chat([])
             mock_post.assert_not_called()
 
     def test_chat_rejects_invalid_top_p_before_request(self):
         client = _make_client()
-        with patch("requests.post") as mock_post:
+        with patch("httpx.Client.post") as mock_post:
             with pytest.raises(ValueError, match="top_p"):
                 client.chat(
                     [{"role": "user", "content": "hi"}],
@@ -198,13 +198,15 @@ class TestStreamMethodErrors:
         body = b'{"error":{"message":"invalid params, top_p (2013)"}}'
         mock_resp = MagicMock()
         mock_resp.status_code = 400
-        mock_resp.content = body
+        mock_resp.read.return_value = body
         mock_resp.close = MagicMock()
 
-        # After the retry refactor, stream_chat calls ``requests.post``
-        # directly (not via a ``with`` block); the helper manages the
-        # stream flag and the caller closes the response.
-        with patch("requests.post", return_value=mock_resp):
+        # stream_chat uses httpx.Client.stream() context manager
+        stream_ctx = MagicMock()
+        stream_ctx.__enter__ = MagicMock(return_value=mock_resp)
+        stream_ctx.__exit__ = MagicMock(return_value=False)
+
+        with patch("httpx.Client.stream", return_value=stream_ctx):
             with pytest.raises(LLMRequestError) as exc_info:
                 list(client.stream_chat([{"role": "user", "content": "hi"}]))
             assert exc_info.value.status_code == 400

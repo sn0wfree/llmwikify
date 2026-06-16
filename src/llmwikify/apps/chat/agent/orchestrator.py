@@ -72,8 +72,8 @@ class ChatEvent:
         return {"type": "error", "message": message}
 
     @staticmethod
-    def save_warning(message: str) -> dict:
-        return {"type": "save_warning", "message": message}
+    def save_warning(reason: str) -> dict:
+        return {"type": "save_warning", "reason": reason}
 
 
 # ─── ChatOrchestrator ─────────────────────────────────────────
