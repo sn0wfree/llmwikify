@@ -496,33 +496,8 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
     set_agent_service(agent_service)
 
     from llmwikify.interfaces.server.http.chat_sse import router as agent_router
-    from llmwikify.apps.chat.routes import set_autoresearch_deps, router as autoresearch_router
-
-    # Load research config from global config file
-    research_config = _load_research_config()
-
-    # AutoResearch — the unified 6-step research framework.
-    from llmwikify.apps.chat.db import AutoResearchDatabase
-    autoresearch_db = AutoResearchDatabase(data_dir)
-    # Get default wiki's tool registry for L3 chat routes
-    # (Phase 4.5 / v0.36): injected so L3 doesn't import L4.
-    try:
-        default_tool_registry = registry.get_tool_registry(
-            registry.get_default_wiki_id(),
-        )
-    except Exception:  # noqa: BLE001
-        default_tool_registry = None
-    set_autoresearch_deps(
-        db=autoresearch_db,
-        wiki_registry=registry,
-        llm_client=agent_service._get_llm(),
-        config=research_config,
-        tool_registry=default_tool_registry,
-    )
-    logger.info("AutoResearch DB initialized at: %s", autoresearch_db.db_path)
 
     app.include_router(agent_router)
-    app.include_router(autoresearch_router)
 
     _register_reproduction_routes(app, registry, agent_service, data_dir=data_dir)
 

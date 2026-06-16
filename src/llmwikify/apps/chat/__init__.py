@@ -29,24 +29,75 @@ preserved byte-for-byte. The 3 new files are thin wrappers
 that expose a unified chat-style interface on top of the
 existing engine.
 """
+import sys as _sys
+
+# Back-compat re-exports: v0.41 classes were git-mv'd to archive/ in v0.42+.
+# Re-exported here so existing callers (``from llmwikify.apps.chat import
+# ResearchEngine``) still work. The classes themselves are unchanged.
+# Submodule re-exports so ``from llmwikify.apps.chat import actions`` etc.
+# also keep working. We also register the modules in sys.modules so
+# direct submodule imports (``import llmwikify.apps.chat.engine``) keep
+# resolving too.
+from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy import (  # noqa: F401
+    actions,  # noqa: F401
+    engine,  # noqa: F401
+    gates,  # noqa: F401
+    llm_step,  # noqa: F401
+    observer,  # noqa: F401
+    reasoner,  # noqa: F401
+    report,  # noqa: F401
+    resume,  # noqa: F401
+    routes,  # noqa: F401
+)
+from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import (  # noqa: F401
+    ResearchEngine,
+)
+from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import (
+    ResearchState as _ResearchState_archived,
+)
+from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.gates import (  # noqa: F401
+    ResearchGates,
+)
+from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import (  # noqa: F401
+    LLMCallMetrics,
+)
+from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.report import (  # noqa: F401
+    ReportGenerator,
+)
+
 from .base import ChatBase, ChatMessage, ChatSession
 from .clarifier import ResearchClarifier
 from .config import DEFAULT_SIX_STEP_CONFIG, merge_six_step_config
-from .engine import ResearchEngine, ResearchState  # re-exported below
-from .gates import ResearchGates
-from .eval_harness import CaseResult, GoldenCase, Harness, HarnessReport
 from .db import AutoResearchDatabase, ChatDatabase
-from .llm_step import LLMCallMetrics
-from .state import MetricsCollector
+from .eval_harness import CaseResult, GoldenCase, Harness, HarnessReport
 from .harness.quality_gate import GateResult, QualityGate
-from .reasoning_checker import ReasoningChecker
-from .report import ReportGenerator
-from .research_agent import ResearchAgent
-from .retry_managers import DBRetryManager, LLMRetryManager, StageRetryManager, retry_async
-from .synthesizer import ResearchSynthesizer
 from .harness.source_filter import SourceFilter
-from .state import VALID_TRANSITIONS, ActionMetrics, ResearchState, SessionMetrics
 from .harness.structure_validator import StructureValidator
+from .reasoning_checker import ReasoningChecker
+from .research_agent import ResearchAgent
+from .retry_managers import (
+    DBRetryManager,
+    LLMRetryManager,
+    StageRetryManager,
+    retry_async,
+)
+from .state import (
+    VALID_TRANSITIONS,
+    ActionMetrics,
+    MetricsCollector,
+    ResearchState,
+    SessionMetrics,
+)
+from .synthesizer import ResearchSynthesizer
+
+for _name in (
+    "actions", "engine", "observer", "gates", "reasoner", "report",
+    "llm_step", "resume", "routes",
+):
+    _sys.modules.setdefault(
+        f"llmwikify.apps.chat.{_name}",
+        _sys.modules[f"llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.{_name}"],
+    )
 
 __all__ = [
     # Engine

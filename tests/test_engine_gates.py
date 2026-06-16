@@ -37,7 +37,7 @@ def test_engine_constructs_gates():
 
 def test_gates_holds_back_refs_to_engine_deps():
     """ResearchGates caches the engine's db, config, _quality_gate."""
-    from llmwikify.apps.chat.gates import ResearchGates
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.gates import ResearchGates
 
     class FakeQualityGate:
         pass
@@ -116,7 +116,7 @@ def test_engine_synthesis_to_text_delegates_to_gates():
 
 def test_framework_compliance_returns_missing_step():
     """Each incomplete framework field produces the right ``missing`` action."""
-    from llmwikify.apps.chat.gates import ResearchGates
+    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.gates import ResearchGates
     from llmwikify.apps.chat.state import ResearchState
 
     class FakeEngine:
