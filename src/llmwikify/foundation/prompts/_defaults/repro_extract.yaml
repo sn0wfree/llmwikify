@@ -6,9 +6,9 @@ trigger:
   when: "repro_extract"
 
 params:
-  max_tokens: 6000
+  max_tokens: 81920
   temperature: 0.1
-  max_content_chars: 32000
+  max_content_chars: 100000
 
 system: |
   You are a quantitative research analyst. Extract structured information from
