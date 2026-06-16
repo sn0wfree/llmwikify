@@ -548,12 +548,20 @@ def _register_reproduction_routes(
     upload_dir = raw_dir
     logger.info("paper raw_dir: %s, upload_dir: %s", raw_dir, upload_dir)
 
+    # Read parquet path from config
+    try:
+        _cfg_file = Path.home() / ".llmwikify" / "llmwikify.json"
+        _parquet_path = __import__("json").loads(_cfg_file.read_text()).get("parquet", {}).get("path") if _cfg_file.exists() else None
+    except Exception:
+        _parquet_path = None
+
     set_paper_deps(
         wiki_registry=registry,
         llm_client=agent_service._get_llm(),
         db=repro_db,
         raw_dir=raw_dir,
         upload_dir=upload_dir,
+        parquet_path=_parquet_path,
     )
     set_factor_deps(
         wiki_registry=registry,

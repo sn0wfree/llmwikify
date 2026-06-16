@@ -35,6 +35,7 @@ _LLM_CLIENT: Any = None
 _DB: Any = None
 _RAW_DIR: Optional[Path] = None
 _UPLOAD_DIR: Optional[Path] = None
+_PARQUET_PATH: Optional[str] = None
 
 
 def _extract_factor_from_page(page: dict, paper_id: str, extraction: dict | None = None) -> dict:
@@ -161,14 +162,16 @@ def set_paper_deps(
     db: Any = None,
     raw_dir: Path | None = None,
     upload_dir: Path | None = None,
+    parquet_path: str | None = None,
 ) -> None:
     """Set dependencies during app startup."""
-    global _WIKI_REGISTRY, _LLM_CLIENT, _DB, _RAW_DIR, _UPLOAD_DIR
+    global _WIKI_REGISTRY, _LLM_CLIENT, _DB, _RAW_DIR, _UPLOAD_DIR, _PARQUET_PATH
     _WIKI_REGISTRY = wiki_registry
     _LLM_CLIENT = llm_client
     _DB = db
     _RAW_DIR = raw_dir
     _UPLOAD_DIR = upload_dir
+    _PARQUET_PATH = parquet_path
 
     if _RAW_DIR is not None:
         _RAW_DIR.mkdir(parents=True, exist_ok=True)
@@ -332,143 +335,242 @@ async def _run_paper_extraction(
         # Import quant storage
         from llmwikify.reproduction.quant_wiki import get_quant_wiki
         from llmwikify.reproduction.factor_library import write_factor_yaml
+        from llmwikify.reproduction.extract_paper import _extract_factors_from_list
         quant = get_quant_wiki()
 
         written: list[str] = []
-        for page in pages:
-            try:
-                pt = page.get("page_type", "Source")
-                if pt == "Factor":
-                    # Convert factor wiki page to 6-layer YAML using
-                    # LLM-extracted factor_metadata from the paper extraction
-                    extracted = _extract_factor_from_page(page, paper_id, extraction=extraction)
-                    factor_name = extracted["name"]
-                    factor_data = extracted["factor"]
-                    write_factor_yaml(factor_name, {"factor": factor_data})
-                else:
-                    # Source → quant/papers/, Strategy → quant/strategies/
-                    quant_page_type = "papers" if pt == "Source" else "strategies"
-                    quant.write_page(
-                        page["page_name"],
-                        page["content"],
-                        page_type=quant_page_type,
+
+        # ── Multi-factor branch: factor_list[] from extraction ──
+        factor_list_factors = _extract_factors_from_list(extraction, paper_id)
+        if factor_list_factors:
+            logger.info(
+                "paper %s: multi-factor mode, %d factors from factor_list",
+                session_id, len(factor_list_factors),
+            )
+            for fl in factor_list_factors:
+                try:
+                    write_factor_yaml(fl["name"], {"factor": fl["factor"]})
+                    _DB.create_artifact(
+                        session_id=session_id,
+                        kind="Factor",
+                        wiki_page=f"factor-{fl['name']}",
                     )
-                _DB.create_artifact(
-                    session_id=session_id,
-                    kind=pt,
-                    wiki_page=page["page_name"],
-                )
-                written.append(page["page_name"])
-            except Exception as exc:
-                logger.warning(
-                    "failed to write page %s: %s", page["page_name"], exc
-                )
+                    written.append(f"factor-{fl['name']}")
+                except Exception as exc:
+                    logger.warning(
+                        "failed to write factor %s: %s", fl["name"], exc
+                    )
 
-        _DB.record_event(
-            session_id, "wiki.written", pages_written=len(written)
-        )
+            # Also write Source pages (strategy_logic, data_requirements, etc.)
+            pages = build_paper_pages(extraction, paper_id)
+            for page in pages:
+                pt = page.get("page_type", "Source")
+                if pt == "Source":
+                    try:
+                        quant.write_page(
+                            page["page_name"], page["content"], page_type="papers"
+                        )
+                        _DB.create_artifact(
+                            session_id=session_id, kind=pt, wiki_page=page["page_name"]
+                        )
+                        written.append(page["page_name"])
+                    except Exception as exc:
+                        logger.warning("failed to write page %s: %s", page["page_name"], exc)
 
-        # Auto-backtest: run factor + strategy backtests if signal was extracted
-        suggested = extraction.get("suggested_signal", {})
-        signal_type = suggested.get("signal_type", "unknown")
-        backtest_results: list[dict[str, Any]] = []
-
-        if signal_type != "unknown":
+            # Auto-backtest all factor_list factors
             _DB.record_event(session_id, "backtest.started", symbol=symbol)
+            backtest_results: list[dict[str, Any]] = []
             try:
                 from llmwikify.reproduction.factor_backtest import run_factor_backtest_universe
-                from llmwikify.reproduction.backtest import run_backtest
                 from llmwikify.reproduction.router import DataRouter
                 from llmwikify.reproduction.universe import resolve_universe
 
-                router = DataRouter(use_cache=True)
-
-                # Prefer universe from data_requirements if available
-                universe_spec = (
-                    extraction.get("data_requirements", {}).get("universe", "HS300")
-                    or "HS300"
-                )
-                # Resolve to actual stock list
+                router = DataRouter(use_cache=True, parquet_path=str(_PARQUET_PATH) if _PARQUET_PATH else None)
+                universe_spec = extraction.get("data_requirements", {}).get("universe", "HS300") or "HS300"
                 symbols = await asyncio.to_thread(resolve_universe, universe_spec)
-                # Fall back to single symbol if universe resolution fails
-                if not symbols:
-                    symbols = [symbol] if symbol else ["000001.SZ"]
 
-                merged_df, source = await asyncio.to_thread(
-                    router.get_universe, symbols, start_date, end_date
-                )
+                for fl in factor_list_factors:
+                    try:
+                        factor_name = fl["name"]
+                        factor_data = fl["factor"]
+                        code = factor_data.get("l1", {}).get("code", "") or factor_data.get("l2", {}).get("generated_code", "")
+                        factor_class = "formula" if code else "momentum"
 
-                if merged_df is not None and not merged_df.empty:
-                    # Pivot to wide format [date × Code]
-                    close_wide = merged_df.pivot_table(
-                        index="date", columns="Code", values="close", aggfunc="last"
-                    )
-                    close_wide = close_wide.sort_index().dropna(how="all")
-
-                    # Factor backtest (cross-section)
-                    factor_slug = None
-                    for p in pages:
-                        if p.get("page_type") == "Factor":
-                            factor_slug = p["page_name"]
-                            break
-
-                    if factor_slug:
-                        factor_class = signal_type
-                        factor_params = suggested.get("signal_params", {})
-                        fb_result = await asyncio.to_thread(
+                        result = await asyncio.to_thread(
                             run_factor_backtest_universe,
-                            close_wide=close_wide,
+                            data_router=router,
+                            symbols=symbols,
                             factor_class=factor_class,
-                            factor_params=factor_params,
-                            adj_mode="M-end",
+                            factor_params={**factor_data.get("l1", {}).get("default_params", {}), "code": code} if code else factor_data.get("l1", {}).get("default_params", {}),
+                            start_date=start_date,
+                            end_date=end_date,
+                            adj_mode="D",
                             n_groups=5,
-                            universe=universe_spec,
+                            cost_bps=15.0,
                         )
+                        bt_result = result["result"]
                         backtest_results.append({
-                            "type": "factor",
-                            "slug": factor_slug,
-                            "ic_mean": fb_result.ic_mean,
-                            "rank_ic_mean": fb_result.rank_ic_mean,
-                            "icir": fb_result.icir,
-                            "annual_return": fb_result.annual_return,
-                            "longshort_ann_return": fb_result.longshort_ann_return,
-                            "max_drawdown": fb_result.max_drawdown,
+                            "factor_name": factor_name,
+                            "factor_class": factor_class,
+                            "ic_summary": result.get("ic_summary"),
+                            "group_return": result.get("group_return"),
+                            "long_short": result.get("long_short"),
+                            "score": bt_result.score,
+                            "turnover": getattr(bt_result, "turnover", None),
                         })
 
-                    # Strategy backtest (single stock for now)
-                    data, _ = await asyncio.to_thread(
-                        router.get, symbol, start_date, end_date
-                    )
-                    strategy_class = suggested.get("strategy_class", "trend_following")
-                    sb_result = await asyncio.to_thread(
-                        run_backtest,
-                        strategy=signal_type,
-                        data=data,
-                        config={
-                            "signal_params": suggested.get("signal_params", {}),
-                            "initial_cash": 1_000_000,
-                            "commission": 0.001,
-                        },
-                    )
-                    backtest_results.append({
-                        "type": "strategy",
-                        "status": sb_result.status,
-                        "trades_count": len(sb_result.trades),
-                        "final_cash": sb_result.final_cash,
-                    })
+                        # Store to DuckDB
+                        try:
+                            from llmwikify.reproduction.factor_value_store import store_factor_values
+                            if result.get("factor_wide") is not None:
+                                store_factor_values(
+                                    factor_name=factor_name,
+                                    factor_wide=result["factor_wide"],
+                                    source=f"paper/{paper_id}",
+                                )
+                        except Exception as db_exc:
+                            logger.warning("paper %s: DuckDB store failed for %s: %s", session_id, factor_name, db_exc)
 
-                    _DB.record_event(
-                        session_id, "backtest.done",
-                        results=backtest_results, source=source,
-                    )
-                    logger.info("paper %s: auto-backtest done (%s)", session_id, source)
-                else:
-                    _DB.record_event(session_id, "backtest.skipped", reason="no data")
-                    logger.warning("paper %s: no data for backtest (%s)", session_id, symbol)
+                    except Exception as exc:
+                        logger.warning("paper %s: backtest failed for %s: %s", session_id, fl["name"], exc)
+                        backtest_results.append({"factor_name": fl["name"], "error": str(exc)})
+
+                _DB.record_event(
+                    session_id, "backtest.done",
+                    results=backtest_results, source=source,
+                )
+                logger.info("paper %s: multi-factor backtest done (%d factors)", session_id, len(backtest_results))
 
             except Exception as bt_exc:
-                logger.warning("paper %s: auto-backtest failed: %s", session_id, bt_exc)
+                logger.warning("paper %s: multi-factor backtest failed: %s", session_id, bt_exc)
                 _DB.record_event(session_id, "backtest.error", error=str(bt_exc))
+
+        else:
+            # ── Single-factor branch (legacy) ──
+            pages = build_paper_pages(extraction, paper_id)
+            for page in pages:
+                try:
+                    pt = page.get("page_type", "Source")
+                    if pt == "Factor":
+                        extracted = _extract_factor_from_page(page, paper_id, extraction=extraction)
+                        factor_name = extracted["name"]
+                        factor_data = extracted["factor"]
+                        write_factor_yaml(factor_name, {"factor": factor_data})
+                    else:
+                        quant_page_type = "papers" if pt == "Source" else "strategies"
+                        quant.write_page(
+                            page["page_name"], page["content"], page_type=quant_page_type,
+                        )
+                    _DB.create_artifact(
+                        session_id=session_id, kind=pt, wiki_page=page["page_name"],
+                    )
+                    written.append(page["page_name"])
+                except Exception as exc:
+                    logger.warning("failed to write page %s: %s", page["page_name"], exc)
+
+            _DB.record_event(session_id, "wiki.written", pages_written=len(written))
+
+            # Auto-backtest (single-factor legacy)
+            suggested = extraction.get("suggested_signal", {})
+            signal_type = suggested.get("signal_type", "unknown")
+            backtest_results: list[dict[str, Any]] = []
+
+            if signal_type != "unknown":
+                _DB.record_event(session_id, "backtest.started", symbol=symbol)
+                try:
+                    from llmwikify.reproduction.factor_backtest import run_factor_backtest_universe
+                    from llmwikify.reproduction.backtest import run_backtest
+                    from llmwikify.reproduction.router import DataRouter
+                    from llmwikify.reproduction.universe import resolve_universe
+
+                    router = DataRouter(use_cache=True, parquet_path=str(_PARQUET_PATH) if _PARQUET_PATH else None)
+
+                    # Prefer universe from data_requirements if available
+                    universe_spec = (
+                        extraction.get("data_requirements", {}).get("universe", "HS300")
+                        or "HS300"
+                    )
+                    # Resolve to actual stock list
+                    symbols = await asyncio.to_thread(resolve_universe, universe_spec)
+                    # Fall back to single symbol if universe resolution fails
+                    if not symbols:
+                        symbols = [symbol] if symbol else ["000001.SZ"]
+
+                    merged_df, source = await asyncio.to_thread(
+                        router.get_universe, symbols, start_date, end_date
+                    )
+
+                    if merged_df is not None and not merged_df.empty:
+                        # Pivot to wide format [date × Code]
+                        close_wide = merged_df.pivot_table(
+                            index="date", columns="Code", values="close", aggfunc="last"
+                        )
+                        close_wide = close_wide.sort_index().dropna(how="all")
+
+                        # Factor backtest (cross-section)
+                        factor_slug = None
+                        for p in pages:
+                            if p.get("page_type") == "Factor":
+                                factor_slug = p["page_name"]
+                                break
+
+                        if factor_slug:
+                            factor_class = signal_type
+                            factor_params = suggested.get("signal_params", {})
+                            fb_result = await asyncio.to_thread(
+                                run_factor_backtest_universe,
+                                close_wide=close_wide,
+                                factor_class=factor_class,
+                                factor_params=factor_params,
+                                adj_mode="M-end",
+                                n_groups=5,
+                                universe=universe_spec,
+                            )
+                            backtest_results.append({
+                                "type": "factor",
+                                "slug": factor_slug,
+                                "ic_mean": fb_result.ic_mean,
+                                "rank_ic_mean": fb_result.rank_ic_mean,
+                                "icir": fb_result.icir,
+                                "annual_return": fb_result.annual_return,
+                                "longshort_ann_return": fb_result.longshort_ann_return,
+                                "max_drawdown": fb_result.max_drawdown,
+                            })
+
+                        # Strategy backtest (single stock for now)
+                        data, _ = await asyncio.to_thread(
+                            router.get, symbol, start_date, end_date
+                        )
+                        strategy_class = suggested.get("strategy_class", "trend_following")
+                        sb_result = await asyncio.to_thread(
+                            run_backtest,
+                            strategy=signal_type,
+                            data=data,
+                            config={
+                                "signal_params": suggested.get("signal_params", {}),
+                                "initial_cash": 1_000_000,
+                                "commission": 0.001,
+                            },
+                        )
+                        backtest_results.append({
+                            "type": "strategy",
+                            "status": sb_result.status,
+                            "trades_count": len(sb_result.trades),
+                            "final_cash": sb_result.final_cash,
+                        })
+
+                        _DB.record_event(
+                            session_id, "backtest.done",
+                            results=backtest_results, source=source,
+                        )
+                        logger.info("paper %s: auto-backtest done (%s)", session_id, source)
+                    else:
+                        _DB.record_event(session_id, "backtest.skipped", reason="no data")
+                        logger.warning("paper %s: no data for backtest (%s)", session_id, symbol)
+
+                except Exception as bt_exc:
+                    logger.warning("paper %s: auto-backtest failed: %s", session_id, bt_exc)
+                    _DB.record_event(session_id, "backtest.error", error=str(bt_exc))
 
         _DB.update_status(session_id, "done")
         _DB.record_event(

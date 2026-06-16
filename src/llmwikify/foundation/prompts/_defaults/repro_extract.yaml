@@ -93,6 +93,40 @@ user: |
       "confidence": "string - high/medium/low",
       "reasoning": "string - why this signal type was chosen"
     },
+    "factor_list": [
+      {
+        "name": "string - factor name (e.g., alpha_001, alpha_002)",
+        "formula": "string - mathematical formula in LaTeX or text",
+        "description": "string - one-sentence description in Chinese",
+        "asset_type": "string - stock|futures|options (default: stock)",
+        "category": "string - price|fundamental|composite (default: price)",
+        "subcategory": "string - momentum|reversal|volatility|liquidity|value|growth|quality|size|signal",
+        "input_columns": ["list of input column names (e.g., open, high, low, close, volume)"],
+        "frequency": "string - 日频|周频|月频",
+        "default_params": {"key": "value"},
+        "param_constraints": {"key": "constraint description"},
+        "business_constraints": "string - usage limitations",
+        "financial_intuition": "string - what this factor intuitively measures",
+        "market_behavior": "string - what market behavior it captures",
+        "theoretical_basis": "string - underlying financial theory",
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "hypothesis name in Chinese",
+            "description": "hypothesis description in Chinese",
+            "expected_ic_sign": "正|负",
+            "source": "theoretical or empirical source",
+            "priority": "主假设|辅助假设"
+          }
+        ],
+        "calculation_steps": [
+          {"step": 1, "description": "step description", "formula": "step formula"}
+        ],
+        "edge_case_handling": "string - edge case handling",
+        "missing_value_handling": "string - missing value strategy",
+        "complexity": "string - e.g., O(T × N)"
+      }
+    ],
     "factor_metadata": {
       "asset_type": "string - stock|futures|options (default: stock)",
       "category": "string - price|fundamental|composite (default: price)",
