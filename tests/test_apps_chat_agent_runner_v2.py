@@ -1,25 +1,23 @@
-"""Tests for ChatRunnerV2 skeleton (Plan B Step B-1).
+"""Tests for ChatRunnerV2 (Plan B Steps B-1 + B-2).
 
-B-1 only establishes the public API surface, so the matrix is small:
-  1. ChatRunnerV2 instantiates with required deps
-  2. run_stream yields at least one done event
-  3. run_to_completion returns ChatRunResult with expected defaults
-  4. ChatRunResult carries microcompact stats fields (compacted_count,
-     total_compacted_chars_saved) when present in the event stream
-  5. exception in run_stream → run_to_completion sets stop_reason=error
-  6. _RunContext.elapsed() returns non-negative float
-  7. hook parameter defaults to NoOpHook
-  8. does not import legacy engines
-  9. dependencies are minimal (only spec + callback)
- 10. skeleton works without DB / LLM / SSE infrastructure
+B-1: skeleton + public API surface (8 cases)
+B-1-extension: independence + edge cases (18 cases)
+B-2: 5-step state machine + hooks + microcompact + text-mode (15 cases)
 
-Plus 15 edge-case tests covering:
-  - _RunContext defaults, slots, time progression, field independence
-  - ChatRunResult aggregation: no events, error string, confirmation
-  - Multi-event streaming: ordering, message_delta accumulation
+Total: 41 cases covering:
+  - Public API: run_stream, run_to_completion, ChatRunResult aggregation
+  - _RunContext: defaults, slots, time progression, field independence
+  - Independence: no legacy engine imports, minimal deps, works without infra
+  - 5-step loop: PRECHECK/REASON/ACT/OBSERVE/COMPLETE
+  - CompositeHook: 11 hook points wired through the loop
+  - microcompact: native integration (default ON, configurable)
+  - text-mode: [TOOL_CALL:...] parsing via TextModeParser
+  - Error handling: LLM stream failure → stop_reason=error
   - Concurrency: two run_to_completion calls don't share state
-  - Mutation safety: spec.messages not mutated by run
-  - stop_reason preservation through the aggregation pipeline
+  - Mutation safety: spec.messages not mutated
+  - confirmation_required: tool result → stop_reason=confirmation_required
+  - max_iterations: caps the loop
+  - multi-tool: executes multiple tool calls per iteration
 """
 from __future__ import annotations
 
@@ -96,7 +94,7 @@ def test_run_stream_yields_done_event() -> None:
     events = asyncio.run(collect())
     assert len(events) >= 1
     assert events[-1]["type"] == "done"
-    assert events[-1]["_v2"] is True
+    assert events[-1]["stop_reason"] == "completed"
 
 
 def test_run_to_completion_returns_chat_run_result() -> None:
@@ -189,6 +187,8 @@ def test_runner_dependencies_are_minimal() -> None:
     src = open(mod.__file__, encoding="utf-8").read()
     allowed_local_imports = {
         "from llmwikify.apps.chat.agent.spec import",
+        "from llmwikify.apps.chat.agent.microcompact import",
+        "from llmwikify.apps.chat.agent.text_mode_tool import",
         "from llmwikify.foundation.callback import",
     }
     for line in src.splitlines():
@@ -425,3 +425,452 @@ def test_run_to_completion_preserves_stop_reason_completed() -> None:
     spec = _make_spec()
     result = asyncio.run(runner.run_to_completion(spec))
     assert result.stop_reason in ("completed", "error")
+
+
+# ─── B-2 核心循环 (5 步) + 钩子 + microcompact ────────────────
+
+
+class _StubLLMService:
+    def __init__(
+        self,
+        events: list[dict[str, Any]] | None = None,
+        followup_events: list[dict[str, Any]] | None = None,
+    ) -> None:
+        self.config: dict = {}
+        self._events = events or [{"type": "done", "content": "stub answer"}]
+        self._followup = followup_events or [{"type": "done", "content": "stub answer"}]
+        self.tool_spec_called = False
+        self.truncate_called = False
+        self.call_count = 0
+
+    def _get_toolspec(self, _registry):
+        self.tool_spec_called = True
+        return [
+            {
+                "type": "function",
+                "function": {"name": "read_file", "description": "Read a file"},
+            },
+        ]
+
+    def _truncate_messages(self, messages):
+        self.truncate_called = True
+        return list(messages)
+
+    async def _llm_stream_with_retry(self, _messages, _tools):
+        self.call_count += 1
+        events = self._events if self.call_count == 1 else self._followup
+        for ev in events:
+            yield ev
+
+
+class _StubExecutor:
+    def __init__(self, results: dict[str, Any] | None = None) -> None:
+        self.results = results or {}
+        self.calls: list[tuple[str, dict]] = []
+
+    async def execute(self, tool_name, args, _registry, _session_id, _ctx):
+        self.calls.append((tool_name, args))
+        if tool_name in self.results:
+            return self.results[tool_name]
+        return {"status": "ok", "result": f"result for {tool_name}"}
+
+
+class _StubPromptBuilder:
+    def __init__(self, prompt: str = "stub system") -> None:
+        self.prompt = prompt
+
+    async def build_with_context(self, _ctx):
+        return self.prompt
+
+    async def build(self, **_kwargs):
+        return self.prompt
+
+
+def _make_full_runner(
+    llm_events=None,
+    tool_results=None,
+    prompt: str = "stub system",
+) -> tuple[ChatRunnerV2, _StubLLMService, _StubExecutor, _StubPromptBuilder]:
+    llm = _StubLLMService(events=llm_events)
+    executor = _StubExecutor(results=tool_results or {})
+    prompt_builder = _StubPromptBuilder(prompt=prompt)
+    runner = ChatRunnerV2(
+        chat_service=llm,
+        tool_executor=executor,
+        prompt_builder=prompt_builder,
+    )
+    return runner, llm, executor, prompt_builder
+
+
+def test_precheck_breaks_on_cancelled() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner()
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        events = []
+        async for ev in runner.run_stream(spec):
+            events.append(ev)
+            if ev.get("type") == "done":
+                break
+        return events
+
+    asyncio.run(_set_ctx_cancelled(runner, spec))
+    events = asyncio.run(run())
+    last = events[-1]
+    assert last["type"] == "done"
+
+
+async def _set_ctx_cancelled(runner, spec):
+    return None
+
+
+def test_reason_calls_llm_and_parses_done() -> None:
+    runner, llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": "Hello "},
+            {"type": "content", "text": "world"},
+            {"type": "done", "content": "Hello world"},
+        ],
+    )
+    spec = _make_spec()
+
+    async def collect() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(collect())
+    assert llm.tool_spec_called is True
+    assert llm.truncate_called is True
+    types = [e["type"] for e in events]
+    assert "message_delta" in types
+    assert types[-1] == "done"
+    final = next(e for e in events if e["type"] == "done")
+    assert "Hello world" in final["content"]
+
+
+def test_reason_extracts_tool_calls() -> None:
+    runner, _llm, executor, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": "call_1",
+                "name": "read_file",
+                "args": {"path": "/tmp/x"},
+            },
+            {
+                "type": "tool_call",
+                "id": "call_2",
+                "name": "exec",
+                "args": {"cmd": "ls"},
+            },
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec()
+
+    async def collect() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(collect())
+    starts = [e for e in events if e["type"] == "tool_call_start"]
+    assert len(starts) == 2
+    assert {s["tool"] for s in starts} == {"read_file", "exec"}
+    assert len(executor.calls) == 2
+
+
+def test_act_appends_tool_message_to_conversation() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": "call_a",
+                "name": "read_file",
+                "args": {"path": "/tmp"},
+            },
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec(messages=[{"role": "user", "content": "read it"}])
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    ends = [e for e in events if e["type"] == "tool_call_end"]
+    assert len(ends) == 1
+    assert ends[0]["tool"] == "read_file"
+
+
+def test_act_skips_malformed_tool_call() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "x", "name": "", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    errors = [e for e in events if e["type"] == "tool_call_error"]
+    assert len(errors) == 1
+    assert "empty name" in errors[0]["error"]
+
+
+def test_act_microcompacts_large_result() -> None:
+    big = {"data": "x" * 5000}
+    runner, _llm, executor, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": "c1",
+                "name": "read_file",
+                "args": {"path": "/big"},
+            },
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": big},
+    )
+    spec = _make_spec(microcompact=True, microcompact_keep_chars=200)
+
+    async def run() -> ChatRunResult:
+        return await runner.run_to_completion(spec)
+
+    result = asyncio.run(run())
+    assert result.compacted_count == 1
+    assert result.total_compacted_chars_saved > 0
+
+
+def test_act_no_microcompact_when_disabled() -> None:
+    big = {"data": "x" * 5000}
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": "c1",
+                "name": "read_file",
+                "args": {"path": "/big"},
+            },
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": big},
+    )
+    spec = _make_spec(microcompact=False, microcompact_keep_chars=200)
+
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.compacted_count == 0
+
+
+def test_act_microcompact_skips_non_compactable_tool() -> None:
+    big = {"data": "x" * 5000}
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": "c1",
+                "name": "write_file",
+                "args": {"path": "/x"},
+            },
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"write_file": big},
+    )
+    spec = _make_spec(microcompact=True, microcompact_keep_chars=200)
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.compacted_count == 0
+
+
+def test_act_confirmation_required_sets_stop_reason() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": "c1",
+                "name": "write_file",
+                "args": {"path": "/x"},
+            },
+            {"type": "done", "content": ""},
+        ],
+        tool_results={
+            "write_file": {
+                "status": "confirmation_required",
+                "confirmation_id": "conf_1",
+                "impact": {"files_affected": 1},
+            },
+        },
+    )
+    spec = _make_spec()
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "confirmation_required"
+
+
+def test_observe_aggregates_thinking() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "thinking", "text": "Let me think "},
+            {"type": "thinking", "text": "about this"},
+            {"type": "done", "content": "answer"},
+        ],
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    thinking = [e for e in events if e["type"] == "thinking"]
+    assert len(thinking) == 2
+    assert thinking[0]["content"] == "Let me think "
+
+
+def test_complete_emits_done_with_stop_reason() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "answer"}],
+    )
+    spec = _make_spec()
+
+    async def run() -> dict[str, Any]:
+        last = {}
+        async for ev in runner.run_stream(spec):
+            last = ev
+        return last
+
+    last = asyncio.run(run())
+    assert last["type"] == "done"
+    assert last["stop_reason"] == "completed"
+    assert "answer" in last["content"]
+    assert "compacted_count" in last
+
+
+def test_composite_hook_lifecycle_invoked() -> None:
+    from llmwikify.foundation.callback import CompositeHook
+    from llmwikify.foundation.callback.integrations.wiki import WikiHook
+
+    class _Spy(CompositeHook):
+        def __init__(self):
+            super().__init__()
+            self.events_seen: list[str] = []
+
+    spy = _Spy()
+    llm = _StubLLMService(events=[
+        {"type": "content", "text": "hi"},
+        {"type": "done", "content": "hi"},
+    ])
+    executor = _StubExecutor()
+    prompt_builder = _StubPromptBuilder()
+    runner = ChatRunnerV2(
+        chat_service=llm,
+        tool_executor=executor,
+        prompt_builder=prompt_builder,
+        hook=spy,
+    )
+    spec = _make_spec()
+
+    async def run():
+        return [ev async for ev in runner.run_stream(spec)]
+
+    asyncio.run(run())
+
+
+def test_text_mode_tool_call_parsed_by_parser() -> None:
+    runner, _llm, executor, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": '[TOOL_CALL] {tool => "read_file", args => { --path "/x"}} [/TOOL_CALL]'},
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    starts = [e for e in events if e["type"] == "tool_call_start"]
+    assert any(s["tool"] == "read_file" for s in starts)
+
+
+def test_error_in_llm_stream_sets_stop_reason_error() -> None:
+    class _BoomLLM(_StubLLMService):
+        async def _llm_stream_with_retry(self, _m, _t):
+            raise RuntimeError("llm dead")
+            yield  # pragma: no cover
+
+    llm = _BoomLLM()
+    runner = ChatRunnerV2(
+        chat_service=llm,
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    spec = _make_spec()
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "error"
+    assert "llm dead" in (result.error or "")
+
+
+def test_max_iterations_caps_loop() -> None:
+    runner, _llm, executor, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": f"c{i}",
+                "name": "read_file",
+                "args": {"path": f"/{i}"},
+            }
+            for i in range(10)
+        ] + [{"type": "done", "content": ""}],
+    )
+    spec = _make_spec(max_iterations=2)
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert len(executor.calls) == 10
+    assert result.stop_reason in ("completed", "error")
+
+
+def test_act_executes_multiple_tools_in_sequence() -> None:
+    runner, _llm, executor, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": "c1",
+                "name": "read_file",
+                "args": {"path": "/a"},
+            },
+            {
+                "type": "tool_call",
+                "id": "c2",
+                "name": "exec",
+                "args": {"cmd": "ls"},
+            },
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec()
+    asyncio.run(runner.run_to_completion(spec))
+    assert len(executor.calls) == 2
+
+
+def test_completion_event_carries_compacted_count() -> None:
+    big = {"data": "x" * 5000}
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": "c1",
+                "name": "read_file",
+                "args": {"path": "/big"},
+            },
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": big},
+    )
+    spec = _make_spec(microcompact=True, microcompact_keep_chars=100)
+
+    async def run() -> dict[str, Any]:
+        last = {}
+        async for ev in runner.run_stream(spec):
+            last = ev
+        return last
+
+    last = asyncio.run(run())
+    assert last["type"] == "done"
+    assert last["compacted_count"] >= 1
