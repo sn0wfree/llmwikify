@@ -440,18 +440,27 @@ factor:
 
 ## 6. 因子目录结构
 
+> **代码实现**：canonical storage 是项目根的 `quant/factors/`，由
+> `src/llmwikify/reproduction/factor_library.py` 维护索引。
+
 ```
-factors/
-├── index.yaml                    # 因子目录索引（包含所有因子摘要）
-├── README.md                     # 因子库使用说明
-├── stock/
-│   ├── price/
-│   │   ├── momentum_20d.yaml     # 模板 1：动量因子
-│   │   └── volatility_20d.yaml   # 后续扩展
-│   └── fundamental/
-│       └── value_60d.yaml        # 模板 2：估值因子
-├── futures/                      # 后续扩展
-└── options/                      # 后续扩展
+quant/
+├── factors/
+│   ├── index.yaml                    # 因子目录索引（自动生成）
+│   ├── README.md                     # 因子库使用说明
+│   ├── stock/
+│   │   ├── price/
+│   │   │   ├── momentum_20d.yaml     # 模板 1：动量因子
+│   │   │   └── volatility_20d.yaml   # 后续扩展
+│   │   └── fundamental/
+│   │       └── value_60d.yaml        # 模板 2：估值因子
+│   ├── futures/                      # 后续扩展
+│   └── options/                      # 后续扩展
+├── papers/{paper_id}/                # 论文抽取产物
+├── factorbacktest/*.md               # 回测报告
+├── strategies/                       # 策略 markdown
+├── datacache/                        # 数据缓存
+└── factor.duckdb                     # factor_values 长表
 ```
 
 ## 7. L4 假设生命周期

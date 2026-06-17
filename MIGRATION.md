@@ -1,6 +1,22 @@
 # Migration Guide
 
-> **Current version**: 0.30.1
+> **Current version**: 0.36.0
+
+---
+
+## v0.31 → v0.37 (summary)
+
+| Range | Highlights |
+|-------|------------|
+| v0.30 → v0.31 | Multi-wiki registry (`kernel/multi_wiki/`): `WikiRegistry`, `WikiInstance`, `RemoteWiki`, `WikiDiscovery`, cross-wiki search, `/api/wikis/*` endpoints |
+| v0.32 | Skills system restructure (`apps/chat/skills/*`): `registry`, `runtime`, `pipelines`, `actions`, `workflows`, plugin loader |
+| v0.33 | Service-layer split (`apps/`); `interfaces/mcp/server.py` deprecated in favour of `interfaces/mcp/adapter.MCPAdapter` |
+| v0.36 | **Hardening** — 32-char message IDs (was 8), rate limiting on `/api/agent/*` (60 req/min/IP), new SSE events: `confirmation_required`, `save_warning`, `timeout`; tool-call rounds 1 → up to 4 |
+| v0.37 | **ReAct loop unification** — `ChatService` defaults to `ChatReActBridge`; `reasoning` and `phase` events emitted; `use_react_engine=False` falls back to legacy `aask_with_tools` |
+
+Full migration steps for v0.36 / v0.37 (UUID changes, AbortSignal,
+regenerate-any-message, server config) live in
+[docs/MIGRATION_v0.36.md](docs/MIGRATION_v0.36.md).
 
 ---
 
