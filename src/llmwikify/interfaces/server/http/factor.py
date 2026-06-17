@@ -277,7 +277,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
         except (json.JSONDecodeError, TypeError):
             factor_params = {}
 
-    data_router = DataRouter(use_cache=True)
+    data_router = DataRouter(use_cache=True, parquet_path=config.get("parquet.path"))
     run_id = generate_run_id(start=req.start_date, end=req.end_date)
     default_source = config.get("backtest.default_source", "user")
 
