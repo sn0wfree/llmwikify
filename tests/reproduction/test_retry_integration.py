@@ -28,9 +28,8 @@ from llmwikify.reproduction.llm_extraction import (
 from llmwikify.reproduction.llm_extraction.planner import PlanResult
 from llmwikify.reproduction.llm_extraction.section_detector import Section
 from llmwikify.reproduction.llm_extraction.track_b import (
-    BATCH_MAX_TOKENS,
-    BATCH_SIZE,
     SignalStub,
+    PASS1_MAX_TOKENS_DEFAULT,
 )
 
 
@@ -174,58 +173,34 @@ class TestTrackATier2Retry:
         assert failed == []
 
 
-# ── Track B Pass 1 single call ──────────────────────
+# ── Track B Pass 1 multi-turn ──────────────────────
 
 
-class TestTrackBPass1SingleRetry:
+class TestTrackBPass1MultiTurnRetry:
     def test_retries_on_transient_failure(self):
+        """LLM first call fails, second call succeeds."""
         good_response = json.dumps({
             "signals": [
                 {"name": "S1", "formula": "rank(x)"},
                 {"name": "S2", "formula": "rank(y)"},
             ],
+            "done": True,
         })
         client = FlakyClient(good_response, fail_times=2)
         plan = PlanResult(
             paper_id="p1", schema_choice="factor",
-            n_signals_estimate=2,  # ≤ BATCH_SIZE → single call path
+            n_signals_estimate=2,
             confidence=0.9,
-            token_budget={"track_b_pass1": 5000}, success=True,
+            token_budget={"track_b_pass1": PASS1_MAX_TOKENS_DEFAULT},
+            success=True,
         )
         stubs, latency, n_calls = track_b._run_pass1(
             client, plan, "p1", "x" * 200,
         )
+        # 1 call with 2 retries = 3 total calls
         assert n_calls == 1
-        # 1 + 2 retries = 3
         assert client.calls == 3
         assert len(stubs) == 2
-
-
-# ── Track B Pass 1 batched ─────────────────────────
-
-
-class TestTrackBPass1BatchedRetry:
-    def test_batches_with_retry_per_batch(self):
-        # 11 signals > BATCH_SIZE → batched
-        items = [{"name": f"Alpha#{i}", "formula": f"f({i})"}
-                 for i in range(1, 12)]
-        good_response = json.dumps({"signals": items})
-        client = FlakyClient(good_response, fail_times=1)  # 1 fail across all
-        plan = PlanResult(
-            paper_id="p1", schema_choice="factor",
-            n_signals_estimate=11,
-            confidence=0.9,
-            token_budget={"track_b_pass1": 5000}, success=True,
-        )
-        stubs, latency, n_calls = track_b._run_pass1(
-            client, plan, "p1", "x" * 200,
-        )
-        # FlakyClient is cumulative: 1 fail then all succeed.
-        # Batch 1: 2 calls (1 fail + 1 ok, 10 items)
-        # Batch 2: 1 call (no more fails, 1 item, breaks loop)
-        # Total: 3 client.calls
-        assert client.calls == 3
-        assert len(stubs) == 11
 
 
 # ── Track B Pass 2 per-factor ──────────────────────

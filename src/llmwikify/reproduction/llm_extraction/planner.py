@@ -63,7 +63,7 @@ DEFAULT_TOKEN_BUDGET = {
 TOKEN_BUDGET_FLOOR = {
     "track_a_tier1": 3072,
     "track_a_tier2_per_section": 2048,
-    "track_b_pass1": 12000,  # Support 200+ alpha papers (name+formula only)
+    "track_b_pass1": 32000,  # Multi-turn continuation, max output per round
     "track_b_pass2_per_factor": 4096,
     "preview": 1536,
 }

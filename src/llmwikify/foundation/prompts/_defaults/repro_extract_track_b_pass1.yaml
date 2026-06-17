@@ -6,7 +6,7 @@ trigger:
   when: "track_b_pass1"
 
 params:
-  max_tokens: 12000
+  max_tokens: 32000
   temperature: 0.1
 
 system: |
@@ -20,14 +20,13 @@ system: |
   - Do NOT fabricate. Skip abstract concepts; only include concrete computable factors.
   - Be CONCISE: skip Chinese descriptions in this pass (Pass 2 adds them).
   - This is enumeration only; L1-L4 details are extracted in Pass 2.
-  - Output a SINGLE JSON object with the full list; do not stop early.
+  - If your output is long, you may stop after a partial list (hit token limit).
+    The user will prompt you to continue. Keep outputting until done.
+  - When ALL signals are enumerated, set `"done": true` in your JSON response.
+    If you are only outputting a partial list, set `"done": false`.
 
 user: |
-  {% if batch_spec %}
-  {{ batch_spec }}
-  {% else %}
   Enumerate all signals/factors in this paper.
-  {% endif %}
 
   Paper ID: {{ paper_id }}
   Paper text (full):
@@ -42,5 +41,5 @@ user: |
       {"name": "Alpha#1", "formula": "rank(...)"},
       {"name": "Alpha#2", "formula": "-1 * correlation(...)"}
     ],
-    "n_signals": 0
+    "done": false
   }

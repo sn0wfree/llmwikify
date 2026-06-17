@@ -43,9 +43,11 @@ def _call_chat_pass2(client: Any, messages: list, max_tokens: int) -> str:
     """Pass 2 per-factor chat with L1 retry."""
     return client.chat(messages, max_tokens=max_tokens, temperature=0.1)
 
-BATCH_SIZE = 10
-BATCH_MAX_TOKENS = 5000
-MAX_BATCHES = 30
+# Multi-turn continuation parameters
+MAX_ROUNDS = 10
+MAX_CONSECUTIVE_ZERO = 2
+PASS1_MAX_TOKENS_DEFAULT = 32000
+PASS1_MAX_TOKENS_FALLBACK = 16384
 
 
 @dataclass
@@ -168,39 +170,25 @@ def _extract_json(text: str) -> dict | list | None:
             return None
 
 
-def _build_batch_spec(
-    batch_idx: int, batch_size: int, seen: set[str], total: int,
-) -> str:
-    """Build batch instruction for the LLM."""
-    if batch_idx == 0:
-        n = min(batch_size, total)
-        return (
-            f"Output the first {n} signals/factors (of {total} total) "
-            f"from the paper above. "
-            "Output strict JSON (no descriptions, just name + formula)."
-        )
-    names = ", ".join(sorted(seen)[-15:])
-    cap = min(batch_size, total - len(seen))
-    return (
-        f"Output the next signals/factors (at most {cap}, "
-        f"~{total - len(seen)} remaining). "
-        f"Already captured: {names}. "
-        "DO NOT output these again. "
-        "Output strict JSON (no descriptions, just name + formula)."
-    )
+def _parse_signals_from_response(response: str) -> tuple[list[SignalStub], bool]:
+    """Parse LLM response into (list of SignalStub, done flag).
 
-
-def _parse_signals_from_response(response: str) -> list[SignalStub]:
-    """Parse LLM response into SignalStub list."""
+    Returns:
+        (stubs, done): stubs = extracted signals from this response,
+            done = whether LLM marked done: true.
+    """
     parsed = _extract_json(response)
     if not parsed:
-        return []
+        return [], False
+    done = False
     if isinstance(parsed, dict) and "signals" in parsed:
         raw_list = parsed["signals"]
+        done = bool(parsed.get("done", False))
     elif isinstance(parsed, list):
         raw_list = parsed
+        done = False
     else:
-        return []
+        return [], done
 
     stubs: list[SignalStub] = []
     for i, item in enumerate(raw_list):
@@ -215,7 +203,7 @@ def _parse_signals_from_response(response: str) -> list[SignalStub]:
             formula_brief=str(item.get("formula", item.get("formula_brief", ""))),
             description=str(item.get("description", "")),
         ))
-    return stubs
+    return stubs, done
 
 
 def _run_pass1(
@@ -224,98 +212,122 @@ def _run_pass1(
     paper_id: str,
     parsed_text: str,
 ) -> tuple[list[SignalStub], int, int]:
-    """Run Pass 1: enumerate all signals.
+    """Run Pass 1: enumerate all signals via multi-turn continuation.
 
-    Uses batched LLM calls when plan estimates > BATCH_SIZE signals.
+    Strategy: full paper in first message, max-output per round,
+    continue with "continue" prompt until LLM signals done or we hit limits.
     Returns (list of SignalStub, latency_ms, n_calls).
     """
-    total = (
-        plan.n_signals_estimate
-        if plan.n_signals_estimate > BATCH_SIZE and plan.confidence >= 0.8
-        else 0
-    )
-    if total > 0:
-        logger.info(
-            "[track_b] paper=%s pass1: batching %d signals (size=%d, max_batches=%d)",
-            paper_id, total, BATCH_SIZE, MAX_BATCHES,
-        )
     system_text, user_template, params = _load_prompt(PROMPT_PASS1)
     tmpl = _jinja_env.from_string(user_template)
+    default_max = int(params.get("max_tokens", PASS1_MAX_TOKENS_DEFAULT))
+    budget_max = int(plan.token_budget.get("track_b_pass1", default_max))
+    max_tokens = max(default_max, budget_max)
 
-    if total == 0:
-        # Single call (original behavior)
-        user_msg = tmpl.render(
-            paper_id=paper_id,
-            paper_text=parsed_text,
-            batch_spec="",
-        )
-        default_max = int(params.get("max_tokens", BATCH_MAX_TOKENS))
-        budget_max = int(plan.token_budget.get("track_b_pass1", default_max))
-        max_tokens = max(default_max, budget_max)
-
-        t0 = time.monotonic()
-        response = _call_chat_pass1(
-            client,
-            [{"role": "system", "content": system_text},
-             {"role": "user", "content": user_msg}],
-            max_tokens,
-        )
-        latency_ms = int((time.monotonic() - t0) * 1000)
-        stubs = _parse_signals_from_response(response)
-        if not stubs:
-            logger.warning("[track_b] pass1 paper=%s JSON parse failed or empty", paper_id)
-        logger.info(
-            "[track_b] pass1 paper=%s enumerated %d signals (%dms)",
-            paper_id, len(stubs), latency_ms,
-        )
-        return stubs, latency_ms, 1
-
-    # Batched extraction
+    # First round initial prompt
+    user_msg_initial = tmpl.render(
+        paper_id=paper_id,
+        paper_text=parsed_text,
+    )
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": system_text},
+        {"role": "user", "content": user_msg_initial},
+    ]
     seen_names: set[str] = set()
     all_stubs: list[SignalStub] = []
     total_latency = 0
-    n_batches = min(math.ceil(total / BATCH_SIZE), MAX_BATCHES)
+    n_rounds = 0
+    consecutive_zero = 0
+    total_estimate = plan.n_signals_estimate
 
-    for batch_idx in range(n_batches):
-        logger.info(
-            "[track_b] paper=%s pass1: batch %d/%d starting (%d/%d captured)",
-            paper_id, batch_idx + 1, n_batches, len(all_stubs), total,
-        )
-        batch_spec = _build_batch_spec(batch_idx, BATCH_SIZE, seen_names, total)
-        user_msg = tmpl.render(
-            paper_id=paper_id,
-            paper_text=parsed_text,
-            batch_spec=batch_spec,
-        )
+    logger.info(
+        "[track_b] paper=%s pass1: multi-turn continuation starting "
+        "(max_tokens=%d, estimate=%d signals)",
+        paper_id, max_tokens, total_estimate,
+    )
+
+    while True:
         t0 = time.monotonic()
-        response = _call_chat_pass1(
-            client,
-            [{"role": "system", "content": system_text},
-             {"role": "user", "content": user_msg}],
-            BATCH_MAX_TOKENS,
-        )
-        total_latency += int((time.monotonic() - t0) * 1000)
+        try:
+            response = _call_chat_pass1(
+                client, messages, max_tokens,
+            )
+        except RuntimeError as exc:
+            if "max_tokens" in str(exc) and max_tokens == PASS1_MAX_TOKENS_DEFAULT:
+                # API doesn't support 32000, fallback to 16384
+                max_tokens = PASS1_MAX_TOKENS_FALLBACK
+                logger.warning(
+                    "[track_b] paper=%s max_tokens=%d rejected by API, falling back to %d",
+                    paper_id, PASS1_MAX_TOKENS_DEFAULT, PASS1_MAX_TOKENS_FALLBACK,
+                )
+                response = _call_chat_pass1(
+                    client, messages, max_tokens,
+                )
+            else:
+                raise
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        total_latency += latency_ms
+        n_rounds += 1
 
-        stubs = _parse_signals_from_response(response)
+        stubs, done_llm = _parse_signals_from_response(response)
         new = [s for s in stubs if s.name not in seen_names]
+
+        # Re-index and add
         for offset, s in enumerate(new, start=len(all_stubs) + 1):
             s.index = offset
         all_stubs.extend(new)
         seen_names |= {s.name for s in new}
 
         logger.info(
-            "[track_b] paper=%s pass1: batch %d/%d done, got %d new (total %d/%d)",
-            paper_id, batch_idx + 1, n_batches, len(new), len(all_stubs), total,
+            "[track_b] paper=%s pass1 round %d/%d: got %d total %d/%d done_llm=%s",
+            paper_id, n_rounds, MAX_ROUNDS, len(new), len(all_stubs),
+            total_estimate, done_llm,
         )
 
-        if len(new) < BATCH_SIZE:
+        # Append to messages for next round
+        messages.append({"role": "assistant", "content": response})
+
+        # Check termination conditions (priority order)
+        if done_llm:
+            logger.info(
+                "[track_b] paper=%s pass1 done: LLM marked done: true",
+                paper_id,
+            )
+            break
+        if len(all_stubs) >= total_estimate > 0:
+            logger.info(
+                "[track_b] paper=%s pass1 done: reached estimated count %d",
+                paper_id, len(all_stubs),
+            )
+            break
+        if len(new) == 0:
+            consecutive_zero += 1
+            if consecutive_zero >= MAX_CONSECUTIVE_ZERO:
+                logger.info(
+                    "[track_b] paper=%s pass1 done: %d consecutive zero new, stopping",
+                    paper_id, MAX_CONSECUTIVE_ZERO,
+                )
+                break
+        else:
+            consecutive_zero = 0
+        if n_rounds >= MAX_ROUNDS:
+            logger.info(
+                "[track_b] paper=%s pass1 done: reached max rounds %d",
+                paper_id, MAX_ROUNDS,
+            )
             break
 
+        # Continue: add continuation prompt
+        messages.append({
+            "role": "user",
+            "content": "继续输出剩余的所有信号因子，不重复之前已经输出的。全部完成后请输出 done: true。",
+        })
+
     logger.info(
-        "[track_b] pass1 paper=%s batched=%d enumerated %d signals (%dms)",
-        paper_id, n_batches, len(all_stubs), total_latency,
+        "[track_b] pass1 paper=%s multi-turn=%d enumerated %d signals (%dms)",
+        paper_id, n_rounds, len(all_stubs), total_latency,
     )
-    return all_stubs, total_latency, n_batches
+    return all_stubs, total_latency, n_rounds
 
 
 def _run_pass2_one(
