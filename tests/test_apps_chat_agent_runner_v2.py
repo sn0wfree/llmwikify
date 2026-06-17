@@ -154,3 +154,55 @@ def test_run_context_carries_spec_state() -> None:
     assert ctx.cancelled is False
     assert ctx.paused is False
     assert ctx.stop_reason == "in_progress"
+
+
+def test_runner_does_not_import_legacy_engines() -> None:
+    import llmwikify.apps.chat.agent.runner_v2 as mod
+
+    src = open(mod.__file__, encoding="utf-8").read()
+    forbidden = (
+        "from llmwikify.apps.chat.agent.chat_react",
+        "from llmwikify.apps.chat.agent.react_engine",
+        "from llmwikify.apps.chat.agent.orchestrator",
+        "from llmwikify.apps.chat.agent.agent_service",
+    )
+    for needle in forbidden:
+        assert needle not in src, (
+            f"runner_v2 must not import legacy engines; found: {needle}"
+        )
+
+
+def test_runner_dependencies_are_minimal() -> None:
+    import llmwikify.apps.chat.agent.runner_v2 as mod
+
+    src = open(mod.__file__, encoding="utf-8").read()
+    allowed_local_imports = {
+        "from llmwikify.apps.chat.agent.spec import",
+        "from llmwikify.foundation.callback import",
+    }
+    for line in src.splitlines():
+        if line.startswith("from llmwikify") or line.startswith("import llmwikify"):
+            assert any(line.startswith(p) for p in allowed_local_imports), (
+                f"unexpected llmwikify import in runner_v2: {line.strip()}"
+            )
+
+
+def test_skeleton_works_without_db_llm_sse() -> None:
+    runner = ChatRunnerV2(
+        chat_service=None,
+        tool_executor=None,
+        prompt_builder=None,
+    )
+    spec = _make_spec()
+
+    async def drain() -> list[dict[str, Any]]:
+        out = []
+        async for ev in runner.run_stream(spec):
+            out.append(ev)
+        return out
+
+    events = asyncio.run(drain())
+    assert events[-1]["type"] == "done"
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "completed"
+    assert result.error is None
