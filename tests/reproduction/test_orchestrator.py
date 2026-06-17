@@ -318,6 +318,11 @@ class _StubStage0:
         self.paper_id = paper_id
         self.title = "Stub Paper"
         self.char_count = len(text)
+        self.content_hash = "stub_hash"
+        self.source_path = Path("/fake/path.pdf")
+        self.source_type = "pdf"
+        self.parsed_md_path = Path("/fake/parsed.md")
+        self.metadata = {}
 
 
 class TestOrchestratorEnd2End:
