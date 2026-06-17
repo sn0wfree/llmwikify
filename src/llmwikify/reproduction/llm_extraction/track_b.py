@@ -31,6 +31,10 @@ PROMPT_PASS2 = "repro_extract_track_b_pass2.yaml"
 
 API_PARAM_KEYS = {"temperature", "max_tokens", "top_p", "top_k"}
 
+# Checkpoint: save Pass 2 progress every N factors
+PASS2_CHECKPOINT_INTERVAL = 10
+PASS2_CHECKPOINT_FILENAME = "track_b_checkpoint.json"
+
 
 @with_retry(stage="track_b_pass1", config=RetryConfig(max_attempts=3, backoff_base=0.5))
 def _call_chat_pass1(client: Any, messages: list, max_tokens: int) -> str:
@@ -168,6 +172,64 @@ def _extract_json(text: str) -> dict | list | None:
             return json.loads(candidate)
         except json.JSONDecodeError:
             return None
+
+
+# ── Checkpoint I/O ──────────────────────────────────────────
+
+
+def _save_checkpoint(
+    work_dir: Path,
+    paper_id: str,
+    pass1_signals: list[SignalStub],
+    pass2_details: list[SignalDetail],
+) -> None:
+    """Save Pass 2 progress to disk for resume."""
+    cp = {
+        "paper_id": paper_id,
+        "pass1_signals": [s.to_dict() for s in pass1_signals],
+        "pass2_details": [d.to_dict() for d in pass2_details],
+        "pass2_done_names": [d.name for d in pass2_details],
+        "updated_at": time.time(),
+    }
+    cp_path = work_dir / PASS2_CHECKPOINT_FILENAME
+    cp_path.write_text(json.dumps(cp, ensure_ascii=False, indent=2), encoding="utf-8")
+    logger.info(
+        "[track_b] checkpoint saved: %s (%d pass1, %d pass2)",
+        cp_path, len(pass1_signals), len(pass2_details),
+    )
+
+
+def _load_checkpoint(
+    work_dir: Path,
+) -> tuple[list[SignalStub], list[SignalDetail]] | None:
+    """Load checkpoint from disk. Returns (pass1_signals, pass2_details) or None."""
+    cp_path = work_dir / PASS2_CHECKPOINT_FILENAME
+    if not cp_path.exists():
+        return None
+    try:
+        data = json.loads(cp_path.read_text(encoding="utf-8"))
+        pass1_signals = [
+            SignalStub(**s) for s in data.get("pass1_signals", [])
+        ]
+        pass2_details = [
+            SignalDetail(**d) for d in data.get("pass2_details", [])
+        ]
+        logger.info(
+            "[track_b] checkpoint loaded: %s (%d pass1, %d pass2 done)",
+            cp_path, len(pass1_signals), len(pass2_details),
+        )
+        return pass1_signals, pass2_details
+    except Exception as exc:
+        logger.warning("[track_b] checkpoint corrupted, starting fresh: %s", exc)
+        return None
+
+
+def _delete_checkpoint(work_dir: Path) -> None:
+    """Delete checkpoint file after successful completion."""
+    cp_path = work_dir / PASS2_CHECKPOINT_FILENAME
+    if cp_path.exists():
+        cp_path.unlink()
+        logger.info("[track_b] checkpoint deleted: %s", cp_path)
 
 
 def _parse_signals_from_response(response: str) -> tuple[list[SignalStub], bool]:
@@ -400,36 +462,61 @@ def _run_pass2_serial(
     paper_id: str,
     signals: list[SignalStub],
     parsed_text: str,
+    work_dir: Path | None = None,
+    existing_details: list[SignalDetail] | None = None,
 ) -> tuple[list[SignalDetail], int]:
-    """Run Pass 2 for all signals serially (for now).
+    """Run Pass 2 for all signals serially with checkpoint.
 
-    Note: design calls for 3-way concurrency; using serial for
-    simplicity (rate-limit friendly). Can switch to asyncio.gather
-    with semaphore later.
+    Args:
+        work_dir: If provided, save checkpoint every PASS2_CHECKPOINT_INTERVAL factors.
+        existing_details: If provided (resume), skip factors already in this list.
     """
-    logger.info(
-        "[track_b] paper=%s pass2: %d factors starting (serial)",
-        paper_id, len(signals),
-    )
-    details: list[SignalDetail] = []
-    total_latency = 0
-    for i, stub in enumerate(signals, 1):
+    done_names = {d.name for d in existing_details} if existing_details else set()
+    remaining = [s for s in signals if s.name not in done_names]
+    details: list[SignalDetail] = list(existing_details) if existing_details else []
+    total_latency = sum(d.latency_ms for d in details)
+
+    if done_names:
+        logger.info(
+            "[track_b] paper=%s pass2: resuming %d/%d factors (%d already done)",
+            paper_id, len(remaining), len(signals), len(done_names),
+        )
+    else:
+        logger.info(
+            "[track_b] paper=%s pass2: %d factors starting (serial)",
+            paper_id, len(signals),
+        )
+
+    for i, stub in enumerate(remaining, 1):
+        global_idx = len(details) + 1
         detail = _run_pass2_one(
             client, plan, paper_id, stub, parsed_text,
         )
         total_latency += detail.latency_ms
         details.append(detail)
-        if i % 10 == 0 or i == len(signals):
-            n_ok = sum(1 for d in details if d.success)
-            logger.info(
-                "[track_b] paper=%s pass2: %d/%d done (%d ok, %d failed)",
-                paper_id, i, len(signals), n_ok, i - n_ok,
-            )
+
+        # Log every factor
         logger.info(
             "[track_b] pass2 %d/%d %s success=%s (%dms)",
-            stub.index, len(signals), stub.name[:30],
+            global_idx, len(signals), stub.name[:30],
             detail.success, detail.latency_ms,
         )
+
+        # Log progress + checkpoint every N factors
+        if global_idx % PASS2_CHECKPOINT_INTERVAL == 0 or global_idx == len(signals):
+            n_ok = sum(1 for d in details if d.success)
+            n_fail = len(details) - n_ok
+            logger.info(
+                "[track_b] paper=%s pass2: %d/%d done (%d ok, %d failed)",
+                paper_id, global_idx, len(signals), n_ok, n_fail,
+            )
+            if work_dir:
+                _save_checkpoint(work_dir, paper_id, signals, details)
+
+    # Final checkpoint
+    if work_dir and remaining:
+        _save_checkpoint(work_dir, paper_id, signals, details)
+
     return details, total_latency
 
 
@@ -439,8 +526,9 @@ def run_track_b(
     plan: PlanResult,
     llm_client: Any | None = None,
     run_pass2: bool = True,
+    work_dir: Path | None = None,
 ) -> TrackBResult:
-    """Run Track B: factor-level extraction.
+    """Run Track B: factor-level extraction with checkpoint resume.
 
     Args:
         paper_id: Stable paper identifier.
@@ -448,7 +536,8 @@ def run_track_b(
         plan: Stage 1 Call 2 plan.
         llm_client: Optional pre-built LLM client.
         run_pass2: Whether to also run Pass 2 (L1-L4 per signal).
-            Set False to just enumerate (Pass 1 only).
+        work_dir: Paper work directory. If provided, checkpoint is saved
+            every PASS2_CHECKPOINT_INTERVAL factors and used for resume.
 
     Returns:
         TrackBResult with pass1_signals + pass2_details + stats.
@@ -466,10 +555,29 @@ def run_track_b(
     client = llm_client or build_default_client()
     t_total = time.monotonic()
 
-    # Pass 1
-    pass1_signals, pass1_latency, n_calls = _run_pass1(
-        client, plan, paper_id, parsed_text,
-    )
+    # Check for existing checkpoint (resume)
+    pass1_signals: list[SignalStub] = []
+    pass2_details_done: list[SignalDetail] = []
+    n_calls = 0
+    pass1_latency = 0
+
+    if work_dir:
+        ckpt = _load_checkpoint(work_dir)
+        if ckpt:
+            pass1_signals, pass2_details_done = ckpt
+            n_calls = len(pass2_details_done)  # approximate
+            logger.info(
+                "[track_b] paper=%s resuming from checkpoint: %d pass1, %d pass2 done",
+                paper_id, len(pass1_signals), len(pass2_details_done),
+            )
+
+    # Pass 1 (skip if resuming from checkpoint)
+    if not pass1_signals:
+        pass1_signals, pass1_latency, n_calls = _run_pass1(
+            client, plan, paper_id, parsed_text,
+        )
+        if work_dir and pass1_signals:
+            _save_checkpoint(work_dir, paper_id, pass1_signals, [])
 
     if not pass1_signals:
         return TrackBResult(
@@ -483,18 +591,22 @@ def run_track_b(
             error="pass1_no_signals",
         )
 
-    # Pass 2 (optional)
+    # Pass 2 (optional, with resume)
     pass2_details: list[SignalDetail] = []
     pass2_latency = 0
-    n_complete = 0
-    n_failed = 0
     if run_pass2:
         pass2_details, pass2_latency = _run_pass2_serial(
             client, plan, paper_id, pass1_signals, parsed_text,
+            work_dir=work_dir,
+            existing_details=pass2_details_done or None,
         )
-        n_calls += len(pass2_details)
-        n_complete = sum(1 for d in pass2_details if d.success)
-        n_failed = len(pass2_details) - n_complete
+        n_calls += len(pass2_details) - len(pass2_details_done)
+        # Delete checkpoint on completion
+        if work_dir:
+            _delete_checkpoint(work_dir)
+
+    n_complete = sum(1 for d in pass2_details if d.success)
+    n_failed = len(pass2_details) - n_complete
 
     total_latency = int((time.monotonic() - t_total) * 1000)
 
