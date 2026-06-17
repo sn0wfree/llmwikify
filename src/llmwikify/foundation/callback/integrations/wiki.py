@@ -17,8 +17,13 @@ class WikiHook(AgentHook):
     def after_tool_executed(
         self, ctx: AgentHookContext, tool_call: Any, result: Any,
     ) -> None:
-        if tool_call.name not in {"wiki_write_page", "wiki_ingest", "wiki_synthesize"}:
+        tool_name = tool_call.get("name") if isinstance(tool_call, dict) else getattr(tool_call, "name", None)
+        if tool_name not in {"wiki_write_page", "wiki_ingest", "wiki_synthesize"}:
             return
-        if not getattr(result, "success", False):
+        if isinstance(result, dict):
+            success = result.get("success", False)
+        else:
+            success = getattr(result, "success", False)
+        if not success:
             return
-        self.wiki.append_log("agent", f"Tool {tool_call.name} executed successfully")
+        self.wiki.append_log("agent", f"Tool {tool_name} executed successfully")

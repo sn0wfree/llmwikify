@@ -244,13 +244,16 @@ class ChatRunnerV2:
         thinking = ""
         tool_calls: list[dict[str, Any]] = []
 
+        final_done_content = ""
+        content_from_parser = False
         try:
             async for ev in self._stream_llm(messages, tools):
-                if ev.get("type") == "done" and not accumulated:
-                    accumulated = ev.get("content", "") or ""
+                if ev.get("type") == "done":
+                    final_done_content = ev.get("content", "") or ""
                 async for parsed in parser.feed(ev):
                     kind = parsed.get("type")
                     if kind == "content":
+                        content_from_parser = True
                         chunk = parsed.get("text", "")
                         accumulated += chunk
                         await _maybe_await(self._hook.on_stream(
@@ -271,11 +274,24 @@ class ChatRunnerV2:
                         yield_event = None
                     if yield_event is not None:
                         yield yield_event
+            for flushed in parser.flush():
+                kind = flushed.get("type")
+                if kind == "content":
+                    content_from_parser = True
+                    chunk = flushed.get("text", "")
+                    accumulated += chunk
+                    await _maybe_await(self._hook.on_stream(
+                        ctx.hook_ctx(iteration), chunk,
+                    ))
+                    yield {"type": "message_delta", "content": chunk}
         except Exception as exc:
             logger.exception("LLM stream failed")
             ctx.error = f"{type(exc).__name__}: {exc}"
             ctx.reason_failed = True
             return
+
+        if not content_from_parser and final_done_content:
+            accumulated = final_done_content
 
         ctx.last_accumulated = accumulated
         ctx.last_thinking = thinking
@@ -352,6 +368,15 @@ class ChatRunnerV2:
                     "call_id": call_id,
                 }
                 break
+
+            if isinstance(result, dict) and result.get("status") == "error":
+                yield {
+                    "type": "tool_call_error",
+                    "tool": tool_name,
+                    "error": str(result.get("error", "")),
+                    "call_id": call_id,
+                }
+                continue
 
             content, compacted, saved = self._microcompact_result(
                 result, tool_name, call_id,

@@ -1,23 +1,27 @@
-"""Tests for ChatRunnerV2 (Plan B Steps B-1 + B-2).
+"""Tests for ChatRunnerV2 (Plan B Steps B-1 + B-2 + B-3).
 
 B-1: skeleton + public API surface (8 cases)
 B-1-extension: independence + edge cases (18 cases)
-B-2: 5-step state machine + hooks + microcompact + text-mode (15 cases)
+B-2: 5-step state machine + hooks + microcompact + text-mode (17 cases)
+B-3: golden comparisons + integration + edge cases (20 cases)
 
-Total: 41 cases covering:
+Total: 63 cases covering:
   - Public API: run_stream, run_to_completion, ChatRunResult aggregation
   - _RunContext: defaults, slots, time progression, field independence
   - Independence: no legacy engine imports, minimal deps, works without infra
   - 5-step loop: PRECHECK/REASON/ACT/OBSERVE/COMPLETE
   - CompositeHook: 11 hook points wired through the loop
   - microcompact: native integration (default ON, configurable)
-  - text-mode: [TOOL_CALL:...] parsing via TextModeParser
+  - text-mode: [TOOL_CALL] Perl-style parsing
   - Error handling: LLM stream failure → stop_reason=error
   - Concurrency: two run_to_completion calls don't share state
   - Mutation safety: spec.messages not mutated
   - confirmation_required: tool result → stop_reason=confirmation_required
   - max_iterations: caps the loop
   - multi-tool: executes multiple tool calls per iteration
+  - Golden comparisons: exact event sequences for Q&A / single / multi / error / max
+  - Integration: WikiHook / microcompact cache / text-mode split chunks / truncation
+  - Edge: empty messages / wiki_id=None / error dict / exception caught / 2x compact
 """
 from __future__ import annotations
 
@@ -874,3 +878,419 @@ def test_completion_event_carries_compacted_count() -> None:
     last = asyncio.run(run())
     assert last["type"] == "done"
     assert last["compacted_count"] >= 1
+
+
+# ─── B-3 Golden comparison tests (10 cases) ─────────────────
+
+
+def test_golden_simple_qa_no_tools_event_sequence() -> None:
+    """Simple question with no tool calls should emit at least one
+    message_delta followed by a done event.
+
+    Note: TextModeParser buffers content events and flushes on done,
+    so consecutive LLM content events may produce 1 message_delta
+    rather than N. The runner guarantees ≥1 message_delta when
+    content is non-empty.
+    """
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": "Hello "},
+            {"type": "content", "text": "world"},
+            {"type": "done", "content": "Hello world"},
+        ],
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    deltas = [e for e in events if e["type"] == "message_delta"]
+    assert len(deltas) >= 1
+    assert "Hello world" in deltas[0]["content"]
+    final = events[-1]
+    assert final["type"] == "done"
+    assert "Hello world" in final["content"]
+    assert final["stop_reason"] == "completed"
+
+
+def test_golden_single_tool_call_event_sequence() -> None:
+    """Single tool call should emit:
+    [tool_call_start, tool_call_end, done] with compacted_count tracking.
+    """
+    runner, _llm, executor, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": "c1",
+                "name": "read_file",
+                "args": {"path": "/x"},
+            },
+            {"type": "done", "content": "answer"},
+        ],
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    assert [e["type"] for e in events] == [
+        "tool_call_start", "tool_call_end", "done",
+    ]
+    assert events[0]["tool"] == "read_file"
+    assert events[0]["args"] == {"path": "/x"}
+    assert events[0]["call_id"] == "c1"
+    assert events[1]["tool"] == "read_file"
+    assert events[1]["call_id"] == "c1"
+    assert len(executor.calls) == 1
+
+
+def test_golden_multi_tool_call_event_sequence() -> None:
+    """Multiple tool calls in one LLM turn: 2 starts + 2 ends + done."""
+    runner, _llm, executor, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "tool_call", "id": "c2", "name": "exec", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    starts = [e for e in events if e["type"] == "tool_call_start"]
+    ends = [e for e in events if e["type"] == "tool_call_end"]
+    assert len(starts) == 2
+    assert len(ends) == 2
+    assert [s["tool"] for s in starts] == ["read_file", "exec"]
+    assert events[-1]["type"] == "done"
+    assert len(executor.calls) == 2
+
+
+def test_golden_confirmation_breaks_loop() -> None:
+    """Confirmation required → confirmation_required event + stop_reason set."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "write_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={
+            "write_file": {
+                "status": "confirmation_required",
+                "confirmation_id": "conf_x",
+                "impact": {},
+            },
+        },
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    conf = [e for e in events if e["type"] == "confirmation_required"]
+    assert len(conf) == 1
+    assert conf[0]["confirmation_id"] == "conf_x"
+    assert conf[0]["tool"] == "write_file"
+    final = events[-1]
+    assert final["type"] == "done"
+    assert final["stop_reason"] == "confirmation_required"
+
+
+def test_golden_llm_error_emits_error_event() -> None:
+    """LLM stream raising → ctx.error set + error event emitted before done."""
+    class _BoomLLM(_StubLLMService):
+        async def _llm_stream_with_retry(self, _m, _t):
+            raise RuntimeError("api down")
+            yield  # pragma: no cover
+
+    runner = ChatRunnerV2(
+        chat_service=_BoomLLM(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    errors = [e for e in events if e["type"] == "error"]
+    assert len(errors) == 1
+    assert "api down" in errors[0]["message"]
+    final = events[-1]
+    assert final["type"] == "done"
+    assert final["stop_reason"] == "error"
+
+
+def test_golden_max_iterations_terminates_loop() -> None:
+    """max_iterations=1 caps the loop after one full iteration."""
+    runner, _llm, executor, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec(max_iterations=1)
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    assert events[-1]["type"] == "done"
+    assert len(executor.calls) == 1
+
+
+def test_golden_microcompact_emits_compacted_event() -> None:
+    """Large tool result → compacted event between tool_call_start and end."""
+    big = {"data": "x" * 5000}
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": big},
+    )
+    spec = _make_spec(microcompact=True, microcompact_keep_chars=100)
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    compacted = [e for e in events if e["type"] == "compacted"]
+    assert len(compacted) == 1
+    assert compacted[0]["call_id"] == "c1"
+    assert compacted[0]["chars_saved"] > 0
+    end = next(e for e in events if e["type"] == "tool_call_end")
+    assert end["call_id"] == "c1"
+
+
+def test_golden_done_event_always_last() -> None:
+    """The 'done' event must always be the last emitted event in a normal run."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": "hi"},
+            {"type": "thinking", "text": "thought"},
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    assert events[-1]["type"] == "done"
+    assert "hi" in events[-1]["content"]
+
+
+def test_golden_thinking_event_emitted_before_content() -> None:
+    """Thinking events should appear before content events when both are present."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "thinking", "text": "Let me think"},
+            {"type": "content", "text": "Hello"},
+            {"type": "done", "content": "Hello"},
+        ],
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    types = [e["type"] for e in events]
+    assert types == ["thinking", "message_delta", "done"]
+
+
+def test_golden_streamed_content_accumulates() -> None:
+    """Multiple message_deltas should be accumulated by run_to_completion."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": "First. "},
+            {"type": "content", "text": "Second. "},
+            {"type": "content", "text": "Third."},
+            {"type": "done", "content": "First. Second. Third."},
+        ],
+    )
+    spec = _make_spec()
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.final_content == "First. Second. Third."
+
+
+# ─── B-3 Integration tests (5 cases) ──────────────────────────
+
+
+def test_integration_composite_hook_with_real_wiki_hook() -> None:
+    """WikiHook.after_tool_executed should fire on wiki_* tool calls."""
+    log: list[str] = []
+
+    class _FakeWiki:
+        def append_log(self, who: str, msg: str) -> None:
+            log.append(f"{who}:{msg}")
+
+    from llmwikify.foundation.callback import CompositeHook
+    from llmwikify.foundation.callback.integrations.wiki import WikiHook
+
+    hook = CompositeHook([WikiHook(wiki=_FakeWiki())])
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "wiki_ingest", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"wiki_ingest": {"success": True, "result": "ok"}},
+    )
+    runner._hook = hook
+    spec = _make_spec()
+    asyncio.run(runner.run_to_completion(spec))
+    assert any("wiki_ingest" in entry for entry in log)
+
+
+def test_integration_microcompact_caches_original_in_spec() -> None:
+    """Microcompact should store original result in spec._compacted_results."""
+    big = {"data": "y" * 5000}
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "call_42", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": big},
+    )
+    spec = _make_spec(microcompact=True, microcompact_keep_chars=100)
+    asyncio.run(runner.run_to_completion(spec))
+    items = spec.compacted()
+    assert len(items) == 1
+    cid, original = items[0]
+    assert cid == "call_42"
+    assert original == big
+
+
+def test_integration_text_mode_parser_handles_split_chunks() -> None:
+    """A [TOOL_CALL] block split across multiple content events should still parse."""
+    runner, _llm, executor, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": '[TOOL_CALL] {tool => "read_file",'},
+            {"type": "content", "text": ' args => { --path "/x"}} [/TOOL_CALL]'},
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    starts = [e for e in events if e["type"] == "tool_call_start"]
+    assert any(s["tool"] == "read_file" for s in starts)
+    assert any("read_file" == c[0] for c in executor.calls)
+
+
+def test_integration_truncation_calls_chat_service() -> None:
+    """Runner should call chat_service._truncate_messages before LLM call."""
+    runner, llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "ok"}],
+    )
+    spec = _make_spec()
+    asyncio.run(runner.run_to_completion(spec))
+    assert llm.truncate_called is True
+
+
+def test_integration_tool_specs_passed_to_llm() -> None:
+    """Runner should call chat_service._get_toolspec and pass to LLM."""
+    runner, llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "ok"}],
+    )
+    spec = _make_spec()
+    asyncio.run(runner.run_to_completion(spec))
+    assert llm.tool_spec_called is True
+
+
+# ─── B-3 Edge cases (5 cases) ────────────────────────────────
+
+
+def test_edge_empty_messages_spec() -> None:
+    """Empty messages list should still produce a valid run."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": ""}],
+    )
+    spec = _make_spec(messages=[])
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    assert events[-1]["type"] == "done"
+
+
+def test_edge_wiki_id_none() -> None:
+    """wiki_id=None should not break the loop."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    spec = _make_spec(wiki_id=None)
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "completed"
+
+
+def test_edge_tool_returns_error_dict() -> None:
+    """Tool returning {status: error} should emit tool_call_error event."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": {"status": "error", "error": "boom"}},
+    )
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    errors = [e for e in events if e["type"] == "tool_call_error"]
+    assert len(errors) == 1
+    assert "boom" in errors[0]["error"]
+
+
+def test_edge_tool_raises_exception_caught() -> None:
+    """Tool raising should be caught and yield tool_call_error event."""
+    class _BoomExec(_StubExecutor):
+        async def execute(self, *_a, **_kw):
+            raise RuntimeError("exec died")
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+    )
+    runner._tool_executor = _BoomExec()
+    spec = _make_spec()
+
+    async def run() -> list[dict[str, Any]]:
+        return [ev async for ev in runner.run_stream(spec)]
+
+    events = asyncio.run(run())
+    errors = [e for e in events if e["type"] == "tool_call_error"]
+    assert len(errors) == 1
+    assert "exec died" in errors[0]["error"]
+
+
+def test_edge_two_microcompact_eligible_tools_in_sequence() -> None:
+    """Multiple compactable tools in one turn: each should compact independently."""
+    big = {"data": "z" * 5000}
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "tool_call", "id": "c2", "name": "exec", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": big, "exec": big},
+    )
+    spec = _make_spec(microcompact=True, microcompact_keep_chars=100)
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.compacted_count == 2
+    assert len(spec.compacted()) == 2
