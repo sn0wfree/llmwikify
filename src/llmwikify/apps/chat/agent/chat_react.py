@@ -165,9 +165,15 @@ class ChatReActBridge:
     fallback, same DB persistence.
     """
 
-    def __init__(self, chat_service: Any, config: dict | None = None) -> None:
+    def __init__(
+        self,
+        chat_service: Any,
+        config: dict | None = None,
+        microcompact_fn: Any = None,
+    ) -> None:
         self._chat_service = chat_service
         self._config = config or getattr(chat_service, "config", {})
+        self._microcompact_fn = microcompact_fn
 
     def build_config(
         self,
@@ -606,12 +612,18 @@ class ChatReActBridge:
                 # pair, but the standard OpenAI spec expects them
                 # paired).
                 tool_call_id = f"call_{idx}"
+                if self._microcompact_fn is not None:
+                    tool_content, _compacted, _saved = self._microcompact_fn(
+                        result, tool_name, call_id,
+                    )
+                else:
+                    tool_content = json.dumps(
+                        result, ensure_ascii=False, default=str,
+                    )
                 tool_msg = {
                     "role": "tool",
                     "name": tool_name,
-                    "content": json.dumps(
-                        result, ensure_ascii=False, default=str,
-                    ),
+                    "content": tool_content,
                 }
                 # If the previous message is an assistant with
                 # tool_calls, pair this tool message by tool_call_id.
