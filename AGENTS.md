@@ -47,3 +47,9 @@ stash 遗留改动 commit 前主动提醒。
 **服务器**：不用 `--reload`；启动 `llmwikify serve --web --port 8765 --host 0.0.0.0`；健康检查 `curl http://localhost:8765/api/health`。
 
 **Skills & Subagents**：Skills 路径 `~/.llmwikify/skills/`；Subagent `.claude/agents/<name>.md` 默认 `isolation: worktree`；prompt 必备 角色 + 输入契约 + 输出契约 + 边界。
+
+**CompositeHook**（`foundation/callback/`）：新增 agent 钩子必用 `AgentHook` 基类（13 钩子点：wants_streaming / before_iteration / on_stream / on_stream_end / emit_reasoning / emit_reasoning_end / before_execute_tools / after_tool_executed / on_tool_error / on_confirmation / after_iteration / finalize_content / on_error）；`CompositeHook` fan-out 错误隔离（async 方法自动 try/except log warning，`finalize_content` 透传异常）；业务 hook 放 `integrations/` 子包（WikiHook / DreamSyncHook / AutoIngestHook）。
+
+**ChatRunner**（`apps/chat/agent/runner.py`）：dataclass 输入用 `ChatRunSpec`（~18 字段，含 microcompact 配置），输出用 `ChatRunResult`（final_content / messages / tools_used / usage / stop_reason / error / compacted_count / total_compacted_chars_saved）；Runner 是 ReActEngine + ChatReActBridge 的薄包装, 不替代主循环；新业务流（Harness / Research / Track B）优先 `ChatRunner.run_to_completion(spec)`，避免直接 new ReActEngine；新 spec 字段加到 `ChatRunSpec`（含 microcompact 子段）而非塞 ReActConfig。
+
+**microcompact**（`apps/chat/agent/microcompact.py`）：默认 ON（`spec.microcompact=True`），`microcompact_keep_chars=1000`；`microcompact_compactable_tools` 默认 `DEFAULT_COMPACTABLE_TOOLS`（read_file / exec / grep / find_files / web_search / web_fetch / list_dir，借鉴 nanobot v0.2.1 `_COMPACTABLE_TOOLS`）；marker 格式 `[Tool result compacted] Tool: ... Original: N chars Kept: M chars ID: ...`；原结果缓存 `spec._compacted_results[call_id]`（per-run 内存，run 结束 GC）；DB 持久化与 observation 生成仍用原 result, 仅 `conversation_messages.append` 用 marker。
