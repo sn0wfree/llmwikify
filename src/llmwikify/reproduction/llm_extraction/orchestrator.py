@@ -18,18 +18,20 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Any
 
 from .defer import DeferredQueue
 from .planner import PlanResult
+from .plan_saver import save_plan
 from .preview import write_preview
 from .retry import DeferError
-from .section_detector import Section, detect_sections
-from .stage0_ingest import run_stage0_ingest
-from .track_a import run_track_a
-from .track_b import run_track_b
+from .section_detector import Section, SectionDetectionResult, detect_sections
+from .stage0_ingest import Stage0Result, run_stage0_ingest
+from .track_a import TrackAResult, run_track_a
+from .track_b import TrackBResult, run_track_b
 from .validator import validate_paper_outputs
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,77 @@ def _make_fallback_plan(paper_id: str, parsed_text: str) -> PlanResult:
         success=True,
         error="fallback_summary_schema",
     )
+
+
+def _slugify(name: str) -> str:
+    """Convert factor name like 'Alpha#1' to 'alpha-001'."""
+    m = re.search(r"(\d+)", name)
+    if m:
+        return f"alpha-{int(m.group(1)):03d}"
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def _write_factor_yamls(
+    work_dir: Path,
+    paper_id: str,
+    pass2_details: list,
+    pass1_signals: list,
+) -> int:
+    """Write draft factor YAML files to work_dir/factors/.
+
+    Each successful factor gets a separate YAML file matching the
+    6-layer structure expected by quant/factors/.
+
+    Returns number of files written.
+    """
+    import yaml
+
+    factors_dir = work_dir / "factors"
+    factors_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build pass1 lookup for formula_brief
+    pass1_map = {s.name: s for s in pass1_signals}
+
+    written = 0
+    for detail in pass2_details:
+        if not detail.success or not detail.l1:
+            continue
+
+        slug = _slugify(detail.name)
+        stub = pass1_map.get(detail.name)
+
+        factor_data = {
+            "factor": {
+                "name": slug,
+                "name_cn": detail.description[:50] if detail.description else detail.name,
+                "asset_type": "stock",
+                "category": "alpha",
+                "subcategory": "paper_derived",
+                "version": 1,
+                "source_paper": paper_id,
+                "status": "draft",
+                "l1": detail.l1,
+                "l2": detail.l2,
+                "l3": detail.l3,
+                "l4": detail.l4,
+            }
+        }
+
+        yaml_path = factors_dir / f"{slug}.yaml"
+        content = yaml.dump(
+            factor_data,
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
+        )
+        yaml_path.write_text(content, encoding="utf-8")
+        written += 1
+
+    logger.info(
+        "[orchestrator] wrote %d draft factor YAMLs to %s",
+        written, factors_dir,
+    )
+    return written
 
 
 def run_one_paper(
@@ -128,6 +201,7 @@ def run_one_paper(
 
     # Stage 1 Call 1: detect sections
     logger.info("[orchestrator] paper=%s [2/5] stage1_call1: detecting sections", paper_id)
+    sec_result: SectionDetectionResult | None = None
     sections: list[Section] | None = None
     try:
         sec_result = detect_sections(
@@ -186,6 +260,13 @@ def run_one_paper(
         plan = _make_fallback_plan(paper_id, parsed_text)
     summary["plan_success"] = plan.success
 
+    # Save plan.json
+    try:
+        save_plan(s0, sec_result, plan, work_dir)
+        logger.info("[orchestrator] paper=%s plan.json saved", paper_id)
+    except Exception as exc:
+        logger.warning("[orchestrator] paper=%s plan.json save failed: %s", paper_id, exc)
+
     # Track A
     logger.info(
         "[orchestrator] paper=%s [4/5] track_a: tier1+tier2 starting",
@@ -215,6 +296,16 @@ def run_one_paper(
                 "[orchestrator] paper=%s [4/5] track_a: failed: %s",
                 paper_id, track_a_result.error,
             )
+        # Save track_a.json (always, even on partial failure)
+        try:
+            track_a_path = work_dir / "track_a.json"
+            track_a_path.write_text(
+                json.dumps(track_a_result.to_dict(), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            logger.info("[orchestrator] paper=%s track_a.json saved", paper_id)
+        except Exception as exc:
+            logger.warning("[orchestrator] paper=%s track_a.json save failed: %s", paper_id, exc)
     except DeferError as exc:
         logger.warning(
             "[orchestrator] paper=%s [4/5] track_a: deferred: %s",
@@ -241,6 +332,7 @@ def run_one_paper(
             plan=plan,
             llm_client=llm_client,
             run_pass2=run_pass2,
+            work_dir=work_dir,
         )
         if track_b_result.success:
             logger.info(
@@ -252,6 +344,48 @@ def run_one_paper(
                 track_b_result.total_latency_ms,
                 track_b_result.llm_calls,
             )
+            # Save track_b_pass1.json + track_b_pass2.json
+            try:
+                pass1_path = work_dir / "track_b_pass1.json"
+                pass1_data = {
+                    "paper_id": paper_id,
+                    "n_pass1": track_b_result.n_pass1,
+                    "n_signals": track_b_result.n_pass1,
+                    "pass1_signals": [s.to_dict() for s in track_b_result.pass1_signals],
+                    "latency_ms": track_b_result.pass1_latency_ms,
+                }
+                pass1_path.write_text(
+                    json.dumps(pass1_data, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                logger.info("[orchestrator] paper=%s track_b_pass1.json saved (%d signals)", paper_id, track_b_result.n_pass1)
+
+                pass2_path = work_dir / "track_b_pass2.json"
+                pass2_data = {
+                    "paper_id": paper_id,
+                    "n_pass1": track_b_result.n_pass1,
+                    "n_pass2_complete": track_b_result.n_pass2_complete,
+                    "n_pass2_failed": track_b_result.n_pass2_failed,
+                    "n_complete": track_b_result.n_pass2_complete,
+                    "n_failed": track_b_result.n_pass2_failed,
+                    "pass2_details": [d.to_dict() for d in track_b_result.pass2_details],
+                    "latency_ms": track_b_result.pass2_latency_ms,
+                }
+                pass2_path.write_text(
+                    json.dumps(pass2_data, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                logger.info("[orchestrator] paper=%s track_b_pass2.json saved (%d/%d)", paper_id, track_b_result.n_pass2_complete, track_b_result.n_pass2_complete + track_b_result.n_pass2_failed)
+
+                # Write draft factor YAML files
+                n_yamls = _write_factor_yamls(
+                    work_dir, paper_id,
+                    track_b_result.pass2_details,
+                    track_b_result.pass1_signals,
+                )
+                logger.info("[orchestrator] paper=%s %d draft factor YAMLs written", paper_id, n_yamls)
+            except Exception as exc:
+                logger.warning("[orchestrator] paper=%s track_b json save failed: %s", paper_id, exc)
         else:
             logger.warning(
                 "[orchestrator] paper=%s [5/5] track_b: failed: %s",
@@ -265,7 +399,7 @@ def run_one_paper(
         deferred.add(
             "track_b", run_track_b,
             (paper_id, parsed_text, plan),
-            {"llm_client": llm_client, "run_pass2": run_pass2},
+            {"llm_client": llm_client, "run_pass2": run_pass2, "work_dir": work_dir},
             reason=str(exc),
         )
         track_b_result = None
