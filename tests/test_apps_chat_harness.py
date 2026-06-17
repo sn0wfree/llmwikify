@@ -60,48 +60,6 @@ class TestPackageExports:
         assert SourceAnalyzer is not None
 
 
-# ─── Backward-compat shims ────────────────────────────────────────
-
-
-class TestBackwardCompatShims:
-    """The 5 shim files at apps/chat/ re-export from harness/."""
-
-    def test_quality_gate_shim(self) -> None:
-        from llmwikify.apps.chat import quality_gate as shim
-        from llmwikify.apps.chat.harness.quality_gate import QualityGate as NewQG
-        from llmwikify.apps.research.base import BaseGateResult
-        assert shim.QualityGate is NewQG
-        assert shim.GateResult is BaseGateResult
-
-    def test_source_filter_shim(self) -> None:
-        from llmwikify.apps.chat import source_filter as shim
-        from llmwikify.apps.chat.harness.source_filter import SourceFilter as NewSF
-        assert shim.SourceFilter is NewSF
-
-    def test_review_shim(self) -> None:
-        from llmwikify.apps.chat import review as shim
-        from llmwikify.apps.chat.harness.review import (
-            ResearchReviewer as NewRR,
-            ResearchRevisor as NewRV,
-        )
-        assert shim.ResearchReviewer is NewRR
-        assert shim.ResearchRevisor is NewRV
-
-    def test_structure_validator_shim(self) -> None:
-        from llmwikify.apps.chat import structure_validator as shim
-        from llmwikify.apps.chat.harness.structure_validator import (
-            StructureValidator as NewSV,
-        )
-        assert shim.StructureValidator is NewSV
-
-    def test_analyzer_shim(self) -> None:
-        from llmwikify.apps.chat import analyzer as shim
-        from llmwikify.apps.chat.harness.source_analyzer import (
-            SourceAnalyzer as NewSA,
-        )
-        assert shim.SourceAnalyzer is NewSA
-
-
 # ─── Class identity + instantiation (smoke tests) ────────────────
 
 

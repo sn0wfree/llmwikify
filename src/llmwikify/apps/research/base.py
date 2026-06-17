@@ -117,8 +117,7 @@ class BaseGateResult:
     """Quality gate check result.
 
     Used by both :class:`BaseQualityGate` and the per-package
-    subclasses in ``apps.research.quality_gate`` and
-    ``apps.chat.quality_gate``. The ``details`` field carries
+    subclasses. The ``details`` field carries
     a free-form dict for gate-specific debugging info.
     """
 
@@ -133,10 +132,9 @@ class BaseQualityGate:
     """Stage-transition quality gates (4 base methods).
 
     Results are injected into ``state.observations`` for the
-    Reasoner to consume. The 4 methods here were duplicated
-    verbatim between ``apps/research/quality_gate.py`` and
-    ``apps/chat/quality_gate.py``; the chat subclass adds
-    four 6-step-framework gates (``check_evidence_quality``,
+    Reasoner to consume. The 4 base methods are defined here;
+    the chat subclass (``apps/chat/harness/quality_gate.py``)
+    adds four 6-step-framework gates (``check_evidence_quality``,
     ``check_reasoning_quality``, ``check_structure_quality``,
     ``check_framework_compliance``).
     """
