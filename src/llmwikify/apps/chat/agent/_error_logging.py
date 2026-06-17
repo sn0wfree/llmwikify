@@ -35,9 +35,9 @@ from __future__ import annotations
 import functools
 import inspect
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from typing import Any, TypeVar, Callable
+from typing import Any, TypeVar
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -92,8 +92,10 @@ def log_exception_returning(
 
 def _log(fn: Callable, msg: str | None, exc: Exception, level: int) -> None:
     logger = logging.getLogger(fn.__module__)
-    log_msg = msg or f"{fn.__name__}: %s"
-    logger.log(level, log_msg, exc, exc_info=True)
+    if msg:
+        logger.log(level, "%s: %s", msg, exc, exc_info=True)
+    else:
+        logger.log(level, "%s: %s", fn.__name__, exc, exc_info=True)
 
 
 @asynccontextmanager
