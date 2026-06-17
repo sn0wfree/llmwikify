@@ -456,7 +456,7 @@ quant/papers/{paper_id}/
 | Stage 1 Call 2 Planner | 1024 | 2560 | 中间任意值 |
 | Stage 2 Track A Tier 1 | 3072 | 6144 | 中间任意值 |
 | Stage 2 Track A Tier 2 / section | 2048 | 4096 | 中间任意值 |
-| Stage 2 Track B Pass 1 enumerate | 2048 | 4096 | 中间任意值 |
+| Stage 2 Track B Pass 1 enumerate | 32000 | 32000 | 固定（multi-turn continuation） |
 | Stage 2 Track B Pass 2 per factor | 4096 | 8192 | 中间任意值 |
 | Stage 3 Validator | 1024 | 2048 | 中间任意值 |
 | Stage 4 Preview.md | **1536** | **3072** | **动态（Planner 估算）** |
@@ -515,7 +515,7 @@ quant/papers/{paper_id}/
 | **P3b** | Stage 1 Call 2: Planner (classify + token_budget) | 2-3h | 1 |
 | **P4** | 4 个 Schema prompt + 5 个 Tier 2 prompt + section detector prompt | 3-4h | 1 |
 | **P5a** | Track A: Paper-level extractor (Tier 1 + Tier 2 调度) | 2-3h | 1 |
-| **P5b** | Track B: Factor-level extractor (Pass 1+2, 3 路并发) | 4-6h | 1 |
+| **P5b** | Track B: Factor-level extractor (Pass 1 multi-turn + Pass 2 3 路并发) | 4-6h | 1 |
 | **P6** | 3-Layer Retry Handler (Track B + Stage 1 Call 1 退路) | 2-3h | 1 |
 | **P7** | Result Validator + status 判定 + preview.md | 1-2h | 1 |
 | **P8** | Logging & checkpoint (extraction.log + llm_calls.jsonl) | 1-2h | 1 |
@@ -535,11 +535,11 @@ quant/papers/{paper_id}/
 | Stage 1 Call 2 (planner) | ~0.05 元 | ~5 元 |
 | Track A Tier 1 | ~0.04 元 | ~4.4 元 |
 | Track A Tier 2 (avg 2 sections) | ~0.04 元 | ~4.4 元 |
-| Track B Pass 1 | ~0.02 元 | ~2.2 元 |
+| Track B Pass 1 | ~0.15 元 | ~16.7 元 |
 | Track B Pass 2 (avg 10 factors) | ~0.20 元 | ~22 元 |
 | Retry overhead | ~30% 增量 | ~10 元 |
 | Validator + Preview | ~0.03 元 | ~3.3 元 |
-| **总计** | | **~60 元** |
+| **总计** | | **~75 元** |
 
 ## 20. 风险与缓解
 
@@ -704,7 +704,10 @@ Track A: Paper/Strategy-level (Always run)
       implementation_assessment, datasets
 
 Track B: Factor-level (if schema != summary)
-  ├─ Pass 1: Enumerate signals
+  ├─ Pass 1: Enumerate signals (multi-turn continuation)
+  │   → 单 session 多轮对话, LLM 自己决定输出量
+  │   → max_tokens=32000, 支持 100+ signals 一次输出
+  │   → 终止条件: done=true / 达到估计数 / 连续两轮无新增 / MAX_ROUNDS=10
   │   → [name, formula, ...] × N
   │
   └─ Pass 2: Detail extraction (3 路并发)
@@ -1730,3 +1733,59 @@ src/llmwikify/foundation/prompts/_defaults/
 - ✅ Track B 的 signals 质量满足 L5 验证要求
 
 **未达条件前，Track C 相关代码、prompt、目录都不实施**。
+
+## 28. Track B Pass 1: Multi-turn Continuation 实现
+
+### 28.1 背景
+
+最初的实现使用 batch 分批逻辑（`BATCH_SIZE=10`），但发现严重问题：
+- `sorted(seen)[-15:]` 字典序裁剪导致 skip list 失真
+- LLM 重复输出被 dedup 砍光，触发提前 break
+- 实际测试结果：25/101（比旧版 80/101 还差）
+
+### 28.2 设计方案
+
+采用 **multi-turn continuation**：单 session 多轮对话，LLM 自己决定输出量。
+
+**核心规则**：
+1. 不预设 batch size，`max_tokens` 拉满到 32000
+2. 上下文自然累加（LLM 通过 attention 看到历史输出）
+3. LLM 主动标记 `done: true` 表示完成
+
+**终止条件**（优先级从高到低）：
+1. LLM 在 JSON 中返回 `done: true`
+2. 累计 factor 数目 ≥ `plan.n_signals_estimate`
+3. 连续两轮 `len(new) = 0`（无新增）
+4. 轮次 ≥ `MAX_ROUNDS = 10`
+
+### 28.3 实现细节
+
+**Prompt 修改**：
+- 添加 `done` 字段到 JSON schema
+- System prompt 补充 multi-turn 协议说明
+- `max_tokens` 12000→32000
+
+**代码改动**：
+- 删除 `BATCH_SIZE`/`BATCH_MAX_TOKENS`/`MAX_BATCHES`/`_build_batch_spec`
+- 新增 `_run_pass1` multi-turn 循环
+- `_parse_signals_from_response` 返回 `(list[SignalStub], done: bool)`
+
+### 28.4 测试结果
+
+**101 Alphas 论文实测**：
+- 一次调用拿完所有 101 个因子
+- LLM 主动标记 `done=True`
+- 覆盖率 100%
+- 延迟 106 秒
+
+**对比**：
+| 版本 | 调用次数 | 结果 |
+|---|---|---|
+| 旧 batching（`sorted[-15:]`） | 11 次 | 25/101 ❌ |
+| 新 multi-turn continuation | 1 次 | 101/101 ✅ |
+
+### 28.5 后续优化
+
+1. **动态 `MAX_ROUNDS`**：根据 `plan.n_signals_estimate` 动态调整
+2. **Token 预算优化**：如果 LLM 一次输出全部，可以节省多轮开销
+3. **错误处理**：API 拒绝 `max_tokens=32000` 时自动 fallback 到 16384
