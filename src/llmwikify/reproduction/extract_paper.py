@@ -105,6 +105,62 @@ def _load_prompt() -> tuple[str, str, dict[str, Any]]:
     return (raw.get("system", ""), raw.get("user", ""), raw.get("params", {}))
 
 
+def _repair_truncated_json(text: str, exc: json.JSONDecodeError) -> dict[str, Any]:
+    """Attempt to repair a truncated JSON response from the LLM.
+
+    The LLM may hit max_tokens mid-output, leaving unclosed braces/brackets
+    or mid-key/mid-value strings. Strategy: find the last complete object/
+    value boundary, close all open brackets, and try to parse.
+    """
+    if not text:
+        return {}
+    pos = exc.pos if hasattr(exc, "pos") and exc.pos > 0 else len(text)
+    # Find candidate truncation points: last }, last ], and the error position
+    candidates = sorted(set(
+        [pos, text.rfind("}") + 1, text.rfind("]") + 1, text.rfind('",') + 2]
+        + list(range(pos, max(pos - 1000, 0), -50))
+    ), reverse=True)
+    for try_pos in candidates:
+        if try_pos <= 0:
+            continue
+        candidate = text[:try_pos]
+        open_braces = 0
+        open_brackets = 0
+        in_string = False
+        escape = False
+        for ch in candidate:
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                open_braces += 1
+            elif ch == "}":
+                open_braces -= 1
+            elif ch == "[":
+                open_brackets += 1
+            elif ch == "]":
+                open_brackets -= 1
+        suffix = ""
+        if in_string:
+            suffix += '"'
+        suffix += "]" * max(open_brackets, 0)
+        suffix += "}" * max(open_braces, 0)
+        repaired = candidate + suffix
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            continue
+    return {}
+
+
 def extract_paper_structure(
     paper_content: str,
     paper_id: str = "",
@@ -168,11 +224,24 @@ def extract_paper_structure(
         cleaned = re.sub(r"```\s*$", "", cleaned)
         json_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if json_match:
-            result = json.loads(json_match.group())
-            logger.info("[extract] paper=%s JSON parsed, keys=%s", paper_id, list(result.keys()))
-            if "factor_list" in result:
-                logger.info("[extract] paper=%s factor_list has %d factors", paper_id, len(result["factor_list"]))
-            return result
+            try:
+                result = json.loads(json_match.group())
+                logger.info("[extract] paper=%s JSON parsed, keys=%s", paper_id, list(result.keys()))
+                if "factor_list" in result:
+                    logger.info("[extract] paper=%s factor_list has %d factors", paper_id, len(result["factor_list"]))
+                return result
+            except json.JSONDecodeError as exc:
+                # Try to repair truncated JSON (LLM hit max_tokens mid-output)
+                logger.warning("[extract] paper=%s JSON parse failed at %s, attempting repair...",
+                              paper_id, exc)
+                result = _repair_truncated_json(json_match.group(), exc)
+                if result:
+                    logger.info("[extract] paper=%s JSON repaired, keys=%s", paper_id, list(result.keys()))
+                    if "factor_list" in result:
+                        logger.info("[extract] paper=%s factor_list has %d factors (repaired)",
+                                    paper_id, len(result["factor_list"]))
+                    return result
+                logger.warning("[extract] paper=%s JSON repair failed", paper_id)
         logger.warning("no JSON found in LLM response for %s (response_len=%d)", paper_id, len(response))
         return {}
     except Exception as exc:
