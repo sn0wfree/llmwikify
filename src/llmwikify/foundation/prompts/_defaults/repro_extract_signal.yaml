@@ -1,0 +1,112 @@
+name: repro_extract_signal
+description: "Track A Tier 1 for 'signal' schema. Extract 8 core paper-level sections for industry rotation / signal-style papers (1-20 named signals)."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "extract_tier1_signal"
+
+params:
+  max_tokens: 6144
+  temperature: 0.1
+
+system: |
+  You are a quantitative research analyst. Given a paper that describes
+  1-20 named signals (industry rotation, style rotation, market timing,
+  or factor-based stock selection), extract 8 core paper-level sections.
+  Output strict JSON only. No prose, no code fences.
+
+  Rules:
+  - This is "signal" schema, not pure "factor" or "summary".
+  - Be precise and factual. Do NOT fabricate.
+  - If a field is not present in the paper, use "TBD" or empty list.
+  - Use English for technical terms, Chinese for descriptions.
+  - Paper-level structure only; individual signal L1-L4 is in Track B.
+
+user: |
+  Extract paper-level structure from this signal-style paper.
+
+  Paper ID: {{ paper_id }}
+  Title: {{ title }}
+  Detected sections: {{ n_sections }}
+  {% if sections %}
+  Section list:
+  {% for s in sections %}
+  - L{{ s.level }} [{{ s.char_start }}-{{ s.char_end }}] {{ s.title }}
+  {% endfor %}
+  {% endif %}
+
+  Paper content (full text):
+  ---
+  {{ paper_text }}
+  ---
+
+  Output strict JSON with 8 sections:
+
+  {
+    "paper_metadata": {
+      "title": "string",
+      "authors": ["list of authors"],
+      "institution": "string (issuing org or company)",
+      "date": "string (publication date or year)",
+      "doi": "string or null",
+      "keywords": ["list of keywords"],
+      "paper_subtype": "academic|industry_report|working_paper|internal"
+    },
+    "abstract_summary": {
+      "one_sentence": "string (one-sentence summary in Chinese)",
+      "three_bullets": ["3 key takeaways in Chinese"],
+      "main_contribution": "string (what's new in Chinese)",
+      "main_finding": "string (empirical result in Chinese)"
+    },
+    "strategy_logic": {
+      "core_hypothesis": "string (核心假说)",
+      "market_logic": "string (为什么应该 work)",
+      "alpha_source": "string (alpha 从哪来)",
+      "applicable_conditions": "string (适用市场条件)",
+      "market_regime": "string (bull/bear/sideways preference)",
+      "long_short_bias": "long_only|short_only|long_short",
+      "holding_period_estimate": "string (e.g. monthly, quarterly)",
+      "capacity_estimate": "string (e.g. 500M CNY)"
+    },
+    "data_requirements": {
+      "fields": ["list of required data fields"],
+      "frequency": "string (daily/weekly/monthly)",
+      "universe": "string (industries/stocks/sectors description)",
+      "data_source": "string (where to get the data)",
+      "data_quality": "string (cleaning notes)",
+      "survivorship_handling": "string (how to handle delisted)",
+      "look_ahead_prevention": "string (T+1 alignment, etc.)",
+      "liquidity_filter": "string (min amount, market cap, etc.)"
+    },
+    "operation_steps": {
+      "signal_generation": "string (how signals are generated, with names)",
+      "position_sizing": "string (equal weight, score-proportional, etc.)",
+      "rebalance_frequency": "string (weekly/monthly/quarterly)",
+      "stop_loss": "string or null",
+      "stop_profit": "string or null",
+      "transaction_cost": "string (commission + slippage)",
+      "rebalance_threshold": "string (only rebalance if drift > N)",
+      "position_count": "integer (typical number of holdings)",
+      "leverage": "string (1.0 for no leverage)"
+    },
+    "model_framework": {
+      "model_type": "string (technical/fundamental/quantitative/hybrid)",
+      "framework": "string (e.g. multi-factor, composite score)",
+      "validation": "string (in-sample, OOS, walk-forward)",
+      "evaluation_metrics": ["list of metrics (IC, IR, Sharpe, etc.)"],
+      "complexity_rating": "low|medium|high",
+      "reproducibility_score": "low|medium|high"
+    },
+    "strengths_weaknesses": {
+      "strengths": ["list of advantages"],
+      "weaknesses": ["list of disadvantages"],
+      "improvement_directions": ["list of possible improvements"]
+    },
+    "suggested_signal": {
+      "signal_type": "string (one of: ma_cross, rsi, momentum, volatility, factor_rank, signal_composite, unknown)",
+      "signal_params": {"key": "value pairs"},
+      "strategy_class": "string (trend_following / factor_ranking / mean_reversion / stat_arb / composite)",
+      "confidence": "high|medium|low",
+      "reasoning": "string (why this signal type was chosen)"
+    }
+  }

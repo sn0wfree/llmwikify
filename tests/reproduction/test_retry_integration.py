@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+"""Integration tests: verify with_retry is wired into all 6 LLM call sites.
+
+For each module, replace client.chat with a mock that fails N times then
+succeeds. Verify the call ultimately succeeds (retry worked) and the
+total call count matches expected (1 + retries).
+"""
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+
+# Import each module that contains LLM call sites
+from llmwikify.reproduction.llm_extraction import (
+    DeferError,
+    planner,
+    section_detector,
+    track_a,
+    track_b,
+)
+from llmwikify.reproduction.llm_extraction.planner import PlanResult
+from llmwikify.reproduction.llm_extraction.section_detector import Section
+from llmwikify.reproduction.llm_extraction.track_b import (
+    BATCH_MAX_TOKENS,
+    BATCH_SIZE,
+    SignalStub,
+)
+
+
+class FlakyClient:
+    """Mock LLM client that fails N times then returns a valid response."""
+
+    def __init__(self, response: str, fail_times: int = 0, exc: Exception | None = None):
+        self.response = response
+        self.fail_times = fail_times
+        self.exc = exc or RuntimeError("transient")
+        self.calls = 0
+        self.last_messages = None
+        self.last_kwargs = None
+
+    def chat(self, messages, **kwargs):
+        self.last_messages = messages
+        self.last_kwargs = kwargs
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            raise self.exc
+        return self.response
+
+
+# ── Section detector ──────────────────────────────────
+
+
+class TestSectionDetectorRetry:
+    def test_retries_on_transient_failure(self):
+        # Use a 1-section response so JSON parses cleanly
+        good_response = json.dumps({
+            "sections": [{"title": "Intro", "level": 1,
+                          "char_start": 0, "char_end": 100}],
+        })
+        client = FlakyClient(good_response, fail_times=2)
+        result = section_detector.detect_sections(
+            paper_id="p1", parsed_text="x" * 200, llm_client=client,
+        )
+        assert result.success is True
+        assert client.calls == 3  # 1 + 2 retries
+
+    def test_passes_after_exhaustion_with_error(self):
+        """Stage 1 Call 1 raises DeferError on retry exhaustion (caller's
+        responsibility to handle via DeferredQueue)."""
+        client = FlakyClient("irrelevant", fail_times=10)
+        with pytest.raises(DeferError) as exc_info:
+            section_detector.detect_sections(
+                paper_id="p1", parsed_text="x" * 200, llm_client=client,
+            )
+        assert "after 3 attempts" in str(exc_info.value)
+        assert client.calls == 3  # max_attempts=3
+
+
+# ── Planner ──────────────────────────────────────────
+
+
+class TestPlannerRetry:
+    def test_retries_on_transient_failure(self):
+        good_response = json.dumps({
+            "schema_choice": "factor",
+            "n_signals_estimate": 5,
+            "confidence": 0.9,
+            "token_budget": {"track_b_pass1": 5000},
+        })
+        client = FlakyClient(good_response, fail_times=2)
+        result = planner.plan_paper(
+            paper_id="p1", title="T", parsed_text="x" * 200,
+            sections=None, llm_client=client,
+        )
+        assert result.success is True
+        assert client.calls == 3
+
+    def test_passes_after_exhaustion(self):
+        """Planner raises DeferError on retry exhaustion."""
+        client = FlakyClient("irrelevant", fail_times=10)
+        with pytest.raises(DeferError) as exc_info:
+            planner.plan_paper(
+                paper_id="p1", title="T", parsed_text="x" * 200,
+                sections=None, llm_client=client,
+            )
+        assert "after 3 attempts" in str(exc_info.value)
+        assert client.calls == 3
+
+
+# ── Track A Tier 1 ──────────────────────────────────
+
+
+class TestTrackATier1Retry:
+    def test_retries_on_transient_failure(self):
+        good_response = json.dumps({
+            "paper_metadata": {"title": "T", "authors": ["A"]},
+        })
+        client = FlakyClient(good_response, fail_times=2)
+        plan = PlanResult(
+            paper_id="p1", schema_choice="factor",
+            n_signals_estimate=5, confidence=0.9,
+            token_budget={"track_a_tier1": 5000}, success=True,
+        )
+        result, latency = track_a._run_tier1(
+            client, plan, "p1", "T", "x" * 200, None,
+        )
+        assert client.calls == 3
+        assert result.get("paper_metadata", {}).get("title") == "T"
+
+
+# ── Track A Tier 2 ──────────────────────────────────
+
+
+class TestTrackATier2Retry:
+    def test_retries_on_transient_failure(self):
+        good_response = json.dumps({"backtest": "results"})
+        client = FlakyClient(good_response, fail_times=2)
+        plan = PlanResult(
+            paper_id="p1", schema_choice="factor",
+            n_signals_estimate=5, confidence=0.9,
+            token_budget={"track_a_tier2_per_section": 5000}, success=True,
+        )
+        tier2, attempted, failed, latency = track_a._run_tier2(
+            client, plan, "p1", "x" * 200,
+        )
+        # FlakyClient is cumulative: first 2 calls fail, rest succeed.
+        # 5 tier2 prompts: prompt 1 takes 3 calls (2 fail + 1 ok),
+        # prompts 2-5 take 1 call each. Total = 3 + 4 = 7.
+        assert client.calls == 7
+        # All 5 prompts attempted; none failed (retry recovered)
+        assert len(attempted) == 5
+        assert failed == []
+
+    def test_all_tier2_prompts_succeed(self):
+        """If retries succeed for all prompts, tier2 is fully populated."""
+        good_response = json.dumps({"backtest": "results"})
+        client = FlakyClient(good_response, fail_times=0)  # no failures
+        plan = PlanResult(
+            paper_id="p1", schema_choice="factor",
+            n_signals_estimate=5, confidence=0.9,
+            token_budget={"track_a_tier2_per_section": 5000}, success=True,
+        )
+        tier2, attempted, failed, latency = track_a._run_tier2(
+            client, plan, "p1", "x" * 200,
+        )
+        assert client.calls == 5  # 1 call per prompt, no retries
+        assert failed == []
+
+
+# ── Track B Pass 1 single call ──────────────────────
+
+
+class TestTrackBPass1SingleRetry:
+    def test_retries_on_transient_failure(self):
+        good_response = json.dumps({
+            "signals": [
+                {"name": "S1", "formula": "rank(x)"},
+                {"name": "S2", "formula": "rank(y)"},
+            ],
+        })
+        client = FlakyClient(good_response, fail_times=2)
+        plan = PlanResult(
+            paper_id="p1", schema_choice="factor",
+            n_signals_estimate=2,  # ≤ BATCH_SIZE → single call path
+            confidence=0.9,
+            token_budget={"track_b_pass1": 5000}, success=True,
+        )
+        stubs, latency, n_calls = track_b._run_pass1(
+            client, plan, "p1", "x" * 200,
+        )
+        assert n_calls == 1
+        # 1 + 2 retries = 3
+        assert client.calls == 3
+        assert len(stubs) == 2
+
+
+# ── Track B Pass 1 batched ─────────────────────────
+
+
+class TestTrackBPass1BatchedRetry:
+    def test_batches_with_retry_per_batch(self):
+        # 11 signals > BATCH_SIZE → batched
+        items = [{"name": f"Alpha#{i}", "formula": f"f({i})"}
+                 for i in range(1, 12)]
+        good_response = json.dumps({"signals": items})
+        client = FlakyClient(good_response, fail_times=1)  # 1 fail across all
+        plan = PlanResult(
+            paper_id="p1", schema_choice="factor",
+            n_signals_estimate=11,
+            confidence=0.9,
+            token_budget={"track_b_pass1": 5000}, success=True,
+        )
+        stubs, latency, n_calls = track_b._run_pass1(
+            client, plan, "p1", "x" * 200,
+        )
+        # FlakyClient is cumulative: 1 fail then all succeed.
+        # Batch 1: 2 calls (1 fail + 1 ok, 10 items)
+        # Batch 2: 1 call (no more fails, 1 item, breaks loop)
+        # Total: 3 client.calls
+        assert client.calls == 3
+        assert len(stubs) == 11
+
+
+# ── Track B Pass 2 per-factor ──────────────────────
+
+
+class TestTrackBPass2Retry:
+    def test_retries_on_transient_failure(self):
+        good_response = json.dumps({
+            "factor": {
+                "description": "desc",
+                "l1": {"formula": "x+y"},
+                "l2": {"function_calls": ["rank"]},
+                "l3": {"input_data": ["close"]},
+                "l4": {"strategy_type": "mean-reversion"},
+            }
+        })
+        client = FlakyClient(good_response, fail_times=2)
+        plan = PlanResult(
+            paper_id="p1", schema_choice="factor",
+            n_signals_estimate=1, confidence=0.9,
+            token_budget={"track_b_pass2_per_factor": 5000}, success=True,
+        )
+        stub = SignalStub(index=1, name="S1", formula_brief="x+y")
+        detail = track_b._run_pass2_one(
+            client, plan, "p1", stub, "x" * 200,
+        )
+        assert client.calls == 3
+        assert detail.success is True
+        assert detail.l1.get("formula") == "x+y"
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

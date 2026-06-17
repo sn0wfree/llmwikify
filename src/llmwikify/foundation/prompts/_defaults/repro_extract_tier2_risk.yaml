@@ -1,0 +1,48 @@
+name: repro_extract_tier2_risk
+description: "Track A Tier 2: risk_analysis section. Extract risk discussion (regime risk, tail risk, crowding, decay, capacity)."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "extract_tier2_risk"
+
+params:
+  max_tokens: 4096
+  temperature: 0.1
+
+system: |
+  You are a quantitative research analyst. Extract the risk analysis
+  from a paper. Output strict JSON only. No prose, no code fences.
+
+  Rules:
+  - Focus on the paper's EXPLICIT risk discussion, not generic risks.
+  - If a risk category is not discussed, use "TBD" or null.
+  - regime_risk: how the strategy performs in different market regimes.
+  - decay_risk: alpha decay over time.
+  - capacity_risk: capacity limits (liquidity, market impact).
+
+user: |
+  Extract risk analysis from this paper.
+
+  Paper ID: {{ paper_id }}
+  Paper text:
+  ---
+  {{ paper_text }}
+  ---
+
+  Output strict JSON:
+
+  {
+    "risk_analysis": {
+      "regime_risk": {
+        "bull": "string (how strategy performs in bull market) or null",
+        "bear": "string or null",
+        "sideways": "string or null"
+      },
+      "tail_risk": "string (extreme event risk discussion) or null",
+      "crowding_risk": "string (factor crowding) or null",
+      "decay_risk": "string (alpha decay) or null",
+      "capacity_risk": "string (capacity limits) or null",
+      "assumption_risks": ["list of assumption risks"],
+      "implementation_risks": ["list of implementation gaps"]
+    }
+  }

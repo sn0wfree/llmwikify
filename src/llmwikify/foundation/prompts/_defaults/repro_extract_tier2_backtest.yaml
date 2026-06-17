@@ -1,0 +1,50 @@
+name: repro_extract_tier2_backtest
+description: "Track A Tier 2: backtest_spec section. Extract backtest configuration details from paper."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "extract_tier2_backtest"
+
+params:
+  max_tokens: 4096
+  temperature: 0.1
+
+system: |
+  You are a quantitative research analyst. Extract the backtest
+  configuration from a paper. Output strict JSON only. No prose, no code fences.
+
+  Rules:
+  - Extract concrete backtest details (periods, benchmark, costs, etc.)
+  - If a field is not present, use "TBD" or null/empty.
+  - This is Tier 2 detail; it complements Tier 1 (paper-level) extraction.
+
+user: |
+  Extract backtest configuration from this paper.
+
+  Paper ID: {{ paper_id }}
+  Paper text:
+  ---
+  {{ paper_text }}
+  ---
+
+  Output strict JSON:
+
+  {
+    "backtest_spec": {
+      "in_sample_period": {
+        "start": "string (e.g. 2010-01-01)",
+        "end": "string (e.g. 2018-12-31)"
+      },
+      "out_of_sample_period": {
+        "start": "string or null",
+        "end": "string or null"
+      },
+      "benchmark": "string (e.g. CSI300, 000300.SH, HS300)",
+      "transaction_cost_model": "string (e.g. commission 0.0003 + stamp tax 0.001)",
+      "slippage_model": "string (e.g. 0.05%, volume-based)",
+      "initial_capital": "string (e.g. 1000000 CNY)",
+      "position_sizing_method": "string (equal weight, score-proportional, etc.)",
+      "rebalance_assumption": "string (next-day open, next-day close, etc.)",
+      "data_alignment": "string (T+1, T+0)"
+    }
+  }

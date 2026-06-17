@@ -1,0 +1,50 @@
+name: repro_extract_tier2_performance
+description: "Track A Tier 2: performance_claimed section. Extract paper-claimed performance metrics."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "extract_tier2_performance"
+
+params:
+  max_tokens: 4096
+  temperature: 0.1
+
+system: |
+  You are a quantitative research analyst. Extract the paper's
+  CLAIMED performance metrics. Output strict JSON only. No prose.
+
+  CRITICAL: These are numbers the paper claims, NOT verified metrics.
+  L5 validation will compare against actual backtest results.
+
+  Rules:
+  - Always extract, regardless of schema (this Tier 2 is universal).
+  - Source = "原文 Table N" or specific section reference.
+  - caveat must mention "论文声明的绩效，未经验证".
+  - Use null for fields not present.
+
+user: |
+  Extract claimed performance from this paper.
+
+  Paper ID: {{ paper_id }}
+  Paper text:
+  ---
+  {{ paper_text }}
+  ---
+
+  Output strict JSON:
+
+  {
+    "performance_claimed": {
+      "annual_return": "string (e.g. 25% or 0.25) or null",
+      "sharpe_ratio": "string or null",
+      "max_drawdown": "string (e.g. -15% or -0.15) or null",
+      "win_rate": "string (e.g. 55% or 0.55) or null",
+      "ic_mean": "string or null",
+      "ic_ir": "string or null",
+      "turnover": "string (monthly/annual turnover) or null",
+      "calmar_ratio": "string or null",
+      "volatility": "string (annual volatility) or null",
+      "source": "string (e.g. 原文 Table 3, Section 4.2)",
+      "caveat": "论文声明的绩效，未经验证。L5 validation 阶段会执行实际回测对比。"
+    }
+  }

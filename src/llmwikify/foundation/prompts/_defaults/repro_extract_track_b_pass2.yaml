@@ -1,0 +1,99 @@
+name: repro_extract_track_b_pass2
+description: "Track B Pass 2: extract full L1-L4 factor metadata for a single signal."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "track_b_pass2"
+
+params:
+  max_tokens: 5500
+  temperature: 0.1
+
+system: |
+  You are a quantitative factor researcher. Given a paper and a single
+  signal/factor to detail, extract full 6-layer metadata (L1-L4; L5-L6
+  filled later by validation). Output strict JSON only. No prose.
+
+  6-Layer structure:
+  - L1 (Logic): definition, formula, input_columns, frequency, constraints
+  - L2 (Calculation): step-by-step calculation pipeline, edge cases, complexity
+  - L3 (Financial Understanding): intuition, market behavior, theory
+  - L4 (Meaning): testable hypotheses with expected IC sign (L4 meaning_summary filled by L5)
+
+  Rules:
+  - Extract from the paper; do NOT fabricate.
+  - L1: most concrete (formula + input columns usually given in paper)
+  - L2: derive from formula (calculation steps)
+  - L3: paper's discussion of financial intuition
+  - L4: 3-5 hypotheses (paper + reasonable inferences); mark uncertainty
+  - L4.meaning_summary, L4.key_insights, L4.uncertainty, L4.final_meaning: leave null
+    (these are filled in L4 implementation phase, not in paper extraction)
+  - Use English for technical terms, Chinese for descriptions.
+
+user: |
+  Extract full L1-L4 factor metadata for this single signal.
+
+  Paper ID: {{ paper_id }}
+  Signal index: {{ signal_index }}
+  Signal name: {{ signal_name }}
+  Brief formula (from Pass 1): {{ formula_brief }}
+
+  Paper text (full):
+  ---
+  {{ paper_text }}
+  ---
+
+  Output strict JSON:
+
+  {
+    "factor": {
+      "name": "{{ signal_name }}",
+      "description": "string (one-sentence description in Chinese)",
+      "l1": {
+        "definition": "string (one-sentence definition in Chinese)",
+        "formula": "string (mathematical formula in LaTeX or text)",
+        "input_columns": ["list of input column names (e.g. open, close, volume)"],
+        "frequency": "string (日频|周频|月频)",
+        "output_schema": "string (e.g. [date × Code] wide format) or null",
+        "nan_meaning": "string or null",
+        "default_params": {"key": "value pairs"},
+        "param_constraints": {"key": "constraint"},
+        "business_constraints": "string or null"
+      },
+      "l2": {
+        "calculation_steps": [
+          {"step": 1, "description": "step", "formula": "step formula"}
+        ],
+        "edge_case_handling": "string or null",
+        "missing_value_handling": "string or null",
+        "data_alignment": "string (e.g. T+1) or null",
+        "complexity": "string (e.g. O(T × N))",
+        "code_location": null
+      },
+      "l3": {
+        "financial_intuition": "string (what this factor intuitively measures in Chinese)",
+        "market_behavior": "string (what market behavior it captures) or null",
+        "theoretical_basis": "string (underlying financial theory) or null",
+        "historical_effectiveness": "string or null",
+        "related_factors": "string or null"
+      },
+      "l4": {
+        "hypotheses": [
+          {
+            "id": "H1",
+            "name": "hypothesis name in Chinese",
+            "description": "hypothesis description in Chinese",
+            "expected_ic_sign": "正|负",
+            "source": "theoretical or empirical source",
+            "priority": "主假设|辅助假设"
+          }
+        ],
+        "hypothesis_limit": 5,
+        "archived_hypotheses": [],
+        "meaning_summary": null,
+        "key_insights": null,
+        "uncertainty": null,
+        "final_meaning": null
+      }
+    }
+  }

@@ -1,0 +1,43 @@
+name: repro_extract_tier2_implementation
+description: "Track A Tier 2: implementation_assessment section. Estimate implementation complexity and effort."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "extract_tier2_implementation"
+
+params:
+  max_tokens: 4096
+  temperature: 0.1
+
+system: |
+  You are a quantitative research analyst. Assess the implementation
+  complexity of the strategy described in a paper. Output strict JSON.
+  No prose, no code fences.
+
+  Rules:
+  - estimated_effort_days: your best estimate to implement (1-30 days).
+  - typical_use_case: "live_trading" | "paper_trading" | "research_only".
+  - code_reusability: "high" (drop-in) | "medium" (needs adaptation) | "low" (rewrite).
+
+user: |
+  Assess implementation complexity for this paper.
+
+  Paper ID: {{ paper_id }}
+  Paper text:
+  ---
+  {{ paper_text }}
+  ---
+
+  Output strict JSON:
+
+  {
+    "implementation_assessment": {
+      "implementation_complexity": "low|medium|high",
+      "data_availability": "string (e.g. 公开数据/Wind 终端/付费 API) or null",
+      "code_reusability": "high|medium|low",
+      "typical_use_case": "live_trading|paper_trading|research_only",
+      "estimated_effort_days": "integer (1-30)",
+      "prerequisites": ["list of prerequisites (data, infra, etc.)"],
+      "common_pitfalls": ["list of typical implementation mistakes"]
+    }
+  }

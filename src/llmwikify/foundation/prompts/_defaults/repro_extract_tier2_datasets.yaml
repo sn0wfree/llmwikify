@@ -1,0 +1,42 @@
+name: repro_extract_tier2_datasets
+description: "Track A Tier 2: datasets section. Extract dataset details (name, source, time range, processing)."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "extract_tier2_datasets"
+
+params:
+  max_tokens: 4096
+  temperature: 0.1
+
+system: |
+  You are a quantitative research analyst. Extract the datasets
+  referenced or used in a paper. Output strict JSON only. No prose.
+
+  Rules:
+  - If multiple datasets, list them all in the array.
+  - Include time range, source, processing notes.
+  - If paper uses no specific dataset, return empty array.
+
+user: |
+  Extract dataset details from this paper.
+
+  Paper ID: {{ paper_id }}
+  Paper text:
+  ---
+  {{ paper_text }}
+  ---
+
+  Output strict JSON:
+
+  {
+    "datasets": [
+      {
+        "name": "string (dataset name)",
+        "source": "string (where to get it, e.g. CSMAR, Wind, Bloomberg)",
+        "time_range": "string (e.g. 2010-01-01 to 2020-12-31) or null",
+        "processing": "string (cleaning, winsorization, etc.) or null",
+        "purpose": "string (what it's used for in the paper)"
+      }
+    ]
+  }

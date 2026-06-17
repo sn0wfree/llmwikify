@@ -1,0 +1,112 @@
+name: repro_extract_allocation
+description: "Track A Tier 1 for 'allocation' schema. Extract 8 core paper-level sections for asset allocation papers (1-3 rules)."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "extract_tier1_allocation"
+
+params:
+  max_tokens: 6144
+  temperature: 0.1
+
+system: |
+  You are a quantitative research analyst. Given a paper focused on
+  asset allocation (top-down macro allocation, regime-based allocation,
+  risk parity, etc.) with 1-3 main allocation rules, extract 8 core
+  paper-level sections. Output strict JSON only. No prose, no code fences.
+
+  Rules:
+  - This is "allocation" schema; the paper's "signals" are allocation rules,
+    not individual stock-picking factors.
+  - Be precise and factual. Do NOT fabricate.
+  - If a field is not present in the paper, use "TBD" or empty list.
+  - Use English for technical terms, Chinese for descriptions.
+
+user: |
+  Extract paper-level structure from this allocation paper.
+
+  Paper ID: {{ paper_id }}
+  Title: {{ title }}
+  Detected sections: {{ n_sections }}
+  {% if sections %}
+  Section list:
+  {% for s in sections %}
+  - L{{ s.level }} [{{ s.char_start }}-{{ s.char_end }}] {{ s.title }}
+  {% endfor %}
+  {% endif %}
+
+  Paper content (full text):
+  ---
+  {{ paper_text }}
+  ---
+
+  Output strict JSON with 8 sections:
+
+  {
+    "paper_metadata": {
+      "title": "string",
+      "authors": ["list of authors"],
+      "institution": "string (issuing org or company)",
+      "date": "string (publication date or year)",
+      "doi": "string or null",
+      "keywords": ["list of keywords"],
+      "paper_subtype": "academic|industry_report|working_paper|internal"
+    },
+    "abstract_summary": {
+      "one_sentence": "string (one-sentence summary in Chinese)",
+      "three_bullets": ["3 key takeaways in Chinese"],
+      "main_contribution": "string (what's new in Chinese)",
+      "main_finding": "string (empirical result in Chinese)"
+    },
+    "strategy_logic": {
+      "core_hypothesis": "string (核心假说, e.g. 宏观因子驱动资产轮动)",
+      "market_logic": "string (为什么这个 allocation 框架应该 work)",
+      "alpha_source": "string (alpha 来源: 宏观择时 / 风险平价 / 风格轮动)",
+      "applicable_conditions": "string (适用市场条件)",
+      "market_regime": "string (preferred regimes)",
+      "long_short_bias": "long_only|short_only|long_short",
+      "holding_period_estimate": "string (e.g. 1-3 months)",
+      "capacity_estimate": "string (e.g. 1B CNY)"
+    },
+    "data_requirements": {
+      "fields": ["list (macro indicators, asset prices, etc.)"],
+      "frequency": "string (monthly/quarterly)",
+      "universe": "string (asset universe, e.g. A股/债券/商品/海外)",
+      "data_source": "string (Wind, Choice, etc.)",
+      "data_quality": "string",
+      "survivorship_handling": "string",
+      "look_ahead_prevention": "string",
+      "liquidity_filter": "string"
+    },
+    "operation_steps": {
+      "signal_generation": "string (allocation rule description, e.g. 风险平价 / 美林时钟)",
+      "position_sizing": "string (allocation rule, e.g. 60/40, risk parity weights)",
+      "rebalance_frequency": "string (monthly/quarterly)",
+      "stop_loss": "string or null",
+      "stop_profit": "string or null",
+      "transaction_cost": "string (commission + slippage for rebalancing)",
+      "rebalance_threshold": "string (band-based rebalance, etc.)",
+      "position_count": "integer (number of asset classes)",
+      "leverage": "string (1.0 for no leverage)"
+    },
+    "model_framework": {
+      "model_type": "string (macro allocation / risk parity / black-litterman / etc.)",
+      "framework": "string (e.g. 美林时钟, 风险平价, 桥水全天候)",
+      "validation": "string (backtest period, OOS)",
+      "evaluation_metrics": ["list (年化收益, 最大回撤, Sharpe, etc.)"],
+      "complexity_rating": "low|medium|high",
+      "reproducibility_score": "low|medium|high"
+    },
+    "strengths_weaknesses": {
+      "strengths": ["list"],
+      "weaknesses": ["list"],
+      "improvement_directions": ["list"]
+    },
+    "suggested_signal": {
+      "signal_type": "string (one of: factor_rank, signal_composite, regime_switch, unknown)",
+      "signal_params": {"key": "value pairs (e.g. risk_parity_weights, regime_thresholds)"},
+      "strategy_class": "string (asset_allocation / risk_parity / regime_rotation)",
+      "confidence": "high|medium|low",
+      "reasoning": "string (why this allocation approach)"
+    }
+  }

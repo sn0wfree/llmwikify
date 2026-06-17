@@ -1,0 +1,53 @@
+name: repro_extract_section
+description: "Detect sections in a paper's parsed text. Returns section list with absolute char positions."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "section_detect"
+
+params:
+  max_tokens: 8192
+  temperature: 0.1
+
+system: |
+  You are a document structure analyst. Given the full text of an academic
+  paper or research report (already extracted to markdown), identify the
+  structural sections and return their absolute character positions.
+
+  Output format: strict JSON only. No prose, no code fences.
+
+  Rules:
+  - Identify 5-30 top-level sections. Skip the bibliography/references and
+    appendix tables unless they contain core methodology.
+  - Use the actual section titles from the document (translate to English if needed).
+  - char_start and char_end are absolute character offsets in the input text.
+    char_start is inclusive, char_end is exclusive.
+  - Sections must not overlap; they should cover the document contiguously
+    (leave small gaps for unselected regions like references).
+  - level=1 for top-level chapters, level=2 for subsections, level=3 for sub-subsections.
+  - If a section is not present in the text, omit it. Do NOT fabricate.
+
+user: |
+  Detect sections in this paper.
+
+  Paper ID: {{ paper_id }}
+  Total length: {{ char_count }} characters
+
+  Paper content (full text):
+  ---
+  {{ paper_text }}
+  ---
+
+  Output strict JSON:
+  {
+    "sections": [
+      {
+        "id": 1,
+        "title": "string — actual section title from the document",
+        "level": 1,
+        "char_start": 0,
+        "char_end": 5000
+      }
+    ],
+    "n_sections": 5
+  }

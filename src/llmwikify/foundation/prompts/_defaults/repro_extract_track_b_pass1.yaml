@@ -1,0 +1,46 @@
+name: repro_extract_track_b_pass1
+description: "Track B Pass 1: enumerate all signals/factors in the paper (name + formula only)."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "track_b_pass1"
+
+params:
+  max_tokens: 12000
+  temperature: 0.1
+
+system: |
+  You are a quantitative research analyst. Given a paper, enumerate ALL
+  distinct signals/factors described. Output strict JSON only. No prose.
+
+  Rules:
+  - Enumerate every distinct named signal/factor (e.g. Alpha#1, Alpha#2, ..., Alpha#101).
+  - For each: name (string), formula (string, LaTeX or text). NO description here.
+  - Use actual names from the paper when possible; fallback to "signal_001" naming.
+  - Do NOT fabricate. Skip abstract concepts; only include concrete computable factors.
+  - Be CONCISE: skip Chinese descriptions in this pass (Pass 2 adds them).
+  - This is enumeration only; L1-L4 details are extracted in Pass 2.
+  - Output a SINGLE JSON object with the full list; do not stop early.
+
+user: |
+  {% if batch_spec %}
+  {{ batch_spec }}
+  {% else %}
+  Enumerate all signals/factors in this paper.
+  {% endif %}
+
+  Paper ID: {{ paper_id }}
+  Paper text (full):
+  ---
+  {{ paper_text }}
+  ---
+
+  Output strict JSON (no descriptions, just name + formula):
+
+  {
+    "signals": [
+      {"name": "Alpha#1", "formula": "rank(...)"},
+      {"name": "Alpha#2", "formula": "-1 * correlation(...)"}
+    ],
+    "n_signals": 0
+  }

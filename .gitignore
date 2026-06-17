@@ -105,3 +105,4 @@ ui/webui/vite.config.js
 
 # DuckDB runtime database
 quant/*.duckdb
+quant/papers/
