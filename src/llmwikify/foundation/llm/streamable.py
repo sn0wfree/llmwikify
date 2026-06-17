@@ -154,6 +154,271 @@ def _is_retryable_status(status_code: int) -> bool:
     return status_code in _RETRYABLE_STATUS_CODES
 
 
+# ─── 429 fine classification (borrowed from nanobot base.py) ───
+#
+# Some 429 responses are billing/quota failures that will NOT clear
+# on retry — e.g. insufficient_quota, payment_required. Retrying
+# these wastes tokens and triggers provider throttling.
+#
+# Distinguishing the two classes requires inspecting the response
+# body. nanobot's Provider ABC carries this logic in
+# ``_is_retryable_429_response``; we expose the same primitives
+# here so the helpers can be invoked from any retry site (HTTP or
+# SSE) and from any new provider-specific code path.
+#
+# Borrowed from nanobot v0.2.1 providers/base.py:374-394,
+# simplified for the body-text-only case (we don't parse the full
+# structured error envelope; that's the caller's job if they want
+# finer control).
+
+_NON_RETRYABLE_429_ERROR_TOKENS: frozenset[str] = frozenset({
+    "insufficient_quota",
+    "quota_exceeded",
+    "quota_exhausted",
+    "billing_hard_limit_reached",
+    "insufficient_balance",
+    "credit_balance_too_low",
+    "billing_not_active",
+    "payment_required",
+})
+
+_RETRYABLE_429_ERROR_TOKENS: frozenset[str] = frozenset({
+    "rate_limit_exceeded",
+    "rate_limit_error",
+    "too_many_requests",
+    "request_limit_exceeded",
+    "requests_limit_exceeded",
+    "overloaded_error",
+})
+
+_NON_RETRYABLE_429_TEXT_MARKERS: tuple[str, ...] = (
+    "insufficient_quota",
+    "insufficient quota",
+    "quota exceeded",
+    "quota exhausted",
+    "billing hard limit",
+    "billing_hard_limit_reached",
+    "billing not active",
+    "insufficient balance",
+    "insufficient_balance",
+    "credit balance too low",
+    "payment required",
+    "payment_required",
+    "out of credits",
+    "out of quota",
+    "exceeded your current quota",
+)
+
+_RETRYABLE_429_TEXT_MARKERS: tuple[str, ...] = (
+    "rate limit",
+    "rate_limit",
+    "too many requests",
+    "retry after",
+    "try again in",
+    "temporarily unavailable",
+    "overloaded",
+    "concurrency limit",
+    "速率限制",
+)
+
+
+def _normalize_error_token(value: Any) -> str | None:
+    """Normalize an error token: strip + lowercase, or return None."""
+    if value is None:
+        return None
+    token = str(value).strip().lower()
+    return token or None
+
+
+def _extract_error_type_code(payload: Any) -> tuple[str | None, str | None]:
+    """Extract (type, code) from a dict or JSON string error payload.
+
+    Returns (None, None) for non-dict input, unparseable JSON, or
+    payloads without an ``error`` / ``type`` / ``code`` field.
+    """
+    data: dict[str, Any] | None = None
+    if isinstance(payload, dict):
+        data = payload
+    elif isinstance(payload, str):
+        text = payload.strip()
+        if text:
+            try:
+                parsed = json.loads(text)
+            except (json.JSONDecodeError, ValueError):
+                parsed = None
+            if isinstance(parsed, dict):
+                data = parsed
+    if not isinstance(data, dict):
+        return None, None
+    type_value = data.get("type")
+    code_value = data.get("code")
+    error_obj = data.get("error")
+    if isinstance(error_obj, dict):
+        type_value = error_obj.get("type") or type_value
+        code_value = error_obj.get("code") or code_value
+    return _normalize_error_token(type_value), _normalize_error_token(code_value)
+
+
+def _is_retryable_429_text(content: str | None) -> bool:
+    """Classify a 429 response body as retryable or not.
+
+    Returns True for rate-limit-style errors (worth waiting + retrying)
+    and False for billing/quota failures (insufficient_quota,
+    payment_required, etc.) that won't clear on retry.
+
+    Unknown bodies default to True (wait + retry) — the safe choice
+    is to retry once and surface the error rather than abandon early.
+    """
+    lowered = (content or "").lower()
+    if any(marker in lowered for marker in _NON_RETRYABLE_429_TEXT_MARKERS):
+        return False
+    if any(marker in lowered for marker in _RETRYABLE_429_TEXT_MARKERS):
+        return True
+    # Unknown 429 → wait + retry (matches nanobot's default).
+    return True
+
+
+def is_arrearage_response(
+    status_code: int | None,
+    content: str | None,
+) -> bool:
+    """Detect API-key arrearage / quota / billing errors.
+
+    These surface as HTTP 402 (Payment Required) or as billing
+    semantic tokens in the error body. They will NOT clear on
+    retry, so callers should treat them as terminal.
+
+    Used by 4xx error handlers to decide whether to log a
+    permanent-failure warning vs a transient-retry warning.
+    """
+    if status_code == 402:
+        return True
+    lowered = (content or "").lower()
+    return any(marker in lowered for marker in _NON_RETRYABLE_429_TEXT_MARKERS)
+
+
+# ─── Thinking style map (borrowed from nanobot OpenAICompatProvider) ───
+#
+# Different OpenAI-compatible providers expose their "thinking on/off"
+# toggle under different keys:
+#
+#   reasoning_split:    {"reasoning_split": true|false}             (MiniMax)
+#   thinking_type:      {"thinking": {"type": "enabled"|"disabled"}} (DeepSeek,
+#                                                                  VolcEngine,
+#                                                                  Xiaomi MiMo)
+#   enable_thinking:    {"enable_thinking": true|false}             (DashScope/Qwen)
+#
+# Borrowed from nanobot v0.2.1 providers/openai_compat_provider.py:73-77
+# (openai_compat_provider._THINKING_STYLE_MAP). Decouples the wire format
+# from per-provider code so new providers can register a new style without
+# touching call sites.
+
+_THINKING_STYLE_BUILDERS: dict[str, Any] = {
+    "thinking_type": lambda on: {"thinking": {"type": "enabled" if on else "disabled"}},
+    "enable_thinking": lambda on: {"enable_thinking": on},
+    "reasoning_split": lambda on: {"reasoning_split": on},
+}
+
+
+def build_thinking_extra_body(
+    style: str,
+    thinking_enabled: bool,
+) -> dict[str, Any] | None:
+    """Build the provider-native ``extra_body`` snippet for a thinking style.
+
+    Returns the dict to merge into the chat-completions request body,
+    or None if *style* is unknown (e.g. empty string for providers
+    that don't support a thinking toggle).
+    """
+    builder = _THINKING_STYLE_BUILDERS.get(style)
+    return builder(thinking_enabled) if builder else None
+
+
+# ─── Role alternation hardening (borrowed from nanobot base.py) ───
+#
+# Some OpenAI-compatible gateways reject requests where the last
+# message is ``assistant`` (no prefill support) or where two
+# consecutive non-system messages share the same role.
+#
+# Borrowed from nanobot v0.2.1 providers/base.py:396-463
+# (``LLMProvider._enforce_role_alternation``), simplified to the
+# behaviour we actually need: drop trailing assistant messages,
+# recover by promoting the last popped assistant to ``user`` so
+# the LLM can still see it.
+#
+# Mutates the input list in-place and returns it for chaining.
+
+
+def _enforce_role_alternation(
+    messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Normalize role alternation for OpenAI-compatible APIs.
+
+    - Merges consecutive same-role user/assistant messages by
+      concatenating their string content.
+    - Drops trailing assistant messages (no prefill support).
+    - Recovers by promoting the last dropped assistant to ``user``
+      so the LLM still sees its content.
+    - Inserts a synthetic user message if the first non-system
+      message is a bare assistant (prevents some providers from
+      rejecting the request).
+
+    Mutates *messages* in-place and returns it.
+    """
+    if not messages:
+        return messages
+
+    merged: list[dict[str, Any]] = []
+    for msg in messages:
+        role = msg.get("role")
+        if (
+            merged
+            and role not in (None, "system", "tool")
+            and merged[-1].get("role") == role
+            and role in ("user", "assistant")
+        ):
+            prev = merged[-1]
+            if role == "assistant":
+                prev_has_tools = bool(prev.get("tool_calls"))
+                curr_has_tools = bool(msg.get("tool_calls"))
+                if curr_has_tools:
+                    merged[-1] = dict(msg)
+                    continue
+                if prev_has_tools:
+                    continue
+            prev_content = prev.get("content") or ""
+            curr_content = msg.get("content") or ""
+            if isinstance(prev_content, str) and isinstance(curr_content, str):
+                prev["content"] = (prev_content + "\n\n" + curr_content).strip()
+            else:
+                merged[-1] = dict(msg)
+        else:
+            merged.append(dict(msg))
+
+    last_popped: dict[str, Any] | None = None
+    while merged and merged[-1].get("role") == "assistant":
+        last_popped = merged.pop()
+
+    if (
+        merged
+        and last_popped is not None
+        and not any(m.get("role") in ("user", "tool") for m in merged)
+    ):
+        recovered = dict(last_popped)
+        recovered["role"] = "user"
+        merged.append(recovered)
+
+    # Safety net: first non-system message must not be bare assistant.
+    for i, msg in enumerate(merged):
+        if msg.get("role") != "system":
+            if msg.get("role") == "assistant" and not msg.get("tool_calls"):
+                merged.insert(i, {"role": "user", "content": "(conversation continued)"})
+            break
+
+    messages[:] = merged
+    return messages
+
+
 def _is_retryable_request_exception(exc: BaseException) -> bool:
     """Check if an httpx exception is worth retrying.
 
@@ -386,6 +651,11 @@ def _validate_request(
       - ``top_p`` outside the OpenAI-compatible (0, 1] range
       - ``temperature`` outside [0, 2] (Anthropic-compatible ceiling)
 
+    Also mutates *messages* in-place via :func:`_enforce_role_alternation`
+    so trailing assistant messages and bare-assistant-leading requests
+    get normalized before the network round-trip (borrowed from
+    nanobot base.py: prevents GLM-style error 1214 and similar).
+
     Provider-specific quirks (e.g. MiniMax reasoning_split + tools
     combinations) are not validated here — they will surface as
     ``LLMRequestError`` with the full body, which is informative
@@ -410,6 +680,7 @@ def _validate_request(
             raise ValueError(
                 f"temperature must be a number in [0, 2]; got {temp!r}"
             )
+    _enforce_role_alternation(messages)
 
 
 def _format_http_error(
