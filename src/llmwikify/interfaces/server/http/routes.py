@@ -499,6 +499,20 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
 
     app.include_router(agent_router)
 
+    # P1-1 (vendored from nanobot api/server.py):
+    # OpenAI-compatible /v1/chat/completions + /v1/models + /v1/health.
+    from llmwikify.apps.api.openai_server import create_openai_router
+
+    model_name = "llmwikify-chat"
+    try:
+        from llmwikify.apps.chat.providers.registry import get_default_provider
+        provider = get_default_provider()
+        if provider and getattr(provider, "model", None):
+            model_name = provider.model
+    except Exception:
+        pass
+    app.include_router(create_openai_router(model=model_name))
+
     _register_reproduction_routes(app, registry, agent_service, data_dir=data_dir)
 
     _mount_agent_spa(app)
