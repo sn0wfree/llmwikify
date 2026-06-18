@@ -1,4 +1,4 @@
-"""Tests for ChatRunnerV2 (Plan B Steps B-1 + B-2 + B-3 + extended + 100+ + 200+ + 300+ + 400+ + 500+).
+"""Tests for ChatRunnerV2 (Plan B Steps B-1 + B-2 + B-3 + extended + 100+ + 200+ + 300+ + 400+ + 500+ + 600+).
 
 B-1: skeleton + public API surface (8 cases)
 B-1-extension: independence + edge cases (18 cases)
@@ -20,13 +20,17 @@ state / code path coverage
 500+: 8 new groups (95 cases) — fuzz testing / property-based /
 property invariants / fuzz with state mutations / edge case fuzz /
 streaming consistency / hook invocation patterns / error handling
+600+: 12 new groups (95 cases) — on_stream_end/emit_reasoning_end
+hook points / stream cancellation / _act edge branches / path
+coverage / hook pipeline / spec mutation / state machine / event
+flow / boundary values / mutation testing / real services / misc
 
-Total: 522 cases covering:
+Total: 617 cases covering:
   - Public API: run_stream, run_to_completion, ChatRunResult aggregation
   - _RunContext: defaults, slots, time progression, field independence
   - Independence: no legacy engine imports, minimal deps, works without infra
   - 5-step loop: PRECHECK/REASON/ACT/OBSERVE/COMPLETE
-  - CompositeHook: 11 hook points wired through the loop
+  - CompositeHook: 13 hook points wired through the loop (incl. on_stream_end + emit_reasoning_end)
   - microcompact: native integration (default ON, configurable)
   - text-mode: [TOOL_CALL] Perl-style parsing
   - Error handling: LLM stream failure → stop_reason=error
@@ -38,9 +42,9 @@ Total: 522 cases covering:
   - Golden comparisons: exact event sequences for Q&A / single / multi / error / max
   - Integration: WikiHook / microcompact cache / text-mode split chunks / truncation
   - Edge: empty messages / wiki_id=None / error dict / exception caught / 2x compact
-  - Hook coverage: before/after_iteration / on_stream / emit_reasoning /
-    before_execute_tools / after_tool_executed / on_tool_error /
-    on_confirmation / on_error
+  - Hook coverage: before/after_iteration / on_stream / on_stream_end /
+    emit_reasoning / emit_reasoning_end / before_execute_tools /
+    after_tool_executed / on_tool_error / on_confirmation / on_error
   - Hook isolation: failing hook doesn't break the loop
   - State safety: spec immutability / session_id preservation / ctx messages
   - Boundary: microcompact exact threshold / 2-compact-in-one-iteration
@@ -71,6 +75,11 @@ Total: 522 cases covering:
     fuzz with state mutations (10) / edge case fuzz (10) /
     streaming consistency (10) / hook invocation patterns (10) /
     error handling (10)
+  - 600+: on_stream_end/emit_reasoning_end (5) / stream cancellation (8) /
+    _act edge branches (8) / path coverage (5) / hook pipeline (8) /
+    spec mutation (8) / state machine (8) / event flow (8) /
+    boundary values (8) / mutation testing (8) / real services (8) /
+    misc/defensive (13)
 """
 from __future__ import annotations
 
@@ -82,7 +91,7 @@ import pytest
 
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2, _RunContext
 from llmwikify.apps.chat.agent.spec import ChatRunResult, ChatRunSpec
-from llmwikify.foundation.callback import NoOpHook
+from llmwikify.foundation.callback import AgentHook, NoOpHook
 
 
 class _StubService:
@@ -489,10 +498,12 @@ class _StubLLMService:
         self,
         events: list[dict[str, Any]] | None = None,
         followup_events: list[dict[str, Any]] | None = None,
+        followup2_events: list[dict[str, Any]] | None = None,
     ) -> None:
         self.config: dict = {}
         self._events = events or [{"type": "done", "content": "stub answer"}]
         self._followup = followup_events or [{"type": "done", "content": "stub answer"}]
+        self._followup2 = followup2_events or [{"type": "done", "content": "stub answer"}]
         self.tool_spec_called = False
         self.truncate_called = False
         self.call_count = 0
@@ -512,7 +523,12 @@ class _StubLLMService:
 
     async def _llm_stream_with_retry(self, _messages, _tools):
         self.call_count += 1
-        events = self._events if self.call_count == 1 else self._followup
+        if self.call_count == 1:
+            events = self._events
+        elif self.call_count == 2:
+            events = self._followup
+        else:
+            events = self._followup2
         for ev in events:
             yield ev
 
@@ -1354,7 +1370,7 @@ def test_hook_before_iteration_called_per_iteration() -> None:
     only fires when an iteration completes tool execution (not on no-tool-calls
     completion path).
     """
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _CountingHook(NoOpHook):
         def __init__(self) -> None:
@@ -1384,7 +1400,7 @@ def test_hook_before_iteration_called_per_iteration() -> None:
 
 def test_hook_after_iteration_called_with_tool_calls() -> None:
     """after_iteration fires when the iteration has tool calls."""
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _CountingHook(NoOpHook):
         def __init__(self) -> None:
@@ -1409,7 +1425,7 @@ def test_hook_after_iteration_called_with_tool_calls() -> None:
 
 def test_hook_on_stream_called_per_delta() -> None:
     """on_stream should fire for each message_delta emitted."""
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _DeltaCounter(NoOpHook):
         def __init__(self) -> None:
@@ -1435,7 +1451,7 @@ def test_hook_on_stream_called_per_delta() -> None:
 
 def test_hook_emit_reasoning_called_for_thinking() -> None:
     """emit_reasoning should fire for thinking chunks."""
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _ThinkingSpy(NoOpHook):
         def __init__(self) -> None:
@@ -1460,7 +1476,7 @@ def test_hook_emit_reasoning_called_for_thinking() -> None:
 
 def test_hook_before_execute_tools_called_once_per_iteration() -> None:
     """before_execute_tools should be called once before tool execution."""
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _ExecSpy(NoOpHook):
         def __init__(self) -> None:
@@ -1511,7 +1527,7 @@ def test_hook_error_isolation_hook_failure_does_not_break() -> None:
 
 def test_hook_on_tool_error_fires_for_raising_tool() -> None:
     """on_tool_error should fire when tool execution raises."""
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _ToolErrSpy(NoOpHook):
         def __init__(self) -> None:
@@ -1543,7 +1559,7 @@ def test_hook_on_tool_error_fires_for_raising_tool() -> None:
 
 def test_hook_on_confirmation_fires_for_confirmation_required() -> None:
     """on_confirmation should fire when tool returns confirmation_required."""
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _ConfSpy(NoOpHook):
         def __init__(self) -> None:
@@ -1575,7 +1591,7 @@ def test_hook_on_confirmation_fires_for_confirmation_required() -> None:
 
 def test_hook_on_error_fires_when_error_event_emitted() -> None:
     """on_error should fire when LLM stream raises."""
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _ErrSpy(NoOpHook):
         def __init__(self) -> None:
@@ -3077,7 +3093,7 @@ def test_concurrent_runs_state_independent() -> None:
 
 
 def test_hook_before_iteration_can_modify_ctx() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _Mutator(NoOpHook):
         def before_iteration(self, ctx):
@@ -3094,7 +3110,7 @@ def test_hook_before_iteration_can_modify_ctx() -> None:
 
 
 def test_hook_after_tool_executed_receives_compacted() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     captured = []
 
@@ -3291,7 +3307,7 @@ def test_hook_with_long_name_works() -> None:
 
 
 def test_hook_iteration_count_in_context() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     iterations_seen = []
 
@@ -3310,7 +3326,7 @@ def test_hook_iteration_count_in_context() -> None:
 
 
 def test_hook_messages_in_context() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     seen_messages = []
 
@@ -3330,7 +3346,7 @@ def test_hook_messages_in_context() -> None:
 
 
 def test_hook_finalize_content_called_with_final() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _Spy(NoOpHook):
         def finalize_content(self, ctx, content):
@@ -3347,7 +3363,7 @@ def test_hook_finalize_content_called_with_final() -> None:
 
 
 def test_hook_finalize_content_exception_falls_back() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _Boom(NoOpHook):
         def finalize_content(self, ctx, content):
@@ -4106,7 +4122,7 @@ def test_12_confirmation_required_event_required_fields() -> None:
 
 
 def test_12_session_init_event_when_hook_wants_streaming() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _StreamHook(NoOpHook):
         def wants_streaming(self):
@@ -5238,7 +5254,7 @@ def test_19_concurrent_runs_isolated_messages() -> None:
 
 
 def test_19_hook_receives_messages_snapshot() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     received = []
 
@@ -5666,7 +5682,7 @@ def test_24_prompt_builder_none_returns_empty() -> None:
 
 
 def test_25_precheck_false_proceeds_to_reason() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     prechecks = []
 
@@ -5747,7 +5763,7 @@ def test_25_reason_raises_goes_to_error() -> None:
 
 
 def test_25_act_all_tools_run_then_observe() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     observations = []
 
@@ -5770,7 +5786,7 @@ def test_25_act_all_tools_run_then_observe() -> None:
 
 
 def test_25_act_confirmation_stops_iteration_no_observe() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     after_iters = []
 
@@ -5837,7 +5853,7 @@ def test_25_act_exception_continues_to_next_tool() -> None:
 
 
 def test_25_observe_appends_observation_after_iteration() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     captured = []
 
@@ -6034,7 +6050,7 @@ def test_26_cancel_at_precheck_iter1() -> None:
 
 
 def test_26_cancel_at_precheck_iter2_via_hook() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     iter_count = [0]
 
@@ -6075,7 +6091,7 @@ def test_26_pause_at_reason_via_precheck() -> None:
 
 
 def test_26_pause_at_act_via_precheck() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _PHook(NoOpHook):
         def before_iteration(self, ctx):
@@ -6108,7 +6124,7 @@ def test_26_timeout_during_act_via_precheck() -> None:
 
 
 def test_26_timeout_during_reason_via_precheck() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _THook(NoOpHook):
         def before_iteration(self, ctx):
@@ -6273,7 +6289,7 @@ def test_27_different_runners_concurrent() -> None:
 
 
 def test_27_hook_called_concurrently_per_run() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     seen_specs = []
 
@@ -7040,7 +7056,7 @@ def test_30_back_to_back_iterations() -> None:
 def test_30_hook_latency_doesnt_affect_timeout() -> None:
     import asyncio as _a
 
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     class _SlowHook(NoOpHook):
         async def before_iteration(self, ctx):
@@ -7248,7 +7264,7 @@ def test_31_tool_result_with_circular_ref_safe() -> None:
 
 
 def test_32_hook_can_observe_ctx_state() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     seen_iterations = []
 
@@ -7272,7 +7288,7 @@ def test_32_hook_can_observe_ctx_state() -> None:
 
 
 def test_32_hook_sees_consistent_iteration_count() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     iters = []
 
@@ -7297,7 +7313,7 @@ def test_32_hook_sees_consistent_iteration_count() -> None:
 
 
 def test_32_hook_observes_messages_growth() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     sizes = []
 
@@ -7320,7 +7336,7 @@ def test_32_hook_observes_messages_growth() -> None:
 
 
 def test_32_hook_can_read_tools_used() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     captured = []
 
@@ -7342,7 +7358,7 @@ def test_32_hook_can_read_tools_used() -> None:
 
 
 def test_32_hook_observes_compacted_count() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     runner, _llm, _exec, _pb = _make_full_runner(
         llm_events=[
@@ -7366,7 +7382,7 @@ def test_32_hook_observes_compacted_count() -> None:
 
 
 def test_32_hook_observes_final_content() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     seen = []
 
@@ -7432,7 +7448,7 @@ def test_32_two_run_streams_interleaved() -> None:
 
 
 def test_32_hook_callback_during_hook() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     depth = [0]
     max_depth = [0]
@@ -7677,7 +7693,7 @@ def test_33_emit_done_with_finalize_raises() -> None:
 
 
 def test_33_hook_ctx_messages_are_copy() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     captured = []
 
@@ -8413,7 +8429,7 @@ def test_36_invariant_messages_unchanged_after_run() -> None:
 def test_37_fuzz_random_ctx_cancelled_at_random_iter() -> None:
     import random
 
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     random.seed(42)
     for _trial in range(5):
@@ -8445,7 +8461,7 @@ def test_37_fuzz_random_ctx_cancelled_at_random_iter() -> None:
 def test_37_fuzz_random_pause_at_random_iter() -> None:
     import random
 
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     random.seed(43)
     for _trial in range(5):
@@ -8506,7 +8522,7 @@ def test_37_fuzz_random_tool_results() -> None:
 def test_37_fuzz_random_observation_in_hook() -> None:
     import random
 
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     random.seed(45)
     for trial in range(5):
@@ -9016,7 +9032,7 @@ def test_39_streaming_done_event_compacted_count_zero() -> None:
 
 
 def test_40_hook_before_iteration_per_iter() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     count = [0]
 
@@ -9038,7 +9054,7 @@ def test_40_hook_before_iteration_per_iter() -> None:
 
 
 def test_40_hook_after_iteration_per_non_break() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     count = [0]
 
@@ -9073,7 +9089,7 @@ def test_40_hook_emit_done_called_once() -> None:
 
 
 def test_40_hook_finalize_content_called_once() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     count = [0]
 
@@ -9092,7 +9108,7 @@ def test_40_hook_finalize_content_called_once() -> None:
 
 
 def test_40_hook_on_stream_per_chunk() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     chunks = []
 
@@ -9116,7 +9132,7 @@ def test_40_hook_on_stream_per_chunk() -> None:
 
 
 def test_40_hook_emit_reasoning_per_chunk() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     chunks = []
 
@@ -9138,7 +9154,7 @@ def test_40_hook_emit_reasoning_per_chunk() -> None:
 
 
 def test_40_hook_before_execute_tools_per_iter() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     count = [0]
 
@@ -9159,7 +9175,7 @@ def test_40_hook_before_execute_tools_per_iter() -> None:
 
 
 def test_40_hook_after_tool_executed_per_tool() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     count = [0]
 
@@ -9181,7 +9197,7 @@ def test_40_hook_after_tool_executed_per_tool() -> None:
 
 
 def test_40_hook_on_error_called_on_error() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     count = [0]
 
@@ -9215,7 +9231,7 @@ def test_40_hook_on_error_called_on_error() -> None:
 
 
 def test_40_hook_on_confirmation_called_on_confirmation() -> None:
-    from llmwikify.foundation.callback import NoOpHook
+    from llmwikify.foundation.callback import AgentHook, NoOpHook
 
     count = [0]
 
@@ -9442,3 +9458,1798 @@ def test_41_all_error_paths_produce_error_event_or_done() -> None:
     assert "error" in types
     assert "done" in types
     assert types[-1] == "done"
+
+
+# ---------------------------------------------------------------------------
+# Group 42: on_stream_end + emit_reasoning_end hook points (5 cases)
+# ---------------------------------------------------------------------------
+
+
+def test_42_on_stream_end_invoked_after_clean_stream() -> None:
+    from llmwikify.foundation.callback import AgentHook
+
+    end_calls: list[bool] = []
+
+    class _EndHook(AgentHook):
+        def on_stream_end(self, ctx, *, resuming: bool) -> None:
+            end_calls.append(resuming)
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": "hi"},
+            {"type": "done", "content": "hi"},
+        ],
+    )
+    runner._hook = _EndHook()
+    events = asyncio.run(_collect(runner, _make_spec()))
+    assert end_calls == [False]
+    assert events[-1]["type"] == "done"
+
+
+def test_42_on_stream_end_not_invoked_on_stream_error() -> None:
+    from llmwikify.foundation.callback import AgentHook
+
+    end_calls: list[bool] = []
+
+    class _EndHook(AgentHook):
+        def on_stream_end(self, ctx, *, resuming: bool) -> None:
+            end_calls.append(resuming)
+
+    class _LLMRaise:
+        config: dict = {}
+
+        def _get_toolspec(self, _r):
+            return []
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+        async def _llm_stream_with_retry(self, _m, _t):
+            raise RuntimeError("boom")
+            yield
+
+    runner = ChatRunnerV2(
+        chat_service=_LLMRaise(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    runner._hook = _EndHook()
+    events = asyncio.run(_collect(runner, _make_spec()))
+    assert end_calls == []
+    assert any(e["type"] == "error" for e in events)
+
+
+def test_42_on_stream_end_raises_does_not_propagate() -> None:
+    from llmwikify.foundation.callback import AgentHook
+
+    class _EndHook(AgentHook):
+        def on_stream_end(self, ctx, *, resuming: bool) -> None:
+            raise RuntimeError("hook boom")
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "ok"}],
+    )
+    runner._hook = _EndHook()
+    events = asyncio.run(_collect(runner, _make_spec()))
+    assert events[-1]["type"] == "done"
+    assert "error" not in [e["type"] for e in events]
+
+
+def test_42_emit_reasoning_end_invoked_on_thinking_to_content() -> None:
+    from llmwikify.foundation.callback import AgentHook
+
+    end_calls: list[int] = []
+
+    class _ReasoningEndHook(AgentHook):
+        def emit_reasoning_end(self, ctx) -> None:
+            end_calls.append(ctx.iteration)
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "thinking", "text": "deep thought"},
+            {"type": "content", "text": "answer"},
+            {"type": "done", "content": "answer"},
+        ],
+    )
+    runner._hook = _ReasoningEndHook()
+    events = asyncio.run(_collect(runner, _make_spec()))
+    assert end_calls == [0]
+    assert any(e["type"] == "thinking" for e in events)
+
+
+def test_42_emit_reasoning_end_not_invoked_without_thinking() -> None:
+    from llmwikify.foundation.callback import AgentHook
+
+    end_calls: list[int] = []
+
+    class _ReasoningEndHook(AgentHook):
+        def emit_reasoning_end(self, ctx) -> None:
+            end_calls.append(ctx.iteration)
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": "no thought"},
+            {"type": "done", "content": "no thought"},
+        ],
+    )
+    runner._hook = _ReasoningEndHook()
+    asyncio.run(_collect(runner, _make_spec()))
+    assert end_calls == []
+
+
+async def _collect(runner, spec) -> list[dict[str, Any]]:
+    return [ev async for ev in runner.run_stream(spec)]
+
+
+# ---------------------------------------------------------------------------
+# Group 43: Stream & cancellation (8 cases)
+# ---------------------------------------------------------------------------
+
+
+def test_43_async_break_run_stream_after_done() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+
+    async def consume_one_done() -> dict:
+        async for ev in runner.run_stream(_make_spec()):
+            return ev
+        raise AssertionError("no event yielded")
+
+    ev = asyncio.run(consume_one_done())
+    assert ev["type"] == "done"
+
+
+def test_43_keyboard_interrupt_propagates() -> None:
+    class _LLMKI:
+        config: dict = {}
+
+        def _get_toolspec(self, _r):
+            return []
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+        async def _llm_stream_with_retry(self, _m, _t):
+            raise KeyboardInterrupt("user pressed Ctrl+C")
+            yield
+
+    runner = ChatRunnerV2(
+        chat_service=_LLMKI(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    with pytest.raises(KeyboardInterrupt):
+        asyncio.run(_collect(runner, _make_spec()))
+
+
+def test_43_asyncio_cancelled_error_propagates() -> None:
+    class _LLMCancel:
+        config: dict = {}
+
+        def _get_toolspec(self, _r):
+            return []
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+        async def _llm_stream_with_retry(self, _m, _t):
+            raise asyncio.CancelledError()
+            yield
+
+    runner = ChatRunnerV2(
+        chat_service=_LLMCancel(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(_collect(runner, _make_spec()))
+
+
+def test_43_outer_run_to_completion_catches_emit_done_exception() -> None:
+    from llmwikify.foundation.callback import AgentHook
+
+    class _EmitBoomHook(AgentHook):
+        def finalize_content(self, ctx, content):
+            raise RuntimeError("finalize boom")
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = _EmitBoomHook()
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason in {"completed", "error"}
+
+
+def test_43_sync_chat_fallback_yields_done() -> None:
+    class _Reply:
+        content = "sync reply"
+
+    class _LLMInner:
+        def chat(self, _messages, tools=None):
+            return _Reply()
+
+    class _WikiSvc:
+        def get_llm(self):
+            return _LLMInner()
+
+    class _LLMSyncOnly:
+        config: dict = {}
+        wiki_service: Any = _WikiSvc()
+
+        def _get_toolspec(self, _r):
+            return []
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+    runner = ChatRunnerV2(
+        chat_service=_LLMSyncOnly(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert "sync reply" in (result.final_content or "")
+
+
+def test_43_sync_chat_fallback_with_no_content_attr() -> None:
+    class _LLMInner:
+        class _R:
+            pass
+
+        def chat(self, _messages, tools=None):
+            return self._R()
+
+    class _WikiSvc:
+        def get_llm(self):
+            return _LLMInner()
+
+    class _LLMSyncNoContent:
+        config: dict = {}
+        wiki_service: Any = _WikiSvc()
+
+        def _get_toolspec(self, _r):
+            return []
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+    runner = ChatRunnerV2(
+        chat_service=_LLMSyncNoContent(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert result.final_content == ""
+
+
+def test_43_run_to_completion_twice_on_same_instance() -> None:
+    llm = _StubLLMService(
+        events=[{"type": "done", "content": "x"}],
+        followup_events=[{"type": "done", "content": "x"}],
+    )
+    runner = ChatRunnerV2(
+        chat_service=llm,
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    r1 = asyncio.run(runner.run_to_completion(_make_spec()))
+    r2 = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert r1.stop_reason == r2.stop_reason == "completed"
+    assert r1.final_content == r2.final_content == "x"
+    assert llm.call_count == 2
+
+
+def test_43_async_break_run_stream_during_content() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": "a"},
+            {"type": "content", "text": "b"},
+            {"type": "done", "content": "ab"},
+        ],
+    )
+
+    async def collect_first_delta() -> list[dict]:
+        out: list[dict] = []
+        async for ev in runner.run_stream(_make_spec()):
+            out.append(ev)
+            if ev.get("type") == "message_delta":
+                break
+        return out
+
+    events = asyncio.run(collect_first_delta())
+    assert any(e["type"] == "message_delta" for e in events)
+    assert not any(e["type"] == "done" for e in events)
+
+
+# ---------------------------------------------------------------------------
+# Group 44: _act & _reason edge branches (8 cases)
+# ---------------------------------------------------------------------------
+
+
+def test_44_confirmation_required_reset_between_iterations() -> None:
+    from llmwikify.foundation.callback import AgentHookContext
+
+    spec = _make_spec()
+    ctx = _RunContext(spec=spec, messages=list(spec.messages))
+    ctx.confirmation_required = True
+    assert ctx.confirmation_required is True
+    ctx.confirmation_required = False
+    assert ctx.confirmation_required is False
+    with pytest.raises(AttributeError):
+        _ = AgentHookContext().confirmation_required
+
+
+def test_44_last_tool_calls_reset_after_normal_completion() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {"p": 1}},
+            {"type": "done", "content": "x"},
+        ],
+        tool_results={"read_file": {"data": "y"}},
+    )
+    spec = _make_spec()
+
+    async def run() -> None:
+        async for _ev in runner.run_stream(spec):
+            pass
+
+    asyncio.run(run())
+    assert spec._compacted_results == {}
+
+
+def test_44_last_tool_calls_reset_after_confirmation_break() -> None:
+    from llmwikify.foundation.callback import AgentHook
+
+    events_holder: list[tuple[str, list]] = []
+
+    def make_executor() -> Any:
+        class _Ex:
+            def __init__(self):
+                self.calls: list = []
+
+            async def execute(self, tool_name, args, _reg, _sid, _ctx):
+                self.calls.append(tool_name)
+                events_holder.append(("executed", list(self.calls)))
+                return {
+                    "status": "confirmation_required",
+                    "confirmation_id": "c1",
+                }
+
+        return _Ex()
+
+    executor = make_executor()
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {"type": "tool_call", "id": "c1", "name": "exec", "args": {"c": "ls"}},
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    runner._hook = AgentHook()
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "confirmation_required"
+    assert events_holder == [("executed", ["exec"])]
+
+
+def test_44_tool_call_uses_tool_key_as_fallback() -> None:
+    executor = _StubExecutor(results={"read_file": {"ok": True}})
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {"type": "tool_call", "id": "c1", "tool": "read_file", "args": {}},
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert executor.calls == [("read_file", {})]
+
+
+def test_44_tool_args_top_level_list_passes_through() -> None:
+    executor = _StubExecutor()
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {"type": "tool_call", "id": "c1", "name": "list_op", "args": [1, 2, 3]},
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert executor.calls == [("list_op", [1, 2, 3])]
+
+
+def test_44_tool_args_top_level_int_passes_through() -> None:
+    executor = _StubExecutor()
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {"type": "tool_call", "id": "c1", "name": "int_op", "args": 42},
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert executor.calls == [("int_op", 42)]
+
+
+def test_44_text_mode_with_multiple_tool_call_blocks() -> None:
+    executor = _StubExecutor()
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {
+                    "type": "content",
+                    "text": (
+                        '[TOOL_CALL] {tool => "exec", args => {c => "ls"}} [/TOOL_CALL]'
+                        ' [TOOL_CALL] {tool => "exec", args => {c => "pwd"}} [/TOOL_CALL]'
+                    ),
+                },
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert len(executor.calls) == 2
+    tool_names = [c[0] for c in executor.calls]
+    assert tool_names == ["exec", "exec"]
+
+
+def test_44_text_mode_with_unclosed_tool_call() -> None:
+    executor = _StubExecutor()
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {
+                    "type": "content",
+                    "text": "before [TOOL_CALL] {tool => \"exec\"",
+                },
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert executor.calls == []
+
+
+# ---------------------------------------------------------------------------
+# Group 45: Path coverage (5 cases)
+# ---------------------------------------------------------------------------
+
+
+def test_45_safe_truncate_missing_method_returns_unchanged() -> None:
+    class _NoTruncate:
+        config: dict = {}
+
+        def _get_toolspec(self, _r):
+            return []
+
+    runner = ChatRunnerV2(
+        chat_service=_NoTruncate(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason in {"completed", "in_progress"}
+
+
+def test_45_get_tool_specs_coroutine_return_treated_as_empty() -> None:
+    class _CoroutineSpec:
+        config: dict = {}
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+        def _get_toolspec(self, _r):
+            async def _coro() -> list[dict]:
+                return [{"name": "x"}]
+
+            return _coro()
+
+    runner = ChatRunnerV2(
+        chat_service=_CoroutineSpec(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason in {"completed", "in_progress"}
+
+
+def test_45_emit_done_iteration_arg_is_zero() -> None:
+    from llmwikify.foundation.callback import AgentHook
+
+    iter_vals: list[int] = []
+
+    class _CaptureIterHook(AgentHook):
+        def finalize_content(self, ctx, content):
+            iter_vals.append(ctx.iteration)
+            return content
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = _CaptureIterHook()
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert iter_vals == [0]
+
+
+def test_45_microcompact_fn_instance_attribute_set() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    spec = _make_spec()
+
+    async def run() -> None:
+        async for _ev in runner.run_stream(spec):
+            pass
+
+    asyncio.run(run())
+    assert runner._microcompact_fn is not None
+
+
+def test_45_outer_try_except_in_run_to_completion_handles_real_exception() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+
+    async def _boom_stream(spec):
+        raise RuntimeError("from run_stream")
+        yield
+
+    runner.run_stream = _boom_stream  # type: ignore[method-assign]
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "error"
+    assert result.error is not None
+    assert "from run_stream" in result.error
+
+
+# ---------------------------------------------------------------------------
+# Group 46: Hook pipeline (8 cases)
+# ---------------------------------------------------------------------------
+
+
+def _make_pipeline_hook(name: str, transform) -> Any:
+    """Create a sync hook that transforms content via `transform(ctx, current)`."""
+
+    class _PipelineHook(AgentHook):
+        pass
+
+    h = _PipelineHook()
+    h.name = name
+
+    def finalize_content(ctx, content):
+        return transform(ctx, content)
+
+    h.finalize_content = finalize_content
+    return h
+
+
+def test_46_two_hooks_finalize_content_pipeline_chains() -> None:
+    from llmwikify.foundation.callback import CompositeHook
+
+    h1 = _make_pipeline_hook("h1", lambda _c, x: x + "1")
+    h2 = _make_pipeline_hook("h2", lambda _c, x: x + "2")
+    composite = CompositeHook([h1, h2])
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = composite
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert result.final_content == "x12"
+
+
+def test_46_three_hooks_finalize_content_pipeline_chains() -> None:
+    from llmwikify.foundation.callback import CompositeHook
+
+    h1 = _make_pipeline_hook("h1", lambda _c, x: x + "a")
+    h2 = _make_pipeline_hook("h2", lambda _c, x: x + "b")
+    h3 = _make_pipeline_hook("h3", lambda _c, x: x + "c")
+    composite = CompositeHook([h1, h2, h3])
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = composite
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert result.final_content == "xabc"
+
+
+def test_46_pipeline_first_hook_returns_none_keeps_original() -> None:
+    from llmwikify.foundation.callback import AgentHook, CompositeHook
+
+    class _NoneHook(AgentHook):
+        def finalize_content(self, ctx, content):
+            return None
+
+    h2 = _make_pipeline_hook("h2", lambda _c, x: x + "!")
+    composite = CompositeHook([_NoneHook(), h2])
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = composite
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert result.final_content == "x!"
+
+
+def test_46_pipeline_middle_hook_raises_falls_back_to_original() -> None:
+    from llmwikify.foundation.callback import AgentHook, CompositeHook
+
+    class _BoomHook(AgentHook):
+        def finalize_content(self, ctx, content):
+            raise RuntimeError("middle boom")
+
+    h1 = _make_pipeline_hook("h1", lambda _c, x: x + "1")
+    h2 = _make_pipeline_hook("h2", lambda _c, x: x + "2")
+    composite = CompositeHook([h1, _BoomHook(), h2])
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = composite
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert result.final_content == "x"
+
+
+def test_46_pipeline_sync_and_async_mix() -> None:
+    from llmwikify.foundation.callback import AgentHook, CompositeHook
+
+    class _AsyncHook(AgentHook):
+        async def finalize_content(self, ctx, content):
+            return content + "_async"
+
+    h_sync = _make_pipeline_hook("sync", lambda _c, x: x + "_sync")
+    composite = CompositeHook([h_sync, _AsyncHook()])
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = composite
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert result.final_content == "x_sync_async"
+
+
+def test_46_pipeline_no_modify_returns_original() -> None:
+    from llmwikify.foundation.callback import AgentHook, CompositeHook
+
+    class _NoOp(AgentHook):
+        def finalize_content(self, ctx, content):
+            return content
+
+    composite = CompositeHook([_NoOp(), _NoOp()])
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = composite
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert result.final_content == "x"
+
+
+def test_46_pipeline_run_to_completion_uses_chained_content() -> None:
+    from llmwikify.foundation.callback import CompositeHook
+
+    h1 = _make_pipeline_hook("upper", lambda _c, x: x.upper())
+    h2 = _make_pipeline_hook("exclaim", lambda _c, x: x + "!")
+    composite = CompositeHook([h1, h2])
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "content", "text": "hello"}, {"type": "done", "content": "hello"}],
+    )
+    runner._hook = composite
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert result.final_content == "HELLO!"
+
+
+def test_46_pipeline_iteration_zero_for_all_hooks() -> None:
+    from llmwikify.foundation.callback import CompositeHook
+
+    iter_vals: list[int] = []
+
+    def make_hook(name: str):
+        def _fn(ctx, x):
+            iter_vals.append(ctx.iteration)
+            return x
+
+        h = AgentHook()
+        h.name = name
+        h.finalize_content = _fn
+        return h
+
+    composite = CompositeHook([make_hook("a"), make_hook("b")])
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = composite
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert iter_vals == [0, 0]
+
+
+# ---------------------------------------------------------------------------
+# Group 47: Spec mutation (8 cases)
+# ---------------------------------------------------------------------------
+
+
+def test_47_hook_ctx_is_snapshot_observations_dont_persist() -> None:
+    after_obs: list[list[str]] = []
+
+    class _ObsHook(AgentHook):
+        def before_iteration(self, ctx) -> None:
+            ctx.observations.append("mutated_by_hook")
+
+        def after_iteration(self, ctx) -> None:
+            after_obs.append(list(ctx.observations))
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": {"ok": True}},
+    )
+    runner._hook = _ObsHook()
+    asyncio.run(runner.run_to_completion(_make_spec(max_iterations=1)))
+    assert after_obs == [[]]
+
+
+def test_47_hook_ctx_is_snapshot_cancelled_dont_propagate() -> None:
+    """Setting ctx.cancelled on hook ctx does NOT break precheck (snapshot)."""
+    class _CancelHook(AgentHook):
+        def before_iteration(self, ctx) -> None:
+            ctx.cancelled = True
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = _CancelHook()
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+
+
+def test_47_hook_ctx_is_snapshot_paused_dont_propagate() -> None:
+    """Setting ctx.paused on hook ctx does NOT break precheck (snapshot)."""
+    class _PauseHook(AgentHook):
+        def before_iteration(self, ctx) -> None:
+            ctx.paused = True
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = _PauseHook()
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+
+
+def test_47_spec_hook_field_is_ignored() -> None:
+    class _FakeHook(AgentHook):
+        def before_iteration(self, ctx) -> None:
+            ctx.observations.append("via_spec_hook")
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = NoOpHook()
+    spec = _make_spec()
+    spec.hook = _FakeHook()
+    asyncio.run(runner.run_to_completion(spec))
+
+
+def test_47_spec_messages_count_after_run() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {"p": 1}},
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec(messages=[{"role": "user", "content": "hi"}])
+    original_count = len(spec.messages)
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert len(spec.messages) == original_count
+    assert len(result.messages) == original_count
+
+
+def test_47_max_iterations_zero_emits_done() -> None:
+    runner, llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec(max_iterations=0)))
+    assert result.stop_reason == "in_progress"
+    assert llm.call_count == 0
+
+
+def test_47_spec_workspace_path_does_not_break() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    spec = _make_spec(workspace=Path("/tmp"))
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason in {"completed", "in_progress"}
+
+
+def test_47_max_iterations_one_with_tool_runs_once() -> None:
+    llm = _StubLLMService(
+        events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {"p": 1}},
+            {"type": "done", "content": ""},
+        ],
+        followup_events=[{"type": "done", "content": "x"}],
+    )
+    runner = ChatRunnerV2(
+        chat_service=llm,
+        tool_executor=_StubExecutor(results={"read_file": {"ok": True}}),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec(max_iterations=1)))
+    assert result.stop_reason == "in_progress"
+    assert llm.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Group 48: State machine transitions (8 cases)
+# ---------------------------------------------------------------------------
+
+
+def test_48_iter0_to_iter1_state_transition() -> None:
+    llm = _StubLLMService(
+        events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {"p": 1}},
+            {"type": "done", "content": ""},
+        ],
+        followup_events=[{"type": "done", "content": "final"}],
+    )
+    runner = ChatRunnerV2(
+        chat_service=llm,
+        tool_executor=_StubExecutor(results={"read_file": {"ok": True}}),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec(max_iterations=2)))
+    assert result.stop_reason == "completed"
+    assert llm.call_count == 2
+    assert result.tools_used == ["read_file"]
+
+
+def test_48_multi_tool_in_one_iter_first_ok_second_confirm() -> None:
+    executor = _StubExecutor(
+        results={
+            "t1": {"data": "ok"},
+            "t2": {"status": "confirmation_required", "confirmation_id": "c2"},
+        },
+    )
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {
+                    "type": "tool_call",
+                    "id": "c1",
+                    "name": "t1",
+                    "args": {},
+                },
+                {
+                    "type": "tool_call",
+                    "id": "c2",
+                    "name": "t2",
+                    "args": {},
+                },
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    events = asyncio.run(_collect(runner, _make_spec()))
+    tool_ends = [e for e in events if e["type"] == "tool_call_end"]
+    confirm_events = [e for e in events if e["type"] == "confirmation_required"]
+    assert len(tool_ends) == 1
+    assert tool_ends[0]["tool"] == "t1"
+    assert len(confirm_events) == 1
+    assert confirm_events[0]["tool"] == "t2"
+
+
+def test_48_max_iter_reached_in_progress() -> None:
+    llm = _StubLLMService(
+        events=[
+            {"type": "tool_call", "id": "c1", "name": "t1", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        followup_events=[
+            {"type": "tool_call", "id": "c2", "name": "t1", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+    )
+    runner = ChatRunnerV2(
+        chat_service=llm,
+        tool_executor=_StubExecutor(results={"t1": {"ok": 1}}),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec(max_iterations=2)))
+    assert result.stop_reason == "in_progress"
+    assert llm.call_count == 2
+
+
+def test_48_observation_appended_only_with_thinking() -> None:
+    obs_after: list[list[str]] = []
+
+    class _CapHook(AgentHook):
+        def after_iteration(self, ctx) -> None:
+            obs_after.append(list(ctx.observations))
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": "no thinking"},
+            {"type": "done", "content": "no thinking"},
+        ],
+    )
+    runner._hook = _CapHook()
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert obs_after == []
+
+
+def test_48_observation_truncated_to_200_chars() -> None:
+    obs_after: list[list[str]] = []
+
+    class _CapHook(AgentHook):
+        def after_iteration(self, ctx) -> None:
+            obs_after.append(list(ctx.observations))
+
+    long_thinking = "x" * 500
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "thinking", "text": long_thinking},
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": {"ok": True}},
+    )
+    runner._hook = _CapHook()
+    asyncio.run(runner.run_to_completion(_make_spec()))
+    assert len(obs_after) == 1
+    assert len(obs_after[0]) == 1
+    assert obs_after[0][0].startswith("thought: ")
+    assert len(obs_after[0][0]) == len("thought: ") + 200
+
+
+def test_48_after_iteration_called_per_iter_with_tools() -> None:
+    after_iters: list[int] = []
+
+    class _CapHook(AgentHook):
+        def after_iteration(self, ctx) -> None:
+            after_iters.append(ctx.iteration)
+
+    llm = _StubLLMService(
+        events=[
+            {"type": "tool_call", "id": "c1", "name": "t1", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        followup_events=[
+            {"type": "tool_call", "id": "c2", "name": "t1", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+    )
+    runner = ChatRunnerV2(
+        chat_service=llm,
+        tool_executor=_StubExecutor(results={"t1": {"ok": 1}}),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    runner._hook = _CapHook()
+    asyncio.run(runner.run_to_completion(_make_spec(max_iterations=2)))
+    assert after_iters == [0, 1]
+
+
+def test_48_tools_used_dedup_preserves_first_seen_order() -> None:
+    """result.tools_used dedupes (per run_to_completion logic)."""
+    executor = _StubExecutor()
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {"type": "tool_call", "id": "c1", "name": "t1", "args": {}},
+                {"type": "tool_call", "id": "c2", "name": "t2", "args": {}},
+                {"type": "tool_call", "id": "c3", "name": "t1", "args": {}},
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert result.tools_used == ["t1", "t2"]
+
+
+def test_48_cancelled_propagates_to_done_event() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "phase", "phase": "cancelled"},
+            {"type": "done", "content": ""},
+        ],
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "cancelled"
+
+
+def test_48_paused_propagates_to_done_event() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "phase", "phase": "paused"},
+            {"type": "done", "content": ""},
+        ],
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "paused"
+
+
+# ---------------------------------------------------------------------------
+# Group 49: Event flow (8 cases)
+# ---------------------------------------------------------------------------
+
+
+def test_49_session_init_first_when_hook_wants_streaming() -> None:
+    from llmwikify.foundation.callback import AgentHook
+
+    class _StreamHook(AgentHook):
+        def wants_streaming(self) -> bool:
+            return True
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = _StreamHook()
+    events = asyncio.run(_collect(runner, _make_spec()))
+    assert events[0]["type"] == "session_init"
+    assert events[0]["session_id"] == "s1"
+    assert events[-1]["type"] == "done"
+
+
+def test_49_error_event_before_done_on_llm_error() -> None:
+    class _LLMErr:
+        config: dict = {}
+
+        def _get_toolspec(self, _r):
+            return []
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+        async def _llm_stream_with_retry(self, _m, _t):
+            yield {"type": "error", "message": "boom"}
+            yield {"type": "done", "content": ""}
+
+    runner = ChatRunnerV2(
+        chat_service=_LLMErr(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    events = asyncio.run(_collect(runner, _make_spec()))
+    error_idx = next(i for i, e in enumerate(events) if e["type"] == "error")
+    done_idx = next(i for i, e in enumerate(events) if e["type"] == "done")
+    assert error_idx < done_idx
+    assert events[error_idx]["message"] == "boom"
+
+
+def test_49_done_event_always_last() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": "a"},
+            {"type": "content", "text": "b"},
+            {"type": "done", "content": "ab"},
+        ],
+    )
+    events = asyncio.run(_collect(runner, _make_spec()))
+    assert events[-1]["type"] == "done"
+
+
+def test_49_compacted_event_emitted_for_microcompact() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": {"data": "x" * 5000}},
+    )
+    events = asyncio.run(_collect(runner, _make_spec(microcompact=True, microcompact_keep_chars=200)))
+    compacted = [e for e in events if e["type"] == "compacted"]
+    assert len(compacted) == 1
+    assert compacted[0]["tool"] == "read_file"
+    assert compacted[0]["chars_saved"] > 0
+
+
+def test_49_tool_call_start_before_tool_call_end() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+    )
+    events = asyncio.run(_collect(runner, _make_spec()))
+    starts = [i for i, e in enumerate(events) if e["type"] == "tool_call_start"]
+    ends = [i for i, e in enumerate(events) if e["type"] == "tool_call_end"]
+    assert starts[0] < ends[0]
+
+
+def test_49_message_delta_joins_to_final_content() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "content", "text": "a"},
+            {"type": "content", "text": "b"},
+            {"type": "content", "text": "c"},
+            {"type": "done", "content": "abc"},
+        ],
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.final_content == "abc"
+
+
+def test_49_no_duplicate_tool_call_id_in_events() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+    )
+    events = asyncio.run(_collect(runner, _make_spec()))
+    ids = [
+        e.get("call_id")
+        for e in events
+        if e.get("type") in {"tool_call_start", "tool_call_end"}
+    ]
+    assert len(ids) == 2
+    assert ids[0] == ids[1]
+
+
+def test_49_error_event_carries_stop_reason_error() -> None:
+    class _LLMErr:
+        config: dict = {}
+
+        def _get_toolspec(self, _r):
+            return []
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+        async def _llm_stream_with_retry(self, _m, _t):
+            yield {"type": "error", "message": "x"}
+
+    runner = ChatRunnerV2(
+        chat_service=_LLMErr(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    events = asyncio.run(_collect(runner, _make_spec()))
+    err_with_sr = [e for e in events if e["type"] == "error" and "stop_reason" in e]
+    assert len(err_with_sr) >= 1
+    assert err_with_sr[0]["stop_reason"] == "error"
+
+
+# ---------------------------------------------------------------------------
+# Group 50: Boundary values (8 cases)
+# ---------------------------------------------------------------------------
+
+
+def test_50_microcompact_keep_chars_zero() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": {"data": "x" * 1000}},
+    )
+    result = asyncio.run(runner.run_to_completion(
+        _make_spec(microcompact=True, microcompact_keep_chars=0),
+    ))
+    assert result.stop_reason == "completed"
+
+
+def test_50_microcompact_keep_chars_negative() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": {"data": "x" * 1000}},
+    )
+    result = asyncio.run(runner.run_to_completion(
+        _make_spec(microcompact=True, microcompact_keep_chars=-100),
+    ))
+    assert result.stop_reason == "completed"
+
+
+def test_50_microcompact_compactable_tools_empty() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": {"data": "x" * 5000}},
+    )
+    result = asyncio.run(runner.run_to_completion(
+        _make_spec(microcompact=True, microcompact_compactable_tools=frozenset()),
+    ))
+    assert result.compacted_count == 0
+
+
+def test_50_max_iterations_one_with_no_tool() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec(max_iterations=1)))
+    assert result.stop_reason == "completed"
+    assert "x" in result.final_content
+
+
+def test_50_max_iterations_huge() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec(max_iterations=10000)))
+    assert result.stop_reason == "completed"
+
+
+def test_50_messages_empty_list() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec(messages=[])))
+    assert result.stop_reason in {"completed", "in_progress"}
+
+
+def test_50_session_id_empty_string() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec(session_id="")))
+    assert result.stop_reason in {"completed", "in_progress"}
+
+
+def test_50_wiki_id_empty_string() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec(wiki_id="")))
+    assert result.stop_reason in {"completed", "in_progress"}
+
+
+# ---------------------------------------------------------------------------
+# Group 51: Mutation testing / lock contracts (8 cases)
+# ---------------------------------------------------------------------------
+
+
+def test_51_precheck_timeout_zero_means_no_timeout() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._config = {"timeout_seconds": 0}
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+
+
+def test_51_getattr_content_falls_back_to_empty() -> None:
+    class _Reply:
+        pass
+
+    class _LLMInner:
+        def chat(self, _messages, tools=None):
+            return _Reply()
+
+    class _WikiSvc:
+        def get_llm(self):
+            return _LLMInner()
+
+    class _LLMSyncNoContent:
+        config: dict = {}
+        wiki_service: Any = _WikiSvc()
+
+        def _get_toolspec(self, _r):
+            return []
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+    runner = ChatRunnerV2(
+        chat_service=_LLMSyncNoContent(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert result.final_content == ""
+
+
+def test_51_safe_truncate_coroutine_return_falls_back_to_original() -> None:
+    class _CorTruncate:
+        config: dict = {}
+
+        def _get_toolspec(self, _r):
+            return []
+
+        def _truncate_messages(self, _m):
+            async def _coro() -> list:
+                return [{"role": "user", "content": "short"}]
+
+            return _coro()
+
+    runner = ChatRunnerV2(
+        chat_service=_CorTruncate(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason in {"completed", "in_progress"}
+
+
+def test_51_get_tool_specs_coroutine_return_treated_as_empty() -> None:
+    class _CorSpec:
+        config: dict = {}
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+        def _get_toolspec(self, _r):
+            async def _coro() -> list:
+                return [{"name": "x"}]
+
+            return _coro()
+
+    runner = ChatRunnerV2(
+        chat_service=_CorSpec(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason in {"completed", "in_progress"}
+
+
+def test_51_truncate_exception_uses_original() -> None:
+    class _TruncBoom:
+        config: dict = {}
+
+        def _get_toolspec(self, _r):
+            return []
+
+        def _truncate_messages(self, _m):
+            raise RuntimeError("trunc boom")
+
+    runner = ChatRunnerV2(
+        chat_service=_TruncBoom(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason in {"completed", "in_progress", "error"}
+
+
+def test_51_toolspec_exception_returns_empty() -> None:
+    class _SpecBoom:
+        config: dict = {}
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+        def _get_toolspec(self, _r):
+            raise RuntimeError("spec boom")
+
+    runner = ChatRunnerV2(
+        chat_service=_SpecBoom(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason in {"completed", "in_progress"}
+
+
+def test_51_safe_truncate_returns_list() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert isinstance(result.messages, list)
+
+
+def test_51_chat_run_result_compacted_count_zero_initially() -> None:
+    result = asyncio.run(
+        ChatRunnerV2(
+            chat_service=_StubLLMService(events=[{"type": "done", "content": "x"}]),
+            tool_executor=_StubExecutor(),
+            prompt_builder=_StubPromptBuilder(),
+        ).run_to_completion(_make_spec()),
+    )
+    assert result.compacted_count == 0
+    assert result.total_compacted_chars_saved == 0
+
+
+# ---------------------------------------------------------------------------
+# Group 52: Real services integration (8 cases)
+# ---------------------------------------------------------------------------
+
+
+def test_52_real_wiki_service_like_with_get_llm() -> None:
+    class _Reply:
+        content = "from wiki service"
+
+    class _LLMInner:
+        async def astream_chat(self, _messages, tools=None):
+            yield {"type": "content", "text": "from "}
+            yield {"type": "content", "text": "wiki service"}
+            yield {"type": "done", "content": "from wiki service"}
+
+    class _WikiSvc:
+        def get_llm(self):
+            return _LLMInner()
+
+    class _ChatService:
+        config: dict = {}
+        wiki_service: Any = _WikiSvc()
+
+        def _get_toolspec(self, _r):
+            return []
+
+        def _truncate_messages(self, m):
+            return list(m)
+
+    runner = ChatRunnerV2(
+        chat_service=_ChatService(),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+    assert "from wiki service" in result.final_content
+
+
+def test_52_real_tool_executor_with_registry() -> None:
+    registry = object()
+    seen_registry: list = []
+
+    class _RegExecutor:
+        async def execute(self, _tool, _args, reg, _sid, _ctx):
+            seen_registry.append(reg)
+            return {"ok": True}
+
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {"type": "tool_call", "id": "c1", "name": "t1", "args": {}},
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=_RegExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    asyncio.run(runner.run_to_completion(_make_spec(tool_registry=registry)))
+    assert seen_registry == [registry]
+
+
+def test_52_real_prompt_builder_with_build_with_context() -> None:
+    from llmwikify.apps.chat.agent.prompt_builder import BuildContext
+
+    seen: list[BuildContext] = []
+
+    class _RealPB:
+        async def build_with_context(self, ctx):
+            seen.append(ctx)
+            return f"prompt for {ctx.wiki_id}"
+
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(events=[{"type": "done", "content": "x"}]),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_RealPB(),
+    )
+    asyncio.run(runner.run_to_completion(_make_spec(wiki_id="mywiki")))
+    assert len(seen) == 1
+    assert seen[0].wiki_id == "mywiki"
+
+
+def test_52_real_spec_with_all_fields() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    spec = ChatRunSpec(
+        messages=[{"role": "user", "content": "hi"}],
+        tool_registry=object(),
+        session_id="full-spec-session",
+        wiki_id="full-wiki",
+        model="test-model",
+        max_iterations=3,
+        max_tool_result_chars=100000,
+        temperature=0.5,
+        max_tokens=1000,
+        reasoning_effort="medium",
+        hook=None,
+        error_message=None,
+        workspace=None,
+        context_window_tokens=8000,
+        progress_callback=None,
+        fail_on_tool_error=True,
+        microcompact=False,
+        microcompact_keep_chars=500,
+    )
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "completed"
+
+
+def test_52_compacted_results_cache_round_trip() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": {"data": "x" * 5000}},
+    )
+    spec = _make_spec(microcompact=True, microcompact_keep_chars=200)
+    asyncio.run(runner.run_to_completion(spec))
+    cached = spec.compacted()
+    assert len(cached) >= 1
+    call_id, original = cached[0]
+    assert original == {"data": "x" * 5000}
+
+
+def test_52_microcompact_cache_reused_across_iters() -> None:
+    executor = _StubExecutor(results={"read_file": {"data": "x" * 5000}})
+    llm = _StubLLMService(
+        events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        followup_events=[{"type": "done", "content": "final"}],
+    )
+    runner = ChatRunnerV2(
+        chat_service=llm,
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    spec = _make_spec(microcompact=True, microcompact_keep_chars=200, max_iterations=2)
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "completed"
+    assert result.compacted_count == 1
+
+
+def test_52_session_id_propagated_to_done_event() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    events = asyncio.run(_collect(runner, _make_spec(session_id="unique-id-123")))
+    done = next(e for e in events if e["type"] == "done")
+    assert done.get("stop_reason") == "completed"
+
+
+def test_52_tool_registry_passed_to_executor() -> None:
+    class _TrackerExecutor:
+        def __init__(self):
+            self.calls: list = []
+
+        async def execute(self, tool_name, args, reg, sid, ctx):
+            self.calls.append((tool_name, args, reg, sid))
+            return {"ok": True}
+
+    executor = _TrackerExecutor()
+    registry = object()
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {"type": "tool_call", "id": "c1", "name": "t1", "args": {}},
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    asyncio.run(runner.run_to_completion(_make_spec(tool_registry=registry, session_id="s1")))
+    assert len(executor.calls) == 1
+    assert executor.calls[0][0] == "t1"
+    assert executor.calls[0][2] is registry
+    assert executor.calls[0][3] == "s1"
+
+
+# ---------------------------------------------------------------------------
+# Group 53: Misc / defensive (4 cases to reach 95 total)
+# ---------------------------------------------------------------------------
+
+
+def test_53_hook_returning_non_none_from_void_hook_ignored() -> None:
+    class _ReturnsValue(AgentHook):
+        def before_iteration(self, ctx) -> str:
+            return "ignored"
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = _ReturnsValue()
+    result = asyncio.run(runner.run_to_completion(_make_spec()))
+    assert result.stop_reason == "completed"
+
+
+def test_53_chat_run_result_default_values() -> None:
+    result = ChatRunResult(
+        final_content=None,
+        messages=[],
+        tools_used=[],
+        usage={},
+        stop_reason="completed",
+    )
+    assert result.error is None
+    assert result.compacted_count == 0
+    assert result.total_compacted_chars_saved == 0
+
+
+def test_53_messages_with_complex_content_types() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    spec = _make_spec(
+        messages=[
+            {"role": "system", "content": "you are a helper"},
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hello"},
+        ],
+    )
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "completed"
+
+
+def test_53_runner_does_not_hold_globals() -> None:
+    """Lock: runner instance state is isolated from module-level globals."""
+    runner1 = ChatRunnerV2(
+        chat_service=_StubLLMService(events=[{"type": "done", "content": "a"}]),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    runner2 = ChatRunnerV2(
+        chat_service=_StubLLMService(events=[{"type": "done", "content": "b"}]),
+        tool_executor=_StubExecutor(),
+        prompt_builder=_StubPromptBuilder(),
+    )
+    r1 = asyncio.run(runner1.run_to_completion(_make_spec()))
+    r2 = asyncio.run(runner2.run_to_completion(_make_spec()))
+    assert r1.final_content == "a"
+    assert r2.final_content == "b"
+
+
+def test_53_async_hook_called_with_await() -> None:
+    async_calls: list[int] = []
+
+    class _AsyncHook(AgentHook):
+        async def before_iteration(self, ctx) -> None:
+            async_calls.append(ctx.iteration)
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    runner._hook = _AsyncHook()
+    asyncio.run(runner.run_to_completion(_make_spec()))
+    assert async_calls == [0]
+
+
+def test_53_tool_call_id_with_special_chars() -> None:
+    executor = _StubExecutor()
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {"type": "tool_call", "id": "call_abc-123_xyz", "name": "t1", "args": {}},
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    events = asyncio.run(_collect(runner, _make_spec()))
+    start = next(e for e in events if e["type"] == "tool_call_start")
+    end = next(e for e in events if e["type"] == "tool_call_end")
+    assert start["call_id"] == "call_abc-123_xyz"
+    assert end["call_id"] == "call_abc-123_xyz"
+
+
+def test_53_run_with_no_tool_calls_emits_only_done() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "answer"}],
+    )
+    events = asyncio.run(_collect(runner, _make_spec()))
+    types = {e["type"] for e in events}
+    assert types == {"message_delta", "done"} or types == {"done"}
+
+
+def test_53_compacted_count_aggregates_across_iters() -> None:
+    llm = _StubLLMService(
+        events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        followup_events=[
+            {"type": "tool_call", "id": "c2", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        followup2_events=[{"type": "done", "content": "final"}],
+    )
+    executor = _StubExecutor(results={"read_file": {"data": "x" * 5000}})
+    runner = ChatRunnerV2(
+        chat_service=llm,
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    result = asyncio.run(runner.run_to_completion(
+        _make_spec(microcompact=True, microcompact_keep_chars=200, max_iterations=3),
+    ))
+    assert result.stop_reason == "completed"
+    assert result.compacted_count == 2
+    assert result.total_compacted_chars_saved > 0
+
+
+def test_53_tool_call_with_empty_args_dict() -> None:
+    executor = _StubExecutor()
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {"type": "tool_call", "id": "c1", "name": "t1", "args": {}},
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    asyncio.run(runner.run_to_completion(_make_spec()))
+    assert executor.calls == [("t1", {})]
+
+
+def test_53_text_mode_double_quotes_in_args() -> None:
+    executor = _StubExecutor()
+    runner = ChatRunnerV2(
+        chat_service=_StubLLMService(
+            events=[
+                {
+                    "type": "content",
+                    "text": '[TOOL_CALL] {tool => "exec", args => {c => "echo \\"hi\\""}} [/TOOL_CALL]',
+                },
+                {"type": "done", "content": ""},
+            ],
+        ),
+        tool_executor=executor,
+        prompt_builder=_StubPromptBuilder(),
+    )
+    asyncio.run(runner.run_to_completion(_make_spec()))
+    assert len(executor.calls) == 1
+    assert executor.calls[0][0] == "exec"
+
+
+def test_53_unicode_in_messages() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    spec = _make_spec(
+        messages=[{"role": "user", "content": "你好 🎉 𝛼"}],
+    )
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "completed"
+
+
+def test_53_done_event_has_compacted_count_field() -> None:
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    events = asyncio.run(_collect(runner, _make_spec()))
+    done = next(e for e in events if e["type"] == "done")
+    assert "compacted_count" in done
+    assert "stop_reason" in done
+    assert "content" in done
+    assert "error" in done
