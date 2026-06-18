@@ -1,7 +1,7 @@
 """Track B: Factor-level extraction (Pass 1 enumerate + Pass 2 detail).
 
 Pass 1: enumerate all signals (name + brief formula) in one LLM call.
-Pass 2: for each signal, extract L1-L4 in 3-way concurrent LLM calls.
+Pass 2: for each signal, extract L1-L4 in parallel LLM calls (default 3 concurrent).
 """
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import logging
 import math
 import re
 import time
+from asyncio import Semaphore
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,11 @@ API_PARAM_KEYS = {"temperature", "max_tokens", "top_p", "top_k"}
 # Checkpoint: save Pass 2 progress every N factors
 PASS2_CHECKPOINT_INTERVAL = 10
 PASS2_CHECKPOINT_FILENAME = "track_b_checkpoint.json"
+
+# Parallel Pass 2 configuration
+PASS2_MAX_CONCURRENCY = 3  # API limit: ≤3 concurrent (6 triggers throttle)
+PASS2_CHECKPOINT_BATCH_SIZE = 10  # Save checkpoint every N completions
+PASS2_USE_PARALLEL = True  # Toggle parallel/serial execution
 
 
 @with_retry(stage="track_b_pass1", config=RetryConfig(max_attempts=3, backoff_base=0.5))
@@ -456,6 +462,85 @@ def _run_pass2_one(
     )
 
 
+async def _run_pass2_one_async(
+    client: Any,
+    plan: PlanResult,
+    paper_id: str,
+    signal_stub: SignalStub,
+    parsed_text: str,
+    semaphore: Semaphore,
+) -> tuple[SignalStub, SignalDetail]:
+    """Async version of _run_pass2_one for parallel execution.
+
+    Args:
+        client: LLM client with achat() method.
+        plan: Stage 1 Call 2 plan.
+        paper_id: Paper identifier.
+        signal_stub: Signal to extract.
+        parsed_text: Full paper text.
+        semaphore: Concurrency limiter.
+
+    Returns:
+        Tuple of (signal_stub, signal_detail) for result tracking.
+    """
+    async with semaphore:
+        system_text, user_template, params = _load_prompt(PROMPT_PASS2)
+        tmpl = _jinja_env.from_string(user_template)
+        user_msg = tmpl.render(
+            paper_id=paper_id,
+            signal_name=signal_stub.name,
+            formula_brief=signal_stub.formula_brief,
+            signal_index=signal_stub.index,
+            paper_text=parsed_text,
+        )
+        default_max = int(params.get("max_tokens", 5500))
+        budget_max = int(
+            plan.token_budget.get("track_b_pass2_per_factor", default_max)
+        )
+        max_tokens = max(default_max, budget_max)
+
+        t0 = time.monotonic()
+        try:
+            # Use async chat method
+            response = await client.achat(
+                [{"role": "system", "content": system_text},
+                 {"role": "user", "content": user_msg}],
+                max_tokens=max_tokens,
+                temperature=0.1,
+            )
+        except DeferError:
+            raise
+        except Exception as exc:
+            return signal_stub, SignalDetail(
+                name=signal_stub.name,
+                success=False,
+                error=f"llm_error: {exc}",
+            )
+        latency_ms = int((time.monotonic() - t0) * 1000)
+
+        parsed = _extract_json(response)
+        if not parsed or not isinstance(parsed, dict):
+            return signal_stub, SignalDetail(
+                name=signal_stub.name,
+                success=False,
+                error="json_parse_failed",
+                latency_ms=latency_ms,
+            )
+
+        # Extract L1-L4 from parsed result
+        factor = parsed.get("factor", parsed)  # accept either nested or flat
+        return signal_stub, SignalDetail(
+            name=signal_stub.name,
+            description=str(factor.get("description", signal_stub.description)),
+            l1=factor.get("l1", {}),
+            l2=factor.get("l2", {}),
+            l3=factor.get("l3", {}),
+            l4=factor.get("l4", {}),
+            success=True,
+            latency_ms=latency_ms,
+        )
+
+
 def _run_pass2_serial(
     client: Any,
     plan: PlanResult,
@@ -504,6 +589,90 @@ def _run_pass2_serial(
 
         # Log progress + checkpoint every N factors
         if global_idx % PASS2_CHECKPOINT_INTERVAL == 0 or global_idx == len(signals):
+            n_ok = sum(1 for d in details if d.success)
+            n_fail = len(details) - n_ok
+            logger.info(
+                "[track_b] paper=%s pass2: %d/%d done (%d ok, %d failed)",
+                paper_id, global_idx, len(signals), n_ok, n_fail,
+            )
+            if work_dir:
+                _save_checkpoint(work_dir, paper_id, signals, details)
+
+    # Final checkpoint
+    if work_dir and remaining:
+        _save_checkpoint(work_dir, paper_id, signals, details)
+
+    return details, total_latency
+
+
+async def _run_pass2_parallel(
+    client: Any,
+    plan: PlanResult,
+    paper_id: str,
+    signals: list[SignalStub],
+    parsed_text: str,
+    work_dir: Path | None = None,
+    existing_details: list[SignalDetail] | None = None,
+) -> tuple[list[SignalDetail], int]:
+    """Run Pass 2 for all signals in parallel with checkpoint.
+
+    Uses asyncio.Semaphore to limit concurrency to PASS2_MAX_CONCURRENCY.
+    Results are collected as they complete and checkpointed in batches.
+
+    Args:
+        client: LLM client with achat() method.
+        plan: Stage 1 Call 2 plan.
+        paper_id: Paper identifier.
+        signals: All signal stubs from Pass 1.
+        parsed_text: Full paper text.
+        work_dir: If provided, save checkpoint every PASS2_CHECKPOINT_BATCH_SIZE factors.
+        existing_details: If provided (resume), skip factors already in this list.
+
+    Returns:
+        Tuple of (list of SignalDetail, total_latency_ms).
+    """
+    done_names = {d.name for d in existing_details} if existing_details else set()
+    remaining = [s for s in signals if s.name not in done_names]
+    details: list[SignalDetail] = list(existing_details) if existing_details else []
+    total_latency = sum(d.latency_ms for d in details)
+
+    if done_names:
+        logger.info(
+            "[track_b] paper=%s pass2: resuming %d/%d factors (%d already done)",
+            paper_id, len(remaining), len(signals), len(done_names),
+        )
+    else:
+        logger.info(
+            "[track_b] paper=%s pass2: %d factors starting (parallel, concurrency=%d)",
+            paper_id, len(signals), PASS2_MAX_CONCURRENCY,
+        )
+
+    semaphore = Semaphore(PASS2_MAX_CONCURRENCY)
+
+    # Create all tasks
+    tasks = [
+        _run_pass2_one_async(client, plan, paper_id, stub, parsed_text, semaphore)
+        for stub in remaining
+    ]
+
+    # Collect results as they complete
+    completed = 0
+    for coro in asyncio.as_completed(tasks):
+        stub, detail = await coro
+        total_latency += detail.latency_ms
+        details.append(detail)
+        completed += 1
+
+        # Log every factor
+        global_idx = len(details)
+        logger.info(
+            "[track_b] pass2 %d/%d %s success=%s (%dms)",
+            global_idx, len(signals), stub.name[:30],
+            detail.success, detail.latency_ms,
+        )
+
+        # Log progress + checkpoint every batch
+        if completed % PASS2_CHECKPOINT_BATCH_SIZE == 0 or completed == len(remaining):
             n_ok = sum(1 for d in details if d.success)
             n_fail = len(details) - n_ok
             logger.info(
@@ -595,11 +764,21 @@ def run_track_b(
     pass2_details: list[SignalDetail] = []
     pass2_latency = 0
     if run_pass2:
-        pass2_details, pass2_latency = _run_pass2_serial(
-            client, plan, paper_id, pass1_signals, parsed_text,
-            work_dir=work_dir,
-            existing_details=pass2_details_done or None,
-        )
+        # Choose parallel or serial execution based on configuration
+        if PASS2_USE_PARALLEL:
+            pass2_details, pass2_latency = asyncio.run(
+                _run_pass2_parallel(
+                    client, plan, paper_id, pass1_signals, parsed_text,
+                    work_dir=work_dir,
+                    existing_details=pass2_details_done or None,
+                )
+            )
+        else:
+            pass2_details, pass2_latency = _run_pass2_serial(
+                client, plan, paper_id, pass1_signals, parsed_text,
+                work_dir=work_dir,
+                existing_details=pass2_details_done or None,
+            )
         n_calls += len(pass2_details) - len(pass2_details_done)
         # Delete checkpoint on completion
         if work_dir:
@@ -621,7 +800,7 @@ def run_track_b(
         n_pass2_failed=n_failed,
         pass1_latency_ms=pass1_latency,
         pass2_latency_ms=pass2_latency,
-        pass2_concurrency=3,
+        pass2_concurrency=PASS2_MAX_CONCURRENCY if PASS2_USE_PARALLEL else 1,
         total_latency_ms=total_latency,
         llm_calls=n_calls,
         success=True,
