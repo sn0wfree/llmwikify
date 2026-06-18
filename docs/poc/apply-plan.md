@@ -366,6 +366,66 @@ class SkillAction(ABC):
 - [x] slash command 从 Orchestrator 内联移除
 - [x] PromptBuilder 可独立测试
 
+### Phase B 实现笔记 (P1-1, P1-2, P1-3, 2026-06-18 完成)
+
+P1-1/P1-2/P1-3 全部已 vendor + 测试通过。Phase A 的 3 步 (P0-1 CompositeHook / P0-2 ChatRunner 独立化 / microcompact) 加上 Phase B 的 3 步 (P1-1 OpenAI API / P1-2 CommandRouter / P1-3 PromptBuilder 独立化) 形成"借鉴 nanobot" 核心的完整闭环。Phase C / Phase D / Phase E 全部缓办 (P2-2 Anthropic 用户暂缓; P3-1/P3-2 谨慎; P3-3 不做)。
+
+#### P1-1 OpenAI 兼容 API (`src/llmwikify/apps/api/openai_server.py`, commit `8ba4a00`)
+
+- **vendored from**: `nanobot/api/server.py` (399 LOC, MIT)
+- **实际 LOC**: 508 (含 docstring + 适配层)
+- **路由**:
+  - `POST /v1/chat/completions` (流式 SSE + 非流式)
+  - `GET /v1/models`
+  - `GET /v1/health`
+- **适配点**:
+  - `aiohttp.web.Application` → FastAPI `APIRouter` (前缀 `/v1`)
+  - `aiohttp.web.StreamResponse` → FastAPI `StreamingResponse`
+  - `agent_loop.process_direct(...)` → `AgentService.chat(...)` (复用 Plan B 完成的 ChatRunnerV2)
+  - 简化: 删除 multipart 上传 (llmwikify 走 wiki API), 加 vision-format text 提取
+  - `app["session_locks"]` → 模块级 `_SessionLockRegistry` (per-session `asyncio.Lock`)
+- **事件翻译**: `OpenAIStreamTranslator` 将 llmwikify `message_delta`/`done`/`error` → OpenAI content/stop chunks; 忽略 `thinking`/`tool_call_*`/`save_warning` (OpenAI 协议无对应通道)。
+- **路由接入**: `interfaces/server/http/routes.py:_register_agent_routes` 调用 `create_openai_router(model=...)`, 从 `get_default_provider().model` 推断 model_name, 失败回退 `"llmwikify-chat"`。
+- **测试**: `tests/test_apps_api_openai.py` (35 cases) — 包含响应形态 / 事件翻译 / 请求解析 / 路由工厂 / FastAPI TestClient E2E (流式 + 非流式 + 错误路径 + session 转发)。
+- **server smoke**: 用 `WikiServer(wiki)` + `TestClient` 实际跑通, 所有 3 路由可达; 流式 SSE content-type 正确; 错误模型返回标准 OpenAI 错误 JSON。
+
+#### P1-2 CommandRouter (`src/llmwikify/apps/chat/command_router.py`, commit `9e43835`)
+
+- **vendored from**: `nanobot/command/router.py` (88 LOC, MIT)
+- **实际 LOC**: 215 (含 docstring + 适配层)
+- **3 层 dispatch**:
+  - **priority** — 锁外执行 (e.g. `/stop` 设 `abort_event`)
+  - **exact** — 锁内精确匹配 (e.g. `/help`, `/clear`, `/status`)
+  - **prefix** — 最长前缀优先 (e.g. `/title <text>`, `/model <name>`)
+- **适配点**:
+  - `InboundMessage` / `OutboundMessage` → `CommandContext.text: str` + handlers 返回 `list[dict]` SSE events
+  - 加 `Awaitable[dict]` 自动 await (handler 可 `async def`)
+  - 加 `is_command()` 公共方法 (合并 priority+exact+prefix 分类)
+  - prefix 派发用 `ctx.text` (原大小写) 提取 args, 保留 user 大小写
+- **集成**: `ChatOrchestrator` 在 `parse_wiki_prefix` 之后、`add_user_message` 之前调 `_dispatch_command`; 匹配后 yield `command_done` 事件短路返回 (不进 LLM loop)。
+- **5 个内建命令**: `/stop` (priority) / `/help` / `/clear` / `/status` (exact) / `/title <text>` (prefix)
+- **可扩展性**: `self.command_router` 是可替换实例, 业务模块可调 `orch.command_router.exact("/foo", handler)` 注入新命令。
+- **测试**: `tests/test_apps_chat_command_router.py` (35 cases) — 注册 / 分类 / dispatch / handler 形态 (None/dict/list/async iter) / 大小写保留 / priority vs exact 语义 / orchestrator 集成。
+
+#### P1-3 PromptBuilder 独立化 (`src/llmwikify/apps/chat/agent/prompt_builder.py`, commit `52d23bf`)
+
+- 早于 P1-1/P1-2 完成 (Plan B 期间)。150 → 300 LOC, 7 sections + BuildContext + mtime cache + 内联 `REACT_SYSTEM_PROMPT`。
+- 测试: 现有 + `tests/test_apps_chat_agent_prompt_builder.py` (15 cases)。
+
+#### 累计数据
+
+- **总 LOC 新增**: ~1,030 (508 + 215 + 300 + 一些 docstring)
+- **测试新增**: 70 (35 OpenAI + 35 CommandRouter) + 15 PromptBuilder = 85
+- **总测试套件**: 968 passed (P1-1 + P1-2 + P1-3 + Plan B 全套)
+
+#### 待审批 (Phase C/D/E, 缓办)
+
+- **P2-1 WebSocket vendor** (1907 LOC) — 按需, 评估实时双向通信需求
+- **P2-2 Anthropic native vendor** (~400 LOC) — **用户 2026-06-18 暂缓**, 当前 focus 是核心功能稳定
+- **P3-1 AgentLoop 状态机重写** — 谨慎, 我们通过 Plan B 写了自己的 5 步状态机 (PRECHECK/REASON/ACT/OBSERVE/COMPLETE), 不需要 vendor nanobot 1724 LOC
+- **P3-2 Consolidator** — 评估, microcompact 已覆盖多数 LLM 压缩场景
+- **P3-3 MessageBus** — ❌ 不做 (单进程 HTTP 已够, apply-plan §5 决策记录)
+
 ### Phase C: P2 评估 (按需)
 
 **目标**: 多渠道接入 (WebSocket / Anthropic native)
