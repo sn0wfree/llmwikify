@@ -151,9 +151,17 @@ class TestChatMethodErrors:
         body = b'{"error":{"message":"invalid params, messages is empty (2013)"}}'
         mock_resp = MagicMock()
         mock_resp.status_code = 400
-        mock_resp.content = body
+        mock_resp.read.return_value = body
+        mock_resp.close = MagicMock()
 
-        with patch("httpx.Client.post", return_value=mock_resp):
+        # chat() delegates to stream_chat() which uses client.stream()
+        # (POST via a streaming context manager). Mock the context
+        # manager so the response surfaces without hitting the network.
+        stream_ctx = MagicMock()
+        stream_ctx.__enter__ = MagicMock(return_value=mock_resp)
+        stream_ctx.__exit__ = MagicMock(return_value=False)
+
+        with patch("httpx.Client.stream", return_value=stream_ctx):
             with pytest.raises(LLMRequestError) as exc_info:
                 client.chat([{"role": "user", "content": "hi"}])
             assert exc_info.value.status_code == 400
@@ -163,9 +171,14 @@ class TestChatMethodErrors:
         client = _make_client()
         mock_resp = MagicMock()
         mock_resp.status_code = 401
-        mock_resp.content = b'{"error":{"message":"invalid api key"}}'
+        mock_resp.read.return_value = b'{"error":{"message":"invalid api key"}}'
+        mock_resp.close = MagicMock()
 
-        with patch("httpx.Client.post", return_value=mock_resp):
+        stream_ctx = MagicMock()
+        stream_ctx.__enter__ = MagicMock(return_value=mock_resp)
+        stream_ctx.__exit__ = MagicMock(return_value=False)
+
+        with patch("httpx.Client.stream", return_value=stream_ctx):
             with pytest.raises(LLMRequestError) as exc_info:
                 client.chat([{"role": "user", "content": "hi"}])
             assert exc_info.value.status_code == 401
@@ -174,20 +187,20 @@ class TestChatMethodErrors:
     def test_chat_rejects_empty_messages_before_request(self):
         """Empty messages raise ValueError, not a network call."""
         client = _make_client()
-        with patch("httpx.Client.post") as mock_post:
+        with patch("httpx.Client.stream") as mock_stream:
             with pytest.raises(ValueError, match="non-empty"):
                 client.chat([])
-            mock_post.assert_not_called()
+            mock_stream.assert_not_called()
 
     def test_chat_rejects_invalid_top_p_before_request(self):
         client = _make_client()
-        with patch("httpx.Client.post") as mock_post:
+        with patch("httpx.Client.stream") as mock_stream:
             with pytest.raises(ValueError, match="top_p"):
                 client.chat(
                     [{"role": "user", "content": "hi"}],
                     top_p=1.5,
                 )
-            mock_post.assert_not_called()
+            mock_stream.assert_not_called()
 
 
 class TestStreamMethodErrors:
