@@ -291,6 +291,8 @@ class TestRunOnePaperMocked:
             "n_pass2_complete", "n_pass2_failed", "deferred_count",
             "deferred_resolved", "deferred_failed", "llm_calls",
             "total_latency_ms", "error",
+            # Success rate and retry fields
+            "success_rate", "retry_rounds", "needs_retry",
         }
         assert set(result.keys()) == expected_keys
 

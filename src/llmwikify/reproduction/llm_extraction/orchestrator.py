@@ -31,7 +31,7 @@ from .retry import DeferError
 from .section_detector import Section, SectionDetectionResult, detect_sections
 from .stage0_ingest import Stage0Result, run_stage0_ingest
 from .track_a import TrackAResult, run_track_a
-from .track_b import TrackBResult, run_track_b
+from .track_b import TrackBResult, run_track_b, PASS2_SUCCESS_THRESHOLD_HIGH
 from .validator import validate_paper_outputs
 
 logger = logging.getLogger(__name__)
@@ -174,6 +174,10 @@ def run_one_paper(
         "llm_calls": 0,
         "total_latency_ms": 0,
         "error": None,
+        # Success rate and retry fields
+        "success_rate": 0.0,
+        "retry_rounds": 0,
+        "needs_retry": False,
     }
     t_total = time.monotonic()
 
@@ -413,6 +417,27 @@ def run_one_paper(
             (track_a_result.llm_calls if track_a_result else 0)
             + track_b_result.llm_calls
         )
+        # Success rate and retry info
+        summary["success_rate"] = track_b_result.success_rate
+        summary["retry_rounds"] = track_b_result.retry_rounds
+        summary["needs_retry"] = track_b_result.needs_retry
+        
+        # Log success rate decision
+        if track_b_result.success_rate >= PASS2_SUCCESS_THRESHOLD_HIGH:
+            logger.info(
+                "[orchestrator] paper=%s success_rate=%.1f%% ✓ high success rate, no retry needed",
+                paper_id, track_b_result.success_rate * 100,
+            )
+        elif track_b_result.retry_rounds > 0:
+            logger.info(
+                "[orchestrator] paper=%s success_rate=%.1f%% ⚠ retry performed (%d rounds)",
+                paper_id, track_b_result.success_rate * 100, track_b_result.retry_rounds,
+            )
+        else:
+            logger.warning(
+                "[orchestrator] paper=%s success_rate=%.1f%% ✗ low success rate, may need full re-run",
+                paper_id, track_b_result.success_rate * 100,
+            )
     elif track_a_result is not None:
         summary["llm_calls"] = track_a_result.llm_calls
 

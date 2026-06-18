@@ -41,6 +41,11 @@ PASS2_MAX_CONCURRENCY = 3  # API limit: ≤3 concurrent (6 triggers throttle)
 PASS2_CHECKPOINT_BATCH_SIZE = 10  # Save checkpoint every N completions
 PASS2_USE_PARALLEL = True  # Toggle parallel/serial execution
 
+# Success rate thresholds for auto-retry
+PASS2_SUCCESS_THRESHOLD_HIGH = 0.95  # 95%: Complete, no retry needed
+PASS2_SUCCESS_THRESHOLD_LOW = 0.80   # 80%: Retry failed factors
+PASS2_MAX_RETRY_ROUNDS = 1           # Maximum retry rounds
+
 
 @with_retry(stage="track_b_pass1", config=RetryConfig(max_attempts=3, backoff_base=0.5))
 def _call_chat_pass1(client: Any, messages: list, max_tokens: int) -> str:
@@ -106,6 +111,10 @@ class TrackBResult:
     llm_calls: int = 0
     success: bool = False
     error: str | None = None
+    # New fields for success rate and retry
+    success_rate: float = 0.0  # Success rate (0.0 - 1.0)
+    retry_rounds: int = 0      # Number of retry rounds performed
+    needs_retry: bool = False  # Whether more retries are needed
 
     def to_dict(self) -> dict:
         return {
@@ -124,6 +133,9 @@ class TrackBResult:
             "llm_calls": self.llm_calls,
             "success": self.success,
             "error": self.error,
+            "success_rate": self.success_rate,
+            "retry_rounds": self.retry_rounds,
+            "needs_retry": self.needs_retry,
         }
 
 
@@ -763,6 +775,7 @@ def run_track_b(
     # Pass 2 (optional, with resume)
     pass2_details: list[SignalDetail] = []
     pass2_latency = 0
+    retry_rounds = 0
     if run_pass2:
         # Choose parallel or serial execution based on configuration
         if PASS2_USE_PARALLEL:
@@ -786,6 +799,52 @@ def run_track_b(
 
     n_complete = sum(1 for d in pass2_details if d.success)
     n_failed = len(pass2_details) - n_complete
+    success_rate = n_complete / len(pass2_details) if pass2_details else 0.0
+
+    # Auto-retry logic for failed factors
+    needs_retry = False
+    if run_pass2 and success_rate < PASS2_SUCCESS_THRESHOLD_HIGH and n_failed > 0:
+        if retry_rounds < PASS2_MAX_RETRY_ROUNDS:
+            needs_retry = True
+            # Get failed signal stubs
+            failed_names = {d.name for d in pass2_details if not d.success}
+            failed_stubs = [s for s in pass1_signals if s.name in failed_names]
+            
+            if failed_stubs:
+                logger.info(
+                    "[track_b] paper=%s retry: %d failed factors (success_rate=%.1f%%), retrying...",
+                    paper_id, len(failed_stubs), success_rate * 100,
+                )
+                retry_rounds += 1
+                
+                # Retry failed factors
+                if PASS2_USE_PARALLEL:
+                    retry_details, retry_latency = asyncio.run(
+                        _run_pass2_parallel(
+                            client, plan, paper_id, failed_stubs, parsed_text,
+                        )
+                    )
+                else:
+                    retry_details, retry_latency = _run_pass2_serial(
+                        client, plan, paper_id, failed_stubs, parsed_text,
+                    )
+                
+                pass2_latency += retry_latency
+                n_calls += len(retry_details)
+                
+                # Merge results: keep successful from original, replace failed with retry results
+                successful_original = [d for d in pass2_details if d.success]
+                pass2_details = successful_original + retry_details
+                
+                # Recalculate stats
+                n_complete = sum(1 for d in pass2_details if d.success)
+                n_failed = len(pass2_details) - n_complete
+                success_rate = n_complete / len(pass2_details) if pass2_details else 0.0
+                
+                logger.info(
+                    "[track_b] paper=%s retry result: %d/%d complete (%.1f%%)",
+                    paper_id, n_complete, len(pass2_details), success_rate * 100,
+                )
 
     total_latency = int((time.monotonic() - t_total) * 1000)
 
@@ -804,4 +863,7 @@ def run_track_b(
         total_latency_ms=total_latency,
         llm_calls=n_calls,
         success=True,
+        success_rate=success_rate,
+        retry_rounds=retry_rounds,
+        needs_retry=success_rate < PASS2_SUCCESS_THRESHOLD_HIGH and not needs_retry,
     )
