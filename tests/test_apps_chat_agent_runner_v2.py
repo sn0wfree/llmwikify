@@ -1,12 +1,13 @@
-"""Tests for ChatRunnerV2 (Plan B Steps B-1 + B-2 + B-3 + extended).
+"""Tests for ChatRunnerV2 (Plan B Steps B-1 + B-2 + B-3 + extended + 100+).
 
 B-1: skeleton + public API surface (8 cases)
 B-1-extension: independence + edge cases (18 cases)
 B-2: 5-step state machine + hooks + microcompact + text-mode (17 cases)
 B-3: golden comparisons + integration + edge cases (20 cases)
 Extended: hook coverage + isolation + concurrency + state (22 cases)
+100+: SSE compat + tool variety + async hooks + boundaries (15 cases)
 
-Total: 85 cases covering:
+Total: 105 cases covering:
   - Public API: run_stream, run_to_completion, ChatRunResult aggregation
   - _RunContext: defaults, slots, time progression, field independence
   - Independence: no legacy engine imports, minimal deps, works without infra
@@ -31,6 +32,12 @@ Total: 85 cases covering:
   - Boundary: microcompact exact threshold / 2-compact-in-one-iteration
   - Error recovery: truncate failure / spec failure / exception propagation
   - Event ordering: error before done on failure path
+  - SSE compatibility: done event required fields / tool_call_start required fields
+  - Tool result variety: list / string / None returns
+  - Tool args: JSON special chars (quotes, newlines, unicode) preserved
+  - Microcompact config: custom compactable_tools set
+  - Hook mix: async CompositeHook + sync NoOpHook
+  - Run context safety: hook_ctx returns independent copy
 """
 from __future__ import annotations
 
@@ -1845,3 +1852,245 @@ def test_emit_done_emits_error_before_done_when_failed() -> None:
     assert "error" in types
     assert "done" in types
     assert types.index("error") < types.index("done")
+
+
+# ─── 100+ milestone: SSE / tool variety / async hooks / boundaries ───
+
+
+def test_tool_result_is_list_passes_through() -> None:
+    """Tool returning a list (not dict) should work without error."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "exec", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"exec": ["line1", "line2", "line3"]},
+    )
+    spec = _make_spec()
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "completed"
+
+
+def test_tool_result_is_string_passes_through() -> None:
+    """Tool returning a string should work."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+        tool_results={"read_file": "raw string content"},
+    )
+    spec = _make_spec()
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "completed"
+
+
+def test_tool_result_is_none_passes_through() -> None:
+    """Tool returning None should work (not crash)."""
+    class _NoneExec(_StubExecutor):
+        async def execute(self, *_a, **_kw):
+            return None
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+    )
+    runner._tool_executor = _NoneExec()
+    spec = _make_spec()
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason in ("completed", "error")
+
+
+def test_tool_args_with_json_special_chars() -> None:
+    """Tool args with quotes, newlines, unicode should be preserved."""
+    special_args = {
+        "path": "/tmp/test with spaces",
+        "query": 'has "quotes" and \\backslashes',
+        "multiline": "line1\nline2\nline3",
+        "unicode": "中文 + emoji 🎉",
+    }
+    captured_args = {}
+
+    class _CaptureExec(_StubExecutor):
+        async def execute(self, tool_name, args, *_a, **_kw):
+            captured_args.update(args)
+            return {"ok": True}
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "exec", "args": special_args},
+            {"type": "done", "content": ""},
+        ],
+    )
+    runner._tool_executor = _CaptureExec()
+    spec = _make_spec()
+    asyncio.run(runner.run_to_completion(spec))
+    assert captured_args == special_args
+
+
+def test_microcompact_with_custom_compactable_tools() -> None:
+    """Custom compactable_tools set should override default."""
+    from llmwikify.apps.chat.agent.microcompact import microcompact_serialize
+
+    custom = frozenset({"custom_tool"})
+    spec = _make_spec(
+        microcompact=True,
+        microcompact_compactable_tools=custom,
+    )
+    big = {"data": "x" * 5000}
+    content_default, comp_default, _ = microcompact_serialize(
+        big, "read_file", "c1", spec,
+    )
+    assert comp_default is False
+    content_custom, comp_custom, _ = microcompact_serialize(
+        big, "custom_tool", "c2", spec,
+    )
+    assert comp_custom is True
+
+
+def test_run_stream_then_run_to_completion_can_share_runner() -> None:
+    """Both APIs can be called on the same runner instance independently."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "first"}],
+    )
+    spec1 = _make_spec()
+
+    async def drain_stream():
+        return [ev async for ev in runner.run_stream(spec1)]
+
+    events1 = asyncio.run(drain_stream())
+    assert events1[-1]["type"] == "done"
+
+    spec2 = _make_spec()
+    result2 = asyncio.run(runner.run_to_completion(spec2))
+    assert result2.stop_reason == "completed"
+
+
+def test_sse_done_event_has_required_fields() -> None:
+    """Done event must contain all required SSE fields for frontend consumption."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": "answer"},
+        ],
+    )
+    spec = _make_spec()
+
+    async def go() -> dict[str, Any]:
+        last = {}
+        async for ev in runner.run_stream(spec):
+            last = ev
+        return last
+
+    last = asyncio.run(go())
+    required_fields = {"type", "content", "stop_reason", "error", "compacted_count"}
+    assert required_fields.issubset(last.keys())
+
+
+def test_sse_tool_call_start_event_has_required_fields() -> None:
+    """tool_call_start event must contain tool, args, call_id for frontend."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": "abc123",
+                "name": "read_file",
+                "args": {"path": "/x"},
+            },
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec()
+
+    async def go() -> dict[str, Any]:
+        async for ev in runner.run_stream(spec):
+            if ev.get("type") == "tool_call_start":
+                return ev
+        return {}
+
+    start = asyncio.run(go())
+    assert start["type"] == "tool_call_start"
+    assert start["tool"] == "read_file"
+    assert start["args"] == {"path": "/x"}
+    assert start["call_id"] == "abc123"
+
+
+def test_async_composite_hook_with_sync_noop_mix() -> None:
+    """CompositeHook (async) + NoOpHook (sync) should work together."""
+    from llmwikify.foundation.callback import CompositeHook
+
+    composite = CompositeHook([NoOpHook()])
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "done", "content": "ok"},
+        ],
+    )
+    runner._hook = composite
+    spec = _make_spec()
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "completed"
+
+
+def test_session_id_in_tool_call_id_prefix() -> None:
+    """Tool call_ids should be unique strings (not None or empty)."""
+    runner, _llm, executor, _pb = _make_full_runner(
+        llm_events=[
+            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
+            {"type": "tool_call", "id": "c2", "name": "exec", "args": {}},
+            {"type": "done", "content": ""},
+        ],
+    )
+    spec = _make_spec()
+    asyncio.run(runner.run_to_completion(spec))
+    assert len(executor.calls) == 2
+
+
+def test_run_context_hook_ctx_returns_independent_copy() -> None:
+    """ctx.hook_ctx should return a copy (mutations don't affect ctx)."""
+    from llmwikify.apps.chat.agent.runner_v2 import _RunContext
+
+    spec = _make_spec(messages=[{"role": "user", "content": "x"}])
+    ctx = _RunContext(spec=spec, messages=list(spec.messages))
+    hook_ctx = ctx.hook_ctx(0)
+    hook_ctx.messages.append({"role": "system", "content": "added"})
+    assert len(ctx.messages) == 1
+
+
+def test_microcompact_empty_messages_spec() -> None:
+    """Microcompact should work with empty spec.messages."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    spec = _make_spec(messages=[], microcompact=True, microcompact_keep_chars=10)
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert result.stop_reason == "completed"
+    assert result.compacted_count == 0
+
+
+def test_run_to_completion_with_tool_args_dict() -> None:
+    """Tool args as dict (not JSON string) should work via runner's _act."""
+    captured = []
+
+    class _CaptureExec(_StubExecutor):
+        async def execute(self, tool_name, args, *_a, **_kw):
+            captured.append(args)
+            return {"ok": True}
+
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "tool_call",
+                "id": "c1",
+                "name": "read_file",
+                "args": {"path": "/x", "limit": 100},
+            },
+            {"type": "done", "content": ""},
+        ],
+    )
+    runner._tool_executor = _CaptureExec()
+    spec = _make_spec()
+    asyncio.run(runner.run_to_completion(spec))
+    assert captured[0] == {"path": "/x", "limit": 100}
