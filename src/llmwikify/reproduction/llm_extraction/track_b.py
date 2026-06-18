@@ -36,10 +36,18 @@ API_PARAM_KEYS = {"temperature", "max_tokens", "top_p", "top_k"}
 PASS2_CHECKPOINT_INTERVAL = 10
 PASS2_CHECKPOINT_FILENAME = "track_b_checkpoint.json"
 
+# Adaptive Pass 2 multi-turn configuration (v2)
+ADAPTIVE_CONTEXT_VERSION = "v2_adaptive"
+PASS2_BATCH_SIZE = 3              # signals per LLM call in adaptive mode
+PASS2_MAX_HISTORY_MESSAGES = 20   # keep system + most recent 20 (user, asst) pairs
+PASS2_MAX_SUPPLEMENTS_PER_SIGNAL = 5  # per-signal max supplemental requests
+PASS2_MAX_TOTAL_ROUNDS = 200      # safety cap on total rounds
+
 # Parallel Pass 2 configuration
 PASS2_MAX_CONCURRENCY = 3  # API limit: ≤3 concurrent (6 triggers throttle)
 PASS2_CHECKPOINT_BATCH_SIZE = 10  # Save checkpoint every N completions
 PASS2_USE_PARALLEL = True  # Toggle parallel/serial execution
+PASS2_USE_ADAPTIVE = True  # Use adaptive multi-turn (v2, recommended)
 
 # Success rate thresholds for auto-retry
 PASS2_SUCCESS_THRESHOLD_HIGH = 0.95  # 95%: Complete, no retry needed
@@ -67,11 +75,20 @@ PASS1_MAX_TOKENS_FALLBACK = 16384
 
 @dataclass
 class SignalStub:
-    """Pass 1 output: brief signal enumeration."""
+    """Pass 1 output: brief signal enumeration.
+
+    Adaptive Pass 2 fields (v2):
+    - context_excerpt: ~3000 chars paper excerpt (adaptive: 1000-10000)
+    - context_start/end: char positions in paper_text for verification
+    """
     index: int
     name: str
     formula_brief: str
     description: str = ""
+    # Adaptive Pass 2 multi-turn (added in v2)
+    context_excerpt: str = ""
+    context_start: int = 0
+    context_end: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -208,12 +225,13 @@ def _save_checkpoint(
         "pass2_details": [d.to_dict() for d in pass2_details],
         "pass2_done_names": [d.name for d in pass2_details],
         "updated_at": time.time(),
+        "context_version": ADAPTIVE_CONTEXT_VERSION,
     }
     cp_path = work_dir / PASS2_CHECKPOINT_FILENAME
     cp_path.write_text(json.dumps(cp, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info(
-        "[track_b] checkpoint saved: %s (%d pass1, %d pass2)",
-        cp_path, len(pass1_signals), len(pass2_details),
+        "[track_b] checkpoint saved: %s (%d pass1, %d pass2, version=%s)",
+        cp_path, len(pass1_signals), len(pass2_details), ADAPTIVE_CONTEXT_VERSION,
     )
 
 
@@ -247,7 +265,80 @@ def _delete_checkpoint(work_dir: Path) -> None:
     cp_path = work_dir / PASS2_CHECKPOINT_FILENAME
     if cp_path.exists():
         cp_path.unlink()
-        logger.info("[track_b] checkpoint deleted: %s", cp_path)
+    logger.info("[track_b] checkpoint deleted: %s", cp_path)
+
+
+def _get_signal_context(signal: SignalStub, parsed_text: str) -> str:
+    """Get context for a signal, with backward-compat fallback (Option B).
+
+    New SignalStub (has context_excerpt): use it directly.
+    Old SignalStub (no context_excerpt): use paper slice based on signal.index.
+
+    Args:
+        signal: SignalStub from Pass 1.
+        parsed_text: Full paper text.
+
+    Returns:
+        Context string to use for Pass 2 extraction.
+    """
+    if signal.context_excerpt and len(signal.context_excerpt) > 200:
+        return signal.context_excerpt
+
+    # Fallback: paper slice based on signal index (for old SignalStub)
+    paper_start = (signal.index - 1) * 5000
+    paper_end = paper_start + 5000
+    if paper_end > len(parsed_text):
+        paper_end = len(parsed_text)
+    if paper_start > len(parsed_text):
+        paper_start = max(0, len(parsed_text) - 5000)
+    logger.warning(
+        "[pass2] signal %s: no context_excerpt (old checkpoint?), "
+        "using paper slice [%d:%d]",
+        signal.name, paper_start, paper_end,
+    )
+    return parsed_text[paper_start:paper_end]
+
+
+def _supplement_context(
+    signal: SignalStub,
+    need_info: dict,
+    parsed_text: str,
+) -> str:
+    """Generate supplemental context based on LLM's level request.
+
+    Levels:
+        a: paragraph level (1000-2000 chars)
+        b: section level (5000-8000 chars)
+        c: full paper
+
+    Args:
+        signal: SignalStub (for context_start reference).
+        need_info: Dict with 'level' key.
+        parsed_text: Full paper text.
+
+    Returns:
+        Supplemental context string.
+    """
+    level = need_info.get("level", "a")
+
+    if level == "c":
+        # Full paper
+        return parsed_text
+
+    if level == "b":
+        # Section level: 5000-8000 chars
+        # Use context_start as anchor, expand to ~7000 chars
+        start = max(0, signal.context_start - 1000)
+        end = min(len(parsed_text), start + 7000)
+        # If we hit end of paper, also extend backward
+        if end - start < 5000 and start > 0:
+            start = max(0, end - 7000)
+        return parsed_text[start:end]
+
+    # Default: level a (paragraph level: 1000-2000 chars)
+    start = max(0, signal.context_start)
+    end = min(len(parsed_text), start + 2000)
+    return parsed_text[start:end]
 
 
 def _parse_signals_from_response(response: str) -> tuple[list[SignalStub], bool]:
@@ -277,11 +368,27 @@ def _parse_signals_from_response(response: str) -> tuple[list[SignalStub], bool]
         name = str(item.get("name", "")).strip()
         if not name:
             continue
+        # context_excerpt: support either string or absent (backward-compat)
+        ctx_raw = item.get("context_excerpt", "")
+        if not isinstance(ctx_raw, str):
+            ctx_raw = ""
+        # context_start/end: best-effort int parse
+        try:
+            ctx_start = int(item.get("context_start", 0) or 0)
+        except (TypeError, ValueError):
+            ctx_start = 0
+        try:
+            ctx_end = int(item.get("context_end", 0) or 0)
+        except (TypeError, ValueError):
+            ctx_end = 0
         stubs.append(SignalStub(
             index=i + 1,
             name=name,
             formula_brief=str(item.get("formula", item.get("formula_brief", ""))),
             description=str(item.get("description", "")),
+            context_excerpt=ctx_raw,
+            context_start=ctx_start,
+            context_end=ctx_end,
         ))
     return stubs, done
 
@@ -617,6 +724,332 @@ def _run_pass2_serial(
     return details, total_latency
 
 
+def _unwrap_factors(parsed: Any) -> list | None:
+    """Unwrap JSON response to a list of factor dicts.
+
+    Accepts:
+    - {"factors": [...]}
+    - [...]
+    - {"factor": {...}}  (legacy single-signal)
+    Returns list of dicts or None on failure.
+    """
+    if parsed is None:
+        return None
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        if "factors" in parsed and isinstance(parsed["factors"], list):
+            return parsed["factors"]
+        if "factor" in parsed and isinstance(parsed["factor"], dict):
+            # Legacy single-factor format → wrap in list
+            return [parsed["factor"]]
+    return None
+
+
+def _build_signal_detail(stub: SignalStub, factor: dict, latency_ms: int) -> SignalDetail:
+    """Build SignalDetail from a factor dict.
+
+    Handles both new (l1/l2/l3/l4 nested) and legacy (flat) schemas.
+    """
+    if not isinstance(factor, dict):
+        return SignalDetail(
+            name=stub.name, success=False,
+            error="invalid_factor_format", latency_ms=latency_ms,
+        )
+    # New format: factor has l1/l2/l3/l4 keys
+    l1 = factor.get("l1", {})
+    l2 = factor.get("l2", {})
+    l3 = factor.get("l3", {})
+    l4 = factor.get("l4", {})
+    return SignalDetail(
+        name=stub.name,
+        description=str(factor.get("description", stub.description)),
+        l1=l1 if isinstance(l1, dict) else {},
+        l2=l2 if isinstance(l2, dict) else {},
+        l3=l3 if isinstance(l3, dict) else {},
+        l4=l4 if isinstance(l4, dict) else {},
+        success=True,
+        latency_ms=latency_ms,
+    )
+
+
+def _render_user_msg(tmpl, paper_id: str, round_idx: int, batch: list[SignalStub]) -> str:
+    """Render user message for one batch in adaptive multi-turn."""
+    rendered_signals = []
+    for sig in batch:
+        ctx = _get_signal_context(sig, "")
+        rendered_signals.append({
+            "name": sig.name,
+            "formula_brief": sig.formula_brief,
+            "context_excerpt": ctx,
+        })
+    return tmpl.render(
+        paper_id=paper_id,
+        round_idx=round_idx,
+        batch_size=len(batch),
+        signals=rendered_signals,
+    )
+
+
+def _render_supplement_msg(
+    need_supplement: list[tuple[SignalStub, dict]],
+    parsed_text: str,
+) -> str:
+    """Render supplemental context message for signals needing more info."""
+    parts = ["以下信号需要更多上下文以完成提取。已补充相应 paper 切片：\n"]
+    for sig, need_info in need_supplement:
+        level = need_info.get("level", "a")
+        reason = need_info.get("reason", "")
+        section_hint = need_info.get("section_hint", "")
+        supplement = _supplement_context(sig, need_info, parsed_text)
+        parts.append(
+            f"\n--- Signal: {sig.name} (level={level}) ---\n"
+            f"Reason: {reason}\n"
+            f"Section hint: {section_hint or '(none)'}\n"
+            f"Supplemental context ({len(supplement)} chars):\n"
+            f"{supplement}\n"
+        )
+    parts.append(
+        "\n请基于补充的上下文，重新提取这些信号的 L1-L4。"
+    )
+    return "".join(parts)
+
+
+async def _run_pass2_adaptive(
+    client: Any,
+    plan: PlanResult,
+    paper_id: str,
+    signals: list[SignalStub],
+    parsed_text: str,
+    work_dir: Path | None = None,
+    existing_details: list[SignalDetail] | None = None,
+) -> tuple[list[SignalDetail], int]:
+    """Run Pass 2 with adaptive multi-turn: LLM self-assesses context, requests a/b/c.
+
+    Algorithm:
+    1. Initialize single session with system prompt
+    2. For each batch of 3 signals:
+       a. Render user message with formula_brief + context_excerpt
+       b. Call LLM (multi-turn accumulates messages)
+       c. Parse response, identify completed vs need_more_context
+       d. For need_more: send supplemental context (a/b/c level)
+       e. Continue until all signals done or per-signal max (5) supplements
+    3. Save checkpoint every batch
+
+    Args:
+        client: LLM client with achat() method.
+        plan: Stage 1 Call 2 plan.
+        paper_id: Paper identifier.
+        signals: All signal stubs from Pass 1.
+        parsed_text: Full paper text (for a/b/c slicing).
+        work_dir: If provided, save checkpoint periodically.
+        existing_details: If provided (resume), skip already-done signals.
+
+    Returns:
+        Tuple of (list of SignalDetail, total_latency_ms).
+    """
+    done_names = {d.name for d in existing_details} if existing_details else set()
+    remaining = [s for s in signals if s.name not in done_names]
+    details: dict[str, SignalDetail] = {d.name: d for d in (existing_details or [])}
+    total_latency = sum(d.latency_ms for d in details.values())
+
+    if not remaining:
+        return list(details.values()), total_latency
+
+    # Load prompt
+    system_text, user_template, params = _load_prompt(PROMPT_PASS2)
+    tmpl = _jinja_env.from_string(user_template)
+    max_tokens = max(
+        int(params.get("max_tokens", 5500)),
+        int(plan.token_budget.get("track_b_pass2_per_factor", 5500)),
+    )
+
+    # Initialize multi-turn session
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": system_text},
+    ]
+    supplement_count: dict[str, int] = {s.name: 0 for s in remaining}
+    pending = {s.name: s for s in remaining}
+    n_rounds = 0
+
+    logger.info(
+        "[track_b] paper=%s pass2: adaptive multi-turn starting "
+        "(batch_size=%d, %d signals, max_rounds=%d)",
+        paper_id, PASS2_BATCH_SIZE, len(remaining), PASS2_MAX_TOTAL_ROUNDS,
+    )
+
+    while pending and n_rounds < PASS2_MAX_TOTAL_ROUNDS:
+        n_rounds += 1
+
+        # Take next batch
+        batch = list(pending.values())[:PASS2_BATCH_SIZE]
+        user_msg = _render_user_msg(tmpl, paper_id, n_rounds, batch)
+        messages.append({"role": "user", "content": user_msg})
+
+        # Trim history if too long
+        max_keep = 1 + PASS2_MAX_HISTORY_MESSAGES  # system + N pairs
+        if len(messages) > max_keep:
+            # Keep system (idx 0) and most recent (max_keep - 1) messages
+            messages = [messages[0]] + messages[-(max_keep - 1):]
+            logger.debug(
+                "[track_b] paper=%s pass2 round %d: trimmed history to %d messages",
+                paper_id, n_rounds, len(messages),
+            )
+
+        # LLM call
+        t0 = time.monotonic()
+        try:
+            response = await client.achat(
+                messages, max_tokens=max_tokens, temperature=0.1,
+            )
+        except DeferError:
+            raise
+        except Exception as exc:
+            # All signals in batch failed
+            for sig in batch:
+                details[sig.name] = SignalDetail(
+                    name=sig.name, success=False,
+                    error=f"llm_error: {exc}",
+                )
+                pending.pop(sig.name, None)
+            continue
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        total_latency += latency_ms
+
+        messages.append({"role": "assistant", "content": response})
+
+        # Parse response
+        parsed = _extract_json(response)
+        factors = _unwrap_factors(parsed)
+
+        if factors is None:
+            # Parse failed: log and continue
+            logger.warning(
+                "[track_b] paper=%s pass2 round %d: JSON parse failed, retrying next round",
+                paper_id, n_rounds,
+            )
+            continue
+
+        # Match factors to batch
+        if len(factors) != len(batch):
+            logger.warning(
+                "[track_b] paper=%s pass2 round %d: got %d factors for %d signals",
+                paper_id, n_rounds, len(factors), len(batch),
+            )
+            # Pad/truncate to match
+            if len(factors) < len(batch):
+                # Missing: mark as failed
+                for i in range(len(factors), len(batch)):
+                    sig = batch[i]
+                    if sig.name not in details:
+                        details[sig.name] = SignalDetail(
+                            name=sig.name, success=False,
+                            error="missing_in_response",
+                            latency_ms=latency_ms,
+                        )
+                        pending.pop(sig.name, None)
+                factors = list(factors) + [{}] * (len(batch) - len(factors))
+            else:
+                factors = factors[:len(batch)]
+
+        # Process each signal
+        need_supplement: list[tuple[SignalStub, dict]] = []
+        completed_count = 0
+        for sig, factor in zip(batch, factors, strict=False):
+            if not isinstance(factor, dict):
+                continue
+            need_info = factor.get("need_more_context")
+            l1 = factor.get("l1")
+            # Signal is "completed" only if l1 is filled (not null)
+            is_completed = l1 is not None and isinstance(l1, dict) and l1
+
+            if need_info and not is_completed:
+                # LLM requests more context
+                supplement_count.setdefault(sig.name, 0)
+                if supplement_count[sig.name] < PASS2_MAX_SUPPLEMENTS_PER_SIGNAL:
+                    supplement_count[sig.name] += 1
+                    need_supplement.append((sig, need_info))
+                    continue
+                else:
+                    # Max supplements reached, mark as failed
+                    details[sig.name] = SignalDetail(
+                        name=sig.name, success=False,
+                        error="max_supplements_exceeded",
+                        latency_ms=latency_ms,
+                    )
+                    pending.pop(sig.name, None)
+                    continue
+            elif is_completed:
+                # Completed
+                details[sig.name] = _build_signal_detail(sig, factor, latency_ms)
+                pending.pop(sig.name, None)
+                completed_count += 1
+            else:
+                # Neither completed nor need_more: probably JSON structure issue
+                # Try to extract whatever is there
+                if any(factor.get(k) for k in ("l1", "l2", "l3", "l4")):
+                    details[sig.name] = _build_signal_detail(sig, factor, latency_ms)
+                    pending.pop(sig.name, None)
+                    completed_count += 1
+                else:
+                    details[sig.name] = SignalDetail(
+                        name=sig.name, success=False,
+                        error="no_l1_l2_l3_l4",
+                        latency_ms=latency_ms,
+                    )
+                    pending.pop(sig.name, None)
+
+        logger.info(
+            "[track_b] paper=%s pass2 round %d: %d/%d completed, %d need supplements (%dms)",
+            paper_id, n_rounds, completed_count, len(batch), len(need_supplement), latency_ms,
+        )
+
+        # Save checkpoint periodically
+        if work_dir and n_rounds % 5 == 0:
+            current_details = [details[s.name] for s in signals if s.name in details]
+            _save_checkpoint(
+                work_dir, paper_id,
+                list(signals),
+                current_details,
+            )
+
+        # Send supplemental context if needed
+        if need_supplement:
+            supplement_msg = _render_supplement_msg(need_supplement, parsed_text)
+            messages.append({"role": "user", "content": supplement_msg})
+            # LLM will re-process in next iteration
+
+    # Mark any still-pending as failed
+    for sig_name, _sig in pending.items():
+        if sig_name not in details:
+            details[sig_name] = SignalDetail(
+                name=sig_name, success=False,
+                error="max_total_rounds_exceeded",
+            )
+
+    # Final checkpoint
+    if work_dir:
+        current_details = [details[s.name] for s in signals if s.name in details]
+        _save_checkpoint(work_dir, paper_id, list(signals), current_details)
+
+    # Build final list (preserving original signal order)
+    final = []
+    for sig in signals:
+        if sig.name in details:
+            final.append(details[sig.name])
+        else:
+            final.append(SignalDetail(name=sig.name, success=False, error="not_processed"))
+
+    logger.info(
+        "[track_b] paper=%s pass2 adaptive done: %d rounds, %d/%d succeeded (success_rate=%.1f%%)",
+        paper_id, n_rounds,
+        sum(1 for d in final if d.success),
+        len(final),
+        100 * sum(1 for d in final if d.success) / len(final) if final else 0,
+    )
+    return final, total_latency
+
+
 async def _run_pass2_parallel(
     client: Any,
     plan: PlanResult,
@@ -776,9 +1209,23 @@ def run_track_b(
     pass2_details: list[SignalDetail] = []
     pass2_latency = 0
     retry_rounds = 0
+    pass2_concurrency_used = 1
     if run_pass2:
-        # Choose parallel or serial execution based on configuration
-        if PASS2_USE_PARALLEL:
+        # Choose execution mode (priority: adaptive > parallel > serial)
+        if PASS2_USE_ADAPTIVE:
+            logger.info(
+                "[track_b] paper=%s pass2 mode: ADAPTIVE multi-turn (v2)",
+                paper_id,
+            )
+            pass2_details, pass2_latency = asyncio.run(
+                _run_pass2_adaptive(
+                    client, plan, paper_id, pass1_signals, parsed_text,
+                    work_dir=work_dir,
+                    existing_details=pass2_details_done or None,
+                )
+            )
+            pass2_concurrency_used = PASS2_BATCH_SIZE
+        elif PASS2_USE_PARALLEL:
             pass2_details, pass2_latency = asyncio.run(
                 _run_pass2_parallel(
                     client, plan, paper_id, pass1_signals, parsed_text,
@@ -786,6 +1233,7 @@ def run_track_b(
                     existing_details=pass2_details_done or None,
                 )
             )
+            pass2_concurrency_used = PASS2_MAX_CONCURRENCY
         else:
             pass2_details, pass2_latency = _run_pass2_serial(
                 client, plan, paper_id, pass1_signals, parsed_text,
@@ -809,14 +1257,14 @@ def run_track_b(
             # Get failed signal stubs
             failed_names = {d.name for d in pass2_details if not d.success}
             failed_stubs = [s for s in pass1_signals if s.name in failed_names]
-            
+
             if failed_stubs:
                 logger.info(
                     "[track_b] paper=%s retry: %d failed factors (success_rate=%.1f%%), retrying...",
                     paper_id, len(failed_stubs), success_rate * 100,
                 )
                 retry_rounds += 1
-                
+
                 # Retry failed factors
                 if PASS2_USE_PARALLEL:
                     retry_details, retry_latency = asyncio.run(
@@ -828,19 +1276,19 @@ def run_track_b(
                     retry_details, retry_latency = _run_pass2_serial(
                         client, plan, paper_id, failed_stubs, parsed_text,
                     )
-                
+
                 pass2_latency += retry_latency
                 n_calls += len(retry_details)
-                
+
                 # Merge results: keep successful from original, replace failed with retry results
                 successful_original = [d for d in pass2_details if d.success]
                 pass2_details = successful_original + retry_details
-                
+
                 # Recalculate stats
                 n_complete = sum(1 for d in pass2_details if d.success)
                 n_failed = len(pass2_details) - n_complete
                 success_rate = n_complete / len(pass2_details) if pass2_details else 0.0
-                
+
                 logger.info(
                     "[track_b] paper=%s retry result: %d/%d complete (%.1f%%)",
                     paper_id, n_complete, len(pass2_details), success_rate * 100,
@@ -859,7 +1307,7 @@ def run_track_b(
         n_pass2_failed=n_failed,
         pass1_latency_ms=pass1_latency,
         pass2_latency_ms=pass2_latency,
-        pass2_concurrency=PASS2_MAX_CONCURRENCY if PASS2_USE_PARALLEL else 1,
+        pass2_concurrency=pass2_concurrency_used,
         total_latency_ms=total_latency,
         llm_calls=n_calls,
         success=True,

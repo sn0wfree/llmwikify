@@ -1,6 +1,6 @@
 name: repro_extract_track_b_pass1
-description: "Track B Pass 1: enumerate all signals/factors in the paper (name + formula only)."
-version: "1.0"
+description: "Track B Pass 1: enumerate all signals/factors in the paper (name + formula + adaptive context_excerpt)."
+version: "2.0"
 trigger:
   type: "api_call"
   when: "track_b_pass1"
@@ -13,13 +13,30 @@ system: |
   You are a quantitative research analyst. Given a paper, enumerate ALL
   distinct signals/factors described. Output strict JSON only. No prose.
 
+  For EACH signal, output:
+  - name: exact identifier (e.g. Alpha#1, MACD, P/E ratio)
+  - formula: short formula (LaTeX/text, ~50 chars)
+  - context_excerpt: paper text that DEFINES this signal
+  - context_start: char position where excerpt begins in paper
+  - context_end: char position where excerpt ends in paper
+
+  context_excerpt length guidelines (ADAPTIVE):
+  - Default: ~3000 chars (covers most cases)
+  - Complex signals (multi-step formulas, many parameters, cross-references):
+    expand to 5000-10000 chars
+  - Simple signals (single-line formulas, no parameters): 1000-2000 chars
+  - Use your judgment based on signal complexity
+
   Rules:
-  - Enumerate every distinct named signal/factor (e.g. Alpha#1, Alpha#2, ..., Alpha#101).
-  - For each: name (string), formula (string, LaTeX or text). NO description here.
+  - Enumerate every distinct named signal/factor in the paper.
+  - For each: name (string), formula (string, LaTeX or text).
+  - context_excerpt must contain the text that DEFINES the signal
+    (where formula/parameters/intuition appear in the paper).
+  - context_start/end: integer char positions in the paper text.
   - Use actual names from the paper when possible; fallback to "signal_001" naming.
   - Do NOT fabricate. Skip abstract concepts; only include concrete computable factors.
-  - Be CONCISE: skip Chinese descriptions in this pass (Pass 2 adds them).
-  - This is enumeration only; L1-L4 details are extracted in Pass 2.
+  - Be CONCISE in formula (~50 chars); Pass 2 adds full details.
+  - This is enumeration + context extraction; L1-L4 details are extracted in Pass 2.
   - If your output is long, you may stop after a partial list (hit token limit).
     The user will prompt you to continue. Keep outputting until done.
   - When ALL signals are enumerated, set `"done": true` in your JSON response.
@@ -27,6 +44,7 @@ system: |
 
 user: |
   Enumerate all signals/factors in this paper.
+  For each, provide name + formula + context_excerpt (paper text that defines the signal).
 
   Paper ID: {{ paper_id }}
   Paper text (full):
@@ -34,12 +52,29 @@ user: |
   {{ paper_text }}
   ---
 
-  Output strict JSON (no descriptions, just name + formula):
+  Output strict JSON:
 
   {
     "signals": [
-      {"name": "Alpha#1", "formula": "rank(...)"},
-      {"name": "Alpha#2", "formula": "-1 * correlation(...)"}
+      {
+        "name": "Alpha#1",
+        "formula": "rank(Ts_Sum(volume, 5))",
+        "context_excerpt": "Alpha#1: (rank(Ts_Sum(volume, 5)) - ...) ... (full definition with parameters and edge cases)",
+        "context_start": 12345,
+        "context_end": 15345
+      },
+      {
+        "name": "Alpha#2",
+        "formula": "-1 * correlation(rank(delta(volume, 1)), rank(delta(close, 1)), 6)",
+        "context_excerpt": "Alpha#2: -1 * correlation(rank(delta(volume, 1)), rank(delta(close, 1)), 6) ...",
+        "context_start": 15500,
+        "context_end": 18500
+      }
     ],
     "done": false
   }
+
+  Note on context_excerpt length:
+  - Simple signals: 1000-2000 chars
+  - Default: ~3000 chars
+  - Complex signals (multi-step formulas, parameters): 5000-10000 chars

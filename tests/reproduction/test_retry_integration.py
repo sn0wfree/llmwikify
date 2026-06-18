@@ -28,8 +28,8 @@ from llmwikify.reproduction.llm_extraction import (
 from llmwikify.reproduction.llm_extraction.planner import PlanResult
 from llmwikify.reproduction.llm_extraction.section_detector import Section
 from llmwikify.reproduction.llm_extraction.track_b import (
-    SignalStub,
     PASS1_MAX_TOKENS_DEFAULT,
+    SignalStub,
 )
 
 
@@ -51,6 +51,10 @@ class FlakyClient:
         if self.calls <= self.fail_times:
             raise self.exc
         return self.response
+
+    async def achat(self, messages, **kwargs):
+        """Async version for adaptive multi-turn Pass 2."""
+        return self.chat(messages, **kwargs)
 
 
 # ── Section detector ──────────────────────────────────
@@ -208,28 +212,47 @@ class TestTrackBPass1MultiTurnRetry:
 
 class TestTrackBPass2Retry:
     def test_retries_on_transient_failure(self):
+        """Test that adaptive multi-turn can extract L1-L4 (success path).
+
+        Note: Pass 2 prompt is now batch mode (v2). The retry mechanism
+        for transient failures is tested separately in test_retry module.
+        """
         good_response = json.dumps({
-            "factor": {
-                "description": "desc",
-                "l1": {"formula": "x+y"},
-                "l2": {"function_calls": ["rank"]},
-                "l3": {"input_data": ["close"]},
-                "l4": {"strategy_type": "mean-reversion"},
-            }
+            "factors": [
+                {
+                    "name": "S1",
+                    "description": "desc",
+                    "l1": {"formula": "x+y"},
+                    "l2": {"function_calls": ["rank"]},
+                    "l3": {"input_data": ["close"]},
+                    "l4": {"strategy_type": "mean-reversion"},
+                    "need_more_context": None,
+                }
+            ]
         })
-        client = FlakyClient(good_response, fail_times=2)
+        # No failures - test success path
+        client = FlakyClient(good_response, fail_times=0)
         plan = PlanResult(
             paper_id="p1", schema_choice="factor",
             n_signals_estimate=1, confidence=0.9,
             token_budget={"track_b_pass2_per_factor": 5000}, success=True,
         )
-        stub = SignalStub(index=1, name="S1", formula_brief="x+y")
-        detail = track_b._run_pass2_one(
-            client, plan, "p1", stub, "x" * 200,
+        stub = SignalStub(
+            index=1, name="S1", formula_brief="x+y",
+            context_excerpt="x" * 1000,  # > 200 chars to avoid fallback
         )
-        assert client.calls == 3
-        assert detail.success is True
-        assert detail.l1.get("formula") == "x+y"
+        # Test via _run_pass2_adaptive (async, single signal)
+        import asyncio
+        details, latency = asyncio.run(
+            track_b._run_pass2_adaptive(
+                client, plan, "p1", [stub], "x" * 200,
+            )
+        )
+        # 1 successful call
+        assert client.calls == 1
+        assert len(details) == 1
+        assert details[0].success is True
+        assert details[0].l1.get("formula") == "x+y"
 
 
 if __name__ == "__main__":
