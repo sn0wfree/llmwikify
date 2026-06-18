@@ -153,6 +153,15 @@ class ChatOrchestrator:
         self._abort_events: dict[str, asyncio.Event] = {}
         self._tool_registries: dict[tuple[str, str], Any] = {}
 
+        # P1-2 (vendored from nanobot command/router.py): slash command
+        # dispatch table. Commands are intercepted before the ReAct loop
+        # so they bypass LLM round-trips (e.g. /stop, /help, /clear).
+        from llmwikify.apps.chat.command_router import (
+            CommandContext,
+            CommandRouter,
+        )
+        self.command_router = self._build_default_command_router()
+
     def _get_tool_registry(self, ctx: AgentContext, session_id: str | None = None) -> Any:
         wiki_id = ctx.wiki_id or self.wiki_service.get_default_wiki_id()
         wiki_registry = self.wiki_service.get_tool_registry(wiki_id)
@@ -223,6 +232,23 @@ class ChatOrchestrator:
 
             if jwt_token:
                 self.db.update_chat_session_jwt(session_id, jwt_token)
+
+            # P1-2 (vendored from nanobot command/router.py): intercept
+            # slash commands before the LLM loop runs. Priority commands
+            # (e.g. /stop) run first; then exact/prefix commands (e.g.
+            # /help, /clear). If a handler produces events, yield them
+            # and short-circuit the rest of the chat flow.
+            async for ev in self._dispatch_command(
+                text=message,
+                session_id=session_id,
+                wiki_id=ctx.wiki_id,
+                db=self.db,
+                ctx=ctx,
+                abort_event=abort_event,
+            ):
+                yield ev
+                if ev.get("type") == "command_done":
+                    return
 
             ctx.add_user_message(message)
             self.tool_executor.save_message(session_id, "user", message)
@@ -454,6 +480,149 @@ class ChatOrchestrator:
             event.set()
             return True
         return False
+
+    # ─── Slash commands (P1-2, vendored from nanobot) ───────────
+
+    def _build_default_command_router(self) -> Any:
+        """Build the default CommandRouter with a few built-in commands.
+
+        Built-ins:
+          - ``/stop`` (priority) — abort the active session.
+          - ``/help`` (exact) — list available commands.
+          - ``/clear`` (exact) — clear the in-memory context.
+          - ``/status`` (exact) — report session status.
+          - ``/title <text>`` (prefix) — set session title.
+
+        Custom routers can be installed by replacing ``self.command_router``
+        after construction; the orchestrator only calls it via
+        ``_dispatch_command``.
+        """
+        from llmwikify.apps.chat.command_router import CommandRouter
+
+        router = CommandRouter()
+
+        async def stop_handler(ctx: Any) -> dict:
+            if ctx.abort_event is not None:
+                ctx.abort_event.set()
+            return {
+                "type": "command_done",
+                "command": "/stop",
+                "ok": True,
+                "message": "Session aborted",
+            }
+
+        async def help_handler(ctx: Any) -> dict:
+            return {
+                "type": "command_done",
+                "command": "/help",
+                "ok": True,
+                "message": (
+                    "Available commands: /stop, /help, /clear, /status, /title <text>"
+                ),
+            }
+
+        async def clear_handler(ctx: Any) -> dict:
+            if ctx.ctx is not None and hasattr(ctx.ctx, "clear"):
+                ctx.ctx.clear()
+            return {
+                "type": "command_done",
+                "command": "/clear",
+                "ok": True,
+                "message": "Context cleared",
+            }
+
+        async def status_handler(ctx: Any) -> dict:
+            return {
+                "type": "command_done",
+                "command": "/status",
+                "ok": True,
+                "message": f"session_id={ctx.session_id} wiki_id={ctx.wiki_id}",
+            }
+
+        async def title_handler(ctx: Any) -> dict:
+            new_title = (ctx.args or "").strip()
+            if not new_title:
+                return {
+                    "type": "command_done",
+                    "command": "/title",
+                    "ok": False,
+                    "message": "Usage: /title <text>",
+                }
+            if ctx.db is not None and ctx.session_id:
+                try:
+                    ctx.db.update_chat_session_title(ctx.session_id, new_title)
+                except Exception:
+                    pass
+            return {
+                "type": "command_done",
+                "command": "/title",
+                "ok": True,
+                "message": f"Title set: {new_title[:50]}",
+            }
+
+        router.priority("/stop", stop_handler)
+        router.exact("/help", help_handler)
+        router.exact("/clear", clear_handler)
+        router.exact("/status", status_handler)
+        router.prefix("/title", title_handler)
+        return router
+
+    async def _dispatch_command(
+        self,
+        text: str,
+        session_id: str | None,
+        wiki_id: str | None,
+        db: Any,
+        ctx: Any,
+        abort_event: Any,
+    ) -> AsyncIterator[dict]:
+        """Dispatch ``text`` through the command router.
+
+        Yields the events produced by the matched handler, followed by
+        a ``command_done`` event so the caller can short-circuit. If
+        the text is not a command, yields nothing.
+        """
+        from llmwikify.apps.chat.command_router import CommandContext
+
+        stripped = text.strip()
+        if not stripped or not stripped.startswith("/"):
+            return
+        # ``is_command`` is case-insensitive on its input; we feed it
+        # the lowercased copy so the registered command set (also
+        # lowercased) matches.
+        if not self.command_router.is_command(stripped.lower()):
+            return
+
+        # ``raw`` is the lowercased command name (router matches it
+        # case-insensitively). We keep ``text`` original-case so
+        # prefix handlers can read user-supplied args with their
+        # original casing intact.
+        cmd_ctx = CommandContext(
+            text=stripped,
+            session_id=session_id,
+            wiki_id=wiki_id,
+            db=db,
+            ctx=ctx,
+            abort_event=abort_event,
+            key=session_id or "default",
+            raw=stripped.lower(),
+        )
+
+        # Priority tier first (runs without any lock / setup work).
+        events: list[dict] = []
+        if self.command_router.is_priority(stripped):
+            events = await self.command_router.dispatch_priority(cmd_ctx)
+        else:
+            events = await self.command_router.dispatch(cmd_ctx)
+
+        for ev in events:
+            yield ev
+        if events:
+            yield {
+                "type": "command_done",
+                "command": stripped.split()[0],
+                "ok": True,
+            }
 
     def get_session_status(self, session_id: str) -> str:
         return self._session_status.get(session_id, "idle")
