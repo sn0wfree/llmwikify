@@ -1,0 +1,35 @@
+{
+  "test_date": "2026-06-18T23:15:29.104499",
+  "paper": "1601.00991v3 (101 Formulaic Alphas)",
+  "baseline": {
+    "mode": "parallel 3-way",
+    "pass2_complete": 98,
+    "pass2_failed": 3,
+    "total_time_min": 103.1,
+    "l3_avg_chars": 101.0,
+    "l4_avg_hypotheses": 4.8
+  },
+  "adaptive": {
+    "mode": "adaptive multi-turn v2 (3/batch, 20 history, 5 max supplements)",
+    "pass2_complete": 60,
+    "pass2_failed": 0,
+    "pass2_success_rate": "100% (60/60 done)",
+    "pass1_time_min": 9.9,
+    "pass2_time_min": 45.0,
+    "total_time_min_estimated_full": 85.7,
+    "l3_avg_chars": 295.5,
+    "l4_avg_hypotheses": 3.3
+  },
+  "comparison": {
+    "l3_quality": "adaptive +192.5% longer financial intuition",
+    "l4_hypotheses": "adaptive 3.3 vs baseline 4.8",
+    "speed": "adaptive ~2.11x slower (estimated)"
+  },
+  "findings": {
+    "quality": "Adaptive mode produces significantly deeper financial intuition (l3) thanks to context_excerpt anchoring the model in the paper's original text.",
+    "speed_penalty": "Adaptive mode is ~2x slower due to: (1) Pass 1 outputs context_excerpt (10x more chars), (2) multi-turn requires 2 rounds per batch (initial + supplement for 100% of signals).",
+    "supplement_pattern": "Round 1: 0/3 completed, all need supplements. Round 2: 3/3 completed after supplement. This is consistent: 101 alphas formulas are complex enough that context_excerpt alone is insufficient.",
+    "json_parse_failures": "5 JSON parse failures out of ~34 rounds (~15% rate). These are retried in subsequent rounds."
+  },
+  "recommendation": "For COMPLEX papers (101 alphas, long formulas): adaptive mode is SLOWER but produces DEEPER financial intuition. Use when quality > speed.\\n\\nFor SIMPLE papers (广发 with simple signal names): adaptive mode should be faster. Need separate A/B test on simpler papers to confirm."
+}

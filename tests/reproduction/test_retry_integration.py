@@ -239,7 +239,7 @@ class TestTrackBPass2Retry:
         )
         stub = SignalStub(
             index=1, name="S1", formula_brief="x+y",
-            context_excerpt="x" * 1000,  # > 200 chars to avoid fallback
+            context_excerpt="x" * 1000,  # > 50 chars to avoid fallback
         )
         # Test via _run_pass2_adaptive (async, single signal)
         import asyncio

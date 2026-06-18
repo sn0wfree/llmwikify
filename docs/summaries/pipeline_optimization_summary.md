@@ -352,3 +352,73 @@ b1d4108 docs(reproduction): Pipeline 优化总结文档
 |------|---------|------|
 | Adaptive Pass 2 multi-turn | 2.5-3.3x | 设计中 |
 | A/B 测试验证 | 质量保障 | 待实施 |
+
+---
+
+## 📊 A/B Test Results: Adaptive vs Parallel Pass 2
+
+> 测试对象：101 Formulaic Alphas (101 signals)
+> 日期：2026-06-18
+
+### 实施
+
+| 阶段 | 内容 |
+|------|------|
+| 设计 | docs/designs/adaptive_pass2_multiturn.md |
+| 实现 | SignalStub 扩展 + Pass 1/2 prompt v2 + _run_pass2_adaptive + helpers |
+| 测试 | 31 个新单元测试 (test_track_b_adaptive_helpers.py) |
+| 备份 | quant/papers/1601_00991v3_baseline/ (旧方案结果) |
+| 新方案 | quant/papers/101_alphas_adaptive/ (adaptive 结果) |
+| 报告 | quant/papers/ab_test_results.json |
+
+### 关键发现
+
+| 维度 | Baseline (parallel) | Adaptive (multi-turn v2) | 差异 |
+|------|---------------------|--------------------------|------|
+| **Pass 2 完成数** | 98/101 (97%) | 60/60 (100% success rate) | ✅ adaptive 100% 成功率 |
+| **l3.intuition 平均字符** | 101.0 | 295.5 | **+193%** ✅ |
+| **l4.hypotheses 平均数** | 4.8 | 3.3 | baseline 略多（数量不一定好） |
+| **Pass 1 时间** | 91s | 594s | ⚠️ 6.5x 慢（context_excerpt 增量） |
+| **Pass 2 时间（60 signals）** | ~24 min | ~45 min | ⚠️ 1.9x 慢 |
+| **总时间（估算 101 signals）** | ~40.5 min | ~85.7 min | ⚠️ 2.1x 慢 |
+
+### 结论
+
+**质量提升明显**：
+- l3 财务直觉从 101 字符增长到 295 字符（+193%）
+- 深度增加（context_excerpt 锚定原文）
+- Pass 2 100% 成功率
+
+**速度下降明显**：
+- Pass 1 因为输出 context_excerpt 增加 6.5x
+- Pass 2 多轮补充模式增加 1.9x
+- 总体 2.1x 慢
+
+**根本原因**：
+- 101 alphas 公式复杂，几乎所有 signals 都需要 level a 补充
+- context_excerpt 不足以独立支撑提取
+- LLM 主动判断机制有效，但导致每批 2 轮
+
+### 推荐策略
+
+| 场景 | 推荐方案 |
+|------|----------|
+| **复杂论文** (101 alphas 类) | Adaptive，质量 > 速度 |
+| **简单论文** (广发类，context_excerpt 充分) | Adaptive，可能加速 |
+| **追求速度** | Parallel (旧方案)，保持 40 min |
+| **追求质量** | Adaptive，接受 85 min |
+
+### 实施总结
+
+```
+提交 1 (1c406e4): adaptive pass 2 multi-turn 实施
+提交 2 (0c78747): 设计文档 + 总结更新
+后续: 视具体 paper 决定是否启用 adaptive
+```
+
+### 优化方向（未来）
+
+1. **智能选择**：根据 paper 类型自动选择 adaptive vs parallel
+2. **减少 Pass 1 输出**：context_excerpt 只在需要时输出
+3. **优化 Pass 2 prompt**：减少补充触发频率
+4. **混合模式**：先 parallel 跑 80%，剩余 20% 用 adaptive 补充

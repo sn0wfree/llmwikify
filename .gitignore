@@ -105,4 +105,7 @@ ui/webui/vite.config.js
 
 # DuckDB runtime database
 quant/*.duckdb
+# quant/papers/ contains extraction outputs (large, regenerated).
+# Note: A/B test reports saved under quant/papers/ab_test_results.json
+# must be force-added (`git add -f`).
 quant/papers/

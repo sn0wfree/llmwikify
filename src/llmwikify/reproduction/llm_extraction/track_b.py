@@ -281,7 +281,7 @@ def _get_signal_context(signal: SignalStub, parsed_text: str) -> str:
     Returns:
         Context string to use for Pass 2 extraction.
     """
-    if signal.context_excerpt and len(signal.context_excerpt) > 200:
+    if signal.context_excerpt and len(signal.context_excerpt) > 50:
         return signal.context_excerpt
 
     # Fallback: paper slice based on signal index (for old SignalStub)

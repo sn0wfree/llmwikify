@@ -73,7 +73,7 @@ class TestGetSignalContext:
     def test_uses_context_excerpt_when_present(self):
         s = SignalStub(
             index=1, name="X", formula_brief="f",
-            context_excerpt="This is the relevant context. " * 20,  # > 200 chars
+            context_excerpt="This is the relevant context. " * 20,  # > 50 chars
         )
         result = _get_signal_context(s, "any full paper text here")
         assert result.startswith("This is the relevant context.")
@@ -81,7 +81,7 @@ class TestGetSignalContext:
     def test_uses_context_excerpt_even_if_paper_is_different(self):
         s = SignalStub(
             index=1, name="X", formula_brief="f",
-            context_excerpt="real context from paper " * 10,  # > 200 chars
+            context_excerpt="real context from paper " * 10,  # > 50 chars
         )
         result = _get_signal_context(s, "completely different paper content")
         assert result.startswith("real context from paper")
@@ -95,10 +95,10 @@ class TestGetSignalContext:
         assert len(result) == 5000
 
     def test_fallback_to_paper_slice_when_too_short(self):
-        """context_excerpt < 200 chars → fallback."""
+        """context_excerpt < 50 chars → fallback."""
         s = SignalStub(
             index=1, name="X", formula_brief="f",
-            context_excerpt="short",  # < 200
+            context_excerpt="short",  # < 50
         )
         paper = "B" * 20000
         result = _get_signal_context(s, paper)
