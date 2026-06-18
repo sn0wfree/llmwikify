@@ -68,3 +68,8 @@ class ChatRunResult:
     error: str | None = None
     compacted_count: int = 0
     total_compacted_chars_saved: int = 0
+    # State trace (v2 runner). Each entry is
+    # ``{state, started_at, duration_ms, event, error}`` —
+    # mirrors nanobot v0.2.1 ``StateTraceEntry``. Empty when
+    # produced by a runner that does not emit one.
+    state_trace: list[dict[str, Any]] = field(default_factory=list)

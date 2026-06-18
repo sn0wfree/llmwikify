@@ -11253,3 +11253,174 @@ def test_53_done_event_has_compacted_count_field() -> None:
     assert "stop_reason" in done
     assert "content" in done
     assert "error" in done
+
+
+# ── state trace (C1: borrowed from nanobot StateTraceEntry) ──
+
+
+def test_state_trace_default_empty_on_dataclass() -> None:
+    """_RunContext.state_trace is initialized to an empty list."""
+    spec = _make_spec()
+    ctx = _RunContext(spec=spec, messages=list(spec.messages))
+    assert ctx.state_trace == []
+
+
+def test_state_trace_entry_fields() -> None:
+    """_StateTraceEntry exposes the 5 expected fields."""
+    from llmwikify.apps.chat.agent.runner_v2 import _StateTraceEntry
+
+    e = _StateTraceEntry(
+        state="REASON",
+        started_at=1.0,
+        duration_ms=12.5,
+        event="ok",
+        error=None,
+    )
+    assert e.state == "REASON"
+    assert e.started_at == 1.0
+    assert e.duration_ms == 12.5
+    assert e.event == "ok"
+    assert e.error is None
+
+
+def test_state_trace_context_manager_records_ok() -> None:
+    """_StateTrace records a state on context exit with event=ok."""
+    from llmwikify.apps.chat.agent.runner_v2 import _StateTrace
+
+    spec = _make_spec()
+    ctx = _RunContext(spec=spec, messages=list(spec.messages))
+    with _StateTrace(ctx, "REASON"):
+        pass
+    assert len(ctx.state_trace) == 1
+    entry = ctx.state_trace[0]
+    assert entry.state == "REASON"
+    assert entry.event == "ok"
+    assert entry.error is None
+    assert entry.duration_ms >= 0.0
+
+
+def test_state_trace_context_manager_records_error() -> None:
+    """_StateTrace records event=error and the message on exception."""
+    from llmwikify.apps.chat.agent.runner_v2 import _StateTrace
+
+    spec = _make_spec()
+    ctx = _RunContext(spec=spec, messages=list(spec.messages))
+    with pytest.raises(RuntimeError):
+        with _StateTrace(ctx, "ACT"):
+            raise RuntimeError("boom")
+    assert len(ctx.state_trace) == 1
+    entry = ctx.state_trace[0]
+    assert entry.state == "ACT"
+    assert entry.event == "error"
+    assert entry.error is not None and "boom" in entry.error
+
+
+def test_state_trace_skipped_event_helper() -> None:
+    """Mutable event attribute lets a caller mark a step as skipped."""
+    from llmwikify.apps.chat.agent.runner_v2 import _StateTrace
+
+    spec = _make_spec()
+    ctx = _RunContext(spec=spec, messages=list(spec.messages))
+    with _StateTrace(ctx, "PRECHECK") as tr:
+        tr.event = "skipped"
+    assert ctx.state_trace[0].event == "skipped"
+
+
+def test_state_trace_appears_in_result_for_text_only_path() -> None:
+    """A text-only run records PRECHECK + REASON + FINALIZE."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "hi"}],
+    )
+    spec = _make_spec()
+    result = asyncio.run(runner.run_to_completion(spec))
+    assert isinstance(result, ChatRunResult)
+    states = [e["state"] for e in result.state_trace]
+    assert "PRECHECK" in states
+    assert "REASON" in states
+    assert "FINALIZE" in states
+    # All entries on the happy path should be ok
+    for entry in result.state_trace:
+        assert entry["event"] == "ok", entry
+        assert entry["error"] is None
+
+
+def test_state_trace_records_act_and_observe_when_tools_called() -> None:
+    """ACT and OBSERVE states are traced when the LLM returns tool calls.
+
+    v2 runner parses tool calls from text-mode
+    ``[TOOL_CALL]`` blocks (event type ``content``), so emit one
+    in the LLM stream.
+    """
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "content",
+                "text": '[TOOL_CALL] {tool => "echo", args => {"x": 1}} [/TOOL_CALL]',
+            },
+            {"type": "done", "content": "done after tool"},
+        ],
+        tool_results={"echo": "ok-result"},
+    )
+    spec = _make_spec()
+    result = asyncio.run(runner.run_to_completion(spec))
+    states = [e["state"] for e in result.state_trace]
+    assert "PRECHECK" in states
+    assert "REASON" in states
+    assert "ACT" in states
+    assert "OBSERVE" in states
+    assert "FINALIZE" in states
+
+
+def test_state_trace_preserves_chronological_order() -> None:
+    """Trace entries are appended in the order the steps were entered.
+
+    Verifies the structural property: PRECHECK is first, FINALIZE is
+    last, and any ACT/OBSERVE pair follows the REASON that triggered
+    it (multi-iteration support).
+    """
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[
+            {
+                "type": "content",
+                "text": '[TOOL_CALL] {tool => "echo", args => {"x": 1}} [/TOOL_CALL]',
+            },
+            {"type": "done", "content": "done"},
+        ],
+        tool_results={"echo": "ok"},
+    )
+    spec = _make_spec()
+    result = asyncio.run(runner.run_to_completion(spec))
+    states = [e["state"] for e in result.state_trace]
+    assert states[0] == "PRECHECK"
+    assert states[-1] == "FINALIZE"
+    # If ACT appears at index i, the REASON that triggered it is at
+    # some j < i. In single-iteration tests we have one of each.
+    if "ACT" in states:
+        i = states.index("ACT")
+        assert "REASON" in states[:i], (
+            f"ACT at {i} but no REASON before it: {states}"
+        )
+
+
+def test_state_trace_entry_has_numeric_duration() -> None:
+    """duration_ms is a float >= 0 (sanity check the timing)."""
+    runner, _llm, _exec, _pb = _make_full_runner(
+        llm_events=[{"type": "done", "content": "x"}],
+    )
+    spec = _make_spec()
+    result = asyncio.run(runner.run_to_completion(spec))
+    for entry in result.state_trace:
+        assert isinstance(entry["duration_ms"], float)
+        assert entry["duration_ms"] >= 0.0
+
+
+def test_chat_run_result_state_trace_default_empty() -> None:
+    """ChatRunResult.state_trace defaults to [] for non-v2 runners."""
+    r = ChatRunResult(
+        final_content="x",
+        messages=[],
+        tools_used=[],
+        usage={},
+        stop_reason="completed",
+    )
+    assert r.state_trace == []

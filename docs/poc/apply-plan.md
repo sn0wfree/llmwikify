@@ -438,15 +438,23 @@ P1-1/P1-2/P1-3 全部已 vendor + 测试通过。Phase A 的 3 步 (P0-1 Composi
 
 ## 5. 不升级项 (决策记录)
 
-| 项 | 不升级理由 |
-|----|-----------|
-| Vendor `Nanobot` 整体 | 23 依赖 + loguru + 多渠道耦合, 与 llmwikify 5+1 service 冲突 |
-| Skills 概念迁移 | llmwikify 81 actions 是 Python 业务, nanobot 是 prompt 文档, 不可移植 |
-| Session 改 JSON 文件 | SQLite 查询/事务优势 > JSON 简单性 |
-| `MessageBus` 引入 | 单进程 HTTP 已够, bus 增加复杂度无价值 |
-| Vendor `agent/loop.py` 状态机 | 1724 LOC, 隐式 8 state, llmwikify 扁平 28 方法已可读 |
-| Vendor `agent/memory.py` | SQLite 已存, Consolidator 仅在 LLM 压缩时需要 |
-| Vendor `providers/base.py` | M1 已分析, shape 不兼容 + loguru 依赖 |
+| 项 | 不升级理由 | 锁定日期 |
+|----|-----------|----------|
+| Vendor `Nanobot` 整体 | 23 依赖 + loguru + 多渠道耦合, 与 llmwikify 5+1 service 冲突 | 初始 |
+| Skills 概念迁移 | llmwikify 81 actions 是 Python 业务, nanobot 是 prompt 文档, 不可移植 | 初始 |
+| Session 改 JSON 文件 | SQLite 查询/事务优势 > JSON 简单性 | 初始 |
+| **`MessageBus` 引入** | **重新评估 (2026-06-19): bus/queue.py 仅 44 LOC `asyncio.Queue` 包装, 用于解耦多 channel (Slack/Discord). 我们是单进程 HTTP, request-response 模式. MessageBus 唯一适用场景: WebSocket 长连接 (P2-1, vendor 1907 LOC). 引入 MessageBus 收益边际. 锁定否决.** | **2026-06-19** |
+| Vendor `agent/loop.py` 状态机 | 1724 LOC, 隐式 8 state, llmwikify 扁平 28 方法已可读 | 初始 |
+| Vendor `agent/memory.py` | SQLite 已存, Consolidator 仅在 LLM 压缩时需要 (后续评估) | 初始 |
+| Vendor `providers/base.py` | M1 已分析, shape 不兼容 + loguru 依赖 | 初始 |
+
+### 5.1 已实施的可借鉴改进
+
+| 项 | 状态 | 实施位置 |
+|----|------|---------|
+| 借鉴 `StateTraceEntry` 加显式 state trace | ✅ 完成 (2026-06-19) | `apps/chat/agent/runner_v2.py` (`_StateTraceEntry` + `_StateTrace` CM) + 10 tests |
+| microcompact (借鉴 `_COMPACTABLE_TOOLS`) | ✅ 完成 (2026-06-17) | `apps/chat/agent/microcompact.py` |
+| 13 钩子点 (借鉴 `agent/hook.py` 设计) | ✅ 完成 (2026-06-17) | `foundation/callback/composite.py` |
 
 ---
 

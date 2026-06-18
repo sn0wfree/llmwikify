@@ -42,6 +42,21 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
+class _StateTraceEntry:
+    """Single state transition in the 5-step machine.
+
+    Pattern borrowed from nanobot v0.2.1 ``StateTraceEntry``
+    (``nanobot/agent/loop.py``) but trimmed to our 5 steps.
+    """
+
+    state: str
+    started_at: float
+    duration_ms: float
+    event: str  # "ok" | "error" | "skipped"
+    error: str | None = None
+
+
+@dataclass(slots=True)
 class _RunContext:
     spec: ChatRunSpec
     messages: list[dict[str, Any]]
@@ -61,6 +76,7 @@ class _RunContext:
     last_thinking: str = ""
     reason_failed: bool = False
     confirmation_required: bool = False
+    state_trace: list[_StateTraceEntry] = field(default_factory=list)
 
     def elapsed(self) -> float:
         return time.monotonic() - self.started_at
@@ -110,6 +126,9 @@ class ChatRunnerV2:
     ) -> Any:
         ctx = _RunContext(spec=spec, messages=list(spec.messages))
         self._microcompact_fn = build_microcompact_fn(spec)
+        # Stash the live context so run_to_completion can read the
+        # accumulated state_trace after consuming the stream.
+        self._current_ctx = ctx
 
         if self._hook.wants_streaming():
             yield {"type": "session_init", "session_id": spec.session_id}
@@ -127,12 +146,15 @@ class ChatRunnerV2:
         for iteration in range(spec.max_iterations):
             await _maybe_await(self._hook.before_iteration(ctx.hook_ctx(iteration)))
 
-            should_break = await self._precheck(ctx)
+            with _StateTrace(ctx, "PRECHECK") as tr:
+                should_break = await self._precheck(ctx)
             if should_break:
+                tr.event = "skipped"
                 break
 
-            async for ev in self._reason(ctx, system_prompt, iteration):
-                yield ev
+            with _StateTrace(ctx, "REASON"):
+                async for ev in self._reason(ctx, system_prompt, iteration):
+                    yield ev
             if ctx.reason_failed:
                 ctx.stop_reason = "error"
                 break
@@ -143,18 +165,25 @@ class ChatRunnerV2:
                     ctx.stop_reason = "completed"
                 break
 
-            async for ev in self._act(ctx, ctx.last_tool_calls, iteration):
-                yield ev
+            with _StateTrace(ctx, "ACT"):
+                async for ev in self._act(ctx, ctx.last_tool_calls, iteration):
+                    yield ev
             if ctx.confirmation_required:
                 ctx.stop_reason = "confirmation_required"
                 break
 
-            self._observe(ctx, ctx.last_thinking)
+            with _StateTrace(ctx, "OBSERVE"):
+                self._observe(ctx, ctx.last_thinking)
 
             await _maybe_await(self._hook.after_iteration(ctx.hook_ctx(iteration)))
 
-        async for ev in self._emit_done(ctx):
-            yield ev
+        with _StateTrace(ctx, "FINALIZE"):
+            async for ev in self._emit_done(ctx):
+                yield ev
+
+        # Note: ``self._current_ctx`` is left pointing at this run's
+        # context so ``run_to_completion`` can read the trace. It is
+        # overwritten on the next ``run_stream`` call.
 
     async def run_to_completion(self, spec: ChatRunSpec) -> ChatRunResult:
         final_content: str | None = None
@@ -194,6 +223,12 @@ class ChatRunnerV2:
             error = f"{type(exc).__name__}: {exc}"
             stop_reason = "error"
 
+        # Pull the state trace from the live context if it was kept
+        # on the instance; otherwise (e.g. an error before the first
+        # iteration) emit an empty list.
+        live_ctx = getattr(self, "_current_ctx", None)
+        trace_entries = live_ctx.state_trace if live_ctx is not None else []
+
         return ChatRunResult(
             final_content=final_content,
             messages=list(spec.messages),
@@ -203,6 +238,16 @@ class ChatRunnerV2:
             error=error,
             compacted_count=compacted_count,
             total_compacted_chars_saved=chars_saved,
+            state_trace=[
+                {
+                    "state": e.state,
+                    "started_at": e.started_at,
+                    "duration_ms": e.duration_ms,
+                    "event": e.event,
+                    "error": e.error,
+                }
+                for e in trace_entries
+            ],
         )
 
     async def _build_system_prompt(self, spec: ChatRunSpec) -> str:
@@ -591,3 +636,43 @@ async def _maybe_await(value: Any) -> Any:
     if inspect.isawaitable(value):
         return await value
     return value
+
+
+class _StateTrace:
+    """Context manager that records a state transition.
+
+    Records ``{state, started_at, duration_ms, event, error}`` to
+    ``ctx.state_trace``.  Pattern from nanobot v0.2.1
+    ``StateTraceEntry`` — but ours is a context manager so the
+    per-step wrapper stays a single line::
+
+        with _StateTrace(ctx, "REASON") as tr:
+            ...
+    """
+
+    __slots__ = ("_ctx", "state", "_start", "event", "error")
+
+    def __init__(self, ctx: _RunContext, state: str) -> None:
+        self._ctx = ctx
+        self.state = state
+        self._start = 0.0
+        self.event = "ok"
+        self.error: str | None = None
+
+    def __enter__(self) -> _StateTrace:
+        self._start = time.monotonic()
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        duration_ms = (time.monotonic() - self._start) * 1000.0
+        if exc is not None:
+            self.event = "error"
+            self.error = f"{type(exc).__name__}: {exc}"
+        self._ctx.state_trace.append(_StateTraceEntry(
+            state=self.state,
+            started_at=self._start,
+            duration_ms=duration_ms,
+            event=self.event,
+            error=self.error,
+        ))
+        return False  # do not suppress exception
