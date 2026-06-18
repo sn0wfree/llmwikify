@@ -289,8 +289,9 @@ def validate_plan_with_llm(
         logger.warning("[planner] validate prompt not found: %s", VALIDATE_PROMPT_PATH)
         return True, "", ""
 
-    import yaml
     import time
+
+    import yaml
 
     raw = yaml.safe_load(VALIDATE_PROMPT_PATH.read_text(encoding="utf-8"))
     system_text = raw.get("system", "")
@@ -327,14 +328,17 @@ def validate_plan_with_llm(
     latency_ms = int((time.monotonic() - t0) * 1000)
     data = _extract_json(response)
 
-    if not data:
-        logger.warning("[planner] validation JSON parse failed, accepting plan")
-        return True, "", ""
-
-    is_valid = bool(data.get("is_valid", True))
-    issues = data.get("issues", [])
-    suggestions = data.get("suggestions", [])
-    revised_strategy = data.get("revised_strategy", "")
+    if data:
+        is_valid = bool(data.get("is_valid", True))
+        issues = data.get("issues", [])
+        suggestions = data.get("suggestions", [])
+        revised_strategy = data.get("revised_strategy", "")
+    else:
+        # Fallback: parse natural language response for key signals.
+        # LLM often returns analysis prose instead of strict JSON.
+        is_valid, issues, suggestions, revised_strategy = _parse_validation_fallback(response)
+        logger.warning("[planner] validation JSON parse failed, used fallback (is_valid=%s, %d issues)",
+                       is_valid, len(issues))
 
     # Combine issues and suggestions for feedback
     feedback_parts = []
@@ -351,3 +355,151 @@ def validate_plan_with_llm(
     )
 
     return is_valid, feedback, revised_strategy
+
+
+def _parse_validation_fallback(response: str) -> tuple[bool, list[str], list[str], str]:
+    """Fallback parser when LLM returns natural language instead of JSON.
+
+    Heuristics:
+    - is_valid: false if "is_valid: false", "issues:", "wrong", "incorrect" present
+                and no strong positive indicators.
+    - issues: bullet lines under "Issues:" / "Problems:" sections.
+    - suggestions: bullet lines under "Suggestions:" / "Recommendations:" sections.
+    - revised_strategy: text after "Revised" / "Improved" extraction strategy.
+    """
+    text_lower = response.lower()
+    strong_negative = any(
+        kw in text_lower
+        for kw in ["is_valid: false", "is invalid", "rejected", "must reject", "should reject"]
+    )
+    has_issues_section = bool(
+        re.search(r"(issues?|problems?)\s*(to\s*consider)?\s*[:：]", text_lower)
+    )
+    strong_positive = any(
+        kw in text_lower
+        for kw in ["is_valid: true", "is correct", "is valid", "is appropriate", "is suitable"]
+    )
+
+    # If no clear signal, default to accepting the plan.
+    if strong_positive and not strong_negative:
+        is_valid = True
+    elif strong_negative:
+        is_valid = False
+    elif has_issues_section:
+        # Has issues but didn't say reject explicitly → be lenient
+        is_valid = True
+    else:
+        is_valid = True
+
+    # Extract issues (lines starting with numbers/bullets after "Issues:" header)
+    # Matches both **Potential Issues:** and plain "Issues:" formats
+    issues: list[str] = []
+    # Pattern A: markdown bold like **Issues:** or **Potential Issues:**
+    # Note: in markdown `**Issues:**` the `**` is BEFORE Issues and AFTER the colon.
+    # So pattern is: **...Issues:** not **...Issues**:
+    issues_md = re.search(
+        r"\*\*[^*\n]{0,40}?(?:issues?|problems?|concerns?|considerations?)\s*:\*\*"
+        r"\s*\n(.+?)(?=\n\s*\n|\n\s*\*\*[^*]*\*\*|$)",
+        response, re.IGNORECASE | re.DOTALL,
+    )
+    # Pattern B: plain "Issues:" or "Potential Issues:" without markdown
+    issues_plain = re.search(
+        r"(?<![\*A-Za-z])(?:potential\s+)?(?:issues?|problems?|concerns?|considerations?)\s*(?:to\s*consider)?\s*:\s*\n"
+        r"(.+?)(?=\n\s*\n|\n\s*[A-Z][^\n]{0,60}:\s*$|$)",
+        response, re.IGNORECASE | re.DOTALL,
+    )
+    issues_match = issues_md or issues_plain
+    if issues_match:
+        raw_text = issues_match.group(1)
+        # Capture content up to the next markdown bold header or end of text.
+        issues_extended = re.search(
+            r"\*\*[^*\n]{0,40}?(?:issues?|problems?|concerns?|considerations?)\s*:\*\*"
+            r"\s*\n(.+?)(?=\n\s*\*\*[A-Z][^*]*\*\*|$)",
+            response, re.IGNORECASE | re.DOTALL,
+        )
+        if issues_extended:
+            raw_text = issues_extended.group(1)
+        # Walk line by line. Collect every line that looks like a bullet (numbered/dash/asterisk),
+        # or non-bullet text that immediately follows a bullet (continuation).
+        # A blank line resets the "continuation" state, so prose after blanks is treated as
+        # end-of-section and breaks out.
+        current_bullet: str | None = None
+        prev_was_blank = False
+        for line in raw_text.split("\n"):
+            stripped = re.sub(r"^[\s\d\.\-\*\)]+", "", line).strip()
+            stripped = re.sub(r"^\*\*(.+?)\*\*\s*[:：]?\s*", r"\1: ", stripped)
+            if not stripped:
+                prev_was_blank = True
+                continue
+            if re.match(r"^\s*[\d\.\-\*\)]+", line):
+                if current_bullet and len(current_bullet) > 5:
+                    issues.append(current_bullet[:200])
+                current_bullet = stripped
+                prev_was_blank = False
+            elif current_bullet and not prev_was_blank:
+                # Direct continuation of bullet (no blank between)
+                current_bullet += " " + stripped
+            else:
+                # Prose without bullet context or after blank line — stop
+                if current_bullet and len(current_bullet) > 5:
+                    issues.append(current_bullet[:200])
+                current_bullet = None
+                break
+        if current_bullet and len(current_bullet) > 5:
+            issues.append(current_bullet[:200])
+
+    # Extract suggestions
+    suggestions: list[str] = []
+    sugg_md = re.search(
+        r"\*\*[^*\n]{0,40}?(?:suggestions?|recommendations?|improvements?)\s*:\*\*"
+        r"\s*\n(.+?)(?=\n\s*\n|\n\s*\*\*[^*]*\*\*|$)",
+        response, re.IGNORECASE | re.DOTALL,
+    )
+    sugg_plain = re.search(
+        r"(?<![\*A-Za-z])(?:suggestions?|recommendations?|improvements?)\s*:\s*\n"
+        r"(.+?)(?=\n\s*\n|\n\s*[A-Z][^\n]{0,60}:\s*$|$)",
+        response, re.IGNORECASE | re.DOTALL,
+    )
+    sugg_match = sugg_md or sugg_plain
+    if sugg_match:
+        raw_text = sugg_match.group(1)
+        sugg_extended = re.search(
+            r"\*\*[^*\n]{0,40}?(?:suggestions?|recommendations?|improvements?)\s*:\*\*"
+            r"\s*\n(.+?)(?=\n\s*\*\*[A-Z][^*]*\*\*|$)",
+            response, re.IGNORECASE | re.DOTALL,
+        )
+        if sugg_extended:
+            raw_text = sugg_extended.group(1)
+        current_bullet: str | None = None
+        prev_was_blank = False
+        for line in raw_text.split("\n"):
+            stripped = re.sub(r"^[\s\d\.\-\*\)]+", "", line).strip()
+            stripped = re.sub(r"^\*\*(.+?)\*\*\s*[:：]?\s*", r"\1: ", stripped)
+            if not stripped:
+                prev_was_blank = True
+                continue
+            if re.match(r"^\s*[\d\.\-\*\)]+", line):
+                if current_bullet and len(current_bullet) > 5:
+                    suggestions.append(current_bullet[:200])
+                current_bullet = stripped
+                prev_was_blank = False
+            elif current_bullet and not prev_was_blank:
+                current_bullet += " " + stripped
+            else:
+                if current_bullet and len(current_bullet) > 5:
+                    suggestions.append(current_bullet[:200])
+                current_bullet = None
+                break
+        if current_bullet and len(current_bullet) > 5:
+            suggestions.append(current_bullet[:200])
+
+    # Extract revised strategy (look for explicit revision statement)
+    revised = ""
+    rev_match = re.search(
+        r"(?:revised|improved|updated)\s*(?:extraction\s*)?strategy\s*[:：]\s*(.+?)(?:\n\s*\n|$)",
+        response, re.IGNORECASE | re.DOTALL,
+    )
+    if rev_match:
+        revised = rev_match.group(1).strip()[:500]
+
+    return is_valid, issues, suggestions, revised

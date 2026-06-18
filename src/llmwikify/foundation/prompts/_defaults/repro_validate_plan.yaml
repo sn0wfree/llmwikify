@@ -1,6 +1,6 @@
 name: repro_validate_plan
 description: "Validate extraction plan quality using LLM judgment."
-version: "1.0"
+version: "1.1"
 trigger:
   type: "api_call"
   when: "validate_plan"
@@ -43,23 +43,27 @@ user: |
   Plan:
   - Schema: {{ schema_choice }}
   - n_signals_estimate: {{ n_signals_estimate }}
-  - Extraction strategy: {{ extraction_strategy }}
-  - Token budget: {{ token_budget }}
   - Confidence: {{ confidence }}
+  - Token budget: track_a_tier1={{ token_budget.get('track_a_tier1', 4500) }}, track_b_pass2_per_factor={{ token_budget.get('track_b_pass2_per_factor', 5500) }}
+
+  Extraction strategy: {{ extraction_strategy }}
 
   {% if previous_feedback %}
   Previous rejection feedback: {{ previous_feedback }}
   {% endif %}
 
-  Paper content preview (first 2000 chars):
+  Paper content preview (first 1500 chars):
   ---
   {{ paper_text_preview }}
   ---
 
   Output strict JSON:
   {
-    "is_valid": true/false,
-    "issues": ["list of issues if any"],
-    "suggestions": ["list of suggestions for improvement"],
-    "revised_strategy": "optional revised extraction strategy if plan needs adjustment"
+    "is_valid": true,
+    "issues": [],
+    "suggestions": [],
+    "revised_strategy": ""
   }
+  
+  Set is_valid to false ONLY if there are serious problems with the plan.
+  For industry rotation papers, consider suggesting "allocation" schema instead of "signal".

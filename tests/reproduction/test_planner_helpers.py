@@ -10,6 +10,7 @@ from llmwikify.reproduction.llm_extraction.planner import (
     PlanResult,
     _clamp_token_budget,
     _extract_json,
+    _parse_validation_fallback,
 )
 
 
@@ -83,7 +84,7 @@ class TestClampTokenBudget:
         assert result["track_a_tier1"] == 3500
 
     def test_all_floor_keys_present(self):
-        budget = {k: 0 for k in TOKEN_BUDGET_FLOOR}
+        budget = dict.fromkeys(TOKEN_BUDGET_FLOOR, 0)
         result = _clamp_token_budget(budget)
         for key, floor in TOKEN_BUDGET_FLOOR.items():
             assert key in result
@@ -115,3 +116,107 @@ class TestPlanResult:
         d = r.to_dict()
         assert d["success"] is False
         assert d["error"] == "llm_timeout"
+
+
+class TestParseValidationFallback:
+    """Test fallback parser for LLM natural language responses."""
+
+    def test_markdown_bold_issues(self):
+        """Issues under **Potential Issues:** markdown bold header."""
+        response = """**Potential Issues:**
+1. The extraction strategy focuses heavily on event library
+2. The n_signals_estimate of 95 seems reasonable
+3. The plan appears well-structured but could benefit from more emphasis on outputs.
+
+The extraction targets are specific."""
+        is_valid, issues, suggestions, _ = _parse_validation_fallback(response)
+        assert is_valid is True
+        assert len(issues) == 3
+        assert "event library" in issues[0]
+
+    def test_plain_issues_header(self):
+        """Issues under plain 'Issues:' header."""
+        response = """Issues:
+1. Wrong schema
+2. Missing tables
+
+Plan needs adjustment."""
+        is_valid, issues, _, _ = _parse_validation_fallback(response)
+        assert is_valid is True  # No explicit "is_valid: false"
+        assert len(issues) == 2
+
+    def test_explicit_rejection(self):
+        """Explicit 'is_valid: false' or 'rejected' → invalid."""
+        response = """**Issues:**
+1. Schema is completely wrong
+
+is_valid: false
+
+This plan must be rejected."""
+        is_valid, issues, _, _ = _parse_validation_fallback(response)
+        assert is_valid is False
+        assert len(issues) == 1
+
+    def test_suggestions_markdown(self):
+        """Suggestions under **Suggestions:** header."""
+        response = """**Suggestions:**
+- Add more detail about allocation outputs
+- Consider breaking down 28 industries
+
+End of analysis."""
+        is_valid, _, suggestions, _ = _parse_validation_fallback(response)
+        assert is_valid is True
+        assert len(suggestions) == 2
+        assert "allocation" in suggestions[0]
+
+    def test_blank_line_separator(self):
+        """Blank lines between bullets should not break extraction."""
+        response = """**Issues:**
+1. First issue
+
+
+2. Second issue after blank lines
+
+End."""
+        is_valid, issues, _, _ = _parse_validation_fallback(response)
+        assert is_valid is True
+        assert len(issues) == 2
+
+    def test_no_issues_returns_valid(self):
+        """No 'Issues:' section and positive markers → valid."""
+        response = """This plan is appropriate. is_valid: true."""
+        is_valid, issues, _, _ = _parse_validation_fallback(response)
+        assert is_valid is True
+        assert len(issues) == 0
+
+    def test_revised_strategy_extraction(self):
+        """Extract revised_strategy when explicitly mentioned."""
+        response = """Revised strategy: Extract only representative industries and skip duplicates.
+
+**Issues:**
+1. Old strategy was too broad."""
+        is_valid, _, _, revised = _parse_validation_fallback(response)
+        assert "representative industries" in revised.lower()
+
+    def test_prose_termination(self):
+        """Prose after bullets should not pollute last bullet."""
+        response = """**Suggestions:**
+- First suggestion
+- Second suggestion
+
+This is just summary prose, not a bullet."""
+        is_valid, _, suggestions, _ = _parse_validation_fallback(response)
+        assert len(suggestions) == 2
+        assert "summary prose" not in suggestions[1]
+
+    def test_chinese_text(self):
+        """Chinese paper text handling."""
+        response = """**Issues:**
+1. 提取策略应该更详细
+2. 信号数量估计过高
+
+结论：建议重新规划。"""
+        is_valid, issues, _, _ = _parse_validation_fallback(response)
+        assert is_valid is True
+        assert len(issues) == 2
+        assert "提取策略" in issues[0]
