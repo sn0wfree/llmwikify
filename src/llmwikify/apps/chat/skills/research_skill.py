@@ -65,7 +65,7 @@ import json
 import logging
 from typing import Any
 
-from llmwikify.apps.chat.agent.react_engine import (
+from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
     EVENT_PHASE,
     EVENT_REASONING,
     EVENT_ROUND_COMPLETE,

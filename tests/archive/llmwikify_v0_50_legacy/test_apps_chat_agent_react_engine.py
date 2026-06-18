@@ -25,7 +25,7 @@ from typing import Any
 
 import pytest
 
-from llmwikify.apps.chat.agent.react_engine import (
+from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
     EVENT_ACTION_ERROR,
     EVENT_OBSERVATION_ERROR,
     EVENT_PHASE,
@@ -797,9 +797,13 @@ class TestMaxRounds:
 class TestAliases:
     def test_react_config_alias(self) -> None:
         assert ReActConfig is not None
-        from llmwikify.apps.chat.agent.react_engine import ReactConfig
+        from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
+            ReactConfig,
+        )
         assert ReactConfig is ReActConfig
 
     def test_react_loop_alias(self) -> None:
-        from llmwikify.apps.chat.agent.react_engine import ReactLoop
+        from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
+            ReactLoop,
+        )
         assert ReactLoop is ReActEngine

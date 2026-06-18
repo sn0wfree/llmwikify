@@ -20,13 +20,6 @@ from llmwikify.apps.chat.db import AutoResearchDatabase
 from llmwikify.apps.chat.providers.registry import create_llm
 from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy import actions
 from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.actions import ActionContext
-from llmwikify.apps.chat.agent.react_engine import (
-    ReActConfig,
-    ReActEngine,
-    SkillAction,
-    SkillContext,
-    SkillResult,
-)
 from llmwikify.apps.chat.agent.research_bridge import translate_react_events
 from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
 from llmwikify.apps.chat.config import merge_six_step_config
@@ -213,6 +206,11 @@ class ResearchEngine:
 
         # Build ReActConfig wired to ResearchEngine's domain logic
         config = self._build_react_config(state)
+        from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
+            ReActEngine,
+            SkillContext,
+        )
+
         engine = ReActEngine(config)
 
         try:
@@ -242,6 +240,12 @@ class ResearchEngine:
 
     def _build_react_config(self, state: ResearchState) -> ReActConfig:
         """Build a ReActConfig wired to ResearchEngine's domain logic."""
+        from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
+            ReActConfig,
+            SkillAction,
+            SkillResult,
+        )
+
         engine_ref = self  # capture for closures
 
         # Build SkillAction wrappers for each action in the dispatch table

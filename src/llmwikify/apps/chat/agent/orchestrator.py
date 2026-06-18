@@ -4,11 +4,17 @@ Extracted from ChatService (v0.41) as the main entry point for chat().
 Coordinates PromptBuilder, ContextManager, and ToolExecutor.
 
 Owns:
-  - Agent while loop (via ChatReActBridge + ReActEngine)
+  - ChatRunnerV2 5-step state machine (PRECHECK/REASON/ACT/OBSERVE/COMPLETE)
   - SSE event streaming
   - Session creation/restore
   - Abort/status management
-  - Event translation (ReActEngine → frontend vocabulary)
+  - V2 persistence hook (tool result persistence, assistant message save)
+  - Research run_id extraction (for /study autoresearch integration)
+
+Plan B migration (B-5): now uses ChatRunnerV2 (runner_v2.py) as the
+sole loop engine. The legacy ChatReActBridge + ReActEngine stack
+(chat_react.py / react_engine.py / react_loop.py) is archived at
+src/llmwikify/archive/llmwikify_v0_50_legacy/chat_legacy/.
 """
 
 from __future__ import annotations
@@ -259,8 +265,8 @@ class ChatOrchestrator:
                 yield ChatEvent.error("Session aborted")
                 return
 
-            # Delegate to ChatReActBridge + ReActEngine
-            async for event in self._chat_via_react(
+            # Delegate to ChatRunnerV2 (Plan B)
+            async for event in self._chat_via_runner_v2(
                 messages_for_llm=messages_for_llm,
                 system_prompt=system_prompt,
                 tool_registry=tool_registry,
@@ -360,7 +366,7 @@ class ChatOrchestrator:
         )
 
         try:
-            async for event in self._chat_via_react(
+            async for event in self._chat_via_runner_v2(
                 messages_for_llm=raw_messages,
                 system_prompt=system_prompt,
                 tool_registry=tool_registry,
@@ -455,84 +461,7 @@ class ChatOrchestrator:
     def get_all_session_status(self) -> dict[str, str]:
         return dict(self._session_status)
 
-    # ─── ReAct bridge ────────────────────────────────────────────
-
-    async def _chat_via_react(
-        self,
-        messages_for_llm: list[dict[str, str]],
-        system_prompt: str,
-        tool_registry: Any,
-        session_id: str,
-        ctx: AgentContext,
-    ) -> AsyncIterator[dict]:
-        """ReAct path for chat()."""
-        if self.config.get("use_v2_runner", False):
-            async for event in self._chat_via_runner_v2(
-                messages_for_llm=messages_for_llm,
-                system_prompt=system_prompt,
-                tool_registry=tool_registry,
-                session_id=session_id,
-                ctx=ctx,
-            ):
-                yield event
-            return
-
-        from llmwikify.apps.chat.agent.bridge_backend import ChatBridgeBackend
-        from llmwikify.apps.chat.agent.chat_react import ChatReActBridge
-        from llmwikify.apps.chat.agent.react_engine import ReActEngine
-        from llmwikify.apps.chat.skills.base import SkillContext
-
-        # Compose the bridge's expected 5-method interface from the
-        # Phase 2 v0.41 extracted components (ToolExecutor +
-        # ContextManager + wiki_service.get_llm()).  Without this
-        # adapter, the bridge would call ``chat._execute_tool`` etc.
-        # on ChatOrchestrator and fail with AttributeError, since
-        # those underscore-prefixed methods live on the old
-        # ChatService that the refactor replaced.
-        bridge_backend = ChatBridgeBackend(
-            tool_executor=self.tool_executor,
-            context_manager=self.context_manager,
-            wiki_service=self.wiki_service,
-            config=self.config,
-        )
-        bridge = ChatReActBridge(chat_service=bridge_backend, config=self.config)
-        config = bridge.build_config(
-            session_id=session_id,
-            wiki_id=ctx.wiki_id,
-            tool_registry=tool_registry,
-            user_message="",
-            system_prompt=system_prompt,
-            messages=messages_for_llm,
-            ctx=ctx,
-            max_iterations=self.config.get("max_chat_rounds", 10),
-        )
-        engine = ReActEngine(config)
-
-        skill_ctx = SkillContext(
-            session_id=session_id,
-            wiki=self.wiki_service.get_wiki(ctx.wiki_id),
-            db=self.db,
-            llm_client=self.wiki_service.get_llm(),
-            llm_spec=self.wiki_service.get_llm_spec(),
-            config={},
-            metrics=None,
-        )
-
-        try:
-            async for event in engine.run(skill_ctx):
-                translated = self._translate_react_event(event, ctx, session_id)
-                if translated is None:
-                    continue
-                if isinstance(translated, list):
-                    for item in translated:
-                        yield item
-                else:
-                    yield translated
-        except Exception as e:
-            logger.exception("ReAct chat error")
-            yield ChatEvent.error(str(e))
-
-    # ─── V2 runner path (Plan B B-4) ──────────────────────────────
+    # ─── V2 runner path (Plan B, default since B-5) ────────────────
 
     async def _chat_via_runner_v2(
         self,
@@ -648,9 +577,9 @@ class ChatOrchestrator:
     ) -> None:
         """Save assistant message to DB on done (V2 path).
 
-        Mirrors v0.41 logic in ``_translate_react_event`` (phase=done
-        branch): count tokens, attach research_run_id, persist via
-        tool_executor.save_message.
+        Counts tokens (no model name fallback per LAL/audit fix),
+        attaches research_run_id for /study autoresearch integration,
+        persists via tool_executor.save_message.
         """
         from llmwikify.foundation.llm.token_estimator import count_tokens
 
@@ -670,163 +599,12 @@ class ChatOrchestrator:
     ) -> str | None:
         """Scan v2 tool_call_end events for an autoresearch run_id.
 
-        Mirrors ``_extract_research_run_id`` but reads from the v2
-        event stream (tool_call events) instead of ctx._tool_calls.
+        When /study triggers autoresearch_compound_run, extracts its
+        run_id from the tool result so the assistant message can be
+        bound to the run (frontend reload reconstructs the card).
         """
         for tc in tool_calls:
             name = tc.get("tool", "")
-            if "autoresearch_compound" not in name or "run" not in name:
-                continue
-            result = tc.get("result")
-            if not isinstance(result, dict):
-                continue
-            data = result.get("data") if result.get("status") == "ok" else result
-            if not isinstance(data, dict):
-                continue
-            run_id = data.get("run_id")
-            if isinstance(run_id, str) and run_id:
-                return run_id
-        return None
-
-    def _translate_react_event(
-        self,
-        event: dict[str, Any],
-        ctx: AgentContext,
-        session_id: str,
-    ) -> dict | None:
-        """Translate ReActEngine event → frontend SSE event."""
-        kind = event.get("type")
-        if kind == "reasoning":
-            return None
-        if kind == "round_complete":
-            return None
-        if kind == "observation_error":
-            return ChatEvent.save_warning(event.get("error", "observation failed"))
-        if kind == "action_error":
-            return {
-                "type": "tool_call_error",
-                "tool": event.get("action", ""),
-                "error": event.get("error", ""),
-                "call_id": event.get("call_id", ""),
-            }
-        if kind == "timeout":
-            return ChatEvent.error(
-                f"ReAct loop timed out after {event.get('limit', 0):.0f}s"
-            )
-        if kind == "phase":
-            phase = event.get("phase")
-            final_state = event.get("final_state")
-            if phase == "done":
-                if not isinstance(final_state, dict):
-                    return None
-                final = final_state.get("final_answer") or ""
-                if not final:
-                    final = final_state.get("llm_content", "")
-                if not final:
-                    final = ""
-                if final.startswith("[error]"):
-                    err_msg = final[len("[error]"):].strip()
-                    return ChatEvent.error(err_msg or "LLM stream failed")
-                # ─── Extract research_run_id from tool_calls (v0.41) ──
-                # When /study triggered autoresearch_compound_run, bind the
-                # run_id to the assistant message so reload can reconstruct
-                # the ResearchRunCard. Empty content fallback: if the LLM
-                # produced no natural-language reply, write a stub string
-                # so reload shows meaningful text alongside the card.
-                research_run_id = self._extract_research_run_id(ctx)
-                if research_run_id and not final.strip():
-                    final = (
-                        "研究已启动\n\n"
-                        "研究进行中，可通过下方卡片查看实时进度与结果。"
-                    )
-                thinking = ""
-                if hasattr(ctx, "_thinking"):
-                    thinking = ctx._thinking
-                if thinking:
-                    ctx._thinking = thinking
-                ctx.add_assistant_message(final)
-                # Save assistant message. LAL (PR 4): no silent
-                # gpt-4o fallback for token estimation.
-                from llmwikify.foundation.llm.token_estimator import count_tokens
-                model_name = "unknown"
-                tokens_output = count_tokens(final, model_name)
-                self.tool_executor.save_message(
-                    session_id, "assistant", final,
-                    tool_calls=list(ctx._tool_calls.values())
-                    if ctx._tool_calls else None,
-                    tokens_output=tokens_output,
-                    research_run_id=research_run_id,
-                )
-                if self.tool_executor._save_error_count > 0:
-                    return [
-                        ChatEvent.save_warning(
-                            f"已丢弃 {self.tool_executor._save_error_count} 条消息的持久化失败"
-                        ),
-                        ChatEvent.done(final),
-                    ]
-                return ChatEvent.done(final)
-            if phase == "cancelled":
-                return None
-            if phase == "paused":
-                return None
-            if phase == "timeout":
-                return ChatEvent.error("ReAct loop timed out")
-            if phase == "incomplete":
-                msg = "研究未完成所有阶段"
-                if isinstance(final_state, dict):
-                    if final_state.get("synthesis"):
-                        msg = "研究分析已完成，但未生成完整报告"
-                    elif final_state.get("sources"):
-                        msg = f"已收集 {len(final_state.get('sources', []))} 个来源，但未完成分析"
-                    elif final_state.get("sub_queries"):
-                        msg = "已规划子查询，但未收集到来源"
-                    elif final_state.get("final_answer"):
-                        msg = final_state["final_answer"]
-                return ChatEvent.done(msg)
-        # Intercept autoresearch_compound_run tool_call_end → emit research_run_started
-        if kind == "tool_call_end":
-            tool_name = event.get("tool", "")
-            if "autoresearch_compound" in tool_name and "run" in tool_name:
-                result = event.get("result", {})
-                if isinstance(result, dict):
-                    # Unwrap SkillResult envelope
-                    if result.get("status") == "ok":
-                        data = result.get("data", {})
-                    else:
-                        data = result
-                    run_id = data.get("run_id", "")
-                    if run_id:
-                        return {
-                            "type": "research_run_started",
-                            "run_id": run_id,
-                            "status": data.get("status", "running"),
-                            "workflow_name": data.get("workflow_name", "autoresearch-compound"),
-                            "timeline": data.get("timeline", []),
-                            "writes_wiki": False,
-                            "proposal_only": True,
-                        }
-        # Pass through: message_delta, thinking, tool_call_start,
-        # tool_call_end, confirmation_required, error, save_warning
-        return event
-
-    # ─── Internal helpers ────────────────────────────────────────
-
-    @staticmethod
-    def _extract_research_run_id(ctx: AgentContext) -> str | None:
-        """Extract the autoresearch run_id from ctx._tool_calls (v0.41).
-
-        Scans the tool calls made during this ReAct round for an
-        ``autoresearch_compound_run`` invocation and returns its
-        ``data.run_id``. Used to bind the run to the assistant message
-        so the frontend can reconstruct the ResearchRunCard on reload.
-
-        Returns None if no autoresearch run was triggered.
-        """
-        tool_calls = getattr(ctx, "_tool_calls", None) or {}
-        for tc in tool_calls.values():
-            if not isinstance(tc, dict):
-                continue
-            name = tc.get("name") or tc.get("tool") or ""
             if "autoresearch_compound" not in name or "run" not in name:
                 continue
             result = tc.get("result")

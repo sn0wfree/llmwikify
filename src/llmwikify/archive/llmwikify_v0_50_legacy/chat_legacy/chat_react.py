@@ -48,15 +48,15 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from llmwikify.apps.chat.agent.react_engine import (
-    ReActConfig,
-    ReActEngine,
-)
 from llmwikify.apps.chat.agent.text_mode_tool import TextModeParser
 from llmwikify.apps.chat.skills.base import (
     SkillAction,
     SkillContext,
     SkillResult,
+)
+from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
+    ReActConfig,
+    ReActEngine,
 )
 
 logger = logging.getLogger(__name__)

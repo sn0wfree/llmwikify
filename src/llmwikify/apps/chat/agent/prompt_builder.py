@@ -31,7 +31,6 @@ from pathlib import Path
 from typing import Any
 
 from llmwikify.apps.chat.agent._error_logging import log_exception_returning
-from llmwikify.apps.chat.agent.chat_react import REACT_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +39,26 @@ DEFAULT_USER_ID = "default"
 BOOTSTRAP_FILES: tuple[str, ...] = ("AGENTS.md", "SOUL.md", "USER.md")
 MAX_HISTORY_CHARS = 32_000
 DEFAULT_BOOTSTRAP_CACHE_SECONDS = 300
+
+REACT_SYSTEM_PROMPT = """\
+## Reasoning Pattern
+
+For each user request, follow this structured reasoning pattern:
+
+1. **Thought**: Analyze what tools you need and why. Think step by step about the best approach.
+2. **Action**: Choose and call the appropriate tool(s).
+3. **Observation**: Review the tool result. If it doesn't fully answer the question, plan a follow-up action.
+
+When you have enough information to answer, provide your final response.
+
+### Rules
+- Always start with a clear Thought before calling any tool.
+- After each tool result, include an Observation about what you learned.
+- If the first tool call doesn't fully answer the question, plan a follow-up.
+- You may call multiple tools in sequence if needed.
+- Request confirmation before any write/modify operations.
+- When done, provide your final answer directly (no more tool calls).
+"""
 
 
 @dataclass(slots=True)

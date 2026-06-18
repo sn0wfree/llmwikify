@@ -40,7 +40,6 @@ import sys as _sys
 # resolving too.
 from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy import (  # noqa: F401
     actions,  # noqa: F401
-    engine,  # noqa: F401
     gates,  # noqa: F401
     llm_step,  # noqa: F401
     observer,  # noqa: F401
@@ -48,12 +47,6 @@ from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy import (  # noqa: F401
     report,  # noqa: F401
     resume,  # noqa: F401
     routes,  # noqa: F401
-)
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import (  # noqa: F401
-    ResearchEngine,
-)
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import (
-    ResearchState as _ResearchState_archived,
 )
 from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.gates import (  # noqa: F401
     ResearchGates,
@@ -91,7 +84,7 @@ from .state import (
 from .synthesizer import ResearchSynthesizer
 
 for _name in (
-    "actions", "engine", "observer", "gates", "reasoner", "report",
+    "actions", "observer", "gates", "reasoner", "report",
     "llm_step", "resume", "routes",
 ):
     _sys.modules.setdefault(
@@ -101,7 +94,6 @@ for _name in (
 
 __all__ = [
     # Engine
-    "ResearchEngine",
     "ResearchAgent",
     "ReportGenerator",
     "ResearchSynthesizer",

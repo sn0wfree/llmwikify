@@ -16,7 +16,7 @@ from llmwikify.apps.chat.agent.microcompact import (
     build_microcompact_fn,
     microcompact_serialize,
 )
-from llmwikify.apps.chat.agent.runner import ChatRunner
+from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.runner import ChatRunner
 from llmwikify.apps.chat.agent.spec import (
     DEFAULT_COMPACTABLE_TOOLS,
     ChatRunResult,
@@ -177,13 +177,17 @@ def test_chat_runner_bridge_without_microcompact_fn_is_none() -> None:
         config: dict = {}
 
     ChatRunner(FakeChatService())
-    from llmwikify.apps.chat.agent.chat_react import ChatReActBridge
+    from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.chat_react import (
+        ChatReActBridge,
+    )
     bridge2 = ChatReActBridge(chat_service=FakeChatService())
     assert bridge2._microcompact_fn is None
 
 
 def test_chat_react_bridge_default_microcompact_fn_is_none() -> None:
-    from llmwikify.apps.chat.agent.chat_react import ChatReActBridge
+    from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.chat_react import (
+        ChatReActBridge,
+    )
 
     class FakeService:
         config: dict = {}
@@ -193,7 +197,9 @@ def test_chat_react_bridge_default_microcompact_fn_is_none() -> None:
 
 
 def test_chat_react_bridge_accepts_microcompact_fn() -> None:
-    from llmwikify.apps.chat.agent.chat_react import ChatReActBridge
+    from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.chat_react import (
+        ChatReActBridge,
+    )
 
     def sentinel(*_a, **_k):
         return ("MARKER", True, 100)
@@ -210,7 +216,7 @@ def test_run_to_completion_returns_error_on_exception() -> None:
         raise RuntimeError("boom")
         yield  # pragma: no cover
 
-    import llmwikify.apps.chat.agent.runner as runner_mod
+    import llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.runner as runner_mod
     original = runner_mod.ChatRunner.run
     runner_mod.ChatRunner.run = fake_run
     try:

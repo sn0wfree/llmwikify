@@ -29,12 +29,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llmwikify.apps.chat.agent.chat_react import (
-    REACT_SYSTEM_PROMPT,
+from llmwikify.apps.chat.agent.prompt_builder import REACT_SYSTEM_PROMPT
+from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.chat_react import (
     ChatReActBridge,
     ChatReActState,
 )
-from llmwikify.apps.chat.agent.react_engine import (
+from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
     EVENT_REASONING,
     ReActConfig,
     ReActEngine,

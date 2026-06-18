@@ -36,7 +36,9 @@ class ChatRunner:
         self._chat_service = chat_service
 
     def build_bridge(self, spec: ChatRunSpec) -> Any:
-        from llmwikify.apps.chat.agent.chat_react import ChatReActBridge
+        from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.chat_react import (
+            ChatReActBridge,
+        )
 
         counter: dict[str, int] = {}
         microcompact_fn = build_microcompact_fn(spec, counter=counter)
@@ -53,7 +55,9 @@ class ChatRunner:
         """Run the ReAct loop, yielding the same event dicts the SSE
         pipeline already consumes.
         """
-        from llmwikify.apps.chat.agent.react_engine import ReActEngine
+        from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
+            ReActEngine,
+        )
 
         bridge = self.build_bridge(spec)
         config = bridge.build_config(

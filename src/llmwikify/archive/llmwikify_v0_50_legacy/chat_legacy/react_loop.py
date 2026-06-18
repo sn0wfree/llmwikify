@@ -6,7 +6,7 @@ This module re-exports all public symbols for backward compatibility.
 New code should import directly from ``react_engine``.
 """
 
-from llmwikify.apps.chat.agent.react_engine import (  # noqa: F401
+from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (  # noqa: F401
     ReactConfig,
     ReactLoop,
     ReActConfig,

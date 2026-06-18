@@ -28,8 +28,8 @@ from pathlib import Path
 from typing import Any
 
 from llmwikify.apps.chat.agent._error_logging import log_exception_returning
-from llmwikify.apps.chat.agent.chat_react import REACT_SYSTEM_PROMPT
 from llmwikify.apps.chat.agent.context_store import ContextStore
+from llmwikify.apps.chat.agent.prompt_builder import REACT_SYSTEM_PROMPT
 from llmwikify.apps.chat.agent.text_mode_tool import (
     TOOL_CALL_RE,
     TextModeParser,
@@ -843,8 +843,12 @@ class ChatService(ChatBase):
         ``aask_with_tools`` would have used. Yields the same SSE
         event vocabulary the frontend expects.
         """
-        from llmwikify.apps.chat.agent.chat_react import ChatReActBridge
-        from llmwikify.apps.chat.agent.react_engine import ReActEngine
+        from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.chat_react import (
+            ChatReActBridge,
+        )
+        from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
+            ReActEngine,
+        )
         from llmwikify.apps.chat.skills.base import SkillContext
 
         bridge = ChatReActBridge(chat_service=self)

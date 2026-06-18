@@ -32,7 +32,7 @@ from typing import Any
 
 import pytest
 
-from llmwikify.apps.chat.agent.react_loop import (
+from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_loop import (
     EVENT_ACTION_ERROR,
     EVENT_OBSERVATION_ERROR,
     EVENT_PHASE,
