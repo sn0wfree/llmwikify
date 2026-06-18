@@ -204,7 +204,7 @@ class TextModeParser:
 
         import json
 
-        chunk = event.get("text", "")
+        chunk = event.get("text") or ""
         self._buffer += chunk
         while True:
             matches = [
