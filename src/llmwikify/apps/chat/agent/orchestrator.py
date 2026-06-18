@@ -76,6 +76,34 @@ class ChatEvent:
         return {"type": "save_warning", "reason": reason}
 
 
+# ─── V2 persistence hook (Plan B B-4) ──────────────────────────
+
+
+class _V2PersistenceHook:
+    """Persist tool results to MemoryManager.context after each tool call.
+
+    Mirrors the bridge's manual ``_persist_tool_result`` call
+    (chat_react.py:572) but as a hook in the v2 runner's lifecycle
+    (after_tool_executed). Errors are isolated (logged, not raised)
+    so a failed persist does not break the run.
+    """
+
+    def __init__(self, tool_executor: Any, session_id: str) -> None:
+        self._tool_executor = tool_executor
+        self._session_id = session_id
+
+    async def after_tool_executed(self, ctx: Any, tool_call: Any, result: Any) -> None:
+        try:
+            await self._tool_executor.persist_tool_result(
+                self._session_id,
+                tool_call.get("name", "") if isinstance(tool_call, dict) else "",
+                tool_call.get("args", {}) if isinstance(tool_call, dict) else {},
+                result,
+            )
+        except Exception:
+            logger.warning("_persist_tool_result failed", exc_info=True)
+
+
 # ─── ChatOrchestrator ─────────────────────────────────────────
 
 
@@ -438,6 +466,17 @@ class ChatOrchestrator:
         ctx: AgentContext,
     ) -> AsyncIterator[dict]:
         """ReAct path for chat()."""
+        if self.config.get("use_v2_runner", False):
+            async for event in self._chat_via_runner_v2(
+                messages_for_llm=messages_for_llm,
+                system_prompt=system_prompt,
+                tool_registry=tool_registry,
+                session_id=session_id,
+                ctx=ctx,
+            ):
+                yield event
+            return
+
         from llmwikify.apps.chat.agent.bridge_backend import ChatBridgeBackend
         from llmwikify.apps.chat.agent.chat_react import ChatReActBridge
         from llmwikify.apps.chat.agent.react_engine import ReActEngine
@@ -492,6 +531,162 @@ class ChatOrchestrator:
         except Exception as e:
             logger.exception("ReAct chat error")
             yield ChatEvent.error(str(e))
+
+    # ─── V2 runner path (Plan B B-4) ──────────────────────────────
+
+    async def _chat_via_runner_v2(
+        self,
+        messages_for_llm: list[dict[str, str]],
+        system_prompt: str,
+        tool_registry: Any,
+        session_id: str,
+        ctx: AgentContext,
+    ) -> AsyncIterator[dict]:
+        """V2 path: use ChatRunnerV2 (Plan B) instead of ReActEngine.
+
+        Reuses ChatBridgeBackend as the chat_service adapter (it already
+        implements the 4 methods ChatRunnerV2 needs: wiki_service,
+        _truncate_messages, _get_toolspec, _llm_stream_with_retry).
+
+        Persists tool results via a V2PersistenceHook (replaces the
+        bridge's manual _persist_tool_result call). On done, saves the
+        assistant message via tool_executor.save_message (same as v1).
+        """
+        from llmwikify.apps.chat.agent.bridge_backend import ChatBridgeBackend
+        from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
+        from llmwikify.apps.chat.agent.spec import ChatRunSpec
+        from llmwikify.foundation.callback import CompositeHook
+        from llmwikify.foundation.callback.integrations.wiki import WikiHook
+
+        bridge_backend = ChatBridgeBackend(
+            tool_executor=self.tool_executor,
+            context_manager=self.context_manager,
+            wiki_service=self.wiki_service,
+            config=self.config,
+        )
+        hook = CompositeHook([
+            WikiHook(wiki=self.wiki_service.get_wiki(ctx.wiki_id)),
+            _V2PersistenceHook(self.tool_executor, session_id),
+        ])
+        runner = ChatRunnerV2(
+            chat_service=bridge_backend,
+            tool_executor=self.tool_executor,
+            prompt_builder=self.prompt_builder,
+            hook=hook,
+            config=self.config,
+        )
+        spec = ChatRunSpec(
+            messages=list(messages_for_llm),
+            tool_registry=tool_registry,
+            session_id=session_id,
+            wiki_id=ctx.wiki_id,
+            max_iterations=self.config.get("max_chat_rounds", 10),
+            microcompact=True,
+        )
+
+        accumulated_tools: list[dict] = []
+        try:
+            async for event in runner.run_stream(spec):
+                kind = event.get("type")
+                if kind == "tool_call_end":
+                    tool = event.get("tool", "")
+                    if "autoresearch_compound" in tool and "run" in tool:
+                        result = event.get("result", {})
+                        if isinstance(result, dict):
+                            data = (
+                                result.get("data", {})
+                                if result.get("status") == "ok"
+                                else result
+                            )
+                            run_id = data.get("run_id", "")
+                            if run_id:
+                                yield {
+                                    "type": "research_run_started",
+                                    "run_id": run_id,
+                                    "status": data.get("status", "running"),
+                                    "workflow_name": data.get(
+                                        "workflow_name", "autoresearch-compound",
+                                    ),
+                                    "timeline": data.get("timeline", []),
+                                    "writes_wiki": False,
+                                    "proposal_only": True,
+                                }
+                    accumulated_tools.append({
+                        "tool": event.get("tool", ""),
+                        "args": event.get("args", {}),
+                        "result": event.get("result"),
+                        "call_id": event.get("call_id", ""),
+                    })
+                if kind == "done":
+                    final = event.get("content", "") or ""
+                    research_run_id = self._extract_research_run_id_from_tools(
+                        accumulated_tools,
+                    )
+                    if research_run_id and not final.strip():
+                        final = (
+                            "研究已启动\n\n"
+                            "研究进行中，可通过下方卡片查看实时进度与结果。"
+                        )
+                    self._save_assistant_message_v2(
+                        session_id, final, accumulated_tools, research_run_id,
+                    )
+                    if self.tool_executor._save_error_count > 0:
+                        yield ChatEvent.save_warning(
+                            f"已丢弃 {self.tool_executor._save_error_count} 条消息的持久化失败",
+                        )
+                yield event
+        except Exception as e:
+            logger.exception("V2 runner chat error")
+            yield ChatEvent.error(str(e))
+
+    def _save_assistant_message_v2(
+        self,
+        session_id: str,
+        content: str,
+        tool_calls: list[dict],
+        research_run_id: str | None,
+    ) -> None:
+        """Save assistant message to DB on done (V2 path).
+
+        Mirrors v0.41 logic in ``_translate_react_event`` (phase=done
+        branch): count tokens, attach research_run_id, persist via
+        tool_executor.save_message.
+        """
+        from llmwikify.foundation.llm.token_estimator import count_tokens
+
+        tokens_output = count_tokens(content, "unknown")
+        self.tool_executor.save_message(
+            session_id,
+            "assistant",
+            content,
+            tool_calls=tool_calls or None,
+            tokens_output=tokens_output,
+            research_run_id=research_run_id,
+        )
+
+    @staticmethod
+    def _extract_research_run_id_from_tools(
+        tool_calls: list[dict],
+    ) -> str | None:
+        """Scan v2 tool_call_end events for an autoresearch run_id.
+
+        Mirrors ``_extract_research_run_id`` but reads from the v2
+        event stream (tool_call events) instead of ctx._tool_calls.
+        """
+        for tc in tool_calls:
+            name = tc.get("tool", "")
+            if "autoresearch_compound" not in name or "run" not in name:
+                continue
+            result = tc.get("result")
+            if not isinstance(result, dict):
+                continue
+            data = result.get("data") if result.get("status") == "ok" else result
+            if not isinstance(data, dict):
+                continue
+            run_id = data.get("run_id")
+            if isinstance(run_id, str) and run_id:
+                return run_id
+        return None
 
     def _translate_react_event(
         self,
