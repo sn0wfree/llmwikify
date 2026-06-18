@@ -422,3 +422,88 @@ b1d4108 docs(reproduction): Pipeline 优化总结文档
 2. **减少 Pass 1 输出**：context_excerpt 只在需要时输出
 3. **优化 Pass 2 prompt**：减少补充触发频率
 4. **混合模式**：先 parallel 跑 80%，剩余 20% 用 adaptive 补充
+
+---
+
+## 🎯 v3.0: Smart Mode + 2000 chars (方案 A+D)
+
+> 实施日期：2026-06-18
+> 目标：解决 adaptive 慢的问题，方案 D (智能选择) + 方案 A (强制 2000 chars)
+
+### 方案 A: 强制 Pass 1 输出 ≥ 2000 chars
+
+修改 `repro_extract_track_b_pass1.yaml` v3.0:
+```yaml
+context_excerpt length guidelines (ADAPTIVE, v3.0):
+- MINIMUM: 2000 chars per signal. Never output less than this.
+- Default: 2000-3000 chars (covers most cases)
+- Complex signals: 5000-10000 chars
+- IMPORTANT: Even for signals in a table, copy the ENTIRE table row(s) +
+  surrounding text. Table row itself (with formula) + context usually =
+  500-1000 chars. May need more surrounding paragraphs to reach 2000+.
+```
+
+### 方案 D: 智能模式选择
+
+新增 `estimate_complexity()` 和 `select_pass2_mode()`:
+
+```python
+def estimate_complexity(stubs) -> dict:
+    """Returns recommendation: 'adaptive' | 'parallel' based on:
+    - signal_count (too few/many → parallel)
+    - avg_formula_len (> 80 chars → parallel)
+    - avg_context_len (< 2000 chars → parallel)
+    """
+
+def select_pass2_mode(stubs) -> str:
+    """Priority: override > auto > flag defaults"""
+```
+
+修复 `_run_pass2_one` 和 `_run_pass2_one_async` 用 batch 模式 parser。
+
+### A/B 测试结果
+
+| 指标 | Baseline (v1) | v2.0 Adaptive | **v3.0 Smart+Parallel** |
+|------|---------------|---------------|--------------------------|
+| **总时间** | 40.5 min | 85.7 min | **33.7 min** ⭐ |
+| **Pass 1** | 91s | 594s | 480s |
+| **Pass 2** | 39 min | 45 min (60 sig) | 30 min |
+| **成功率** | 97% | 100% (60 sig) | 98% (101 sig) |
+| **l3.intuition** | 101 chars | 295 chars | 105 chars |
+| **YAML 写出** | - | 0 (timed out) | **97** ⭐ |
+
+### 关键发现
+
+✅ **v3.0 比 baseline 还快 17%**（40.5 → 33.7 min）
+✅ **自动选 parallel**（101 alphas 复杂公式不适用 adaptive）
+✅ **98% 成功率** + 97 YAML 写出
+✅ **质量基本保持**（l3 +4%, l1.formula +0.5%）
+
+### v3.0 实际效果详解
+
+**加速来源**：
+1. Smart mode 自动选 parallel（避免 adaptive 的 multi-turn 慢）
+2. Pass 1 输出 524 chars context（虽然未达 2000，但比 v2.0 的 350 长 1.5x）
+3. Pass 2 3 路并行，每个 ~30s
+
+**质量保持来源**：
+- Pass 1 context 加长让 LLM 看到更多原文
+- batch mode prompt 标准化输出格式
+- LLM 自主判断机制保留（如果用 adaptive 还能用）
+
+### 推荐使用
+
+- **默认 v3.0** (smart auto-select) - 适合所有 paper
+- **复杂论文** 自动用 parallel (快 + 稳定)
+- **简单论文** 可手动 `PASS2_MODE_OVERRIDE="adaptive"` (质量提升)
+- **旧 checkpoint** 自动 fallback (Option B)
+
+### Git 历史
+
+```
+afef007 fix(reproduction): plan 验证 fallback 解析器
+4c31a4f feat(reproduction): 自反馈规划机制
+1c406e4 feat(reproduction): adaptive pass 2 multi-turn
+0c78747 docs(reproduction): adaptive pass 2 设计
+[next]   feat(reproduction): v3.0 smart mode + 强制 2000 chars
+```

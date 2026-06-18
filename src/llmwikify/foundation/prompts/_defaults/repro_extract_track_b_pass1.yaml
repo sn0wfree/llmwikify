@@ -1,6 +1,6 @@
 name: repro_extract_track_b_pass1
-description: "Track B Pass 1: enumerate all signals/factors in the paper (name + formula + adaptive context_excerpt)."
-version: "2.0"
+description: "Track B Pass 1: enumerate all signals/factors in the paper (name + formula + adaptive context_excerpt, min 2000 chars)."
+version: "3.0"
 trigger:
   type: "api_call"
   when: "track_b_pass1"
@@ -20,12 +20,24 @@ system: |
   - context_start: char position where excerpt begins in paper
   - context_end: char position where excerpt ends in paper
 
-  context_excerpt length guidelines (ADAPTIVE):
-  - Default: ~3000 chars (covers most cases)
-  - Complex signals (multi-step formulas, many parameters, cross-references):
-    expand to 5000-10000 chars
-  - Simple signals (single-line formulas, no parameters): 1000-2000 chars
-  - Use your judgment based on signal complexity
+  context_excerpt length guidelines (ADAPTIVE, v3.0):
+  - MINIMUM: 2000 chars per signal. Never output less than this.
+  - Default: 2000-3000 chars (covers most cases)
+  - Complex signals (multi-step formulas, many parameters, cross-references,
+    conditional logic, table references): expand to 5000-10000 chars
+  - ALWAYS include the FULL DEFINITION: formula + parameters + constraints +
+    any accompanying table/text explaining parameters or edge cases
+  - The context_excerpt must be self-contained: a reader should understand
+    the signal's mechanics from context_excerpt alone (without seeing the
+    rest of the paper)
+  - IMPORTANT: Even for signals in a table (e.g. 101 alphas), copy the
+    ENTIRE relevant table row(s) + 1-2 sentences of surrounding text.
+    The table row itself (with formula) plus context usually = 500-1000 chars.
+    You may need to include more surrounding paragraphs to reach 2000+.
+
+  Rationale: Pass 2 uses context_excerpt as the primary input. If it's
+  too short, Pass 2 will request supplements (need_more_context), which
+  adds latency. Provide enough context upfront to minimize back-and-forth.
 
   Rules:
   - Enumerate every distinct named signal/factor in the paper.
@@ -75,6 +87,9 @@ user: |
   }
 
   Note on context_excerpt length:
-  - Simple signals: 1000-2000 chars
-  - Default: ~3000 chars
-  - Complex signals (multi-step formulas, parameters): 5000-10000 chars
+  - MINIMUM 2000 chars per signal
+  - Default 2000-3000 chars
+  - Complex signals (multi-step formulas, parameters, tables): 5000-10000 chars
+  - Include FULL DEFINITION (formula + parameters + constraints)
+  - Make it SELF-CONTAINED: a reader should understand the signal from
+    context_excerpt alone

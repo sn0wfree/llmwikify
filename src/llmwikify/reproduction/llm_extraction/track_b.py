@@ -49,6 +49,15 @@ PASS2_CHECKPOINT_BATCH_SIZE = 10  # Save checkpoint every N completions
 PASS2_USE_PARALLEL = True  # Toggle parallel/serial execution
 PASS2_USE_ADAPTIVE = True  # Use adaptive multi-turn (v2, recommended)
 
+# Smart mode selection (v3.0)
+PASS2_MODE_AUTO = True       # Auto-select based on complexity
+PASS2_MODE_OVERRIDE = ""     # If set: "adaptive" | "parallel" | "serial" | ""
+# Complexity thresholds for auto-selection
+ADAPTIVE_MIN_SIGNALS = 20    # < 20 signals → use parallel (less overhead)
+ADAPTIVE_MAX_SIGNALS = 200   # > 200 signals → use parallel (multi-turn too slow)
+ADAPTIVE_AVG_FORMULA_LEN = 80  # > 80 chars avg formula → use parallel (complex)
+ADAPTIVE_AVG_CONTEXT_LEN = 2000  # < 2000 chars avg context → use parallel (likely complex)
+
 # Success rate thresholds for auto-retry
 PASS2_SUCCESS_THRESHOLD_HIGH = 0.95  # 95%: Complete, no retry needed
 PASS2_SUCCESS_THRESHOLD_LOW = 0.80   # 80%: Retry failed factors
@@ -299,6 +308,144 @@ def _get_signal_context(signal: SignalStub, parsed_text: str) -> str:
     return parsed_text[paper_start:paper_end]
 
 
+def estimate_complexity(stubs: list[SignalStub]) -> dict:
+    """Estimate extraction complexity from Pass 1 signals.
+
+    Heuristics:
+    - Signal count: too few (overhead) or too many (multi-turn slow) → parallel
+    - Avg formula length: long formulas → complex → parallel better
+    - Avg context_excerpt length: short context → LLM will request many
+      supplements → parallel might be better
+
+    Returns:
+        dict with:
+        - signal_count: int
+        - avg_formula_len: float
+        - avg_context_len: float
+        - complexity_score: float (0.0-1.0, higher = more complex)
+        - recommendation: "adaptive" | "parallel"
+        - reasons: list[str] explaining the recommendation
+    """
+    if not stubs:
+        return {
+            "signal_count": 0,
+            "avg_formula_len": 0,
+            "avg_context_len": 0,
+            "complexity_score": 0.5,
+            "recommendation": "parallel",
+            "reasons": ["no signals found"],
+        }
+
+    n = len(stubs)
+    formula_lens = [len(s.formula_brief or "") for s in stubs]
+    context_lens = [len(s.context_excerpt or "") for s in stubs]
+    avg_formula = sum(formula_lens) / n
+    avg_context = sum(context_lens) / n
+
+    # Complexity score (0-1)
+    # Each factor contributes 0-0.33
+    signal_factor = 0.0
+    if n < ADAPTIVE_MIN_SIGNALS:
+        signal_factor = 0.0  # Too few, no benefit from multi-turn
+    elif n > ADAPTIVE_MAX_SIGNALS:
+        signal_factor = 0.4  # Too many, multi-turn too slow
+    else:
+        signal_factor = 0.0  # In sweet spot
+
+    formula_factor = min(0.3, avg_formula / 300)  # 0-0.3 based on formula length
+    context_factor = 0.0 if avg_context >= 1500 else 0.3  # Short context = complex
+
+    score = signal_factor + formula_factor + context_factor
+
+    # Decision logic
+    reasons = []
+    use_adaptive = True
+
+    if n < ADAPTIVE_MIN_SIGNALS:
+        use_adaptive = False
+        reasons.append(
+            f"only {n} signals (< {ADAPTIVE_MIN_SIGNALS}); parallel has less overhead"
+        )
+    elif n > ADAPTIVE_MAX_SIGNALS:
+        use_adaptive = False
+        reasons.append(
+            f"{n} signals (> {ADAPTIVE_MAX_SIGNALS}); multi-turn would be too slow"
+        )
+
+    if avg_formula > ADAPTIVE_AVG_FORMULA_LEN:
+        use_adaptive = False
+        reasons.append(
+            f"avg formula {avg_formula:.0f} chars (> {ADAPTIVE_AVG_FORMULA_LEN}); "
+            f"complex formulas cause excessive need_more requests"
+        )
+
+    if avg_context < ADAPTIVE_AVG_CONTEXT_LEN:
+        use_adaptive = False
+        reasons.append(
+            f"avg context {avg_context:.0f} chars (< {ADAPTIVE_AVG_CONTEXT_LEN}); "
+            f"short context triggers many supplements"
+        )
+
+    if not reasons:
+        reasons.append(
+            f"{n} signals, avg formula {avg_formula:.0f} chars, "
+            f"avg context {avg_context:.0f} chars: good for adaptive"
+        )
+
+    return {
+        "signal_count": n,
+        "avg_formula_len": avg_formula,
+        "avg_context_len": avg_context,
+        "complexity_score": round(score, 3),
+        "recommendation": "adaptive" if use_adaptive else "parallel",
+        "reasons": reasons,
+    }
+
+
+def select_pass2_mode(stubs: list[SignalStub]) -> str:
+    """Select Pass 2 execution mode based on override and complexity.
+
+    Priority:
+    1. PASS2_MODE_OVERRIDE (if set): force this mode
+    2. PASS2_MODE_AUTO = True: use estimate_complexity()
+    3. Default to PASS2_USE_ADAPTIVE / PASS2_USE_PARALLEL flags
+
+    Returns: "adaptive" | "parallel" | "serial"
+    """
+    if PASS2_MODE_OVERRIDE:
+        mode = PASS2_MODE_OVERRIDE.lower()
+        if mode in ("adaptive", "parallel", "serial"):
+            logger.info(
+                "[track_b] pass2 mode: %s (override)", mode,
+            )
+            return mode
+        logger.warning(
+            "[track_b] invalid PASS2_MODE_OVERRIDE=%s, falling back to auto",
+            mode,
+        )
+
+    if PASS2_MODE_AUTO:
+        complexity = estimate_complexity(stubs)
+        logger.info(
+            "[track_b] complexity: signals=%d avg_formula=%.0f avg_context=%.0f "
+            "score=%.2f → %s. Reasons: %s",
+            complexity["signal_count"],
+            complexity["avg_formula_len"],
+            complexity["avg_context_len"],
+            complexity["complexity_score"],
+            complexity["recommendation"],
+            "; ".join(complexity["reasons"]),
+        )
+        return complexity["recommendation"]
+
+    # Fallback to flags
+    if PASS2_USE_ADAPTIVE:
+        return "adaptive"
+    if PASS2_USE_PARALLEL:
+        return "parallel"
+    return "serial"
+
+
 def _supplement_context(
     signal: SignalStub,
     need_info: dict,
@@ -524,15 +671,22 @@ def _run_pass2_one(
     signal_stub: SignalStub,
     parsed_text: str,
 ) -> SignalDetail:
-    """Run Pass 2 for a single signal: extract L1-L4."""
+    """Run Pass 2 for a single signal: extract L1-L4.
+
+    Uses batch mode (v2.0+) for consistency with adaptive multi-turn.
+    """
     system_text, user_template, params = _load_prompt(PROMPT_PASS2)
     tmpl = _jinja_env.from_string(user_template)
+    context = _get_signal_context(signal_stub, parsed_text)
     user_msg = tmpl.render(
         paper_id=paper_id,
-        signal_name=signal_stub.name,
-        formula_brief=signal_stub.formula_brief,
-        signal_index=signal_stub.index,
-        paper_text=parsed_text,
+        round_idx=1,
+        batch_size=1,
+        signals=[{
+            "name": signal_stub.name,
+            "formula_brief": signal_stub.formula_brief,
+            "context_excerpt": context,
+        }],
     )
     default_max = int(params.get("max_tokens", 5500))
     budget_max = int(
@@ -567,8 +721,20 @@ def _run_pass2_one(
             latency_ms=latency_ms,
         )
 
-    # Extract L1-L4 from parsed result
-    factor = parsed.get("factor", parsed)  # accept either nested or flat
+    # Extract L1-L4 from parsed result (v2.0+ batch mode)
+    factors_list = _unwrap_factors(parsed)
+    if factors_list and isinstance(factors_list, list) and factors_list:
+        factor = factors_list[0]  # batch_size=1, take first
+    else:
+        # Legacy single-factor format
+        factor = parsed.get("factor", parsed)
+    if not isinstance(factor, dict):
+        return SignalDetail(
+            name=signal_stub.name,
+            success=False,
+            error="invalid_factor_format",
+            latency_ms=latency_ms,
+        )
     return SignalDetail(
         name=signal_stub.name,
         description=str(factor.get("description", signal_stub.description)),
@@ -605,12 +771,17 @@ async def _run_pass2_one_async(
     async with semaphore:
         system_text, user_template, params = _load_prompt(PROMPT_PASS2)
         tmpl = _jinja_env.from_string(user_template)
+        # Use batch mode (v2.0+) for consistency with adaptive
+        context = _get_signal_context(signal_stub, parsed_text)
         user_msg = tmpl.render(
             paper_id=paper_id,
-            signal_name=signal_stub.name,
-            formula_brief=signal_stub.formula_brief,
-            signal_index=signal_stub.index,
-            paper_text=parsed_text,
+            round_idx=1,
+            batch_size=1,
+            signals=[{
+                "name": signal_stub.name,
+                "formula_brief": signal_stub.formula_brief,
+                "context_excerpt": context,
+            }],
         )
         default_max = int(params.get("max_tokens", 5500))
         budget_max = int(
@@ -646,8 +817,20 @@ async def _run_pass2_one_async(
                 latency_ms=latency_ms,
             )
 
-        # Extract L1-L4 from parsed result
-        factor = parsed.get("factor", parsed)  # accept either nested or flat
+        # Extract L1-L4 from parsed result (v2.0+ batch mode: {"factors": [{...}]})
+        factors_list = _unwrap_factors(parsed)
+        if factors_list and isinstance(factors_list, list) and factors_list:
+            factor = factors_list[0]  # batch_size=1, take first
+        else:
+            # Legacy single-factor format
+            factor = parsed.get("factor", parsed)
+        if not isinstance(factor, dict):
+            return signal_stub, SignalDetail(
+                name=signal_stub.name,
+                success=False,
+                error="invalid_factor_format",
+                latency_ms=latency_ms,
+            )
         return signal_stub, SignalDetail(
             name=signal_stub.name,
             description=str(factor.get("description", signal_stub.description)),
@@ -1211,8 +1394,9 @@ def run_track_b(
     retry_rounds = 0
     pass2_concurrency_used = 1
     if run_pass2:
-        # Choose execution mode (priority: adaptive > parallel > serial)
-        if PASS2_USE_ADAPTIVE:
+        # Choose execution mode (v3: smart auto-select based on complexity)
+        mode = select_pass2_mode(pass1_signals)
+        if mode == "adaptive":
             logger.info(
                 "[track_b] paper=%s pass2 mode: ADAPTIVE multi-turn (v2)",
                 paper_id,
@@ -1225,7 +1409,11 @@ def run_track_b(
                 )
             )
             pass2_concurrency_used = PASS2_BATCH_SIZE
-        elif PASS2_USE_PARALLEL:
+        elif mode == "parallel":
+            logger.info(
+                "[track_b] paper=%s pass2 mode: PARALLEL (3-way, v1)",
+                paper_id,
+            )
             pass2_details, pass2_latency = asyncio.run(
                 _run_pass2_parallel(
                     client, plan, paper_id, pass1_signals, parsed_text,
@@ -1234,7 +1422,11 @@ def run_track_b(
                 )
             )
             pass2_concurrency_used = PASS2_MAX_CONCURRENCY
-        else:
+        else:  # "serial"
+            logger.info(
+                "[track_b] paper=%s pass2 mode: SERIAL (v1)",
+                paper_id,
+            )
             pass2_details, pass2_latency = _run_pass2_serial(
                 client, plan, paper_id, pass1_signals, parsed_text,
                 work_dir=work_dir,

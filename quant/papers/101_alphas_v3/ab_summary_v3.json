@@ -1,0 +1,17 @@
+{
+  "paper_id": "101_alphas_v3",
+  "success": true,
+  "plan_success": true,
+  "n_signals": 101,
+  "n_pass2_complete": 99,
+  "n_pass2_failed": 2,
+  "deferred_count": 0,
+  "deferred_resolved": 0,
+  "deferred_failed": 0,
+  "llm_calls": 108,
+  "total_latency_ms": 2021124,
+  "error": null,
+  "success_rate": 0.9801980198019802,
+  "retry_rounds": 0,
+  "needs_retry": false
+}

@@ -20,6 +20,8 @@ from llmwikify.reproduction.llm_extraction.track_b import (
     _get_signal_context,
     _run_pass2_adaptive,
     _supplement_context,
+    estimate_complexity,
+    select_pass2_mode,
 )
 
 # ── SignalStub new fields ──────────────────────────────────────
@@ -521,3 +523,136 @@ class TestBuildSignalDetail:
         assert detail.success is True
         assert detail.l1 == {}
         assert detail.l2 == {}
+
+
+# ── Complexity estimation (v3.0) ──────────────────────────────
+
+
+class TestEstimateComplexity:
+    """Test complexity estimation for smart mode selection."""
+
+    def test_empty_stubs_returns_parallel(self):
+        result = estimate_complexity([])
+        assert result["recommendation"] == "parallel"
+        assert result["signal_count"] == 0
+
+    def test_simple_paper_recommends_adaptive(self):
+        """Few signals, short formulas, adequate context → adaptive."""
+        stubs = [
+            SignalStub(
+                index=i + 1, name=f"S{i+1}", formula_brief="rank(close)",
+                context_excerpt="x" * 2500,  # 2500 chars (>= 2000)
+            )
+            for i in range(50)
+        ]
+        result = estimate_complexity(stubs)
+        assert result["signal_count"] == 50
+        assert result["avg_formula_len"] < 80
+        assert result["avg_context_len"] >= 2000
+        assert result["recommendation"] == "adaptive"
+
+    def test_too_few_signals_recommends_parallel(self):
+        """< ADAPTIVE_MIN_SIGNALS → parallel (less overhead)."""
+        stubs = [
+            SignalStub(
+                index=1, name="S1", formula_brief="rank(close)",
+                context_excerpt="x" * 2500,
+            )
+        ]
+        result = estimate_complexity(stubs)
+        assert result["recommendation"] == "parallel"
+        assert any("overhead" in r for r in result["reasons"])
+
+    def test_too_many_signals_recommends_parallel(self):
+        """> ADAPTIVE_MAX_SIGNALS → parallel (multi-turn too slow)."""
+        stubs = [
+            SignalStub(
+                index=i + 1, name=f"S{i+1}", formula_brief="rank(close)",
+                context_excerpt="x" * 2500,
+            )
+            for i in range(250)
+        ]
+        result = estimate_complexity(stubs)
+        assert result["signal_count"] == 250
+        assert result["recommendation"] == "parallel"
+        assert any("too slow" in r for r in result["reasons"])
+
+    def test_long_formulas_recommends_parallel(self):
+        """Avg formula > 80 chars → complex → parallel."""
+        stubs = [
+            SignalStub(
+                index=i + 1, name=f"S{i+1}",
+                formula_brief="rank(" + "x" * 100,  # 105 chars
+                context_excerpt="x" * 2500,
+            )
+            for i in range(50)
+        ]
+        result = estimate_complexity(stubs)
+        assert result["avg_formula_len"] > 80
+        assert result["recommendation"] == "parallel"
+        assert any("formula" in r for r in result["reasons"])
+
+    def test_short_context_recommends_parallel(self):
+        """Avg context < 2000 chars → LLM will need many supplements."""
+        stubs = [
+            SignalStub(
+                index=i + 1, name=f"S{i+1}", formula_brief="rank(close)",
+                context_excerpt="x" * 500,  # only 500 chars
+            )
+            for i in range(50)
+        ]
+        result = estimate_complexity(stubs)
+        assert result["avg_context_len"] < 2000
+        assert result["recommendation"] == "parallel"
+        assert any("context" in r for r in result["reasons"])
+
+    def test_complexity_score_increases_with_complexity(self):
+        """Score reflects complexity level."""
+        simple = [
+            SignalStub(
+                index=1, name="S1", formula_brief="rank(x)",
+                context_excerpt="x" * 2500,
+            )
+        ]
+        complex_stubs = [
+            SignalStub(
+                index=1, name="S1",
+                formula_brief="rank(" + "x" * 100,
+                context_excerpt="x" * 500,
+            )
+        ]
+        simple_result = estimate_complexity(simple)
+        complex_result = estimate_complexity(complex_stubs)
+        # Complex case should have higher score (or at least as high)
+        assert complex_result["complexity_score"] >= simple_result["complexity_score"]
+
+
+class TestSelectPass2Mode:
+    """Test mode selection logic."""
+
+    def test_auto_selects_parallel_for_simple_cases(self):
+        """Few signals → auto selects parallel."""
+        stubs = [
+            SignalStub(
+                index=1, name="S1", formula_brief="rank(close)",
+                context_excerpt="x" * 2500,
+            )
+        ]
+        mode = select_pass2_mode(stubs)
+        assert mode == "parallel"
+
+    def test_auto_selects_adaptive_for_good_fit(self):
+        """Mid-size, simple formulas, good context → adaptive."""
+        stubs = [
+            SignalStub(
+                index=i + 1, name=f"S{i+1}", formula_brief="rank(close)",
+                context_excerpt="x" * 2500,
+            )
+            for i in range(50)
+        ]
+        mode = select_pass2_mode(stubs)
+        assert mode == "adaptive"
+
+    def test_empty_stubs_returns_parallel(self):
+        mode = select_pass2_mode([])
+        assert mode == "parallel"
