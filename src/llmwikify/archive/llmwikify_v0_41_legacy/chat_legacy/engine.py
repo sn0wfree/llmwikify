@@ -206,7 +206,7 @@ class ResearchEngine:
 
         # Build ReActConfig wired to ResearchEngine's domain logic
         config = self._build_react_config(state)
-        from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
+        from llmwikify.apps.chat.agent.research_runner import (
             ReActEngine,
             SkillContext,
         )
@@ -240,7 +240,7 @@ class ResearchEngine:
 
     def _build_react_config(self, state: ResearchState) -> ReActConfig:
         """Build a ReActConfig wired to ResearchEngine's domain logic."""
-        from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
+        from llmwikify.apps.chat.agent.research_runner import (
             ReActConfig,
             SkillAction,
             SkillResult,

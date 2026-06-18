@@ -28,9 +28,8 @@ What does NOT live here
   - LLM provider wiring: ``apps/chat/providers/``
   - Tool registration: ``apps/agent/tools/`` (legacy)
   - The legacy v1 ReAct engine stack (``chat_react`` /
-    ``react_engine`` / ``react_loop``) — moved to
-    ``src/llmwikify/archive/llmwikify_v0_50_legacy/chat_legacy/``
-    on 2026-06-18 (Plan B B-5 cleanup).
+    ``react_engine`` / ``react_loop``) — was archived in
+    B-5 and removed in B-7 (2026-06-18).
 
 Per the 4-layer refactor, ``apps/chat/agent/`` is L3; it may
 import from ``apps/chat/skills/``, ``apps/chat/providers/``,

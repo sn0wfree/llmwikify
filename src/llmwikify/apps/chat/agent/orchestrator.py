@@ -13,8 +13,8 @@ Owns:
 
 Plan B migration (B-5): now uses ChatRunnerV2 (runner_v2.py) as the
 sole loop engine. The legacy ChatReActBridge + ReActEngine stack
-(chat_react.py / react_engine.py / react_loop.py) is archived at
-src/llmwikify/archive/llmwikify_v0_50_legacy/chat_legacy/.
+(chat_react.py / react_engine.py / react_loop.py) was archived in
+B-5 and removed in B-7.
 """
 
 from __future__ import annotations

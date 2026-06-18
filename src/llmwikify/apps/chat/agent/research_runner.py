@@ -10,9 +10,10 @@ Compatibility layer
 -------------------
 
 The :class:`ReactConfig` + :class:`ReactLoop` API mirrors the v0.50
-``llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine`` so
-``research_skill.py`` and its tests can keep the same public surface
-without the archive import.
+``ReActConfig`` / ``ReActEngine`` interface (formerly at
+``llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine``,
+removed in B-7) so ``research_skill.py``, ``v0.41 engine.py`` and their
+tests can keep the same public surface without the archive import.
 
 Why a custom state machine (not ChatRunnerV2)?
 ------------------------------------------------
@@ -42,6 +43,12 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
+
+from llmwikify.apps.chat.skills.base import (
+    SkillAction,
+    SkillContext,
+    SkillResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +89,7 @@ class ReactConfig:
         default=lambda s: s.get("phase") == "done",
     )
     reason: ReasonCallable | None = None
+    observe: HookCallable | None = None
     max_rounds: int = 5
     timeout_seconds: float = 0
     on_before_act: HookCallable | None = None
@@ -103,6 +111,42 @@ async def _maybe_await(value: Any) -> Any:
     if inspect.isawaitable(value):
         return await value
     return value
+
+
+# ─── State helpers (v0.50 compat: dict + dataclass) ───────────────
+
+
+def _is_dataclass(obj: Any) -> bool:
+    """Check if obj is a dataclass instance (not the class itself)."""
+    import dataclasses
+    return dataclasses.is_dataclass(obj) and not isinstance(obj, type)
+
+
+def _state_get(state: Any, key: str, default: Any = None) -> Any:
+    """Get a value from state, supporting both dict and dataclass."""
+    if isinstance(state, dict):
+        return state.get(key, default)
+    return getattr(state, key, default)
+
+
+def _state_update(state: Any, data: dict) -> None:
+    """Update state with data, supporting both dict and dataclass."""
+    if isinstance(state, dict):
+        state.update(data)
+    else:
+        for k, v in data.items():
+            if hasattr(state, k):
+                setattr(state, k, v)
+
+
+def _state_snapshot(state: Any) -> dict:
+    """Snapshot state as a dict, supporting both dict and dataclass."""
+    if isinstance(state, dict):
+        return dict(state)
+    import dataclasses
+    if dataclasses.is_dataclass(state):
+        return dataclasses.asdict(state)
+    return dict(vars(state))
 
 
 # ─── ReactLoop ────────────────────────────────────────────────────
@@ -130,7 +174,15 @@ class ReactLoop:
 
     def __init__(self, config: ReactConfig) -> None:
         self._config = config
-        self._state: dict[str, Any] = dict(config.initial_state)
+        # Support both dict and dataclass states (v0.50 compat).
+        # For dataclasses, keep the original instance (not a copy) so
+        # mutations are visible to the caller.
+        import dataclasses
+        initial = config.initial_state
+        if dataclasses.is_dataclass(initial) and not isinstance(initial, dict):
+            self._state = initial
+        else:
+            self._state = dict(initial)
         self._round: int = 0
         self._cancelled: bool = False
         self._paused: bool = False
@@ -168,7 +220,7 @@ class ReactLoop:
 
         for round_idx in range(self._config.max_rounds):
             self._round = round_idx
-            self._state["round"] = round_idx
+            _state_update(self._state, {"round": round_idx})
 
             # 1. PRECHECK: done_condition + timeout
             if self._check_timeout():
@@ -217,17 +269,29 @@ class ReactLoop:
             yield reasoning_event
 
             # Honour forced next action from on_after_act
-            forced = self._state.pop("_forced_next_action", None)
+            forced = _state_get(self._state, "_forced_next_action")
             if forced is not None:
+                if isinstance(self._state, dict):
+                    self._state.pop("_forced_next_action", None)
+                else:
+                    try:
+                        delattr(self._state, "_forced_next_action")
+                    except AttributeError:
+                        pass
                 action_name = forced
 
             if action_name == "done":
-                yield {"type": EVENT_PHASE, "phase": "done"}
+                yield {
+                    "type": EVENT_PHASE,
+                    "phase": "done",
+                    "round": round_idx,
+                    "reason": "reason_returned_done",
+                }
                 return
-            if self._state.get("cancelled", False):
+            if _state_get(self._state, "cancelled", False):
                 yield {"type": EVENT_PHASE, "phase": "cancelled"}
                 return
-            if self._state.get("paused", False):
+            if _state_get(self._state, "paused", False):
                 yield {"type": EVENT_PHASE, "phase": "paused"}
                 return
 
@@ -267,7 +331,19 @@ class ReactLoop:
                     self._config.on_after_act(self._state, action_name, result),
                 )
 
-            # 4. OBSERVE: fold result.data into state (per v0.50)
+            # Forward nested events from action handlers (v0.50 compat).
+            # v0.41 engine's _make_action_handler collects dispatch
+            # events into result.data["_events"]; we yield them
+            # inline so the caller sees them.
+            if result is not None and getattr(result, "status", None) == "ok":
+                data = getattr(result, "data", None) or {}
+                if isinstance(data, dict):
+                    nested = data.pop("_events", None)
+                    if nested:
+                        for ne in nested:
+                            yield ne
+
+            # 4. OBSERVE: fold result.data + observe() output into state (per v0.50)
             if self._config.on_before_observe is not None:
                 try:
                     await _maybe_await(self._config.on_before_observe(self._state, result))
@@ -279,7 +355,21 @@ class ReactLoop:
             if result is not None and getattr(result, "data", None):
                 data = result.data
                 if isinstance(data, dict):
-                    self._state.update(data)
+                    _state_update(self._state, data)
+
+            # v0.50 observe callable (separate from on_*_observe hooks)
+            if self._config.observe is not None:
+                try:
+                    observe_output = await _maybe_await(
+                        self._config.observe(self._state, ctx)
+                    )
+                    if observe_output:
+                        _state_update(self._state, dict(observe_output))
+                except Exception as e:
+                    yield {
+                        "type": EVENT_OBSERVATION_ERROR,
+                        "error": str(e),
+                    }
 
             if self._config.on_after_observe is not None:
                 try:
@@ -309,7 +399,7 @@ class ReactLoop:
         yield {
             "type": EVENT_PHASE,
             "phase": "done",
-            "final_state": dict(self._state),
+            "final_state": _state_snapshot(self._state),
         }
 
     def _check_timeout(self) -> bool:
@@ -328,6 +418,8 @@ class ReactLoop:
 __all__ = [
     "ReactConfig",
     "ReactLoop",
+    "ReActConfig",
+    "ReActLoop",
     "EVENT_REASONING",
     "EVENT_ACTION_ERROR",
     "EVENT_OBSERVATION_ERROR",
@@ -335,3 +427,17 @@ __all__ = [
     "EVENT_PHASE",
     "EVENT_TIMEOUT",
 ]
+
+
+# v0.50 backward-compat aliases (ReActConfig/ReActLoop are the v0.50 names;
+# ReactConfig/ReactLoop are the canonical Plan B v2 names).
+ReActConfig = ReactConfig
+ReActLoop = ReactLoop
+ReActEngine = ReactLoop
+
+# Re-export v0.50 Skill types so legacy imports work after
+# the v0.50 archive is removed (B-7). v0.41 engine.py imports
+# these names; their semantics are unchanged from apps/chat/skills/base.py.
+SkillContext = SkillContext
+SkillAction = SkillAction
+SkillResult = SkillResult
