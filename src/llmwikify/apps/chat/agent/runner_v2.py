@@ -77,6 +77,11 @@ class _RunContext:
             final_content=self.final_content,
             stop_reason=self.stop_reason,
             error=self.error,
+            observations=list(self.observations),
+            cancelled=self.cancelled,
+            paused=self.paused,
+            compacted_count=self.compacted_count,
+            chars_saved=self.chars_saved,
         )
 
 
@@ -299,6 +304,14 @@ class ChatRunnerV2:
             logger.exception("LLM stream failed")
             ctx.error = f"{type(exc).__name__}: {exc}"
             ctx.reason_failed = True
+            for flushed in parser.flush():
+                kind = flushed.get("type")
+                if kind == "content":
+                    chunk = flushed.get("text", "")
+                    accumulated += chunk
+                    yield {"type": "message_delta", "content": chunk}
+            if not content_from_parser and accumulated:
+                pass
             return
 
         if not content_from_parser and final_done_content:

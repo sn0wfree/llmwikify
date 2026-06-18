@@ -26,3 +26,8 @@ class AgentHookContext:
     final_content: str | None = None
     stop_reason: str | None = None
     error: str | None = None
+    observations: list[str] = field(default_factory=list)
+    cancelled: bool = False
+    paused: bool = False
+    compacted_count: int = 0
+    chars_saved: int = 0
