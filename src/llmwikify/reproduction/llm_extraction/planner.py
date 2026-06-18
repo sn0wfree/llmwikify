@@ -161,6 +161,7 @@ def plan_paper(
     parsed_text: str,
     sections: list[Section] | None = None,
     llm_client: Any | None = None,
+    feedback: str = "",
 ) -> PlanResult:
     """Run Stage 1 Call 2: classify + plan + token_budget.
 
@@ -170,6 +171,7 @@ def plan_paper(
         parsed_text: Full text from Stage 0.
         sections: Optional sections from Call 1 (improves planning accuracy).
         llm_client: Optional pre-built LLM client.
+        feedback: Optional feedback from previous failed plan (for re-planning).
 
     Returns:
         PlanResult with all planning fields populated. ``success=False``
@@ -188,6 +190,7 @@ def plan_paper(
         n_sections=len(section_dicts),
         sections=section_dicts,
         paper_text=parsed_text,
+        feedback=feedback,
     )
 
     api_params = {k: v for k, v in params.items() if k in API_PARAM_KEYS}
@@ -248,3 +251,103 @@ def plan_paper(
         latency_ms=latency_ms,
         success=True,
     )
+
+
+VALIDATE_PROMPT_PATH = (
+    Path(__file__).parent.parent.parent
+    / "foundation"
+    / "prompts"
+    / "_defaults"
+    / "repro_validate_plan.yaml"
+)
+
+
+@with_retry(stage="validate_plan", config=RetryConfig(max_attempts=2, backoff_base=0.5))
+def _validate_plan_with_llm_retry(client: Any, messages: list, **api_params: Any) -> str:
+    """Thin wrapper around ``client.chat`` with L1 retry for plan validation."""
+    return client.chat(messages, **api_params)
+
+
+def validate_plan_with_llm(
+    client: Any,
+    plan: PlanResult,
+    parsed_text: str,
+    previous_feedback: str = "",
+) -> tuple[bool, str, str]:
+    """Validate plan using LLM judgment.
+
+    Args:
+        client: LLM client.
+        plan: Plan to validate.
+        parsed_text: Full paper text (for context).
+        previous_feedback: Feedback from previous failed plan.
+
+    Returns:
+        (is_valid, issues, revised_strategy)
+    """
+    if not VALIDATE_PROMPT_PATH.exists():
+        logger.warning("[planner] validate prompt not found: %s", VALIDATE_PROMPT_PATH)
+        return True, "", ""
+
+    import yaml
+    import time
+
+    raw = yaml.safe_load(VALIDATE_PROMPT_PATH.read_text(encoding="utf-8"))
+    system_text = raw.get("system", "")
+    user_template = raw.get("user", "")
+    params = raw.get("params", {})
+
+    tmpl = _jinja_env.from_string(user_template)
+    user_msg = tmpl.render(
+        title=plan.paper_id,
+        paper_type=plan.paper_type,
+        schema_choice=plan.schema_choice,
+        n_signals_estimate=plan.n_signals_estimate,
+        extraction_strategy=plan.extraction_strategy,
+        token_budget=plan.token_budget,
+        confidence=plan.confidence,
+        previous_feedback=previous_feedback,
+        paper_text_preview=parsed_text[:2000],
+    )
+
+    api_params = {k: v for k, v in params.items() if k in API_PARAM_KEYS}
+    messages = [
+        {"role": "system", "content": system_text},
+        {"role": "user", "content": user_msg},
+    ]
+
+    logger.info("[planner] validating plan for paper=%s", plan.paper_id)
+    t0 = time.monotonic()
+    try:
+        response = _validate_plan_with_llm_retry(client, messages, **api_params)
+    except Exception as exc:
+        logger.warning("[planner] validation LLM call failed: %s", exc)
+        return True, "", ""  # If validation fails, accept plan
+
+    latency_ms = int((time.monotonic() - t0) * 1000)
+    data = _extract_json(response)
+
+    if not data:
+        logger.warning("[planner] validation JSON parse failed, accepting plan")
+        return True, "", ""
+
+    is_valid = bool(data.get("is_valid", True))
+    issues = data.get("issues", [])
+    suggestions = data.get("suggestions", [])
+    revised_strategy = data.get("revised_strategy", "")
+
+    # Combine issues and suggestions for feedback
+    feedback_parts = []
+    if issues:
+        feedback_parts.append(f"Issues: {'; '.join(issues)}")
+    if suggestions:
+        feedback_parts.append(f"Suggestions: {'; '.join(suggestions)}")
+
+    feedback = " ".join(feedback_parts) if feedback_parts else ""
+
+    logger.info(
+        "[planner] validation result: is_valid=%s issues=%d suggestions=%d (%dms)",
+        is_valid, len(issues), len(suggestions), latency_ms,
+    )
+
+    return is_valid, feedback, revised_strategy

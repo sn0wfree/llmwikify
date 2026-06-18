@@ -33,6 +33,7 @@ from .stage0_ingest import Stage0Result, run_stage0_ingest
 from .track_a import TrackAResult, run_track_a
 from .track_b import TrackBResult, run_track_b, PASS2_SUCCESS_THRESHOLD_HIGH
 from .validator import validate_paper_outputs
+from .llm_factory import build_default_client
 
 logger = logging.getLogger(__name__)
 
@@ -240,28 +241,64 @@ def run_one_paper(
             reason=str(exc),
         )
 
-    # Stage 1 Call 2: plan paper
+    # Stage 1 Call 2: plan paper (with LLM self-feedback)
     logger.info("[orchestrator] paper=%s [3/5] stage1_call2: planning", paper_id)
-    try:
-        plan = _run_planner(
-            paper_id=paper_id, title=title, parsed_text=parsed_text,
-            sections=sections, llm_client=llm_client,
-        )
-        logger.info(
-            "[orchestrator] paper=%s [3/5] stage1_call2: ok schema=%s n=%d conf=%.2f",
-            paper_id, plan.schema_choice, plan.n_signals_estimate, plan.confidence,
-        )
-    except DeferError as exc:
-        logger.warning(
-            "[orchestrator] paper=%s [3/5] stage1_call2: deferred, using summary fallback: %s",
-            paper_id, exc,
-        )
-        deferred.add(
-            "stage1_call2", _run_planner,
-            (paper_id, title, parsed_text), {"sections": sections, "llm_client": llm_client},
-            reason=str(exc),
-        )
+    plan = None
+    max_replan_attempts = 2
+    replan_feedback = ""
+
+    for attempt in range(max_replan_attempts + 1):
+        try:
+            plan = _run_planner(
+                paper_id=paper_id, title=title, parsed_text=parsed_text,
+                sections=sections, llm_client=llm_client,
+                feedback=replan_feedback,
+            )
+            
+            # Validate plan using LLM
+            from .planner import validate_plan_with_llm
+            client = llm_client or build_default_client()
+            is_valid, issues, revised_strategy = validate_plan_with_llm(
+                client=client,
+                plan=plan,
+                parsed_text=parsed_text,
+                previous_feedback=replan_feedback,
+            )
+            
+            if is_valid:
+                logger.info(
+                    "[orchestrator] paper=%s [3/5] stage1_call2: ok schema=%s n=%d conf=%.2f (attempt %d)",
+                    paper_id, plan.schema_choice, plan.n_signals_estimate, plan.confidence, attempt + 1,
+                )
+                break
+            else:
+                logger.warning(
+                    "[orchestrator] paper=%s [3/5] stage1_call2: plan invalid (attempt %d): %s",
+                    paper_id, attempt + 1, issues,
+                )
+                replan_feedback = issues
+                
+                # Apply revised strategy if provided
+                if revised_strategy:
+                    plan.extraction_strategy = revised_strategy
+                
+        except DeferError as exc:
+            logger.warning(
+                "[orchestrator] paper=%s [3/5] stage1_call2: deferred, using summary fallback: %s",
+                paper_id, exc,
+            )
+            deferred.add(
+                "stage1_call2", _run_planner,
+                (paper_id, title, parsed_text, sections, llm_client),
+                reason=str(exc),
+            )
+            plan = _make_fallback_plan(paper_id, parsed_text)
+            break
+
+    if plan is None:
+        logger.error("[orchestrator] paper=%s [3/5] stage1_call2: all attempts failed, using fallback", paper_id)
         plan = _make_fallback_plan(paper_id, parsed_text)
+    
     summary["plan_success"] = plan.success
 
     # Save plan.json
@@ -490,10 +527,12 @@ def _run_planner(
     parsed_text: str,
     sections: list[Section] | None,
     llm_client: Any | None,
+    feedback: str = "",
 ) -> PlanResult:
     """Wrapper around plan_paper so it can be deferred."""
     from .planner import plan_paper
     return plan_paper(
         paper_id=paper_id, title=title, parsed_text=parsed_text,
         sections=sections, llm_client=llm_client,
+        feedback=feedback,
     )
