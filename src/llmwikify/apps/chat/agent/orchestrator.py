@@ -128,9 +128,13 @@ class ChatOrchestrator:
         config: dict | None = None,
         skill_service: Any = None,
     ):
+        from llmwikify.apps.chat.agent.confirmation_manager import (
+            ConfirmationManager,
+        )
         from llmwikify.apps.chat.agent.context_manager import ContextManager
         from llmwikify.apps.chat.agent.event_log import EventLog
         from llmwikify.apps.chat.agent.prompt_builder import PromptBuilder
+        from llmwikify.apps.chat.agent.session_manager import SessionManager
         from llmwikify.apps.chat.agent.tool_executor import ToolExecutor
         from llmwikify.apps.chat.config import merge_six_step_config
 
@@ -152,6 +156,17 @@ class ChatOrchestrator:
         self._session_status: dict[str, str] = {}
         self._abort_events: dict[str, asyncio.Event] = {}
         self._tool_registries: dict[tuple[str, str], Any] = {}
+
+        # Phase 5: extract confirmation + session management into
+        # dedicated classes. Both managers observe the dicts above by
+        # reference, so state changes stay consistent.
+        self._confirmation_mgr = ConfirmationManager(self._tool_registries)
+        self._session_mgr = SessionManager(
+            db=chat_db,
+            context_manager=self.context_manager,
+            session_status=self._session_status,
+            abort_events=self._abort_events,
+        )
 
         # P1-2 (vendored from nanobot command/router.py): slash command
         # dispatch table. Commands are intercepted before the ReAct loop
@@ -350,7 +365,7 @@ class ChatOrchestrator:
             history_loader=self._load_history,
             db=self.db,
         )
-        result = await self.approve_confirmation(
+        result = await self._confirmation_mgr.approve_confirmation(
             confirmation_id, wiki_id, arguments
         )
         if self._is_unknown_confirmation(result):
@@ -405,22 +420,27 @@ class ChatOrchestrator:
             yield ChatEvent.error(str(e))
 
     # ─── Confirmations ───────────────────────────────────────────
+    # Phase 5: these methods now delegate to ``self._confirmation_mgr``
+    # (see ``confirmation_manager.py``). The public signatures are
+    # preserved so external callers (``AgentService``,
+    # ``chat_sse.py`` HTTP routes) keep working.
 
     @staticmethod
     def _is_unknown_confirmation(result: Any) -> bool:
-        if not isinstance(result, dict) or result.get("status") != "error":
-            return False
-        error = result.get("error", "")
-        return "Unknown confirmation ID" in error or "Invalid confirmation ID" in error
+        """Static helper kept for backward compatibility.
+
+        Prefer ``ConfirmationManager.is_unknown_confirmation``. The
+        logic is identical; this method is a thin shim so existing
+        callers (e.g. ``approve_confirmation_continue``) and external
+        consumers (e.g. tests) continue to work.
+        """
+        from llmwikify.apps.chat.agent.confirmation_manager import (
+            ConfirmationManager as _CM,
+        )
+        return _CM.is_unknown_confirmation(result)
 
     def list_confirmations(self, wiki_id: str | None = None) -> dict[str, list[dict]]:
-        grouped: dict[str, list[dict]] = {}
-        for (_, cached_wiki_id), registry in self._tool_registries.items():
-            if wiki_id and cached_wiki_id != wiki_id:
-                continue
-            for group, items in registry.get_pending_by_group().items():
-                grouped.setdefault(group, []).extend(items)
-        return grouped
+        return self._confirmation_mgr.list_confirmations(wiki_id)
 
     async def approve_confirmation(
         self,
@@ -428,58 +448,38 @@ class ChatOrchestrator:
         wiki_id: str | None = None,
         arguments: dict | None = None,
     ) -> dict:
-        for (_, cached_wiki_id), registry in self._tool_registries.items():
-            if wiki_id and cached_wiki_id != wiki_id:
-                continue
-            result = registry.confirm_execution(confirmation_id, arguments)
-            if not self._is_unknown_confirmation(result):
-                return result
-        return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+        return await self._confirmation_mgr.approve_confirmation(
+            confirmation_id, wiki_id, arguments,
+        )
 
     async def reject_confirmation(
         self, confirmation_id: str, wiki_id: str | None = None,
     ) -> dict:
-        for (_, cached_wiki_id), registry in self._tool_registries.items():
-            if wiki_id and cached_wiki_id != wiki_id:
-                continue
-            result = registry.reject_execution(confirmation_id)
-            if not self._is_unknown_confirmation(result):
-                return result
-        return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+        return await self._confirmation_mgr.reject_confirmation(confirmation_id, wiki_id)
 
     async def batch_approve_confirmations(
         self, confirmation_ids: list[str], wiki_id: str | None = None,
     ) -> dict:
-        results = [
-            await self.approve_confirmation(cid, wiki_id)
-            for cid in confirmation_ids
-        ]
-        return {"approved": len(results), "results": results}
+        return await self._confirmation_mgr.batch_approve_confirmations(
+            confirmation_ids, wiki_id,
+        )
 
     # ─── Session management ──────────────────────────────────────
+    # Phase 5: also delegated to ``self._session_mgr``
+    # (see ``session_manager.py``). The public signatures are
+    # preserved.
 
     def delete_session(self, session_id: str) -> bool:
-        """Delete a session from DB and evict its in-memory context."""
-        self.context_manager.remove(session_id)
-        return self.db.delete_chat_session(session_id)
+        return self._session_mgr.delete_session(session_id)
 
     def revert_session(self, session_id: str, message_id: str) -> int:
-        count = self.db.revert_to_message(session_id, message_id)
-        self.context_manager.remove(session_id)
-        return count
+        return self._session_mgr.revert_session(session_id, message_id)
 
     def edit_message(self, message_id: str, new_content: str) -> bool:
-        return self.db.update_chat_message(message_id, new_content)
+        return self._session_mgr.edit_message(message_id, new_content)
 
     def abort_session(self, session_id: str) -> bool:
-        """Signal abort for an active session."""
-        if self._session_status.get(session_id) != "busy":
-            return False
-        event = self._abort_events.get(session_id)
-        if event:
-            event.set()
-            return True
-        return False
+        return self._session_mgr.abort_session(session_id)
 
     # ─── Slash commands (P1-2, vendored from nanobot) ───────────
 
@@ -625,10 +625,10 @@ class ChatOrchestrator:
             }
 
     def get_session_status(self, session_id: str) -> str:
-        return self._session_status.get(session_id, "idle")
+        return self._session_mgr.get_session_status(session_id)
 
     def get_all_session_status(self) -> dict[str, str]:
-        return dict(self._session_status)
+        return self._session_mgr.get_all_session_status()
 
     # ─── V2 runner path (Plan B, default since B-5) ────────────────
 
