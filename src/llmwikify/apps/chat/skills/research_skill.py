@@ -65,7 +65,7 @@ import json
 import logging
 from typing import Any
 
-from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
+from llmwikify.apps.chat.agent.research_runner import (
     EVENT_PHASE,
     EVENT_REASONING,
     EVENT_ROUND_COMPLETE,
@@ -333,7 +333,7 @@ async def _act_report(args: dict, ctx: SkillContext) -> SkillResult:
 # ─── Hooks ──────────────────────────────────────────────────────
 
 
-def _make_check_control_signals(db: Any) -> "Any":
+def _make_check_control_signals(db: Any) -> Any:
     """Build the on_before_act hook for cancel/pause signals.
 
     Reads the DB session's status field; if "cancelling" or
@@ -359,7 +359,7 @@ def _make_check_control_signals(db: Any) -> "Any":
 def _make_gate_intervention(
     db: Any,
     gate_min_sources: int = 3,
-) -> "Any":
+) -> Any:
     """Build the on_after_act hook for quality gate intervention.
 
     Phase 6 simplified gate: if after a "gather" action
@@ -383,7 +383,7 @@ def _make_gate_intervention(
     return gate_intervention
 
 
-def _make_persist_state(db: Any) -> "Any":
+def _make_persist_state(db: Any) -> Any:
     """Build the persist_state hook: serialize state into research_steps."""
     def persist_research_state(state: dict, round_idx: int) -> None:
         if db is None:
@@ -399,7 +399,7 @@ def _make_persist_state(db: Any) -> "Any":
     return persist_research_state
 
 
-def _make_restore_state(db: Any) -> "Any":
+def _make_restore_state(db: Any) -> Any:
     """Build the restore_state hook: load last persisted state."""
     def restore_research_state(state: dict) -> dict:
         if db is None or not state.get("session_id"):
@@ -443,11 +443,19 @@ def _make_research_config(args: dict, ctx: SkillContext) -> ReactConfig:
             # Fall back to module-level instance (offline /
             # non-registered state). Useful for tests.
             from llmwikify.apps.chat.skills.actions import (
-                plan_skill as _plan,
                 analyze_skill as _analyze,
-                summarize_skill as _summarize,
-                score_skill as _score,
+            )
+            from llmwikify.apps.chat.skills.actions import (
+                plan_skill as _plan,
+            )
+            from llmwikify.apps.chat.skills.actions import (
                 revise_skill as _revise,
+            )
+            from llmwikify.apps.chat.skills.actions import (
+                score_skill as _score,
+            )
+            from llmwikify.apps.chat.skills.actions import (
+                summarize_skill as _summarize,
             )
             fallback = {
                 "plan": _plan, "analyze": _analyze,
@@ -469,7 +477,7 @@ def _make_research_config(args: dict, ctx: SkillContext) -> ReactConfig:
     # binding).
     from llmwikify.apps.chat.skills.base import SkillAction
 
-    def _wrap(name: str, fn: "Any") -> SkillAction:
+    def _wrap(name: str, fn: Any) -> SkillAction:
         async def handler(args: dict, ctx: SkillContext) -> SkillResult:
             return await fn(args, ctx)
         return SkillAction(

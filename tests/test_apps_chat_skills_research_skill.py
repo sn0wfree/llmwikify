@@ -24,6 +24,14 @@ from typing import Any
 
 import pytest
 
+from llmwikify.apps.chat.agent.research_runner import (
+    EVENT_ACTION_ERROR,
+    EVENT_OBSERVATION_ERROR,
+    EVENT_PHASE,
+    EVENT_REASONING,
+    EVENT_ROUND_COMPLETE,
+    ReactConfig,
+)
 from llmwikify.apps.chat.skills import (
     SkillContext,
     SkillRegistry,
@@ -48,14 +56,6 @@ from llmwikify.apps.chat.skills.research_skill import (
     research_skill,
     resume_research,
     run_research,
-)
-from llmwikify.archive.llmwikify_v0_50_legacy.chat_legacy.react_engine import (
-    EVENT_ACTION_ERROR,
-    EVENT_OBSERVATION_ERROR,
-    EVENT_PHASE,
-    EVENT_REASONING,
-    EVENT_ROUND_COMPLETE,
-    ReactConfig,
 )
 
 
