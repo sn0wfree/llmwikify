@@ -115,17 +115,29 @@ class TestRunL5Pipeline:
             assert data["factor"]["version"] == 2  # Version bumped
 
     def test_success_with_mock_llm(self):
-        """Pipeline succeeds with mock LLM client."""
+        """Pipeline succeeds with mock LLM client.
+
+        The pipeline now calls ``llm_client.chat()`` twice — once for
+        hypothesis testing, once for reflection (added in
+        ``64169d5 feat(l5): 稳定性分析增强``). Provide responses for
+        both invocations via ``side_effect``.
+        """
         mock_factor = _mock_factor_data()
         mock_bt = _mock_backtest_result()
 
-        mock_llm = MagicMock()
-        mock_llm.chat.return_value = json.dumps({
+        hypothesis_response = json.dumps({
             "hypothesis_testing": [
                 {"hypothesis_id": "H1", "conclusion": "支持", "reasoning": "IC positive"}
             ],
             "final_meaning": "This is a momentum factor.",
         })
+        reflection_response = json.dumps({
+            "suggestions": [],
+            "summary": "No further improvements.",
+        })
+
+        mock_llm = MagicMock()
+        mock_llm.chat.side_effect = [hypothesis_response, reflection_response]
 
         written = {}
         def capture_write(name, data):
@@ -137,8 +149,8 @@ class TestRunL5Pipeline:
             result = run_l5_pipeline("stock/price/test_factor", llm_client=mock_llm)
 
             assert result["success"] is True
-            # LLM was called
-            mock_llm.chat.assert_called_once()
+            # LLM was called twice: hypothesis + reflection
+            assert mock_llm.chat.call_count == 2
             # Hypothesis testing was populated
             l5_data = result["l5_data"]
             assert len(l5_data["hypothesis_testing"]) == 1

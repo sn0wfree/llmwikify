@@ -323,6 +323,10 @@ class DataRouter:
     SynthDataSource always returns non-None so it acts as a hard floor.
     """
 
+    # Class-level default password slot — tests monkeypatch this to
+    # bypass the env-var / file-based lookup in `_load_ch_passwd`.
+    DEFAULT_CH_PASSWORD: Optional[str] = None
+
     def __init__(
         self,
         sources: Optional[list[DataSource]] = None,

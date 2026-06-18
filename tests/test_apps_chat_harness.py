@@ -280,7 +280,12 @@ class TestComposition:
 class TestPyprojectRegistration:
     def test_apps_chat_harness_in_setuptools(self) -> None:
         """The new harness/ subpackage is registered in
-        pyproject.toml's [tool.setuptools] packages."""
+        pyproject.toml's setuptools config.
+
+        Modern pyproject uses ``[tool.setuptools.packages.find]``
+        (dict shape) instead of an explicit ``packages`` list —
+        verify the include pattern matches the harness package.
+        """
         try:
             import tomllib  # Python 3.11+
         except ImportError:
@@ -288,5 +293,17 @@ class TestPyprojectRegistration:
         from pathlib import Path
         with open(Path(__file__).parent.parent / "pyproject.toml", "rb") as f:
             data = tomllib.load(f)
-        packages = data["tool"]["setuptools"]["packages"]
-        assert "llmwikify.apps.chat.harness" in packages
+        setuptools = data["tool"]["setuptools"]
+        # Two accepted shapes:
+        #   1. legacy: packages = ["llmwikify.apps.chat.harness", ...]
+        #   2. modern: packages.find = {where=[...], include=[...]}
+        if "packages" in setuptools and isinstance(setuptools["packages"], list):
+            assert "llmwikify.apps.chat.harness" in setuptools["packages"]
+        else:
+            find_cfg = setuptools["packages"]["find"]
+            includes = find_cfg.get("include", [])
+            # The harness package is matched by the wildcard "llmwikify*".
+            assert any(
+                inc == "llmwikify*" or inc == "llmwikify.apps.chat.harness"
+                for inc in includes
+            ), f"harness not covered by setuptools find include: {includes}"

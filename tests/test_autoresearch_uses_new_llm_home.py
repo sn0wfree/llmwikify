@@ -16,7 +16,11 @@ import ast
 from pathlib import Path
 
 
-AUTORESEARCH_DIR = Path("src/llmwikify/apps/chat")
+# Resolve autoresearch dir relative to this file so the test is
+# stable when other tests in the same suite chdir or monkeypatch cwd.
+_AUTORESEARCH_DIR = (
+    Path(__file__).parent.parent / "src" / "llmwikify" / "apps" / "chat"
+)
 DEPRECATED_PATH = "llmwikify.agent.backend.adapters"
 
 
@@ -33,8 +37,8 @@ def _imports_from(path: Path, module: str) -> list[str]:
 
 def test_autoresearch_does_not_import_from_deprecated_adapters():
     """No autoresearch file imports from the deprecated adapters module."""
-    py_files = list(AUTORESEARCH_DIR.glob("*.py"))
-    assert py_files, f"no .py files in {AUTORESEARCH_DIR}"
+    py_files = list(_AUTORESEARCH_DIR.glob("*.py"))
+    assert py_files, f"no .py files in {_AUTORESEARCH_DIR}"
 
     hits: list[str] = []
     for p in py_files:
@@ -45,10 +49,22 @@ def test_autoresearch_does_not_import_from_deprecated_adapters():
 
 
 def test_autoresearch_engine_imports_streamable_from_new_home():
-    """engine.py uses the new home for StreamableLLMClient."""
-    from llmwikify.apps.chat import engine
+    """engine.py uses the new home for StreamableLLMClient.
 
-    src = Path(engine.__file__).read_text()
+    The v0.41 ResearchEngine was moved to ``archive/llmwikify_v0_41_legacy``
+    in B-7 (2026-06-18); the test reads the archived source directly to
+    avoid the (no longer needed) module-level import chain.
+    """
+    engine_path = (
+        Path(__file__).parent.parent
+        / "src"
+        / "llmwikify"
+        / "archive"
+        / "llmwikify_v0_41_legacy"
+        / "chat_legacy"
+        / "engine.py"
+    )
+    src = engine_path.read_text()
     assert "from llmwikify.foundation.llm.streamable import StreamableLLMClient" in src
     assert "from llmwikify._legacy.adapters import" not in src
 

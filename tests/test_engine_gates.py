@@ -27,7 +27,7 @@ import inspect
 
 def test_engine_constructs_gates():
     """ResearchEngine.__init__ creates a self.gates attribute."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine.__init__)
     assert "self.gates = ResearchGates(self)" in src, (
@@ -55,7 +55,7 @@ def test_gates_holds_back_refs_to_engine_deps():
 
 def test_engine_check_control_signals_delegates_to_gates():
     """engine._check_control_signals → self.gates.check_control_signals."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._check_control_signals)
     assert "self.gates.check_control_signals" in src, (
@@ -65,7 +65,7 @@ def test_engine_check_control_signals_delegates_to_gates():
 
 def test_engine_check_framework_compliance_delegates_to_gates():
     """engine._check_framework_compliance → self.gates.check_framework_compliance."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._check_framework_compliance)
     assert "self.gates.check_framework_compliance" in src, (
@@ -75,7 +75,7 @@ def test_engine_check_framework_compliance_delegates_to_gates():
 
 def test_engine_check_quality_compliance_delegates_to_gates():
     """engine._check_quality_compliance → self.gates.check_quality_compliance."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._check_quality_compliance)
     assert "self.gates.check_quality_compliance" in src, (
@@ -85,7 +85,7 @@ def test_engine_check_quality_compliance_delegates_to_gates():
 
 def test_engine_can_replan_delegates_to_gates():
     """engine._can_replan → self.gates.can_replan."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._can_replan)
     assert "self.gates.can_replan" in src, (
@@ -95,7 +95,7 @@ def test_engine_can_replan_delegates_to_gates():
 
 def test_engine_evaluate_gate_delegates_to_gates():
     """engine._evaluate_gate → self.gates.evaluate_gate."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._evaluate_gate)
     assert "self.gates.evaluate_gate" in src, (
@@ -105,7 +105,7 @@ def test_engine_evaluate_gate_delegates_to_gates():
 
 def test_engine_synthesis_to_text_delegates_to_gates():
     """engine._synthesis_to_text → ResearchGates.synthesis_to_text (static)."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._synthesis_to_text)
     assert "ResearchGates.synthesis_to_text" in src, (
@@ -180,7 +180,7 @@ def test_legacy_gate_logic_not_in_engine():
     C2, only the 1-line delegators remain. This test
     catches re-introduction of the inline logic.
     """
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine)
     # The 6-step framework check (step 1/2/3/4/5/6) should NOT

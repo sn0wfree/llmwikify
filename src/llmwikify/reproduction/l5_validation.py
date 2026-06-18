@@ -474,10 +474,15 @@ def _score_group(group_analysis: dict) -> float:
 
 
 def _score_return(return_analysis: dict) -> float:
-    """Score return analysis (0-20)."""
-    sharpe = return_analysis.get("sharpe", 0)
-    calmar = return_analysis.get("calmar", 0)
-    sortino = return_analysis.get("sortino", 0)
+    """Score return analysis (0-20).
+
+    Uses ``abs()`` of sharpe/calmar/sortino so reverse factors (where
+    high-alpha edges flip the sign) still receive full credit. This
+    matches the convention in ``_score_ic`` and ``_score_group``.
+    """
+    sharpe = abs(return_analysis.get("sharpe", 0))
+    calmar = abs(return_analysis.get("calmar", 0))
+    sortino = abs(return_analysis.get("sortino", 0))
 
     # Sharpe (0-8)
     if sharpe > 1.0:

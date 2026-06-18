@@ -170,3 +170,12 @@ def strategy_client(tmp_path, monkeypatch):
     app.include_router(router)
     from fastapi.testclient import TestClient
     yield TestClient(app), wiki
+
+
+# ── Pytest collection ignore ────────────────────────────────────
+#
+# test_e2e_paper.py is a script (``python tests/reproduction/test_e2e_paper.py``)
+# that starts its own server. Pytest collecting it produces 8 errors.
+# Exclude it from collection.
+
+collect_ignore = ["test_e2e_paper.py"]

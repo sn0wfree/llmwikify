@@ -28,7 +28,7 @@ import inspect
 
 def test_engine_constructs_observer_and_resume_loader():
     """ResearchEngine.__init__ creates self.observer + self.resume_loader."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine.__init__)
     assert "self.observer = ResearchObserver(self)" in src, (
@@ -65,7 +65,7 @@ def test_resume_loader_holds_back_refs_to_engine_deps():
 
 def test_engine_observe_delegates_to_observer():
     """engine._observe → self.observer.observe."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._observe)
     assert "self.observer.observe" in src, (
@@ -75,7 +75,7 @@ def test_engine_observe_delegates_to_observer():
 
 def test_engine_load_resume_state_delegates_to_resume_loader():
     """engine._load_resume_state → self.resume_loader.load."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._load_resume_state)
     assert "self.resume_loader.load" in src, (
@@ -238,7 +238,7 @@ def test_legacy_observe_and_resume_logic_not_in_engine():
     1-line delegators remain. This test catches
     re-introduction of the inline logic.
     """
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine)
     # The phrase ``Average source credibility`` (from

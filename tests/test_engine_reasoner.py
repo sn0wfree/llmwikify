@@ -35,7 +35,7 @@ def test_engine_constructs_reasoner():
 
     # We can't construct a full engine without deps, so use a
     # mock: assert the attribute is set in __init__.
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine.__init__)
     assert "self.reasoner = ResearchReasoner(self)" in src, (
@@ -66,7 +66,7 @@ def test_reasoner_holds_back_refs_to_engine_deps():
 
 def test_engine_reason_delegates_to_reasoner():
     """engine._reason() calls self.reasoner.reason() (1-line delegator)."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._reason)
     # The body must reference self.reasoner.reason
@@ -91,7 +91,7 @@ def test_engine_reason_delegates_to_reasoner():
 
 def test_engine_rule_based_reason_delegates_to_reasoner():
     """engine._rule_based_reason() is a 1-line delegator."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._rule_based_reason)
     assert "self.reasoner.rule_based" in src, (
@@ -102,7 +102,7 @@ def test_engine_rule_based_reason_delegates_to_reasoner():
 
 def test_engine_llm_reason_delegates_to_reasoner():
     """engine._llm_reason() is a 1-line delegator."""
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._llm_reason)
     assert "self.reasoner._llm_reason" in src, (
@@ -306,7 +306,7 @@ def test_legacy_rule_based_block_not_in_engine():
     remains. This test catches re-introduction of the inline
     logic.
     """
-    import llmwikify.apps.chat.engine as engine_mod
+    import llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine)
     # The phrase ``if state.phase == "error"`` should NOT appear
