@@ -132,7 +132,8 @@ class ChatRunnerV2:
 
             if not ctx.last_tool_calls:
                 ctx.final_content = ctx.last_accumulated
-                ctx.stop_reason = "completed"
+                if ctx.stop_reason not in {"cancelled", "paused", "timeout"}:
+                    ctx.stop_reason = "completed"
                 break
 
             async for ev in self._act(ctx, ctx.last_tool_calls, iteration):
@@ -250,6 +251,16 @@ class ChatRunnerV2:
             async for ev in self._stream_llm(messages, tools):
                 if ev.get("type") == "done":
                     final_done_content = ev.get("content", "") or ""
+                elif ev.get("type") == "phase":
+                    phase_value = ev.get("phase")
+                    if phase_value in {"cancelled", "paused", "timeout"}:
+                        ctx.stop_reason = phase_value
+                    yield ev
+                elif ev.get("type") == "error":
+                    ctx.error = ev.get("message") or ev.get("error") or ctx.error
+                    ctx.reason_failed = True
+                    yield ev
+                    return
                 async for parsed in parser.feed(ev):
                     kind = parsed.get("type")
                     if kind == "content":
