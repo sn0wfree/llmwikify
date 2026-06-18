@@ -7,9 +7,11 @@ B-2 fills in the skeleton with the 5-step state machine:
   4. OBSERVE    aggregate observations into a per-turn summary
   5. COMPLETE   finalize_content pipeline + emit done / error
 
-CompositeHook integration covers 11 of the 13 AgentHook points
-(wants_streaming and on_confirmation are detected/special-cased in
-the dispatcher, not invoked directly). Microcompact defaults to ON
+CompositeHook integration covers all 13 AgentHook points:
+  wants_streaming, before_iteration, on_stream, on_stream_end,
+  emit_reasoning, emit_reasoning_end, before_execute_tools,
+  after_tool_executed, on_tool_error, on_confirmation, after_iteration,
+  finalize_content, on_error. Microcompact defaults to ON
 via :func:`build_microcompact_fn`. Text-mode ``[TOOL_CALL]`` parsing
 shares ``TextModeParser`` with the existing chat_react path so a
 fallback ``<tool_call>`` block in a non-tool-aware model still works.
@@ -249,11 +251,28 @@ class ChatRunnerV2:
         accumulated = ""
         thinking = ""
         tool_calls: list[dict[str, Any]] = []
+        in_thinking = False
+
+        async def end_thinking() -> None:
+            nonlocal in_thinking
+            if not in_thinking:
+                return
+            in_thinking = False
+            try:
+                await _maybe_await(self._hook.emit_reasoning_end(
+                    ctx.hook_ctx(iteration),
+                ))
+            except Exception:
+                logger.warning(
+                    "emit_reasoning_end hook raised", exc_info=True,
+                )
 
         final_done_content = ""
         content_from_parser = False
         try:
             async for ev in self._stream_llm(messages, tools):
+                if ev.get("type") in {"done", "phase", "error"}:
+                    await end_thinking()
                 if ev.get("type") == "done":
                     final_done_content = ev.get("content", "") or ""
                 elif ev.get("type") == "phase":
@@ -268,6 +287,8 @@ class ChatRunnerV2:
                     return
                 async for parsed in parser.feed(ev):
                     kind = parsed.get("type")
+                    if kind != "thinking":
+                        await end_thinking()
                     if kind == "content":
                         content_from_parser = True
                         chunk = parsed.get("text", "")
@@ -277,6 +298,7 @@ class ChatRunnerV2:
                         ))
                         yield_event = {"type": "message_delta", "content": chunk}
                     elif kind == "thinking":
+                        in_thinking = True
                         chunk = parsed.get("text", "")
                         thinking += chunk
                         await _maybe_await(self._hook.emit_reasoning(
@@ -290,6 +312,7 @@ class ChatRunnerV2:
                         yield_event = None
                     if yield_event is not None:
                         yield yield_event
+            await end_thinking()
             for flushed in parser.flush():
                 kind = flushed.get("type")
                 if kind == "content":
@@ -313,6 +336,13 @@ class ChatRunnerV2:
             if not content_from_parser and accumulated:
                 pass
             return
+        else:
+            try:
+                await _maybe_await(self._hook.on_stream_end(
+                    ctx.hook_ctx(iteration), resuming=False,
+                ))
+            except Exception:
+                logger.warning("on_stream_end hook raised", exc_info=True)
 
         if not content_from_parser and final_done_content:
             accumulated = final_done_content
@@ -327,6 +357,7 @@ class ChatRunnerV2:
     ) -> None:
         await _maybe_await(self._hook.before_execute_tools(ctx.hook_ctx(iteration)))
         ctx.confirmation_required = False
+        ctx.last_tool_calls = []
 
         for _idx, tc in enumerate(tool_calls):
             tool_name = tc.get("name") or tc.get("tool", "")
@@ -430,8 +461,6 @@ class ChatRunnerV2:
                 "result": result,
                 "call_id": call_id,
             }
-
-        ctx.last_tool_calls = []
 
     def _observe(self, ctx: _RunContext, last_thinking: str) -> None:
         if last_thinking:
