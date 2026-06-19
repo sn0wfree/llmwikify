@@ -752,23 +752,79 @@ def _supplement_context(
     return parsed_text[start:end]
 
 
+def _detect_done_flag(response: str, parsed: dict | list | None) -> bool:
+    """Detect whether LLM marked enumeration as complete.
+
+    F3 (v0.4-Patch): LLM (M2.7) often signals done in natural language prose
+    instead of strict JSON `done: true`. Recognise multiple forms:
+
+    JSON form (strict):
+        {"done": true}
+        {"done": "true"}
+        {"signals": [...], "done": true}
+
+    Prose form (lenient, check response text):
+        "已完成所有信号" / "全部完成" / "枚举完毕" / "enumeration complete"
+        "<done/>" / "[DONE]" / "###DONE###"
+        Trailing line: "done: true" / "Done." / "FIN."
+
+    Args:
+        response: Raw LLM response text.
+        parsed: Parsed JSON dict/list (may be None).
+
+    Returns:
+        True if any done signal detected.
+    """
+    # 1. JSON form
+    if isinstance(parsed, dict):
+        d = parsed.get("done")
+        if isinstance(d, bool) and d:
+            return True
+        if isinstance(d, str) and d.strip().lower() in ("true", "yes", "1", "complete"):
+            return True
+    # 2. Prose form
+    text = (response or "").lower()
+    prose_markers = (
+        "已完成所有信号",
+        "全部完成",
+        "枚举完毕",
+        "全部输出",
+        "enumeration complete",
+        "all signals extracted",
+        "all signals enumerated",
+        "no more signals",
+    )
+    for marker in prose_markers:
+        if marker in text:
+            return True
+    # 3. Tag form (very strict, must be at end of response)
+    text_stripped = (response or "").rstrip()
+    if text_stripped.endswith(("</done>", "<done/>", "[done]", "[done]", "###done###")):
+        return True
+    # 4. Trailing "done: true" line
+    last_lines = [ln.strip() for ln in text_stripped.splitlines()[-3:]]
+    for ln in last_lines:
+        if ln in ("done: true", "done:true", "done.", "fin."):
+            return True
+    return False
+
+
 def _parse_signals_from_response(response: str) -> tuple[list[SignalStub], bool]:
     """Parse LLM response into (list of SignalStub, done flag).
 
     Returns:
         (stubs, done): stubs = extracted signals from this response,
-            done = whether LLM marked done: true.
+            done = whether LLM marked enumeration complete (F3: prose + JSON).
     """
     parsed = _extract_json(response)
     if not parsed:
-        return [], False
-    done = False
+        return [], _detect_done_flag(response, None)
+    done = _detect_done_flag(response, parsed)
     if isinstance(parsed, dict) and "signals" in parsed:
         raw_list = parsed["signals"]
-        done = bool(parsed.get("done", False))
     elif isinstance(parsed, list):
         raw_list = parsed
-        done = False
+        done = False  # bare list response shouldn't claim done
     else:
         return [], done
 
