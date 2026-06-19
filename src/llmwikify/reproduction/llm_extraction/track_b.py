@@ -89,8 +89,10 @@ def _call_chat_pass2(client: Any, messages: list, max_tokens: int) -> str:
     return client.chat(messages, max_tokens=max_tokens, temperature=0.1)
 
 # Multi-turn continuation parameters
-MAX_ROUNDS = 10
-MAX_CONSECUTIVE_ZERO = 2
+# F1 (v0.4-Patch): MAX_CONSECUTIVE_ZERO 2 → 3 (more lenient, avoids premature exit
+# when LLM echoes back already-seen signals in continuation round)
+MAX_ROUNDS = 15
+MAX_CONSECUTIVE_ZERO = 3
 PASS1_MAX_TOKENS_DEFAULT = 32000
 PASS1_MAX_TOKENS_FALLBACK = 16384
 

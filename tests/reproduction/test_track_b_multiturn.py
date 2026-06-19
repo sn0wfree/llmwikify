@@ -187,7 +187,7 @@ class TestRunPass1:
         assert len(stubs) == 20
 
     def test_consecutive_zero_new_stops(self):
-        """Two consecutive rounds with zero new → stop."""
+        """Three consecutive rounds with zero new → stop (F1: MAX_CONSECUTIVE_ZERO 2→3)."""
         plan = PlanResult(
             paper_id="test",
             schema_choice="factor",
@@ -198,13 +198,14 @@ class TestRunPass1:
         )
         client = RoundSequenceFakeLLM([
             single_round_response(20, done=False),  # 20 new
-            "{}",  # 0 new
-            "{}",  # 0 new → stop after 3 rounds
+            "{}",  # 0 new (consecutive_zero=1)
+            "{}",  # 0 new (consecutive_zero=2)
+            "{}",  # 0 new (consecutive_zero=3) → stop after 4 rounds
         ])
         stubs, latency, n_calls = _run_pass1(
             client, plan, "test", "dummy text",
         )
-        assert n_calls == 3
+        assert n_calls == 4
         assert len(stubs) == 20
 
     def test_max_rounds_cap(self):
