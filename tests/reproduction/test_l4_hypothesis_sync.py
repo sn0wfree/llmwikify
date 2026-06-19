@@ -56,8 +56,11 @@ def _setup_factor_yaml(tmp_path: Path) -> Path:
 
 def test_l4_hypothesis_status_synced_from_l5(monkeypatch, tmp_path):
     """When L5 hypothesis_testing results are present, L4 hypothesis status should be updated."""
-    import os
-    os.chdir(tmp_path)
+    # Use monkeypatch.chdir so cwd is restored after this test —
+    # otherwise downstream tests that read files via relative paths
+    # (e.g. test_interfaces_server_routes.py::TestL4RoutesPy) will fail
+    # because the cwd leaked to tmp_path.
+    monkeypatch.chdir(tmp_path)
     _setup_factor_yaml(tmp_path)
 
     from llmwikify.reproduction import l5_orchestrator
@@ -140,8 +143,8 @@ def test_l4_hypothesis_status_synced_from_l5(monkeypatch, tmp_path):
 
 def test_l4_partial_support_status(monkeypatch, tmp_path):
     """'部分支持' conclusion should map to '部分支持' status."""
-    import os
-    os.chdir(tmp_path)
+    # monkeypatch.chdir restores cwd after the test (see sibling test).
+    monkeypatch.chdir(tmp_path)
     _setup_factor_yaml(tmp_path)
 
     from llmwikify.reproduction import l5_orchestrator
