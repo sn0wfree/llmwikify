@@ -437,6 +437,11 @@ class MemoryManager:
     Provides a single injection point for the 5+1-service
     architecture. Services receive ``MemoryManager`` and
     access stores via attributes.
+
+    Phase 6 (2026-06-19, Option 7a): Also exposes ``consolidator`` and
+    ``dream`` attributes (None when no provider is supplied) for the
+    Consolidator + Dream pipeline borrowed from nanobot agent/memory.py.
+    See ``docs/poc/apply-plan.md`` §6.
     """
 
     def __init__(
@@ -444,6 +449,7 @@ class MemoryManager:
         app_db: AppDatabase,
         wiki: Any = None,
         data_dir: Path | None = None,
+        provider: Any = None,
     ):
         self.app_db = app_db
         self.conversation = ConversationStore(app_db.chat)
@@ -460,14 +466,75 @@ class MemoryManager:
             react_state=self.react_state,
             preferences=self.preferences,
         )
+        # Phase 6 (Option 7a): consolidate / dream are peer attributes,
+        # set lazily when a provider is supplied. Tests / scripts without
+        # an LLM pass ``provider=None`` and these stay None.
+        self.consolidator: Any = None
+        self.dream: Any = None
+        if provider is not None:
+            # Lazy imports to avoid circular dependencies at module load
+            from llmwikify.apps.chat.memory.consolidator import (
+                Consolidator,
+                ConsolidatorConfig,
+            )
+            _data_dir = data_dir or app_db.data_dir
+            self.consolidator = Consolidator(
+                memory_manager=self,
+                db=app_db.chat,
+                provider=provider,
+                data_dir=_data_dir,
+                config=ConsolidatorConfig(),
+            )
+            # Dream (Phase 6 Step 3) — try-import so Step 2 ships without it
+            try:
+                from llmwikify.apps.chat.memory.dream import Dream, DreamConfig
+
+                self.dream = Dream(
+                    memory_manager=self,
+                    db=app_db.chat,
+                    provider=provider,
+                    data_dir=_data_dir,
+                    config=DreamConfig(),
+                )
+            except ImportError:
+                logger.debug("Dream not yet available (Phase 6 Step 3)")
+
+    # ─── Phase 6 thin method shims (Option 7a) ───────────────
+
+    async def consolidate_session(
+        self,
+        session_id: str,
+        messages: list[dict[str, str]],
+        session_tokens: int,
+    ) -> Any:
+        """Forward to ``self.consolidator.maybe_consolidate`` if available.
+
+        Returns ``None`` when no provider was configured (i.e.
+        ``self.consolidator is None``). 9 existing callers of
+        ``MemoryManager`` are unaffected by this addition.
+        """
+        if self.consolidator is None:
+            return None
+        return await self.consolidator.maybe_consolidate(
+            session_id, messages, session_tokens,
+        )
+
+    async def dream_run(self) -> Any:
+        """Forward to ``self.dream.run`` if available. Returns ``None`` otherwise."""
+        if self.dream is None:
+            return None
+        return await self.dream.run()
 
 
 __all__ = [
-    "MemoryManager",
+    "Consolidator",
+    "ConsolidatorConfig",
+    "ConsolidationResult",
+    "ContextStore",
     "ConversationStore",
     "KnowledgeStore",
-    "ContextStore",
+    "MemoryIndex",
+    "MemoryManager",
     "ReActStateStore",
     "UserPreferenceStore",
-    "MemoryIndex",
 ]

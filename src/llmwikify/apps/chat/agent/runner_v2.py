@@ -113,6 +113,7 @@ class ChatRunnerV2:
         prompt_builder: Any,
         config: dict | None = None,
         hook: AgentHook | None = None,
+        memory_manager: Any | None = None,
     ) -> None:
         self._chat_service = chat_service
         self._tool_executor = tool_executor
@@ -120,6 +121,12 @@ class ChatRunnerV2:
         self._config = config or {}
         self._hook = hook or NoOpHook()
         self._microcompact_fn: Any = None
+        # Phase 6 (2026-06-19): Optional MemoryManager for after-iteration
+        # consolidation (borrowed from nanobot Consolidator architecture).
+        # If supplied, ``run_stream`` will call ``consolidate_session``
+        # after each iteration (after the existing ``after_iteration`` hook).
+        # See ``docs/poc/apply-plan.md`` §6 for the rationale.
+        self._memory_manager = memory_manager
 
     async def run_stream(
         self, spec: ChatRunSpec,
@@ -176,6 +183,32 @@ class ChatRunnerV2:
                 self._observe(ctx, ctx.last_thinking)
 
             await _maybe_await(self._hook.after_iteration(ctx.hook_ctx(iteration)))
+
+            # Phase 6 (2026-06-19): Optional memory consolidation after
+            # each iteration. Borrowed from nanobot Consolidator
+            # architecture; uses MemoryManager.consolidate_session()
+            # which is a thin shim over Consolidator.maybe_consolidate.
+            # Failures are logged + swallowed (don't break the chat loop).
+            if self._memory_manager is not None and self._memory_manager.consolidator is not None:
+                try:
+                    session_id = getattr(spec, "session_id", None) or ctx.session_id
+                    messages = list(ctx.messages) if hasattr(ctx, "messages") else []
+                    total_tokens = sum(
+                        len(str(m.get("content", ""))) // 4
+                        for m in messages
+                    )
+                    if session_id and messages:
+                        result = await self._memory_manager.consolidate_session(
+                            session_id=session_id,
+                            messages=messages,
+                            session_tokens=total_tokens,
+                        )
+                        if result is not None:
+                            ctx.compacted_count += 1
+                except Exception:
+                    logger.warning(
+                        "memory consolidation failed in run_stream", exc_info=True,
+                    )
 
         with _StateTrace(ctx, "FINALIZE"):
             async for ev in self._emit_done(ctx):
