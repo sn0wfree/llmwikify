@@ -45,12 +45,41 @@ def _ok_response(content: str = "ok") -> MagicMock:
     return resp
 
 
+def _ok_stream_response(content: str = "ok") -> MagicMock:
+    """Build a mock 200 streaming response (SSE) for client.stream()."""
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.close = MagicMock()
+    resp.iter_lines.return_value = [
+        f'data: {{"choices": [{{"delta": {{"content": "{content}"}}}}]}}',
+        "data: [DONE]",
+    ]
+    return resp
+
+
 def _err_response(status_code: int, body: bytes = b"") -> MagicMock:
     resp = MagicMock()
     resp.status_code = status_code
     resp.content = body
     resp.close = MagicMock()
     return resp
+
+
+def _err_stream_response(status_code: int, body: bytes = b"") -> MagicMock:
+    """Build a mock 4xx/5xx streaming response for client.stream()."""
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.close = MagicMock()
+    resp.read.return_value = body
+    return resp
+
+
+def _stream_ctx(resp: MagicMock) -> MagicMock:
+    """Wrap a response in a mock context manager suitable for client.stream()."""
+    ctx = MagicMock()
+    ctx.__enter__ = MagicMock(return_value=resp)
+    ctx.__exit__ = MagicMock(return_value=False)
+    return ctx
 
 
 # ─── Helpers ─────────────────────────────────────────────────────
@@ -85,64 +114,70 @@ class TestBackoffMath:
 
 
 class TestChatRetry:
+    """``chat()`` is a sync wrapper around ``stream_chat()`` — both go
+    through ``httpx.Client.stream("POST", ...)``. Tests must patch
+    ``httpx.Client.stream`` (not ``.post``) and use stream-shaped mocks.
+    """
+
     def test_chat_succeeds_first_try(self):
         client = _make_client()
-        with patch("httpx.Client.post", return_value=_ok_response("hi")) as mock_post:
+        with patch(
+            "httpx.Client.stream",
+            return_value=_stream_ctx(_ok_stream_response("hi")),
+        ) as mock_stream:
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "hi"
-        assert mock_post.call_count == 1
+        assert mock_stream.call_count == 1
 
     def test_chat_retries_on_read_timeout(self, monkeypatch):
         """ReadTimeout is retried; success on attempt 2."""
         client = _make_client()
-        # Make time.sleep a no-op so the test is fast
         monkeypatch.setattr(
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
-
-        ok = _ok_response("recovered")
         with patch(
-            "httpx.Client.post",
+            "httpx.Client.stream",
             side_effect=[
                 httpx.ReadTimeout("first attempt timed out"),
-                ok,
+                _stream_ctx(_ok_stream_response("recovered")),
             ],
-        ) as mock_post:
+        ) as mock_stream:
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "recovered"
-        assert mock_post.call_count == 2
+        assert mock_stream.call_count == 2
 
     def test_chat_retries_on_connection_error(self, monkeypatch):
         client = _make_client()
         monkeypatch.setattr(
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
-        ok = _ok_response("recovered")
         with patch(
-            "httpx.Client.post",
+            "httpx.Client.stream",
             side_effect=[
                 httpx.ConnectError("ECONNRESET"),
                 httpx.ConnectError("ECONNRESET"),
-                ok,
+                _stream_ctx(_ok_stream_response("recovered")),
             ],
-        ) as mock_post:
+        ) as mock_stream:
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "recovered"
-        assert mock_post.call_count == 3
+        assert mock_stream.call_count == 3
 
     def test_chat_retries_on_429(self, monkeypatch):
         client = _make_client()
         monkeypatch.setattr(
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
-        ok = _ok_response("recovered")
         with patch(
-            "httpx.Client.post",
-            side_effect=[_err_response(429, b"rate limited"), ok],
-        ) as mock_post:
+            "httpx.Client.stream",
+            side_effect=[
+                _stream_ctx(_err_stream_response(429, b"rate limited")),
+                _stream_ctx(_ok_stream_response("recovered")),
+            ],
+        ) as mock_stream:
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "recovered"
-        assert mock_post.call_count == 2
+        assert mock_stream.call_count == 2
 
     def test_chat_retries_on_5xx(self, monkeypatch):
         """All 5xx codes are retried: 500, 502, 503, 504."""
@@ -151,14 +186,16 @@ class TestChatRetry:
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         for status in (500, 502, 503, 504):
-            ok = _ok_response(f"recovered from {status}")
             with patch(
-                "httpx.Client.post",
-                side_effect=[_err_response(status, b"transient"), ok],
-            ) as mock_post:
+                "httpx.Client.stream",
+                side_effect=[
+                    _stream_ctx(_err_stream_response(status, b"transient")),
+                    _stream_ctx(_ok_stream_response(f"recovered from {status}")),
+                ],
+            ) as mock_stream:
                 result = client.chat([{"role": "user", "content": "hi"}])
             assert result == f"recovered from {status}"
-            assert mock_post.call_count == 2
+            assert mock_stream.call_count == 2
 
     def test_chat_does_not_retry_400(self, monkeypatch):
         """4xx (except 429) is a client error — no retry."""
@@ -167,14 +204,15 @@ class TestChatRetry:
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         with patch(
-            "httpx.Client.post", return_value=_err_response(400, b"bad request")
-        ) as mock_post:
+            "httpx.Client.stream",
+            return_value=_stream_ctx(_err_stream_response(400, b"bad request")),
+        ) as mock_stream:
             from llmwikify.foundation.llm.streamable import LLMRequestError
 
             with pytest.raises(LLMRequestError) as exc_info:
                 client.chat([{"role": "user", "content": "hi"}])
             assert exc_info.value.status_code == 400
-        assert mock_post.call_count == 1
+        assert mock_stream.call_count == 1
 
     def test_chat_does_not_retry_401(self, monkeypatch):
         """Auth errors are not retryable."""
@@ -183,13 +221,14 @@ class TestChatRetry:
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         with patch(
-            "httpx.Client.post", return_value=_err_response(401, b"invalid api key")
-        ) as mock_post:
+            "httpx.Client.stream",
+            return_value=_stream_ctx(_err_stream_response(401, b"invalid api key")),
+        ) as mock_stream:
             from llmwikify.foundation.llm.streamable import LLMRequestError
 
             with pytest.raises(LLMRequestError):
                 client.chat([{"role": "user", "content": "hi"}])
-        assert mock_post.call_count == 1
+        assert mock_stream.call_count == 1
 
     def test_chat_exhausts_retries_on_persistent_read_timeout(self, monkeypatch):
         """After max_retries+1 attempts, the last exception is re-raised."""
@@ -198,13 +237,13 @@ class TestChatRetry:
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         with patch(
-            "httpx.Client.post",
+            "httpx.Client.stream",
             side_effect=httpx.ReadTimeout("persistent"),
-        ) as mock_post:
+        ) as mock_stream:
             with pytest.raises(httpx.ReadTimeout):
                 client.chat([{"role": "user", "content": "hi"}])
         # 1 initial + 3 retries = 4 total attempts
-        assert mock_post.call_count == 4
+        assert mock_stream.call_count == 4
 
     def test_chat_exhausts_retries_on_persistent_5xx(self, monkeypatch):
         client = _make_client()
@@ -212,14 +251,15 @@ class TestChatRetry:
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
         with patch(
-            "httpx.Client.post", return_value=_err_response(503, b"down")
-        ) as mock_post:
+            "httpx.Client.stream",
+            return_value=_stream_ctx(_err_stream_response(503, b"down")),
+        ) as mock_stream:
             from llmwikify.foundation.llm.streamable import LLMRequestError
 
             with pytest.raises(LLMRequestError) as exc_info:
                 client.chat([{"role": "user", "content": "hi"}])
             assert exc_info.value.status_code == 503
-        assert mock_post.call_count == 4
+        assert mock_stream.call_count == 4
 
     def test_chat_retries_connect_error(self, monkeypatch):
         """ConnectError is retried (covers transient SSL failures)."""
@@ -227,17 +267,16 @@ class TestChatRetry:
         monkeypatch.setattr(
             "llmwikify.foundation.llm.streamable.time.sleep", lambda s: None
         )
-        ok = _ok_response("recovered")
         with patch(
-            "httpx.Client.post",
+            "httpx.Client.stream",
             side_effect=[
                 httpx.ConnectError("cert verify failed"),
-                ok,
+                _stream_ctx(_ok_stream_response("recovered")),
             ],
-        ) as mock_post:
+        ) as mock_stream:
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "recovered"
-        assert mock_post.call_count == 2
+        assert mock_stream.call_count == 2
 
 
 # ─── chat_with_tools() retry behavior ───────────────────────────
