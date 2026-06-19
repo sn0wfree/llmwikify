@@ -89,7 +89,7 @@ class TestAllSevenStepsGoThroughRunPrompt:
         self, prompt_name, llm_role, expects_json, client_attr,
     ):
         """Each step uses the LLM client matching its role."""
-        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import run_prompt
+        from llmwikify.apps.chat.research_engine.llm_step import run_prompt
 
         chat_return = (
             json.dumps({"x": 1}) if expects_json else "raw markdown text"
@@ -145,7 +145,7 @@ class TestFrameworkAugmentationEndToEnd:
     """
 
     def test_report_injects_before_yaml_messages(self):
-        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import run_prompt
+        from llmwikify.apps.chat.research_engine.llm_step import run_prompt
 
         llm = _make_llm("# R")
         ctx = _make_ctx(
@@ -172,7 +172,7 @@ class TestFrameworkAugmentationEndToEnd:
         assert len(messages) >= 2
 
     def test_review_injects_before_yaml_messages(self):
-        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import run_prompt
+        from llmwikify.apps.chat.research_engine.llm_step import run_prompt
 
         llm = _make_llm(json.dumps({"approved": True, "score": 8}))
         ctx = _make_ctx(
@@ -203,7 +203,7 @@ class TestFrameworkAugmentationEndToEnd:
     def test_no_framework_injection_for_non_augmented_steps(self, prompt_name):
         """Steps without framework_kind set never inject, even when
         six_step_context is provided."""
-        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import run_prompt
+        from llmwikify.apps.chat.research_engine.llm_step import run_prompt
 
         chat_return = json.dumps({"x": 1})
         default_llm = _make_llm(chat_return)

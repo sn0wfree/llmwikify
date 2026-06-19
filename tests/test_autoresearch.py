@@ -41,7 +41,7 @@ from llmwikify.apps.chat.db_migrations import (
     migrate_research_six_step_columns,
     migrate_v3_add_events_column,
 )
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import (
+from llmwikify.apps.chat.research_engine.engine import (
     ResearchEngine,
 )
 
@@ -768,10 +768,10 @@ class TestFrameworkComplianceGate:
     @pytest.mark.asyncio
     async def test_action_incomplete_sets_status_and_persists(self, mock_wiki, mock_llm, db):
         """action_incomplete marks status='incomplete' and persists partial result."""
-        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.actions import (
+        from llmwikify.apps.chat.research_engine.actions import (
             action_incomplete,
         )
-        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import (
+        from llmwikify.apps.chat.research_engine.engine import (
             ResearchEngine,
         )
 
@@ -1898,7 +1898,7 @@ class TestResume:
 
     def test_resume_from_incomplete_allows_entry(self, db):
         """routes.py should allow resume from 'incomplete' status."""
-        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.routes import (
+        from llmwikify.apps.chat.research_engine.routes import (
             resume_autoresearch,
         )
         sid = db.create_research_session("w", "q")

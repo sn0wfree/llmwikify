@@ -31,33 +31,6 @@ existing engine.
 """
 import sys as _sys
 
-# Back-compat re-exports: v0.41 classes were git-mv'd to archive/ in v0.42+.
-# Re-exported here so existing callers (``from llmwikify.apps.chat import
-# ResearchEngine``) still work. The classes themselves are unchanged.
-# Submodule re-exports so ``from llmwikify.apps.chat import actions`` etc.
-# also keep working. We also register the modules in sys.modules so
-# direct submodule imports (``import llmwikify.apps.chat.engine``) keep
-# resolving too.
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy import (  # noqa: F401
-    actions,  # noqa: F401
-    gates,  # noqa: F401
-    llm_step,  # noqa: F401
-    observer,  # noqa: F401
-    reasoner,  # noqa: F401
-    report,  # noqa: F401
-    resume,  # noqa: F401
-    routes,  # noqa: F401
-)
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.gates import (  # noqa: F401
-    ResearchGates,
-)
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import (  # noqa: F401
-    LLMCallMetrics,
-)
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.report import (  # noqa: F401
-    ReportGenerator,
-)
-
 from .base import ChatBase, ChatMessage, ChatSession
 from .clarifier import ResearchClarifier
 from .config import DEFAULT_SIX_STEP_CONFIG, merge_six_step_config
@@ -68,6 +41,33 @@ from .harness.source_filter import SourceFilter
 from .harness.structure_validator import StructureValidator
 from .reasoning_checker import ReasoningChecker
 from .research_agent import ResearchAgent
+
+# Back-compat re-exports: v0.41 modules moved from archive/ to
+# apps/chat/research_engine/ in 2026-06-19. The classes themselves
+# are unchanged; only the import path changed. Re-exported here so
+# existing callers (``from llmwikify.apps.chat import ResearchEngine``
+# or ``import llmwikify.apps.chat.engine``) still work.
+from .research_engine import (  # noqa: F401
+    ResearchEngine,  # noqa: F401
+    actions,  # noqa: F401
+    engine,  # noqa: F401
+    gates,  # noqa: F401
+    llm_step,  # noqa: F401
+    observer,  # noqa: F401
+    reasoner,  # noqa: F401
+    report,  # noqa: F401
+    resume,  # noqa: F401
+    routes,  # noqa: F401
+)
+from .research_engine.gates import (  # noqa: F401
+    ResearchGates,
+)
+from .research_engine.llm_step import (  # noqa: F401
+    LLMCallMetrics,
+)
+from .research_engine.report import (  # noqa: F401
+    ReportGenerator,
+)
 from .retry_managers import (
     DBRetryManager,
     LLMRetryManager,
@@ -83,13 +83,16 @@ from .state import (
 )
 from .synthesizer import ResearchSynthesizer
 
+# Register research_engine submodules in sys.modules so that legacy
+# direct-submodule imports (``import llmwikify.apps.chat.engine``)
+# still resolve to the new location.
 for _name in (
-    "actions", "observer", "gates", "reasoner", "report",
+    "actions", "engine", "observer", "gates", "reasoner", "report",
     "llm_step", "resume", "routes",
 ):
     _sys.modules.setdefault(
         f"llmwikify.apps.chat.{_name}",
-        _sys.modules[f"llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.{_name}"],
+        _sys.modules[f"llmwikify.apps.chat.research_engine.{_name}"],
     )
 
 __all__ = [

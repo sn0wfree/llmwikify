@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = [ "setuptools>=61.0", "wheel",]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,92 +9,28 @@ description = "General-purpose LLM-Wiki CLI and Python library - Build persisten
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [
-    {name = "sn0wfree", email = "linlu1234567@sina.com"}
-]
-maintainers = [
-    {name = "sn0wfree", email = "linlu1234567@sina.com"}
-]
-keywords = [
-    "wiki",
-    "llm", 
-    "knowledge-base",
-    "obsidian",
-    "mcp",
-    "notebook",
-    "second-brain",
-    "pkms",
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "Intended Audience :: Education",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Education",
-    "Topic :: Scientific/Engineering",
-    "Topic :: Text Processing",
-    "Topic :: Utilities",
-]
-dependencies = [
-    "jinja2>=3.1.0",
-    "pyyaml>=6.0",
-    "requests>=2.28.0",
-]
+keywords = [ "wiki", "llm", "knowledge-base", "obsidian", "mcp", "notebook", "second-brain", "pkms",]
+classifiers = [ "Development Status :: 4 - Beta", "Intended Audience :: Developers", "Intended Audience :: Science/Research", "Intended Audience :: Education", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.10", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Topic :: Education", "Topic :: Scientific/Engineering", "Topic :: Text Processing", "Topic :: Utilities",]
+dependencies = [ "jinja2>=3.1.0", "pyyaml>=6.0", "requests>=2.28.0",]
+[[project.authors]]
+name = "sn0wfree"
+email = "linlu1234567@sina.com"
+
+[[project.maintainers]]
+name = "sn0wfree"
+email = "linlu1234567@sina.com"
 
 [project.optional-dependencies]
-mcp = ["fastmcp>=3.0.0"]
+mcp = [ "fastmcp>=3.0.0",]
 config = []
-watch = ["watchdog>=3.0.0"]
-graph = [
-    "networkx>=3.0",
-    "pyvis>=0.3.0",
-    "python-louvain>=0.16",
-]
-web = [
-    "fastapi>=0.104.0",
-    "starlette>=0.27.0",
-    "uvicorn>=0.23.0",
-    "httpx>=0.24.0",
-]
-# ⚠️ DEPRECATED ⚠️
-# Agent functionality has moved to an independent project.
-# Kept here for backward compatibility only. Will be removed in future version.
-agent = [
-    "croniter>=2.0.0",
-    "filelock>=3.13.0",
-    "duckduckgo-search>=4.0",
-    "tavily-python>=0.3.0",
-]
-llm = [
-    "tiktoken>=0.7.0",
-]
-extractors = [
-    "markitdown[all]>=0.1.0",
-    "pymupdf>=1.23.0",
-    "trafilatura>=1.7.0",
-    "youtube-transcript-api>=0.6.0",
-]
-all = [
-    "llmwikify[extractors,mcp,config,watch,graph,web,agent]",
-]
-dev = [
-    "llmwikify[all]",
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "black>=23.0.0",
-    "ruff>=0.1.0",
-    "mypy>=1.0.0",
-    "types-PyYAML>=6.0",
-    "types-requests>=2.30",
-    "build>=0.10.0",
-    "twine>=4.0.0",
-    "import-linter>=2.0",
-]
+watch = [ "watchdog>=3.0.0",]
+graph = [ "networkx>=3.0", "pyvis>=0.3.0", "python-louvain>=0.16",]
+web = [ "fastapi>=0.104.0", "starlette>=0.27.0", "uvicorn>=0.23.0", "httpx>=0.24.0",]
+agent = [ "croniter>=2.0.0", "filelock>=3.13.0", "duckduckgo-search>=4.0", "tavily-python>=0.3.0",]
+llm = [ "tiktoken>=0.7.0",]
+extractors = [ "markitdown[all]>=0.1.0", "pymupdf>=1.23.0", "trafilatura>=1.7.0", "youtube-transcript-api>=0.6.0",]
+all = [ "llmwikify[extractors,mcp,config,watch,graph,web,agent]",]
+dev = [ "llmwikify[all]", "pytest>=7.0.0", "pytest-cov>=4.0.0", "black>=23.0.0", "ruff>=0.1.0", "mypy>=1.0.0", "types-PyYAML>=6.0", "types-requests>=2.30", "build>=0.10.0", "twine>=4.0.0", "import-linter>=2.0",]
 
 [project.urls]
 Homepage = "https://github.com/sn0wfree/llmwikify"
@@ -107,46 +43,14 @@ Changelog = "https://github.com/sn0wfree/llmwikify/blob/main/CHANGELOG.md"
 llmwikify = "llmwikify.interfaces.cli:main"
 wiki = "llmwikify.interfaces.cli:main"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["llmwikify*"]
-
-[tool.setuptools.package-data]
-llmwikify = ["py.typed"]
-"llmwikify.foundation.templates" = [
-    "*.json",
-    "_gitignore",
-    "skill_llmwikify/*.md",
-    "skill_llmwikify/resources/*.md",
-]
-
 [tool.black]
 line-length = 88
-target-version = ['py310', 'py311', 'py312']
-include = '\.pyi?$'
+target-version = [ "py310", "py311", "py312",]
+include = "\\.pyi?$"
 
 [tool.ruff]
 line-length = 88
 target-version = "py310"
-
-[tool.ruff.lint]
-select = [
-    "E",  # pycodestyle errors
-    "F",  # pyflakes
-    "I",  # isort
-    "W",  # pycodestyle warnings
-    "B",  # flake8-bugbear
-    "C4", # flake8-comprehensions
-    "UP", # pyupgrade
-]
-ignore = [
-    "E501",  # line too long (handled by black)
-    "B904",  # raise from err (stylistic, would add noise to exception handling)
-    "F401",  # unused imports (networkx imported in try/except for availability checks)
-]
 
 [tool.mypy]
 python_version = "3.10"
@@ -158,53 +62,53 @@ check_untyped_defs = true
 no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
-
 [[tool.mypy.overrides]]
-module = [
-    "croniter",
-    "networkx",
-    "networkx.*",
-    "pyvis.*",
-    "community",
-]
+module = [ "croniter", "networkx", "networkx.*", "pyvis.*", "community",]
 ignore_missing_imports = true
 
-[tool.pytest.ini_options]
-minversion = "7.0"
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_functions = ["test_*"]
-addopts = "-v --tb=short"
-asyncio_mode = "auto"
-markers = [
-    "e2e: end-to-end tests that start a real server (run with `pytest -m e2e`)",
-]
-
-[tool.coverage.run]
-branch = true
-source = ["src/llmwikify"]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-]
-
 [tool.importlinter]
-# 4-layer architecture enforcement.
-# Replaced by the custom ``scripts/check_architecture.py`` AST
-# check (see the 4-layer refactor design doc
-# docs/designs/refactor-4layer-architecture.md). import-linter
-# proved to be too brittle: the .importlinter ini format has a
-# 'name' vs 'id' field inconsistency that surfaces only at
-# runtime, and the TOML form requires verbose nested tables.
-# The custom script gives the same enforcement with no
-# external dependency and full control over rule encoding.
 root_package = "llmwikify"
 include_external_packages = true
 contracts = []
 
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.package-data]
+llmwikify = [ "py.typed",]
+"llmwikify.foundation.templates" = [ "*.json", "_gitignore", "skill_llmwikify/*.md", "skill_llmwikify/resources/*.md",]
+
+[tool.ruff.lint]
+select = [ "E", "F", "I", "W", "B", "C4", "UP",]
+ignore = [ "E501", "B904", "F401",]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = [ "tests",]
+python_files = [ "test_*.py",]
+python_functions = [ "test_*",]
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
+markers = [ "e2e: end-to-end tests that start a real server (run with `pytest -m e2e`)",]
+
+[tool.coverage.run]
+branch = true
+source = [ "src/llmwikify",]
+
+[tool.coverage.report]
+exclude_lines = [ "pragma: no cover", "def __repr__", "raise AssertionError", "raise NotImplementedError", "if __name__ == .__main__.:", "if TYPE_CHECKING:",]
+
+[tool.setuptools.packages.find]
+where = [ "src",]
+include = [ "llmwikify*",]
+
+[tool.ruff.lint.per-file-ignores]
+"src/llmwikify/apps/chat/research_engine/actions.py" = [ "E701",]
+"src/llmwikify/apps/chat/research_engine/engine.py" = [ "E701",]
+"src/llmwikify/apps/chat/research_engine/gates.py" = [ "E701",]
+"src/llmwikify/apps/chat/research_engine/observer.py" = [ "E701",]
+"src/llmwikify/apps/chat/research_engine/reasoner.py" = [ "E701",]
+"src/llmwikify/apps/chat/research_engine/report.py" = [ "E701",]
+"src/llmwikify/apps/chat/research_engine/resume.py" = [ "E701",]
+"src/llmwikify/apps/chat/research_engine/routes.py" = [ "E701",]
+"src/llmwikify/apps/chat/research_engine/llm_step.py" = [ "E701",]

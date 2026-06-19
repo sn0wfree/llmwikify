@@ -15,8 +15,9 @@ from fastapi import APIRouter, Request
 
 from llmwikify.apps.chat.config import merge_six_step_config
 from llmwikify.apps.chat.db import AutoResearchDatabase
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import ResearchEngine
 from llmwikify.apps.chat.task_manager import get_task_manager
+
+from .engine import ResearchEngine
 
 logger = logging.getLogger(__name__)
 

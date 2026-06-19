@@ -12,25 +12,28 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from llmwikify.foundation.llm.streamable import StreamableLLMClient
-from llmwikify.apps.chat.clarifier import ResearchClarifier
 from llmwikify.apps.chat.config import merge_six_step_config
 from llmwikify.apps.chat.gatherer import SourceGatherer
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import run_prompt
-from llmwikify.apps.chat.prompts import _plan_fallback, _replan_fallback
 from llmwikify.apps.chat.harness.quality_gate import QualityGate
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.report import ReportGenerator
 from llmwikify.apps.chat.harness.review import ResearchReviewer, ResearchRevisor
+from llmwikify.apps.chat.prompts import _plan_fallback, _replan_fallback
 from llmwikify.apps.chat.session import ResearchSessionManager
 from llmwikify.apps.chat.state import (
+    VALID_TRANSITIONS,
     ActionMetrics,
     MetricsCollector,
     ResearchState,
     SessionMetrics,
-    VALID_TRANSITIONS,
 )
+
+if TYPE_CHECKING:
+    from llmwikify.apps.chat.clarifier import ResearchClarifier
+from llmwikify.foundation.llm.streamable import StreamableLLMClient
+
+from .llm_step import run_prompt
+from .report import ReportGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -616,7 +619,9 @@ async def action_report(
     # ─── 6-step step 4: structure validation ───
     if state.report_md and ctx.config.get("structure_check_enabled", True):
         try:
-            from llmwikify.apps.chat.harness.structure_validator import StructureValidator
+            from llmwikify.apps.chat.harness.structure_validator import (
+                StructureValidator,
+            )
             validator = StructureValidator()
             result = validator.validate(
                 report=state.report_md,

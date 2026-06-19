@@ -31,7 +31,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import run_prompt
+from llmwikify.apps.chat.research_engine.llm_step import run_prompt
 
 
 # ─── research_clarify.yaml matches legacy Chinese inline content ─────

@@ -8,36 +8,38 @@ to do next based on intermediate results.
 from __future__ import annotations
 
 import json
-import time
 import logging
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
 
-from llmwikify.foundation.llm.streamable import StreamableLLMClient
-from llmwikify.apps.chat.db import AutoResearchDatabase
-from llmwikify.apps.chat.providers.registry import create_llm
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy import actions
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.actions import ActionContext
 from llmwikify.apps.chat.agent.research_bridge import translate_react_events
-from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
+from llmwikify.apps.chat.agent.research_runner import ReActConfig
 from llmwikify.apps.chat.config import merge_six_step_config
+from llmwikify.apps.chat.db import AutoResearchDatabase
 from llmwikify.apps.chat.gatherer import SourceGatherer
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.gates import ResearchGates
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.observer import ResearchObserver
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.reasoner import ResearchReasoner
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.resume import ResearchResumeLoader
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import run_prompt
+from llmwikify.apps.chat.harness.quality_gate import QualityGate
+from llmwikify.apps.chat.harness.review import ResearchReviewer, ResearchRevisor
+from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
+from llmwikify.apps.chat.providers.registry import create_llm
+from llmwikify.apps.chat.session import ResearchSessionManager
 from llmwikify.apps.chat.state import (
     MetricsCollector,
     ResearchState,
 )
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.report import ReportGenerator
-from llmwikify.apps.chat.harness.review import ResearchReviewer, ResearchRevisor
-from llmwikify.apps.chat.session import ResearchSessionManager
 from llmwikify.apps.chat.synthesizer import ResearchSynthesizer
-from llmwikify.apps.chat.harness.quality_gate import QualityGate
+from llmwikify.foundation.llm.streamable import StreamableLLMClient
+
+from . import actions
+from .actions import ActionContext
+from .gates import ResearchGates
+from .llm_step import run_prompt
+from .observer import ResearchObserver
+from .reasoner import ResearchReasoner
+from .report import ReportGenerator
+from .resume import ResearchResumeLoader
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +169,7 @@ class ResearchEngine:
         """Execute the ReAct research loop, yielding SSE events."""
         self.session_manager.session_id = session_id
         self._start_time = time.monotonic()
-        
+
         # Initialize metrics (DR-13) + build dispatch table
         self._metrics = MetricsCollector(session_id=session_id)
         self._metrics.start()
@@ -241,7 +243,6 @@ class ResearchEngine:
     def _build_react_config(self, state: ResearchState) -> ReActConfig:
         """Build a ReActConfig wired to ResearchEngine's domain logic."""
         from llmwikify.apps.chat.agent.research_runner import (
-            ReActConfig,
             SkillAction,
             SkillResult,
         )

@@ -29,11 +29,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy import actions
+from . import actions
 
 if TYPE_CHECKING:
-    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import ResearchEngine
     from llmwikify.apps.chat.state import ResearchState
+
+    from .engine import ResearchEngine
 
 logger = logging.getLogger(__name__)
 
@@ -55,14 +56,14 @@ class ResearchGates:
     after gathering, structure quality before report).
     """
 
-    def __init__(self, engine: "ResearchEngine"):
+    def __init__(self, engine: ResearchEngine):
         self._engine = engine
         # Cached for direct access in hot paths.
         self._db = engine.db
         self._config = engine.config
         self._quality_gate = engine._quality_gate
 
-    def check_control_signals(self, state: "ResearchState") -> None:
+    def check_control_signals(self, state: ResearchState) -> None:
         """Check DB for cancel/pause signals from API layer."""
         try:
             session = self._db.get_research_session(state.session_id)
@@ -75,7 +76,7 @@ class ResearchGates:
         except Exception as e:
             logger.debug("Control signal check failed: %s", e)
 
-    def check_framework_compliance(self, state: "ResearchState") -> dict | None:
+    def check_framework_compliance(self, state: ResearchState) -> dict | None:
         """Return None if all 6-step framework fields are present, else
         {missing: action_name, reason: human_readable}.
 
@@ -110,7 +111,7 @@ class ResearchGates:
             return {"missing": "review", "reason": "step 6 (review) missing"}
         return None
 
-    def check_quality_compliance(self, state: "ResearchState") -> dict | None:
+    def check_quality_compliance(self, state: ResearchState) -> dict | None:
         """Layered check: 6-step presence + quality thresholds.
 
         Used by the strict_exit gate (v6) to prevent the engine from
@@ -177,7 +178,7 @@ class ResearchGates:
 
         return None
 
-    def can_replan(self, state: "ResearchState") -> bool:
+    def can_replan(self, state: ResearchState) -> bool:
         """Return True if the engine has budget for one more action.
 
         Used by the framework compliance gate to decide between
@@ -189,7 +190,7 @@ class ResearchGates:
             return False
         return True
 
-    def evaluate_gate(self, state: "ResearchState"):
+    def evaluate_gate(self, state: ResearchState):
         """Evaluate quality gate based on current phase.
 
         Each phase invokes its base gate plus the 6-step framework gate.

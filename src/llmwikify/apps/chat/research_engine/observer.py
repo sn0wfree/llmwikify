@@ -23,8 +23,9 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import ResearchEngine
     from llmwikify.apps.chat.state import ResearchState
+
+    from .engine import ResearchEngine
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,12 @@ class ResearchObserver:
          reasoner can use in the next Thought step.
     """
 
-    def __init__(self, engine: "ResearchEngine"):
+    def __init__(self, engine: ResearchEngine):
         self._engine = engine
         # Cached for direct access in hot paths.
         self._db = engine.db
 
-    def observe(self, state: "ResearchState") -> None:
+    def observe(self, state: ResearchState) -> None:
         """Refresh state from DB and generate interpreted observations."""
         state.sources = self._db.get_sources(state.session_id) or []
         state.sub_queries_raw = self._db.get_sub_queries(state.session_id) or []

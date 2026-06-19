@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import ResearchEngine
+from llmwikify.apps.chat.research_engine.engine import ResearchEngine
 from llmwikify.apps.chat.research_agent import ResearchAgent
 
 

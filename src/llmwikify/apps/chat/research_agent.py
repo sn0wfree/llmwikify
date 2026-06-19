@@ -26,8 +26,9 @@ import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
+from llmwikify.apps.chat.research_engine.engine import ResearchEngine
+
 from .base import ChatBase
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import ResearchEngine
 
 
 class ResearchAgent(ChatBase):

@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import _resolve_llm_client, run_prompt
+from llmwikify.apps.chat.research_engine.llm_step import _resolve_llm_client, run_prompt
 
 
 # Patch PromptRegistry.get_messages to return a minimal valid message

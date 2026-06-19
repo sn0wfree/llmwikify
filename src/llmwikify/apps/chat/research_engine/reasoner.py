@@ -29,11 +29,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import run_prompt
+from .llm_step import run_prompt
 
 if TYPE_CHECKING:
-    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import ResearchEngine
     from llmwikify.apps.chat.state import ResearchState
+
+    from .engine import ResearchEngine
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ class ResearchReasoner:
     ``rule_based()`` for parity with the legacy code path.
     """
 
-    def __init__(self, engine: "ResearchEngine"):
+    def __init__(self, engine: ResearchEngine):
         self._engine = engine
         # Cached for direct access in hot paths.
         self._db = engine.db
@@ -71,7 +72,7 @@ class ResearchReasoner:
         self._action_ctx = engine._action_ctx
         self._max_replan = engine._max_replan
 
-    async def reason(self, state: "ResearchState") -> str:
+    async def reason(self, state: ResearchState) -> str:
         """Decide the next action based on current state.
 
         Returns one of: ``plan`` / ``gather`` / ``analyze`` /
@@ -91,7 +92,7 @@ class ResearchReasoner:
             )
             return self.rule_based(state) or "done"
 
-    def rule_based(self, state: "ResearchState") -> str | None:
+    def rule_based(self, state: ResearchState) -> str | None:
         """Deterministic decision tree as fallback.
 
         Walks the state in canonical order:
@@ -174,7 +175,7 @@ class ResearchReasoner:
         # Default → done
         return "done"
 
-    async def _llm_reason(self, state: "ResearchState") -> str:
+    async def _llm_reason(self, state: ResearchState) -> str:
         """Use LLM to decide next action with chain-of-thought reasoning.
 
         Migrated to use ``run_prompt``. Falls back to the

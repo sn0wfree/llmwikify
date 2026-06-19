@@ -136,15 +136,17 @@ class TestL3ChatRoutes:
     """
 
     def test_chat_routes_archived_does_not_import_interfaces(self) -> None:
+        # 2026-06-19: chat_legacy/routes.py moved to
+        # apps/chat/research_engine/routes.py. Verify that new location.
         from pathlib import Path
         src = Path(
-            "src/llmwikify/archive/llmwikify_v0_41_legacy/chat_legacy/routes.py"
+            "src/llmwikify/apps/chat/research_engine/routes.py"
         ).read_text()
         assert "from llmwikify.interfaces" not in src
 
     def test_chat_routes_stores_deps(self) -> None:
         """set_autoresearch_deps should store all deps."""
-        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.routes import set_autoresearch_deps
+        from llmwikify.apps.chat.research_engine.routes import set_autoresearch_deps
         set_autoresearch_deps(
             db=None, wiki_registry=None,
             llm_client=None, config=None,

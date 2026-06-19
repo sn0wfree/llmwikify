@@ -6,8 +6,9 @@ import logging
 from collections.abc import Iterator
 from typing import Any
 
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import run_prompt
 from llmwikify.apps.chat.prompts import source_hash as _source_hash
+
+from .llm_step import run_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -130,9 +131,9 @@ class ReportGenerator:
         ``generate`` method now uses ``run_prompt`` instead and does
         not call this method.
         """
-        from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
         from llmwikify.apps.chat.engine_helpers import resolve_llm_params
         from llmwikify.apps.chat.prompts import render_framework_block
+        from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
 
         registry = PromptRegistry(provider=getattr(self.llm_client, "provider", "openai"))
         source_contents = self._build_source_contents(sources)

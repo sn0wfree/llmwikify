@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from llmwikify.apps.chat import LLMCallMetrics, MetricsCollector
-from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.llm_step import run_prompt
+from llmwikify.apps.chat.research_engine.llm_step import run_prompt
 
 
 # ─── helpers ──────────────────────────────────────────────────────────
@@ -398,7 +398,7 @@ class TestSubmoduleMetricsKwarg:
         assert c.metrics is None
 
     def test_report_accepts_metrics(self):
-        from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.report import ReportGenerator
+        from llmwikify.apps.chat.research_engine.report import ReportGenerator
         mc = MetricsCollector(session_id="s")
         r = ReportGenerator(MagicMock(), MagicMock(), config={}, metrics=mc)
         assert r.metrics is mc

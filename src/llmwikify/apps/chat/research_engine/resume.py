@@ -25,8 +25,9 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from llmwikify.archive.llmwikify_v0_41_legacy.chat_legacy.engine import ResearchEngine
     from llmwikify.apps.chat.state import ResearchState
+
+    from .engine import ResearchEngine
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +45,13 @@ class ResearchResumeLoader:
     and applies it to the live state object.
     """
 
-    def __init__(self, engine: "ResearchEngine"):
+    def __init__(self, engine: ResearchEngine):
         self._engine = engine
         # Cached for direct access.
         self._db = engine.db
         self._max_react_rounds = engine._max_react_rounds
 
-    def load(self, state: "ResearchState") -> None:
+    def load(self, state: ResearchState) -> None:
         """Load existing session state for resume.
 
         If the session row is missing, returns silently
