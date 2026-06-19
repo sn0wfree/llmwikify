@@ -519,7 +519,9 @@ class ChatOrchestrator:
                 "command": "/help",
                 "ok": True,
                 "message": (
-                    "Available commands: /stop, /help, /clear, /status, /title <text>"
+                    "Available commands: /stop, /help, /clear, /status, "
+                    "/title <text>, /memory_dream [session <id>], "
+                    "/goal [<objective> | done [recap]]"
                 ),
             }
 
@@ -613,12 +615,77 @@ class ChatOrchestrator:
                 "data": getattr(result, "data", None),
             }
 
+        # Phase 8 (2026-06-20): /goal slash command — register / inspect /
+        # complete a sustained goal. Thin wrapper around GoalSkill so
+        # users get the same ``ChatRunner`` ergonomics from the chat
+        # input box.
+        #   /goal                       → show current goal
+        #   /goal <objective text>      → start_long_task (objective=text)
+        #   /goal done [recap text]     → complete_goal (recap=text)
+        async def goal_handler(ctx: Any) -> dict:
+            from llmwikify.apps.chat.skills.crud.goal_skill import (
+                _complete_goal,
+                _get_goal,
+                _start_long_task,
+            )
+
+            class _StubSkillContext:
+                def __init__(self, c: Any) -> None:
+                    self.session_id = c.session_id or ""
+                    self.db = c.db
+                    self.config: dict[str, Any] = {}
+
+            def _summarize(args_text: str, res: Any) -> str:
+                data = getattr(res, "data", None) or {}
+                if not args_text:
+                    if not data.get("active"):
+                        return "No active goal"
+                    g = data.get("goal", {})
+                    return f"Active: {g.get('objective', '')[:100]}"
+                if args_text.lower() == "done" or args_text.lower().startswith(
+                    "done ",
+                ):
+                    if data.get("completed"):
+                        return f"Completed: {data.get('objective', '')[:80]}"
+                    return data.get("reason", "no active goal")
+                return f"Goal registered: {data.get('objective', '')[:100]}"
+
+            stub = _StubSkillContext(ctx)
+            args_text = (ctx.args or "").strip()
+
+            if not args_text:
+                result = await _get_goal({}, stub)
+            elif args_text.lower() == "done" or args_text.lower().startswith(
+                "done ",
+            ):
+                recap = args_text[4:].strip() if len(args_text) > 4 else ""
+                result = await _complete_goal({"recap": recap}, stub)
+            else:
+                result = await _start_long_task(
+                    {"goal": args_text, "ui_summary": args_text[:120]},
+                    stub,
+                )
+
+            ok = getattr(result, "status", "ok") == "ok"
+            return {
+                "type": "command_done",
+                "command": "/goal",
+                "ok": ok,
+                "message": (
+                    getattr(result, "error", "") or "goal command failed"
+                    if not ok
+                    else _summarize(args_text, result)
+                ),
+                "data": getattr(result, "data", None),
+            }
+
         router.priority("/stop", stop_handler)
         router.exact("/help", help_handler)
         router.exact("/clear", clear_handler)
         router.exact("/status", status_handler)
         router.prefix("/title", title_handler)
         router.prefix("/memory_dream", memory_dream_handler)
+        router.prefix("/goal", goal_handler)
         return router
 
     async def _dispatch_command(
