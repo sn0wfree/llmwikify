@@ -57,6 +57,18 @@ class TestRegistration:
         # Tests the documented behaviour so a future de-dup is intentional.
         assert len(r._prefix) == 2
 
+    def test_memory_dream_registered_by_default(self) -> None:
+        """Phase 6 (2026-06-19): /memory_dream should be registered
+        as a prefix command in the orchestrator's default router."""
+        from llmwikify.apps.chat.agent.orchestrator import ChatOrchestrator
+
+        # Build an instance with default router (no full DB / LLM)
+        orch = ChatOrchestrator.__new__(ChatOrchestrator)
+        orch.command_router = orch._build_default_command_router()
+        assert orch.command_router.is_command("/memory_dream")
+        assert orch.command_router.is_command("/memory_dream session abc")
+        assert orch.command_router.is_command("/MEMORY_DREAM")  # case-insensitive
+
 
 # ---------------------------------------------------------------------------
 # 2. Classification

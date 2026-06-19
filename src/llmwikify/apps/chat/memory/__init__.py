@@ -477,6 +477,8 @@ class MemoryManager:
                 Consolidator,
                 ConsolidatorConfig,
             )
+            from llmwikify.apps.chat.memory.dream import Dream, DreamConfig
+
             _data_dir = data_dir or app_db.data_dir
             self.consolidator = Consolidator(
                 memory_manager=self,
@@ -485,19 +487,13 @@ class MemoryManager:
                 data_dir=_data_dir,
                 config=ConsolidatorConfig(),
             )
-            # Dream (Phase 6 Step 3) — try-import so Step 2 ships without it
-            try:
-                from llmwikify.apps.chat.memory.dream import Dream, DreamConfig
-
-                self.dream = Dream(
-                    memory_manager=self,
-                    db=app_db.chat,
-                    provider=provider,
-                    data_dir=_data_dir,
-                    config=DreamConfig(),
-                )
-            except ImportError:
-                logger.debug("Dream not yet available (Phase 6 Step 3)")
+            self.dream = Dream(
+                memory_manager=self,
+                db=app_db.chat,
+                provider=provider,
+                data_dir=_data_dir,
+                config=DreamConfig(),
+            )
 
     # ─── Phase 6 thin method shims (Option 7a) ───────────────
 
@@ -532,6 +528,9 @@ __all__ = [
     "ConsolidationResult",
     "ContextStore",
     "ConversationStore",
+    "Dream",
+    "DreamConfig",
+    "DreamResult",
     "KnowledgeStore",
     "MemoryIndex",
     "MemoryManager",

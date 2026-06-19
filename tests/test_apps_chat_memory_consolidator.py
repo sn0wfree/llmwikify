@@ -429,8 +429,10 @@ class TestMemoryManagerConsolidatorIntegration:
         )
         assert mm.consolidator is not None
         assert isinstance(mm.consolidator, Consolidator)
-        # Dream is None until Step 3
-        assert mm.dream is None
+        # Dream is wired in Step 3 (Phase 6)
+        assert mm.dream is not None
+        from llmwikify.apps.chat.memory.dream import Dream
+        assert isinstance(mm.dream, Dream)
 
     @pytest.mark.asyncio
     async def test_consolidate_session_forwards(self, tmp_path: Path) -> None:

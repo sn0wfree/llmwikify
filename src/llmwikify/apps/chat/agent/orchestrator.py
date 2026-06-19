@@ -560,11 +560,63 @@ class ChatOrchestrator:
                 "message": f"Title set: {new_title[:50]}",
             }
 
+        # Phase 6 (2026-06-19): /memory_dream prefix command.
+        # Triggers the long-term fact extractor (borrowed from
+        # nanobot agent/memory.py:859). Note: this is distinct
+        # from the existing ``/dream`` slash command which wraps
+        # ``apps/agent/dream_editor/`` (wiki edit proposals).
+        async def memory_dream_handler(ctx: Any) -> AsyncIterator[dict]:
+            from llmwikify.apps.chat.memory import MemoryManager
+            from llmwikify.apps.chat.skills.crud.memory_dream_skill import (
+                _get_dream,
+                _run,
+                _run_for_session,
+            )
+
+            # Build a minimal SkillContext-like object for the skill handlers
+            class _StubSkillContext:
+                def __init__(self, c: Any) -> None:
+                    self.session_id = c.session_id
+                    self.config: dict[str, Any] = {
+                        "memory_manager": getattr(c, "memory_manager", None),
+                    }
+
+            stub = _StubSkillContext(ctx)
+            dream = _get_dream(stub)
+            if isinstance(dream, dict) and dream.get("ok") is False:
+                yield {
+                    "type": "command_done",
+                    "command": "/memory_dream",
+                    "ok": False,
+                    "message": dream.get("message", "dream not configured"),
+                }
+                return
+
+            args_text = (ctx.args or "").strip()
+            if args_text.startswith("session "):
+                sid = args_text[len("session "):].strip()
+                result = await _run_for_session({"session_id": sid}, stub)
+            else:
+                result = await _run({}, stub)
+
+            yield {
+                "type": "command_done",
+                "command": "/memory_dream",
+                "ok": result.ok if hasattr(result, "ok") else True,
+                "message": (
+                    result.message
+                    if hasattr(result, "message") and not result.ok
+                    else "dream complete"
+                ),
+                "data": getattr(result, "data", None),
+            }
+
         router.priority("/stop", stop_handler)
         router.exact("/help", help_handler)
         router.exact("/clear", clear_handler)
         router.exact("/status", status_handler)
         router.prefix("/title", title_handler)
+        router.prefix("/memory_dream", memory_dream_handler)
         return router
 
     async def _dispatch_command(
