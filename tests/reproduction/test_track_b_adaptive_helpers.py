@@ -642,7 +642,10 @@ class TestSelectPass2Mode:
         assert mode == "parallel"
 
     def test_auto_selects_adaptive_for_good_fit(self):
-        """Mid-size, simple formulas, good context → adaptive."""
+        """Mid-size, simple formulas, good context → hybrid (v3.1).
+
+        50 signals triggers hybrid (≥30), not pure adaptive.
+        """
         stubs = [
             SignalStub(
                 index=i + 1, name=f"S{i+1}", formula_brief="rank(close)",
@@ -651,7 +654,7 @@ class TestSelectPass2Mode:
             for i in range(50)
         ]
         mode = select_pass2_mode(stubs)
-        assert mode == "adaptive"
+        assert mode == "hybrid"
 
     def test_empty_stubs_returns_parallel(self):
         mode = select_pass2_mode([])

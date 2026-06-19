@@ -51,12 +51,20 @@ PASS2_USE_ADAPTIVE = True  # Use adaptive multi-turn (v2, recommended)
 
 # Smart mode selection (v3.0)
 PASS2_MODE_AUTO = True       # Auto-select based on complexity
-PASS2_MODE_OVERRIDE = ""     # If set: "adaptive" | "parallel" | "serial" | ""
+PASS2_MODE_OVERRIDE = ""     # If set: "adaptive" | "parallel" | "serial" | "hybrid" | ""
 # Complexity thresholds for auto-selection
 ADAPTIVE_MIN_SIGNALS = 20    # < 20 signals → use parallel (less overhead)
 ADAPTIVE_MAX_SIGNALS = 200   # > 200 signals → use parallel (multi-turn too slow)
 ADAPTIVE_AVG_FORMULA_LEN = 80  # > 80 chars avg formula → use parallel (complex)
 ADAPTIVE_AVG_CONTEXT_LEN = 2000  # < 2000 chars avg context → use parallel (likely complex)
+
+# Hybrid mode (v3.1): parallel first, then adaptive supplement for shallow factors
+PASS2_HYBRID_ENABLED = True  # Allow "hybrid" as Pass 2 mode
+HYBRID_INTUITION_THRESHOLD = 150  # l3.intuition < this chars → shallow, needs supplement
+HYBRID_THEORETICAL_MIN = 50  # l3.theoretical_basis < this chars → shallow
+HYBRID_HYPOTHESES_MIN = 2    # l4.hypotheses count < this → shallow
+HYBRID_SUPPLEMENT_RATIO = 0.2  # Supplement at most 20% of factors with adaptive
+HYBRID_MIN_SUPPLEMENTS = 3    # Always supplement at least this many (if any)
 
 # Success rate thresholds for auto-retry
 PASS2_SUCCESS_THRESHOLD_HIGH = 0.95  # 95%: Complete, no retry needed
@@ -407,14 +415,14 @@ def select_pass2_mode(stubs: list[SignalStub]) -> str:
 
     Priority:
     1. PASS2_MODE_OVERRIDE (if set): force this mode
-    2. PASS2_MODE_AUTO = True: use estimate_complexity()
+    2. PASS2_MODE_AUTO = True: use estimate_complexity() (may return "hybrid")
     3. Default to PASS2_USE_ADAPTIVE / PASS2_USE_PARALLEL flags
 
-    Returns: "adaptive" | "parallel" | "serial"
+    Returns: "adaptive" | "parallel" | "serial" | "hybrid"
     """
     if PASS2_MODE_OVERRIDE:
         mode = PASS2_MODE_OVERRIDE.lower()
-        if mode in ("adaptive", "parallel", "serial"):
+        if mode in ("adaptive", "parallel", "serial", "hybrid"):
             logger.info(
                 "[track_b] pass2 mode: %s (override)", mode,
             )
@@ -426,6 +434,24 @@ def select_pass2_mode(stubs: list[SignalStub]) -> str:
 
     if PASS2_MODE_AUTO:
         complexity = estimate_complexity(stubs)
+        # Hybrid mode: prefer when complexity score suggests adaptive but
+        # signal count is high (would be slow pure adaptive)
+        if (
+            PASS2_HYBRID_ENABLED
+            and complexity["recommendation"] == "adaptive"
+            and complexity["signal_count"] >= 30
+        ):
+            logger.info(
+                "[track_b] complexity: signals=%d avg_formula=%.0f avg_context=%.0f "
+                "score=%.2f → HYBRID (parallel + adaptive supplement). "
+                "Reasons: %s",
+                complexity["signal_count"],
+                complexity["avg_formula_len"],
+                complexity["avg_context_len"],
+                complexity["complexity_score"],
+                "; ".join(complexity["reasons"]),
+            )
+            return "hybrid"
         logger.info(
             "[track_b] complexity: signals=%d avg_formula=%.0f avg_context=%.0f "
             "score=%.2f → %s. Reasons: %s",
@@ -444,6 +470,228 @@ def select_pass2_mode(stubs: list[SignalStub]) -> str:
     if PASS2_USE_PARALLEL:
         return "parallel"
     return "serial"
+
+
+def _assess_factor_quality(detail: SignalDetail) -> dict:
+    """Assess if a factor needs adaptive supplementation (hybrid mode).
+
+    Returns dict with:
+        - needs_supplement: bool
+        - shallow_score: float (0-1, higher = more shallow)
+        - reasons: list[str]
+        - l3_intuition_chars: int
+        - l3_theoretical_chars: int
+        - l4_hypotheses_count: int
+
+    A factor is "shallow" if any of:
+    - l3.intuition (or financial_intuition) < HYBRID_INTUITION_THRESHOLD (150 chars)
+    - l3.theoretical_basis < HYBRID_THEORETICAL_MIN (50 chars)
+    - l4.hypotheses count < HYBRID_HYPOTHESES_MIN (2)
+    - factor failed (success=False)
+
+    Shallow factors benefit most from adaptive multi-turn supplementation.
+
+    Schema compat:
+    - New (v2.0+): l3.financial_intuition
+    - Legacy: l3.intuition
+    """
+    l3 = detail.l3 or {}
+    l4 = detail.l4 or {}
+    # Schema compat: financial_intuition (new) or intuition (legacy)
+    l3_intuition = l3.get("financial_intuition") or l3.get("intuition") or ""
+    l3_intuition_str = str(l3_intuition)
+    l3_intuition_chars = len(l3_intuition_str)
+
+    l3_theoretical = l3.get("theoretical_basis", "") or ""
+    l3_theoretical_str = str(l3_theoretical)
+    l3_theoretical_chars = len(l3_theoretical_str)
+
+    hypotheses = l4.get("hypotheses", []) or []
+    l4_hypotheses_count = len(hypotheses) if isinstance(hypotheses, list) else 0
+
+    reasons = []
+    shallow_score = 0.0
+
+    if not detail.success:
+        reasons.append("factor_failed")
+        shallow_score += 1.0
+
+    if l3_intuition_chars < HYBRID_INTUITION_THRESHOLD:
+        reasons.append(f"l3.intuition short ({l3_intuition_chars} chars)")
+        shallow_score += 0.4
+
+    if l3_theoretical_chars < HYBRID_THEORETICAL_MIN:
+        reasons.append(f"l3.theoretical_basis short ({l3_theoretical_chars} chars)")
+        shallow_score += 0.3
+
+    if l4_hypotheses_count < HYBRID_HYPOTHESES_MIN:
+        reasons.append(f"l4.hypotheses few ({l4_hypotheses_count})")
+        shallow_score += 0.3
+
+    return {
+        "needs_supplement": shallow_score > 0,
+        "shallow_score": round(shallow_score, 3),
+        "reasons": reasons,
+        "l3_intuition_chars": l3_intuition_chars,
+        "l3_theoretical_chars": l3_theoretical_chars,
+        "l4_hypotheses_count": l4_hypotheses_count,
+    }
+
+
+def _select_supplement_targets(
+    details: list[SignalDetail],
+    stubs: list[SignalStub],
+    parsed_text: str,
+) -> tuple[list[SignalStub], list[SignalDetail]]:
+    """Select shallow factors to supplement via adaptive multi-turn.
+
+    Args:
+        details: SignalDetail list from parallel Pass 2.
+        stubs: Original SignalStub list (in same order).
+        parsed_text: Full paper text (unused, reserved for future).
+
+    Returns:
+        (supplement_stubs, supplement_details) where:
+        - supplement_stubs: SignalStub to re-process via adaptive
+        - supplement_details: original SignalDetail objects to replace
+    """
+    stub_by_name = {s.name: s for s in stubs}
+
+    # Assess all details
+    assessments = []
+    for d in details:
+        a = _assess_factor_quality(d)
+        if a["needs_supplement"]:
+            assessments.append((d, a))
+
+    # Sort by shallow_score desc (most shallow first)
+    assessments.sort(key=lambda x: x[1]["shallow_score"], reverse=True)
+
+    # Calculate how many to supplement (HYBRID_SUPPLEMENT_RATIO of total)
+    n_total = len(details)
+    n_to_supplement = max(
+        HYBRID_MIN_SUPPLEMENTS,
+        int(n_total * HYBRID_SUPPLEMENT_RATIO),
+    )
+    # Don't exceed available shallow factors
+    n_to_supplement = min(n_to_supplement, len(assessments))
+
+    supplement_stubs: list[SignalStub] = []
+    supplement_details: list[SignalDetail] = []
+    for d, _a in assessments[:n_to_supplement]:
+        stub = stub_by_name.get(d.name)
+        if stub:
+            supplement_stubs.append(stub)
+            supplement_details.append(d)
+
+    return supplement_stubs, supplement_details
+
+
+def _hybrid_pass2(
+    client: Any,
+    plan: PlanResult,
+    paper_id: str,
+    signals: list[SignalStub],
+    parsed_text: str,
+    work_dir: Path | None = None,
+    existing_details: list[SignalDetail] | None = None,
+) -> tuple[list[SignalDetail], int]:
+    """Hybrid Pass 2: parallel first, adaptive supplement for shallow factors.
+
+    Workflow:
+    1. Run Pass 2 in parallel (3-way) for all signals - fast (~30 min for 101)
+    2. Assess each factor's quality (l3.intuition depth, l4.hypotheses count, etc.)
+    3. Select bottom 20% shallow factors (max)
+    4. Re-process those factors via adaptive multi-turn - deep
+    5. Merge: keep original successes, replace shallow with adaptive results
+
+    Args:
+        client: LLM client.
+        plan: PlanResult.
+        paper_id: Paper identifier.
+        signals: Pass 1 signal stubs.
+        parsed_text: Full paper text.
+        work_dir: For checkpointing (optional).
+        existing_details: Resume from checkpoint.
+
+    Returns:
+        (details, total_latency_ms) where details is the merged list.
+    """
+    logger.info(
+        "[track_b] paper=%s pass2 HYBRID: phase 1 = parallel (%d signals)",
+        paper_id, len(signals),
+    )
+
+    # Phase 1: Parallel (fast)
+    parallel_details, parallel_latency = asyncio.run(
+        _run_pass2_parallel(
+            client, plan, paper_id, signals, parsed_text,
+            work_dir=work_dir,
+            existing_details=existing_details,
+        )
+    )
+
+    # Phase 2: Assess quality
+    supplement_stubs, supplement_details = _select_supplement_targets(
+        parallel_details, signals, parsed_text,
+    )
+
+    if not supplement_stubs:
+        logger.info(
+            "[track_b] paper=%s pass2 HYBRID: no shallow factors, done",
+            paper_id,
+        )
+        return parallel_details, parallel_latency
+
+    logger.info(
+        "[track_b] paper=%s pass2 HYBRID: phase 2 = adaptive supplement "
+        "(%d/%d shallow factors)",
+        paper_id, len(supplement_stubs), len(signals),
+    )
+
+    # Phase 3: Adaptive multi-turn for shallow factors
+    adaptive_details, adaptive_latency = asyncio.run(
+        _run_pass2_adaptive(
+            client, plan, paper_id, supplement_stubs, parsed_text,
+        )
+    )
+
+    # Phase 4: Merge - replace original shallow with adaptive results
+    supplement_names = {d.name for d in supplement_details}
+    final_details: list[SignalDetail] = []
+    replaced = 0
+    for d in parallel_details:
+        if d.name in supplement_names:
+            # Find adaptive replacement
+            replacement = next((a for a in adaptive_details if a.name == d.name), None)
+            if replacement:
+                final_details.append(replacement)
+                replaced += 1
+            else:
+                # Keep original if adaptive failed
+                final_details.append(d)
+        else:
+            final_details.append(d)
+
+    # Track which ones improved
+    improved = 0
+    for orig in supplement_details:
+        new = next((d for d in final_details if d.name == orig.name), None)
+        if new and new.success:
+            orig_intuition = (orig.l3 or {}).get("intuition", "") or ""
+            new_intuition = (new.l3 or {}).get("intuition", "") or ""
+            if len(str(new_intuition)) > len(str(orig_intuition)):
+                improved += 1
+
+    total_latency = parallel_latency + adaptive_latency
+    logger.info(
+        "[track_b] paper=%s pass2 HYBRID: complete "
+        "(%d replaced, %d improved, %dms parallel + %dms adaptive = %dms total)",
+        paper_id, replaced, improved,
+        parallel_latency, adaptive_latency, total_latency,
+    )
+
+    return final_details, total_latency
 
 
 def _supplement_context(
@@ -956,11 +1204,19 @@ def _build_signal_detail(stub: SignalStub, factor: dict, latency_ms: int) -> Sig
     )
 
 
-def _render_user_msg(tmpl, paper_id: str, round_idx: int, batch: list[SignalStub]) -> str:
-    """Render user message for one batch in adaptive multi-turn."""
+def _render_user_msg(tmpl, paper_id: str, round_idx: int, batch: list[SignalStub], parsed_text: str = "") -> str:
+    """Render user message for one batch in adaptive multi-turn.
+
+    Args:
+        tmpl: Jinja2 template for the user message.
+        paper_id: Paper identifier.
+        round_idx: Current round number (1-indexed).
+        batch: List of SignalStub to extract in this batch.
+        parsed_text: Full paper text (for context fallback if SignalStub lacks context_excerpt).
+    """
     rendered_signals = []
     for sig in batch:
-        ctx = _get_signal_context(sig, "")
+        ctx = _get_signal_context(sig, parsed_text)
         rendered_signals.append({
             "name": sig.name,
             "formula_brief": sig.formula_brief,
@@ -1066,7 +1322,7 @@ async def _run_pass2_adaptive(
 
         # Take next batch
         batch = list(pending.values())[:PASS2_BATCH_SIZE]
-        user_msg = _render_user_msg(tmpl, paper_id, n_rounds, batch)
+        user_msg = _render_user_msg(tmpl, paper_id, n_rounds, batch, parsed_text)
         messages.append({"role": "user", "content": user_msg})
 
         # Trim history if too long
@@ -1396,7 +1652,18 @@ def run_track_b(
     if run_pass2:
         # Choose execution mode (v3: smart auto-select based on complexity)
         mode = select_pass2_mode(pass1_signals)
-        if mode == "adaptive":
+        if mode == "hybrid":
+            logger.info(
+                "[track_b] paper=%s pass2 mode: HYBRID (parallel + adaptive supplement, v3.1)",
+                paper_id,
+            )
+            pass2_details, pass2_latency = _hybrid_pass2(
+                client, plan, paper_id, pass1_signals, parsed_text,
+                work_dir=work_dir,
+                existing_details=pass2_details_done or None,
+            )
+            pass2_concurrency_used = PASS2_MAX_CONCURRENCY
+        elif mode == "adaptive":
             logger.info(
                 "[track_b] paper=%s pass2 mode: ADAPTIVE multi-turn (v2)",
                 paper_id,

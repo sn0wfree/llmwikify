@@ -505,5 +505,98 @@ afef007 fix(reproduction): plan 验证 fallback 解析器
 4c31a4f feat(reproduction): 自反馈规划机制
 1c406e4 feat(reproduction): adaptive pass 2 multi-turn
 0c78747 docs(reproduction): adaptive pass 2 设计
-[next]   feat(reproduction): v3.0 smart mode + 强制 2000 chars
+721f7df feat(reproduction): v3.0 smart mode + 强制 2000 chars
+```
+
+---
+
+## 🎯 v3.1: Hybrid Pass 2 Mode
+
+> 实施日期：2026-06-19
+> 目标：组合 v3.0 parallel (快) + v2.0 adaptive (深) 的优势
+
+### 设计
+
+```
+Hybrid Pass 2 流程:
+1. Phase 1: 全部 signals 用 parallel 跑 (30 min, ~30s/批)
+2. Assess: 评估每个 factor 的 l3.intuition / l3.theoretical / l4.hypotheses
+3. Select: 挑 20% most shallow signals (min 3 个)
+4. Phase 2: 剩余用 adaptive multi-turn 跑 (深)
+5. Merge: 替换 shallow factors 为 adaptive 结果
+```
+
+### 配置
+
+```python
+PASS2_HYBRID_ENABLED = True
+HYBRID_INTUITION_THRESHOLD = 150  # l3.intuition < 150 chars → shallow
+HYBRID_THEORETICAL_MIN = 50       # l3.theoretical_basis < 50 chars → shallow
+HYBRID_HYPOTHESES_MIN = 2         # l4.hypotheses count < 2 → shallow
+HYBRID_SUPPLEMENT_RATIO = 0.2     # Supplement at most 20%
+HYBRID_MIN_SUPPLEMENTS = 3        # Always supplement at least 3 if any
+```
+
+### Smart Mode 选择条件
+
+```
+auto_select hybrid when:
+  - complexity recommends adaptive
+  - signal_count >= 30
+```
+
+### 实施组件
+
+| 组件 | 行数 | 功能 |
+|------|------|------|
+| `_assess_factor_quality` | 60 | 评估每个 factor 深度 |
+| `_select_supplement_targets` | 50 | 挑 bottom 20% shallow |
+| `_hybrid_pass2` | 110 | 两阶段 + merge 协调 |
+| `_render_user_msg` (修复) | - | 接收 parsed_text |
+
+### A/B 测试 (20 signals)
+
+| 指标 | v3.0 Parallel | v3.1 Hybrid | Delta |
+|------|---------------|-------------|-------|
+| 总时间 | ~7 min | 7.09 min | +1% |
+| 成功率 | 100% | 100% | - |
+| l3.intuition avg | 103 chars | 102 chars | -1% |
+| l4.hypotheses avg | 3.6 | 3.5 | -3% |
+| 补充目标 (20%) | - | 4 signals | - |
+| 补充后提升 | - | ❌ 无显著提升 | - |
+
+### 实证发现
+
+**关键**：hybrid 补充的 4 个 signals (Alpha#16/8/3/6) **l3.intuition 反而变短 7-15 chars**。
+
+**根因分析**：
+1. Adaptive multi-turn prompt 不区分"补充提取"vs"初始提取"
+2. LLM 在 multi-turn 中倾向输出简洁（节省 token）
+3. 当前 hybrid 机制**完整**但**深度提升**需要 prompt 层配合
+
+**改进方向（未实施）**：
+1. 为补充添加专用 prompt（强调"深度补充"指令）
+2. 降低补充比例（如 10%）只补 failed signals
+3. 提高 HYBRID_INTUITION_THRESHOLD 让更多 signals 走补充
+
+### 推荐使用
+
+| 场景 | 推荐 |
+|------|------|
+| 复杂论文 (101 alphas) | v3.0 parallel (稳) |
+| 简单论文 (28 signals) | v3.0 parallel (快) |
+| 质量要求 > 速度 | v3.1 hybrid + 调 prompt (待优化) |
+
+### 实施价值
+
+虽然实证未显著提升质量，但 hybrid 模式作为**架构层**实施完整：
+- 智能识别 shallow factors（机制正确）
+- 20% 资源再分配（架构合理）
+- 与 auto mode 集成（可自动启用）
+
+### Git 历史
+
+```
+721f7df feat(reproduction): v3.0 smart mode
+[next]   feat(reproduction): v3.1 hybrid mode (架构完整 + 实证效果待优化)
 ```
