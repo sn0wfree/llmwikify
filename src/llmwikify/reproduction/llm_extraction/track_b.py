@@ -29,6 +29,7 @@ _jinja_env = Environment(loader=BaseLoader(), trim_blocks=True, lstrip_blocks=Tr
 
 PROMPT_PASS1 = "repro_extract_track_b_pass1.yaml"
 PROMPT_PASS2 = "repro_extract_track_b_pass2.yaml"
+PROMPT_PASS2_SUPPLEMENT = "repro_extract_track_b_pass2_supplement.yaml"
 
 API_PARAM_KEYS = {"temperature", "max_tokens", "top_p", "top_k"}
 
@@ -65,6 +66,9 @@ HYBRID_THEORETICAL_MIN = 50  # l3.theoretical_basis < this chars → shallow
 HYBRID_HYPOTHESES_MIN = 2    # l4.hypotheses count < this → shallow
 HYBRID_SUPPLEMENT_RATIO = 0.2  # Supplement at most 20% of factors with adaptive
 HYBRID_MIN_SUPPLEMENTS = 3    # Always supplement at least this many (if any)
+HYBRID_SUPPLEMENT_BATCH_SIZE = 4   # Supplement signals per LLM call (batch)
+HYBRID_SUPPLEMENT_CONCURRENCY = 3  # Max concurrent batches for supplement phase
+HYBRID_SUPPLEMENT_USE_SPECIFIC_PROMPT = True  # Use PROMPT_PASS2_SUPPLEMENT instead of adaptive multi-turn
 
 # Success rate thresholds for auto-retry
 PASS2_SUCCESS_THRESHOLD_HIGH = 0.95  # 95%: Complete, no retry needed
@@ -645,14 +649,23 @@ def _hybrid_pass2(
 
     logger.info(
         "[track_b] paper=%s pass2 HYBRID: phase 2 = adaptive supplement "
-        "(%d/%d shallow factors)",
+        "(%d/%d shallow factors, prompt=%s)",
         paper_id, len(supplement_stubs), len(signals),
+        PROMPT_PASS2_SUPPLEMENT if HYBRID_SUPPLEMENT_USE_SPECIFIC_PROMPT else PROMPT_PASS2,
     )
 
-    # Phase 3: Adaptive multi-turn for shallow factors
+    # Phase 3: Adaptive multi-turn for shallow factors.
+    # When HYBRID_SUPPLEMENT_USE_SPECIFIC_PROMPT=True, use PROMPT_PASS2_SUPPLEMENT
+    # which emphasizes L3/L4 depth (vs general pass 2).
+    supplement_prompt = (
+        PROMPT_PASS2_SUPPLEMENT
+        if HYBRID_SUPPLEMENT_USE_SPECIFIC_PROMPT
+        else PROMPT_PASS2
+    )
     adaptive_details, adaptive_latency = asyncio.run(
         _run_pass2_adaptive(
             client, plan, paper_id, supplement_stubs, parsed_text,
+            prompt_file=supplement_prompt,
         )
     )
 
@@ -1262,8 +1275,13 @@ async def _run_pass2_adaptive(
     parsed_text: str,
     work_dir: Path | None = None,
     existing_details: list[SignalDetail] | None = None,
+    prompt_file: str = PROMPT_PASS2,
 ) -> tuple[list[SignalDetail], int]:
     """Run Pass 2 with adaptive multi-turn: LLM self-assesses context, requests a/b/c.
+
+    Args:
+        prompt_file: Prompt template filename. Defaults to PROMPT_PASS2.
+            Set to PROMPT_PASS2_SUPPLEMENT for deep refinement mode (hybrid).
 
     Algorithm:
     1. Initialize single session with system prompt
@@ -1296,11 +1314,12 @@ async def _run_pass2_adaptive(
         return list(details.values()), total_latency
 
     # Load prompt
-    system_text, user_template, params = _load_prompt(PROMPT_PASS2)
+    system_text, user_template, params = _load_prompt(prompt_file)
     tmpl = _jinja_env.from_string(user_template)
+    default_max = int(params.get("max_tokens", 5500))
     max_tokens = max(
-        int(params.get("max_tokens", 5500)),
-        int(plan.token_budget.get("track_b_pass2_per_factor", 5500)),
+        default_max,
+        int(plan.token_budget.get("track_b_pass2_per_factor", default_max)),
     )
 
     # Initialize multi-turn session

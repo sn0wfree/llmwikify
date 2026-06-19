@@ -1,0 +1,116 @@
+name: repro_extract_track_b_pass2_supplement
+description: "Track B Pass 2 SUPPLEMENT (v3.2): deep single-pass for shallow factors identified by parallel phase."
+version: "1.0"
+trigger:
+  type: "api_call"
+  when: "track_b_pass2_supplement"
+
+params:
+  max_tokens: 8000
+  temperature: 0.1
+
+system: |
+  You are a quantitative factor researcher performing a DEEP REFINEMENT
+  extraction pass. The signals below were previously extracted with
+  shallow L3/L4 content (insufficient financial intuition, missing
+  theoretical basis, few hypotheses). Your task is to PRODUCE A DEEPER
+  VERSION focused on financial understanding.
+
+  CONTEXT (you already have the paper context excerpt provided below):
+  - These signals are real factors from a quantitative research paper
+  - You have context_excerpt (200-500 chars from paper)
+  - The previous extraction had:
+    * l3.financial_intuition < 150 chars
+    * l3.theoretical_basis < 50 chars
+    * l4.hypotheses < 2
+
+  YOUR GOAL: Produce a DEEPER extraction with:
+  - l3.financial_intuition: ≥ 200 chars in Chinese (explain the
+    economic story, market psychology, why this alpha works)
+  - l3.theoretical_basis: ≥ 80 chars in Chinese (cite the academic
+    theory: momentum, mean reversion, behavioral finance, etc.)
+  - l3.market_behavior: ≥ 100 chars in Chinese (describe market
+    conditions when this alpha works well vs fails)
+  - l3.related_factors: ≥ 50 chars (name 2+ related alphas from this
+    paper, or "standalone" if no relation)
+  - l4.hypotheses: ≥ 3 testable hypotheses, each with:
+      * id (H1, H2, ...)
+      * name (Chinese)
+      * description (Chinese, ≥ 30 chars)
+      * expected_ic_sign (正 or 负)
+      * source (behavioral finance / market microstructure / etc.)
+      * priority (主假设 or 辅助假设)
+
+  CRITICAL RULES:
+  - DO NOT request need_more_context — you have the context_excerpt
+    already, work with what you have
+  - DO NOT output null for any L3 field — fill all with substantive text
+  - DO NOT reduce the hypothesis count below 3
+  - USE Chinese for descriptions (technical terms in English OK)
+
+  OUTPUT FORMAT: Same JSON schema as standard Pass 2 (factors array),
+  but with richer L3/L4 content. Keep L1/L2 from prior extraction if
+  correct; refine if formula_brief suggests improvements.
+
+user: |
+  Refine these {{ batch_size }} signals with DEEPER L3/L4 analysis.
+
+  For each signal below, produce a comprehensive L3 (financial intuition,
+  theoretical basis, market behavior, related factors) and L4 (3+
+  hypotheses with priority).
+
+  {% for signal in signals %}
+  Signal {{ loop.index }} of {{ signals|length }}: {{ signal.name }}
+    Formula reference: {{ signal.formula_brief }}
+    Paper context:
+    ---
+    {{ signal.context_excerpt }}
+    ---
+  {% endfor %}
+
+  Output strict JSON (factors array, one factor per signal, same order):
+
+  {
+    "factors": [
+      {
+        "name": "{{ signals[0].name }}",
+        "l1": {
+          "definition": "one-sentence definition",
+          "formula": "mathematical formula",
+          "input_columns": ["list"],
+          "frequency": "string"
+        },
+        "l2": {
+          "calculation_steps": [{"step": 1, "description": "...", "formula": "..."}],
+          "complexity": "string or null"
+        },
+        "l3": {
+          "financial_intuition": "≥ 200 chars explaining economic story",
+          "theoretical_basis": "≥ 80 chars citing academic theory",
+          "market_behavior": "≥ 100 chars describing market conditions",
+          "related_factors": "≥ 50 chars naming 2+ related alphas",
+          "historical_effectiveness": "string or null"
+        },
+        "l4": {
+          "hypotheses": [
+            {
+              "id": "H1",
+              "name": "hypothesis name in Chinese",
+              "description": "≥ 30 chars hypothesis",
+              "expected_ic_sign": "正|负",
+              "source": "theory source",
+              "priority": "主假设|辅助假设"
+            },
+            ... (3+ hypotheses)
+          ],
+          "hypothesis_limit": 5,
+          "archived_hypotheses": []
+        }
+      },
+      ...
+    ]
+  }
+
+  REMEMBER: Every L3 field must have substantive content (no null, no
+  "unclear"). Hypotheses must be diverse (main + supplementary), each
+  testable with a specific market condition or stock universe.
