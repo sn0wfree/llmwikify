@@ -19,17 +19,26 @@ logger = logging.getLogger(__name__)
 def register_routes(
     app: FastAPI,
     registry: WikiRegistry,
+    provider: Any = None,
 ) -> None:
     """Register all API routes (unified architecture).
 
     Args:
         app: FastAPI application
         registry: WikiRegistry (always created, even for single wiki)
+        provider: optional LLM client (Phase 7). Forwarded to
+            ``_register_agent_routes`` so AgentService can wire it
+            into MemoryManager for Consolidator + Dream.
     """
-    _register_wiki_routes(app, registry)
+    _register_wiki_routes(app, registry, provider=provider)
+    _register_agent_routes(app, registry, provider=provider)
 
 
-def _register_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
+def _register_wiki_routes(
+    app: FastAPI,
+    registry: WikiRegistry,
+    provider: Any = None,
+) -> None:
     """Register unified wiki routes with WikiRegistry."""
 
     def _get_default_or_first_wiki_id() -> str:
@@ -466,8 +475,8 @@ def _register_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
 
     app.include_router(log_router)
 
-    # --- Agent Routes ---
-    _register_agent_routes(app, registry)
+    # --- Agent Routes (Phase 7: provider forwarded to MemoryManager) ---
+    _register_agent_routes(app, registry, provider=provider)
 
 
 def _load_research_config() -> dict[str, Any] | None:
@@ -487,15 +496,25 @@ def _load_research_config() -> dict[str, Any] | None:
         return None
 
 
-def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
-    """Register Agent backend routes (Phase 1)."""
+def _register_agent_routes(
+    app: FastAPI,
+    registry: WikiRegistry,
+    provider: Any = None,
+) -> None:
+    """Register Agent backend routes (Phase 1).
+
+    Phase 7 (2026-06-19): Accepts an optional ``provider`` (LLM client)
+    so the AgentService wires it into MemoryManager, enabling the
+    Phase 6 Consolidator + Dream pipeline. If ``provider`` is None,
+    the existing fallback path (provider-less MemoryManager) is used.
+    """
     from llmwikify.apps.chat.agent.agent_service import AgentService
     from llmwikify.interfaces.server.http.chat_sse import set_agent_service
 
     data_dir = Path.home() / ".llmwikify" / "agent"
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    agent_service = AgentService(registry, data_dir)
+    agent_service = AgentService(registry, data_dir, provider=provider)
     set_agent_service(agent_service)
 
     from llmwikify.interfaces.server.http.chat_sse import router as agent_router

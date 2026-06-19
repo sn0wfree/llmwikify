@@ -657,6 +657,127 @@ Mock 策略: LLM (`AsyncMock`), filesystem (`tmp_path`), APScheduler (lifespan t
 3. **P2 优先级**: WebSocket / Anthropic native 当前是否需要?
 4. **Skills 决策**: 确认不借鉴 nanobot skills (保持 81 actions Python 函数)?
 
+---
+
+## 8. Phase 7 实施笔记 (2026-06-19, Provider 注入 + DreamScheduler Lifespan)
+
+### 8.1 启动动机
+
+Phase 6 Step 4 ship 了 `DreamScheduler` utility class, 但有 2 个缺口:
+1. `AgentService.__init__` 不接 provider → `MemoryManager` 无 `consolidator/dream` → scheduler 启动是 no-op
+2. `WikiServer` 用 deprecated `@app.on_event("shutdown")`, 没有 startup hook
+
+Phase 7 修这两个缺口: provider 一路打通 + 用 FastAPI 现代化 lifespan 集成 DreamScheduler.
+
+### 8.2 关键决策 (3 项)
+
+| # | 决策 | 选择 | 理由 |
+|---|---|---|---|
+| 1 | Provider 注入路径 | `AgentService(provider=...)` → `MemoryManager(provider=...)` | 直接路径, 无 wrapper, 无注册表 |
+| 2 | WikiServer lifespan | 替换 `@app.on_event` → `@asynccontextmanager lifespan(app)` | 现代 FastAPI API (deprecated on_event 警告) |
+| 3 | DreamScheduler 启用开关 | `enable_dream_scheduler: bool = True` (默认开, 可关) | Production 默认开, tests 默认关 |
+
+### 8.3 关键集成点
+
+**AgentService**:
+```python
+class AgentService:
+    def __init__(self, wiki_registry, data_dir, ..., provider=None):
+        ...
+        if memory_manager is None:
+            self.memory_manager = MemoryManager(
+                app_db, wiki=None, data_dir=data_dir,
+                provider=provider,  # NEW Phase 7
+            )
+        self.dream_scheduler = None  # 待 lifespan 启动
+
+    async def start_dream_scheduler(
+        self, cron_expression=None, enabled=True, config_path=None,
+    ) -> DreamScheduler | None:
+        # 读 ~/.llmwikify/memory_config.json (不存在则写默认值)
+        # 启动 APScheduler, 设置 self.dream_scheduler
+```
+
+**WikiServer lifespan** (替换 `@app.on_event`):
+```python
+@asynccontextmanager
+async def lifespan(app):
+    # startup
+    if self.enable_dream_scheduler and self._agent_service is not None:
+        try:
+            await self._agent_service.start_dream_scheduler()
+        except Exception: logger.exception(...)
+    yield
+    # shutdown (reverse order)
+    if self._agent_service is not None:
+        try: await self._agent_service.stop_dream_scheduler()
+        except Exception: ...
+    if self.registry: self.registry.close()
+
+app = FastAPI(..., lifespan=lifespan)
+```
+
+**Provider 透传链** (`register_routes`):
+```python
+def register_routes(app, registry, provider=None):
+    _register_wiki_routes(app, registry, provider=provider)  # NEW param
+    _register_agent_routes(app, registry, provider=provider)
+
+def _register_agent_routes(app, registry, provider=None):
+    agent_service = AgentService(registry, data_dir, provider=provider)
+    # MemoryManager 自动 wire provider → consolidator + dream 实例化
+```
+
+### 8.4 测试覆盖 (1 文件, 20 cases)
+
+`tests/test_apps_chat_agent_service_phase7.py` (20 cases):
+- TestAgentServiceProviderInjection (5): provider 注入路径 + back-compat (无 provider 时 MemoryManager 不创建 consolidator/dream)
+- TestAgentServiceStartDreamScheduler (8): start/stop/idempotent/cron loading/disable/first-run defaults
+- TestAgentServiceStopDreamScheduler (3): idempotent stop
+- TestWikiServerProviderIntegration (4): WikiServer 加 provider + enable_dream_scheduler 参数
+
+### 8.5 修复细节
+
+**Bug 1**: `load_memory_config(cfg_path)` 当时传的是 full path (`/tmp/.../memory_config.json`), 但函数内部又 append `memory_config.json`, 导致找不到文件.
+**Fix**: 拆 `cfg_dir` (directory) 和 `cfg_path` (full path), 只把 directory 传给 `load_memory_config`.
+
+**Bug 2**: `@app.on_event("shutdown")` 是 deprecated API, FastAPI 推荐 lifespan context manager.
+**Fix**: 重写 `_build_app`, 把 wiki registry close 移到 lifespan 的 finally 块.
+
+### 8.6 数据对比
+
+| 维度 | Phase 6 Step 4 | Phase 7 后 | Δ |
+|---|---:|---:|---:|
+| WikiServer lifespan | ❌ deprecated | ✅ FastAPI lifespan | 升级 |
+| DreamScheduler 启动 | 手动 | 自动 (lifespan) | 简化 |
+| provider → MemoryManager | ❌ 断开 | ✅ 一路打通 | 接通 |
+| /api/health.dream_scheduler | ❌ | ✅ 显示状态 | 可观测 |
+| Tests | 14 | 34 | +20 |
+| 总 regression | 2673 | 2693 | +20 |
+
+### 8.7 累计数据 (Phase 5+6+7)
+
+| 维度 | Phase 7 后 |
+|---|---:|
+| 总 commit (Plan B 起) | ~35 |
+| 总新增 LOC | ~5,500 |
+| 总新增 test cases | ~117 |
+| 测试基线 | 2693 pass / 47 skipped / 0 fail |
+| archive 清理 | -7,771 LOC |
+| 外部依赖新增 | +1 (apscheduler, optional) |
+| 总 nanobot 借鉴组件 | 5 (state trace / microcompact / 13 hooks / Consolidator / Dream) |
+
+### 8.8 验收标准
+
+- [x] 1 commit
+- [x] AgentService 接受 provider 参数
+- [x] WikiServer 加 lifespan handler (start/stop DreamScheduler)
+- [x] WikiServer 透传 provider → routes.py → AgentService
+- [x] /api/health 显示 dream_scheduler feature flag
+- [x] 20 新 test cases
+- [x] 0 regression (基线 2673 → 2693 pass / 0 fail)
+- [x] ruff clean on modified files
+
 确认后我会:
 - 创建详细 task list (todowrite)
 - 启动 Phase A 第一步 (CompositeHook)

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from logging.handlers import RotatingFileHandler
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -55,6 +56,8 @@ class WikiServer:
     - WebUI static file serving (React SPA)
     - Optional API key authentication
     - Multi-wiki support via WikiRegistry
+    - Phase 7 (2026-06-19): LLM provider injection + lifespan-managed
+      DreamScheduler (Phase 6 Consolidator + Dream pipeline).
 
     Usage:
         # Single wiki mode (backward compatible)
@@ -66,6 +69,11 @@ class WikiServer:
         registry.initialize()
         server = WikiServer(registry, enable_webui=True)
         server.run(host="127.0.0.1", port=8765)
+
+        # Phase 7: provider injection (enables Phase 6 DreamScheduler)
+        from llmwikify.apps.chat.providers.registry import get_default_provider
+        provider = get_default_provider()
+        server = WikiServer(wiki, provider=provider, enable_dream_scheduler=True)
 
         # Pure MCP mode (stdio)
         server = WikiServer(wiki, enable_rest=False, enable_webui=False)
@@ -81,6 +89,8 @@ class WikiServer:
         enable_rest: bool = True,
         enable_webui: bool = True,
         cors_enabled: bool = True,
+        provider: Any = None,
+        enable_dream_scheduler: bool = True,
     ):
         # Unified architecture: always use WikiRegistry
         if isinstance(wiki, WikiRegistry):
@@ -113,7 +123,13 @@ class WikiServer:
         self.enable_mcp = enable_mcp
         self.enable_rest = enable_rest
         self.enable_webui = enable_webui
+        self.provider = provider
+        self.enable_dream_scheduler = enable_dream_scheduler
         self.mcp: MCPAdapter | None = None
+        # Reference to AgentService after register_routes; needed by the
+        # lifespan handler to start/stop the DreamScheduler. Set by
+        # _build_app -> register_routes (which instantiates AgentService).
+        self._agent_service: Any = None
 
         # 1. Build MCP adapter
         if enable_mcp:
@@ -122,22 +138,68 @@ class WikiServer:
         # 2. Build FastAPI application
         self.app = self._build_app(cors_enabled=cors_enabled)
 
-        # 3. Register REST API routes
+        # 3. Register REST API routes (Phase 7: provider forwarded)
         if enable_rest:
-            register_routes(self.app, self.registry)
+            register_routes(self.app, self.registry, provider=self.provider)
+            # Capture the AgentService created by _register_agent_routes
+            # so the lifespan handler can access it for DreamScheduler.
+            from llmwikify.interfaces.server.http.chat_sse import (
+                get_agent_service,
+            )
+            self._agent_service = get_agent_service()
 
         # 4. Mount WebUI static files
         if enable_webui:
             self._mount_webui()
 
     def _build_app(self, cors_enabled: bool = True) -> FastAPI:
-        """Build and configure FastAPI application."""
+        """Build and configure FastAPI application with Phase 7 lifespan.
+
+        Phase 7 (2026-06-19): Replaces the deprecated
+        ``@app.on_event("shutdown")`` with the modern FastAPI
+        ``lifespan`` context manager so the DreamScheduler can be
+        started/stopped cleanly. The lifespan also closes the wiki
+        registry on shutdown (preserved from the previous handler).
+        """
+
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            """Phase 7 lifespan: start DreamScheduler on startup, stop
+            on shutdown. Always closes the registry on shutdown."""
+            # Phase 7: start DreamScheduler (Phase 6 background)
+            if self.enable_dream_scheduler and self._agent_service is not None:
+                try:
+                    await self._agent_service.start_dream_scheduler()
+                except Exception:
+                    logger.exception(
+                        "WikiServer: dream_scheduler start failed "
+                        "during lifespan startup",
+                    )
+            try:
+                yield
+            finally:
+                # Stop DreamScheduler first (so it doesn't fire mid-shutdown)
+                if self._agent_service is not None:
+                    try:
+                        await self._agent_service.stop_dream_scheduler()
+                    except Exception:
+                        logger.warning(
+                            "WikiServer: dream_scheduler stop failed",
+                            exc_info=True,
+                        )
+                logger.info("llmwikify server shutting down")
+                if self.registry:
+                    self.registry.close()
+                elif self.wiki:
+                    self.wiki.close()
+
         app = FastAPI(
             title="llmwikify",
             version="0.31.0",
             description="LLM Wiki Knowledge Base API",
             docs_url="/docs",
             redoc_url="/redoc",
+            lifespan=lifespan,
         )
 
         # CORS support
@@ -198,6 +260,14 @@ class WikiServer:
                         "webui": self.enable_webui,
                         "auth": self.api_key is not None,
                         "multi_wiki": True,
+                        # Phase 7 feature flag (visible in /api/health)
+                        "dream_scheduler": (
+                            self.enable_dream_scheduler
+                            and self._agent_service is not None
+                            and getattr(
+                                self._agent_service, "dream_scheduler", None,
+                            ) is not None
+                        ),
                     },
                     "timestamp": datetime.utcnow().isoformat(),
                 }
@@ -218,18 +288,16 @@ class WikiServer:
                         "webui": self.enable_webui,
                         "auth": self.api_key is not None,
                         "multi_wiki": False,
+                        "dream_scheduler": (
+                            self.enable_dream_scheduler
+                            and self._agent_service is not None
+                            and getattr(
+                                self._agent_service, "dream_scheduler", None,
+                            ) is not None
+                        ),
                     },
                     "timestamp": datetime.utcnow().isoformat(),
                 }
-
-        # Lifecycle hooks
-        @app.on_event("shutdown")
-        async def shutdown_event():
-            logger.info("llmwikify server shutting down")
-            if self.registry:
-                self.registry.close()
-            elif self.wiki:
-                self.wiki.close()
 
         return app
 

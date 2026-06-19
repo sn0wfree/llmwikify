@@ -30,6 +30,12 @@ class AgentService:
 
     Wires together AppDatabase + ChatService + WikiService +
     SkillService + HarnessService + MemoryManager.
+
+    Phase 7 (2026-06-19): Accepts ``provider`` (LLM client) and
+    forwards it to ``MemoryManager`` so the Consolidator + Dream
+    pipeline (Phase 6) can run without relying on lazy lookup.
+    Also exposes ``start_dream_scheduler`` / ``stop_dream_scheduler``
+    for lifespan integration with the FastAPI app.
     """
 
     def __init__(
@@ -41,6 +47,7 @@ class AgentService:
         harness_service: Any = None,
         memory_manager: Any = None,
         config: Any = None,
+        provider: Any = None,
     ):
         from llmwikify.apps.chat.agent.orchestrator import ChatOrchestrator
         from llmwikify.apps.db import AppDatabase
@@ -49,6 +56,7 @@ class AgentService:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.config = config
+        self.provider = provider
 
         # AppDatabase (or use provided one)
         if app_db is not None:
@@ -61,9 +69,12 @@ class AgentService:
             wiki_registry, self.data_dir, self.app_db.chat,
         )
 
-        # MemoryManager (6 memory stores) — must be created
-        # BEFORE ChatOrchestrator so the chat layer can be wired
-        # with it.
+        # MemoryManager (6 memory stores + Phase 6 Consolidator/Dream).
+        # If an explicit MemoryManager is supplied, use it as-is.
+        # Otherwise create one. Phase 7 (2026-06-19): if a provider is
+        # supplied AND no explicit MemoryManager is given, build the
+        # default MemoryManager with provider wired so Consolidator +
+        # Dream can operate (otherwise they stay None — lazy fallback).
         if memory_manager is not None:
             self.memory_manager = memory_manager
         else:
@@ -72,6 +83,7 @@ class AgentService:
                 self.app_db,
                 wiki=None,  # Wired on first skill invocation
                 data_dir=self.data_dir,
+                provider=provider,
             )
 
         # ChatOrchestrator (SSE chat) — share the same ChatDatabase
@@ -105,6 +117,14 @@ class AgentService:
         self.skill_service.wiki_service = self.wiki_service
         self.chat_service.skill_service = self.skill_service
 
+        # Phase 7 (2026-06-19): DreamScheduler lifecycle hook.
+        # Holds the scheduler instance once ``start_dream_scheduler`` is
+        # called; ``stop_dream_scheduler`` shuts it down. None before
+        # start (so unit tests that never touch the scheduler pay zero
+        # cost). Kept as a single attribute so the FastAPI lifespan
+        # handler can locate it deterministically.
+        self.dream_scheduler: Any = None
+
     # ─── DB facade shortcut ─────────────────────────────────────
 
     @property
@@ -128,6 +148,113 @@ class AgentService:
 
     def reload_llm(self) -> None:
         self.wiki_service.reload_llm()
+
+    # ─── Phase 7 DreamScheduler lifecycle (2026-06-19) ─────────
+
+    async def start_dream_scheduler(
+        self,
+        cron_expression: str | None = None,
+        enabled: bool = True,
+        config_path: Path | str | None = None,
+    ) -> Any:
+        """Start the Phase 6 DreamScheduler as a background task.
+
+        Idempotent: re-calling is a no-op if a scheduler is already
+        running. Returns the scheduler instance (or None if ``dream``
+        is not configured because no LLM provider was supplied).
+
+        Args:
+            cron_expression: cron string (default from
+                ``~/.llmwikify/memory_config.json`` or
+                ``"0 3 * * *"``).
+            enabled: ``False`` short-circuits and returns None.
+            config_path: optional override for the config file path;
+                defaults to ``<data_dir>/memory_config.json``.
+        """
+        if not enabled:
+            logger.info("AgentService: dream_scheduler disabled, skipping start")
+            return None
+
+        # Need a Dream instance; MemoryManager must be built with a
+        # provider for consolidator/dream to exist.
+        if (
+            self.memory_manager is None
+            or getattr(self.memory_manager, "dream", None) is None
+        ):
+            logger.warning(
+                "AgentService: dream_scheduler start skipped — "
+                "MemoryManager has no dream (provider not provided?)",
+            )
+            return None
+
+        if self.dream_scheduler is not None and self.dream_scheduler.is_running:
+            logger.debug("AgentService: dream_scheduler already running")
+            return self.dream_scheduler
+
+        from llmwikify.apps.chat.memory.dream_scheduler import (
+            CRON_DAILY_03,
+            DreamScheduler,
+        )
+        from llmwikify.apps.chat.memory.memory_config import (
+            DEFAULT_CONFIG_FILENAME,
+            load_memory_config,
+            write_default_memory_config,
+        )
+
+        # Load cron from memory_config.json if not supplied
+        if cron_expression is None:
+            cfg_dir = (
+                Path(config_path).parent
+                if config_path is not None
+                else self.data_dir
+            )
+            cfg_path = cfg_dir / DEFAULT_CONFIG_FILENAME
+            # First-run convenience: write defaults ONLY if file missing.
+            if not cfg_path.exists():
+                write_default_memory_config(cfg_dir)
+            # Pass the directory, NOT the full path (load_memory_config
+            # internally appends the filename).
+            mem_cfg = load_memory_config(cfg_dir)
+            cron_expression = (
+                mem_cfg.dream.get("cron_expression") or CRON_DAILY_03
+            )
+            dream_enabled = mem_cfg.dream.get("enabled", True)
+            if not dream_enabled:
+                logger.info(
+                    "AgentService: dream_scheduler disabled in "
+                    "memory_config.json, skipping start",
+                )
+                return None
+
+        sched = DreamScheduler(
+            dream=self.memory_manager.dream,
+            cron_expression=cron_expression,
+            enabled=True,
+        )
+        await sched.start()
+        self.dream_scheduler = sched
+        logger.info(
+            "AgentService: dream_scheduler started (cron=%r)",
+            cron_expression,
+        )
+        return sched
+
+    async def stop_dream_scheduler(self) -> None:
+        """Stop the running DreamScheduler (Phase 7).
+
+        Idempotent: safe to call even if no scheduler was started.
+        """
+        if self.dream_scheduler is None:
+            return
+        try:
+            await self.dream_scheduler.stop()
+        except Exception:
+            logger.warning(
+                "AgentService: dream_scheduler stop failed",
+                exc_info=True,
+            )
+        finally:
+            self.dream_scheduler = None
 
     async def approve_confirmation_and_continue(
         self,

@@ -633,7 +633,142 @@ Mock 策略: LLM (`AsyncMock`), filesystem (`tmp_path`), APScheduler (lifespan t
 
 ### 10.8.9 后续 (Phase 7+)
 
-- **Phase 7**: microcompact metrics 暴露 (`/api/llm/metrics` HTTP endpoint + frontend panel)
-- **Phase 8**: Memory consolidation 与 reproduction cross-system query (`apps/memory_facade/` 协调者)
-- **Phase 9**: Multi-modal memory (image/audio via foundation/extractors)
-- **v0.5 release**: CHANGELOG + version bump (Phase 5+6 累计)
+- **Phase 7**: provider 注入 AgentService → DreamScheduler lifespan 集成 (✅ 完成 2026-06-19, 见 §10.9)
+- **Phase 8**: microcompact metrics 暴露 (`/api/llm/metrics` HTTP endpoint + frontend panel)
+- **Phase 9**: Memory consolidation 与 reproduction cross-system query (`apps/memory_facade/` 协调者)
+- **Phase 10**: Multi-modal memory (image/audio via foundation/extractors)
+- **v0.5 release**: CHANGELOG + version bump (Phase 5+6+7 累计)
+
+---
+
+## 10.9 Phase 7 — Provider 注入 + DreamScheduler Lifespan (2026-06-19)
+
+> Phase 7 解决 Phase 6 Step 4 的"utility ship without integration" 缺口:
+> 让 DreamScheduler 在 WikiServer lifespan 中**自动**启动/停止. 借鉴 nanobot
+> cron 与 agent 集成模式, 但适配 llmwikify 的 FastAPI 架构.
+
+### 10.9.1 动机
+
+Phase 6 Step 4 shipped DreamScheduler 作为 utility class, 但有 2 个缺口:
+1. **WikiServer 不自动启动** — AgentService 创建时没有 provider, MemoryManager
+   无 consolidator/dream 实例, scheduler 即使启动也是 no-op
+2. **lifespan 不存在** — WikiServer 用 `@app.on_event("shutdown")` (deprecated),
+   没有 startup hook 可用
+
+Phase 7 修这两个缺口:
+- AgentService 接受 `provider` 参数, 转发给 MemoryManager (Phase 6 已有, 路径打通)
+- WikiServer 用 FastAPI 现代化 `lifespan` context manager 替换 `@app.on_event`
+- lifespan 自动调用 `agent_service.start_dream_scheduler()` / `stop_dream_scheduler()`
+
+### 10.9.2 集成点
+
+**AgentService 改造**:
+```python
+class AgentService:
+    def __init__(self, wiki_registry, data_dir, ..., provider=None):
+        # Provider 转发给 MemoryManager (Phase 6 已有路径)
+        if memory_manager is None:
+            self.memory_manager = MemoryManager(
+                app_db, wiki=None, data_dir=data_dir,
+                provider=provider,  # NEW Phase 7
+            )
+        self.dream_scheduler = None  # 待 lifespan 启动
+
+    async def start_dream_scheduler(
+        self, cron_expression=None, enabled=True, config_path=None,
+    ) -> DreamScheduler | None:
+        # 读 ~/.llmwikify/memory_config.json (不存在则写默认值)
+        # 启动 APScheduler, 设置 self.dream_scheduler
+
+    async def stop_dream_scheduler(self) -> None:
+        # Stop + clear self.dream_scheduler
+```
+
+**WikiServer lifespan** (替换 deprecated `@app.on_event`):
+```python
+@asynccontextmanager
+async def lifespan(app):
+    # startup
+    if self.enable_dream_scheduler and self._agent_service is not None:
+        try:
+            await self._agent_service.start_dream_scheduler()
+        except Exception:
+            logger.exception(...)
+    yield
+    # shutdown
+    if self._agent_service is not None:
+        try:
+            await self._agent_service.stop_dream_scheduler()
+        except Exception: ...
+    if self.registry: self.registry.close()
+
+app = FastAPI(..., lifespan=lifespan)
+```
+
+### 10.9.3 使用模式
+
+**Production (WikiServer 启动时自动)**:
+```python
+from llmwikify.apps.chat.providers.registry import get_default_provider
+provider = get_default_provider()  # MiniMax M2.7 or xiaomi_mimo
+server = WikiServer(
+    wiki, provider=provider,
+    enable_dream_scheduler=True,  # default True
+)
+server.run(host="0.0.0.0", port=8765)
+# lifespan 自动启动 DreamScheduler (daily 03:00 by default)
+```
+
+**Tests / dev (显式关闭)**:
+```python
+server = WikiServer(wiki, enable_dream_scheduler=False)
+```
+
+**Memory config 自定义** (`~/.llmwikify/memory_config.json`):
+```json
+{
+  "consolidation": {...},
+  "dream": {
+    "enabled": true,
+    "cron_expression": "0 */6 * * *",
+    "max_batch_size": 20
+  }
+}
+```
+
+### 10.9.4 文件清单
+
+**修改 (3 文件)**:
+- `apps/chat/agent/agent_service.py` (+100 LOC): provider 参数, start/stop_dream_scheduler, dream_scheduler 属性
+- `interfaces/server/http/routes.py` (+15 LOC): `_register_wiki_routes` + `_register_agent_routes` + `register_routes` 加 provider 透传
+- `interfaces/server/core.py` (+80 LOC): WikiServer 加 provider + enable_dream_scheduler 参数, lifespan handler 替换 @app.on_event
+
+**新增 tests (1 文件, 20 cases)**:
+- `tests/test_apps_chat_agent_service_phase7.py` (20 cases):
+  TestAgentServiceProviderInjection (5): provider_stored / no_provider_default_none /
+    provider_wires_memory_manager / explicit_memory_manager_overrides /
+    dream_scheduler_attr_initially_none
+  TestAgentServiceStartDreamScheduler (8): start_with_provider / no_dream_returns_none /
+    disabled_short_circuit / idempotent / loads_cron_from_config /
+    respects_dream_disabled / writes_default_first_run / explicit_cron_overrides
+  TestAgentServiceStopDreamScheduler (3): stop_after_start / without_start_is_noop /
+    double_stop_idempotent
+  TestWikiServerProviderIntegration (4): provider_param_stored / no_provider_default /
+    lifespan_set_on_app / agent_service_captured
+
+### 10.9.5 数据对比 (前 vs 后)
+
+| 维度 | Phase 6 Step 4 | Phase 7 后 | Δ |
+|---|---:|---:|---:|
+| WikiServer lifespan | ❌ 无 (deprecated on_event) | ✅ FastAPI lifespan | 升级 |
+| DreamScheduler 启动 | 手动 | 自动 (lifespan) | 简化 |
+| provider → MemoryManager | ❌ 断开 | ✅ 一路打通 | 接通 |
+| /api/health 显示 dream_scheduler | ❌ | ✅ `features.dream_scheduler` | 可观测 |
+| Tests | 14 (scheduler only) | 34 (scheduler + integration) | +20 |
+| 总 regression | 2673 | 2693 | +20 |
+
+### 10.9.6 后续 (Phase 8+)
+
+- **Phase 8**: microcompact metrics 暴露 (`/api/llm/metrics` HTTP endpoint + frontend panel)
+- **Phase 9**: Memory consolidation 与 reproduction cross-system query (`apps/memory_facade/` 协调者)
+- **v0.5 release**: CHANGELOG + version bump (Phase 5+6+7 累计)
