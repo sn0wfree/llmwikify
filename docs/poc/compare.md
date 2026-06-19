@@ -1,9 +1,11 @@
 # compare.md — llmwikify chat vs nanobot 深度对比
 
-> Date: 2026-06-17
+> Date: 2026-06-19 (updated Phase 5 god class split)
+> Original: 2026-06-17
 > nanobot tag: v0.2.1 (`f309982 chore(release): update version to 0.2.1`)
 > nanobot source: `/tmp/nanobot/nanobot/`
 > llmwikify source: `/home/ll/llmwikify/src/llmwikify/`
+> llmwikify HEAD: `793cf1b` (Phase 5 D5)
 
 ---
 
@@ -296,3 +298,171 @@
 - ❌ 改写 ui/webui/ (Tier 3)
 - ❌ 处理 Unstaged 10 文件 (用户确认先不管)
 - ❌ M1 已 commit (2c59227), 不重做
+
+---
+
+## 10. Phase 5 — God Class Split (2026-06-19)
+
+> Phase 5 是 Plan B (5 步状态机) 之后的内部架构清理, **与 nanobot 借鉴无关**。
+> 目标: 拆解 chat 子系统内的 4 个 god class, 借鉴 nanobot 的"小而专"模块化思路。
+
+### 10.1 拆解目标 (4 个 god class)
+
+| God class (前) | 形态 | LOC | 触发问题 |
+|---|---|---:|---|
+| `ChatOrchestrator` | 720 LOC 混合 5 职责 (chat loop + confirmation + session + executor wiring + DB) | 720 | 12 方法可独立, 单测困难 |
+| `ChatDatabase` (`db.py`) | 926 LOC 混 21 表 + 27 research_delegate + 17 wiki_delegate | 926 | 单文件过大, schema 演变风险 |
+| `apps/chat/chat_legacy/*` | 9 文件共 ~2,800 LOC 在 archive 但 live import 路径 | 2,800 | archive 不应被 import |
+| `service.py` | 1,236 LOC 已被 B-7 删除, 3 tests 残留 | 1,236 | uncollectable tests |
+
+### 10.2 拆解结果 (4 + 1 阶段)
+
+#### D1: `ConfirmationManager` + `SessionManager` (`da870d9`)
+
+从 `ChatOrchestrator` 抽出 2 个 manager, dict-by-reference 共享状态:
+
+```python
+# 前: ChatOrchestrator 12 个方法 + 散落状态
+# 后: 3 文件各司其职
+agent/orchestrator.py       720 LOC (chat loop only)
+agent/confirmation_manager.py 86 LOC (5 confirm/reject method)
+agent/session_manager.py      80 LOC (5 session lifecycle method)
+```
+
+**保留 11 个 public method 作为 1-line 委托** — 调用方零迁移, 公共 API 完全不变。
+
+**新增测试**: `test_confirmation_manager.py` (25) + `test_session_manager.py` (13) = **38 新 cases**。
+
+#### D3: `ChatDatabase` 拆 7 repository (`f771c0a`, **高风险**)
+
+926 LOC god class → 7 个 repository + 1 thin facade:
+
+```
+apps/chat/db/
+├── __init__.py            50 LOC (re-exports)
+├── _facade.py            608 LOC (ChatDatabase thin facade, 99 methods 1-line 委托)
+├── base.py                79 LOC (ChatDBBase 抽象)
+├── chat_session_repo.py  166 LOC (chat_sessions 表, 8 methods)
+├── chat_message_repo.py  227 LOC (chat_messages + revert_to_message 回调)
+├── tool_call_repo.py     138 LOC (tool_calls + delete_after_rowid 回调)
+├── permission_repo.py     90 LOC (chat_permissions 表)
+├── research_delegate.py  216 LOC (27 delegates → ResearchDatabase)
+├── wiki_delegate.py      133 LOC (17 delegates → WikiDatabase)
+└── admin_stats_repo.py   155 LOC (5 cross-table stats)
+```
+
+**架构选择**: facade 模式, 99 个 method 都是 1-line 委托 → 调用方零迁移 (123 调用方)。
+**跨表事务**: `delete_chat_session` + `revert_to_message` 在 facade 协调, 用 `tool_call_delete_after_rowid` 回调跨 repo 共享同一 SQLite connection。
+**module/package 冲突解决**: `db.py` (file) + `db/` (package) 共存时 Python 优先 package, 故 facade 移入 `db/_facade.py`。
+
+**新增测试**: 7 test files + 106 cases (session 18 / message 16 / tool 16 / permission 10 / admin 10 / research 17 / wiki 19)。
+
+#### D4: inline `chat_legacy/` → `research_engine/` (`4c469fe`)
+
+把 v0.41 6-step framework 从 `archive/llmwikify_v0_41_legacy/chat_legacy/` (9 文件) git mv 到 `apps/chat/research_engine/`:
+
+```
+research_engine/
+├── __init__.py     44 LOC (re-exports + back-compat aliases)
+├── engine.py      410 LOC (ResearchEngine)
+├── actions.py     877 LOC (8 action functions + ActionContext)
+├── gates.py       274 LOC (ResearchGates)
+├── llm_step.py    237 LOC (run_prompt)
+├── observer.py    135 LOC (ResearchObserver)
+├── reasoner.py    239 LOC (ResearchReasoner)
+├── report.py      289 LOC (ReportGenerator)
+├── resume.py      185 LOC (ResearchResumeLoader)
+└── routes.py      312 LOC (legacy autoresearch FastAPI router)
+```
+
+**back-compat**: `apps/chat/__init__.py` 末段 `sys.modules` 注入 9 aliases (`llmwikify.apps.chat.{engine,actions,gates,...}`) — 旧调用 `from llmwikify.apps.chat import engine` 仍可用。
+**修复**: `actions.py` 用 `TYPE_CHECKING` 懒导入 `ResearchClarifier` (原循环 import)。
+**archive 真正冻结**: `archive/chat_legacy/` 删除空目录, `git grep` 验证 0 live imports。
+
+#### D5: 3 dead archive tests 清理 (`793cf1b`)
+
+B-7 (`98a47bd`) 已删除 `service.py` (1,236 LOC), 但 3 tests 因 `from llmwikify.apps.chat.agent.service import` (无 archive 前缀) 残留, pytest collection error。
+
+**迁移 18 个 uncovered scenario** → `tests/test_apps_chat_agent_context_manager.py`:
+- `TestAgentContext` (5): state mgmt + copy semantics
+- `TestCompaction` (5): disabled / too-few / below-threshold / reduces / fail-fallback
+- `TestTruncation` (7): short / long / system-preserved / fallback / empty / single / override
+- `TestPrepareMessages` (1): compact + truncate 集成
+
+**净 diff**: -1,742 (3 dead tests) + 264 (新 test) = -1,478 LOC。
+
+### 10.3 借鉴的 nanobot 模式 (Phase 5 副产品)
+
+| 模式 | nanobot 来源 | llmwikify 实施 | LOC |
+|---|---|---|---:|
+| **State Trace** | `nanobot.agent.observability.StateTraceEntry` | `apps/chat/agent/runner_v2.py:60` `_StateTraceEntry` + `_StateTrace` CM + `self._current_ctx` | 85 |
+| **Microcompact** | `nanobot.agent.autocompact._COMPACTABLE_TOOLS` | `apps/chat/agent/microcompact.py` (默认 ON, keep_chars=1000) | 85 |
+| **13 钩子点 CompositeHook** | `nanobot.agent.hook.Hook` (8 态 lifecycle) | `foundation/callback/composite.py` 13 钩子点 + `CompositeHook` fan-out + `_maybe_await` | 170 |
+
+**State Trace 设计要点** (借鉴 nanobot 而非 vendor):
+- `_StateTraceEntry` 5 字段 (step / status / elapsed_ms / iteration / message_count)
+- `_StateTrace` CM 包裹主循环 5 步, 失败仍记录
+- `ChatRunResult.state_trace` 默认空 list, runner_v2 通过 `self._current_ctx` 传递
+
+**Microcompact 借鉴清单** (`apply-plan.md:§5.1`):
+- 7 compactable tools: `read_file / exec / grep / find_files / web_search / web_fetch / list_dir`
+- marker 格式: `[Tool result compacted] Tool: ... Original: N chars Kept: M chars ID: ...`
+- `spec._compacted_results[call_id]` per-run 内存缓存, run 结束 GC
+- DB 持久化与 observation 生成仍用原 result, 仅 `conversation_messages.append` 用 marker
+
+**CompositeHook 13 钩子点** (来自 `plan-b-refactor.md:§2.5`):
+- `wants_streaming` / `before_iteration` / `on_stream` / `on_stream_end`
+- `emit_reasoning` / `emit_reasoning_end`
+- `before_execute_tools` / `after_tool_executed` / `on_tool_error`
+- `on_confirmation`
+- `after_iteration` / `finalize_content` / `on_error`
+
+**fan-out 错误隔离**: `CompositeHook` 的 async 方法自动 try/except log warning, 仅 `finalize_content` 透传异常。
+**业务 hook 放 `integrations/` 子包**: `WikiHook` / `DreamSyncHook` / `AutoIngestHook` (3 个, 共 113 LOC)。
+
+### 10.4 决策记录 (Plan B → Phase 5)
+
+**Plan B (5 步状态机, 2026-06-18)**:
+- ✅ B-1 到 B-7 完成, 19 commits, 868 tests, 0 archive deps
+- ✅ 选择性借鉴 nanobot TurnState 8 态 → 我们 5 步域特化
+- ✅ 不 vendor nanobot `agent/loop.py` (1,724 LOC, 改写成本 > 收益)
+
+**Phase 5 (god class split, 2026-06-19)**:
+- ✅ D1 + D3 + D4 + D5 (D2 是设计阶段, 无独立 commit)
+- ✅ 4 god class → 11 + 9 + 10 + 0 = 30 个小文件
+- ✅ 调用方零迁移 (123 + 3 production + 14 test), facade 模式保留公共 API
+- ✅ 借鉴 nanobot 3 模式 (state trace / microcompact / 13 hooks)
+
+### 10.5 数据对比 (前 vs 后)
+
+| 维度 | Phase 5 前 (god class 状态) | Phase 5 后 (D5 终点) | Δ |
+|---|---:|---:|---:|
+| `apps/chat/db/` LOC | 926 (单 `db.py`) | 1,862 (10 文件) | +936 (拆分 overhead) |
+| `apps/chat/research_engine/` LOC | 0 (在 archive) | 3,002 (10 文件) | +3,002 (净增) |
+| `archive/llmwikify_v0_41_legacy/` LOC | ~5,500 | ~28 (仅 README + 空 `__init__.py`) | **-5,472** (冻结) |
+| 测试 cases (Phase 5 新增) | 0 | 38 (managers) + 106 (db repos) + 18 (ctx) = **+162** | +162 |
+| Public API 迁移成本 | — | 0 (facade/manager 透明) | — |
+| 拆分后最大单文件 LOC | 1,236 (`service.py`, B-7 已删) | 877 (`research_engine/actions.py`) | — |
+
+**结论**: Phase 5 把 4 个 god class 拆成 30+ 个小文件, 调用方零迁移, 测试覆盖 +162 cases,
+archive 目录 -5,472 LOC。代码 LOC 净增 (~+3,938) 是拆分 overhead, 但单文件最大 < 900 LOC。
+
+### 10.6 与 nanobot 模块化对比
+
+| 维度 | nanobot | llmwikify Phase 5 后 |
+|---|---|---|
+| 平均单文件 LOC | 60 (22 子模块 / 1.3k 文件) | ~250 (chat 子系统) |
+| 最大单文件 LOC | `loop.py` 1,724 (历史包袱) | `research_engine/actions.py` 877 |
+| God class 数 | 1 (`AgentLoop`) | 0 (已全部拆) |
+| Facade 模式 | 无 | `_facade.py` (ChatDatabase 99 委托) |
+| Delegate 模式 | `factory.make_provider()` | `research_delegate.py` 27 委托 + `wiki_delegate.py` 17 委托 |
+
+**借鉴点**: nanobot 没有 facade 模式, 我们新增 `_facade.py` 是从 `db.py` god class 拆分中自然产生的设计。
+**未借鉴**: nanobot `agent/loop.py` 1,724 LOC 仍是单文件 — 我们选择拆为 10 个 < 900 LOC 文件。
+
+### 10.7 后续 (Phase 6+)
+
+- **Phase 6**: Memory 合并 (跨 chat + reproduction, 当前散落 memory.py + MemoryManager)
+- **Phase 7**: microcompact metrics 暴露 (`/api/llm/metrics` HTTP endpoint + frontend panel, P3-1 推迟)
+- **v0.5 cleanup** (2026-06-19): `git rm -r archive/llmwikify_v0_41_legacy/` (仅剩 README + 空 __init__.py, ~28 LOC)
+- **未来若补 nanobot 全模块**: 见 `apply-plan.md:§4 Phase C/D/E`, 仍锁定 P3-3 MessageBus 否决
