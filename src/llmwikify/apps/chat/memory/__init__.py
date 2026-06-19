@@ -531,9 +531,13 @@ __all__ = [
     "Dream",
     "DreamConfig",
     "DreamResult",
+    "DreamScheduler",
     "KnowledgeStore",
+    "MemoryConfig",
     "MemoryIndex",
     "MemoryManager",
     "ReActStateStore",
     "UserPreferenceStore",
+    "load_memory_config",
+    "write_default_memory_config",
 ]
