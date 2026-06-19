@@ -285,6 +285,17 @@ class ChatDatabase(BaseDatabase):
                 return content[:100] if content else ""
         return ""
 
+    # ─── Phase 8: session metadata (goal_state) ─────────────────
+
+    def get_session_metadata(self, session_id: str) -> dict:
+        return self._sessions.get_session_metadata(session_id)
+
+    def set_session_metadata(self, session_id: str, metadata: dict) -> None:
+        return self._sessions.set_session_metadata(session_id, metadata)
+
+    def update_session_metadata(self, session_id: str, **patch) -> dict:
+        return self._sessions.update_session_metadata(session_id, **patch)
+
     # ─── Chat messages (4 → ChatMessageRepository) ──────────────
 
     def save_chat_message(self, message: dict) -> None:

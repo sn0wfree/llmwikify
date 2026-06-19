@@ -144,7 +144,9 @@ class ChatOrchestrator:
         self.config = config or merge_six_step_config()
         self.skill_service = skill_service
 
-        self.prompt_builder = PromptBuilder(wiki_service, memory_manager)
+        self.prompt_builder = PromptBuilder(
+            wiki_service, memory_manager, chat_db=chat_db,
+        )
         self.context_manager = ContextManager(config=self.config)
         self.tool_executor = ToolExecutor(
             chat_db=chat_db,

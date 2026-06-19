@@ -21,13 +21,18 @@ Design ref: ``v0.32-skill-restructure.md`` §3.1 (#28-#31)
 """
 
 from llmwikify.apps.chat.skills.crud.dream_skill import DreamSkill, dream_skill
+from llmwikify.apps.chat.skills.crud.goal_skill import GoalSkill, goal_skill
 from llmwikify.apps.chat.skills.crud.memory_skill import MemorySkill, memory_skill
 from llmwikify.apps.chat.skills.crud.notify_skill import NotifySkill, notify_skill
-from llmwikify.apps.chat.skills.crud.scheduler_skill import SchedulerSkill, scheduler_skill
+from llmwikify.apps.chat.skills.crud.scheduler_skill import (
+    SchedulerSkill,
+    scheduler_skill,
+)
 
 __all__ = [
     "MemorySkill", "memory_skill",
     "NotifySkill", "notify_skill",
     "SchedulerSkill", "scheduler_skill",
     "DreamSkill", "dream_skill",
+    "GoalSkill", "goal_skill",
 ]

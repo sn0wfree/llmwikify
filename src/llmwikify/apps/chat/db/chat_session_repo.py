@@ -22,6 +22,7 @@ Methods (8):
 """
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import uuid
@@ -52,6 +53,13 @@ class ChatSessionRepository(ChatDBBase):
             try:
                 conn.execute(
                     "ALTER TABLE chat_sessions ADD COLUMN title TEXT"
+                )
+            except sqlite3.OperationalError:
+                pass  # column already exists
+            # Phase 8: metadata JSON blob (goal_state, etc.)
+            try:
+                conn.execute(
+                    "ALTER TABLE chat_sessions ADD COLUMN metadata TEXT"
                 )
             except sqlite3.OperationalError:
                 pass  # column already exists
@@ -161,6 +169,63 @@ class ChatSessionRepository(ChatDBBase):
         # Fallback: derive from first user message via the message repo
         # (deferred to ChatDatabase facade to avoid circular import).
         return ""  # facade will derive if needed
+
+    # ─── Phase 8: session metadata (goal_state, ...) ──────────────
+
+    def get_session_metadata(self, session_id: str) -> dict[str, Any]:
+        """Return the parsed ``metadata`` JSON blob, or ``{}``.
+
+        Returns an empty dict for missing sessions, ``NULL`` blobs, or
+        malformed JSON so callers can ``meta.get(...)`` without
+        defensive ``isinstance`` checks.
+        """
+        session = self.get_chat_session(session_id)
+        if not session:
+            return {}
+        raw = session.get("metadata")
+        if not raw:
+            return {}
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning(
+                "chat_sessions.metadata corrupted for %s, treating as empty",
+                session_id,
+            )
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    def set_session_metadata(
+        self, session_id: str, metadata: dict[str, Any],
+    ) -> None:
+        """Replace the ``metadata`` JSON blob for one session.
+
+        Pass an empty dict to clear it (stored as ``NULL`` for cheaper
+        reads on the common "no metadata" case).
+        """
+        blob = json.dumps(metadata) if metadata else None
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE chat_sessions
+                   SET metadata = ?, updated_at = datetime('now')
+                   WHERE id = ?""",
+                (blob, session_id),
+            )
+            conn.commit()
+
+    def update_session_metadata(
+        self, session_id: str, **patch: Any,
+    ) -> dict[str, Any]:
+        """Merge ``patch`` into the existing metadata, persist, return new dict.
+
+        Convenience wrapper: callers wanting "set goal_state to this"
+        do ``repo.update_session_metadata(sid, goal_state=blob)``
+        without an explicit read-merge-write dance.
+        """
+        meta = self.get_session_metadata(session_id)
+        meta.update(patch)
+        self.set_session_metadata(session_id, meta)
+        return meta
 
 
 __all__ = ["ChatSessionRepository"]

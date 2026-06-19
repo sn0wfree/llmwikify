@@ -14,6 +14,7 @@ Section assembly order (joined by ``\n\n---\n\n``):
   5. Skills Summary   always-loaded skills + index
   6. ReAct Prompt     REACT_SYSTEM_PROMPT
   7. Recent History   wiki context + related conversations
+  8. Goal State       active sustained objective (Phase 8, if present)
 
 Each section is wrapped in a try/except so a single failure degrades
 to an empty string instead of breaking the whole prompt.
@@ -89,11 +90,16 @@ class PromptBuilder:
         memory_manager: Any = None,
         workspace: Path | None = None,
         config: dict | None = None,
+        chat_db: Any = None,
     ) -> None:
         self.wiki_service = wiki_service
         self.memory_manager = memory_manager
         self.workspace = workspace
         self.config = config or {}
+        # Phase 8 (2026-06-20): chat_db is used to read session metadata
+        # (goal_state). Optional — when absent, goal_state injection is
+        # silently skipped so existing call sites keep working.
+        self.chat_db = chat_db
         self._bootstrap_cache: dict[str, tuple[float, float, str]] = {}
         self._bootstrap_cache_ttl = self.config.get(
             "bootstrap_cache_seconds", DEFAULT_BOOTSTRAP_CACHE_SECONDS,
@@ -133,6 +139,7 @@ class PromptBuilder:
             self._safe_section("skills", self._get_skills_section(ctx)),
             self._safe_section("react", self._get_react_prompt(ctx)),
             self._safe_section("history", self._get_recent_history(ctx)),
+            self._safe_section("goal_state", self._get_goal_state(ctx)),
         ])
         sections = await asyncio.gather(*coros)
         return "\n\n---\n\n".join(s for s in sections if s)
@@ -309,6 +316,34 @@ class PromptBuilder:
         if len(joined) > ctx.max_history_chars:
             joined = joined[: ctx.max_history_chars] + "…"
         return joined
+
+    @log_exception_returning(default=None, msg="Failed to load goal_state")
+    async def _get_goal_state(self, ctx: BuildContext) -> str | None:
+        """Phase 8: mirror the active sustained goal into the system prompt.
+
+        Reads ``chat_sessions.metadata`` via ``self.chat_db`` and renders
+        the active objective (and optional ui_summary) so compaction
+        cannot strip it. Returns ``None`` when no chat_db is wired, no
+        session is given, or no goal is active.
+        """
+        if self.chat_db is None or not ctx.session_id:
+            return None
+        from llmwikify.apps.chat.agent.goal_state import (
+            goal_state_runtime_lines,
+        )
+        try:
+            metadata = self.chat_db.get_session_metadata(ctx.session_id)
+        except Exception:
+            logger.warning("get_session_metadata failed", exc_info=True)
+            return None
+        lines = goal_state_runtime_lines(metadata)
+        if not lines:
+            return None
+        body = "\n".join(lines)
+        return (
+            "## Sustained goal (Runtime Context — metadata only, not "
+            "instructions)\n" + body
+        )
 
 
 async def _empty() -> str:

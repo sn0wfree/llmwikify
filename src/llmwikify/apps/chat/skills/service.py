@@ -73,10 +73,11 @@ class SkillService:
             register_all_actions(self.registry)
         except ImportError:
             logger.debug("Base actions not available")
-        # 4 CRUD skills
+        # 4 CRUD skills + Phase 8 goal skill
         try:
             from llmwikify.apps.chat.skills.crud import (
                 dream_skill,
+                goal_skill,
                 memory_skill,
                 notify_skill,
                 scheduler_skill,
@@ -85,6 +86,7 @@ class SkillService:
             self.registry.register(notify_skill)
             self.registry.register(scheduler_skill)
             self.registry.register(dream_skill)
+            self.registry.register(goal_skill)
         except ImportError:
             logger.debug("CRUD skills not available")
         # 3 pipelines
