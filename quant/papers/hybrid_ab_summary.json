@@ -1,0 +1,201 @@
+{
+  "total_papers": 5,
+  "total_time_min": 81.69,
+  "papers": [
+    {
+      "paper_id": "20180302-招商证券-A股涅槃论（捌）：中国信贷周期论与机器进化论",
+      "pdf": "20180302-招商证券-A股涅槃论（捌）：中国信贷周期论与机器进化论.pdf",
+      "schema_hint": "signal",
+      "parallel": {
+        "mode": "parallel",
+        "paper_id": "20180302-招商证券-A股涅槃论（捌）：中国信贷周期论与机器进化论_ab_parallel",
+        "status": "success",
+        "elapsed_min": 11.37,
+        "n_signals": 24,
+        "n_pass2_complete": 23,
+        "n_pass2_failed": 1,
+        "success_rate": 0.9583,
+        "stats": {
+          "n_total": 24,
+          "n_success": 23,
+          "avg_intuition": 71.43478260869566,
+          "avg_theoretical": 45.391304347826086,
+          "avg_hypotheses": 3.391304347826087
+        }
+      },
+      "hybrid": {
+        "mode": "hybrid",
+        "paper_id": "20180302-招商证券-A股涅槃论（捌）：中国信贷周期论与机器进化论_ab_hybrid",
+        "status": "success",
+        "elapsed_min": 9.95,
+        "n_signals": 23,
+        "n_pass2_complete": 23,
+        "n_pass2_failed": 0,
+        "success_rate": 1.0,
+        "stats": {
+          "n_total": 23,
+          "n_success": 23,
+          "avg_intuition": 73.1304347826087,
+          "avg_theoretical": 55.04347826086956,
+          "avg_hypotheses": 3.5652173913043477
+        }
+      }
+    },
+    {
+      "paper_id": "20180816-招商证券-A股投资启示录（一）：布局科技三年上行周期",
+      "pdf": "20180816-招商证券-A股投资启示录（一）：布局科技三年上行周期.pdf",
+      "schema_hint": "allocation",
+      "parallel": {
+        "mode": "parallel",
+        "paper_id": "20180816-招商证券-A股投资启示录（一）：布局科技三年上行周期_ab_parallel",
+        "status": "success",
+        "elapsed_min": 6.86,
+        "n_signals": 12,
+        "n_pass2_complete": 12,
+        "n_pass2_failed": 0,
+        "success_rate": 1.0,
+        "stats": {
+          "n_total": 12,
+          "n_success": 12,
+          "avg_intuition": 87.16666666666667,
+          "avg_theoretical": 63.75,
+          "avg_hypotheses": 3.75
+        }
+      },
+      "hybrid": {
+        "mode": "hybrid",
+        "paper_id": "20180816-招商证券-A股投资启示录（一）：布局科技三年上行周期_ab_hybrid",
+        "status": "success",
+        "elapsed_min": 7.26,
+        "n_signals": 0,
+        "n_pass2_complete": 0,
+        "n_pass2_failed": 0,
+        "success_rate": 0,
+        "stats": {
+          "n_total": 0,
+          "n_success": 0,
+          "avg_intuition": 0,
+          "avg_theoretical": 0,
+          "avg_hypotheses": 0
+        }
+      }
+    },
+    {
+      "paper_id": "20181125-浙商证券-A股行业比较周报：政策框架的梳理和当前市场的分析",
+      "pdf": "20181125-浙商证券-A股行业比较周报：政策框架的梳理和当前市场的分析.pdf",
+      "schema_hint": "summary",
+      "parallel": {
+        "mode": "parallel",
+        "paper_id": "20181125-浙商证券-A股行业比较周报：政策框架的梳理和当前市场的分析_ab_parallel",
+        "status": "success",
+        "elapsed_min": 3.26,
+        "n_signals": 0,
+        "n_pass2_complete": 0,
+        "n_pass2_failed": 0,
+        "success_rate": 0,
+        "stats": {
+          "n_total": 0,
+          "n_success": 0,
+          "avg_intuition": 0,
+          "avg_theoretical": 0,
+          "avg_hypotheses": 0
+        }
+      },
+      "hybrid": {
+        "mode": "hybrid",
+        "paper_id": "20181125-浙商证券-A股行业比较周报：政策框架的梳理和当前市场的分析_ab_hybrid",
+        "status": "success",
+        "elapsed_min": 5.95,
+        "n_signals": 8,
+        "n_pass2_complete": 8,
+        "n_pass2_failed": 0,
+        "success_rate": 1.0,
+        "stats": {
+          "n_total": 8,
+          "n_success": 8,
+          "avg_intuition": 82.875,
+          "avg_theoretical": 57.25,
+          "avg_hypotheses": 3.125
+        }
+      }
+    },
+    {
+      "paper_id": "20180823-招商证券-A股投资启示录（二）：盈利韧性，剩者为王与赢家通吃",
+      "pdf": "20180823-招商证券-A股投资启示录（二）：盈利韧性，剩者为王与赢家通吃.pdf",
+      "schema_hint": "allocation",
+      "parallel": {
+        "mode": "parallel",
+        "paper_id": "20180823-招商证券-A股投资启示录（二）：盈利韧性，剩者为王与赢家通吃_ab_parallel",
+        "status": "success",
+        "elapsed_min": 9.29,
+        "n_signals": 18,
+        "n_pass2_complete": 18,
+        "n_pass2_failed": 0,
+        "success_rate": 1.0,
+        "stats": {
+          "n_total": 18,
+          "n_success": 18,
+          "avg_intuition": 58.05555555555556,
+          "avg_theoretical": 58.111111111111114,
+          "avg_hypotheses": 3.388888888888889
+        }
+      },
+      "hybrid": {
+        "mode": "hybrid",
+        "paper_id": "20180823-招商证券-A股投资启示录（二）：盈利韧性，剩者为王与赢家通吃_ab_hybrid",
+        "status": "success",
+        "elapsed_min": 12.57,
+        "n_signals": 14,
+        "n_pass2_complete": 14,
+        "n_pass2_failed": 0,
+        "success_rate": 1.0,
+        "stats": {
+          "n_total": 14,
+          "n_success": 14,
+          "avg_intuition": 56.92857142857143,
+          "avg_theoretical": 56.785714285714285,
+          "avg_hypotheses": 2.9285714285714284
+        }
+      }
+    },
+    {
+      "paper_id": "20180913-招商证券-A股投资启示录（三）：A股投资三段论，兼论市场底部信号与市场风格",
+      "pdf": "20180913-招商证券-A股投资启示录（三）：A股投资三段论，兼论市场底部信号与市场风格.pdf",
+      "schema_hint": "factor",
+      "parallel": {
+        "mode": "parallel",
+        "paper_id": "20180913-招商证券-A股投资启示录（三）：A股投资三段论，兼论市场底部信号与市场风格_ab_parallel",
+        "status": "success",
+        "elapsed_min": 6.89,
+        "n_signals": 16,
+        "n_pass2_complete": 16,
+        "n_pass2_failed": 0,
+        "success_rate": 1.0,
+        "stats": {
+          "n_total": 16,
+          "n_success": 16,
+          "avg_intuition": 67.6875,
+          "avg_theoretical": 45.9375,
+          "avg_hypotheses": 2.4375
+        }
+      },
+      "hybrid": {
+        "mode": "hybrid",
+        "paper_id": "20180913-招商证券-A股投资启示录（三）：A股投资三段论，兼论市场底部信号与市场风格_ab_hybrid",
+        "status": "success",
+        "elapsed_min": 8.28,
+        "n_signals": 13,
+        "n_pass2_complete": 13,
+        "n_pass2_failed": 0,
+        "success_rate": 1.0,
+        "stats": {
+          "n_total": 13,
+          "n_success": 13,
+          "avg_intuition": 71.61538461538461,
+          "avg_theoretical": 51.76923076923077,
+          "avg_hypotheses": 3.3076923076923075
+        }
+      }
+    }
+  ]
+}
