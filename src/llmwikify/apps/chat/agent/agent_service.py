@@ -125,6 +125,12 @@ class AgentService:
         # handler can locate it deterministically.
         self.dream_scheduler: Any = None
 
+        # Phase 9 (2026-06-20): AutoCompact lifecycle hook. Same shape
+        # as dream_scheduler: holder + lazy task. ``None`` until
+        # ``start_auto_compact`` is invoked.
+        self.auto_compact: Any = None
+        self._auto_compact_task: Any = None
+
     # ─── DB facade shortcut ─────────────────────────────────────
 
     @property
@@ -255,6 +261,119 @@ class AgentService:
             )
         finally:
             self.dream_scheduler = None
+
+    # ─── Phase 9 AutoCompact lifecycle (2026-06-20) ────────────
+
+    async def start_auto_compact(
+        self,
+        ttl_minutes: int = 30,
+        interval_seconds: float = 300.0,
+        enabled: bool = True,
+    ) -> Any:
+        """Start a periodic AutoCompact tick.
+
+        Idempotent: re-calling returns the running instance. Returns
+        ``None`` when AutoCompact cannot run (no provider → no
+        Consolidator) or ``enabled=False``.
+
+        Args:
+            ttl_minutes: a session is considered idle when its
+                ``updated_at`` is at least this many minutes in the
+                past. ``0`` disables the TTL check (no-op).
+            interval_seconds: how often to wake up and call
+                :meth:`AutoCompact.check_expired`. The first tick fires
+                ``interval_seconds`` after start.
+            enabled: short-circuits to ``None`` so callers can flip it
+                off via config without restructuring lifespan code.
+        """
+        if not enabled:
+            logger.info("AgentService: auto_compact disabled, skipping start")
+            return None
+
+        if (
+            self.memory_manager is None
+            or getattr(self.memory_manager, "consolidator", None) is None
+        ):
+            logger.warning(
+                "AgentService: auto_compact start skipped — "
+                "MemoryManager has no consolidator (provider not provided?)",
+            )
+            return None
+
+        if self.auto_compact is not None and self._auto_compact_task is not None:
+            logger.debug("AgentService: auto_compact already running")
+            return self.auto_compact
+
+        from llmwikify.apps.chat.agent.autocompact import AutoCompact
+
+        self.auto_compact = AutoCompact(
+            chat_db=self.app_db.chat,
+            memory_manager=self.memory_manager,
+            ttl_minutes=ttl_minutes,
+        )
+
+        async def _periodic_tick() -> None:
+            import asyncio
+            try:
+                while True:
+                    await asyncio.sleep(interval_seconds)
+                    try:
+                        active = self._active_session_keys()
+                        await self.auto_compact.check_expired(
+                            active_session_keys=active,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "AgentService: auto_compact tick failed",
+                            exc_info=True,
+                        )
+            except asyncio.CancelledError:
+                raise
+
+        import asyncio
+        self._auto_compact_task = asyncio.create_task(_periodic_tick())
+        logger.info(
+            "AgentService: auto_compact started (ttl=%dm, interval=%.0fs)",
+            ttl_minutes, interval_seconds,
+        )
+        return self.auto_compact
+
+    async def stop_auto_compact(self) -> None:
+        """Stop the running AutoCompact periodic tick (Phase 9).
+
+        Idempotent: safe to call even if AutoCompact was never started.
+        """
+        if self._auto_compact_task is None:
+            self.auto_compact = None
+            return
+        self._auto_compact_task.cancel()
+        try:
+            await self._auto_compact_task
+        except BaseException:  # noqa: BLE001 — CancelledError + bubbled errors
+            pass
+        finally:
+            self._auto_compact_task = None
+            self.auto_compact = None
+
+    def _active_session_keys(self) -> list[str]:
+        """Return ids of sessions currently marked as active.
+
+        Uses ``ChatOrchestrator.get_all_session_status`` so AutoCompact
+        skips chats with an in-flight LLM turn or a pending
+        confirmation.
+        """
+        try:
+            from llmwikify.apps.chat.agent.autocompact import (
+                active_keys_from_status_map,
+            )
+            status_map = self.chat_service.get_all_session_status()
+            return list(active_keys_from_status_map(status_map))
+        except Exception:
+            logger.warning(
+                "AgentService: _active_session_keys failed",
+                exc_info=True,
+            )
+            return []
 
     async def approve_confirmation_and_continue(
         self,
