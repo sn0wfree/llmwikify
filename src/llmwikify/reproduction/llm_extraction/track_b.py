@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import re
 import time
 from asyncio import Semaphore
@@ -52,7 +53,7 @@ PASS2_USE_ADAPTIVE = True  # Use adaptive multi-turn (v2, recommended)
 
 # Smart mode selection (v3.0)
 PASS2_MODE_AUTO = True       # Auto-select based on complexity
-PASS2_MODE_OVERRIDE = ""     # If set: "adaptive" | "parallel" | "serial" | "hybrid" | ""
+PASS2_MODE_OVERRIDE = os.getenv("PASS2_MODE_OVERRIDE", "")  # L1 env var: "adaptive" | "parallel" | "serial" | "hybrid" | ""
 # Complexity thresholds for auto-selection
 ADAPTIVE_MIN_SIGNALS = 20    # < 20 signals → use parallel (less overhead)
 ADAPTIVE_MAX_SIGNALS = 200   # > 200 signals → use parallel (multi-turn too slow)
