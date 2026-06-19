@@ -445,8 +445,9 @@ P1-1/P1-2/P1-3 全部已 vendor + 测试通过。Phase A 的 3 步 (P0-1 Composi
 | Session 改 JSON 文件 | SQLite 查询/事务优势 > JSON 简单性 | 初始 |
 | **`MessageBus` 引入** | **重新评估 (2026-06-19): bus/queue.py 仅 44 LOC `asyncio.Queue` 包装, 用于解耦多 channel (Slack/Discord). 我们是单进程 HTTP, request-response 模式. MessageBus 唯一适用场景: WebSocket 长连接 (P2-1, vendor 1907 LOC). 引入 MessageBus 收益边际. 锁定否决.** | **2026-06-19** |
 | Vendor `agent/loop.py` 状态机 | 1724 LOC, 隐式 8 state, llmwikify 扁平 28 方法已可读 | 初始 |
-| Vendor `agent/memory.py` | SQLite 已存, Consolidator 仅在 LLM 压缩时需要 (后续评估) | 初始 |
+| Vendor `agent/memory.py` 整体 | 1,161 LOC 文件级 vendor 适配成本高, **改为选择性借鉴 Consolidator + Dream** (Phase 6) | 2026-06-19 |
 | Vendor `providers/base.py` | M1 已分析, shape 不兼容 + loguru 依赖 | 初始 |
+| **合并 `chat memory` 与 `reproduction memory`** | 它们是 peer (同层 sibling), 不是 parent-child. 合并会强制单向耦合. 未来如需跨域查询, 新建 `apps/memory_facade/` 协调者. | **2026-06-19** |
 
 ### 5.1 已实施的可借鉴改进
 
@@ -455,10 +456,173 @@ P1-1/P1-2/P1-3 全部已 vendor + 测试通过。Phase A 的 3 步 (P0-1 Composi
 | 借鉴 `StateTraceEntry` 加显式 state trace | ✅ 完成 (2026-06-19) | `apps/chat/agent/runner_v2.py` (`_StateTraceEntry` + `_StateTrace` CM) + 10 tests |
 | microcompact (借鉴 `_COMPACTABLE_TOOLS`) | ✅ 完成 (2026-06-17) | `apps/chat/agent/microcompact.py` |
 | 13 钩子点 (借鉴 `agent/hook.py` 设计) | ✅ 完成 (2026-06-17) | `foundation/callback/composite.py` |
+| **Consolidator (借鉴 `nanobot/agent/memory.py:444`)** | ✅ 完成 (Phase 6, 2026-06-19) | `apps/chat/memory/consolidator.py` (per-session evict + LLM summarize + 双写 SQLite+md) |
+| **Dream (借鉴 `nanobot/agent/memory.py:859`)** | ✅ 完成 (Phase 6, 2026-06-19) | `apps/chat/memory/dream.py` (2-phase fact extraction + 双写 + /dream slash + APScheduler) |
 
 ---
 
-## 6. 优先级决策: 立即可做的 3 件事
+## 6. Phase 6 实施笔记 (2026-06-19, Consolidator + Dream)
+
+### 6.1 启动动机
+
+Phase 5 完成后 (D1-D5), `apps/chat/memory/__init__.py` (473 LOC) 与 nanobot `agent/memory.py` (1,161 LOC) 仍差 2 个核心组件:
+- **Consolidator**: per-turn session eviction + LLM summarize → 长期记忆
+- **Dream**: 后台 fact extraction + 长期记忆维护
+
+microcompact (借鉴 nanobot `_COMPACTABLE_TOOLS`) 解决了 per-tool-result compaction, 但**不持久化**, 不能替代 Consolidator 的 per-session eviction + 总结。
+
+### 6.2 关键决策 (7 项)
+
+| # | 决策 | 选择 | 理由 |
+|---|---|---|---|
+| 1 | 范围 | Consolidator + Dream (借鉴 nanobot memory.py) | 真正空缺, 不是"合并 chat+reproduction" |
+| 2 | 数据后端 | **双写: SQLite 2 表 + `~/.llmwikify/memory/*.md`** | SQLite 高效 query, markdown human-readable, 不进 wiki |
+| 3 | Cron library | **APScheduler** | 与 nanobot 一致, 为跨平台准备 (Linux/macOS/Windows) |
+| 4 | LLM summarization prompt | **新写** | microcompact 是 per-tool, summarization 是 per-session, 语义不同 |
+| 5 | Dream 周期 | **Daily 03:00** | nanobot 默认 |
+| 6 | Fact extraction 范围 | **增量 (since-last-run via `.dream_cursor`)** | 借鉴 nanobot cursor 机制 |
+| 7 | 与 MemoryManager 关系 | **Option 7a**: MemoryManager 加 2 method | 9 caller 零迁移, 渐进式扩展 |
+
+### 6.3 数据后端 (Both: SQLite + 文件系统)
+
+```
+~/.llmwikify/
+├── agent/.llmwiki_agent.db         # 现有 chat DB, 加 2 表
+└── memory/                         NEW filesystem tree
+    ├── sessions/{session_id}.md     # Consolidator per-session 总结
+    ├── facts/index.md              # Dream 聚合 index
+    ├── facts/{fact_id}.md          # Dream per-fact 详情
+    └── .dream_cursor               # Dream 增量 cursor
+```
+
+**为什么不进 wiki 系统**: wiki 是研究内容 (用户浏览/搜索), memory 是系统状态 (自动生成, 不应污染 wiki)。借鉴 nanobot `workspace/memory/MEMORY.md` 文件系统模式。
+
+### 6.4 与 reproduction/sessions.py 关系 (明确)
+
+`apps/reproduction/sessions.py` (564 LOC) **不是** chat memory 的子集, 是 **peer (sibling)**:
+- chat memory: 追踪 session 内对话 + 长期 facts (chat 域)
+- reproduction: 追踪 paper reproduction 流程 (reproduction 域)
+
+**未来跨域查询** (Phase 8+): 新建 `apps/memory_facade/` 协调者, 同时持 `ChatMemoryManager` + `ReproductionDatabase`, 提供 schema-aware cross-system search API. **不**把 ReproductionDatabase 塞进 MemoryManager (peer-to-peer 协调, 不是 parent-child 嵌套)。
+
+### 6.5 实施步骤 (4 步 + 验证)
+
+| Step | 内容 | 估时 | Commits |
+|---|---|---|---|
+| 1 | Tables + stores + apscheduler dep | 45 min | 1 |
+| 2 | Consolidator + MemoryManager attr + runner_v2 hook | 60 min | 2 |
+| 3 | Dream + /dream skill + command_router register | 75 min | 3 |
+| 4 | APScheduler lifespan + memory_config.json | 45 min | 4 |
+| 5 | Full regression + ruff + docs | 30 min | 5 |
+
+### 6.6 关键集成点
+
+**Runner_v2 `after_iteration` 钩子** (复用 13 钩子点):
+```python
+# apps/chat/agent/runner_v2.py
+async def _run_iteration(self, ctx):
+    # ... 5 步 (PRECHECK/REASON/ACT/OBSERVE/COMPLETE) ...
+    
+    # Phase 6 NEW: 每次迭代后检查 consolidation
+    if self._memory_manager and self._memory_manager.consolidator:
+        try:
+            result = await self._memory_manager.consolidate_session(
+                session_id=ctx.session_id,
+                messages=list(ctx.messages),
+                session_tokens=ctx.total_tokens,
+            )
+            if result:
+                ctx.compacted_count += 1  # 复用现有字段
+        except Exception:
+            logger.warning("consolidation failed", exc_info=True)
+```
+
+**MemoryManager 扩展** (Option 7a, 9 caller 零迁移):
+```python
+# apps/chat/memory/__init__.py
+class MemoryManager:
+    def __init__(self, app_db, wiki=None, data_dir=None, provider=None):
+        # ... existing 6 stores ...
+        # NEW (optional, None if no provider):
+        self.consolidator = Consolidator(self, app_db.chat, provider, data_dir or app_db.data_dir) if provider else None
+        self.dream = Dream(self, app_db.chat, provider, data_dir or app_db.data_dir) if provider else None
+    
+    async def consolidate_session(self, session_id, messages, session_tokens):
+        return await self.consolidator.maybe_consolidate(...) if self.consolidator else None
+    
+    async def dream_run(self):
+        return await self.dream.run() if self.dream else None
+```
+
+**APScheduler lifespan** (FastAPI context manager):
+```python
+# interfaces/server/http/routes.py
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _dream_scheduler
+    if config.get("dream.enabled", True):
+        _dream_scheduler = DreamScheduler(dream=app.state.memory_manager.dream, ...)
+        await _dream_scheduler.start()
+    yield
+    if _dream_scheduler:
+        await _dream_scheduler.stop()
+```
+
+### 6.7 数据对比
+
+| 维度 | Phase 6 前 | Phase 6 后 | Δ |
+|---|---:|---:|---:|
+| `apps/chat/memory/` LOC | 473 (单文件) | ~1,300 (7 文件) | +830 |
+| SQLite 表数 (chat DB) | 21 | 23 | +2 |
+| Tests (memory 子系统) | 19 | ~70 | +50 |
+| 9 caller 迁移成本 | — | 0 | — |
+| 与 nanobot memory.py 差距 | 缺 Consolidator+Dream | 全补齐 | — |
+
+### 6.8 测试覆盖 (5 文件, ~50 cases)
+
+| 文件 | 测什么 | cases |
+|---|---|---|
+| `test_apps_chat_memory_consolidation_store.py` | SQLite CRUD (add/get/list by session_id) | 6 |
+| `test_apps_chat_memory_facts_store.py` | SQLite CRUD (add/get/list by source_type) | 6 |
+| `test_apps_chat_memory_consolidator.py` | 阈值触发 / evict 范围 / 双写 / throttling | 15 |
+| `test_apps_chat_memory_dream.py` | 增量 cursor / fact extraction / 双写 | 12 |
+| `test_apps_chat_skill_dream.py` + `test_command_router.py` +1 | `/dream` slash | 5 + 1 |
+
+Mock 策略: LLM (`AsyncMock`), filesystem (`tmp_path`), APScheduler (lifespan test 不启 scheduler, 直接 `dream.run()`)。
+
+### 6.9 风险 + 缓解
+
+| 风险 | 缓解 |
+|---|---|
+| Consolidator 频繁触发 → LLM cost | `min_consolidation_interval_sec=60` throttle per session |
+| Markdown 文件累积过多 | `stale_threshold_days=14` 自动 archive (可选) |
+| Dream LLM call 超时 | `max_iterations=10` cap + `asyncio.wait_for(timeout=300)` |
+| Table migration 失败 | `IF NOT EXISTS` 幂等, 失败不阻塞启动 |
+| 与 microcompact 冲突 | microcompact 仍 per-tool-result; consolidate 是 per-session eviction (不同语义) |
+
+### 6.10 验收标准
+
+- [ ] 4 commits (Step 1-4) + 1 docs commit (Step 5)
+- [ ] 2 新表 + 2 新 store + 2 新 memory 类 + 1 slash command + 1 scheduler
+- [ ] ~50 新 test cases
+- [ ] 0 regression (基线 2578 pass / 0 fail → 完成后 ~2628 pass / 0 fail)
+- [ ] ruff clean on new files
+- [ ] 9 个 MemoryManager caller 零迁移 (Option 7a 验证)
+
+### 6.11 累计数据 (Plan A + B + Phase 5 + 6)
+
+| 维度 | Phase 6 后 |
+|---|---:|
+| 总 commit (Plan B 起) | ~30 |
+| 总新增 LOC | ~5,000 |
+| 总新增 test cases | ~700 |
+| 测试基线 | 2578 pass / 47 skipped / 0 fail (D7 后) |
+| Phase 6 后基线 | ~2628 pass / 47 skipped / 0 fail |
+| archive 清理 | -7,771 LOC (累计 D2-D6-3) |
+| 外部依赖新增 | +1 (apscheduler) |
+| 总 nanobot 借鉴组件 | 5 (state trace / microcompact / 13 hooks / Consolidator / Dream) |
+
+---
 
 按"风险最低 + 价值最高"排序, 推荐 **本周可完成**:
 

@@ -462,7 +462,178 @@ archive 目录 -5,472 LOC。代码 LOC 净增 (~+3,938) 是拆分 overhead, 但�
 
 ### 10.7 后续 (Phase 6+)
 
-- **Phase 6**: Memory 合并 (跨 chat + reproduction, 当前散落 memory.py + MemoryManager)
+- **Phase 6**: Memory consolidation pipeline (借鉴 nanobot Consolidator + Dream, 见 §10.8)
 - **Phase 7**: microcompact metrics 暴露 (`/api/llm/metrics` HTTP endpoint + frontend panel, P3-1 推迟)
 - **v0.5 cleanup** (2026-06-19): `git rm -r archive/llmwikify_v0_41_legacy/` (仅剩 README + 空 __init__.py, ~28 LOC)
 - **未来若补 nanobot 全模块**: 见 `apply-plan.md:§4 Phase C/D/E`, 仍锁定 P3-3 MessageBus 否决
+
+---
+
+## 10.8 Phase 6 — Memory Consolidation Pipeline (2026-06-19, 借鉴 nanobot memory.py)
+
+> Phase 6 解决 `apps/chat/memory/__init__.py` 与 nanobot `agent/memory.py`
+> 的关键差距: **长期记忆 + 后台 consolidation + Dream 处理器**。
+> 不是"chat + reproduction memory 合并" (它们是 peer, 详见 `apply-plan.md:§6`)。
+
+### 10.8.1 nanobot memory.py 设计 vs 我们的差距
+
+nanobot 单文件 `agent/memory.py` (1,161 LOC) 有 3 个独立组件协作:
+
+| 组件 | LOC | 职责 | nanobot 实施 |
+|---|---:|---|---|
+| **MemoryStore** | 403 | 纯文件 I/O | `MEMORY.md` (facts) + `history.jsonl` (events) + `SOUL.md` (identity) + `USER.md` (user info) + `GitStore` 版本控制 |
+| **Consolidator** | 415 | 短期 → 长期桥 | Per-turn 检查, session eviction + LLM summarize → 写 `MEMORY.md` |
+| **Dream** | 302 | 后台记忆处理 | 2-phase: Phase 1 analyze history; Phase 2 edit files via `AgentRunner` (file tools) |
+
+我们 `apps/chat/memory/__init__.py` (473 LOC) **缺** Consolidator 和 Dream, 只有 MemoryManager (6-store facade)。microcompact 是 per-tool-result (短周期), 不持久化, 不能替代 Consolidator (per-session eviction + 持久化总结)。
+
+### 10.8.2 Phase 6 实施: 加 Consolidator + Dream
+
+借鉴 nanobot 但**适配 llmwikify 架构** (后端差异):
+
+| 维度 | nanobot | Phase 6 后 llmwikify |
+|---|---|---|
+| **存储后端** | 纯文件 (md + jsonl) | **双写**: SQLite 2 表 + 文件系统 `~/.llmwikify/memory/*.md` |
+| **触发方式** | per-turn (Consolidator) + cron/command (Dream) | per-turn via `after_iteration` 钩子 (复用 13 钩子点) + `/dream` slash + APScheduler daily 03:00 |
+| **长期记忆存储** | `MEMORY.md` (单文件, Git 版本) | `memory_consolidations` (SQLite, per-session summary) + `memory_facts` (SQLite, long-term facts) + `~/.llmwikify/memory/sessions/{id}.md` + `~/.llmwikify/memory/facts/{id}.md` (human-readable) |
+| **跨平台 cron** | apscheduler (Linux/macOS) | **APScheduler** (与 nanobot 一致, 为跨平台准备) |
+
+**为什么双写 (SQLite + markdown) 不只用 SQLite**:
+- SQLite 高效 query (供 MemoryIndex search)
+- markdown human-readable (供用户 `cat ~/.llmwikify/memory/facts/index.md`)
+- 不进 wiki 系统 (wiki 是研究内容, memory 是系统状态)
+
+### 10.8.3 文件清单
+
+**新增 (7 文件, ~830 LOC)**:
+```
+apps/chat/memory/
+├── consolidator.py          ~250 LOC  # Consolidator class + ConsolidatorConfig
+├── dream.py                 ~300 LOC  # Dream class + DreamConfig
+├── consolidation_store.py   ~80 LOC   # SQLite CRUD
+├── facts_store.py           ~80 LOC   # SQLite CRUD
+├── tables.py                ~50 LOC   # SQL DDL
+└── dream_scheduler.py       ~70 LOC   # APScheduler wrapper
+
+apps/chat/skills/crud/
+└── dream_skill.py           ~80 LOC   # /dream slash command
+```
+
+**修改 (6 文件)**:
+- `apps/chat/db/_facade.py` — `_init_db()` 加 2 表
+- `apps/chat/memory/__init__.py` — MemoryManager: provider 参数 + `consolidator`/`dream` 属性 + 2 method
+- `apps/chat/agent/runner_v2.py` — `after_iteration` 钩子触发 consolidate
+- `apps/chat/command_router.py` — register `/dream`
+- `interfaces/server/http/routes.py` — FastAPI lifespan: scheduler start/stop
+- `pyproject.toml` — `apscheduler>=3.10,<4`
+
+### 10.8.4 Option 7a 决策: 与 MemoryManager 关系
+
+我们 3 种候选:
+
+| 选项 | 描述 | 选? |
+|---|---|---|
+| 7a | Consolidator/Dream 是 MemoryManager 的 method + 属性 | ✅ **选** |
+| 7b | 新建 `ChatMemory` 容器 (MemoryManager 是其属性), 9 caller 改 | ❌ 破坏性 |
+| 7c | Consolidator 取代 MemoryManager | ❌ 语义混乱 |
+
+**7a 优势**:
+- 9 个现有 caller (`chat_sse.py`, `agent_service.py`, `prompt_builder.py`, `memory_skill.py`, `skills/service.py` 等) 零迁移
+- MemoryManager 仍是 facade, 只是转发到内部 consolidator/dream
+- 渐进式扩展, 未来可升级到 7b
+
+```python
+# apps/chat/memory/__init__.py
+class MemoryManager:
+    def __init__(self, app_db, wiki=None, data_dir=None, provider=None):
+        # ... existing 6 stores ...
+        # NEW (optional, may be None in tests):
+        self.consolidator = Consolidator(self, db=app_db.chat, provider=provider, data_dir=data_dir) if provider else None
+        self.dream = Dream(self, db=app_db.chat, provider=provider, data_dir=data_dir) if provider else None
+    
+    async def consolidate_session(self, session_id, messages, session_tokens):
+        return await self.consolidator.maybe_consolidate(...) if self.consolidator else None
+    
+    async def dream_run(self):
+        return await self.dream.run() if self.dream else None
+```
+
+### 10.8.5 数据 schema (新增 2 表)
+
+```sql
+-- 在 apps/chat/db/_facade.py:_init_db() 加 IF NOT EXISTS
+
+CREATE TABLE memory_consolidations (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    start_msg_idx INTEGER NOT NULL,
+    end_msg_idx INTEGER NOT NULL,
+    summary TEXT NOT NULL,
+    md_file_path TEXT,
+    tokens_before INTEGER,
+    tokens_after INTEGER,
+    created_at REAL NOT NULL,
+    INDEX idx_mem_cons_session (session_id, created_at)
+);
+
+CREATE TABLE memory_facts (
+    id TEXT PRIMARY KEY,
+    content TEXT NOT NULL,
+    source_session_id TEXT,
+    source_type TEXT NOT NULL,        -- 'consolidation' | 'dream_extraction' | 'manual'
+    confidence REAL DEFAULT 1.0,
+    last_referenced_at REAL,
+    created_at REAL NOT NULL,
+    INDEX idx_mem_facts_source (source_type),
+    INDEX idx_mem_facts_created (created_at)
+);
+```
+
+### 10.8.6 与 reproduction/sessions.py 关系
+
+**关键澄清**: Phase 6 **不**合并 chat memory 与 reproduction memory。它们是 sibling (同层 peer), 不是 parent-child:
+
+```
+apps/chat/memory/          (chat 域 - session 内对话 + 长期 facts)
+  ├── MemoryManager
+  ├── Consolidator (NEW)
+  └── Dream (NEW)
+
+apps/reproduction/sessions.py  (reproduction 域 - paper reproduction 流程)
+  └── ReproductionDatabase
+```
+
+未来如果需要跨域查询 (e.g., "找 paper X 的 chat conversations + backtest results"), 应新建 `apps/memory_facade/` 协调者, **不**把 ReproductionDatabase 塞进 MemoryManager。这是 peer-to-peer 协调, 不是 parent-child 嵌套。
+
+### 10.8.7 测试覆盖
+
+新增 5 文件, ~50 cases:
+
+| 文件 | 测什么 | cases |
+|---|---|---|
+| `test_apps_chat_memory_consolidation_store.py` | SQLite CRUD | 6 |
+| `test_apps_chat_memory_facts_store.py` | SQLite CRUD | 6 |
+| `test_apps_chat_memory_consolidator.py` | 阈值触发 / evict 范围 / 双写 / throttling | 15 |
+| `test_apps_chat_memory_dream.py` | 增量 cursor / fact extraction / 双写 | 12 |
+| `test_apps_chat_skill_dream.py` + `test_command_router.py` +1 | `/dream` slash | 5 + 1 |
+
+Mock 策略: LLM (`AsyncMock`), filesystem (`tmp_path`), APScheduler (lifespan test 不启 scheduler, 直接调 `dream.run()`)。
+
+### 10.8.8 数据对比 (Phase 6 前 vs 后)
+
+| 维度 | Phase 6 前 | Phase 6 后 | Δ |
+|---|---:|---:|---:|
+| `apps/chat/memory/` LOC | 473 (单文件) | ~1,300 (7 文件) | +830 |
+| SQLite 表数 (chat DB) | 21 | 23 (+ 2 memory 表) | +2 |
+| Markdown 文件位置 | 无 | `~/.llmwikify/memory/` 新目录 | +新 |
+| Tests (memory 子系统) | 19 | ~70 | +50 |
+| Phase 6 vs nanobot 差距 | 缺 Consolidator + Dream | 全补齐 | — |
+| 9 个 caller 迁移成本 | — | 0 (Option 7a) | — |
+| 外部依赖新增 | — | apscheduler | +1 |
+
+### 10.8.9 后续 (Phase 7+)
+
+- **Phase 7**: microcompact metrics 暴露 (`/api/llm/metrics` HTTP endpoint + frontend panel)
+- **Phase 8**: Memory consolidation 与 reproduction cross-system query (`apps/memory_facade/` 协调者)
+- **Phase 9**: Multi-modal memory (image/audio via foundation/extractors)
+- **v0.5 release**: CHANGELOG + version bump (Phase 5+6 累计)
