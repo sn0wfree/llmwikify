@@ -614,12 +614,55 @@ Alpha#15: 64 → 590 chars (+526)
 2. **禁用 null/need_more_context**：避免 LLM "逃跑"
 3. **明确目标角色**：DEEP REFINEMENT 而非重新生成
 
+### A/B 测试 (完整 101 alphas)
+
+**对比：v3.0 parallel (全 101 signals) → v3.2 hybrid (parallel 81 + supplement 20)**
+
+**整体（101 signals 平均）**:
+| 指标 | v3.0 Parallel | v3.2 Hybrid | 提升 |
+|------|---------------|-------------|------|
+| l3.intuition | 107.1 chars | **218.8 chars** | **2.0x** |
+| l3.theoretical | 58.7 chars | **153.1 chars** | **2.6x** |
+| l4.hypotheses | 3.7 | **4.1** | 1.1x |
+| 成功率 | 99/101 | **101/101** | +2 |
+| 总时间 | 33.7 min | ~55 min | +63% |
+
+**Supplement 单独统计（20 targets）**:
+| 指标 | v3.0 (sup 20) | v3.2 (sup 20) | 提升 |
+|------|---------------|---------------|------|
+| **l3.intuition** | 74.8 chars | **649.6 chars** | **8.7x** ⭐ |
+| **l3.theoretical** | 30.0 chars | **512.5 chars** | **17.1x** ⭐ |
+| **l4.hypotheses** | 2.60 | **5.00** | **1.9x** ⭐ |
+
+**20/20 supplement targets 全部显著提升**（最大提升）:
+- Alpha#81: 105 → 1126 chars (+1021)
+- Alpha#71: 134 → 1033 chars (+899)
+- Alpha#82: 115 → 994 chars (+879)
+
+### 广发论文测试 (天风证券-20160803)
+
+**完整 Pipeline 跑通**:
+- Schema: allocation（非 factor，但 hybrid 兼容）
+- Pass 1: 15 signals (84s)
+- Pass 2: 20/21 (95.2%)
+- 总时间: 5.86 min
+- Mode: parallel (smart mode 自动选)
+- l3.intuition: 70.8 chars
+- l3.theoretical: 58.3 chars
+- l4.hypotheses: 2.95
+
+**观察**:
+- 广发 schema=allocation → 走 parallel（不触发 hybrid）
+- 15 signals < 30 阈值 → 不触发 hybrid
+- 实际产出 21 details（schema=allocation 包含额外字段）
+
 ### 推荐使用
 
 | 场景 | 推荐 |
 |------|------|
-| 复杂论文 (101 alphas) | **v3.2 hybrid + supplement prompt** (深度↑ 47.5x) |
-| 简单论文 (28 signals) | v3.0 parallel (无需补充) |
+| 复杂论文 (101 alphas) | **v3.2 hybrid + supplement prompt** (深度↑ 8.7-17x) |
+| 简单论文 (15 signals) | v3.0/v3.2 parallel (自动选择) |
+| allocation schema | v3.0/v3.2 parallel (smart mode 自动) |
 | 质量要求 > 速度 | v3.2 hybrid + supplement |
 
 ### Git 历史
@@ -627,5 +670,6 @@ Alpha#15: 64 → 590 chars (+526)
 ```
 590bfea feat(reproduction): v3.1 hybrid mode
 721f7df feat(reproduction): v3.0 smart mode
-[next]   feat(reproduction): v3.2 supplement prompt (47.5x 深度提升)
+3ae63c2 feat(reproduction): v3.2 supplement prompt (47.5x)
+[next]   test(reproduction): v3.2 hybrid full 101 alphas + 广发验证
 ```
