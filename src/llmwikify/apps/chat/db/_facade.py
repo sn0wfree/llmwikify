@@ -134,6 +134,10 @@ class ChatDatabase(BaseDatabase):
         and event_log stay here (created in BaseDatabase's shared
         ``_init_db`` was removed; we keep them in ChatDatabase
         because they were historically created here).
+
+        Phase 6 (2026-06-19): also creates ``memory_consolidations``
+        and ``memory_facts`` for the Consolidator + Dream pipeline
+        (borrowed from nanobot agent/memory.py architecture).
         """
         # Owned-table repos create their own schemas.
         self._sessions._init_schema()
@@ -186,6 +190,12 @@ class ChatDatabase(BaseDatabase):
                 ON event_log(session_id, created_at)
                 """
             )
+            # Phase 6 (2026-06-19): memory_consolidations + memory_facts
+            # (borrowed from nanobot Consolidator + Dream architecture).
+            # See docs/poc/apply-plan.md §6 for full rationale.
+            from llmwikify.apps.chat.memory.tables import ALL_PHASE6_DDL
+            for ddl in ALL_PHASE6_DDL:
+                conn.execute(ddl)
             conn.commit()
 
     # ─── Chat sessions (8 → ChatSessionRepository) ──────────────
