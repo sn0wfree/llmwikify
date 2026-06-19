@@ -51,17 +51,19 @@ def test_autoresearch_does_not_import_from_deprecated_adapters():
 def test_autoresearch_engine_imports_streamable_from_new_home():
     """engine.py uses the new home for StreamableLLMClient.
 
-    The v0.41 ResearchEngine was moved to ``archive/llmwikify_v0_41_legacy``
-    in B-7 (2026-06-18); the test reads the archived source directly to
-    avoid the (no longer needed) module-level import chain.
+    D4 (2026-06-19): The v0.41 ResearchEngine was git-mv'd from
+    ``archive/llmwikify_v0_41_legacy/chat_legacy/engine.py`` to
+    ``apps/chat/research_engine/engine.py`` (its production home).
+    The test now reads the production source to verify the
+    canonical import path.
     """
     engine_path = (
         Path(__file__).parent.parent
         / "src"
         / "llmwikify"
-        / "archive"
-        / "llmwikify_v0_41_legacy"
-        / "chat_legacy"
+        / "apps"
+        / "chat"
+        / "research_engine"
         / "engine.py"
     )
     src = engine_path.read_text()
