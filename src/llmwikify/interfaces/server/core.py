@@ -91,6 +91,7 @@ class WikiServer:
         cors_enabled: bool = True,
         provider: Any = None,
         enable_dream_scheduler: bool = True,
+        enable_auto_compact: bool = True,
     ):
         # Unified architecture: always use WikiRegistry
         if isinstance(wiki, WikiRegistry):
@@ -125,6 +126,7 @@ class WikiServer:
         self.enable_webui = enable_webui
         self.provider = provider
         self.enable_dream_scheduler = enable_dream_scheduler
+        self.enable_auto_compact = enable_auto_compact
         self.mcp: MCPAdapter | None = None
         # Reference to AgentService after register_routes; needed by the
         # lifespan handler to start/stop the DreamScheduler. Set by
@@ -164,8 +166,9 @@ class WikiServer:
 
         @asynccontextmanager
         async def lifespan(app: FastAPI):
-            """Phase 7 lifespan: start DreamScheduler on startup, stop
-            on shutdown. Always closes the registry on shutdown."""
+            """Phase 7+9 lifespan: start DreamScheduler + AutoCompact on
+            startup, stop on shutdown. Always closes the registry on
+            shutdown."""
             # Phase 7: start DreamScheduler (Phase 6 background)
             if self.enable_dream_scheduler and self._agent_service is not None:
                 try:
@@ -175,10 +178,43 @@ class WikiServer:
                         "WikiServer: dream_scheduler start failed "
                         "during lifespan startup",
                     )
+            # Phase 9 (2026-06-20): start AutoCompact periodic tick.
+            # Pulls TTL / interval from memory_config.json so users can
+            # tune without code changes; the lifespan doesn't override
+            # the AgentService default unless config overrides it.
+            if self.enable_auto_compact and self._agent_service is not None:
+                try:
+                    from llmwikify.apps.chat.memory.memory_config import (
+                        load_memory_config,
+                    )
+                    mem_cfg = load_memory_config(self._agent_service.data_dir)
+                    ac_cfg = mem_cfg.auto_compact
+                    if ac_cfg.get("enabled", True):
+                        await self._agent_service.start_auto_compact(
+                            ttl_minutes=int(ac_cfg.get("ttl_minutes", 30)),
+                            interval_seconds=float(
+                                ac_cfg.get("interval_seconds", 300.0),
+                            ),
+                            enabled=True,
+                        )
+                except Exception:
+                    logger.exception(
+                        "WikiServer: auto_compact start failed "
+                        "during lifespan startup",
+                    )
             try:
                 yield
             finally:
-                # Stop DreamScheduler first (so it doesn't fire mid-shutdown)
+                # Stop AutoCompact first (cheaper / no LLM call in flight)
+                if self._agent_service is not None:
+                    try:
+                        await self._agent_service.stop_auto_compact()
+                    except Exception:
+                        logger.warning(
+                            "WikiServer: auto_compact stop failed",
+                            exc_info=True,
+                        )
+                # Stop DreamScheduler next (so it doesn't fire mid-shutdown)
                 if self._agent_service is not None:
                     try:
                         await self._agent_service.stop_dream_scheduler()
@@ -268,6 +304,14 @@ class WikiServer:
                                 self._agent_service, "dream_scheduler", None,
                             ) is not None
                         ),
+                        # Phase 9 feature flag
+                        "auto_compact": (
+                            self.enable_auto_compact
+                            and self._agent_service is not None
+                            and getattr(
+                                self._agent_service, "auto_compact", None,
+                            ) is not None
+                        ),
                     },
                     "timestamp": datetime.utcnow().isoformat(),
                 }
@@ -293,6 +337,13 @@ class WikiServer:
                             and self._agent_service is not None
                             and getattr(
                                 self._agent_service, "dream_scheduler", None,
+                            ) is not None
+                        ),
+                        "auto_compact": (
+                            self.enable_auto_compact
+                            and self._agent_service is not None
+                            and getattr(
+                                self._agent_service, "auto_compact", None,
                             ) is not None
                         ),
                     },

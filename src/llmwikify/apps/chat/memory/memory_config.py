@@ -1,8 +1,8 @@
-"""memory_config — Phase 6 config helpers.
+"""memory_config — Phase 6 + Phase 9 config helpers.
 
 Reads ~/.llmwikify/memory_config.json if present, otherwise falls
 back to defaults. Lets users tune consolidation threshold, dream
-schedule, etc. without code changes.
+schedule, and (Phase 9) AutoCompact TTL without code changes.
 
 Default config:
     {
@@ -18,6 +18,11 @@ Default config:
         "cron_expression": "0 3 * * *",
         "max_batch_size": 20,
         "timeout_seconds": 300.0
+      },
+      "auto_compact": {
+        "enabled": true,
+        "ttl_minutes": 30,
+        "interval_seconds": 300.0
       }
     }
 """
@@ -53,6 +58,11 @@ class MemoryConfig:
         "max_batch_size": 20,
         "timeout_seconds": 300.0,
     })
+    auto_compact: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "ttl_minutes": 30,
+        "interval_seconds": 300.0,
+    })
 
 
 def load_memory_config(data_dir: Path | str) -> MemoryConfig:
@@ -81,6 +91,8 @@ def load_memory_config(data_dir: Path | str) -> MemoryConfig:
             cfg.consolidation.update(data["consolidation"])
         if "dream" in data and isinstance(data["dream"], dict):
             cfg.dream.update(data["dream"])
+        if "auto_compact" in data and isinstance(data["auto_compact"], dict):
+            cfg.auto_compact.update(data["auto_compact"])
     return cfg
 
 
