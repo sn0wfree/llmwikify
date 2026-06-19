@@ -49,6 +49,7 @@ from .serve import ServeCommand, run_serve
 from .qmd import QmdCommand, run_qmd
 from .db import DbCommand, run_db
 from .quant_init_cmd import QuantInitCommand, run_quant_init
+from .reproduce_cmd import ReproduceCommand, run_one_paper_cli, run_batch
 
 # Phase 3 #6 — new ``help`` subcommand for command + alias
 # discovery. ``mcp`` is no longer a separate Command class —
@@ -86,6 +87,7 @@ register_command(ServeCommand())
 register_command(QmdCommand())
 register_command(DbCommand())
 register_command(QuantInitCommand())
+register_command(ReproduceCommand())
 register_command(HelpCommand())
 
 # C3 backward-compat re-exports — when ``commands.py`` was
@@ -152,4 +154,5 @@ __all__ = [
     "QmdCommand", "run_qmd",
     "DbCommand", "run_db",
     "HelpCommand",  # Phase 3 #6
+    "ReproduceCommand", "run_one_paper_cli", "run_batch",  # Phase 4 — paper reproduction
 ]
