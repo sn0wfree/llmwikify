@@ -361,9 +361,9 @@ def app_with_mock_service(monkeypatch):
     ]
     mock_service.chat = lambda **_: _async_iter(events)
 
-    import llmwikify.interfaces.server.http.chat_sse as chat_sse_mod
-    monkeypatch.setattr(chat_sse_mod, "AGENT_SERVICE", mock_service)
-    monkeypatch.setattr(chat_sse_mod, "get_agent_service", lambda: mock_service)
+    import llmwikify.apps.api.openai_server as openai_mod
+    monkeypatch.setattr(openai_mod, "_AGENT_SERVICE", mock_service)
+    monkeypatch.setattr(openai_mod, "get_agent_service", lambda: mock_service)
 
     app = FastAPI()
     app.include_router(create_openai_router(model="llmwikify-chat"))

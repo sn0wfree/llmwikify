@@ -1,10 +1,13 @@
 """FastAPI route definitions - unified single and multi-wiki mode."""
 
 from __future__ import annotations
+
 import logging
 from pathlib import Path
 from typing import Any
-from fastapi import APIRouter, FastAPI, Request, HTTPException, Depends
+
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+
 from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.instance import WikiType
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
@@ -501,7 +504,16 @@ def _register_agent_routes(app: FastAPI, registry: WikiRegistry) -> None:
 
     # P1-1 (vendored from nanobot api/server.py):
     # OpenAI-compatible /v1/chat/completions + /v1/models + /v1/health.
-    from llmwikify.apps.api.openai_server import create_openai_router
+    # L3-local: openai_server.py maintains its own agent_service registry
+    # (no L3→L4 import); routes.py sets it explicitly here.
+    from llmwikify.apps.api.openai_server import (
+        create_openai_router,
+    )
+    from llmwikify.apps.api.openai_server import (
+        set_agent_service as set_openai_agent_service,
+    )
+
+    set_openai_agent_service(agent_service)
 
     model_name = "llmwikify-chat"
     try:
@@ -530,21 +542,29 @@ def _register_reproduction_routes(
     routers need access to the LLM client and the reproduction session DB
     that the agent service owns. v0.4.0 — end-to-end reproduction pipeline.
     """
-    from llmwikify.interfaces.server.http.paper import (
-        router as paper_router,
-        set_paper_deps,
-    )
     from llmwikify.interfaces.server.http.factor import (
         router as factor_router,
+    )
+    from llmwikify.interfaces.server.http.factor import (
         set_factor_deps,
     )
-    from llmwikify.interfaces.server.http.strategy import (
-        router as strategy_router,
-        set_strategy_deps,
+    from llmwikify.interfaces.server.http.paper import (
+        router as paper_router,
+    )
+    from llmwikify.interfaces.server.http.paper import (
+        set_paper_deps,
     )
     from llmwikify.interfaces.server.http.reproduction import (
         router as reproduction_router,
+    )
+    from llmwikify.interfaces.server.http.reproduction import (
         set_repro_deps,
+    )
+    from llmwikify.interfaces.server.http.strategy import (
+        router as strategy_router,
+    )
+    from llmwikify.interfaces.server.http.strategy import (
+        set_strategy_deps,
     )
     from llmwikify.reproduction.sessions import ReproductionDatabase
 

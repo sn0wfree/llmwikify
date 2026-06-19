@@ -106,13 +106,17 @@ def chat(fresh_registry: SkillRegistry) -> ChatBase:
 
 class TestConstruction:
     def test_default_registry_used_when_none(self) -> None:
-        # The default registry is empty until actions are
-        # explicitly registered. This is by design — the
-        # app startup (server) is responsible for populating
-        # it via register_all_actions(default_registry()).
+        # When no skill_registry is passed, ChatBase uses the
+        # process-wide ``default_registry()`` (a lazy-initialized
+        # singleton — see ``skills/registry.py:285``). It is NOT
+        # empty in suite context because other tests populate it
+        # via ``register_all_actions(default_registry())``; the
+        # test below asserts the singleton-sharing contract rather
+        # than emptiness.
+        from llmwikify.apps.chat.skills.registry import default_registry
         cb = ChatBase(StubLLM())
         assert cb.skill_registry is not None
-        assert len(cb.skill_registry) == 0  # pre-registration
+        assert cb.skill_registry is default_registry()
 
     def test_default_registry_populated_after_register(self) -> None:
         from llmwikify.apps.chat.skills.actions import register_all_actions

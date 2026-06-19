@@ -39,21 +39,44 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from llmwikify.apps.chat.agent.agent_service import AgentService
-from llmwikify.interfaces.server.http.chat_sse import get_agent_service
 
 __all__ = (
     "API_SESSION_KEY",
     "OpenAIStreamTranslator",
     "create_openai_router",
+    "get_agent_service",
     "openai_chat_completion_response",
     "openai_error_response",
     "openai_sse_chunk",
+    "set_agent_service",
 )
 
 
 API_SESSION_KEY = "api:default"
 
 _OPENAI_SSE_DONE = b"data: [DONE]\n\n"
+
+
+# ─── Agent service registry (L3-local, replaces chat_sse import) ───
+#
+# Previously: ``from llmwikify.interfaces.server.http.chat_sse import
+# get_agent_service`` violated the L3→L4 architecture rule
+# (apps/api/ must not import from interfaces/). Routes.py now calls
+# both ``set_agent_service`` here AND the chat_sse setter; each layer
+# maintains its own registry.
+_AGENT_SERVICE: AgentService | None = None
+
+
+def set_agent_service(service: AgentService) -> None:
+    """Set the AgentService used by OpenAI-compat endpoints."""
+    global _AGENT_SERVICE
+    _AGENT_SERVICE = service
+
+
+def get_agent_service() -> AgentService:
+    if _AGENT_SERVICE is None:
+        raise RuntimeError("Agent service not initialized for OpenAI API")
+    return _AGENT_SERVICE
 
 
 # ---------------------------------------------------------------------------
