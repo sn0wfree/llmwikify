@@ -478,6 +478,12 @@ def _register_wiki_routes(
     # --- Agent Routes (Phase 7: provider forwarded to MemoryManager) ---
     _register_agent_routes(app, registry, provider=provider)
 
+    # --- Skills introspection (Phase 11-F2) ---
+    # Surfaces registered skills + their plugin frontmatter
+    # (version / author / triggers / tags) so the webui and operators
+    # can introspect what's loaded without grepping logs.
+    _register_skills_routes(app)
+
 
 def _load_research_config() -> dict[str, Any] | None:
     """Load research config from global config file (~/.llmwikify/llmwikify.json).
@@ -547,6 +553,68 @@ def _register_agent_routes(
     _register_reproduction_routes(app, registry, agent_service, data_dir=data_dir)
 
     _mount_agent_spa(app)
+
+
+def _register_skills_routes(app: FastAPI) -> None:
+    """Phase 11-F2: expose registered skills + plugin metadata.
+
+    Two endpoints, both mounted under ``/api/skills``:
+
+      - ``GET /api/skills``         — list all registered skills with
+        their manifests (name / description / actions) and any plugin
+        frontmatter (version / author / tags / license / source).
+      - ``GET /api/skills/{name}``  — single skill detail.
+
+    Skills that were registered through ``PromptBasedSkill`` plugin
+    files (``~/.llmwikify/skills/<name>/SKILL.md``) carry an extra
+    ``_plugin_metadata`` dict populated by ``plugin_loader``; those
+    fields are surfaced as ``plugin.*`` in the response. Built-in
+    skills don't have plugin metadata, so those keys are simply absent
+    — callers should use ``.get('plugin')`` defensively.
+    """
+    from llmwikify.apps.chat.skills.registry import default_registry
+
+    skills_router = APIRouter(prefix="/api/skills", tags=["skills"])
+
+    @skills_router.get("")
+    async def list_skills() -> dict[str, Any]:
+        """List all registered skills with action summaries + plugin metadata."""
+        registry = default_registry()
+        out: list[dict[str, Any]] = []
+        for skill in registry:
+            entry: dict[str, Any] = {
+                "name": skill.name,
+                "description": skill.description,
+                "action_count": len(skill.actions),
+                "actions": sorted(skill.actions.keys()),
+            }
+            plugin_meta = getattr(skill, "_plugin_metadata", None)
+            if plugin_meta:
+                entry["plugin"] = plugin_meta
+            out.append(entry)
+        return {"count": len(out), "skills": out}
+
+    @skills_router.get("/{name}")
+    async def get_skill(name: str) -> dict[str, Any]:
+        """Detail for a single skill; 404 if not registered."""
+        registry = default_registry()
+        skill = registry.get(name)
+        if skill is None:
+            raise HTTPException(
+                status_code=404, detail=f"Skill {name!r} not registered"
+            )
+        manifest = skill.manifest().to_dict()
+        entry: dict[str, Any] = {
+            "name": skill.name,
+            "description": skill.description,
+            "manifest": manifest,
+        }
+        plugin_meta = getattr(skill, "_plugin_metadata", None)
+        if plugin_meta:
+            entry["plugin"] = plugin_meta
+        return entry
+
+    app.include_router(skills_router)
 
 
 def _register_reproduction_routes(

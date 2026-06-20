@@ -66,35 +66,58 @@ def load_plugins(registry: "SkillRegistry") -> int:
 
 
 def _load_skill_md(skill_dir: Path, registry: "SkillRegistry") -> None:
-    """Load a Prompt-Based skill from a ``SKILL.md`` file."""
+    """Load a Prompt-Based skill from a ``SKILL.md`` file.
+
+    Phase 11 (2026-06-20): delegates frontmatter parsing to
+    ``skills.loader.parse_skill_frontmatter``. The fields consumed by
+    ``PromptBasedSkill`` (name / description / triggers / allowed-tools)
+    are unchanged for backward compatibility, but ``version`` /
+    ``author`` / ``tags`` / ``license`` / ``requires_config`` are now
+    stored on the registry's manifest for ``/api/skills`` to expose.
+
+    Parse warnings (YAML errors, missing fields, type mismatches) are
+    logged at WARNING level so operators can spot malformed plugins
+    without the load failing.
+    """
     from llmwikify.apps.chat.skills.base import PromptBasedSkill
+    from llmwikify.apps.chat.skills.loader import parse_skill_frontmatter
 
-    content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    skill_md = skill_dir / "SKILL.md"
+    content = skill_md.read_text(encoding="utf-8")
+    parsed = parse_skill_frontmatter(
+        content,
+        fallback_name=skill_dir.name,
+        source_path=skill_md,
+    )
+    fm = parsed.frontmatter
 
-    meta: dict = {}
-    body = content
-    if content.startswith("---"):
-        parts = content.split("---", 2)
-        if len(parts) >= 3:
-            import yaml
-            meta = yaml.safe_load(parts[1]) or {}
-            body = parts[2].strip()
-
-    name = meta.get("name", skill_dir.name)
-    description = meta.get("description", f"Plugin skill: {name}")
-    triggers = meta.get("triggers", [])
-    allowed_tools = meta.get("allowed-tools", [])
+    for warning in fm.warnings:
+        logger.warning(
+            "Plugin %s SKILL.md: %s", skill_dir.name, warning
+        )
 
     skill = PromptBasedSkill(
-        name=name,
-        description=description,
-        instructions=body,
-        triggers=triggers,
-        allowed_tools=allowed_tools,
+        name=fm.name,
+        description=fm.description,
+        instructions=parsed.body,
+        triggers=fm.triggers,
+        allowed_tools=fm.allowed_tools,
     )
+    # Stash extended frontmatter on the instance so the registry /
+    # /api/skills endpoint can surface version / author / license
+    # without changing PromptBasedSkill's constructor.
+    skill._plugin_metadata = {
+        "version": fm.version,
+        "author": fm.author,
+        "tags": list(fm.tags),
+        "license": fm.license,
+        "requires_config": fm.requires_config,
+        "source_path": str(parsed.source_path),
+    }
     registry.register(skill)
     logger.debug(
-        "Loaded Prompt-Based plugin: %s (triggers=%s)", name, triggers
+        "Loaded Prompt-Based plugin: %s (version=%s triggers=%s)",
+        fm.name, fm.version, fm.triggers,
     )
 
 
