@@ -109,3 +109,7 @@ quant/*.duckdb
 # Note: A/B test reports saved under quant/papers/ab_test_results.json
 # must be force-added (`git add -f`).
 quant/papers/
+
+# QuantNodes PipelineRunner output
+/output/
+/.factor_cache/
