@@ -306,6 +306,23 @@ class ChatRunnerV2:
         timeout = self._config.get("timeout_seconds", 0)
         if timeout and ctx.elapsed() > timeout:
             return True
+        # Phase 10 (2026-06-20): goal-active predicate (borrowed from
+        # nanobot ``AgentRunSpec.goal_active_predicate``). The
+        # orchestrator typically wires this to a closure reading
+        # ``chat_sessions.metadata['goal_state'].status``. Predicate
+        # exceptions are swallowed (don't kill the loop on a transient
+        # DB hiccup); returning False sets stop_reason="goal_abandoned".
+        pred = ctx.spec.goal_active_predicate
+        if pred is not None:
+            try:
+                if not pred():
+                    ctx.stop_reason = "goal_abandoned"
+                    return True
+            except Exception:
+                logger.warning(
+                    "goal_active_predicate raised; ignoring",
+                    exc_info=True,
+                )
         return ctx.cancelled or ctx.paused
 
     async def _reason(

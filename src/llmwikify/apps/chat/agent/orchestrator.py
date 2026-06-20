@@ -794,6 +794,27 @@ class ChatOrchestrator:
             hook=hook,
             config=self.config,
         )
+        # Phase 10 (2026-06-20): wire goal_active_predicate so a session
+        # whose goal_state.status is no longer "active" stops at the
+        # next PRECHECK. Closure captures ``session_id`` + ``self.db``;
+        # exception path returns True (don't kill loop on DB hiccup).
+        # Sessions without a goal default to True (Phase 8 back-compat).
+        chat_db = self.db
+        captured_sid = session_id
+
+        def _goal_active_predicate() -> bool:
+            try:
+                getter = getattr(chat_db, "get_session_metadata", None)
+                if getter is None:
+                    return True
+                md = getter(captured_sid) or {}
+                gs = md.get("goal_state")
+                if not isinstance(gs, dict):
+                    return True
+                return gs.get("status") == "active"
+            except Exception:
+                return True
+
         spec = ChatRunSpec(
             messages=list(messages_for_llm),
             tool_registry=tool_registry,
@@ -801,6 +822,7 @@ class ChatOrchestrator:
             wiki_id=ctx.wiki_id,
             max_iterations=self.config.get("max_chat_rounds", 10),
             microcompact=True,
+            goal_active_predicate=_goal_active_predicate,
         )
 
         accumulated_tools: list[dict] = []

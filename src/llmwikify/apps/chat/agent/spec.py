@@ -52,6 +52,15 @@ class ChatRunSpec:
         default_factory=lambda: DEFAULT_COMPACTABLE_TOOLS,
     )
 
+    # Phase 10 (2026-06-20): borrowed from nanobot v0.2.1
+    # ``AgentRunSpec.goal_active_predicate``. Called once per
+    # iteration in PRECHECK; returning False stops the runner with
+    # ``stop_reason="goal_abandoned"`` (intended use: read
+    # ``chat_sessions.metadata['goal_state'].status`` from the
+    # orchestrator's closure). ``None`` means "no goal constraint"
+    # (default — preserves Phase 8 behaviour).
+    goal_active_predicate: Callable[[], bool] | None = None
+
     _compacted_results: dict[str, Any] = field(default_factory=dict)
 
     def compacted(self) -> list[tuple[str, Any]]:
