@@ -961,3 +961,144 @@ agent 的工作）。
 - [ ] E：`SubagentManager` + `SubagentSkill` 注册 + 12 tests + 防递归验证
 - [ ] ruff clean on changed files
 - [ ] 0 regression（Phase 8/9 既有测试全过）
+
+---
+
+## 11. Phase 11 — Skill frontmatter 解析层 + /api/skills 端点 (2026-06-20)
+
+> 借鉴 nanobot v0.2.1 `skills/loader.py`：把 plugin SKILL.md 的 YAML frontmatter
+> 解析从 `plugin_loader` 内嵌代码抽出为独立、强类型、带错误降级的模块，
+> 并暴露 HTTP 端点供 webui / debug 工具查技能元数据。
+
+### 11.1 动机
+
+进入 Phase 11 时项目已有完整 skill 体系（v0.32）：
+
+- `Skill` / `SkillAction` / `SkillContext` / `SkillResult` / `SkillManifest`
+  五件套（`skills/base.py`）
+- `SkillRegistry` 进程级注册表 + `default_registry()` 单例
+  （`skills/registry.py`）
+- `PromptBasedSkill` 接受 name / description / triggers / allowed_tools
+  字段（`skills/base.py`）
+- `plugin_loader._load_skill_md` 从 `~/.llmwikify/skills/<name>/SKILL.md`
+  加载插件技能
+
+借鉴评估（与 apply-plan §2 表格对齐）后发现 4 个真实缺口：
+
+| 缺口 | 影响 |
+|---|---|
+| frontmatter 解析内嵌在 plugin_loader 里，难单测 | 边界场景（YAML 错、缺字段、类型错）全靠 load_plugins 的 try/except 兜住，错误细节丢失 |
+| 无 `version` / `author` / `license` 字段 | webui 不能展示技能版本，运维难定位过时插件 |
+| 无 `/api/skills` HTTP 端点 | 只有 `Skill.manifest()` 给 LLM 用，HTTP 层无 introspect 入口 |
+| 错误处理弱 | 单个 SKILL.md 解析失败会丢掉 warn detail |
+
+### 11.2 关键决策 (3 项)
+
+1. **抽出独立 `loader.py`** — 把 frontmatter 解析从 plugin_loader 解耦，
+   单一职责：纯函数 `parse_skill_frontmatter(raw, fallback_name, source_path)`，
+   返回 `SkillMarkdown { frontmatter, body, source_path }`。
+
+2. **不 raise，只警告** — 借鉴 nanobot 的"warn-don't-fail"哲学：YAML 错、
+   字段缺、类型错都记入 `frontmatter.warnings` 列表，不抛异常。
+   plugin_loader 把 warnings 转 `logger.warning`，让运维 grep 日志能定位坏插件，
+   但单插件不挂全进程。
+
+3. **`_plugin_metadata` 旁路字段** — 不修改 `PromptBasedSkill.__init__`
+   构造签名（保持 backward compat），改成把扩展元数据贴在实例上：
+   `skill._plugin_metadata = {version, author, tags, license, requires_config, source_path}`。
+   `/api/skills` 端点读这个字段；不存在时端点只回基础 manifest，不报错。
+
+### 11.3 数据结构 (`src/llmwikify/apps/chat/skills/loader.py`)
+
+```python
+@dataclass
+class SkillFrontmatter:
+    name: str               # fallback: skill_dir.name
+    description: str        # fallback: "Plugin skill: {name}"
+    version: str = "0.1.0"  # SemVer-ish
+    author: str = "unknown"
+    triggers: list[str] = field(default_factory=list)
+    allowed_tools: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    license: str = ""
+    requires_config: bool = False
+    warnings: list[str] = field(default_factory=list)  # internal, not serialized
+
+@dataclass
+class SkillMarkdown:
+    frontmatter: SkillFrontmatter
+    body: str              # 用于 PromptBasedSkill.instructions
+    source_path: Path
+
+def parse_skill_frontmatter(
+    raw: str,
+    *,
+    fallback_name: str,
+    source_path: Path | None = None,
+) -> SkillMarkdown:
+    """Tolerant YAML frontmatter parser. Never raises."""
+```
+
+**类型 coerce 策略**：
+
+| 字段 | 期望类型 | 容错 |
+|---|---|---|
+| `name` / `description` / `version` / `author` / `license` | str | int/float/bool → str() + warning；list/dict → default + warning |
+| `triggers` / `allowed_tools` / `tags` | list[str] | str → split(',') + warning；非 string list item → drop + warning |
+| `requires_config` | bool | 非 bool → default + warning |
+| YAML 错误 | — | 整段 frontmatter 当 body 处理 + warning，不 raise |
+| 未闭合 `---` | — | 整段当 body + warning |
+
+### 11.4 端点 (`src/llmwikify/interfaces/server/http/routes.py`)
+
+新增 `_register_skills_routes(app)`：
+
+| Method | Path | 用途 |
+|---|---|---|
+| GET | `/api/skills` | 列出所有注册技能 + 插件元数据（plugin.* 字段） |
+| GET | `/api/skills/{name}` | 单技能详情：manifest + plugin metadata；未知 → 404 |
+
+注册时机：`register_routes()` 末尾，紧跟 `_register_agent_routes()`。
+资源来源：`default_registry()`（不依赖 SkillService singleton，避免引入 service 生命周期复杂度）。
+
+### 11.5 测试覆盖 (3 文件, 42 cases)
+
+| 文件 | cases | 覆盖 |
+|---|---|---|
+| `tests/test_apps_chat_skills_loader.py` | 23 | frontmatter 解析单元：无 frontmatter / 全字段 / coerce / YAML 错 / 未闭合 / 空 / 未知键 / body 含 --- / source_path / to_dict / JSON 安全 / parametrize warnings |
+| `tests/test_interfaces_server_skills_routes.py` | 10 | plugin_loader 集成：全 fm / body-only / YAML 错；/api/skills 空 / 注册后 / plugin metadata；detail / 404 / built-in 无 plugin 字段；路由注册 |
+| `tests/test_apps_chat_skills_loader_end_to_end.py` | 9 | 端到端：body-only skill / 全 fm skill / 多 skill 并存 / 坏 + 好 并存 / comma triggers / code-based 不带 _plugin_metadata / PLUGIN_DIR 不存在 / `_*.py` 跳过 / JSON round-trip |
+
+### 11.6 数据对比 (Plugin skills vs Built-in)
+
+| 维度 | Built-in skills | Plugin skills (新) |
+|---|---|---|
+| 注册路径 | `SkillService.register_all()` 显式 register | `plugin_loader.load_plugins()` 启动时扫描 |
+| 元数据来源 | Python 类属性 `name` / `description` | SKILL.md YAML frontmatter |
+| `_plugin_metadata` | 不存在 | `{version, author, tags, license, requires_config, source_path}` |
+| 解析失败 | ImportError 启动就 fail | 单 skill 降级 + warning，进程继续 |
+| /api/skills 字段 | `name, description, action_count, actions` | 同 + `plugin.{version,author,tags,license,requires_config,source_path}` |
+
+### 11.7 累计数据 (Phase 6+7+8+9+10+11)
+
+| 维度 | 数量 |
+|---|---|
+| 新文件 | 1 (`skills/loader.py` 302 LOC) |
+| 修改文件 | 2 (`plugin_loader.py` / `routes.py`) |
+| 新端点 | 2 (`GET /api/skills`, `GET /api/skills/{name}`) |
+| 新测试文件 | 3 (42 cases) |
+| ruff 新增错误 | 0（pre-existing UP037 / B008 不动） |
+
+### 11.8 验收
+
+- [x] F1：`parse_skill_frontmatter` 纯函数 + SkillFrontmatter dataclass + 23 unit tests
+- [x] F2：`plugin_loader` 重构 + `_plugin_metadata` 旁路 + `/api/skills` 两端点 + 10 tests
+- [x] F3：端到端 9 cases（tmp PLUGIN_DIR + load_plugins + /api/skills 全链路）
+- [x] ruff clean on changed files（loader.py / F2+F3 test files）
+- [x] 0 regression（所有 phase 8/9/10 既有测试全过）
+
+### 11.9 不在本次范围
+
+- **WebSocket 实时 push（候选 E）** — 风险高（涉及 SSE 替代决策 + 生命周期管理），保留 v0.42+
+- **SkillsLoader hot-reload** — 改 registry 后热加载需要 reload 语义，本期只做 cold-start load
+- **Permissions/认证** — /api/skills 当前无 auth；沿用 WikiServer 的全局 auth middleware
