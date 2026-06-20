@@ -28,6 +28,10 @@ from llmwikify.apps.chat.skills.crud.scheduler_skill import (
     SchedulerSkill,
     scheduler_skill,
 )
+from llmwikify.apps.chat.skills.crud.subagent_skill import (
+    SubagentSkill,
+    subagent_skill,
+)
 
 __all__ = [
     "MemorySkill", "memory_skill",
@@ -35,4 +39,5 @@ __all__ = [
     "SchedulerSkill", "scheduler_skill",
     "DreamSkill", "dream_skill",
     "GoalSkill", "goal_skill",
+    "SubagentSkill", "subagent_skill",
 ]
