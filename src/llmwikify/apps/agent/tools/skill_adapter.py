@@ -21,6 +21,8 @@ class SkillToolAdapter:
         session_id: str = "",
         exposed_skills: list[str] | tuple[str, ...] | None = None,
         wiki_service: Any = None,
+        subagent_manager: Any = None,
+        child_tool_registry: Any = None,
     ):
         self.skill_service = skill_service
         self.wiki = wiki
@@ -28,7 +30,17 @@ class SkillToolAdapter:
         self.wiki_id = wiki_id
         self.session_id = session_id
         self.wiki_service = wiki_service
-        self.exposed_skills = set(exposed_skills or ["dynamic_workflow", "autoresearch_compound"])
+        # Phase 10-E (2026-06-20): optional SubagentManager + child
+        # tool_registry. When set, ``subagent`` is auto-added to
+        # exposed_skills so the LLM can call spawn_subagent. The
+        # child_tool_registry MUST NOT contain the subagent tool
+        # (caller's responsibility) — children cannot grandchild.
+        self.subagent_manager = subagent_manager
+        self.child_tool_registry = child_tool_registry
+        default_exposed = ["dynamic_workflow", "autoresearch_compound"]
+        if subagent_manager is not None:
+            default_exposed.append("subagent")
+        self.exposed_skills = set(exposed_skills or default_exposed)
         self._name_map: dict[str, tuple[str, str]] = {}
         self._tools: dict[str, dict[str, Any]] = {}
         self._pending_confirmations: dict[str, dict[str, Any]] = {}
@@ -142,11 +154,18 @@ class SkillToolAdapter:
                 llm_spec = self.wiki_service.get_llm_spec()
             except Exception:
                 pass
+        config: dict[str, Any] = {"wiki_id": self.wiki_id} if self.wiki_id else {}
+        # Phase 10-E (2026-06-20): expose SubagentManager + safe child
+        # tool registry to subagent_skill via SkillContext.config.
+        if self.subagent_manager is not None:
+            config["subagent_manager"] = self.subagent_manager
+        if self.child_tool_registry is not None:
+            config["child_tool_registry"] = self.child_tool_registry
         ctx = SkillContext(
             wiki=self.wiki,
             db=self.db,
             llm_spec=llm_spec,
-            config={"wiki_id": self.wiki_id} if self.wiki_id else {},
+            config=config,
             session_id=self.session_id,
         )
         result = self.skill_service.execute(skill_name, action_name, arguments, ctx)
@@ -185,11 +204,16 @@ class SkillToolAdapter:
                 llm_spec = self.wiki_service.get_llm_spec()
             except Exception:
                 pass
+        config: dict[str, Any] = {"wiki_id": self.wiki_id} if self.wiki_id else {}
+        if self.subagent_manager is not None:
+            config["subagent_manager"] = self.subagent_manager
+        if self.child_tool_registry is not None:
+            config["child_tool_registry"] = self.child_tool_registry
         ctx = SkillContext(
             wiki=self.wiki,
             db=self.db,
             llm_spec=llm_spec,
-            config={"wiki_id": self.wiki_id} if self.wiki_id else {},
+            config=config,
             session_id=self.session_id,
         )
         _, action = self.skill_service.registry.find_action(skill_name, action_name)

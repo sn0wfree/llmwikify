@@ -179,30 +179,62 @@ class ChatOrchestrator:
         )
         self.command_router = self._build_default_command_router()
 
-    def _get_tool_registry(self, ctx: AgentContext, session_id: str | None = None) -> Any:
+    def _get_tool_registry(
+        self,
+        ctx: AgentContext,
+        session_id: str | None = None,
+        *,
+        expose_subagent: bool = False,
+        subagent_manager: Any = None,
+        child_tool_registry: Any = None,
+    ) -> Any:
+        """Build (or fetch from cache) the tool registry exposed to the LLM.
+
+        Phase 10-E (2026-06-20): when ``expose_subagent=True`` the
+        ``subagent`` skill is added to the SkillToolAdapter's exposed
+        skills and the supplied ``subagent_manager`` +
+        ``child_tool_registry`` are stitched into the adapter so
+        ``spawn_subagent`` can reach a real manager. Children get a
+        registry built with ``expose_subagent=False`` so they can't
+        spawn grandchildren.
+
+        The cache key includes ``expose_subagent`` so parent and
+        child registries don't collide.
+        """
         wiki_id = ctx.wiki_id or self.wiki_service.get_default_wiki_id()
         wiki_registry = self.wiki_service.get_tool_registry(wiki_id)
         if self.skill_service is None:
             return wiki_registry
-        cache_key = (session_id or ctx.session_id or "", wiki_id or "")
-        if cache_key in self._tool_registries:
+        cache_key = (
+            session_id or ctx.session_id or "",
+            wiki_id or "",
+            bool(expose_subagent),
+        )
+        if cache_key in self._tool_registries and not expose_subagent:
+            # Only the child (no-subagent) registry is safe to cache
+            # cross-invocation. Parent registries hold a live
+            # SubagentManager ref and must rebuild each chat.
             return self._tool_registries[cache_key]
         from llmwikify.apps.agent.tools.skill_adapter import (
             CompositeToolRegistry,
             SkillToolAdapter,
         )
+        adapter_kwargs: dict[str, Any] = {
+            "wiki": self.wiki_service.get_wiki(wiki_id),
+            "db": self.db,
+            "wiki_id": wiki_id,
+            "session_id": session_id or ctx.session_id,
+            "wiki_service": self.wiki_service,
+        }
+        if expose_subagent:
+            adapter_kwargs["subagent_manager"] = subagent_manager
+            adapter_kwargs["child_tool_registry"] = child_tool_registry
         registry = CompositeToolRegistry(
             wiki_registry,
-            SkillToolAdapter(
-                self.skill_service,
-                wiki=self.wiki_service.get_wiki(wiki_id),
-                db=self.db,
-                wiki_id=wiki_id,
-                session_id=session_id or ctx.session_id,
-                wiki_service=self.wiki_service,
-            ),
+            SkillToolAdapter(self.skill_service, **adapter_kwargs),
         )
-        self._tool_registries[cache_key] = registry
+        if not expose_subagent:
+            self._tool_registries[cache_key] = registry
         return registry
 
     # ─── SSE chat ────────────────────────────────────────────────
@@ -793,6 +825,26 @@ class ChatOrchestrator:
             prompt_builder=self.prompt_builder,
             hook=hook,
             config=self.config,
+        )
+        # Phase 10-E (2026-06-20): wire in-process SubagentManager so
+        # the LLM can call ``spawn_subagent``. The child registry is
+        # built with ``expose_subagent=False`` so children cannot
+        # spawn grandchildren. The parent tool_registry is rebuilt
+        # with ``expose_subagent=True`` and the manager+child
+        # registry stitched into SkillContext.config.
+        from llmwikify.apps.chat.agent.subagent_manager import (
+            SubagentManager,
+        )
+        subagent_manager = SubagentManager(runner)
+        child_tool_registry = self._get_tool_registry(
+            ctx, session_id, expose_subagent=False,
+        )
+        tool_registry = self._get_tool_registry(
+            ctx,
+            session_id,
+            expose_subagent=True,
+            subagent_manager=subagent_manager,
+            child_tool_registry=child_tool_registry,
         )
         # Phase 10 (2026-06-20): wire goal_active_predicate so a session
         # whose goal_state.status is no longer "active" stops at the

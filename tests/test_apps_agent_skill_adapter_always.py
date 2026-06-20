@@ -75,6 +75,10 @@ def _make_adapter(*, has_always: bool) -> SkillToolAdapter:
     }
     adapter._pending_confirmations = {}
     adapter._get_skill_commands_handler = AsyncMock()
+    # Phase 10-E (2026-06-20): wire-up adds these attrs; tests that
+    # use ``__new__`` to bypass __init__ need to set defaults here.
+    adapter.subagent_manager = None
+    adapter.child_tool_registry = None
     return adapter
 
 
