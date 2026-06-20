@@ -29,82 +29,98 @@ logger = logging.getLogger("test_101_quantnodes")
 def setup_cache(universe: str = "HS300", start_date: str = "2020-01-01", end_date: str = "2024-12-31") -> str:
     """Ensure cache data exists, return path to QuantNodes-compatible HDF5 dir.
 
+    Strategy:
+    1. ClickHouse `quote.cn_stock` (real HS300 close panel)
+    2. akshare fallback
+    3. synthetic data last resort
+
     QuantNodes LoadDataNode expects HDF5 files in data_path:
       - stk_daily.h5  (keys: stklist, trade_dt, cp, open, high, low, close, volume, etc.)
       - index_daily.h5 (keys: indexlist, trade_dt, index_cp, etc.)
     """
-    from llmwikify.reproduction.akshare_data import (
-        fetch_hs300_constituents,
-        fetch_close_panel,
-    )
-
     cache_dir = Path.home() / ".llmwikify" / "akshare_cache" / "quantnodes_h5"
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    # Files: stk_daily.h5, index_daily.h5
     stk_path = cache_dir / "stk_daily.h5"
     idx_path = cache_dir / "index_daily.h5"
     if stk_path.exists() and stk_path.stat().st_size > 1_000_000:
         logger.info("Cache exists: %s (%.1f MB)", stk_path, stk_path.stat().st_size / 1e6)
         return str(cache_dir)
 
-    # Fetch HS300 constituents
-    codes = fetch_hs300_constituents(refresh=False)
-    if not codes:
-        codes = [f"{i:06d}.{'SZ' if i < 600000 else 'SH'}" for i in range(1, 51)]
-    n_stocks = min(50, len(codes))
-    codes = codes[:n_stocks]
+    # Strategy 1: ClickHouse (real data)
+    n_stocks = 50
+    try:
+        from llmwikify.reproduction.clickhouse_data import (
+            fetch_close_panel,
+            fetch_hs300_constituents,
+        )
+        codes = fetch_hs300_constituents()[:n_stocks]
+        if codes:
+            logger.info("[clickhouse] Fetching %d codes %s ~ %s", len(codes), start_date, end_date)
+            df = fetch_close_panel(codes, start_date, end_date)
+            if not df.empty:
+                _build_h5_from_long(df, codes, stk_path, idx_path)
+                return str(cache_dir)
+    except Exception as exc:
+        logger.warning("[clickhouse] failed, falling back to akshare: %s", exc)
 
-    # Fetch or generate close panel
-    close_panel = fetch_close_panel(codes, start_date, end_date, refresh=False)
-    if close_panel.empty:
-        logger.warning("Close panel empty, generating synthetic data")
-        import pandas as pd
-        import numpy as np
-        dates = pd.date_range(start_date, end_date, freq="B")
-        np.random.seed(42)
-        data = {}
-        for code in codes:
-            price = 10 + np.cumsum(np.random.randn(len(dates)) * 0.02)
-            data[code] = price
-        close_panel = pd.DataFrame(data, index=dates)
+    # Strategy 2: akshare
+    try:
+        from llmwikify.reproduction.akshare_data import (
+            fetch_close_panel as ak_close,
+        )
+        from llmwikify.reproduction.akshare_data import (
+            fetch_hs300_constituents as ak_fetch,
+        )
+        codes = ak_fetch(refresh=False)
+        if not codes:
+            codes = [f"{i:06d}.{'SZ' if i < 600000 else 'SH'}" for i in range(1, 51)]
+        n_stocks = min(50, len(codes))
+        codes = codes[:n_stocks]
+        close_panel = ak_close(codes, start_date, end_date, refresh=False)
+        if not close_panel.empty:
+            _build_h5_from_wide(close_panel, codes, stk_path, idx_path)
+            return str(cache_dir)
+    except Exception as exc:
+        logger.warning("[akshare] failed, falling back to synthetic: %s", exc)
 
-    # Synthesize OHLCV
+    # Strategy 3: synthetic
+    logger.warning("All data sources failed, using synthetic data")
+    _build_synthetic_h5(n_stocks, start_date, end_date, stk_path, idx_path)
+    return str(cache_dir)
+
+
+def _build_h5_from_long(df, codes, stk_path, idx_path):
+    """Build H5 from long-format DataFrame (date, code, open, high, low, close, volume, ...)."""
     import numpy as np
     import pandas as pd
-    np.random.seed(0)
-    long = close_panel.stack().reset_index()
-    long.columns = ["date", "code", "close"]
-    long["open"] = long["close"] * (1 + np.random.randn(len(long)) * 0.005)
-    long["high"] = long[["open", "close"]].max(axis=1) * (1 + np.abs(np.random.randn(len(long))) * 0.003)
-    long["low"] = long[["open", "close"]].min(axis=1) * (1 - np.abs(np.random.randn(len(long))) * 0.003)
-    long["volume"] = np.random.randint(1_000_000, 10_000_000, len(long))
-    long["returns"] = long.groupby("code")["close"].pct_change().fillna(0)
-    long["vwap"] = (long["high"] + long["low"] + long["close"]) / 3
-    long["amount"] = long["close"] * long["volume"]
 
-    # Build [date × code] wide panels
-    def pivot_wide(key: str) -> pd.DataFrame:
-        wide = long.pivot(index="date", columns="code", values=key)
-        wide.index = pd.to_datetime(wide.index)
-        return wide
+    # Synthesize missing cols
+    np.random.seed(0)
+    if "open" not in df.columns:
+        df["open"] = df["close"] * (1 + np.random.randn(len(df)) * 0.005)
+    if "high" not in df.columns:
+        df["high"] = df[["open", "close"]].max(axis=1) * (1 + np.abs(np.random.randn(len(df))) * 0.003)
+    if "low" not in df.columns:
+        df["low"] = df[["open", "close"]].min(axis=1) * (1 - np.abs(np.random.randn(len(df))) * 0.003)
+    if "amount" not in df.columns:
+        df["amount"] = df["close"] * df["volume"]
 
     stklist = pd.DataFrame({"code": codes})
     stklist.index = codes
-    # trade_dt must be int yyyymmdd (QuantNodes AdjustDateNode requirement)
-    trade_dates_int = [int(d.strftime("%Y%m%d")) for d in close_panel.index]
-    trade_dt = pd.DataFrame({"trade_dt": trade_dates_int})
-    trade_dt.index = close_panel.index
+    # trade_dt MUST be int64 yyyymmdd (QuantNodes valid_date requirement)
+    if pd.api.types.is_datetime64_any_dtype(df["date"]):
+        trade_dates_int = sorted(df["date"].dt.strftime("%Y%m%d").astype(int).unique())
+    else:
+        trade_dates_int = sorted(df["date"].unique())
+    trade_dt = pd.DataFrame({"trade_dt": trade_dates_int}, dtype="int64")
+    idx_dates = pd.to_datetime(trade_dates_int, format="%Y%m%d")
 
-    # id_300 (HS300 membership flag) — True for all synthetic stocks
-    id_300 = pd.DataFrame(
-        True,
-        index=pd.to_datetime(trade_dates_int, format="%Y%m%d"),
-        columns=codes,
-    )
+    def pivot_wide(key: str) -> pd.DataFrame:
+        wide = df.pivot(index="date", columns="code", values=key)
+        wide.index = pd.to_datetime(wide.index, format="%Y%m%d")
+        return wide
 
-    # Build HDF5
-    logger.info("Building HDF5 cache at %s ...", cache_dir)
     wide_open = pivot_wide("open")
     wide_high = pivot_wide("high")
     wide_low = pivot_wide("low")
@@ -113,18 +129,17 @@ def setup_cache(universe: str = "HS300", start_date: str = "2020-01-01", end_dat
     wide_returns = pivot_wide("returns")
     wide_vwap = pivot_wide("vwap")
     wide_amount = pivot_wide("amount")
-    # Synthesize industry + mkt_cap
+
+    id_300 = pd.DataFrame(True, index=idx_dates, columns=codes)
     np.random.seed(1)
-    industry_codes = np.random.randint(1, 30, n_stocks)
-    id_citic1 = pd.DataFrame(
-        [industry_codes], columns=codes, index=close_panel.index[:1]
-    )
-    id_citic1 = id_citic1.reindex(close_panel.index, method="ffill")
-    mv_float = wide_close * np.random.randint(1e8, 1e10, (len(close_panel.index), n_stocks))
-    st = pd.DataFrame(0.0, index=close_panel.index, columns=codes)
-    suspend = pd.DataFrame(0.0, index=close_panel.index, columns=codes)
-    ud_limit = pd.DataFrame(0.0, index=close_panel.index, columns=codes)
-    ipo_days = pd.DataFrame(365, index=close_panel.index, columns=codes)
+    industry_codes = np.random.randint(1, 30, len(codes))
+    id_citic1 = pd.DataFrame([industry_codes], columns=codes, index=idx_dates[:1])
+    id_citic1 = id_citic1.reindex(idx_dates, method="ffill")
+    mv_float = wide_close * np.random.randint(1e8, 1e10, (len(idx_dates), len(codes)))
+    st = pd.DataFrame(0.0, index=idx_dates, columns=codes)
+    suspend = pd.DataFrame(0.0, index=idx_dates, columns=codes)
+    ud_limit = pd.DataFrame(0.0, index=idx_dates, columns=codes)
+    ipo_days = pd.DataFrame(365, index=idx_dates, columns=codes)
 
     with pd.HDFStore(stk_path, mode="w") as store:
         store.put("stklist", stklist)
@@ -146,7 +161,6 @@ def setup_cache(universe: str = "HS300", start_date: str = "2020-01-01", end_dat
         store.put("ud_limit", ud_limit)
         store.put("ipo_days", ipo_days)
 
-    # Index HDF5 (HS300 baseline)
     indexlist = pd.DataFrame({"index_code": ["000300.SH"]}, index=["000300.SH"])
     index_cp = wide_close.mean(axis=1).to_frame("000300.SH")
     index_cp.columns = ["000300.SH"]
@@ -154,9 +168,41 @@ def setup_cache(universe: str = "HS300", start_date: str = "2020-01-01", end_dat
         store.put("indexlist", indexlist)
         store.put("trade_dt", trade_dt)
         store.put("index_cp", index_cp)
+    logger.info("H5 from ClickHouse: %d stocks × %d days", len(codes), len(idx_dates))
 
-    logger.info("Wrote HDF5 cache: %d stocks × %d days", n_stocks, len(close_panel.index))
-    return str(cache_dir)
+
+def _build_h5_from_wide(close_panel, codes, stk_path, idx_path):
+    """Build H5 from wide-format close panel (akshare fallback)."""
+    import numpy as np
+    import pandas as pd
+
+    np.random.seed(0)
+    long = close_panel.stack().reset_index()
+    long.columns = ["date", "code", "close"]
+    long["open"] = long["close"] * (1 + np.random.randn(len(long)) * 0.005)
+    long["high"] = long[["open", "close"]].max(axis=1) * (1 + np.abs(np.random.randn(len(long))) * 0.003)
+    long["low"] = long[["open", "close"]].min(axis=1) * (1 - np.abs(np.random.randn(len(long))) * 0.003)
+    long["volume"] = np.random.randint(1_000_000, 10_000_000, len(long))
+    long["returns"] = long.groupby("code")["close"].pct_change().fillna(0)
+    long["vwap"] = (long["high"] + long["low"] + long["close"]) / 3
+    long["amount"] = long["close"] * long["volume"]
+    _build_h5_from_long(long, codes, stk_path, idx_path)
+
+
+def _build_synthetic_h5(n_stocks, start_date, end_date, stk_path, idx_path):
+    """Generate synthetic data (last resort fallback)."""
+    import numpy as np
+    import pandas as pd
+    np.random.seed(42)
+    dates = pd.date_range(start_date, end_date, freq="B")
+    codes = [f"{i:06d}.SZ" for i in range(1, n_stocks + 1)]
+    data = {}
+    for code in codes:
+        price = 10 + np.cumsum(np.random.randn(len(dates)) * 0.02)
+        data[code] = price
+    close_panel = pd.DataFrame(data, index=dates)
+    _build_h5_from_wide(close_panel, codes, stk_path, idx_path)
+    logger.info("H5 synthetic: %d stocks × %d days", n_stocks, len(dates))
 
 
 def main():

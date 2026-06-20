@@ -250,8 +250,9 @@ def run_factor_backtest(
     Returns:
         BacktestOutcome with metrics, L5 decision, status.
     """
-    from .factor_compiler import FactorCompiler
     from QuantNodes.research.factor_test.pipeline_runner import PipelineRunner
+
+    from .factor_compiler import FactorCompiler
 
     t0 = time.monotonic()
     yaml_path = Path(factor_yaml_path)
@@ -286,11 +287,19 @@ def run_factor_backtest(
 
     # Step 3: Execute compiled expression on cached data → DataFrame
     try:
-        factor_df = _execute_compiled_expression(
-            expression=compile_result.code,
-            data_path=data_path,
-            factor_name=yaml_path.stem,
-        )
+        # Loop v4: code is AST JSON; legacy: code is polars expression string
+        if compile_result.code.lstrip().startswith("{"):
+            factor_df = _execute_compiled_ast(
+                ast_json=compile_result.code,
+                data_path=data_path,
+                factor_name=yaml_path.stem,
+            )
+        else:
+            factor_df = _execute_compiled_expression(
+                expression=compile_result.code,
+                data_path=data_path,
+                factor_name=yaml_path.stem,
+            )
     except Exception as exc:
         import traceback
         tb = traceback.format_exc()
@@ -358,9 +367,9 @@ def _execute_compiled_expression(
     Returns:
         DataFrame indexed by date with code columns (= [date × code] wide format).
     """
+    import numpy as np
     import pandas as pd
     import polars as pl
-    import numpy as np
 
     data_path = Path(data_path)
     # Load stk_daily.h5 keys
@@ -390,7 +399,7 @@ def _execute_compiled_expression(
     )
 
     # Build namespace for exec
-    namespace = {
+    _namespace = {
         "pl": pl,
         "polars": pl,
         "np": np,
@@ -447,6 +456,68 @@ def _execute_compiled_expression(
         df_with_factor = df_pl.with_columns(pl.lit(float(result)).alias("factor_value"))
 
     # Pivot to wide format [date × code]
+    factor_pandas = df_with_factor.select(["date", "code", "factor_value"]).to_pandas()
+    factor_wide = factor_pandas.pivot(index="date", columns="code", values="factor_value")
+    factor_wide.index = pd.to_datetime(factor_wide.index)
+    return factor_wide
+
+
+def _execute_compiled_ast(
+    ast_json: str,
+    data_path: str,
+    factor_name: str,
+) -> Any:
+    """Loop v4: Execute AST JSON on cached data → wide DataFrame.
+
+    Args:
+        ast_json: JSON string of ASTNode.
+        data_path: Path to OHLCV HDF5 dir.
+        factor_name: Factor name (for logging).
+
+    Returns:
+        DataFrame indexed by date with code columns (= [date × code] wide format).
+    """
+    import json
+
+    import pandas as pd
+    import polars as pl
+
+    from .ast_compiler import CompileError, compile_ast
+    from .ast_nodes import ASTNode
+
+    data_path = Path(data_path)
+    # Load stk_daily.h5 keys
+    cp_wide = pd.read_hdf(data_path / "stk_daily.h5", "cp")
+    open_wide = pd.read_hdf(data_path / "stk_daily.h5", "open")
+    high_wide = pd.read_hdf(data_path / "stk_daily.h5", "high")
+    low_wide = pd.read_hdf(data_path / "stk_daily.h5", "low")
+    close_wide = cp_wide
+    volume_wide = pd.read_hdf(data_path / "stk_daily.h5", "volume")
+    returns_wide = pd.read_hdf(data_path / "stk_daily.h5", "returns")
+    vwap_wide = pd.read_hdf(data_path / "stk_daily.h5", "vwap")
+
+    def wide_to_polars(wide: pd.DataFrame, value_name: str) -> pl.DataFrame:
+        long = wide.stack().reset_index()
+        long.columns = ["date", "code", value_name]
+        return pl.from_pandas(long)
+
+    df_pl = (
+        wide_to_polars(close_wide, "close")
+        .join(wide_to_polars(open_wide, "open"), on=["date", "code"])
+        .join(wide_to_polars(high_wide, "high"), on=["date", "code"])
+        .join(wide_to_polars(low_wide, "low"), on=["date", "code"])
+        .join(wide_to_polars(volume_wide, "volume"), on=["date", "code"])
+        .join(wide_to_polars(returns_wide, "returns"), on=["date", "code"])
+        .join(wide_to_polars(vwap_wide, "vwap"), on=["date", "code"])
+    )
+
+    # Parse and compile AST
+    ast_node = ASTNode(**json.loads(ast_json))
+    expr = compile_ast(ast_node)
+
+    df_with_factor = df_pl.with_columns(expr.alias("factor_value"))
+
+    # Pivot to wide format
     factor_pandas = df_with_factor.select(["date", "code", "factor_value"]).to_pandas()
     factor_wide = factor_pandas.pivot(index="date", columns="code", values="factor_value")
     factor_wide.index = pd.to_datetime(factor_wide.index)
