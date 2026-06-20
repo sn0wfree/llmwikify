@@ -26,6 +26,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from llmwikify.apps.chat.agent.context_manager import AgentContext
+from llmwikify.foundation.callback import AgentHook
 
 logger = logging.getLogger(__name__)
 
@@ -85,13 +86,18 @@ class ChatEvent:
 # ─── V2 persistence hook (Plan B B-4) ──────────────────────────
 
 
-class _V2PersistenceHook:
+class _V2PersistenceHook(AgentHook):
     """Persist tool results to MemoryManager.context after each tool call.
 
     Mirrors the bridge's manual ``_persist_tool_result`` call
     (chat_react.py:572) but as a hook in the v2 runner's lifecycle
     (after_tool_executed). Errors are isolated (logged, not raised)
     so a failed persist does not break the run.
+
+    Phase A-3 (2026-06-20): made this a proper subclass of
+    :class:`AgentHook` so :class:`CompositeHook` can safely call
+    ``wants_streaming()`` / other hook points without ``AttributeError``
+    when only ``after_tool_executed`` is overridden.
     """
 
     def __init__(self, tool_executor: Any, session_id: str) -> None:
@@ -806,7 +812,7 @@ class ChatOrchestrator:
         from llmwikify.apps.chat.agent.bridge_backend import ChatBridgeBackend
         from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
         from llmwikify.apps.chat.agent.spec import ChatRunSpec
-        from llmwikify.foundation.callback import CompositeHook
+        from llmwikify.foundation.callback import AgentHook, CompositeHook
         from llmwikify.foundation.callback.integrations.wiki import WikiHook
 
         bridge_backend = ChatBridgeBackend(
