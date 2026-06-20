@@ -9,6 +9,12 @@ if TYPE_CHECKING:
 
     from .base import LLMProvider
 
+# Auto-imported below in the registration block — kept at top level
+# so ruff E402 doesn't trip; the side-effecting ``register_provider``
+# calls remain at the bottom of the file so any ``from
+# .providers.registry import PROVIDERS`` sees a populated dict.
+from .minimax import MiniMaxProvider
+from .xiaomi import XiaomiProvider
 
 PROVIDERS: dict[str, type[LLMProvider]] = {}
 
@@ -71,9 +77,7 @@ def create_llm(config: dict[str, Any]) -> StreamableLLMClient:
     return provider.from_config(llm_cfg)
 
 
-# Auto-register built-in providers
-from .minimax import MiniMaxProvider
-from .xiaomi import XiaomiProvider
-
+# Auto-register built-in providers (must run AFTER the functions above
+# are defined so ``register_provider`` is in scope).
 register_provider(MiniMaxProvider)
 register_provider(XiaomiProvider)
