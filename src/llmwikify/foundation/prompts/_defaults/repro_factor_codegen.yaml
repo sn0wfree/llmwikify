@@ -2,7 +2,7 @@ name: repro_factor_codegen
 description: "Generate pandas code for factor computation from mathematical formula"
 version: "1.0"
 trigger:
-  type: "internal"
+  type: "api_call"
   when: "factor_codegen"
 
 params:

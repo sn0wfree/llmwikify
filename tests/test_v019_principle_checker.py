@@ -253,6 +253,12 @@ class TestPrincipleCheckerCheckAllTemplates:
         Phase 1 #5 added 2 new templates
         (``research_clarify``, ``research_reason``) in the
         autoresearch YAML sync. Updated to include them.
+
+        Stage B (v0.4, 2026-06-20): reproduction pipeline added 17
+        ``repro_*`` templates in commit 72f405d + 145ae24 — paper
+        → backtest + QuantNodes. ``repro_factor_codegen`` /
+        ``repro_factor_reflect`` trigger types normalised from
+        ``internal`` to ``api_call`` to fit VALID_TRIGGER_TYPES.
         """
         checker = PrincipleChecker()
         results = checker.check_all_templates()
@@ -262,6 +268,28 @@ class TestPrincipleCheckerCheckAllTemplates:
             "generate_wiki_ops",
             "ingest_instructions",
             "investigate_lint",
+            "repro_codegen",
+            "repro_extract",
+            "repro_extract_allocation",
+            "repro_extract_factor",
+            "repro_extract_plan",
+            "repro_extract_section",
+            "repro_extract_signal",
+            "repro_extract_summary",
+            "repro_extract_tier2_backtest",
+            "repro_extract_tier2_datasets",
+            "repro_extract_tier2_implementation",
+            "repro_extract_tier2_performance",
+            "repro_extract_tier2_risk",
+            "repro_extract_track_b_pass1",
+            "repro_extract_track_b_pass2",
+            "repro_extract_track_b_pass2_supplement",
+            "repro_extract_validate",
+            "repro_factor",
+            "repro_factor_codegen",
+            "repro_factor_full",
+            "repro_factor_reflect",
+            "repro_validate_plan",
             "research_clarify",  # Phase 1 #5
             "research_plan",
             "research_reason",   # Phase 1 #5

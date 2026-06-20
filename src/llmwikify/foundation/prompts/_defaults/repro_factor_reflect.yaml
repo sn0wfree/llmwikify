@@ -2,7 +2,7 @@ name: repro_factor_reflect
 description: "基于 L5 验证结果反思因子设计并提出优化建议"
 version: "1.0"
 trigger:
-  type: "internal"
+  type: "api_call"
   when: "l5_reflection"
 
 params:
