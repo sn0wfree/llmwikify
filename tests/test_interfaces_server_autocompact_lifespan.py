@@ -94,11 +94,18 @@ async def test_lifespan_startup_invokes_start_auto_compact(tmp_path: Path) -> No
         provider=_make_provider(),
         enable_dream_scheduler=False,
         enable_auto_compact=True,
+        enable_rest=False,
         enable_webui=False,
     )
-    # Stub the AgentService methods so we don't actually spawn tasks
+    # Stub the AgentService methods so we don't actually spawn tasks.
+    # enable_rest=False above prevents real AgentService creation; we
+    # attach a MagicMock so the lifespan handler sees _agent_service != None.
+    server._agent_service = MagicMock()
+    server._agent_service.data_dir = tmp_path
     server._agent_service.start_auto_compact = AsyncMock(return_value=MagicMock())
     server._agent_service.stop_auto_compact = AsyncMock()
+    server._agent_service.start_dream_scheduler = AsyncMock()
+    server._agent_service.stop_dream_scheduler = AsyncMock()
     # Drive the lifespan context manager manually
     async with server.app.router.lifespan_context(server.app):
         pass
@@ -115,10 +122,15 @@ async def test_lifespan_skips_when_auto_compact_disabled(tmp_path: Path) -> None
         provider=_make_provider(),
         enable_dream_scheduler=False,
         enable_auto_compact=False,
+        enable_rest=False,
         enable_webui=False,
     )
+    server._agent_service = MagicMock()
+    server._agent_service.data_dir = tmp_path
     server._agent_service.start_auto_compact = AsyncMock()
     server._agent_service.stop_auto_compact = AsyncMock()
+    server._agent_service.start_dream_scheduler = AsyncMock()
+    server._agent_service.stop_dream_scheduler = AsyncMock()
     async with server.app.router.lifespan_context(server.app):
         pass
     assert server._agent_service.start_auto_compact.await_count == 0
@@ -137,14 +149,19 @@ async def test_lifespan_respects_memory_config_disable(tmp_path: Path) -> None:
         provider=_make_provider(),
         enable_dream_scheduler=False,
         enable_auto_compact=True,
+        enable_rest=False,
         enable_webui=False,
     )
-    data_dir = server._agent_service.data_dir
+    server._agent_service = MagicMock()
+    data_dir = tmp_path
+    server._agent_service.data_dir = data_dir
     (data_dir / DEFAULT_CONFIG_FILENAME).write_text(json.dumps({
         "auto_compact": {"enabled": False},
     }))
     server._agent_service.start_auto_compact = AsyncMock()
     server._agent_service.stop_auto_compact = AsyncMock()
+    server._agent_service.start_dream_scheduler = AsyncMock()
+    server._agent_service.stop_dream_scheduler = AsyncMock()
     async with server.app.router.lifespan_context(server.app):
         pass
     assert server._agent_service.start_auto_compact.await_count == 0
