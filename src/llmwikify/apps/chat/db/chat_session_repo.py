@@ -6,11 +6,12 @@ Schema:
         wiki_id TEXT,
         jwt_token TEXT,
         title TEXT,                 -- v0.40: auto-naming
+        metadata TEXT,              -- Phase 8: JSON blob (goal_state, ...)
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
     )
 
-Methods (8):
+Methods (10):
     create_chat_session        — INSERT new session, return id
     get_chat_session           — SELECT one by id
     update_chat_session_wiki   — UPDATE wiki_id + updated_at
@@ -19,6 +20,8 @@ Methods (8):
     list_chat_sessions         — SELECT all, ORDER BY created_at DESC
     delete_chat_session        — DELETE one session (cascade via app code)
     get_chat_session_title     — get stored title OR derive from first user msg
+    get_session_metadata       — Phase 8: parsed JSON metadata or {}
+    set_session_metadata       — Phase 8: write JSON metadata
 """
 from __future__ import annotations
 
