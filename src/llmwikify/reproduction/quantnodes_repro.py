@@ -410,17 +410,21 @@ def _execute_compiled_expression(
     expr_clean = re.sub(r"```\n?", "", expr_clean)
 
     # Column names to auto-wrap as pl.col() — but only when they appear
-    # in polars expressions (not inside string literals or function calls).
+    # as bare identifiers, NOT inside pl.col() (already wrapped) or
+    # string literals.
     COL_NAMES = ["close", "open", "high", "low", "volume", "returns", "vwap"]
 
     def col_pat(name: str) -> re.Pattern:
-        # Match the bare identifier NOT preceded by . (attribute access) and
-        # NOT followed by ( (function call). e.g. match 'close' in
-        # 'rank(close)' but not in 'pl.col(close)' or 'something.close'.
-        return re.compile(rf"(?<![\w.]){name}(?![\w(])")
+        # Match bare identifier, NOT inside pl.col('name') or string literal
+        return re.compile(rf"(?<![\w.]){name}(?![\w'(])")
 
     for name in COL_NAMES:
+        # Skip if name is already wrapped: pl.col('name')
+        # Strategy: find pl.col('name') and replace with pl.col('name') (no-op)
+        # then auto-wrap bare occurrences
         expr_clean = col_pat(name).sub(f"pl.col('{name}')", expr_clean)
+        # If LLM used pl.col(name) (without quotes), fix to pl.col('name')
+        expr_clean = re.sub(rf"pl\.col\({name}\)", f"pl.col('{name}')", expr_clean)
 
     # Execute expression (last line should be the result)
     local_ns = {"pl": pl, "polars": pl, "np": np, "pd": pd}
