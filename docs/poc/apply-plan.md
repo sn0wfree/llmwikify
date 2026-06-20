@@ -782,3 +782,182 @@ def _register_agent_routes(app, registry, provider=None):
 - 创建详细 task list (todowrite)
 - 启动 Phase A 第一步 (CompositeHook)
 - 给出具体 commit 计划
+
+---
+
+## 10. Phase 10 — I + E 借鉴方案 (2026-06-20)
+
+> Phase 8/9 落地后，nanobot 借鉴评估剩余的 2 个高价值低风险项：
+>
+> - **I. Goal-active predicate 接入 ChatRunner** — 把 Phase 8 的 `goal_state` 从"提示
+>   给 LLM"升级为"运行时硬约束"，goal abandoned 后下一轮立即停。
+> - **E. SubagentManager (in-process agent-as-tool)** — 借鉴 nanobot
+>   `agent/subagent.py` (392 LOC)，让主 LLM 通过 tool-call 派生**同进程**子
+>   ChatRunner 处理子任务。与现有 subprocess 版 `subagent_runner.py` (550 LOC)
+>   并存而非替换：subprocess 路径用于 workflow DAG（YAML 触发，重型隔离），
+>   in-process 路径用于 LLM tool-call（运行时动态、轻量）。
+
+### 10.1 I — Goal-active predicate
+
+#### 动机
+
+Phase 8 把 `goal_state` 注入 system prompt 第 8 段（"## Sustained goal"），LLM
+可"看到"目标但**没有运行时约束**。如果用户 `/goal done` 或外部进程把 status
+改成 completed/abandoned，正在循环的 ChatRunner 还是会按 max_iterations 跑完，
+浪费 token。
+
+借鉴 nanobot `AgentRunSpec.goal_active_predicate: Callable[[], bool] | None`：
+runner 每轮 PRECHECK 调一次 predicate，返回 False 立即停。
+
+#### 设计
+
+| 文件 | 改动 | LOC |
+|---|---|---:|
+| `apps/chat/agent/spec.py` | `ChatRunSpec` 加 `goal_active_predicate: Callable[[], bool] \| None = None` | +5 |
+| `apps/chat/agent/runner_v2.py` | `_precheck` 加 predicate 检查；新 `stop_reason="goal_abandoned"` | +12 |
+| `apps/chat/agent/orchestrator.py` | 主 chat() 构造 ChatRunSpec 时注入闭包，从 `chat_db.get_session_metadata(sid)` 同步读 `goal_state.status` | +18 |
+| `tests/test_apps_chat_agent_runner_v2_goal.py` | 5 cases | +120 |
+
+**predicate 语义**:
+- 返回 `True` → goal active 或未设 goal（默认 True 不杀循环）
+- 返回 `False` → goal completed/abandoned → 下轮 PRECHECK 即停
+- 抛异常 → 容错吞掉，**不**杀循环（保守策略，避免 DB 故障导致全部 chat 死）
+
+**注入实现**（orchestrator）:
+```python
+sid = session_id
+chat_db = self.db
+def _goal_predicate() -> bool:
+    try:
+        md = chat_db.get_session_metadata(sid) or {}
+        gs = md.get("goal_state")
+        if not isinstance(gs, dict):
+            return True  # 未设 goal → 不约束
+        return gs.get("status") == "active"
+    except Exception:
+        return True  # DB 故障容错
+spec.goal_active_predicate = _goal_predicate
+```
+
+#### 边界
+
+- predicate 频繁同步调用（每轮 PRECHECK） → 必须 fast read。`ChatSessionRepo.get_session_metadata` 是单 SELECT，已 < 5ms。
+- 不影响 "无 goal" session（默认 None / 默认 True）。
+- `stop_reason="goal_abandoned"` 与 `cancelled / paused / timeout` 同形，前端 SSE 可不区分（也可未来加 UI hint）。
+
+### 10.2 E — SubagentManager (in-process)
+
+#### 动机
+
+llmwikify 已有 `apps/chat/skills/workflows/subagent_runner.py` (550 LOC,
+**subprocess** 隔离)，但启动开销大（~1s Python interpreter cold start），
+不适合 LLM 运行时动态决策"我想分支查 N 个子话题"的场景。
+
+借鉴 nanobot `agent/subagent.py` (392 LOC, **in-process**)：用同一个
+`ChatRunnerV2` instance 跑独立 ChatRunSpec（独立 messages / tools / budget），
+复用 LLM client 但隔离 ctx。启动开销 ~50ms。
+
+#### 与现有 subprocess subagent_runner 的关系
+
+| 维度 | 现有 subprocess（保留） | 新 in-process（新增） |
+|---|---|---|
+| 触发者 | workflow DAG executor（YAML 阶段） | LLM tool-call（`spawn_subagent`） |
+| 隔离 | spawn 新 Python interpreter | 同进程独立 ChatRunSpec |
+| 启动 | ~1s | ~50ms |
+| 序列化 | JSON wire format | 内存 dict |
+| 用例 | paper reproduction pipeline | 动态分支研究 / 并行查 N 个东西 |
+| 失败影响 | 子进程崩不影响父 | 异常 try/except 隔离 |
+
+→ **共存，不替换**。subprocess 契约不动。
+
+#### 设计
+
+| 文件 | 改动 | LOC |
+|---|---|---:|
+| `apps/chat/agent/subagent_manager.py` (新) | `SubagentSpec` / `SubagentResult` / `SubagentManager.run()` | ~150 |
+| `apps/chat/skills/crud/subagent_skill.py` (新) | `SubagentSkill` + `_spawn_subagent` action | ~80 |
+| `apps/chat/skills/service.py` | `register_all` 注册 SubagentSkill | +3 |
+| `apps/chat/skills/crud/__init__.py` | 导出 SubagentSkill | +2 |
+| `tests/test_apps_chat_agent_subagent_manager.py` | 8 cases | ~180 |
+| `tests/test_apps_chat_skill_subagent.py` | 4 cases | ~90 |
+
+**dataclass schema**:
+```python
+@dataclass
+class SubagentSpec:
+    goal: str                              # 子任务目标（写入 system prompt）
+    initial_messages: list[dict]           # 子 runner 起手 messages
+    tool_registry: Any                     # 子 runner 可用 tools（通常父 tools 子集）
+    parent_session_id: str                 # 父 session id（落 DB / metrics）
+    max_iterations: int = 5                # 子 runner budget（独立于父）
+    inherit_wiki_id: str | None = None     # 子 runner 用哪个 wiki context
+    timeout_seconds: float = 120.0         # 子 runner 软超时
+
+@dataclass
+class SubagentResult:
+    status: str                            # "ok" | "error" | "timeout"
+    final_content: str | None
+    tools_used: list[str]
+    usage: dict[str, int]
+    error: str | None = None
+    state_trace: list[dict] = field(default_factory=list)
+```
+
+**SubagentManager.run()** 流程:
+1. `async with self._semaphore:` 限并发（默认 max_concurrent=2）
+2. 构造 ChatRunSpec：
+   - `messages = [{"role":"system", "content":f"Subagent goal: {spec.goal}\\n..."}] + spec.initial_messages`
+   - `tool_registry = spec.tool_registry`（不含 spawn_subagent → 防递归套娃）
+   - `max_iterations = spec.max_iterations`
+   - `microcompact = True`（子同样压 read_file）
+   - `goal_active_predicate = lambda: True`（子内不挂父 goal_state）
+3. 用 fresh ChatRunnerV2 instance（共享 provider / prompt_builder，不传 memory_manager → 子不触发 consolidation）
+4. `asyncio.wait_for(runner.run_to_completion(child_spec), timeout=spec.timeout_seconds)`
+5. 异常路径 → status="error" / status="timeout"，**不**抛给父 runner
+
+**SubagentSkill (LLM tool 包装)**:
+```yaml
+name: spawn_subagent
+description: |
+  Spawn an isolated assistant to investigate a sub-goal in detail.
+  Returns final_content + tools_used + usage. Use this when you need
+  to dig deep into a topic without polluting the main conversation.
+args:
+  goal: str (required)            # what to investigate
+  max_iterations: int = 5         # budget cap (1-10)
+returns:
+  final_content: str              # 子 runner 最后输出
+  tools_used: list[str]
+  usage: dict
+```
+
+#### 防递归 / 防失控
+
+- 子 runner 的 `tool_registry` **不**含 `spawn_subagent` → 子不能再 spawn 子
+- `SubagentManager._semaphore = asyncio.Semaphore(2)` → 同时最多 2 个子 runner
+- 子 runner 不持 memory_manager → 不递归触发 consolidation
+- timeout 软超时 + max_iterations 硬上限双约束
+- 异常 try/except 全包，status 字段反馈给 LLM（不让父崩）
+
+#### 后续（不在本次范围）
+
+- v1.1: 父 cancelled 级联取消子（接入 abort_event）
+- v1.2: 子 runner SSE 事件转发给父（"思考中..." 进度提示）
+- v1.3: 子 runner state_trace 透传给父 result（debug 友好）
+
+### 10.3 实施顺序
+
+1. **docs first** ✅ 本节
+2. **I-1 ~ I-4** (1 commit) — `feat(chat): goal_active_predicate 接入 ChatRunner`
+3. **E-1 ~ E-3** (1 commit) — `feat(chat): in-process SubagentManager + spawn_subagent tool`
+
+每步独立 commit，独立 ruff + pytest 验证；不混提；不动 untracked workspace files
+（`docs/quantnodes.md` / `src/llmwikify/reproduction/factor_compiler.py`，属其他
+agent 的工作）。
+
+### 10.4 验收
+
+- [ ] I：`goal_active_predicate` 字段、predicate 检查、orchestrator 注入 + 5 tests
+- [ ] E：`SubagentManager` + `SubagentSkill` 注册 + 12 tests + 防递归验证
+- [ ] ruff clean on changed files
+- [ ] 0 regression（Phase 8/9 既有测试全过）
