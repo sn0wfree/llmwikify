@@ -20,6 +20,12 @@ from typing import Any
 import polars as pl
 
 from .ast_compiler import CompileError, compile_ast
+from .ast_complexity import (
+    ComplexityVerdict,
+    check_complexity,
+    collect_ops,
+    count_nodes,
+)
 from .ast_extractor import extract_ast
 from .ast_nodes import QN_OPS, ASTNode
 from .error_categorizer import (
@@ -350,6 +356,28 @@ class FactorCompiler:
                     )
 
             if ast_node is not None and struct_err is None:
+                # Stage 2.5: complexity check (flag false-positive LLM truncation)
+                l2_step_count = len(factor_data.get("l2", {}).get("calculation_steps", []))
+                verdict, complexity_msg = check_complexity(ast_node, l2_step_count)
+                if verdict == ComplexityVerdict.INCOMPLETE:
+                    struct_err = StructuredError(
+                        kind="IncompleteAST",
+                        message=complexity_msg,
+                        suggestion=(
+                            "Your AST compiled successfully but appears truncated. "
+                            "The L2 has more calculation steps than your AST represents. "
+                            "Output the COMPLETE expression with ALL steps (delta + rank + "
+                            "correlation + multiply for alpha-014, not just delta)."
+                        ),
+                    )
+                    last_structured_err = struct_err
+                    logger.info(
+                        "[factor_compiler] %s iter %d: AST incomplete (%d nodes, %d ops, %d expected)",
+                        factor_name, iterations,
+                        count_nodes(ast_node), len(collect_ops(ast_node)), l2_step_count,
+                    )
+                    continue
+
                 # Success
                 elapsed = time.monotonic() - t0
                 result = CompileResult(
