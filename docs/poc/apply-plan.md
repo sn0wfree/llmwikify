@@ -1580,3 +1580,146 @@ class WebSocketManager:
 - **多进程 / Redis bus** — Phase 16+
 - **WebUI WS 客户端** — webui 仓库另开 PR
 - **reconnect state resume** — 客户端断线恢复历史（Phase 17+）
+
+---
+
+## 15. Phase 15 — AgentRunner 共享执行器抽象（借鉴 nanobot v0.2.1，2026-06-21）
+
+> 借鉴 nanobot v0.2.1 `nanobot/agent/runner.py`（~700 LOC）设计：
+> 把"agent loop 共享执行器"从 `ChatRunnerV2` 抽出为 `AgentRunner[SpecT, ResultT]` ABC。
+> `ChatRunnerV2` 继承 ABC 公开契约不变；未来 SubagentManager / CronSkill / WorkflowActor
+> 都能通过 ABC 接入，不必依赖 `ChatRunnerV2` 的私有 collaborators。
+
+### 15.1 动机
+
+当前 agent loop 只有一种实现（`ChatRunnerV2`），但同样的"接受 spec → 运行 → 返回 result / stream"
+契约未来多处需要：
+
+| 模块 | 现状 | 期望 |
+|---|---|---|
+| `ChatRunnerV2` | 实际执行者 | 继续是核心实现，继承 `AgentRunner[ChatRunSpec, ChatRunResult]` |
+| `SubagentManager` | `new ChatRunnerV2(...)` 复用 parent 私有 attrs | 接受 `AgentRunner` 类型 hint；未来 Phase 16+ 真接基类（不依赖 `_chat_service` 等私有 attrs） |
+| `CronSkill` (future) | 还没有 | 接 `AgentRunner` 跑 cron 触发的 chat loop |
+| `WorkflowActor` (future) | 还没有 | 接 `AgentRunner` 跑 workflow actor step |
+| Test stubs | `_StubParentRunner` 复制 4 个 attrs | 接 `AgentRunner` duck-type check，错误信息明确 |
+
+抽出 `AgentRunner` ABC + 让 `ChatRunnerV2` 继承，让后续接入"按 ABC 接口"而不是"按 ChatRunnerV2 子类"。
+
+### 15.2 关键决策（4 项）
+
+1. **ABC + Generic[SpecT, ResultT]** — 不强制 spec/result 是某个具体类型；
+   子类 `class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"])` 自由绑定。
+   `TypeVar` 用 `contravariant=True`（spec 入参）和 `covariant=True`（result 出参）。
+
+2. **最小契约 3 方法**：
+   - `run_stream(spec) -> AsyncIterator[event]` — 流式
+   - `run_to_completion(spec) -> ResultT` — 一次性
+   - `wants_streaming() -> bool` — capability check（默认 `False`）
+
+3. **不 raise recoverable error** — `run_to_completion` 必须把可恢复错误转 `ResultT.error` /
+   `stop_reason` 字段，不 raise。**仅** `asyncio.CancelledError` 允许 propagate。
+
+4. **运行时 duck-type check** — `SubagentManager.__init__` 接受 `AgentRunner` 类型 hint，
+   但内部仍 `new ChatRunnerV2` 复用 collaborators，所以加 hasattr 检查：
+   缺 `_chat_service` / `_tool_executor` / `_prompt_builder` / `_config` 中任一
+   → `TypeError` + 明确列出缺哪个。**未来 Phase 16+ 加 spec-only 路径**就不依赖这些私有 attrs。
+
+### 15.3 数据结构（src/llmwikify/apps/chat/agent/agent_runner.py）
+
+```python
+SpecT = TypeVar("SpecT", bound=Any, contravariant=True)
+ResultT = TypeVar("ResultT", bound=Any, covariant=True)
+
+class AgentRunner(ABC, Generic[SpecT, ResultT]):
+    @abstractmethod
+    async def run_stream(self, spec: SpecT) -> AsyncIterator[dict[str, Any]]:
+        """Final event is ``{"type": "done", ...}``.
+        Implementations SHOULD NOT raise for recoverable errors —
+        convert to ``{"type": "error"}`` events and return.
+        """
+        raise NotImplementedError
+        yield {}
+
+    @abstractmethod
+    async def run_to_completion(self, spec: SpecT) -> ResultT:
+        """Drain run_stream and return typed result.
+        MUST NOT raise for recoverable errors; only CancelledError.
+        """
+        raise NotImplementedError
+
+    def wants_streaming(self) -> bool:
+        return False
+
+    @property
+    def name(self) -> str:
+        return type(self).__name__
+```
+
+### 15.4 改动清单
+
+| 文件 | 行 | 内容 |
+|---|---|---|
+| `src/llmwikify/apps/chat/agent/agent_runner.py` | +145 | ABC + 2 TypeVar + 3 abstract 方法 + 1 capability check + 1 name property |
+| `src/llmwikify/apps/chat/agent/runner_v2.py` | +12/-1 | `class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"])` + import |
+| `src/llmwikify/apps/chat/agent/subagent_manager.py` | +30/-3 | parent_runner 类型 hint + hasattr duck-type check + 明确错误信息 |
+| `tests/test_apps_chat_agent_runner_v2.py` | +1/-0 | allowed_local_imports 加 `from llmwikify.apps.chat.agent.agent_runner import` |
+| `tests/test_apps_chat_agent_agent_runner.py` | +374 | 19 新 cases (6 TestClass) |
+
+### 15.5 借鉴落地
+
+借 nanobot v0.2.1 `nanobot/agent/runner.py`：
+- `AgentRunner.run(spec)` 共享执行器 ✓
+- `AgentRunSpec` / `AgentRunResult` dataclass 入参出参 ✓（鸭子类型化；llmwikify 用 `ChatRunSpec` / `ChatRunResult`）
+- 19 字段 spec (initial_messages / tools / model / max_iterations / max_tool_result_chars / ...) — llmwikify `ChatRunSpec` 已有对应字段
+- 并行 batch tool execution — llmwikify 已在 ChatRunnerV2 `_act` 内
+- `progress_callback` / `checkpoint_callback` / `injection_callback` — Phase 16+ 接入 hook
+- `fail_on_tool_error=True` 提前 break — llmwikify 当前在 runner_v2 `_act` 内处理
+
+未借：
+- nanobot 的 19 字段 spec 全集 — llmwikify 的 ChatRunSpec 已经按需覆盖核心字段
+- nanobot 的 7-step round 内部逻辑 — llmwikify 5-step 状态机已足够
+- `_MAX_EMPTY_RETRIES = 2` / `_MAX_LENGTH_RECOVERIES = 3` retry 逻辑 — 留 future Phase 16+ 加
+
+### 15.6 测试覆盖（tests/test_apps_chat_agent_agent_runner.py，19 cases）
+
+| Class | cases | 内容 |
+|---|---|---|
+| `TestAgentRunnerABC` | 3 | 不能直接实例化 / 缺一方法不能实例化 / 两方法齐全可实例化 |
+| `TestAgentRunnerGeneric` | 2 | Generic[Spec, Result] binding / unbound 默认 Any |
+| `TestAgentRunnerDefaults` | 4 | wants_streaming 默认 False / 可覆盖 / name 默认 / name 可覆盖 |
+| `TestChatRunnerV2IsAgentRunner` | 4 | issubclass / isinstance / 默认能力 / name |
+| `TestFakeAgentRunnerContract` | 4 | FakeRunner 完整实现 + SubagentManager duck-type 接受 stub / 拒绝缺 attrs runner / 错误信息列缺哪个 |
+| `TestAgentRunnerPolymorphism` | 2 | 多态分发 / ChatRunnerV2 作为 AgentRunner 传递 |
+
+### 15.7 累计数据（Phase 6+7+8+9+10+11+12+13+14+15）
+
+| 维度 | 数量 |
+|---|---|
+| 新文件 | 1（agent_runner.py） |
+| 新增代码 | ~565 LOC（含测试） |
+| 新测试 | 19 cases |
+| 修改既有代码 | 3 文件 +43/-4 LOC |
+| ruff 新增错误 | 0（auto-fix 5 个 I001/W292） |
+| 0 regression | 681/681 runner + subagent + adapter + ABC tests pass |
+
+### 15.8 验收
+
+- [x] `AgentRunner` ABC + `SpecT` / `ResultT` TypeVar
+- [x] 3 个抽象方法 `run_stream` / `run_to_completion` + `wants_streaming` capability
+- [x] `name` property 默认 `type(self).__name__`
+- [x] "不 raise recoverable error" 约定（文档化）
+- [x] `ChatRunnerV2` 继承 `AgentRunner["ChatRunSpec", "ChatRunResult"]`，公开契约不变
+- [x] `SubagentManager.parent_runner` 类型 hint `ChatRunnerV2 → AgentRunner`
+- [x] `SubagentManager` duck-type check + 明确错误信息列出缺哪个 attr
+- [x] ruff clean
+- [x] 19/19 AgentRunner tests pass
+- [x] 681/681 runner + subagent + adapter + ABC tests pass（无回归）
+
+### 15.9 不在本次范围（Phase 15-后续）
+
+- **SubagentManager 真接基类（不依赖 collaborators）** — Phase 16：spec 自带 config / tool registry
+- **WorkflowActor / CronSkill 复用 AgentRunner** — Phase 16+
+- **Provider / ToolRegistry 抽进 ABC** — Phase 17+
+- **`fail_on_tool_error` retry 策略** — Phase 16+ 借鉴 nanobot
+- **`progress_callback` / `checkpoint_callback`** — Phase 17+
+- **Multi-runner dispatch 抽象**（一个 chat 内部用多个 runner） — Phase 18+
