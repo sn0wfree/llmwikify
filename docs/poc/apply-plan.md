@@ -1723,3 +1723,171 @@ class AgentRunner(ABC, Generic[SpecT, ResultT]):
 - **`fail_on_tool_error` retry 策略** — Phase 16+ 借鉴 nanobot
 - **`progress_callback` / `checkpoint_callback`** — Phase 17+
 - **Multi-runner dispatch 抽象**（一个 chat 内部用多个 runner） — Phase 18+
+
+---
+
+## 16. Phase 16 — LLMProvider ABC + ProviderConfig + RetryMode + ThinkingStyle（借鉴 nanobot v0.2.1，2026-06-21）
+
+> 借鉴 nanobot v0.2.1 `providers/base.py`（~843 LOC）设计：
+> 在现有 `LLMProvider` Protocol 之外新增 `LLMProviderABC` + `ProviderConfig` dataclass +
+> `RetryMode` enum + `ThinkingStyle` enum，让 future LLM provider 能用统一抽象层接入。
+> 旧 Provider（`MiniMaxProvider` / `XiaomiProvider`）仍走 Protocol + `BaseLLMProvider`，
+> 本期不强迁；ABC 留给 future provider。
+
+### 16.1 动机
+
+旧 `LLMProvider` Protocol 只覆盖 5 个方法：
+- `from_config(config: dict) -> StreamableLLMClient`
+- `validate_config(config) -> list[str]`
+- `default_model() / supported_models() / default_base_url() / provider_name()`
+
+实际生产中需要但**没法**建模的 3 个概念：
+
+1. **Retry 策略** — 不同 provider / 不同 model / 不同场景需要不同重试行为：
+   transient（默认）/ persistent（也重试 billing）/ off（不重试）/ aggressive（重试所有）
+2. **Thinking style** — 10+ 推理风格（minimal/detailed/step_by_step/exhaustive/safe_first...），
+   决定 prompt 注入 + extra_body 字段
+3. **Snapshot / hot-swap** — runtime 切换 model / api_key 不重建 HTTP pool
+
+借鉴 nanobot `providers/base.py` 设计抽出统一抽象层。
+
+### 16.2 关键决策（4 项）
+
+1. **Protocol + ABC 并存** — 旧 `LLMProvider` Protocol 保留给 `MiniMaxProvider` /
+   `XiaomiProvider`（不动）；新 `LLMProviderABC` 给 future provider 用。
+   两套 surface 互不干扰，由 `__init__.py` 各自导出。
+
+2. **ProviderConfig dataclass + dict 双兼容** — `from_config(config)` 同时接受
+   `dict`（legacy）和 `ProviderConfig`（typed 推荐）；dict 走 `from_dict()` 自动转换。
+   现有 raw config 文件（`~/.llmwikify/llmwikify.json`）不需迁移。
+
+3. **`apply_snapshot()` 默认 noop**（不 abstract）— 让 Protocol-based provider
+   可以"轻量级"接入 ABC（不需要写 snapshot handler）；future 真有 mutable state 的
+   provider 才 override。注释解释 + `# noqa: B027` 抑制 ruff 警告。
+
+4. **ThinkingStyle 11 个**（≥ 10 要求）— 含 nanobot 全套 + llmwikify 特定的
+   `tool_first`（工具调用优先）/ `safe_first`（保守拒绝）。`extra_body()` 方法
+   返回 vendor-specific 字段；prompt-level 风格由 `thinking_style_prompt()` override。
+
+### 16.3 数据结构（src/llmwikify/apps/chat/providers/abc.py）
+
+```python
+class RetryMode(str, Enum):
+    TRANSIENT = "transient"      # 默认：429/5xx 重试
+    PERSISTENT = "persistent"    # + billing 也重试（dev/容错）
+    OFF = "off"                  # 不重试
+    AGGRESSIVE = "aggressive"    # 重试所有（含 4xx）
+
+class ThinkingStyle(str, Enum):
+    MINIMAL / DETAILED / STEP_BY_STEP / BUDGET_AWARE / CODE_FIRST /
+    COMPACT / EXHAUSTIVE / ANALYTICAL / SUMMARY_FIRST / TOOL_FIRST /
+    SAFE_FIRST
+    def extra_body(self) -> dict: ...   # 返回 vendor-specific 字段
+    @classmethod
+    def default(cls) -> "ThinkingStyle": ...   # = MINIMAL
+
+@dataclass
+class ProviderConfig:
+    provider: str = ""
+    model: str = ""
+    api_key: str = ""           # 允许 "env:VAR_NAME"
+    base_url: str = ""
+    enabled: bool = False
+    retry_mode: RetryMode = RetryMode.TRANSIENT
+    thinking_style: ThinkingStyle = ThinkingStyle.MINIMAL
+    max_tokens: int | None = None
+    temperature: float | None = None
+    extra: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data) -> "ProviderConfig": ...   # 接受 None / 非 dict / 错误 enum 都容错
+    def to_dict(self) -> dict: ...
+    def is_configured(self) -> bool: ...
+
+class LLMProviderABC(ABC):
+    # 5 抽象方法（与 Protocol 同）
+    @abstractmethod
+    def from_config(self, config: dict | ProviderConfig) -> StreamableLLMClient: ...
+    @abstractmethod
+    def provider_name(self) -> str: ...
+    @abstractmethod
+    def default_model(self) -> str: ...
+    @abstractmethod
+    def default_base_url(self) -> str: ...
+    @abstractmethod
+    def supported_models(self) -> list[str]: ...
+
+    # capability check + hot-swap + thinking style
+    def supported_retry_modes(self) -> list[RetryMode]: return [TRANSIENT]
+    def supported_thinking_styles(self) -> list[ThinkingStyle]: return list(ThinkingStyle)
+    def apply_snapshot(self, snapshot): pass    # default noop (# noqa: B027)
+    def thinking_style_prompt(self, style) -> str: return ""    # default empty
+```
+
+### 16.4 改动清单
+
+| 文件 | 行 | 内容 |
+|---|---|---|
+| `src/llmwikify/apps/chat/providers/abc.py` | +370 | RetryMode + ThinkingStyle + ProviderConfig + LLMProviderABC |
+| `src/llmwikify/apps/chat/providers/__init__.py` | +14/-1 | 导出 4 个新符号 |
+| `src/llmwikify/apps/chat/providers/base.py` | +2/-2 | ruff auto-fix (forward ref + trailing newline) |
+| `tests/test_apps_chat_providers_abc.py` | +664 | 53 cases (7 TestClass) |
+
+### 16.5 借鉴落地
+
+借 nanobot v0.2.1 `providers/base.py`：
+- `LLMProvider` ABC + `from_config()` factory ✓
+- `apply_snapshot()` runtime hot-swap ✓（default noop 而非 abstract）
+- 4 retry 模式（`provider_retry_mode` env）✓
+- `thinking_style` 10+ 风格 ✓（11 个 vendor）
+- `build_thinking_extra_body()` → `ThinkingStyle.extra_body()` ✓
+
+未借：
+- nanobot 的 24 个具体 provider class（Custom/OpenAI/Anthropic/...） — llmwikify 只需 2 个 (MiniMax/Xiaomi)
+- nanobot 的 `apply_provider_spec` 类级方法 — Phase 17+ 才需要
+- nanobot 的 `tool_concurrency_safe` / `prepare_call` — 留给 future provider
+- nanobot 的 `RoleAlternation` / `TokenEstimator` — llmwikify `foundation/llm/` 已有等价模块
+
+### 16.6 测试覆盖（tests/test_apps_chat_providers_abc.py，53 cases）
+
+| Class | cases | 内容 |
+|---|---|---|
+| `TestRetryMode` | 4 | values / count / JSON 安全 / str 构造 |
+| `TestThinkingStyle` | 7 | count ≥ 10 / default / values / extra_body keys (11 parametrize) / 不变性 / DETAILED/COMPACT 具体值 |
+| `TestProviderConfig` | 14 | defaults / from_dict 平/包/enum/numeric/bad-enum/extra / to_dict round-trip / drop empty / is_configured / is_configured env: / JSON 安全 |
+| `TestLLMProviderABC` | 8 | 不能直接实例化 / 缺方法不能实例化 / 全方法可实例化 / apply_snapshot noop / 默认能力 / thinking_style_prompt 空 / 可覆盖 |
+| `TestABCFromConfigPolymorphism` | 2 | subclass 接受 dict / ProviderConfig |
+| `TestBackwardCompat` | 7 | MiniMax/Xiaomi 仍可用 / Protocol 不变 / ABC 与 Protocol 并存 / BaseLLMProvider helper 仍可用 |
+| `TestEndToEndABCProvider` | 1 | FullProvider 端到端：init / from_config dict / apply_snapshot 不重建 client / thinking_style_prompt 覆盖 |
+
+### 16.7 累计数据（Phase 6+7+8+9+10+11+12+13+14+15+16）
+
+| 维度 | 数量 |
+|---|---|
+| 新文件 | 2（abc.py + test_apps_chat_providers_abc.py） |
+| 新增代码 | ~1050 LOC（含测试） |
+| 新测试 | 53 cases |
+| 修改既有代码 | 2 文件 +16/-3 LOC |
+| ruff 新增错误 | 0（auto-fix 9 个 I001/W292/F401） |
+| 0 regression | 183/183 provider + foundation tests pass |
+
+### 16.8 验收
+
+- [x] `RetryMode` enum 4 mode + str 语义 + JSON 安全
+- [x] `ThinkingStyle` enum 11 风格 + `extra_body()` 映射 + `default()`
+- [x] `ProviderConfig` dataclass 9 字段 + `from_dict()` 容错 + `to_dict()` round-trip + `is_configured()`
+- [x] `LLMProviderABC` 5 抽象方法 + `apply_snapshot()` noop default + `supported_retry_modes` / `supported_thinking_styles` / `thinking_style_prompt` 默认
+- [x] `Protocol` (`LLMProvider`) 与 `ABC` (`LLMProviderABC`) 并存
+- [x] 旧 Provider (`MiniMaxProvider` / `XiaomiProvider`) 零回归
+- [x] ruff clean
+- [x] 53/53 ABC + ProviderConfig tests pass
+- [x] 183/183 provider + foundation tests pass（无回归）
+
+### 16.9 不在本次范围（Phase 16-后续）
+
+- **MiniMax/Xiaomi 真接 ABC** — Phase 17+：让 from_config 接受 `ProviderConfig`，加 apply_snapshot override
+- **`create_llm()` 接 `ProviderConfig`** — Phase 17+：现在仍只接 dict
+- **`/api/health` 加 `provider_config` dump** — Phase 17+
+- **Provider snapshot 持久化 + config reload** — Phase 18+
+- **24 个 nanobot provider 集成** — 按需 Phase（先做需求大的如 Anthropic / OpenAI native）
+- **tool_concurrency_safe / prepare_call** — future provider 需要时再加
