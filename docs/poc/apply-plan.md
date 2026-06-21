@@ -1246,3 +1246,172 @@ re.sub(rf"{RUNTIME_CONTEXT_TAG}.*?{RUNTIME_CONTEXT_END}", "", prompt, flags=re.D
   Consolidator / memory writeback 还没用 tag 剥离 metadata。后续可加。
 - **运行时 `system_prompt` 字段语义** — 当前 user prefs 的 `system_prompt` 是 user 写的真指令
   ；未来若 user 写"忽略 goal_state"，需要更细的字段语义（如 `_instruction_prefs` vs `_data_prefs`）
+
+---
+
+## 13. Phase 13 — MessageBus 进程内 pub/sub（借鉴 nanobot v0.2.1，2026-06-20）
+
+> 借鉴 nanobot v0.2.1 `nanobot/bus/queue.py`（103 LOC）+ `bus/events.py`（53 LOC）：
+> 把 ChatOrchestrator ↔ ChatRunnerV2 ↔ DreamScheduler ↔ AutoCompact 之间的紧耦合
+> 解耦为"通过 MessageBus 间接通信"。本期仅铺路（不强制接），为 Phase 14 WebSocket 双向流
+> 和未来多渠道/cron 调度提前铺路。
+
+### 13.1 动机
+
+当前 chat/agent 模块间耦合图：
+
+```
+ChatOrchestrator.chat()
+  → ChatBridgeBackend._llm_stream_with_retry()  (直接调用)
+  → ChatRunnerV2.run_stream()  (直接调用)
+    → ChatEvent.{message_delta,thinking,...}  → yield → SSE  (直接 yield)
+DreamScheduler  → AgentService.start_dream_scheduler()  (直接调用)
+AutoCompact     → AgentService.start_auto_compact()     (直接调用)
+SubagentManager → ChatRunnerV2.run_to_completion()       (直接调用)
+```
+
+未来要加：
+- **WebSocket 通道** — 同一个 ChatRunnerV2 要同时支持 SSE 和 WS fan-out
+- **多渠道** — Telegram / Discord / CLI 都要消费 runner 输出
+- **Cron 调度** — cron 触发 dream / auto_compact 时要给用户推结果
+
+借鉴 nanobot `MessageBus` 设计：在 runner 和 channel 之间放一个进程内 queue，
+所有 inter-module 通信走 bus，channel 各自从 bus 拉取并过滤关心的 metadata。
+
+### 13.2 关键决策（4 项）
+
+1. **同进程 asyncio.Queue** — Phase 13 仅同进程。多进程 / Redis 由 Phase 15+ 处理。
+   默认 outbound queue size 1024，超出视为 channel backpressure → drop + warning + stats。
+
+2. **payload = ChatEvent factory 输出** — `OutboundMessage.payload` 就是现有
+   `ChatEvent.message_delta({...})` 返回的 dict。这样现有 SSE 客户端契约完全不变，
+   Phase 14 加 WS 时只需新增一个 channel adapter 拉 bus，不必改 ChatOrchestrator。
+
+3. **显式 metadata 而不是把控制信号塞进 payload** — `OUTBOUND_META_STREAM_DELTA`
+   / `OUTBOUND_META_STREAM_END` / `OUTBOUND_META_STREAM_ID` 等用 `_*` 前缀命名空间
+   与 user 字段隔离。channel 可以按 `is_stream_delta` / `is_stream_end` 过滤
+   而不污染 payload。
+
+4. **零侵入缺省行为** — `get_default_bus()` 永远返回一个可用的 bus，
+   即使没有任何调用方 publish，`consume_*` 也只是 timeout 返回 None。
+   现有 SSE 路径完全无感。
+
+### 13.3 数据结构（src/llmwikify/apps/chat/bus/events.py）
+
+```python
+@dataclass
+class InboundMessage:        # channel → runner
+    channel: str = "http"
+    sender_id: str = ""
+    content: str = ""
+    session_key: str = ""
+    metadata: dict = field(default_factory=dict)
+    timestamp: float = time.time()
+    message_id: str = uuid.uuid4().hex[:12]
+
+@dataclass
+class OutboundMessage:       # runner → channel
+    channel: str = ""        # "" = 任何 channel 可消费
+    target_id: str = ""      # SSE conn id / WS chat_id
+    session_key: str = ""
+    payload: dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
+    timestamp: float = time.time()
+    @property
+    def is_stream_delta(self) -> bool: ...
+    @property
+    def is_stream_end(self) -> bool: ...
+```
+
+**7 个显式 metadata 常量**：
+- `INBOUND_META_RUNTIME_CONTROL` / `INBOUND_META_RESUMED` (从 channel → runner)
+- `OUTBOUND_META_STREAM_DELTA` / `OUTBOUND_META_STREAM_END` /
+  `OUTBOUND_META_STREAM_ID` / `OUTBOUND_META_PROGRESS` /
+  `OUTBOUND_META_RETRY_WAIT` / `OUTBOUND_META_WANTS_STREAM` (从 runner → channel)
+
+### 13.4 接口（src/llmwikify/apps/chat/bus/queue.py）
+
+```python
+class MessageBus:
+    def __init__(self, *, outbound_maxsize=1024): ...
+    def publish_inbound(self, msg: InboundMessage) -> None: ...
+    async def consume_inbound(self, timeout=None) -> InboundMessage | None: ...
+    def publish_outbound(self, msg: OutboundMessage) -> bool: ...
+    async def consume_outbound(self, timeout=None) -> OutboundMessage | None: ...
+    def stats(self) -> dict: ...   # /api/health bus metrics
+    def reset(self) -> None: ...  # tests only
+
+def get_default_bus() -> MessageBus: ...        # lazy singleton
+def reset_default_bus() -> MessageBus: ...      # tests
+def set_default_bus(bus: MessageBus | None): ...  # production injection
+```
+
+### 13.5 改动清单
+
+| 文件 | 行 | 内容 |
+|---|---|---|
+| `src/llmwikify/apps/chat/bus/__init__.py` | 0 | package 标记 |
+| `src/llmwikify/apps/chat/bus/events.py` | +215 | InboundMessage / OutboundMessage + 7 metadata constants |
+| `src/llmwikify/apps/chat/bus/queue.py` | +243 | MessageBus + 4 singleton helpers |
+| `tests/test_apps_chat_bus.py` | +343 | 29 cases (6 TestClass) |
+
+**未改文件**：ChatOrchestrator / ChatRunnerV2 / DreamScheduler / AutoCompact / SubagentManager
+（Phase 13 仅铺路，不强制接，避免范围爆炸）。
+
+### 13.6 借鉴落地
+
+借 nanobot `bus/queue.py`：
+- 双 asyncio.Queue（inbound + outbound）✓
+- `publish_*` 非阻塞 ✓
+- `consume_*(timeout=None)` 默认 wait forever；传 timeout → `asyncio.wait_for` → None ✓
+- 进程级 default singleton (`get_default_bus()`) ✓
+- `reset_default_bus()` for tests ✓
+
+未借：
+- nanobot 的 `OUTBOUND_META_AGENT_UI` / `INBOUND_META_RUNTIME_CONTROL` 我们重命名为
+  `OUTBOUND_META_STREAM_DELTA` / `INBOUND_META_RUNTIME_CONTROL`（llmwikify-specific 语义）。
+- nanobot 的 `_SUBS` / `_fan_out_targets` 多订阅模型未借 — Phase 14 WebSocket channel 时再加。
+
+### 13.7 测试覆盖（tests/test_apps_chat_bus.py，29 cases）
+
+| Class | cases | 内容 |
+|---|---|---|
+| `TestInboundMessage` | 4 | defaults + to_dict round-trip + 缺字段 fallback + metadata 隔离 |
+| `TestOutboundMessage` | 5 | defaults + to_dict round-trip + is_stream_delta/end properties + stream_id + ALL_OUTBOUND_META 常量 |
+| `TestMessageBusLifecycle` | 3 | empty queues + 自定义 maxsize + reset 计数器和队列 |
+| `TestInboundPath` | 5 | publish/consume + timeout → None + FIFO + 无界 + stats 计数器更新 |
+| `TestOutboundPath` | 4 | publish/consume + timeout → None + backpressure drop + drain 后恢复 |
+| `TestDefaultBus` | 4 | lazy singleton + reset 替换 + set 替换 + None 清空 |
+| `TestSSEEventIntegration` | 3 | ChatEvent.message_delta round-trip + stream metadata 标记 + stream_id 多段区分 |
+
+### 13.8 累计数据（Phase 6+7+8+9+10+11+12+13）
+
+| 维度 | 数量 |
+|---|---|
+| 新文件 | 4（events.py / queue.py / __init__.py / test_apps_chat_bus.py） |
+| 新增代码 | ~460 LOC |
+| 新测试 | 29 cases |
+| 修改既有测试 | 0 |
+| ruff 新增错误 | 0（已 auto-fix 7 个 I001/W292/F841） |
+| 0 regression | 33/33 prompt + 29/29 bus = 62/62 |
+
+### 13.9 验收
+
+- [x] `InboundMessage` / `OutboundMessage` dataclass + to_dict/from_dict
+- [x] `MessageBus` 4 方法对称（publish/consume × inbound/outbound）
+- [x] asyncio.wait_for + timeout → None
+- [x] outbound backpressure drop + stats 计数器
+- [x] 7 metadata 常量 + `ALL_OUTBOUND_META` 集合
+- [x] `is_stream_delta` / `is_stream_end` property
+- [x] thread-safe default singleton + reset/set
+- [x] ruff clean
+- [x] 29/29 bus tests pass
+
+### 13.10 不在本次范围（Phase 13-后续）
+
+- **WebSocket channel** — Phase 14（候选 #3）：从 bus consume_outbound → WebSocket fan-out
+- **ChatOrchestrator 接入 bus** — 后续 Phase 14-15：把现有 SSE `yield event` 改为 `publish_outbound(event)` + adapter consume → SSE
+- **DreamScheduler / AutoCompact emit bus events** — 后续：让 scheduler 触发时通过 bus 给用户推结果
+- **SubagentManager 注入** — 后续：spawn_subagent 完成后通过 bus 注入到 parent session
+- **多进程 / Redis bus** — Phase 15+
+- **Channel registry** — 后续 Phase：仿 nanobot channels/manager.py 设计 channel registry
