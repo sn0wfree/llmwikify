@@ -205,9 +205,24 @@ class ChatSessionRepository(ChatDBBase):
 
         Pass an empty dict to clear it (stored as ``NULL`` for cheaper
         reads on the common "no metadata" case).
+
+        Implementation note (Phase 17 real-test fix, 2026-06-21):
+        callers like ``GoalSkill`` invoke ``update_session_metadata``
+        before any explicit session has been created (e.g. the LLM
+        starts a long-task on a session_id it just minted, or a
+        future caller writes metadata before the user's first chat
+        message). The previous UPDATE-only implementation silently
+        dropped those writes. We now use INSERT-OR-IGNORE-then-UPDATE
+        so metadata writes never fail on a missing row.
         """
         blob = json.dumps(metadata) if metadata else None
         with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO chat_sessions
+                   (id, wiki_id, jwt_token, title, metadata, created_at, updated_at)
+                   VALUES (?, '', '', NULL, ?, datetime('now'), datetime('now'))""",
+                (session_id, blob),
+            )
             conn.execute(
                 """UPDATE chat_sessions
                    SET metadata = ?, updated_at = datetime('now')
