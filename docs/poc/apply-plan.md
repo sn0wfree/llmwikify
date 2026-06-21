@@ -1891,3 +1891,110 @@ class LLMProviderABC(ABC):
 - **Provider snapshot 持久化 + config reload** — Phase 18+
 - **24 个 nanobot provider 集成** — 按需 Phase（先做需求大的如 Anthropic / OpenAI native）
 - **tool_concurrency_safe / prepare_call** — future provider 需要时再加
+
+---
+
+## 17. Phase 17 — Real-server integration tests + DB upsert fix (2026-06-21)
+
+> Phase 12-16 累计 11 commit 后未做跨模块真实集成测试。本期写 4 个 TestClass
+> 跑真实 `WikiServer` + `TestClient` + `mock_llm` fixture，覆盖启停 / SSE /
+> WebSocket / PromptBuilder 全链路。同时暴露并修复一个 pre-existing bug：
+> `set_session_metadata` 在 session 不存在时静默失败。
+
+### 17.1 动机
+
+Phase 12-16 累计 11 个 commit（Runtime Context tag / MessageBus / WebSocket /
+AgentRunner ABC / LLMProvider ABC），但每个 commit 自带 unit tests + 既有
+TestClient smoke (`test_chat_e2e.py`)。**没有**一个测试同时跑 WikiServer
+lifespan + SSE 流 + WebSocket 协议 + 真实 PromptBuilder 渲染。
+
+"单元全过 + 既有 smoke 过" ≠ "Phase 12-16 集成无 bug"。本期写 4 个
+TestClass（19 cases）做真实集成验证。
+
+### 17.2 测试覆盖（tests/test_integration_phase12_to_16_real.py，19 cases）
+
+| Class | cases | 内容 |
+|---|---|---|
+| `TestT1WikiServerLifecycle` | 3 | `/api/health` features 完整 / lifespan 启停无 error / Phase 14 新路由注册 |
+| `TestT5PromptBuilderRuntimeContext` | 2 | 真实 PromptBuilder 输出含 `[Runtime Context]…[/Runtime Context]` 包围 goal_state / 正则可剥离 |
+| `TestT2AgentChatEndToEnd` | 2 | mock-LLM + 真实 `/api/agent/chat` SSE：`session_created → message_delta → done` / session 持久化 |
+| `TestT3WebSocketRealHandshake` | 5 | 无 auth 连接 + `?token=` 校验（1008）+ new_chat echo + disconnect cleanup + multi-conn fan-out |
+| `TestT6StressAndCrossCutting` | 7 | `/api/skills` / ws manager reset 隔离 / multi-session / bus stats / ProviderConfig round-trip / AgentRunner ABC / 真实 live PromptBuilder |
+
+### 17.3 暴露并修复的 pre-existing bug
+
+**症状**：`set_session_metadata(session_id, metadata)` 在 `session_id` 不存在于
+`chat_sessions` 表时静默失败（`UPDATE ... WHERE id = ?` 影响 0 行）。
+
+**触发场景**：
+- Phase 8 `GoalSkill.start_long_task` 接收 LLM tool call 后调
+  `update_session_metadata(sid, goal_state=blob)`，但不先 `create_chat_session`
+  （LLM 可能在刚 mint 出来的 session_id 上立刻设 goal）
+- 用户视角：goal 看起来设置了，但下次 chat PromptBuilder 读不到 →
+  LLM 不知道有 active goal → 一致性破坏
+
+**根因**：`set_session_metadata` 仅做 `UPDATE`，没做 upsert。
+
+**修复**（src/llmwikify/apps/chat/db/chat_session_repo.py）：
+```diff
+- conn.execute(
+-     """UPDATE chat_sessions
+-        SET metadata = ?, updated_at = datetime('now')
+-        WHERE id = ?""",
+-     (blob, session_id),
+- )
++ conn.execute(
++     """INSERT OR IGNORE INTO chat_sessions
++        (id, wiki_id, jwt_token, title, metadata, created_at, updated_at)
++        VALUES (?, '', '', NULL, ?, datetime('now'), datetime('now'))""",
++     (session_id, blob),
++ )
++ conn.execute(
++     """UPDATE chat_sessions
++        SET metadata = ?, updated_at = datetime('now')
++        WHERE id = ?""",
++     (blob, session_id),
++ )
+```
+
+两步走：先 `INSERT OR IGNORE`（存在则 no-op，不存在则创建空 row），再 UPDATE。
+新 row 默认 `wiki_id=''/jwt_token=''/title=NULL`，等后续调用 `create_chat_session`
+时会覆盖。
+
+**为什么 Phase 8 时没发现**：
+- 既有 GoalSkill 测试用 `create_chat_session` 先建 session 再设 goal
+- `_get_goal_state` 单测用 `chat_db` mock 注入 metadata，不走真实 DB
+
+**为什么 Phase 17 真实集成测试暴露**：
+- 新 test `test_live_prompt_builder_has_runtime_context_tag` 调真实
+  `WikiServer._agent_service.chat_service.prompt_builder.build_with_context(ctx)`
+  + `orchestrator.db.update_session_metadata(sid, ...)` — sid 不存在 →
+  `set_session_metadata` no-op → `_get_goal_state` 读不到 → 断言失败
+
+### 17.4 累计数据
+
+| 维度 | 数量 |
+|---|---|
+| 新测试 | 19 cases（4 TestClass） |
+| 修改既有代码 | 1 文件（chat_session_repo.py）+15 LOC |
+| Wide regression | 1176/1176 pass（包含新 19 + 既有 1157） |
+| ruff 新增错误 | 0（auto-fix + noqa） |
+
+### 17.5 验收
+
+- [x] 4 TestClass 19 cases 真实集成测试
+- [x] 暴露并修复 `set_session_metadata` 静默失败 bug
+- [x] ruff clean
+- [x] 1176/1176 wide regression pass（无回归）
+- [x] 修复同时修了 Phase 8 GoalSkill 的隐式契约 — 现在 LLM 在没显式
+  `create_chat_session` 的 session_id 上设 goal 也能成功
+
+### 17.6 不在本次范围
+
+- **GoalSkill 主动 create session if missing** — 现状已通过 upsert 修复，
+  GoalSkill 仍可保持原契约（不主动创建）。未来若要做 session 列表展示，
+  可加 GoalSkill precheck。
+- **其他 chat_session_repo 方法的 upsert 审计** — 当前只有 metadata 受影响，
+  其他 update_* 路径都先 read session 校验。
+- **真实 LLM 集成测试** — 仍用 mock_llm fixture；真实 LLM 测试需要 API key
+  + 网络，留给 CI 配置。
