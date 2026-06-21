@@ -41,6 +41,7 @@ def register_routes(
     """
     _register_wiki_routes(app, registry, provider=provider)
     _register_agent_routes(app, registry, provider=provider)
+    _register_websocket_routes(app, api_key=api_key or "")  # noqa: F821
 
 
 def _register_wiki_routes(
@@ -492,13 +493,6 @@ def _register_wiki_routes(
     # (version / author / triggers / tags) so the webui and operators
     # can introspect what's loaded without grepping logs.
     _register_skills_routes(app)
-
-    # --- WebSocket agent channel (Phase 14) ---
-    # Real-time bidirectional channel (subscribed model + token auth).
-    # Phase 14 ships the protocol + fan-out; ChatOrchestrator wiring
-    # (Phase 15+) will replace the in-handler echo with the real
-    # chat stream from MessageBus.
-    _register_websocket_routes(app, api_key=api_key or "")  # noqa: F821
 
 
 def _load_research_config() -> dict[str, Any] | None:
