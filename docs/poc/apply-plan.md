@@ -1415,3 +1415,168 @@ def set_default_bus(bus: MessageBus | None): ...  # production injection
 - **SubagentManager 注入** — 后续：spawn_subagent 完成后通过 bus 注入到 parent session
 - **多进程 / Redis bus** — Phase 15+
 - **Channel registry** — 后续 Phase：仿 nanobot channels/manager.py 设计 channel registry
+
+---
+
+## 14. Phase 14 — WebSocket 双向流通道（借鉴 nanobot v0.2.1，2026-06-20）
+
+> 借鉴 nanobot v0.2.1 `nanobot/channels/websocket.py`（1907 LOC）核心 50%：
+> token 协议 + 订阅模型 + fan-out。本期只打通"通道 + 协议 + 订阅 + fan-out"，
+> **不接** ChatOrchestrator / MessageBus（Phase 15+ 接）。Webui 客户端是 Phase 15+。
+
+### 14.1 动机
+
+现有 SSE 单向流限制：
+- **不能反向推送** — cron 触发 / Subagent 完成 / dream 提案 / auto_compact 完成，
+  服务端没法主动通知客户端，只能等下一次用户发消息才看到结果
+- **不能 cancel** — 客户端发 /stop 后 SSE 才能停；新连接要从头看历史
+- **多端不能联动** — 同一 chat_id 多个 SSE 互不感知（web + cli 同时跑会重复计算）
+
+WebSocket 双向流是产品差异化能力。借鉴 nanobot 1907 LOC 的核心 50%（token + 订阅 + fan-out），
+落地一个最小可用版本。
+
+### 14.2 关键决策（5 项）
+
+1. **fastapi native** — 用 `fastapi.WebSocket`（0.135.1 已支持），不引入新依赖。
+   `websockets` 16.0 已装（fastapi 依赖）。
+
+2. **per-connection out_queue + 独立 writer task** — 拆"manage fan-out publish"与
+   "actual ws.send_json"。`send_to_chat` 用 `put_nowait` 永不阻塞 manager 路径；
+   writer task 负责 `await ws.send_json`，慢客户端慢就慢，不会阻塞其他连接。
+
+3. **defaultdict + 显式 del** — `_subs: defaultdict(set)` + `_conn_chats: defaultdict(set)`
+   提供 O(1) 增删。但 defaultdict 删除空 key 不会自动清理，所以 `detach` / `detach_all`
+   必须显式 `del self._conn_chats[conn]`（否则 `total_connections()` 过估）。
+
+4. **dataclass(eq=False)** — `_Connection` 含 `out_queue` (asyncio.Queue) 这种 mutable field，
+   默认 dataclass 会生成 `__hash__ = None`（unhashable）。`eq=False` 让它按 `id(self)` hash，
+   才能作为 dict key / set member。
+
+5. **token auth 复用 api_key** — `/api/ws/agent?token=<api_key>` 与 WikiServer `AuthMiddleware`
+   共用同一 `api_key`。空字符串 = 跳过 auth（dev 模式）。Phase 15+ 加 HMAC + TTL。
+
+### 14.3 数据结构（src/llmwikify/apps/chat/channels/websocket.py）
+
+```python
+@dataclass(eq=False)
+class _Connection:
+    ws: WebSocket
+    peer: str              # "host:port"
+    subscribed_chats: set[str] = field(default_factory=set)
+    out_queue: asyncio.Queue[dict] = field(default_factory=asyncio.Queue)
+    closed: bool = False
+    connected_at: float = time.time()
+
+class WebSocketManager:
+    def __init__(self):
+        self._subs: dict[str, set[_Connection]] = defaultdict(set)
+        self._conn_chats: dict[_Connection, set[str]] = defaultdict(set)
+
+    def attach(self, conn, chat_id): ...    # subscribe
+    def detach(self, conn, chat_id): ...    # unsubscribe
+    def detach_all(self, conn): ...          # on disconnect
+    async def send_to_chat(self, chat_id, msg) -> int: ...   # fan-out
+    def stats(self) -> dict: ...             # /api/health bus metrics
+```
+
+### 14.4 协议
+
+**Client → server**（4 种）：
+| type | 必填字段 | 行为 |
+|---|---|---|
+| `new_chat` | 可选 `chat_id` | 创建 chat_id，自动 attach，返回 `chat_created` |
+| `attach` | `chat_id` | 订阅已有 chat_id，返回 `attached` + `subscribed_count` |
+| `message` | `chat_id` + `content` | 当前 echo（Phase 14）；Phase 15+ 走 ChatOrchestrator |
+| `ping` | — | 返回 `pong` 带 ts |
+
+**Server → client**（7 种）：
+| type | 字段 |
+|---|---|
+| `ready` | peer, server_time（连接建立即推） |
+| `chat_created` | chat_id |
+| `attached` | chat_id, subscribed_count |
+| `delta` | chat_id, content, ts |
+| `stream_end` | chat_id, ts |
+| `pong` | ts |
+| `error` | error |
+
+**HTTP endpoints**：
+| Method | Path | 用途 |
+|---|---|---|
+| WS | `/api/ws/agent?token=<api_key>` | 主 agent 通道 |
+| POST | `/api/ws/token?token=<api_key>` | 临时 token（Phase 14 shim：echo 入参） |
+
+### 14.5 改动清单
+
+| 文件 | 行 | 内容 |
+|---|---|---|
+| `src/llmwikify/apps/chat/channels/__init__.py` | 0 | package 标记 |
+| `src/llmwikify/apps/chat/channels/websocket.py` | +490 | 完整 WS 模块 |
+| `src/llmwikify/interfaces/server/http/routes.py` | +16 | import + register_routes 加 api_key 形参 + 调用 _register_websocket_routes |
+| `src/llmwikify/interfaces/server/core.py` | +10/-3 | WikiServer 传 api_key 给 register_routes |
+| `tests/test_apps_chat_channels_websocket.py` | +377 | 30 cases |
+
+### 14.6 借鉴落地
+
+借 nanobot `channels/websocket.py`（1907 LOC）：
+- token 协议（query `?token=`）✓
+- 订阅模型 `_subs + _conn_chats` 双索引 ✓
+- 客户端 envelope（new_chat / attach / message / ping）✓
+- 服务端 envelope（ready / chat_created / attached / delta / stream_end / pong / error）✓
+- fan-out + 反向索引 cleanup ✓
+- `token_issue` endpoint 占位（Phase 14 shim）✓
+
+未借（避免范围爆炸）：
+- nanobot 的 15 个 channels（Discord / Telegram / Slack / WhatsApp …）— llmwikify 主 HTTP/WebUI
+- nanobot 的 WebSocketConfig pydantic 模型（host/port/path/ssl_cert/...）— Phase 15+ 再加
+- nanobot 的 `_MAX_STREAM_SEGMENTS` 多段并发 — 单 process 当前不需要
+- 临时 token 的 HMAC 签名 + TTL + 单次使用表 — Phase 15+ 加
+- WebUI 客户端代码 — webui 是另一个 repo
+
+### 14.7 测试覆盖（tests/test_apps_chat_channels_websocket.py，30 cases）
+
+| Class | cases | 内容 |
+|---|---|---|
+| `TestWebSocketManager` | 9 | empty / attach / detach idempotent / detach_all / send_to_chat no-subscribers / fan-out / skip closed / backpressure |
+| `TestSingletonHelpers` | 3 | lazy singleton + reset 替换 + set 替换 |
+| `TestWebSocketEndpoint` | 15 | invalid token → 1008 / valid token / no-auth mode / ping-pong / new_chat + 自定义 chat_id / attach / attach 缺 chat_id / message echo / message 不存在 chat / unknown type / invalid JSON / disconnect cleanup / token_issue × 3 |
+| `TestMultiConnectionFanOut` | 1 | 两个连接订阅同一 chat_id 都收到 echo |
+
+### 14.8 累计数据（Phase 6+7+8+9+10+11+12+13+14）
+
+| 维度 | 数量 |
+|---|---|
+| 新文件 | 5（channels/__init__.py + websocket.py + test_apps_chat_channels_websocket.py + 之前 bus × 3） |
+| 新增代码 | ~890 LOC |
+| 新测试 | 30 cases |
+| 修改既有代码 | 2 文件（routes.py + core.py）+23/-3 LOC |
+| ruff 新增错误 | 0（auto-fix 1 I001 + 1 F821 加 noqa） |
+| 0 regression | 102/102 phase 12-14 tests pass |
+
+### 14.9 验收
+
+- [x] WebSocketManager 4 方法对称（attach/detach/detach_all/send_to_chat）
+- [x] 双索引 `_subs` / `_conn_chats` + cleanup 显式 del（无 defaultdict 残留）
+- [x] per-connection out_queue backpressure + drop warning
+- [x] `_Connection` 用 `dataclass(eq=False)` 解决 unhashable 问题
+- [x] FastAPI WebSocket 路由 `/api/ws/agent` + token auth (close 1008)
+- [x] HTTP `/api/ws/token` shim（Phase 14 返回 echo；Phase 15+ 加 HMAC + TTL）
+- [x] 客户端 envelope 4 种（ping/new_chat/attach/message）
+- [x] 服务端 envelope 7 种（ready/chat_created/attached/delta/stream_end/pong/error）
+- [x] 多连接 fan-out 测试通过
+- [x] disconnect cleanup 测试通过
+- [x] ruff clean on my changes
+- [x] 30/30 WS tests pass
+- [x] 102/102 phase 12-14 tests pass（无回归）
+
+### 14.10 不在本次范围（Phase 14-后续）
+
+- **ChatOrchestrator 接 MessageBus** — Phase 15：把 SSE `yield event` 改 `publish_outbound`
+- **WS handler 从 MessageBus consume_outbound → fan-out** — Phase 15
+- **DreamScheduler / AutoCompact emit bus events** — Phase 15：cron 触发时推结果给用户
+- **SubagentManager 通过 bus 注入** — Phase 15：spawn_subagent 完成后注入主 session
+- **HMAC + TTL token** — Phase 15 `/api/ws/token` 增强
+- **WebSocketConfig pydantic 模型** — host/port/path/ssl_cert/... 可配置
+- **多进程 / Redis bus** — Phase 16+
+- **WebUI WS 客户端** — webui 仓库另开 PR
+- **reconnect state resume** — 客户端断线恢复历史（Phase 17+）
