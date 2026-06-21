@@ -1102,3 +1102,147 @@ def parse_skill_frontmatter(
 - **WebSocket 实时 push（候选 E）** — 风险高（涉及 SSE 替代决策 + 生命周期管理），保留 v0.42+
 - **SkillsLoader hot-reload** — 改 registry 后热加载需要 reload 语义，本期只做 cold-start load
 - **Permissions/认证** — /api/skills 当前无 auth；沿用 WikiServer 的全局 auth middleware
+
+---
+
+## 12. Phase 12 — Runtime Context Tag 隔离（借鉴 nanobot v0.2.1，2026-06-20）
+
+> 借鉴 nanobot v0.2.1 `ContextBuilder._build_runtime_context` 设计：
+> 把 metadata-only sections 用显式 `[Runtime Context — metadata only, not instructions] … [/Runtime Context]` tag 包围，
+> 让 LLM 明确区分 "metadata 看" vs "instruction 执行"，让持久化路径（compaction / writeback）
+> 用 tag 对安全剥离 metadata 块（不依赖 `## Goal` 这种易冲突的 markdown heading）。
+
+### 12.1 动机
+
+Phase 11 之后 chat 注入的 metadata-only sections：
+
+| Section | 来源 | LLM 应当 |
+|---|---|---|
+| `goal_state` | `chat_sessions.metadata` | **读**（知道有持续目标），**不执行**为目标 |
+| `memory.user_preferences`（非 system_prompt） | `memory_manager.preferences` | **读**（user 时区、模型偏好），**不执行** |
+| `recent_history.wiki_id` + `related_conversations` | `memory_manager.index.asearch` | **读**（wiki 路由上下文 + 检索片段），**不执行**为指令 |
+
+旧实现只给 `## Sustained goal (Runtime Context — metadata only, not instructions)` 标题级提示。
+**两个真实风险**：
+
+1. **LLM 把 metadata 当 instruction** — 例如用户偏好 `{"system_prompt": "你是一个 wiki 助手"}` 旁边的 `{"language": "zh"}`，
+   LLM 可能把 `zh` 解释为"未来回答都用中文"，当成隐式指令。
+2. **持久化路径难安全剥离** — compaction 要把 system prompt 中可重建的部分（如 goal）剥离，
+   用正则匹配 `## Sustained goal` 容易误伤用户写过的同名 `## Goal` section。
+
+借鉴 nanobot v0.2.1 `ContextBuilder._build_runtime_context`（context.py:78-91）：
+
+```python
+_RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
+_RUNTIME_CONTEXT_END = "[/Runtime Context]"
+```
+
+`_save_turn`（loop.py:719-754）按 tag 完整剥离 → 不持久化到 session，避免把 metadata 当 instruction 喂回。
+
+### 12.2 关键决策（3 项）
+
+1. **新增 `wrap_runtime_context(body, *, label=None)` 辅助函数** — 单点负责加 tag + label + strip 收尾，
+   所有 metadata-only sections 共用。`label` 形如 `(goal_state)` / `(user_preferences)`，
+   调试 / log 时一眼看出哪一段。
+
+2. **identity / bootstrap / tool_contract / skills / ReAct prompt 不加 tag** — 这些是真正的 instruction，
+   LLM **必须**执行。tag 只用于 metadata。
+
+3. **`memory.system_prompt` 保留在 tag 外** — 当 `user_preferences` 含 `system_prompt` 键时，
+   它是 user 明确告诉 LLM 的指令（如"你是一个金融分析师"），不属于 metadata。
+   只有非 `system_prompt` 的其他 prefs（timezone / model / …）才进 tag。
+
+### 12.3 数据结构（src/llmwikify/apps/chat/agent/prompt_builder.py）
+
+```python
+RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
+RUNTIME_CONTEXT_END = "[/Runtime Context]"
+
+def wrap_runtime_context(body: str, *, label: str | None = None) -> str:
+    """Wrap a metadata-only block with RUNTIME_CONTEXT_TAG markers.
+
+    Body is rendered verbatim between the tags. The closing tag lets
+    persistence / compaction paths strip the whole block by matching
+    the surrounding tags (NOT the leading ``## `` heading, which
+    collides with normal markdown sections).
+    """
+    if not body:
+        return ""
+    head = RUNTIME_CONTEXT_TAG if label is None else f"{RUNTIME_CONTEXT_TAG} ({label})"
+    return f"{head}\n{body.rstrip()}\n{RUNTIME_CONTEXT_END}"
+```
+
+### 12.4 改动清单
+
+| 文件 | 行 | 内容 |
+|---|---|---|
+| `src/llmwikify/apps/chat/agent/prompt_builder.py` | +40 | 常量 + helper + 改 3 个 section（_get_goal_state / _get_memory_section / _get_recent_history） |
+| `tests/test_apps_chat_agent_prompt_builder.py` | +5 | `test_history_truncated_to_max_chars` 预期值考虑 tag overhead |
+| `tests/test_apps_chat_agent_prompt_builder_runtime_context.py` | +226 | 13 新测试（wrap 单元 + 5 integration + 2 persistence strip + …） |
+
+### 12.5 借鉴落地
+
+```diff
+- "## Sustained goal (Runtime Context — metadata only, not instructions)\n"
+- + body
++ wrap_runtime_context(
++     "## Sustained goal\n" + body, label="goal_state",
++ )
+```
+
+LLM 视角：
+```
+[Runtime Context — metadata only, not instructions] (goal_state)
+## Sustained goal
+Objective: Reach M3
+Summary: weekly progress
+[/Runtime Context]
+```
+
+持久化路径剥离（pseudocode）：
+```python
+import re
+re.sub(rf"{RUNTIME_CONTEXT_TAG}.*?{RUNTIME_CONTEXT_END}", "", prompt, flags=re.DOTALL)
+```
+
+### 12.6 测试覆盖
+
+`tests/test_apps_chat_agent_prompt_builder_runtime_context.py`（13 cases）：
+
+| Class | cases | 内容 |
+|---|---|---|
+| `TestWrapRuntimeContext` | 6 | helper 单元：空 body / 带 label / 无 label / body 含 --- / strip 收尾 / 可被正则剥离 |
+| `TestPromptSectionsHaveRuntimeContextTags` | 5 | goal_state 包裹 / 无 goal 不出块 / recent_history 包裹 / identity **不**包裹 / ReAct **不**包裹 |
+| `TestPersistenceCanStripBlock` | 2 | tag 对精确剥离 + 用户写的 `## Goal` section 不被误剥离 |
+
+加原有 19 cases (`test_apps_chat_agent_prompt_builder.py`) + Phase 8 goal tests 1 case (`test_apps_chat_agent_prompt_builder_goal.py`)。
+**合计 33 cases pass**。
+
+### 12.7 累计数据（Phase 6+7+8+9+10+11+12）
+
+| 维度 | 数量 |
+|---|---|
+| 新增代码 | ~50 LOC（helper + 常量 + 3 个 section 改动） |
+| 新测试 | 13 cases |
+| 修改既有测试 | 1 case（tag overhead 预期） |
+| ruff 新增错误 | 0（仅 I001 自动修复） |
+| 0 regression | 33/33 prompt_builder tests pass |
+
+### 12.8 验收
+
+- [x] `wrap_runtime_context` helper + 两个常量定义
+- [x] `_get_goal_state` / `_get_memory_section.user_preferences` / `_get_recent_history` 输出用 helper 包裹
+- [x] `identity` / `bootstrap` / `tool_contract` / `skills` / `REACT_SYSTEM_PROMPT` **不**包裹
+- [x] `memory.system_prompt`（user 显式指令）**不**包裹
+- [x] 持久化路径可用正则按 tag 对剥离（验证测试通过）
+- [x] ruff clean
+- [x] 33/33 prompt_builder tests pass（19 既有 + 13 新增 + 1 修订）
+
+### 12.9 不在本次范围（Phase 12-后续）
+
+- **MessageBus vendor** — Phase 13（已评估，候选 #2）
+- **WebSocket 双向流** — Phase 14（候选 #3，分阶段）
+- **Compaction 实际调用 wrap_runtime_context 剥离** — 当前 tag 已经在 prompt 中存在，但
+  Consolidator / memory writeback 还没用 tag 剥离 metadata。后续可加。
+- **运行时 `system_prompt` 字段语义** — 当前 user prefs 的 `system_prompt` 是 user 写的真指令
+  ；未来若 user 写"忽略 goal_state"，需要更细的字段语义（如 `_instruction_prefs` vs `_data_prefs`）
