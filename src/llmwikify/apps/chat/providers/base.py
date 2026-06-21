@@ -19,7 +19,7 @@ class LLMProvider(Protocol):
     - List supported models
     """
 
-    def from_config(self, config: dict) -> "StreamableLLMClient":
+    def from_config(self, config: dict) -> StreamableLLMClient:
         """Create an LLM client from a full config dict."""
         ...
 
