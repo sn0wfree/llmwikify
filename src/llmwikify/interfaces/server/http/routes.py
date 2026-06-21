@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 
+from llmwikify.apps.chat.channels.websocket import _register_websocket_routes
 from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.instance import WikiType
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
@@ -20,6 +21,8 @@ def register_routes(
     app: FastAPI,
     registry: WikiRegistry,
     provider: Any = None,
+    *,
+    api_key: str | None = None,
 ) -> None:
     """Register all API routes (unified architecture).
 
@@ -29,6 +32,12 @@ def register_routes(
         provider: optional LLM client (Phase 7). Forwarded to
             ``_register_agent_routes`` so AgentService can wire it
             into MemoryManager for Consolidator + Dream.
+        api_key
+            Optional API key (Phase 14, WS auth). Forwarded to
+            ``_register_websocket_routes`` so the WebSocket
+            handshake can validate ``?token=`` against the same
+            key as the REST ``AuthMiddleware``. Pass ``None`` to
+            disable WS auth (dev mode).
     """
     _register_wiki_routes(app, registry, provider=provider)
     _register_agent_routes(app, registry, provider=provider)
@@ -483,6 +492,13 @@ def _register_wiki_routes(
     # (version / author / triggers / tags) so the webui and operators
     # can introspect what's loaded without grepping logs.
     _register_skills_routes(app)
+
+    # --- WebSocket agent channel (Phase 14) ---
+    # Real-time bidirectional channel (subscribed model + token auth).
+    # Phase 14 ships the protocol + fan-out; ChatOrchestrator wiring
+    # (Phase 15+) will replace the in-handler echo with the real
+    # chat stream from MessageBus.
+    _register_websocket_routes(app, api_key=api_key or "")  # noqa: F821
 
 
 def _load_research_config() -> dict[str, Any] | None:

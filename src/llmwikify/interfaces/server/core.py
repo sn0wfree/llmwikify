@@ -6,18 +6,18 @@ Combines MCP protocol, REST API, and WebUI into a single FastAPI application.
 from __future__ import annotations
 
 import logging
-from logging.handlers import RotatingFileHandler
 from contextlib import asynccontextmanager
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from llmwikify.interfaces.server.constants import DEFAULT_HOST, DEFAULT_PORT
 from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
-from llmwikify.interfaces.server.constants import DEFAULT_HOST, DEFAULT_PORT
 
 from ..mcp.adapter import MCPAdapter
 from .http.middleware import AuthMiddleware
@@ -142,7 +142,11 @@ class WikiServer:
 
         # 3. Register REST API routes (Phase 7: provider forwarded)
         if enable_rest:
-            register_routes(self.app, self.registry, provider=self.provider)
+            register_routes(
+                self.app, self.registry,
+                provider=self.provider,
+                api_key=self.api_key,
+            )
             # Capture the AgentService created by _register_agent_routes
             # so the lifespan handler can access it for DreamScheduler.
             from llmwikify.interfaces.server.http.chat_sse import (
