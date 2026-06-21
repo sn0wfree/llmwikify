@@ -46,6 +46,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from llmwikify.apps.chat.agent.agent_runner import AgentRunner
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
 from llmwikify.apps.chat.agent.spec import ChatRunSpec
 from llmwikify.foundation.callback import NoOpHook
@@ -94,13 +95,42 @@ class SubagentManager:
     parent runner's collaborators (``chat_service``,
     ``prompt_builder``, ``tool_executor``, ``config``) so children
     inherit LLM connectivity without re-wiring providers.
+
+    Phase 15 (2026-06-21): ``parent_runner`` is now typed as
+    :class:`AgentRunner` (the shared abstract base). The runtime
+    check ``isinstance(parent_runner, ChatRunnerV2)`` still gates
+    the collaborator-reuse path because the manager reads
+    ``parent._chat_service`` / ``_tool_executor`` / ``_prompt_builder``
+    / ``_config`` which are ``ChatRunnerV2``-specific. Passing a
+    non-ChatRunnerV2 instance raises ``TypeError`` with a clear
+    message (Phase 16+ will add a generic spec-only path that
+    doesn't depend on these private attributes).
     """
 
     def __init__(
         self,
-        parent_runner: ChatRunnerV2,
+        parent_runner: AgentRunner,
         max_concurrent: int = 2,
     ) -> None:
+        # Phase 15: duck-type check. ``ChatRunnerV2`` carries
+        # ``_chat_service`` / ``_tool_executor`` / ``_prompt_builder`` /
+        # ``_config`` private attributes that the child builder reads;
+        # the base ``AgentRunner`` doesn't expose those. Test stubs
+        # can pass anything that has the same attributes (see
+        # ``_StubParentRunner`` in tests/test_apps_chat_agent_subagent_manager.py).
+        missing = [
+            attr for attr in
+            ("_chat_service", "_tool_executor", "_prompt_builder", "_config")
+            if not hasattr(parent_runner, attr)
+        ]
+        if missing:
+            raise TypeError(
+                "SubagentManager parent_runner is missing required "
+                f"collaborator attributes: {missing} (got "
+                f"{type(parent_runner).__name__}). Today only "
+                "ChatRunnerV2 (or sibling subclasses) qualify. "
+                "Phase 16+ will accept any AgentRunner via spec-only path."
+            )
         self._parent = parent_runner
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._max_concurrent = max_concurrent

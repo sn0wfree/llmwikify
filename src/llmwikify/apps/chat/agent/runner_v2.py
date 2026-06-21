@@ -33,6 +33,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from llmwikify.apps.chat.agent.agent_runner import AgentRunner
 from llmwikify.apps.chat.agent.microcompact import build_microcompact_fn
 from llmwikify.apps.chat.agent.spec import ChatRunResult, ChatRunSpec
 from llmwikify.apps.chat.agent.text_mode_tool import TextModeParser
@@ -103,8 +104,16 @@ class _RunContext:
         )
 
 
-class ChatRunnerV2:
-    """Unified chat agent loop with 5-step state machine + hook integration."""
+class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
+    """Unified chat agent loop with 5-step state machine + hook integration.
+
+    Phase 15 (2026-06-21): now extends :class:`AgentRunner` so it
+    participates in the shared "agent loop" abstraction borrowed from
+    nanobot v0.2.1 ``AgentRunner``. The public contract (``run_stream`` /
+    ``run_to_completion``) is unchanged; existing callers see no
+    difference. New callers can use ``AgentRunner`` as the interface
+    type and pass any implementation (including test stubs).
+    """
 
     def __init__(
         self,
