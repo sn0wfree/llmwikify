@@ -163,7 +163,15 @@ def test_history_truncated_to_max_chars() -> None:
     parts = prompt.split("\n\n---\n\n")
     history_section = parts[-1]
     assert "…" in history_section
-    assert len(history_section) <= 320
+    # Phase 12 (2026-06-20): the section is wrapped in
+    # [Runtime Context]…[/Runtime Context] tags (~70 chars overhead),
+    # so the upper bound is the max + tag overhead, not just the max.
+    from llmwikify.apps.chat.agent.prompt_builder import (
+        RUNTIME_CONTEXT_END,
+        RUNTIME_CONTEXT_TAG,
+    )
+    tag_overhead = len(RUNTIME_CONTEXT_TAG) + len(RUNTIME_CONTEXT_END) + 30
+    assert len(history_section) <= 300 + tag_overhead
 
 
 def test_section_failure_does_not_break_others(tmp_path: Path) -> None:
