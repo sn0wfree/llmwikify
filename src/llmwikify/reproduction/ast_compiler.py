@@ -108,6 +108,19 @@ def _resolve_qn_op(op: str) -> Callable[..., pl.Expr]:
     return op_func
 
 
+def _resolve_semantic_op(op: str, kwargs: dict[str, Any]):
+    """PR-5 (2026-06-21): Resolve a semantic op to its AST template.
+
+    Returns None if op is not a registered semantic op.
+    """
+    from .semantic_registry import get_op
+
+    if get_op(op) is None:
+        return None
+    from .semantic_registry import instantiate
+    return instantiate(op, kwargs)
+
+
 def compile_ast(node: ASTNode) -> pl.Expr:
     """Recursively compile an AST node into a polars expression.
 
@@ -119,6 +132,10 @@ def compile_ast(node: ASTNode) -> pl.Expr:
     - QNCallFailed
     """
     if not is_known_op(node.op):
+        # PR-5 (2026-06-21): try semantic registry (Layer 4)
+        sem_ast = _resolve_semantic_op(node.op, node.kwargs)
+        if sem_ast is not None:
+            return compile_ast(sem_ast)
         raise CompileError(
             "UnknownOp", f"Op not in 157 known operators: {node.op!r}", op=node.op,
         )
