@@ -25,6 +25,7 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
+from llmwikify.apps.chat.agent import events
 from llmwikify.apps.chat.agent.context_manager import AgentContext
 from llmwikify.foundation.callback import AgentHook
 
@@ -39,30 +40,30 @@ class ChatEvent:
 
     @staticmethod
     def message_delta(content: str) -> dict:
-        return {"type": "message_delta", "content": content}
+        return {"type": events.MESSAGE_DELTA, "content": content}
 
     @staticmethod
     def thinking(content: str) -> dict:
-        return {"type": "thinking", "content": content}
+        return {"type": events.THINKING, "content": content}
 
     @staticmethod
     def tool_call_start(tool: str, args: dict, call_id: str = "") -> dict:
-        return {"type": "tool_call_start", "tool": tool, "args": args, "call_id": call_id}
+        return {"type": events.TOOL_CALL_START, "tool": tool, "args": args, "call_id": call_id}
 
     @staticmethod
     def tool_call_end(tool: str, result: Any, call_id: str = "", duration_ms: int = 0) -> dict:
-        return {"type": "tool_call_end", "tool": tool, "result": result, "call_id": call_id, "duration_ms": duration_ms}
+        return {"type": events.TOOL_CALL_END, "tool": tool, "result": result, "call_id": call_id, "duration_ms": duration_ms}
 
     @staticmethod
     def tool_call_error(tool: str, error: str, call_id: str = "", duration_ms: int = 0) -> dict:
-        return {"type": "tool_call_error", "tool": tool, "error": error, "call_id": call_id, "duration_ms": duration_ms}
+        return {"type": events.TOOL_CALL_ERROR, "tool": tool, "error": error, "call_id": call_id, "duration_ms": duration_ms}
 
     @staticmethod
     def confirmation_required(
         conf_id: str, tool: str, args: dict, impact: dict, call_id: str = "",
     ) -> dict:
         return {
-            "type": "confirmation_required",
+            "type": events.CONFIRMATION_REQUIRED,
             "confirmation_id": conf_id,
             "tool": tool,
             "args": args,
@@ -72,15 +73,29 @@ class ChatEvent:
 
     @staticmethod
     def done(final_response: str) -> dict:
-        return {"type": "done", "content": final_response}
+        return {"type": events.DONE, "content": final_response}
 
     @staticmethod
     def error(message: str) -> dict:
-        return {"type": "error", "message": message}
+        return {"type": events.ERROR, "message": message}
 
     @staticmethod
     def save_warning(reason: str) -> dict:
-        return {"type": "save_warning", "reason": reason}
+        return {"type": events.SAVE_WARNING, "reason": reason}
+
+    @staticmethod
+    def command_done(
+        command: str, ok: bool, message: str, data: Any = None,
+    ) -> dict:
+        ev: dict[str, Any] = {
+            "type": events.COMMAND_DONE,
+            "command": command,
+            "ok": ok,
+            "message": message,
+        }
+        if data is not None:
+            ev["data"] = data
+        return ev
 
 
 # ─── V2 persistence hook (Plan B B-4) ──────────────────────────
@@ -292,14 +307,14 @@ class ChatOrchestrator:
         try:
             if session_id is None:
                 session_id = self.db.create_chat_session(wiki_id, jwt_token)
-                yield {"type": "session_created", "session_id": session_id}
+                yield {"type": events.SESSION_CREATED, "session_id": session_id}
             else:
                 session = self.db.get_chat_session(session_id)
                 if session is None:
                     session_id = self.db.create_chat_session(wiki_id, jwt_token)
-                    yield {"type": "session_created", "session_id": session_id}
+                    yield {"type": events.SESSION_CREATED, "session_id": session_id}
 
-            self.event_log.log(session_id, {"type": "user_message", "content": message[:200]})
+            self.event_log.log(session_id, {"type": events.USER_MESSAGE, "content": message[:200]})
 
             ctx = await self.context_manager.get_or_create(
                 session_id, wiki_id,
@@ -333,7 +348,7 @@ class ChatOrchestrator:
                 abort_event=abort_event,
             ):
                 yield ev
-                if ev.get("type") == "command_done":
+                if ev.get("type") == events.COMMAND_DONE:
                     return
 
             ctx.add_user_message(message)
@@ -374,16 +389,16 @@ class ChatOrchestrator:
                     yield ChatEvent.error("Session aborted")
                     return
                 # Log non-streaming events (skip message_delta for volume)
-                if event.get("type") != "message_delta":
+                if event.get("type") != events.MESSAGE_DELTA:
                     self.event_log.log(session_id, event)
-                if event.get("type") == "confirmation_required":
+                if event.get("type") == events.CONFIRMATION_REQUIRED:
                     tool = event.get("tool", "tool")
                     self.tool_executor.save_message(
                         session_id,
                         "assistant",
                         f"Confirmation required for {tool}: {event.get('confirmation_id', '')}",
                     )
-                elif event.get("type") == "error":
+                elif event.get("type") == events.ERROR:
                     self.tool_executor.save_message(
                         session_id,
                         "assistant",
@@ -550,63 +565,45 @@ class ChatOrchestrator:
         async def stop_handler(ctx: Any) -> dict:
             if ctx.abort_event is not None:
                 ctx.abort_event.set()
-            return {
-                "type": "command_done",
-                "command": "/stop",
-                "ok": True,
-                "message": "Session aborted",
-            }
+            return ChatEvent.command_done("/stop", True, "Session aborted")
 
         async def help_handler(ctx: Any) -> dict:
-            return {
-                "type": "command_done",
-                "command": "/help",
-                "ok": True,
-                "message": (
+            return ChatEvent.command_done(
+                "/help",
+                True,
+                (
                     "Available commands: /stop, /help, /clear, /status, "
                     "/title <text>, /memory_dream [session <id>], "
                     "/goal [<objective> | done [recap]]"
                 ),
-            }
+            )
 
         async def clear_handler(ctx: Any) -> dict:
             if ctx.ctx is not None and hasattr(ctx.ctx, "clear"):
                 ctx.ctx.clear()
-            return {
-                "type": "command_done",
-                "command": "/clear",
-                "ok": True,
-                "message": "Context cleared",
-            }
+            return ChatEvent.command_done("/clear", True, "Context cleared")
 
         async def status_handler(ctx: Any) -> dict:
-            return {
-                "type": "command_done",
-                "command": "/status",
-                "ok": True,
-                "message": f"session_id={ctx.session_id} wiki_id={ctx.wiki_id}",
-            }
+            return ChatEvent.command_done(
+                "/status",
+                True,
+                f"session_id={ctx.session_id} wiki_id={ctx.wiki_id}",
+            )
 
         async def title_handler(ctx: Any) -> dict:
             new_title = (ctx.args or "").strip()
             if not new_title:
-                return {
-                    "type": "command_done",
-                    "command": "/title",
-                    "ok": False,
-                    "message": "Usage: /title <text>",
-                }
+                return ChatEvent.command_done(
+                    "/title", False, "Usage: /title <text>",
+                )
             if ctx.db is not None and ctx.session_id:
                 try:
                     ctx.db.update_chat_session_title(ctx.session_id, new_title)
                 except Exception:
                     pass
-            return {
-                "type": "command_done",
-                "command": "/title",
-                "ok": True,
-                "message": f"Title set: {new_title[:50]}",
-            }
+            return ChatEvent.command_done(
+                "/title", True, f"Title set: {new_title[:50]}",
+            )
 
         # Phase 6 (2026-06-19): /memory_dream prefix command.
         # Triggers the long-term fact extractor (borrowed from
@@ -632,12 +629,11 @@ class ChatOrchestrator:
             stub = _StubSkillContext(ctx)
             dream = _get_dream(stub)
             if isinstance(dream, dict) and dream.get("ok") is False:
-                yield {
-                    "type": "command_done",
-                    "command": "/memory_dream",
-                    "ok": False,
-                    "message": dream.get("message", "dream not configured"),
-                }
+                yield ChatEvent.command_done(
+                    "/memory_dream",
+                    False,
+                    dream.get("message", "dream not configured"),
+                )
                 return
 
             args_text = (ctx.args or "").strip()
@@ -647,17 +643,16 @@ class ChatOrchestrator:
             else:
                 result = await _run({}, stub)
 
-            yield {
-                "type": "command_done",
-                "command": "/memory_dream",
-                "ok": result.ok if hasattr(result, "ok") else True,
-                "message": (
+            yield ChatEvent.command_done(
+                "/memory_dream",
+                result.ok if hasattr(result, "ok") else True,
+                (
                     result.message
                     if hasattr(result, "message") and not result.ok
                     else "dream complete"
                 ),
-                "data": getattr(result, "data", None),
-            }
+                data=getattr(result, "data", None),
+            )
 
         # Phase 8 (2026-06-20): /goal slash command — register / inspect /
         # complete a sustained goal. Thin wrapper around GoalSkill so
@@ -711,17 +706,16 @@ class ChatOrchestrator:
                 )
 
             ok = getattr(result, "status", "ok") == "ok"
-            return {
-                "type": "command_done",
-                "command": "/goal",
-                "ok": ok,
-                "message": (
+            return ChatEvent.command_done(
+                "/goal",
+                ok,
+                (
                     getattr(result, "error", "") or "goal command failed"
                     if not ok
                     else _summarize(args_text, result)
                 ),
-                "data": getattr(result, "data", None),
-            }
+                data=getattr(result, "data", None),
+            )
 
         router.priority("/stop", stop_handler)
         router.exact("/help", help_handler)
@@ -774,20 +768,16 @@ class ChatOrchestrator:
         )
 
         # Priority tier first (runs without any lock / setup work).
-        events: list[dict] = []
+        cmd_events: list[dict] = []
         if self.command_router.is_priority(stripped):
-            events = await self.command_router.dispatch_priority(cmd_ctx)
+            cmd_events = await self.command_router.dispatch_priority(cmd_ctx)
         else:
-            events = await self.command_router.dispatch(cmd_ctx)
+            cmd_events = await self.command_router.dispatch(cmd_ctx)
 
-        for ev in events:
+        for ev in cmd_events:
             yield ev
-        if events:
-            yield {
-                "type": "command_done",
-                "command": stripped.split()[0],
-                "ok": True,
-            }
+        if cmd_events:
+            yield ChatEvent.command_done(stripped.split()[0], True, "")
 
     def get_session_status(self, session_id: str) -> str:
         return self._session_mgr.get_session_status(session_id)
@@ -893,7 +883,7 @@ class ChatOrchestrator:
         try:
             async for event in runner.run_stream(spec):
                 kind = event.get("type")
-                if kind == "tool_call_end":
+                if kind == events.TOOL_CALL_END:
                     tool = event.get("tool", "")
                     if "autoresearch_compound" in tool and "run" in tool:
                         result = event.get("result", {})
@@ -906,7 +896,7 @@ class ChatOrchestrator:
                             run_id = data.get("run_id", "")
                             if run_id:
                                 yield {
-                                    "type": "research_run_started",
+                                    "type": events.RESEARCH_RUN_STARTED,
                                     "run_id": run_id,
                                     "status": data.get("status", "running"),
                                     "workflow_name": data.get(
@@ -923,7 +913,7 @@ class ChatOrchestrator:
                         "call_id": event.get("call_id", ""),
                         "status": "executed",
                     })
-                if kind == "done":
+                if kind == events.DONE:
                     final = event.get("content", "") or ""
                     research_run_id = self._extract_research_run_id_from_tools(
                         accumulated_tools,

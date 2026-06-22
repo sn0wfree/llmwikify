@@ -33,6 +33,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from llmwikify.apps.chat.agent import events
 from llmwikify.apps.chat.agent.agent_runner import AgentRunner
 from llmwikify.apps.chat.agent.microcompact import build_microcompact_fn
 from llmwikify.apps.chat.agent.spec import ChatRunResult, ChatRunSpec
@@ -148,7 +149,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         self._current_ctx = ctx
 
         if self._hook.wants_streaming():
-            yield {"type": "session_init", "session_id": spec.session_id}
+            yield {"type": events.SESSION_INIT, "session_id": spec.session_id}
 
         try:
             system_prompt = await self._build_system_prompt(spec)
@@ -239,27 +240,27 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         try:
             async for event in self.run_stream(spec):
                 kind = event.get("type")
-                if kind == "done":
+                if kind == events.DONE:
                     final_content = event.get("content", final_content)
                     if "stop_reason" in event:
                         stop_reason = event["stop_reason"]
-                elif kind == "error":
+                elif kind == events.ERROR:
                     error = event.get("message") or event.get("error")
                     stop_reason = "error"
-                elif kind == "tool_call_end":
+                elif kind == events.TOOL_CALL_END:
                     tool = event.get("tool")
                     if tool and tool not in tools_used:
                         tools_used.append(tool)
-                elif kind == "message_delta" and event.get("content"):
+                elif kind == events.MESSAGE_DELTA and event.get("content"):
                     final_content = (final_content or "") + event["content"]
-                elif kind == "compacted":
+                elif kind == events.COMPACTED:
                     compacted_count += 1
                     chars_saved += int(event.get("chars_saved", 0))
-                elif kind == "phase":
+                elif kind == events.PHASE:
                     new_phase = event.get("phase")
                     if new_phase in {"cancelled", "paused", "timeout"}:
                         stop_reason = new_phase
-                elif kind == "confirmation_required":
+                elif kind == events.CONFIRMATION_REQUIRED:
                     stop_reason = "confirmation_required"
         except Exception as exc:
             logger.exception("ChatRunnerV2.run_to_completion failed")
@@ -376,16 +377,16 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         content_from_parser = False
         try:
             async for ev in self._stream_llm(messages, tools):
-                if ev.get("type") in {"done", "phase", "error"}:
+                if ev.get("type") in {events.DONE, events.PHASE, events.ERROR}:
                     await end_thinking()
-                if ev.get("type") == "done":
+                if ev.get("type") == events.DONE:
                     final_done_content = ev.get("content", "") or ""
-                elif ev.get("type") == "phase":
+                elif ev.get("type") == events.PHASE:
                     phase_value = ev.get("phase")
                     if phase_value in {"cancelled", "paused", "timeout"}:
                         ctx.stop_reason = phase_value
                     yield ev
-                elif ev.get("type") == "error":
+                elif ev.get("type") == events.ERROR:
                     ctx.error = ev.get("message") or ev.get("error") or ctx.error
                     ctx.reason_failed = True
                     yield ev
@@ -401,7 +402,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                         await _maybe_await(self._hook.on_stream(
                             ctx.hook_ctx(iteration), chunk,
                         ))
-                        yield_event = {"type": "message_delta", "content": chunk}
+                        yield_event = {"type": events.MESSAGE_DELTA, "content": chunk}
                     elif kind == "thinking":
                         in_thinking = True
                         chunk = parsed.get("text", "")
@@ -409,7 +410,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                         await _maybe_await(self._hook.emit_reasoning(
                             ctx.hook_ctx(iteration), chunk,
                         ))
-                        yield_event = {"type": "thinking", "content": chunk}
+                        yield_event = {"type": events.THINKING, "content": chunk}
                     elif kind == "tool_call":
                         tool_calls.append(parsed)
                         yield_event = None
@@ -427,7 +428,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                     await _maybe_await(self._hook.on_stream(
                         ctx.hook_ctx(iteration), chunk,
                     ))
-                    yield {"type": "message_delta", "content": chunk}
+                    yield {"type": events.MESSAGE_DELTA, "content": chunk}
         except Exception as exc:
             logger.exception("LLM stream failed")
             ctx.error = f"{type(exc).__name__}: {exc}"
@@ -437,7 +438,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                 if kind == "content":
                     chunk = flushed.get("text", "")
                     accumulated += chunk
-                    yield {"type": "message_delta", "content": chunk}
+                    yield {"type": events.MESSAGE_DELTA, "content": chunk}
             return
         else:
             try:
@@ -476,7 +477,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
 
             if not tool_name:
                 yield {
-                    "type": "tool_call_error",
+                    "type": events.TOOL_CALL_ERROR,
                     "tool": "",
                     "error": "Skipped malformed tool call with empty name",
                     "call_id": call_id,
@@ -484,7 +485,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                 continue
 
             yield {
-                "type": "tool_call_start",
+                "type": events.TOOL_CALL_START,
                 "tool": tool_name,
                 "args": args,
                 "call_id": call_id,
@@ -501,7 +502,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                     ctx.hook_ctx(iteration), tc, exc,
                 ))
                 yield {
-                    "type": "tool_call_error",
+                    "type": events.TOOL_CALL_ERROR,
                     "tool": tool_name,
                     "error": str(exc),
                     "call_id": call_id,
@@ -518,7 +519,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                     ctx.hook_ctx(iteration), tc,
                 ))
                 yield {
-                    "type": "confirmation_required",
+                    "type": events.CONFIRMATION_REQUIRED,
                     "confirmation_id": result.get("confirmation_id", ""),
                     "tool": tool_name,
                     "args": args,
@@ -529,7 +530,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
 
             if isinstance(result, dict) and result.get("status") == "error":
                 yield {
-                    "type": "tool_call_error",
+                    "type": events.TOOL_CALL_ERROR,
                     "tool": tool_name,
                     "error": str(result.get("error", "")),
                     "call_id": call_id,
@@ -543,7 +544,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                 ctx.compacted_count += 1
                 ctx.chars_saved += saved
                 yield {
-                    "type": "compacted",
+                    "type": events.COMPACTED,
                     "call_id": call_id,
                     "tool": tool_name,
                     "chars_saved": saved,
@@ -559,7 +560,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
 
             ctx.tools_used.append(tool_name)
             yield {
-                "type": "tool_call_end",
+                "type": events.TOOL_CALL_END,
                 "tool": tool_name,
                 "result": result,
                 "call_id": call_id,
@@ -586,7 +587,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             except Exception:
                 logger.warning("on_error hook raised", exc_info=True)
             yield {
-                "type": "error",
+                "type": events.ERROR,
                 "message": ctx.error,
                 "stop_reason": ctx.stop_reason,
             }
@@ -598,7 +599,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             logger.warning("finalize_content hook raised", exc_info=True)
             final = ctx.final_content
         yield {
-            "type": "done",
+            "type": events.DONE,
             "content": final or ctx.final_content or "",
             "stop_reason": ctx.stop_reason,
             "error": ctx.error,
@@ -644,7 +645,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                 yield ev
             return
         if llm is None:
-            yield {"type": "done", "content": ""}
+            yield {"type": events.DONE, "content": ""}
             return
         if hasattr(llm, "astream_chat"):
             async for ev in llm.astream_chat(messages, tools=tools):
@@ -652,7 +653,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             return
         reply = llm.chat(messages, tools=tools)
         yield {
-            "type": "done",
+            "type": events.DONE,
             "content": getattr(reply, "content", "") or "",
         }
 

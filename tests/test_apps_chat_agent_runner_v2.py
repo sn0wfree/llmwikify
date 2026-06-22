@@ -249,6 +249,7 @@ def test_runner_dependencies_are_minimal() -> None:
 
     src = open(mod.__file__, encoding="utf-8").read()
     allowed_local_imports = {
+        "from llmwikify.apps.chat.agent import events",
         "from llmwikify.apps.chat.agent.agent_runner import",
         "from llmwikify.apps.chat.agent.spec import",
         "from llmwikify.apps.chat.agent.microcompact import",
