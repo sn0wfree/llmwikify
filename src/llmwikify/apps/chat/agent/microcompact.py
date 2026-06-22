@@ -64,7 +64,7 @@ def build_microcompact_fn(
     spec: ChatRunSpec,
     counter: dict[str, int] | None = None,
 ) -> Any:
-    """Build a closure suitable for ``ChatReActBridge(microcompact_fn=...)``.
+    """Build a closure suitable for ``ChatRunnerV2(microcompact_fn=...)``.
 
     The returned callable has the signature
     ``(result, tool_name, call_id) -> tuple[str, bool, int]`` matching

@@ -285,10 +285,10 @@ class CompositeToolRegistry:
 
     @staticmethod
     def _is_unknown_confirmation(result: Any) -> bool:
-        if not isinstance(result, dict) or result.get("status") != "error":
-            return False
-        error = result.get("error", "")
-        return "Unknown confirmation ID" in error or "Invalid confirmation ID" in error
+        from llmwikify.apps.chat.agent.confirmation_manager import (
+            ConfirmationManager as _CM,
+        )
+        return _CM.is_unknown_confirmation(result)
 
     def confirm_execution(self, confirmation_id: str, arguments: dict | None = None) -> Any:
         for registry in self.registries:

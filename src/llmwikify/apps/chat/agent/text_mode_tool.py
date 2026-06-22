@@ -1,4 +1,4 @@
-"""Text-mode tool-call parsing — shared between ChatService and ChatReActBridge.
+"""Text-mode tool-call parsing — shared between ChatService and ChatRunnerV2.
 
 Some LLMs (especially smaller or non-tool-aware ones) emit tool
 calls as inline text instead of using the OpenAI-style structured
@@ -11,7 +11,7 @@ We detect and execute these blocks the same way as native tool
 calls, suppressing the leaked markup from the user-visible stream.
 
 This module was extracted from ``service.py`` so that both
-``ChatService`` and ``ChatReActBridge`` can share the same
+``ChatService`` and ``ChatRunnerV2`` can share the same
 parsing logic.
 """
 

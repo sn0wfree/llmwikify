@@ -254,6 +254,7 @@ def test_runner_dependencies_are_minimal() -> None:
         "from llmwikify.apps.chat.agent.microcompact import",
         "from llmwikify.apps.chat.agent.text_mode_tool import",
         "from llmwikify.foundation.callback import",
+        "from llmwikify.foundation.utils import",
     }
     for line in src.splitlines():
         if line.startswith("from llmwikify") or line.startswith("import llmwikify"):

@@ -13,11 +13,11 @@ This avoids forcing every consumer to migrate to async in one step.
 
 from __future__ import annotations
 
-import inspect
 import logging
 from typing import Any
 
 from llmwikify.foundation.callback.context import AgentHookContext
+from llmwikify.foundation.utils import maybe_await as _maybe_await
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +67,6 @@ class AgentHook:
 
     def on_error(self, ctx: AgentHookContext, error: BaseException) -> None:
         pass
-
-
-async def _maybe_await(value: Any) -> Any:
-    if inspect.isawaitable(value):
-        return await value
-    return value
 
 
 class NoOpHook(AgentHook):

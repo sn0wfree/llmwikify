@@ -49,6 +49,7 @@ from llmwikify.apps.chat.skills.base import (
     SkillContext,
     SkillResult,
 )
+from llmwikify.foundation.utils import maybe_await as _maybe_await
 
 logger = logging.getLogger(__name__)
 
@@ -98,19 +99,6 @@ class ReactConfig:
     on_after_observe: HookCallable | None = None
     persist_state: HookCallable | None = None
     restore_state: Callable[[dict], dict] | None = None
-
-
-# ─── _maybe_await helper ──────────────────────────────────────────
-
-
-async def _maybe_await(value: Any) -> Any:
-    """Await value if it's awaitable; return as-is otherwise.
-
-    Mirrors ``runner_v2.py:_maybe_await`` so hooks may be sync or async.
-    """
-    if inspect.isawaitable(value):
-        return await value
-    return value
 
 
 # ─── State helpers (v0.50 compat: dict + dataclass) ───────────────

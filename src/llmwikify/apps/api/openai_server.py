@@ -167,7 +167,7 @@ class OpenAIStreamTranslator:
       - ``{"type": "tool_call_start", "tool": "...", ...}`` → ignored (we don't expose tool_calls to OpenAI clients)
       - ``{"type": "tool_call_end", ...}``                  → ignored
       - ``{"type": "tool_call_error", ...}``               → ignored
-      - ``{"type": "done", "final_response": "..."}``      → final stop chunk
+      - ``{"type": "done", "content": "..."}``                → final stop chunk
       - ``{"type": "error", "message": "..."}``            → end stream (no [DONE])
       - ``{"type": "save_warning", "reason": "..."}``      → ignored (internal signal)
 
@@ -410,7 +410,7 @@ def _make_chat_handler(model: str, request_timeout: float):
                         if event.get("type") == "message_delta":
                             accumulated.append(event.get("content", ""))
                         elif event.get("type") == "done":
-                            fr = event.get("final_response")
+                            fr = event.get("content")
                             if isinstance(fr, str) and fr:
                                 final_response = fr
                 except asyncio.TimeoutError:

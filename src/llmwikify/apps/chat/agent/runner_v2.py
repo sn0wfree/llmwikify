@@ -38,6 +38,7 @@ from llmwikify.apps.chat.agent.microcompact import build_microcompact_fn
 from llmwikify.apps.chat.agent.spec import ChatRunResult, ChatRunSpec
 from llmwikify.apps.chat.agent.text_mode_tool import TextModeParser
 from llmwikify.foundation.callback import AgentHook, AgentHookContext, NoOpHook
+from llmwikify.foundation.utils import maybe_await as _maybe_await
 
 logger = logging.getLogger(__name__)
 
@@ -437,8 +438,6 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                     chunk = flushed.get("text", "")
                     accumulated += chunk
                     yield {"type": "message_delta", "content": chunk}
-            if not content_from_parser and accumulated:
-                pass
             return
         else:
             try:
@@ -689,12 +688,6 @@ def _last_user_content(messages: list[dict[str, Any]]) -> str:
             content = m.get("content", "")
             return content if isinstance(content, str) else str(content)
     return ""
-
-
-async def _maybe_await(value: Any) -> Any:
-    if inspect.isawaitable(value):
-        return await value
-    return value
 
 
 class _StateTrace:

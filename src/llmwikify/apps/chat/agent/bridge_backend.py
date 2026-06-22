@@ -1,31 +1,26 @@
-"""ChatBridgeBackend — adapter from new components to ChatReActBridge's expected interface.
+"""ChatBridgeBackend — ``chat_service`` adapter for ChatRunnerV2.
 
-The bridge (``agent/chat_react.py``) was originally written against the
-old monolithic ``ChatService`` (which had 5 underscore-prefixed methods:
-``_truncate_messages``, ``_get_toolspec``, ``_llm_stream_with_retry``,
-``_execute_tool``, ``_persist_tool_result``).
+``ChatRunnerV2`` reads its collaborators off a duck-typed
+``chat_service`` object, expecting 3 underscore-prefixed methods plus a
+``wiki_service`` accessor:
 
-After the Phase 2 v0.41 refactor, those responsibilities were extracted
-to standalone components:
+  - ``_truncate_messages``     → delegates to ``ContextManager.truncate``
+  - ``_get_toolspec``          → delegates to ``ToolExecutor.get_toolspec``
+  - ``_llm_stream_with_retry`` → delegates to ``ToolExecutor.llm_stream_with_retry``
+  - ``wiki_service.get_llm()`` → the LLM client (needed for streaming)
 
-  - ``ToolExecutor``        — tool execution + DB persistence
-  - ``ContextManager``      — message truncation
-  - ``wiki_service.get_llm()`` — the LLM client (needed for streaming)
+This class is the single point of composition that wires those new
+standalone components into the shape the runner expects.
 
-This class is the single point of composition: it implements the 5-method
-interface that ``ChatReActBridge`` expects, by delegating to the
-appropriate new component.  This keeps the bridge itself free of any
-knowledge of the new architecture.
-
-Production wiring in ``ChatOrchestrator._chat_via_react``::
+Production wiring in ``ChatOrchestrator._chat_via_runner_v2``::
 
     backend = ChatBridgeBackend(
         tool_executor=self.tool_executor,
         context_manager=self.context_manager,
-        llm_client=self.wiki_service.get_llm(),
+        wiki_service=self.wiki_service,
         config=self.config,
     )
-    bridge = ChatReActBridge(chat_service=backend, config=self.config)
+    runner = ChatRunnerV2(chat_service=backend, ...)
 """
 
 from __future__ import annotations
@@ -38,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChatBridgeBackend:
-    """Adapter exposing the 5-method interface ChatReActBridge expects.
+    """Adapter exposing the 3-method interface ChatRunnerV2 expects.
 
     Methods
     -------
@@ -51,15 +46,9 @@ class ChatBridgeBackend:
     _llm_stream_with_retry(messages, tools)
         Delegate to ``ToolExecutor.llm_stream_with_retry``.
 
-    _execute_tool(tool_name, args, tool_registry, session_id, ctx)
-        Delegate to ``ToolExecutor.execute``.
-
-    _persist_tool_result(session_id, tool_name, args, result)
-        Delegate to ``ToolExecutor.persist_tool_result``.
-
-    The methods are kept underscore-prefixed to mirror the old
-    ``ChatService`` interface and avoid test rewrites — tests already
-    pass mock objects with these names.
+    The methods are kept underscore-prefixed to match the duck-typed
+    ``chat_service`` contract ChatRunnerV2 reads from — test stubs
+    already pass mock objects exposing these same names.
     """
 
     def __init__(
@@ -110,7 +99,7 @@ class ChatBridgeBackend:
     ) -> AsyncIterator[dict]:
         """Stream from LLM with first-chunk retry.
 
-        The bridge's reason callback iterates this directly; we delegate
+        ``ChatRunnerV2._stream_llm`` iterates this directly; we delegate
         to ``ToolExecutor.llm_stream_with_retry`` (which already
         implements the retry policy).
         """
@@ -119,31 +108,6 @@ class ChatBridgeBackend:
             messages, tools, llm,
         ):
             yield ev
-
-    async def _execute_tool(
-        self,
-        tool_name: str,
-        args: dict,
-        tool_registry: Any,
-        session_id: str,
-        ctx: Any,
-    ) -> dict | list:
-        """Execute a tool call and persist to DB."""
-        return await self._tool_executor.execute(
-            tool_name, args, tool_registry, session_id, ctx,
-        )
-
-    async def _persist_tool_result(
-        self,
-        session_id: str,
-        tool_name: str,
-        args: dict,
-        result: Any,
-    ) -> None:
-        """Persist a tool result to MemoryManager.context."""
-        await self._tool_executor.persist_tool_result(
-            session_id, tool_name, args, result,
-        )
 
 
 __all__ = ["ChatBridgeBackend"]

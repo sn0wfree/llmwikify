@@ -17,7 +17,6 @@ wrapper was deleted in v0.34.0.
 from __future__ import annotations
 
 import logging
-import warnings
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -445,10 +444,10 @@ class AgentService:
 
     @staticmethod
     def _is_unknown_confirmation(result: Any) -> bool:
-        if not isinstance(result, dict) or result.get("status") != "error":
-            return False
-        error = result.get("error", "")
-        return "Unknown confirmation ID" in error or "Invalid confirmation ID" in error
+        from llmwikify.apps.chat.agent.confirmation_manager import (
+            ConfirmationManager as _CM,
+        )
+        return _CM.is_unknown_confirmation(result)
 
     async def approve_confirmation(
         self, confirmation_id: str, wiki_id: str | None = None,
