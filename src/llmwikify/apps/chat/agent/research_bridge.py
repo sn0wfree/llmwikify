@@ -11,7 +11,10 @@ duplicated across both engines.
 from __future__ import annotations
 
 import logging
-from typing import Any, AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable
+from typing import Any
+
+from llmwikify.apps.chat.agent.research_runner import _state_get
 
 logger = logging.getLogger(__name__)
 
@@ -44,24 +47,24 @@ async def translate_react_events(
             reason = event.get("reason")
 
             if phase == "cancelled":
-                round_idx = getattr(state, "round", state.get("round", 0) if isinstance(state, dict) else 0)
-                phase_name = getattr(state, "phase", state.get("phase", "") if isinstance(state, dict) else "")
+                round_idx = _state_get(state, "round", 0)
+                phase_name = _state_get(state, "phase", "")
                 yield {"type": "cancelled", "round": round_idx, "phase": phase_name}
                 update_status(session_id, "cancelled", phase_name, -1)
 
             elif phase == "paused":
-                round_idx = getattr(state, "round", state.get("round", 0) if isinstance(state, dict) else 0)
-                phase_name = getattr(state, "phase", state.get("phase", "") if isinstance(state, dict) else "")
+                round_idx = _state_get(state, "round", 0)
+                phase_name = _state_get(state, "phase", "")
                 yield {"type": "paused", "round": round_idx, "phase": phase_name}
                 update_status(session_id, "paused", phase_name, round_idx)
 
             elif phase == "timeout":
                 yield {"type": "error", "error": f"Research timed out after {timeout_seconds}s"}
-                update_status(session_id, "timeout", getattr(state, "phase", ""), -1)
+                update_status(session_id, "timeout", _state_get(state, "phase", ""), -1)
 
             elif phase == "done" and reason == "max_rounds":
-                round_idx = getattr(state, "round", state.get("round", 0) if isinstance(state, dict) else 0)
-                max_rounds = getattr(state, "max_rounds", state.get("max_rounds", 0) if isinstance(state, dict) else 0)
+                round_idx = _state_get(state, "round", 0)
+                max_rounds = _state_get(state, "max_rounds", 0)
                 yield {"type": "round_max", "round": round_idx, "message": f"Reached max rounds ({max_rounds})"}
 
             elif phase == "done" and reason == "reason_returned_done" and action_done_handler is not None:
@@ -69,7 +72,7 @@ async def translate_react_events(
                     yield done_ev
 
         elif event_type == "reasoning":
-            phase_name = getattr(state, "phase", state.get("phase", "") if isinstance(state, dict) else "")
+            phase_name = _state_get(state, "phase", "")
             event["phase"] = phase_name
             yield event
 
