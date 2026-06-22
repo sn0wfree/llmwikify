@@ -70,6 +70,15 @@ class NodeType(str, Enum):
     PL_WHEN = "pl_when"
     PL_MAX_H = "pl_max_h"
     PL_MIN_H = "pl_min_h"
+    # PR-3 (2026-06-21): 6 new polars native operators
+    PL_CONCAT_LIST = "pl_concat_list"
+    PL_STR_CONTAINS = "pl_str_contains"
+    PL_STR_LENGTH = "pl_str_length"
+    PL_DT_YEAR = "pl_dt_year"
+    PL_DT_MONTH = "pl_dt_month"
+    PL_DT_DAY = "pl_dt_day"
+    PL_ALIAS = "pl_alias"
+    PL_FILL_NULL = "pl_fill_null"
 
     # QuantNodes (string operators — the LLM emits these names verbatim)
     @classmethod
@@ -146,6 +155,15 @@ OP_SPEC: dict[str, tuple[int, int, set[str] | Literal["*"]]] = {
     "pl_when": (1, 3, set()),  # condition, then_val, otherwise_val
     "pl_max_h": (1, 99, set()),
     "pl_min_h": (1, 99, set()),
+    # PR-3 (2026-06-21): polars native extensions
+    "pl_concat_list": (1, 99, set()),  # concat_list([expr1, expr2, ...])
+    "pl_str_contains": (1, 1, {"pattern"}),  # .str.contains(pattern)
+    "pl_str_length": (1, 1, set()),  # .str.lengths()
+    "pl_dt_year": (1, 1, set()),
+    "pl_dt_month": (1, 1, set()),
+    "pl_dt_day": (1, 1, set()),
+    "pl_alias": (1, 1, {"name"}),
+    "pl_fill_null": (1, 1, {"value"}),  # .fill_null(value)
     # Time-series rolling / ts (window required)
     "rolling_mean": (1, 1, {"window"}),
     "rolling_std": (1, 1, {"window"}),

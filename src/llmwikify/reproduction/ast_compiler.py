@@ -52,6 +52,15 @@ _POLARS_FNS: dict[str, Callable[[ASTNode, list[pl.Expr]], pl.Expr]] = {
     ),
     "pl_max_h": lambda n, c: pl.max_horizontal(*c),
     "pl_min_h": lambda n, c: pl.min_horizontal(*c),
+    # PR-3 (2026-06-21): 6 new polars native operators
+    "pl_concat_list": lambda n, c: pl.concat_list(c),
+    "pl_str_contains": lambda n, c: c[0].str.contains(n.kwargs["pattern"]),
+    "pl_str_length": lambda n, c: c[0].str.len_chars(),
+    "pl_dt_year": lambda n, c: c[0].dt.year(),
+    "pl_dt_month": lambda n, c: c[0].dt.month(),
+    "pl_dt_day": lambda n, c: c[0].dt.day(),
+    "pl_alias": lambda n, c: c[0].alias(n.kwargs["name"]),
+    "pl_fill_null": lambda n, c: c[0].fill_null(n.kwargs["value"]),
 }
 
 
