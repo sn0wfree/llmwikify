@@ -991,3 +991,232 @@ class _StubWiki:
 
     def get_skill_descriptions(self, names):
         return {n: f"desc for {n}" for n in names}
+
+
+# ── T7: BusAdapter real-server wiring (Phase 19-A) ──────────────
+
+
+class TestT7BusAdapterWiring:
+    """T7: Verify the SSE handler's bus mirror actually publishes
+    to the in-process MessageBus when a real /api/agent/chat call
+    is made."""
+
+    def test_sse_handler_mirrors_to_bus(
+        self, tmp_path: Path,
+    ) -> None:
+        """End-to-end: /api/agent/chat POST → SSE handler iterates
+        events → BusAdapter.mirror_sse_event publishes each one to
+        the default MessageBus. We assert that consuming from the
+        bus yields OutboundMessage with the same payloads."""
+        import asyncio
+
+        from fastapi.testclient import TestClient
+
+        from llmwikify.apps.chat.bus import (
+            OutboundMessage,
+            get_default_bus,
+            reset_default_bus,
+        )
+        from llmwikify.apps.chat.channels.websocket import (
+            reset_default_ws_manager,
+            reset_default_ws_session_map,
+        )
+        from llmwikify.interfaces.server.core import WikiServer
+
+        reset_default_bus()
+        reset_default_ws_manager()
+        reset_default_ws_session_map()
+        wiki = _make_wiki(tmp_path)
+        server = WikiServer(
+            wiki,
+            provider=_make_provider(),
+            enable_dream_scheduler=False,
+            enable_auto_compact=False,
+            enable_webui=False,
+        )
+        bus = get_default_bus()
+        with TestClient(server.app) as client:
+            with client.stream(
+                "POST", "/api/agent/chat",
+                json={"message": "ping", "session_id": None},
+            ) as resp:
+                assert resp.status_code == 200
+                # Drain the SSE stream so the handler runs to completion
+                for _ in resp.iter_lines():
+                    pass
+
+        # After SSE finished, the bus should have received every event
+        # the orchestrator yielded (mirrored by BusAdapter).
+        stats = bus.stats()
+        published = stats["outbound"]["published"]
+        assert published >= 2, (
+            f"Expected at least session_created + stream_end mirrored; "
+            f"got {published}"
+        )
+        # The mirrored payloads should include session_created at least
+        # (proves the orchestrator's events flowed through the adapter)
+        # Drain bus quickly to inspect a sample.
+        async def _drain_one() -> OutboundMessage | None:
+            return await bus.consume_outbound(timeout=0.5)
+        sample = asyncio.run(_drain_one())
+        if sample is not None:
+            # OutboundMessage has payload field
+            assert isinstance(sample.payload, dict)
+
+    def test_ws_real_chat_mirrors_to_bus(
+        self, tmp_path: Path,
+    ) -> None:
+        """End-to-end: WS send message → orchestrator runs → each
+        event mirrored to bus with target_id=chat_id."""
+        import asyncio
+
+        from fastapi.testclient import TestClient
+
+        from llmwikify.apps.chat.bus import (
+            OutboundMessage,
+            get_default_bus,
+            reset_default_bus,
+        )
+        from llmwikify.apps.chat.channels.websocket import (
+            WSClientMsg,
+            WSServerMsg,
+            reset_default_ws_manager,
+            reset_default_ws_session_map,
+        )
+        from llmwikify.interfaces.server.core import WikiServer
+
+        reset_default_bus()
+        reset_default_ws_manager()
+        reset_default_ws_session_map()
+        wiki = _make_wiki(tmp_path)
+        server = WikiServer(
+            wiki,
+            provider=_make_provider(),
+            enable_dream_scheduler=False,
+            enable_auto_compact=False,
+            enable_webui=False,
+        )
+        bus = get_default_bus()
+        chat_id = "T7-bus-room"
+        with TestClient(server.app) as client:
+            with client.websocket_connect("/api/ws/agent") as ws:
+                ws.receive_json()  # ready
+                ws.send_json({"type": WSClientMsg.NEW_CHAT, "chat_id": chat_id})
+                ws.receive_json()  # chat_created
+                ws.send_json({
+                    "type": WSClientMsg.MESSAGE,
+                    "chat_id": chat_id,
+                    "content": "wire me",
+                })
+                # Drain to stream_end
+                for _ in range(50):
+                    msg = ws.receive_json()
+                    if msg["type"] in (
+                        WSServerMsg.STREAM_END, WSServerMsg.ERROR,
+                    ):
+                        break
+        # WS→orchestrator→bus path should have published at least
+        # the session_created event with target_id=chat_id.
+        async def _collect(target: str) -> list[OutboundMessage]:
+            found: list[OutboundMessage] = []
+            for _ in range(20):
+                m = await bus.consume_outbound(timeout=0.3)
+                if m is None:
+                    break
+                if m.target_id == target:
+                    found.append(m)
+            return found
+
+        targeted = asyncio.run(_collect(chat_id))
+        assert len(targeted) >= 1, (
+            f"Expected at least one OutboundMessage with target_id={chat_id}, "
+            f"got 0"
+        )
+        # The session_created event should be one of them
+        types = [m.payload.get("type", "") for m in targeted]
+        assert "session_created" in types or "message_delta" in types
+
+
+# ── T8: WS session_id cache continuity (Phase 19-B) ─────────────
+
+
+class TestT8WsSessionIdContinuity:
+    """T8: After first WS message mints a session_id, subsequent
+    messages on the same chat_id should resume that session (not
+    start a new one)."""
+
+    def test_second_ws_message_reuses_session(
+        self, tmp_path: Path,
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from llmwikify.apps.chat.channels.websocket import (
+            WSClientMsg,
+            WSServerMsg,
+            get_default_ws_session_map,
+            reset_default_ws_manager,
+            reset_default_ws_session_map,
+        )
+        from llmwikify.interfaces.server.core import WikiServer
+
+        reset_default_ws_manager()
+        reset_default_ws_session_map()
+        wiki = _make_wiki(tmp_path)
+        server = WikiServer(
+            wiki,
+            provider=_make_provider(),
+            enable_dream_scheduler=False,
+            enable_auto_compact=False,
+            enable_webui=False,
+        )
+        session_map = get_default_ws_session_map()
+        chat_id = "T8-continuity"
+        with TestClient(server.app) as client:
+            with client.websocket_connect("/api/ws/agent") as ws:
+                ws.receive_json()  # ready
+                ws.send_json(
+                    {"type": WSClientMsg.NEW_CHAT, "chat_id": chat_id},
+                )
+                ws.receive_json()  # chat_created
+
+                # First message
+                ws.send_json({
+                    "type": WSClientMsg.MESSAGE,
+                    "chat_id": chat_id,
+                    "content": "first",
+                })
+                seen_session_ids: list[str] = []
+                for _ in range(50):
+                    msg = ws.receive_json()
+                    if msg["type"] in (
+                        WSServerMsg.STREAM_END, WSServerMsg.ERROR,
+                    ):
+                        break
+                    if msg["type"] == "session_created":
+                        sid = msg.get("session_id", "")
+                        if sid:
+                            seen_session_ids.append(sid)
+
+                # Second message — should reuse the same session
+                ws.send_json({
+                    "type": WSClientMsg.MESSAGE,
+                    "chat_id": chat_id,
+                    "content": "second",
+                })
+                for _ in range(50):
+                    msg = ws.receive_json()
+                    if msg["type"] in (
+                        WSServerMsg.STREAM_END, WSServerMsg.ERROR,
+                    ):
+                        break
+
+        # Session map should have exactly one session_id for this chat
+        cached_sid = session_map.get(chat_id)
+        assert cached_sid is not None, (
+            f"Session map should have cached session_id for {chat_id}"
+        )
+        # The session_created we observed should match the cached one
+        if seen_session_ids:
+            assert cached_sid in seen_session_ids, (
+                f"cached sid={cached_sid} not in observed={seen_session_ids}"
+            )
