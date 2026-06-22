@@ -1247,6 +1247,8 @@ re.sub(rf"{RUNTIME_CONTEXT_TAG}.*?{RUNTIME_CONTEXT_END}", "", prompt, flags=re.D
 - **运行时 `system_prompt` 字段语义** — 当前 user prefs 的 `system_prompt` 是 user 写的真指令
   ；未来若 user 写"忽略 goal_state"，需要更细的字段语义（如 `_instruction_prefs` vs `_data_prefs`）
 
+> 已发布为 v0.38.0（[release notes](../releases/v0.38.0.md)）
+
 ---
 
 ## 13. Phase 13 — MessageBus 进程内 pub/sub（借鉴 nanobot v0.2.1，2026-06-20）
@@ -1416,6 +1418,8 @@ def set_default_bus(bus: MessageBus | None): ...  # production injection
 - **多进程 / Redis bus** — Phase 15+
 - **Channel registry** — 后续 Phase：仿 nanobot channels/manager.py 设计 channel registry
 
+> 已发布为 v0.38.0（[release notes](../releases/v0.38.0.md)）
+
 ---
 
 ## 14. Phase 14 — WebSocket 双向流通道（借鉴 nanobot v0.2.1，2026-06-20）
@@ -1578,6 +1582,8 @@ class WebSocketManager:
 - **HMAC + TTL token** — Phase 15 `/api/ws/token` 增强
 - **WebSocketConfig pydantic 模型** — host/port/path/ssl_cert/... 可配置
 - **多进程 / Redis bus** — Phase 16+
+
+> 已发布为 v0.38.0（[release notes](../releases/v0.38.0.md)）
 - **WebUI WS 客户端** — webui 仓库另开 PR
 - **reconnect state resume** — 客户端断线恢复历史（Phase 17+）
 
@@ -1719,6 +1725,8 @@ class AgentRunner(ABC, Generic[SpecT, ResultT]):
 
 - **SubagentManager 真接基类（不依赖 collaborators）** — Phase 16：spec 自带 config / tool registry
 - **WorkflowActor / CronSkill 复用 AgentRunner** — Phase 16+
+
+> 已发布为 v0.38.0（[release notes](../releases/v0.38.0.md)）
 - **Provider / ToolRegistry 抽进 ABC** — Phase 17+
 - **`fail_on_tool_error` retry 策略** — Phase 16+ 借鉴 nanobot
 - **`progress_callback` / `checkpoint_callback`** — Phase 17+
@@ -1890,6 +1898,8 @@ class LLMProviderABC(ABC):
 - **`/api/health` 加 `provider_config` dump** — Phase 17+
 - **Provider snapshot 持久化 + config reload** — Phase 18+
 - **24 个 nanobot provider 集成** — 按需 Phase（先做需求大的如 Anthropic / OpenAI native）
+
+> 已发布为 v0.38.0（[release notes](../releases/v0.38.0.md)）
 - **tool_concurrency_safe / prepare_call** — future provider 需要时再加
 
 ---
@@ -1998,3 +2008,73 @@ TestClass（19 cases）做真实集成验证。
   其他 update_* 路径都先 read session 校验。
 - **真实 LLM 集成测试** — 仍用 mock_llm fixture；真实 LLM 测试需要 API key
   + 网络，留给 CI 配置。
+
+> 已发布为 v0.38.0（[release notes](../releases/v0.38.0.md)）
+
+---
+
+## 18. Phase 19 — BusAdapter + Bus/WS Wire-Up (2026-06-22)
+
+> Phase 13/14 借鉴完成 + Phase 16 抽象 + Phase 17 真测试暴露 DB bug，
+> 但 **SSE 路径仍直接 yield 给 SSE handler**，WS handler 仍 echo。
+> 本阶段（19-A/B/C）补完接线：
+>
+>   - **19-A**: BusAdapter 把 SSE 事件镜像到 MessageBus
+>   - **19-B**: WS `message` 真调 ChatOrchestrator.chat()
+>   - **19-C**: 真实集成测试覆盖 bus mirror + session 连续性
+
+### 18.1 BusAdapter (`apps/chat/bus/adapter.py`)
+
+```python
+class BusAdapter:
+    def mirror_sse_event(
+        self, event: dict, *,
+        target_id: str = "", session_key: str = "",
+        metadata: dict | None = None,
+    ) -> bool: ...
+
+    @staticmethod
+    def translate_sse_to_ws(event: dict) -> dict: ...
+```
+
+- `mirror_sse_event` 包装 `OutboundMessage(channel="http", payload=event)` 发布到 bus
+- 自动给 `message_delta` / `thinking` 标 `OUTBOUND_META_STREAM_DELTA`，`done` 标 `OUTBOUND_META_STREAM_END`
+- `translate_sse_to_ws` 覆盖 13 种 SSE event 类型（详见 release notes §4.3）
+- Bus 失败被 catch，不影响 SSE 流
+
+**SSE 路径接线（chat_sse.py）**：`event_generator` 在每次 `yield` 前调
+`bus_adapter.mirror_sse_event(event, target_id="", session_key=f"http:{session_id}")`。
+**SSE 客户端契约不变**，mirror 是副效应。
+
+### 18.2 WS Real Chat Wire (`apps/chat/channels/websocket.py`)
+
+`_handle_client_msg("message")` 在注入 `orchestrator` 后改为：
+
+1. 校验 `chat_id ∈ conn.subscribed_chats`
+2. `asyncio.create_task(_run_ws_chat(...))` 不阻塞 receive loop
+3. `_run_ws_chat` 遍历 orchestrator yield，每个事件同时走 3 路径：
+   - mirror 到 bus（target_id=chat_id）
+   - 翻译为 WS envelope
+   - `manager.send_to_chat(chat_id, ws_envelope)` fan-out
+
+**WsSessionMap**（chat_id → session_id）缓存 `session_created` /
+`session_init` 事件的 session_id，后续同 chat_id 的 message 复用。
+
+**fallback**：`chat_service=None` 时回退到 Phase 14 echo（dev mode / 单测）。
+
+### 18.3 真实集成测试覆盖
+
+`tests/test_integration_phase12_to_16_real.py` 新增：
+
+- **TestT7BusAdapterWiring** (2 cases) — SSE handler mirror / WS real chat mirror
+- **TestT8WsSessionIdContinuity** (1 case) — 同 chat_id 第二次 message 复用 session
+
+### 18.4 不在本次范围
+
+- **WebSocket HMAC + TTL token**（Phase 14.10 推迟项，留 v0.39）
+- **MessageBus Redis / 多进程**（Phase 13.10 推迟项，留 v0.39）
+- **LLMProvider ABC 真接 MiniMax/Xiaomi**（Phase 17+ 推迟项，留 v0.39）
+- **SubagentManager 改基类调用走 spec-only path**（Phase 15.9）
+- **WS reconnect + 状态恢复**（事件补发 / replay）
+
+> 已发布为 v0.38.0（[release notes](../releases/v0.38.0.md)）

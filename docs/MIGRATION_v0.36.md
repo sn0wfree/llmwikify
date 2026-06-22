@@ -127,6 +127,8 @@ async for event in ReActEngine(config).run(SkillContext(...)):
 
 - `docs/releases/v0.36.0.md` — Full release notes
 - `docs/releases/v0.37.0.md` — Full release notes
+- `docs/releases/v0.38.0.md` — Full release notes (Phase 12-19, nanobot v0.2.1 borrowings)
+- `docs/MIGRATION_v0.38.md` — v0.38 migration notes (bus + WS wire-up)
 - `docs/api/agent.md` — API reference (all events, all endpoints)
 - `docs/designs/v0.36-agentchat-hardening.md` — v0.36 design
 - `docs/designs/v0.37-react-loop.md` — v0.37 design

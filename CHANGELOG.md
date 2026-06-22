@@ -5,6 +5,60 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.38.0] - 2026-06-22
+
+Full release notes: [`docs/releases/v0.38.0.md`](docs/releases/v0.38.0.md)
+
+### Added — Nanobot v0.2.1 Borrowings
+
+- **Runtime Context Tag isolation** (Phase 12, apply-plan §12) —
+  per-call tool-result sandbox via `[Runtime Context]…[/Runtime Context]`
+  wrapping in `PromptBuilder`.
+- **MessageBus in-process pub/sub** (Phase 13, apply-plan §13) —
+  `MessageBus` dual `asyncio.Queue` (inbound unbounded / outbound
+  bounded 1024) with backpressure drop + log. New `BusAdapter` for
+  SSE→bus mirror + SSE→WS envelope translation (Phase 19-A).
+- **WebSocket bidirectional channel** (Phase 14, apply-plan §14) —
+  `WebSocketManager` + `_Connection` + `WsSessionMap` (chat_id →
+  session_id). `/api/ws/agent?token=<api_key>` endpoint with
+  `?token=` auth and `1008` close on mismatch.
+- **AgentRunner shared executor** (Phase 15, apply-plan §15) —
+  `AgentRunner[SpecT, ResultT]` ABC. `ChatRunnerV2` inherits it;
+  `SubagentManager.parent_runner` type hint relaxed to base.
+- **LLMProvider ABC + ProviderConfig + RetryMode + ThinkingStyle**
+  (Phase 16, apply-plan §16) — provider-agnostic core with
+  `from_dict()` / `to_dict()` round-trip; old `LLMProvider` Protocol
+  + `BaseLLMProvider` retained for backward compat.
+
+### Added — Bus+WS Wire-Up (Phase 19, apply-plan §19)
+
+- **SSE handler mirrors to bus** — every SSE event in
+  `/api/agent/chat` and `/confirmations/{id}/approve-and-continue`
+  is wrapped as `OutboundMessage` and published to the default
+  `MessageBus`. SSE wire format is **unchanged** (mirror is a
+  side-effect).
+- **WS `message` routes to `ChatOrchestrator.chat()`** (Phase 19-B) —
+  replaces Phase 14 echo with real chat. Each yield is mirrored to
+  bus + translated to WS envelope (`delta` / `stream_end` /
+  `tool_call(phase=…)`) + fan-out via `WebSocketManager.send_to_chat`.
+- **`WsSessionMap`** caches `session_id` from `session_created` /
+  `session_init` events so subsequent WS messages on the same
+  `chat_id` resume the conversation.
+
+### Fixed
+
+- **`set_session_metadata` upsert fix** (Phase 17, commit `472d890`) —
+  the previous UPDATE-only implementation silently failed when the
+  session row didn't exist yet, causing `GoalSkill` goal-state
+  writes to be lost. Now `INSERT OR IGNORE` + `UPDATE` two-step
+  upsert semantics.
+
+### Test Coverage
+
+- 22 real-server integration tests (Phase 17 + 19-C) — catch
+  integration bugs that unit tests miss.
+- 154 new unit tests across Phase 12-19.
+
 ## [0.35.0] - 2026-06-09
 
 ### Fixed

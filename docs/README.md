@@ -86,6 +86,24 @@ Bug reports and issue tracking.
 
 ---
 
+## 📦 Releases (`docs/releases/`)
+
+Per-version release notes. See [CHANGELOG.md](../CHANGELOG.md) for a condensed
+timeline; `docs/releases/` for the full feature-by-feature write-up of each
+release.
+
+| Release | Title | Status |
+|---------|-------|--------|
+| [v0.38.0](releases/v0.38.0.md) | Nanobot v0.2.1 Borrowings + Bus+WS Wire | **latest** |
+| [v0.37.0](releases/v0.37.0.md) | Triple ReAct Loop 统一 | — |
+| [v0.36.0](releases/v0.36.0.md) | AgentChat 全面硬化 | — |
+| [v0.33.0](releases/v0.33.0.md) | 5+1-Service Architecture | — |
+| [v0.32.5](releases/v0.32.5.md) | Skill Pipeline Split + 3-Facade Database | — |
+| [v0.32.0](releases/v0.32.0.md) | Skill Refactor | — |
+| [phase-6-11-cumulative](releases/phase-6-11-cumulative.md) | Phases 6-11 commit log (pre-v0.37) | — |
+
+---
+
 ## 📦 Archive (`docs/archive/`)
 
 Historical documents kept for reference. Not actively maintained.
@@ -131,6 +149,7 @@ docs/
 ├── REFERENCE_TRACKING_GUIDE.md
 │
 ├── designs/                           # 24 active/recent feature designs
+├── releases/                          # 6 per-version notes (v0.32 → v0.38)
 ├── research/                          # 1 landscape research doc
 ├── issues/                            # bug reports + issue tracker
 └── archive/
