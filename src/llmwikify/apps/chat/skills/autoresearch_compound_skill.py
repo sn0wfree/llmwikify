@@ -283,7 +283,7 @@ class AutoResearchCompoundSkill(Skill):
             action_type="read",
             requires_confirmation=False,
             tags=["autoresearch", "workflow", "execution"],
-            triggers=["/study", "研究："],
+            triggers=["/study"],
             trigger_param="question",
         ),
         "status": SkillAction(

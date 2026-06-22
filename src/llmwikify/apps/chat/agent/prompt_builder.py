@@ -279,10 +279,15 @@ class PromptBuilder:
                 tool_list += f" (+{len(tool_names) - 20} more)"
             sections.append(f"## Available tools\n{tool_list}")
         sections.append(
-            "When a user types a slash command (e.g. /study) or a Chinese "
-            "trigger (e.g. 研究：...), first call `get_skill_commands` to "
-            "discover available commands and their usage, then call the "
-            "appropriate skill tool."
+            "When a user types a slash command (e.g. /study), first "
+            "call `get_skill_commands` to discover available commands "
+            "and their usage, then call the appropriate skill tool. "
+            "For ordinary questions or tasks (e.g. messages that "
+            "merely mention 研究 / 调研 / research / investigate / "
+            "深入 without an explicit `/study` prefix), answer "
+            "directly using the available tools (read_file, exec, "
+            "grep, etc.) — do NOT invoke skill tools just because "
+            "the message sounds like a research request."
         )
         return "\n\n".join(sections)
 

@@ -329,6 +329,13 @@ class WikiServer:
                                 self._agent_service, "auto_compact", None,
                             ) is not None
                         ),
+                        # Phase 20 feature flag: the only trigger that
+                        # routes a user message to the Research workflow
+                        # is an explicit ``/study <question>`` prefix.
+                        # Any message that merely mentions 调研 / 研究 /
+                        # research without that prefix stays in normal
+                        # chat (see docs/releases/v0.38.0.md §14).
+                        "research_trigger": "/study",
                     },
                     "timestamp": datetime.utcnow().isoformat(),
                 }
@@ -363,6 +370,8 @@ class WikiServer:
                                 self._agent_service, "auto_compact", None,
                             ) is not None
                         ),
+                        # Phase 20: only `/study` routes to Research.
+                        "research_trigger": "/study",
                     },
                     "timestamp": datetime.utcnow().isoformat(),
                 }
