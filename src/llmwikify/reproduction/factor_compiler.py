@@ -33,6 +33,8 @@ from .error_categorizer import (
     categorize_compile_error,
     categorize_extract_error,
 )
+from .self_repairing import build_error_history, repair_once
+from .telemetry import get_telemetry
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +291,9 @@ class FactorCompiler:
             except (json.JSONDecodeError, TypeError):
                 pass
 
+        telemetry = get_telemetry()
+        telemetry.record("compile.start", factor=factor_name)
+
         if os.getenv("FACTOR_COMPILER_MOCK") == "1":
             t0 = time.monotonic()
             ast = _mock_ast(factor_name)
@@ -305,6 +310,7 @@ class FactorCompiler:
                     source="mock",
                     polars_expr=str(expr),
                 )
+                telemetry.record("compile.success", factor=factor_name, source="mock")
             except CompileError as exc:
                 result = CompileResult(
                     factor_name=factor_name,
@@ -315,21 +321,23 @@ class FactorCompiler:
                     elapsed_sec=time.monotonic() - t0,
                     source="mock",
                 )
+                telemetry.record("compile.failure", factor=factor_name, error=str(exc))
             self._save_cache(cache_path, result)
             return result
 
         t0 = time.monotonic()
         base_user_prompt = self._build_user_prompt(factor_data)
         last_structured_err: StructuredError | None = None
+        previous_errors: list[StructuredError] = []
         iterations = 0
 
         for it in range(self.max_iterations + 1):
             iterations = it + 1
             user_prompt = base_user_prompt
-            if last_structured_err is not None:
-                user_prompt += (
-                    f"\n\nPREVIOUS ATTEMPT FAILED:\n{last_structured_err.to_prompt()}\n\n"
-                    "Please fix the AST and return ONLY the corrected JSON."
+            # Stage A (PR-6+PR-7): inject error history instead of single error
+            if previous_errors:
+                user_prompt += "\n\n" + build_error_history(previous_errors) + (
+                    "\n\nPlease fix the AST and return ONLY the corrected JSON."
                 )
 
             samples = self._multi_sample(user_prompt, self.n_samples)
@@ -344,6 +352,7 @@ class FactorCompiler:
                     struct_err = categorize_extract_error(
                         ValueError("extract failed"), sample_text
                     )
+                    telemetry.record("extract.failure", factor=factor_name)
                     continue
                 try:
                     expr = compile_ast(ast_node)
@@ -354,6 +363,44 @@ class FactorCompiler:
                     struct_err = categorize_compile_error(
                         exc, available_columns=factor_data.get("l1", {}).get("input_columns")
                     )
+                    telemetry.record(
+                        "compile.failure",
+                        factor=factor_name,
+                        error_kind=struct_err.kind,
+                    )
+
+                    # Stage A (PR-6): Self-Repair try before re-prompting LLM
+                    repaired_node = repair_once(ast_node, struct_err, factor_data=factor_data)
+                    if repaired_node is not None and repaired_node is not ast_node:
+                        try:
+                            expr = compile_ast(repaired_node)
+                            polars_expr_str = str(expr)
+                            telemetry.record(
+                                "repair.success",
+                                factor=factor_name,
+                                error_kind=struct_err.kind,
+                            )
+                            logger.info(
+                                "[factor_compiler] %s Self-Repair OK (%s)",
+                                factor_name, struct_err.kind,
+                            )
+                            ast_node = repaired_node
+                            struct_err = None
+                            break
+                        except CompileError as repair_exc:
+                            telemetry.record(
+                                "repair.failure",
+                                factor=factor_name,
+                                error_kind=struct_err.kind,
+                            )
+                            logger.info(
+                                "[factor_compiler] %s Self-Repair failed (%s): %s",
+                                factor_name, struct_err.kind, repair_exc,
+                            )
+                            struct_err = categorize_compile_error(
+                                repair_exc,
+                                available_columns=factor_data.get("l1", {}).get("input_columns"),
+                            )
 
             if ast_node is not None and struct_err is None:
                 # Stage 2.5: complexity check (flag false-positive LLM truncation)
@@ -371,6 +418,8 @@ class FactorCompiler:
                         ),
                     )
                     last_structured_err = struct_err
+                    previous_errors.append(struct_err)
+                    telemetry.record("compile.incomplete", factor=factor_name)
                     logger.info(
                         "[factor_compiler] %s iter %d: AST incomplete (%d nodes, %d ops, %d expected)",
                         factor_name, iterations,
@@ -391,13 +440,21 @@ class FactorCompiler:
                     polars_expr=polars_expr_str,
                 )
                 self._save_cache(cache_path, result)
+                telemetry.record(
+                    "compile.success",
+                    factor=factor_name,
+                    iterations=iterations,
+                    elapsed_sec=round(elapsed, 3),
+                )
                 logger.info(
                     "[factor_compiler] %s compiled: valid=True, %d iters, %.1fs",
                     factor_name, iterations, elapsed,
                 )
                 return result
 
-            # All samples failed
+            # All samples failed - record error and continue
+            if struct_err is not None:
+                previous_errors.append(struct_err)
             last_structured_err = struct_err
             logger.info(
                 "[factor_compiler] %s iter %d failed: %s",
@@ -406,16 +463,25 @@ class FactorCompiler:
 
         # Exhausted iterations
         elapsed = time.monotonic() - t0
+        last_err_str = (
+            last_structured_err.to_prompt() if last_structured_err else "exhausted"
+        )
         result = CompileResult(
             factor_name=factor_name,
             code="",
             is_valid=False,
-            error_message=last_structured_err.to_prompt() if last_structured_err else "exhausted",
+            error_message=last_err_str,
             iterations=iterations,
             elapsed_sec=elapsed,
             source="llm",
         )
         self._save_cache(cache_path, result)
+        telemetry.record(
+            "compile.failure",
+            factor=factor_name,
+            iterations=iterations,
+            last_error=last_structured_err.kind if last_structured_err else None,
+        )
         return result
 
     def _multi_sample(self, user_prompt: str, k: int) -> list[str]:
