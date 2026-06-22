@@ -94,12 +94,18 @@ def _compile_qn_call(
 
 
 def _resolve_qn_op(op: str) -> Callable[..., pl.Expr]:
-    """Look up a QuantNodes operator function by name."""
-    from QuantNodes.operators.proxy import _OPERATOR_REGISTRY
-    for cat_ops in _OPERATOR_REGISTRY.values():
-        if op in cat_ops:
-            return cat_ops[op]["func"]
-    raise CompileError("UnknownOp", f"QN op {op!r} not found in registry", op=op)
+    """Look up a QuantNodes operator function by name.
+
+    PR-1 (2026-06-21): use public API get_operator (not the private registry).
+    Returns the function itself (None if not found).
+    """
+    from QuantNodes.operators.proxy import get_operator
+    op_func = get_operator(op)
+    if op_func is None:
+        raise CompileError(
+            "UnknownOp", f"QN op {op!r} not found in registry", op=op,
+        )
+    return op_func
 
 
 def compile_ast(node: ASTNode) -> pl.Expr:

@@ -438,11 +438,13 @@ def _execute_compiled_expression(
     # Execute expression (last line should be the result)
     local_ns = {"pl": pl, "polars": pl, "np": np, "pd": pd}
     # Provide all QuantNodes operators in namespace
+    # PR-1 (2026-06-21): use public API list_operators + get_operator (returns function).
     try:
-        from QuantNodes.operators.proxy import _OPERATOR_REGISTRY
-        for category_ops in _OPERATOR_REGISTRY.values():
-            for op_name, op_info in category_ops.items():
-                local_ns[op_name] = op_info["func"]
+        from QuantNodes.operators.proxy import get_operator, list_operators
+        for op_name in list_operators():
+            op_func = get_operator(op_name)
+            if op_func is not None:
+                local_ns[op_name] = op_func
     except Exception:
         pass
 
