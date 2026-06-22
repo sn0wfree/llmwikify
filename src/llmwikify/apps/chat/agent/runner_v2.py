@@ -40,6 +40,7 @@ from llmwikify.apps.chat.agent.spec import ChatRunResult, ChatRunSpec
 from llmwikify.apps.chat.agent.text_mode_tool import TextModeParser
 from llmwikify.foundation.callback import AgentHook, AgentHookContext, NoOpHook
 from llmwikify.foundation.utils import maybe_await as _maybe_await
+from llmwikify.foundation.utils_timing import measure_latency
 
 logger = logging.getLogger(__name__)
 
@@ -491,23 +492,31 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                 "call_id": call_id,
             }
 
-            try:
-                result = await self._execute_tool(
-                    tool_name, args, ctx.spec.tool_registry,
-                    ctx.spec.session_id, ctx,
-                )
-            except Exception as exc:
-                logger.warning("Tool %s failed", tool_name, exc_info=True)
-                await _maybe_await(self._hook.on_tool_error(
-                    ctx.hook_ctx(iteration), tc, exc,
-                ))
-                yield {
-                    "type": events.TOOL_CALL_ERROR,
-                    "tool": tool_name,
-                    "error": str(exc),
-                    "call_id": call_id,
-                }
-                continue
+            # Pass5 (2026-06-22): wrap tool execution with measure_latency
+            # CM so the resulting TOOL_CALL_END / TOOL_CALL_ERROR events
+            # carry a real ``duration_ms`` value (was previously always 0).
+            # The CM is a no-op cost (~3 lines, ~1us) and is the
+            # decorator-pattern Phase 5 step for runner_v2 (mirrors
+            # nanobot's inline ``time.monotonic() - start`` pattern).
+            with measure_latency() as get_ms:
+                try:
+                    result = await self._execute_tool(
+                        tool_name, args, ctx.spec.tool_registry,
+                        ctx.spec.session_id, ctx,
+                    )
+                except Exception as exc:
+                    logger.warning("Tool %s failed", tool_name, exc_info=True)
+                    await _maybe_await(self._hook.on_tool_error(
+                        ctx.hook_ctx(iteration), tc, exc,
+                    ))
+                    yield {
+                        "type": events.TOOL_CALL_ERROR,
+                        "tool": tool_name,
+                        "error": str(exc),
+                        "call_id": call_id,
+                        "duration_ms": get_ms(),
+                    }
+                    continue
 
             await _maybe_await(self._hook.after_tool_executed(
                 ctx.hook_ctx(iteration), tc, result,
@@ -564,6 +573,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                 "tool": tool_name,
                 "result": result,
                 "call_id": call_id,
+                "duration_ms": get_ms(),
             }
 
     def _observe(self, ctx: _RunContext, last_thinking: str) -> None:
