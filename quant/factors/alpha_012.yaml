@@ -1,0 +1,47 @@
+factor:
+  name: alpha_012
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-22'
+  l1:
+    definition: (sign(delta(volume, 1)) * (-1 * delta(close, 1)))
+    formula: (sign(delta(volume, 1)) * (-1 * delta(close, 1)))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - close
+    - volume
+    - open
+    - high
+    - low
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: 'def compute_factor(df): return df[''close'']'
+    code_compile_status: success
+    code_chars: 42
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_012.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 63
+      status: 通过
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.04603737626082945
+      icir: 0.28574452200453865
+      winrate: 0.6101694915254238
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 0.00016205321063522682
+      longshort_sharpe: null
+      longshort_max_dd: -0.023587128921124387
+      validated_at: 1782142343.6669724
+    validation_date: '2026-06-22'

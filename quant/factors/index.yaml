@@ -1,4 +1,20 @@
 factors:
+- name: alpha_001
+  name_cn: ''
+  asset_type: ''
+  category: ''
+  subcategory: ''
+  status: 已注册
+  definition: ''
+  file: alpha_001.yaml
+- name: alpha_012
+  name_cn: ''
+  asset_type: stock
+  category: formulaic
+  subcategory: ''
+  status: 已验证
+  definition: (sign(delta(volume, 1)) * (-1 * delta(close, 1)))
+  file: alpha_012.yaml
 - name: stock_fundamental_value_60d
   name_cn: 股票60日估值因子
   asset_type: stock
@@ -15,12 +31,32 @@ factors:
   status: 已注册
   definition: 过去20个交易日的涨跌幅
   file: stock/price/momentum_20d.yaml
+- name: stock_price_test_momentum
+  name_cn: ''
+  asset_type: ''
+  category: ''
+  subcategory: ''
+  status: 已注册
+  definition: ''
+  file: stock/price/test_momentum.yaml
+- name: test_telemetry_mock
+  name_cn: ''
+  asset_type: ''
+  category: ''
+  subcategory: ''
+  status: 已注册
+  definition: ''
+  file: test_telemetry_mock.yaml
 statistics:
-  total: 2
+  total: 6
   by_asset_type:
-    stock: 2
+    unknown: 3
+    stock: 3
   by_category:
+    unknown: 3
+    formulaic: 1
     fundamental: 1
     price: 1
   by_status:
-    已注册: 2
+    已注册: 5
+    已验证: 1
