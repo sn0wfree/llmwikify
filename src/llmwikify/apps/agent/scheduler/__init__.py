@@ -183,7 +183,7 @@ class WikiScheduler:
     def register_system_tasks(
         self,
         wiki: Any,
-        dream_editor: Any | None = None,
+        wiki_dream_editor: Any | None = None,
         notification_manager: Any | None = None,
     ) -> None:
         """Register default wiki system tasks.
@@ -193,9 +193,9 @@ class WikiScheduler:
         - Manual tasks (is_write=True): write operations, generate proposals
         """
 
-        def dream_task():
-            if dream_editor:
-                result = dream_editor.run_dream()
+        def wiki_dream_task():
+            if wiki_dream_editor:
+                result = wiki_dream_editor.run_wiki_dream()
                 if notification_manager and result.get("pending_review", 0) > 0:
                     notification_manager.add(
                         "info",
@@ -203,7 +203,7 @@ class WikiScheduler:
                         data=result,
                     )
                 return result
-            return {"status": "skipped", "reason": "no dream editor"}
+            return {"status": "skipped", "reason": "no wiki dream editor"}
 
         def check_raw_task():
             if hasattr(wiki, "raw_dir") and wiki.raw_dir.exists():
@@ -242,9 +242,9 @@ class WikiScheduler:
 
         # Manual tasks (write operations, generate proposals for review)
         self.add_task(
-            "dream_update",
+            "wiki_dream_update",
             "0 */2 * * *",
-            dream_task,
+            wiki_dream_task,
             "Analyze QuerySink and generate Dream proposals",
             is_write=True,
         )

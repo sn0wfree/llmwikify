@@ -3,7 +3,7 @@ import {
   FileText, Database, Activity, AlertTriangle, Sparkles, PlayCircle,
   RefreshCw, Circle, BarChart3, Clock,
 } from 'lucide-react';
-import { api, WikiStatus, SinkStatus, DreamEdit } from '../../api';
+import { api, WikiStatus, SinkStatus, WikiDreamEdit } from '../../api';
 import { useWikiStore } from '../../stores/wikiStore';
 import { LoadingState, EmptyState } from '../ui/states';
 import { cn } from '@/lib/utils';
@@ -13,13 +13,13 @@ interface GrowthMetrics {
   sinkEntries: number;
   sinkCount: number;
   urgentSinks: number;
-  dreamEdits: number;
-  dreamRuns: number;
+  wikiDreamEdits: number;
+  wikiDreamRuns: number;
 }
 
 interface ActivityEntry {
   timestamp: string;
-  type: 'dream' | 'warning' | 'info';
+  type: 'wiki_dream' | 'warning' | 'info';
   description: string;
 }
 
@@ -34,7 +34,7 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
   const isMultiWikiMode = propMultiWiki ?? storeMultiWiki;
   const [wikiStatus, setWikiStatus] = useState<WikiStatus | null>(null);
   const [sinkStatus, setSinkStatus] = useState<SinkStatus | null>(null);
-  const [dreamLog, setDreamLog] = useState<DreamEdit[]>([]);
+  const [wikiDreamLog, setWikiDreamLog] = useState<WikiDreamEdit[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -42,14 +42,14 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
 
   const loadData = async () => {
     try {
-      const [status, sink, dream] = await Promise.all([
+      const [status, sink, wikiDream] = await Promise.all([
         isMultiWikiMode && currentWikiId ? api.wiki.scoped.status(currentWikiId).catch(() => null) : api.wiki.status().catch(() => null),
         isMultiWikiMode && currentWikiId ? api.wiki.scoped.sinkStatus(currentWikiId).catch(() => null) : api.wiki.sinkStatus().catch(() => null),
-        api.dream.log(50).catch(() => []),
+        api.wikiDream.log(50).catch(() => []),
       ]);
       setWikiStatus(status);
       setSinkStatus(sink);
-      setDreamLog(dream);
+      setWikiDreamLog(wikiDream);
     } catch { /* Ignore */ } finally { setLoading(false); }
   };
 
@@ -64,14 +64,14 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
     sinkEntries: sinkStatus?.total_entries ?? 0,
     sinkCount: sinkStatus?.total_sinks ?? 0,
     urgentSinks: sinkStatus?.urgent_count ?? 0,
-    dreamEdits: dreamLog.reduce((sum, d) => sum + d.edits_applied, 0),
-    dreamRuns: dreamLog.length,
-  }), [wikiStatus, sinkStatus, dreamLog]);
+    wikiDreamEdits: wikiDreamLog.reduce((sum, d) => sum + d.edits_applied, 0),
+    wikiDreamRuns: wikiDreamLog.length,
+  }), [wikiStatus, sinkStatus, wikiDreamLog]);
 
   const activities = useMemo<ActivityEntry[]>(() => {
     const entries: ActivityEntry[] = [];
-    dreamLog.forEach((d) => {
-      entries.push({ timestamp: d.timestamp, type: 'dream', description: `Dream: ${d.edits_applied} edits across ${d.sinks_processed} sinks` });
+    wikiDreamLog.forEach((d) => {
+      entries.push({ timestamp: d.timestamp, type: 'wiki_dream', description: `Wiki Dream: ${d.edits_applied} edits across ${d.sinks_processed} sinks` });
     });
     sinkStatus?.sinks?.forEach((s) => {
       if (s.urgency !== 'ok') {
@@ -80,7 +80,7 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
     });
     entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
     return entries.slice(0, 20);
-  }, [dreamLog, sinkStatus]);
+  }, [wikiDreamLog, sinkStatus]);
 
   const sinkDistribution = useMemo(() => {
     if (!sinkStatus?.sinks) return [];
@@ -122,8 +122,8 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
           <KPICard label="Sink Entries" value={metrics.sinkEntries} icon={Database} tone="warning" />
           <KPICard label="Active Sinks" value={metrics.sinkCount} icon={Activity} tone="info" />
           <KPICard label="Urgent" value={metrics.urgentSinks} icon={AlertTriangle} tone={metrics.urgentSinks > 0 ? 'danger' : 'muted'} />
-          <KPICard label="Dream Edits" value={metrics.dreamEdits} icon={Sparkles} tone="success" />
-          <KPICard label="Dream Runs" value={metrics.dreamRuns} icon={PlayCircle} tone="info" />
+          <KPICard label="Wiki Dream Edits" value={metrics.wikiDreamEdits} icon={Sparkles} tone="success" />
+          <KPICard label="Wiki Dream Runs" value={metrics.wikiDreamRuns} icon={PlayCircle} tone="info" />
         </div>
 
         {/* Charts Grid */}
@@ -192,32 +192,32 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
             <HealthDonut
               pages={metrics.pages}
               sinkEntries={metrics.sinkEntries}
-              dreamEdits={metrics.dreamEdits}
+              wikiDreamEdits={metrics.wikiDreamEdits}
               urgentSinks={metrics.urgentSinks}
             />
           </div>
 
-          {/* Dream Activity */}
+          {/* Wiki Dream Activity */}
           <div className="rounded-xl glass p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-primary" />
-                Dream Activity
+                Wiki Dream Activity
               </h2>
               <span className="text-[10px] text-muted-foreground font-mono">
-                {dreamLog.length} runs
+                {wikiDreamLog.length} runs
               </span>
             </div>
-            {dreamLog.length === 0 ? (
+            {wikiDreamLog.length === 0 ? (
               <EmptyState
                 variant="compact"
                 icon={<Sparkles className="w-5 h-5" />}
-                title="No dream runs"
-                description="Run a dream pass to consolidate sinks."
+                title="No wiki dream runs"
+                description="Run a wiki dream pass to consolidate sinks."
               />
             ) : (
               <div className="space-y-3 max-h-72 overflow-y-auto pr-2 -mr-2">
-                {dreamLog.slice(0, 10).map((d, i) => (
+                {wikiDreamLog.slice(0, 10).map((d, i) => (
                   <div key={i} className="flex items-start gap-3 group">
                     <div className="relative shrink-0 mt-1.5">
                       <div className="w-2 h-2 rounded-full bg-primary ring-2 ring-background" />
@@ -261,7 +261,7 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
                     <div className="relative shrink-0 mt-1.5">
                       <div className={cn(
                         'w-2 h-2 rounded-full ring-2 ring-background',
-                        a.type === 'dream' && 'bg-success',
+                        a.type === 'wiki_dream' && 'bg-success',
                         a.type === 'warning' && 'bg-warning',
                         a.type === 'info' && 'bg-primary',
                       )} />
@@ -349,8 +349,8 @@ function UrgencyBadge({ tone, label, range }: { tone: string; label: string; ran
   );
 }
 
-function HealthDonut({ pages, sinkEntries, dreamEdits, urgentSinks }: { pages: number; sinkEntries: number; dreamEdits: number; urgentSinks: number }) {
-  const total = pages + sinkEntries + dreamEdits + Math.max(urgentSinks, 0);
+function HealthDonut({ pages, sinkEntries, wikiDreamEdits, urgentSinks }: { pages: number; sinkEntries: number; wikiDreamEdits: number; urgentSinks: number }) {
+  const total = pages + sinkEntries + wikiDreamEdits + Math.max(urgentSinks, 0);
   if (total === 0) {
     return (
       <EmptyState
@@ -370,7 +370,7 @@ function HealthDonut({ pages, sinkEntries, dreamEdits, urgentSinks }: { pages: n
   const segments = [
     { label: 'Pages', value: pages, colorVar: '--chart-1' },
     { label: 'Sink Entries', value: sinkEntries, colorVar: '--chart-2' },
-    { label: 'Dream Edits', value: dreamEdits, colorVar: '--chart-3' },
+    { label: 'Wiki Dream Edits', value: wikiDreamEdits, colorVar: '--chart-3' },
     { label: 'Urgent', value: urgentSinks, colorVar: '--destructive' },
   ].filter((s) => s.value > 0);
 

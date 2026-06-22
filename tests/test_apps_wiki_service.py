@@ -5,8 +5,8 @@ Covers:
   - WikiService metadata (name, init, docstring)
   - Wiki resolution (get_default_wiki_id, get_wiki)
   - LLM lazy init (get_llm, reload_llm)
-  - Factory methods (dream_editor, notification_manager, scheduler, tool_registry)
-  - Dream lifecycle (run_dream, get_dream_log, get_dream_proposals,
+  - Factory methods (wiki_dream_editor, notification_manager, scheduler, tool_registry)
+  - Wiki dream lifecycle (run_wiki_dream, get_wiki_dream_log, get_wiki_dream_proposals,
     approve/reject_proposal, batch_approve, apply_proposals)
   - Notifications (list, mark_read)
   - Confirmations (list, approve, reject, batch)
@@ -128,7 +128,7 @@ class TestWikiServiceMetadata:
     def test_init(self, wiki_service: WikiService) -> None:
         assert wiki_service.wiki_registry is not None
         assert wiki_service.db is not None
-        assert wiki_service._dream_editors == {}
+        assert wiki_service._wiki_dream_editors == {}
         assert wiki_service._notification_managers == {}
         assert wiki_service._schedulers == {}
         assert wiki_service._tool_registries == {}
@@ -176,30 +176,30 @@ class TestToolRegistryFactory:
             wiki_service.get_tool_registry(None)
 
 
-# ─── Dream lifecycle ────────────────────────────────────────────
+# ─── Wiki dream lifecycle ────────────────────────────────────────────
 
 
-class TestDreamLifecycle:
+class TestWikiDreamLifecycle:
     def test_get_dream_log_no_wiki(self, wiki_service: WikiService) -> None:
         wiki_service.wiki_registry.default_id = None
-        result = wiki_service.get_dream_log(None)
+        result = wiki_service.get_wiki_dream_log(None)
         assert result == []
 
     def test_get_dream_proposals_no_wiki(self, wiki_service: WikiService) -> None:
         wiki_service.wiki_registry.default_id = None
-        result = wiki_service.get_dream_proposals(None)
+        result = wiki_service.get_wiki_dream_proposals(None)
         assert result == {"proposals": {}, "stats": {}}
 
     def test_approve_proposal_not_found(self, wiki_service: WikiService) -> None:
-        result = wiki_service.approve_proposal("nonexistent")
+        result = wiki_service.approve_wiki_dream_proposal("nonexistent")
         assert result["status"] == "error"
 
     def test_reject_proposal_not_found(self, wiki_service: WikiService) -> None:
-        result = wiki_service.reject_proposal("nonexistent")
+        result = wiki_service.reject_wiki_dream_proposal("nonexistent")
         assert result["status"] == "error"
 
     def test_batch_approve_proposals_empty(self, wiki_service: WikiService) -> None:
-        result = wiki_service.batch_approve_proposals([])
+        result = wiki_service.batch_approve_wiki_dream_proposals([])
         assert result["approved"] == 0
         assert result["results"] == []
 
@@ -275,7 +275,7 @@ class TestAgentStatus:
         assert "state" in result
         assert "scheduler_tasks" in result
         assert "pending_confirmations" in result
-        assert "dream_proposals" in result
+        assert "wiki_dream_proposals" in result
         assert "unread_notifications" in result
 
 

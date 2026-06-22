@@ -17,7 +17,7 @@ from llmwikify.foundation.callback import (
 )
 from llmwikify.foundation.callback.integrations import (
     AutoIngestHook,
-    DreamSyncHook,
+    WikiDreamSyncHook,
     WikiHook,
 )
 
@@ -141,11 +141,11 @@ async def test_hook_context_mutations_visible_across_hooks() -> None:
 
 def test_integration_hooks_instantiate() -> None:
     wiki = type("W", (), {"append_log": lambda self, *a, **k: None})()
-    dream = type("D", (), {"run_dream": lambda self: None})()
+    dream = type("D", (), {"run_wiki_dream": lambda self: None})()
 
     WikiHook(wiki)
-    DreamSyncHook(dream_editor=dream)
-    DreamSyncHook(dream_editor=None)
+    WikiDreamSyncHook(wiki_dream_editor=dream)
+    WikiDreamSyncHook(wiki_dream_editor=None)
     AutoIngestHook(wiki)
 
 
@@ -171,13 +171,13 @@ async def test_wiki_hook_logs_only_on_wiki_tools() -> None:
     ]
 
 
-async def test_dream_sync_flag() -> None:
-    hook = DreamSyncHook(dream_editor=None)
+async def test_wiki_dream_sync_flag() -> None:
+    hook = WikiDreamSyncHook(wiki_dream_editor=None)
     composite = CompositeHook([hook])
     ctx = AgentHookContext()
     await composite.after_tool_executed(ctx, _make_tool_call("wiki_synthesize"), _make_result(success=True))
-    assert hook.pending_dream is True
-    assert hook.check_and_run_dream() is False
+    assert hook.pending_wiki_dream is True
+    assert hook.check_and_run_wiki_dream() is False
 
 
 def test_add_remove_clear_registry() -> None:

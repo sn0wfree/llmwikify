@@ -76,17 +76,17 @@ class SkillService:
         # 4 CRUD skills + Phase 8 goal skill + Phase 10-E subagent skill
         try:
             from llmwikify.apps.chat.skills.crud import (
-                dream_skill,
                 goal_skill,
                 memory_skill,
                 notify_skill,
                 scheduler_skill,
                 subagent_skill,
+                wiki_dream_skill,
             )
             self.registry.register(memory_skill)
             self.registry.register(notify_skill)
             self.registry.register(scheduler_skill)
-            self.registry.register(dream_skill)
+            self.registry.register(wiki_dream_skill)
             self.registry.register(goal_skill)
             self.registry.register(subagent_skill)
         except ImportError:
@@ -169,8 +169,8 @@ class SkillService:
                 wiki_id = ctx.config.get("wiki_id")
                 try:
                     ctx.config.setdefault(
-                        "dream_editor",
-                        self.wiki_service.get_dream_editor(wiki_id),
+                        "wiki_dream_editor",
+                        self.wiki_service.get_wiki_dream_editor(wiki_id),
                     )
                 except (ValueError, KeyError):
                     pass

@@ -6,7 +6,7 @@ import { Card } from '../ui/legacy-card';
 import { Button } from '../ui/legacy-button';
 import { Badge } from '../ui/legacy-badge';
 
-export function DreamLog() {
+export function WikiDreamLog() {
   const [edits, setEdits] = useState<DreamEdit[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentWikiId } = useWikiStore();
@@ -17,7 +17,7 @@ export function DreamLog() {
 
   const loadEdits = async () => {
     try {
-      const log = await api.dream.log(undefined, currentWikiId || undefined);
+      const log = await api.wikiDream.log(undefined, currentWikiId || undefined);
       setEdits(log);
     } catch {
       setEdits([]);

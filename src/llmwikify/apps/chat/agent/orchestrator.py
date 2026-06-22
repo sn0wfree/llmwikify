@@ -605,8 +605,8 @@ class ChatOrchestrator:
         # Phase 6 (2026-06-19): /memory_dream prefix command.
         # Triggers the long-term fact extractor (borrowed from
         # nanobot agent/memory.py:859). Note: this is distinct
-        # from the existing ``/dream`` slash command which wraps
-        # ``apps/agent/dream_editor/`` (wiki edit proposals).
+        # from the existing ``/wiki_dream`` slash command which wraps
+        # ``apps/agent/wiki_dream_editor/`` (wiki edit proposals).
         async def memory_dream_handler(ctx: Any) -> AsyncIterator[dict]:
             from llmwikify.apps.chat.memory import MemoryManager
             from llmwikify.apps.chat.skills.crud.memory_dream_skill import (

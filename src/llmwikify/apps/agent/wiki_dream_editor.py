@@ -1,4 +1,4 @@
-"""Dream Editor - Surgical wiki page editing engine with proposal mode.
+"""WikiDream Editor - Surgical wiki page editing engine with proposal mode.
 
 Analyzes QuerySink content and generates edit proposals for human review.
 Small edits (< 100 chars) can be auto-approved. All edits are logged and reversible.
@@ -16,7 +16,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class ProposalManager:
+class WikiDreamProposalManager:
     """Manages Dream edit proposals with auto-approve for small changes.
 
     Reuses NotificationManager pattern: in-memory list with UUID IDs,
@@ -145,7 +145,7 @@ class ProposalManager:
         return before - len(self._proposals)
 
 
-class DreamEditor:
+class WikiDreamEditor:
     """Performs surgical edits to wiki pages based on QuerySink analysis.
 
     Workflow (proposal mode):
@@ -167,13 +167,13 @@ class DreamEditor:
         self.data_dir = data_dir or wiki.root / ".llmwikify" / "agent"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.edits_file = self.data_dir / "edits.jsonl"
-        self.proposal_manager = ProposalManager(db=db, wiki_id=wiki_id)
+        self.proposal_manager = WikiDreamProposalManager(db=db, wiki_id=wiki_id)
 
-    def run_dream(self) -> dict:
+    def run_wiki_dream(self) -> dict:
         """Execute a Dream cycle: generate proposals from sinks, auto-approve small edits.
 
         Does NOT write files directly. Returns proposal summary.
-        Use apply_proposals() to apply approved proposals.
+        Use apply_wiki_dream_proposals() to apply approved proposals.
         """
         sink_status = self.wiki.query_sink.status()
         sinks = sink_status.get("sinks", [])
@@ -208,7 +208,7 @@ class DreamEditor:
         results["proposals_generated"] = sum(all_stats.values())
         results["pending_review"] = all_stats["pending"]
 
-        self._log_dream_run(results)
+        self._log_wiki_dream_run(results)
         return results
 
     def _generate_proposals_from_sink(self, page_name: str) -> None:
@@ -296,7 +296,7 @@ class DreamEditor:
             source_entries=non_dup_entries,
         )
 
-    def apply_proposals(self, proposal_ids: list[str] | None = None) -> dict:
+    def apply_wiki_dream_proposals(self, proposal_ids: list[str] | None = None) -> dict:
         """Apply approved (or auto_approved) proposals to wiki files.
 
         Args:
@@ -418,7 +418,7 @@ class DreamEditor:
         self.wiki.append_log("dream_edit", f"Replaced section in {page_name} from Dream proposal")
 
     def _apply_surgical_edit(self, page: str, edit: dict) -> bool:
-        """Apply a single surgical edit operation. Legacy method, use apply_proposals instead."""
+        """Apply a single surgical edit operation. Legacy method, use apply_wiki_dream_proposals instead."""
         page_path = self.wiki.wiki_dir / f"{page}.md"
         if not page_path.exists():
             return False
@@ -464,11 +464,11 @@ class DreamEditor:
         logger.warning(f"Restore for {timestamp} requested - requires git integration for full support")
         return False
 
-    def _log_dream_run(self, results: dict) -> None:
+    def _log_wiki_dream_run(self, results: dict) -> None:
         with open(self.edits_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(results, ensure_ascii=False) + "\n")
 
-    def get_edit_log(self, limit: int = 20) -> list[dict]:
+    def get_wiki_dream_edit_log(self, limit: int = 20) -> list[dict]:
         if not self.edits_file.exists():
             return []
         entries = []

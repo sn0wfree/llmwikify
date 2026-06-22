@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api, DreamProposal } from '../../api';
+import { api, WikiDreamProposal } from '../../api';
 import { useToast } from './Toast';
 import { useWikiStore } from '../../stores/wikiStore';
 import { EmptyState } from '../agent/StateViews';
@@ -7,8 +7,8 @@ import { Card } from '../ui/legacy-card';
 import { Button } from '../ui/legacy-button';
 import { Badge } from '../ui/legacy-badge';
 
-export function DreamProposals() {
-  const [groups, setGroups] = useState<Record<string, DreamProposal[]>>({});
+export function WikiDreamProposals() {
+  const [groups, setGroups] = useState<Record<string, WikiDreamProposal[]>>({});
   const [stats, setStats] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -19,7 +19,7 @@ export function DreamProposals() {
 
   const loadProposals = useCallback(async () => {
     try {
-      const data = await api.dream.proposals(currentWikiId || undefined);
+      const data = await api.wikiDream.proposals(currentWikiId || undefined);
       setGroups(data.proposals);
       setStats(data.stats);
     } catch {
@@ -56,7 +56,7 @@ export function DreamProposals() {
     if (selected.size === 0) return;
     setActionLoading(true);
     try {
-      await api.dream.batchApprove(Array.from(selected));
+      await api.wikiDream.batchApprove(Array.from(selected));
       setSelected(new Set());
       loadProposals();
       addToast('success', `Approved ${selected.size} proposal${selected.size > 1 ? 's' : ''}`);
@@ -71,7 +71,7 @@ export function DreamProposals() {
     setShowApplyConfirm(false);
     setActionLoading(true);
     try {
-      const result = await api.dream.apply(undefined, currentWikiId || undefined);
+      const result = await api.wikiDream.apply(undefined, currentWikiId || undefined);
       loadProposals();
       addToast('success', `Applied ${result.applied} proposal${result.applied !== 1 ? 's' : ''}`);
     } catch (e) {
@@ -83,7 +83,7 @@ export function DreamProposals() {
 
   const handleApprove = async (id: string) => {
     try {
-      await api.dream.approve(id);
+      await api.wikiDream.approve(id);
       loadProposals();
       addToast('success', 'Approved');
     } catch (e) {
@@ -93,7 +93,7 @@ export function DreamProposals() {
 
   const handleReject = async (id: string) => {
     try {
-      await api.dream.reject(id);
+      await api.wikiDream.reject(id);
       loadProposals();
       addToast('success', 'Rejected');
     } catch (e) {

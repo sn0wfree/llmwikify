@@ -5,7 +5,7 @@ that wires together the 5+1-service architecture:
 
   - AppDatabase (3-facade aggregate)
   - ChatService (SSE chat + DB + session)
-  - WikiService (multi-wiki + dream/notify/scheduler/tool)
+  - WikiService (multi-wiki + wiki_dream/notify/scheduler/tool)
   - SkillService (skill registry + runtime)
   - HarnessService (6 eval primitives)
   - MemoryManager (6 memory stores)
@@ -387,33 +387,33 @@ class AgentService:
         ):
             yield event
 
-    # ─── WikiService delegation (dream/notify/scheduler/etc.) ─
+    # ─── WikiService delegation (wiki_dream/notify/scheduler/etc.) ─
 
-    async def run_dream(self, wiki_id: str | None = None) -> dict:
-        return await self.wiki_service.run_dream(wiki_id)
+    async def run_wiki_dream(self, wiki_id: str | None = None) -> dict:
+        return await self.wiki_service.run_wiki_dream(wiki_id)
 
-    def get_dream_log(
+    def get_wiki_dream_log(
         self, wiki_id: str | None = None, limit: int = 20,
     ) -> list[dict]:
-        return self.wiki_service.get_dream_log(wiki_id, limit)
+        return self.wiki_service.get_wiki_dream_log(wiki_id, limit)
 
-    def get_dream_proposals(self, wiki_id: str | None = None) -> dict:
-        return self.wiki_service.get_dream_proposals(wiki_id)
+    def get_wiki_dream_proposals(self, wiki_id: str | None = None) -> dict:
+        return self.wiki_service.get_wiki_dream_proposals(wiki_id)
 
-    def approve_proposal(self, proposal_id: str) -> dict:
-        return self.wiki_service.approve_proposal(proposal_id)
+    def approve_wiki_dream_proposal(self, proposal_id: str) -> dict:
+        return self.wiki_service.approve_wiki_dream_proposal(proposal_id)
 
-    def reject_proposal(self, proposal_id: str) -> dict:
-        return self.wiki_service.reject_proposal(proposal_id)
+    def reject_wiki_dream_proposal(self, proposal_id: str) -> dict:
+        return self.wiki_service.reject_wiki_dream_proposal(proposal_id)
 
-    def batch_approve_proposals(self, proposal_ids: list[str]) -> dict:
-        return self.wiki_service.batch_approve_proposals(proposal_ids)
+    def batch_approve_wiki_dream_proposals(self, proposal_ids: list[str]) -> dict:
+        return self.wiki_service.batch_approve_wiki_dream_proposals(proposal_ids)
 
-    async def apply_proposals(
+    async def apply_wiki_dream_proposals(
         self, wiki_id: str | None = None,
         proposal_ids: list[str] | None = None,
     ) -> dict:
-        return await self.wiki_service.apply_proposals(wiki_id, proposal_ids)
+        return await self.wiki_service.apply_wiki_dream_proposals(wiki_id, proposal_ids)
 
     def list_notifications(
         self, wiki_id: str | None = None, unread_only: bool = False,

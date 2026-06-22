@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from './test-utils';
-import { DreamProposals } from '../components/wiki/DreamProposals';
+import { WikiDreamProposals } from '../components/wiki/WikiDreamProposals';
 
 const mockProposals = vi.fn();
 const mockApprove = vi.fn();
@@ -16,20 +16,20 @@ vi.mock('../api', () => ({
   },
 }));
 
-describe('DreamProposals', () => {
+describe('WikiDreamProposals', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('should show loading state initially', () => {
     mockProposals.mockReturnValue(new Promise(() => {}));
-    render(<DreamProposals />);
+    render(<WikiDreamProposals />);
     expect(screen.getByText('Loading proposals...')).toBeInTheDocument();
   });
 
   it('should render empty state when no proposals', async () => {
     mockProposals.mockResolvedValue({ proposals: {}, stats: {} });
-    render(<DreamProposals />);
+    render(<WikiDreamProposals />);
 
     await waitFor(() => {
       expect(screen.getByText(/No pending dream proposals\.?/)).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe('DreamProposals', () => {
       stats: { pending: 1, auto_approved: 0 },
     });
 
-    render(<DreamProposals />);
+    render(<WikiDreamProposals />);
 
     await waitFor(() => {
       expect(screen.getByText('Test Page')).toBeInTheDocument();

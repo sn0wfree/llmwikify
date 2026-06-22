@@ -65,7 +65,7 @@ class WikiService:
         self._agent_db = db
 
         # Lazy-initialized subsystem managers (per wiki)
-        self._dream_editors: dict[str, Any] = {}
+        self._wiki_dream_editors: dict[str, Any] = {}
         self._notification_managers: dict[str, Any] = {}
         self._schedulers: dict[str, Any] = {}
         self._tool_registries: dict[str, Any] = {}
@@ -144,9 +144,9 @@ class WikiService:
 
     # ─── Factory methods ─────────────────────────────────────────
 
-    def get_dream_editor(self, wiki_id: str | None = None) -> Any:
-        """Get or create DreamEditor for the given wiki."""
-        return self._get_dream_editor(wiki_id)
+    def get_wiki_dream_editor(self, wiki_id: str | None = None) -> Any:
+        """Get or create WikiDreamEditor for the given wiki."""
+        return self._get_wiki_dream_editor(wiki_id)
 
     def get_notification_manager(
         self, wiki_id: str | None = None
@@ -158,21 +158,21 @@ class WikiService:
         """Get or create WikiScheduler for the given wiki."""
         return self._get_scheduler(wiki_id)
 
-    def _get_dream_editor(self, wiki_id: str | None = None) -> Any:
+    def _get_wiki_dream_editor(self, wiki_id: str | None = None) -> Any:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             raise ValueError("No wiki_id available")
-        if wiki_id not in self._dream_editors:
-            from llmwikify.apps.agent.dream_editor import DreamEditor
+        if wiki_id not in self._wiki_dream_editors:
+            from llmwikify.apps.agent.wiki_dream_editor import WikiDreamEditor
 
             wiki = self.get_wiki(wiki_id)
-            self._dream_editors[wiki_id] = DreamEditor(
+            self._wiki_dream_editors[wiki_id] = WikiDreamEditor(
                 wiki=wiki,
                 data_dir=self.data_dir / wiki_id,
                 db=self._wiki_db,
                 wiki_id=wiki_id,
             )
-        return self._dream_editors[wiki_id]
+        return self._wiki_dream_editors[wiki_id]
 
     def _get_notification_manager(
         self, wiki_id: str | None = None
@@ -203,9 +203,9 @@ class WikiService:
             scheduler_dir = self.data_dir / wiki_id / "scheduler"
             scheduler_dir.mkdir(parents=True, exist_ok=True)
             scheduler = WikiScheduler(scheduler_dir)
-            dream_editor = self._get_dream_editor(wiki_id)
+            wiki_dream_editor = self._get_wiki_dream_editor(wiki_id)
             nm = self._get_notification_manager(wiki_id)
-            scheduler.register_system_tasks(wiki, dream_editor, nm)
+            scheduler.register_system_tasks(wiki, wiki_dream_editor, nm)
             scheduler.load_state()
             self._schedulers[wiki_id] = scheduler
         return self._schedulers[wiki_id]
@@ -225,12 +225,12 @@ class WikiService:
 
     # ─── Dream (7 methods) ───────────────────────────────────────
 
-    async def run_dream(self, wiki_id: str | None = None) -> dict:
+    async def run_wiki_dream(self, wiki_id: str | None = None) -> dict:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             return {"status": "error", "error": "No wiki_id available"}
-        editor = self._get_dream_editor(wiki_id)
-        result = editor.run_dream()
+        editor = self._get_wiki_dream_editor(wiki_id)
+        result = editor.run_wiki_dream()
         if result.get("pending_review", 0) > 0:
             nm = self._get_notification_manager(wiki_id)
             nm.add(
@@ -240,49 +240,49 @@ class WikiService:
             )
         return result
 
-    def get_dream_log(
+    def get_wiki_dream_log(
         self, wiki_id: str | None = None, limit: int = 20
     ) -> list[dict]:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             return []
-        editor = self._get_dream_editor(wiki_id)
+        editor = self._get_wiki_dream_editor(wiki_id)
         return editor.get_edit_log(limit)
 
-    def get_dream_proposals(
+    def get_wiki_dream_proposals(
         self, wiki_id: str | None = None
     ) -> dict:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             return {"proposals": {}, "stats": {}}
-        editor = self._get_dream_editor(wiki_id)
+        editor = self._get_wiki_dream_editor(wiki_id)
         return {
             "proposals": editor.proposal_manager.get_pending_by_page(),
             "stats": editor.proposal_manager.get_stats(),
         }
 
-    def approve_proposal(self, proposal_id: str) -> dict:
-        for editor in self._dream_editors.values():
+    def approve_wiki_dream_proposal(self, proposal_id: str) -> dict:
+        for editor in self._wiki_dream_editors.values():
             p = editor.proposal_manager.approve(proposal_id)
             if p:
                 return p
         return {"status": "error", "error": "Proposal not found"}
 
-    def reject_proposal(self, proposal_id: str) -> dict:
-        for editor in self._dream_editors.values():
+    def reject_wiki_dream_proposal(self, proposal_id: str) -> dict:
+        for editor in self._wiki_dream_editors.values():
             p = editor.proposal_manager.reject(proposal_id)
             if p:
                 return p
         return {"status": "error", "error": "Proposal not found"}
 
-    def batch_approve_proposals(self, proposal_ids: list[str]) -> dict:
+    def batch_approve_wiki_dream_proposals(self, proposal_ids: list[str]) -> dict:
         results = []
         for pid in proposal_ids:
-            r = self.approve_proposal(pid)
+            r = self.approve_wiki_dream_proposal(pid)
             results.append(r)
         return {"approved": len(results), "results": results}
 
-    async def apply_proposals(
+    async def apply_wiki_dream_proposals(
         self,
         wiki_id: str | None = None,
         proposal_ids: list[str] | None = None,
@@ -290,8 +290,8 @@ class WikiService:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             return {"status": "error", "error": "No wiki_id available"}
-        editor = self._get_dream_editor(wiki_id)
-        result = editor.apply_proposals(proposal_ids)
+        editor = self._get_wiki_dream_editor(wiki_id)
+        result = editor.apply_wiki_dream_proposals(proposal_ids)
         if result.get("applied", 0) > 0:
             nm = self._get_notification_manager(wiki_id)
             nm.add(
@@ -408,14 +408,14 @@ class WikiService:
                 "state": "idle",
                 "scheduler_tasks": [],
                 "pending_confirmations": 0,
-                "dream_proposals": {},
+                "wiki_dream_proposals": {},
                 "unread_notifications": 0,
             }
 
         scheduler = self._get_scheduler(wiki_id)
         tasks = scheduler.list_tasks()
 
-        editor = self._get_dream_editor(wiki_id)
+        editor = self._get_wiki_dream_editor(wiki_id)
         dream_stats = editor.proposal_manager.get_stats()
 
         nm = self._get_notification_manager(wiki_id)
@@ -430,7 +430,7 @@ class WikiService:
             "pending_work": {},
             "action_log": [],
             "pending_confirmations": pending_confs,
-            "dream_proposals": dream_stats,
+            "wiki_dream_proposals": dream_stats,
             "unread_notifications": unread,
         }
 

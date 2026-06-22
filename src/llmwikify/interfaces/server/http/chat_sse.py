@@ -247,55 +247,55 @@ async def get_session_status(session_id: str):
     return {"session_id": session_id, "status": status}
 
 
-# --- Dream endpoints ---
+# --- Wiki Dream endpoints ---
 
-@router.get("/dream/log")
+@router.get("/wiki-dream/log")
 async def dream_log(request: Request, limit: int = 20):
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    return service.get_dream_log(wiki_id, limit)
+    return service.get_wiki_dream_log(wiki_id, limit)
 
 
-@router.post("/dream/run")
+@router.post("/wiki-dream/run")
 async def dream_run(request: Request):
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    return await service.run_dream(wiki_id)
+    return await service.run_wiki_dream(wiki_id)
 
 
-@router.get("/dream/proposals")
+@router.get("/wiki-dream/proposals")
 async def dream_proposals(request: Request):
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    return service.get_dream_proposals(wiki_id)
+    return service.get_wiki_dream_proposals(wiki_id)
 
 
-@router.post("/dream/proposals/{proposal_id}/approve")
+@router.post("/wiki-dream/proposals/{proposal_id}/approve")
 async def approve_proposal(proposal_id: str):
     service = get_agent_service()
-    return service.approve_proposal(proposal_id)
+    return service.approve_wiki_dream_proposal(proposal_id)
 
 
-@router.post("/dream/proposals/{proposal_id}/reject")
+@router.post("/wiki-dream/proposals/{proposal_id}/reject")
 async def reject_proposal(proposal_id: str):
     service = get_agent_service()
-    return service.reject_proposal(proposal_id)
+    return service.reject_wiki_dream_proposal(proposal_id)
 
 
-@router.post("/dream/proposals/batch-approve")
+@router.post("/wiki-dream/proposals/batch-approve")
 async def batch_approve_proposals(request: Request):
     body = await request.json()
     req = BatchApproveProposalsRequest(**body)
     service = get_agent_service()
-    return service.batch_approve_proposals(req.ids)
+    return service.batch_approve_wiki_dream_proposals(req.ids)
 
 
-@router.post("/dream/proposals/apply")
+@router.post("/wiki-dream/proposals/apply")
 async def apply_proposals(request: Request):
     body = await request.json()
     req = ApplyProposalsRequest(**body)
     service = get_agent_service()
-    return await service.apply_proposals(req.wiki_id, req.ids)
+    return await service.apply_wiki_dream_proposals(req.wiki_id, req.ids)
 
 
 # --- Notifications endpoints ---
@@ -348,7 +348,7 @@ async def agent_status(request: Request):
             "pending_work": {},
             "action_log": [],
             "pending_confirmations": 0,
-            "dream_proposals": {},
+            "wiki_dream_proposals": {},
             "unread_notifications": 0,
         }
 

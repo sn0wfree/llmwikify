@@ -36,12 +36,12 @@ class BatchApproveRequest(BaseModel):
 
 
 class BatchApproveProposalsRequest(BaseModel):
-    """POST /api/agent/dream/proposals/batch-approve"""
+    """POST /api/agent/wiki-dream/proposals/batch-approve"""
     ids: list[str] = Field(default_factory=list)
 
 
 class ApplyProposalsRequest(BaseModel):
-    """POST /api/agent/dream/proposals/apply"""
+    """POST /api/agent/wiki-dream/proposals/apply"""
     wiki_id: str | None = None
     ids: list[str] | None = None
 

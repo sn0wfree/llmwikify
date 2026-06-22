@@ -49,7 +49,7 @@ export function AgentLayout() {
     const fetchBadges = async () => {
       try {
         const status = await api.agent.status(currentWikiId || undefined);
-        const proposalsCount = Object.values(status.dream_proposals || {}).reduce(
+        const proposalsCount = Object.values(status.wiki_dream_proposals || {}).reduce(
           (a: number, b) => a + (Number(b) || 0), 0
         ) as number;
         setBadges({

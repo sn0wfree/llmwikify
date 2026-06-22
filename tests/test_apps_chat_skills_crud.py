@@ -9,7 +9,7 @@ Covers:
   - MemorySkill: metadata, append/query/summarize/clear
   - NotifySkill: metadata, list/mark_read/subscribe
   - SchedulerSkill: metadata, add_job/list_jobs/remove_job/trigger
-  - DreamSkill: metadata, run/get_proposals/approve/reject
+  - WikiDreamSkill: metadata, run/get_proposals/approve/reject
 
 Target: 30+ tests, no I/O, mocks for managers.
 """
@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 
 from llmwikify.apps.chat.skills import SkillContext, SkillResult
-from llmwikify.apps.chat.skills.crud.dream_skill import DreamSkill, _approve, _get_proposals, _reject, _run, dream_skill
+from llmwikify.apps.chat.skills.crud.wiki_dream_skill import WikiDreamSkill, _approve, _get_proposals, _reject, _run, wiki_dream_skill
 from llmwikify.apps.chat.skills.crud.memory_skill import MemorySkill, _add, _clear, _list, _search, memory_skill
 from llmwikify.apps.chat.skills.crud.notify_skill import NotifySkill, _list_notifications, _mark_read, _subscribe, notify_skill
 from llmwikify.apps.chat.skills.crud.scheduler_skill import SchedulerSkill, _add_job, _list_jobs, _remove_job, _trigger, scheduler_skill
@@ -121,13 +121,13 @@ class MockScheduler:
         return Task()
 
 
-class MockDreamEditor:
+class MockWikiDreamEditor:
     def __init__(self) -> None:
         self._proposals: list[dict] = [
             {"id": "p1", "status": "pending", "page_name": "test"},
         ]
 
-    def run_dream(self) -> dict:
+    def run_wiki_dream(self) -> dict:
         return {"status": "ok", "pending_review": 0}
 
     @property
@@ -176,7 +176,7 @@ def ctx_with_scheduler() -> SkillContext:
 
 @pytest.fixture
 def ctx_with_dream() -> SkillContext:
-    return SkillContext(config={"dream_editor": MockDreamEditor()})
+    return SkillContext(config={"wiki_dream_editor": MockWikiDreamEditor()})
 
 
 @pytest.fixture
@@ -346,23 +346,23 @@ class TestSchedulerSkillActions:
         assert r.status == "error"
 
 
-# ─── DreamSkill ──────────────────────────────────────────────────
+# ─── WikiDreamSkill ──────────────────────────────────────────────────
 
 
-class TestDreamSkillMetadata:
+class TestWikiDreamSkillMetadata:
     def test_name(self) -> None:
-        assert dream_skill.name == "dream"
+        assert wiki_dream_skill.name == "wiki_dream"
 
     def test_has_4_actions(self) -> None:
-        assert set(dream_skill.actions.keys()) == {"run", "get_proposals", "approve", "reject"}
+        assert set(wiki_dream_skill.actions.keys()) == {"run", "get_proposals", "approve", "reject"}
 
     def test_manifest(self) -> None:
-        m = dream_skill.manifest()
-        assert m.name == "dream"
+        m = wiki_dream_skill.manifest()
+        assert m.name == "wiki_dream"
         assert m.action_count == 4
 
 
-class TestDreamSkillActions:
+class TestWikiDreamSkillActions:
     @pytest.mark.asyncio
     async def test_run(self, ctx_with_dream: SkillContext) -> None:
         r = await _run({}, ctx_with_dream)

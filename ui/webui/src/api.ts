@@ -195,7 +195,7 @@ export interface Notification {
   read: boolean;
 }
 
-export interface DreamEdit {
+export interface WikiDreamEdit {
   timestamp: string;
   sinks_processed: number;
   edits_applied: number;
@@ -207,7 +207,7 @@ export interface DreamEdit {
   errors: Array<{ page: string; error: string }>;
 }
 
-export interface DreamProposal {
+export interface WikiDreamProposal {
   id: string;
   page_name: string;
   edit_type: string;
@@ -381,7 +381,7 @@ export const api = {
         pending_work: unknown;
         action_log: unknown[];
         pending_confirmations: number;
-        dream_proposals: Record<string, number>;
+        wiki_dream_proposals: Record<string, number>;
         unread_notifications: number;
       }>(`/agent/status${wikiId ? `?wiki_id=${wikiId}` : ''}`),
     tools: (wikiId?: string) => request<Array<{ name: string; description: string }>>(`/agent/tools${wikiId ? `?wiki_id=${wikiId}` : ''}`),
@@ -431,17 +431,17 @@ export const api = {
       request<ResearchRunStatus>(`/agent/research-runs/${runId}`),
   },
 
-  dream: {
-    log: (limit = 20, wikiId?: string) => request<DreamEdit[]>(`/agent/dream/log?limit=${limit}${wikiId ? `&wiki_id=${wikiId}` : ''}`),
-    run: (wikiId?: string) => request<Record<string, unknown>>(`/agent/dream/run${wikiId ? `?wiki_id=${wikiId}` : ''}`, { method: 'POST' }),
-    proposals: (wikiId?: string) => request<{ proposals: Record<string, DreamProposal[]>; stats: Record<string, number> }>(`/agent/dream/proposals${wikiId ? `?wiki_id=${wikiId}` : ''}`),
-    approve: (id: string) => request<DreamProposal>(`/agent/dream/proposals/${id}/approve`, { method: 'POST' }),
-    reject: (id: string) => request<DreamProposal>(`/agent/dream/proposals/${id}/reject`, { method: 'POST' }),
-    batchApprove: (ids: string[]) => request<{ approved: number; results: DreamProposal[] }>('/agent/dream/proposals/batch-approve', {
+  wikiDream: {
+    log: (limit = 20, wikiId?: string) => request<WikiDreamEdit[]>(`/agent/wiki-dream/log?limit=${limit}${wikiId ? `&wiki_id=${wikiId}` : ''}`),
+    run: (wikiId?: string) => request<Record<string, unknown>>(`/agent/wiki-dream/run${wikiId ? `?wiki_id=${wikiId}` : ''}`, { method: 'POST' }),
+    proposals: (wikiId?: string) => request<{ proposals: Record<string, WikiDreamProposal[]>; stats: Record<string, number> }>(`/agent/wiki-dream/proposals${wikiId ? `?wiki_id=${wikiId}` : ''}`),
+    approve: (id: string) => request<WikiDreamProposal>(`/agent/wiki-dream/proposals/${id}/approve`, { method: 'POST' }),
+    reject: (id: string) => request<WikiDreamProposal>(`/agent/wiki-dream/proposals/${id}/reject`, { method: 'POST' }),
+    batchApprove: (ids: string[]) => request<{ approved: number; results: WikiDreamProposal[] }>('/agent/wiki-dream/proposals/batch-approve', {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),
-    apply: (ids?: string[], wikiId?: string) => request<{ applied: number; errors: unknown[] }>(`/agent/dream/proposals/apply${wikiId ? `?wiki_id=${wikiId}` : ''}`, {
+    apply: (ids?: string[], wikiId?: string) => request<{ applied: number; errors: unknown[] }>(`/agent/wiki-dream/proposals/apply${wikiId ? `?wiki_id=${wikiId}` : ''}`, {
       method: 'POST',
       body: JSON.stringify({ ids: ids || null }),
     }),

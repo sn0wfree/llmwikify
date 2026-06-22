@@ -85,17 +85,17 @@ class TestSkillServiceReset:
 
 
 class TestSkillServiceWikiServiceInjection:
-    """P0: Verify SkillService injects dream_editor/notification_manager/
+    """P0: Verify SkillService injects wiki_dream_editor/notification_manager/
     scheduler into ctx.config via wiki_service."""
 
     def test_wiki_service_stored(self):
         svc = SkillService(wiki_service="fake_wiki_service")
         assert svc.wiki_service == "fake_wiki_service"
 
-    def test_inject_dream_editor_into_ctx(self):
+    def test_inject_wiki_dream_editor_into_ctx(self):
         class _FakeWikiService:
-            def get_dream_editor(self, wiki_id=None):
-                return "dream_editor_instance"
+            def get_wiki_dream_editor(self, wiki_id=None):
+                return "wiki_dream_editor_instance"
 
         class _FakeCtx:
             def __init__(self):
@@ -108,12 +108,12 @@ class TestSkillServiceWikiServiceInjection:
             wiki_id = ctx.config.get("wiki_id")
             try:
                 ctx.config.setdefault(
-                    "dream_editor",
-                    svc.wiki_service.get_dream_editor(wiki_id),
+                    "wiki_dream_editor",
+                    svc.wiki_service.get_wiki_dream_editor(wiki_id),
                 )
             except (ValueError, KeyError):
                 pass
-        assert ctx.config["dream_editor"] == "dream_editor_instance"
+        assert ctx.config["wiki_dream_editor"] == "wiki_dream_editor_instance"
 
     def test_inject_notification_manager_into_ctx(self):
         class _FakeWikiService:
@@ -166,13 +166,13 @@ class TestSkillServiceWikiServiceInjection:
 
         svc = SkillService(wiki_service=None)
         ctx = _FakeCtx()
-        assert "dream_editor" not in ctx.config
+        assert "wiki_dream_editor" not in ctx.config
         assert "notification_manager" not in ctx.config
         assert "scheduler" not in ctx.config
 
     def test_wiki_service_value_error_skips(self):
         class _FakeWikiService:
-            def get_dream_editor(self, wiki_id=None):
+            def get_wiki_dream_editor(self, wiki_id=None):
                 raise ValueError("No wiki_id available")
 
         class _FakeCtx:
@@ -186,9 +186,9 @@ class TestSkillServiceWikiServiceInjection:
             wiki_id = ctx.config.get("wiki_id")
             try:
                 ctx.config.setdefault(
-                    "dream_editor",
-                    svc.wiki_service.get_dream_editor(wiki_id),
+                    "wiki_dream_editor",
+                    svc.wiki_service.get_wiki_dream_editor(wiki_id),
                 )
             except (ValueError, KeyError):
                 pass
-        assert "dream_editor" not in ctx.config
+        assert "wiki_dream_editor" not in ctx.config

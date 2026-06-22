@@ -1,4 +1,4 @@
-"""DreamSyncHook — flag a pending dream after Sink-related tool calls."""
+"""WikiDreamSyncHook — flag a pending wiki dream after Sink-related tool calls."""
 
 from __future__ import annotations
 
@@ -11,12 +11,12 @@ from llmwikify.foundation.callback.context import AgentHookContext
 logger = logging.getLogger(__name__)
 
 
-class DreamSyncHook(AgentHook):
-    name = "dream_sync"
+class WikiDreamSyncHook(AgentHook):
+    name = "wiki_dream_sync"
 
-    def __init__(self, dream_editor: Any | None = None) -> None:
-        self.dream_editor = dream_editor
-        self.pending_dream = False
+    def __init__(self, wiki_dream_editor: Any | None = None) -> None:
+        self.wiki_dream_editor = wiki_dream_editor
+        self.pending_wiki_dream = False
 
     def after_tool_executed(
         self, ctx: AgentHookContext, tool_call: Any, result: Any,
@@ -24,15 +24,15 @@ class DreamSyncHook(AgentHook):
         if tool_call.name not in {"wiki_synthesize", "wiki_sink_status"}:
             return
         if getattr(result, "success", False):
-            self.pending_dream = True
+            self.pending_wiki_dream = True
 
-    def check_and_run_dream(self) -> bool:
-        if not self.pending_dream or self.dream_editor is None:
+    def check_and_run_wiki_dream(self) -> bool:
+        if not self.pending_wiki_dream or self.wiki_dream_editor is None:
             return False
-        self.pending_dream = False
+        self.pending_wiki_dream = False
         try:
-            self.dream_editor.run_dream()
+            self.wiki_dream_editor.run_wiki_dream()
             return True
         except Exception:
-            logger.exception("Dream sync failed")
+            logger.exception("Wiki dream sync failed")
             return False

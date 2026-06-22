@@ -1,0 +1,556 @@
+================================================================================
+ 完整 Chat 流程图 — llmwikify
+ 生成时间: 2026-06-22
+ 状态: Phase 7 后 (provider injection + DreamScheduler lifespan)
+================================================================================
+
+核心特征:
+  ◆ 3 个 HTTP 入口 (SSE / WebSocket / OpenAI-compat) → 1 个统一入口 (AgentService.chat)
+  ◆ 1 个 ReAct 循环 (ChatRunnerV2.run_stream) → 1 个 LLM 调用 (astream_chat)
+  ◆ 13 个 hook 点 (CompositeHook) 贯穿 5 步状态机
+  ◆ 微压缩 (microcompact) 默认 ON: 大工具结果 → marker
+
+
+================================================================================
+图 1: 完整调用链（端到端）
+================================================================================
+
+═══════════════════════════════════════════════════════════════════════════════
+ L0: USER ENTRY POINTS                          3 paths × 2 modes = 10 entries
+═══════════════════════════════════════════════════════════════════════════════
+
+   ┌─────────────────────────┐  ┌─────────────────────────┐  ┌─────────────────────────┐
+   │  POST /api/agent/chat   │  │  WS  /api/ws/agent      │  │  POST /v1/chat/         │
+   │  (chat_sse.py:85)       │  │  (websocket.py:498)     │  │      completions        │
+   │  ─────────              │  │  ─────────              │  │  (openai_server.py:     │
+   │  SSE-streaming          │  │  WS-streaming           │  │      313/406)           │
+   │                         │  │                         │  │  ─────────              │
+   │  Status / sessions /    │  │  Confirmations / stop   │  │  OpenAI-streaming       │
+   │   abort                 │  │   /sessions / events    │  │  OpenAI-non-streaming   │
+   └───────────┬─────────────┘  └───────────┬─────────────┘  └───────────┬─────────────┘
+               │                            │                            │
+               │  ┌─────────────────────────┴────────────────────────────┘
+               │  │
+               ▼  ▼  ▼
+
+═══════════════════════════════════════════════════════════════════════════════
+ L1: UNIFIED ENTRY                              (1 fan-in)
+═══════════════════════════════════════════════════════════════════════════════
+
+                       ┌────────────────────────────────────────┐
+                       │  AgentService.chat()                   │
+                       │  agent_service.py:143                  │
+                       │  ──────────                            │
+                       │  • Composition root (AppDB / WikiSvc / │
+                       │    MemoryMgr / ChatOrchestrator /       │
+                       │    SkillSvc)                            │
+                       │  • async for event in                  │
+                       │    self.chat_service.chat(...)         │
+                       │  • Pure delegation (no business logic) │
+                       │  • Returns AsyncIterator[dict]         │
+                       │    (SSE-style events)                  │
+                       │                                        │
+                       │  Phase 7 additions:                    │
+                       │  • + provider parameter                │
+                       │  • + dream_scheduler attribute         │
+                       │  • + start/stop_dream_scheduler()      │
+                       └────────────────────┬───────────────────┘
+                                            │
+                                            ▼
+
+═══════════════════════════════════════════════════════════════════════════════
+ L2: BUSINESS ORCHESTRATION                     (~1007 LOC, 22 public methods)
+═══════════════════════════════════════════════════════════════════════════════
+
+                       ┌────────────────────────────────────────┐
+                       │  ChatOrchestrator.chat()               │
+                       │  orchestrator.py:248                   │
+                       │  ──────────                            │
+                       │  • Session create / restore            │
+                       │  • JWT / wiki_id wiring                │
+                       │  • History loader                      │
+                       │  • Slash command dispatch              │
+                       │    ├ /stop /clear /help /status        │
+                       │    ├ /title /goal                      │
+                       │    └ /memory_dream (Phase 6 Step 3)    │
+                       │  • EventLog.record()                   │
+                       │  • Bus mirror (cross-channel pub/sub)  │
+                       │  • Microcompact on tool results        │
+                       └────────────────────┬───────────────────┘
+                                            │
+                                            ▼
+
+═══════════════════════════════════════════════════════════════════════════════
+ L3: PROMPT + CONTEXT PREPARATION               (pre-LLM, ~750 LOC)
+═══════════════════════════════════════════════════════════════════════════════
+
+            ┌──────────────────────┐     ┌──────────────────────────┐
+            │  PromptBuilder       │     │  ContextManager          │
+            │  prompt_builder.py   │     │  context_manager.py      │
+            │  ───────             │     │  ───────                 │
+            │  7-section           │     │  • In-memory AgentContext│
+            │  system prompt:      │     │  • LRU + TTL cache       │
+            │  1. identity         │     │  • Token-aware truncate  │
+            │  2. bootstrap        │     │  • LLM compact (fallback)│
+            │  3. tools (registry) │     │  • History load from DB  │
+            │  4. memory (Phase 6) │     │                          │
+            │  5. skills           │     │                          │
+            │  6. ReAct rules      │     │                          │
+            │  7. history/goal     │     │                          │
+            └──────────┬───────────┘     └────────────┬─────────────┘
+                       │                              │
+                       └──────────────┬───────────────┘
+                                      │
+                                      ▼
+
+═══════════════════════════════════════════════════════════════════════════════
+ L4: ReAct WIRING                               (150 LOC, 装配层)
+═══════════════════════════════════════════════════════════════════════════════
+
+                       ┌────────────────────────────────────────┐
+                       │  _chat_via_runner_v2()                 │
+                       │  orchestrator.py:794                   │
+                       │  ──────────                            │
+                       │  组装以下 7 个零件:                    │
+                       │  ┌──────────────────────────────────┐  │
+                       │  │ 1. ChatBridgeBackend(149 LOC)    │  │  ← adapter, 可消
+                       │  │    5 方法适配 (_truncate /        │  │
+                       │  │    _get_toolspec / _llm_stream /  │  │
+                       │  │    _execute_tool / _persist)      │  │
+                       │  ├──────────────────────────────────┤  │
+                       │  │ 2. CompositeHook([WikiHook,       │  │  ← 13 钩子点
+                       │  │    DreamSyncHook, AutoIngestHook, │  │
+                       │  │    _V2PersistenceHook])          │  │
+                       │  ├──────────────────────────────────┤  │
+                       │  │ 3. ChatRunnerV2                   │  │
+                       │  │    (state machine driver)         │  │
+                       │  ├──────────────────────────────────┤  │
+                       │  │ 4. SubagentManager               │  │
+                       │  │    (in-process spawn guardrails) │  │
+                       │  ├──────────────────────────────────┤  │
+                       │  │ 5. tool_registry (parent + child)│  │
+                       │  │    via CompositeToolRegistry      │  │
+                       │  ├──────────────────────────────────┤  │
+                       │  │ 6. _goal_active_predicate closure│  │
+                       │  │    (reads DB session metadata)   │  │
+                       │  ├──────────────────────────────────┤  │
+                       │  │ 7. ChatRunSpec                    │  │
+                       │  │    (microcompact=True, default)   │  │
+                       │  └──────────────────────────────────┘  │
+                       └────────────────────┬───────────────────┘
+                                            │
+                                            ▼
+
+═══════════════════════════════════════════════════════════════════════════════
+ L5: ReAct STATE MACHINE                        (737 LOC, 5 步循环)
+═══════════════════════════════════════════════════════════════════════════════
+
+                       ╔════════════════════════════════════════╗
+                       ║  ChatRunnerV2.run_stream(spec)        ║   ← 唯一 ReAct loop
+                       ║  runner_v2.py:140                     ║   ← AgentRunner ABC
+                       ║  ──────────                           ║     (泛型 SpecT/ResultT)
+                       ║  5-step state machine:                ║
+                       ║                                        ║
+                       ║  ┌─────────┐                          ║
+                       ║  │PRECHECK │ hook.before_iteration()  ║
+                       ║  │  abort? │ ──► break if abort       ║
+                       ║  │  paused?│                          ║
+                       ║  │  goal?  │                          ║
+                       ║  └────┬────┘                          ║
+                       ║       │ ok                            ║
+                       ║       ▼                               ║
+                       ║  ┌─────────┐                          ║
+                       ║  │ REASON  │ hook.on_stream()         ║
+                       ║  │  _stream│ hook.emit_reasoning()    ║
+                       ║  │   _llm  │                          ║
+                       ║  │         │ TextModeParser for       ║
+                       ║  │         │  text-mode LLMs          ║
+                       ║  │  yield: │                          ║
+                       ║  │   • thinking                       ║
+                       ║  │   • message_delta                  ║
+                       ║  │   • tool_call_start                ║
+                       ║  └────┬────┘                          ║
+                       ║       │ no tools → emit_done          ║
+                       ║       ▼                               ║
+                       ║  ┌─────────┐                          ║
+                       ║  │  ACT    │ hook.before_execute_tools║
+                       ║  │ for tc: │ hook.after_tool_executed ║
+                       ║  │  exec → │ hook.on_tool_error       ║
+                       ║  │  result │                          ║
+                       ║  │  append │ (microcompact:           ║
+                       ║  │  micro- │   replace big result     ║
+                       ║  │  compact│   with marker)           ║
+                       ║  │  confirm│ → confirmation_required  ║
+                       ║  └────┬────┘                          ║
+                       ║       │                                ║
+                       ║       ▼                               ║
+                       ║  ┌─────────┐                          ║
+                       ║  │OBSERVE  │                          ║
+                       ║  │ truncate│                          ║
+                       ║  │ thinking                          ║
+                       ║  │ to 200ch│                          ║
+                       ║  └────┬────┘                          ║
+                       ║       │ hook.after_iteration()        ║
+                       ║       │ memory.consolidate_session()  ║
+                       ║       │  (Phase 6, throttle 60s)      ║
+                       ║       │                                ║
+                       ║       └────► loop back to REASON      ║
+                       ║                                        ║
+                       ║  ┌─────────┐                          ║
+                       ║  │FINALIZE │ hook.finalize_content()  ║
+                       ║  │  done   │ (pipeline mode)          ║
+                       ║  │  save   │ save_warning on persist  ║
+                       ║  └─────────┘  error                   ║
+                       ╚══════════════════╤═════════════════════╝
+                                        │
+                                        ▼
+
+═══════════════════════════════════════════════════════════════════════════════
+ L6: LLM STREAMING + TOOL EXEC                  (the actual LLM call)
+═══════════════════════════════════════════════════════════════════════════════
+
+                       ┌────────────────────────────────────────┐
+                       │  ToolExecutor.llm_stream_with_retry()  │
+                       │  tool_executor.py:166                  │
+                       │  ──────────                            │
+                       │  • Retry on first chunk (transient)    │
+                       │  • Pass-through on subsequent chunks   │
+                       │  • Persist tool results to DB          │
+                       │  • Inject log_tool_call records        │
+                       └────────────────────┬───────────────────┘
+                                            │
+                                            ▼
+                       ┌────────────────────────────────────────┐
+                       │  StreamableLLMClient.astream_chat()    │
+                       │  foundation/llm/streamable.py          │
+                       │  ──────────                            │
+                       │  • HTTP POST → api.minimaxi.com        │
+                       │    (or xiaomi_mimo / openai_compat)    │
+                       │  • Parse SSE chunks                    │
+                       │  • Yield delta / thinking / tool_call  │
+                       └────────────────────┬───────────────────┘
+                                            │
+                                            ▼
+                       ┌────────────────────────────────────────┐
+                       │  LLM PROVIDER                          │
+                       │  ──────────                            │
+                       │  MiniMax M2.7 (default, ≤ 3 concurrent)│
+                       │  xiaomi_mimo (alternative)             │
+                       │  openai_compat (any compatible API)    │
+                       └────────────────────────────────────────┘
+
+
+================================================================================
+图 2: 13 个 Hook 点 × 5 步状态机时序
+================================================================================
+
+ iter 0          iter 1          iter 2          iter N
+   │                │                │                │
+   ├─PRECHECK       ├─PRECHECK       ├─PRECHECK       ├─PRECHECK
+   │  before_iter   │  before_iter   │  before_iter   │  before_iter
+   │                │                │                │
+   ├─REASON         ├─REASON         ├─REASON         ├─REASON
+   │  on_stream ◄────────── stream chunks from LLM ──────────►│
+   │  emit_reasoning ◄────── thinking blocks ────────────────►│
+   │  on_stream_end                                        ◄─┤
+   │  emit_reasoning_end                                   ◄─┤
+   │                │                │                │
+   ├─ACT            ├─ACT            ├─ACT            ├─ACT
+   │  before_exec_tools                                    ◄─┤
+   │  after_tool_executed                                   ◄─┤
+   │  on_tool_error                                         ◄─┤
+   │  on_confirmation                                       ◄─┤
+   │                │                │                │
+   ├─OBSERVE        ├─OBSERVE       ...              ...
+   │                │                │                │
+   ├─after_iter     ├─after_iter     ├─after_iter     ├─after_iter
+   │  (memory       │  (memory       │  (memory       │  (memory
+   │   consolidate) │   consolidate) │   consolidate) │   consolidate)
+   │                │                │                │
+   └─► loop ────────┴─► loop ────────┴─► loop ────────┴─► DONE
+
+  FINALIZE:
+    ├─ on_error (if any exception during iter)
+    └─ finalize_content (pipeline mode: text-modification)
+
+  LIFECYCLE (per-chat, not per-iter):
+    ├─ wants_streaming (capability check, before run_stream)
+    └─ (no explicit on_start / on_end — implicit via lifespan for Phase 7 DreamScheduler)
+
+
+================================================================================
+图 3: 状态对象生命周期
+================================================================================
+
+ ┌────────────────┐     ┌────────────────┐     ┌────────────────┐
+ │  ChatRunSpec   │     │ _RunContext    │     │ AgentContext   │
+ │  (input)       │     │ (per-call)     │     │ (per-session)  │
+ │  ────────      │     │ ────────       │     │ ────────       │
+ │  messages      │ ──► │  messages      │ ──► │ messages       │
+ │  tool_registry │     │  session_id    │     │ session_id     │
+ │  session_id    │     │  system_prompt │     │ wiki_id        │
+ │  microcompact= │     │  tool_registry │     │ status         │
+ │   True         │     │  spec (ref)    │     │ abort_event    │
+ │  hook          │     │  hook_ctx      │     │ tool_registry  │
+ │  goal_active_  │     │  iter (int)    │     │ (in-memory)    │
+ │   predicate    │     │  iter_tool_    │     │                │
+ │  ...           │     │   count        │     │ ── owns ──     │
+ │                │     │  accum_tools   │     │ LRU+TTL cache  │
+ │  IMMUTABLE     │     │                │     │                │
+ │  (passed in)   │     │  MUTABLE       │     │ PERSISTENT     │
+ │                │     │  (per call)    │     │ (in ContextMgr │
+ │                │     │                │     │  + DB backup) │
+ └────────────────┘     └────────────────┘     └────────────────┘
+        ▲                      ▲                       ▲
+        │                      │                       │
+        │ create in            │ create in             │ create in
+        │ _chat_via_           │ run_stream            │ ContextManager
+        │  runner_v2()         │ (cloned from spec)    │ .prepare_messages()
+
+ SIDECAR STATE (escape hatches):
+   • abort_event:  asyncio.Event  (HTTP /sessions/{id}/abort, /stop slash cmd)
+   • _session_status: dict[str, str]  (busy/idle, also in SessionManager)
+   • chat_db: shared between orchestrator + runner (via bridge_backend)
+   • MemoryManager: shared (consolidator + dream_run on after_iter)
+
+
+================================================================================
+图 4: 26 个内部 LLM 调用分类（不经过 AgentService）
+================================================================================
+
+ ┌──────────────────────────────┬────────────────────────────────────────┐
+ │ Module                       │ Purpose                                │
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ kernel/wiki/engines/         │ Wiki lint / gap detection /            │
+ │  analyzer.py (2 sites)       │ synthesis (JSON 1-shot)                │
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ kernel/wiki/mixins/          │ Source analysis / synthesis            │
+ │  analysis/llm.py (2)        │                                        │
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ kernel/wiki/mixins/io/       │ analyze_source                         │
+ │  source_analysis.py (1)     │                                        │
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ apps/chat/agent/             │ Token-budget truncation                │
+ │  context_manager.py:221     │ (Phase 5 compact)                      │
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ apps/chat/memory/            │ Phase 6 Consolidator + Dream           │
+ │  consolidator.py:245        │                                        │
+ │  dream.py:295               │                                        │
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ apps/chat/research_engine/   │ 6-step research framework              │
+ │  llm_step.py:202 (unified)  │ run_prompt()                           │
+ │  + 7 callers               │ (clarify/plan/reason/review/revise)    │
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ apps/chat/research_engine/   │ Streaming report (research SSE)         │
+ │  report.py:219              │ (parallel to chat, not in orchestrator)│
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ apps/chat/engine_helpers.py  │ chat_json helper                       │
+ │  :111                       │                                        │
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ apps/chat/skills/workflows/  │ Subagent subprocess driver             │
+ │  subagent_worker.py:226     │ (intentional isolation)                │
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ apps/chat/eval_harness.py:148│ LLM-as-judge (different model)         │
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ reproduction/ (14 sites)    │ Paper/factor extraction pipeline       │
+ │  extract_paper.py           │ (offline batch, has retry+logger)      │
+ │  extract_factors.py         │                                        │
+ │  factor_compiler.py         │                                        │
+ │  factor_compiler_react.py   │                                        │
+ │  l5_orchestrator.py (2)     │                                        │
+ │  llm_extraction/track_a.py   │                                        │
+ │  llm_extraction/track_b.py(4)│                                       │
+ │  llm_extraction/section_    │                                        │
+ │   detector.py + planner.py  │                                        │
+ ├──────────────────────────────┼────────────────────────────────────────┤
+ │ foundation/llm/             │ Debug context-window probe             │
+ │  context_windows.py:90      │                                        │
+ └──────────────────────────────┴────────────────────────────────────────┘
+
+ 全部 26 个都是 1-shot JSON 调用, 无 tool loop, 无 session/wiki 上下文
+ → 不应/无法走 AgentService.chat()
+
+
+================================================================================
+图 5: Mermaid 版（可渲染到 HTML）
+================================================================================
+
+```mermaid
+flowchart TD
+    subgraph L0["USER ENTRY POINTS"]
+        SSE["POST /api/agent/chat<br/>chat_sse.py:85"]
+        WS["WS /api/ws/agent<br/>websocket.py:498"]
+        OAI["POST /v1/chat/completions<br/>openai_server.py:313/406"]
+    end
+
+    subgraph L1["UNIFIED ENTRY"]
+        AS["AgentService.chat<br/>agent_service.py:143<br/><i>1 fan-in point</i>"]
+    end
+
+    subgraph L2["BUSINESS ORCHESTRATION"]
+        CO["ChatOrchestrator.chat<br/>orchestrator.py:248<br/><i>1007 LOC</i>"]
+        SC["Slash Commands<br/>/stop /clear /help /status<br/>/title /goal /memory_dream"]
+    end
+
+    subgraph L3["PROMPT + CONTEXT"]
+        PB["PromptBuilder<br/>prompt_builder.py<br/><i>7 sections</i>"]
+        CM["ContextManager<br/>context_manager.py<br/><i>LRU+TTL, truncate</i>"]
+    end
+
+    subgraph L4["WIRING (150 LOC)"]
+        WIRING["_chat_via_runner_v2<br/>orchestrator.py:794<br/><i>7 parts assembly</i>"]
+        BACKEND["ChatBridgeBackend<br/>149 LOC <i>adapter, removable</i>"]
+        HOOK["CompositeHook<br/><i>13 hook points</i>"]
+        SUB["SubagentManager<br/><i>5 guardrails</i>"]
+        SPEC["ChatRunSpec<br/><i>microcompact=True</i>"]
+    end
+
+    subgraph L5["ReAct LOOP (737 LOC, 5-step)"]
+        CR["ChatRunnerV2.run_stream<br/>runner_v2.py:140<br/><i>AgentRunner[Spec, Result]</i>"]
+        PRE["PRECHECK<br/>abort/pause/goal"]
+        REA["REASON<br/>_stream_llm"]
+        ACT["ACT<br/>tool exec + microcompact"]
+        OBS["OBSERVE<br/>truncate thinking"]
+        FIN["FINALIZE<br/>done + save_warning"]
+    end
+
+    subgraph L6["LLM CALL"]
+        TE["ToolExecutor<br/>llm_stream_with_retry<br/>tool_executor.py:166"]
+        SLC["StreamableLLMClient<br/>astream_chat"]
+        LLM["Provider<br/>MiniMax M2.7 / xiaomi_mimo / openai_compat"]
+    end
+
+    subgraph SIDECAR["SIDECAR SERVICES"]
+        MEM["MemoryManager<br/>consolidator + dream<br/>(Phase 6)"]
+        DSCHED["DreamScheduler<br/>APScheduler<br/>(Phase 7)"]
+        SLV["SessionManager<br/>+ ConfirmationManager<br/>(Phase 5)"]
+    end
+
+    SSE --> AS
+    WS --> AS
+    OAI --> AS
+
+    AS --> CO
+    CO --> SC
+    CO --> PB
+    CO --> CM
+    CO --> WIRING
+
+    WIRING --> BACKEND
+    WIRING --> HOOK
+    WIRING --> SUB
+    WIRING --> SPEC
+    WIRING --> CR
+
+    CR --> PRE
+    PRE -->|ok| REA
+    REA -->|no tools| FIN
+    REA -->|has tools| ACT
+    ACT --> OBS
+    OBS -->|loop| PRE
+    OBS -.->|max iter| FIN
+
+    REA --> TE
+    ACT --> HOOK
+    OBS --> MEM
+
+    TE --> SLC
+    SLC --> LLM
+
+    MEM -.->|schedule| DSCHED
+    CO --> SLV
+```
+
+
+================================================================================
+图 6: ChatBridgeBackend 消除前后对比 (未来可选)
+================================================================================
+
+ BEFORE (当前):
+ ┌──────────────┐     ┌─────────────────────┐     ┌──────────────────┐
+ │ orchestrator │────►│ ChatBridgeBackend   │────►│ ToolExecutor     │
+ │              │     │ (149 LOC adapter)   │     │ ContextManager   │
+ │              │     │ _truncate_messages  │     │ WikiService      │
+ │              │     │ _get_toolspec       │     │                  │
+ │              │     │ _llm_stream_retry   │     │                  │
+ │              │     │ _execute_tool (unused)    │                  │
+ │              │     │ _persist (unused)    │     │                  │
+ └──────────────┘     └─────────────────────┘     └──────────────────┘
+ 间接层: orchestrator → adapter → tool_executor/context/wiki = 3 hops
+
+ AFTER (消除后):
+ ┌──────────────┐     ┌──────────────────┐
+ │ orchestrator │────►│ ChatRunnerV2     │────► ToolExecutor (direct)
+ │              │     │ (context_manager) │     ContextManager (direct)
+ │              │     │ (llm_client)      │     WikiService.get_llm() (direct)
+ └──────────────┘     └──────────────────┘
+ 间接层: orchestrator → runner → tool_executor/context/wiki = 2 hops
+
+ 变化:
+   - 删 bridge_backend.py (149 LOC)
+   - runner_v2.__init__: chat_service → context_manager + llm_client
+   - runner_v2._stream_llm: 从 self._chat_service._llm_stream_with_retry
+     → self._tool_executor.llm_stream_with_retry + self._llm_client fallback
+   - orchestrator._chat_via_runner_v2: 150 LOC → ~50 LOC (抽 ChatRunnerBuilder)
+   - SubagentManager: 读 parent._context_manager / parent._llm_client
+
+ 净减: ~110 LOC
+ 风险: 低 — 纯重构, 零行为变化
+ 测试: ~115 cases 机械性更新 (构造函数签名替换)
+
+
+================================================================================
+附: 关键文件索引
+================================================================================
+
+ 文件                                        LOC     职责
+ ─────────────────────────────────────────────────────────────────
+ apps/chat/agent/agent_service.py            556     Composition root + chat 入口
+ apps/chat/agent/orchestrator.py             1007    Business orchestration + slash cmds
+ apps/chat/agent/runner_v2.py                737     5-step ReAct state machine
+ apps/chat/agent/bridge_backend.py           149     Adapter (dead, removable)
+ apps/chat/agent/prompt_builder.py           412     7-section system prompt
+ apps/chat/agent/context_manager.py          314     In-memory AgentContext + truncate
+ apps/chat/agent/tool_executor.py            205     Tool exec + DB persist + LLM retry
+ apps/chat/agent/subagent_manager.py         230     In-process subagent spawn
+ apps/chat/agent/spec.py                     84      ChatRunSpec + ChatRunResult dataclasses
+ apps/chat/agent/microcompact.py             85      Replace big results with marker
+ apps/chat/agent/autocompact.py              228     Background session consolidation
+ apps/chat/agent/confirmation_manager.py     86      Confirmation queue
+ apps/chat/agent/session_manager.py          80      Session create/restore
+ apps/chat/agent/agent_runner.py             145     ABC (AgentRunner Generic[SpecT, ResultT])
+ apps/chat/agent/_error_logging.py           125     @log_exception_returning decorator
+ apps/chat/agent/event_log.py                88      Session event log
+ apps/chat/agent/goal_state.py               129     Goal state model
+ apps/chat/agent/text_mode_tool.py           252     Perl-style [TOOL_CALL] parser
+ apps/chat/agent/research_runner.py          443     Research state machine (separate)
+
+ foundation/callback/composite.py            170     AgentHook (13 points) + CompositeHook
+ foundation/callback/context.py              33      AgentHookContext (15 fields)
+ foundation/callback/integrations/wiki.py    29      WikiHook
+ foundation/callback/integrations/dream.py   38      DreamSyncHook
+ foundation/callback/integrations/auto_ingest.py 46  AutoIngestHook
+
+ apps/chat/memory/__init__.py                ~530    MemoryManager + 6 stores
+ apps/chat/memory/consolidator.py            285     Phase 6 Consolidator
+ apps/chat/memory/dream.py                   392     Phase 6 Dream (2-phase)
+ apps/chat/memory/dream_scheduler.py         146     Phase 7 APScheduler wrapper
+ apps/chat/memory/memory_config.py           110     Phase 7 ~/.llmwikify/memory_config.json
+
+ interfaces/server/http/chat_sse.py         528     HTTP /api/agent/chat
+ interfaces/server/http/routes.py            753     Route registration
+ interfaces/server/core.py                   ~280    WikiServer + FastAPI lifespan
+ apps/api/openai_server.py                   512     OpenAI-compat adapter
+ apps/chat/channels/websocket.py             671     WebSocket handler
+
+ tests/test_apps_chat_agent_runner_v2.py    11427   ChatRunnerV2 (617 cases)
+ tests/test_apps_chat_agent_service_phase7.py 366   Phase 7 (20 cases)
+ tests/test_apps_chat_memory_*.py            ~1600   Phase 6 (all memory tests)
+
+ 总 LOC (agent package):                    ~5800
+ 总 LOC (callback):                         224
+ 总 LOC (memory):                           ~1800
+ 总 LOC (server/http):                      ~2000
+ 总 test LOC (chat):                        ~14500
+ 总 test cases:                             2693 pass / 47 skipped / 0 fail
+================================================================================
