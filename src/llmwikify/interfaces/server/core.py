@@ -133,6 +133,19 @@ class WikiServer:
         # _build_app -> register_routes (which instantiates AgentService).
         self._agent_service: Any = None
 
+        # Phase 19-A: ensure the default MessageBus and WebSocketManager
+        # singletons exist before routes mount, so the SSE handler can
+        # publish + the WS handler can subscribe against the same bus.
+        # Idempotent — singleton helpers short-circuit if already set.
+        from llmwikify.apps.chat.bus import (
+            get_default_bus,
+        )
+        from llmwikify.apps.chat.channels.websocket import (
+            get_default_ws_manager,
+        )
+        get_default_bus()
+        get_default_ws_manager()
+
         # 1. Build MCP adapter
         if enable_mcp:
             self.mcp = MCPAdapter(self.wiki, name=mcp_name)

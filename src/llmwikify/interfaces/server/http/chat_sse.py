@@ -12,6 +12,7 @@ from fastapi import APIRouter, Request
 from sse_starlette import EventSourceResponse
 
 from llmwikify.apps.chat.agent.agent_service import AgentService
+from llmwikify.apps.chat.bus.adapter import BusAdapter
 from llmwikify.interfaces.server.http._models import (
     ApplyProposalsRequest,
     ApprovalRequest,
@@ -61,12 +62,23 @@ async def chat(request: Request):
     jwt_token = get_jwt_from_request(request)
     service = get_agent_service()
 
+    # Phase 19-A: bus adapter for SSE→bus mirror. The adapter is a
+    # stateless wrapper around MessageBus + the SSE→WS translator;
+    # see apps/chat/bus/adapter.py. Default bus is the process-wide
+    # singleton, so the WS handler sees the same outbound stream.
+    bus_adapter = BusAdapter()
+
     async def event_generator():
         """SSE generator with heartbeat and timeout (Phase 4.4 / v0.36).
 
         Sends a heartbeat comment every 15s to keep the
         connection alive through proxies/CDNs. Total stream
         lifetime is capped at 5 minutes (300s).
+
+        Phase 19-A: each yielded event is mirrored to the in-process
+        ``MessageBus`` so WebSocket subscribers and any future channel
+        consumer can fan-out without coupling to ``ChatOrchestrator``.
+        The SSE wire format is unchanged; mirroring is a side-effect.
         """
         start_time = time.monotonic()
         last_event_time = start_time
@@ -76,6 +88,15 @@ async def chat(request: Request):
             wiki_id=req.wiki_id,
             jwt_token=jwt_token,
         ):
+            # Mirror to bus (target_id empty = fan-out to any consumer;
+            # WS handler will filter by its own chat_id subscription).
+            bus_adapter.mirror_sse_event(
+                event,
+                target_id="",
+                session_key=(
+                    f"http:{req.session_id}" if req.session_id else ""
+                ),
+            )
             yield {
                 "event": "message",
                 "data": json.dumps(event),
@@ -83,12 +104,20 @@ async def chat(request: Request):
             last_event_time = time.monotonic()
             # Check total timeout
             if last_event_time - start_time > STREAM_TIMEOUT:
+                timeout_event = {
+                    "type": "timeout",
+                    "message": "Stream timed out after 5 minutes",
+                }
+                bus_adapter.mirror_sse_event(
+                    timeout_event,
+                    target_id="",
+                    session_key=(
+                        f"http:{req.session_id}" if req.session_id else ""
+                    ),
+                )
                 yield {
                     "event": "message",
-                    "data": json.dumps({
-                        "type": "timeout",
-                        "message": "Stream timed out after 5 minutes",
-                    }),
+                    "data": json.dumps(timeout_event),
                 }
                 return
         # Final heartbeat check
@@ -367,8 +396,13 @@ async def approve_and_continue(confirmation_id: str, request: Request):
     req = ApprovalRequest(**body)
     service = get_agent_service()
 
+    bus_adapter = BusAdapter()
+
     async def event_generator():
-        """SSE generator with heartbeat and timeout (Phase 4.4 / v0.36)."""
+        """SSE generator with heartbeat and timeout (Phase 4.4 / v0.36).
+
+        Phase 19-A: mirrors each event to MessageBus for fan-out.
+        """
         start_time = time.monotonic()
         async for event in service.approve_confirmation_and_continue(
             confirmation_id=confirmation_id,
@@ -376,15 +410,30 @@ async def approve_and_continue(confirmation_id: str, request: Request):
             wiki_id=req.wiki_id,
             arguments=req.arguments,
         ):
+            bus_adapter.mirror_sse_event(
+                event,
+                target_id="",
+                session_key=(
+                    f"http:{req.session_id}" if req.session_id else ""
+                ),
+            )
             yield {"event": "message", "data": json.dumps(event)}
             elapsed = time.monotonic() - start_time
             if elapsed > STREAM_TIMEOUT:
+                timeout_event = {
+                    "type": "timeout",
+                    "message": "Stream timed out after 5 minutes",
+                }
+                bus_adapter.mirror_sse_event(
+                    timeout_event,
+                    target_id="",
+                    session_key=(
+                        f"http:{req.session_id}" if req.session_id else ""
+                    ),
+                )
                 yield {
                     "event": "message",
-                    "data": json.dumps({
-                        "type": "timeout",
-                        "message": "Stream timed out after 5 minutes",
-                    }),
+                    "data": json.dumps(timeout_event),
                 }
                 return
 
