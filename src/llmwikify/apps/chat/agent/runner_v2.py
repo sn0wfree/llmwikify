@@ -127,6 +127,13 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         hook: AgentHook | None = None,
         memory_manager: Any | None = None,
     ) -> None:
+        # Pass7 (2026-06-22, M-2): ``chat_service`` duck-types the
+        # :class:`ChatServiceAdapter` Protocol (apps/chat/agent/protocols.py).
+        # We keep ``Any`` at the parameter boundary so 100+ existing test
+        # stubs (which may not implement all 3 methods) keep working, but
+        # the Protocol documents the contract for IDE / mypy navigation.
+        # Production wiring uses ``ChatBridgeBackend`` which satisfies the
+        # Protocol structurally.
         self._chat_service = chat_service
         self._tool_executor = tool_executor
         self._prompt_builder = prompt_builder
@@ -645,27 +652,94 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
     async def _stream_llm(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
     ) -> Any:
+        # Pass7 (2026-06-22, Phase 8): wrap the LLM stream with
+        # ``measure_latency`` and record to the process-wide
+        # ``LLMMetricsCollector``. Gives ``/api/llm/metrics`` real data
+        # without invasive changes to ``StreamableLLMClient`` itself.
+        # Records only on the primary LLM path (excludes fallback
+        # ``llm.chat`` single-shot which is the last-resort path).
+        from llmwikify.apps.chat.agent.llm_metrics import (
+            get_llm_metrics_collector,
+        )
+
         retry = getattr(self._chat_service, "_llm_stream_with_retry", None)
         llm = None
         if hasattr(self._chat_service, "wiki_service") and self._chat_service.wiki_service is not None:
             llm = getattr(self._chat_service.wiki_service, "get_llm", None)
             llm = llm() if callable(llm) else None
+
+        # Compute chars_in for metrics (sum of message contents).
+        chars_in = 0
+        if messages:
+            for m in messages:
+                if isinstance(m, dict):
+                    chars_in += len(str(m.get("content", "")))
+
         if retry is not None:
-            async for ev in retry(messages, tools):
-                yield ev
+            with measure_latency() as get_ms:
+                success_flag = True
+                error_str = ""
+                try:
+                    async for ev in retry(messages, tools):
+                        yield ev
+                except Exception as exc:
+                    success_flag = False
+                    error_str = f"{type(exc).__name__}: {exc}"
+                    raise
+                finally:
+                    get_llm_metrics_collector().record(
+                        prompt_name="chat_reason",
+                        latency_ms=get_ms(),
+                        chars_in=chars_in,
+                        success=success_flag,
+                        error=error_str,
+                    )
             return
         if llm is None:
             yield {"type": events.DONE, "content": ""}
             return
         if hasattr(llm, "astream_chat"):
-            async for ev in llm.astream_chat(messages, tools=tools):
-                yield ev
+            with measure_latency() as get_ms:
+                success_flag = True
+                error_str = ""
+                try:
+                    async for ev in llm.astream_chat(messages, tools=tools):
+                        yield ev
+                except Exception as exc:
+                    success_flag = False
+                    error_str = f"{type(exc).__name__}: {exc}"
+                    raise
+                finally:
+                    get_llm_metrics_collector().record(
+                        prompt_name="chat_reason",
+                        latency_ms=get_ms(),
+                        chars_in=chars_in,
+                        success=success_flag,
+                        error=error_str,
+                    )
             return
-        reply = llm.chat(messages, tools=tools)
-        yield {
-            "type": events.DONE,
-            "content": getattr(reply, "content", "") or "",
-        }
+        # Fallback single-shot — still record but tagged differently.
+        with measure_latency() as get_ms:
+            success_flag = True
+            error_str = ""
+            try:
+                reply = llm.chat(messages, tools=tools)
+                yield {
+                    "type": events.DONE,
+                    "content": getattr(reply, "content", "") or "",
+                }
+            except Exception as exc:
+                success_flag = False
+                error_str = f"{type(exc).__name__}: {exc}"
+                raise
+            finally:
+                get_llm_metrics_collector().record(
+                    prompt_name="chat_fallback",
+                    latency_ms=get_ms(),
+                    chars_in=chars_in,
+                    success=success_flag,
+                    error=error_str,
+                )
 
     async def _execute_tool(
         self,

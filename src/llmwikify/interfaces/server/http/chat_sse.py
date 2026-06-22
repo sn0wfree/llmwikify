@@ -353,6 +353,28 @@ async def agent_status(request: Request):
         }
 
 
+# --- LLM metrics endpoint (Pass7, Phase 8, 2026-06-22) ---
+
+@router.get("/llm-metrics")
+async def llm_metrics():
+    """Return aggregate LLM-call metrics from the process-wide collector.
+
+    Backed by ``LLMMetricsCollector`` (apps/chat/agent/llm_metrics.py)
+    which is populated by ``ChatRunnerV2._stream_llm`` via
+    ``measure_latency()`` CM (decorator-pattern CM, see Pass5).
+
+    Returns:
+        JSON summary with ``total_records``, ``success_count``,
+        ``error_count``, ``total_latency_ms``, ``avg_latency_ms``,
+        ``total_chars_in``, ``uptime_seconds``, ``by_prompt`` (per-prompt
+        aggregates), and ``recent`` (last 20 records).
+    """
+    from llmwikify.apps.chat.agent.llm_metrics import (
+        get_llm_metrics_collector,
+    )
+    return get_llm_metrics_collector().summary()
+
+
 # --- Research run endpoints ---
 
 @router.get("/research-runs/{run_id}")
