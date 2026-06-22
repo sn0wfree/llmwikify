@@ -373,7 +373,13 @@ def _execute_compiled_expression(
 
     data_path = Path(data_path)
     # Load stk_daily.h5 keys
-    cp_wide = pd.read_hdf(data_path / "stk_daily.h5", "cp")
+    # PR-7 (2026-06-21): normalize "cp" -> "close" for consistency with HDF5 writer.
+    try:
+        with pd.HDFStore(data_path / "stk_daily.h5", "r") as _store:
+            _close_key = "close" if "/close" in _store.keys() else "cp"
+    except Exception:
+        _close_key = "cp"
+    cp_wide = pd.read_hdf(data_path / "stk_daily.h5", _close_key)
     open_wide = pd.read_hdf(data_path / "stk_daily.h5", "open")
     high_wide = pd.read_hdf(data_path / "stk_daily.h5", "high")
     low_wide = pd.read_hdf(data_path / "stk_daily.h5", "low")
@@ -489,7 +495,13 @@ def _execute_compiled_ast(
 
     data_path = Path(data_path)
     # Load stk_daily.h5 keys
-    cp_wide = pd.read_hdf(data_path / "stk_daily.h5", "cp")
+    # PR-7 (2026-06-21): normalize "cp" -> "close" for consistency with HDF5 writer.
+    try:
+        with pd.HDFStore(data_path / "stk_daily.h5", "r") as _store:
+            _close_key = "close" if "/close" in _store.keys() else "cp"
+    except Exception:
+        _close_key = "cp"
+    cp_wide = pd.read_hdf(data_path / "stk_daily.h5", _close_key)
     open_wide = pd.read_hdf(data_path / "stk_daily.h5", "open")
     high_wide = pd.read_hdf(data_path / "stk_daily.h5", "high")
     low_wide = pd.read_hdf(data_path / "stk_daily.h5", "low")
