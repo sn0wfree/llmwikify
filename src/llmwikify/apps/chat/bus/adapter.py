@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from llmwikify.apps.chat.agent import events as chat_events
 from llmwikify.apps.chat.bus.events import (
     OUTBOUND_META_STREAM_DELTA,
     OUTBOUND_META_STREAM_END,
@@ -76,23 +77,37 @@ class WSTranslatedType:
     Kept as a class so we can extend without changing call sites.
     The actual on-wire strings must match ``WSServerMsg.*`` for
     backward compat with existing WS clients.
+
+    Pass4-C (2026-06-22): the 9 passthrough constants are now
+    aliases of ``apps.chat.agent.events`` constants, so any rename
+    of the canonical SSE type string is reflected here automatically.
+    The 5 WS-only translation constants (``DELTA``, ``STREAM_END``,
+    ``TOOL_CALL``, ``THINKING``, ``UNKNOWN``) plus ``TIMEOUT`` (a
+    WS-only concept, not produced by the SSE side) keep their
+    literal string values to match the WS wire protocol.
     """
 
+    # WS-only translated types (post-translation wire strings)
     DELTA = "delta"
     THINKING = "thinking"
     STREAM_END = "stream_end"
-    ERROR = "error"
     TOOL_CALL = "tool_call"
-    CONFIRMATION_REQUIRED = "confirmation_required"
-    COMPACTED = "compacted"
-    PHASE = "phase"
-    SAVE_WARNING = "save_warning"
-    COMMAND_DONE = "command_done"
-    RESEARCH_RUN_STARTED = "research_run_started"
-    SESSION_CREATED = "session_created"
-    SESSION_INIT = "session_init"
-    TIMEOUT = "timeout"
     UNKNOWN = "unknown"
+
+    # Passthrough: SSE wire name == WS wire name (alias to chat_events)
+    ERROR = chat_events.ERROR
+    CONFIRMATION_REQUIRED = chat_events.CONFIRMATION_REQUIRED
+    COMPACTED = chat_events.COMPACTED
+    PHASE = chat_events.PHASE
+    SAVE_WARNING = chat_events.SAVE_WARNING
+    COMMAND_DONE = chat_events.COMMAND_DONE
+    RESEARCH_RUN_STARTED = chat_events.RESEARCH_RUN_STARTED
+    SESSION_CREATED = chat_events.SESSION_CREATED
+    SESSION_INIT = chat_events.SESSION_INIT
+
+    # WS-only wire string (no SSE source produces this; kept for
+    # forward-compat with WS clients that may emit it).
+    TIMEOUT = "timeout"
 
 
 def _delta_envelope(event: dict[str, Any]) -> dict[str, Any]:
@@ -273,45 +288,38 @@ class BusAdapter:
 
         etype = event.get("type", "")
 
-        if etype == "message_delta":
+        # ── SSE → WS translation (5 mappings) ──
+        if etype == chat_events.MESSAGE_DELTA:
             return _delta_envelope(event)
-        if etype == "thinking":
+        if etype == chat_events.THINKING:
             return _thinking_envelope(event)
-        if etype == "done":
+        if etype == chat_events.DONE:
             return _stream_end_envelope(event)
-        if etype == "error":
+        if etype == chat_events.ERROR:
             return _error_envelope(event)
-        if etype == "tool_call_start":
-            return _tool_call_envelope(event, "start")
-        if etype == "tool_call_end":
-            return _tool_call_envelope(event, "end")
-        if etype == "tool_call_error":
-            return _tool_call_envelope(event, "error")
-        if etype == "confirmation_required":
-            return _passthrough_envelope(
-                event, WSTranslatedType.CONFIRMATION_REQUIRED,
-            )
-        if etype == "compacted":
-            return _passthrough_envelope(event, WSTranslatedType.COMPACTED)
-        if etype == "phase":
-            return _passthrough_envelope(event, WSTranslatedType.PHASE)
-        if etype == "save_warning":
-            return _passthrough_envelope(event, WSTranslatedType.SAVE_WARNING)
-        if etype == "command_done":
-            return _passthrough_envelope(event, WSTranslatedType.COMMAND_DONE)
-        if etype == "research_run_started":
-            return _passthrough_envelope(
-                event, WSTranslatedType.RESEARCH_RUN_STARTED,
-            )
-        if etype == "session_created":
-            return _passthrough_envelope(
-                event, WSTranslatedType.SESSION_CREATED,
-            )
-        if etype == "session_init":
-            return _passthrough_envelope(
-                event, WSTranslatedType.SESSION_INIT,
-            )
-        if etype == "timeout":
+        # ── tool_call_start/end/error collapse to one WS envelope ──
+        if etype in (
+            chat_events.TOOL_CALL_START,
+            chat_events.TOOL_CALL_END,
+            chat_events.TOOL_CALL_ERROR,
+        ):
+            # phase = "start" | "end" | "error" (strip the "tool_call_" prefix)
+            phase = etype[len("tool_call_"):]
+            return _tool_call_envelope(event, phase)
+        # ── Passthrough (SSE wire name == WS wire name) ──
+        if etype in (
+            chat_events.CONFIRMATION_REQUIRED,
+            chat_events.COMPACTED,
+            chat_events.PHASE,
+            chat_events.SAVE_WARNING,
+            chat_events.COMMAND_DONE,
+            chat_events.RESEARCH_RUN_STARTED,
+            chat_events.SESSION_CREATED,
+            chat_events.SESSION_INIT,
+        ):
+            return _passthrough_envelope(event, etype)
+        # ── WS-only passthrough (no SSE source; kept for back-compat) ──
+        if etype == WSTranslatedType.TIMEOUT:
             return _passthrough_envelope(event, WSTranslatedType.TIMEOUT)
         # Unknown type: preserve verbatim + flag. Consumers should
         # decide whether to render or ignore.

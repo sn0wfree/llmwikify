@@ -98,6 +98,39 @@ class ChatEvent:
         return ev
 
 
+# ─── Skill stub helper (shared by /memory_dream + /goal handlers) ──
+
+
+def _make_skill_ctx(
+    cmd_ctx: Any,
+    *,
+    include_db: bool = False,
+    memory_manager: Any = None,
+) -> Any:
+    """Build a SkillContext-shaped object from a CommandContext.
+
+    Skill handlers (memory_dream / goal) need ``session_id`` + ``db`` +
+    ``config["memory_manager"]``. CommandContext doesn't expose those,
+    so we wrap.
+
+    Args:
+        cmd_ctx: CommandContext from CommandRouter.
+        include_db: If True, attach ``cmd_ctx.db`` as ``stub.db``.
+        memory_manager: Optional MemoryManager for /memory_dream handler.
+    """
+    class _StubSkillContext:
+        pass
+
+    stub = _StubSkillContext()
+    stub.session_id = cmd_ctx.session_id or ""
+    if include_db:
+        stub.db = cmd_ctx.db
+    stub.config: dict[str, Any] = {}
+    if memory_manager is not None:
+        stub.config["memory_manager"] = memory_manager
+    return stub
+
+
 # ─── V2 persistence hook (Plan B B-4) ──────────────────────────
 
 
@@ -618,15 +651,12 @@ class ChatOrchestrator:
                 _run_for_session,
             )
 
-            # Build a minimal SkillContext-like object for the skill handlers
-            class _StubSkillContext:
-                def __init__(self, c: Any) -> None:
-                    self.session_id = c.session_id
-                    self.config: dict[str, Any] = {
-                        "memory_manager": getattr(c, "memory_manager", None),
-                    }
-
-            stub = _StubSkillContext(ctx)
+            # Pass self.memory_manager (orchestrator instance attr) rather
+            # than ``getattr(ctx, "memory_manager", None)`` — CommandContext
+            # doesn't carry a memory_manager field, so the previous code
+            # always injected ``None`` and /memory_dream was silently
+            # disabled.
+            stub = _make_skill_ctx(ctx, memory_manager=self.memory_manager)
             dream = _get_dream(stub)
             if isinstance(dream, dict) and dream.get("ok") is False:
                 yield ChatEvent.command_done(
@@ -668,12 +698,6 @@ class ChatOrchestrator:
                 _start_long_task,
             )
 
-            class _StubSkillContext:
-                def __init__(self, c: Any) -> None:
-                    self.session_id = c.session_id or ""
-                    self.db = c.db
-                    self.config: dict[str, Any] = {}
-
             def _summarize(args_text: str, res: Any) -> str:
                 data = getattr(res, "data", None) or {}
                 if not args_text:
@@ -689,7 +713,7 @@ class ChatOrchestrator:
                     return data.get("reason", "no active goal")
                 return f"Goal registered: {data.get('objective', '')[:100]}"
 
-            stub = _StubSkillContext(ctx)
+            stub = _make_skill_ctx(ctx, include_db=True)
             args_text = (ctx.args or "").strip()
 
             if not args_text:
@@ -787,28 +811,36 @@ class ChatOrchestrator:
 
     # ─── V2 runner path (Plan B, default since B-5) ────────────────
 
-    async def _chat_via_runner_v2(
+    def _build_chat_runner_v2(
         self,
-        messages_for_llm: list[dict[str, str]],
-        system_prompt: str,
-        tool_registry: Any,
-        session_id: str,
         ctx: AgentContext,
-    ) -> AsyncIterator[dict]:
-        """V2 path: use ChatRunnerV2 (Plan B) instead of ReActEngine.
+        session_id: str,
+        messages_for_llm: list[dict[str, str]],
+    ) -> tuple[Any, Any]:
+        """Assemble ``ChatRunnerV2`` + ``ChatRunSpec`` for one chat invocation.
 
-        Reuses ChatBridgeBackend as the chat_service adapter (it exposes
-        the 3 methods ChatRunnerV2 needs — _truncate_messages,
-        _get_toolspec, _llm_stream_with_retry — plus a wiki_service
-        accessor for the LLM client).
+        Centralises the per-chat wiring (bridge backend + hooks +
+        SubagentManager + goal predicate + spec) so ``_chat_via_runner_v2``
+        stays focused on stream iteration. Caller must NOT hold the
+        returned runner across chat() calls — SubagentManager + WikiHook
+        hold per-chat state.
 
-        Persists tool results via a _V2PersistenceHook. On done, saves
-        the assistant message via tool_executor.save_message (same as v1).
+        Returns:
+            ``(runner, spec)`` tuple ready for
+            ``async for event in runner.run_stream(spec)``.
+
+        Args:
+            ctx: AgentContext (wiki_id + session_id).
+            session_id: chat session id.
+            messages_for_llm: pre-built prompt messages.
         """
         from llmwikify.apps.chat.agent.bridge_backend import ChatBridgeBackend
         from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
         from llmwikify.apps.chat.agent.spec import ChatRunSpec
-        from llmwikify.foundation.callback import AgentHook, CompositeHook
+        from llmwikify.apps.chat.agent.subagent_manager import (
+            SubagentManager,
+        )
+        from llmwikify.foundation.callback import CompositeHook
         from llmwikify.foundation.callback.integrations.wiki import WikiHook
 
         bridge_backend = ChatBridgeBackend(
@@ -834,14 +866,11 @@ class ChatOrchestrator:
         # spawn grandchildren. The parent tool_registry is rebuilt
         # with ``expose_subagent=True`` and the manager+child
         # registry stitched into SkillContext.config.
-        from llmwikify.apps.chat.agent.subagent_manager import (
-            SubagentManager,
-        )
         subagent_manager = SubagentManager(runner)
         child_tool_registry = self._get_tool_registry(
             ctx, session_id, expose_subagent=False,
         )
-        tool_registry = self._get_tool_registry(
+        parent_tool_registry = self._get_tool_registry(
             ctx,
             session_id,
             expose_subagent=True,
@@ -871,12 +900,43 @@ class ChatOrchestrator:
 
         spec = ChatRunSpec(
             messages=list(messages_for_llm),
-            tool_registry=tool_registry,
+            tool_registry=parent_tool_registry,
             session_id=session_id,
             wiki_id=ctx.wiki_id,
             max_iterations=self.config.get("max_chat_rounds", 10),
             microcompact=True,
             goal_active_predicate=_goal_active_predicate,
+        )
+        return runner, spec
+
+    async def _chat_via_runner_v2(
+        self,
+        messages_for_llm: list[dict[str, str]],
+        system_prompt: str,
+        tool_registry: Any,
+        session_id: str,
+        ctx: AgentContext,
+    ) -> AsyncIterator[dict]:
+        """V2 path: use ChatRunnerV2 (Plan B) instead of ReActEngine.
+
+        Reuses ChatBridgeBackend as the chat_service adapter (it exposes
+        the 3 methods ChatRunnerV2 needs — _truncate_messages,
+        _get_toolspec, _llm_stream_with_retry — plus a wiki_service
+        accessor for the LLM client).
+
+        Persists tool results via a _V2PersistenceHook. On done, saves
+        the assistant message via tool_executor.save_message (same as v1).
+
+        The wiring is delegated to :meth:`_build_chat_runner_v2`;
+        persistence is delegated to :mod:`chat_persistence`.
+        """
+        from llmwikify.apps.chat.agent.chat_persistence import (
+            extract_research_run_id_from_tools,
+            save_assistant_done_message,
+        )
+
+        runner, spec = self._build_chat_runner_v2(
+            ctx, session_id, messages_for_llm,
         )
 
         accumulated_tools: list[dict] = []
@@ -915,7 +975,7 @@ class ChatOrchestrator:
                     })
                 if kind == events.DONE:
                     final = event.get("content", "") or ""
-                    research_run_id = self._extract_research_run_id_from_tools(
+                    research_run_id = extract_research_run_id_from_tools(
                         accumulated_tools,
                     )
                     if research_run_id and not final.strip():
@@ -923,8 +983,12 @@ class ChatOrchestrator:
                             "研究已启动\n\n"
                             "研究进行中，可通过下方卡片查看实时进度与结果。"
                         )
-                    self._save_assistant_message_v2(
-                        session_id, final, accumulated_tools, research_run_id,
+                    save_assistant_done_message(
+                        self.tool_executor,
+                        session_id,
+                        final,
+                        accumulated_tools,
+                        research_run_id,
                     )
                     if self.tool_executor._save_error_count > 0:
                         yield ChatEvent.save_warning(
@@ -942,48 +1006,31 @@ class ChatOrchestrator:
         tool_calls: list[dict],
         research_run_id: str | None,
     ) -> None:
-        """Save assistant message to DB on done (V2 path).
+        """Thin shim — delegates to :mod:`chat_persistence` (Pass4-C).
 
-        Counts tokens (no model name fallback per LAL/audit fix),
-        attaches research_run_id for /study autoresearch integration,
-        persists via tool_executor.save_message.
+        Kept so existing test imports
+        (``test_apps_chat_agent_orchestrator_v2.py``) continue to work.
         """
-        from llmwikify.foundation.llm.token_estimator import count_tokens
-
-        tokens_output = count_tokens(content, "unknown")
-        self.tool_executor.save_message(
+        from llmwikify.apps.chat.agent.chat_persistence import (
+            save_assistant_done_message,
+        )
+        save_assistant_done_message(
+            self.tool_executor,
             session_id,
-            "assistant",
             content,
-            tool_calls=tool_calls or None,
-            tokens_output=tokens_output,
-            research_run_id=research_run_id,
+            tool_calls,
+            research_run_id,
         )
 
     @staticmethod
     def _extract_research_run_id_from_tools(
         tool_calls: list[dict],
     ) -> str | None:
-        """Scan v2 tool_call_end events for an autoresearch run_id.
-
-        When /study triggers autoresearch_compound_run, extracts its
-        run_id from the tool result so the assistant message can be
-        bound to the run (frontend reload reconstructs the card).
-        """
-        for tc in tool_calls:
-            name = tc.get("tool", "")
-            if "autoresearch_compound" not in name or "run" not in name:
-                continue
-            result = tc.get("result")
-            if not isinstance(result, dict):
-                continue
-            data = result.get("data") if result.get("status") == "ok" else result
-            if not isinstance(data, dict):
-                continue
-            run_id = data.get("run_id")
-            if isinstance(run_id, str) and run_id:
-                return run_id
-        return None
+        """Thin shim — delegates to :mod:`chat_persistence` (Pass4-C)."""
+        from llmwikify.apps.chat.agent.chat_persistence import (
+            extract_research_run_id_from_tools,
+        )
+        return extract_research_run_id_from_tools(tool_calls)
 
     async def _load_history(self, session_id: str) -> list[dict]:
         """Load conversation history from MemoryManager or DB."""
