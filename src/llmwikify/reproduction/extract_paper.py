@@ -504,7 +504,14 @@ def _extract_factors_from_list(
             "l2": l2,
             "l3": l3,
             "l4": l4,
-            "l5": {"overall_assessment": {"score": 0, "status": "未验证", "modules": {}}},
+            "l5": {
+                # Stage B (2026-06-22): placeholders for Loop v4 AST pipeline.
+                # ast_compile_status starts as "pending"; factor_compiler later
+                # fills in ast + ast_compile_status.
+                "ast": None,
+                "ast_compile_status": "pending",
+                "overall_assessment": {"score": 0, "status": "未验证", "modules": {}},
+            },
             "metadata": {
                 "created_at": "TBD",
                 "updated_at": "TBD",
@@ -519,8 +526,55 @@ def _extract_factors_from_list(
     return results
 
 
+def run_factor_compile_for_paper(
+    factor_dicts: list[dict[str, Any]],
+    max_factors: int | None = None,
+) -> list[dict[str, Any]]:
+    """Stage B (2026-06-22): run FactorCompiler for each extracted factor.
+
+    Each input is a {name, factor: {...}} dict (output of _extract_factors_from_list).
+    After factor_compiler.compile() succeeds, factor.l5.ast + status are written
+    back via persist_l5_to_yaml.
+
+    Args:
+        factor_dicts: List of factor dicts from _extract_factors_from_list.
+        max_factors: If set, only process the first N factors (for testing).
+
+    Returns:
+        List of {name, compile_result, action} dicts.
+    """
+    from .factor_compiler import FactorCompiler
+
+    compiler = FactorCompiler()
+    results: list[dict[str, Any]] = []
+    targets = factor_dicts[:max_factors] if max_factors else factor_dicts
+
+    for entry in targets:
+        factor_name = entry["name"]
+        factor_data = entry["factor"]
+        try:
+            compile_result = compiler.compile(factor_data, use_cache=False)
+            results.append({
+                "name": factor_name,
+                "compile_result": compile_result,
+                "is_valid": compile_result.is_valid,
+            })
+        except Exception as exc:
+            logger.warning(
+                "[extract_paper] %s compile crashed: %s", factor_name, exc,
+            )
+            results.append({
+                "name": factor_name,
+                "compile_result": None,
+                "is_valid": False,
+                "error": str(exc),
+            })
+    return results
+
+
 __all__ = [
     "extract_paper_structure",
     "build_paper_pages",
     "_extract_factors_from_list",
+    "run_factor_compile_for_paper",
 ]

@@ -650,3 +650,157 @@ def test_stage_a_telemetry_records_compile_attempts() -> None:
     assert s["counts"]["repair.success"] == 1
     assert s["counts"]["compile.success"] == 1
     assert s["total_events"] == 4
+
+
+# ─── 阶段 B: l5.ast 流水线贯通 ─────────────────────────
+
+
+def test_stage_b_persist_l5_to_yaml_creates(tmp_path) -> None:
+    """Stage B: persist_l5_to_yaml creates factor yaml with l5.ast."""
+    import os
+
+    os.environ["FACTOR_COMPILER_MOCK"] = "1"
+    # Setup isolated project root
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    factors_dir = project_root / "quant" / "factors"
+    factors_dir.mkdir(parents=True)
+    (factors_dir / "index.yaml").write_text("factors: []\n")
+    stock_dir = factors_dir / "stock" / "price"
+    stock_dir.mkdir(parents=True)
+
+    from src.llmwikify.reproduction.factor_compiler import (
+        FactorCompiler,
+        CompileResult,
+        persist_l5_to_yaml,
+    )
+    from src.llmwikify.reproduction.factor_library import read_factor_yaml
+
+    compiler = FactorCompiler()
+    r = compiler.compile({
+        "name": "stock/price/test_momentum",
+        "l1": {"default_params": {}},
+        "l2": {"calculation_steps": [{}]},
+    })
+    action = persist_l5_to_yaml(
+        "stock/price/test_momentum", r.code, r, project_root=project_root,
+    )
+    assert action is not None
+    assert "Created" in action or "Updated" in action
+
+    # Read back from isolated project root
+    yaml_data = read_factor_yaml(
+        "stock/price/test_momentum", project_root=project_root,
+    )
+    assert yaml_data is not None
+    assert "l5" in yaml_data["factor"]
+    assert "ast" in yaml_data["factor"]["l5"]
+    assert yaml_data["factor"]["l5"]["ast"] is not None
+    assert yaml_data["factor"]["l5"]["ast_compile_status"] == "compiled"
+    assert yaml_data["factor"]["l5"]["ast_compile_source"] == "mock"
+
+
+def test_stage_b_extract_paper_l5_placeholder() -> None:
+    """Stage B: extract_paper._extract_factors_from_list sets l5.ast=None placeholder."""
+    from src.llmwikify.reproduction.extract_paper import _extract_factors_from_list
+
+    extraction = {
+        "factor_list": [
+            {
+                "name": "alpha-001",
+                "asset_type": "stock",
+                "category": "formulaic",
+                "definition": "test factor",
+                "formula": "rank(pct_change(close, 5))",
+                "input_columns": ["close"],
+                "calculation_steps": [{"step": 1, "description": "test"}],
+                "hypotheses": [],
+            }
+        ]
+    }
+    result = _extract_factors_from_list(extraction, paper_id="test_paper")
+    assert len(result) == 1
+    factor_dict = result[0]["factor"]
+    assert factor_dict["l5"]["ast"] is None
+    assert factor_dict["l5"]["ast_compile_status"] == "pending"
+
+
+def test_stage_b_run_factor_compile_for_paper_mock(tmp_path) -> None:
+    """Stage B: run_factor_compile_for_paper invokes FactorCompiler for each factor."""
+    import os
+
+    os.environ["FACTOR_COMPILER_MOCK"] = "1"
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    factors_dir = project_root / "quant" / "factors"
+    factors_dir.mkdir(parents=True)
+    (factors_dir / "index.yaml").write_text("factors: []\n")
+
+    from src.llmwikify.reproduction.extract_paper import (
+        _extract_factors_from_list,
+        run_factor_compile_for_paper,
+    )
+
+    extraction = {
+        "factor_list": [
+            {
+                "name": f"alpha-{i:03d}",
+                "asset_type": "stock",
+                "category": "formulaic",
+                "definition": "test",
+                "formula": "rank(close)",
+                "input_columns": ["close"],
+                "calculation_steps": [{"step": 1, "description": "test"}],
+                "hypotheses": [],
+            }
+            for i in [1, 2]
+        ]
+    }
+    factor_dicts = _extract_factors_from_list(extraction, paper_id="stage_b_test")
+
+    # Patch project_root by changing cwd temporarily
+    old_cwd = os.getcwd()
+    os.chdir(project_root)
+    try:
+        results = run_factor_compile_for_paper(factor_dicts, max_factors=2)
+    finally:
+        os.chdir(old_cwd)
+
+    assert len(results) == 2
+    for r in results:
+        assert r["is_valid"] is True
+        assert r["compile_result"] is not None
+
+
+def test_stage_b_l5_yaml_invalid_status(tmp_path) -> None:
+    """Stage B: persist_l5_to_yaml writes 'failed' status when compile failed."""
+    from pathlib import Path
+    import os
+
+    from src.llmwikify.reproduction.factor_compiler import CompileResult, persist_l5_to_yaml
+
+    # Synthesize a failed CompileResult
+    failed_result = CompileResult(
+        factor_name="test_failed_factor",
+        code="",
+        is_valid=False,
+        error_message="simulated compile error",
+        iterations=3,
+        elapsed_sec=0.5,
+        source="llm",
+        polars_expr="",
+    )
+
+    proj = tmp_path / "p"
+    proj.mkdir()
+    (proj / "quant" / "factors").mkdir(parents=True)
+    (proj / "quant" / "factors" / "index.yaml").write_text("factors: []\n")
+
+    action = persist_l5_to_yaml(
+        "test_failed_factor", "", failed_result, project_root=proj,
+    )
+    assert action is not None
+    from src.llmwikify.reproduction.factor_library import read_factor_yaml
+    data = read_factor_yaml("test_failed_factor", project_root=proj)
+    assert data["factor"]["l5"]["ast_compile_status"] == "failed"
+    assert "ast_compile_error" in data["factor"]["l5"]

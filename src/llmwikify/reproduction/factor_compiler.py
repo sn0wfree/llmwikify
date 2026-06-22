@@ -323,6 +323,9 @@ class FactorCompiler:
                 )
                 telemetry.record("compile.failure", factor=factor_name, error=str(exc))
             self._save_cache(cache_path, result)
+            # Stage B: persist even in MOCK mode for testing
+            if os.getenv("FACTOR_COMPILER_PERSIST_L5", "1") == "1":
+                persist_l5_to_yaml(factor_name, result.code, result)
             return result
 
         t0 = time.monotonic()
@@ -446,6 +449,9 @@ class FactorCompiler:
                     iterations=iterations,
                     elapsed_sec=round(elapsed, 3),
                 )
+                # Stage B (2026-06-22): persist compiled AST to factor.yaml l5.ast
+                if os.getenv("FACTOR_COMPILER_PERSIST_L5", "1") == "1":
+                    persist_l5_to_yaml(factor_name, ast_node.model_dump_json(), result)
                 logger.info(
                     "[factor_compiler] %s compiled: valid=True, %d iters, %.1fs",
                     factor_name, iterations, elapsed,
@@ -482,6 +488,9 @@ class FactorCompiler:
             iterations=iterations,
             last_error=last_structured_err.kind if last_structured_err else None,
         )
+        # Stage B: persist failure to yaml too (so l5.ast_compile_status=failed visible)
+        if os.getenv("FACTOR_COMPILER_PERSIST_L5", "1") == "1":
+            persist_l5_to_yaml(factor_name, result.code, result)
         return result
 
     def _multi_sample(self, user_prompt: str, k: int) -> list[str]:
@@ -562,4 +571,68 @@ class FactorCompiler:
             logger.warning("[factor_compiler] cache save failed: %s", exc)
 
 
-__all__ = ["CompileResult", "FactorCompiler", "SYSTEM_PROMPT", "compile_ast"]
+def persist_l5_to_yaml(
+    factor_name: str,
+    ast_json: str,
+    compile_result: CompileResult,
+    project_root: Path | None = None,
+) -> str | None:
+    """Stage B (2026-06-22): persist compiled AST to factor.yaml under l5.ast.
+
+    Reads existing factor YAML (if any), updates l5.ast + compile metadata,
+    writes back via factor_library.write_factor_yaml.
+
+    Args:
+        factor_name: Factor slug like 'stock/price/momentum_20d' or 'alpha_001'.
+        ast_json: JSON string of ASTNode (from compile_result.code).
+        compile_result: CompileResult from FactorCompiler.compile().
+        project_root: Override project root (for tests).
+
+    Returns:
+        write_factor_yaml action string ("Created"/"Updated") or None on failure.
+    """
+    from .factor_library import read_factor_yaml, write_factor_yaml
+
+    try:
+        existing = read_factor_yaml(factor_name, project_root=project_root)
+        if existing is None:
+            # Create minimal factor structure
+            data = {"factor": {"name": factor_name.replace("/", "_"), "l5": {}}}
+        else:
+            data = existing
+
+        factor = data.setdefault("factor", {})
+        l5 = factor.setdefault("l5", {})
+        l5["ast"] = ast_json
+        l5["ast_compile_status"] = "compiled" if compile_result.is_valid else "failed"
+        l5["ast_compile_iterations"] = compile_result.iterations
+        l5["ast_compile_source"] = compile_result.source
+        l5["ast_compiled_at"] = time.time()
+        if compile_result.error_message:
+            l5["ast_compile_error"] = compile_result.error_message[:500]
+
+        action = write_factor_yaml(factor_name, data, project_root=project_root)
+        get_telemetry().record(
+            "yaml.l5.persist",
+            factor=factor_name,
+            status=l5["ast_compile_status"],
+            action=action,
+        )
+        logger.info(
+            "[factor_compiler] %s l5.ast persisted (%s)",
+            factor_name, action,
+        )
+        return action
+    except Exception as exc:
+        logger.warning("[factor_compiler] %s l5.ast persist failed: %s", factor_name, exc)
+        get_telemetry().record("yaml.l5.persist_failure", factor=factor_name, error=str(exc))
+        return None
+
+
+__all__ = [
+    "CompileResult",
+    "FactorCompiler",
+    "SYSTEM_PROMPT",
+    "compile_ast",
+    "persist_l5_to_yaml",
+]
