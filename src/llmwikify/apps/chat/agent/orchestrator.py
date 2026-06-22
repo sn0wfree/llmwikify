@@ -98,39 +98,6 @@ class ChatEvent:
         return ev
 
 
-# ─── Skill stub helper (shared by /memory_dream + /goal handlers) ──
-
-
-def _make_skill_ctx(
-    cmd_ctx: Any,
-    *,
-    include_db: bool = False,
-    memory_manager: Any = None,
-) -> Any:
-    """Build a SkillContext-shaped object from a CommandContext.
-
-    Skill handlers (memory_dream / goal) need ``session_id`` + ``db`` +
-    ``config["memory_manager"]``. CommandContext doesn't expose those,
-    so we wrap.
-
-    Args:
-        cmd_ctx: CommandContext from CommandRouter.
-        include_db: If True, attach ``cmd_ctx.db`` as ``stub.db``.
-        memory_manager: Optional MemoryManager for /memory_dream handler.
-    """
-    class _StubSkillContext:
-        pass
-
-    stub = _StubSkillContext()
-    stub.session_id = cmd_ctx.session_id or ""
-    if include_db:
-        stub.db = cmd_ctx.db
-    stub.config: dict[str, Any] = {}
-    if memory_manager is not None:
-        stub.config["memory_manager"] = memory_manager
-    return stub
-
-
 # ─── V2 persistence hook (Plan B B-4) ──────────────────────────
 
 
@@ -578,176 +545,39 @@ class ChatOrchestrator:
     # ─── Slash commands (P1-2, vendored from nanobot) ───────────
 
     def _build_default_command_router(self) -> Any:
-        """Build the default CommandRouter with a few built-in commands.
+        """Build the default CommandRouter with the 7 built-in commands.
 
-        Built-ins:
-          - ``/stop`` (priority) — abort the active session.
-          - ``/help`` (exact) — list available commands.
-          - ``/clear`` (exact) — clear the in-memory context.
-          - ``/status`` (exact) — report session status.
-          - ``/title <text>`` (prefix) — set session title.
+        Pass6 (2026-06-22): the 8 inline closures were extracted to
+        :mod:`apps.chat.agent.builtin_commands` so each handler is
+        independently testable. The router construction is now
+        declarative — see ``builtin_commands.register_builtin_commands``
+        for the full list.
+
+        Built-ins (priority / exact / prefix):
+          - ``/stop``           — abort the active session.
+          - ``/help``           — list available commands.
+          - ``/clear``          — clear the in-memory context.
+          - ``/status``         — report session status.
+          - ``/title <text>``   — set session title.
+          - ``/memory_dream``   — trigger fact extractor.
+          - ``/goal``           — long-goal CRUD.
 
         Custom routers can be installed by replacing ``self.command_router``
         after construction; the orchestrator only calls it via
         ``_dispatch_command``.
         """
+        from llmwikify.apps.chat.agent.builtin_commands import (
+            register_builtin_commands,
+        )
         from llmwikify.apps.chat.command_router import CommandRouter
 
         router = CommandRouter()
-
-        async def stop_handler(ctx: Any) -> dict:
-            if ctx.abort_event is not None:
-                ctx.abort_event.set()
-            return ChatEvent.command_done("/stop", True, "Session aborted")
-
-        async def help_handler(ctx: Any) -> dict:
-            return ChatEvent.command_done(
-                "/help",
-                True,
-                (
-                    "Available commands: /stop, /help, /clear, /status, "
-                    "/title <text>, /memory_dream [session <id>], "
-                    "/goal [<objective> | done [recap]]"
-                ),
-            )
-
-        async def clear_handler(ctx: Any) -> dict:
-            if ctx.ctx is not None and hasattr(ctx.ctx, "clear"):
-                ctx.ctx.clear()
-            return ChatEvent.command_done("/clear", True, "Context cleared")
-
-        async def status_handler(ctx: Any) -> dict:
-            return ChatEvent.command_done(
-                "/status",
-                True,
-                f"session_id={ctx.session_id} wiki_id={ctx.wiki_id}",
-            )
-
-        async def title_handler(ctx: Any) -> dict:
-            new_title = (ctx.args or "").strip()
-            if not new_title:
-                return ChatEvent.command_done(
-                    "/title", False, "Usage: /title <text>",
-                )
-            if ctx.db is not None and ctx.session_id:
-                try:
-                    ctx.db.update_chat_session_title(ctx.session_id, new_title)
-                except Exception:
-                    pass
-            return ChatEvent.command_done(
-                "/title", True, f"Title set: {new_title[:50]}",
-            )
-
-        # Phase 6 (2026-06-19): /memory_dream prefix command.
-        # Triggers the long-term fact extractor (borrowed from
-        # nanobot agent/memory.py:859). Note: this is distinct
-        # from the existing ``/wiki_dream`` slash command which wraps
-        # ``apps/agent/wiki_dream_editor/`` (wiki edit proposals).
-        async def memory_dream_handler(ctx: Any) -> AsyncIterator[dict]:
-            from llmwikify.apps.chat.memory import MemoryManager
-            from llmwikify.apps.chat.skills.crud.memory_dream_skill import (
-                _get_dream,
-                _run,
-                _run_for_session,
-            )
-
-            # Pass self.memory_manager (orchestrator instance attr) rather
-            # than ``getattr(ctx, "memory_manager", None)`` — CommandContext
-            # doesn't carry a memory_manager field, so the previous code
-            # always injected ``None`` and /memory_dream was silently
-            # disabled.
-            stub = _make_skill_ctx(ctx, memory_manager=self.memory_manager)
-            dream = _get_dream(stub)
-            if isinstance(dream, dict) and dream.get("ok") is False:
-                yield ChatEvent.command_done(
-                    "/memory_dream",
-                    False,
-                    dream.get("message", "dream not configured"),
-                )
-                return
-
-            args_text = (ctx.args or "").strip()
-            if args_text.startswith("session "):
-                sid = args_text[len("session "):].strip()
-                result = await _run_for_session({"session_id": sid}, stub)
-            else:
-                result = await _run({}, stub)
-
-            yield ChatEvent.command_done(
-                "/memory_dream",
-                result.ok if hasattr(result, "ok") else True,
-                (
-                    result.message
-                    if hasattr(result, "message") and not result.ok
-                    else "dream complete"
-                ),
-                data=getattr(result, "data", None),
-            )
-
-        # Phase 8 (2026-06-20): /goal slash command — register / inspect /
-        # complete a sustained goal. Thin wrapper around GoalSkill so
-        # users get the same ``ChatRunner`` ergonomics from the chat
-        # input box.
-        #   /goal                       → show current goal
-        #   /goal <objective text>      → start_long_task (objective=text)
-        #   /goal done [recap text]     → complete_goal (recap=text)
-        async def goal_handler(ctx: Any) -> dict:
-            from llmwikify.apps.chat.skills.crud.goal_skill import (
-                _complete_goal,
-                _get_goal,
-                _start_long_task,
-            )
-
-            def _summarize(args_text: str, res: Any) -> str:
-                data = getattr(res, "data", None) or {}
-                if not args_text:
-                    if not data.get("active"):
-                        return "No active goal"
-                    g = data.get("goal", {})
-                    return f"Active: {g.get('objective', '')[:100]}"
-                if args_text.lower() == "done" or args_text.lower().startswith(
-                    "done ",
-                ):
-                    if data.get("completed"):
-                        return f"Completed: {data.get('objective', '')[:80]}"
-                    return data.get("reason", "no active goal")
-                return f"Goal registered: {data.get('objective', '')[:100]}"
-
-            stub = _make_skill_ctx(ctx, include_db=True)
-            args_text = (ctx.args or "").strip()
-
-            if not args_text:
-                result = await _get_goal({}, stub)
-            elif args_text.lower() == "done" or args_text.lower().startswith(
-                "done ",
-            ):
-                recap = args_text[4:].strip() if len(args_text) > 4 else ""
-                result = await _complete_goal({"recap": recap}, stub)
-            else:
-                result = await _start_long_task(
-                    {"goal": args_text, "ui_summary": args_text[:120]},
-                    stub,
-                )
-
-            ok = getattr(result, "status", "ok") == "ok"
-            return ChatEvent.command_done(
-                "/goal",
-                ok,
-                (
-                    getattr(result, "error", "") or "goal command failed"
-                    if not ok
-                    else _summarize(args_text, result)
-                ),
-                data=getattr(result, "data", None),
-            )
-
-        router.priority("/stop", stop_handler)
-        router.exact("/help", help_handler)
-        router.exact("/clear", clear_handler)
-        router.exact("/status", status_handler)
-        router.prefix("/title", title_handler)
-        router.prefix("/memory_dream", memory_dream_handler)
-        router.prefix("/goal", goal_handler)
+        # Use getattr so test stubs (built via __new__ to bypass __init__)
+        # can still construct the router without a memory_manager attribute.
+        register_builtin_commands(
+            router,
+            memory_manager=getattr(self, "memory_manager", None),
+        )
         return router
 
     async def _dispatch_command(
