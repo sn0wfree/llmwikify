@@ -6,7 +6,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests: 3100+ collected](https://img.shields.io/badge/tests-3100%2B%20collected-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
-[![Version: 0.36.0](https://img.shields.io/badge/version-0.36.0-blue.svg)](pyproject.toml)
+[![Version: 0.38.0](https://img.shields.io/badge/version-0.38.0-blue.svg)](pyproject.toml)
 
 ---
 

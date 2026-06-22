@@ -248,7 +248,7 @@ class WikiServer:
 
         app = FastAPI(
             title="llmwikify",
-            version="0.31.0",
+            version="0.38.0",
             description="LLM Wiki Knowledge Base API",
             docs_url="/docs",
             redoc_url="/redoc",
@@ -304,7 +304,7 @@ class WikiServer:
             if is_multi:
                 return {
                     "status": "ok",
-                    "version": "0.31.0",
+                    "version": "0.38.0",
                     "mode": "multi-wiki",
                     "wiki_count": wiki_count,
                     "default_wiki_id": self.registry.get_default_wiki_id(),
@@ -337,7 +337,7 @@ class WikiServer:
                 page_count = len(list(self.wiki.wiki_dir.glob("**/*.md"))) if self.wiki.wiki_dir.exists() else 0
                 return {
                     "status": "ok",
-                    "version": "0.31.0",
+                    "version": "0.38.0",
                     "mode": "single-wiki",
                     "wiki": {
                         "initialized": self.wiki.is_initialized(),
