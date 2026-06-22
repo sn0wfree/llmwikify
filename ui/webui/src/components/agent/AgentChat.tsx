@@ -277,7 +277,8 @@ export function AgentChat() {
             case 'done': {
               const thinkingSnapshot = currentThinkingRef.current;
               const toolCallsSnapshot = currentToolCallsRef.current;
-              setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
+              const doneContent = event.content || '';
+              setMessages((prev) => [...prev, { role: 'assistant', content: doneContent, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
               setCurrentAssistantMsg('');
               setCurrentThinking('');
               setCurrentToolCalls([]);
@@ -583,8 +584,9 @@ export function AgentChat() {
             case 'done': {
               const thinkingSnapshot = currentThinkingRef.current;
               const toolCallsSnapshot = currentToolCallsRef.current;
-              if (!currentResearchRunRef.current || !event.final_response.includes(currentResearchRunRef.current)) {
-                setMessages((prev) => [...prev, { role: 'assistant', content: event.final_response, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
+              const doneContent = event.content || '';
+              if (!currentResearchRunRef.current || !doneContent.includes(currentResearchRunRef.current)) {
+                setMessages((prev) => [...prev, { role: 'assistant', content: doneContent, thinking: thinkingSnapshot || undefined, timestamp: new Date().toISOString(), toolCalls: toolCallsSnapshot }]);
               }
               currentResearchRunRef.current = null;
               setCurrentAssistantMsg('');
@@ -592,7 +594,7 @@ export function AgentChat() {
               setCurrentToolCalls([]);
               currentThinkingRef.current = '';
               currentToolCallsRef.current = [];
-              setTokenEstimate((t) => t + Math.ceil((event.final_response.length + thinkingSnapshot.length) / 4));
+              setTokenEstimate((t) => t + Math.ceil((doneContent.length + (thinkingSnapshot || '').length) / 4));
               setConnectionState('idle');
               break;
             }
