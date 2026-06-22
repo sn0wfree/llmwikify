@@ -62,16 +62,28 @@ function buildStubResearchRun(runId: string): ResearchRunStatus {
   };
 }
 
+const STATUS_NORMALIZE: Record<string, string> = {
+  executed: 'done',
+  confirmation_required: 'error',
+};
+
 function parseToolCalls(raw: unknown): ToolCall[] | undefined {
   if (raw == null) return undefined;
-  if (Array.isArray(raw)) return raw as ToolCall[];
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? (parsed as ToolCall[]) : undefined;
-    } catch { return undefined; }
+  if (!Array.isArray(raw)) {
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return undefined;
+        raw = parsed;
+      } catch { return undefined; }
+    } else {
+      return undefined;
+    }
   }
-  return undefined;
+  return (raw as Record<string, unknown>[]).map((tc) => ({
+    ...tc,
+    status: (STATUS_NORMALIZE[tc.status as string] || tc.status || 'done') as ToolCall['status'],
+  })) as ToolCall[];
 }
 
 type ConnectionState = 'idle' | 'live' | 'error';

@@ -72,7 +72,7 @@ class ChatEvent:
 
     @staticmethod
     def done(final_response: str) -> dict:
-        return {"type": "done", "final_response": final_response}
+        return {"type": "done", "content": final_response}
 
     @staticmethod
     def error(message: str) -> dict:
@@ -123,7 +123,7 @@ class ChatOrchestrator:
     """Agent chat orchestrator — the main entry point for chat().
 
     Coordinates PromptBuilder, ContextManager, and ToolExecutor.
-    Delegates the ReAct loop to ChatReActBridge + ReActEngine.
+    Delegates the ReAct loop to ChatRunnerV2.
     """
 
     def __init__(
@@ -243,6 +243,37 @@ class ChatOrchestrator:
             self._tool_registries[cache_key] = registry
         return registry
 
+    async def _prepare_llm_messages(
+        self,
+        ctx: AgentContext,
+        user_message: str | None,
+        session_id: str,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Build system prompt + observation-aware messages for the LLM.
+
+        Returns (system_prompt, messages_for_llm).  Extracted from
+        ``chat()`` and ``approve_confirmation_continue()`` which both
+        performed the same 15-line preparation block.
+        """
+        system_prompt = await self.prompt_builder.build(
+            ctx.wiki_id,
+            user_message=user_message,
+            session_id=session_id,
+        )
+        raw_messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system_prompt},
+        ] + ctx.get_messages()
+        obs_summary = ctx.get_observations_summary()
+        if obs_summary:
+            raw_messages.insert(-1, {
+                "role": "system",
+                "content": obs_summary,
+            })
+        raw_messages = await self.context_manager.prepare_messages(
+            raw_messages, wiki_service=self.wiki_service,
+        )
+        return system_prompt, raw_messages
+
     # ─── SSE chat ────────────────────────────────────────────────
 
     async def chat(
@@ -322,24 +353,9 @@ class ChatOrchestrator:
 
             tool_registry = self._get_tool_registry(ctx, session_id)
 
-            system_prompt = await self.prompt_builder.build(
-                ctx.wiki_id,
-                user_message=message,
-                session_id=session_id,
+            system_prompt, messages_for_llm = await self._prepare_llm_messages(
+                ctx, message, session_id,
             )
-            raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
-            # Inject observations from previous tool calls
-            obs_summary = ctx.get_observations_summary()
-            if obs_summary:
-                raw_messages.insert(-1, {
-                    "role": "system",
-                    "content": obs_summary,
-                })
-            # Compact + truncate
-            raw_messages = await self.context_manager.prepare_messages(
-                raw_messages, wiki_service=self.wiki_service,
-            )
-            messages_for_llm = raw_messages
 
             # Check if already aborted
             if abort_event.is_set():
@@ -430,20 +446,10 @@ class ChatOrchestrator:
             return
 
         tool_registry = self._get_tool_registry(ctx, session_id)
-        system_prompt = await self.prompt_builder.build(
-            ctx.wiki_id,
-            user_message=ctx.messages[-1]["content"] if ctx.messages else None,
-            session_id=session_id,
-        )
-        raw_messages = [{"role": "system", "content": system_prompt}] + ctx.get_messages()
-        obs_summary = ctx.get_observations_summary()
-        if obs_summary:
-            raw_messages.insert(-1, {
-                "role": "system",
-                "content": obs_summary,
-            })
-        raw_messages = await self.context_manager.prepare_messages(
-            raw_messages, wiki_service=self.wiki_service,
+        system_prompt, raw_messages = await self._prepare_llm_messages(
+            ctx,
+            ctx.messages[-1]["content"] if ctx.messages else None,
+            session_id,
         )
 
         try:
@@ -801,13 +807,13 @@ class ChatOrchestrator:
     ) -> AsyncIterator[dict]:
         """V2 path: use ChatRunnerV2 (Plan B) instead of ReActEngine.
 
-        Reuses ChatBridgeBackend as the chat_service adapter (it already
-        implements the 4 methods ChatRunnerV2 needs: wiki_service,
-        _truncate_messages, _get_toolspec, _llm_stream_with_retry).
+        Reuses ChatBridgeBackend as the chat_service adapter (it exposes
+        the 3 methods ChatRunnerV2 needs — _truncate_messages,
+        _get_toolspec, _llm_stream_with_retry — plus a wiki_service
+        accessor for the LLM client).
 
-        Persists tool results via a V2PersistenceHook (replaces the
-        bridge's manual _persist_tool_result call). On done, saves the
-        assistant message via tool_executor.save_message (same as v1).
+        Persists tool results via a _V2PersistenceHook. On done, saves
+        the assistant message via tool_executor.save_message (same as v1).
         """
         from llmwikify.apps.chat.agent.bridge_backend import ChatBridgeBackend
         from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
@@ -915,6 +921,7 @@ class ChatOrchestrator:
                         "args": event.get("args", {}),
                         "result": event.get("result"),
                         "call_id": event.get("call_id", ""),
+                        "status": "executed",
                     })
                 if kind == "done":
                     final = event.get("content", "") or ""
