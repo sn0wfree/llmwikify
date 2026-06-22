@@ -569,7 +569,6 @@ def _register_agent_routes(
 
     # Register /api/autoresearch/* routes (router exists, never mounted)
     from llmwikify.apps.chat.config import merge_six_step_config
-    from llmwikify.apps.chat.providers.registry import create_llm
     from llmwikify.apps.chat.research_engine.routes import (
         router as autoresearch_router,
         set_autoresearch_deps,
@@ -579,7 +578,7 @@ def _register_agent_routes(
     autoresearch_llm = provider
     if autoresearch_llm is None:
         try:
-            autoresearch_llm = create_llm(merge_six_step_config().get("llm", {}))
+            autoresearch_llm = agent_service._get_llm()
         except Exception:
             pass
     set_autoresearch_deps(
