@@ -28,6 +28,7 @@ const NAV_QUANT = [
   { to: '/agent/paper', label: 'Paper', icon: FileText },
   { to: '/agent/factor', label: 'Factor', icon: Beaker },
   { to: '/agent/strategy', label: 'Strategy', icon: TrendingUp },
+  { to: '/agent/backtest', label: 'Backtest', icon: Activity },
 ] as const;
 
 const NAV_SECONDARY = [

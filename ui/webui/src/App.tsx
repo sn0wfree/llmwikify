@@ -39,6 +39,12 @@ const FactorDetail = lazy(() =>
 const StrategyPanel = lazy(() =>
   import('./components/strategy/StrategyPanel').then(m => ({ default: m.StrategyPanel }))
 );
+const StrategyDetail = lazy(() =>
+  import('./components/strategy/StrategyDetail').then(m => ({ default: m.StrategyDetail }))
+);
+const BacktestPlatform = lazy(() =>
+  import('./components/backtest/BacktestPlatform').then(m => ({ default: m.BacktestPlatform }))
+);
 
 function Loading() {
   return <div className="p-6 text-muted-foreground">Loading...</div>;
@@ -65,10 +71,11 @@ function App() {
             <Route path="autoresearch" element={<AutoResearchPanel />} />
             <Route path="reproduction" element={<ReproductionPanel />} />
             <Route path="paper" element={<PaperPanel />} />
-            <Route path="factor" element={<FactorPanel />} />
-            <Route path="factor-library" element={<FactorDetail />} />
-            <Route path="factor-library/:name" element={<FactorDetail />} />
-            <Route path="strategy" element={<StrategyPanel />} />
+            <Route path="factor" element={<FactorDetail />} />
+            <Route path="factor/:name" element={<FactorDetail />} />
+            <Route path="strategy" element={<StrategyDetail />} />
+            <Route path="strategy/:name" element={<StrategyDetail />} />
+            <Route path="backtest" element={<BacktestPlatform />} />
             <Route path="tasks" element={<TaskMonitor />} />
             <Route path="settings" element={<LLMSettings />} />
           </Route>

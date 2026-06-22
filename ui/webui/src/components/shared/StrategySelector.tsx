@@ -1,5 +1,5 @@
 /**
- * StrategySelector — select a Strategy page from wiki/strategy/ directory.
+ * StrategySelector — select a Strategy definition from quant/strategies/ library.
  *
  * Fetches strategy list from /api/strategy/list and displays as selectable cards.
  *
@@ -77,7 +77,7 @@ export function StrategySelector({ onSelect, selectedSlug, className }: Strategy
         <TrendingUp className="w-4 h-4 mx-auto mb-1 opacity-50" />
         <div>No strategies found</div>
         <div className="text-[10px] mt-1 opacity-70">
-          Create one via Paper extraction or manually in wiki/strategy/
+          Create one via Paper extraction or manually in quant/strategies/
         </div>
       </div>
     );
