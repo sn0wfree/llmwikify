@@ -46,6 +46,8 @@ stash 遗留改动 commit 前主动提醒。
 
 **服务器**：不用 `--reload`；启动 `llmwikify serve --web --port 8765 --host 0.0.0.0`；健康检查 `curl http://localhost:8765/api/health`。
 
+**WebUI 构建**：改 `ui/webui/src/**` 后必须 `cd ui/webui && npm run build`（或 `pnpm build`），仅 `tsc --noEmit` 类型检查不会更新 `ui/webui/dist/assets/AgentChat-*.js` 等 bundle；浏览器会继续加载旧 hash 的 chunk，源码修复"看不见"。dist/ 在 `.gitignore` 里不入仓，但 serve 时被 FastAPI 静态挂载到 `/assets/*`。验证：`grep -c "final_response" ui/webui/dist/assets/AgentChat-*.js` 应返回 0。
+
 **Skills & Subagents**：Skills 路径 `~/.llmwikify/skills/`；Subagent `.claude/agents/<name>.md` 默认 `isolation: worktree`；prompt 必备 角色 + 输入契约 + 输出契约 + 边界。
 
 **CompositeHook**（`foundation/callback/`）：新增 agent 钩子必用 `AgentHook` 基类（13 钩子点：wants_streaming / before_iteration / on_stream / on_stream_end / emit_reasoning / emit_reasoning_end / before_execute_tools / after_tool_executed / on_tool_error / on_confirmation / after_iteration / finalize_content / on_error）；`CompositeHook` fan-out 错误隔离（async 方法自动 try/except log warning，`finalize_content` 透传异常）；业务 hook 放 `integrations/` 子包（WikiHook / DreamSyncHook / AutoIngestHook）。
