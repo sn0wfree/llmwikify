@@ -4,9 +4,14 @@ Thin FastAPI router for single-factor testing. Matches the pattern of
 reproduction.py: global deps set during app startup via set_factor_deps().
 
 Endpoints:
-    GET  /api/factor/list            — list all Factor wiki pages
-    GET  /api/factor/{slug}          — get Factor definition
+    GET  /api/factor/list            — list factors (legacy alias of /library/list)
+    GET  /api/factor/library/list    — list all factors from quant/factors/ (canonical)
+    GET  /api/factor/library/{name}  — get full 6-layer YAML definition
+    GET  /api/factor/{slug}          — get Factor definition (YAML)
+    PUT  /api/factor/library/{name}  — update Factor YAML
     POST /api/factor/{slug}/backtest — run factor backtest (cross-section mode)
+    POST /api/factor/{slug}/validate — run L5 validation pipeline
+    GET  /api/factor/{slug}/backtest — get past backtest results
 """
 
 from __future__ import annotations

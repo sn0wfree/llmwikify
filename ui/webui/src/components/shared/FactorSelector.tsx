@@ -1,7 +1,8 @@
 /**
- * FactorSelector — select a Factor page from wiki/factor/ directory.
+ * FactorSelector — select a Factor definition from quant/factors/ library.
  *
- * Fetches factor list from /api/factor/list and displays as selectable cards.
+ * Fetches factor list from /api/factor/library/list and flattens the
+ * categories dict into a single array of selectable cards.
  *
  * Usage:
  *   <FactorSelector onSelect={(slug) => setSelectedFactor(slug)} />
@@ -55,10 +56,20 @@ export function FactorSelector({ onSelect, selectedSlug, className }: FactorSele
     let cancelled = false;
     const fetchFactors = async () => {
       try {
-        const res = await fetch('/api/factor/list');
+        const res = await fetch('/api/factor/library/list');
         const data = await res.json();
         if (!cancelled) {
-          setFactors(data.factors || []);
+          // Backend returns {"categories": {price: [...], fundamental: [...], ...}}
+          // Flatten into a single array and rename _name to _slug for the UI contract.
+          const flat = Object.values(data.categories || {}).flat() as any[];
+          const items: FactorItem[] = flat.map((f) => ({
+            _slug: f._name ?? f._path ?? '',
+            title: f.name_cn || f.name,
+            factor_class: f.factor_class ?? f.subcategory ?? f.category,
+            factor_params: f.factor_params ?? f.default_params,
+            status: f.status,
+          }));
+          setFactors(items);
         }
       } catch {
         if (!cancelled) {
@@ -88,7 +99,7 @@ export function FactorSelector({ onSelect, selectedSlug, className }: FactorSele
         <Beaker className="w-4 h-4 mx-auto mb-1 opacity-50" />
         <div>No factors found</div>
         <div className="text-[10px] mt-1 opacity-70">
-          Create one via Paper extraction or manually in wiki/factor/
+          Create one via Paper extraction or manually in quant/factors/
         </div>
       </div>
     );
