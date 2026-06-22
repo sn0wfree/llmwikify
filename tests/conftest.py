@@ -10,8 +10,31 @@ import pytest
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from llmwikify.kernel import Wiki
 from llmwikify.foundation.extractors import ExtractedContent
+from llmwikify.kernel import Wiki
+
+
+# Phase 19-D (2026-06-22): redirect all chat/agent DB writes to a
+# per-session tmp dir so test runs no longer pollute the production
+# ``~/.llmwikify/agent/.llmwiki_agent.db``. Previously tests relied
+# on ``monkeypatch.setenv("HOME", ...)``, which ``Path.home()``
+# ignores on Linux (it consults /etc/passwd, not $HOME).
+#
+# The autouse=True + scope="session" fixture sets LLMWIKIFY_DATA_DIR
+# once for the whole test run, before any test imports
+# ``llmwikify.interfaces.server.http.routes``. Tests that need a
+# specific data dir can still ``monkeypatch.setenv`` it locally.
+@pytest.fixture(autouse=True, scope="session")
+def _isolate_llmwikify_data_dir() -> str:
+    import os
+    tmp_root = Path(tempfile.mkdtemp(prefix="llmwikify_test_data_"))
+    os.environ["LLMWIKIFY_DATA_DIR"] = str(tmp_root)
+    yield str(tmp_root)
+    # Cleanup: best-effort rmtree
+    try:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    except Exception:
+        pass
 
 
 @pytest.fixture

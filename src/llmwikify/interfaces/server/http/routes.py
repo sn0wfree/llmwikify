@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -542,11 +543,25 @@ def _register_agent_routes(
     so the AgentService wires it into MemoryManager, enabling the
     Phase 6 Consolidator + Dream pipeline. If ``provider`` is None,
     the existing fallback path (provider-less MemoryManager) is used.
+
+    Phase 19-D (2026-06-22): ``data_dir`` honors ``LLMWIKIFY_DATA_DIR``
+    when set, falling back to ``~/.llmwikify/agent``. This lets tests
+    monkeypatch the data dir via ``monkeypatch.setenv`` without writing
+    to the production database (which ``Path.home()`` ignores on Linux).
     """
     from llmwikify.apps.chat.agent.agent_service import AgentService
     from llmwikify.interfaces.server.http.chat_sse import set_agent_service
 
-    data_dir = Path.home() / ".llmwikify" / "agent"
+    # Phase 19-D: prefer explicit LLMWIKIFY_DATA_DIR; fall back to
+    # the previous ``~/.llmwikify/agent`` default. Without this,
+    # pytest's ``monkeypatch.setenv("HOME", ...)`` had no effect
+    # (``Path.home()`` consults /etc/passwd, not $HOME), so test
+    # runs polluted the real production DB with mock-LLM fixtures.
+    _env_data_dir = os.environ.get("LLMWIKIFY_DATA_DIR")
+    if _env_data_dir:
+        data_dir = Path(_env_data_dir)
+    else:
+        data_dir = Path.home() / ".llmwikify" / "agent"
     data_dir.mkdir(parents=True, exist_ok=True)
 
     agent_service = AgentService(registry, data_dir, provider=provider)
