@@ -38,10 +38,29 @@ def register_routes(
             handshake can validate ``?token=`` against the same
             key as the REST ``AuthMiddleware``. Pass ``None`` to
             disable WS auth (dev mode).
+
+    Phase 19-B: also wires the ``AgentService`` (created by
+    ``_register_agent_routes``) into the WS router so the
+    ``message`` handler routes to the real ``ChatOrchestrator``
+    instead of echoing.
     """
     _register_wiki_routes(app, registry, provider=provider)
     _register_agent_routes(app, registry, provider=provider)
-    _register_websocket_routes(app, api_key=api_key or "")  # noqa: F821
+    # Phase 19-B: pass the freshly-created AgentService so the WS
+    # handler can route ``message`` to ChatOrchestrator.chat(). We
+    # resolve via the global set by ``_register_agent_routes`` →
+    # ``chat_sse.set_agent_service`` to avoid refactoring its
+    # private signature.
+    from llmwikify.interfaces.server.http.chat_sse import get_agent_service
+    agent_svc = None
+    try:
+        agent_svc = get_agent_service()
+    except RuntimeError:
+        # Agent service not initialized — WS falls back to echo
+        pass
+    _register_websocket_routes(
+        app, api_key=api_key or "", chat_service=agent_svc,
+    )
 
 
 def _register_wiki_routes(

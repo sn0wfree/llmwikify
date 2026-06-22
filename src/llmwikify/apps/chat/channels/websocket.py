@@ -1,4 +1,4 @@
-"""Phase 14 — WebSocket agent channel (borrowed from nanobot v0.2.1).
+"""Phase 14 + 19-B — WebSocket agent channel (borrowed from nanobot v0.2.1).
 
 借鉴 nanobot v0.2.1 ``nanobot/channels/websocket.py`` 核心 50%：
 
@@ -12,9 +12,9 @@
 
 设计原则：
 
-  - **渐进式** — Phase 14 只把"通道 + 协议 + 订阅"打通，**不接** ChatOrchestrator。
-    Phase 15+ 让 ChatOrchestrator 把 SSE ``yield event`` 改 ``publish_outbound``，
-    然后 WS handler 从 bus 拉取 fan-out。本期 handler 内置 send_event 接口供测试。
+  - **渐进式** — Phase 14 把"通道 + 协议 + 订阅"打通；**Phase 19-B** 把 WS
+    ``message`` 真正路由到 ``ChatOrchestrator.chat()``，并在每个 yield 上
+    镜像到 ``MessageBus`` + 翻译到 WS envelope 后 fan-out。
   - **fastapi native** — 用 fastapi.WebSocket（已确认 0.135.1 支持），不引入新依赖。
   - **认证可关** — token 不匹配 → close code 1008（policy violation）。生产用
     WikiServer 的 api_key 校验（与 REST API 一致）。
@@ -24,6 +24,8 @@
   - 单 process。Redis-bus / 多实例由 Phase 15+ 处理。
   - 无 reconnect 状态恢复（客户端断线后丢失 in-flight 消息）。
   - 不支持 multipart 上传（图片/PDF），那是 OpenAI-compat API 的范围。
+  - **chat_service 注入** — Phase 19-B 引入，WS 路由在挂载时接受
+    ``chat_service: AgentService | None``，None 则回退到 echo（dev mode）。
 """
 
 from __future__ import annotations
@@ -258,11 +260,69 @@ def set_default_ws_manager(mgr: WebSocketManager | None) -> None:
 PER_CONN_OUT_MAXSIZE = 256
 
 
+# ─── Session map (Phase 19-B) ──────────────────────────────────────
+#
+# Maps WS ``chat_id`` → backend ``session_id`` (returned by the
+# orchestrator's ``session_created`` event). Persisted across
+# connections so a client can reconnect to the same chat_id and
+# continue the conversation.
+#
+# Kept at module scope so the default in-process server can hand
+# out a stable mapping. For tests, the helper accepts an injected
+# map (see ``_register_websocket_routes``).
+#
+# Thread-safety: all access is via the asyncio event loop, so a
+# plain dict suffices. We don't use locks because the event loop
+# doesn't preempt between awaits in the same task.
+
+
+class WsSessionMap:
+    """Maps WS ``chat_id`` → backend ``session_id``.
+
+    Phase 19-B: created lazily on first WS message; subsequent
+    messages on the same ``chat_id`` reuse the same session. A
+    reconnect to the same ``chat_id`` resumes the session.
+    """
+
+    def __init__(self) -> None:
+        self._map: dict[str, str] = {}
+
+    def get(self, chat_id: str) -> str | None:
+        return self._map.get(chat_id)
+
+    def set(self, chat_id: str, session_id: str) -> None:
+        self._map[chat_id] = session_id
+
+    def discard(self, chat_id: str) -> None:
+        self._map.pop(chat_id, None)
+
+    def stats(self) -> dict[str, int]:
+        return {"tracked_chats": len(self._map)}
+
+
+_default_session_map: WsSessionMap | None = None
+
+
+def get_default_ws_session_map() -> WsSessionMap:
+    """Return the process-wide default ``WsSessionMap`` (lazy init)."""
+    global _default_session_map
+    if _default_session_map is None:
+        _default_session_map = WsSessionMap()
+    return _default_session_map
+
+
+def reset_default_ws_session_map() -> WsSessionMap:
+    """Force-replace the default session map. Tests only."""
+    global _default_session_map
+    _default_session_map = WsSessionMap()
+    return _default_session_map
+
+
 # ─── FastAPI router ─────────────────────────────────────────────
 
 
 def _register_websocket_routes(
-    app: FastAPI, *, api_key: str = "",
+    app: FastAPI, *, api_key: str = "", chat_service: Any = None,
 ) -> None:
     """Mount the WebSocket routes onto ``app``.
 
@@ -272,6 +332,16 @@ def _register_websocket_routes(
         Main agent channel. Auth via ``?token=<api_key>`` query param.
         Server pushes ``ready`` on accept; client may ``new_chat`` /
         ``attach`` / ``message`` / ``ping`` thereafter.
+
+        Phase 19-B: ``message`` is routed to ``ChatOrchestrator.chat()``
+        via the injected ``chat_service`` (an ``AgentService``). The
+        orchestrator's yield stream is:
+          1. mirrored to ``MessageBus`` (so any other consumer sees it)
+          2. translated to the WS envelope (``delta`` / ``stream_end`` / ...)
+          3. fan-out via ``WebSocketManager.send_to_chat``
+        If ``chat_service`` is ``None``, the handler falls back to the
+        Phase 14 echo behavior (useful for unit tests and dev mode).
+
     POST /api/ws/token
         Issue a temporary single-use token (HTTP/1.1). Currently
         a no-op shim returning a deterministic token; Phase 15+
@@ -283,8 +353,20 @@ def _register_websocket_routes(
     configured API key. When empty (default), auth is skipped —
     useful for tests and local dev. Production should always
     set ``api_key``.
+
+    The ``chat_service`` is an ``AgentService`` (or any object with a
+    ``.chat_service`` attribute exposing ``ChatOrchestrator.chat``).
+    For backward compat with tests / dev mode, ``None`` is accepted
+    and the handler echoes instead of routing to the orchestrator.
     """
     router = APIRouter(tags=["websocket"])
+
+    # Late-resolve the chat orchestrator: we accept either an
+    # ``AgentService`` (whose ``.chat_service`` is the orchestrator)
+    # or an orchestrator directly. ``None`` falls back to echo.
+    orchestrator = None
+    if chat_service is not None:
+        orchestrator = getattr(chat_service, "chat_service", chat_service)
 
     @router.websocket("/api/ws/agent")
     async def ws_agent(
@@ -311,6 +393,7 @@ def _register_websocket_routes(
             out_queue=asyncio.Queue(maxsize=PER_CONN_OUT_MAXSIZE),
         )
         manager = get_default_ws_manager()
+        session_map = get_default_ws_session_map()
         # Greet the client
         await conn.out_queue.put({
             "type": WSServerMsg.READY,
@@ -330,7 +413,11 @@ def _register_websocket_routes(
                         "error": f"Invalid JSON: {e}",
                     })
                     continue
-                await _handle_client_msg(conn, manager, msg)
+                await _handle_client_msg(
+                    conn, manager, msg,
+                    orchestrator=orchestrator,
+                    session_map=session_map,
+                )
         except WebSocketDisconnect:
             pass
         except Exception:
@@ -374,10 +461,83 @@ def _register_websocket_routes(
 # ─── Internal helpers ───────────────────────────────────────────
 
 
+async def _run_ws_chat(
+    *,
+    conn: _Connection,
+    manager: WebSocketManager,
+    chat_id: str,
+    content: str,
+    orchestrator: Any,
+    session_map: WsSessionMap,
+) -> None:
+    """Phase 19-B: route a WS message to ``ChatOrchestrator.chat()``.
+
+    Iterates the orchestrator's yielded event stream and, for each
+    event:
+
+      1. mirrors to ``MessageBus`` (so any other consumer sees it);
+      2. translates to the WS envelope via ``BusAdapter.translate_sse_to_ws``;
+      3. fan-outs to all connections subscribed to ``chat_id`` via
+         ``WebSocketManager.send_to_chat``.
+
+    Side-effects:
+
+      - On ``session_created`` / ``session_init`` events, the
+        ``session_id`` is cached in ``session_map[chat_id]`` so
+        subsequent messages on the same ``chat_id`` resume the
+        conversation.
+      - On exception, the orchestrator's events so far have already
+        been fanned out. We log + best-effort send an error envelope
+        but do NOT raise (the receive loop must not crash).
+    """
+    from llmwikify.apps.chat.bus.adapter import BusAdapter
+
+    session_id = session_map.get(chat_id)
+    bus_adapter = BusAdapter()
+    try:
+        async for event in orchestrator.chat(
+            message=content, session_id=session_id,
+        ):
+            # Mirror to bus (target_id=chat_id so future per-chat
+            # consumers can filter; channel='websocket' marks the
+            # origin so SSE→bus mirrors can be told apart from
+            # WS→orchestrator→bus mirrors if needed).
+            bus_adapter.mirror_sse_event(
+                event,
+                target_id=chat_id,
+                session_key=f"websocket:{chat_id}",
+            )
+            # Translate to WS envelope + fan-out
+            ws_envelope = BusAdapter.translate_sse_to_ws(event)
+            await manager.send_to_chat(chat_id, ws_envelope)
+            # Cache session_id for follow-up messages
+            etype = event.get("type", "")
+            if etype in ("session_created", "session_init"):
+                sid = event.get("session_id", "")
+                if sid:
+                    session_map.set(chat_id, sid)
+    except Exception:
+        logger.exception(
+            "WS chat route failed for chat_id=%s peer=%s",
+            chat_id, conn.peer,
+        )
+        # Best-effort error fan-out so subscribers see something.
+        try:
+            await manager.send_to_chat(chat_id, {
+                "type": WSServerMsg.ERROR,
+                "error": "Internal error while streaming chat response",
+            })
+        except Exception:
+            pass
+
+
 async def _handle_client_msg(
     conn: _Connection,
     manager: WebSocketManager,
     msg: dict[str, Any],
+    *,
+    orchestrator: Any = None,
+    session_map: WsSessionMap | None = None,
 ) -> None:
     """Dispatch a single client message.
 
@@ -385,9 +545,11 @@ async def _handle_client_msg(
     ---------------------------
     ``{type: "new_chat"}`` → mint a chat_id, attach, return ``chat_created``
     ``{type: "attach", chat_id: ...}`` → subscribe to existing chat_id
-    ``{type: "message", chat_id: ..., content: ...}`` → echo as a stub
-        ``delta`` + ``stream_end`` (Phase 14 has no ChatOrchestrator
-        integration; the echo proves the message round-tripped).
+    ``{type: "message", chat_id: ..., content: ...}`` →
+        Phase 19-B: if ``orchestrator`` is provided, route to
+        ``ChatOrchestrator.chat()`` and stream the real response
+        (each yield mirrored to bus + translated to WS envelope +
+        fan-out). Otherwise fall back to Phase 14 echo behavior.
     ``{type: "ping"}`` → respond with ``pong``
     """
     mtype = msg.get("type", "")
@@ -429,9 +591,23 @@ async def _handle_client_msg(
                 "error": "message requires chat_id (must be attached first)",
             })
             return
-        # Phase 14 echo: prove the channel round-trip. Phase 15+
-        # will route to ChatOrchestrator.chat() and stream the
-        # real response via ``send_to_chat``.
+
+        # Phase 19-B: real ChatOrchestrator route when an
+        # orchestrator has been injected. We spawn a task so the
+        # receive loop is never blocked by a slow LLM stream.
+        if orchestrator is not None:
+            asyncio.create_task(_run_ws_chat(
+                conn=conn,
+                manager=manager,
+                chat_id=chat_id,
+                content=content,
+                orchestrator=orchestrator,
+                session_map=session_map or get_default_ws_session_map(),
+            ))
+            return
+
+        # Fallback: Phase 14 echo. Used when no chat_service is
+        # wired (dev mode / unit tests).
         await manager.send_to_chat(chat_id, {
             "type": WSServerMsg.DELTA,
             "chat_id": chat_id,
@@ -483,8 +659,13 @@ __all__ = [
     "WebSocketManager",
     "WSServerMsg",
     "WSClientMsg",
+    "WsSessionMap",
     "get_default_ws_manager",
     "reset_default_ws_manager",
     "set_default_ws_manager",
+    "get_default_ws_session_map",
+    "reset_default_ws_session_map",
     "_register_websocket_routes",
+    "_handle_client_msg",
+    "_run_ws_chat",
 ]
