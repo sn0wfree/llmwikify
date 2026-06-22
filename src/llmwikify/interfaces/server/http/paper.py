@@ -387,59 +387,111 @@ async def _run_paper_extraction(
             _DB.record_event(session_id, "backtest.started", symbol=symbol)
             backtest_results: list[dict[str, Any]] = []
             try:
-                from llmwikify.reproduction.factor_backtest import run_factor_backtest_universe
+                from llmwikify.reproduction.factor_backtest import (
+                    _compute_factor_matrix,
+                    run_factor_backtest_universe,
+                )
                 from llmwikify.reproduction.router import DataRouter
                 from llmwikify.reproduction.universe import resolve_universe
+
+                # PR-4 (2026-06-21): Limit concurrent LLM-driven multi-factor backtests
+                backtest_semaphore = asyncio.Semaphore(3)
+
+                async def _run_one_backtest(
+                    factor_name: str,
+                    factor_data: dict[str, Any],
+                ) -> dict[str, Any]:
+                    """PR-4: Run a single factor backtest, AST-aware."""
+                    async with backtest_semaphore:
+                        # PR-4: AST path priority (l5.ast > l1.code)
+                        l5_ast = factor_data.get("l5", {}).get("ast") or factor_data.get("l5_ast")
+                        if l5_ast:
+                            factor_class = "ast_compiled"
+                            factor_params = {"ast_json": l5_ast}
+                        else:
+                            code = (
+                                factor_data.get("l1", {}).get("code", "")
+                                or factor_data.get("l2", {}).get("generated_code", "")
+                            )
+                            factor_class = "formula" if code else "momentum"
+                            default_params = factor_data.get("l1", {}).get("default_params", {})
+                            factor_params = (
+                                {**default_params, "code": code} if code else default_params
+                            )
+
+                        try:
+                            bt = await asyncio.to_thread(
+                                run_factor_backtest_universe,
+                                close_wide=close_wide,
+                                factor_class=factor_class,
+                                factor_params=factor_params,
+                                adj_mode="D",
+                                n_groups=5,
+                                universe=universe_spec,
+                            )
+                            # Store factor values to DuckDB (compute separately since
+                            # run_factor_backtest_universe does not return factor_wide)
+                            try:
+                                factor_wide = await asyncio.to_thread(
+                                    _compute_factor_matrix,
+                                    close_wide, factor_class, factor_params,
+                                )
+                                if not factor_wide.empty:
+                                    from llmwikify.reproduction.factor_value_store import (
+                                        store_factor_values,
+                                    )
+                                    await asyncio.to_thread(
+                                        store_factor_values,
+                                        factor_name=factor_name,
+                                        factor_wide=factor_wide,
+                                        source=f"paper/{paper_id}",
+                                    )
+                            except Exception as db_exc:
+                                logger.warning(
+                                    "paper %s: DuckDB store failed for %s: %s",
+                                    session_id, factor_name, db_exc,
+                                )
+
+                            return {
+                                "factor_name": factor_name,
+                                "factor_class": factor_class,
+                                "ic_mean": bt.ic_mean,
+                                "icir": bt.icir,
+                                "score": bt.score,
+                                "turnover": getattr(bt, "turnover", None),
+                            }
+                        except Exception as exc:
+                            logger.warning(
+                                "paper %s: backtest failed for %s: %s",
+                                session_id, factor_name, exc,
+                            )
+                            return {"factor_name": factor_name, "error": str(exc)}
 
                 router = DataRouter(use_cache=True, parquet_path=str(_PARQUET_PATH) if _PARQUET_PATH else None)
                 universe_spec = extraction.get("data_requirements", {}).get("universe", "HS300") or "HS300"
                 symbols = await asyncio.to_thread(resolve_universe, universe_spec)
+                if not symbols:
+                    raise RuntimeError(f"Cannot resolve universe '{universe_spec}'")
 
-                for fl in factor_list_factors:
-                    try:
-                        factor_name = fl["name"]
-                        factor_data = fl["factor"]
-                        code = factor_data.get("l1", {}).get("code", "") or factor_data.get("l2", {}).get("generated_code", "")
-                        factor_class = "formula" if code else "momentum"
+                # PR-4 (2026-06-21): Pre-fetch close_wide once for all factors.
+                merged_df, source = await asyncio.to_thread(
+                    router.get_universe, symbols, start_date, end_date
+                )
+                if merged_df is None or merged_df.empty:
+                    raise RuntimeError(f"No data for universe '{universe_spec}'")
+                close_wide = merged_df.pivot_table(
+                    index="date", columns="Code", values="close", aggfunc="last"
+                ).sort_index().dropna(how="all")
 
-                        result = await asyncio.to_thread(
-                            run_factor_backtest_universe,
-                            data_router=router,
-                            symbols=symbols,
-                            factor_class=factor_class,
-                            factor_params={**factor_data.get("l1", {}).get("default_params", {}), "code": code} if code else factor_data.get("l1", {}).get("default_params", {}),
-                            start_date=start_date,
-                            end_date=end_date,
-                            adj_mode="D",
-                            n_groups=5,
-                            cost_bps=15.0,
-                        )
-                        bt_result = result["result"]
-                        backtest_results.append({
-                            "factor_name": factor_name,
-                            "factor_class": factor_class,
-                            "ic_summary": result.get("ic_summary"),
-                            "group_return": result.get("group_return"),
-                            "long_short": result.get("long_short"),
-                            "score": bt_result.score,
-                            "turnover": getattr(bt_result, "turnover", None),
-                        })
-
-                        # Store to DuckDB
-                        try:
-                            from llmwikify.reproduction.factor_value_store import store_factor_values
-                            if result.get("factor_wide") is not None:
-                                store_factor_values(
-                                    factor_name=factor_name,
-                                    factor_wide=result["factor_wide"],
-                                    source=f"paper/{paper_id}",
-                                )
-                        except Exception as db_exc:
-                            logger.warning("paper %s: DuckDB store failed for %s: %s", session_id, factor_name, db_exc)
-
-                    except Exception as exc:
-                        logger.warning("paper %s: backtest failed for %s: %s", session_id, fl["name"], exc)
-                        backtest_results.append({"factor_name": fl["name"], "error": str(exc)})
+                # Run all factors concurrently (semaphore=3 limits LLM compile)
+                results = await asyncio.gather(
+                    *[
+                        _run_one_backtest(fl["name"], fl["factor"])
+                        for fl in factor_list_factors
+                    ],
+                    return_exceptions=False,
+                )
+                backtest_results = list(results)
 
                 _DB.record_event(
                     session_id, "backtest.done",

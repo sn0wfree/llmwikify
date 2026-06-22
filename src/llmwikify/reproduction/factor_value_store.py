@@ -183,11 +183,15 @@ def compute_and_store_factor(
 
     This is the main entry point for the factor value pipeline.
 
+    PR-4 (2026-06-21): Loop v4 AST path support.
+    - If factor_class == "ast_compiled" and factor_params has ast_json, route via AST.
+    - factor_class fallback for unknown types.
+
     Args:
         close_wide: DataFrame [date × Code] of close prices.
         factor_name: Factor identifier for storage.
-        factor_class: Factor type (momentum, volatility, etc.).
-        factor_params: Factor construction parameters.
+        factor_class: Factor type (momentum, volatility, ast_compiled, etc.).
+        factor_params: Factor construction parameters (may include ast_json).
         db_path: Optional DuckDB path override.
 
     Returns:

@@ -21,6 +21,7 @@ from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
+import polars as pl
 
 from .schemas import FactorBacktestResult
 
@@ -107,6 +108,15 @@ def _compute_factor_values(
             return close.pct_change(period)
         return _compute_factor_from_code(data, code)
 
+    elif factor_class == "ast_compiled":
+        # PR-4 (2026-06-21): Loop v4 AST path
+        ast_json = factor_params.get("ast_json")
+        if not ast_json:
+            logger.warning("factor_class='ast_compiled' but no ast_json provided, falling back to momentum")
+            period = int(factor_params.get("period", 20))
+            return close.pct_change(period)
+        return _compute_factor_from_ast(data, ast_json)
+
     else:
         # Default: momentum
         period = int(factor_params.get("lookback", factor_params.get("period", 20)))
@@ -154,6 +164,36 @@ def _compute_factor_from_code(data: pd.DataFrame, code: str) -> pd.Series:
     if isinstance(result, pd.DataFrame):
         result = result.iloc[:, 0]
     return result.astype(float)
+
+
+def _compute_factor_from_ast(data: pd.DataFrame, ast_json: str) -> pd.Series:
+    """PR-4 (2026-06-21): Loop v4 AST execution path.
+
+    Compile AST JSON → polars.Expr, evaluate on long-format df, return Series.
+
+    Args:
+        data: DataFrame with columns [date, open, high, low, close, volume].
+        ast_json: JSON string of ASTNode (Pydantic model_dump).
+
+    Returns:
+        Series of factor values aligned with input data index.
+    """
+    import json
+
+    from .ast_compiler import CompileError, compile_ast
+    from .ast_nodes import ASTNode
+
+    try:
+        ast_node = ASTNode(**json.loads(ast_json))
+        expr = compile_ast(ast_node)
+    except (CompileError, ValueError) as exc:
+        logger.warning("AST compile failed (%s); falling back to momentum", exc)
+        return data["close"].pct_change(20)
+
+    df_pl = pl.from_pandas(data[["date", "open", "high", "low", "close", "volume"]])
+    df_with_factor = df_pl.with_columns(expr.alias("factor_value"))
+    out = df_with_factor.select("factor_value").to_pandas()
+    return out["factor_value"].reset_index(drop=True)
 
 
 # ─── IC computation ──────────────────────────────────────────

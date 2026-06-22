@@ -269,13 +269,19 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
         raise HTTPException(status_code=404, detail=f"Factor '{slug}' not found")
     factor = factor_data.get("factor", factor_data)
 
-    factor_class = factor.get("subcategory", factor.get("factor_class", "momentum"))
-    factor_params = factor.get("l1", {}).get("default_params", factor.get("factor_params", {}))
-    if isinstance(factor_params, str):
-        try:
-            factor_params = json.loads(factor_params)
-        except (json.JSONDecodeError, TypeError):
-            factor_params = {}
+    # PR-4 (2026-06-21): Loop v4 AST path takes priority over legacy factor_class.
+    l5_ast = factor.get("l5", {}).get("ast") or factor.get("l5_ast")
+    if l5_ast:
+        factor_class = "ast_compiled"
+        factor_params = {"ast_json": l5_ast}
+    else:
+        factor_class = factor.get("subcategory", factor.get("factor_class", "momentum"))
+        factor_params = factor.get("l1", {}).get("default_params", factor.get("factor_params", {}))
+        if isinstance(factor_params, str):
+            try:
+                factor_params = json.loads(factor_params)
+            except (json.JSONDecodeError, TypeError):
+                factor_params = {}
 
     data_router = DataRouter(use_cache=True, parquet_path=config.get("parquet.path"))
     run_id = generate_run_id(start=req.start_date, end=req.end_date)
