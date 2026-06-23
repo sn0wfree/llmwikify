@@ -3,13 +3,13 @@
   "alpha_index": 86,
   "factor_name": "alpha-086",
   "formula_brief": "((Ts_Rank(correlation(close, sum(adv20, 14.7444), 6.00049), 20.4195) < rank(((open + close) - (vwap + open)))) * -1)",
-  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = rolling mean of volume over 20 days\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n    \n    # sum(adv20, 14.7444) - rolling sum, window truncated to int\n    sum_adv = rolling_sum(adv20, window=14)\n    \n    # correlation(close, sum_adv, 6.00049) - rolling correlation\n    corr = correlation(pl.col('close'), sum_adv, window=6)\n    \n    # Ts_Rank of correlation over 20.4195 (truncated to 20)\n    ts_rank_val = ts_rank(corr, window=20)\n    \n    # (open + close) - (vwap + open) = close - vwap\n    cross_term = pl.col('close') - pl.col('vwap')\n    \n    # Cross-sectional rank per date\n    rank_cross = rank(cross_term).over('date')\n    \n    # Compare: (ts_rank < rank_cross) * -1\n    factor = pl.when(ts_rank_val < rank_cross).then(-1).otherwise(0)\n    \n    return df.select(factor).to_series()",
-  "code_chars": 863,
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20: 20-day rolling mean of volume\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n    \n    # sum(adv20, 14.7444) -> delta(adv20, periods=15) [rounded]\n    sum_adv20 = delta(adv20, periods=15)\n    \n    # correlation(close, sum_adv20, 6.00049) -> window=6 [rounded]\n    corr_expr = correlation(pl.col('close'), sum_adv20, window=6)\n    \n    # Ts_Rank(corr_expr, 20.4195) -> window=20 [rounded]\n    ts_rank_expr = ts_rank(corr_expr, window=20)\n    \n    # Materialize the time-series result before cross-section comparison\n    df = df.with_columns(ts_rank_expr.alias('_ts_rank'))\n    \n    # rank(((open + close) - (vwap + open))) = rank(close - vwap)\n    rank_expr = rank(pl.col('close') - pl.col('vwap')).over('date')\n    \n    # (ts_rank < rank) * -1\n    factor = (pl.col('_ts_rank') < rank_expr) * -1\n    \n    return df.select(factor).to_series()",
+  "code_chars": 910,
   "factor_series_len": 65250,
-  "factor_series_dtype": "Int32",
+  "factor_series_dtype": "Float64",
   "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_086.h5",
-  "ic_mean": NaN,
-  "icir": NaN,
-  "ic_winrate": NaN,
-  "elapsed_sec": 29.253494078293443
+  "ic_mean": 0.010369455793321415,
+  "icir": 0.0688327389217422,
+  "ic_winrate": 0.576271186440678,
+  "elapsed_sec": 135.66243701055646
 }

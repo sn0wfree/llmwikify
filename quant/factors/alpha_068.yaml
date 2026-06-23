@@ -23,25 +23,26 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv15 = average\
-      \ dollar volume over 15 days\n    df = df.with_columns(\n        rolling_mean(pl.col('close')\
-      \ * pl.col('volume'), window=15).alias('_adv15')\n    )\n    \n    # Cross-sectional\
-      \ ranks per date (materialize before using in ts operators)\n    df = df.with_columns([\n\
-      \        rank(pl.col('high')).over('date').alias('_rank_high'),\n        rank(pl.col('_adv15')).over('date').alias('_rank_adv15')\n\
-      \    ])\n    \n    # Rolling correlation between rank(high) and rank(adv15)\n\
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv15: 15-day\
+      \ average daily volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+      \ window=15).alias('_adv15')\n    )\n\n    # Cross-sectional ranks of high and\
+      \ adv15 (materialized before correlation)\n    df = df.with_columns(\n     \
+      \   rank(pl.col('high')).over('date').alias('_rank_high'),\n        rank(pl.col('_adv15')).over('date').alias('_rank_adv15')\n\
+      \    )\n\n    # Rolling correlation between the ranks (window 8.91644 -> 9)\n\
       \    df = df.with_columns(\n        correlation(pl.col('_rank_high'), pl.col('_rank_adv15'),\
-      \ window=8).alias('_corr')\n    )\n    \n    # Ts_Rank of the correlation\n\
-      \    df = df.with_columns(\n        ts_rank(pl.col('_corr'), window=13).alias('_tsrank')\n\
-      \    )\n    \n    # Weighted price: close * 0.518371 + low * (1 - 0.518371)\n\
-      \    df = df.with_columns(\n        (pl.col('close') * 0.518371 + pl.col('low')\
-      \ * (1 - 0.518371)).alias('_wprice')\n    )\n    \n    # Delta of the weighted\
-      \ price (periods = int(1.06157) = 1)\n    df = df.with_columns(\n        delta(pl.col('_wprice'),\
-      \ periods=1).alias('_delta_wprice')\n    )\n    \n    # Cross-sectional rank\
-      \ of delta\n    df = df.with_columns(\n        rank(pl.col('_delta_wprice')).over('date').alias('_rank_delta')\n\
-      \    )\n    \n    # Final factor: -1 * (Ts_Rank < rank(delta(...)))\n    factor\
-      \ = (pl.col('_tsrank') < pl.col('_rank_delta')) * -1\n    \n    return df.select(factor).to_series()"
+      \ window=9).alias('_corr')\n    )\n\n    # Time-series rank of the correlation\
+      \ (window 13.9333 -> 14)\n    df = df.with_columns(\n        ts_rank(pl.col('_corr'),\
+      \ window=14).alias('_ts_rank_corr')\n    )\n\n    # Weighted price: 0.518371\
+      \ * close + (1 - 0.518371) * low\n    weighted = pl.col('close') * 0.518371\
+      \ + pl.col('low') * (1 - 0.518371)\n\n    # Delta with period 1.06157 -> 1\n\
+      \    df = df.with_columns(\n        delta(weighted, periods=1).alias('_delta_weighted')\n\
+      \    )\n\n    # Cross-sectional rank of the delta\n    df = df.with_columns(\n\
+      \        rank(pl.col('_delta_weighted')).over('date').alias('_rank_delta')\n\
+      \    )\n\n    # (ts_rank_corr < rank_delta) * -1\n    cond = pl.col('_ts_rank_corr')\
+      \ < pl.col('_rank_delta')\n    factor = cond.cast(pl.Float64) * -1.0\n\n   \
+      \ return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1446
+    code_chars: 1382
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_068.h5
     ast: null
     ast_compile_status: null
@@ -49,17 +50,17 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 50
-      status: 待验证
+      score: 52
+      status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: null
-      icir: null
-      winrate: null
+      ic_mean: 0.009129632964046267
+      icir: 0.08111041108754102
+      winrate: 0.4915254237288136
       rank_ic_mean: null
       rank_icir: null
-      annual_return: -0.00014648933853178558
+      annual_return: 0.00021149772599948768
       longshort_sharpe: null
-      longshort_max_dd: -0.0320375396354689
-      validated_at: 1782178869.2495358
+      longshort_max_dd: -0.017023544317382608
+      validated_at: 1782180489.851495
     validation_date: '2026-06-23'

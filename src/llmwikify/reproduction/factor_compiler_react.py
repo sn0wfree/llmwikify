@@ -159,7 +159,7 @@ def _build_execute_namespace() -> dict[str, Any]:
     return ns
 
 
-def _execute_code(code: str, df: pl.DataFrame, timeout_sec: float = 60.0) -> pl.Series:
+def _execute_code(code: str, df: pl.DataFrame, timeout_sec: float = 120.0) -> pl.Series:
     """Run the LLM-generated code in a CodeSandbox; return factor Series."""
     import threading
     from QuantNodes.ai.sandbox import CodeSandbox
@@ -226,6 +226,12 @@ Error:
 {context}
 
 Please re-emit a CORRECTED ```python``` code block. Keep the same overall approach but fix the specific issue above. Use FUNCTION FORM for QuantNodes operators (e.g. `rolling_std(pl.col('x'), window=20)`, NOT `pl.col('x').rolling_std(...)`). Use `.over('date')` for cross-section operators (rank, scale) and `.over('code')` for per-code time-series.
+
+IMPORTANT: If the error mentions "truth value of an Expr is ambiguous":
+- Do NOT use Python `if/elif/else`, `and`, `or`, `not` on polars expressions.
+- Use `pl.when(cond).then(x).otherwise(y)` for conditional logic.
+- Use `&` (not `and`), `|` (not `or`), `~` (not `not`) for boolean operations.
+- Materialize intermediate results with `with_columns()` before applying `.over('date')`.
 
 Output ONLY the corrected code block, no prose."""
 

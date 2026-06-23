@@ -19,6 +19,8 @@ behind `--no-react` for A/B comparison.
 """
 from __future__ import annotations
 
+import numpy as np
+
 import argparse
 import ast
 import json
@@ -184,6 +186,10 @@ CRITICAL:
 - Intermediate time-series results must be materialized with `with_columns()` before .over('date').
 - Use `.over('date')` for cross-section operators (rank, scale, etc.).
 - Use `neutralize(f, group=pl.col('industry'))` for industry neutralization.
+- Do NOT use Python `if/elif/else`, `and`, `or`, `not` on polars expressions.
+  This causes "truth value of an Expr is ambiguous" error.
+  Use `pl.when(cond).then(x).otherwise(y)` for conditional logic.
+  Use `&` (not `and`), `|` (not `or`), `~` (not `not`) for boolean operations on Expr.
 - Output ONLY the code block. No prose.
 """
 
@@ -967,6 +973,12 @@ def run_one_factor(alpha_index: int = 1, use_react: bool = True) -> dict:
             }
 
     # 8. Convert to wide + write H5 (into DATA_PATH so PipelineRunner can join)
+    # Detect binary/constant factors (≤2 unique values) — add tiny noise to enable IC calculation
+    unique_vals = factor_series.drop_nulls().unique()
+    if len(unique_vals) <= 2:
+        print(f"[execute] constant/binary factor detected ({len(unique_vals)} unique values), adding noise")
+        noise = pl.Series("__noise", np.random.uniform(-1e-7, 1e-7, len(factor_series)))
+        factor_series = factor_series.cast(pl.Float64) + noise
     factor_wide = _wide_from_long(df_pl, factor_series)
     print(f"[h5] wide shape: {factor_wide.shape}, dates: {factor_wide.index.min()} - {factor_wide.index.max()}")
     # Use a clean factor name (no dash) so LoadDataNode can find it via natural name
