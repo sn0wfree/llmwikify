@@ -1,0 +1,8 @@
+factor:
+  name: test_telemetry_mock
+  l5:
+    ast: '{"op":"rank","args":[{"op":"pct_change","args":[{"op":"col","args":[],"kwargs":{},"value":"close"}],"kwargs":{"periods":5},"value":null}],"kwargs":{},"value":null}'
+    ast_compile_status: compiled
+    ast_compile_iterations: 0
+    ast_compile_source: mock
+    ast_compiled_at: 1782119505.521987
