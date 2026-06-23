@@ -51,3 +51,71 @@ factor:
       longshort_max_dd: -0.015188620194545699
       validated_at: 1782145585.7639382
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对每只股票计算 close 在最近 10 个交易日窗口内的时序百分位排名 (Ts_Rank)
+      formula: Ts_Rank(close_i, t, 10) = rank(close_i,t among {close_i,t-9, ..., close_i,t})
+        / 10
+    - step: 2
+      description: 在每个交易日截面上, 对 Ts_Rank(close, 10) 做横截面排名, 得到 rank1
+      formula: rank1 = CS_Rank(Ts_Rank(close, 10))
+    - step: 3
+      description: 计算每只股票当日的 close/open 比值, 衡量日内强度, 再做横截面排名得到 rank2
+      formula: rank2 = CS_Rank(close / open)
+    - step: 4
+      description: 将 rank1 取负后与 rank2 相乘得到最终因子值
+      formula: factor = (-1 * rank1) * rank2
+    edge_case_handling: close/open 当 open=0 时会产生 inf 或 NaN, 实际数据中 open>0 通常成立; ts_rank
+      窗口不足 10 日时返回 NaN, 由横截面 rank 自动跳过
+    missing_value_handling: 滚动窗口不足或原始字段缺失导致 NaN 的行, 在横截面 rank 中被剔除, 不参与当日因子计算
+    data_alignment: T+1
+    complexity: O(T × N × W), W=10 为时序窗口长度
+  l3:
+    financial_intuition: '因子同时刻画短期均值回复与日内动量: 给予''近 10 日价格百分位偏低但当日收阳''的股票更高因子值, 押注超跌后的日内反弹。'
+    market_behavior: 捕捉个股在短期下跌后于当日出现买盘支撑的反弹机会, 体现'短线超跌 + 当日转强'的复合信号。
+    theoretical_basis: 融合了行为金融学中的均值回复假说 (De Bondt & Thaler) 与日内动量/反转效应, 假设超跌后的日内强势预示短期修正。
+    historical_effectiveness: 在 A 股市场日频横截面回测中, 短期均值回复信号通常 IC 较弱且不稳定, 与日内动量叠加后可提高信噪比,
+      但整体年化超额有限。
+    related_factors: 'Alpha #75 原式, 接近 alpha #34 (mean reversion) 与 alpha #23 (intraday
+      momentum) 的乘积形式, 也与经典 RSI、Short-term Reversal 因子相关'
+  l4:
+    hypotheses:
+    - id: H1
+      name: 短期均值回复
+      description: 近 10 日涨幅较大 (Ts_Rank 偏高) 的股票倾向于回调, 因此 -rank(Ts_Rank) 与未来收益呈正相关
+      expected_ic_sign: 正
+      source: De Bondt & Thaler (1985) 过度反应理论; Lehmann (1990) 短期反转
+      priority: 主假设
+    - id: H2
+      name: 日内动量延续
+      description: 当日 close/open 较高 (收阳且强势) 的股票, 短线买盘惯性推动次日延续, rank(close/open) 与未来收益正相关
+      expected_ic_sign: 正
+      source: 日内动量文献 (Gao et al., 2018)
+      priority: 辅假设
+    - id: H3
+      name: 乘积交互效应
+      description: 因子为两 rank 乘积, 在均值回复与日内动量同号时 (即超跌+当日强势) 信号最强, 构成非线性选股逻辑
+      expected_ic_sign: 不确定
+      source: '因子合成中的交互项构造, 见 Alpha #75 原始定义'
+      priority: 辅假设
+    - id: H4
+      name: 流动性/波动率溢价干扰
+      description: close/open 易受跳空与高波动影响, 低流动性小盘股的日内比值噪声大, 可能在因子中引入反向偏差
+      expected_ic_sign: 负
+      source: 流动性溢价与微观结构噪声相关研究
+      priority: 次假设
+    meaning_summary: 因子值越大, 表示股票近 10 日处于价格分布低位但当日收阳力度强, 押注'超跌 + 当日转强'的短期反弹。
+    key_insights:
+    - 乘积结构使得因子在两信号同向时 (均值回复 + 日内强势) 显著放大, 反向时自动衰减, 天然带过滤功能
+    - Ts_Rank 窗口仅 10 日, 对短期噪声敏感, 在波动率突变或趋势行情中容易失效
+    - rank(close/open) 接近 1 时的边界值会放大因子, 需关注 open 接近 0 或停复牌等极端样本
+    uncertainty: 均值回复与日内动量谁主导取决于市场状态 (震荡 vs 趋势), 因子 IC 在不同年份可能符号反转, 稳定性偏弱。
+  l6:
+    industry_concentration: '中等: close/open 受行业整体日内走势影响 (如周期股同涨同跌), 需在行业层面做中性化处理以提升纯alpha'
+    crowding_level: '较低: Alpha #75 在 101 alphas 中相对小众, 实际使用的研究机构不多, 拥挤度低于经典反转/动量因子'
+    failure_conditions:
+    - 强趋势行情中均值回复信号失效, 近 10 日新高的股票可能继续上涨, 导致因子 IC 转负
+    - 高波动/频繁跳空环境下, close/open 噪声大且均值回复节奏被打乱, 因子信号混乱
+    - 小盘股或流动性差股票受停复牌、涨跌停影响, close/open 失真, 因子值被极端值主导
+    risk_notes: 因子对短期反转高度依赖, 在牛市中可能持续亏损; 建议配合趋势过滤器使用, 并对 close/open 做 winsorize 与行业中性感化以控制回撤。

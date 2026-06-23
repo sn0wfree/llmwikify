@@ -61,3 +61,74 @@ factor:
       longshort_max_dd: -0.05081644413704528
       validated_at: 1782175620.912614
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 adv5 (5日均量) 并对其做 26 日滚动求和, 然后与 vwap 计算 4 日滚动相关系数, 再用 7 日线性衰减加权
+      formula: decay_linear(corr(vwap, sum(adv5, 26.47), 4.58), 7.18)
+    - step: 2
+      description: 对衰减后的相关系数做横截面 rank, 得到 rank1
+      formula: rank1 = rank(decay1)
+    - step: 3
+      description: 计算 adv15 (15日均量), 对 open 和 adv15 分别做横截面 rank, 然后计算 20 日滚动相关系数,
+        取 8 日窗口内的 argmin (即相关性达到最小的时点位置), 再做 6 日 ts_rank, 最后 8 日线性衰减
+      formula: decay_linear(ts_rank(ts_argmin(corr(rank(open), rank(adv15), 20.82),
+        8.63), 6.96), 8.07)
+    - step: 4
+      description: 对衰减后的 ts_rank 做横截面 rank, 得到 rank2
+      formula: rank2 = rank(decay2)
+    - step: 5
+      description: 两部分相减得到最终因子值
+      formula: factor = rank1 - rank2
+    edge_case_handling: rolling_corr 在常数序列或窗口不足时返回 NaN, decay_linear 与 ts_argmin 对
+      NaN 需按线性衰减/忽略处理; 横截面 rank 对 NaN 通常排在末尾
+    missing_value_handling: 滚动窗口初始化阶段 (前 26+4+7 天) 因子值为 NaN, 实际使用时应 dropna 或向后填充
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 因子比较短期量价联动强度 (rank1) 与中长期开价-量能背离时点 (rank2) 的差异, 捕捉量价关系从同向走向背离的拐点,
+      反映资金流入与价格突破/反转的博弈。
+    market_behavior: 当短期 vwap 与累计成交量高度正相关但开盘价已与中期量能趋势发生阶段性背离时, 趋势动能即将衰竭, 因子预期反向收益;
+      反之预期动量延续。
+    theoretical_basis: 基于量价背离 (volume-price divergence) 与时间序列拐点识别理论, 量价同向表示趋势确认, 背离则提示反转;
+      线性衰减加权降低噪音, ts_argmin 定位背离最深点。
+    historical_effectiveness: 在 101 Alphas 原始回测中属于中频因子, A 股市场需重新检验; 牛市/趋势市中可能更有效,
+      震荡市易失效。
+    related_factors: Alpha#7 (量价相关性), Alpha#10 (ts_rank 相关性), Alpha#15 (ts_argmin
+      类), VPV (volume-price volatility)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 量价同向 + 背离已修复 → 动量延续
+      description: 当 rank1 较高 (短期 vwap 与累计量正相关性强) 同时 rank2 较低 (open 与中期量能背离的 argmin
+        较远, 背离已修复) 时, 趋势仍将延续, 预期正收益
+      expected_ic_sign: 正
+      source: 从公式 rank1 - rank2 直接推导
+      priority: 主假设
+    - id: H2
+      name: 量价背离 → 反转信号
+      description: 当 rank1 较低 (量价短期脱钩) 而 rank2 较高 (近期刚出现 open 与中期量能的背离低点) 时, 预期价格短期反转
+      expected_ic_sign: 负
+      source: 量价反转经典文献
+      priority: 备选假设
+    - id: H3
+      name: 流动性溢价
+      description: adv5/adv15 衡量近期流动性, 量能放大且量价正相关时, 高流动性股票后续表现更优
+      expected_ic_sign: 正
+      source: Amihud 非流动性因子延伸
+      priority: 辅助假设
+    meaning_summary: 因子值越高表示短期量价联动紧密且中期背离已修复, 暗示趋势动能充足; 因子值越低表示短期量价脱钩且刚出现背离低点, 暗示趋势可能反转。
+    key_insights:
+    - 双窗口设计 (短期 4-7 日 vs 中长期 8-20 日) 捕捉多时间尺度量价关系
+    - ts_argmin 而非直接使用相关系数, 强调'背离发生的时间点'这一拐点信号
+    - rank 相减结构暗示因子以'相对强弱'而非绝对水平选股
+    uncertainty: argmin 位置信号在低相关性 (接近 0) 区域噪声大, 此时 ts_rank 可能不区分有效信号与噪音; A 股涨跌停板导致
+      vwap 失真也会影响 Part 1 有效性。
+  l6:
+    industry_concentration: 高, 量价信号在周期性行业 (有色、煤炭、化工) 及小盘成长股中表现更显著, 消费/公用事业等防御性行业信号偏弱
+    crowding_level: 中, 量价类因子 (Alpha#7/#10 等) 已被高频量化广泛使用, 原始 101 Alphas 组合存在一定拥挤, 需结合另类数据做差异化
+    failure_conditions:
+    - 市场处于强趋势/弱趋势切换的震荡期, 量价信号反复时因子失效
+    - 流动性枯竭或政策干预导致 vwap/open 失真 (如 A 股涨跌停板、停牌), 滚动相关性异常
+    - 行业轮动剧烈或风格切换 (如大小盘/成长价值) 期间, 因子 IC 方向可能反转
+    risk_notes: 因子在极端事件 (流动性危机、监管黑天鹅) 下易出现大幅回撤; 建议配合换手率与波动率因子做组合风控, 避免在高换手小票过度暴露。

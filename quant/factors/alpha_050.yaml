@@ -53,3 +53,84 @@ factor:
       longshort_max_dd: -0.03696483781248952
       validated_at: 1782146148.4327278
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对每日截面上的成交量(volume)做横截面排名, 得到归一化排序值
+      formula: rank(volume)_t,i = rank(volume_t,i | date=t)
+    - step: 2
+      description: 对每日截面上的成交量加权均价(vwap)做横截面排名
+      formula: rank(vwap)_t,i = rank(vwap_t,i | date=t)
+    - step: 3
+      description: 在 5 日滚动窗口内计算 rank(volume) 与 rank(vwap) 的时序相关系数
+      formula: corr_t,i = corr(rank(vol), rank(vwap), window=5)_t,i
+    - step: 4
+      description: 对相关系数再做一次截面排名, 消除量纲差异
+      formula: rank_corr_t,i = rank(corr_t,i | date=t)
+    - step: 5
+      description: 对截面排名后的相关系数取 5 日滚动最大值, 强化近期最强的量价同向信号
+      formula: ts_max_t,i = rolling_max(rank_corr_t,i, window=5)
+    - step: 6
+      description: 乘以 -1, 因子值越大代表量价同向性越弱 (或反向越强), 因子期望做多量价背离的股票
+      formula: alpha_t,i = -1 × ts_max_t,i
+    edge_case_handling: 5 日滚动窗口在上市不足 5 日的股票上产生 NaN; 相关系数在方差为 0 时返回 NaN; rank 函数在 polars
+      中需保证 'date' 列存在且每只股票的时间序列连续
+    missing_value_handling: 中间任意步骤产生 NaN 会沿流水线传播, 最终因子值为 NaN 的股票在回测中通常被剔除; 可在计算前对
+      volume/vwap 做前向填充以减少缺失
+    data_alignment: T+1 (因子在 T 日收盘后基于当日及过去 4 日数据计算, 用于 T+1 日开盘建仓)
+    complexity: O(T × N)
+  l3:
+    financial_intuition: '捕捉量价同向性的反转效应: 当某股票成交量与均价持续同向变动时, 表明趋势跟随资金推动, 短期可能超买, 因子押注其均值回归;
+      反之, 量价背离的股票预期后续有超额收益。'
+    market_behavior: 在趋势市/动量市中, 量价同向可能持续而非回归; 在震荡市/反转市中, 量价背离后回归概率更高, 因子表现更优。
+    theoretical_basis: '基于量价关系的行为金融理论: 散户追涨杀跌导致量价同向, 而知情资金反向操作造成量价背离后的价格修正; 同时借鉴 Jegadeesh
+      & Titman 动量与反转的对偶逻辑。'
+    historical_effectiveness: Alpha#34 在原始 101 Alphas 论文中具有显著的 rank IC 和年化收益, 在 A
+      股和美股均有报告有效性, 但随因子拥挤度上升近年边际收益下降。
+    related_factors: 量价相关性类因子 (Alpha#34 的变体), OBV, PVT, 换手率-动量因子, 量价背离 (divergence)
+      类技术指标
+  l4:
+    hypotheses:
+    - id: H1
+      name: 量价同向反转假说
+      description: 成交量与均价持续同向变动反映散户追涨, 短期超买, 后续存在均值回归压力, 因此因子值(负的量价同向最大值)与未来收益正相关
+      expected_ic_sign: 正
+      source: '101 Alphas #34 原始论文 + 行为金融量价理论'
+      priority: 主假设
+    - id: H2
+      name: 量价背离动量假说
+      description: 量价背离 (成交量放大而价格滞涨) 可能预示主力吸筹, 后续有正向 alpha
+      expected_ic_sign: 正
+      source: OBV 背离技术分析文献
+      priority: 辅助假设
+    - id: H3
+      name: 横截面排序稳定性假说
+      description: 二次截面 rank 后的相关系数更具可比性, 因子在不同市值/行业间排序稳定性提升, IC 衰减更慢
+      expected_ic_sign: 不确定
+      source: 因子标准化方法论 (Gu et al.)
+      priority: 辅助假设
+    - id: H4
+      name: 趋势持续失效假说
+      description: 在强趋势行情中, 量价同向可能延续而非回归, 导致因子回撤
+      expected_ic_sign: 负
+      source: 动量崩溃 (momentum crash) 文献
+      priority: 次要假设
+    meaning_summary: 因子取负的'量价 5 日相关系数截面排名的 5 日最大值', 数值越大代表该股近期量价背离越显著, 因子预期做多此类股票以捕获量价回归收益。
+    key_insights:
+    - 双重截面 rank + ts_max 的组合既保留了时序强度信息, 又实现横截面可比
+    - 5 日窗口兼顾灵敏度与噪声抑制, 是短期反转因子的典型选择
+    - 取负号是 101 Alphas 中常见的反转/做空动量操作
+    uncertainty: 因子对市场风格切换敏感, 在动量崩溃或趋势市中可能阶段性失效; 此外, 5 日相关系数在低成交量股票上噪声较大, 影响因子的稳定性。
+  l6:
+    industry_concentration: 在交易活跃、散户参与度高的行业 (如 TMT、消费、医药) 中信号更强; 在低换手行业 (公用事业、基建)
+      中信号较弱且噪声大。
+    crowding_level: 高 — 作为 101 Alphas 中最经典的反转类因子之一, 已被广泛实现于各类量化平台, 近年拥挤度上升, 边际 alpha
+      衰减明显。
+    failure_conditions:
+    - '强趋势/动量市: 量价同向持续, 反转假说不成立, 因子大幅回撤'
+    - '低流动性/小盘股: 相关系数估计噪声大, 因子信噪比下降'
+    - '政策/事件冲击驱动的快速反转市: 5 日窗口滞后于突变, 信号失效'
+    risk_notes:
+    - 因子对市场状态 (regime) 高度敏感, 建议配合趋势/波动率过滤器使用
+    - 建议与动量因子做负向组合配置以分散风险
+    - 回测需考虑换手率约束 (5 日窗口 + 截面 rank 导致日频换手较高), 交易成本敏感

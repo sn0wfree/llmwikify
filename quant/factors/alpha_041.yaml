@@ -47,3 +47,65 @@ factor:
       longshort_max_dd: -0.022170028318706434
       validated_at: 1782145828.5184171
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算日内最高价与最低价的乘积
+      formula: high * low
+    - step: 2
+      description: 对乘积取 0.5 次方, 得到日内高低价区间的几何均值 (GHL)
+      formula: (high * low)^0.5
+    - step: 3
+      description: 用 GHL 减去成交量加权均价 VWAP, 得到因子值
+      formula: GHL - VWAP
+    - step: 4
+      description: 按日期-股票对齐输出横截面因子序列
+      formula: factor = (high * low)^0.5 - vwap
+    edge_case_handling: 若 high 或 low <= 0 则 sqrt 产生 NaN/inf; polars 默认不对负数开方报错, 但结果为
+      nan, 需在数据层保证价格严格为正
+    missing_value_handling: high / low / vwap 任一缺失则该行因子为 null, 后续 drop_nulls 或保留由调用方决定
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: '因子衡量 VWAP 相对于日内高低价区间几何中点的位置: 区间中点高于 VWAP 说明成交量更多集中在低位, 暗示低位承接积极,
+      是潜在的多头信号.'
+    market_behavior: '捕捉日内量价分布的不对称性: 主力是否在下跌过程中被动买入 (承接) 还是在上涨过程中被动卖出 (派发), 反映分时级别的供需失衡'
+    theoretical_basis: 日内价格区间理论 (Parkinson 高低价估计量) + 成交量加权均价 (VWAP) 偏离度, 属于微观结构层面的量价背离逻辑
+    historical_effectiveness: 在振幅较大、流动性较好的活跃股票上效果更显著; 在低波动或尾盘流动性骤降时信号易失真
+    related_factors: Alpha#26 (vwap 相关偏离), Parkinson 波动率, Alpha#1 (rank-based 价量),
+      VWAP-reversion 类因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 低位放量承接假设
+      description: GHL > VWAP 表明日内多数成交发生在区间下半部, 主力逢低吸纳, 后续有正向超额收益
+      expected_ic_sign: 正
+      source: 量价分布 + 微观结构文献 (Barclay & Hendershott 关于日内信息不对称)
+      priority: 主假设
+    - id: H2
+      name: VWAP 均值回归假设
+      description: 当 VWAP 显著偏离区间中点时 (无论正负), 价格存在向 GHL 回拉的动力, 因子绝对值越大未来反转越强
+      expected_ic_sign: 不确定
+      source: 日内均值回归与 VWAP 锚定效应
+      priority: 备选假设
+    - id: H3
+      name: 高振幅活跃度溢价假设
+      description: 因子在日内振幅大的股票上信息含量更高, 预期在次高/中盘活跃股上 IC 更显著
+      expected_ic_sign: 正
+      source: 振幅-收益截面溢价 (CPV 因子相关)
+      priority: 辅助假设
+    meaning_summary: 本质是 VWAP 对日内价格区间几何中心的偏离度, 用于刻画分时级别的量价不对称性, 是一个纯横截面微观结构因子
+    key_insights:
+    - 采用几何均值而非算术均值, 对高低价取对数对称, 受极端值影响更小
+    - 对 vwap 敏感度高, vwap 的计算口径 (是否含开盘集合竞价) 会显著改变因子值
+    - 对停牌、一字板等极端行情天然降权 (区间收窄, 因子绝对值趋零)
+    uncertainty: '因子的方向性高度依赖市场状态: 趋势市中 GHL-VWAP 可能反映动量而非反转; 此外 VWAP 在不同券商/数据源定义不同,
+      跨数据源复现存在口径风险'
+  l6:
+    industry_concentration: 因子对所有行业普适, 不含行业中性化处理; 但在金融、消费等日内交易活跃的行业略占优
+    crowding_level: 中高, VWAP 偏离类策略在量化圈广泛使用, 且公式极简, 容易被快速复制, 存在一定拥挤
+    failure_conditions:
+    - '强单边趋势市: 价格突破区间后, GHL-VWAP 信号持续同向但已无回归空间, 因子失效并产生持续亏损'
+    - '开盘跳空/一字板场景: high=low 导致 GHL=价格, 因子退化为 price-vwap, 信息量大幅下降'
+    - '尾盘流动性枯竭: 临近收盘时 VWAP 趋于稳定而 high/low 还在跳动, 噪声放大导致信号失真'
+    risk_notes: 因子回看周期仅 1 日, 对隔夜跳空和消息面冲击极为脆弱, 建议结合波动率过滤或与中频因子组合使用; 同时应做行业与市值中性化以避免系统性暴露

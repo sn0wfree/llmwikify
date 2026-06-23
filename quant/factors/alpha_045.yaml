@@ -60,3 +60,79 @@ factor:
       longshort_max_dd: -0.017157042651151203
       validated_at: 1782145960.4704907
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对 close 做 5 日滞后, 再取 20 日滚动均值, 即 20 日窗口的 5 日滞后价格均线
+      formula: avg_delayed = sum(delay(close, 5), 20) / 20
+    - step: 2
+      description: 对上述滞后均线做截面 rank, 得到股票间相对位置
+      formula: rank_avg = rank(avg_delayed)
+    - step: 3
+      description: 计算 close 与 volume 的 2 日滚动相关系数, 刻画短期量价联动
+      formula: corr_cv = rolling_corr(close, volume, 2)
+    - step: 4
+      description: 分别计算 close 的 5 日和 20 日滚动求和, 再求两者 2 日滚动相关系数, 截面 rank 归一化
+      formula: rank_corr_sums = rank(rolling_corr(sum(close,5), sum(close,20), 2))
+    - step: 5
+      description: 将三个分量相乘并乘以 -1, 得到最终因子值
+      formula: factor = -1 * rank_avg * corr_cv * rank_corr_sums
+    edge_case_handling: 滚动窗口起始期数据不足时, rolling 函数返回 null, 因子值为 null; correlation 窗口为
+      2 时若常数序列则返回 null; rank 对 null 输出 null
+    missing_value_handling: Polars rolling 默认返回 null (而非 0), 保留 null 不填充, 最终因子值为 null
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 因子融合'滞后均线相对位置'、'短期量价联动'和'短中周期价格趋势一致性'三维度, 识别价格趋势已衰竭且量价背离的股票,
+      做反转押注。
+    market_behavior: '捕捉的趋势断裂 + 量价背离型反转行情: 价格已在 5-25 日前见顶, 当前量价同步性下降, 短期均线与中期均线走势分化时,
+      倾向于下跌回归。'
+    theoretical_basis: '基于均值回归假说与量价分析: 滞后均线衡量历史价位, 量价相关性反映信息流入强度, 短中周期价格求和相关性反映趋势稳定性。三者结合识别''假突破''。'
+    historical_effectiveness: Alpha 101 论文报告在美股 2007-2015 回测中 IC 显著, IC 约 -0.03 至
+      -0.05 (因子取负后 IC 为负), 属于中频反转因子。
+    related_factors: Alpha 010 (反转), Alpha 016 (量价相关), Alpha 055 (短期均线 vs 长期均线), Alpha
+      086 (量价 + 价格动量组合)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 滞后价格反转主假设
+      description: 20 日前较高 (5 日滞后均线高) 的股票倾向于均值回归下跌, 因子越大 (-1 * 滞后均线 rank 高) 未来收益越低
+      expected_ic_sign: 负
+      source: 均值回归理论 + 公式首项 -1 * rank(avg_delayed)
+      priority: 主假设
+    - id: H2
+      name: 量价背离放大效应
+      description: close 与 volume 短期相关性低意味着量价背离, 结合历史高位放大反转信号; corr_cv 越接近 0 或为负,
+        反转越强
+      expected_ic_sign: 负
+      source: 量价分析文献 + 公式 corr_cv 项
+      priority: 副假设
+    - id: H3
+      name: 趋势一致性筛选
+      description: 短期与中期价格求和高度相关的股票趋势更稳, 该 rank 越高, 因子绝对值越大, 强化反转信号
+      expected_ic_sign: 负
+      source: 趋势持续性理论 + rank_corr_sums 项
+      priority: 副假设
+    - id: H4
+      name: 三因子交互非线性
+      description: 三个分量相乘意味着只有三个条件同时满足的股票才会得到极值信号, 是 AND 型复合反转信号
+      expected_ic_sign: 负
+      source: 公式乘法结构 + 多条件筛选逻辑
+      priority: 辅助假设
+    meaning_summary: 该因子是一个中频反转因子, 通过'历史价格位置 × 量价背离 × 趋势一致性'三维筛选, 识别具备反转条件的股票。
+    key_insights:
+    - 三因子乘积结构意味着因子分布偏度大, 极值股票集中度高, 因子载荷集中
+    - 5 日滞后 + 20 日窗口形成 5-25 日前价格参照系, 适合捕捉 5-20 持有期反转
+    - -1 乘子表明该 alpha 原论文设计为负 IC 信号, 即因子值越大未来收益越低
+    uncertainty: 量价相关性在低成交量个股上不稳定, 短中周期价格求和相关性在 2 日窗口下估计噪声大, 因子整体信号噪声比中等。
+  l6:
+    industry_concentration: '中等等位: 反转类因子在周期性行业 (化工/有色/钢铁) 表现更强, 在防御性行业 (公用事业/医药) 较弱;
+      量价分量在高换手行业 (TMT/消费) 信号更稳定。'
+    crowding_level: '中高: Alpha 101 公式为业界公开基准, 大量量化机构采用类似量价 + 反转结构, 拥挤度较高, 近年 alpha
+      衰减明显。'
+    failure_conditions:
+    - 强趋势市 (如 2020 年 3-7 月成长股急涨) 中均值回归失效, 因子 IC 转正甚至崩盘
+    - 低成交量 / 流动性枯竭环境下, close-volume 相关系数估计不可靠, 信号噪声剧增
+    - 政策驱动的板块普涨/普跌行情中, 截面 rank 失效, 反转因子集体回撤
+    risk_notes: 因子对市场风格切换敏感 (成长 vs 价值切换时回撤大); 建议配合趋势强度过滤器; 短窗口相关性使因子换手率较高, 需考虑交易成本;
+      极值因子值对应小市值或异常波动股票, 存在流动性风险。

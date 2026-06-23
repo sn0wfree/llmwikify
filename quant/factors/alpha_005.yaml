@@ -52,3 +52,71 @@ factor:
       longshort_max_dd: -0.02445299386135601
       validated_at: 1782144199.269948
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 VWAP 的 10 日滚动均值 (等价于 sum(vwap,10)/10)
+      formula: vwap_mean = rolling_sum(vwap, window=10) / 10
+    - step: 2
+      description: 'Part A: 在截面上对 (open - vwap_10d_mean) 做横截面秩排序'
+      formula: part_a = rank(open - vwap_mean).over('date')
+    - step: 3
+      description: 'Part B: 在截面上对 (close - vwap) 做秩, 取绝对值并乘以 -1, 使其非正'
+      formula: part_b = -1 * |rank(close - vwap).over('date')|
+    - step: 4
+      description: 将 Part A 与 Part B 逐元素相乘, 得到最终因子值
+      formula: factor = part_a * part_b
+    edge_case_handling: 前 9 个交易日由于 10 日滚动窗口不足, vwap_mean 产生 null, 因子值为 null; 后续日期正常计算
+    missing_value_handling: Polars 截面 rank 默认将 null 排在末尾并保留为 null; 滚动窗口前期 vwap_mean
+      缺失会通过减法传播到 Part A, 最终因子保持 null
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 捕捉'开盘相对 10 日均 VWAP 偏高 + 当日收盘与 VWAP 偏离较大'的高位反转模式, 本质是结合中短期估值偏离与日内反转的反转因子
+    market_behavior: 强势股开盘后冲高但远离 VWAP 时, 短线获利回吐压力大; 反之弱势股盘中急跌远离 VWAP 反而孕育反弹
+    theoretical_basis: 基于均值回归 (Mean Reversion) 与日内价格围绕 VWAP 回归的微观结构理论, VWAP 作为机构交易基准具有锚定效应
+    historical_effectiveness: 在 A 股及成熟市场的横截面反转测试中, 10 日左右窗口的开盘价偏离因子 IC 约 -3%~-5%,
+      配合日内 VWAP 偏离信号可增强稳定性
+    related_factors: Alpha#22 (price-VWAP mean reversion), Alpha#46 (vwap reversal),
+      开盘跳空反转因子, 收盘-均价偏离因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 均值回归 (主假设)
+      description: 开盘价显著高于 10 日均 VWAP 的股票, 当日继续冲高远离 VWAP 后存在短期获利回吐压力, 下一交易日收益为负
+      expected_ic_sign: 负
+      source: 反转因子经典文献 + VWAP 微观结构理论
+      priority: 主假设
+    - id: H2
+      name: VWAP 锚定反转
+      description: 收盘价对日内 VWAP 偏离越大, 次日价格越倾向于向 VWAP 回归, |rank(close-vwap)| 越大的股票未来收益越低
+      expected_ic_sign: 负
+      source: 日内反转文献 (Berman/Van Ness 等)
+      priority: 辅助假设
+    - id: H3
+      name: 开盘跳空反转
+      description: Part A 单独衡量开盘对近期均价的跳空幅度, 跳空越高越倾向于回补缺口, 该部分贡献为负 IC
+      expected_ic_sign: 负
+      source: 开盘跳空回补的经典市场异象
+      priority: 辅助假设
+    - id: H4
+      name: 牛市趋势失效
+      description: 在强趋势/牛市中, 开盘高且持续走强的股票不会反转, 此时因子失效甚至反向
+      expected_ic_sign: 不确定
+      source: 趋势市与反转市因子表现差异文献
+      priority: 风险假设
+    meaning_summary: 因子值越小 (越负) 表示股票开盘相对 10 日 VWAP 偏高且当日收盘显著偏离 VWAP, 越倾向于做空; 因子值越大
+      (越正) 表示开盘偏低但盘中远离 VWAP, 越倾向于做多
+    key_insights:
+    - Part B 的负号与绝对值组合确保其为非正数, 与 Part A 相乘后天然放大'高开高走'信号的空头含义
+    - VWAP 同时出现在两部分, 使因子对日内流动性分布敏感, 隐含机构交易行为信息
+    - 双重偏离 (开盘 vs 10日均, 收盘 vs 当日 VWAP) 增强了反转信号的纯度, 但也降低因子在低流动性股票中的适用性
+    uncertainty: VWAP 数据质量在低频日数据中可能存在估算误差; 10 日窗口对中频调仓较敏感, 需结合调仓频率验证; 强趋势行情下反转失效是主要不确定性来源
+  l6:
+    industry_concentration: '中等: 反转因子在周期股、小盘股上效果更显著, 消费/科技大盘股上信号较弱'
+    crowding_level: '中高: 经典反转策略已被大量量化产品使用, 拥挤度较高, 近年超额收益有衰减趋势'
+    failure_conditions:
+    - 强趋势/单边牛市行情中, 突破型股票持续走强, 反转信号失效
+    - 市场流动性骤降或风格剧变 (如政策事件冲击) 时, VWAP 偏离的微观结构逻辑被破坏
+    - 高换手小盘股流动性踩踏场景下, |close-vwap| 信号被噪音淹没, 因子失效
+    risk_notes: 因子做空部分依赖融券资源, 实际投资中需关注做空成本与券源可得性; 建议配合趋势强度过滤器在牛市中降低权重, 并对小盘股施加流动性与涨跌幅限制

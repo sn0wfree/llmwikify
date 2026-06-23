@@ -54,3 +54,71 @@ factor:
     default_params: {}
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 构造条件输入：当当日收益率小于0时取20日滚动标准差，否则取收盘价
+      formula: 'x = (returns < 0) ? stddev(returns, 20) : close'
+    - step: 2
+      description: 对条件输入做SignedPower(2)运算：保留符号的平方，即 sign(x)·|x|²
+      formula: y = SignedPower(x, 2) = sign(x) × |x|^2
+    - step: 3
+      description: 计算5日滚动窗口内y值最大值的索引位置（距当前交易日的偏移量）
+      formula: z = Ts_ArgMax(y, 5)
+    - step: 4
+      description: 对当日全市场股票的z值做横截面排序
+      formula: r = rank(z)
+    - step: 5
+      description: 排序值减0.5做中心化，输出范围[-0.5, 0.5]
+      formula: alpha = r - 0.5
+    edge_case_handling: 当returns为NaN时，条件(returns<0)结果为null，pl.when对null条件返回null，inner为NaN，后续SignedPower与Ts_ArgMax均传播NaN；当stddev(returns,20)前19日数据不足时滚动结果为NaN，同上处理
+    missing_value_handling: 不做填充，NaN自然传播至最终因子值，下游组合构建时需通过去NaN或赋低权重处理
+    data_alignment: T日收盘后计算，使用T日及之前的历史数据，信号在T+1日开盘生效（标准delay-1 alpha）
+    complexity: O(T × N)，T为交易日数，N为股票数
+  l3:
+    financial_intuition: 因子通过条件切换将下行期的波动率与上行期的价格拼接为统一信号，平方放大极端值，再用5日argmax定位极端事件距今的时间间隔。排序靠后者（极端值发生在较远过去）与靠前者（极端值刚发生）对应不同的市场状态预期。
+    market_behavior: 下跌阶段投资者更关注波动率而非价格水平（风险厌恶主导），上涨阶段关注价格突破（动量主导）；SignedPower保留符号使得下行波动率的极端值仍为负；argmax位置反映极端事件的时序新鲜度。
+    theoretical_basis: 混合了波动率异象（volatility anomaly）与价格动量/反转逻辑，属于101 Alphas中典型的条件分支型构造；Ts_ArgMax的索引位置本质上是事件新鲜度的代理变量，与行为金融学中的近因效应（recency
+      effect）相关。
+    historical_effectiveness: 原始101 Alphas论文报告因子池平均夏普约1.5-2.0，单因子IC约2-5%；本因子作为其中较复杂的条件型alpha，实盘表现取决于具体样本期与对冲方式。
+    related_factors: Alpha#9、Alpha#10（条件分支型）、Alpha#42（均值回归）、Alpha#101（短期反转）、Alpha#55（波动率加权动量）
+  l4:
+    hypotheses:
+    - id: H1
+      name: 极端事件新鲜度与反转效应
+      description: SignedPower后取argmax，排序靠前表示y值最大值发生在最近1-2日（高新鲜度），对应短期价格/波动率极端刚出现，往往面临均值回归压力，因子值低对应未来负收益
+      expected_ic_sign: 负
+      source: 101 Alphas系列中argmax类因子普遍呈现短期反转特征，结合行为金融recency bias
+      priority: 主假设
+    - id: H2
+      name: 下行波动率风险溢价
+      description: 当returns<0时因子输入为20日波动率，SignedPower保号使得下行波动越大因子值越负；高下行波动股票未来收益更低（高风险低收益）
+      expected_ic_sign: 负
+      source: 波动率风险溢价文献（Bali & Cakici 2008）、下行波动率异象
+      priority: 主假设
+    - id: H3
+      name: 上行期价格动量延续
+      description: 当returns≥0时因子输入为close的平方（保号），高close的平方放大效应使argmax偏向高价股票；高价极端值在5日窗口中较早出现者可能对应动量末段
+      expected_ic_sign: 不确定
+      source: Jegadeesh & Titman动量效应，但受argmax方向调控后关系复杂
+      priority: 辅助假设
+    - id: H4
+      name: 横截面分布偏度导致的小盘溢价
+      description: SignedPower(2)放大极端值，使得argmax分布右偏（高rank）；小盘/低流动性股票价格波动幅度大，更容易出现极端值，占据rank高位
+      expected_ic_sign: 正
+      source: 小盘溢价（Fama-French SMB）、流动性溢价
+      priority: 辅助假设
+    meaning_summary: 该因子是一个条件拼接+极端定位+横截面排序的混合型alpha，核心信息含量在于(1)区分下行波动率与上行价格的信号差异，(2)5日窗口内极端事件的时序位置。因子值高的股票意味着其极端值在更早之前发生或由不同分支驱动，因子值低的股票意味着极端值刚发生或下行波动率极高。
+    key_insights:
+    - 条件分支使因子在牛熊市表现不对称：下跌时暴露波动率风险，上涨时暴露价格动量
+    - SignedPower(2)保号运算区别于普通x²，保留了下行波动率的负向信息，代码实现易出错的环节
+    - Ts_ArgMax的索引值本身是离散变量(0-4)，rank后产生平台效应，组合调仓时存在大量同rank股票
+    uncertainty: 原论文未单独报告该因子的IC方向和显著性，5个假设的方向存在冲突（H1与H3、H2与H4），实际IC符号需要回测验证；argmax的0-4离散性使因子的秩相关系数天然偏低
+  l6:
+    industry_concentration: 因子构建未引入行业中性化处理，SignedPower(2)对极端值的放大效应会使得波动率天然偏高的行业（如科技、医药、新能源）以及价格波动大的周期股在rank分布两端更集中，存在行业暴露风险。建议组合构建时叠加行业中性化约束。
+    crowding_level: 中等偏高。该因子源自101 Alphas公开论文，是业界广泛测试和可能实盘使用的标准alpha之一；条件分支逻辑清晰，复现门槛低，潜在策略拥挤度较高；ArgMax类因子在各类竞赛和研报中频繁出现，alpha衰减风险中等。
+    failure_conditions:
+    - 市场单边趋势行情中，条件分支始终激活同一侧（持续下跌时持续使用stddev分支，持续上涨时持续使用close分支），因子退化为纯波动率因子或纯价格因子，丧失条件切换的信息增量
+    - 高换手/高波动小盘股集群中，SignedPower(2)放大效应导致少数极端值主导rank分布，IC不稳定且对outlier敏感
+    - 横截面股票数量较少或行业结构发生重大变化时（如政策导致的行业轮动），rank的横截面分布失稳，因子信号噪声比显著下降
+    risk_notes: 因子值域[-0.5, 0.5]对称分布，天然多空平衡，但argmax的离散性(0-4)导致大量股票共享相同rank，实际多空组合并非完全等权；SignedPower(2)对outlier极度敏感（平方放大效应），建议对输入的stddev和close做winsorize或rank预处理后再代入公式；因子在市场拐点处（牛熊切换）因条件分支频繁切换，信号翻转风险较高，需关注换手率。

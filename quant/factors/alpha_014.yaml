@@ -51,3 +51,77 @@ factor:
       longshort_max_dd: -0.03405334511337657
       validated_at: 1782144423.3584394
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 returns 的 3 期差分, 即 returns_t - returns_{t-3}, 衡量过去 3 期的累计变动方向
+      formula: delta(returns, 3) = returns_t - returns_{t-3}
+    - step: 2
+      description: 对 3 期收益差分在截面（同一 date）上进行排名, 得到 0~1 的分位值
+      formula: rank(delta(returns, 3))
+    - step: 3
+      description: 对截面排名取负号, 使近期上涨的股票获得较大负值, 下跌的股票获得较大正值
+      formula: -1 * rank(delta(returns, 3))
+    - step: 4
+      description: 在时间序列上计算 open 与 volume 的 10 期滚动相关系数, 衡量开盘价与成交量的同步性
+      formula: corr(open, volume, 10)
+    - step: 5
+      description: 将负排名与开量相关系数逐元素相乘, 得到最终因子值
+      formula: (-1 * rank(delta(returns, 3))) * corr(open, volume, 10)
+    edge_case_handling: 滚动窗口不足 10 期时 correlation 输出 NaN, 此时该日因子值为 NaN; rank 在截面样本极少（<2）时退化为常数;
+      delta 在序列开头 3 期产生 NaN
+    missing_value_handling: delta 或 correlation 产生的 NaN 直接传播至最终因子值, 不做填充; rank 对 NaN
+      输入的处理取决于 polars 默认行为（通常 NaN 参与排序时结果不可靠）
+    data_alignment: T+1
+    complexity: O(T × N), 其中 T 为交易日数, N 为截面股票数
+  l3:
+    financial_intuition: '因子融合了短期反转信号与开量相关性强度: 近期上涨且开量同步性高的股票被做空, 近期下跌且开量同步性高的股票被做多,
+      相关性充当信号置信度加权。'
+    market_behavior: 捕捉的是'高开量同步下的过度反应回补'现象——当股价开盘与成交量高度联动时, 信息冲击更剧烈, 短期反转幅度也更大。
+    theoretical_basis: '基于行为金融学过度反应理论与价格-成交量信息不对称理论: 开量高相关意味着信息驱动交易密集, 短期价格偏离后倾向于均值回归。'
+    historical_effectiveness: 在 A 股及美股短期反转类因子研究中具有中等有效性, IC 通常为正（与原公式一致）, 对流动性较差的中小盘股票信号更强。
+    related_factors: Alpha#16（volatility 相关反转）、Alpha#33（open 与 high 相关性）、经典 short-term
+      reversal 因子、量价相关性因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 短期反转效应
+      description: 过去 3 期收益上升的股票在后续短期倾向于回吐, 因此 -1*rank(delta_returns) 应与未来收益呈正相关
+      expected_ic_sign: 正
+      source: Jegadeesh & Titman (1993) 短期反转文献 + Alpha#(-3*rank) 类公式惯例
+      priority: 主假设
+    - id: H2
+      name: 开量相关性作为信号加权器
+      description: open 与 volume 的滚动相关性越高, 说明该股票的信息驱动交易越显著, 短期反转的幅度也越大, 相关性起到放大器作用
+      expected_ic_sign: 正
+      source: 价格-成交量信息含量理论 (Campbell et al.) + 量价因子研究
+      priority: 主假设
+    - id: H3
+      name: 开盘价驱动的隔夜信息传递
+      description: open-volume 高相关可能反映隔夜消息在开盘集中释放, 这类股票的短期定价偏差更显著, 更适合反转策略
+      expected_ic_sign: 正
+      source: 隔夜收益与开盘行为研究 (Lou et al. 2019)
+      priority: 辅助假设
+    - id: H4
+      name: 趋势行情下反转失效
+      description: 在强趋势市场中, 3 期 delta 持续同向, 反转信号被趋势吞没, 因子 IC 可能转负或失效
+      expected_ic_sign: 不确定
+      source: 反转因子在动量崩溃期表现不稳的经验观察
+      priority: 辅助假设
+    meaning_summary: '该因子本质是''带量价置信度加权的短期反转因子'': 用 open-volume 相关性来过滤/加权 3 期反转信号,
+      在量价联动强的股票上放空短期赢家、放多短期输家。'
+    key_insights:
+    - 相关系数在此公式中不是独立信号源, 而是反转信号的权重调节器
+    - 当 open 与 volume 相关性接近 0 时, 因子整体信号被压缩, 相当于对低信息含量股票的噪声信号做衰减
+    - 3 期窗口较短, 因子对日间波动和跳跃较为敏感, 换手率较高
+    uncertainty: 开量相关性在牛熊市中可能系统性偏高或偏低, 导致权重扭曲; correlation 窗口(10)与 delta 窗口(3)不一致,
+      信号匹配存在时间错位风险。
+  l6:
+    industry_concentration: 因子载荷在金融、地产等开量联动显著的板块上偏高, 在消费、公用事业等稳定板块上偏低; 整体行业分散度中等。
+    crowding_level: '中等: 短期反转和量价相关性均为学术界与业界广泛使用的经典信号, 但二者乘积的组合形式相对小众, 拥挤度低于纯反转因子。'
+    failure_conditions:
+    - 强趋势/单边行情中反转逻辑失效, 因子持续亏损
+    - open-volume 相关性进入结构性高位（市场整体信息密度提升）, 反转幅度被过度加权导致回撤
+    - 小盘股流动性枯竭时滚动相关系数估计噪声大, 因子信号失真
+    risk_notes: 因子对交易成本敏感（换手率高）, 需扣除双边手续费后评估; 相关性在极端事件下易突变, 建议对 corr 值做 winsorize
+      或截断处理以提升稳健性。

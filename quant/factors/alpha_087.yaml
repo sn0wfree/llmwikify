@@ -65,3 +65,84 @@ factor:
       longshort_max_dd: -0.04064769473440063
       validated_at: 1782150815.2502122
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: Part A - 计算 close 与 vwap 的加权混合价 (close 权重 0.369701, vwap 权重 0.630299),
+        取 2 期差分 delta, 再做 3 期线性衰减 decay_linear, 得到截面 rank
+      formula: rank_a = rank(decay_linear(delta(close*0.369701 + vwap*0.630299, 2),
+        3))
+    - step: 2
+      description: Part B - 计算 81 日滚动均量 adv81, 对其做行业中性化 (代码中用横截面 neutralize 近似 IndNeutralize),
+        与 close 做 13 日滚动 correlation, 取绝对值, 5 期线性衰减, 再做 14 日时间序列排名 Ts_Rank
+      formula: ts_rank_b = Ts_Rank(decay_linear(abs(corr(IndNeutralize(adv81), close,
+        13)), 5), 14)
+    - step: 3
+      description: 对 Part A 与 Part B 逐元素取 max, 选出当日两个子信号中更强的那个
+      formula: max_val = max(rank_a, ts_rank_b)
+    - step: 4
+      description: 整体乘以 -1 进行方向反转, 使因子值与原始信号呈反向关系
+      formula: factor = max_val * (-1)
+    edge_case_handling: 代码使用 round() 将小数窗口四舍五入为整数 (1.91233→2, 2.65461→3, 4.89768→5,
+      14.4535→14, 13.4132→13), 与原公式存在轻微实现偏差; 因无行业分类列, IndNeutralize 退化为横截面 neutralize,
+      行业中性化效果近似而非完全等价
+    missing_value_handling: 前 80 日 adv81 为 NaN 导致 Part B 全程 NaN; correlation 窗口前 12
+      日为 NaN; decay_linear 与 ts_rank 各自窗口起点处产生 NaN, 最终因子在序列前期不可用, 通常由回测引擎 dropna 处理
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 该因子结合短期价量混合动量与行业中性化量价相关性持续度, 取两者更强信号并取反, 本质上是一个'反拥挤/反转'因子——做空动量与量价联动同时处于高位的股票,
+      做空短期过度活跃的交易拥挤。
+    market_behavior: 捕捉的是'高量价联动 + 短期强势动量'的共振拥挤状态, 假设此类股票短期超买, 后续倾向于回调或去拥挤
+    theoretical_basis: '基于行为金融的''过度反应与反转''理论与''交易拥挤''假说: 当股票同时出现强动量和高量价相关性时, 往往代表一致性预期过强,
+      易触发均值回归'
+    historical_effectiveness: 在 A 股及美股的中高频截面回测中, 此类反转因子在震荡市与风格切换期表现较好; 强趋势市中可能因动量持续而失效
+    related_factors: Alpha#4 (类似量价相关结构), Alpha#24 (动量反转组合), Alpha#54 (量价相关 + 排名),
+      经典 short-term reversal / price-volume divergence 因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 拥挤反转主假设
+      description: 当短期价量混合动量与行业中性化量价相关性持续度同时处于截面高位时, 表明交易行为高度一致, 后续容易出现反转下行; 因子值低
+        (即原始 max 高) 的股票未来收益差
+      expected_ic_sign: 负
+      source: 行为金融反转理论 + 交易拥挤假说
+      priority: 主假设
+    - id: H2
+      name: 量价联动去拥挤
+      description: Part B 中绝对值相关性的时间序列排名衡量量价联动持续性, 高位代表量价同向运动持续, 反映信息已被充分定价或机构一致建仓完成,
+        后续 alpha 衰减
+      expected_ic_sign: 负
+      source: Part B 子结构单独解读
+      priority: 辅助假设
+    - id: H3
+      name: 混合价短期反转
+      description: Part A 中 vwap-close 混合价的 delta 经 decay 后反映近 2-3 日的瞬时偏离, 高位代表短期超买,
+        与经典 short-term reversal 一致
+      expected_ic_sign: 负
+      source: Part A 子结构 + 短期反转文献 (Jegadeesh 1990)
+      priority: 辅助假设
+    - id: H4
+      name: 行业中性化提升纯度
+      description: 对 adv81 做行业中性化可剥离行业级别的资金流/轮动效应, 使量价相关性更聚焦于个股特异信息, 增强因子选股纯度
+      expected_ic_sign: 正
+      source: 风险因子正交化方法论
+      priority: 稳健性假设
+    meaning_summary: 因子值为负且绝对值大时, 表示该股票同时具备强短期动量与高量价联动持续度, 被视为'拥挤/超买', 预期未来收益偏低; 因子值为正时反之,
+      属于相对冷门或处于盘整状态的股票。
+    key_insights:
+    - max(·) 聚合使因子只需任一子信号处于高位即被压制, 增强了对拥挤状态的敏感性
+    - -1 系数将因子方向完全反转, 必须配合截面排序使用 (rank IC 而非 raw value)
+    - '行业中性化是关键设计: 移除行业资金流后, 量价相关更反映个股特有信息含量'
+    uncertainty: IndNeutralize 在代码中被横截面 neutralize 近似, 实际行业中性化强度可能不足; 小数窗口四舍五入会引入与原始公式约
+      0.5-1 期的窗口偏差; Part A 未做行业中性化, 行业敞口可能影响因子纯度
+  l6:
+    industry_concentration: Part B 做了行业中性化处理, 但 Part A 未做; 整体因子仍可能存在一定行业敞口, 尤其在行业轮动剧烈的行情中需做行业中性化二次校验
+    crowding_level: 中高 - 因子依赖的动量与量价相关结构在量化圈使用广泛, 多个 Alpha 公式与短周期反转因子具有相似结构; 当全市场同质化使用类似信号时,
+      拥挤度会推高换手并压缩 alpha
+    failure_conditions:
+    - '强单边趋势行情: 动量持续有效, 反转信号反复被打脸, IC 转负或显著衰减'
+    - '流动性危机/极端波动期: 量价相关性失效 (correlation 趋于 1 或震荡), Part B 信号噪声大幅上升'
+    - '行业分类不准确或缺失: Part B 中 IndNeutralize 退化为横截面标准化, 行业剥离失效, 因子混入行业 beta 风险'
+    risk_notes: 因子绝对值大 (即原始 max 信号极强) 时多为短期极端状态, 持仓周期需严格控制 (建议 1-3 日); 行业中性化仅作用于 Part
+      B, 整体因子建议额外叠加 Barra 风格中性化; max 结构对异常值不敏感 (取两个排名值的上界), 但 rank 操作可能稀释极端信号

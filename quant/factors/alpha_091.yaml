@@ -63,3 +63,73 @@ factor:
       longshort_max_dd: -0.02508658174252171
       validated_at: 1782150981.977346
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对 close 做行业中性化处理, 然后计算其与 volume 的 10 日滚动相关系数
+      formula: corr = rolling_corr(IndNeutralize(close, industry), volume, 10)
+    - step: 2
+      description: '对相关系数做两次线性衰减: 先 16 日再 4 日'
+      formula: decay1 = decay_linear(corr, 16); decay2 = decay_linear(decay1, 4)
+    - step: 3
+      description: 对二次衰减序列做 5 日时间序列排名 (Ts_Rank)
+      formula: part1 = Ts_Rank(decay2, 5)
+    - step: 4
+      description: 计算 30 日均成交额 adv30, 然后求 vwap 与 adv30 的 4 日滚动相关系数, 再做 3 日线性衰减, 最后做截面
+        rank
+      formula: part2 = rank(decay_linear(corr(vwap, adv30, 4), 3))
+    - step: 5
+      description: 将两部分相减后乘以 -1, 得到最终因子值
+      formula: factor = (part1 - part2) * (-1)
+    edge_case_handling: rolling 窗口不足时 (warmup 期内) 产生 NaN; 行业中性化因无 industry 列被近似跳过,
+      导致原意损失
+    missing_value_handling: polars rolling 默认跳过 NaN (pairwise), 序列开头的 NaN 自然传播至最终因子
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 因子同时捕捉个股量价相关性的衰减动量与均价-流动性相关性的截面排序, 衡量价量关系与流动性联动之间的背离程度, 用于识别量价结构正在转折的标的
+    market_behavior: 适用于量价信息不对称、换手结构发生改变的市场环境, 即多空力量重新定价阶段
+    theoretical_basis: '行为金融的注意力衰减假说 + 流动性溢价理论: 行业中性化剥离板块噪声, 双层 decay_linear 强化近期信号,
+      Ts_Rank 提取转折时点'
+    historical_effectiveness: 101 Alphas 论文报告在 1997-2014 美股回测中夏普约 1.2 左右, 但 2018 年后因同质化拥挤明显衰减
+    related_factors:
+    - Alpha 49 (量价相关)
+    - Alpha 51 (adv 相关)
+    - Alpha 60 (vwap-decay)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 量价相关性背离反转
+      description: 当个股量价相关性与流动性相关性同时走弱 (Part1 低, Part2 高) 时, 因子值被 -1 反转后为正, 预期未来超额收益为正
+      expected_ic_sign: 正
+      source: Alpha 56 原始论文 + 反转效应文献
+      priority: 主假设
+    - id: H2
+      name: 行业相对量价动量
+      description: 剥离行业后近期量价相关性增强的股票 (Part1 上升) 应在短期延续, 但被 -1 翻转后为负, 预期 IC 为负
+      expected_ic_sign: 负
+      source: 动量-反转混合效应
+      priority: 备选假设
+    - id: H3
+      name: 流动性传导滞后
+      description: vwap-流动性相关性截面排名靠前者代表信息尚未充分定价, 做空可获超额
+      expected_ic_sign: 不确定
+      source: 信息扩散速度文献
+      priority: 辅助假设
+    meaning_summary: 因子本质是'行业中性化量价相关性的近期时间排名'减去'vwap-流动性相关性的截面排名'再取反, 正值代表量价结构出现有意义的转折,
+      负值代表量价趋势仍在强化
+    key_insights:
+    - 行业中性化是核心预处理, 缺失该步骤会显著降低纯度
+    - 双层 decay + Ts_Rank 构成'去噪+转折检测'的组合, 单纯动量会失效
+    - adv30 的引入将价量信息从'绝对水平'提升到'相对流动性'维度, 是与简单量价因子的本质区别
+    uncertainty: 高 — 包含 5 个超参数 (9.75/16.4/3.83/4.87/4.01/2.68) 和 industry 列依赖, 任何环节失真都会让因子语义偏移
+  l6:
+    industry_concentration: 对金融、公用事业等成交额大且稳定的板块信号更强; 对小盘科技/生物医药因 adv30 不稳定, 信号噪声大
+    crowding_level: 高 — Alpha 56 是 101 alphas 中被广泛复刻的因子之一, 私募和量化平台高度同质化, 近年 alpha
+      衰减明显
+    failure_conditions:
+    - 行业中性化缺失 (如本实现) 导致跨行业可比性丧失, 在板块轮动剧烈时失效
+    - 市场处于强趋势 (如 2020 疫后复苏、2023 AI 行情) 时, 价量趋势而非转折主导, 因子 IC 转负
+    - 小盘股流动性枯竭 (如 2024 年初微盘股危机) 时, adv30 失真, Part2 信号崩溃
+    risk_notes: 需在回测中严格保留 industry 列并使用 GICS/申万等真实分类; 超参数对回看窗口敏感, 建议做 ±20% 鲁棒性测试;
+      警惕与同策略基金的拥挤踩踏风险

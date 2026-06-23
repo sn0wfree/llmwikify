@@ -60,3 +60,74 @@ factor:
       longshort_max_dd: -0.02136602394895161
       validated_at: 1782149504.503599
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: vwap 加权混合（公式中 0.728317 与 1-0.728317 的线性组合数学上等价于 vwap 本身）
+      formula: vwap_blend = 0.728317 * vwap + (1 - 0.728317) * vwap = vwap
+    - step: 2
+      description: 对 vwap 按行业（IndClass.industry）做横截面中性化处理，消除行业层面的系统性偏差
+      formula: neutralized = IndNeutralize(vwap, industry)
+    - step: 3
+      description: 在 4 日滚动窗口上计算中性化 vwap 与 volume 的相关系数，捕捉短期价量联动性
+      formula: corr_t = rolling_corr(neutralized, volume, window=4)
+    - step: 4
+      description: 对相关系数序列做 16 日线性衰减加权（decay_linear），近端权重更高
+      formula: decayed_t = Σ_{i=0..15} w_i * corr_{t-i}, w_i = (16-i)/16
+    - step: 5
+      description: 在 8 日窗口内对衰减后的相关系数做时间序列排名（Ts_Rank），再乘以 -1 取负
+      formula: factor = -1 * Ts_Rank(decayed, window=8)
+    edge_case_handling: correlation 窗口为 4，短期窗口需保证至少有 2 个有效观测；ts_rank 窗口为 8，最初若干交易日返回
+      NaN；neutralize 在每只股票所属行业内做回归，缺少行业分类的股票会被剔除或归入其他类
+    missing_value_handling: rolling_corr 与 ts_rank 在窗口数据不足时输出 NaN；decay_linear 对 NaN
+      序列做加权平均时 NaN 会自然传播；最终因子 NaN 由回测框架按 delist/停牌规则处理
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 因子衡量行业中性化后个股价量相关性的短期偏离方向：价量协同减弱（负相关）时做多，协同增强时做空，捕捉价量关系的均值回复特性。
+    market_behavior: 在信息扩散、流动性冲击或主力资金建仓/出货阶段，价量相关性会出现短暂结构性变化；因子押注这种偏离会在 8 个交易日内部分修复。
+    theoretical_basis: 基于行为金融的过度反应-修正假说与价量关系的均值回复特征，结合 Kakade、Llorente 等关于交易活动与价格发现关系的研究。
+    historical_effectiveness: 源自 101 Alphas 中 Alpha#96，在美股长周期回测中具有显著 IC；A 股市场上需注意涨跌停制度对
+      vwap 与 volume 相关性的扭曲。
+    related_factors: Alpha#12（价量相关性）、Alpha#31（价量衰减相关性）、PV Correlation、流动性因子、量价背离因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 价量相关性短期反转
+      description: 行业中性化后的价量相关性呈现短期均值回复：近期相关性越偏离历史正常水平（无论正负），未来越倾向于回归，因此对相关性 Ts_Rank
+        取负后与未来收益正相关
+      expected_ic_sign: 正
+      source: '101 Alphas #96 原始构造逻辑 + 均值回复假说'
+      priority: 主假设
+    - id: H2
+      name: 行业中性化纯化信号
+      description: 通过 IndNeutralize 消除行业层面同步的价量关系（如周期股集体放量），仅保留个股特质性的价量信息，提升信号纯度
+      expected_ic_sign: 正
+      source: Barra 风险模型中性化思路 + 行业因子控制
+      priority: 次假设
+    - id: H3
+      name: 时间序列排名捕捉动量维度
+      description: Ts_Rank 在 8 日窗口内对衰减序列做百分位排名，捕捉相关系数本身的短期动量/反转模式，而非截面排名
+      expected_ic_sign: 不确定
+      source: Ts_Rank 操作定义
+      priority: 辅助假设
+    meaning_summary: 取负后的 Ts_Rank 因子本质是'价量相关性偏离度的反向指标'，高因子值代表近期个股价量协同关系较弱（可能存在量价背离），低因子值代表价量高度协同。
+    key_insights:
+    - 公式中 0.728317 与 1-0.728317 的组合实际是恒等变换，参数装饰性强于实质作用
+    - 三层滚动（corr=4 / decay=16 / ts_rank=8）形成'短窗口测关系→中窗口加权→短窗口排名'的级联结构
+    - 负号是关键：原始 Ts_Rank 高（协同增强）时做空，Ts_Rank 低（协同减弱/背离）时做多
+    uncertainty: A 股涨跌停板会导致 vwap 与 volume 的真实关系被截断，相关性指标在极端行情下失真；行业分类标准（中信/申万/万得）切换会显著改变
+      IndNeutralize 效果
+  l6:
+    industry_concentration: 中性化处理后行业暴露接近零，但 vwap 与 volume 的相关性本身在金融、地产等大票行业与 TMT、医药等中小票行业存在结构差异，未完全消除的'行业风格残差'可能带来约
+      5-10% 的行业偏离。
+    crowding_level: Alpha#96 是 101 Alphas 中的经典构造，公开程度高，机构量化产品中可能存在广泛复用，拥挤度中等偏高；尤其在短窗口（4/8
+      日）上，相似信号叠加后 alpha 衰减较快。
+    failure_conditions:
+    - 市场处于强趋势行情（牛/熊单边）：价量相关性持续偏高或偏低，无均值回复，均线系统失灵
+    - 个股处于涨跌停或停牌密集期：vwap 与 volume 数据被截断或缺失，rolling_corr 输出噪声或 NaN
+    - 行业分类粒度不匹配：当行业类别过粗（如一级行业）时 IndNeutralize 效果不足，混入行业共同因子
+    risk_notes:
+    - decay_linear 与 ts_rank 的窗口较短（16/8），对换手率敏感，交易成本侵蚀显著，建议配合换手率约束使用
+    - IndNeutralize 的实现方式（dummy 回归 /  Barra 纯化 / 分组均值剔除）会显著影响因子表现，跨平台复现时需统一口径
+    - 因子对 volume 数据质量高度依赖，包含大量异常成交（如配股、增发解禁当日）的样本会污染相关性估计

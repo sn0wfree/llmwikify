@@ -62,3 +62,85 @@ factor:
       longshort_max_dd: -0.041419076908691836
       validated_at: 1782149628.9969103
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 20 日均量 adv20, 再对其取 22 日滚动和 sum_adv20, 作为中长期成交量趋势代理变量
+      formula: sum_adv20_t = Σ_{i=0}^{21} ts_mean(volume, 20)_{t-i}
+    - step: 2
+      description: 计算 vwap 与 sum_adv20 在 9 日窗口内的滚动相关系数, 衡量近期价格与累计量能趋势的联动性
+      formula: corr_t = rolling_corr(vwap, sum_adv20, window=9)
+    - step: 3
+      description: 对相关系数做截面 rank, 得到个股在 VWAP-量能相关性维度上的相对位置
+      formula: rank_corr_t = rank(corr_t) over date
+    - step: 4
+      description: '构造日内价格结构布尔条件: 开盘价相对中位偏低 (2·rank(open) < rank((high+low)/2) + rank(high)),
+        表示日内开盘弱于均价与最高价'
+      formula: cond_t = (2·rank(open)) < (rank((high+low)/2) + rank(high))
+    - step: 5
+      description: 对布尔条件做截面 rank, 再与 rank_corr 比较; 若 rank_corr < rank_cond 则输出 -1,
+        否则 0; 整个表达式隐含 -1 系数
+      formula: factor = -1 · I(rank_corr < rank(cond))
+    edge_case_handling: 相关系数窗口不足或方差为 0 时 rolling_corr 返回 NaN; 布尔条件在 polars 中通过 .cast(pl.Int32)
+      转为数值以便 rank; 最终结果强制转为 pl.Float64 以保证下游兼容
+    missing_value_handling: 滚动窗口前期不足时 corr / rolling_sum 产生 null, 沿用 polars 默认 NaN
+      传播; rank 阶段 null 会被排在末尾, 比较时 null 视为 False, 自然落到 0 输出侧
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 该因子将 VWAP 与中期累计量能的相关性 (流动性结构信号) 与日内开盘相对中位/高位的弱势形态 (价格结构信号)
+      相结合, 在两者同时发出弱势信号时输出 -1, 捕捉由量价背离驱动的短期反转机会。
+    market_behavior: 当个股出现 VWAP 与量能趋势脱钩 (价格未能跟随放量上行, 甚至反向运行) 且日内开盘明显偏弱时, 往往暗示存在持续性卖压或主力派发,
+      短期价格倾向于进一步走弱。
+    theoretical_basis: '基于行为金融的量价背离假说与日内价格形态反转假说: 量价同步性下降意味着信息效率恶化, 而开盘价低于盘中均价/高价
+      (典型 ''弱开强收'' 失败模式) 反映买盘承接不足, 两者共振放大短期下行概率。'
+    historical_effectiveness: 在 101 Alphas 框架 (Kakushadze 2016) 中该公式属于高频截面排序型因子, 在
+      A 股日频横截面上对短期收益具有一定负向预测能力, 但对成交量突变与涨跌停制度敏感。
+    related_factors: Alpha#9 (turnover/vwap 相关结构类), Alpha#52 (vwap 与均量背离), 经典量价背离因子
+      (PVO, OBV 趋势反转), 以及日内形态因子 (intraday reversal)
+  l4:
+    hypotheses:
+    - id: H1
+      name: VWAP-量能相关性越低, 未来收益越弱
+      description: VWAP 与累计均量的滚动相关性低意味着近期价格未跟随量能趋势, 反映流动性结构恶化, 倾向于带来负向超额收益, 因此 rank_corr
+        低的股票应被做空。
+      expected_ic_sign: 负
+      source: 量价背离假说 + Alpha#9 类似逻辑
+      priority: 主假设
+    - id: H2
+      name: 弱开个股存在短期反转下行
+      description: 当开盘价在截面上明显低于 (high+low)/2 与 high 的 rank 时, 表明日内开盘显著弱于中枢与高点, 在趋势未配合下短期仍以下行为主。
+      expected_ic_sign: 负
+      source: 日内形态反转假说 (open-low/mid-high 关系)
+      priority: 主假设
+    - id: H3
+      name: 两类弱势信号叠加强化做空信号
+      description: VWAP-量能相关性弱势与开盘弱势同时存在时, 卖压确认度提高, 因子输出 -1 的样本负向收益应显著强于单一信号。
+      expected_ic_sign: 负
+      source: 多信号融合增强假说
+      priority: 辅助假设
+    - id: H4
+      name: 因子在低成交拥挤度环境中更稳定
+      description: 该组合信号较少被传统量价因子覆盖, 在量价类策略拥挤度较低时效果较好; 反之在拥挤阶段可能出现 alpha 衰减。
+      expected_ic_sign: 不确定
+      source: 策略拥挤度与 alpha 衰减文献
+      priority: 辅助假设
+    meaning_summary: '因子值为 -1 或 0 的离散信号: 当个股 VWAP-累计均量相关性截面排名偏低, 且其开盘价相对截面上的 (high+low)/2
+      与 high 偏弱时, 触发做空信号 (-1); 其余情况为 0 (不做空)。'
+    key_insights:
+    - 因子是布尔型离散信号 (取值为 {-1, 0}), 天然适合作为择时/择股触发器而非连续打分
+    - VWAP-累计均量相关系数本质是 '流动性趋势同步性' 指标, 其下降常对应机构减仓或被动平仓
+    - 开盘弱势 + VWAP-量能背离同时出现时, 通常意味着事件驱动型卖压, 而非随机噪声
+    uncertainty: 由于最终输出为离散值, IC 计算时实际只能衡量 -1 vs 0 的分组收益差, 信息含量低于连续因子; 同时 vwap 字段在不同数据源中口径差异较大
+      (含/不含成交量加权), 会显著影响相关系数结果。
+  l6:
+    industry_concentration: '中等偏高: 该因子对量价同步性敏感, 在周期股与中小盘交易活跃标的上信号更频繁, 金融、地产等低换手行业触发率较低;
+      触发集中在 TMT 与高端制造板块。'
+    crowding_level: '中等: VWAP-量能相关性类逻辑与 Alpha#9/#52 等公开因子有一定重叠, 但开盘 vs 中位/高价的叠加条件使其差异化,
+      整体拥挤度低于纯量价趋势因子。'
+    failure_conditions:
+    - 强趋势单边行情中, VWAP 与累计均量相关性持续偏高, 触发条件难以满足, 因子几乎全为 0, 失去选股能力
+    - 涨跌停板或停牌密集的交易日, vwap/high/low 出现截断, 相关系数与 rank 失真, 信号噪声激增
+    - '小盘低流动性股票: 窗口期数据不足或全天仅几笔成交, corr 估计严重偏差, 易产生极端误判'
+    risk_notes: 因子为离散做空信号, 实际构建组合时需配合流动性与可卖空性过滤; 单一 -1 信号的负向收益绝对值可能有限, 建议与价格反转强度结合做连续打分;
+      此外 vwap 字段在早期 A 股数据中可能缺失, 需提前做完整性校验。

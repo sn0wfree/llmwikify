@@ -55,3 +55,72 @@ factor:
       longshort_max_dd: -0.02210869832232518
       validated_at: 1782177640.1589139
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 7 日价格变化量及其变体：close - delay(close, 7) 与 delta(close, 7)（二者等价），再求和，得到
+        2 倍的 7 日动量
+      formula: (close - delay(close, 7)) + delta(close, 7) = 2 * (close_t - close_{t-7})
+    - step: 2
+      description: 对上述 2 倍 7 日变化量取 sign 并乘以 -1，得到短期反转方向信号（近 7 日上涨 → -1，近 7 日下跌 → +1）
+      formula: sign_part = -1 * sign(2 * delta_7(close)) ∈ {-1, 0, 1}
+    - step: 3
+      description: 计算 250 日（约 1 年）滚动收益累计并加 1，再在截面上做 rank（按 date 分组），得到过去 1 年表现的相对位次
+      formula: rank_part = 1 + rank(1 + sum(returns, 250))  ∈ [1, 2]
+    - step: 4
+      description: 将反转方向信号与长期表现 rank 相乘，长期赢家且短期回调的股票获得较大正因子值
+      formula: factor = sign_part * rank_part
+    edge_case_handling: sign 函数对零值返回 0（当 close_t = close_{t-7} 时因子为 0）；rank 在每个截面日期上归一化；sum(returns,
+      250) 在前 249 行产生 NaN，依赖 polars 滚动窗口的自动丢弃处理
+    missing_value_handling: delay/delta 产生的前 7 行 NaN 与 rolling_sum 产生的前 249 行 NaN
+      自然向下游传播；rank 跨截面计算，NaN 会被保留在结果中
+    data_alignment: T+1（基于 t 日收盘数据，t+1 日开盘可交易）
+    complexity: O(T × N)，T 为时间序列长度，N 为截面股票数
+  l3:
+    financial_intuition: 在 1 年期相对强势（高累计收益）的股票中做 7 日短期反转——即'强者回调买入、弱者反弹卖出'的回调交易策略。
+    market_behavior: 短期价格存在均值回复（反转效应），而中长期呈动量延续；因子将两者结合，仅在强势股上做多短期回调、在弱势股上做空短期反弹。
+    theoretical_basis: Jegadeesh & Titman (1993) 动量效应 + Jegadeesh (1990) 短期反转效应；行为金融学解释为投资者过度反应（短期）与信息扩散滞后（长期）。
+    historical_effectiveness: 在 A 股月频调仓框架下属于经典 101 Alphas 系列，实盘测试中长期具备正 IC，但 2017
+      年以后动量衰减导致其表现有所下降。
+    related_factors: Alpha#4（价格反转类）、Alpha#10（动量类）、Alpha#23（多周期动量反转混合）
+  l4:
+    hypotheses:
+    - id: H1
+      name: 短期反转效应
+      description: 近 7 日下跌的股票在未来存在均值回复倾向，应给予正向因子值。sign_part 项独立贡献正向 IC。
+      expected_ic_sign: 正
+      source: Jegadeesh (1990) 短期反转文献 + Alpha#4 经验
+      priority: 主假设
+    - id: H2
+      name: 长期动量加权
+      description: 过去 250 日累计收益更高的股票应获得更高因子权重（rank_part 越大，因子绝对值越大），该假设若成立则因子在赢家池中信号更强。
+      expected_ic_sign: 正
+      source: Jegadeesh & Titman (1993) 中长期动量文献
+      priority: 主假设
+    - id: H3
+      name: 交互效应：赢家中的短期回调
+      description: 市场对处于上升趋势的股票出现回调时反而是更强的买入信号；rank_part 对 sign_part 的线性放大预期产生正 IC
+        增量。
+      expected_ic_sign: 正
+      source: 101 Alphas 原始构造逻辑 + George & Hwang (2004) 锚定效应
+      priority: 副假设
+    - id: H4
+      name: 动量崩盘风险
+      description: 若因子被解读为'追涨杀跌 + 短期反转'，在高波动/暴跌市中可能因反转项放空弱势股而蒙受损失，整体 IC 可能转负。
+      expected_ic_sign: 负
+      source: Daniel & Moskowitz (2016) momentum crashes
+      priority: 副假设
+    meaning_summary: 因子值越大 = 长期累计收益排名靠前 + 短期回调 → 预期未来反弹；因子值越小 = 长期弱势 + 短期反弹 → 预期未来回落。
+    key_insights:
+    - (close - delay(close,7)) + delta(close,7) 等价于 2 倍的 7 日变化，sign 操作只关注方向不关注幅度
+    - sign_part 是离散三值信号（-1/0/1），导致因子本身离散化，换手率偏高
+    - rank_part ∈ [1,2] 起到截面加权作用，抑制了绝对量纲差异但牺牲了信息量
+    uncertainty: 信号方向取决于短期反转与长期动量哪个主导；在趋势市/震荡市切换时因子表现不稳定；A股小盘股流动性不足时 250 日回望可能引入幸存者偏差。
+  l6:
+    industry_concentration: rank_part 按全市场截面排序，理论上行业中性；但 250 日动量会自然向过去 1 年涨幅集中的行业（周期/成长）倾斜。
+    crowding_level: 中——属于公开 101 Alphas 公式，机构广泛使用；短期反转 + 长期动量组合在量化圈拥挤度较高，预期超额收益已被部分压缩。
+    failure_conditions:
+    - 市场处于强趋势行情时，短期反转被持续突破，sign_part 方向反复翻转导致因子失效
+    - 动量崩盘（momentum crash）情景：长期赢家突然暴跌时，rank_part 仍赋予其高权重但反转信号滞后，因子大幅回撤
+    - 横盘震荡期 sign_part 在 ±1 之间高频切换，交易成本侵蚀明显，扣除费用后 IC 转负
+    risk_notes: sign 离散化使因子暴露集中在 ±1 和 ±2 几个离散值，组合优化时需注意其与价格类风险因子的相关性；250 日窗口对新股、退市股不友好，建议加入流动性与上市天数过滤。

@@ -52,3 +52,72 @@ factor:
       longshort_max_dd: -0.02081875327360086
       validated_at: 1782146245.9010193
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 low - close, 衡量收盘相对日内最低价的偏离量 (恒 ≤ 0)
+      formula: low - close
+    - step: 2
+      description: 计算 open^5, 以 5 次方放大开盘价信号的强弱差异
+      formula: open^5
+    - step: 3
+      description: '构建分子: -1 × (low - close) × open^5 (恒 ≥ 0)'
+      formula: -1 × (low - close) × open^5
+    - step: 4
+      description: 计算 low - high, 衡量日内振幅方向 (恒 ≤ 0)
+      formula: low - high
+    - step: 5
+      description: '构建分母并求因子值: (low - high) × close^5, factor = 分子 / 分母'
+      formula: factor = numerator / denominator
+    edge_case_handling: '代码未做特殊处理: 当 low ≈ high (一字板/十字星) 时分母趋零, 因子值发散; 当 close →
+      0 时 close^5 → 0 同样导致分母为零; open^5 与 close^5 在高价股上易产生数值溢出'
+    missing_value_handling: 未对缺失值做处理, 若 open/close/low/high 任一为 NaN 则输出 NaN, polars
+      默认会传播缺失
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: '因子捕捉''高开放量+强势收尾''的日内形态: 开盘显著高于收盘(冲高回落), 但收盘仍守住日内高位, 5次方放大该模式信号。'
+    market_behavior: 反映日内多空博弈后多方仍占优的'冲高回落仍强'格局, 衡量隔夜跳空高开后空方打压但多方收复失地的能力。
+    theoretical_basis: '基于行为金融的''收盘强势效应''与''隔夜动量''理论: 强势收尾吸引次日买盘关注, 跳空高开后能维持高位的股票被解读为承接力强,
+      易于形成短期动量延续。'
+    historical_effectiveness: 属于 101 Alphas 系列中纯价量高次方构造的另类因子, 对极端日内形态敏感, 在高波动、跳空频繁的市场环境下信号更强。
+    related_factors: 日内动量因子 (Intraday Momentum)、收盘位置因子 (CPR/Close Position)、隔夜收益因子
+      (Overnight Return)、Gap Reversal
+  l4:
+    hypotheses:
+    - id: H1
+      name: 强势收尾动量延续
+      description: 高开且收盘在日内高位的股票代表多空博弈中多方占优, 次日有动量延续倾向, 因子值最负者未来收益为正
+      expected_ic_sign: 正
+      source: '行为金融: 收盘强势→关注度提升→次日追涨; 101 Alphas 经典动量逻辑'
+      priority: 主假设
+    - id: H2
+      name: 5次方放大增强极端信号
+      description: open^5 与 close^5 的高次方构造显著放大 open/close 比的差异, 使因子对极端日内模式(大幅高开/低开)更敏感,
+        提升预测力
+      expected_ic_sign: 正
+      source: 非线性变换在量价信号提取中的常规增强手法
+      priority: 辅助假设
+    - id: H3
+      name: 日内反转假说
+      description: 若'高开放量+冲高回落'被解读为短期顶部信号, 则因子最负者反而预示未来回调, 即 IC 为负
+      expected_ic_sign: 负
+      source: 技术分析中的'高位放量长上影'反转形态
+      priority: 备选假设
+    meaning_summary: 因子 = -(close-low)/(high-low) × (open/close)^5, 恒为非正数, 绝对值越大代表股票'跳空高开但日内仍强势收尾'的形态越典型。
+    key_insights:
+    - 因子值恒 ≤ 0, 排名时按升序/绝对值大小构建多空组合
+    - 5次方权重使因子对 open/close 比极度敏感, 极易被极端日内行情主导
+    - 分母含 (low - high), 窄幅震荡日分母趋零, 因子发散是主要失效源
+    uncertainty: 因 5 次方构造 + 分母含易趋零的 (low - high), 因子分布严重右偏(大量 0 附近), 实际 IC 方向、稳定性、单调性需通过分组回测严格验证,
+      单一假设存在反转可能。
+  l6:
+    industry_concentration: 无显著行业偏向, 但对日内波动大、跳空频繁的行业(科技股、小盘成长、重组概念股)信号更强; 对银行/公用事业等低波动行业信号较弱。
+    crowding_level: '中等偏低: 属于 101 Alphas 中较冷门的高次方纯价构造, 实际使用需叠加分母截断等额外处理, 大多数公开 alpha
+      库中未直接采用此原式。'
+    failure_conditions:
+    - '一字板/十字星/极窄幅震荡日: low ≈ high → 分母趋零, 因子值爆炸, 形成极端离群点'
+    - '退市边缘/价格极低股票: close → 0 → close^5 → 0, 分母为 0 或符号反转'
+    - '大幅跳空+极端行情: open^5/close^5 数值溢出, 因子主导由价差变成纯价格量级, 失定价量含义'
+    risk_notes: '建议: 1) 对 |low - high| < ε 的样本直接剔除或置 NaN; 2) 对 open/close 做分位数截尾;
+      3) 因子在行业内或市值组内做 z-score 标准化以消除价量级影响; 4) 关注因子右偏分布对组合权重的扭曲, 必要时做符号反转或取负使用。'

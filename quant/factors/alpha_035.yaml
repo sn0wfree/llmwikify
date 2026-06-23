@@ -53,3 +53,80 @@ factor:
       longshort_max_dd: -0.04830262844812814
       validated_at: 1782145237.2518766
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对过去 32 个交易日的成交量做时序排名 (Ts_Rank), 得到当前成交量在近期窗口中的相对位置, 范围 [0, 1]
+      formula: Ts_Rank(volume, 32)
+    - step: 2
+      description: 计算日内价格组合 (close + high - low), 该值与 close 单调正相关; 对过去 16 日做 Ts_Rank
+        后取 1 减, 值越高代表当前价格水平在近 16 日中越靠低位
+      formula: 1 - Ts_Rank(close + high - low, 16)
+    - step: 3
+      description: 对过去 32 日收益率做 Ts_Rank 后取 1 减, 值越高代表近期收益越差 (短期超跌)
+      formula: 1 - Ts_Rank(returns, 32)
+    - step: 4
+      description: 将三个分量逐元素相乘得到最终因子值, 三者同向放大信号
+      formula: Ts_Rank(volume, 32) × (1 - Ts_Rank(close + high - low, 16)) × (1 -
+        Ts_Rank(returns, 32))
+    edge_case_handling: ts_rank 在窗口不足时 (前 31/15 日) 通常返回 NaN 或用部分窗口计算, 实际实现需保证窗口起点正确填充;
+      当 volume=0 时 rank 仍有效; close+high-low 为标量加法不会引入额外边界
+    missing_value_handling: 原始 volume/close/high/low/returns 若缺失, pl.col 直接传播 NaN;
+      ts_rank 内部应跳过 NaN 或按部分窗口计算, 否则最终因子在该行 NaN
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: '捕捉''放量杀跌''的恐慌抛售信号: 因子值高代表个股处于近期价格低位、成交量放大、短期收益为负, 属于典型的''超卖+放量''复合反转信号,
+      预期未来均值回归反弹。'
+    market_behavior: 在市场急跌、恐慌出逃阶段因子值飙升, 随后若市场企稳则因子表现强势; 在趋势性下跌或熊市延续中可能持续给出错误反转信号。
+    theoretical_basis: '融合行为金融的''处置效应''与''反应过度/不足'': 高成交量放大了下跌的信号强度, 短期超跌触发均值回归; 同时
+      close+high-low 实质上引入了价格位置 (类似 stochastic K) 维度, 强化''底部确认''。'
+    historical_effectiveness: 在 101 Alphas 中属于中长期日频有效因子, 对中证 500/全 A 截面排序具有显著正 IC;
+      在波动率高、换手率高的中小盘股票池中效果更明显。
+    related_factors: Alpha#1 (反转), Alpha#12 (量价反转), Alpha#22 (量价结合), 传统反转因子 (RSTR),
+      换手率因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 短期反转 (Mean Reversion)
+      description: 因子值高的股票 (近期超跌) 在未来 1-5 个交易日存在显著正向超额收益, 即'跌多了会反弹'
+      expected_ic_sign: 正
+      source: Jegadeesh & Titman (1993) 反转效应, Alpha#1 原始假设
+      priority: 主假设
+    - id: H2
+      name: 放量确认 (Volume Confirmation)
+      description: 高成交量放大了价格信号的可靠性, 放量杀跌后的反弹幅度大于缩量下跌, 成交量维度提供增量信息
+      expected_ic_sign: 正
+      source: 价量关系文献 (Karpoff 1987), Blume-Easley-OBrien 量价信息流
+      priority: 主假设
+    - id: H3
+      name: 价格位置过滤 (Price Level Filter)
+      description: close+high-low 的低 Ts_Rank 标识股价处于近期低位, 与收益率反转维度形成'价格位置 + 收益负值'双重确认,
+        提升信号纯度
+      expected_ic_sign: 正
+      source: 技术分析支撑位/超卖区理论, 类似 KDJ 中的位置信息
+      priority: 辅助假设
+    - id: H4
+      name: 趋势延续风险 (Momentum Crash Risk)
+      description: 在强趋势下跌 (如 2015 股灾、2018 贸易战) 中, 放量杀跌可能是趋势中继而非反转, 因子可能失效或反向
+      expected_ic_sign: 不确定
+      source: Daniel & Moskowitz (2016) Momentum Crashes
+      priority: 风险假设
+    meaning_summary: 这是一个多维度反转因子, 通过'放量 + 低价位 + 负收益'三要素复合识别短期超卖股票, 核心押注均值回归行为。
+    key_insights:
+    - 三个分量全部为乘积结构, 任一分量为 0 都会拉低因子值, 因此信号稀疏性强, 选股集中度高
+    - close+high-low 的引入使因子同时编码了日内收盘位置 (高/低距离) 与绝对价格水平, 比纯 close 序列更具信息量
+    - 32 日 vs 16 日的非对称窗口让价格维度更敏感 (短期) 而量价收益维度更平滑, 减少噪音
+    uncertainty: 短期窗口 (16 日) 对调仓频率敏感, 日频 vs 周频调仓下 IC 衰减程度需回测验证; close+high-low 的经济含义并非直观标准量,
+      与传统 KDJ/RSI 的相关性有待检验
+  l6:
+    industry_concentration: '中等偏高: 超跌+放量信号在周期性行业 (地产、券商、有色) 和小盘成长股中出现更频繁, 单一行业暴露可能导致因子偏向
+      Beta 行业, 建议做行业中性化处理'
+    crowding_level: '中等: 属于 101 Alphas 经典组合之一, 量化机构普遍使用, 但因三因子复合稀释了单纯反转信号的拥挤度, 实际拥挤度低于纯反转因子;
+      注意与 Alpha#1、Alpha#12 的相关性导致的隐含拥挤'
+    failure_conditions:
+    - '单边趋势下跌市: 放量杀跌演变为恐慌抛售的中继而非底部, 反转假设失效, 因子显著负收益'
+    - '低流动性小盘股扎堆: 量价噪音大, Ts_Rank 失真, 因子在尾部股票池信号不稳'
+    - '市场风格剧烈切换 (如价值→成长轮动): 超跌因子与新强势因子方向相反, 短期回撤大'
+    risk_notes: 因子对窗口长度 (16/32) 较敏感, 过拟合风险中等; close+high-low 非标准量需警惕数据异常 (如停牌后涨跌停导致极端值);
+      三项相乘导致因子分布右偏, 极端值尾部风险较大, 建议 IC 化或 winsorize 处理后入模。

@@ -66,3 +66,85 @@ factor:
       longshort_max_dd: -0.03431539183103862
       validated_at: 1782149874.023521
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对 vwap 做行业中性化处理, 消除行业层面的系统性差异
+      formula: IndNeutralize(vwap, IndClass.industry)
+    - step: 2
+      description: 对行业中性化后的 vwap 计算约 3 日差分, 得到短期动量信号
+      formula: delta(vwap_ind_neutral, 2.72412)
+    - step: 3
+      description: 在 5 日窗口内取差分的滚动最大值, 捕捉动量的峰值
+      formula: ts_max(delta_vwap, 4.79344)
+    - step: 4
+      description: 对滚动最大值做截面 rank 标准化
+      formula: rank(ts_max_delta)
+    - step: 5
+      description: 用 0.490655 权重合成 close 与 vwap 的混合价格序列
+      formula: close * 0.490655 + vwap * (1 - 0.490655)
+    - step: 6
+      description: 计算混合价格与 20 日均量 (adv20) 在 5 日窗口的滚动相关系数
+      formula: rolling_corr(close_vwap_combo, adv20, 4.92416)
+    - step: 7
+      description: 对相关系数做 9 日时间序列 rank, 得到价格-量相关性变化的排序
+      formula: Ts_Rank(corr, 9.0615)
+    - step: 8
+      description: 将两个 rank 做幂运算, 然后乘以 -1 翻转信号方向
+      formula: (rank1 ^ ts_rank_corr) * -1
+    edge_case_handling: 行业中性化需有效行业分类; delta 和 ts_max 起始日产生 NaN; rolling_corr 在常数序列时返回
+      NaN; 幂运算对负底数在非整数指数下产生 NaN, ts_rank 输出 [0,1] 范围, 需保证 rank1 非负
+    missing_value_handling: 差分及滚动窗口起始行产生 NaN, 直接参与后续运算; 最终因子在缺失行输出 NaN, 由下游筛选剔除
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 因子结合行业中性 VWAP 短期动量峰值与价格-成交量的相关性变化, 捕捉经过行业调整后仍强势且伴随量价协同的股票;
+      取负号暗示押注这类股票的均值回归或反转。
+    market_behavior: 在动量因子过热反转、量价背离修正的市场环境中表现较好; 当趋势延续性强、行业轮动剧烈时可能失效。
+    theoretical_basis: '基于行为金融学的过度反应理论: 短期价格冲击伴随高量价相关性时, 后续容易出现均值回归; 行业中性化剥离共同因子暴露,
+      增强因子纯度。'
+    historical_effectiveness: 101 Alphas 论文中此类复合因子的 IC 约 0.03-0.05, 换手率较高, 适合中等频率调仓策略。
+    related_factors:
+    - Alpha001 (量价相关性)
+    - Alpha038 (价格动量与量比)
+    - Alpha054 (行业中性化动量)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 行业中性动量反转
+      description: 行业调整后短期 VWAP 动量峰值越高的股票, 后续越倾向于反转下跌
+      expected_ic_sign: 负
+      source: 公式中末项乘以 -1, 主信号方向即为反转
+      priority: 主假设
+    - id: H2
+      name: 量价协同反转
+      description: 近 9 日价格-成交量相关性持续走高的股票, 代表筹码集中与趋势末端, 后续回报为负
+      expected_ic_sign: 负
+      source: Ts_Rank(correlation) 升序部分对应量价协同增强, 参与负向加权
+      priority: 次假设
+    - id: H3
+      name: 双重信号非线性放大
+      description: 幂运算使动量与量价信号同时高的股票被指数级放大压低, 增强反转赌注的弹性
+      expected_ic_sign: 负
+      source: rank1 ^ ts_rank_corr 的非线性组合
+      priority: 辅助假设
+    - id: H4
+      name: 行业轮动时期的相对有效性
+      description: 因子对行业 beta 已中性化, 在行业轮动较弱的震荡市中更稳定, 单边市中 IC 可能衰减
+      expected_ic_sign: 不确定
+      source: IndNeutralize 步骤的逻辑含义
+      priority: 辅助假设
+    meaning_summary: 因子值越低 (越负), 越代表行业调整后短期动量峰值大、量价相关性高, 视为超买信号, 预期后续下跌。
+    key_insights:
+    - 负号位于最外层, 整体因子方向已确定, IC 应为负
+    - 幂运算 rank1^ts_rank_corr 在两者同高时产生极端负值, 对反转信号有非线性放大作用
+    - 行业中性化是必要前提, 缺失将引入显著行业暴露偏差
+    uncertainty: 幂运算的数值稳定性依赖 ts_rank 输出严格在 (0,1]; 不同实现对 rank 的处理 (百分位 vs 名次) 会改变因子分布。
+  l6:
+    industry_concentration: 通过 IndNeutralize 已显式剥离行业暴露, 因子值在各行业间均匀分布, 行业集中度低
+    crowding_level: 中-高, 该模式属于 101 Alphas 公开因子, 在量化机构中广泛使用, 存在一定策略拥挤风险
+    failure_conditions:
+    - '强趋势市场: 动量持续而非反转, 因子 IC 转正失效'
+    - '行业剧烈轮动期: 即使行业中性化后, 行业内个股同步性增强, 横截面 rank 信息量下降'
+    - '低流动性小盘股: adv20 噪声大, 量价相关性估计不稳, 因子波动加剧'
+    risk_notes: 因子依赖行业分类准确性, 分类标准变化会导致历史回测与实盘表现不一致; 幂运算放大了极端值, 需关注因子分布的尾部风险及换手率控制。

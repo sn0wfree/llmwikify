@@ -61,3 +61,74 @@ factor:
       longshort_max_dd: -0.04343782724364908
       validated_at: 1782150449.2525246
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算加权价格 (low*0.352233 + vwap*0.647767), 并对其求 20 日滚动求和
+      formula: sum_inner1 = rolling_sum(low*0.352233 + vwap*(1-0.352233), 20)
+    - step: 2
+      description: 计算 40 日均量 adv40, 再对 adv40 求 20 日滚动求和
+      formula: sum_adv40 = rolling_sum(rolling_mean(volume, 40), 20)
+    - step: 3
+      description: 计算 sum_inner1 与 sum_adv40 的 7 日滚动相关系数, 再做截面 rank 得到 rank1
+      formula: rank1 = rank(rolling_corr(sum_inner1, sum_adv40, 7))
+    - step: 4
+      description: 对 vwap 和 volume 分别做截面 rank, 计算两者的 6 日滚动相关系数 corr2, 再截面 rank 得到
+        rank2
+      formula: rank2 = rank(rolling_corr(rank(vwap), rank(volume), 6))
+    - step: 5
+      description: 将 rank1 与 rank2 做幂运算 (rank1 的 rank2 次方), 两者均高时结果趋近 1, 仅 rank1 高时由
+        rank2 决定压缩程度
+      formula: factor = rank1 ** rank2
+    edge_case_handling: 滚动窗口前期数据不足时返回 NaN; 截面 rank 对当日所有股票归一化, 0 < rank < 1, 幂运算结果有界
+    missing_value_handling: 上游缺失值自然传播; corr 在常数序列上返回 NaN, rank(NaN) 为 NaN
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 融合中期 (20 日) 加权价-量相关性与短期 (6 日) 量价秩相关性, 两者同向时因子值高, 反映量价配合共振的标的。
+    market_behavior: '捕捉量价共振的中期动量信号: 当价格与成交量在中短期均呈正相关 (放量上涨或缩量下跌的延续), 未来收益倾向延续; 反之则可能反转。'
+    theoretical_basis: 基于量价理论 (量先价行) 和行为金融学的趋势跟随假说; 双时间尺度交叉验证降低噪声, 幂运算强化一致信号、抑制冲突信号。
+    historical_effectiveness: 在趋势性强的市场 (如 A 股成长板块、美股动量窗口) 表现较佳; 震荡市易因量价关系反复切换而失效。
+    related_factors: Alpha#101 系列量价因子、PV-Corr、OBV、Turnover-Price Correlation、量价共振类复合因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 量价中期正相关动量延续
+      description: 20 日加权价与 40 日均量在 7 日窗口内正相关性强 (放量上涨) 的股票, 未来收益倾向于继续上行
+      expected_ic_sign: 正
+      source: 经典量价动量文献 (Lee & Swaminathan 2000)
+      priority: 主假设
+    - id: H2
+      name: 短期秩相关确认
+      description: vwap 与 volume 的短期秩相关性强说明近期资金流入与价格上行同步, 是动量延续的确认信号
+      expected_ic_sign: 正
+      source: 量价同步性研究 (Chordia & Swaminathan 2000)
+      priority: 主假设
+    - id: H3
+      name: 幂运算放大一致性
+      description: 当 rank1 与 rank2 同为高值 (双信号一致) 时, rank1^rank2 趋近 1; 双信号背离时被压低, 起到过滤噪声、强化共识的作用
+      expected_ic_sign: 正
+      source: 非线形组合因子设计经验
+      priority: 辅助假设
+    - id: H4
+      name: 反转风险
+      description: 若短期量价秩相关转负 (放量滞涨), 但中期仍正, 幂运算结果由短期主导, 因子可能发出反转信号
+      expected_ic_sign: 不确定
+      source: 量价背离反转文献
+      priority: 辅助假设
+    meaning_summary: 中期价格-成交量滚动和与 40 日均量滚动和正相关, 同时短期 vwap-volume 秩相关也为正, 双信号共振时因子取高值,
+      反映量价配合的动量延续。
+    key_insights:
+    - 双时间尺度量价相关交叉验证, 降低单一窗口噪声
+    - 幂运算 rank1^rank2 强化双信号一致、抑制背离, 是非线形组合的典型设计
+    - 加权价 (0.35*low + 0.65*vwap) 偏重 vwap, 对盘中成交均价更敏感
+    uncertainty: 参数 (0.352233, 19.7428, 6.83313, 5.77492) 高度经验性, 过拟合风险较大; 幂运算的非线性使得因子分布有偏,
+      IC 稳定性需检验
+  l6:
+    industry_concentration: 在成交活跃、量价关系显著的板块 (如科技、消费) 效果较强; 低流动性小盘股因 adv40 不稳定, 信号噪声大
+    crowding_level: '中: 量价类因子在量化圈广泛使用, Alpha#101 风格变体众多, 存在一定同质化竞争'
+    failure_conditions:
+    - 市场进入震荡或风格切换期, 量价关系反复变化, 双信号难以同向
+    - 极端行情 (崩盘或急涨) 时, 短期秩相关剧烈跳动, 幂运算结果失真
+    - 小盘股/低流动性标的中, adv40 估计不稳定, 中期相关性计算噪声放大
+    risk_notes: 非线性幂运算使因子对 rank2 的尾部值敏感, 需监控因子分布偏度与换手率; 建议与其他低相关因子组合, 避免量价类因子集中暴露

@@ -60,3 +60,84 @@ factor:
       longshort_max_dd: -0.03193108808886523
       validated_at: 1782149924.324742
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: '计算 adv50: 50 日滚动均值的成交额 (close × volume), 表征中期流动性水平'
+      formula: adv50 = ts_mean(close * volume, 50)
+    - step: 2
+      description: 对 close 进行行业中性化处理, 剥离行业层面系统性影响, 保留个股特异信息
+      formula: ind_neutral_close = neutralize(close) over('date', industry_class)
+    - step: 3
+      description: 计算行业中性化 close 与 adv50 的 18 日滚动相关系数, 度量价格与流动性的联动关系
+      formula: corr = rolling_corr(ind_neutral_close, adv50, 18)
+    - step: 4
+      description: 对相关系数序列做 18 日 Ts_Rank, 衡量近期'价-量联动'的相对位次与持续性
+      formula: ts_rank_corr = ts_rank(corr, 18)
+    - step: 5
+      description: 取 vwap 的一期变化, 做横截面 rank, 再以其为底、ts_rank_corr 为指数做幂运算, 最后乘以 -1
+      formula: factor = -1 * (rank(delta(vwap, 1))^ts_rank_corr)
+    edge_case_handling: delta(vwap, 1.29456) 中非整数窗口在实际实现中取整为 1; 相关系数与 Ts_Rank 本身已限制在
+      [0,1] 区间, 避免幂运算溢出; 行业中性化在无行业分类时退化为截面去均值 (代码中以 neutralize over('date') 替代)
+    missing_value_handling: adv50 与 corr 的滚动计算在窗口不足时产生 NaN; 幂运算 0^0 视实现可能返回 1 或 NaN,
+      实际中窗口填满后逐步生效
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 捕捉'短期 VWAP 异动 × 价-量联动持续性'的非线性组合, 并取反, 形成对量价共振股票的逆势押注, 押注短期
+      VWAP 上跳后伴随高流动性持续性的标的将出现回吐。
+    market_behavior: 在量价同步上行、流动性持续放大的'热钱涌入'阶段, 该因子倾向于做空, 利用短期追涨情绪的均值回归获利; 在低联动环境下信号衰减,
+      接近纯 vwap 反转。
+    theoretical_basis: 基于短期价格动量的均值回归 (short-term reversal) 与流动性-价格相关性持续性的非线性加权, 幂运算放大了'高联动
+      + 高 VWAP 变化'组合的下行惩罚。
+    historical_effectiveness: 在 101 Alphas 原始论文测试集中属于有效组合类因子, IC 绝对值中等; 在 A 股因涨跌停与
+      T+1 约束下, 信号衰减可能加快, 需控制换手。
+    related_factors: Alpha#18 (类似短期反转 + 量价相关结构)、Alpha#1 (vwap 变化类)、Alpha#54 (价-量相关
+      + 幂运算结构)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 短期 VWAP 反转主效应
+      description: 横截面 rank(delta(vwap)) 体现短期 VWAP 变化, 整体被乘以 -1, 预期与下期收益负相关, 即做多 VWAP
+        下挫、回避 VWAP 上跳的股票
+      expected_ic_sign: 负
+      source: 短期反转文献 (Jegadeesh 1990) 与原公式 -1 符号
+      priority: 主假设
+    - id: H2
+      name: 价-量联动持续性的非线性放大
+      description: Ts_Rank(corr) 作为指数, 当近期价格-流动性联动处于历史高位时, 强化对 VWAP 上跳股票的惩罚; 联动弱时因子接近线性反转,
+        形成非线性效应
+      expected_ic_sign: 负
+      source: 幂函数加权结构 + 量价持续性假设
+      priority: 主假设
+    - id: H3
+      name: 行业中性化纯化个股信号
+      description: 通过 IndNeutralize 剥离行业 beta, 使价-量相关更聚焦于个股特异信息, 提升因子在行业轮动剧烈阶段的稳健性
+      expected_ic_sign: 正
+      source: 行业中性化标准处理 (Lehmann 1990)
+      priority: 辅助假设
+    - id: H4
+      name: 流动性分层下的异质性
+      description: adv50 作为流动性代理, 在大盘/中盘/小盘股中价-量联动幅度不同, 因子在中等流动性股票中表现最佳, 极端高/低流动性端效果衰减
+      expected_ic_sign: 不确定
+      source: 流动性溢价与因子失效边界经验
+      priority: 辅助假设
+    meaning_summary: 因子本质是'短期 VWAP 动量反转'的加权版本, 权重由近期行业中性化价格与 50 日均成交额的相关性强弱决定, 联动越强、权重越极端,
+      越强化对短期 VWAP 异动的逆势押注。
+    key_insights:
+    - 幂运算使得因子分布在两端更尖锐, 仓位集中度上升, 收益分布偏度改变
+    - Ts_Rank 的窗口 (~18 日) 决定信号敏感度, 短则灵敏但噪声大, 长则平滑但滞后
+    - 行业中性化使该因子可叠加在行业中性组合上, 但需注意行业内 vwap 异动的可比性
+    uncertainty: delta(vwap, 1.29456) 的非整数窗口在离散日数据上如何精确实现存在歧义; 行业中性化在没有精确行业分类时可能引入截面均值替代误差;
+      幂运算对 ts_rank 的数值精度敏感, 微小差异可能改变排序。
+  l6:
+    industry_concentration: 因子本身已做行业中性化, 行业暴露接近 0; 但 adv50 计算隐含市值/流动性偏向, 在大票池中信号更稳定,
+      小票池中噪声放大。
+    crowding_level: '中等偏低: 公式结构复杂 (delta + rank + corr + ts_rank + 幂运算五重变换), 公开实现门槛高,
+      简单复制者少, 拥挤度低于纯反转类因子。'
+    failure_conditions:
+    - 持续单边趋势行情中, 短期 VWAP 反转信号被趋势吞没, 因子持续回撤
+    - 低流动性 / 涨跌停密集环境下, vwap 失真、corr 样本不足, 信号噪声激增
+    - 宏观流动性急剧变化 (如央行大幅放/缩量) 导致 adv50 与价格联动结构突变, ts_rank 历史分布失效
+    risk_notes: 幂运算放大极端值贡献, 单票权重需做上限约束; 建议与中长期动量或质量因子低相关叠加, 避免在趋势市与动量因子同向踩踏; 行业中性化依赖行业分类准确性,
+      分类口径变更会引发因子值断点。

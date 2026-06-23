@@ -66,3 +66,76 @@ factor:
       longshort_max_dd: -0.02209104789370346
       validated_at: 1782150852.771722
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 60 日滚动均量 adv60, 作为后续量价相关性的基准
+      formula: adv60 = rolling_mean(volume, 60)
+    - step: 2
+      description: 对每日的 open/low/high/close 做截面 rank, 计算 (rank(open)+rank(low)) -
+        (rank(high)+rank(close)), 衡量开盘+最低 相对于 最高+收盘 的相对位置
+      formula: diff = (rank(Open) + rank(Low)) - (rank(High) + rank(Close))
+    - step: 3
+      description: 对 diff 做 8 日线性衰减加权 (decay_linear), 然后再做截面 rank, 得到 Part1, 反映近期多空反转结构的截面相对强弱
+      formula: Part1 = rank(decay_linear(diff, 8.07))
+    - step: 4
+      description: 分别计算 close 的 8 日时序 rank 和 adv60 的 21 日时序 rank, 二者再做 8 日滚动相关系数,
+        衡量价与量的近期同步性
+      formula: corr = correlation(ts_rank(Close,8.45), ts_rank(adv60,20.70), 8.01)
+    - step: 5
+      description: 对相关系数做 7 日线性衰减, 再做 3 日时序 rank 得到 Part2; 最终 Part1 与 Part2 取逐元素最小值作为因子
+      formula: Factor = min(Part1, ts_rank(decay_linear(corr, 6.65), 2.62))
+    edge_case_handling: decay_linear 与 ts_rank 对窗口内不足长度的数据按已有序列计算; correlation 在波动为零时返回
+      NaN; rank 截面内单一标的时退化为常数
+    missing_value_handling: rolling 相关与 rank 产生的 NaN 沿时间方向自然传播, 因子值在 warm-up 前为缺失,
+      60 日后稳定
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: '因子捕捉"日内 K 线结构反转 + 量价同步性走弱"双重信号: Part1 识别近期开高收低/盘中走弱的个股,
+      Part2 识别价量相关性由高位回落的标的, 取 min 强化量价背离与形态反转共振的选股能力。'
+    market_behavior: 在均值回归行情、震荡市以及急跌反弹中表现较好; 在强趋势单边市中因量价持续同向, Part2 偏高, 因子可能被压制。
+    theoretical_basis: '基于行为金融的处置效应与反应过度理论: 投资者对开盘负向冲击过度反应导致后续反转, 而量价背离常预示趋势动能衰减。'
+    historical_effectiveness: 101 Alphas 论文中长期 IC 为正且较为稳定, 属于量价结合反转类 alpha 中表现较突出的因子。
+    related_factors: 反转类 (Alpha 12, Alpha 37)、量价背离类 (Alpha 25, Alpha 53)、形态结构类 (Alpha
+      5, Alpha 23)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 开高收低形态反转
+      description: 开盘与最低相对偏强、收盘与最高相对偏弱的股票 (Part1 偏低) 未来存在正向反转收益
+      expected_ic_sign: 正
+      source: '行为金融: 隔夜消息过度反应, 盘中回吐后回归基本面'
+      priority: 主假设
+    - id: H2
+      name: 量价相关性回落
+      description: 价格与成交量时序秩相关性处于近期低位的股票, 表明量价背离, 趋势动能衰减
+      expected_ic_sign: 正
+      source: '量价分析理论: 量价齐升持续时趋势强, 背离时常预示反转'
+      priority: 主假设
+    - id: H3
+      name: 双信号 min 强化
+      description: 通过 min(Part1, Part2) 要求两条件同时成立, 提升反转信号的纯度, 降低噪声交易
+      expected_ic_sign: 正
+      source: '信号合成逻辑: 与逻辑或相比, 逻辑与 min 更稳健'
+      priority: 辅助假设
+    - id: H4
+      name: 流动性依赖
+      description: adv60 的使用使因子天然偏向中大市值票, 对小票或流动性突变敏感度较低, 但在流动性骤降环境可能失效
+      expected_ic_sign: 不确定
+      source: '数据驱动: 60 日均量平滑了短期流动性扰动'
+      priority: 辅助假设
+    meaning_summary: 因子是"日内 K 线结构反转"与"量价相关性走低"两个子信号的交集, 通过 min 选取同时满足两类反转条件的标的。
+    key_insights:
+    - Part1 与 Part2 通过 min 组合, 实质上是 AND 逻辑, 比 OR 更严格
+    - Part2 中 Ts_Rank(3) 使信号对最新一日相关性变化敏感, 增强反转信号时效性
+    - adv60 采用 60 日窗口避免短量能噪音, 提高相关性估计稳定性
+    uncertainty: min 组合可能过度过滤信号导致换手率偏低, 在趋势性牛市中信号稀少, 因子绝对收益受市场状态影响较大。
+  l6:
+    industry_concentration: 偏低, 量价反转属于横截面普适信号; 但金融与周期板块的量价关系特征更显著, 持仓可能略偏价值/周期风格。
+    crowding_level: '中等: 反转类 alpha 在量化圈普遍使用, 但本因子因 min 双重过滤和 adv60 平滑, 拥挤度低于纯反转因子。'
+    failure_conditions:
+    - '强趋势单边行情: 量价持续同向, Part2 偏高, 因子被压制失效'
+    - '震荡市快速反转: 双 min 条件难以同时满足, 信号稀疏, 持仓过少影响收益'
+    - '小盘股流动性枯竭: adv60 计算不可靠, 量价相关性估计噪声大, 因子失效'
+    risk_notes: 因子属于反转型, 与动量因子呈负相关, 在风格切换期可能出现回撤; 建议与动量或质量因子搭配以平衡; 注意 60 日均量在 IPO/解禁等事件后的数值突变对相关性的影响。

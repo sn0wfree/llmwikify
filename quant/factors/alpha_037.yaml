@@ -23,16 +23,19 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 1. Compute (open\
-      \ - close)\n    diff = pl.col('open') - pl.col('close')\n\n    # 2. Materialize\
-      \ the time-series correlation BEFORE cross-section rank\n    #    correlation(\
-      \ delay(open-close, 1), close, window=200 )\n    df = df.with_columns(\n   \
-      \     correlation(\n            delay(diff, periods=1),\n            pl.col('close'),\n\
-      \            window=200\n        ).alias('_corr')\n    )\n\n    # 3. Cross-sectional:\
-      \ rank(correlation) + rank(open - close)\n    factor = (\n        rank(pl.col('_corr')).over('date')\n\
-      \        + rank(diff).over('date')\n    )\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: open\
+      \ - close\n    df = df.with_columns(\n        (pl.col('open') - pl.col('close')).alias('_oc')\n\
+      \    )\n    # Step 2: delay by 1 period\n    df = df.with_columns(\n       \
+      \ delay(pl.col('_oc'), periods=1).alias('_oc_lag1')\n    )\n    # Step 3: materialize\
+      \ 200-day correlation (Rule 2)\n    df = df.with_columns(\n        correlation(pl.col('_oc_lag1'),\
+      \ pl.col('close'), window=200).alias('_corr')\n    )\n    # Step 4: rank the\
+      \ correlation cross-sectionally\n    df = df.with_columns(\n        rank(pl.col('_corr')).over('date').alias('_rank_corr')\n\
+      \    )\n    # Step 5: rank (open - close) cross-sectionally\n    df = df.with_columns(\n\
+      \        rank(pl.col('_oc')).over('date').alias('_rank_oc')\n    )\n    # Step\
+      \ 6: sum of the two ranks\n    factor = pl.col('_rank_corr') + pl.col('_rank_oc')\n\
+      \    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 638
+    code_chars: 880
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_037.h5
     ast: null
     ast_compile_status: null
@@ -52,5 +55,81 @@ factor:
       annual_return: 0.00042792631728483244
       longshort_sharpe: null
       longshort_max_dd: -0.010900152203411135
-      validated_at: 1782177574.944464
+      validated_at: 1782185466.635926
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算每只股票当日的 (open - close)，作为日内涨跌幅代理
+      formula: _oc = open - close
+    - step: 2
+      description: 将 (open - close) 延迟 1 个交易日，得到昨日日内变动
+      formula: _oc_lag1 = delay(_oc, 1)
+    - step: 3
+      description: 在 200 日滚动窗口内计算 _oc_lag1 与 close 的相关系数（按 Rule 2 materialize，避免被后续
+        rank 重复计数）
+      formula: _corr = rolling_corr(_oc_lag1, close, window=200)
+    - step: 4
+      description: 对 200 日相关系数做横截面 rank 标准化
+      formula: _rank_corr = rank(_corr) over(date)
+    - step: 5
+      description: 对当日 (open - close) 做横截面 rank 标准化
+      formula: _rank_oc = rank(_oc) over(date)
+    - step: 6
+      description: 将两个 rank 相加得到最终因子值
+      formula: factor = _rank_corr + _rank_oc
+    edge_case_handling: 前 199 个交易日因 200 日滚动窗口不足而相关系数为 NaN；首日因 lag(1) 为 NaN；横截面 rank
+      在某日所有值相同时输出常数但不报错
+    missing_value_handling: NaN 来自延迟期和滚动窗口前期，rank 操作对 NaN 通常保持为 NaN，最终因子在该位置为 NaN
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 捕捉两类信号的叠加：(1) 昨日日内变动与收盘价水平在过去 200 日的相关结构（趋势/反转特征）；(2) 当日日内涨跌方向（open-close
+      体现开盘跳空与日内反转）。整体衡量日内动量与价格水平敏感度的联合排序效应。
+    market_behavior: 在日内反转显著、跳空频繁的市场环境中表现突出；高相关组往往呈现更强的价格惯性，低相关组则更易均值回归
+    theoretical_basis: 基于价格序列自相关结构与日内信息不对称理论：开盘价包含隔夜信息，收盘价反映日内博弈，二者差值及其滞后相关性能刻画信息传导与短期反转
+    historical_effectiveness: 作为 101 Alphas 之一，在美股回测中具有统计显著的预测能力，但近年来因因子拥挤和被广泛使用而有所衰减
+    related_factors: Alpha#1 (rank + delay)、Alpha#12 (sign(delta) * volume)、日内反转因子
+      (open-close reversal)、价格动量因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 日内反转假说
+      description: rank(open-close) 高的股票（开盘高于收盘）未来短期存在反转倾向，因子值为正时应预测负收益
+      expected_ic_sign: 负
+      source: 日内反转文献 (open-close reversal)
+      priority: 主假设
+    - id: H2
+      name: 价格惯性/动量假说
+      description: 200 日相关性高的股票昨日日内变动对收盘价影响更持续，因子值正时预测正收益
+      expected_ic_sign: 正
+      source: 动量/价格水平惯性理论
+      priority: 次假设
+    - id: H3
+      name: 联合信号假说
+      description: 两个 rank 信号的简单加和本身是 rank-weighted 综合排序，不具有严格方向性，方向取决于两信号相对权重
+      expected_ic_sign: 不确定
+      source: 101 Alphas 原始设计思路
+      priority: 辅助假设
+    - id: H4
+      name: 隔夜信息传导假说
+      description: 昨日日内变动与今日收盘的高相关结构反映隔夜信息被日内消化，因子值高的股票信息传递效率低，未来补跌/补涨
+      expected_ic_sign: 不确定
+      source: 市场微观结构信息传导理论
+      priority: 辅助假设
+    meaning_summary: 因子值越高，代表 (a) 昨日日内变动与收盘价水平 200 日相关性越强，且/或 (b) 当日开盘相对收盘越高（日内下跌越大）。两类信号叠加后整体反映日内反转与价格惯性结构的强弱组合。
+    key_insights:
+    - 使用 Rule 2 (materialize) 对滚动相关系数先 materialize 再横截面 rank，避免双重 rank 失真
+    - delay(1) 而非 delay(0) 意味着使用昨日日内信息来预测今日，避开了 look-ahead bias
+    - 两个 rank 量纲一致，相加仍保持在 0-2N 范围内，横截面可比性良好
+    uncertainty: 两个分项的 IC 方向相反，叠加后整体方向不确定，需依赖实证回测判断主效应；同时 200 日长周期在快速风格切换市场中可能引入滞后
+  l6:
+    industry_concentration: 无明显行业偏向，open-close 与价格水平相关性的组合对各行业均有覆盖；流动性差的小盘股因 open-close
+      噪声大可能贡献极端值
+    crowding_level: 高拥挤——Alpha#6 是 101 Alphas 中最常被引用的因子之一，学术界和业界广泛使用并已多次被挖掘衰减，因子 alpha
+      衰减明显
+    failure_conditions:
+    - 市场处于强趋势行情时，日内反转信号失效，因子 IC 转负
+    - 小盘股、ST 股、停牌复牌股因 open-close 异常跳动产生极端 rank 值，导致因子失真
+    - 宏观事件或政策冲击期（如央行降息、贸易战升级），价格水平相关性结构突变，200 日窗口的相关系数失去预测意义
+    risk_notes: 需注意因子值在牛市中与反转信号冲突，组合中应与其他动量/反转因子做对冲；高拥挤度意味着因子拥挤交易（crowded trade）风险显著，需监控因子相关性集中度

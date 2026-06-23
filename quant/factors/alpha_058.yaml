@@ -55,3 +55,83 @@ factor:
       longshort_max_dd: -0.044096047109917796
       validated_at: 1782148603.0195081
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对每只股票当日 vwap 按行业分类进行中性化处理, 消除行业层面的价格水平差异
+      formula: neutralized_vwap = neutralize(vwap) over sector, date
+    - step: 2
+      description: 计算行业中性化 vwap 与 volume 的 4 日滚动相关系数, 衡量价量协同程度
+      formula: corr_t = rolling_corr(neutralized_vwap, volume, window=4)
+    - step: 3
+      description: 对相关系数序列施加 8 日线性衰减加权, 近期值权重更高
+      formula: decayed_t = Σ_{i=0..7} (8-i)/28 · corr_{t-i} / Σ w
+    - step: 4
+      description: 对衰减后序列做 6 日时间序列排名, 得到 [0,1] 的分位数
+      formula: ts_rank_t = rank(decayed, window=6) / 6
+    - step: 5
+      description: 整体乘以 -1, 反转信号方向
+      formula: factor = -1 · ts_rank_t
+    edge_case_handling: 窗口期内相关/排名可能因常数序列导致 NaN 或方差为零; 实现中 rolling_corr 与 ts_rank 通常返回
+      NaN, 最终因子为 NaN; 行业中性化在缺失行业标签时退化为全局中性化或原值
+    missing_value_handling: vwap 或 volume 为 NaN 时, rolling_corr 传播 NaN; 后续 decay_linear
+      和 ts_rank 均沿用 NaN, 因子值为 NaN; 不做前向填充以避免引入未来信息
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 因子刻画的是行业内个股近期价量联动关系的分位数水平并取反, 捕捉的是'量价背离/同向'的非线性信号, 认为价格创新高时若缺乏成交量配合,
+      后续反转概率较高。
+    market_behavior: 在量价齐升后市场趋于短期超买, 缺乏量能配合的突破容易失败; 反之缩量下跌后的'地量'信号常对应底部。该因子试图在两种状态之间寻找反向收益机会。
+    theoretical_basis: '基于量价关系的经典技术分析理论: 量是价的先行指标或确认指标; 行业中性化剥离行业 beta, 仅保留个股特异的量价节奏;
+      线性衰减与时间序列排名使因子对近期信号更敏感且具备可比性。'
+    historical_effectiveness: 在 WorldQuant 101 Alphas 原始论文中此类量价相关性类因子具有较稳定的横截面预测能力,
+      IC 绝对值通常在 0.02–0.05 区间; 在中频调仓 (5–10 日) 表现优于高频。
+    related_factors:
+    - Alpha_12 (sign(volume delta) 相关类)
+    - 量价背离反转类技术指标 (OBV, MFI 衍生)
+    - WorldQuant Alpha_044、Alpha_054 等相关性结构类因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 量价齐升短期反转
+      description: 近期 vwap 与 volume 相关性强 (量价同向) 的个股, 由于已透支买入动能, 未来收益偏低; 由于因子取 -1,
+        高因子值 (低相关) 应对应正收益, 即 IC 为正
+      expected_ic_sign: 正
+      source: 量价反转经典文献 + 101 Alphas 原始假设
+      priority: 主假设
+    - id: H2
+      name: 行业剥离增强纯净度
+      description: 经行业中性化后, 因子仅反映个股特异的量价节奏, 避免了行业整体放量/缩量的噪声, 预期提升跨行业可比性
+      expected_ic_sign: 正
+      source: Barra 行业中性化框架推论
+      priority: 辅助假设
+    - id: H3
+      name: 流动性分层有效性
+      description: 在小市值/低流动性股票中, 量价信号噪声大, 因子预测能力下降; 在中高流动性股票池中 IC 更稳定
+      expected_ic_sign: 不确定
+      source: 流动性溢价与微观结构噪声文献
+      priority: 辅助假设
+    - id: H4
+      name: 信号反转敏感性
+      description: -1 取反是关键设计, 若市场处于强趋势行情, 量价齐升反而是趋势确认, 此时因子 IC 可能为负, 即因子具有 regime
+        依赖性
+      expected_ic_sign: 负
+      source: 趋势/反转风格切换的实证观察
+      priority: 备择假设
+    meaning_summary: 该因子取行业内个股近期 vwap 与成交量相关性的衰减加权分位数并取反, 核心观点是'无量上涨不可持续', 通过行业中性化聚焦个股特异的量价节奏。
+    key_insights:
+    - 行业中性化是关键预处理, 直接影响因子的横截面可比性
+    - -1 反转决定了因子方向, 在趋势市中可能失效
+    - 线性衰减 + 时间序列排名使因子对近期量价关系变化敏感, 但也增加了换手率
+    uncertainty: '信号反转方向 (H1 vs H4) 高度依赖市场风格: 趋势市 vs 反转市表现可能完全相反; 行业中性化替代方案的精度直接影响因子质量。'
+  l6:
+    industry_concentration: '低: 因子在每个行业内部独立计算并经行业中性化剥离, 不存在行业暴露, 但因量价行为在不同行业 (如金融
+      vs 科技) 结构性差异, 实际组合构建时仍需做行业约束'
+    crowding_level: '中: 101 Alphas 是公开且被广泛复现的因子集, 量价相关性类因子被众多量化机构使用, 拥挤度中等; 在小市值/低流动性池中拥挤度更低,
+      在中大市值池中拥挤度更高'
+    failure_conditions:
+    - 强趋势/动量行情中, 量价齐升是趋势确认而非反转信号, 因子 IC 可能转负
+    - 个股层面量价数据异常 (如停牌后复牌、分红除权、成交量骤变) 导致相关计算失真
+    - 行业分类体系变更或缺失, 中性化退化为简单去均值, 引入行业暴露噪声
+    risk_notes: 因子换手率较高 (Ts_Rank 窗口仅 6 日), 交易成本敏感; 量价数据在尾盘/集合竞价阶段易受冲击, 建议使用稳健的日内聚合
+      VWAP; 行业中性化替代方案 (代码中为全局 neutralize over date) 与真实 sector 中性存在偏差, 实盘需补充真实行业标签以匹配论文假设。

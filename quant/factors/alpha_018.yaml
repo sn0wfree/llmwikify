@@ -51,3 +51,74 @@ factor:
       longshort_max_dd: -0.016360495837931362
       validated_at: 1782144523.3661523
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算日内收益 close - open 及其绝对值 abs(close - open)
+      formula: ret = close - open; abs_ret = |ret|
+    - step: 2
+      description: 对 abs(close - open) 做 5 日滚动标准差, 衡量近期日内波动幅度
+      formula: std_5 = stddev(abs_ret, window=5)
+    - step: 3
+      description: 计算 close 与 open 的 10 日滚动相关系数, 衡量开收盘走势联动性
+      formula: corr_10 = correlation(close, open, window=10)
+    - step: 4
+      description: 将波动率、当日日内收益、相关性三者相加, 形成综合信号
+      formula: inner = std_5 + (close - open) + corr_10
+    - step: 5
+      description: 截面 rank 后取负, 使因子值小的股票获得高因子载荷
+      formula: factor = -1 * rank(inner, cross_section)
+    edge_case_handling: 滚动窗口前期 (std 不足 5 日 / corr 不足 10 日) 产生 NaN; abs 运算避免负值溢出; rank
+      在每个 date 内独立计算避免跨日可比性问题
+    missing_value_handling: 滚动窗口不足的初始行输出 NaN, 不参与当日截面 rank (rank 自动忽略 NaN)
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 因子融合了日内波动率、日内收益和开收盘相关性, 取反后做多低波动+日内下跌+开收盘弱相关的股票, 属于低波动+日内反转的复合异象。
+    market_behavior: 捕捉日内交易模式不稳定、价格发现效率低、短期反转的股票; 在震荡市/反转市表现较好, 在强趋势市中可能失效。
+    theoretical_basis: 低波动异象 (Baker, Bradley & Wurgler 2011)、日内反转效应 (日内收益负自相关) 以及开收盘弱相关意味着信息传递慢、套利空间大。
+    historical_effectiveness: 在 101 Alphas 原始测试中属于表现中等的因子; 低波动部分长期有效, 但日内反转部分在 A 股受
+      T+1 限制影响效果。
+    related_factors: Alpha#1 (power), Alpha#18 (close-open ranking), 低波动因子 (BAB),
+      短期反转 (STREV), realized volatility factor
+  l4:
+    hypotheses:
+    - id: H1
+      name: 低波动异象
+      description: 日内波动率低的股票 (std_5 小) 未来收益更高, 因为投资者过度关注高波动彩票型股票导致低波动股票被低估
+      expected_ic_sign: 正
+      source: Baker, Bradley & Wurgler (2011) 'Benchmarks as Limits to Arbitrage'
+      priority: 主假设
+    - id: H2
+      name: 日内反转效应
+      description: 当日 close-open 为负的股票次日存在反弹, 日内收益呈负自相关
+      expected_ic_sign: 正
+      source: 日内动量/反转文献, Heston & Sadka (2008) 季节性反转
+      priority: 主假设
+    - id: H3
+      name: 低相关性=低效率
+      description: close-open 相关系数低说明日内价格发现效率差、信息传递慢, 未来存在更大的漂移或反转空间
+      expected_ic_sign: 正
+      source: 价格发现效率文献, Roll (1988) 噪声交易
+      priority: 次假设
+    - id: H4
+      name: 复合信号非线性
+      description: 三者简单加和可能存在信号抵消问题, 实际 IC 取决于市场环境, 单边趋势市中可能反转
+      expected_ic_sign: 不确定
+      source: 复合因子经验观察
+      priority: 辅助假设
+    meaning_summary: '因子载荷高的股票: 日内波动小、当日收阴、开收盘走势独立——典型的''安静+弱势+无序''组合, 预期次日反弹。'
+    key_insights:
+    - 三组件求和后取负, 实质是做多'三低'股票 (低波动+低日内收益+低相关性), 三者方向一致增强反转信号
+    - rank 是截面归一化, 因子为纯相对排序, 绝对值不具经济意义, 仅看 IC 和多空组合
+    - std 和 corr 滚动窗口分别为 5 日和 10 日, 因子对近期波动结构敏感, 换手较快
+    uncertainty: 三者等权相加的合理性存疑, 实际贡献可能不均衡; T+1 交易制度下日内反转信号可能延迟或被交易成本吞噬
+  l6:
+    industry_concentration: 因子在防御性行业 (公用事业、医药、食品饮料) 偏多头, 在高波动周期/成长行业 (TMT、新能源) 偏空头,
+      行业暴露明显
+    crowding_level: '中等: 低波动异象已被广泛认知并拥挤, 但日内反转+相关性组合仍有一定 alpha 空间'
+    failure_conditions:
+    - '强趋势/动量市: 日内反转和低波动异象同时失效, 因子大幅回撤'
+    - '高波动率/危机环境: 低波动股票反而承担系统性下行风险, 流动性挤兑时低波动失效'
+    - 'T+1/涨跌停限制严格的市场: 日内反转信号无法被 T+0 套利实现, IC 衰减明显'
+    risk_notes: 因子对市场风格切换敏感, 需监控波动率因子和反转因子的拥挤度; 在 A 股需额外考虑涨跌停导致的 close-open 失真; 建议与动量/质量因子做负相关组合以分散风格风险。

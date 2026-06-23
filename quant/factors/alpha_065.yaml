@@ -62,3 +62,77 @@ factor:
       longshort_max_dd: -0.048369389066084484
       validated_at: 1782149720.1674666
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对 open 与 vwap 加权合成一个'类 vwap'价格序列, open 权重 0.00817, vwap 权重 0.99183
+      formula: w_open = open * 0.00817205 + vwap * (1 - 0.00817205)
+    - step: 2
+      description: 计算 60 日均量 adv60, 再对其做 9 日滚动求和, 得到近期累计成交活跃度
+      formula: sum_adv60 = rolling_sum(rolling_mean(volume, 60), 9)
+    - step: 3
+      description: 在 6 日窗口内计算 w_open 与 sum_adv60 的滚动相关系数, 反映短期价量联动强度
+      formula: corr = rolling_corr(w_open, sum_adv60, 6)
+    - step: 4
+      description: 计算 14 日滚动最低价, 用 open 减去该最低价衡量开盘价相对近期低点的位置
+      formula: diff_open = open - ts_min(open, 14)
+    - step: 5
+      description: 分别对 corr 和 diff_open 做截面 rank, 当 rank(corr) < rank(diff_open) 时输出
+        -1, 否则输出 0
+      formula: factor = (rank(corr) < rank(open - ts_min(open,14))) * -1
+    edge_case_handling: rolling 窗口在序列前段不足时按可用数据计算; rank 在截面上 NaN 需 dropna 或填充; correlation
+      窗口内若方差为 0 输出 NaN, 由 rank 处理为最低或 NaN
+    missing_value_handling: rolling 相关与求和产生的 NaN 沿时间方向自然衰减; 截面 rank 时通常需剔除当日全为 NaN
+      的股票, 布尔比较 True/False 转 int 后再乘 -1
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 当一只股票'近 14 日开盘价相对最低点偏高'但'价量相关性在截面上偏低'时, 视为无量上涨的伪突破, 给 -1
+      短头信号; 反之信号为 0。
+    market_behavior: 捕捉无量拉升后的短期回调, 利用量价背离识别假突破, 属于短期反转/均值回复类行为
+    theoretical_basis: '行为金融学中的''过度反应与量价背离''理论: 缺乏成交量配合的上涨难以持续, 后续更易回落; 同时截面 rank
+      强调相对强弱, 而非绝对水平'
+    historical_effectiveness: 在 A 股小盘高换手样本中, 该类量价背离反转因子 IC 历史上为负 (即因子值越负, 未来收益越低),
+      胜率约 50-55%, 但换手率较高
+    related_factors: Alpha#85 (high/close 加权与 adv30 的相关 vs open 距 min)、量价背离类 (VP_Corr)、换手率反转、Turnover_Rev_1M
+  l4:
+    hypotheses:
+    - id: H1
+      name: 无量上涨的短期反转
+      description: 当股票近期从 14 日低点反弹明显但与累计成交活跃度相关性弱, 即上涨缺乏量能配合, 预期短期回调, 因子值为 -1 时未来收益应偏低
+      expected_ic_sign: 负
+      source: Alpha#85 设计逻辑 + 量价背离文献
+      priority: 主假设
+    - id: H2
+      name: 截面量价联动强度具有信息含量
+      description: corr 在截面上的 rank 越低代表价量同步性越差, 这类股票在窗口内更易出现反转
+      expected_ic_sign: 负
+      source: 截面相关性 vs 未来收益研究
+      priority: 次假设
+    - id: H3
+      name: 高换手/小盘股中更显著
+      description: 成交量信号在流动性差的小盘股中噪声更大, 价量背离假突破更常见, 因子在小盘高换手样本中 IC 绝对值更大
+      expected_ic_sign: 不确定
+      source: 流动性溢价与小盘效应文献
+      priority: 次假设
+    - id: H4
+      name: 强趋势行情下失效
+      description: 在单边上涨或政策驱动的强势趋势中, 无量上涨可能继续而非反转, 因子 IC 显著衰减甚至反转
+      expected_ic_sign: 不确定
+      source: 反转因子的趋势依赖性研究
+      priority: 辅假设
+    meaning_summary: 因子 = -1 表示'量价背离 + 相对低点已抬升'的伪突破, 建议做空; = 0 表示信号不成立。整体为短期反转做空信号。
+    key_insights:
+    - 加权后 w_open 几乎等价于 vwap, 公式对开盘价的依赖其实仅通过 diff_open 这一项体现
+    - sign(rank1 - rank2) 而非 raw value, 本质是截面相对强弱比较, 对绝对水平不敏感
+    - 窗口 6/9/14/60 的组合, 周期为 1-2 周, 属典型短周期反转因子
+    uncertainty: 量价相关估计在低成交或停牌股票上极不稳定, 截面 rank 后噪声可能主导排名; -1/0 二值化也意味着因子方差较大, IC 估计受少数极值影响明显
+  l6:
+    industry_concentration: 无明显行业偏向, 但小盘/高换手股票中信号更显著, 行业分布与流动性结构相关而非基本面行业
+    crowding_level: 中等偏低, 该公式参数较冷门, 公开复现较少, 但量价反转类策略在量化私募中较常见, 存在一定拥挤
+    failure_conditions:
+    - 单边上涨或政策驱动行情中, 无量上涨可能持续而非反转, 因子 IC 反转或失效
+    - 低成交/高波动小盘股中, 滚动相关估计噪声大, 假信号增多, 换手率上升但胜率下降
+    - 市场流动性骤降 (如熔断、停牌密集期) 时, adv60 与相关系数失真, 因子崩溃
+    risk_notes: 做空信号依赖融券或期货对冲, 若只能做多需反向取值或构建多空组合; 因子二值化 (-1/0) 仓位波动大, 实战需平滑或分档; 注意
+      vwap 字段在不同数据源中口径差异, 应统一为日内成交量加权均价

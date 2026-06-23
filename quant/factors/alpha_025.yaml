@@ -52,3 +52,75 @@ factor:
       longshort_max_dd: -0.019934733246765233
       validated_at: 1782144682.8597033
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对每只股票计算 20 日滚动成交量均值 (adv20)，作为流动性代理
+      formula: adv20_i,t = mean(volume_i, t-19:t)
+    - step: 2
+      description: 计算日内价格位移 (high - close)，衡量收盘价相对日内最高价的折让，反映当日卖压
+      formula: downside_i,t = high_i,t - close_i,t
+    - step: 3
+      description: 将负收益、20 日均量、VWAP 和日内折让四者相乘，构建复合信号；-returns × (high-close) 形成 '负动量+日内弱势'
+        信号，再由 adv20×vwap 加权
+      formula: raw_i,t = (-1 × returns_i,t) × adv20_i,t × vwap_i,t × (high_i,t - close_i,t)
+    - step: 4
+      description: 在每个截面日对 raw 值做横截面排名（rank），输出 0~1 之间的相对强度
+      formula: factor_i,t = rank(raw_i,t) over(date=t)
+    edge_case_handling: rolling window 不足 20 日时返回 null；returns/vwap/high/close 任一缺失则该条记录为
+      null；rank 自动跳过 null
+    missing_value_handling: 采用 polars 滚动函数的默认 NaN 传播策略，前 19 个交易日 adv20 为 null，因子值为
+      null；后续可用 drop_nulls 或前向填充
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 捕捉高流动性股票在下跌趋势中、收盘价远离日内高点的'被动抛售'信号；预期该类股票存在短期反转溢价
+    market_behavior: 当大盘回调或个股出现负面信息时，流动性好的股票因机构止损而日内承压，close 显著低于 high；该抛压往往过度反应，后续
+      1-5 日存在均值回复
+    theoretical_basis: 基于短期反转 (Short-term Reversal) 与流动性溢价 (Liquidity Premium) 理论；高
+      VWAP 与高成交量放大信息含量，使过度反应更明显
+    historical_effectiveness: 101 Alphas 中同类负反转因子在 A 股与美股均显示正 IC，年化信息比约 0.05-0.10；日内折让项进一步增强信号纯度
+    related_factors: Alpha#1 (returns rank), Alpha#10, Alpha#39 (price reversal),
+      Short-term Reversal (STR), ILLIQ
+  l4:
+    hypotheses:
+    - id: H1
+      name: 短期反转主效应
+      description: 下跌股票 (负 returns) 在 T+1 至 T+5 存在显著正向反转收益；因子值越高 (rank 越接近 1)，未来收益越大
+      expected_ic_sign: 正
+      source: Jegadeesh (1990) 短期反转；101 Alphas 中负 returns 类因子实证
+      priority: 主假设
+    - id: H2
+      name: 流动性加权放大效应
+      description: 在成交量大、VWAP 高的股票上，反转信号更可靠，因为信息被更多交易者定价，过度反应更易纠正
+      expected_ic_sign: 正
+      source: Amihud (2002) 流动性溢价；Pastor & Stambaugh (2003)
+      priority: 主假设
+    - id: H3
+      name: 日内弱势增量信号
+      description: (high - close) 越大说明收盘越接近最低价，日内卖压越强；该项独立于 returns 提供增量反转预测力
+      expected_ic_sign: 正
+      source: 日内价格形态文献；price reversal 中 close-to-low 因子
+      priority: 次假设
+    - id: H4
+      name: 横截面排名稳定性
+      description: 经截面 rank 处理后，因子对绝对收益量级不敏感，IC 稳定性优于原始乘积形式，但排名翻转会带来换手
+      expected_ic_sign: 不确定
+      source: 截面标准化 (Gu et al. 2020)
+      priority: 辅助假设
+    meaning_summary: 因子值越高 (rank 接近 1)，代表股票兼具'负收益+高换手+日内弱势'特征，预期短期反弹；因子值越低则代表强势股，预期回调
+    key_insights:
+    - 三重弱势信号叠加：负收益 × 高 VWAP × (high-close) 形成强反转预期
+    - 20 日均量起流动性筛选作用，规避低流动性噪声
+    - 横截面 rank 保证因子在截面可比，避免市值/价格量级干扰
+    uncertainty: 滚动均量在剧烈放量行情中可能滞后；rank 函数在 polars 实现下需确认分位数绑定方式 (average/min/max)，不同绑定会导致因子值微小差异
+  l6:
+    industry_concentration: 低-中：因子为全市场横截面 rank，不主动选行业；但高换手+负动量股票常集中于周期与科技板块
+    crowding_level: 中：负反转因子在量化圈广泛使用 (Alpha#1/Alpha#10 风格)，但加入 VWAP 和 (high-close)
+      后独特性提升，拥挤度低于纯反转
+    failure_conditions:
+    - 强趋势行情中 (如 2014-2015 牛市)，反转效应失效，因子 IC 转负
+    - 高波动/危机环境下，流动性骤降导致 adv20 失真，VWAP 噪声放大
+    - 涨跌停板频繁的 A 股市场，(high-close) 可能被涨跌停截断，信号失真
+    risk_notes: 因子换手率较高 (日频截面 rank)，交易成本敏感；建议在 5 日或 10 日调仓频率下使用以降低冲击成本；需监控极端市场下 IC
+      衰减风险

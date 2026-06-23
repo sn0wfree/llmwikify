@@ -56,3 +56,71 @@ factor:
       longshort_max_dd: -0.014810835345073298
       validated_at: 1782146166.590946
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: '计算过去两段各 10 天的日均收益率: ret_past 为 close_{t-20} 到 close_{t-10} 的日均收益,
+        ret_recent 为 close_{t-10} 到 close_t 的日均反向收益 (代码中以 close_{t-10} - close_t 实现)'
+      formula: ret_past = (delay(close,20) - delay(close,10)) / 10;  ret_recent =
+        (delay(close,10) - close) / 10
+    - step: 2
+      description: '计算动量加速度差值, 触发条件为: 过去 10 日均收益与最近 10 日均收益之差小于 -0.05, 即两段趋势组合后呈现强弱势/急速减速'
+      formula: condition = (ret_past - ret_recent) < -0.05
+    - step: 3
+      description: 若条件成立, 因子值取常数 1 (强信号); 否则取 -1 倍的 1 日收益率 (短期反转信号)
+      formula: 'factor = condition ? 1 : -(close - delay(close,1))'
+    - step: 4
+      description: 在 Polars 中以 pl.when(condition).then(1).otherwise(...) 拼接, null
+        自然传播, 前 20 行因子为 null
+      formula: pl.when(cond).then(1).otherwise(-1 * (close - delay(close,1)))
+    edge_case_handling: 前 20 个交易日因 delay(close,20) 为 null 导致整条记录为 null; condition
+      为 null 时落入 otherwise 分支, 而 close_1 也为 null, 故首日同样为 null; 极小价格序列中分母恒为 10, 无除零风险
+    missing_value_handling: 依赖 Polars 默认 null 传播; 不做前向填充或中位数替代, 保持原始信号完整性, 由下游回测剔除
+      warm-up 区间
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: '因子融合短期反转与动量急刹车信号: 常规状态下押注 1 日反转, 当两段 10 日动量差距超阈值时切换为强买入信号,
+      整体捕捉''涨多回调/跌多反弹''的均值回复机会'
+    market_behavior: 在震荡市与急跌后修复期表现较佳; 强趋势市中反转信号易被趋势吞没, 表现弱化
+    theoretical_basis: 基于短期价格过度反应导致的均值回复 (overreaction) 与动量加速度/动量崩溃 (momentum crash)
+      理论, 类似 Jegadeesh & Titman 反转效应与 Daniel & Moskowitz 动量崩溃的折中
+    historical_effectiveness: 在 A 股高频反转因子研究中, 1 日反转 IC 普遍为负; 叠加动量崩溃条件可过滤掉部分假突破, 历史上
+      IC 约 -0.02 ~ -0.05, 需控制换手率
+    related_factors: Alpha#4, Alpha#49 (均值回复类), 1-day reversal, short-term reversal,
+      momentum crash indicator
+  l4:
+    hypotheses:
+    - id: H1
+      name: 短期反转主导
+      description: '因子在大多数时间取 -(close-close_1), 反映 1 日收益率的均值回复: 昨日涨的股票今日倾向于跌, 因此因子
+        IC 应为负'
+      expected_ic_sign: 负
+      source: Jegadeesh (1990) 短期反转文献; A 股 1 日反转因子实证
+      priority: 主假设
+    - id: H2
+      name: 动量崩溃买入信号
+      description: 当过去 20 日呈现显著减速 (两段动量差 < -0.05) 时因子置 1, 押注急跌后的反弹; 此条件下 IC 应转为正
+      expected_ic_sign: 正
+      source: Daniel & Moskowitz (2016) 动量崩溃; Cooper (2010) bear market reversal
+      priority: 次假设
+    - id: H3
+      name: 非对称信号叠加增强
+      description: 二元条件分支与连续反转分支拼接, 因子分布严重右偏, 在小盘/高波动股票上信号更强
+      expected_ic_sign: 负
+      source: 组合信号非线性叠加的经验规律
+      priority: 辅助假设
+    meaning_summary: 1 日反转信号为主、动量崩溃为辅的混合因子, 通过二元阈值切换增强对急跌行情的捕捉
+    key_insights:
+    - 因子值集中在 -(close-close_1) 的连续区间, 二元条件仅在动量崩溃窗口被触发, 占比通常 < 10%
+    - 动量崩溃触发后因子被钳制为 1, 削弱了截面排序能力, 需结合分位数处理或缩放
+    - 1 日反转对换手率极敏感, 实际使用中应配合交易成本与流动性过滤
+    uncertainty: 二元阈值 -0.05 是固定经验值, 在不同市场状态/品种上不一定最优; 因子值非对称分布导致 IC 估计波动较大
+  l6:
+    industry_concentration: 在科技、消费等高波动/高换手行业信号更强; 在金融、公用事业等低波动行业信号偏弱
+    crowding_level: 中高, 1 日反转是 A 股最拥挤的短周期因子之一, 大多数量化私募均有类似敞口, alpha 衰减较快
+    failure_conditions:
+    - '强单边趋势行情: 持续上涨/下跌中反转信号被趋势吞没, 因子大幅回撤'
+    - '低波动/低换手环境: 1 日收益噪声降低, 信号不显著, IC 接近 0'
+    - '政策/流动性冲击期: 涨跌停板密集或停牌导致 close 序列不连续, 动量差失真, 条件分支误触发'
+    risk_notes: 因子对交易成本极敏感, 实盘需严格控制单边换手; 二元条件在样本边缘的过拟合风险较高, 建议做 walk-forward 验证; 因子行业/市值中性化后再用效果更稳健

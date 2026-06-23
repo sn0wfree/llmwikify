@@ -68,3 +68,86 @@ factor:
       longshort_max_dd: -0.015589696750857678
       validated_at: 1782174587.5453844
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 adv60 (60 日成交量滚动均值) 作为长期流动性代理; 对每日截面内的 vwap 和 volume 做 rank
+        标准化
+      formula: adv60 = mean(volume, 60); rank_vwap = rank(vwap); rank_volume = rank(volume)
+    - step: 2
+      description: '分支一: 计算 rank(vwap) 与 rank(volume) 的滚动相关 (窗口≈3.84), 用 decay_linear
+        (衰减期≈4.17) 加重近期权重, 再做 ts_rank (窗口≈8.38) 取时序分位, 刻画短期量价耦合的持续性'
+      formula: branch1 = Ts_Rank(decay_linear(corr(rank(vwap), rank(volume), 4), 4),
+        8)
+    - step: 3
+      description: '分支二: 对 close 和 adv60 分别做 ts_rank (窗口≈7.45 和 4.13), 取滚动相关 (窗口≈3.65),
+        用 ts_argmax (窗口≈12.66) 定位相关极值出现日, 再经 decay_linear (衰减期≈14.04) 平滑并 ts_rank
+        (窗口≈13.41), 衡量中期价量协同的关键时点'
+      formula: branch2 = Ts_Rank(decay_linear(Ts_ArgMax(corr(Ts_Rank(close, 7), Ts_Rank(adv60,
+        4), 4), 13), 14), 13)
+    - step: 4
+      description: 取两个分支 ts_rank 的截面最大 (max), 乘以 -1, 突出两类量价信号中更强的一方, 取负号后因子值越高代表该信号越弱
+        (潜在反转标的)
+      formula: factor = -1 × max(branch1, branch2)
+    edge_case_handling: adv60 在前 60 日为 NaN; rolling_corr 窗口不足返回 NaN; ts_argmax 在常数列上返回
+      0 或边界值; max_horizontal 在两者皆 NaN 时输出 NaN, 实际建议 dropna 过滤
+    missing_value_handling: rank/correlation/decay_linear/ts_rank 对 NaN 透传, 因子输出 NaN;
+      不做额外填充, 由上游 dropna 处理
+    data_alignment: T+1
+    complexity: O(T × N) — 全部运算为滚动/截面操作, 随时间序列长度 T 和股票数 N 线性扩展
+  l3:
+    financial_intuition: 因子综合短期量价耦合强度与中期价量协同的关键时点, 取负号后倾向于捕捉量价同步性偏低或价量协同极值已过期的股票,
+      即弱势反转标的。
+    market_behavior: 在量价背离、量能衰减、趋势末端或消息消化期, 该因子标识出量价关系不再强势的股票, 预期其存在阶段性反转机会。
+    theoretical_basis: '基于量价关系反转假说: 短期内量价高同步往往对应趋势末端动量耗尽; 中期价量协同的 ts_argmax 后移意味着协同信号衰减,
+      后续易出现均值回归。'
+    historical_effectiveness: 在 101 Alphas 论文中属于中段排名因子, 在 A 股高换手环境中对反转效应有较好区分度, 在低成交量或单边趋势行情中效果下降。
+    related_factors: Alpha#7 (量价相关 ts_rank), Alpha#12 (量价相关 ts_argmax), Alpha#51 (类似
+      max 组合结构), 量价背离类反转因子 (VPDD)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 短期量价耦合反转
+      description: rank(vwap) 与 rank(volume) 滚动相关经 decay_linear 强化后取 ts_rank, 高值代表量价同步性持续偏强,
+        取负号后预期该类股票存在短期反转, IC 为负
+      expected_ic_sign: 负
+      source: Alpha#54 分支一结构 + 量价反转文献
+      priority: 主假设
+    - id: H2
+      name: 中期价量协同极值后反转
+      description: close 与 adv60 经 ts_rank 相关后, ts_argmax 定位协同极值出现日; 极值日远离当前意味着协同信号衰减,
+        后期大概率反转
+      expected_ic_sign: 负
+      source: Alpha#54 分支二 + 动量反转文献
+      priority: 主假设
+    - id: H3
+      name: max 结构突出极端信号
+      description: 取两分支 ts_rank 的 max 再乘 -1, 等价于在两类反转信号中选更强的一类做空, 增强因子对极端量价状态的捕捉力,
+        但在双信号冲突时表现不确定
+      expected_ic_sign: 不确定
+      source: max 组合机制推导
+      priority: 辅助假设
+    - id: H4
+      name: 流动性分层效应
+      description: adv60 在分支二作为长期流动性基准, 因子在高流动性股票中更稳定, 在低流动性小票上信号噪声大, 整体 IC 可能弱化
+      expected_ic_sign: 不确定
+      source: 截面流动性异质性
+      priority: 辅助假设
+    meaning_summary: 因子值越大, 代表该股票在短期量价同步或中期价量协同任一维度上越强, 经取负号后视为反转做空信号; 值越小 (越负) 则越可能被视作趋势延续或量价修复中。
+    key_insights:
+    - 双分支 max 结构使因子同时覆盖短期与中期量价维度, 提升信号覆盖度但牺牲了纯度
+    - ts_argmax + decay_linear 是该因子的关键设计, 锁定协同极值时点而非当前水平, 强化反转特征
+    - rank 标准化降低了价格量级差异, 但也削弱了绝对量价背离信号
+    uncertainty: max 操作在两个分支同向时冗余, 反向时取较大者, 信号含义随时间漂移; 多个窗口参数被截断为整数 (3.84→4, 8.38→8)
+      可能改变原始因子的最优参数。
+  l6:
+    industry_concentration: 中等偏低, rank/correlation/ts_rank 均为截面标准化操作, 但不同行业 (周期 vs
+      消费) 的量价相关性结构差异仍会带来行业偏暴露
+    crowding_level: 中等偏高, 核心结构 (rank(vwap)与rank(volume)相关 + ts_argmax 相关) 是 101 Alphas
+      经典组合, 在量化圈被广泛复现, 易出现拥挤交易
+    failure_conditions:
+    - 强趋势行情中量价同步持续而非反转, 因子失效 (动量效应主导期)
+    - 低成交量或流动性骤降环境下, 滚动相关与 ts_argmax 信噪比恶化, 信号失效
+    - 市场结构性切换 (如风格切换、行业轮动加速) 使 adv60 与 close 的协同模式发生突变, ts_argmax 锁定的历史极值失效
+    risk_notes: 需关注因子对成长/价值、流动性、市值等风格因子的暴露; decay_linear 加重近期权重, 对尾部事件 (闪崩/暴涨) 敏感;
+      max 结构存在路径依赖, 回测与实盘窗口参数一致性需严格控制。

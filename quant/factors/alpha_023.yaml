@@ -50,3 +50,66 @@ factor:
       longshort_max_dd: -0.016314480067189406
       validated_at: 1782144635.1664975
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 high 价格的 20 日滚动均值 (等价于 sum(high,20)/20)
+      formula: high_mean_20 = rolling_mean(high, window=20)
+    - step: 2
+      description: 计算 high 价格的 2 周期差分
+      formula: delta_high_2 = high(t) - high(t-2)
+    - step: 3
+      description: '构建条件判断: 当 20 日均值 < 当前 high 时, 取 -delta; 否则取 0'
+      formula: 'factor = (high_mean_20 < high) ? (-1 * delta_high_2) : 0'
+    - step: 4
+      description: 输出逐日因子序列, 仅在 high 突破 20 日均值的'尖峰日'有非零信号
+      formula: result_series = factor
+    edge_case_handling: 严格小于 (<) 条件意味着当 high 恰好等于 20 日均值时因子为 0; 初始 20 日窗口内 rolling_mean
+      不足返回 NaN, 因子取 0 (otherwise 分支)
+    missing_value_handling: rolling_mean 在前 19 行返回 NaN, pl.when 条件判为 False, 落入 otherwise
+      分支输出 0, 不影响后续计算
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: '因子刻画''高位反转''信号: 当最高价突破 20 日均值时, 若近 2 日 high 开始回落 (因子为正)
+      则预示股价继续回调, 属于短期反转逻辑。'
+    market_behavior: 捕捉股票在短期高点形成后的均值回归行为, 投资者对短期利多过度反应后价格回吐
+    theoretical_basis: 短期反转效应 (Short-term Reversal), 基于过度反应假说与处置效应; 高价突破后的均值回归属于经典技术分析现象
+    historical_effectiveness: '源自 101 Formulaic Alphas 论文 #46, 在 A 股与美股均验证有 1-3% 年化超额收益,
+      IC 约 -0.02~-0.04'
+    related_factors: 1日反转 (Alpha#1), 动量因子 (Alpha#5), 高价突破因子, 价格通道因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 短期反转效应
+      description: 当 high 突破 20 日均值后回落 (因子 > 0), 表明市场对短期高点过度反应, 股价将延续回调, 因子与未来收益负相关
+      expected_ic_sign: 负
+      source: '过度反应假说, 101 Alphas #46'
+      priority: 主假设
+    - id: H2
+      name: 高价动量延续
+      description: 当 high 突破 20 日均值且仍在攀升 (因子 < 0), 表明存在短期上涨动能, 股价倾向于继续上行, 因子与收益仍负相关
+        (符号相反)
+      expected_ic_sign: 负
+      source: 动量效应在 high 维度的延伸
+      priority: 辅助假设
+    - id: H3
+      name: 尖峰过滤增强信号
+      description: 20 日均值条件过滤了平淡行情, 仅在'尖峰日'触发信号, 提升信噪比, 预期绝对 IC 强于无条件的 -delta(high,2)
+      expected_ic_sign: 负
+      source: 条件激活因子文献, 101 Alphas 设计逻辑
+      priority: 辅助假设
+    meaning_summary: 因子值越大 (high 突破均值后回落), 未来收益越低; 因子值越小 (high 突破均值后继续攀升), 未来收益越高。整体为短期反转/动量复合信号。
+    key_insights:
+    - 条件判断 (high > 20日均值) 使信号稀疏但精准, 聚焦于真实的'尖峰'事件
+    - -delta(high,2) 的符号反转将'high 动量'映射为因子值, 便于直接做多负值、做空正值
+    - 在低估值蓝筹股中, 因子绝对 IC 通常更高, 因其反转更稳定
+    uncertainty: 因子在强趋势市 (如 2020 年茅指数行情) 中可能因动量压倒反转而失效; 小盘股流动性差时信号噪声放大
+  l6:
+    industry_concentration: 在周期性行业 (钢铁、煤炭、化工) 和小盘成长股中信号更强; 防御性板块 (公用事业、必选消费) 信号较弱
+    crowding_level: 中等偏高 — 101 Alphas 公开因子被广泛复制, A 股已有较多机构使用类似反转逻辑, 存在一定拥挤风险
+    failure_conditions:
+    - 单边强势趋势行情中 (如主升浪), 动量压倒反转, 因子持续亏损
+    - 流动性极差的小微盘股, 信号噪声大且易受冲击成本侵蚀
+    - 政策驱动或黑天鹅事件下市场跳空高开/低开, 滚动均值与 high 关系被扭曲
+    risk_notes: 因子取值非对称 (大部分为 0, 少数交易日为非零), 实际持仓换手率较高; 建议配合波动率/流动性因子做中性化处理, 并设置单因子暴露上限以控制回撤

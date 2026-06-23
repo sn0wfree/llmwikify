@@ -61,3 +61,84 @@ factor:
       longshort_max_dd: -0.026827086366780797
       validated_at: 1782146053.6670973
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 截面排序 1/close 乘以当日 volume, 再除以 20 日均量 (adv20), 得到低股价+放量信号
+      formula: (rank(1/close) × volume) / adv20
+    - step: 2
+      description: 截面排序 (high - close) 衡量日内上影/冲高幅度, 乘以 high 再除以 5 日 high 均值, 得到冲高力度信号
+      formula: (high × rank(high - close)) / mean(high, 5)
+    - step: 3
+      description: 将 Part 1 和 Part 2 相乘, 融合'低估值放量'与'日内冲高'两个维度
+      formula: Part1 × Part2
+    - step: 4
+      description: 计算 5 日 VWAP 变化 (vwap - delay(vwap, 5)), 截面排序得到中期资金面动量信号
+      formula: rank(vwap - delay(vwap, 5))
+    - step: 5
+      description: 用 Part 3 (combined signal) 减去 VWAP 动量排名, 得到最终因子值
+      formula: factor = Part1×Part2 - rank(vwap - delay(vwap, 5))
+    edge_case_handling: adv20/mean(high,5) 接近 0 时可能产生极端值; 1/close 在 close 极小时会放大,
+      需在生产环境加 epsilon 防除零; 截面排名天然对缺失值鲁棒 (默认末位排名)
+    missing_value_handling: rolling 窗口不足时返回 null; 截面 rank 自动忽略 nan 并按有效值排名; 最终因子在空值处不参与排序
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 因子融合'低估值放量'与'日内冲高'的横截面信号, 同时剥离 5 日 VWAP 趋势动量, 意在捕捉短期超跌反弹+资金流入但中期趋势未确认的异动个股。
+    market_behavior: 在散户主导、主题炒作活跃的市场中, 低价股放量冲高但 VWAP 尚未形成持续上行的标的往往具备短期反转超额收益; 在趋势市/机构主导市中该信号易被吞噬。
+    theoretical_basis: 结合了行为金融学的'处置效应' (低价股关注度溢价)、'日内反转' (上影后回补) 和'量价背离' (放量但中期动量弱)
+      三大假说, 核心是均值回归 + 微观结构信号。
+    historical_effectiveness: 在 101 Alphas 原始测试中表现为中等强度 alpha (rank IC 约 0.03-0.05),
+      在 A 股小盘股/低价股因子池中效果更显著, 大盘股池中信号衰减明显。
+    related_factors: 'Alpha #24 (类似量价+VWAP 动量结构)、Alpha #18 (vwap 突破类)、反转因子 (str +
+      turn)、量比 (volume / adv20)'
+  l4:
+    hypotheses:
+    - id: H1
+      name: 低估值+放量主假设
+      description: Part 1 (rank(1/close) * volume / adv20) 倾向于在低股价且当日成交量显著放大的股票上取值较高,
+        这类股票在散户市场具有'低价股溢价'效应, 预期产生正 alpha
+      expected_ic_sign: 正
+      source: 101 Alphas 公式结构 + 处置效应文献
+      priority: 主假设
+    - id: H2
+      name: VWAP 动量扣除假设
+      description: 末尾减去的 rank(vwap - delay(vwap, 5)) 衡量 5 日资金面动量, 扣除后强调'尚未形成持续 VWAP
+        上行'的标的, 即短期异动但中期未确认的状态, 预期该减项本身为负贡献
+      expected_ic_sign: 负
+      source: 公式末尾减号结构 + 动量反转文献
+      priority: 主假设
+    - id: H3
+      name: 日内冲高辅助假设
+      description: Part 2 衡量 high-close 缺口 (日内上影), 与 high 水平和 5 日 high 均值的比值, 高值代表冲高后回落,
+        配合放量可能预示次日反转
+      expected_ic_sign: 正
+      source: 101 Alphas 公式结构 + 日内反转研究
+      priority: 辅助假设
+    - id: H4
+      name: 市场状态依赖假设
+      description: '因子整体 IC 方向取决于市场风格: 震荡市/反转市中因子 IC 为正, 趋势市中 Part 2 的''冲高回落''信号会失效导致
+        IC 转负'
+      expected_ic_sign: 不确定
+      source: 行为金融学 + 风格轮动经验
+      priority: 辅助假设
+    meaning_summary: 因子本质是'低价放量+日内冲高'减去'5 日 VWAP 动量排名'的合成体, 强调横截面中短期异动但中期资金未确认的标的,
+      倾向于捕捉反转机会。
+    key_insights:
+    - 双重截面排名 (rank(1/close) 和 rank(high-close)) 使得因子对价格水平绝对值不敏感, 仅依赖相对位置
+    - adv20 和 mean(high, 5) 的分母起到量价水平标准化作用, 避免大票/小票间不可比
+    - '末尾减号是关键设计: 主动剥离中期动量, 避免与纯动量因子相关性过高'
+    uncertainty: 因子结构高度依赖 intraday 字段 (high, vwap), 在仅有 OHLC 的数据集上需要 vwap 近似; 多个除法嵌套
+      (1/close, /adv20, /mean(high,5)) 对极端行情敏感, 尾部需 winsorize
+  l6:
+    industry_concentration: 因低价+放量特征, 因子天然向小市值、低价、高换手板块倾斜, 在 ST/小盘成长/主题概念股中暴露较高, 行业上偏向消费电子、传媒、地产等小票密集行业
+    crowding_level: 中等偏高 — 101 Alphas 在卖方研究中被广泛回测, 低价反转类逻辑在 A 股已较为拥挤, 但因因子包含 VWAP
+      等非传统字段, 实际可复现性有限, 实际拥挤度低于纯反转因子
+    failure_conditions:
+    - '单边趋势市: 趋势行情中''冲高回落+放量''反而是强势特征, 因子信号反转, IC 转负'
+    - '小盘股流动性枯竭: 极端熊市中 adv20 失真, 1/close 在仙股上产生极端值, 因子完全失效'
+    - 'VWAP 数据缺失或计算口径不一致: 若用均价代替 vwap, 末尾减项失效, 因子退化为纯量价+反转信号'
+    risk_notes:
+    - 因子复合度高, 调参和回测容易过拟合, 需严格做样本外测试
+    - '对涨跌停制度敏感: 涨停日 high=close 导致 (high-close)=0, rank 后该维度信息丢失'
+    - 需注意 vwap 在不同数据源 (分钟级 vs 日级合成) 的口径差异, 跨数据源迁移时需重新校准

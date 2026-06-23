@@ -61,3 +61,79 @@ factor:
       longshort_max_dd: -0.024354332307457233
       validated_at: 1782150361.1919577
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 VWAP 短期动量：1 日 VWAP 变化后取 12 日指数衰减线性加权, 再做截面 rank
+      formula: rank(decay_linear(delta(vwap, 1), 12))
+    - step: 2
+      description: 计算量价结构信号：81 日均量 adv81, 对 low 做行业中性化后与 adv81 求 8 日滚动相关, 再做 20 日
+        Ts_Rank、17 日 decay_linear、19 日 Ts_Rank
+      formula: Ts_Rank(decay_linear(Ts_Rank(correlation(neutralize(low), adv81, 8),
+        20), 17), 19)
+    - step: 3
+      description: 将 Part 1 (rank 后动量) 与 Part 2 (时序排名后量价相关) 做截面 max, 保留两者中较大值
+      formula: max(Part1, Part2)
+    - step: 4
+      description: 对 max 结果乘以 -1, 反转因子方向, 使其成为反转/做空高动量做多低动量的因子
+      formula: max(Part1, Part2) * -1
+    edge_case_handling: rolling_corr 窗口不足 8 日时产生 NaN, decay_linear 窗口不足时同样 NaN, 最终通过
+      pl.max_horizontal 与 rank 传播, 不做填充
+    missing_value_handling: 各步产生的 NaN 在 max 与乘法中自然保留, 不会传染为 0; rank 与 ts_rank 在截面/窗口内对
+      NaN 兼容 (默认为尾部或 NaN 跳过)
+    data_alignment: T+1
+    complexity: O(T × N) — T 日 N 股票, 各窗口算子线性扫描
+  l3:
+    financial_intuition: '融合短期 VWAP 动量与量价相关性强度, 取 max 后取负, 捕捉动量过度延伸后的反转机会: 动量与量价背离均强时预示短期超买,
+      因子做空高信号做多低信号。'
+    market_behavior: 动量+量价共振后均值回归; 在趋势延续行情中因子可能持续回撤, 在震荡反转行情中表现优异
+    theoretical_basis: '基于短周期反转 (short-term reversal) 与量价背离 (volume-price divergence)
+      的复合: max 构造增强任一信号的有效性, 负号体现反转方向'
+    historical_effectiveness: 101 Alphas 中以反转类因子著称, 在 A 股 1-5 日持有期 IC 多为负且绝对值 0.02-0.04,
+      换手率较高, 适合 T+0/T+1 交易
+    related_factors: Alpha#1 (rank+power 动量反转), Alpha#4 (ts_rank 低位反转), 量价相关性因子, 短期
+      VWAP 偏离因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 短期动量反转假说
+      description: VWAP 短期涨幅越大, 未来 1-5 日越倾向于回吐 (经典 short-term reversal); 经 rank 归一化后该反转效应在截面上稳健
+      expected_ic_sign: 负
+      source: Jegadeesh (1990) short-term reversal, Lehmann 1990
+      priority: 主假设
+    - id: H2
+      name: 量价相关性反转假说
+      description: 个股低价格与历史均量相关性越强, 说明量价同步上行越显著, 短期超买越严重, 未来越易回撤
+      expected_ic_sign: 负
+      source: 量价背离理论, Griffin et al. (2003) volume-momentum
+      priority: 主假设
+    - id: H3
+      name: max 复合增强假说
+      description: 对动量与量价信号取 max 后取负, 任一信号达到极值即可触发反转, 增强因子对单一信号失效的鲁棒性, 但可能放大高波动期回撤
+      expected_ic_sign: 负
+      source: 101 Alphas 构造经验, 复合反转因子研究
+      priority: 次假设
+    - id: H4
+      name: 行业中性化失效假说
+      description: 代码中 neutralize 替代 IndNeutralize 可能丢失行业信息, 在强行业轮动行情中量价信号被错误归一化,
+        因子方向可能反转
+      expected_ic_sign: 不确定
+      source: 代码实现差异分析
+      priority: 次假设
+    meaning_summary: 因子值越大代表动量与量价信号越弱 (低反转标的), 因子值越小代表双信号越强 (高反转标的); 预期负 IC, 做多因子值大的、做空因子值小的可获反转收益。
+    key_insights:
+    - 'max 而非 sum 构造意味着因子是 OR-型组合: 任一信号触发即有效, 提升覆盖但牺牲平滑性'
+    - 三层时间窗口 (8/12/17/19/20) 混合, 体现多频率反转的融合, 对参数较敏感
+    - -1 取反使因子从动量逻辑转为反转逻辑, 与传统动量因子方向相反, 配置时需做方向校验
+    uncertainty: 代码用 neutralize 替代 IndNeutralize, 可能改变量价相关性的截面分布; delta(vwap,1) 周期仅
+      1, 对 tick 数据噪音敏感
+  l6:
+    industry_concentration: 中低 — Part 2 显式对 low 做行业中性化, Part 1 依赖 VWAP 截面 rank 隐含分散,
+      行业暴露受控
+    crowding_level: 中高 — 101 Alphas 系列被广泛复制, 此类 max+反转组合在量化私募中拥挤度较高, 容量受限
+    failure_conditions:
+    - '强趋势/单边行情: 动量延续而非反转, 因子持续回撤'
+    - '低成交量/流动性枯竭环境: 量价相关信号失真, correlation 噪声放大'
+    - '行业轮动加速期: 替代 neutralize 无法完全剥离行业, 量价信号受行业 beta 干扰, 因子方向漂移'
+    risk_notes: 反转因子换手率高, 交易成本侵蚀显著 (双边 0.3%+ 需扣除); 因子在牛市中后期及熊市反弹期表现较好, 趋势行情需降低权重或择时关闭;
+      Ts_Rank 窗口对参数敏感, 建议对 17/19/20 做滚动敏感性测试

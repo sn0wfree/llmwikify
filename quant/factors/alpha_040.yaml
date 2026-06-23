@@ -53,3 +53,78 @@ factor:
       longshort_max_dd: -0.022880929359915706
       validated_at: 1782145810.6058905
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对每只股票计算 high 价格的 10 日滚动标准差, 衡量近期价格波动幅度
+      formula: stddev(high, 10)
+    - step: 2
+      description: 将滚动标准差在每个交易日做横截面 rank 归一化, 并取相反数, 使因子偏好低波动股票
+      formula: rank(-stddev(high, 10))
+    - step: 3
+      description: 对每只股票计算 high 与 volume 的 10 日滚动相关系数, 衡量价格高点与成交量的同向运动程度
+      formula: correlation(high, volume, 10)
+    - step: 4
+      description: 将取反的波动率 rank 与价格-成交量相关系数逐元素相乘, 得到最终因子值
+      formula: factor = -1 × rank(stddev(high, 10)) × correlation(high, volume, 10)
+    edge_case_handling: high 恒定时 stddev=0, 横截面 rank 产生大量并列值, polars 默认使用 average rank
+      处理; 滚动窗口内 volume 或 high 方差为零时, correlation 返回 NaN, 需在下游做 NaN 过滤
+    missing_value_handling: rolling_std 与 rolling_corr 在窗口未满 (前 9 个交易日) 时输出 NaN, 因子值随之缺失;
+      建议下游 dropna 或仅保留窗口完整后的样本
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 因子偏好低波动且 high-价格与成交量正相关的股票, 即走势稳定、量价配合良好的标的, 回避高波动或量价背离的个股。
+    market_behavior: 在风险厌恶、震荡偏防守的市场环境中表现较好; 在趋势市、动量驱动的行情中容易失效, 因为低波动股票往往跑输高弹性标的。
+    theoretical_basis: '低波动异象 (Low Volatility Anomaly): 高波动股票长期收益低于低波动股票; 量价同步性 (Price-Volume
+      Synchronicity) 反映信息效率, 高同步的股票信息透明度更高, 定价更合理, 风险溢价较低。'
+    historical_effectiveness: 学术文献 (Ang et al., 2006; Blitz & van Vliet, 2007) 显示低波动组合在美国及全球市场存在显著超额收益;
+      量价相关性作为辅助信号可在截面排序中增强低波因子的稳定性。
+    related_factors: 低波因子 (BAB / SML Low Vol)、量价相关性因子 (PV Correlation)、Realized Volatility、Idiosyncratic
+      Volatility
+  l4:
+    hypotheses:
+    - id: H1
+      name: 低波动溢价
+      description: 横截面 rank 取负后, 因子偏好 stddev(high,10) 较低的股票; 若低波动异象成立, 这部分应贡献正 IC
+      expected_ic_sign: 正
+      source: Ang, Hodrick, Xing & Zhang (2006); Blitz & van Vliet (2007)
+      priority: 主假设
+    - id: H2
+      name: 量价正相关信号
+      description: correlation(high, volume, 10) 较高的股票意味着价格上涨伴随放量, 信息透明度高、量价配合良好,
+        应获得正收益贡献
+      expected_ic_sign: 正
+      source: Morck, Yeung & Yu (2000) Price-Volume Synchronicity
+      priority: 主假设
+    - id: H3
+      name: '交互效应: 稳定 + 量价同步'
+      description: 低波动与量价正相关均为偏防守的'质量'信号, 二者相乘形成乘性筛选, 增强对稳健标的的暴露, 预期在风险偏好下行阶段超额收益更显著
+      expected_ic_sign: 正
+      source: 多因子组合理论, 防御性因子在 risk-off 阶段表现
+      priority: 辅助假设
+    - id: H4
+      name: 趋势市失效
+      description: 在强动量或高波动率市场环境下, 低波动股票系统性跑输, 且量价正相关可能捕捉到的是下跌放量 (负相关绝对值大), 导致因子失效甚至回撤
+      expected_ic_sign: 负
+      source: AQR 低波因子在 2020-2021 动量市阶段性回撤的实证观察
+      priority: 辅助假设
+    meaning_summary: 该因子是低波动溢价与量价同步性两个防御性信号的乘性组合, 越稳定且量价配合越好的股票因子值越高, 预期在震荡和 risk-off
+      市场获取超额收益。
+    key_insights:
+    - '取反后的 rank(stddev) 使因子方向与低波异象一致: stddev 越小、rank 越大, 取负后数值越大'
+    - 'correlation(high, volume) 是有方向的: 放量推高 (正相关) 为正向贡献, 放量杀跌 (负相关) 拉低因子值'
+    - '乘性结构 (-rank × corr) 等价于双重筛选: 任意一项为零或负都会显著抑制因子值, 提高了对''稳健 + 价涨量增''标的的纯度'
+    uncertainty: correlation 方向不固定, 在下跌市中可能反向贡献; 低波因子在 A 股的溢价幅度弱于美股, 且量价同步性的横截面区分度受市场结构影响,
+      IC 稳定性需要分市场状态检验。
+  l6:
+    industry_concentration: 低波动 + 量价同步的组合天然偏向公用事业、食品饮料、医药等防御性行业, 在科技、新能源等高弹性行业暴露低,
+      存在明显的行业风格偏移。
+    crowding_level: 低波因子在 A 股量化圈已属于相对拥挤的策略 (BAB、Smart Beta 大量使用), 纯量价相关性信号拥挤度中等, 组合后整体拥挤度偏高,
+      需关注因子衰减与策略容量。
+    failure_conditions:
+    - '强趋势/动量行情: 低波动股票跑输高弹性标的, 低波溢价消失甚至反转'
+    - '政策驱动或题材轮动剧烈的市场: 行业风格快速切换, 防御性组合 beta 偏低导致相对收益跑输'
+    - 'correlation(high, volume) 整体转负的市场 (系统性下跌放量): 第二项贡献反转, 因子值被压低, 失去选股能力'
+    risk_notes: 因子对市场 beta 敏感度低, 在牛市中可能持续跑输基准; 量价相关性在 A 股受涨跌停制度与流动性事件干扰, 极端日 (如 2015
+      年股灾、2020 年春节后) 相关系数失真, 需做稳健性处理或剔除异常窗口。

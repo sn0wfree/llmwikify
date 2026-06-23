@@ -60,3 +60,80 @@ factor:
       longshort_max_dd: -0.025396950879625985
       validated_at: 1782149753.6049922
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: '计算 VWAP 3 日差分: delta(vwap, 3)，得到短期 VWAP 动量序列'
+      formula: delta_vwap = vwap_t - vwap_{t-3}
+    - step: 2
+      description: 对 delta_vwap 做 7 日线性衰减加权平均, 再做横截面 rank
+      formula: rank1 = rank(decay_linear(delta_vwap, 7))
+    - step: 3
+      description: '计算日内位置指标: (low - vwap) / (open - (high+low)/2). 注意 low*0.96633
+        + low*(1-0.96633) = low (可化简). 分子衡量当日最低价相对 VWAP 的偏离, 分母为开盘价相对日内中位价的偏移, 反映当日方向性强度'
+      formula: inner = (low - vwap) / (open - mid)
+    - step: 4
+      description: 对 inner 做 11 日线性衰减平滑, 再取 6 日时间序列 rank
+      formula: ts_rank1 = Ts_Rank(decay_linear(inner, 11), 6)
+    - step: 5
+      description: 两部分相加并乘以 -1 取反, 得到最终因子值
+      formula: factor = -(rank1 + ts_rank1)
+    edge_case_handling: 代码使用 int() 对浮点参数取整 (3.51013→3, 7.23052→7, 11.4157→11, 6.72611→6);
+      分母 (open - (high+low)/2) 接近 0 时可能产生极端值, 代码未做显式截尾或 NaN 处理
+    missing_value_handling: delta 与 decay_linear 产生的前期 NaN 由后续 rank/ts_rank 自然跳过,
+      实际计算从窗口长度 (3+7=10 / 11+6=17) 之后开始有效
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: '融合 VWAP 短期动量与日内最低价相对 VWAP 的偏离度, 经取反后捕捉短周期均值回归/反转效应: 当 VWAP
+      上行但盘中低点远低于 VWAP 时, 暗示卖压释放, 因子预期反弹。'
+    market_behavior: 在震荡市/反转行情中表现较好, 捕捉由流动性供给与日内噪声定价导致的短期价格回归; 在强趋势市中容易被延续行情击穿。
+    theoretical_basis: '基于行为金融学的反应过度/反应不足框架与流动性定价理论: VWAP 偏离与日内极端价位蕴含知情交易者与噪声交易者的博弈,
+      短期价格围绕 VWAP 回归。'
+    historical_effectiveness: 在 101 Alphas 原论文中属于复合反转类因子, 对 A 股日频截面具有一定区分度, 但近年随拥挤度提升超额收益有所衰减。
+    related_factors: Alpha#49 (price*volume 反转类)、Alpha#101 (VWAP 反转类)、short-term reversal
+      (STREV)、intraday reversal
+  l4:
+    hypotheses:
+    - id: H1
+      name: VWAP 动量反转
+      description: delta(vwap, 3) 上升但因子做负向使用时, 表示前期 VWAP 上行, 因子预期短期均值回归到 VWAP, 未来收益为负
+      expected_ic_sign: 负
+      source: 推导自 Part1 rank1 与最终 -1 符号
+      priority: 主假设
+    - id: H2
+      name: 日内低点偏离反转
+      description: 当 (low - vwap) 持续向下偏离 (分母为正) 即盘中触及远低于 VWAP 的低点, 暗示卖压耗尽, 因子取反后值高预示反弹
+      expected_ic_sign: 正
+      source: Part2 inner 构造 + 取反
+      priority: 主假设
+    - id: H3
+      name: 方向性强度过滤
+      description: 分母 (open - mid) 度量开盘相对均价的偏移方向与幅度, 当开盘强势高开时该值较大, 使整体信号幅度被压缩, 从而对开盘跳空方向进行自适应调整
+      expected_ic_sign: 不确定
+      source: Part2 分母结构推导
+      priority: 辅助假设
+    - id: H4
+      name: 时间序列位序反转
+      description: Ts_Rank(window=6) 衡量 inner 在近 6 日的相对位序, 高位表示近期日内低点偏离模式重复出现, 因子预期模式反转
+      expected_ic_sign: 负
+      source: Ts_Rank 算子 + -1 符号
+      priority: 辅助假设
+    meaning_summary: 因子综合刻画'VWAP 动量 + 日内低点偏离'两个短期信号, 整体为反转型 alpha, 数值越高代表越强的反弹预期。
+    key_insights:
+    - low*0.96633 + low*(1-0.96633) 在数学上恒等于 low, Part2 内核实际为 (low-vwap)/(open-mid),
+      这是该 alpha 化简后的本质表达式
+    - 两个 Part 的窗口长度近似 3/7/11/6, 体现 alpha 设计中对不同时间尺度信号的层级叠加
+    - '最终乘 -1 是关键: 原始两项为''追趋势/追偏离''信号, 取反后变成反转/回归信号, 与 Part2 内涵(低点偏离)协同'
+    uncertainty: 分母 (open - (high+low)/2) 在窄幅震荡日接近 0, 会放大噪声; 化简项 low 在构造中冗余但不影响计算结果,
+      实际建模中可考虑引入动量阈值或波动率过滤。
+  l6:
+    industry_concentration: 对流动性敏感, 中小盘股票及日内波动较大的科技/小盘成长股上信号更明显; 大盘蓝筹因子载荷较稳定但绝对收益较低。
+    crowding_level: '中等偏高: 该 alpha 源自公开 101 公式集, 国内量化机构已广泛复现, 中证 500/1000 池中拥挤度持续提升,
+      超额收益呈衰减趋势。'
+    failure_conditions:
+    - '强趋势/单边市: 因子做反转方向, 在 2014-15 牛市、2020 末抱团行情等强趋势阶段会被持续击穿, 出现连续回撤'
+    - '高换手/极端波动日: 分母 (open-mid) 极小时信号失真, 涨跌停或一字板时 inner 无定义, 需剔除或停牌处理'
+    - '风格切换/小盘失效: 当小盘溢价崩塌、流动性溢价压缩 (如 2017 蓝筹行情、2024 微盘股冲击), 因子 IC 显著下降'
+    risk_notes: '因子存在明显长尾风险: 个股日线数据中 vwap=0/open=0/异常停牌会污染 inner; 建议在回测中加入停牌过滤、涨跌停剔除、流动性中位数换手过滤,
+      并对因子值做行业与市值中性化后再使用。'

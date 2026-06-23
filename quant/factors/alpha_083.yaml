@@ -59,3 +59,77 @@ factor:
       longshort_max_dd: -0.017894203615235894
       validated_at: 1782150680.3729415
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: '计算归一化日内振幅: (high - low) / (sum(close, 5) / 5), 用 5 日均收盘价对日内振幅做标准化'
+      formula: inner1 = (high - low) / (sum(close, 5) / 5)
+    - step: 2
+      description: 将归一化振幅延迟 2 期后做截面 rank, 得到过去两日波动率在截面上的相对位置
+      formula: rank_delayed = rank(delay(inner1, 2)) over date
+    - step: 3
+      description: 对成交量做双重截面 rank, 强调成交量的相对活跃度
+      formula: rank_rank_vol = rank(rank(volume)) over date
+    - step: 4
+      description: '计算分子: 滞后波动率排名 × 双重成交量排名'
+      formula: numerator = rank_delayed * rank_rank_vol
+    - step: 5
+      description: '计算分母: 归一化振幅除以 (vwap - close), 当收盘价偏离 VWAP 越远, 分母绝对值越小'
+      formula: denominator = inner1 / (vwap - close)
+    - step: 6
+      description: 最终因子 = 分子 / 分母
+      formula: factor = numerator / denominator
+    edge_case_handling: 未显式处理分母为零 (vwap == close) 或 inner1 极小导致的数值爆炸; 5 日窗口起始若干行为
+      null, delay(2) 进一步产生缺失
+    missing_value_handling: rolling_sum(close, 5) 在序列前 4 行为 null, delay(2) 再产生 2 行
+      null, 最终前 6 行因子值为 null; 未做填充
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 融合滞后波动率、相对成交量活跃度与收盘价对 VWAP 的偏离, 捕捉'高波动放量后价格远离 VWAP'所带来的短期反转机会。
+    market_behavior: '反映量价配合下的短期均值回复: 当个股放量且前期波动较大, 而当前收盘价显著偏离 VWAP 时, 价格倾向于回撤'
+    theoretical_basis: '基于行为金融的均值回复理论: 过度反应 + 流动性冲击 → 短期价格修正; VWAP 偏离反映微观结构中的买卖失衡'
+    historical_effectiveness: 在 A 股和美股的短线反转类因子回测中, 类似量价反转结构在 1-5 日持有期通常具有正收益, 但信号衰减较快
+    related_factors: Alpha#10 (三符反转), Alpha#22 (量价相关), Alpha#55 (趋势反转), 经典 short-term
+      reversal 因子
+  l4:
+    hypotheses:
+    - id: H1
+      name: 短期反转效应
+      description: 因子值大代表'前期高波动 + 放量 + 收盘价远低于 VWAP', 预期后续出现反弹, 即因子与未来收益正相关
+      expected_ic_sign: 正
+      source: 行为金融学均值回复 + VWAP 微观结构信号
+      priority: 主假设
+    - id: H2
+      name: 量价背离反转
+      description: 双 rank 成交量强化了'高换手伴随价格偏离'的信号, 在放量但收盘价显著低于 VWAP 的股票中, 次日存在正向超额收益
+      expected_ic_sign: 正
+      source: 成交量作为反转信号放大器 (Lee & Swaminathan 2000)
+      priority: 次假设
+    - id: H3
+      name: 波动率持续性风险
+      description: 当市场处于趋势或高波动持续阶段, 反转信号失效, 因子可能持续负向
+      expected_ic_sign: 负
+      source: 波动率聚集效应 (GARCH 类现象)
+      priority: 备择假设
+    - id: H4
+      name: VWAP 偏离动量延续
+      description: 在强趋势行情中, 收盘价远离 VWAP 可能代表强势/弱势的延续, 因子与未来收益可能同向
+      expected_ic_sign: 不确定
+      source: 趋势跟随文献 (Jegadeesh & Titman)
+      priority: 备择假设
+    meaning_summary: 因子综合衡量'过去波动 + 相对成交活跃 + 当前价格对 VWAP 偏离', 本质是量价反转信号, 因子值越大越预示短期反弹。
+    key_insights:
+    - 双重 rank(volume) 是该因子的放大器, 突出'放量'特征
+    - 分母中 (vwap - close) 翻转方向, 收盘价越低于 VWAP, 分母越大, 因子值被压缩 (注意符号)
+    - delay(2) 引入滞后性, 信号相对滞后但更稳健
+    uncertainty: 分母含方向性变量 (vwap-close), 因子值正负号的实际经济含义依赖截面分布; 需在实证中验证 IC 方向假设
+  l6:
+    industry_concentration: 低, 因子使用通用价量字段, 无行业暴露偏好; 但在周期性行业 (有色、化工) 因波动较大, 因子波动也较大
+    crowding_level: 中, 公式复杂度较高, 与公开 101 Alphas 中反转类因子结构相似, 存在一定策略拥挤风险
+    failure_conditions:
+    - 趋势市/单边行情中, 短期反转信号失效, 因子可能出现持续负 IC
+    - 极端低波动环境下, 日内振幅趋零导致分母不稳定, 信号噪声放大
+    - 市场流动性危机时, VWAP 偏离失效, 微观结构信号失真
+    risk_notes: 因子对短期反转依赖较强, 在牛市中可能持续回撤; 建议结合市场状态过滤 (如 trend/volatility regime) 使用;
+      交易成本敏感, 高换手时收益可能被侵蚀

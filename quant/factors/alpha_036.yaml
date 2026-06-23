@@ -75,3 +75,79 @@ factor:
       longshort_max_dd: -0.018198901839703574
       validated_at: 1782177831.8115191
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 日内收益与滞后成交量的滚动相关性截面排序 (权重 2.21)
+      formula: P1 = 2.21 × rank_cs(corr_15(close - open, delay(volume, 1)))
+    - step: 2
+      description: 日内反转幅度 (open - close) 截面排序 (权重 0.7)
+      formula: P2 = 0.7 × rank_cs(open - close)
+    - step: 3
+      description: 6 日前取反收益的 5 日时序排序再截面排序 (权重 0.73)
+      formula: P3 = 0.73 × rank_cs(Ts_Rank_5(delay(-returns, 6)))
+    - step: 4
+      description: VWAP 与 20 日均量 6 日相关性的绝对值截面排序 (权重 1.0)
+      formula: P4 = rank_cs(|corr_6(vwap, adv20)|)
+    - step: 5
+      description: 开盘价相对 200 日均线偏离与日内收益乘积的截面排序 (权重 0.6)
+      formula: P5 = 0.6 × rank_cs((mean_200(close) - open) × (close - open))
+    - step: 6
+      description: 五部分加总得到最终因子值
+      formula: Factor = P1 + P2 + P3 + P4 + P5
+    edge_case_handling: 滚动窗口起始期数据不足时,相关系数/均值返回 NaN,在 rank 时自然被置于末位;abs() 确保相关性非负以捕捉强度而非方向
+    missing_value_handling: NaN 在 rank 时被视作最小值处理;volume/returns/vwap 缺失会沿用前向 NaN 传播
+    data_alignment: T+1
+    complexity: O(T × N × max_window) = O(T × N × 200)
+  l3:
+    financial_intuition: 综合日内反转、量价背离、VWAP-成交量信息流动与 200 日均线均值回复的复合多因子信号,捕捉微观结构异象与价格修正机会。
+    market_behavior: 日内反转 + 量价领先关系 + 长期均线回归 + 知情交易信息扩散,横截面叠加捕捉多周期价格发现与流动性定价偏差
+    theoretical_basis: 行为金融反转假说 (overreaction/underreaction)、信息渐进扩散 (Kyle 1985)、流动性溢价与均值回复
+      (De Bondt & Thaler)
+    historical_effectiveness: WorldQuant 101 Alphas 中属于复合型多信号 alpha,实证 IC 显著但稳定性一般,对中频持仓较敏感
+    related_factors:
+    - Alpha#010 (日内反转)
+    - Alpha#024 (量价相关)
+    - Alpha#051 (均线偏离反转)
+    - Alpha#054 (VWAP-成交量)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 日内反转效应
+      description: 开盘高于收盘 (日内下跌) 的股票短期倾向于反弹,因隔夜信息过度反应与日内流动性回补
+      expected_ic_sign: 正
+      source: Part 2 + Part 5 同向叠加,日内负收益预示短期正超额
+      priority: 主假设
+    - id: H2
+      name: 量价领先-反转
+      description: 日内收益与昨日成交量负相关 (放量后下跌或缩量后上涨) 预示价格修正,反映知情交易后流动性反转
+      expected_ic_sign: 正
+      source: Part 1 高权重 2.21,捕捉量价背离反转
+      priority: 主假设
+    - id: H3
+      name: 长期均线均值回复
+      description: 开盘价低于 200 日均线且日内反弹的股票,长期超跌反弹动量延续
+      expected_ic_sign: 正
+      source: Part 5 (mean_200 - open) × (close - open),开放缺口 + 日内反弹
+      priority: 次假设
+    - id: H4
+      name: VWAP-成交量信息扩散
+      description: VWAP 与均量强相关意味着机构定价活跃,信息扩散完成后价格延续动量
+      expected_ic_sign: 不确定
+      source: Part 4 取绝对值捕捉相关性强度,方向取决于流动性方向
+      priority: 辅助假设
+    meaning_summary: 高因子值股票特征:日内下跌 (反转)、放量后下跌 (量价背离)、处于 200 日均线下方且日内反弹 (超跌反弹)、VWAP-成交量协同性强
+    key_insights:
+    - Part 1 权重最高 (2.21),量价关系是核心驱动
+    - Part 2+Part 5 形成日内反转与均线反转的双重确认
+    - Part 4 取绝对值,弱化方向只保留相关性强度,可能在趋势/反转市表现分化
+    uncertainty: Part 4 (abs(corr)) 方向不明确,在趋势市与反转市表现可能反转;Part 3 的 6 日延迟+5 日 ts_rank
+      组合解释性较弱,需依赖实证检验
+  l6:
+    industry_concentration: 因子基于个股价格量价数据,无明显行业偏向,跨行业分散度较高
+    crowding_level: 中等偏高 — 多子项组合源自经典 101 Alphas 框架,机构复用度较高,但各分量非线性叠加降低完全替代风险
+    failure_conditions:
+    - 强单边趋势市场:日内反转信号 (Part 2) 持续失效,趋势跟随策略占优
+    - 低流动性/极端行情:成交量信号 (Part 1, Part 4) 噪声增大,200 日均线锚定失效
+    - 宏观事件冲击/风格切换:VWAP-成交量相关性结构突变,因子 IC 急剧衰减
+    risk_notes: 需关注 200 日窗口在次新股/小盘股上的数据可用性;Part 4 取绝对值可能导致多空对冲不充分,建议结合市场状态动态调节子项权重

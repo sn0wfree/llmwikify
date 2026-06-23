@@ -57,3 +57,84 @@ factor:
       longshort_max_dd: -0.01882346919965661
       validated_at: 1782144501.9199028
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对每只股票计算 close 在过去 10 日窗口内的时序排名 (ts_rank), 再在截面上做 rank, 最后乘以 -1。ts_rank
+        高代表近期 close 处于 10 日分布的相对高位, 取负后使其在因子中贡献为负。
+      formula: part1 = -1 × rank(ts_rank(close, 10))
+    - step: 2
+      description: 对 close 做两次一阶差分 (delta(delta(close, 1), 1)), 即价格的二阶差分, 度量价格变化的加速度;
+        然后在截面上做 rank。该项捕捉价格动量变化的相对强弱。
+      formula: part2 = rank(Δ(Δ(close, 1), 1))
+    - step: 3
+      description: 用 volume 除以 20 日均量得到相对量比, 再做 5 日窗口的 ts_rank, 最后在截面上做 rank。该项度量近期成交量相对历史均量的活跃程度。
+      formula: part3 = rank(ts_rank(volume / adv20, 5))
+    - step: 4
+      description: 将三个截面 rank 分量逐元素相乘得到最终因子值。
+      formula: factor = part1 × part2 × part3
+    edge_case_handling: rolling_mean(volume, 20) 在前 19 行产生 NaN, 后续 ratio 与 ts_rank
+      继承 NaN; rank 在含 NaN 的组中按现有实现 (polars rank) 通常将 NaN 排在最后或保留 NaN, 需在下游对齐时丢弃; 上市不足
+      20 日的股票 adv20 无定义, 该股票当日因子为 NaN。
+    missing_value_handling: close / volume 缺失时直接传播 NaN; ts_rank / delta 对含 NaN 的窗口会按滚动函数默认值
+      (通常跳过 NaN 或返回 NaN, 取决于实现), 最终因子通过 select 取列后由调用方 fill / drop 处理。
+    data_alignment: T+1
+    complexity: O(T × N), 其中 T 为交易日数, N 为股票数; 每步涉及 O(window) 的滚动计算, 多只标量操作, 整体线性。
+  l3:
+    financial_intuition: '该因子是均值回归型多因子合成: 惩罚近期持续上涨的高位股 (时序 rank 取负), 同时要求价格出现加速度拐点并伴随放量,
+      旨在捕捉放量加速下杀的超跌反弹机会。'
+    market_behavior: 在震荡市与熊市反弹中表现较好, 因子做空强势股、做多弱势放量股; 在强趋势市中容易持续亏损。
+    theoretical_basis: 基于 '短期价格过度反应 + 放量即趋势末端' 的行为金融假设, 即投资者对利空过度反应后的均值回归, 以及 '放量见顶/见底'
+      的量价理论。
+    historical_effectiveness: 在 101 Alphas 原始回测中 (US 股票, 1998-2012) 属于中等强度 alpha;
+      在 A 股市场, 均值回归类因子在中小盘和行业轮动较快的环境下效果更显著, 单边牛市中效果衰减明显。
+    related_factors: Alpha 12 (类似 delta(delta) 结构), Alpha 16 (volume 标准化), Alpha 22
+      (ts_rank + delta), 经典反转因子 (1-month reversal), 换手率反转因子。
+  l4:
+    hypotheses:
+    - id: H1
+      name: 时序均值回归 (主假设)
+      description: close 在 10 日时序排名越高 (近期越强), 未来越倾向于回调, 因此 -1 × rank(ts_rank) 越大 (即
+        ts_rank 越低), 未来收益越高。
+      expected_ic_sign: 正
+      source: De Bondt & Thaler (1985) overreaction; Jegadeesh (1990) short-term reversal
+      priority: 主假设
+    - id: H2
+      name: 价格加速度与拐点
+      description: delta(delta(close)) 衡量价格变化率的变化 (二阶动量), 截面 rank 高表示加速度在截面上靠前, 配合
+        part1 的负号后, 期望捕捉 '前期已跌 + 开始减速/拐头' 的股票。
+      expected_ic_sign: 正
+      source: 二阶动量 (second-order momentum) 文献, 动量失效/反转点研究
+      priority: 主假设
+    - id: H3
+      name: 放量信号
+      description: ts_rank(volume/adv20) 高表示近期成交量相对历史放大, 截面 rank 高的股票代表放量更显著, 量价配合更可能确认拐点。
+      expected_ic_sign: 正
+      source: 量价理论, Blume-Easley-O'Hara 成交量信息含量
+      priority: 辅助假设
+    - id: H4
+      name: 三者乘积的交互效应
+      description: 单独任一分量不一定显著, 因子整体收益源于 '低位 + 拐点 + 放量' 三条件同时成立的稀疏信号, 期望 IC 绝对值大于任一单分量。
+      expected_ic_sign: 正
+      source: 101 Alphas 合成逻辑, 多条件筛选增强稀疏性
+      priority: 辅助假设
+    meaning_summary: 在截面上寻找 '时序排名靠后 (近期弱势) + 价格加速度靠前 (开始拐头) + 近期相对放量' 三重条件同时满足的股票,
+      押注其短期反弹。
+    key_insights:
+    - part1 的 -1 是关键符号, 决定了因子方向是 '做空强势' 而非 '做多强势', 一旦误删 -1 因子方向完全反转
+    - delta(delta) 比 delta 更敏感, 容易产生异常值, 需在样本期关注其分布尾部
+    - 三因子乘积放大了稀疏性, 大部分股票因子值集中在 0 附近, 极端值来自三重条件的交集
+    uncertainty: '加速度分量的 IC 方向依赖于市场状态: 在下跌末段加速度为正 (反弹前) 因子表现好, 在上升中继时加速度为正反而做空强势股会亏损;
+      该因子的稳定性弱于纯反转因子。'
+  l6:
+    industry_concentration: 因子本身不直接做行业暴露, 但 '放量 + 弱势 + 拐点' 在周期性行业 (有色、煤炭、化工) 与小盘成长股中触发频率更高,
+      行业中性化后可获得更纯的 alpha。
+    crowding_level: 中等。101 Alphas 类合成反转因子在量化圈是公开策略, 国内外多家机构使用类似结构, 因子拥挤度高于纯反转但低于纯动量;
+      2020 年后 A 股市场均值回归策略整体拥挤度上升, 收益出现衰减。
+    failure_conditions:
+    - '强趋势单边行情 (如 2014-2015 上半年、2020 下半年): 强势股持续强势, part1 持续做多弱势股导致大幅回撤'
+    - '低成交量/低波动环境: adv20 波动小, volume/adv20 信号噪声大, 放量信号失效'
+    - '政策冲击或风格切换期: 行业系统性下跌/上涨时, 个股加速度信号被宏观因素淹没, 拐点判别失效'
+    risk_notes: 1) 因子绝对值分布长尾, 极值组合对回撤贡献大, 建议对 part1×part2×part3 做截面 z-score 或 winsorize;
+      2) part1 取负意味着天然多空组合, 需关注融券成本与做空可行性; 3) 三重条件交集稀疏, 持仓数量过少会放大交易成本与冲击成本, 建议至少 50-100
+      只股票等权或因子加权。

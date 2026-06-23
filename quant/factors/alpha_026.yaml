@@ -52,3 +52,80 @@ factor:
       longshort_max_dd: -0.02452794204264394
       validated_at: 1782144759.6161668
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 对 volume 序列在 5 日滚动窗口内做时序秩 (ts_rank)，得到每日成交量在近 5 日中的分位水平
+      formula: ts_rank(volume, 5)
+    - step: 2
+      description: 对 high 序列在 5 日滚动窗口内做时序秩，得到每日最高价在近 5 日中的分位水平
+      formula: ts_rank(high, 5)
+    - step: 3
+      description: 计算上述两个秩序列在 5 日滚动窗口上的 Pearson 相关系数，衡量成交量与最高价短期走势的协同性
+      formula: correlation(ts_rank(volume,5), ts_rank(high,5), 5)
+    - step: 4
+      description: 对相关系数序列取 3 日滚动最大值 (ts_max)，放大近 3 日最显著的量价同向信号
+      formula: ts_max(correlation, 3)
+    - step: 5
+      description: 取负号，使因子方向与逻辑一致：相关性越高（量价共振），因子值越低
+      formula: -1 * ts_max(correlation, 3)
+    edge_case_handling: rolling 窗口初始不足时自动产生 null；volume 或 high 为 0/负值时 correlation
+      仍可计算，但 ts_rank 窗口不满时输出 null；最终因子保留 null 不填充，避免引入伪信号
+    missing_value_handling: 上游 rolling 系列若含 null（窗口不足），ts_rank、correlation、ts_max
+      均按各自窗口规则产生 null；不做前向/后向填充
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: 捕捉量价同步性：成交量与最高价短期同涨同跌说明高价被放量确认，往往是主力派发信号；因子做空此类'量价共振'股票，做多量价背离的股票，押注短期均值回归。
+    market_behavior: 高量伴随新高的股票容易见顶回落（distribution）；而缩量上涨或放量滞涨的股票（量价背离）后续反而有望补涨或企稳。
+    theoretical_basis: Wyckoff 量价理论 + 行为金融学中的注意力/反应过度假说：放量高点过度反映乐观预期，存在均值回归空间。
+    historical_effectiveness: '来自 101 Alphas #30，在 A 股日频横截面测试中 IC 多为负（即因子值越低、未来收益越正），胜率约
+      50–55%，属于中等有效性的反转因子。'
+    related_factors:
+    - Alpha#30 (原始定义)
+    - 量价背离类因子 (PVT/OBV 反转)
+    - 换手率反转因子
+    - Alpha#36 (量价相关性类)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 量价共振 → 短期反转
+      description: 成交量与最高价 5 日秩相关性越高（近 3 日最大值大），说明放量冲高特征显著，未来 1–5 日收益为负；因子取负后，预期 IC
+        为正。
+      expected_ic_sign: 正
+      source: '101 Alphas #30 论文 + Wyckoff distribution'
+      priority: 主假设
+    - id: H2
+      name: 量价背离 → 补涨/企稳
+      description: 因子值大（即 correlation 低）对应量价背离的股票，后续更可能补涨或企稳，贡献因子的多头端收益。
+      expected_ic_sign: 正
+      source: 行为金融反应不足假说
+      priority: 辅助假设
+    - id: H3
+      name: 高换手小盘股更敏感
+      description: 在中小市值、高换手股票中量价信号更明显，因子 IC 绝对值更大；大盘股则被机构定价弱化。
+      expected_ic_sign: 不确定
+      source: A 股市场微观结构经验
+      priority: 辅助假设
+    - id: H4
+      name: 趋势市失效
+      description: 在强趋势/牛市中放量新高往往不是派发而是趋势延续，因子可能反转失效，IC 翻负。
+      expected_ic_sign: 负
+      source: 趋势跟随文献
+      priority: 辅助假设
+    meaning_summary: 因子衡量的是'量价同步强度'的相反数：值越小，量价共振越强（高位放量），越应规避；值越大，量价背离越明显，越值得关注。
+    key_insights:
+    - 使用 ts_rank 而非原始值，使量价比较对绝对水平不敏感，仅看短期相对位次，稳健性更好
+    - ts_max(3) 而非均值，放大近端最显著的共振信号，适合捕捉短期反转的'尖峰'
+    - 负号设计使因子逻辑与 IC 方向一致：高位放量 → 做空 → 因子为正时该股应回避
+    uncertainty: correlation 与 rolling_max 均对窗口敏感，5/5/3 的组合在 A 股最优不一定可移植；牛市/熊市切换时
+      IC 可能翻转。
+  l6:
+    industry_concentration: 量价信号在交易活跃的成长股、TMT、医药、新能源等行业更显著；在低换手公用事业、银行等大蓝筹上信号弱、噪声大。
+    crowding_level: 中低。Alpha#30 是经典 101 公式之一，学术引用频繁但实盘私募使用率不如量价反转类常见，整体拥挤度可控。
+    failure_conditions:
+    - 强趋势/单边行情：放量新高常为趋势延续而非派发，因子 IC 反转失效
+    - 低流动性股票：volume 与 high 噪声大，5 日 correlation 极不稳定，信号失真
+    - 事件驱动窗口（除权除息、重大公告、停牌复牌）：量价关系被外生事件扭曲，短期窗口需剔除
+    risk_notes: 因子对窗口参数 (5/5/3) 较敏感，建议做参数敏感性扫描；建议叠加行业/市值中性化；回测时注意 survivorship bias
+      与 look-ahead bias（rolling 用到未来 5 日数据，需严格 T+1 对齐）。

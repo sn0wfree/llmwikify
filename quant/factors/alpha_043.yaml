@@ -53,3 +53,73 @@ factor:
       longshort_max_dd: -0.04847496517119499
       validated_at: 1782145905.8006566
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算每只股票过去 20 日的成交量均值 adv20, 作为基准成交量
+      formula: adv20 = ts_mean(volume, 20)
+    - step: 2
+      description: 计算当日成交量与 adv20 的比值 vol_ratio, 再对该比值做 20 日时间序列排名, 得到 term1 (衡量相对成交量的异常程度)
+      formula: term1 = ts_rank(volume / adv20, 20)
+    - step: 3
+      description: 计算 7 日价格变化 delta(close, 7), 取负后做 8 日时间序列排名, 得到 term2 (衡量近期下跌在历史中的相对位置)
+      formula: term2 = ts_rank(-1 * delta(close, 7), 8)
+    - step: 4
+      description: 将 term1 与 term2 相乘, 只有当成交量放大与价格下跌同时出现时, 因子值才显著为正
+      formula: factor = term1 * term2
+    edge_case_handling: ts_rank 输出值域为 [0,1], 天然避免极端值; 但 vol_ratio 在成交量为 0 或异常放大时可能产生
+      inf, 需在 ts_rank 前做 winsorize 或截尾处理
+    missing_value_handling: delta(close, 7) 在序列前 7 行产生 NaN, ts_rank 输出 NaN; 上市不足 20
+      或 8 日的股票因子值为空, 需在使用前 drop_nulls
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: '捕捉放量下跌的''恐慌抛售/投降''信号: 当一只股票出现异常放量同时伴随近期显著下跌时, 因子给出高分, 代表潜在的过度反应或反转机会。'
+    market_behavior: 放量下跌常出现在恐慌底部、利空兑现或趋势加速阶段; 短期可能继续惯性下跌, 中期则存在均值回归反弹可能, 因子同时刻画流动性冲击与价格动量。
+    theoretical_basis: '基于行为金融的过度反应假说 (Overreaction Hypothesis) 与成交量-价格信息假说: 异常放量伴随下跌反映市场情绪极端化,
+      历史上常对应短期反转; 同时高换手率蕴含信息融入后的定价修正。'
+    historical_effectiveness: 在 A 股与美股均观察到放量下跌因子在 1-5 日反转窗口下具有正 alpha, 但 IC 不稳定, 受市场情绪周期与流动性环境影响较大。
+    related_factors: '反转因子 (1-day reversal)、换手率因子 (turnover)、量价相关性 (PV corr)、Alpha
+      #101 原始公式 (含 ts_argmax 与 SignedPower 包装)、Amihud 非流动性因子'
+  l4:
+    hypotheses:
+    - id: H1
+      name: 恐慌反转假说
+      description: 放量下跌代表情绪化抛售, 股价短期超跌, 未来 1-5 日存在均值回归反弹, 因子与未来收益正相关
+      expected_ic_sign: 正
+      source: 行为金融过度反应理论, Lehmann (1990) 短期反转文献
+      priority: 主假设
+    - id: H2
+      name: 动量确认假说
+      description: 放量下跌是趋势加速/熊市确认信号, 卖压未释放完毕, 未来收益继续下行
+      expected_ic_sign: 负
+      source: 成交量确认动量假说, 价格-量价背离研究
+      priority: 次假设
+    - id: H3
+      name: 信息融入假说
+      description: 高成交量代表新信息快速融入价格, 因子对收益预测能力有限, IC 应趋近于零
+      expected_ic_sign: 不确定
+      source: 有效市场假说 (EMH), 成交量信息效率研究
+      priority: 备择假设
+    - id: H4
+      name: 流动性溢价假说
+      description: 高换手率(异常放量)股票承担更高流动性风险, 长期应享有更高收益补偿, 与 1/f noise 相关
+      expected_ic_sign: 正
+      source: Amihud (2002) 非流动性溢价, 换手率异象研究
+      priority: 辅助假设
+    meaning_summary: 因子值越高, 表示该股票近期出现'异常放量+显著下跌'的组合, 暗示市场情绪极端化; 值越低, 则表示'缩量上涨'或'量价平稳',
+      暗示趋势稳健或缺乏关注。
+    key_insights:
+    - term1 与 term2 通过乘法耦合, 要求两个条件同时满足, 比简单相加更稀疏, 因子多头持仓集中度高
+    - 两个 ts_rank 窗口 (20 与 8) 长度不一致, term2 对短期价格变化更敏感, term1 反映中期成交量基线, 组合后形成'量价短期错配'信号
+    - 反转与动量效应在因子中相互矛盾, 实际方向取决于市场状态 (震荡市偏反转, 趋势市偏动量)
+    uncertainty: '因子 IC 方向高度依赖市场状态: 牛熊切换、流动性危机、政策冲击等事件均会改变放量下跌的预测含义, 缺乏稳健的方向性预期。'
+  l6:
+    industry_concentration: '高: 因子天然偏好高换手率行业 (券商、题材股、新能源、半导体等), 行业中性化后效果更稳健; 在银行、公用事业等低换手行业信号稀疏。'
+    crowding_level: '中高: 放量下跌是经典量价因子, 101 alphas 及各类反转/换手率策略中均被广泛使用, 头部量化机构同质化程度较高,
+      拥挤交易风险存在。'
+    failure_conditions:
+    - 单边趋势行情中, 放量下跌不是底部信号而是趋势加速信号, 因子做反转会持续亏损
+    - 低流动性/小盘股中, 成交量比值波动剧烈, ts_rank 噪声大, 信号失真严重
+    - 政策利好/利空冲击或停牌复牌初期, 异常放量不代表市场情绪, 而是事件驱动, 因子失效
+    risk_notes: '需警惕''反转陷阱'': 放量下跌后继续下跌的概率不可忽视; 建议配合波动率、流动性、行业景气度等辅助因子做组合过滤, 并严格控制单股持仓上限与回撤止损。'

@@ -57,3 +57,83 @@ factor:
       longshort_max_dd: -0.018842301110596368
       validated_at: 1782178210.4178677
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: '计算 Part1: 最近 5 日最低价的最小值与其 5 日延迟之差, 即 delay(ts_min(low,5),5) -
+        ts_min(low,5), 衡量 5 日低点是否抬升或创新低'
+      formula: Part1 = -1 * ts_min(low, 5) + delay(ts_min(low, 5), 5)
+    - step: 2
+      description: '计算 Part2: 先用 240 日与 20 日滚动窗口对 returns 求和并做差, 再除以 220 标准化 (等价于长期均值收益与短期均值收益之差),
+        然后按 date 做横截面 rank'
+      formula: Part2 = rank((sum(returns,240) - sum(returns,20)) / 220)  [cross-sectional]
+    - step: 3
+      description: '计算 Part3: 成交量在过去 5 日窗口内的时序 rank, 表征近期成交活跃度'
+      formula: Part3 = ts_rank(volume, 5)
+    - step: 4
+      description: 将三部分逐元素相乘得到最终因子值
+      formula: factor = Part1 × Part2 × Part3
+    edge_case_handling: 滚动求和窗口起始阶段 (前 240 行) 会产生 NaN; 横截面 rank 在 date 内执行, 单一交易日若无数据则该日全部
+      NaN; ts_rank 与 delay 在窗口不足时输出 NaN。
+    missing_value_handling: 代码未显式填充, 依赖上游 ensure_sorted 与 rolling 函数默认行为, NaN 自然传播;
+      最终因子仅在三个 Part 均有值时非空。
+    data_alignment: T+1 (因子基于 T 及之前数据计算, 预测 T+1 收益)
+    complexity: O(T × N), T 为时间长度, N 为截面股票数; 滚动/时序算子按 ticker 独立执行, 横截面 rank 按 date
+      分组
+  l3:
+    financial_intuition: 因子融合'短期低点变化'、'长期相对短期动量差'与'近期量能'三类信号, 刻画在中期动量支撑下、由放量确认的价格结构变化,
+      捕捉趋势加速或反转节点。
+    market_behavior: 当个股 5 日低点持续抬升、长期收益跑赢短期且近期放量时, 视为量价配合的趋势确立; 反之若低点下移, 因子做空, 反映弱势确认。
+    theoretical_basis: 结合行为金融的'处置效应' (低点抬升意味着套牢盘释放) 与'动量-反转'文献 (240 日 vs 20 日均收益差近似中期动量);
+      成交量作为信息流入代理, 源自价格-成交量因果关系研究。
+    historical_effectiveness: 源自 WorldQuant 101 Alphas 实证组合, 在美股 A 股样本中表现为中频因子, IC
+      绝对值通常 0.02-0.04, 换手率较高, 适合作为多因子模型辅助信号。
+    related_factors: Alpha#12 (量价背离)、Alpha#18 (高低点比较动量)、Alpha#83 (高低点 ratio + 量能 rank)、Momentum
+      (12-1)、OBV、ADL
+  l4:
+    hypotheses:
+    - id: H1
+      name: 中期动量叠加短期低点抬升的延续效应
+      description: 当 Part2 较高 (长期收益 > 短期) 且 Part1 < 0 (低点抬升) 时, 视为趋势健康延续, 因子值为负, 预测负收益即做空;
+        反之 Part1 > 0 配合高 Part2 为弱势延续, 因子值为正, 预期负收益, 故整体 IC 倾向于负
+      expected_ic_sign: 负
+      source: 公式结构推导 + WorldQuant 101 Alphas 实证
+      priority: 主假设
+    - id: H2
+      name: 量能确认效应
+      description: Part3 (ts_rank volume) 对 Part1×Part2 的信号起放大/确认作用, 放量时信号强度提升, 缩量时信号被抑制,
+        即 IC 的截面差异与当日成交量分位正相关
+      expected_ic_sign: 正
+      source: 量价关系文献 (Karpoff 1987)
+      priority: 辅助假设
+    - id: H3
+      name: 240-20 动量差的横截面选股能力
+      description: Part2 单独使用时近似长期减短期动量差, 在横截面应具备正 IC; 当 Part1 和 Part3 接近中性时, 因子整体行为接近纯动量信号
+      expected_ic_sign: 正
+      source: Jegadeesh & Titman 1993 动量效应
+      priority: 辅助假设
+    - id: H4
+      name: 三因子非线性交互
+      description: 因子整体并非线性组合, Part1×Part2×Part3 三阶交互使 IC 方向依赖于三部分同号/异号区域, 在小盘高波动股票中因
+        Part1 和 Part3 的噪声导致 IC 不稳定
+      expected_ic_sign: 不确定
+      source: 高阶交互项的非线性理论
+      priority: 辅助假设
+    meaning_summary: '该因子本质是一个三阶交互的量价-动量复合信号: Part1 编码短期价格结构 (低点变化), Part2 编码中期相对动量,
+      Part3 编码短期量能; 三者相乘放大了三者方向一致时的信号, 削弱了噪声方向的信号。'
+    key_insights:
+    - Part1 与 Part2 的符号天然相反的概率较高, 导致因子值正负分布不对称, 需关注因子值方向而非绝对值大小
+    - 220 = 240 - 20 是关键标准化参数, 改变窗口比例会显著影响 Part2 的量纲和横截面分布
+    - Part3 的 5 日 ts_rank 引入短期反转成分, 与 Part2 的中期动量形成多时间尺度对冲
+    uncertainty: '三阶交互使 IC 方向高度依赖市场状态: 趋势市中 H1 主导, 震荡市中 Part3 噪声放大导致 IC 不稳定; Part1
+      的符号在不同频率数据 (日/周) 下解释可能反转。'
+  l6:
+    industry_concentration: Part1 与 Part3 未做行业中性化, 在行业级别的低/高联动期 (如周期股普涨/普跌) 可能引入行业
+      beta; Part2 通过横截面 rank 部分分散行业暴露, 整体行业中性程度中等。
+    crowding_level: 中等偏低, 三阶交互结构复杂且不易被简单复制, 但作为 101 Alphas 公开因子之一, 主流机构已有类似实现, 实际拥挤度随使用年限上升。
+    failure_conditions:
+    - '市场剧烈反转或黑天鹅事件: Part1 的 5 日窗口无法捕捉结构性突破, Part3 量能在恐慌抛售中失效 (流动性枯竭导致量价脱钩)'
+    - '行业轮动加速期: Part2 横截面 rank 在行业同步涨跌时区分度下降, Part1 行业 beta 暴露放大误差'
+    - '小盘低流动性股票: Part3 的 ts_rank 在成交量稀疏时波动大, Part1 的极值易被跳空扭曲, 三阶交互噪声爆炸'
+    risk_notes: 三阶乘积结构使因子对极端值敏感, 建议在合成前对每个 Part 做 winsorize (如 1%-99% 分位截尾); 因子换手率高,
+      交易成本敏感; Part2 的 240 日窗口导致 IC 滞后, 在风格快速切换时存在信号延迟风险。

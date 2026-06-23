@@ -61,3 +61,84 @@ factor:
       longshort_max_dd: -0.021236212804945864
       validated_at: 1782151023.3307903
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: '计算布尔条件: ((high+low)/2 + close) < (low + open), 化简后等价于 close <
+        open - high/2, 衡量收盘价相对开盘价和高点均价的偏离, 捕捉显著阴线/下挫形态'
+      formula: cond1 = ((high+low)/2 + close) < (low + open)
+    - step: 2
+      description: '对 cond1 序列做 decay_linear 平滑 (窗口≈14), 再做 ts_rank (窗口≈18), 得到 part1:
+        近期弱势价格行为的时序分位'
+      formula: part1 = Ts_Rank(decay_linear(cond1, 14.7221), 18.8683)
+    - step: 3
+      description: 在截面上对 low 做 rank, 对 adv30 (30日均量) 做 rank, 然后做时序 correlation (窗口≈7),
+        得到低价股与低成交股的相关性时序
+      formula: corr = rolling_corr(rank(low), rank(adv30), 7.58555)
+    - step: 4
+      description: '对 corr 做 decay_linear (窗口≈6) 和 ts_rank (窗口≈6), 得到 part2: 量价低位共振信号的时序分位'
+      formula: part2 = Ts_Rank(decay_linear(corr, 6.94024), 6.80584)
+    - step: 5
+      description: 取 part1 与 part2 的逐元素较小值, 作为最终因子值, 即两路信号中更保守/更显著的一路
+      formula: factor = min(part1, part2)
+    edge_case_handling: 窗口长度通过 int() 截断处理 (14→14, 18→18, 7→7, 6→6); cond1 布尔值 cast
+      为 Float64 避免 decay_linear 类型错误; rolling 起始期返回 NaN, 由 min_horizontal 自然传播
+    missing_value_handling: 滚动窗口未满、NaN 输入直接向下游传播; rank/correlation 在 NaN 处产生缺失值, 不会做填充;
+      min_horizontal 对含 NaN 的两个 Series 逐位置取 min, 保留 NaN
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: '因子融合两类弱势信号: 一是个股近期收盘相对开盘的大幅下挫(技术性阴线), 二是截面中低价股与低成交股的相关性时序,
+      取两者时序分位的较小值, 倾向于选出短期被卖压压制、量能萎缩的标的。'
+    market_behavior: 捕捉弱势/补跌行情下的个股, 在恐慌抛售或流动性退潮阶段表现较强; 在趋势性反弹或普涨阶段可能失效或贡献负收益。
+    theoretical_basis: 基于 '弱势反转 vs 动量延续' 的双信号框架, 结合量价背离思想 (低量+低位通常对应弱势确认), 并用 min
+      操作保证只选两路信号同时确认的股票, 提升纯净度。
+    historical_effectiveness: 在 101 alphas 原始回测中具备统计显著性; 在 A 股市场, 短期弱势/低量因子在熊市及震荡下行期有效,
+      在牛市或风格切换期效果衰减甚至反转。
+    related_factors: Alpha 100, Alpha 101, 弱势反转类因子, 量价相关性因子, 低换手/低成交额因子, 短期反转 (Short-term
+      Reversal)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 弱势阴线持续 → 后续补跌
+      description: 当 close 显著低于 open (close < open - high/2) 持续出现时, 表明空头动能延续, 下一期收益为负,
+        因子值与未来收益负相关
+      expected_ic_sign: 负
+      source: 短期反转文献 + cond1 构造逻辑
+      priority: 主假设
+    - id: H2
+      name: 低价低量共振 → 流动性溢价
+      description: 截面上 rank(low) 与 rank(adv30) 的正相关, 反映低价股往往伴随低成交量, 这类股票在市场下行时承压更重,
+        因子值高对应未来低收益
+      expected_ic_sign: 负
+      source: 流动性溢价理论 + 量价截面相关性
+      priority: 主假设
+    - id: H3
+      name: min 组合增强信号纯净度
+      description: 对两个 ts_rank 取较小值, 只在两路信号同时成立时给出高因子值, 降低了单信号噪声, 提升 IC 稳定性
+      expected_ic_sign: 负
+      source: min 函数性质 + 因子融合文献
+      priority: 辅助假设
+    - id: H4
+      name: 牛市中可能反转
+      description: 在强势反弹或主题驱动的牛市中, 弱势阴线后的 '假摔' 可能成为反转买点, 因子 IC 可能由负转正
+      expected_ic_sign: 不确定
+      source: 市场风格切换 + 反转因子非线性
+      priority: 辅助假设
+    meaning_summary: 因子值越大, 表示该股同时满足 '近期持续阴线下挫' 和 '截面量价低位共振' 两种弱势特征, 在弱势/下行市场中预期跑输基准。
+    key_insights:
+    - cond1 化简后等价于 close < open - high/2, 是一种'收盘价深度低于开盘且超过高点一半幅度'的极端阴线判定
+    - min(part1, part2) 是严格的 AND 关系, 比均值/加和更纯净, 但也更稀疏
+    - 截面对 low 和 adv30 都做 rank, 是为了消除量价绝对水平影响, 关注截面相对位置的相关性
+    uncertainty: 窗口期均被 int() 截断 (如 14.7221→14), 与原始 101 alphas 公式存在细微差异; cond1 布尔值
+      cast 为 Float64 后再做 decay_linear, 与原始公式中对 0/1 序列的衰减处理一致, 但实现细节可能影响数值
+  l6:
+    industry_concentration: 因子在周期性行业 (钢铁、煤炭、地产等) 和小盘价值股中信号更强, 因为这些板块阴线频发且量能易萎缩; 在成长/科技板块中信号偏弱。
+    crowding_level: 中等偏低, 该因子源自 101 alphas 但使用了较复杂的 min+ts_rank+decay_linear 组合, 实际研究中使用率不高,
+      拥挤度可控; 但底层 '弱势反转' 思路广泛存在, 存在一定同质化风险。
+    failure_conditions:
+    - 牛市/普涨行情中, 弱势阴线后续容易反弹, 因子 IC 由负转正导致回撤
+    - 市场风格切换 (如从小盘价值切换至大盘成长) 时, 截面量价关系结构改变, rank 相关性失效
+    - 政策利好或突发主题行情下, 持续阴线股票反而因超跌反弹领涨, 因子逻辑被破坏
+    risk_notes: 因子天然做空弱势股、做多强势股, 在单边下行市中回撤可控; 但在 V 型反转中可能遭受较大回撤; 建议叠加市场状态判断或与反转因子组合使用,
+      避免在反弹初期集中暴露。

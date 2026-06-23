@@ -64,3 +64,85 @@ factor:
       longshort_max_dd: -0.032847388756873055
       validated_at: 1782177863.8905706
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 20 日均量 adv20, 再求 volume/adv20 得到相对成交量, 对其施加 9 日线性衰减加权 (decay_linear)
+      formula: decay_linear(volume / adv20, 9)
+    - step: 2
+      description: 对衰减后的相对成交量做横截面 rank, 再用 (1 - rank) 与 7 日价格变动 delta(close, 7) 相乘,
+        得到 _product
+      formula: delta(close, 7) * (1 - rank(decay_linear(volume/adv20, 9)))
+    - step: 3
+      description: 对 _product 做横截面 rank 并取负, 得到短期反转/量价信号
+      formula: -1 * rank(_product)
+    - step: 4
+      description: 计算 250 日累计收益 sum(returns, 250), 横截面 rank 后加 1 作为趋势放大系数
+      formula: 1 + rank(sum(returns, 250))
+    - step: 5
+      description: 将短期反转信号与长期趋势放大系数相乘, 得到最终因子值
+      formula: (-1 * rank(_product)) * (1 + rank(sum(returns, 250)))
+    edge_case_handling: rolling_mean 和 rolling_sum 在窗口未满时返回 null, 因子前 ~250 行为空值; 除法
+      volume/adv20 不会触发除零, 因为 volume 本身非负; rank 在截面上有 null 时会跳过
+    missing_value_handling: delta、rolling_mean、rolling_sum 产生的 null 会沿列传播; rank 对
+      null 输出 null; 整体前 250 行因子为空, 之后无额外填充
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: '捕捉''无量上涨''的短期反转信号: 周线动量为正且近期无成交异常放大的股票倾向于回落, 该信号在年线趋势向上的股票中更强,
+      体现量价背离下的均值回归。'
+    market_behavior: 当个股在短期内价格上涨但缺乏成交量配合时, 上涨基础不牢靠, 容易出现回调; 长期处于上升通道的票一旦出现量价背离, 回调概率和幅度更大,
+      提供做空/减仓机会。
+    theoretical_basis: '基于量价理论 (volume-price divergence) 与短期均值回归: 成交量是价格变动的确认信号, 无量上涨属于弱趋势;
+      同时结合动量-反转周期 (short-term reversal) 效应。'
+    historical_effectiveness: 在 A 股小盘股和次新股中效果较显著, 因为这些标的量价关系更敏感; 牛市/高波动期信号可能失效 (momentum
+      regime); 熊市/震荡市效果更佳。
+    related_factors: Alpha#4 (turnover-based reversal), Alpha#10 (volume momentum),
+      Alpha#23 (short-term reversal), Alpha#56 (volume-price divergence)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 量价背离短期反转
+      description: 周线价格上涨但近期成交量未异常放大的股票存在短期反转压力, 因子值越低 (rank 越靠前为负) 未来收益越负
+      expected_ic_sign: 负
+      source: 量价理论 + 短期反转效应
+      priority: 主假设
+    - id: H2
+      name: 长期趋势放大效应
+      description: (1 + rank(sum(returns, 250))) 系数使信号在年线趋势较强的股票中权重更大, 假设这类股票的无量上涨更易触发回调
+      expected_ic_sign: 正
+      source: 动量崩溃 (momentum crash) 理论
+      priority: 次假设
+    - id: H3
+      name: 成交量异常作为反转确认
+      description: decay_linear(volume/adv20, 9) 的高 rank 表明近期成交活跃, 与 delta(close,7)
+        负向相乘后提供反转确认
+      expected_ic_sign: 负
+      source: Wyckoff 量价分析
+      priority: 辅助假设
+    - id: H4
+      name: 横截面相对量价背离排序
+      description: 因子通过 cross-section rank 同时比较个股的量价背离程度, 而非线性叠加, 假设相对背离越严重未来反转幅度越大
+      expected_ic_sign: 负
+      source: 横截面反转文献 (Jegadeesh 1990)
+      priority: 辅助假设
+    meaning_summary: 因子核心是'短期量价背离 × 长期趋势放大', 通过负向 rank 周线动量乘以 (1-rank 衰减相对量) 识别无量上涨,
+      再以 250 日累计收益 rank 作为权重, 押注此类股票的短期回调。
+    key_insights:
+    - delta(close,7) 捕捉 1 周动量, (1 - rank_decay) 抑制有量上涨、放量无量上涨, 二者乘积本质是'有量价涨的减弱'
+    - 整体取负后, 因子值越低代表短期'无量上涨'特征越显著, 排序后形成做空候选
+    - (1 + rank(250日收益)) 永远为正且介于 (1, 2), 是单调放大系数, 不会改变方向
+    - decay_linear 使近期 1-2 天的相对成交量权重最高, 对短期放量最敏感
+    uncertainty: 因子在 regime 切换时 (如政策驱动牛熊切换、流动性骤变) 表现不稳定; decay_linear 窗口较短 (9 日),
+      对日内量能脉冲敏感, 信号噪声比较大; 250 日 sum(returns) 包含的早期窗口对全样本影响有限, 在结构性牛市中可能持续亏损。
+  l6:
+    industry_concentration: 因子对成交量敏感, 在流动性差异较大的行业 (如券商、地产 vs 食品饮料、医药) 间 rank 分布偏态,
+      行业中性化后可能损失信号; 小盘/次新股聚集行业信号更强, 行业中性化后 IC 可能下降。
+    crowding_level: 中等偏低。量价背离和短期反转是经典策略, Alpha#101 系列中多个因子包含类似结构, 但本因子叠加了 250 日趋势放大,
+      市场上纯同质化策略较少。
+    failure_conditions:
+    - '持续高波动/政策牛行情: 短期反转效应失效, 动量延续, 因子持续亏损'
+    - '成交量结构性萎缩 (如流动性危机): volume/adv20 持续低位, rank 极端化, (1-rank) 趋同, 截面区分度丧失'
+    - '大盘股/低换手标的池: 量价关系噪声大, decay_linear 失效, 信号不稳定'
+    risk_notes: 因子为纯横截面排序, 需结合行业/市值中性化; 250 日窗口导致因子换手率偏低, 但 delta(7) + rank 的周度变动使其实际换手较高;
+      建议在熊市/震荡市使用, 牛市控制权重; 警惕小盘股流动性风险, 需配合流动性过滤。

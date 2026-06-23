@@ -63,3 +63,66 @@ factor:
       longshort_max_dd: -0.022944316892609222
       validated_at: 1782150195.1713595
     validation_date: '2026-06-23'
+  l2:
+    calculation_steps:
+    - step: 1
+      description: 计算 adv180 = volume 的 180 日滚动均值，作为中期成交量基准
+      formula: adv180 = rolling_mean(volume, 180)
+    - step: 2
+      description: 'Part 1: 计算 close 的 3 日 ts_rank 与 adv180 的 12 日 ts_rank，求 18 日滚动相关系数，经
+        4 日线性衰减后取 15 日 ts_rank'
+      formula: P1 = Ts_Rank(decay_linear(corr(Ts_Rank(close,3), Ts_Rank(adv180,12),
+        18), 4), 15)
+    - step: 3
+      description: 'Part 2: 计算 (low + open - 2*vwap) 的截面 rank 并平方，经 16 日线性衰减后取 4 日
+        ts_rank'
+      formula: P2 = Ts_Rank(decay_linear(rank((low+open-2*vwap))^2, 16), 4)
+    - step: 4
+      description: 取 Part 1 与 Part 2 的逐元素最大值作为最终因子值
+      formula: factor = max(P1, P2)
+    edge_case_handling: adv180 初始 180 日内为 NaN；rank 截面要求同一日期至少两只股票；max 操作在 NaN 时传播缺失值
+    missing_value_handling: rolling 窗口不足时返回 NaN，由 max_horizontal 传播；rank 函数对 NaN 输出
+      NaN
+    data_alignment: T+1
+    complexity: O(T × N)
+  l3:
+    financial_intuition: Part 1 捕捉短期价格动量与中期成交量趋势的协同关系——量价同向时趋势更可靠；Part 2 衡量开盘与最低价相对
+      VWAP 的极端偏离，反映日内价格非对称性。取 max 保留最显著信号。
+    market_behavior: 量价共振时趋势延续；日内价格大幅偏离 VWAP 往往预示反转或波动加剧
+    theoretical_basis: 量价关系理论（price-volume divergence）与日内信息不对称理论
+    historical_effectiveness: 在 101 Alphas 原论文中属于复合动量-反转类因子，样本外有效性中等
+    related_factors: Alpha#054, Alpha#055, Alpha#099 (量价复合类因子)
+  l4:
+    hypotheses:
+    - id: H1
+      name: 量价协同动量
+      description: 短期价格走势与中期均量趋势正相关时，表明上涨得到成交量支撑，预期未来收益为正
+      expected_ic_sign: 正
+      source: 'Part 1: correlation(Ts_Rank(close), Ts_Rank(adv180))'
+      priority: 主假设
+    - id: H2
+      name: 日内价格极端偏离反转
+      description: 开盘价与最低价显著偏离 VWAP（rank 平方放大极值）时，捕捉到日内极端波动，预期短期反转
+      expected_ic_sign: 负
+      source: 'Part 2: rank((low+open-2*vwap))^2'
+      priority: 主假设
+    - id: H3
+      name: max 信号选择效应
+      description: max 操作选择更显著的信号分位，理论上可增强因子在牛熊市的稳健性
+      expected_ic_sign: 正
+      source: max(P1, P2) 复合结构
+      priority: 辅助假设
+    meaning_summary: 因子从量价协同与日内价格偏离两个维度评估股票，选取更显著的信号。
+    key_insights:
+    - Part 1 关注量价中长期趋势的协调性
+    - Part 2 通过 rank^2 放大日内极端偏离的截面信号
+    - max 运算使因子偏向两个维度中信号更强的一侧
+    uncertainty: 两个子信号的 IC 方向相反（动量 vs 反转），max 操作可能导致因子方向不统一，截面回归时需关注分布特征
+  l6:
+    industry_concentration: 在金融、消费等成交量活跃、信息传导快的行业信号较强；在低成交量的公用事业等行业可能失效
+    crowding_level: 中等——属于 101 Alphas 经典复合因子，机构使用较普遍，alpha 衰减风险存在
+    failure_conditions:
+    - 市场风格切换期（动量与反转风格快速反转）
+    - 小盘低流动性股票（adv180 噪声大，rank 截面不稳定）
+    - 极端波动或政策事件驱动行情（日内价格偏离失真）
+    risk_notes: 因子方向可能因 max 选择偏向 Part 1 或 Part 2 而漂移，建议分市场环境检验；衰减窗口较短(4日)使信号对近期数据敏感
