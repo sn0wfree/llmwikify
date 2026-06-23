@@ -88,15 +88,23 @@ minversion = "7.0"
 testpaths = [ "tests",]
 python_files = [ "test_*.py",]
 python_functions = [ "test_*",]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --strict-markers"
 asyncio_mode = "auto"
-markers = [ "e2e: end-to-end tests that start a real server (run with `pytest -m e2e`)",]
+markers = [
+  "e2e: end-to-end tests that start a real server (run with `pytest -m e2e`)",
+  "mock: unit tests using mocks only, no real I/O (default, always run)",
+  "integration: integration tests with real DB/H5 (run on push to main)",
+  "llm: tests requiring real LLM API (gated by GHA secret, only main + nightly)",
+  "slow: tests taking >10s (excluded from quick runs)",
+]
 
 [tool.coverage.run]
 branch = true
 source = [ "src/llmwikify",]
 
 [tool.coverage.report]
+fail_under = 80
+show_missing = true
 exclude_lines = [ "pragma: no cover", "def __repr__", "raise AssertionError", "raise NotImplementedError", "if __name__ == .__main__.:", "if TYPE_CHECKING:",]
 
 [tool.setuptools.packages.find]
