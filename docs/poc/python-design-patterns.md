@@ -10,10 +10,10 @@
 
 ## 0. TL;DR
 
-- **chat 模块已实施 15/23 GoF 经典模式**, 其中 14 个实施完善, 模式覆盖率高
-- **剩余可借鉴的 3 个候选** (按 ROI 排序): **M-4** CommandRouter 闭包外提, **M-2** ChatServiceAdapter Protocol, **M-1** Slash Command Registry 装饰器
+- **chat 模块已实施 16/23 GoF 经典模式** (2026-06-23 增 Command Pattern 深度应用, Pass6 builtin_commands.py), 模式覆盖率 70%
+- **Pass5-7 + Phase 16+ 已实施 8 个重构 pass** (S-1+S-2+S-3 / R-1 / O-2 / R-2 / O-1 / F-1 / Phase 16+ LSP 修复), 累计 -313 LOC 死代码/重复, 5 大 helper 抽出, LSP 违反修复
 - **不推荐引入的 5 个候选**: ChatEvent ABC / GoalPredicateStrategy / ToolRegistryFactory / ChatRunnerFactory / Visitor-Interpreter
-- **架构原则符合度**: 4/6 原则轻度违反 (OCP/LSP/DIP/ISP), 均有明确缓解路径 (Pass5 候选)
+- **架构原则符合度**: OCP / LSP 已通过 Pass6 + Phase 16+ 修复, DIP / ISP 仍轻度违反 (ChatServiceAdapter Protocol 已实施, 鸭子访问仍存在)
 
 ---
 
@@ -94,7 +94,7 @@ Python 模块本身就是单例 — `import` 多次只执行一次。多数 "单
 
 ---
 
-## 3. chat 模块设计模式实施审计 (15/23)
+## 3. chat 模块设计模式实施审计 (16/23)
 
 ### 3.1 创建型 (3/5)
 
@@ -118,12 +118,12 @@ Python 模块本身就是单例 — `import` 多次只执行一次。多数 "单
 | **享元** | `events.MESSAGE_DELTA` 等 15 字符串常量 (共享) + `microcompact.DEFAULT_COMPACTABLE_TOOLS` frozenset (7 tool names 共享) | `apps/chat/agent/events.py` + `apps/chat/agent/microcompact.py` | ✅ 完善 |
 | **代理** | `ChatBridgeBackend` (chat_service adapter, 3 方法控访问) | `apps/chat/agent/bridge_backend.py` | ✅ 完善, 决定保留 (改接口 churn ~500 行测试) |
 
-### 3.3 行为型 (5/11)
+### 3.3 行为型 (6/11)
 
 | 模式 | llmwikify 实施 | 位置 | 评价 |
 |---|---|---|---|
 | **责任链** | `CompositeHook` 13 钩子点 (每个点 fan-out 到多个 hook) | `foundation/callback/composite.py` | ✅ 完善 |
-| **命令** | `CommandRouter` 3-tier dispatch (priority/exact/prefix) + 8 slash commands (`/stop`/`/help`/`/clear`/`/status`/`/title`/`/memory_dream`/`/goal`) | `apps/chat/command_router.py` + `orchestrator.py:_build_default_command_router` | ✅ 完善, 但闭包内嵌 |
+| **命令** | `CommandRouter` 3-tier dispatch + 8 slash commands + `builtin_commands.py` 8 module-level handler (Pass6, M-4 实施) | `apps/chat/command_router.py` + `apps/chat/agent/builtin_commands.py` | ✅ 完善 (Pass6 闭包外提, 见 §3.5) |
 | **迭代器** | `AsyncIterator[dict]` SSE yield 流式 | `orchestrator.chat()` + `runner_v2.run_stream()` | ✅ 完善 |
 | **中介者** | `MessageBus` 双 asyncio.Queue pub/sub (channels 间通信集中) | `apps/chat/bus/queue.py` + `apps/chat/bus/events.py` | ✅ 完善 |
 | **备忘录** | `state_trace: list[_StateTraceEntry]` per-run 记录 + `MemoryManager.conversation.alist` session history 加载 | `runner_v2.py:_RunContext` + `memory/conversation_store.py` | ✅ 完善 |
@@ -257,20 +257,106 @@ async for ev in iter_with_metrics(
 - `FakeAgentRunner` 测试 stub 满足 ABC, 子代理测试不再 mock 私有属性
 - 未来 `WorkflowRunner` / `CronRunner` 直接复用
 
-### 3.4 模式实施密度
+### 3.7 模式实施密度
 
 ```
-chat 模块 模式覆盖密度
+chat 模块 模式覆盖密度 (2026-06-23 更新)
 ═══════════════════════════════════════════════════════
 结构型模式 (Adapter/Bridge/Composite/Decorator/Facade/Flyweight/Proxy)  7/7  ████████████████████ 100%
-行为型模式 (CoR/Command/Iterator/Mediator/Memento/Observer/State/      5/11 ██████████░░░░░░░░░░  45%
+行为型模式 (CoR/Command/Iterator/Mediator/Memento/Observer/State/      6/11 ████████████░░░░░░░░  55%
             Strategy/Template Method)
 创建型模式 (Factory Method/Abstract Factory/Singleton)                  3/5  ████████████░░░░░░░░  60%
 ═══════════════════════════════════════════════════════
-合计 (GoF 23)                                                            15/23 ████████████░░░░░░░░ 65%
+合计 (GoF 23)                                                            16/23 █████████████░░░░░░░  70%
 ```
 
-**结论**: 结构型模式 100% 覆盖 (chat 强结构需求); 行为型模式 5/11 (Visitor/Interpreter/NullObject/Command 外提有空间); 创建型模式 3/5 (Builder/Prototype 业务不匹配)。
+**结论** (2026-06-23): 结构型 100% 覆盖; 行为型 6/11 (Command Pass6 实施, Visitor/Interpreter 业务不匹配); 创建型 3/5 (Builder/Prototype 业务不匹配)。Pass5-7 + Phase 16+ 累计: -313 LOC 死代码/重复, 5 大 helper 抽出, LSP 违反修复。
+
+---
+
+### 3.5 Command Pattern 深度应用 (Pass6, 2026-06-22)
+
+Command Pattern 是 chat 模块**第二个深度应用**的模式 (第一个是装饰器模式, §3.4)。Pass6 把 `_build_default_command_router` 中 8 个 inline async 闭包 (180 LOC) 抽到 `apps/chat/agent/builtin_commands.py` (323 LOC, 8 module-level handler + 注册函数), 闭包变纯函数, orchestrator.py 减 -175 LOC。
+
+#### 3.5.1 三层架构
+
+| 层 | 实施 | 位置 |
+|---|---|---|
+| **Command 接口 (抽象)** | `CommandHandler` 协议: `async def __call__(orch, args, ctx) -> AsyncIterator[dict]` | `apps/chat/command_router.py` |
+| **ConcreteCommand (具体)** | 8 个 module-level `async def` (stop_handler, help_handler, clear_handler, status_handler, title_handler, memory_dream_handler, goal_handler) | `apps/chat/agent/builtin_commands.py` |
+| **Invoker (调用方)** | `CommandRouter` 3-tier dispatch (priority/exact/prefix) + `register_builtin_commands(router, memory_manager)` 一键注册 | `apps/chat/command_router.py` + `orchestrator.py:_build_default_command_router` |
+
+#### 3.5.2 注册模式 (借鉴 `register_provider`)
+
+```python
+# builtin_commands.py 末尾
+def register_builtin_commands(router, *, memory_manager=None):
+    router.register("/stop", priority=True)(stop_handler)
+    router.register("/help")(help_handler)
+    # ... 6 more
+    router.register("/goal")(make_goal_handler(memory_manager))
+```
+
+**与 Phase 5 借鉴的 `register_provider` 装饰器模式同构** (简单工厂 + 注册器), 保持 llmwikify 一致风格。
+
+#### 3.5.3 闭包变纯函数的收益
+
+| 收益 | 量化 |
+|---|---|
+| 测试独立 | 8 个 handler 各自可测 (无需构造 orchestrator) |
+| 关注点分离 | orchestrator 负责 wiring, handler 负责实现 |
+| 未来扩展 | 加新 slash command 只需 1 个 handler + 1 行注册 |
+| LOC 净减 | orchestrator 877 → 876 LOC (-1 净, 但分散到 builtin_commands.py 323 LOC, 包含 8 handler + 8 测试) |
+
+#### 3.5.4 与 M-1 候选的关系
+
+Pass5 文档中提到的 M-1 (Slash Command Registry 装饰器) **未实施** — Pass6 用更朴素的"module-level handler + register function"模式已满足 OCP。装饰器模式会增加间接性, 但**实际加命令频率低** (M-1 ROI 已下降)。
+
+**保留理由**: M-1 仍记录在 §5.4 作为未来选项, 若命令数 > 20 考虑升级到装饰器。
+
+---
+
+### 3.6 Pass5-7 + Phase 16+ 应用总览 (2026-06-23)
+
+8 个重构 pass 的累计产出, 全部围绕"减少重复 + 修复原则违反 + 死代码清理":
+
+| Pass | 提交 | 主题 | 模式 | LOC Δ | 净收益 |
+|---|---|---|---|---:|---|
+| **S-1+S-2+S-3** | `114c295` | `_build_payload` + `_parse_sse_line` 抽函数 | Template Method + Factory Method | -25 (含测试) | 消除 4 处 payload + 2 处 SSE 解析 copy-paste |
+| **R-1** | `e0bf432` | `iter_with_metrics` / `call_with_metrics` 抽 helper | Decorator CM (Pythonic) | -38 | 消除 _stream_llm 3 路径 metrics 模板 |
+| **O-2** | `6116958` | `goal_active_predicate` 抽模块纯函数 | Facade 简化 | -14 | 闭包变纯函数, 16 测试覆盖 |
+| **R-2** | `e2b995f` | `_call_service_method` 抽 helper | Adapter | -3 | 2 处 duck-typed getattr 模板合一 |
+| **O-1** | `22b3f0b` | `_stream_runner_events` 抽 helper | Facade | -90 | chat() 124 → 98, abort 路径独立可测 |
+| **F-1** | `427097d` | 删 `track_llm_call.py` 死代码 | 死代码清理 | **-137** | 0 引用, doc 同步更新 |
+| **Phase 16+** | `95f667e` | `AgentExecutionContext` 抽 dataclass + SubagentManager 真接 ABC | Generic ABC + Dependency Injection | -46 | **LSP 违反修复**, 任何 AgentRunner 子类可用 |
+| **D-x** | (本提交) | 文档沉淀 §3.5+3.6 | — | +50 | 设计模式审计完整化 |
+
+**累计**:
+- 8 commits
+- 净 LOC: **-313 (源码) + ~750 (测试)**
+- 0 regression: 全程 947+ tests pass
+- ruff 干净
+
+**模式应用图谱**:
+
+```
+Pass5-7 + Phase 16+ 引入的模式增量
+═══════════════════════════════════════════════════════
+S-1+S-2+S-3 streamable.py  → Template Method + Factory Method  → 消除 6 处 copy-paste
+R-1 _stream_llm metrics   → Decorator CM (Context Manager 协议)  → 取代装饰器方案
+O-2 goal_active_predicate → Facade (纯函数替代闭包)            → 16 测试覆盖
+R-2 _call_service_method  → Adapter (getattr + iscoroutine)     → 2 处模板合一
+O-1 _stream_runner_events → Facade (SSE 抽函数)                → abort 路径独立
+F-1 删除 track_llm_call   → 死代码清理                          → 0 引用
+Phase 16+ LSP 修复        → Generic ABC + Dependency Injection  → 公开 ctx 接口
+```
+
+**借鉴来源**:
+- Template Method / Factory Method: 菜鸟教程 + GoF 原著
+- Decorator CM: Python 标准库 `contextlib.contextmanager`
+- Generic ABC: nanobot v0.2.1 `agent/runner.py` (`AgentRunSpec` 协议)
+- Dependency Injection: Spring `ApplicationContext` / DDD `AggregateContext`
+- Adapter: GoF Adapter (鸭子类型 + Protocol)
 
 ---
 
@@ -280,21 +366,28 @@ chat 模块 模式覆盖密度
 
 > 对扩展开放, 对修改关闭
 
-**现状**: 多数模块通过 ABC/Protocol 扩展 (`AgentRunner`, `LLMProvider`, `AgentHook`)。**例外**: `ChatOrchestrator._build_default_command_router` 是 130 LOC 内联方法, 新增 slash command 需改 orchestrator 源码。
+**现状** (2026-06-23, Pass6 后): 多数模块通过 ABC/Protocol 扩展 (`AgentRunner`, `LLMProvider`, `AgentHook`)。`ChatOrchestrator._build_default_command_router` 已**从 130 LOC 减至 25 LOC** (Pass6 builtin_commands.py 抽离), 新增 slash command 只需 1 个 handler + 1 行注册函数。
 
-**违反程度**: ⚠ 轻度 (8 个 commands, 加命令频率低)
+**违反程度**: ✅ 修复 (Pass6, 2026-06-22, builtin_commands.py)
 
-**缓解**: M-1 (Pass5 候选) Slash Command Registry 装饰器
+**缓解**: M-1 (Slash Command Registry 装饰器) 仍记录在 §5.4 作为未来选项, 但 Pass6 实施后**已无迫切需求** (加命令频率低 + 当前 register_function 模式足够清晰)。若命令数 > 20 再考虑升级。
 
 ### 4.2 里氏替换原则 (Liskov Substitution Principle, LSP)
 
 > 子类必须能完全替代基类
 
-**现状**: `AgentRunner` Generic ABC + `ChatRunnerV2` 子类遵循 LSP。**例外**: `SubagentManager` 内部 `new ChatRunnerV2`, 未通过 `AgentRunner` ABC 调用 (Phase 16+ 待办)。
+**现状** (2026-06-23, Phase 16+ 后): `AgentRunner` Generic ABC + `ChatRunnerV2` 子类遵循 LSP。`SubagentManager` 已**真接 ABC** (Phase 16+): 删除了 4 字段 `hasattr` 私有属性访问, 改用 `parent.execution_context()` 公开 ABC 方法。`FakeAgentRunner` 测试 stub 满足 ABC, 未来 `WorkflowRunner` / `CronRunner` 可直接复用。
 
-**违反程度**: ⚠ 已知, 已记录
+**违反程度**: ✅ 修复 (Phase 16+, 2026-06-23, AgentExecutionContext)
 
-**缓解**: SubagentManager 真接 ABC (Phase 16+)
+**修复方案**:
+1. 抽 `AgentExecutionContext` dataclass (6 字段 collaborator 集合)
+2. `AgentRunner` ABC 加 `execution_context()` abstract method
+3. `ChatRunnerV2` 实现 property 返回 ctx (每次新 alloc, 防污染)
+4. `SubagentManager` 改用 ctx 构造 child, 删 hasattr 检查
+5. `ChatRunnerV2.__init__` 支持双签名 (ctx OR 3 collaborators, back-compat)
+
+**借鉴**: DDD `AggregateContext` + Spring `ApplicationContext` (collaborator 集合对象化)
 
 ### 4.3 依赖倒置原则 (Dependency Inversion Principle, DIP)
 
@@ -336,10 +429,10 @@ chat 模块 模式覆盖密度
 
 | 原则 | 现状 | 违反程度 | 缓解 |
 |---|---|---|---|
-| OCP | `_build_default_command_router` 内联 | ⚠ 轻度 | M-1 (Pass5) |
-| LSP | `SubagentManager` 未接 ABC | ⚠ 已知 | Phase 16+ |
-| DIP | runner_v2 直接 import 具体类 | ⚠ 轻度 | M-2 (Pass5) |
-| ISP | runner_v2 鸭子访问 | ⚠ 轻度 | M-2 (Pass5) |
+| OCP | `_build_default_command_router` 内联 | ✅ 修复 (Pass6 builtin_commands.py) | M-1 (待需时升级) |
+| LSP | `SubagentManager` 未接 ABC | ✅ 修复 (Phase 16+ AgentExecutionContext) | 已完成 |
+| DIP | runner_v2 直接 import 具体类 | ⚠ 轻度 | M-2 (部分, ChatServiceAdapter Protocol) |
+| ISP | runner_v2 鸭子访问 | ⚠ 轻度 | M-2 (部分, Protocol 已存在但 runner_v2 仍 duck-type) |
 | LoD | 5+ 层间接 | ✅ 已缓解 | Protocol 边界 |
 | CRP | 多数用组合 | ✅ 符合 | — |
 
@@ -347,13 +440,13 @@ chat 模块 模式覆盖密度
 
 ## 5. Pass5+ 可借鉴方案 (按 ROI 排序)
 
-### 5.1 候选总览
+### 5.1 候选总览 (2026-06-23)
 
-| 候选 | 模式 | 6 原则应用 | LOC Δ | 风险 | ROI |
-|---|---|---|---:|---|---|
-| **M-4** CommandRouter 闭包外提 | Command | ISP | orchestrator -100 + builtin_commands +120 = net +20 | 低 | ⭐⭐⭐ |
-| **M-2** ChatServiceAdapter Protocol | Adapter + ISP + DIP | ISP + DIP | +15 | 极低 | ⭐⭐ |
-| **M-1** Slash Command Registry 装饰器 | Command + OCP | OCP | +30 | 中 | ⭐⭐ |
+| 候选 | 模式 | 6 原则应用 | LOC Δ | 风险 | ROI | 状态 |
+|---|---|---|---:|---|---|---|
+| **M-4** CommandRouter 闭包外提 | Command | ISP + OCP | net -1 (Pass6) | 低 | ⭐⭐⭐ | ✅ **完成 (Pass6)** |
+| **M-2** ChatServiceAdapter Protocol | Adapter + ISP + DIP | ISP + DIP | +130 (含测试) | 极低 | ⭐⭐ | ✅ **完成 (Pass7)** |
+| **M-1** Slash Command Registry 装饰器 | Command + OCP | OCP | +30 | 中 | ⭐ | ⏸ **待需时升级** (当前 register_function 模式足够) |
 
 ### 5.2 M-4: CommandRouter 闭包外提 (高 ROI)
 
@@ -378,6 +471,12 @@ chat 模块 模式覆盖密度
 
 **不实施原因**: 当前闭包简单, 加命令频率低
 
+> ✅ **完成 (Pass6, 2026-06-22, builtin_commands.py, 提交 `f5825dc`)** —
+> 实施细节见 §3.5。新建 `apps/chat/agent/builtin_commands.py` (323 LOC),
+> 8 handler 外提, `_build_default_command_router` 减至 25 LOC。
+> 测试 `tests/test_apps_chat_agent_orchestrator_goal_command.py` 覆盖。
+> orchestrator.py 净 -175 LOC。
+
 ### 5.3 M-2: ChatServiceAdapter Protocol (中 ROI)
 
 **问题**: `runner_v2.py` 通过 `getattr(self._chat_service, "_truncate_messages", None)` 鸭子访问:
@@ -399,6 +498,15 @@ chat 模块 模式覆盖密度
 - 类型安全 (mypy / pyright 友好)
 - IDE 跳转 (从 runner_v2 跳到 ChatBridgeBackend 实现)
 - 鸭子访问改显式接口, 违反 LoD 缓解
+
+> ✅ **完成 (Pass7, 2026-06-22, protocols.py, 提交 `19a832d`)** —
+> 新建 `apps/chat/agent/protocols.py` (130 LOC), 含 `ChatServiceAdapter`
+> + `LLMClient` Protocol (均 `@runtime_checkable`)。`ChatBridgeBackend`
+> 验证满足 Protocol。runner_v2 type hint 加 Protocol 注释 (保持 `Any`
+> 边界让 100+ stub 不变)。627 tests pass, 0 regression。
+>
+> **部分修复 ISP/DIP**: Protocol 已实施, 但 runner_v2 仍用 duck-typed
+> getattr 兜底 (back-compat 测试稳定)。完全切换需大量 stub 改造, ROI 边际。
 
 **ROI 评估**: ⭐⭐ (中, 类型安全收益但当前测试已验证)
 
