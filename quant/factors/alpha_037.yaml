@@ -23,16 +23,16 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # (open - close)\n\
-      \    oc_diff = pl.col('open') - pl.col('close')\n\n    # delay((open - close),\
-      \ 1)\n    delayed_oc = delay(oc_diff, periods=1)\n\n    # correlation(delay((open\
-      \ - close), 1), close, 200)\n    corr = rolling_corr(delayed_oc, pl.col('close'),\
-      \ window=200)\n\n    # rank(correlation(...)) — cross-sectional rank per date\n\
-      \    rank_corr = rank(corr).over('date')\n\n    # rank((open - close)) — cross-sectional\
-      \ rank per date\n    rank_oc = rank(oc_diff).over('date')\n\n    # Final factor:\
-      \ sum of the two ranks\n    factor = rank_corr + rank_oc\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 1. Compute (open\
+      \ - close)\n    diff = pl.col('open') - pl.col('close')\n\n    # 2. Materialize\
+      \ the time-series correlation BEFORE cross-section rank\n    #    correlation(\
+      \ delay(open-close, 1), close, window=200 )\n    df = df.with_columns(\n   \
+      \     correlation(\n            delay(diff, periods=1),\n            pl.col('close'),\n\
+      \            window=200\n        ).alias('_corr')\n    )\n\n    # 3. Cross-sectional:\
+      \ rank(correlation) + rank(open - close)\n    factor = (\n        rank(pl.col('_corr')).over('date')\n\
+      \        + rank(diff).over('date')\n    )\n\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 635
+    code_chars: 638
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_037.h5
     ast: null
     ast_compile_status: null
@@ -40,17 +40,17 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 50
-      status: 待验证
+      score: 64
+      status: 通过
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: null
-      icir: null
-      winrate: null
+      ic_mean: 0.03586862161404755
+      icir: 0.2732020698861871
+      winrate: 0.6440677966101694
       rank_ic_mean: null
       rank_icir: null
-      annual_return: null
+      annual_return: 0.00042792631728483244
       longshort_sharpe: null
-      longshort_max_dd: null
-      validated_at: 1782175654.21903
+      longshort_max_dd: -0.010900152203411135
+      validated_at: 1782177574.944464
     validation_date: '2026-06-23'

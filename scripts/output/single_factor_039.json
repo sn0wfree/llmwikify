@@ -3,13 +3,13 @@
   "alpha_index": 39,
   "factor_name": "alpha-039",
   "formula_brief": "((-1 * rank((delta(close, 7) * (1 - rank(decay_linear((volume / adv20), 9)))))) * (1 + rank(sum(returns, 250))))",
-  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20: 20-day rolling mean of volume\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n\n    # volume / adv20\n    vol_ratio = pl.col('volume') / adv20\n\n    # decay_linear(volume / adv20, 9)\n    decayed = decay_linear(vol_ratio, window=9)\n\n    # rank(decay_linear(...)) cross-section\n    rank_decayed = rank(decayed).over('date')\n\n    # 1 - rank_decayed\n    one_minus_rank = 1 - rank_decayed\n\n    # delta(close, 7)\n    close_delta = delta(pl.col('close'), periods=7)\n\n    # inner product: delta(close, 7) * (1 - rank(decay_linear(...)))\n    inner_product = close_delta * one_minus_rank\n\n    # rank(inner_product) cross-section\n    rank_inner = rank(inner_product).over('date')\n\n    # -1 * rank_inner\n    neg_rank = -1 * rank_inner\n\n    # sum(returns, 250)\n    sum_returns = rolling_sum(pl.col('returns'), window=250)\n\n    # rank(sum(returns, 250)) cross-section\n    rank_sum_returns = rank(sum_returns).over('date')\n\n    # 1 + rank_sum_returns\n    one_plus_rank = 1 + rank_sum_returns\n\n    # final factor\n    factor = neg_rank * one_plus_rank\n\n    return df.select(factor).to_series()",
-  "code_chars": 1143,
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize adv20 (20-day average volume)\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'), window=20).alias('_adv20')\n    )\n\n    # Materialize decay_linear(volume/adv20, 9) - time-series\n    df = df.with_columns(\n        decay_linear(pl.col('volume') / pl.col('_adv20'), window=9).alias('_decay')\n    )\n\n    # Cross-section rank on materialized _decay\n    df = df.with_columns(\n        rank(pl.col('_decay')).over('date').alias('_rank_decay')\n    )\n\n    # delta(close, 7) * (1 - rank_decay) - both inputs are materialized\n    df = df.with_columns(\n        (delta(pl.col('close'), periods=7) * (1 - pl.col('_rank_decay'))).alias('_product')\n    )\n\n    # Cross-section rank of the product\n    df = df.with_columns(\n        rank(pl.col('_product')).over('date').alias('_rank_product')\n    )\n\n    # Materialize sum(returns, 250) - time-series\n    df = df.with_columns(\n        rolling_sum(pl.col('returns'), window=250).alias('_sum_ret')\n    )\n\n    # Cross-section rank of sum returns\n    df = df.with_columns(\n        rank(pl.col('_sum_ret')).over('date').alias('_rank_sum_ret')\n    )\n\n    # Final factor: (-1 * rank_product) * (1 + rank_sum_ret)\n    factor = (-1 * pl.col('_rank_product')) * (1 + pl.col('_rank_sum_ret'))\n\n    return df.select(factor).to_series()",
+  "code_chars": 1334,
   "factor_series_len": 65250,
   "factor_series_dtype": "Float64",
   "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_039.h5",
-  "ic_mean": NaN,
-  "icir": NaN,
-  "ic_winrate": NaN,
-  "elapsed_sec": 65.84118128567934
+  "ic_mean": -0.017198233425160768,
+  "icir": -0.1074787890302374,
+  "ic_winrate": 0.3728813559322034,
+  "elapsed_sec": 24.128013698384166
 }

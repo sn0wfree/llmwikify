@@ -23,22 +23,25 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv15: average\
-      \ dollar volume over 15 days (close * volume)\n    dollar_volume = pl.col('close')\
-      \ * pl.col('volume')\n    adv15 = ts_mean(dollar_volume, 15)\n\n    # Cross-sectional\
-      \ ranks\n    rank_high = rank(pl.col('high')).over('date')\n    rank_adv15 =\
-      \ rank(adv15).over('date')\n\n    # Time-series correlation between rank(high)\
-      \ and rank(adv15), window 9 (from 8.91644)\n    corr = rolling_corr(rank_high,\
-      \ rank_adv15, window=9)\n\n    # Ts_Rank of correlation, window 14 (from 13.9333)\n\
-      \    ts_rank_corr = ts_rank(corr, window=14)\n\n    # Weighted price: close\
-      \ * 0.518371 + low * (1 - 0.518371)\n    weighted = pl.col('close') * 0.518371\
-      \ + pl.col('low') * (1 - 0.518371)\n\n    # Delta with period 1 (from 1.06157)\n\
-      \    delta_val = delta(weighted, periods=1)\n\n    # Cross-sectional rank of\
-      \ delta\n    rank_delta = rank(delta_val).over('date')\n\n    # Final factor:\
-      \ -1 where ts_rank(corr) < rank(delta), 0 otherwise\n    factor = (pl.when(ts_rank_corr\
-      \ < rank_delta).then(1).otherwise(0)) * -1\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv15 = average\
+      \ dollar volume over 15 days\n    df = df.with_columns(\n        rolling_mean(pl.col('close')\
+      \ * pl.col('volume'), window=15).alias('_adv15')\n    )\n    \n    # Cross-sectional\
+      \ ranks per date (materialize before using in ts operators)\n    df = df.with_columns([\n\
+      \        rank(pl.col('high')).over('date').alias('_rank_high'),\n        rank(pl.col('_adv15')).over('date').alias('_rank_adv15')\n\
+      \    ])\n    \n    # Rolling correlation between rank(high) and rank(adv15)\n\
+      \    df = df.with_columns(\n        correlation(pl.col('_rank_high'), pl.col('_rank_adv15'),\
+      \ window=8).alias('_corr')\n    )\n    \n    # Ts_Rank of the correlation\n\
+      \    df = df.with_columns(\n        ts_rank(pl.col('_corr'), window=13).alias('_tsrank')\n\
+      \    )\n    \n    # Weighted price: close * 0.518371 + low * (1 - 0.518371)\n\
+      \    df = df.with_columns(\n        (pl.col('close') * 0.518371 + pl.col('low')\
+      \ * (1 - 0.518371)).alias('_wprice')\n    )\n    \n    # Delta of the weighted\
+      \ price (periods = int(1.06157) = 1)\n    df = df.with_columns(\n        delta(pl.col('_wprice'),\
+      \ periods=1).alias('_delta_wprice')\n    )\n    \n    # Cross-sectional rank\
+      \ of delta\n    df = df.with_columns(\n        rank(pl.col('_delta_wprice')).over('date').alias('_rank_delta')\n\
+      \    )\n    \n    # Final factor: -1 * (Ts_Rank < rank(delta(...)))\n    factor\
+      \ = (pl.col('_tsrank') < pl.col('_rank_delta')) * -1\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1073
+    code_chars: 1446
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_068.h5
     ast: null
     ast_compile_status: null
@@ -58,5 +61,5 @@ factor:
       annual_return: -0.00014648933853178558
       longshort_sharpe: null
       longshort_max_dd: -0.0320375396354689
-      validated_at: 1782149820.0992692
+      validated_at: 1782178869.2495358
     validation_date: '2026-06-23'

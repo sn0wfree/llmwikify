@@ -3,13 +3,13 @@
   "alpha_index": 32,
   "factor_name": "alpha-032",
   "formula_brief": "(scale(((sum(close, 7) / 7) - close)) + (20 * scale(correlation(vwap, delay(close, 5), 230))))",
-  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 7-day rolling mean of close: sum(close, 7) / 7\n    mean_7 = rolling_sum(pl.col('close'), window=7) / 7\n    \n    # (sum(close,7)/7) - close\n    diff = mean_7 - pl.col('close')\n    \n    # scale(((sum(close,7)/7) - close))  -- cross-section\n    scaled_diff = scale(diff).over('date')\n    \n    # delay(close, 5)\n    delay_close_5 = delay(pl.col('close'), periods=5)\n    \n    # correlation(vwap, delay(close, 5), 230)\n    corr_230 = rolling_corr(pl.col('vwap'), delay_close_5, window=230)\n    \n    # scale(correlation)  -- cross-section\n    scaled_corr = scale(corr_230).over('date')\n    \n    # Final factor: scale(...) + 20 * scale(...)\n    factor = scaled_diff + 20 * scaled_corr\n    \n    return df.select(factor).to_series()",
-  "code_chars": 779,
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Part 1 (time-series): (sum(close, 7) / 7) - close\n    part1_ts = rolling_mean(pl.col('close'), window=7) - pl.col('close')\n\n    # Materialize before cross-section scale\n    df = df.with_columns(part1_ts.alias('_part1'))\n    part1 = scale(pl.col('_part1')).over('date')\n\n    # Part 2 (time-series): correlation(vwap, delay(close, 5), 230)\n    part2_ts = correlation(pl.col('vwap'), delay(pl.col('close'), periods=5), window=230)\n\n    # Materialize before cross-section scale\n    df = df.with_columns(part2_ts.alias('_part2'))\n    part2 = scale(pl.col('_part2')).over('date')\n\n    # Final factor\n    factor = part1 + 20 * part2\n\n    return df.select(factor).to_series()",
+  "code_chars": 724,
   "factor_series_len": 65250,
   "factor_series_dtype": "Float64",
   "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_032.h5",
-  "ic_mean": NaN,
-  "icir": NaN,
-  "ic_winrate": NaN,
-  "elapsed_sec": 16.521193465217948
+  "ic_mean": -0.00870315855824775,
+  "icir": -0.06103795655337731,
+  "ic_winrate": 0.4576271186440678,
+  "elapsed_sec": 30.47125329449773
 }

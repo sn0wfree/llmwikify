@@ -3,13 +3,13 @@
   "alpha_index": 61,
   "factor_name": "alpha-061",
   "formula_brief": "(rank((vwap - ts_min(vwap, 16.1219))) < rank(correlation(vwap, adv180, 17.9282)))",
-  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code', 'date'])\n\n    # ADV180: 180-day average of volume\n    adv180 = rolling_mean(pl.col('volume'), window=180)\n\n    # LHS base: vwap - rolling_min(vwap, ~16)\n    vwap_min = rolling_min(pl.col('vwap'), window=16)\n    lhs = pl.col('vwap') - vwap_min\n\n    # RHS base: rolling_corr(vwap, adv180, ~18)\n    rhs = rolling_corr(pl.col('vwap'), adv180, window=18)\n\n    # Cross-sectional ranks\n    rank_lhs = rank(lhs).over('date')\n    rank_rhs = rank(rhs).over('date')\n\n    # Boolean comparison → 1.0 / 0.0\n    factor = pl.when(rank_lhs < rank_rhs).then(1.0).otherwise(0.0)\n\n    return df.select(factor).to_series()",
-  "code_chars": 678,
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: Compute adv180 = 180-day average daily volume (time-series, materialised)\n    df = df.with_columns(\n        ts_mean(pl.col('volume'), window=180).alias('_adv180')\n    )\n\n    # Step 2: Compute time-series components and materialise them\n    # (a) vwap - ts_min(vwap, ~16)\n    # (b) correlation(vwap, adv180, ~18)\n    df = df.with_columns(\n        (pl.col('vwap') - ts_min(pl.col('vwap'), window=16)).alias('_diff_vwap'),\n        correlation(pl.col('vwap'), pl.col('_adv180'), window=18).alias('_corr_vwap_adv')\n    )\n\n    # Step 3: Cross-sectional ranks per date on the materialised columns\n    rank_diff = rank(pl.col('_diff_vwap')).over('date')\n    rank_corr = rank(pl.col('_corr_vwap_adv')).over('date')\n\n    # Step 4: Compare the two ranks; cast boolean to float (1.0 / 0.0)\n    factor = (rank_diff < rank_corr).cast(pl.Float64)\n\n    return df.select(factor).to_series()",
+  "code_chars": 938,
   "factor_series_len": 65250,
   "factor_series_dtype": "Float64",
   "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_061.h5",
-  "ic_mean": NaN,
-  "icir": NaN,
-  "ic_winrate": NaN,
-  "elapsed_sec": 34.19487949088216
+  "ic_mean": -1.2164315901254315e-06,
+  "icir": -7.996141778406265e-06,
+  "ic_winrate": 0.5423728813559322,
+  "elapsed_sec": 23.785833328962326
 }

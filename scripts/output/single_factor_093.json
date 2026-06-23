@@ -1,15 +1,101 @@
 {
-  "status": "success",
-  "alpha_index": 93,
-  "factor_name": "alpha-093",
-  "formula_brief": "(Ts_Rank(decay_linear(correlation(IndNeutralize(vwap, IndClass.industry), adv81, 17.4193), 19.848), 7.54455) / rank(decay_linear(delta(((close * 0.524434) + (vwap * (1 - 0.524434))), 2.77377), 16.2664)))",
-  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code', 'date'])\n    \n    # adv81: 81-day average volume (proxy for average daily volume)\n    adv81 = rolling_mean(pl.col('volume'), window=81)\n    \n    # Numerator: Ts_Rank(decay_linear(correlation(IndNeutralize(vwap), adv81, 17), 20), 8)\n    vwap_neutralized = neutralize(pl.col('vwap')).over('date')\n    corr_val = rolling_corr(vwap_neutralized, adv81, window=17)\n    decay1 = decay_linear(corr_val, window=20)\n    num = ts_rank(decay1, window=8)\n    \n    # Denominator: rank(decay_linear(delta(close*0.524434 + vwap*0.475566, 3), 16))\n    weighted_price = pl.col('close') * 0.524434 + pl.col('vwap') * (1 - 0.524434)\n    delta_val = delta(weighted_price, periods=3)\n    decay2 = decay_linear(delta_val, window=16)\n    denom = rank(decay2).over('date')\n    \n    factor = num / denom\n    \n    return df.select(factor).to_series()",
-  "code_chars": 900,
-  "factor_series_len": 65250,
-  "factor_series_dtype": "Float64",
-  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_093.h5",
-  "ic_mean": NaN,
-  "icir": NaN,
-  "ic_winrate": NaN,
-  "elapsed_sec": 28.623080564662814
+  "status": "failed",
+  "stage": "react",
+  "error": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some things you might want to try:\n- instead of `pl.col('a') and pl.col('b')`, use `pl.col('a') & pl.col('b')`\n- instead of `pl.col('a') in [y, z]`, use `pl.col('a').is_in([y, z])`\n- instead of `max(pl.col('a'), pl.col('b'))`, use `pl.max_horizontal(pl.col('a'), pl.col('b'))`\n\niguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some things you might want to try:\n- instead of `pl.col('a') and pl.col('b')`, use `pl.col('a') & pl.col('b')`\n- instead of `pl.col('a') in [y, z]`, use `pl.col('a').is_in([y, z])`\n- instead of `max(pl.col('a'), pl.col('b'))`, use `pl.max_horizontal(pl.col('a'), pl.col('b'))`\n\n",
+  "react_meta": {
+    "code": "",
+    "is_valid": false,
+    "error_kind": "execute_error",
+    "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some things you might want to try:\n- instead of `pl.col('a') and pl.col('b')`, use `pl.col('a') & pl.col('b')`\n- instead of `pl.col('a') in [y, z]`, use `pl.col('a').is_in([y, z])`\n- instead of `max(pl.col('a'), pl.col('b'))`, use `pl.max_horizontal(pl.col('a'), pl.col('b'))`\n\niguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some things you might want to try:\n- instead of `pl.col('a') and pl.col('b')`, use `pl.col('a') & pl.col('b')`\n- instead of `pl.col('a') in [y, z]`, use `pl.col('a').is_in([y, z])`\n- instead of `max(pl.col('a'), pl.col('b'))`, use `pl.max_horizontal(pl.col('a'), pl.col('b'))`\n\n",
+    "iterations": 4,
+    "steps": [
+      {
+        "state": "REASON",
+        "error_kind": "none",
+        "error_message": "",
+        "code_chars": 1518,
+        "elapsed_sec": 36.959
+      },
+      {
+        "state": "ACT",
+        "error_kind": "execute_error",
+        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
+        "code_chars": 1504,
+        "elapsed_sec": 0.005
+      },
+      {
+        "state": "OBSERVE",
+        "error_kind": "execute_error",
+        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
+        "code_chars": 1504,
+        "elapsed_sec": 0.0
+      },
+      {
+        "state": "REASON",
+        "error_kind": "none",
+        "error_message": "",
+        "code_chars": 1527,
+        "elapsed_sec": 34.048
+      },
+      {
+        "state": "ACT",
+        "error_kind": "execute_error",
+        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
+        "code_chars": 1513,
+        "elapsed_sec": 0.004
+      },
+      {
+        "state": "OBSERVE",
+        "error_kind": "execute_error",
+        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
+        "code_chars": 1513,
+        "elapsed_sec": 0.0
+      },
+      {
+        "state": "REASON",
+        "error_kind": "none",
+        "error_message": "",
+        "code_chars": 1526,
+        "elapsed_sec": 3.679
+      },
+      {
+        "state": "ACT",
+        "error_kind": "execute_error",
+        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
+        "code_chars": 1512,
+        "elapsed_sec": 0.005
+      },
+      {
+        "state": "OBSERVE",
+        "error_kind": "execute_error",
+        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
+        "code_chars": 1512,
+        "elapsed_sec": 0.0
+      },
+      {
+        "state": "REASON",
+        "error_kind": "none",
+        "error_message": "",
+        "code_chars": 1518,
+        "elapsed_sec": 3.759
+      },
+      {
+        "state": "ACT",
+        "error_kind": "execute_error",
+        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
+        "code_chars": 1504,
+        "elapsed_sec": 0.005
+      },
+      {
+        "state": "OBSERVE",
+        "error_kind": "execute_error",
+        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
+        "code_chars": 1504,
+        "elapsed_sec": 0.0
+      }
+    ],
+    "elapsed_sec": 78.465
+  },
+  "elapsed_sec": 78.6887685842812,
+  "alpha_index": 93
 }

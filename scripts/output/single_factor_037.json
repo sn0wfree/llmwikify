@@ -3,13 +3,13 @@
   "alpha_index": 37,
   "factor_name": "alpha-037",
   "formula_brief": "(rank(correlation(delay((open - close), 1), close, 200)) + rank((open - close)))",
-  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # (open - close)\n    oc_diff = pl.col('open') - pl.col('close')\n\n    # delay((open - close), 1)\n    delayed_oc = delay(oc_diff, periods=1)\n\n    # correlation(delay((open - close), 1), close, 200)\n    corr = rolling_corr(delayed_oc, pl.col('close'), window=200)\n\n    # rank(correlation(...)) — cross-sectional rank per date\n    rank_corr = rank(corr).over('date')\n\n    # rank((open - close)) — cross-sectional rank per date\n    rank_oc = rank(oc_diff).over('date')\n\n    # Final factor: sum of the two ranks\n    factor = rank_corr + rank_oc\n\n    return df.select(factor).to_series()",
-  "code_chars": 635,
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 1. Compute (open - close)\n    diff = pl.col('open') - pl.col('close')\n\n    # 2. Materialize the time-series correlation BEFORE cross-section rank\n    #    correlation( delay(open-close, 1), close, window=200 )\n    df = df.with_columns(\n        correlation(\n            delay(diff, periods=1),\n            pl.col('close'),\n            window=200\n        ).alias('_corr')\n    )\n\n    # 3. Cross-sectional: rank(correlation) + rank(open - close)\n    factor = (\n        rank(pl.col('_corr')).over('date')\n        + rank(diff).over('date')\n    )\n\n    return df.select(factor).to_series()",
+  "code_chars": 638,
   "factor_series_len": 65250,
   "factor_series_dtype": "Float64",
   "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_037.h5",
-  "ic_mean": NaN,
-  "icir": NaN,
-  "ic_winrate": NaN,
-  "elapsed_sec": 13.089104620739818
+  "ic_mean": 0.03586862161404755,
+  "icir": 0.2732020698861871,
+  "ic_winrate": 0.6440677966101694,
+  "elapsed_sec": 31.305473355576396
 }

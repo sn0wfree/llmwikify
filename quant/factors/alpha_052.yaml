@@ -23,17 +23,19 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Part 1: (-1 *\
-      \ ts_min(low, 5)) + delay(ts_min(low, 5), 5)\n    ts_min_low = ts_min(pl.col('low'),\
-      \ window=5)\n    delayed_ts_min_low = delay(ts_min_low, periods=5)\n    part1\
-      \ = -1 * ts_min_low + delayed_ts_min_low\n\n    # Part 2: rank(((sum(returns,\
-      \ 240) - sum(returns, 20)) / 220))\n    sum_returns_240 = ts_sum(pl.col('returns'),\
-      \ window=240)\n    sum_returns_20 = ts_sum(pl.col('returns'), window=20)\n \
-      \   part2_inner = (sum_returns_240 - sum_returns_20) / 220\n    part2 = rank(part2_inner).over('date')\n\
-      \n    # Part 3: ts_rank(volume, 5)\n    part3 = ts_rank(pl.col('volume'), window=5)\n\
-      \n    # Final factor\n    factor = part1 * part2 * part3\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize the\
+      \ rolling sum expression first (time-series result)\n    # before applying cross-sectional\
+      \ rank, to avoid re-evaluation within date groups\n    df = df.with_columns(\n\
+      \        ((rolling_sum(pl.col('returns'), window=240) - rolling_sum(pl.col('returns'),\
+      \ window=20)) / 220).alias('_sum_diff')\n    )\n    \n    # Compute the factor\n\
+      \    # Part 1: (-1 * ts_min(low, 5)) + delay(ts_min(low, 5), 5)\n    part1 =\
+      \ (-1 * ts_min(pl.col('low'), window=5)) + delay(ts_min(pl.col('low'), window=5),\
+      \ periods=5)\n    \n    # Part 2: cross-sectional rank of the materialized sum_diff\n\
+      \    part2 = rank(pl.col('_sum_diff')).over('date')\n    \n    # Part 3: ts_rank(volume,\
+      \ 5)\n    part3 = ts_rank(pl.col('volume'), window=5)\n    \n    # Final factor\n\
+      \    factor = part1 * part2 * part3\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 732
+    code_chars: 871
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_052.h5
     ast: null
     ast_compile_status: null
@@ -41,17 +43,17 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 50
-      status: 待验证
+      score: 63
+      status: 通过
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: null
-      icir: null
-      winrate: null
+      ic_mean: 0.0337542973371413
+      icir: 0.28189765685796186
+      winrate: 0.6101694915254238
       rank_ic_mean: null
       rank_icir: null
-      annual_return: null
+      annual_return: -1.7721790735003573e-05
       longshort_sharpe: null
-      longshort_max_dd: 0.0
-      validated_at: 1782146193.8801234
+      longshort_max_dd: -0.018842301110596368
+      validated_at: 1782178210.4178677
     validation_date: '2026-06-23'

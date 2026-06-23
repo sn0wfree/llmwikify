@@ -79,7 +79,7 @@ _patch_sample_pool_filter()  # apply on import
 
 SYSTEM_PROMPT_CODE = """You are a quant factor code generator.
 
-Translate a factor formula into a Python function `compute_factor(df)` that returns a pandas Series
+Translate a factor formula into a Python function `compute_factor(df)` that returns a polars Series
 of factor values, one per row of `df`.
 
 ## DATA ORDERING RULE (CRITICAL)
@@ -87,13 +87,10 @@ The `df` parameter is ALREADY sorted by (code, date) order — **DO NOT call `df
 The framework handles sorting. If you re-sort, your factor values will be MISALIGNED to the wrong
 (date, code) pairs and downstream backtest metrics (IC, ICIR) will be wrong.
 
-Use `rank(pl.col('x')).over('date')` for cross-section operators.
-Use `ts_rank(pl.col('x'), window=N)` directly — df is already per-code-grouped,
-so NO `.over('code')` is needed for time-series operators.
-
 ## INPUT
 `df` is a polars DataFrame (long format: rows = (date, code) pairs).
-Columns: date, code, close, open, high, low, volume, returns, vwap.
+Columns: date, code, close, open, high, low, volume, returns, vwap, industry.
+- `industry` is CITIC Level-1 classification (int, 23 categories) for industry neutralization.
 
 ## CRITICAL: USE FUNCTION FORM, NOT METHOD FORM
 
@@ -105,16 +102,32 @@ Examples (ALWAYS use function form):
   ✓ rolling_std(pl.col('returns'), window=20)
   ✗ pl.col('returns').rolling_std(window=20)
 
-For cross-section operators, USE `.over('date')`:
-  ✓ rank(argmax).over('date')
-  ✗ pl.col('argmax').rank()       (lacks .over — won't be cross-sectional)
+## CRITICAL: MATERIALIZE BEFORE .over('date')
+
+When a cross-section operation (rank, scale, etc.) depends on a time-series result
+(rolling_*, ts_*, correlation, decay_*), you MUST materialize the time-series result
+first using `with_columns()`, then apply `.over('date')` on the materialized column.
+
+Why: `select(rank(rolling_expr).over('date'))` re-evaluates `rolling_expr` within each
+date group (only 50 rows). If the rolling window > 50, you get NaN. Even if window < 50,
+cross-code data contamination produces wrong values.
+
+Pattern:
+  ❌ select(rank(correlation(a, b, window=200)).over('date'))
+  ✅ df = df.with_columns(correlation(a, b, window=200).alias('_ts'))
+     factor = rank(pl.col('_ts')).over('date')
+
+## TIME-SERIES OPERATORS
+
+Time-series operators (rolling_*, ts_*, correlation, decay_*) operate on the FULL column.
+They do NOT need `.over('code')` — they work correctly on the full sorted DataFrame.
 
 ## AVAILABLE OPERATORS
 
 ### QuantNodes time-series (function form, kwargs={"window": N})
   rolling_mean, rolling_std, rolling_sum, rolling_max, rolling_min,
   rolling_corr (2 args), rolling_cov (2 args), rolling_argmax, rolling_argmin,
-  ts_argmax, ts_argmin, ts_rank, ts_mean, ts_std, ts_sum, ts_quantile,
+  ts_argmax, ts_argmin, ts_rank, ts_mean, ts_std, ts_min, ts_max, ts_sum, ts_quantile,
   ts_delta, ts_diff, ts_lag, ts_pct_change, ts_corr (2), ts_cov (2)
   decay_linear, decay_exp
   correlation (2), covariance (2)
@@ -129,8 +142,11 @@ For cross-section operators, USE `.over('date')`:
   -> 1 arg + kwargs={"span": N}
 
 ### Cross-sectional (require .over('date'))
-  rank, scale, zscore, winsorize, neutralize, indneutralize
-  -> 1 arg, no kwargs. Use as `rank(pl.col('x')).over('date')`.
+  rank, scale, zscore, winsorize, neutralize
+  -> rank/scale/zscore/winsorize: 1 arg. Use as `rank(pl.col('x')).over('date')`.
+  -> neutralize(f, group=None): subtract group mean if group provided, else market mean.
+     Industry neutralize: `neutralize(pl.col('x'), group=pl.col('industry')).over('date')`
+  NOTE: `indneutralize` does NOT exist. Use `neutralize(f, group=pl.col('industry'))`.
 
 ### Polars native (built-in methods are OK)
   pl.when(cond).then(x).otherwise(y)
@@ -144,31 +160,30 @@ and return a polars Series aligned with df's row order.
 
 ```python
 def compute_factor(df: pl.DataFrame) -> pl.Series:
-    # 1. Sort by (code, date) for per-code rolling
-    df = df.sort(['code', 'date'])
-
-    # 2. Compute per-code rolling std of returns
+    # 1. Compute time-series values (NO .over needed, operates on full column)
     cond = pl.col('returns') < 0
     inner = pl.when(cond).then(
         rolling_std(pl.col('returns'), window=20)
     ).otherwise(pl.col('close'))
 
-    # 3. Signed power: sign(inner) * abs(inner)^2
+    # 2. Signed power: sign(inner) * abs(inner)^2
     signed = inner.sign() * (inner.abs() ** 2)
 
-    # 4. Ts_ArgMax with 5-day window (function form)
-    argmax = ts_argmax(signed, window=5)
+    # 3. Materialize ts_argmax BEFORE cross-section rank
+    df = df.with_columns(ts_argmax(signed, window=5).alias('_argmax'))
 
-    # 5. Cross-sectional rank per date, centre around zero
-    factor = rank(argmax).over('date') - 0.5
+    # 4. Cross-sectional rank per date on materialized column
+    factor = rank(pl.col('_argmax')).over('date') - 0.5
 
     return df.select(factor).to_series()
 ```
 
 CRITICAL:
 - Return type MUST be `pl.Series` with the same length as `df`.
-- Use `.over('code')` for per-code rolling/time-series operators (NOT `.over('date')`).
+- Time-series operators work on full column — do NOT add .over('code').
+- Intermediate time-series results must be materialized with `with_columns()` before .over('date').
 - Use `.over('date')` for cross-section operators (rank, scale, etc.).
+- Use `neutralize(f, group=pl.col('industry'))` for industry neutralization.
 - Output ONLY the code block. No prose.
 """
 
@@ -890,6 +905,7 @@ def run_one_factor(alpha_index: int = 1, use_react: bool = True) -> dict:
     volume_wide = pd.read_hdf(DATA_PATH / "stk_daily.h5", "volume")
     returns_wide = pd.read_hdf(DATA_PATH / "stk_daily.h5", "returns")
     vwap_wide = pd.read_hdf(DATA_PATH / "stk_daily.h5", "vwap")
+    id_citic1_wide = pd.read_hdf(DATA_PATH / "stk_daily.h5", "id_citic1")
 
     def wide_to_long(wide: pd.DataFrame, name: str) -> pl.DataFrame:
         long = wide.stack().reset_index()
@@ -904,6 +920,7 @@ def run_one_factor(alpha_index: int = 1, use_react: bool = True) -> dict:
         .join(wide_to_long(volume_wide, "volume"), on=["date", "code"])
         .join(wide_to_long(returns_wide, "returns"), on=["date", "code"])
         .join(wide_to_long(vwap_wide, "vwap"), on=["date", "code"])
+        .join(wide_to_long(id_citic1_wide, "industry"), on=["date", "code"])
         .sort(["date", "code"])
     )
     print(f"[data] shape: {df_pl.shape}, columns: {df_pl.columns}")

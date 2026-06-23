@@ -3,13 +3,13 @@
   "alpha_index": 64,
   "factor_name": "alpha-064",
   "formula_brief": "((rank(correlation(sum(((open * 0.178404) + (low * (1 - 0.178404))), 12.7054), sum(adv120, 12.7054), 16.6208)) < rank(delta(((((high + low) / 2) * 0.178404) + (vwap * (1 - 0.178404))), 3.69741))) * -1)",
-  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv120 - average daily volume over 120 days\n    adv120 = ts_mean(pl.col('volume'), window=120)\n\n    # First component: sum((open * 0.178404) + (low * (1 - 0.178404)), 12)\n    inner1 = (pl.col('open') * 0.178404) + (pl.col('low') * (1 - 0.178404))\n    sum1 = ts_sum(inner1, window=12)\n\n    # Second component: sum(adv120, 12)\n    sum2 = ts_sum(adv120, window=12)\n\n    # Rolling correlation with window 16\n    corr = ts_corr(sum1, sum2, window=16)\n\n    # Cross-sectional rank of correlation\n    rank1 = rank(corr).over('date')\n\n    # Second part: delta(((((high + low) / 2) * 0.178404) + (vwap * (1 - 0.178404))), 3)\n    inner2 = ((pl.col('high') + pl.col('low')) / 2 * 0.178404) + (pl.col('vwap') * (1 - 0.178404))\n    delta_val = delta(inner2, periods=3)\n\n    # Cross-sectional rank of delta\n    rank2 = rank(delta_val).over('date')\n\n    # (rank1 < rank2) ? -1 : 0\n    factor = pl.when(rank1 < rank2).then(pl.lit(-1.0)).otherwise(pl.lit(0.0))\n\n    return df.select(factor).to_series()",
-  "code_chars": 1041,
+  "code": "import math\n\ndef compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Window sizes (ceiling of non-integer values)\n    w_sum1 = math.ceil(12.7054)   # 13\n    w_corr = math.ceil(16.6208)   # 17\n    w_delta = math.ceil(3.69741)  # 4\n    \n    # adv120: 120-day rolling mean of volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'), window=120).alias('_adv120')\n    )\n    \n    # Part A: weighted price = open * 0.178404 + low * (1 - 0.178404)\n    a_price = (pl.col('open') * 0.178404) + (pl.col('low') * (1 - 0.178404))\n    \n    # Materialize rolling sums first\n    df = df.with_columns(\n        rolling_sum(a_price, window=w_sum1).alias('_a_price_sum'),\n        rolling_sum(pl.col('_adv120'), window=w_sum1).alias('_a_adv_sum')\n    )\n    \n    # Rolling correlation between price sum and adv sum\n    df = df.with_columns(\n        correlation(pl.col('_a_price_sum'), pl.col('_a_adv_sum'), window=w_corr).alias('_a_corr')\n    )\n    \n    # Part B: weighted price = ((high+low)/2) * 0.178404 + vwap * (1 - 0.178404)\n    b_price = ((pl.col('high') + pl.col('low')) / 2) * 0.178404 + pl.col('vwap') * (1 - 0.178404)\n    \n    # Delta with periods=4\n    df = df.with_columns(\n        delta(b_price, periods=w_delta).alias('_b_delta')\n    )\n    \n    # Cross-sectional ranks\n    a_rank = rank(pl.col('_a_corr')).over('date')\n    b_rank = rank(pl.col('_b_delta')).over('date')\n    \n    # Final: -1 if rank(corr) < rank(delta), else 0\n    factor = pl.when(a_rank < b_rank).then(-1).otherwise(0)\n    \n    return df.select(factor).to_series()",
+  "code_chars": 1541,
   "factor_series_len": 65250,
-  "factor_series_dtype": "Float64",
+  "factor_series_dtype": "Int32",
   "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_064.h5",
-  "ic_mean": NaN,
-  "icir": NaN,
-  "ic_winrate": NaN,
-  "elapsed_sec": 23.59601528570056
+  "ic_mean": 0.005420589543653548,
+  "icir": 0.04250790344628165,
+  "ic_winrate": 0.5254237288135594,
+  "elapsed_sec": 75.29749267362058
 }
