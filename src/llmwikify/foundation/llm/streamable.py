@@ -1292,6 +1292,7 @@ class StreamableLLMClient(LLMClient):
                             "type": "tool_call",
                             "tool": entry["name"],
                             "args": "".join(entry["args_parts"]),
+                            "id": entry.get("id", ""),
                         }
                     tool_call_buffer.clear()
                     yield {
@@ -1455,6 +1456,7 @@ class StreamableLLMClient(LLMClient):
                                 "type": "tool_call",
                                 "tool": entry["name"],
                                 "args": "".join(entry["args_parts"]),
+                                "id": entry.get("id", ""),
                             }
                         tool_call_buffer.clear()
                         yield {

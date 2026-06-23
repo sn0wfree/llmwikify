@@ -185,6 +185,9 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                 ctx.stop_reason = "error"
                 break
 
+            if ctx.last_tool_calls:
+                self._append_assistant_tool_calls(ctx)
+
             if not ctx.last_tool_calls:
                 ctx.final_content = ctx.last_accumulated
                 if ctx.stop_reason not in {"cancelled", "paused", "timeout"}:
@@ -463,6 +466,49 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         ctx.last_thinking = thinking
         ctx.last_tool_calls = list(tool_calls)
         ctx.reason_failed = False
+
+    @staticmethod
+    def _append_assistant_tool_calls(ctx: _RunContext) -> None:
+        """Resolve tool_call ids and append the assistant message.
+
+        Required so the next iteration's LLM call sees a matching
+        ``assistant(tool_calls[i].id)`` declaration for every
+        ``tool(tool_call_id)`` we are about to push. Without this,
+        providers like minimax return 400
+        ``tool result's tool id(call_xxx) not found (2013)`` on
+        iteration 2 because no assistant message declared the
+        tool_call that produced the pending tool result.
+
+        Id resolution: streamable may not propagate ``id`` for
+        text-mode / older streams, so we generate a stable local id
+        here once and reuse it in :meth:`_act` for the tool message.
+        """
+        resolved: list[dict[str, Any]] = []
+        for tc in ctx.last_tool_calls:
+            resolved.append({
+                **tc,
+                "id": tc.get("id") or f"call_{uuid.uuid4().hex[:8]}",
+            })
+        ctx.last_tool_calls = resolved
+        ctx.messages.append({
+            "role": "assistant",
+            "content": ctx.last_accumulated or "",
+            "tool_calls": [
+                {
+                    "id": tc.get("id", ""),
+                    "type": "function",
+                    "function": {
+                        "name": tc.get("name") or tc.get("tool", ""),
+                        "arguments": (
+                            json.dumps(tc.get("args", {}), ensure_ascii=False)
+                            if isinstance(tc.get("args"), (dict, list))
+                            else str(tc.get("args", "") or "")
+                        ),
+                    },
+                }
+                for tc in resolved
+            ],
+        })
 
     async def _act(
         self, ctx: _RunContext, tool_calls: list[dict[str, Any]], iteration: int,
