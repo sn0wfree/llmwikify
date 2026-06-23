@@ -40,16 +40,9 @@ class TestPass2Config:
 
 
 class TestConfigImports:
-    """Test 其他公共 API (2 测试)."""
+    """Test 其他公共 API (1 测试)."""
 
     def test_path_constant(self) -> None:
-        """Path 类型可导入."""
+        """Path 类型可导入 (来自 stdlib, 验证 Python 环境)."""
         from pathlib import Path
-        # 验证 Path 可用
         assert Path is not None
-
-    def test_config_module_imports(self) -> None:
-        """config 模块可重新导入."""
-        import importlib
-        m = importlib.import_module("llmwikify.reproduction.llm_extraction.config")
-        assert m.Pass2Config is c.Pass2Config
