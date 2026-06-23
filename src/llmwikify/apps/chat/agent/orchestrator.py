@@ -32,6 +32,41 @@ from llmwikify.foundation.callback import AgentHook
 logger = logging.getLogger(__name__)
 
 
+# ─── Goal-state predicate (O-2) ───────────────────────────────
+
+
+def goal_active_predicate(db: Any, session_id: str) -> bool:
+    """Return True iff the session's goal is still active.
+
+    Phase 10 (2026-06-20, nanobot borrow): reads
+    ``chat_sessions.metadata['goal_state'].status``. Exceptions are
+    swallowed and treated as "active" (don't kill the runner on a
+    transient DB hiccup). Sessions without a goal default to active
+    (Phase 8 back-compat).
+
+    Args:
+        db: ChatDatabase (or any object exposing
+            ``get_session_metadata(session_id) -> dict | None``).
+            A ``None`` value or missing method is allowed.
+        session_id: The chat session to check.
+
+    Returns:
+        True if the loop should continue, False if the goal is no
+        longer active (caller will set ``stop_reason="goal_abandoned"``).
+    """
+    try:
+        getter = getattr(db, "get_session_metadata", None)
+        if getter is None:
+            return True
+        md = getter(session_id) or {}
+        gs = md.get("goal_state")
+        if not isinstance(gs, dict):
+            return True
+        return gs.get("status") == "active"
+    except Exception:
+        return True
+
+
 # ─── SSE event factory ────────────────────────────────────────
 
 
@@ -707,27 +742,12 @@ class ChatOrchestrator:
             subagent_manager=subagent_manager,
             child_tool_registry=child_tool_registry,
         )
-        # Phase 10 (2026-06-20): wire goal_active_predicate so a session
-        # whose goal_state.status is no longer "active" stops at the
-        # next PRECHECK. Closure captures ``session_id`` + ``self.db``;
-        # exception path returns True (don't kill loop on DB hiccup).
-        # Sessions without a goal default to True (Phase 8 back-compat).
-        chat_db = self.db
-        captured_sid = session_id
-
-        def _goal_active_predicate() -> bool:
-            try:
-                getter = getattr(chat_db, "get_session_metadata", None)
-                if getter is None:
-                    return True
-                md = getter(captured_sid) or {}
-                gs = md.get("goal_state")
-                if not isinstance(gs, dict):
-                    return True
-                return gs.get("status") == "active"
-            except Exception:
-                return True
-
+        # Phase 10 (2026-06-20, O-2 2026-06-23): wire
+        # goal_active_predicate so a session whose goal_state.status
+        # is no longer "active" stops at the next PRECHECK. The pure
+        # function ``goal_active_predicate`` (module-level, defined
+        # above) is wrapped in a zero-arg lambda to match
+        # ``ChatRunSpec.goal_active_predicate: Callable[[], bool]``.
         spec = ChatRunSpec(
             messages=list(messages_for_llm),
             tool_registry=parent_tool_registry,
@@ -735,7 +755,7 @@ class ChatOrchestrator:
             wiki_id=ctx.wiki_id,
             max_iterations=self.config.get("max_chat_rounds", 10),
             microcompact=True,
-            goal_active_predicate=_goal_active_predicate,
+            goal_active_predicate=lambda: goal_active_predicate(self.db, session_id),
         )
         return runner, spec
 
