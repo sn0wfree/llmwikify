@@ -23,7 +23,6 @@ Phase B (2026-06-22): initial implementation, tested on alpha-001 / alpha-002.
 """
 from __future__ import annotations
 
-import ast
 import logging
 import re
 import time
@@ -34,7 +33,22 @@ from typing import Any
 
 import polars as pl
 
+from .codegen_utils import (
+    _PYTHON_FENCE_RE,
+    build_execute_namespace,
+    execute_code,
+    extract_python,
+    validate_safety,
+    validate_syntax,
+)
 from .telemetry import get_telemetry
+
+# Backward-compatible aliases for existing test imports
+_extract_python = extract_python
+_validate_syntax = validate_syntax
+_validate_safety = validate_safety
+_build_execute_namespace = build_execute_namespace
+_execute_code = execute_code
 
 logger = logging.getLogger(__name__)
 
@@ -106,135 +120,7 @@ class ReactResult:
 # ── Code extraction & validation helpers ──────────────────────────
 
 
-_PYTHON_FENCE_RE = re.compile(r"```python\s*\n(.+?)\n```", re.DOTALL)
 
-
-def _extract_python(text: str) -> str | None:
-    """Extract Python from ```python``` fence; fallback to def compute_factor."""
-    if not text:
-        return None
-    m = _PYTHON_FENCE_RE.search(text)
-    if m:
-        return m.group(1).strip()
-    if "def compute_factor" in text:
-        idx = text.index("def compute_factor")
-        return text[idx:].strip()
-    return None
-
-
-def _validate_syntax(code: str) -> tuple[bool, str]:
-    """ast.parse syntax check."""
-    try:
-        ast.parse(code)
-        return True, ""
-    except SyntaxError as exc:
-        return False, f"line {exc.lineno}: {exc.msg}"
-
-
-def _validate_safety(code: str) -> tuple[bool, str]:
-    """CodeSandbox safety check + pattern check for common LLM mistakes."""
-    import re
-
-    # Check for Python boolean on polars expressions (causes DangerousCodeError)
-    # Pattern: `if rank(`, `if pl.col(`, `if rolling_`, `if ts_`, `if correlation(`
-    if_patterns = [
-        r'if\s+rank\s*\(',
-        r'if\s+pl\.col\s*\(',
-        r'if\s+rolling_\w+\s*\(',
-        r'if\s+ts_\w+\s*\(',
-        r'if\s+correlation\s*\(',
-        r'if\s+scale\s*\(',
-        r'if\s+zscore\s*\(',
-        r'elif\s+rank\s*\(',
-        r'elif\s+pl\.col\s*\(',
-        r'elif\s+rolling_\w+\s*\(',
-        r'elif\s+ts_\w+\s*\(',
-    ]
-    for pat in if_patterns:
-        if re.search(pat, code):
-            return False, (
-                f"Detected `if/elif` on polars expression (matches pattern: {pat}). "
-                "Use `pl.when(condition).then(value).otherwise(value)` instead. "
-                "Example: `factor = pl.when(rank(a) < rank(b)).then(-1).otherwise(0)`"
-            )
-
-    from QuantNodes.ai.sandbox import CodeSandbox
-
-    sandbox = CodeSandbox(max_code_length=500_000)
-    validation = sandbox.validate(code)
-    if not validation.is_safe:
-        return False, "; ".join(str(e) for e in validation.errors)
-    return True, ""
-
-
-def _build_execute_namespace() -> dict[str, Any]:
-    """Build namespace with QuantNodes operators + polars/pandas."""
-    from QuantNodes.operators.proxy import get_operator, list_operators
-
-    ns: dict[str, Any] = {
-        "pl": pl,
-        "polars": pl,
-        "pd": __import__("pandas"),
-        "np": __import__("numpy"),
-    }
-    for op_name in list_operators():
-        op_func = get_operator(op_name)
-        if op_func is not None:
-            ns[op_name] = op_func
-    return ns
-
-
-def _execute_code(code: str, df: pl.DataFrame, timeout_sec: float = 120.0) -> pl.Series:
-    """Run the LLM-generated code in a CodeSandbox; return factor Series."""
-    import threading
-    from QuantNodes.ai.sandbox import CodeSandbox
-
-    namespace = _build_execute_namespace()
-    namespace["df"] = df
-
-    sandbox = CodeSandbox(max_code_length=500_000)
-    if not sandbox.validate(code).is_safe:
-        raise ValueError("Unsafe code (sandbox rejected)")
-
-    # Wrap: define compute_factor, then call it and capture the result.
-    wrapped = code.rstrip() + "\n_factor_result = compute_factor(df)\n"
-
-    result_box = [None]
-    error_box = [None]
-
-    def _run():
-        try:
-            result_box[0] = sandbox.validate_and_execute(wrapped, namespace)
-        except Exception as exc:
-            error_box[0] = exc
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout=timeout_sec)
-    if t.is_alive():
-        raise TimeoutError(f"compute_factor() exceeded {timeout_sec}s timeout")
-    if error_box[0] is not None:
-        raise error_box[0]
-    result = result_box[0]
-    series = result.get("_factor_result")
-    if series is None:
-        # Search the namespace for any pl.Series
-        for v in result.values():
-            if isinstance(v, pl.Series):
-                series = v
-                break
-    if series is None:
-        raise ValueError(
-            f"compute_factor() did not return a Series; got keys: {list(result.keys())}"
-        )
-    if callable(series):
-        raise ValueError("compute_factor is a function, not a Series (never called)")
-    if isinstance(series, pl.Expr):
-        # LLM returned a polars Expr; evaluate it on the dataframe
-        series = df.select(series.alias("__factor__")).to_series()
-    if not isinstance(series, pl.Series):
-        series = pl.Series(series)
-    return series
 
 
 def _sanitize_code(code: str) -> str:
@@ -244,7 +130,6 @@ def _sanitize_code(code: str) -> str:
     - `if expr:` → wraps with pl.when() (best-effort, simple cases only)
     - `and` → `&`, `or` → `|`, `not` → `~` (on polars expressions)
     """
-    import re
 
     # Fix boolean operators on polars expressions
     # Only replace 'and'/'or'/'not' when used as Python keywords (not in strings/comments)

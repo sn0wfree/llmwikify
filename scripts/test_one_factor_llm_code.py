@@ -19,10 +19,7 @@ behind `--no-react` for A/B comparison.
 """
 from __future__ import annotations
 
-import numpy as np
-
 import argparse
-import ast
 import json
 import re
 import sys
@@ -30,10 +27,18 @@ import time
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import polars as pl
 
-from llmwikify.foundation.llm.streamable import StreamableLLMClient
+from llmwikify.reproduction.codegen_utils import (
+    SYSTEM_PROMPT_CODE,
+    build_llm_client,
+    execute_code,
+    extract_python,
+    validate_safety,
+    validate_syntax,
+)
 
 PROJECT_ROOT = Path("/home/ll/llmwikify")
 # Switched from short (65d) to long (1305d, 5y) data on 2026-06-22 for meaningful IC.
@@ -77,193 +82,7 @@ def _patch_sample_pool_filter():
 
 _patch_sample_pool_filter()  # apply on import
 
-# ─── 新 SYSTEM_PROMPT（不要 AST，要 Python） ─────────────────────────
-
-SYSTEM_PROMPT_CODE = """You are a quant factor code generator.
-
-Translate a factor formula into a Python function `compute_factor(df)` that returns a polars Series
-of factor values, one per row of `df`.
-
-## DO NOT (会导致执行失败)
-1. DO NOT use `if pl.col(...)` or `if rank(...)` — use `pl.when().then().otherwise()`
-2. DO NOT use `and`/`or`/`not` on polars columns — use `&`/`|`/`~`
-3. DO NOT call `df.sort(...)` — data is already sorted
-4. DO NOT use `pl.col('x').rolling_std(...)` — use `rolling_std(pl.col('x'), window=N)`
-
-## DATA
-`df` is a polars DataFrame (long format: rows = (date, code) pairs).
-Columns: date, code, close, open, high, low, volume, returns, vwap, industry.
-
-## 3 RULES (ALL CRITICAL)
-
-### RULE 1: USE FUNCTION FORM
-QuantNodes operators are FUNCTIONS, NOT Expr methods.
-  ✓ `rolling_std(pl.col('returns'), window=20)`
-  ✗ `pl.col('returns').rolling_std(window=20)`
-
-### RULE 2: MATERIALIZE BEFORE .over('date')
-When rank/scale depends on a rolling/correlation result, store it first:
-  ✓ `df = df.with_columns(correlation(a, b, window=200).alias('_ts'))`
-    `factor = rank(pl.col('_ts')).over('date')`
-  ✗ `rank(correlation(a, b, window=200)).over('date')`  ← re-evaluates in 50-row group → NaN
-
-### RULE 3: NO PYTHON BOOLEAN ON POLARS EXPR
-NEVER use `if/elif/else`, `and`, `or`, `not` on polars expressions.
-
-WRONG:
-```python
-if rank(pl.col('a')).over('date') < rank(pl.col('b')).over('date'):
-    factor = -1
-else:
-    factor = 0
-```
-
-RIGHT:
-```python
-factor = pl.when(
-    rank(pl.col('a')).over('date') < rank(pl.col('b')).over('date')
-).then(-1).otherwise(0)
-```
-
-Also: use `&` not `and`, `|` not `or`, `~` not `not`.
-
-## OPERATORS
-
-### QuantNodes time-series (kwargs={"window": N})
-  rolling_mean, rolling_std, rolling_sum, rolling_max, rolling_min,
-  rolling_corr (2 args), rolling_cov (2 args), rolling_argmax, rolling_argmin,
-  ts_argmax, ts_argmin, ts_rank, ts_mean, ts_std, ts_min, ts_max, ts_sum, ts_quantile,
-  ts_delta, ts_diff, ts_lag, ts_pct_change, ts_corr (2), ts_cov (2)
-  decay_linear, decay_exp, correlation (2), covariance (2)
-
-### QuantNodes (require periods kwarg)
-  delta, diff, lag, delay, shift, pct_change, ref
-
-### Cross-sectional (require .over('date'))
-  rank, scale, zscore, winsorize, neutralize
-  -> neutralize(f, group=pl.col('industry')): industry neutralization
-
-### Polars native
-  pl.when(cond).then(x).otherwise(y), pl.col('x').abs(), .sign(), .log(), .sqrt()
-
-## OUTPUT FORMAT
-
-```python
-def compute_factor(df: pl.DataFrame) -> pl.Series:
-    # Rule 2: materialize rolling result first
-    df = df.with_columns(rolling_std(pl.col('returns'), window=20).alias('_std'))
-    # Rule 3: use pl.when, not if
-    inner = pl.when(pl.col('returns') < 0).then(pl.col('_std')).otherwise(pl.col('close'))
-    # Rule 2: materialize ts_argmax
-    df = df.with_columns(ts_argmax(inner.sign() * (inner.abs() ** 2), window=5).alias('_argmax'))
-    # Rule 2+1: rank on materialized column, function form
-    factor = rank(pl.col('_argmax')).over('date') - 0.5
-    return df.select(factor).to_series()
-```
-
-CRITICAL: Return `pl.Series` with same length as `df`. Output ONLY code block.
-"""
-
-
 # ─── 工具函数 ─────────────────────────────────────────────────────
-
-
-def _extract_python(text: str) -> str | None:
-    """Extract Python code from ```python ... ``` fence."""
-    m = re.search(r"```python\s*\n(.+?)\n```", text, re.DOTALL)
-    if m:
-        return m.group(1).strip()
-    # Fallback: look for `def compute_factor` and take everything after
-    if "def compute_factor" in text:
-        idx = text.index("def compute_factor")
-        return text[idx:].strip()
-    return None
-
-
-def _validate_python_syntax(code: str) -> tuple[bool, str]:
-    """Check syntax via ast.parse."""
-    try:
-        ast.parse(code)
-        return True, ""
-    except SyntaxError as exc:
-        return False, f"SyntaxError at line {exc.lineno}: {exc.msg}"
-
-
-def _safe_check(code: str) -> tuple[bool, str]:
-    """Run CodeSandbox.validate for safety check."""
-    from QuantNodes.ai.sandbox import CodeSandbox
-
-    sandbox = CodeSandbox(max_code_length=500_000)
-    validation = sandbox.validate(code)
-    if not validation.is_safe:
-        return False, "; ".join(str(e) for e in validation.errors)
-    return True, ""
-
-
-def _execute_code(code: str, df_pl: pl.DataFrame) -> pl.Series:
-    """Execute the LLM-generated code via CodeSandbox on the given polars DataFrame.
-
-    Returns a polars Series of factor values aligned with df's row order.
-    """
-    from QuantNodes.ai.sandbox import CodeSandbox
-    from QuantNodes.operators.proxy import get_operator, list_operators
-
-    # Build namespace with QuantNodes operators (function form ONLY — polars Expr
-    # methods like .rolling_std() use different kwargs and would shadow the QuantNodes
-    # versions, so we deliberately don't monkey-patch Expr).
-    namespace = {
-        "pl": pl,
-        "polars": pl,
-        "pd": pd,
-        "np": __import__("numpy"),
-    }
-    for op_name in list_operators():
-        op_func = get_operator(op_name)
-        if op_func is not None:
-            namespace[op_name] = op_func
-
-    sandbox = CodeSandbox(max_code_length=500_000)
-    validation = sandbox.validate(code)
-    if not validation.is_safe:
-        raise ValueError(f"Unsafe code: {validation.errors}")
-
-    # Inject df as a global and call compute_factor via wrapper
-    namespace["df"] = df_pl
-    # Wrap code: define compute_factor, then call it and store result in _factor_result
-    wrapped = (
-        code.rstrip()
-        + "\n\n# Auto-call compute_factor(df) and store result\n"
-        + "_factor_result = compute_factor(df)\n"
-    )
-    result = sandbox.validate_and_execute(wrapped, namespace)
-    series = result.get("_factor_result")
-    if series is None:
-        series = result.get("compute_factor") or result.get("_result") or result.get("result")
-    if series is None:
-        # Look for any pl.Series in the result namespace
-        for _k, v in result.items():
-            if isinstance(v, pl.Series):
-                series = v
-                break
-    if series is None:
-        raise ValueError(
-            f"compute_factor() did not return a Series; got keys: {list(result.keys())}"
-        )
-    if isinstance(series, type(lambda: None)) or callable(series):
-        raise ValueError(
-            f"compute_factor is still a function (was never called); "
-            f"namespace keys: {list(result.keys())}"
-        )
-    if not isinstance(series, pl.Series):
-        series = pl.Series(series)
-    # Sanity check: length must match df_pl (catches misaligned compute_factor)
-    if len(series) != len(df_pl):
-        raise ValueError(
-            f"compute_factor returned series of len {len(series)}, "
-            f"expected {len(df_pl)} (length of df). "
-            f"Check if your code accidentally filtered/expanded rows."
-        )
-    return series
 
 
 def _wide_from_long(df_pl: pl.DataFrame, factor_series: pl.Series) -> pd.DataFrame:
@@ -380,19 +199,6 @@ def _build_qn_config(factor_name: str, h5_path: Path, expression: str) -> dict:
 # ─── 主流程 ───────────────────────────────────────────────────────
 
 
-def _build_llm_client() -> StreamableLLMClient:
-    """Build StreamableLLMClient from ~/.llmwikify/llmwikify.json."""
-    config = json.loads(Path("~/.llmwikify/llmwikify.json").expanduser().read_text())
-    llm_cfg = config["llm"]
-    return StreamableLLMClient(
-        provider=llm_cfg.get("provider", "openai"),
-        api_key=llm_cfg["api_key"],
-        base_url=llm_cfg["base_url"],
-        model=llm_cfg["model"],
-        request_timeout_seconds=float(llm_cfg.get("timeout", 600)),
-    )
-
-
 def _llm_code_oneshot(
     factor_name: str,
     formula_brief: str,
@@ -427,24 +233,24 @@ Output ONLY the code block."""
     print(f"\n[LLM] raw response ({len(content)} chars):")
     print(content[:500] + ("..." if len(content) > 500 else ""))
 
-    code = _extract_python(content)
+    code = extract_python(content)
     if not code:
         return None, None, "no code fence", 0
     print(f"\n[extract] code ({len(code)} chars):")
     print(code)
 
-    syntax_ok, syntax_err = _validate_python_syntax(code)
+    syntax_ok, syntax_err = validate_syntax(code)
     if not syntax_ok:
         return None, None, syntax_err, 1
     print("[syntax] OK")
 
-    safe_ok, safe_err = _safe_check(code)
+    safe_ok, safe_err = validate_safety(code)
     if not safe_ok:
         return None, None, safe_err, 2
     print("[safety] OK")
 
     try:
-        series = _execute_code(code, df_pl)
+        series = execute_code(code, df_pl)
     except Exception as exc:
         return None, None, f"{type(exc).__name__}: {exc}", 3
     print(f"[execute] OK: factor_series len={len(series)}, dtype={series.dtype}")
@@ -507,7 +313,7 @@ def _llm_code_react(
     # Re-execute the final code to get the Series (compile_to_code_react
     # doesn't return the Series; we re-run the validated code)
     try:
-        series = _execute_code(result.code, df_pl)
+        series = execute_code(result.code, df_pl)
     except Exception as exc:
         return None, None, f"final execute failed: {exc}", result.to_dict()
     return result.code, series, None, result.to_dict()
@@ -905,7 +711,7 @@ def run_one_factor(alpha_index: int = 1, use_react: bool = True) -> dict:
 
     # 3. LLM call to generate Python code (ReAct self-retry by default)
     print(f"\n[LLM] calling model via {('ReAct' if use_react else '1-shot')} loop...")
-    llm = _build_llm_client()
+    llm = build_llm_client()
 
     # 4. LLM generates code (ReAct or 1-shot)
     react_meta: dict = {}
