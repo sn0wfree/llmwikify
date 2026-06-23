@@ -51,8 +51,9 @@ llmwikify 是面向持久知识沉淀的 LLM Wiki 系统，不是传统一次性
 | `/agent/autoresearch` | 6 步 AutoResearch 研究工作流 |
 | `/agent/reproduction` | 论文/研报策略复现工作台 |
 | `/agent/paper` | 论文/研报抽取到 Wiki/Factor/Strategy 页面 |
-| `/agent/factor` | 因子选择、配置、IC、分组、多空分析 |
-| `/agent/strategy` | 策略选择、配置、回测与结果展示 |
+| `/agent/factor` | 因子库浏览（卡片列表 → 6 层详情） |
+| `/agent/strategy` | 策略库浏览（卡片列表 → 4 层详情） |
+| `/agent/backtest` | 单因子回测 + 策略回测（IC、分组、多空、KPI、PnL） |
 | `/agent/tasks` | 任务/调度监控 |
 | `/agent/settings` | LLM provider、model、API key 配置 |
 

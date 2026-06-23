@@ -14,7 +14,7 @@ import {
   Coins,
 } from 'lucide-react';
 
-type ToolStatus = 'pending' | 'streaming' | 'done' | 'error';
+type ToolStatus = 'pending' | 'streaming' | 'done' | 'error' | 'executed' | 'confirmation_required';
 type ConnectionState = 'idle' | 'live' | 'error';
 
 interface ToolCall {
@@ -67,6 +67,8 @@ const STATUS_ICON: Record<ToolStatus, typeof Loader2> = {
   streaming: Loader2,
   done: CheckCircle2,
   error: XCircle,
+  executed: CheckCircle2,
+  confirmation_required: AlertCircle,
 };
 
 const STATUS_TONE: Record<ToolStatus, string> = {
@@ -74,6 +76,8 @@ const STATUS_TONE: Record<ToolStatus, string> = {
   streaming: 'text-primary',
   done: 'text-green-500',
   error: 'text-destructive',
+  executed: 'text-green-500',
+  confirmation_required: 'text-yellow-500',
 };
 
 function formatTimeShort(iso: string): string {

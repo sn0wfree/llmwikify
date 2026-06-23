@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type ToolStatus = 'pending' | 'streaming' | 'done' | 'error';
+type ToolStatus = 'pending' | 'streaming' | 'done' | 'error' | 'executed' | 'confirmation_required';
 
 interface ToolCardProps {
   tool: string;
@@ -29,6 +29,7 @@ const TOOL_ICONS: Record<string, typeof Wrench> = {
 
 const STATUS_ICON: Record<ToolStatus, typeof Loader2> = {
   pending: Loader2, streaming: Loader2, done: CheckCircle2, error: XCircle,
+  executed: CheckCircle2, confirmation_required: AlertTriangle,
 };
 
 const statusColorMap: Record<ToolStatus, string> = {
@@ -36,14 +37,18 @@ const statusColorMap: Record<ToolStatus, string> = {
   streaming: 'border-primary/50',
   done: 'border-success/40',
   error: 'border-destructive/50',
+  executed: 'border-success/40',
+  confirmation_required: 'border-warning/40',
 };
 
 const statusBadgeVariant: Record<ToolStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   pending: 'outline', streaming: 'default', done: 'secondary', error: 'destructive',
+  executed: 'secondary', confirmation_required: 'outline',
 };
 
 const statusText: Record<ToolStatus, string> = {
   pending: 'pending', streaming: 'running', done: 'done', error: 'error',
+  executed: 'done', confirmation_required: 'confirm',
 };
 
 const statusDotColor: Record<ToolStatus, string> = {
@@ -51,6 +56,8 @@ const statusDotColor: Record<ToolStatus, string> = {
   streaming: 'bg-primary animate-stage-pulse',
   done: 'bg-success',
   error: 'bg-destructive',
+  executed: 'bg-success',
+  confirmation_required: 'bg-warning',
 };
 
 function truncateJson(obj: unknown, maxLen = 200): string {

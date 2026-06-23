@@ -13,6 +13,7 @@ Used by:
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -51,15 +52,46 @@ def list_factors(project_root: Path | None = None) -> list[dict[str, Any]]:
 def read_factor_yaml(name: str, project_root: Path | None = None) -> dict[str, Any] | None:
     """Read a single factor YAML file.
 
+    Supports two formats:
+    1. New directory format: factors/{name}/factor.yaml
+    2. Old single-file format: factors/{name}.yaml
+
     Args:
-        name: Factor path relative to factors/ (e.g., 'stock/price/momentum_20d')
+        name: Factor path relative to factors/ (e.g., '101_alphas/stk_alpha_001_f9f371')
 
     Returns:
         Full 6-layer factor dict, or None if not found.
     """
     factors_dir = _get_factors_dir(project_root)
-    yaml_path = factors_dir / f"{name}.yaml"
 
+    # Try new directory format first
+    dir_path = factors_dir / name
+    yaml_path = dir_path / "factor.yaml"
+    if yaml_path.exists():
+        try:
+            content = yaml_path.read_text(encoding="utf-8")
+            data = yaml.safe_load(content)
+            # Load code.py if exists
+            code_path = dir_path / "code.py"
+            if code_path.exists():
+                data["code"] = code_path.read_text(encoding="utf-8")
+            # Load backtest/latest.json if exists
+            backtest_path = dir_path / "backtest" / "latest.json"
+            if backtest_path.exists():
+                import json
+                data["backtest"] = json.loads(backtest_path.read_text(encoding="utf-8"))
+            # Load meta.json if exists
+            meta_path = dir_path / "meta.json"
+            if meta_path.exists():
+                import json
+                data["meta"] = json.loads(meta_path.read_text(encoding="utf-8"))
+            return data
+        except Exception as exc:
+            logger.warning("could not read factor YAML %s: %s", name, exc)
+            return None
+
+    # Fall back to old single-file format
+    yaml_path = factors_dir / f"{name}.yaml"
     if not yaml_path.exists():
         return None
 
@@ -74,20 +106,56 @@ def read_factor_yaml(name: str, project_root: Path | None = None) -> dict[str, A
 def write_factor_yaml(name: str, data: dict, project_root: Path | None = None) -> str:
     """Write a factor YAML file and update index.yaml.
 
+    Supports two formats:
+    1. New directory format: factors/{name}/factor.yaml
+    2. Old single-file format: factors/{name}.yaml
+
     Args:
         name: Factor path relative to factors/
         data: Full factor dict (with 'factor' root key)
 
     Returns:
-        "Created: factors/{name}.yaml" or "Updated: factors/{name}.yaml"
+        "Created: factors/{name}" or "Updated: factors/{name}"
     """
     factors_dir = _get_factors_dir(project_root)
-    yaml_path = factors_dir / f"{name}.yaml"
-    is_new = not yaml_path.exists()
 
-    yaml_path.parent.mkdir(parents=True, exist_ok=True)
-    content = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
-    yaml_path.write_text(content, encoding="utf-8")
+    # Check if it's a directory format
+    dir_path = factors_dir / name
+    if dir_path.is_dir():
+        # New directory format
+        yaml_path = dir_path / "factor.yaml"
+        is_new = not yaml_path.exists()
+
+        # Write factor.yaml
+        content = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        yaml_path.write_text(content, encoding="utf-8")
+
+        # Write code.py if code is in data
+        if "code" in data:
+            code_path = dir_path / "code.py"
+            code_path.write_text(data["code"], encoding="utf-8")
+
+        # Write meta.json if meta is in data
+        if "meta" in data:
+            import json
+            meta_path = dir_path / "meta.json"
+            meta_path.write_text(json.dumps(data["meta"], indent=2, ensure_ascii=False), encoding="utf-8")
+
+        # Write backtest/latest.json if backtest is in data
+        if "backtest" in data:
+            import json
+            backtest_dir = dir_path / "backtest"
+            backtest_dir.mkdir(exist_ok=True)
+            backtest_path = backtest_dir / "latest.json"
+            backtest_path.write_text(json.dumps(data["backtest"], indent=2, ensure_ascii=False), encoding="utf-8")
+    else:
+        # Old single-file format
+        yaml_path = factors_dir / f"{name}.yaml"
+        is_new = not yaml_path.exists()
+
+        yaml_path.parent.mkdir(parents=True, exist_ok=True)
+        content = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        yaml_path.write_text(content, encoding="utf-8")
 
     # Keep index.yaml in sync
     try:
@@ -96,22 +164,42 @@ def write_factor_yaml(name: str, data: dict, project_root: Path | None = None) -
         logger.warning("index.yaml update failed after writing %s: %s", name, exc)
 
     action = "Created" if is_new else "Updated"
-    return f"{action}: factors/{name}.yaml"
+    return f"{action}: factors/{name}"
 
 
 def list_factors_by_category(project_root: Path | None = None) -> dict[str, list[dict]]:
     """List all factors grouped by category.
 
     Returns:
-        Dict like {'price': [...], 'fundamental': [...], 'composite': [...]}
+        Dict like {'alpha': [...], 'momentum': [...], 'value': [...]}
     """
     factors_dir = _get_factors_dir(project_root)
     if not factors_dir.exists():
         return {}
 
     categories: dict[str, list[dict]] = {}
+
+    # Scan for new directory format (factor.yaml inside directories)
+    for yaml_file in sorted(factors_dir.rglob("*/factor.yaml")):
+        try:
+            content = yaml_file.read_text(encoding="utf-8")
+            data = yaml.safe_load(content)
+            if data:
+                factor = data.get("factor", data)
+                cat = factor.get("category", "unknown")
+                # Get relative path without factor.yaml
+                rel = yaml_file.parent.relative_to(factors_dir)
+                factor["_name"] = str(rel)
+                factor["_path"] = str(rel / "factor.yaml")
+                categories.setdefault(cat, []).append(factor)
+        except Exception as exc:
+            logger.warning("could not read %s: %s", yaml_file, exc)
+
+    # Scan for old single-file format (for backward compatibility)
     for yaml_file in sorted(factors_dir.rglob("*.yaml")):
-        if yaml_file.name == "index.yaml":
+        if yaml_file.name in ("index.yaml", "_meta.yaml", "config.yaml"):
+            continue
+        if yaml_file.parent.name == "backtest":
             continue
         try:
             content = yaml_file.read_text(encoding="utf-8")
@@ -125,6 +213,7 @@ def list_factors_by_category(project_root: Path | None = None) -> dict[str, list
                 categories.setdefault(cat, []).append(factor)
         except Exception as exc:
             logger.warning("could not read %s: %s", yaml_file, exc)
+
     return categories
 
 
@@ -145,8 +234,43 @@ def update_index(project_root: Path | None = None) -> None:
         "by_status": {},
     }
 
+    # Scan for new directory format (factor.yaml inside directories)
+    for yaml_file in sorted(factors_dir.rglob("*/factor.yaml")):
+        try:
+            content = yaml_file.read_text(encoding="utf-8")
+            data = yaml.safe_load(content)
+            if data:
+                factor = data.get("factor", data)
+                rel = yaml_file.parent.relative_to(factors_dir)
+
+                entry = {
+                    "name": factor.get("name", ""),
+                    "name_cn": factor.get("name_cn", ""),
+                    "asset_type": factor.get("asset_type", ""),
+                    "category": factor.get("category", ""),
+                    "subcategory": factor.get("subcategory", ""),
+                    "status": factor.get("status", "已注册"),
+                    "definition": factor.get("l1", {}).get("definition", ""),
+                    "file": str(rel),
+                }
+                factors.append(entry)
+
+                # Update stats
+                stats["total"] += 1
+                at = entry["asset_type"] or "unknown"
+                stats["by_asset_type"][at] = stats["by_asset_type"].get(at, 0) + 1
+                cat = entry["category"] or "unknown"
+                stats["by_category"][cat] = stats["by_category"].get(cat, 0) + 1
+                st = entry["status"] or "unknown"
+                stats["by_status"][st] = stats["by_status"].get(st, 0) + 1
+        except Exception as exc:
+            logger.warning("could not read %s: %s", yaml_file, exc)
+
+    # Scan for old single-file format (for backward compatibility)
     for yaml_file in sorted(factors_dir.rglob("*.yaml")):
-        if yaml_file.name == "index.yaml":
+        if yaml_file.name in ("index.yaml", "_meta.yaml", "config.yaml"):
+            continue
+        if yaml_file.parent.name == "backtest":
             continue
         try:
             content = yaml_file.read_text(encoding="utf-8")
@@ -169,21 +293,22 @@ def update_index(project_root: Path | None = None) -> None:
 
                 # Update stats
                 stats["total"] += 1
-                at = factor.get("asset_type", "unknown")
-                cat = factor.get("category", "unknown")
-                st = factor.get("status", "已注册")
+                at = entry["asset_type"] or "unknown"
                 stats["by_asset_type"][at] = stats["by_asset_type"].get(at, 0) + 1
+                cat = entry["category"] or "unknown"
                 stats["by_category"][cat] = stats["by_category"].get(cat, 0) + 1
+                st = entry["status"] or "unknown"
                 stats["by_status"][st] = stats["by_status"].get(st, 0) + 1
         except Exception as exc:
             logger.warning("could not read %s: %s", yaml_file, exc)
 
-    index_data = {
+    index = {
+        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "stats": stats,
         "factors": factors,
-        "statistics": stats,
     }
 
     index_path = factors_dir / "index.yaml"
-    content = yaml.dump(index_data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    content = yaml.dump(index, default_flow_style=False, allow_unicode=True, sort_keys=False)
     index_path.write_text(content, encoding="utf-8")
     logger.info("index.yaml updated with %d factors", len(factors))

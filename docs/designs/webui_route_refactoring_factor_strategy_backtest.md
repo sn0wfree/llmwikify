@@ -1,8 +1,8 @@
 # WebUI 路由重构: 因子库 / 策略库 / 回测平台
 
-> 日期: 2026-06-22
+> 日期: 2026-06-22（实现于 2026-06-23）
 > 作者: sn0wfree
-> 状态: 设计稿
+> 状态: 已实现
 
 ## 背景
 
@@ -29,45 +29,46 @@ NAV_QUANT:
 
 路由映射:
 ```
-/agent/factor           → FactorDetail (因子库浏览器, 带 FactorSelector)
-/agent/factor/:name     → FactorDetail (指定因子)
-/agent/strategy         → StrategyDetail (策略库浏览器, 带 StrategySelector) [新建]
-/agent/strategy/:name   → StrategyDetail (指定策略)
-/agent/backtest         → BacktestPlatform (合并 FactorPanel + StrategyPanel) [新建]
+/agent/factor           → FactorList (因子库展示页, 卡片按 category 分组)
+/agent/factor/:name     → FactorDetail (6 层详情)
+/agent/strategy         → StrategyList (策略库展示页)
+/agent/strategy/:name   → StrategyDetail (4 层详情)
+/agent/backtest         → BacktestPlatform (单因子回测 + 策略回测 Tab)
 ```
 
 ## 改动清单
 
-### 1. 新建 `StrategyDetail.tsx` (~200 行)
+### 1. 新建 `FactorList.tsx` / `StrategyList.tsx` (展示页)
 
-复制 `FactorDetail.tsx` 结构, 改为策略:
-- 路由: `/agent/strategy/:name`
-- API: `GET /api/strategy/{slug}` (已有 `strategy.py`)
-- 渲染: 策略定义 (L1-L4, 无 L5/L6)
-- 左侧无 selector (通过侧栏导航), 或加 StrategySelector
+因子/策略库**展示页**, 独立于回测平台:
+- `FactorList`: 调 `GET /api/factor/library/list`, flatten categories → 按 category 分组的卡片网格, 点击导航至 `/agent/factor/:name`
+- `StrategyList`: 调 `GET /api/strategy/list`, 卡片网格, 点击导航至 `/agent/strategy/:name`
+- 卡片展示 name_cn / definition / status，点击进入对应的 Detail 详情页
 
-### 2. 新建 `BacktestPlatform.tsx` (~150 行)
+### 2. `FactorDetail.tsx` / `StrategyDetail.tsx` (详情页, 已有)
+
+- `FactorDetail`: 渲染 6 层 YAML (L1-L6), API `GET /api/factor/library/{name}`
+- `StrategyDetail`: 渲染 4 层定义 (L1-L4), API `GET /api/strategy/{slug}`
+- 仅接受 `:name` 路由参数; 无 `name` 时不再渲染 (由 List 页负责选择)
+
+### 3. `BacktestPlatform.tsx` (回测平台, 已有)
 
 合并 FactorPanel + StrategyPanel:
 - Tab 切换: 单因子回测 / 策略回测
-- 左侧: FactorSelector 或 StrategySelector (随 Tab 切换)
-- 右侧: 回测结果 (复用现有 MetricCards, ICChart, GroupReturnBar 等)
+- `FactorPanel` / `StrategyPanel` 仅在此处使用 (不再绑定 Factor/Strategy 菜单)
+- 复用 MetricCards, ICChart, GroupReturnBar 等可视化组件
 
-### 3. 更新 `App.tsx`
+### 4. `App.tsx` 路由 (最终结果)
 
-```diff
-- <Route path="factor" element={<FactorPanel />} />
-- <Route path="factor-library" element={<FactorDetail />} />
-- <Route path="factor-library/:name" element={<FactorDetail />} />
-- <Route path="strategy" element={<StrategyPanel />} />
-+ <Route path="factor" element={<FactorDetail />} />
-+ <Route path="factor/:name" element={<FactorDetail />} />
-+ <Route path="strategy" element={<StrategyDetail />} />
-+ <Route path="strategy/:name" element={<StrategyDetail />} />
-+ <Route path="backtest" element={<BacktestPlatform />} />
+```tsx
+<Route path="factor" element={<FactorList />} />
+<Route path="factor/:name" element={<FactorDetail />} />
+<Route path="strategy" element={<StrategyList />} />
+<Route path="strategy/:name" element={<StrategyDetail />} />
+<Route path="backtest" element={<BacktestPlatform />} />
 ```
 
-### 4. 更新 `AgentLayout.tsx` 侧栏
+### 5. 更新 `AgentLayout.tsx` 侧栏
 
 ```diff
   const NAV_QUANT = [
@@ -78,16 +79,10 @@ NAV_QUANT:
   ] as const;
 ```
 
-### 5. 修复 `StrategySelector.tsx` (同 Phase 0)
-
-- 改调 `/api/strategy/list` (或检查后端返回格式)
-- flatten categories → flat array
-- 改文案 "wiki/strategy/" → "quant/strategies/"
-
 ## 验证
 
-- [ ] `/agent/factor` 显示因子列表 + 点击进入 FactorDetail
-- [ ] `/agent/strategy` 显示策略列表 + 点击进入 StrategyDetail
-- [ ] `/agent/backtest` 显示 Tab: 单因子回测 / 策略回测
-- [ ] 侧栏显示 Factor / Strategy / Backtest 三个入口
-- [ ] vite build 成功, 0 个新 TS error
+- [x] `/agent/factor` 显示因子库展示页 (卡片列表) + 点击进入 FactorDetail
+- [x] `/agent/strategy` 显示策略库展示页 (卡片列表) + 点击进入 StrategyDetail
+- [x] `/agent/backtest` 显示 Tab: 单因子回测 / 策略回测
+- [x] 侧栏显示 Factor / Strategy / Backtest 三个入口
+- [x] vite build 成功, 0 个新 TS error
