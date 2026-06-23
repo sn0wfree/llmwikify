@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 1,
+  "factor_name": "alpha-001",
+  "formula_brief": "(rank(Ts_ArgMax(SignedPower(((returns < 0) ? stddev(returns, 20) : close), 2.), 5)) - 0.5)",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Inner: if returns < 0 then stddev(returns, 20) else close\n    inner = pl.when(pl.col('returns') < 0).then(\n        rolling_std(pl.col('returns'), window=20)\n    ).otherwise(pl.col('close'))\n\n    # SignedPower: sign(x) * abs(x)^2\n    signed = inner.sign() * (inner.abs() ** 2)\n\n    # Ts_ArgMax with 5-day window\n    argmax = ts_argmax(signed, window=5)\n\n    # Cross-sectional rank, centred around zero\n    factor = rank(argmax).over('date') - 0.5\n\n    return df.select(factor).to_series()",
+  "code_chars": 544,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_001.h5",
+  "ic_mean": 0.032644310087837906,
+  "icir": 0.2238193454409272,
+  "ic_winrate": 0.5932203389830508,
+  "elapsed_sec": 18.06885133124888
+}

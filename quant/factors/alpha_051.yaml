@@ -1,0 +1,58 @@
+factor:
+  name: alpha_051
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: '(((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close,
+      10) - close) / 10)) < (-1 * 0.05)) ? 1 : ((-1 * 1) * (close - delay(close, 1))))'
+    formula: '(((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10)
+      - close) / 10)) < (-1 * 0.05)) ? 1 : ((-1 * 1) * (close - delay(close, 1))))'
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - close
+    - open
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Delayed close\
+      \ values\n    close_20 = delay(pl.col('close'), periods=20)\n    close_10 =\
+      \ delay(pl.col('close'), periods=10)\n    close_1 = delay(pl.col('close'), periods=1)\n\
+      \n    # Average 10-day return from 20 days ago to 10 days ago\n    ret_past\
+      \ = (close_20 - close_10) / 10\n    # Average 10-day return from 10 days ago\
+      \ to today\n    ret_recent = (close_10 - pl.col('close')) / 10\n\n    # Condition:\
+      \ momentum deceleration worse than -5%\n    condition = (ret_past - ret_recent)\
+      \ < (-0.05)\n\n    # Else branch: negative of 1-day return\n    else_val = (-1)\
+      \ * (pl.col('close') - close_1)\n\n    factor = pl.when(condition).then(1).otherwise(else_val)\n\
+      \n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 736
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_051.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 48
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.002893989323950005
+      icir: -0.022178611990746184
+      winrate: 0.4576271186440678
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 0.0002396376514066656
+      longshort_sharpe: null
+      longshort_max_dd: -0.014810835345073298
+      validated_at: 1782146166.590946
+    validation_date: '2026-06-23'

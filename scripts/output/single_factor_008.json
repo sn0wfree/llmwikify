@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 8,
+  "factor_name": "alpha-008",
+  "formula_brief": "(-1 * rank(((sum(open, 5) * sum(returns, 5)) - delay((sum(open, 5) * sum(returns, 5)), 10))))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Sum of open over 5 periods\n    sum_open = rolling_sum(pl.col('open'), window=5)\n    \n    # Sum of returns over 5 periods\n    sum_returns = rolling_sum(pl.col('returns'), window=5)\n    \n    # Product: sum(open, 5) * sum(returns, 5)\n    product = sum_open * sum_returns\n    \n    # Delay by 10 periods\n    delayed_product = delay(product, periods=10)\n    \n    # Difference\n    diff = product - delayed_product\n    \n    # Cross-sectional rank, multiplied by -1\n    factor = -1 * rank(diff).over('date')\n    \n    return df.select(factor).to_series()",
+  "code_chars": 601,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_008.h5",
+  "ic_mean": 0.027104634835166976,
+  "icir": 0.15885823596462936,
+  "ic_winrate": 0.559322033898305,
+  "elapsed_sec": 15.822868883609772
+}

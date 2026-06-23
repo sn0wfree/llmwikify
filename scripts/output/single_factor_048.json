@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 48,
+  "factor_name": "alpha-048",
+  "formula_brief": "(indneutralize(((correlation(delta(close, 1), delta(delay(close, 1), 1), 250) * delta(close, 1)) / close), IndClass.subindustry) / sum(((delta(close, 1) / delay(close, 1))^2), 250))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already sorted by (code, date) - DO NOT call df.sort(...)\n\n    # delta(close, 1): today's close - yesterday's close\n    delta_close = delta(pl.col('close'), periods=1)\n\n    # delay(close, 1): yesterday's close\n    delay_close = delay(pl.col('close'), periods=1)\n\n    # delta(delay(close, 1), 1): yesterday's close - two-days-ago's close\n    delta_delay_close = delta(delay_close, periods=1)\n\n    # 250-day rolling correlation between today's change and yesterday's change\n    corr = correlation(delta_close, delta_delay_close, window=250)\n\n    # (correlation * delta(close, 1)) / close\n    numerator_expr = (corr * delta_close) / pl.col('close')\n\n    # Cross-sectional neutralize (substitute for indneutralize, which requires IndClass)\n    neutralized = neutralize(numerator_expr).over('date')\n\n    # (delta(close, 1) / delay(close, 1))^2 -> daily return squared\n    daily_return_sq = (delta_close / delay_close) ** 2\n\n    # 250-day rolling sum of squared daily returns\n    denom = rolling_sum(daily_return_sq, window=250)\n\n    # Final factor: neutralized numerator / denominator\n    factor = neutralized / denom\n\n    return df.select(factor).to_series()",
+  "code_chars": 1217,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_048.h5",
+  "ic_mean": NaN,
+  "icir": NaN,
+  "ic_winrate": NaN,
+  "elapsed_sec": 46.186858873814344
+}

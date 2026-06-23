@@ -1,0 +1,62 @@
+factor:
+  name: alpha_070
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((rank(delta(vwap, 1.29456))^Ts_Rank(correlation(IndNeutralize(close,
+      IndClass.industry), adv50, 17.8256), 17.9171)) * -1)
+    formula: ((rank(delta(vwap, 1.29456))^Ts_Rank(correlation(IndNeutralize(close,
+      IndClass.industry), adv50, 17.8256), 17.9171)) * -1)
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - close
+    - adv50
+    - vwap
+    - industry
+    - open
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv50: 50-day\
+      \ average dollar volume (close * volume)\n    adv50 = ts_mean(pl.col('close')\
+      \ * pl.col('volume'), window=50)\n\n    # Industry neutralize close (using neutralize\
+      \ as substitute since industry class unavailable)\n    ind_neutral_close = neutralize(pl.col('close')).over('date')\n\
+      \n    # Correlation between ind-neutralized close and adv50\n    corr = rolling_corr(ind_neutral_close,\
+      \ adv50, window=18)\n\n    # Ts_Rank of correlation\n    ts_rank_corr = ts_rank(corr,\
+      \ window=18)\n\n    # Delta of vwap\n    vwap_delta = delta(pl.col('vwap'),\
+      \ periods=1)\n\n    # Cross-sectional rank of delta(vwap)\n    rank_delta =\
+      \ rank(vwap_delta).over('date')\n\n    # Raise rank to the power of ts_rank\n\
+      \    factor = rank_delta ** ts_rank_corr\n\n    # Multiply by -1\n    factor\
+      \ = factor * -1\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 866
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_070.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 47
+      status: 失败
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.012559456601099054
+      icir: -0.08357830012574002
+      winrate: 0.5084745762711864
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 4.313603884287254e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.03193108808886523
+      validated_at: 1782149924.324742
+    validation_date: '2026-06-23'

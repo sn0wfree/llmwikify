@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 39,
+  "factor_name": "alpha-039",
+  "formula_brief": "((-1 * rank((delta(close, 7) * (1 - rank(decay_linear((volume / adv20), 9)))))) * (1 + rank(sum(returns, 250))))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20: 20-day rolling mean of volume\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n\n    # volume / adv20\n    vol_ratio = pl.col('volume') / adv20\n\n    # decay_linear(volume / adv20, 9)\n    decayed = decay_linear(vol_ratio, window=9)\n\n    # rank(decay_linear(...)) cross-section\n    rank_decayed = rank(decayed).over('date')\n\n    # 1 - rank_decayed\n    one_minus_rank = 1 - rank_decayed\n\n    # delta(close, 7)\n    close_delta = delta(pl.col('close'), periods=7)\n\n    # inner product: delta(close, 7) * (1 - rank(decay_linear(...)))\n    inner_product = close_delta * one_minus_rank\n\n    # rank(inner_product) cross-section\n    rank_inner = rank(inner_product).over('date')\n\n    # -1 * rank_inner\n    neg_rank = -1 * rank_inner\n\n    # sum(returns, 250)\n    sum_returns = rolling_sum(pl.col('returns'), window=250)\n\n    # rank(sum(returns, 250)) cross-section\n    rank_sum_returns = rank(sum_returns).over('date')\n\n    # 1 + rank_sum_returns\n    one_plus_rank = 1 + rank_sum_returns\n\n    # final factor\n    factor = neg_rank * one_plus_rank\n\n    return df.select(factor).to_series()",
+  "code_chars": 1143,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_039.h5",
+  "ic_mean": NaN,
+  "icir": NaN,
+  "ic_winrate": NaN,
+  "elapsed_sec": 65.84118128567934
+}

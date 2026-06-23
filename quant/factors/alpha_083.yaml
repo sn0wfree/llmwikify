@@ -1,0 +1,61 @@
+factor:
+  name: alpha_083
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((rank(delay(((high - low) / (sum(close, 5) / 5)), 2)) * rank(rank(volume)))
+      / (((high - low) / (sum(close, 5) / 5)) / (vwap - close)))
+    formula: ((rank(delay(((high - low) / (sum(close, 5) / 5)), 2)) * rank(rank(volume)))
+      / (((high - low) / (sum(close, 5) / 5)) / (vwap - close)))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - high
+    - low
+    - close
+    - volume
+    - vwap
+    - open
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # (high - low)\
+      \ / (sum(close, 5) / 5)\n    sum_close_5 = rolling_sum(pl.col('close'), window=5)\n\
+      \    hl = pl.col('high') - pl.col('low')\n    inner1 = hl / (sum_close_5 / 5)\n\
+      \    \n    # delay by 2 periods\n    delayed = delay(inner1, periods=2)\n  \
+      \  \n    # rank(delay(...)) - cross-section\n    rank_delayed = rank(delayed).over('date')\n\
+      \    \n    # rank(rank(volume)) - cross-section\n    rank_vol = rank(pl.col('volume')).over('date')\n\
+      \    rank_rank_vol = rank(rank_vol).over('date')\n    \n    # numerator: rank(delay)\
+      \ * rank(rank(volume))\n    numerator = rank_delayed * rank_rank_vol\n    \n\
+      \    # denominator: ((high - low) / (sum(close,5)/5)) / (vwap - close)\n   \
+      \ vwap_close_diff = pl.col('vwap') - pl.col('close')\n    denominator = inner1\
+      \ / vwap_close_diff\n    \n    # final factor\n    factor = numerator / denominator\n\
+      \    \n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 908
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_083.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 55
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.010726337952482063
+      icir: 0.073295878312652
+      winrate: 0.559322033898305
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 7.888805740141613e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.017894203615235894
+      validated_at: 1782150680.3729415
+    validation_date: '2026-06-23'

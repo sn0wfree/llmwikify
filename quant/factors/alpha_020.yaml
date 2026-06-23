@@ -1,0 +1,56 @@
+factor:
+  name: alpha_020
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((((-1 * rank((open - delay(high, 1)))) * rank((open - delay(close,
+      1)))) * rank((open - delay(low, 1))))
+    formula: ((((-1 * rank((open - delay(high, 1)))) * rank((open - delay(close, 1))))
+      * rank((open - delay(low, 1))))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - high
+    - low
+    - close
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Cross-sectional\
+      \ differences using delayed (lagged) values\n    open_minus_high = pl.col('open')\
+      \ - delay(pl.col('high'), periods=1)\n    open_minus_close = pl.col('open')\
+      \ - delay(pl.col('close'), periods=1)\n    open_minus_low = pl.col('open') -\
+      \ delay(pl.col('low'), periods=1)\n\n    # Cross-sectional rank per date for\
+      \ each term\n    rank1 = rank(open_minus_high).over('date')\n    rank2 = rank(open_minus_close).over('date')\n\
+      \    rank3 = rank(open_minus_low).over('date')\n\n    # Combine: -1 * rank1\
+      \ * rank2 * rank3\n    factor = -1 * rank1 * rank2 * rank3\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 647
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_020.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 52
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.00417738966354692
+      icir: 0.02808017016445763
+      winrate: 0.559322033898305
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 8.570748598502043e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.016519399668172195
+      validated_at: 1782144574.824281
+    validation_date: '2026-06-23'

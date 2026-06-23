@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 53,
+  "factor_name": "alpha-053",
+  "formula_brief": "(-1 * delta((((close - low) - (high - close)) / (close - low)), 9))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code', 'date'])\n    \n    # Inner expression: ((close - low) - (high - close)) / (close - low)\n    inner = (\n        (pl.col('close') - pl.col('low')) - (pl.col('high') - pl.col('close'))\n    ) / (pl.col('close') - pl.col('low'))\n    \n    # Apply delta with periods=9 and multiply by -1\n    factor = -1 * delta(inner, periods=9)\n    \n    return df.select(factor).to_series()",
+  "code_chars": 443,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_053.h5",
+  "ic_mean": 0.016819962913135353,
+  "icir": 0.1347059364064447,
+  "ic_winrate": 0.5932203389830508,
+  "elapsed_sec": 6.799127729609609
+}

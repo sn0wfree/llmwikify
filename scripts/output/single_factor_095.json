@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 95,
+  "factor_name": "alpha-095",
+  "formula_brief": "(rank((open - ts_min(open, 12.4105))) < Ts_Rank((rank(correlation(sum(((high + low) / 2), 19.1351), sum(adv40, 19.1351), 12.8742))^5), 11.7584))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code', 'date'])\n\n    # adv40 proxy: 40-day rolling mean of volume\n    adv40 = rolling_mean(pl.col('volume'), window=40)\n\n    # Left side: rank(open - ts_min(open, 12))  [12.4105 -> 12]\n    open_minus_min = pl.col('open') - rolling_min(pl.col('open'), window=12)\n    left = rank(open_minus_min).over('date')\n\n    # Right side: Ts_Rank( rank( correlation( sum((H+L)/2, 19), sum(adv40, 19), 13) )^5 , 12 )\n    mid_price = (pl.col('high') + pl.col('low')) / 2\n    sum_mid = rolling_sum(mid_price, window=19)          # 19.1351 -> 19\n    sum_adv40 = rolling_sum(adv40, window=19)            # 19.1351 -> 19\n    corr = rolling_corr(sum_mid, sum_adv40, window=13)   # 12.8742 -> 13\n    ranked_corr = rank(corr).over('date')\n    powered = ranked_corr ** 5\n    right = ts_rank(powered, window=12)                 # 11.7584 -> 12\n\n    # Boolean comparison cast to float\n    factor = (left < right).cast(pl.Float64)\n\n    return df.select(factor).to_series()",
+  "code_chars": 1016,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_095.h5",
+  "ic_mean": NaN,
+  "icir": NaN,
+  "ic_winrate": NaN,
+  "elapsed_sec": 17.401251506060362
+}

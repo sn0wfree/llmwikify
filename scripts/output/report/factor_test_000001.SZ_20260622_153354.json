@@ -1,0 +1,127 @@
+{
+  "factor_name": "000001.SZ",
+  "timestamp": "2026-06-22T15:33:54.224049",
+  "ic": {
+    "ic_mean": NaN,
+    "ic_std": NaN,
+    "icir": NaN,
+    "rank_ic_mean": NaN,
+    "rank_icir": NaN
+  },
+  "group": {
+    "n_groups": 5,
+    "group_eva_exc": {
+      "1": {
+        "AnnualRt": NaN,
+        "AccumRt": NaN,
+        "SR": NaN,
+        "MDD": 0.0,
+        "WinRatio": NaN,
+        "WinLossRatio": NaN,
+        "Calmar": NaN,
+        "MDD_date": 20200131.0,
+        "MDD_lastdays": 1,
+        "MDD_recoverdays": 1,
+        "Periods": 0
+      },
+      "2": {
+        "AnnualRt": NaN,
+        "AccumRt": NaN,
+        "SR": NaN,
+        "MDD": 0.0,
+        "WinRatio": NaN,
+        "WinLossRatio": NaN,
+        "Calmar": NaN,
+        "MDD_date": 20200131.0,
+        "MDD_lastdays": 1,
+        "MDD_recoverdays": 1,
+        "Periods": 0
+      },
+      "3": {
+        "AnnualRt": NaN,
+        "AccumRt": NaN,
+        "SR": NaN,
+        "MDD": 0.0,
+        "WinRatio": NaN,
+        "WinLossRatio": NaN,
+        "Calmar": NaN,
+        "MDD_date": 20200131.0,
+        "MDD_lastdays": 1,
+        "MDD_recoverdays": 1,
+        "Periods": 0
+      },
+      "4": {
+        "AnnualRt": NaN,
+        "AccumRt": NaN,
+        "SR": NaN,
+        "MDD": 0.0,
+        "WinRatio": NaN,
+        "WinLossRatio": NaN,
+        "Calmar": NaN,
+        "MDD_date": 20200131.0,
+        "MDD_lastdays": 1,
+        "MDD_recoverdays": 1,
+        "Periods": 0
+      },
+      "5": {
+        "AnnualRt": NaN,
+        "AccumRt": NaN,
+        "SR": NaN,
+        "MDD": 0.0,
+        "WinRatio": NaN,
+        "WinLossRatio": NaN,
+        "Calmar": NaN,
+        "MDD_date": 20200131.0,
+        "MDD_lastdays": 1,
+        "MDD_recoverdays": 1,
+        "Periods": 0
+      }
+    }
+  },
+  "longshort": {
+    "eva": {
+      "多头超额": {
+        "AnnualRt": NaN,
+        "AccumRt": NaN,
+        "SR": NaN,
+        "MDD": 0.0,
+        "WinRatio": NaN,
+        "WinLossRatio": NaN,
+        "Calmar": NaN,
+        "MDD_date": 20200131.0,
+        "MDD_lastdays": 1,
+        "MDD_recoverdays": 1,
+        "Periods": 0
+      },
+      "空头超额": {
+        "AnnualRt": NaN,
+        "AccumRt": NaN,
+        "SR": NaN,
+        "MDD": 0.0,
+        "WinRatio": NaN,
+        "WinLossRatio": NaN,
+        "Calmar": NaN,
+        "MDD_date": 20200131.0,
+        "MDD_lastdays": 1,
+        "MDD_recoverdays": 1,
+        "Periods": 0
+      },
+      "多空": {
+        "AnnualRt": NaN,
+        "AccumRt": NaN,
+        "SR": NaN,
+        "MDD": 0.0,
+        "WinRatio": NaN,
+        "WinLossRatio": NaN,
+        "Calmar": NaN,
+        "MDD_date": 20200131.0,
+        "MDD_lastdays": 1,
+        "MDD_recoverdays": 1,
+        "Periods": 0
+      }
+    }
+  },
+  "risk_corr": {
+    "mean": {}
+  }
+}

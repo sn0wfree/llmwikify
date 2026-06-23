@@ -1,0 +1,66 @@
+factor:
+  name: alpha_064
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((rank(correlation(sum(((open * 0.178404) + (low * (1 - 0.178404))),
+      12.7054), sum(adv120, 12.7054), 16.6208)) < rank(delta(((((high + low) / 2)
+      * 0.178404) + (vwap * (1 - 0.178404))), 3.69741))) * -1
+    formula: ((rank(correlation(sum(((open * 0.178404) + (low * (1 - 0.178404))),
+      12.7054), sum(adv120, 12.7054), 16.6208)) < rank(delta(((((high + low) / 2)
+      * 0.178404) + (vwap * (1 - 0.178404))), 3.69741))) * -1)
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - high
+    - low
+    - adv120
+    - vwap
+    - close
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv120 - average\
+      \ daily volume over 120 days\n    adv120 = ts_mean(pl.col('volume'), window=120)\n\
+      \n    # First component: sum((open * 0.178404) + (low * (1 - 0.178404)), 12)\n\
+      \    inner1 = (pl.col('open') * 0.178404) + (pl.col('low') * (1 - 0.178404))\n\
+      \    sum1 = ts_sum(inner1, window=12)\n\n    # Second component: sum(adv120,\
+      \ 12)\n    sum2 = ts_sum(adv120, window=12)\n\n    # Rolling correlation with\
+      \ window 16\n    corr = ts_corr(sum1, sum2, window=16)\n\n    # Cross-sectional\
+      \ rank of correlation\n    rank1 = rank(corr).over('date')\n\n    # Second part:\
+      \ delta(((((high + low) / 2) * 0.178404) + (vwap * (1 - 0.178404))), 3)\n  \
+      \  inner2 = ((pl.col('high') + pl.col('low')) / 2 * 0.178404) + (pl.col('vwap')\
+      \ * (1 - 0.178404))\n    delta_val = delta(inner2, periods=3)\n\n    # Cross-sectional\
+      \ rank of delta\n    rank2 = rank(delta_val).over('date')\n\n    # (rank1 <\
+      \ rank2) ? -1 : 0\n    factor = pl.when(rank1 < rank2).then(pl.lit(-1.0)).otherwise(pl.lit(0.0))\n\
+      \n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 1041
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_064.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 50
+      status: 待验证
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: null
+      icir: null
+      winrate: null
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -0.00014648933853178558
+      longshort_sharpe: null
+      longshort_max_dd: -0.0320375396354689
+      validated_at: 1782149696.6542656
+    validation_date: '2026-06-23'

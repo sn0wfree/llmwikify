@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 35,
+  "factor_name": "alpha-035",
+  "formula_brief": "((Ts_Rank(volume, 32) * (1 - Ts_Rank(((close + high) - low), 16))) * (1 - Ts_Rank(returns, 32)))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Part 1: Ts_Rank(volume, 32)\n    rank_volume = ts_rank(pl.col('volume'), window=32)\n\n    # Part 2: 1 - Ts_Rank((close + high - low), 16)\n    inner_expr = pl.col('close') + pl.col('high') - pl.col('low')\n    rank_inner = ts_rank(inner_expr, window=16)\n\n    # Part 3: 1 - Ts_Rank(returns, 32)\n    rank_returns = ts_rank(pl.col('returns'), window=32)\n\n    # Combine: part1 * part2 * part3\n    factor = rank_volume * (1 - rank_inner) * (1 - rank_returns)\n\n    return df.select(factor).to_series()",
+  "code_chars": 548,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_035.h5",
+  "ic_mean": -0.01191021386379334,
+  "icir": -0.09372981621443854,
+  "ic_winrate": 0.4915254237288136,
+  "elapsed_sec": 8.862105451524258
+}

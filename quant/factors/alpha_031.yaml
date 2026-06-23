@@ -1,0 +1,61 @@
+factor:
+  name: alpha_031
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (rank(rank(rank(decay_linear((-1 * rank(rank(delta(close, 10)))),
+      10)))) + rank((-1 * delta(close, 3)))) + sign(scale(correlation(adv20, low,
+      12))))
+    formula: (rank(rank(rank(decay_linear((-1 * rank(rank(delta(close, 10)))), 10))))
+      + rank((-1 * delta(close, 3)))) + sign(scale(correlation(adv20, low, 12))))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - low
+    - close
+    - adv20
+    - open
+    - high
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
+      \ 'date'])\n\n    # Part A: rank(rank(rank(decay_linear((-1 * rank(rank(delta(close,\
+      \ 10)))), 10))))\n    delta_10 = delta(pl.col('close'), periods=10)\n    rr_delta\
+      \ = rank(rank(delta_10).over('date')).over('date')\n    neg_rr = -1 * rr_delta\n\
+      \    decayed = decay_linear(neg_rr, window=10)\n    part_a = rank(rank(rank(decayed).over('date')).over('date')).over('date')\n\
+      \n    # Part B: rank((-1 * delta(close, 3)))\n    delta_3 = delta(pl.col('close'),\
+      \ periods=3)\n    part_b = rank((-1 * delta_3)).over('date')\n\n    # Part C:\
+      \ sign(scale(correlation(adv20, low, 12)))\n    adv20 = ts_mean(pl.col('volume'),\
+      \ window=20)\n    corr = correlation(adv20, pl.col('low'), window=12)\n    part_c\
+      \ = scale(corr).over('date').sign()\n\n    factor = (part_a + part_b) + part_c\n\
+      \n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 863
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_031.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 54
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.011122674071252052
+      icir: 0.05194958937766991
+      winrate: 0.559322033898305
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -0.0002489392232263299
+      longshort_sharpe: null
+      longshort_max_dd: -0.03723032516951137
+      validated_at: 1782145099.7216716
+    validation_date: '2026-06-23'

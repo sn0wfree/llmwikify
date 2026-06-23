@@ -1,0 +1,48 @@
+factor:
+  name: alpha_006
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (-1 * correlation(open, volume, 10))
+    formula: (-1 * correlation(open, volume, 10))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - volume
+    - close
+    - high
+    - low
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    factor = -1 * correlation(pl.col('open'),\
+      \ pl.col('volume'), window=10)\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 166
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_006.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 44
+      status: 失败
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.01946172814822468
+      icir: -0.11879482880829478
+      winrate: 0.4406779661016949
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -4.104518227654452e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.01964838268312323
+      validated_at: 1782144226.1460865
+    validation_date: '2026-06-23'

@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 49,
+  "factor_name": "alpha-049",
+  "formula_brief": "(((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10) - close) / 10)) < (-1 * 0.1)) ? 1 : ((-1 * 1) * (close - delay(close, 1))))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Sort by code and date for per-code time-series operators\n    df = df.sort(['code', 'date'])\n\n    # Delayed close prices\n    delay_20 = delay(pl.col('close'), periods=20)\n    delay_10 = delay(pl.col('close'), periods=10)\n    delay_1 = delay(pl.col('close'), periods=1)\n\n    # Condition: (delay(close,20) - delay(close,10))/10 - (delay(close,10) - close)/10 < -0.1\n    cond = ((delay_20 - delay_10) / 10 - (delay_10 - pl.col('close')) / 10) < (-0.1)\n\n    # False branch: -1 * (close - delay(close, 1))\n    false_branch = -1 * (pl.col('close') - delay_1)\n\n    # Apply conditional\n    factor = pl.when(cond).then(1).otherwise(false_branch)\n\n    return df.select(factor).to_series()",
+  "code_chars": 734,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_049.h5",
+  "ic_mean": 0.008792603140654314,
+  "icir": 0.06723908843203356,
+  "ic_winrate": 0.5084745762711864,
+  "elapsed_sec": 25.239057095721364
+}

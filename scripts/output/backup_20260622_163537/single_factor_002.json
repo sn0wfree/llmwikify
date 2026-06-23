@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 2,
+  "factor_name": "alpha-002",
+  "formula_brief": "(-1 * correlation(rank(delta(log(volume), 2)), rank(((close - open) / open)), 6))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Sort by (code, date) for per-code rolling\n    df = df.sort(['code', 'date'])\n    \n    # 1. log(volume)\n    log_vol = pl.col('volume').log()\n    \n    # 2. delta(log(volume), 2) - 2-period difference of log(volume)\n    delta_log_vol = delta(log_vol, periods=2)\n    \n    # 3. (close - open) / open\n    ret = (pl.col('close') - pl.col('open')) / pl.col('open')\n    \n    # 4. Cross-sectional rank per date for both series\n    ranked_delta = rank(delta_log_vol).over('date')\n    ranked_ret = rank(ret).over('date')\n    \n    # 5. Rolling correlation with window 6\n    corr = rolling_corr(ranked_delta, ranked_ret, window=6)\n    \n    # 6. Multiply by -1\n    factor = corr * (-1)\n    \n    return df.select(factor).to_series()",
+  "code_chars": 773,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_002.h5",
+  "ic_mean": 0.015216055242774827,
+  "icir": 0.11152533132258707,
+  "ic_winrate": 0.5263157894736842,
+  "elapsed_sec": 47.415300857275724
+}

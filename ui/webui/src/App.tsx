@@ -30,14 +30,14 @@ const ReproductionPanel = lazy(() =>
 const PaperPanel = lazy(() =>
   import('./components/paper/PaperPanel').then(m => ({ default: m.PaperPanel }))
 );
-const FactorPanel = lazy(() =>
-  import('./components/factor/FactorPanel').then(m => ({ default: m.FactorPanel }))
+const FactorList = lazy(() =>
+  import('./components/factor/FactorList').then(m => ({ default: m.FactorList }))
 );
 const FactorDetail = lazy(() =>
   import('./components/factor/FactorDetail').then(m => ({ default: m.FactorDetail }))
 );
-const StrategyPanel = lazy(() =>
-  import('./components/strategy/StrategyPanel').then(m => ({ default: m.StrategyPanel }))
+const StrategyList = lazy(() =>
+  import('./components/strategy/StrategyList').then(m => ({ default: m.StrategyList }))
 );
 const StrategyDetail = lazy(() =>
   import('./components/strategy/StrategyDetail').then(m => ({ default: m.StrategyDetail }))
@@ -71,9 +71,9 @@ function App() {
             <Route path="autoresearch" element={<AutoResearchPanel />} />
             <Route path="reproduction" element={<ReproductionPanel />} />
             <Route path="paper" element={<PaperPanel />} />
-            <Route path="factor" element={<FactorDetail />} />
+            <Route path="factor" element={<FactorList />} />
             <Route path="factor/:name" element={<FactorDetail />} />
-            <Route path="strategy" element={<StrategyDetail />} />
+            <Route path="strategy" element={<StrategyList />} />
             <Route path="strategy/:name" element={<StrategyDetail />} />
             <Route path="backtest" element={<BacktestPlatform />} />
             <Route path="tasks" element={<TaskMonitor />} />

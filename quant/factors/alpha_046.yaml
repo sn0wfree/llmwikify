@@ -1,0 +1,58 @@
+factor:
+  name: alpha_046
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: '((0.25 < (((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close,
+      10) - close) / 10))) ? (-1 * 1) : (((((delay(close, 20) - delay(close, 10))
+      / 10) - ((delay(close, 10) - close) / 10)) < 0) ? 1 '
+    formula: '((0.25 < (((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close,
+      10) - close) / 10))) ? (-1 * 1) : (((((delay(close, 20) - delay(close, 10))
+      / 10) - ((delay(close, 10) - close) / 10)) < 0) ? 1 : ((-1 * 1) * (close - delay(close,
+      1)))))'
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - close
+    - open
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    close = pl.col('close')\n\
+      \    \n    delay_20 = delay(close, periods=20)\n    delay_10 = delay(close,\
+      \ periods=10)\n    delay_1 = delay(close, periods=1)\n    \n    term1 = (delay_20\
+      \ - delay_10) / 10\n    term2 = (delay_10 - close) / 10\n    term = term1 -\
+      \ term2\n    \n    factor = pl.when(term > 0.25).then(-1).otherwise(\n     \
+      \   pl.when(term < 0).then(1).otherwise(-1 * (close - delay_1))\n    )\n   \
+      \ \n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 485
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_046.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 51
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.003390126620867463
+      icir: 0.023439151733643557
+      winrate: 0.5084745762711864
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 0.00035599064815139414
+      longshort_sharpe: null
+      longshort_max_dd: -0.015517679788794527
+      validated_at: 1782146024.7494235
+    validation_date: '2026-06-23'

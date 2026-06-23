@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 51,
+  "factor_name": "alpha-051",
+  "formula_brief": "(((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10) - close) / 10)) < (-1 * 0.05)) ? 1 : ((-1 * 1) * (close - delay(close, 1))))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Sort by (code, date) to ensure proper per-code time-series operations\n    df = df.sort(['code', 'date'])\n    \n    # Compute the two average change segments\n    # Segment 1: average daily change from day -20 to day -10\n    seg1 = (delay(pl.col('close'), periods=20) - delay(pl.col('close'), periods=10)) / 10\n    \n    # Segment 2: average daily change from day -10 to today\n    seg2 = (delay(pl.col('close'), periods=10) - pl.col('close')) / 10\n    \n    # Difference between the two segments\n    diff = seg1 - seg2\n    \n    # Condition: diff < -0.05\n    cond = diff < (-1 * 0.05)\n    \n    # If condition true -> 1, else -> -1 * (close - delay(close, 1))\n    factor = pl.when(cond).then(1).otherwise(\n        (-1 * 1) * (pl.col('close') - delay(pl.col('close'), periods=1))\n    )\n    \n    return df.select(factor).to_series()",
+  "code_chars": 880,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_051.h5",
+  "ic_mean": 0.009774322037460027,
+  "icir": 0.07566567018046205,
+  "ic_winrate": 0.5084745762711864,
+  "elapsed_sec": 13.021351350471377
+}

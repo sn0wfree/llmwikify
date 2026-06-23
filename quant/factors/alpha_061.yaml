@@ -1,0 +1,58 @@
+factor:
+  name: alpha_061
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (rank((vwap - ts_min(vwap, 16.1219))) < rank(correlation(vwap, adv180,
+      17.9282)))
+    formula: (rank((vwap - ts_min(vwap, 16.1219))) < rank(correlation(vwap, adv180,
+      17.9282)))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - vwap
+    - close
+    - open
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
+      \ 'date'])\n\n    # ADV180: 180-day average of volume\n    adv180 = rolling_mean(pl.col('volume'),\
+      \ window=180)\n\n    # LHS base: vwap - rolling_min(vwap, ~16)\n    vwap_min\
+      \ = rolling_min(pl.col('vwap'), window=16)\n    lhs = pl.col('vwap') - vwap_min\n\
+      \n    # RHS base: rolling_corr(vwap, adv180, ~18)\n    rhs = rolling_corr(pl.col('vwap'),\
+      \ adv180, window=18)\n\n    # Cross-sectional ranks\n    rank_lhs = rank(lhs).over('date')\n\
+      \    rank_rhs = rank(rhs).over('date')\n\n    # Boolean comparison → 1.0 / 0.0\n\
+      \    factor = pl.when(rank_lhs < rank_rhs).then(1.0).otherwise(0.0)\n\n    return\
+      \ df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 678
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_061.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 50
+      status: 待验证
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: null
+      icir: null
+      winrate: null
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -0.00014648933853178558
+      longshort_sharpe: null
+      longshort_max_dd: -0.0320375396354689
+      validated_at: 1782149595.5102758
+    validation_date: '2026-06-23'

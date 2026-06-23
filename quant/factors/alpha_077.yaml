@@ -1,0 +1,65 @@
+factor:
+  name: alpha_077
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: min(rank(decay_linear(((((high + low) / 2) + high) - (vwap + high)),
+      20.0451)), rank(decay_linear(correlation(((high + low) / 2), adv40, 3.1614),
+      5.64125)))
+    formula: min(rank(decay_linear(((((high + low) / 2) + high) - (vwap + high)),
+      20.0451)), rank(decay_linear(correlation(((high + low) / 2), adv40, 3.1614),
+      5.64125)))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - high
+    - low
+    - adv40
+    - vwap
+    - close
+    - open
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already\
+      \ sorted by (code, date); do NOT re-sort\n    df = df.sort(['code', 'date'])\n\
+      \n    # adv40: 40-day rolling mean of volume\n    adv40 = rolling_mean(pl.col('volume'),\
+      \ window=40)\n\n    # ----- Inner expression 1 -----\n    # ((((high + low)\
+      \ / 2) + high) - (vwap + high)) simplifies to\n    # (high + low) / 2 - vwap\n\
+      \    expr1 = ((pl.col('high') + pl.col('low')) / 2) - pl.col('vwap')\n    decayed1\
+      \ = decay_linear(expr1, window=20)         # period 20.0451 -> 20\n    rank1\
+      \ = rank(decayed1).over('date')\n\n    # ----- Inner expression 2 -----\n  \
+      \  mid = (pl.col('high') + pl.col('low')) / 2\n    corr_expr = rolling_corr(mid,\
+      \ adv40, window=3)   # period 3.1614 -> 3\n    decayed2 = decay_linear(corr_expr,\
+      \ window=6)     # period 5.64125 -> 6\n    rank2 = rank(decayed2).over('date')\n\
+      \n    # Element-wise min of the two cross-sectional ranks\n    factor = pl.min_horizontal(rank1,\
+      \ rank2)\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 979
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_077.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 38
+      status: 失败
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.04355026261779499
+      icir: -0.22117490322388556
+      winrate: 0.3728813559322034
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -0.0003577043491745924
+      longshort_sharpe: null
+      longshort_max_dd: -0.041447177614501285
+      validated_at: 1782150383.285014
+    validation_date: '2026-06-23'

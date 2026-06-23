@@ -1,0 +1,49 @@
+factor:
+  name: alpha_101
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((close - open) / ((high - low) + .001))
+    formula: ((close - open) / ((high - low) + .001))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - high
+    - low
+    - close
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    factor = (pl.col('close')\
+      \ - pl.col('open')) / ((pl.col('high') - pl.col('low')) + 0.001)\n    return\
+      \ df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 184
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_101.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 39
+      status: 失败
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.03327424384406691
+      icir: -0.23773715879819995
+      winrate: 0.4067796610169492
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -0.0004432015250135368
+      longshort_sharpe: null
+      longshort_max_dd: -0.05006468054445161
+      validated_at: 1782175292.8842003
+    validation_date: '2026-06-23'

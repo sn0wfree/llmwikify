@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 25,
+  "factor_name": "alpha-025",
+  "formula_brief": "rank(((((-1 * returns) * adv20) * vwap) * (high - close)))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Sort by (code, date) for per-code rolling operations\n    df = df.sort(['code', 'date'])\n\n    # adv20 = 20-day rolling mean of volume\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n\n    # Inner expression: ((-1 * returns) * adv20) * vwap * (high - close)\n    inner = (\n        (-1 * pl.col('returns'))\n        * adv20\n        * pl.col('vwap')\n        * (pl.col('high') - pl.col('close'))\n    )\n\n    # Cross-sectional rank per date\n    factor = rank(inner).over('date')\n\n    return df.select(factor).to_series()",
+  "code_chars": 573,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_025.h5",
+  "ic_mean": -0.008868420656868683,
+  "icir": -0.07440952236013999,
+  "ic_winrate": 0.5510204081632653,
+  "elapsed_sec": 29.78646043688059
+}

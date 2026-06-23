@@ -1,0 +1,54 @@
+factor:
+  name: alpha_005
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (rank((open - (sum(vwap, 10) / 10))) * (-1 * abs(rank((close - vwap)))))
+    formula: (rank((open - (sum(vwap, 10) / 10))) * (-1 * abs(rank((close - vwap)))))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - close
+    - vwap
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 10-day rolling\
+      \ mean of vwap (sum/10)\n    vwap_mean = rolling_sum(pl.col('vwap'), window=10)\
+      \ / 10\n\n    # Part A: rank(open - vwap_mean) cross-sectionally\n    part_a\
+      \ = rank(pl.col('open') - vwap_mean).over('date')\n\n    # Part B: -1 * abs(rank(close\
+      \ - vwap)) cross-sectionally\n    rank_close_vwap = rank(pl.col('close') - pl.col('vwap')).over('date')\n\
+      \    part_b = -1 * rank_close_vwap.abs()\n\n    # Final factor: A * B\n    factor\
+      \ = part_a * part_b\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 542
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_005.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 54
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.010572169709675868
+      icir: 0.06302215942138356
+      winrate: 0.576271186440678
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -7.209764037940936e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.02445299386135601
+      validated_at: 1782144199.269948
+    validation_date: '2026-06-23'

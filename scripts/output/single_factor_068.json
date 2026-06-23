@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 68,
+  "factor_name": "alpha-068",
+  "formula_brief": "((Ts_Rank(correlation(rank(high), rank(adv15), 8.91644), 13.9333) < rank(delta(((close * 0.518371) + (low * (1 - 0.518371))), 1.06157))) * -1)",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv15: average dollar volume over 15 days (close * volume)\n    dollar_volume = pl.col('close') * pl.col('volume')\n    adv15 = ts_mean(dollar_volume, 15)\n\n    # Cross-sectional ranks\n    rank_high = rank(pl.col('high')).over('date')\n    rank_adv15 = rank(adv15).over('date')\n\n    # Time-series correlation between rank(high) and rank(adv15), window 9 (from 8.91644)\n    corr = rolling_corr(rank_high, rank_adv15, window=9)\n\n    # Ts_Rank of correlation, window 14 (from 13.9333)\n    ts_rank_corr = ts_rank(corr, window=14)\n\n    # Weighted price: close * 0.518371 + low * (1 - 0.518371)\n    weighted = pl.col('close') * 0.518371 + pl.col('low') * (1 - 0.518371)\n\n    # Delta with period 1 (from 1.06157)\n    delta_val = delta(weighted, periods=1)\n\n    # Cross-sectional rank of delta\n    rank_delta = rank(delta_val).over('date')\n\n    # Final factor: -1 where ts_rank(corr) < rank(delta), 0 otherwise\n    factor = (pl.when(ts_rank_corr < rank_delta).then(1).otherwise(0)) * -1\n\n    return df.select(factor).to_series()",
+  "code_chars": 1073,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Int32",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_068.h5",
+  "ic_mean": NaN,
+  "icir": NaN,
+  "ic_winrate": NaN,
+  "elapsed_sec": 26.489216953516006
+}

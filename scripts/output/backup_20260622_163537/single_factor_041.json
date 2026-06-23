@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 41,
+  "factor_name": "alpha-041",
+  "formula_brief": "(((high * low)^0.5) - vwap)",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 1. Sort by (code, date) for consistency\n    df = df.sort(['code', 'date'])\n\n    # 2. Compute ((high * low)^0.5) - vwap\n    factor = (pl.col('high') * pl.col('low')) ** 0.5 - pl.col('vwap')\n\n    return df.select(factor).to_series()",
+  "code_chars": 287,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_041.h5",
+  "ic_mean": 0.009684592138839912,
+  "icir": 0.06591466251333507,
+  "ic_winrate": 0.5423728813559322,
+  "elapsed_sec": 6.0156129989773035
+}

@@ -1,0 +1,54 @@
+factor:
+  name: alpha_015
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (-1 * sum(rank(correlation(rank(high), rank(volume), 3)), 3))
+    formula: (-1 * sum(rank(correlation(rank(high), rank(volume), 3)), 3))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - high
+    - volume
+    - close
+    - open
+    - low
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
+      \ 'date'])\n    \n    # Cross-sectional ranks\n    rank_high = rank(pl.col('high')).over('date')\n\
+      \    rank_volume = rank(pl.col('volume')).over('date')\n    \n    # 3-day rolling\
+      \ correlation between ranked high and ranked volume\n    corr = rolling_corr(rank_high,\
+      \ rank_volume, window=3)\n    \n    # Cross-sectional rank of the correlation\n\
+      \    rank_corr = rank(corr).over('date')\n    \n    # 3-day rolling sum of the\
+      \ ranked correlation\n    sum_corr = ts_sum(rank_corr, window=3)\n    \n   \
+      \ # Multiply by -1\n    factor = -1 * sum_corr\n    \n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 643
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_015.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 46
+      status: 失败
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.016156805286019073
+      icir: -0.10706679762869341
+      winrate: 0.4745762711864407
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -0.00017981209940187703
+      longshort_sharpe: null
+      longshort_max_dd: -0.04948271710638941
+      validated_at: 1782144446.2642217
+    validation_date: '2026-06-23'

@@ -1,0 +1,49 @@
+factor:
+  name: alpha_033
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: rank((-1 * ((1 - (open / close))^1)))
+    formula: rank((-1 * ((1 - (open / close))^1)))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - close
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    inner = 1 - (pl.col('open')\
+      \ / pl.col('close'))\n    signed = -1 * (inner ** 1)\n    factor = rank(signed).over('date')\n\
+      \    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 212
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_033.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 62
+      status: 通过
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.040004817351488246
+      icir: 0.2871360246443578
+      winrate: 0.5932203389830508
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 0.0003672665584086854
+      longshort_sharpe: null
+      longshort_max_dd: -0.017299188745745243
+      validated_at: 1782145143.9807327
+    validation_date: '2026-06-23'

@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 16,
+  "factor_name": "alpha-016",
+  "formula_brief": "(-1 * rank(covariance(rank(high), rank(volume), 5)))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code', 'date'])\n\n    # Cross-sectional ranks\n    rank_high = rank(pl.col('high')).over('date')\n    rank_volume = rank(pl.col('volume')).over('date')\n\n    # Rolling covariance (time-series) of the two ranked series, window=5\n    cov = rolling_cov(rank_high, rank_volume, window=5)\n\n    # Cross-sectional rank of the covariance, then negate\n    factor = -1 * rank(cov).over('date')\n\n    return df.select(factor).to_series()",
+  "code_chars": 491,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_016.h5",
+  "ic_mean": -0.010015824119848861,
+  "icir": -0.06594441291091738,
+  "ic_winrate": 0.5084745762711864,
+  "elapsed_sec": 12.24950560927391
+}

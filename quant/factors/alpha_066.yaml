@@ -1,0 +1,62 @@
+factor:
+  name: alpha_066
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((rank(decay_linear(delta(vwap, 3.51013), 7.23052)) + Ts_Rank(decay_linear(((((low
+      * 0.96633) + (low * (1 - 0.96633))) - vwap) / (open - ((high + low) / 2))),
+      11.4157), 6.72611)) * -1)
+    formula: ((rank(decay_linear(delta(vwap, 3.51013), 7.23052)) + Ts_Rank(decay_linear(((((low
+      * 0.96633) + (low * (1 - 0.96633))) - vwap) / (open - ((high + low) / 2))),
+      11.4157), 6.72611)) * -1)
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - high
+    - low
+    - vwap
+    - close
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
+      \ 'date'])\n    \n    # Part 1: rank(decay_linear(delta(vwap, 3.51013), 7.23052))\n\
+      \    delta_vwap = delta(pl.col('vwap'), periods=int(3.51013))\n    decay1 =\
+      \ decay_linear(delta_vwap, window=int(7.23052))\n    rank1 = rank(decay1).over('date')\n\
+      \    \n    # Part 2: Ts_Rank(decay_linear((((low*0.96633 + low*(1-0.96633))\
+      \ - vwap) / (open - (high+low)/2)), 11.4157), 6.72611)\n    inner = (\n    \
+      \    ((pl.col('low') * 0.96633) + (pl.col('low') * (1 - 0.96633)) - pl.col('vwap'))\
+      \ /\n        (pl.col('open') - ((pl.col('high') + pl.col('low')) / 2))\n   \
+      \ )\n    decay2 = decay_linear(inner, window=int(11.4157))\n    ts_rank1 = ts_rank(decay2,\
+      \ window=int(6.72611))\n    \n    # Combine and multiply by -1\n    factor =\
+      \ (rank1 + ts_rank1) * -1\n    \n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 841
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_066.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 50
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.0013013965301278904
+      icir: 0.008471992038535527
+      winrate: 0.5084745762711864
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 0.00016993875624549126
+      longshort_sharpe: null
+      longshort_max_dd: -0.025396950879625985
+      validated_at: 1782149753.6049922
+    validation_date: '2026-06-23'

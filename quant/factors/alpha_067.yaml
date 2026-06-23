@@ -1,0 +1,66 @@
+factor:
+  name: alpha_067
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((rank((high - ts_min(high, 2.14593)))^rank(correlation(IndNeutralize(vwap,
+      IndClass.sector), IndNeutralize(adv20, IndClass.subindustry), 6.02936))) * -1)
+    formula: ((rank((high - ts_min(high, 2.14593)))^rank(correlation(IndNeutralize(vwap,
+      IndClass.sector), IndNeutralize(adv20, IndClass.subindustry), 6.02936))) * -1)
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - high
+    - adv20
+    - vwap
+    - industry
+    - close
+    - open
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = 20-day\
+      \ rolling mean of volume (proxy for average daily volume)\n    adv20 = rolling_mean(pl.col('volume'),\
+      \ window=20)\n    \n    # ts_min(high, 2.14593) - window rounds to 2\n    high_min\
+      \ = ts_min(pl.col('high'), window=2)\n    \n    # high - ts_min(high, 2)\n \
+      \   high_diff = pl.col('high') - high_min\n    \n    # Cross-sectional rank\
+      \ of (high - ts_min(high, 2))\n    rank1 = rank(high_diff).over('date')\n  \
+      \  \n    # IndNeutralize vwap by sector, and adv20 by subindustry.\n    # Since\
+      \ industry classification columns are not available in df,\n    # we pass the\
+      \ values through unchanged.\n    vwap_neut = pl.col('vwap')\n    adv20_neut\
+      \ = adv20\n    \n    # rolling correlation between IndNeutralize(vwap) and IndNeutralize(adv20)\n\
+      \    # window 6.02936 rounds to 6\n    corr = rolling_corr(vwap_neut, adv20_neut,\
+      \ window=6)\n    \n    # Cross-sectional rank of the correlation\n    rank2\
+      \ = rank(corr).over('date')\n    \n    # rank1^rank2 (exponentiation)\n    power\
+      \ = rank1 ** rank2\n    \n    # Multiply by -1\n    factor = power * -1\n  \
+      \  \n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 1118
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_067.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 52
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.001888481592583921
+      icir: 0.01011843820605914
+      winrate: 0.5254237288135594
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 0.00014318217991626803
+      longshort_sharpe: null
+      longshort_max_dd: -0.023487994767138094
+      validated_at: 1782149785.5479383
+    validation_date: '2026-06-23'

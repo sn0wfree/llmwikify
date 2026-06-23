@@ -1,0 +1,51 @@
+factor:
+  name: alpha_044
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (-1 * correlation(high, rank(volume), 5))
+    formula: (-1 * correlation(high, rank(volume), 5))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - high
+    - volume
+    - close
+    - open
+    - low
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Cross-sectional\
+      \ rank of volume per date\n    rank_vol = rank(pl.col('volume')).over('date')\n\
+      \n    # 5-day rolling correlation between high and rank(volume)\n    corr =\
+      \ correlation(pl.col('high'), rank_vol, window=5)\n\n    # Multiply by -1\n\
+      \    factor = -1 * corr\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 356
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_044.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 52
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.005772251650654621
+      icir: 0.03568594626385054
+      winrate: 0.5084745762711864
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -9.52227455045529e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.03177117748728313
+      validated_at: 1782145927.5725884
+    validation_date: '2026-06-23'

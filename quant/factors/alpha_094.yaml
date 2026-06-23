@@ -1,0 +1,62 @@
+factor:
+  name: alpha_094
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((rank((vwap - ts_min(vwap, 11.5783)))^Ts_Rank(correlation(Ts_Rank(vwap,
+      19.6462), Ts_Rank(adv60, 4.02992), 18.0926), 2.70756)) * -1)
+    formula: ((rank((vwap - ts_min(vwap, 11.5783)))^Ts_Rank(correlation(Ts_Rank(vwap,
+      19.6462), Ts_Rank(adv60, 4.02992), 18.0926), 2.70756)) * -1)
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - adv60
+    - vwap
+    - close
+    - open
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv60 = 60-day\
+      \ average daily volume\n    adv60 = ts_mean(pl.col('volume'), 60)\n\n    # ts_min(vwap,\
+      \ 11.5783) -> rolling_min, window must be int\n    vwap_min = rolling_min(pl.col('vwap'),\
+      \ window=11)\n\n    # rank(vwap - ts_min(vwap, 11.5783)) -- cross-sectional\
+      \ rank per date\n    rank_part = rank(pl.col('vwap') - vwap_min).over('date')\n\
+      \n    # Ts_Rank(vwap, 19.6462) -> cast to int\n    ts_rank_vwap = ts_rank(pl.col('vwap'),\
+      \ 19)\n\n    # Ts_Rank(adv60, 4.02992) -> cast to int\n    ts_rank_adv60 = ts_rank(adv60,\
+      \ 4)\n\n    # correlation(Ts_Rank(vwap, 19.6462), Ts_Rank(adv60, 4.02992), 18.0926)\
+      \ -> int\n    corr = rolling_corr(ts_rank_vwap, ts_rank_adv60, 18)\n\n    #\
+      \ Ts_Rank(correlation(...), 2.70756) -> cast to int\n    ts_rank_corr = ts_rank(corr,\
+      \ 2)\n\n    # (rank_part ^ ts_rank_corr) * -1\n    factor = (rank_part ** ts_rank_corr)\
+      \ * -1\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 925
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_094.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 50
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.0003401994108857873
+      icir: -0.0019823754993341333
+      winrate: 0.5084745762711864
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 9.142173683107657e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.030981823775598473
+      validated_at: 1782151103.431158
+    validation_date: '2026-06-23'

@@ -1,0 +1,63 @@
+factor:
+  name: alpha_073
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (max(rank(decay_linear(delta(vwap, 4.72775), 2.91864)), Ts_Rank(decay_linear(((delta(((open
+      * 0.147155) + (low * (1 - 0.147155))), 2.03608) / ((open * 0.147155) + (low
+      * (1 - 0.147155)))) * -1), 3.338
+    formula: (max(rank(decay_linear(delta(vwap, 4.72775), 2.91864)), Ts_Rank(decay_linear(((delta(((open
+      * 0.147155) + (low * (1 - 0.147155))), 2.03608) / ((open * 0.147155) + (low
+      * (1 - 0.147155)))) * -1), 3.33829), 16.7411)) * -1)
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - low
+    - vwap
+    - close
+    - high
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already\
+      \ sorted by (code, date); do not re-sort\n\n    # Part A: rank( decay_linear(\
+      \ delta(vwap, 4.72775), 2.91864 ) )\n    vwap_delta = delta(pl.col('vwap'),\
+      \ periods=int(4.72775))\n    vwap_decayed = decay_linear(vwap_delta, window=int(2.91864))\n\
+      \    part_a = rank(vwap_decayed).over('date')\n\n    # Part B: Ts_Rank( decay_linear(\
+      \ (delta(w, 2.03608) / w) * -1, 3.33829 ), 16.7411 )\n    # where w = open *\
+      \ 0.147155 + low * (1 - 0.147155)\n    w = pl.col('open') * 0.147155 + pl.col('low')\
+      \ * (1 - 0.147155)\n    w_delta = delta(w, periods=int(2.03608))\n    ratio\
+      \ = (w_delta / w) * -1\n    ratio_decayed = decay_linear(ratio, window=int(3.33829))\n\
+      \    part_b = ts_rank(ratio_decayed, window=int(16.7411))\n\n    # max(Part\
+      \ A, Part B) * -1\n    factor = pl.max_horizontal([part_a, part_b]) * -1\n\n\
+      \    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 882
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_073.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 59
+      status: 通过
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.02698911990045699
+      icir: 0.1937027724817293
+      winrate: 0.576271186440678
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 3.3567377522025765e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.024002253941598967
+      validated_at: 1782150261.9901206
+    validation_date: '2026-06-23'

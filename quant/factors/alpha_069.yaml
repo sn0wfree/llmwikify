@@ -1,0 +1,68 @@
+factor:
+  name: alpha_069
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((rank(ts_max(delta(IndNeutralize(vwap, IndClass.industry), 2.72412),
+      4.79344))^Ts_Rank(correlation(((close * 0.490655) + (vwap * (1 - 0.490655))),
+      adv20, 4.92416), 9.0615)) * -1)
+    formula: ((rank(ts_max(delta(IndNeutralize(vwap, IndClass.industry), 2.72412),
+      4.79344))^Ts_Rank(correlation(((close * 0.490655) + (vwap * (1 - 0.490655))),
+      adv20, 4.92416), 9.0615)) * -1)
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - close
+    - adv20
+    - vwap
+    - industry
+    - open
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20: 20-day\
+      \ average daily volume\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n\
+      \    \n    # Step 1: Industry neutralize vwap (using neutralize as proxy since\
+      \ no industry column)\n    ind_neutral_vwap = neutralize(pl.col('vwap')).over('date')\n\
+      \    \n    # Step 2: delta with period ~3 (rounded from 2.72412)\n    delta_vwap\
+      \ = delta(ind_neutral_vwap, periods=3)\n    \n    # Step 3: ts_max with window\
+      \ ~5 (rounded from 4.79344)\n    ts_max_delta = ts_max(delta_vwap, window=5)\n\
+      \    \n    # Step 4: cross-sectional rank\n    rank1 = rank(ts_max_delta).over('date')\n\
+      \    \n    # Step 5: weighted close/vwap combo\n    close_vwap_combo = pl.col('close')\
+      \ * 0.490655 + pl.col('vwap') * (1 - 0.490655)\n    \n    # Step 6: rolling\
+      \ correlation with adv20 over ~5 days (rounded from 4.92416)\n    corr = rolling_corr(close_vwap_combo,\
+      \ adv20, window=5)\n    \n    # Step 7: Ts_Rank over ~9 days (rounded from 9.0615)\n\
+      \    ts_rank_corr = ts_rank(corr, window=9)\n    \n    # Step 8: rank1 ^ ts_rank_corr,\
+      \ then multiply by -1\n    factor = (rank1 ** ts_rank_corr) * -1\n    \n   \
+      \ return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 1144
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_069.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 45
+      status: 失败
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.013500117253834895
+      icir: -0.0907566249231631
+      winrate: 0.4406779661016949
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -8.176029605022617e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.03431539183103862
+      validated_at: 1782149874.023521
+    validation_date: '2026-06-23'

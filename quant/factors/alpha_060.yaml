@@ -1,0 +1,59 @@
+factor:
+  name: alpha_060
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (0 - (1 * ((2 * scale(rank(((((close - low) - (high - close)) / (high
+      - low)) * volume)))) - scale(rank(ts_argmax(close, 10))))))
+    formula: (0 - (1 * ((2 * scale(rank(((((close - low) - (high - close)) / (high
+      - low)) * volume)))) - scale(rank(ts_argmax(close, 10))))))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - high
+    - low
+    - close
+    - volume
+    - open
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already\
+      \ sorted by (code, date) — do NOT re-sort\n\n    # Inner term: ((close - low)\
+      \ - (high - close)) / (high - low) * volume\n    inner = (\n        ((pl.col('close')\
+      \ - pl.col('low')) - (pl.col('high') - pl.col('close')))\n        / (pl.col('high')\
+      \ - pl.col('low'))\n        * pl.col('volume')\n    )\n\n    # rank(inner) cross-sectionally,\
+      \ then scale\n    scaled_rank_inner = scale(rank(inner).over('date')).over('date')\n\
+      \n    # ts_argmax(close, 10) — per code (df already sorted)\n    argmax_close\
+      \ = ts_argmax(pl.col('close'), window=10)\n\n    # rank(argmax) cross-sectionally,\
+      \ then scale\n    scaled_rank_argmax = scale(rank(argmax_close).over('date')).over('date')\n\
+      \n    # Final: 0 - (1 * (2 * scaled_rank_inner - scaled_rank_argmax))\n    factor\
+      \ = -(2 * scaled_rank_inner - scaled_rank_argmax)\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 888
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_060.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 53
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.003934422748199161
+      icir: 0.02834219068107369
+      winrate: 0.5932203389830508
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -3.9276675362076574e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.025587204049099237
+      validated_at: 1782149553.372387
+    validation_date: '2026-06-23'

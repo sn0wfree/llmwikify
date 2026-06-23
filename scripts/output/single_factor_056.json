@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 56,
+  "factor_name": "alpha-056",
+  "formula_brief": "(0 - (1 * (rank((sum(returns, 10) / sum(sum(returns, 2), 3))) * rank((returns * cap)))))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Inner: sum(returns, 2) - 2-period rolling sum of returns\n    sum_ret_2 = rolling_sum(pl.col('returns'), window=2)\n    \n    # Outer: sum(sum(returns, 2), 3) - 3-period rolling sum of the above\n    sum_sum_ret_2_3 = rolling_sum(sum_ret_2, window=3)\n    \n    # Ratio: sum(returns, 10) / sum(sum(returns, 2), 3)\n    ratio = rolling_sum(pl.col('returns'), window=10) / sum_sum_ret_2_3\n    \n    # Cross-sectional rank of the ratio\n    rank_ratio = rank(ratio).over('date')\n    \n    # returns * cap (using vwap as proxy since cap is not in the schema)\n    ret_cap = pl.col('returns') * pl.col('vwap')\n    \n    # Cross-sectional rank of returns*cap\n    rank_ret_cap = rank(ret_cap).over('date')\n    \n    # Final factor: -(rank_ratio * rank_ret_cap)\n    factor = -(rank_ratio * rank_ret_cap)\n    \n    return df.select(factor).to_series()",
+  "code_chars": 885,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_056.h5",
+  "ic_mean": 0.001369186952700995,
+  "icir": 0.00974974314226246,
+  "ic_winrate": 0.5254237288135594,
+  "elapsed_sec": 38.894884165376425
+}

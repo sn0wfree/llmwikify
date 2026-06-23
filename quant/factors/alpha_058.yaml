@@ -1,0 +1,57 @@
+factor:
+  name: alpha_058
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (-1 * Ts_Rank(decay_linear(correlation(IndNeutralize(vwap, IndClass.sector),
+      volume, 3.92795), 7.89291), 5.50322))
+    formula: (-1 * Ts_Rank(decay_linear(correlation(IndNeutralize(vwap, IndClass.sector),
+      volume, 3.92795), 7.89291), 5.50322))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - volume
+    - vwap
+    - close
+    - open
+    - high
+    - low
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # IndNeutralize(vwap,\
+      \ IndClass.sector) - use neutralize as substitute (sector data not available)\n\
+      \    neutralized_vwap = neutralize(pl.col('vwap')).over('date')\n    \n    #\
+      \ correlation(neutralized_vwap, volume, 3.92795) -> window=4\n    corr = rolling_corr(neutralized_vwap,\
+      \ pl.col('volume'), window=4)\n    \n    # decay_linear(corr, 7.89291) -> window=8\n\
+      \    decayed = decay_linear(corr, window=8)\n    \n    # Ts_Rank(decayed, 5.50322)\
+      \ -> window=6\n    ts_ranked = ts_rank(decayed, window=6)\n    \n    # -1 *\
+      \ Ts_Rank(...)\n    factor = -1 * ts_ranked\n    \n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 644
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_058.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 44
+      status: 失败
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.02554918816132528
+      icir: -0.1672955381540883
+      winrate: 0.4915254237288136
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -0.00025245950882657464
+      longshort_sharpe: null
+      longshort_max_dd: -0.044096047109917796
+      validated_at: 1782148603.0195081
+    validation_date: '2026-06-23'

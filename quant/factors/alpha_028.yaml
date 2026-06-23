@@ -1,0 +1,55 @@
+factor:
+  name: alpha_028
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: scale(((correlation(adv20, low, 5) + ((high + low) / 2)) - close))
+    formula: scale(((correlation(adv20, low, 5) + ((high + low) / 2)) - close))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - high
+    - low
+    - close
+    - adv20
+    - open
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already\
+      \ sorted by (code, date) — do not re-sort\n\n    # ADV20: 20-day average of\
+      \ volume\n    adv20 = ts_mean(pl.col('volume'), 20)\n\n    # 5-day rolling correlation\
+      \ between ADV20 and low\n    corr = correlation(adv20, pl.col('low'), 5)\n\n\
+      \    # (high + low) / 2  — mid price\n    mid_price = (pl.col('high') + pl.col('low'))\
+      \ / 2\n\n    # Combine: correlation + mid_price - close\n    expr = corr + mid_price\
+      \ - pl.col('close')\n\n    # Cross-sectional scale (preserves sign, normalizes\
+      \ by sum of |x|)\n    factor = scale(expr).over('date')\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 630
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_028.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 54
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.0174311164545656
+      icir: 0.09816694902970131
+      winrate: 0.5084745762711864
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 0.00016714663947103858
+      longshort_sharpe: null
+      longshort_max_dd: -0.024476178747675527
+      validated_at: 1782144919.4342122
+    validation_date: '2026-06-23'

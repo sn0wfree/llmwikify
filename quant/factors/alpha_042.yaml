@@ -1,0 +1,50 @@
+factor:
+  name: alpha_042
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (rank((vwap - close)) / rank((vwap + close)))
+    formula: (rank((vwap - close)) / rank((vwap + close)))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - close
+    - vwap
+    - open
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    diff = pl.col('vwap')\
+      \ - pl.col('close')\n    summ = pl.col('vwap') + pl.col('close')\n\n    factor\
+      \ = rank(diff).over('date') / rank(summ).over('date')\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 244
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_042.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 34
+      status: 失败
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.047767054015998296
+      icir: -0.28455317131793023
+      winrate: 0.3125
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 4.925698203872564e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.026100578502945598
+      validated_at: 1782145858.2145312
+    validation_date: '2026-06-23'

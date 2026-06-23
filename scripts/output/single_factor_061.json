@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 61,
+  "factor_name": "alpha-061",
+  "formula_brief": "(rank((vwap - ts_min(vwap, 16.1219))) < rank(correlation(vwap, adv180, 17.9282)))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code', 'date'])\n\n    # ADV180: 180-day average of volume\n    adv180 = rolling_mean(pl.col('volume'), window=180)\n\n    # LHS base: vwap - rolling_min(vwap, ~16)\n    vwap_min = rolling_min(pl.col('vwap'), window=16)\n    lhs = pl.col('vwap') - vwap_min\n\n    # RHS base: rolling_corr(vwap, adv180, ~18)\n    rhs = rolling_corr(pl.col('vwap'), adv180, window=18)\n\n    # Cross-sectional ranks\n    rank_lhs = rank(lhs).over('date')\n    rank_rhs = rank(rhs).over('date')\n\n    # Boolean comparison → 1.0 / 0.0\n    factor = pl.when(rank_lhs < rank_rhs).then(1.0).otherwise(0.0)\n\n    return df.select(factor).to_series()",
+  "code_chars": 678,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_061.h5",
+  "ic_mean": NaN,
+  "icir": NaN,
+  "ic_winrate": NaN,
+  "elapsed_sec": 34.19487949088216
+}

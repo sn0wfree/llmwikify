@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 42,
+  "factor_name": "alpha-042",
+  "formula_brief": "(rank((vwap - close)) / rank((vwap + close)))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    diff = pl.col('vwap') - pl.col('close')\n    summ = pl.col('vwap') + pl.col('close')\n\n    factor = rank(diff).over('date') / rank(summ).over('date')\n\n    return df.select(factor).to_series()",
+  "code_chars": 244,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_042.h5",
+  "ic_mean": -0.047767054015998296,
+  "icir": -0.28455317131793023,
+  "ic_winrate": 0.3125,
+  "elapsed_sec": 21.74709302186966
+}

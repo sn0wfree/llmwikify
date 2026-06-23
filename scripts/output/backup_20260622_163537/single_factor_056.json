@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 56,
+  "factor_name": "alpha-056",
+  "formula_brief": "(0 - (1 * (rank((sum(returns, 10) / sum(sum(returns, 2), 3))) * rank((returns * cap)))))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Sort by (code, date) for per-code rolling operations\n    df = df.sort(['code', 'date'])\n\n    # sum(returns, 10) — rolling sum of returns over 10 days\n    sum_returns_10 = rolling_sum(pl.col('returns'), window=10)\n\n    # sum(returns, 2) — rolling sum of returns over 2 days\n    sum_returns_2 = rolling_sum(pl.col('returns'), window=2)\n\n    # sum(sum(returns, 2), 3) — rolling sum of the above over 3 days\n    sum_sum_returns_2_3 = rolling_sum(sum_returns_2, window=3)\n\n    # sum(returns, 10) / sum(sum(returns, 2), 3)\n    ratio = sum_returns_10 / sum_sum_returns_2_3\n\n    # rank(ratio) cross-sectional per date\n    rank_ratio = rank(ratio).over('date')\n\n    # Cap proxy: close * volume (since shares_outstanding is not available)\n    cap = pl.col('close') * pl.col('volume')\n\n    # returns * cap\n    returns_cap = pl.col('returns') * cap\n\n    # rank(returns * cap) cross-sectional per date\n    rank_returns_cap = rank(returns_cap).over('date')\n\n    # 0 - (1 * rank_ratio * rank_returns_cap)\n    factor = 0 - (1 * (rank_ratio * rank_returns_cap))\n\n    return df.select(factor).to_series()",
+  "code_chars": 1143,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_056.h5",
+  "ic_mean": 0.026164960680097823,
+  "icir": 0.2004848834992978,
+  "ic_winrate": 0.6,
+  "elapsed_sec": 26.332510950043797
+}

@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 7,
+  "factor_name": "alpha-007",
+  "formula_brief": "((adv20 < volume) ? ((-1 * ts_rank(abs(delta(close, 7)), 60)) * sign(delta(close, 7))) : (-1 * 1))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = 20-day average daily volume\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n\n    # delta(close, 7) = close - close shifted by 7\n    delta_close = delta(pl.col('close'), periods=7)\n\n    # ts_rank(abs(delta(close, 7)), 60)\n    ts_rank_val = ts_rank(delta_close.abs(), window=60)\n\n    # sign(delta(close, 7))\n    sign_val = delta_close.sign()\n\n    # Condition: adv20 < volume\n    cond = adv20 < pl.col('volume')\n\n    # True branch: -1 * ts_rank(abs(delta(close,7)), 60) * sign(delta(close, 7))\n    true_val = -1 * ts_rank_val * sign_val\n\n    # False branch: -1\n    factor = pl.when(cond).then(true_val).otherwise(-1)\n\n    return df.select(factor).to_series()",
+  "code_chars": 726,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_007.h5",
+  "ic_mean": -0.012114578372307977,
+  "icir": -0.08639647345471368,
+  "ic_winrate": 0.4576271186440678,
+  "elapsed_sec": 25.378788029775023
+}

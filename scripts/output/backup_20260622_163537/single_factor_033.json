@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 33,
+  "factor_name": "alpha-033",
+  "formula_brief": "rank((-1 * ((1 - (open / close))^1)))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code', 'date'])\n\n    # 1 - (open / close)\n    ratio_diff = 1 - (pl.col('open') / pl.col('close'))\n\n    # -1 * (1 - (open / close))^1\n    neg_ratio_diff = -1 * (ratio_diff ** 1)\n\n    # Cross-sectional rank\n    factor = rank(neg_ratio_diff).over('date')\n\n    return df.select(factor).to_series()",
+  "code_chars": 363,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_033.h5",
+  "ic_mean": 0.019579341001412794,
+  "icir": 0.13832203408209998,
+  "ic_winrate": 0.559322033898305,
+  "elapsed_sec": 7.344765454530716
+}

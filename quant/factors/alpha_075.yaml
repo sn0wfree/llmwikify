@@ -1,0 +1,62 @@
+factor:
+  name: alpha_075
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (rank(correlation(vwap, volume, 4.24304)) < rank(correlation(rank(low),
+      rank(adv50), 12.4413)))
+    formula: (rank(correlation(vwap, volume, 4.24304)) < rank(correlation(rank(low),
+      rank(adv50), 12.4413)))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - low
+    - volume
+    - adv50
+    - vwap
+    - close
+    - open
+    - high
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv50: 50-day\
+      \ rolling mean of volume (per code, since df is already sorted by code,date)\n\
+      \    adv50 = rolling_mean(pl.col('volume'), window=50)\n\n    # First rolling\
+      \ correlation: vwap vs volume, window ~ 4.24304\n    corr1 = rolling_corr(pl.col('vwap'),\
+      \ pl.col('volume'), window=4)\n\n    # Cross-sectional rank of corr1 (per date)\n\
+      \    rank1 = rank(corr1).over('date')\n\n    # Cross-sectional ranks of low\
+      \ and adv50 (per date)\n    rank_low = rank(pl.col('low')).over('date')\n  \
+      \  rank_adv50 = rank(adv50).over('date')\n\n    # Second rolling correlation:\
+      \ rank(low) vs rank(adv50), window ~ 12.4413\n    corr2 = rolling_corr(rank_low,\
+      \ rank_adv50, window=12)\n\n    # Cross-sectional rank of corr2 (per date)\n\
+      \    rank2 = rank(corr2).over('date')\n\n    # Boolean comparison: rank1 < rank2\n\
+      \    factor = rank1 < rank2\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 898
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_075.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 56
+      status: 通过
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.04064360833981485
+      icir: 0.162582860830995
+      winrate: 0.5254237288135594
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -8.53995508481864e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.0374246486686722
+      validated_at: 1782150332.5366948
+    validation_date: '2026-06-23'

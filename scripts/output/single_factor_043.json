@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 43,
+  "factor_name": "alpha-043",
+  "formula_brief": "(ts_rank((volume / adv20), 20) * ts_rank((-1 * delta(close, 7)), 8))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = 20-day average volume (per-code time-series, no .over needed)\n    adv20 = ts_mean(pl.col('volume'), 20)\n\n    # term1: ts_rank((volume / adv20), 20)\n    vol_ratio = pl.col('volume') / adv20\n    part1 = ts_rank(vol_ratio, 20)\n\n    # term2: ts_rank((-1 * delta(close, 7)), 8)\n    delta_close = delta(pl.col('close'), periods=7)\n    neg_delta = -1 * delta_close\n    part2 = ts_rank(neg_delta, 8)\n\n    # factor = product of the two terms\n    factor = part1 * part2\n\n    return df.select(factor).to_series()",
+  "code_chars": 566,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_043.h5",
+  "ic_mean": -0.02580825524455978,
+  "icir": -0.15804196279271684,
+  "ic_winrate": 0.4067796610169492,
+  "elapsed_sec": 39.53711747378111
+}

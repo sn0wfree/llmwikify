@@ -1,0 +1,67 @@
+factor:
+  name: alpha_048
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (indneutralize(((correlation(delta(close, 1), delta(delay(close, 1),
+      1), 250) * delta(close, 1)) / close), IndClass.subindustry) / sum(((delta(close,
+      1) / delay(close, 1))^2), 250))
+    formula: (indneutralize(((correlation(delta(close, 1), delta(delay(close, 1),
+      1), 250) * delta(close, 1)) / close), IndClass.subindustry) / sum(((delta(close,
+      1) / delay(close, 1))^2), 250))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - close
+    - industry
+    - open
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already\
+      \ sorted by (code, date) - DO NOT call df.sort(...)\n\n    # delta(close, 1):\
+      \ today's close - yesterday's close\n    delta_close = delta(pl.col('close'),\
+      \ periods=1)\n\n    # delay(close, 1): yesterday's close\n    delay_close =\
+      \ delay(pl.col('close'), periods=1)\n\n    # delta(delay(close, 1), 1): yesterday's\
+      \ close - two-days-ago's close\n    delta_delay_close = delta(delay_close, periods=1)\n\
+      \n    # 250-day rolling correlation between today's change and yesterday's change\n\
+      \    corr = correlation(delta_close, delta_delay_close, window=250)\n\n    #\
+      \ (correlation * delta(close, 1)) / close\n    numerator_expr = (corr * delta_close)\
+      \ / pl.col('close')\n\n    # Cross-sectional neutralize (substitute for indneutralize,\
+      \ which requires IndClass)\n    neutralized = neutralize(numerator_expr).over('date')\n\
+      \n    # (delta(close, 1) / delay(close, 1))^2 -> daily return squared\n    daily_return_sq\
+      \ = (delta_close / delay_close) ** 2\n\n    # 250-day rolling sum of squared\
+      \ daily returns\n    denom = rolling_sum(daily_return_sq, window=250)\n\n  \
+      \  # Final factor: neutralized numerator / denominator\n    factor = neutralized\
+      \ / denom\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 1217
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_048.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 50
+      status: 待验证
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: null
+      icir: null
+      winrate: null
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: null
+      longshort_sharpe: null
+      longshort_max_dd: 0.0
+      validated_at: 1782146107.9010332
+    validation_date: '2026-06-23'

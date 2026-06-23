@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 60,
+  "factor_name": "alpha-060",
+  "formula_brief": "(0 - (1 * ((2 * scale(rank(((((close - low) - (high - close)) / (high - low)) * volume)))) - scale(rank(ts_argmax(close, 10))))))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already sorted by (code, date) — do NOT re-sort\n\n    # Inner term: ((close - low) - (high - close)) / (high - low) * volume\n    inner = (\n        ((pl.col('close') - pl.col('low')) - (pl.col('high') - pl.col('close')))\n        / (pl.col('high') - pl.col('low'))\n        * pl.col('volume')\n    )\n\n    # rank(inner) cross-sectionally, then scale\n    scaled_rank_inner = scale(rank(inner).over('date')).over('date')\n\n    # ts_argmax(close, 10) — per code (df already sorted)\n    argmax_close = ts_argmax(pl.col('close'), window=10)\n\n    # rank(argmax) cross-sectionally, then scale\n    scaled_rank_argmax = scale(rank(argmax_close).over('date')).over('date')\n\n    # Final: 0 - (1 * (2 * scaled_rank_inner - scaled_rank_argmax))\n    factor = -(2 * scaled_rank_inner - scaled_rank_argmax)\n\n    return df.select(factor).to_series()",
+  "code_chars": 888,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_060.h5",
+  "ic_mean": 0.003934422748199161,
+  "icir": 0.02834219068107369,
+  "ic_winrate": 0.5932203389830508,
+  "elapsed_sec": 40.876406541094184
+}

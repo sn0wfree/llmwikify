@@ -1,0 +1,65 @@
+factor:
+  name: alpha_063
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((rank(decay_linear(delta(IndNeutralize(close, IndClass.industry),
+      2.25164), 8.22237)) - rank(decay_linear(correlation(((vwap * 0.318108) + (open
+      * (1 - 0.318108))), sum(adv180, 37.2467), 13.557), 12.
+    formula: ((rank(decay_linear(delta(IndNeutralize(close, IndClass.industry), 2.25164),
+      8.22237)) - rank(decay_linear(correlation(((vwap * 0.318108) + (open * (1 -
+      0.318108))), sum(adv180, 37.2467), 13.557), 12.2883))) * -1)
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - close
+    - vwap
+    - industry
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already\
+      \ sorted by (code, date) — do NOT re-sort\n\n    # Term 1: rank(decay_linear(delta(IndNeutralize(close,\
+      \ industry), 2), 8))\n    # IndNeutralize requires industry classification which\
+      \ is unavailable; pass close through\n    ind_neutral_close = pl.col('close')\n\
+      \    delta_close = delta(ind_neutral_close, periods=2)\n    decay1 = decay_linear(delta_close,\
+      \ window=8)\n    rank1 = rank(decay1).over('date')\n\n    # Term 2: rank(decay_linear(corr(vwap*0.318108\
+      \ + open*0.681892, sum(adv180, 37), 14), 12))\n    # adv180 ~ mean(volume, 180)\
+      \ as proxy\n    weighted_price = pl.col('vwap') * 0.318108 + pl.col('open')\
+      \ * (1 - 0.318108)\n    adv180 = rolling_mean(pl.col('volume'), window=180)\n\
+      \    sum_adv = rolling_sum(adv180, window=37)\n    corr_val = rolling_corr(weighted_price,\
+      \ sum_adv, window=14)\n    decay2 = decay_linear(corr_val, window=12)\n    rank2\
+      \ = rank(decay2).over('date')\n\n    # Combine: (rank1 - rank2) * -1\n    factor\
+      \ = (rank1 - rank2) * -1\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 1046
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_063.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 50
+      status: 待验证
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: null
+      icir: null
+      winrate: null
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: null
+      longshort_sharpe: null
+      longshort_max_dd: 0.0
+      validated_at: 1782149665.0954657
+    validation_date: '2026-06-23'

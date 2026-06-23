@@ -1,0 +1,63 @@
+factor:
+  name: alpha_092
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: min(Ts_Rank(decay_linear(((((high + low) / 2) + close) < (low + open)),
+      14.7221), 18.8683), Ts_Rank(decay_linear(correlation(rank(low), rank(adv30),
+      7.58555), 6.94024), 6.80584))
+    formula: min(Ts_Rank(decay_linear(((((high + low) / 2) + close) < (low + open)),
+      14.7221), 18.8683), Ts_Rank(decay_linear(correlation(rank(low), rank(adv30),
+      7.58555), 6.94024), 6.80584))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - high
+    - low
+    - close
+    - adv30
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
+      \ 'date'])\n\n    # Part 1: decay_linear of boolean condition, then ts_rank\n\
+      \    cond1 = (((pl.col('high') + pl.col('low')) / 2) + pl.col('close')) < (pl.col('low')\
+      \ + pl.col('open'))\n    cond1_float = cond1.cast(pl.Float64)\n    decay1 =\
+      \ decay_linear(cond1_float, window=int(14.7221))\n    part1 = ts_rank(decay1,\
+      \ window=int(18.8683))\n\n    # Part 2: correlation of cross-section ranks,\
+      \ then decay, then ts_rank\n    rank_low = rank(pl.col('low')).over('date')\n\
+      \    adv30 = rolling_mean(pl.col('volume'), window=30)\n    rank_adv30 = rank(adv30).over('date')\n\
+      \    corr = correlation(rank_low, rank_adv30, window=int(7.58555))\n    decay2\
+      \ = decay_linear(corr, window=int(6.94024))\n    part2 = ts_rank(decay2, window=int(6.80584))\n\
+      \n    # Final: element-wise min of the two parts\n    factor = pl.min_horizontal([part1,\
+      \ part2])\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 929
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_092.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 56
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.01334525126698289
+      icir: 0.0914669279755797
+      winrate: 0.5932203389830508
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 0.0001420238060059198
+      longshort_sharpe: null
+      longshort_max_dd: -0.021236212804945864
+      validated_at: 1782151023.3307903
+    validation_date: '2026-06-23'

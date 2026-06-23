@@ -1,0 +1,61 @@
+factor:
+  name: alpha_085
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (rank(correlation(((high * 0.876703) + (close * (1 - 0.876703))),
+      adv30, 9.61331))^rank(correlation(Ts_Rank(((high + low) / 2), 3.70596), Ts_Rank(volume,
+      10.1595), 7.11408)))
+    formula: (rank(correlation(((high * 0.876703) + (close * (1 - 0.876703))), adv30,
+      9.61331))^rank(correlation(Ts_Rank(((high + low) / 2), 3.70596), Ts_Rank(volume,
+      10.1595), 7.11408)))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - high
+    - low
+    - close
+    - volume
+    - adv30
+    - open
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    w = 0.876703\n\n\
+      \    # Component A: rank(correlation(weighted_hc, adv30, 9))\n    weighted_hc\
+      \ = pl.col('high') * w + pl.col('close') * (1 - w)\n    adv30 = rolling_mean(pl.col('volume'),\
+      \ window=30)\n    corr_a = rolling_corr(weighted_hc, adv30, window=9)\n    rank_a\
+      \ = rank(corr_a).over('date')\n\n    # Component B: rank(correlation(ts_rank(mid,\
+      \ 3), ts_rank(vol, 10), 7))\n    mid = (pl.col('high') + pl.col('low')) / 2\n\
+      \    ts_rank_mid = ts_rank(mid, window=3)\n    ts_rank_vol = ts_rank(pl.col('volume'),\
+      \ window=10)\n    corr_b = rolling_corr(ts_rank_mid, ts_rank_vol, window=7)\n\
+      \    rank_b = rank(corr_b).over('date')\n\n    # Final: A^B\n    factor = rank_a\
+      \ ** rank_b\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 752
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_085.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 49
+      status: 待更新
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.004613947651774516
+      icir: -0.024942623854332744
+      winrate: 0.4915254237288136
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -0.00014286008684294416
+      longshort_sharpe: null
+      longshort_max_dd: -0.04577762559582058
+      validated_at: 1782150742.2832382
+    validation_date: '2026-06-23'

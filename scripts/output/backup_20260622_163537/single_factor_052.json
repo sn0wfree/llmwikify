@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 52,
+  "factor_name": "alpha-052",
+  "formula_brief": "((((-1 * ts_min(low, 5)) + delay(ts_min(low, 5), 5)) * rank(((sum(returns, 240) - sum(returns, 20)) / 220))) * ts_rank(volume, 5))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Sort by (code, date) for per-code rolling\n    df = df.sort(['code', 'date'])\n\n    # ts_min(low, 5)  -- use rolling_min as function form\n    min_low_5 = rolling_min(pl.col('low'), window=5)\n\n    # delay(ts_min(low, 5), 5)\n    delayed_min = delay(min_low_5, periods=5)\n\n    # (-1 * ts_min(low, 5)) + delay(ts_min(low, 5), 5)\n    part1 = -1 * min_low_5 + delayed_min\n\n    # sum(returns, 240) and sum(returns, 20)\n    sum_ret_240 = rolling_sum(pl.col('returns'), window=240)\n    sum_ret_20 = rolling_sum(pl.col('returns'), window=20)\n\n    # (sum(returns, 240) - sum(returns, 20)) / 220\n    ratio = (sum_ret_240 - sum_ret_20) / 220\n\n    # cross-sectional rank of the ratio\n    rank_ratio = rank(ratio).over('date')\n\n    # ts_rank(volume, 5)\n    ts_rank_vol = ts_rank(pl.col('volume'), window=5)\n\n    # final factor\n    factor = part1 * rank_ratio * ts_rank_vol\n\n    return df.select(factor).to_series()",
+  "code_chars": 954,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_052.h5",
+  "ic_mean": NaN,
+  "icir": NaN,
+  "ic_winrate": NaN,
+  "elapsed_sec": 30.019920092076063
+}

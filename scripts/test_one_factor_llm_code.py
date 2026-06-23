@@ -646,11 +646,12 @@ def _compute_score(icir: float | None, win_rate: float | None) -> int:
 
     Weighted: 70% ICIR (dominant) + 30% WinRate.
     """
-    if icir is None:
+    import math
+    if icir is None or (isinstance(icir, float) and math.isnan(icir)):
         return 50
     # ICIR is typically -1 to +1; map to 0-100 with center at 0
     icir_score = max(0, min(100, 50 + round(icir * 50)))
-    if win_rate is None:
+    if win_rate is None or (isinstance(win_rate, float) and math.isnan(win_rate)):
         return icir_score
     wr_score = round(win_rate * 100)
     return round(icir_score * 0.7 + wr_score * 0.3)
@@ -664,7 +665,8 @@ def _compute_status(icir: float | None) -> str:
       失败  — ICIR < -0.05 (negative edge)
       待更新 — default
     """
-    if icir is None:
+    import math
+    if icir is None or (isinstance(icir, float) and math.isnan(icir)):
         return "待验证"
     if icir > 0.10:
         return "通过"
@@ -744,22 +746,26 @@ def persist_code_to_yaml(
         l5["ast_compile_source"] = None
         l5["ast_compile_error"] = None
 
-        icir = backtest.get("icir")
-        win_rate = backtest.get("win_rate")
+        import math
+        def _nan_to_none(v):
+            return None if isinstance(v, float) and math.isnan(v) else v
+
+        icir = _nan_to_none(backtest.get("icir"))
+        win_rate = _nan_to_none(backtest.get("win_rate"))
         l5["overall_assessment"] = {
             "score": _compute_score(icir, win_rate),
             "status": _compute_status(icir),
             "pass_threshold": 60,
             "final_meaning": "",  # Phase 3 LLM 填充
             # Extra fields for backward compat (PipelineRunner summary)
-            "ic_mean": backtest.get("ic_mean"),
+            "ic_mean": _nan_to_none(backtest.get("ic_mean")),
             "icir": icir,
             "winrate": win_rate,
-            "rank_ic_mean": backtest.get("rank_ic_mean"),
-            "rank_icir": backtest.get("rank_icir"),
-            "annual_return": backtest.get("longshort_ann_return"),
-            "longshort_sharpe": backtest.get("longshort_sharpe"),
-            "longshort_max_dd": backtest.get("longshort_max_dd"),
+            "rank_ic_mean": _nan_to_none(backtest.get("rank_ic_mean")),
+            "rank_icir": _nan_to_none(backtest.get("rank_icir")),
+            "annual_return": _nan_to_none(backtest.get("longshort_ann_return")),
+            "longshort_sharpe": _nan_to_none(backtest.get("longshort_sharpe")),
+            "longshort_max_dd": _nan_to_none(backtest.get("longshort_max_dd")),
             "validated_at": time.time(),
         }
         # Frontend expects `validation_date` as YYYY-MM-DD string (FactorDetail.tsx:558)
@@ -808,6 +814,10 @@ def save_backtest_to_db(
     Schema columns matched by WebUI GET /api/factor/{slug}/backtest
     (factor.py:514-524).
     """
+    import math
+    def _nan_to_none(v):
+        return None if isinstance(v, float) and math.isnan(v) else v
+
     try:
         from llmwikify.reproduction.sessions import ReproductionDatabase
         db = ReproductionDatabase()
@@ -837,15 +847,15 @@ def save_backtest_to_db(
             adj_mode=adj_mode,
             hedge="equal",
             data_source="quantnodes_pipeline",
-            ic_mean=backtest.get("ic_mean"),
-            rank_ic_mean=backtest.get("rank_ic_mean"),
-            icir=backtest.get("icir"),
-            rank_icir=backtest.get("rank_icir"),
-            win_rate=backtest.get("win_rate"),
-            annual_return=backtest.get("longshort_ann_return"),
-            longshort_ann_return=backtest.get("longshort_ann_return"),
-            longshort_sharpe=backtest.get("longshort_sharpe"),
-            longshort_max_dd=backtest.get("longshort_max_dd"),
+            ic_mean=_nan_to_none(backtest.get("ic_mean")),
+            rank_ic_mean=_nan_to_none(backtest.get("rank_ic_mean")),
+            icir=_nan_to_none(backtest.get("icir")),
+            rank_icir=_nan_to_none(backtest.get("rank_icir")),
+            win_rate=_nan_to_none(backtest.get("win_rate")),
+            annual_return=_nan_to_none(backtest.get("longshort_ann_return")),
+            longshort_ann_return=_nan_to_none(backtest.get("longshort_ann_return")),
+            longshort_sharpe=_nan_to_none(backtest.get("longshort_sharpe")),
+            longshort_max_dd=_nan_to_none(backtest.get("longshort_max_dd")),
             ic_series=backtest.get("ic_series", []),
             group_metrics=backtest.get("group_metrics", {}),
         )

@@ -1,0 +1,52 @@
+factor:
+  name: alpha_016
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: (-1 * rank(covariance(rank(high), rank(volume), 5)))
+    formula: (-1 * rank(covariance(rank(high), rank(volume), 5)))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - high
+    - volume
+    - close
+    - open
+    - low
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
+      \ 'date'])\n\n    # Cross-sectional ranks\n    rank_high = rank(pl.col('high')).over('date')\n\
+      \    rank_volume = rank(pl.col('volume')).over('date')\n\n    # Rolling covariance\
+      \ (time-series) of the two ranked series, window=5\n    cov = rolling_cov(rank_high,\
+      \ rank_volume, window=5)\n\n    # Cross-sectional rank of the covariance, then\
+      \ negate\n    factor = -1 * rank(cov).over('date')\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 491
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_016.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 48
+      status: 失败
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.010015824119848861
+      icir: -0.06594441291091738
+      winrate: 0.5084745762711864
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 2.9977188825913714e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.018094416337809126
+      validated_at: 1782144466.5349712
+    validation_date: '2026-06-23'

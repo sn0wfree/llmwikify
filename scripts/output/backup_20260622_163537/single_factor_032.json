@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 32,
+  "factor_name": "alpha-032",
+  "formula_brief": "(scale(((sum(close, 7) / 7) - close)) + (20 * scale(correlation(vwap, delay(close, 5), 230))))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Sort by code and date for per-code rolling operations\n    df = df.sort(['code', 'date'])\n\n    # Part 1: scale((sum(close, 7) / 7) - close)\n    rolling_sum_7 = rolling_sum(pl.col('close'), window=7)\n    diff_close = (rolling_sum_7 / 7) - pl.col('close')\n    part1 = scale(diff_close).over('date')\n\n    # Part 2: 20 * scale(correlation(vwap, delay(close, 5), 230))\n    delayed_close = delay(pl.col('close'), periods=5)\n    corr_230 = rolling_corr(pl.col('vwap'), delayed_close, window=230)\n    part2 = 20 * scale(corr_230).over('date')\n\n    # Combine the two terms\n    factor = part1 + part2\n\n    return df.select(factor).to_series()",
+  "code_chars": 688,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_032.h5",
+  "ic_mean": NaN,
+  "icir": NaN,
+  "ic_winrate": NaN,
+  "elapsed_sec": 15.802091320976615
+}

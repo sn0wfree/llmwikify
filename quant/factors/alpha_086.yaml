@@ -1,0 +1,61 @@
+factor:
+  name: alpha_086
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((Ts_Rank(correlation(close, sum(adv20, 14.7444), 6.00049), 20.4195)
+      < rank(((open + close) - (vwap + open)))) * -1)
+    formula: ((Ts_Rank(correlation(close, sum(adv20, 14.7444), 6.00049), 20.4195)
+      < rank(((open + close) - (vwap + open)))) * -1)
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - close
+    - adv20
+    - vwap
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20: 20-day\
+      \ average daily volume (proxy since adv20 is not in columns)\n    adv20 = rolling_mean(pl.col('volume'),\
+      \ window=20)\n\n    # sum(adv20, 14.7444) -> rolling sum with window 15\n  \
+      \  sum_adv20 = rolling_sum(adv20, window=15)\n\n    # correlation(close, sum_adv20,\
+      \ 6.00049) -> rolling correlation with window 6\n    corr = rolling_corr(pl.col('close'),\
+      \ sum_adv20, window=6)\n\n    # Ts_Rank(corr, 20.4195) -> time-series rank with\
+      \ window 20\n    ts_rank_corr = ts_rank(corr, window=20)\n\n    # (open + close)\
+      \ - (vwap + open) simplifies to (close - vwap)\n    close_minus_vwap = pl.col('close')\
+      \ - pl.col('vwap')\n\n    # Cross-sectional rank per date\n    ranked = rank(close_minus_vwap).over('date')\n\
+      \n    # (Ts_Rank < rank) * -1 -> -1 if true else 0\n    factor = pl.when(ts_rank_corr\
+      \ < ranked).then(-1).otherwise(0)\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 907
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_086.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 50
+      status: 待验证
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: null
+      icir: null
+      winrate: null
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -0.00014648933853178558
+      longshort_sharpe: null
+      longshort_max_dd: -0.0320375396354689
+      validated_at: 1782150768.1363058
+    validation_date: '2026-06-23'

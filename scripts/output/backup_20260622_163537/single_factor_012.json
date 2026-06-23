@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 12,
+  "factor_name": "alpha-012",
+  "formula_brief": "(sign(delta(volume, 1)) * (-1 * delta(close, 1)))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code', 'date'])\n\n    # sign(delta(volume, 1))\n    sign_delta_volume = delta(pl.col('volume'), periods=1).sign()\n\n    # -1 * delta(close, 1)\n    neg_delta_close = -1 * delta(pl.col('close'), periods=1)\n\n    # Combined factor\n    factor = sign_delta_volume * neg_delta_close\n\n    return df.select(factor).to_series()",
+  "code_chars": 384,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_012.h5",
+  "ic_mean": -0.0045873141413417425,
+  "icir": -0.03000669480374095,
+  "ic_winrate": 0.5084745762711864,
+  "elapsed_sec": 7.6661168076097965
+}

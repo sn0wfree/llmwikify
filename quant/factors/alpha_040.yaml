@@ -1,0 +1,55 @@
+factor:
+  name: alpha_040
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((-1 * rank(stddev(high, 10))) * correlation(high, volume, 10))
+    formula: ((-1 * rank(stddev(high, 10))) * correlation(high, volume, 10))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - high
+    - volume
+    - close
+    - open
+    - low
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already\
+      \ sorted by (code, date) — DO NOT re-sort\n    \n    # Time-series: rolling\
+      \ std of high with window 10\n    std_high = rolling_std(pl.col('high'), window=10)\n\
+      \    \n    # Cross-section rank of the rolling std per date\n    rank_std =\
+      \ rank(std_high).over('date')\n    \n    # Time-series: rolling correlation\
+      \ between high and volume with window 10\n    corr_hv = correlation(pl.col('high'),\
+      \ pl.col('volume'), window=10)\n    \n    # Combine: -1 * rank(stddev(high,\
+      \ 10)) * correlation(high, volume, 10)\n    factor = -1 * rank_std * corr_hv\n\
+      \    \n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 641
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_040.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 43
+      status: 失败
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.019115309463324872
+      icir: -0.12379555835398562
+      winrate: 0.4067796610169492
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 2.8924162499111006e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.022880929359915706
+      validated_at: 1782145810.6058905
+    validation_date: '2026-06-23'

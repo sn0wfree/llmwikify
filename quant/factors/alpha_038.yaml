@@ -1,0 +1,53 @@
+factor:
+  name: alpha_038
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: ((-1 * rank(Ts_Rank(close, 10))) * rank((close / open)))
+    formula: ((-1 * rank(Ts_Rank(close, 10))) * rank((close / open)))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - open
+    - close
+    - high
+    - low
+    - volume
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Ts_Rank(close,\
+      \ 10) - time-series rank over 10-day window\n    ts_rank_close = ts_rank(pl.col('close'),\
+      \ window=10)\n    \n    # Cross-section rank of Ts_Rank\n    rank1 = rank(ts_rank_close).over('date')\n\
+      \    \n    # Close to open ratio\n    ratio = pl.col('close') / pl.col('open')\n\
+      \    \n    # Cross-section rank of close/open\n    rank2 = rank(ratio).over('date')\n\
+      \    \n    # Final factor: (-1 * rank1) * rank2\n    factor = (-1 * rank1) *\
+      \ rank2\n    \n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 538
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_038.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 61
+      status: 通过
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.03683834672455014
+      icir: 0.22417507725267313
+      winrate: 0.6101694915254238
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 0.00022763975525230684
+      longshort_sharpe: null
+      longshort_max_dd: -0.015188620194545699
+      validated_at: 1782145585.7639382
+    validation_date: '2026-06-23'

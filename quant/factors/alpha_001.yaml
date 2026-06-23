@@ -1,0 +1,56 @@
+factor:
+  name: alpha_001
+  l5:
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compiled_at: 1782094275.9388237
+    ast_compile_error: null
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Inner: if returns\
+      \ < 0 then stddev(returns, 20) else close\n    inner = pl.when(pl.col('returns')\
+      \ < 0).then(\n        rolling_std(pl.col('returns'), window=20)\n    ).otherwise(pl.col('close'))\n\
+      \n    # SignedPower: sign(x) * abs(x)^2\n    signed = inner.sign() * (inner.abs()\
+      \ ** 2)\n\n    # Ts_ArgMax with 5-day window\n    argmax = ts_argmax(signed,\
+      \ window=5)\n\n    # Cross-sectional rank, centred around zero\n    factor =\
+      \ rank(argmax).over('date') - 0.5\n\n    return df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 544
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_001.h5
+    overall_assessment:
+      score: 60
+      status: 通过
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: 0.032644310087837906
+      icir: 0.2238193454409272
+      winrate: 0.5932203389830508
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: 4.241492464851504e-05
+      longshort_sharpe: null
+      longshort_max_dd: -0.039131664102797434
+      validated_at: 1782144112.1808612
+    validation_date: '2026-06-23'
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-23'
+  l1:
+    definition: '(rank(Ts_ArgMax(SignedPower(((returns < 0) ? stddev(returns, 20)
+      : close), 2.), 5)) - 0.5)'
+    formula: '(rank(Ts_ArgMax(SignedPower(((returns < 0) ? stddev(returns, 20) : close),
+      2.), 5)) - 0.5)'
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - close
+    - returns
+    - open
+    - high
+    - low
+    - volume
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号

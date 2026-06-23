@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 79,
+  "factor_name": "alpha-079",
+  "formula_brief": "(rank(delta(IndNeutralize(((close * 0.60733) + (open * (1 - 0.60733))), IndClass.sector), 1.23438)) < rank(correlation(Ts_Rank(vwap, 3.60973), Ts_Rank(adv150, 9.18637), 14.6644)))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Inner blend expression: close * 0.60733 + open * (1 - 0.60733)\n    blend = pl.col('close') * 0.60733 + pl.col('open') * (1 - 0.60733)\n\n    # IndNeutralize (no industry column available, use raw blend value)\n    # ind_neutral = indneutralize(blend).over('date')\n\n    # Delta of blend (periods=1, since 1.23438 rounds to 1)\n    d = delta(blend, periods=1)\n\n    # Cross-sectional rank of delta\n    rank1 = rank(d).over('date')\n\n    # adv150: 150-day rolling mean of volume\n    adv150 = rolling_mean(pl.col('volume'), window=150)\n\n    # Ts_Rank(vwap, 3.60973) -> window=3\n    ts_rank_vwap = ts_rank(pl.col('vwap'), window=3)\n\n    # Ts_Rank(adv150, 9.18637) -> window=9\n    ts_rank_adv = ts_rank(adv150, window=9)\n\n    # Rolling correlation (window=14, since 14.6644 rounds to 14)\n    corr = rolling_corr(ts_rank_vwap, ts_rank_adv, window=14)\n\n    # Cross-sectional rank of correlation\n    rank2 = rank(corr).over('date')\n\n    # Final comparison: rank(delta) < rank(corr) -> 1.0 / 0.0\n    factor = pl.when(rank1 < rank2).then(1.0).otherwise(0.0)\n\n    return df.select(factor).to_series()",
+  "code_chars": 1139,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_079.h5",
+  "ic_mean": NaN,
+  "icir": NaN,
+  "ic_winrate": NaN,
+  "elapsed_sec": 69.22477845288813
+}

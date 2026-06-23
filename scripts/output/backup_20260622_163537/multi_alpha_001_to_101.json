@@ -1,0 +1,23 @@
+{
+  "total": 1,
+  "success_count": 1,
+  "failed_count": 0,
+  "aggregate": {
+    "ic_mean_avg": -0.029,
+    "icir_avg": -0.2351,
+    "winrate_avg": 0.4068
+  },
+  "alphas": [
+    {
+      "index": 54,
+      "status": "success",
+      "ic_mean": -0.028962106812407264,
+      "icir": -0.23507707174173334,
+      "ic_winrate": 0.4067796610169492,
+      "code_chars": 370,
+      "elapsed_sec": 15.52232518978417,
+      "stage": "",
+      "error": ""
+    }
+  ]
+}

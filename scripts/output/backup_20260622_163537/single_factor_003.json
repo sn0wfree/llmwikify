@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 3,
+  "factor_name": "alpha-003",
+  "formula_brief": "(-1 * correlation(rank(open), rank(volume), 10))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 1. Sort by (code, date) for per-code rolling\n    df = df.sort(['code', 'date'])\n\n    # 2. Cross-sectional rank of open and volume per date\n    rank_open = rank(pl.col('open')).over('date')\n    rank_volume = rank(pl.col('volume')).over('date')\n\n    # 3. Rolling correlation with window=10, then multiply by -1\n    factor = -1 * rolling_corr(rank_open, rank_volume, window=10)\n\n    return df.select(factor).to_series()",
+  "code_chars": 473,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_003.h5",
+  "ic_mean": 0.012880019286061332,
+  "icir": 0.09055049088055488,
+  "ic_winrate": 0.6271186440677966,
+  "elapsed_sec": 27.283959802240133
+}
