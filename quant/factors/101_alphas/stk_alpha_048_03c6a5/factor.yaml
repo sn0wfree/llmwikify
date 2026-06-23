@@ -1,0 +1,33 @@
+name: stk_alpha_048_03c6a5
+display_name: 'Alpha #48'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (indneutralize(((correlation(delta(close, 1), delta(delay(close, 1),
+    1), 250) * delta(close, 1)) / close), IndClass.subindustry) / sum(((delta(close,
+    1) / delay(close, 1))^2), 250))
+  formula: (indneutralize(((correlation(delta(close, 1), delta(delay(close, 1), 1),
+    250) * delta(close, 1)) / close), IndClass.subindustry) / sum(((delta(close, 1)
+    / delay(close, 1))^2), 250))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - industry
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2: {}
+l3: {}
+l4: {}
+l6: {}

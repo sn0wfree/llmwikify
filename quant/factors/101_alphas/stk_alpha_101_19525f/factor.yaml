@@ -1,0 +1,86 @@
+name: stk_alpha_101_19525f
+display_name: 'Alpha #101'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((close - open) / ((high - low) + .001))
+  formula: ((close - open) / ((high - low) + .001))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - high
+  - low
+  - close
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: '计算日内实体 (body): 当日收盘价减去开盘价, 衡量当日净涨跌方向与幅度'
+    formula: body = close - open
+  - step: 2
+    description: '计算日内振幅 (range): 当日最高价减去最低价, 衡量当日波动幅度'
+    formula: range = high - low
+  - step: 3
+    description: 将实体除以振幅+0.001, 得到相对位置指标, 衡量收盘价在当日波幅中的相对位置
+    formula: factor = body / (range + 0.001)
+  edge_case_handling: 在分母中加入 0.001 小常数, 避免当 high == low (一字板/停牌) 时出现除零错误; 同时避免极端低波动日数值爆炸
+  missing_value_handling: 依赖 polars 默认行为, 若 close/open/high/low 任一为 null, 对应行的因子值为
+    null; 无显式前向/后向填充
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 衡量收盘价相对开盘价在日内波幅中的位置, 反映多空双方当日博弈的相对强弱 (类似 K 线实体/振幅比)
+  market_behavior: 因子值接近 +1 表示日内强势收阳, 接近 -1 表示弱势收阴, 接近 0 表示日内震荡; 捕捉的是当日买卖力量对比的相对强度,
+    而非绝对涨跌
+  theoretical_basis: '基于价格行为的反转与动量效应: 极端日内强势/弱势可能预示短期反转 (overbought/oversold), 也可能预示动量延续,
+    取决于市场状态'
+  historical_effectiveness: 在 101 Alphas 体系中该因子单独使用效果一般, 但作为多因子组合组件可贡献额外 alpha; 在高波动与小盘股中信号更显著
+  related_factors: 'Candle Body Ratio, Alpha #44 (类似结构), RSI 形态, Intraday Momentum,
+    101-Alpha #1 (rank-based 变体)'
+l4:
+  hypotheses:
+  - id: H1
+    name: 日内动量延续
+    description: 当 close >> open 形成强势阳线时, 次日开盘容易出现跳空或延续上行, 因子值与次日收益正相关
+    expected_ic_sign: 正
+    source: 动量效应文献 (Jegadeesh & Titman 1993) + 日内动量研究 (Barber et al. 2012)
+    priority: 主假设
+  - id: H2
+    name: 极端反转
+    description: 因子值极端 (接近 ±1) 时反映当日单边市, 容易透支短期动能, 次日存在回吐压力, 即存在非线性反转效应
+    expected_ic_sign: 负
+    source: 短期反转效应 (Da, Liu, Schaumburg 2014) + 价格极值反转文献
+    priority: 次假设
+  - id: H3
+    name: 波动率依赖
+    description: 因子 IC 在高波动率环境下更显著, 因高波动放大日内信息含量; 低波动/盘整市下信号噪声大
+    expected_ic_sign: 正
+    source: 波动率风险溢价 (Ang et al. 2006) + 状态依赖因子模型
+    priority: 辅助假设
+  meaning_summary: 该因子本质是 K 线实体相对振幅的位置指标, 反映日内多空净优势; 单纯线性使用易受动量与反转双重力量影响, 实际应用中常需做截尾
+    (winsorize) 或非线性变换
+  key_insights:
+  - 0.001 常数是关键防爆措施, 删去后一字板/停牌日将产生 inf 导致回测崩溃
+  - 因子对 close 与 open 极度敏感, 受尾盘交易、收盘竞价机制影响较大, 跨市场使用时需考虑交易制度差异
+  - 未做横截面标准化 (rank/zscore), 原始值域受振幅分布影响, 实际使用前建议做截面 rank 化
+  uncertainty: 因子的方向性 (动量 vs 反转) 高度依赖调仓频率、股票池特征与市场状态, 单 IC 测试可能给出不一致结论; 建议做分位数组合 (quintile
+    spread) 与多空对冲检验
+l6:
+  industry_concentration: 因子不依赖行业特定变量, 在各板块普遍适用; 但金融、周期类股票日内振幅较大, 信号噪声比可能低于消费/成长股
+  crowding_level: 中等, 该因子结构简单 (仅 OHLC), 与经典 K 线形态、技术指标高度重叠, 存在被 CTA/量化散户普遍使用导致的拥挤风险
+  failure_conditions:
+  - '低流动性小盘股: 日内振幅易被冲击驱动, 因子值极端且不可预测, 失效概率高'
+  - '涨跌停板限制: 接近涨停/跌停时因子被截断在 ±1 附近, 丧失区分度'
+  - '事件日 (财报/分红/重大公告): 跳空开盘导致 open 失真, 实体被夸大, 因子噪声急剧上升'
+  risk_notes: 未做横截面标准化, 多空头寸大小受个股波动率影响不均衡, 组合构建时需叠加 volatility scaling; 0.001 虽防止除零,
+    但仍会令一字板日因子被压到极值, 建议在预处理阶段过滤停牌/一字板

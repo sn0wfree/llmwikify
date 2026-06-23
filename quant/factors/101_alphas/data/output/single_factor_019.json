@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 19,
+  "factor_name": "alpha-019",
+  "formula_brief": "((-1 * sign(((close - delay(close, 7)) + delta(close, 7)))) * (1 + rank((1 + sum(returns, 250)))))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Part 1: -1 * sign((close - delay(close, 7)) + delta(close, 7))\n    close_delay_7 = delay(pl.col('close'), periods=7)\n    close_delta_7 = delta(pl.col('close'), periods=7)\n    inner = (pl.col('close') - close_delay_7) + close_delta_7\n    sign_part = -1 * inner.sign()\n    \n    # Part 2: 1 + rank(1 + sum(returns, 250))\n    # Materialize the rolling sum first to avoid cross-code contamination\n    df = df.with_columns(rolling_sum(pl.col('returns'), window=250).alias('_sum_ret'))\n    rank_part = 1 + rank(pl.col('_sum_ret') + 1).over('date')\n    \n    # Combine\n    factor = sign_part * rank_part\n    \n    return df.select(factor).to_series()",
+  "code_chars": 697,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_019.h5",
+  "ic_mean": -0.018287859133158127,
+  "icir": -0.1111158668546881,
+  "ic_winrate": 0.4576271186440678,
+  "elapsed_sec": 21.185488173738122
+}

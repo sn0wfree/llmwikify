@@ -1,0 +1,109 @@
+name: stk_alpha_060_eca5c2
+display_name: 'Alpha #60'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (0 - (1 * ((2 * scale(rank(((((close - low) - (high - close)) / (high
+    - low)) * volume)))) - scale(rank(ts_argmax(close, 10))))))
+  formula: (0 - (1 * ((2 * scale(rank(((((close - low) - (high - close)) / (high -
+    low)) * volume)))) - scale(rank(ts_argmax(close, 10))))))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - low
+  - close
+  - volume
+  - open
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: '计算日内收盘位置 (归一化) 并用成交量加权: ((close - low) - (high - close)) / (high
+      - low) * volume, 化简为 (2*close - high - low)/(high - low) * volume, 反映价格收盘在当日波幅中的相对位置
+      (量价配合)'
+    formula: inner = (2*close - high - low) / (high - low) * volume
+  - step: 2
+    description: 对 inner 做截面 rank, 再用 scale 归一化, 得到每日截面上量价日内强度的标准化排序
+    formula: A = scale(rank(inner))  // 截面
+  - step: 3
+    description: 对每只股票计算 ts_argmax(close, 10), 即过去 10 日中最高收盘出现的位置 (距今天数, 0=今日最高, 9=9
+      日前最高)
+    formula: B_raw = ts_argmax(close, 10)
+  - step: 4
+    description: 对 B_raw 做截面 rank + scale, 得到反映「10 日新高新鲜度」的截面标准化指标
+    formula: B = scale(rank(B_raw))  // 截面
+  - step: 5
+    description: '组合: 0 - (1*(2*A - B)) = B - 2*A. 即对日内强势做负向加权, 对陈旧高点做正向加权, 体现反转/反转加速'
+    formula: factor = scale(rank(argmax)) - 2 * scale(rank(vw_close_pos))
+  edge_case_handling: 当 high == low 时 (一字板/停牌后恢复) 分母为 0, 需在分母加极小值或对当日记录剔除; ts_argmax
+    在窗口不足 10 日时返回 None, 通常向前填充或丢弃; scale 对截面样本数过少 (1 只) 时方差为 0 需返回 0
+  missing_value_handling: close/high/low/volume 任一缺失则该日该股 inner 为 null, 不参与截面 rank;
+    rank 默认跳过 null, scale 输出 null; 建议前向填充价格缺失, 成交量缺失置 0
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '捕捉日内量价强势 + 短期新高的反转效应: 当日放量收高、刚创 10 日新高的股票短期易回吐, 而缩量弱势、近期未创新高的股票存在反弹动能,
+    是典型短期反转 alpha.'
+  market_behavior: A 股/美股均存在的短期反转现象; 投资者对日内突破和短期新高过度反应, 触发获利回吐与跟风止损, 反向资金在随后 1-5 个交易日形成超额收益.
+  theoretical_basis: '基于 De Bondt-Thaler (1985) 过度反应理论、短期反转异象 (Jegadeesh 1990) 以及量价反转
+    (Gervais-Shanken 2003): 高换手高动量伴随未来收益下挫.'
+  historical_effectiveness: 在 101 alphas 原始测试中排名中上, 月度 IC 约 2-4%, 多空年化在 10-15% 量级;
+    在高换手、动量拥挤的市场 (如 2014-15 A 股小盘、2020-21 美股 meme) 表现尤佳.
+  related_factors: Alpha#21 (ts_argmax × rank), Alpha#32 (close vs high 突破), Alpha#37
+    (open vs close 缺口), 经典 short-term reversal (1-month), price-volume reversal, RSI
+    极端值反转
+l4:
+  hypotheses:
+  - id: H1
+    name: 日内量价强势 → 短期反转
+    description: 放量收在当日波幅高位 (vw_close_pos 高) 的股票在未来 1-5 日收益偏负, 即 scale(rank(inner))
+      对未来收益 IC 为负
+    expected_ic_sign: 负
+    source: Gervais-Shanken (2003) 高换手 → 低收益; Barber-Odean (2000) 散户追涨
+    priority: 主假设
+  - id: H2
+    name: 10 日新高新鲜度 → 短期反转
+    description: 刚创 10 日新高的股票 (ts_argmax 小, rank 低) 未来表现弱于 10 日新高已有一段时间的股票, 即 scale(rank(argmax))
+      对未来收益 IC 为正 (数值大=陈旧=优)
+    expected_ic_sign: 正
+    source: 短期价格动量在 1 周内常呈反转 (Lehmann 1990), 与 12 月动量方向相反
+    priority: 主假设
+  - id: H3
+    name: 合成因子 IC 显著为正
+    description: B - 2*A 的整体设计使 H1 的反转信号被双倍放大, H2 提供辅助, 截面多空年化超额收益为正
+    expected_ic_sign: 正
+    source: '101 alphas 原始 paper 实证 #30 的年化收益'
+    priority: 主假设
+  - id: H4
+    name: 在动量拥挤/高波动环境更有效
+    description: 市场情绪极端、追涨氛围浓厚时, 量价强势的过度反应更明显, 反转 alpha 表现更强
+    expected_ic_sign: 正
+    source: 市场状态依赖文献 (Wang-Xu-Yu 2020 alpha 时变研究)
+    priority: 次假设
+  meaning_summary: '该因子本质上是一个「短期反转复合因子」: 双向否定短期强势信号, 价值评估偏向「日内无量弱势 + 新高已陈旧」的股票, 押注市场对突破和新高的过度反应会均值回归.'
+  key_insights:
+  - ts_argmax 在此处的角色不是「追新高」, 而是「逃离新高」, 其 rank 越大 (新高越陈旧) 越受青睐
+  - 内层 (2*A) 的权重是 2, 而 B 的权重是 1, 说明日内反转的信号贡献被刻意放大, 是因子的核心驱动力
+  - 高量价强势与刚创新高在截面常正相关, 因子通过 -2*A + B 将两者部分对冲后保留反转纯度
+  uncertainty: 原始 WorldQuant 测试基于美股 2000-2014, A 股应用需注意涨跌停板导致 high==low、停牌导致窗口不足等结构性问题;
+    ts_argmax(close,10) 用 close 而非 high, 含义与通常的 10 日 breakout 略有差异, 可能在跳空高开低收时扭曲信号.
+l6:
+  industry_concentration: 中性, 不依赖特定行业; 但行业 beta 较高的板块 (科技/成长) 在动量期易触发反转, 行业集中度略偏高,
+    建议做行业中性化处理
+  crowding_level: 中等, Alpha#30 在 WorldQuant 平台公开, 多家量化机构已实现, 拥挤度逐月上升; 在 A 股属于公开度较高的反转类因子,
+    建议结合另类数据增强独特性
+  failure_conditions:
+  - 强趋势/单边行情 (如 2014 末、2020 春季) 中反转失效, 突破即趋势, 因子多空收益倒挂
+  - 低波动 + 慢牛格局下日内突破信号本身稀少且噪音低, 量价信号的信噪比下降, IC 衰减
+  - 涨跌停板/流动性枯竭导致 high==low 增多或 rank 截面样本过少, 因子分母不稳, 出现极端值
+  risk_notes: 因子对短期波动率敏感, 建议结合 volatility regime 过滤; ts_argmax 的窗口 (10 日) 对换手频率敏感,
+    调参风险较大; 在事件密集期 (财报/政策) 突破与反转并存, 因子方向不稳定.

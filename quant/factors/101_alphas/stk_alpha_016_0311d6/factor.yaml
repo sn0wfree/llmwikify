@@ -1,0 +1,98 @@
+name: stk_alpha_016_0311d6
+display_name: 'Alpha #16'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * rank(covariance(rank(high), rank(volume), 5)))
+  formula: (-1 * rank(covariance(rank(high), rank(volume), 5)))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - volume
+  - close
+  - open
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 按日期对 high 价格做横截面排名, 消除价格量级差异
+    formula: rank_high_t = rank(high_t) over date
+  - step: 2
+    description: 按日期对 volume 做横截面排名, 标准化成交活跃度
+    formula: rank_volume_t = rank(volume_t) over date
+  - step: 3
+    description: 对每只股票计算 rank(high) 与 rank(volume) 的 5 日滚动协方差, 度量量价同向运动强度
+    formula: cov_t = Cov(rank_high, rank_volume, window=5)
+  - step: 4
+    description: 对协方差序列再做横截面排名, 统一为可比分数
+    formula: rank_cov_t = rank(cov_t) over date
+  - step: 5
+    description: 取负号, 做多量价背离 (协方差低/负) 的股票, 做空量价齐升 (协方差高) 的股票
+    formula: factor_t = -1 × rank_cov_t
+  edge_case_handling: 滚动窗口前 4 日因样本不足协方差为 NaN, 横截面 rank 会将这些股票排到末尾或赋 NaN, 自然被下游选股过滤
+  missing_value_handling: rank 对 NaN 默认赋最小秩或跳过; 滚动协方差在样本不足时输出 NaN, 不参与排序
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '捕捉量价背离与量价齐升的反转差异: 做多缩量下跌/量缩价稳的股票, 做空放量冲高的股票, 利用投资者对''放量见顶''的过度反应获利。'
+  market_behavior: '短期反转 (short-term reversal): 当某只股票在高价区域伴随放量, 表明多空分歧加剧, 容易触发获利了结导致价格回撤;
+    反之量价背离的股票往往处于被低估的修复期。'
+  theoretical_basis: '行为金融学的过度反应与处置效应: 投资者倾向于在放量上涨后卖出锁定利润, 形成短期价格压力; 同时忽略了量价背离股票的潜在价值修复机会。'
+  historical_effectiveness: 在 A 股日频横截面上, 量价类反转因子通常 IC 在 -0.02 到 -0.05 之间, 年化超额约 5-10%,
+    但在趋势市中效果显著衰减。
+  related_factors: 'Alpha #41 原始量价反转因子、量价相关性 (PV correlation)、换手率反转、Amivest 流动性因子、资金流因子'
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价齐升反转假说
+    description: 高价区放量代表过度投机与主力派发, 未来 1-5 日股价倾向于回撤, 故协方差越大的股票未来收益越低, 因子取负号后 IC 应为正
+    expected_ic_sign: 正
+    source: 行为金融学 / 经典量价反转文献
+    priority: 主假设
+  - id: H2
+    name: 量价背离修复假说
+    description: 价升量缩或价跌量缩的股票被市场低估, 存在均值回归动力, 因子做多端 (负协方差) 应获得正向收益
+    expected_ic_sign: 正
+    source: 均值回归理论 / Bargain Hunting 假说
+    priority: 次假设
+  - id: H3
+    name: 高波动环境增强假说
+    description: 在波动率较高、换手活跃的市场环境下, 投资者情绪驱动的交易更明显, 反转信号更强; 牛市趋势市中信号衰减
+    expected_ic_sign: 正
+    source: 市场状态依赖性研究
+    priority: 次假设
+  - id: H4
+    name: 小盘股集中假说
+    description: 小盘股更容易被资金操纵, 放量冲高多为游资出货, 反转效应在小市值组最为显著, 因子收益可能集中于小盘
+    expected_ic_sign: 不确定
+    source: 市值效应 / 流动性溢价文献
+    priority: 辅助假设
+  meaning_summary: '该因子本质是一个''量价协同度''反转因子: 用 5 日滚动协方差度量高价与高成交量是否同步出现, 同步性越强越做空, 越背离越做多,
+    押注短期价格回归。'
+  key_insights:
+  - 双重 rank 设计 (先对 high/volume 排名, 再对协方差排名) 使因子对价格量级和协方差绝对值都不敏感, 纯反映横截面相对关系
+  - 5 日窗口对短期反转敏感, 换更长窗口 (10/20 日) 可切换为中期反转或趋势因子
+  - 取负号是关键, 若遗漏负号则变成追涨杀跌的动量因子, 效果可能完全相反
+  uncertainty: 反转因子的有效期较短且依赖市场状态, 在 A 股 2019-2021 的结构性牛市中曾出现持续回撤; 此外, 不同行业 (如周期 vs
+    消费) 的量价弹性差异较大, 因子需做行业中性化处理。
+l6:
+  industry_concentration: 因子本身不直接选行业, 但金融、地产、周期等高 Beta 行业的协方差波动更大, 因子敞口在这些行业上略偏高;
+    建议中性化处理。
+  crowding_level: 中等偏低。量价类反转是传统 alpha 思路, 但双重 rank 协方差的构造相对小众, 实际管理人中广泛使用者不多, 拥挤度低于换手率、量比等大众因子。
+  failure_conditions:
+  - 单边趋势/牛市中放量上涨是趋势确认信号而非反转信号, 因子将持续亏损 (如 2019-2020 部分时段)
+  - 小盘极端炒作行情下, 放量冲高后可能继续涨停 (如题材股连板), 反转逻辑被打破
+  - 政策驱动或突发利好导致量价齐升的非投机性上涨 (如重组、业绩爆发), 因子会错误做空
+  - 流动性枯竭或市场微观结构变化 (如涨跌幅放宽、注册制) 会改变量价关系, 需重新校准
+  risk_notes: 建议结合 20 日均线趋势过滤器使用, 在均线之上不做空以规避趋势市; 同时对极端协方差值做 winsorize 截尾, 防止单只妖股拉偏因子;
+    回测时需注意前视偏差 (rolling_cov 不能用未来数据) 及 survivorship bias。

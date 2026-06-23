@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_055_c42122",
+  "display_name": "Alpha #55",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 55,
+  "code_hash": "c42122",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

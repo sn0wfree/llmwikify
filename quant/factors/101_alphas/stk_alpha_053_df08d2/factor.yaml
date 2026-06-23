@@ -1,0 +1,93 @@
+name: stk_alpha_053_df08d2
+display_name: 'Alpha #53'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * delta((((close - low) - (high - close)) / (close - low)), 9))
+  formula: (-1 * delta((((close - low) - (high - close)) / (close - low)), 9))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - low
+  - close
+  - open
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算日内位置指标 inner = (2*close - low - high) / (close - low)，即 (close-low)
+      与 (high-close) 之差再除以 (close-low)，等价于 2 - 1/x（x 为 close 在当日振幅中的相对位置）
+    formula: inner = ((close - low) - (high - close)) / (close - low)
+  - step: 2
+    description: 对该日内位置指标做 9 日 delta（差分），衡量 close 在振幅中位置的 9 日变化方向与幅度
+    formula: delta_t = inner_t - inner_{t-9}
+  - step: 3
+    description: 对 delta 取负号，得到因子值，使指标的反向变化与未来收益正相关
+    formula: factor = -1 * delta_t
+  edge_case_handling: 当 close == low 时分母为零，inner 出现 inf/NaN；当 high == low（一字板）时同样异常；代码中未显式过滤，需依赖
+    polars 的除零行为产生 null 并在 delta 时跳过
+  missing_value_handling: 原始 OHLC 缺失时 pl.col 抛错；inner 产生的 NaN/inf 在 delta 中按缺失传播，最终因子值为
+    null；未做 winsorize 或 fill
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 刻画 close 在日内振幅中位置的 9 日变化趋势，因子取反后捕捉日内相对位置动量的反转——收盘价持续向振幅上沿漂移的股票预期回调，反之预期反弹。
+  market_behavior: 日内位置动量均值回复：连续数日收阳（偏振幅上沿）的股票倾向于回落，连续数日收阴（偏振幅下沿）的股票倾向于回升
+  theoretical_basis: 行为金融学中的过度反应与短期反转：投资者对日内强弱信号的过度反应会引发反向修正；与 Alpha#10、#37、#41 同属日内位置类反转因子
+  historical_effectiveness: Kakushadze 101 Alphas 公开回测中属于中低频有效的反转类因子，单独 IC 较弱但与其他因子相关性低，可作为组合分散项
+  related_factors: Alpha#10、Alpha#37、Alpha#41、CFP（收盘在振幅中的分位）、反转因子 RET_1M
+l4:
+  hypotheses:
+  - id: H1
+    name: 日内位置动量反转
+    description: close 9 日内由振幅下沿向上沿漂移（inner 上升、因子为负）的股票，预期未来收益下行；反之预期上行
+    expected_ic_sign: 正
+    source: Kakushadze 101 Alphas 论文 + 行为金融反转理论
+    priority: 主假设
+  - id: H2
+    name: 短期反转增强效应
+    description: 对中小盘、低换手股票，9 日反转的力度更强，IC 绝对值更高
+    expected_ic_sign: 正
+    source: 反转因子在小票上表现更强的实证文献
+    priority: 次假设
+  - id: H3
+    name: 分母噪声导致的稳健性
+    description: 当 close 接近 low 时 inner 数值爆炸，因子不稳定；预期截尾或使用 (close-low)/range 替代后 IC
+      会改善
+    expected_ic_sign: 不确定
+    source: 公式推导 + 数值稳定性分析
+    priority: 辅助假设
+  - id: H4
+    name: 趋势行情失效
+    description: 在强趋势市中 close 持续位于振幅单侧，inner 单调变化，因子失效——IC 接近 0 或反转
+    expected_ic_sign: 不确定
+    source: 反转因子在 trend regime 失效的通识
+    priority: 辅助假设
+  meaning_summary: 因子 = -(9 日前日 close 在日内振幅中位置的 9 日变化量)。值越大代表 close 9 日前曾位于振幅下沿/中下部、近期向中上部回升；值越小代表
+    close 9 日前曾偏振幅上沿、近期回落。
+  key_insights:
+  - inner 可化简为 2 - 1/x，x 是 close 在 (low, high) 中的相对位置；x=1 时 inner=1，x=0.5 时 inner=0，x→0
+    时 inner→-∞
+  - 因子本质是 9 日日内位置变化的相反数，属于反转而非动量
+  - 分母 (close-low) 在 close 接近 low 时极易出现极端值，原始公式数值稳定性差
+  uncertainty: 公式对 close-low 的非线性放大导致因子分布偏态严重，实际 IC 可能不稳定；建议改用 CFP 等稳健化版本。
+l6:
+  industry_concentration: 因子不依赖行业中性化，跨行业有效；电气设备、半导体等高波动行业因子绝对值偏大
+  crowding_level: 中度拥挤——来自 101 Alphas 公开论文，被大量量化机构复现，单独 alpha 已被部分挖掘；与其他 101 alpha
+    组合使用仍有边际
+  failure_conditions:
+  - 强趋势市/单边行情中 close 持续位于振幅单侧，inner 单调变化导致因子在趋势延续期失效
+  - 一字板/涨跌停频发的低流动性股票，close 频繁等于 high 或 low，分母为零或 inner 极端
+  - close 集中分布在振幅下沿的小盘股，inner 出现 -∞ 异常值，污染因子分布
+  risk_notes: 未做极值处理与中性化，原始因子存在显著市值/波动率暴露；建议在使用前对 inner 与因子分别做 winsorize 与市值中性化；注意
+    division by zero 与 null 传播

@@ -1,0 +1,108 @@
+name: stk_alpha_084_2832f8
+display_name: 'Alpha #84'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: SignedPower(Ts_Rank((vwap - ts_max(vwap, 15.3217)), 20.7127), delta(close,
+    4.96796))
+  formula: SignedPower(Ts_Rank((vwap - ts_max(vwap, 15.3217)), 20.7127), delta(close,
+    4.96796))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - vwap
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 VWAP 在 15 日窗口内的滚动最大值 (窗口从 15.3217 截断为 15)
+    formula: vwap_max = ts_max(vwap, 15)
+  - step: 2
+    description: 计算当日 VWAP 与 15 日滚动最大值之差。由于 vwap ≤ rolling_max, 偏差恒为 ≤ 0
+    formula: diff_vwap = vwap - vwap_max
+  - step: 3
+    description: 对偏差序列做 20 日时间序列百分位排名, 得到 [0, 1] 区间的秩值 (窗口从 20.7127 截断为 20)
+    formula: rank_val = ts_rank(diff_vwap, 20)
+  - step: 4
+    description: 计算收盘价的 5 日差分, 作为后续幂运算的指数 (periods 从 4.96796 截断为 4)
+    formula: close_delta = close[t] - close[t-4]
+  - step: 5
+    description: '对秩值进行符号幂变换: sign(rank) × |rank|^close_delta。因 rank ∈ [0, 1], sign
+      项实际恒为正, 结果等效为 rank^close_delta。当 close_delta<0 时, 小秩值被指数放大 (1/rank^|delta|)'
+    formula: factor = sign(rank) × |rank|^close_delta ≈ rank^close_delta
+  edge_case_handling: 当 close_delta = 0 时, 因子值恒为 1 (任何非零底数的 0 次幂), 导致该样本失去区分度; 当 close_delta
+    为负且 rank 接近 0 时, 因子值可能极大, 产生离群值; VWAP 等于滚动最大时 diff=0, rank 接近 1, 因子处于正常范围
+  missing_value_handling: 未显式处理缺失值; 滚动窗口起始位置因 warm-up 不足会产生 NaN, 应在下游过滤
+  data_alignment: T+1
+  complexity: O(T × N × 20)
+l3:
+  financial_intuition: 因子将 VWAP 相对于 15 日高点的偏离程度 (用时序秩衡量) 与近 5 日价格变动进行非线性耦合, 捕捉量价方向一致时的极端状态,
+    在价格下行时放大弱势信号、在价格上行时压缩强势信号, 形成对趋势延续或反转的非对称识别能力。
+  market_behavior: 适用于量价信息含量高的中频交易场景, 在趋势确立或超跌反弹阶段信号较强; 市场震荡或方向频繁切换时, rank 与 close_delta
+    信号可能反复矛盾导致因子值跳变
+  theoretical_basis: '基于行为金融学中的反应过度/不足与量价先行理论: VWAP 持续低于近期高点反映卖压持续, 配合价格下行构成看空强化;
+    而 VWAP 接近高点配合价格上涨则印证买方力量, 二者一致时构成强趋势信号'
+  historical_effectiveness: 在 101 Alphas 原始测试集中该类 VWAP-rank × 价格动量非线性组合排名靠前, 对中频日频选股具有增量信息;
+    但窗口被截断后 (15/20/5 替换 15.32/20.71/4.97) 信息含量略有损失, 实际 IC 可能低于原论文
+  related_factors: Alpha 006, Alpha 012 (VWAP-rank 类), Alpha 010 (rank × delta 类),
+    Alpha 023 (SignedPower 类)
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价同向弱势放大假说 (主假设)
+    description: 当 VWAP 持续低于 15 日高点 (rank 偏低) 且近 5 日价格下行 (close_delta<0) 时, 因子值被 signed_power
+      指数放大, 反映卖压持续叠加价格下跌的一致看空信号, 预期未来仍延续下行趋势, IC 为负
+    expected_ic_sign: 负
+    source: '基于公式构造的直接推导: 小底数 ^ 负指数 = 大值, 极端大值映射到弱势延续'
+    priority: 主假设
+  - id: H2
+    name: 量价同向强势温和假说
+    description: VWAP 接近 15 日高点 (rank 偏高) 且价格上行 (close_delta>0) 时, 因子值温和, 反映买盘力量确认的稳健上涨,
+      但因底数 ∈ [0,1] 经正幂压缩后信号不极致, 预期 IC 较弱或方向不确定
+    expected_ic_sign: 不确定
+    source: '推导: 大底数 ^ 正指数 仍接近 1 但被压缩, 信号区分度有限'
+    priority: 备选假设
+  - id: H3
+    name: 信号矛盾噪声假说
+    description: 当 rank 与 close_delta 方向矛盾 (如 VWAP 弱势但价格上涨) 时, 因子值接近 0 或 1 的中性区间,
+      缺乏预测能力, 是因子的'盲区', 应在组合中剔除或降权
+    expected_ic_sign: 不确定
+    source: '由幂函数性质推导: 矛盾信号下因子值落入中性带'
+    priority: 备选假设
+  - id: H4
+    name: 均值回归反弹假说
+    description: 因子极大值可能并非趋势延续信号, 而是超跌状态下的均值回归机会——VWAP 严重偏离高点 + 价格快速下跌后, 短期反弹概率上升,
+      IC 为正
+    expected_ic_sign: 正
+    source: 行为金融反应过度理论; 与 H1 互为对立面, 需实证验证
+    priority: 对立假设
+  meaning_summary: 该因子通过 signed_power 非线性变换, 在价格下行段放大'VWAP 持续低于近期高点'的弱势信号, 在价格上行段则压缩信号;
+    实质是一个方向敏感的非对称量价动量因子, 主信号集中在下行确认的弱势股上。
+  key_insights:
+  - sign(rank) 在 rank∈[0,1] 时恒为正, 'signed' 命名主要体现结果对 close_delta 正负的非对称响应
+  - close_delta 的符号决定因子是放大 (负) 还是压缩 (正), 这是核心非线性来源
+  - 窗口参数 (15.32/20.71/4.97) 被截断为整数可能引入约 1-3% 的 IC 损失
+  uncertainty: 主假设 (弱势延续) 与对立假设 (超跌反弹) 的方向冲突, 需依赖历史回测确定; signed_power 对极端值的非线性放大也可能引入回撤期因子失效风险
+l6:
+  industry_concentration: 因子在周期性行业 (钢铁、煤炭、化工) 与小盘高波动行业 (电子、计算机) 中信号可能更显著, 因这些行业的 VWAP
+    偏离与价格短期波动幅度更大; 防御性行业 (公用事业、食品饮料) 信号较弱
+  crowding_level: '中-高: VWAP-rank 与短期动量类因子被广泛使用, 101 Alphas 公开后同质化严重, 在 A 股中部分窗口组合已出现拥挤交易特征'
+  failure_conditions:
+  - '市场风格切换 (如从趋势市转为震荡市): rank 与 close_delta 频繁矛盾, 因子落入中性带失效'
+  - '低流动性/小微盘股: VWAP 受冲击成本影响失真, ts_rank 噪声大, signed_power 放大噪声导致极端离群值'
+  - '涨跌停或停牌密集期: close_delta 与 vwap 失真, close_delta=0 时因子退化为常数 1, 失去区分度'
+  risk_notes: signed_power 在 close_delta 为负且 rank 趋近 0 时因子值爆炸式增长, 必须对输出做 winsorize
+    或截尾处理 (如 ±3σ 或 99% 分位); close_delta=0 的样本需单独标记或剔除, 否则引入大量伪信号

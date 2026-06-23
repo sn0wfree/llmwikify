@@ -1,0 +1,503 @@
+updated_at: '2026-06-23'
+workspaces:
+- name: 101_alphas
+  display_name: 101 Formulaic Alphas
+  factor_count: 99
+  asset_class: stk
+  category: alpha
+factors:
+- name: stk_alpha_001_f9f371
+  workspace: 101_alphas
+  display_name: 'Alpha #1'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_002_9dcba7
+  workspace: 101_alphas
+  display_name: 'Alpha #2'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_003_66a301
+  workspace: 101_alphas
+  display_name: 'Alpha #3'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_004_55fcd1
+  workspace: 101_alphas
+  display_name: 'Alpha #4'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_005_162edc
+  workspace: 101_alphas
+  display_name: 'Alpha #5'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_006_68346d
+  workspace: 101_alphas
+  display_name: 'Alpha #6'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_007_c0f738
+  workspace: 101_alphas
+  display_name: 'Alpha #7'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_008_c0477c
+  workspace: 101_alphas
+  display_name: 'Alpha #8'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_009_970057
+  workspace: 101_alphas
+  display_name: 'Alpha #9'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_010_9149ea
+  workspace: 101_alphas
+  display_name: 'Alpha #10'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_011_d02502
+  workspace: 101_alphas
+  display_name: 'Alpha #11'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_012_56b188
+  workspace: 101_alphas
+  display_name: 'Alpha #12'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_013_e10e08
+  workspace: 101_alphas
+  display_name: 'Alpha #13'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_014_bcfb3b
+  workspace: 101_alphas
+  display_name: 'Alpha #14'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_015_347296
+  workspace: 101_alphas
+  display_name: 'Alpha #15'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_016_0311d6
+  workspace: 101_alphas
+  display_name: 'Alpha #16'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_017_3348d8
+  workspace: 101_alphas
+  display_name: 'Alpha #17'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_018_48a880
+  workspace: 101_alphas
+  display_name: 'Alpha #18'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_019_7f22bc
+  workspace: 101_alphas
+  display_name: 'Alpha #19'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_020_c6f4ce
+  workspace: 101_alphas
+  display_name: 'Alpha #20'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_021_4ae89d
+  workspace: 101_alphas
+  display_name: 'Alpha #21'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_022_06d6aa
+  workspace: 101_alphas
+  display_name: 'Alpha #22'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_023_c7baf3
+  workspace: 101_alphas
+  display_name: 'Alpha #23'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_024_8540b7
+  workspace: 101_alphas
+  display_name: 'Alpha #24'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_025_258c09
+  workspace: 101_alphas
+  display_name: 'Alpha #25'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_026_881601
+  workspace: 101_alphas
+  display_name: 'Alpha #26'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_027_728a53
+  workspace: 101_alphas
+  display_name: 'Alpha #27'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_028_15294b
+  workspace: 101_alphas
+  display_name: 'Alpha #28'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_029_a81d02
+  workspace: 101_alphas
+  display_name: 'Alpha #29'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_030_bfef12
+  workspace: 101_alphas
+  display_name: 'Alpha #30'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_031_2e400f
+  workspace: 101_alphas
+  display_name: 'Alpha #31'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_032_a53c28
+  workspace: 101_alphas
+  display_name: 'Alpha #32'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_033_67adca
+  workspace: 101_alphas
+  display_name: 'Alpha #33'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_034_05b515
+  workspace: 101_alphas
+  display_name: 'Alpha #34'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_035_70a88f
+  workspace: 101_alphas
+  display_name: 'Alpha #35'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_036_b58630
+  workspace: 101_alphas
+  display_name: 'Alpha #36'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_037_4fa096
+  workspace: 101_alphas
+  display_name: 'Alpha #37'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_038_e4d169
+  workspace: 101_alphas
+  display_name: 'Alpha #38'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_039_6bd26b
+  workspace: 101_alphas
+  display_name: 'Alpha #39'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_040_43629f
+  workspace: 101_alphas
+  display_name: 'Alpha #40'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_041_e6c92d
+  workspace: 101_alphas
+  display_name: 'Alpha #41'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_042_df282f
+  workspace: 101_alphas
+  display_name: 'Alpha #42'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_043_91bc7c
+  workspace: 101_alphas
+  display_name: 'Alpha #43'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_044_d48994
+  workspace: 101_alphas
+  display_name: 'Alpha #44'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_045_be0e01
+  workspace: 101_alphas
+  display_name: 'Alpha #45'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_046_bb162c
+  workspace: 101_alphas
+  display_name: 'Alpha #46'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_047_316c96
+  workspace: 101_alphas
+  display_name: 'Alpha #47'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_048_03c6a5
+  workspace: 101_alphas
+  display_name: 'Alpha #48'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_049_bd78f6
+  workspace: 101_alphas
+  display_name: 'Alpha #49'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_050_c738fd
+  workspace: 101_alphas
+  display_name: 'Alpha #50'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_051_477468
+  workspace: 101_alphas
+  display_name: 'Alpha #51'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_052_114dbf
+  workspace: 101_alphas
+  display_name: 'Alpha #52'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_053_df08d2
+  workspace: 101_alphas
+  display_name: 'Alpha #53'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_054_fb62ed
+  workspace: 101_alphas
+  display_name: 'Alpha #54'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_055_c42122
+  workspace: 101_alphas
+  display_name: 'Alpha #55'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_056_ed63e6
+  workspace: 101_alphas
+  display_name: 'Alpha #56'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_058_94d46e
+  workspace: 101_alphas
+  display_name: 'Alpha #58'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_059_55fffe
+  workspace: 101_alphas
+  display_name: 'Alpha #59'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_060_eca5c2
+  workspace: 101_alphas
+  display_name: 'Alpha #60'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_061_57802a
+  workspace: 101_alphas
+  display_name: 'Alpha #61'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_062_67a5c3
+  workspace: 101_alphas
+  display_name: 'Alpha #62'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_063_b595d3
+  workspace: 101_alphas
+  display_name: 'Alpha #63'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_064_ee4e88
+  workspace: 101_alphas
+  display_name: 'Alpha #64'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_065_28996c
+  workspace: 101_alphas
+  display_name: 'Alpha #65'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_066_42a5a6
+  workspace: 101_alphas
+  display_name: 'Alpha #66'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_067_897127
+  workspace: 101_alphas
+  display_name: 'Alpha #67'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_068_83ce68
+  workspace: 101_alphas
+  display_name: 'Alpha #68'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_069_256ff7
+  workspace: 101_alphas
+  display_name: 'Alpha #69'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_070_a15dd0
+  workspace: 101_alphas
+  display_name: 'Alpha #70'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_071_70dc98
+  workspace: 101_alphas
+  display_name: 'Alpha #71'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_072_6ba715
+  workspace: 101_alphas
+  display_name: 'Alpha #72'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_073_b43fc6
+  workspace: 101_alphas
+  display_name: 'Alpha #73'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_074_6d3d56
+  workspace: 101_alphas
+  display_name: 'Alpha #74'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_075_569f1e
+  workspace: 101_alphas
+  display_name: 'Alpha #75'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_076_ec571f
+  workspace: 101_alphas
+  display_name: 'Alpha #76'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_077_eaf64e
+  workspace: 101_alphas
+  display_name: 'Alpha #77'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_078_38141a
+  workspace: 101_alphas
+  display_name: 'Alpha #78'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_079_44f669
+  workspace: 101_alphas
+  display_name: 'Alpha #79'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_080_f7e1fb
+  workspace: 101_alphas
+  display_name: 'Alpha #80'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_081_12f2ab
+  workspace: 101_alphas
+  display_name: 'Alpha #81'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_082_ac6e39
+  workspace: 101_alphas
+  display_name: 'Alpha #82'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_083_553e40
+  workspace: 101_alphas
+  display_name: 'Alpha #83'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_084_2832f8
+  workspace: 101_alphas
+  display_name: 'Alpha #84'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_085_45be76
+  workspace: 101_alphas
+  display_name: 'Alpha #85'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_086_632b8e
+  workspace: 101_alphas
+  display_name: 'Alpha #86'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_087_538152
+  workspace: 101_alphas
+  display_name: 'Alpha #87'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_088_9e29c5
+  workspace: 101_alphas
+  display_name: 'Alpha #88'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_089_b39cec
+  workspace: 101_alphas
+  display_name: 'Alpha #89'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_090_849bf5
+  workspace: 101_alphas
+  display_name: 'Alpha #90'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_091_07d18e
+  workspace: 101_alphas
+  display_name: 'Alpha #91'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_092_f1c4e5
+  workspace: 101_alphas
+  display_name: 'Alpha #92'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_093_f3d74e
+  workspace: 101_alphas
+  display_name: 'Alpha #93'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_094_65c8c3
+  workspace: 101_alphas
+  display_name: 'Alpha #94'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_095_7a01d4
+  workspace: 101_alphas
+  display_name: 'Alpha #95'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_096_7c0a52
+  workspace: 101_alphas
+  display_name: 'Alpha #96'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_097_975afb
+  workspace: 101_alphas
+  display_name: 'Alpha #97'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_098_f09d65
+  workspace: 101_alphas
+  display_name: 'Alpha #98'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_099_0e39f0
+  workspace: 101_alphas
+  display_name: 'Alpha #99'
+  status: verified
+  updated_at: '2026-06-23'
+- name: stk_alpha_101_19525f
+  workspace: 101_alphas
+  display_name: 'Alpha #101'
+  status: verified
+  updated_at: '2026-06-23'

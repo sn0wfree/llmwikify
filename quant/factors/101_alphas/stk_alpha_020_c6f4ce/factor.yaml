@@ -1,0 +1,85 @@
+name: stk_alpha_020_c6f4ce
+display_name: 'Alpha #20'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((((-1 * rank((open - delay(high, 1)))) * rank((open - delay(close,
+    1)))) * rank((open - delay(low, 1))))
+  formula: ((((-1 * rank((open - delay(high, 1)))) * rank((open - delay(close, 1))))
+    * rank((open - delay(low, 1))))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - high
+  - low
+  - close
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算今日开盘价与昨日 high/close/low 的差值, 形成三个'跳空缺口'代理变量
+    formula: gap_high = open_t - high_{t-1}; gap_close = open_t - close_{t-1}; gap_low
+      = open_t - low_{t-1}
+  - step: 2
+    description: 对每个差值在截面(date)上进行 rank 标准化, 消除量纲影响
+    formula: r1 = rank(gap_high); r2 = rank(gap_close); r3 = rank(gap_low)
+  - step: 3
+    description: 将三个截面 rank 相乘并取负号, 得到综合因子值
+    formula: factor = -1 × r1 × r2 × r3
+  edge_case_handling: delay 在第一行产生 null; rank 不会因 null 导致错误(通常自动跳过); 需保证输入已按 date
+    排序
+  missing_value_handling: delay 产生的 null 沿用 polars 默认传播, 最终结果中第一根 K 线的因子为 null
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '捕捉隔夜跳空缺口的方向与大小: 三项 rank 同时偏低(开盘远低于昨高/收/低)表示大幅低开, 取负后给予正向因子——本质是''低开反转/缺口回补''因子。'
+  market_behavior: '市场对隔夜信息的过度反应: 大幅低开后倾向于日内反弹回补缺口, 大幅高开后倾向于回落, 表现为隔夜收益的均值回归。'
+  theoretical_basis: '行为金融学的过度反应假说 + 流动性供给假说: 隔夜信息冲击导致开盘价跳跃, 知情交易者在反向提供流动性, 推动价格回归。'
+  historical_effectiveness: 在 A 股与美股均被验证具有显著隔夜反转效应, IC 多为正(低开→正收益); 牛市中效果更明显, 极端波动期信号可能短暂失效。
+  related_factors: overnight_return, gap_factor, intraday_reversal, close-to-open
+    momentum reversal
+l4:
+  hypotheses:
+  - id: H1
+    name: 隔夜低开反转
+    description: 开盘价相对昨日 high/close/low 越低(大幅低开), 未来收益越高, 因子与下期收益正相关
+    expected_ic_sign: 正
+    source: 101 Alphas 原始公式推导 + 隔夜反转文献
+    priority: 主假设
+  - id: H2
+    name: 缺口回补(均值回归)
+    description: 三个代理变量从不同维度度量缺口大小, 相乘强化了极端低开/高开信号的尾部效应, 体现缺口回补规律
+    expected_ic_sign: 正
+    source: Price Gap Fill 文献 (Lakonishok 等)
+    priority: 次假设
+  - id: H3
+    name: 高波动/高换手环境下更有效
+    description: 市场情绪剧烈、隔夜信息冲击大时, 低开更可能由恐慌驱动, 反转力度更强
+    expected_ic_sign: 正
+    source: '行为金融: 恐慌性抛售后的反弹'
+    priority: 辅助假设
+  meaning_summary: 该因子通过比较开盘价与昨日 high/close/low 的截面 rank, 衡量隔夜跳空方向的极端程度, 取负后做多大幅低开、做空大幅高开,
+    押注缺口回补。
+  key_insights:
+  - 三项 rank 乘积对'全维度低开'(open 同时低于昨 high、close、low)赋予最高得分, 强调极端尾部信号
+  - 不直接使用隔夜收益率, 而是用 (open − high) 和 (open − low) 刻画缺口上限, 信息含量更丰富
+  - 纯截面因子, 不依赖时序标准化, 对不同价格水平的股票天然可比
+  uncertainty: 三项 rank 的乘积放大了噪声, 在分布两端股票稀少时(单日 N 较小)易受极端值影响; 且不区分行业/市值, 可能混入风格暴露
+l6:
+  industry_concentration: 低, 因子对各行业普遍适用, 极端低开/高开事件在大多数行业都会出现
+  crowding_level: 中等, 隔夜反转是经典 alpha, 部分量化机构已布局但未达到拥挤阈值
+  failure_conditions:
+  - 强趋势行情中缺口不补, 因子持续亏损(如单边牛市中低开反而是买点不会立刻回补)
+  - 重大政策/消息导致跳空, 缺口由基本面变化驱动而非情绪, 反转失败
+  - 涨跌停/流动性枯竭导致开盘价被扭曲, rank 排序失真
+  risk_notes: 做空端依赖融券, A 股市场做空受限可能影响回测表现; 因子在尾部分布暴露大, 需结合波动率/换手率等风险因子做中性化处理

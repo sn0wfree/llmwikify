@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_043_91bc7c",
+  "display_name": "Alpha #43",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 43,
+  "code_hash": "91bc7c",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

@@ -1,0 +1,95 @@
+name: stk_alpha_090_849bf5
+display_name: 'Alpha #90'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((rank((close - ts_max(close, 4.66719)))^Ts_Rank(correlation(IndNeutralize(adv40,
+    IndClass.subindustry), low, 5.38375), 3.21856)) * -1)
+  formula: ((rank((close - ts_max(close, 4.66719)))^Ts_Rank(correlation(IndNeutralize(adv40,
+    IndClass.subindustry), low, 5.38375), 3.21856)) * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - low
+  - close
+  - adv40
+  - industry
+  - open
+  - high
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 40 日平均成交额 adv40 = mean(volume × close, 40)
+    formula: adv40 = ts_mean(volume * close, 40)
+  - step: 2
+    description: 对 adv40 进行 sub-industry 行业内中性化（每日行业内去均值）
+    formula: adv40_neut = adv40 - mean(adv40 | sub_industry, per date)
+  - step: 3
+    description: 计算中性化后 adv40 与 low 的 5 日滚动相关系数, 再对该序列做 3 日 ts_rank (百分位)
+    formula: tsr = ts_rank(corr(adv40_neut, low, 5), 3)
+  - step: 4
+    description: 计算 close 距 5 日最高价的偏离, 并在截面上做 rank
+    formula: r = rank(close - ts_max(close, 5))
+  - step: 5
+    description: 将 rank 值以 tsr 为指数做幂运算, 整体乘以 -1
+    formula: factor = -1 * (r ^ tsr)
+  edge_case_handling: neutralize 在缺失行业列时按全市场 demean 兜底; rolling 窗口不足 40/5/3 的行产出 NaN;
+    ts_rank 输出落在 (0,1) 区间, rank 输出落在 (0,1) 区间, 0 或负底数时幂运算在 polars 中为 NaN
+  missing_value_handling: rolling 与 neutralize 各自独立处理 NaN; 中间任一环节为 NaN 会传播至最终因子, 不会做二次填充
+  data_alignment: T+1
+  complexity: O(T × N) 单次横截面计算 + 线性时间序列滚动
+l3:
+  financial_intuition: '组合 ''价格距 5 日新高的偏离'' 与 ''行业中性化成交额与低价的联动强度'': 偏离越大、量价同向越显著的股票越被赋高因子值,
+    押注其均值回归。'
+  market_behavior: 捕捉短期超跌后的反弹, 同时以行业内量价同步性作为确认/过滤, 避免在无量阴跌中误入。
+  theoretical_basis: 短期价格偏离 (close vs N 日 high) 的均值回归文献, 配合 behavioural overreaction
+    与 microstructure 上的 volume-low 共动关系。
+  historical_effectiveness: 在 101 Alphas 系列中属于成交量-价位耦合类因子, 对中频反转有正贡献, 但在强趋势/低换手环境下衰减明显。
+  related_factors: Alpha#4 (low * volume), Alpha#55 (divergence of price vs ts_rank),
+    momentum/reversal 短期反转因子, 行业中性化换手率因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期反转效应
+    description: close 显著低于 5 日最高价的股票, 短期倾向于反弹, 因子应与之同向
+    expected_ic_sign: 正
+    source: 101 Alphas 中 close-ts_max 类构造 + 短期反转文献
+    priority: 主假设
+  - id: H2
+    name: 量价同向放大效应
+    description: ts_rank(相关性) 作为指数放大/压缩 rank 信号; 当行业内成交额与低价正相关时, 超跌反弹的可信度更高
+    expected_ic_sign: 正
+    source: 量价关系 (volume-price confirmation) 经典研究
+    priority: 次假设
+  - id: H3
+    name: 行业中性化抗板块漂移
+    description: adv40 经 sub-industry 中性化后再做相关, 减少因子对板块系统性涨跌的暴露
+    expected_ic_sign: 不确定
+    source: 行业中性化标准做法 (Barra)
+    priority: 辅助假设
+  meaning_summary: 高因子值 = 股票远离 5 日新高, 且行业内成交额与低点同向走强, 押注其短期反弹。
+  key_insights:
+  - 'rank 之后做幂运算, 实际是非线性放大: tsr 越接近 1 越强调极端偏离, 越接近 0 越把全市场压向 1'
+  - adv40 用 sub-industry 中性化, 关键在于减弱板块资金流对相关性的污染, 而非消除其本身
+  - 取负号 (×-1) 后的方向需要根据实证 IC 重新校准, 不能仅看公式符号
+  uncertainty: 幂运算对 tsr 在 (0,1) 区间极敏感, 跨样本稳定性较弱; 行业列缺失时 neutralize 退化为全市场 demean,
+    会改变因子含义。
+l6:
+  industry_concentration: 理论上经 sub-industry 中性化后行业暴露接近 0; 若行业列缺失退化为全市场 demean, 行业暴露会显著上升
+  crowding_level: 中等偏低, close-ts_max + 量价相关的组合在 101 Alphas 之外被复制较少, 拥挤度低于纯反转/纯动量
+  failure_conditions:
+  - '强趋势市: 价格创新低后继续下跌, 短期反转假设失效, 因子持续负贡献'
+  - '成交萎缩/无量阴跌: adv40 与 low 相关性噪声大, tsr 失真, 幂运算放大噪声'
+  - '行业层面剧烈轮动: 行业中性化不充分或行业分类滞后, 中性化残差仍带强板块 beta'
+  risk_notes: 幂运算易放大极端值, 建议对 r 与 tsr 做 winsorize; 行业分类列必须存在且与日期对齐, 否则 neutralize 行为与原始公式偏离,
+    需做容灾处理; 负号需通过回测 IC 校准方向, 不应默认公式即因子方向。

@@ -1,0 +1,79 @@
+name: stk_alpha_044_d48994
+display_name: 'Alpha #44'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * correlation(high, rank(volume), 5))
+  formula: (-1 * correlation(high, rank(volume), 5))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - volume
+  - close
+  - open
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 对每日截面上的成交量(volume)进行排名,得到相对成交量水平 rank(volume)
+    formula: rank_vol_t = rank(volume_t) over date
+  - step: 2
+    description: 在 5 日滚动窗口内,计算每日最高价(high)与 rank(volume) 的时序相关系数
+    formula: corr_t = rolling_corr(high_t, rank_vol_t, window=5)
+  - step: 3
+    description: 对相关系数取负,得到最终因子值
+    formula: factor_t = -1 × corr_t
+  edge_case_handling: 窗口不足 5 日时滚动相关系数返回 NaN;截面排名仅在同日有效,跨日不混合
+  missing_value_handling: high 或 volume 缺失时对应样本被剔除,不参与相关系数计算
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 捕捉'量价配合'与反转效应的关系:当股票高价伴随放量时(正相关),因子值为负,预期未来回调;当高价出现在缩量环境中(负相关),因子值为正,预期仍有上行空间。
+  market_behavior: 反映的是量价背离/配合所蕴含的短期供需失衡与均值回归信号,在震荡反转市更为有效
+  theoretical_basis: 基于量价反转理论(volume-price reversal):放量冲高常代表短期买力耗尽,缩量上涨则代表抛压轻、趋势可持续
+  historical_effectiveness: 在 A 股日频短周期反转策略文献中表现稳定,IC 绝对值通常在 0.02~0.04 区间
+  related_factors: Alpha#12 (sign of volume change)、量价背离类因子、换手率反转因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 放量冲高反转
+    description: 当个股近 5 日最高价与成交量排名呈正相关(放量创新高),因子值为负,预期未来收益为负——放量是短期买力衰竭信号
+    expected_ic_sign: 负
+    source: 量价反转经典文献 (Gao et al., 2018 等)
+    priority: 主假设
+  - id: H2
+    name: 缩量上涨延续
+    description: 当最高价与成交量排名呈负相关(缩量上涨),因子值为正,预期未来仍有正收益——抛压轻,趋势延续
+    expected_ic_sign: 正
+    source: 价量背离 → 趋势延续假说
+    priority: 次假设
+  - id: H3
+    name: 截面相对强弱反转
+    description: 由于成交量使用了截面 rank,该因子隐含了'相对放量'概念——只在全市场中相对放量冲高的个股更易反转
+    expected_ic_sign: 负
+    source: 横截面相对量价假说
+    priority: 辅助假设
+  meaning_summary: 因子核心是'最高价与相对成交量的 5 日滚动相关性的相反数',本质衡量量价配合度,取负后体现反转/延续的双向信号
+  key_insights:
+  - 使用截面 rank(volume) 而非原始 volume,排除了规模/流动性差异,聚焦相对放量行为
+  - 采用 5 日短窗口,对短期量价失衡敏感,信号衰减快
+  - 取负号是该因子的关键设计:将'放量冲高'转换为做空信号
+  uncertainty: 在强趋势/牛市中,放量冲高常代表突破而非反转,因子可能失效;不同市场状态(regime) 下 IC 方向可能反转
+l6:
+  industry_concentration: 中等:周期性行业(有色、化工)量价波动大,因子载荷较高;防御性行业信号较弱
+  crowding_level: 中等偏低:该因子在 101 alphas 系列中知名度高,但实际使用中常被改造(替换 high 为 close/vwap),纯版本拥挤度有限
+  failure_conditions:
+  - 强势单边趋势行情:放量冲高变为有效突破,反转假说失效,因子 IC 反转
+  - 低流动性小票:截面 rank 噪声大,相关系数估计不稳定
+  - 市场情绪极端/政策驱动行情:量价关系被外生事件破坏
+  risk_notes: 因子回撤主要来源于趋势市与反转市的风格切换;建议结合波动率或趋势强度过滤器使用,纯因子需控制行业与市值敞口

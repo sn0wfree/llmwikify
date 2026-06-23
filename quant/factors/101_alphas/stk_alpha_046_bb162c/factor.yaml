@@ -1,0 +1,98 @@
+name: stk_alpha_046_bb162c
+display_name: 'Alpha #46'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: '((0.25 < (((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close,
+    10) - close) / 10))) ? (-1 * 1) : (((((delay(close, 20) - delay(close, 10)) /
+    10) - ((delay(close, 10) - close) / 10)) < 0) ? 1 '
+  formula: '((0.25 < (((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close,
+    10) - close) / 10))) ? (-1 * 1) : (((((delay(close, 20) - delay(close, 10)) /
+    10) - ((delay(close, 10) - close) / 10)) < 0) ? 1 : ((-1 * 1) * (close - delay(close,
+    1)))))'
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: '对收盘价取滞后序列: delay(close,20), delay(close,10), delay(close,1)'
+    formula: delay(close, k), k ∈ {20, 10, 1}
+  - step: 2
+    description: '计算两段均值收益及其差 (加速度代理): term1 为 t-20 到 t-10 的均值收益, term2 为 t-10 到 t
+      的均值收益, term = term1 - term2'
+    formula: term = (delay(close,20)-delay(close,10))/10 − (delay(close,10)-close)/10
+  - step: 3
+    description: '分段赋值: 当 term > 0.25 (强减速) 时 factor = -1; 当 term < 0 (加速) 时 factor
+      = +1; 其余 (温和减速, 0 ≤ term ≤ 0.25) 时 factor = -(close − delay(close,1)) (日内反转)'
+    formula: factor = if term>0.25 → -1; elif term<0 → 1; else → -(close−delay(close,1))
+  edge_case_handling: 首次 20 个交易日因 delay(20) 缺失产生 NaN; Polars 使用 shift 实现延迟, 边界按 NaN
+    传播; term 与 close−delay(close,1) 的比较直接由 pl.when 完成, 无需额外填零
+  missing_value_handling: delay(close,k) 产生 NaN 会沿 term 与最终 factor 传播, 不做插值或前向填充,
+    后续回测/IC 计算需 dropna
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '用价格加速度 (远期收益 vs 近期收益之差) 判别趋势状态: 强减速做空, 加速做多, 温和减速叠加日线反转, 属动量-反转混合信号。'
+  market_behavior: 捕捉趋势动能的边际变化, 在趋势确立早期 (加速段) 跟随, 在趋势过热 (强减速) 与日内超涨超跌时反转
+  theoretical_basis: 动量/反转的微观结构文献 (Jegadeesh & Titman; De Bondt & Thaler) 与价格加速度模型,
+    假设价格变化率的变化本身含有对未来收益的预测信息
+  historical_effectiveness: 在 A 股日频截面上 IC 较弱且不稳定, 强减速信号 (term>0.25) 较稀有但贡献明显; 加速段做多
+    + 日内反转的复合结构使其对换手率与波动率较为敏感
+  related_factors: Alpha#22 (价格加速度), Alpha#50 (量价结合), 经典反转因子 (1日反转), 动量因子 (10日/20日动量)
+l4:
+  hypotheses:
+  - id: H1
+    name: 强减速 → 下跌
+    description: 当远期收益显著大于近期收益 (term>0.25) 时, 价格动能耗竭, 未来收益转负, factor 取 -1
+    expected_ic_sign: 负
+    source: De Bondt & Thaler (1985) 过激反应假说
+    priority: 主假设
+  - id: H2
+    name: 加速段 → 上涨
+    description: term<0 表示近期收益高于远期, 价格进入加速阶段, 动量延续, factor 取 +1 押注继续上行
+    expected_ic_sign: 正
+    source: Jegadeesh & Titman (1993) 动量效应
+    priority: 主假设
+  - id: H3
+    name: 温和减速叠加日内反转
+    description: 0≤term≤0.25 时, factor = −(close−delay(close,1)), 即日内涨则看跌、日内跌则看涨,
+      与短期反转同向
+    expected_ic_sign: 正
+    source: 短期反转文献 (Lehmann 1990)
+    priority: 次假设
+  - id: H4
+    name: 整体因子混合方向不确定
+    description: 三段信号方向不一致 (-1/+1/日内反转), 因子整体 IC 符号取决于市场状态与三段占比, 在强趋势市中可能为正, 在高波动反转市中可能为负
+    expected_ic_sign: 不确定
+    source: 因子分段结构分析
+    priority: 次假设
+  meaning_summary: '用价格加速度做状态机: 加速跟多, 强减速跟空, 温和减速叠加日内反转。因子整体是动量与反转的混合, 方向不固定。'
+  key_insights:
+  - term 的经济学含义是 '加速度' 而非 '动量' 本身, 是二阶差分
+  - 0.25 阈值使强减速信号非常稀疏但信号强, 加速段信号更频繁但与动量因子高度共线
+  - 温和减速段与 1 日反转完全重合, 等价于在非极端日做短期反转
+  uncertainty: 三段信号方向互相矛盾, 整体 IC 取决于各段在截面中的占比; term 阈值 0.25 是硬编码, 未做参数化, 不同标的需要重新校准
+l6:
+  industry_concentration: 低, 因子仅用收盘价, 不含行业/市值信息, 行业分布接近基准
+  crowding_level: 中, 动量+反转混合逻辑与 Alpha#22/Alpha#50 接近, 在量化圈属于常见思路, 但分段结构降低了完全复制难度
+  failure_conditions:
+  - 强趋势单边市中, '强减速 → -1' 与 '加速 → +1' 都可能因趋势延续而失效, 因子方向被反复打脸
+  - 高换手率/高波动率小票中, 日内反转段 (温和减速部分) 频繁触发但反转效应弱化, 噪声显著
+  - 当 close 接近涨停跌停或停牌时, delay(close,k) 失真, term 异常大导致 -1 误判
+  risk_notes: 因子取值包含常数 ±1 与连续段, 多空敞口不均衡; 强减速段触发稀疏但权重高, 单次错判对组合回撤冲击大; 建议对三段分别计算 IC
+    与换手率, 再决定加权方式

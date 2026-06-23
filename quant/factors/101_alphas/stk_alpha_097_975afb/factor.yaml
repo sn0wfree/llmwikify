@@ -1,0 +1,111 @@
+name: stk_alpha_097_975afb
+display_name: 'Alpha #97'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((rank(decay_linear(delta(IndNeutralize(((low * 0.721001) + (vwap *
+    (1 - 0.721001))), IndClass.industry), 3.3705), 20.4523)) - Ts_Rank(decay_linear(Ts_Rank(correlation(Ts_Rank(low,
+    7.87871), Ts_Rank(a
+  formula: ((rank(decay_linear(delta(IndNeutralize(((low * 0.721001) + (vwap * (1
+    - 0.721001))), IndClass.industry), 3.3705), 20.4523)) - Ts_Rank(decay_linear(Ts_Rank(correlation(Ts_Rank(low,
+    7.87871), Ts_Rank(adv60, 17.255), 4.97547), 18.5925), 15.7152), 6.71659)) * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - low
+  - adv60
+  - vwap
+  - industry
+  - close
+  - open
+  - high
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: '加权价格合成: low 与 vwap 以 0.721001 权重加权, 得到接近最低价的混合价格信号'
+    formula: weighted = low * 0.721001 + vwap * 0.278999
+  - step: 2
+    description: '行业中性化: 对加权价格做行业内去均值, 消除行业截面偏差; 然后取 3 日 delta (3 期差分), 捕捉短期价格变化'
+    formula: delta_val = IndNeutralize(weighted, industry) − IndNeutralize(weighted,
+      industry).shift(3)
+  - step: 3
+    description: '线性衰减加权: 对 delta 值做 20 日窗口的指数线性衰减 (近端权重大), 突出近期变动'
+    formula: decayed1 = decay_linear(delta_val, window=20)
+  - step: 4
+    description: '量价相关性链: 先对 low 与 adv60 分别做时序排名 (窗口 7 和 17), 再求 4 日滚动相关, 再做 18 日
+      ts_rank 排名, 最后 15 日线性衰减 → 6 日 ts_rank'
+    formula: ts_rank_decayed = Ts_Rank(decay_linear(Ts_Rank(corr(Ts_Rank(low,7), Ts_Rank(adv60,17),4),
+      18), 15), 6)
+  - step: 5
+    description: '组合并取负: 截面 rank(部分1) 减去 ts_rank(部分2), 再乘以 -1 得到最终因子'
+    formula: factor = -1 * (rank(decayed1) - ts_rank_decayed)
+  edge_case_handling: floor 操作将非整数参数向下取整 (3.3705→3, 20.4523→20, 7.87871→7, 17.255→17,
+    4.97547→4, 18.5925→18, 15.7152→15, 6.71659→6); 无 industry 列时使用 date 分组做截面中性化替代;
+    delta/衰减/ts_rank 在窗口不足时输出 NaN
+  missing_value_handling: 低/vwap/volume 缺失时, 中间步骤 (delta, decay_linear, ts_rank, corr)
+    均按各函数默认规则传播 NaN; 最终因子值在两端 rolling 窗口不足时为 NaN
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '因子融合行业中性化的短期价格动量与量价相关性变化, 通过取负放大反转效应: 当行业中性价格上升且量价相关性走弱时,
+    因子值偏低, 预期后续回落; 反之预期反弹。'
+  market_behavior: 捕捉行业内部短期价格漂移与成交量-价格联动背离的复合反转信号; 在动量-反转切换、量价异常同步的市场阶段表现活跃
+  theoretical_basis: 行为金融反转假说 + 量价关系理论 (价格-成交量背离预示拐点) + 行业中性的截面可比性
+  historical_effectiveness: 101 Alphas 系列中属于复合动量-反转因子, 在 A 股/美股均有一定选股能力, 但 IC 稳定性中等,
+    需配合行业中性化严格实现
+  related_factors: Alpha#1 (量价), Alpha#5 (短期反转), Alpha#6 (动量+量价), Alpha#15 (量价相关性)
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期价格反转
+    description: 行业中性化加权价格 (偏向低价) 的 3 日变化经衰减后, 短期上涨后倾向于回落, 即因子值 (取负后) 越低越预示后续下行
+    expected_ic_sign: 负
+    source: formula_part1 + 最终 -1 符号
+    priority: 主假设
+  - id: H2
+    name: 量价背离反转
+    description: low 与成交量滚动相关性上升时, 后续价格倾向于反转 (即 ts_rank_decayed 高时, 因子值偏低, 预期下跌)
+    expected_ic_sign: 负
+    source: formula_part2 + 减法结构
+    priority: 主假设
+  - id: H3
+    name: 双重信号叠加
+    description: '两部分同向时增强信号: 短期价格上涨叠加量价联动增强, 反转预期更强, 因子负值极端时胜率更高'
+    expected_ic_sign: 负
+    source: 加法组合逻辑
+    priority: 辅助假设
+  - id: H4
+    name: 低权重 VWAP 偏差
+    description: 加权价格高度偏向 low (权重 0.72), 相当于日内下行通道代理, 其变化更敏感地反映卖压
+    expected_ic_sign: 负
+    source: 公式权重 0.721001 设计
+    priority: 辅助假设
+  meaning_summary: '复合反转因子: 行业中性低价代理的短期动量 vs 量价相关性的时序排名, 取负后方向为反向 (因子越小, 越倾向于做空)'
+  key_insights:
+  - 加权价格 72% 偏向 low, 实质是日内下行压力的代理变量
+  - 行业中性化是核心, 缺失行业标签会显著削弱因子效果
+  - 量价相关性经多层 ts_rank + 衰减, 强调的是相关性的'变化'而非水平
+  - 最终 -1 系数意味着因子值与预期收益呈反向关系
+  uncertainty: 高——多层算子叠加 (delta+decay+rank+相关性+ts_rank) 使因子方向与 IC 符号依赖具体参数实现与市场环境;
+    取负后的方向需在样本内回测验证
+l6:
+  industry_concentration: 中等偏高——行业中性化是因子核心步骤, 若行业分类粒度不准确 (例如缺少中证二级/三级行业) 会导致截面中性化偏差,
+    因子表现对行业映射质量敏感
+  crowding_level: 中——属于 101 Alphas 标准组合的一部分, 在量化圈被广泛复制, 但因多步嵌套 (相关性+衰减) 较复杂, 实际完整复现度有限,
+    拥挤度低于简单动量因子
+  failure_conditions:
+  - '行业中性化失效: 行业标签缺失或粒度不足时, 因子退化为简单动量, IC 显著下降'
+  - '趋势市/强动量环境: 持续单边行情中反转因子普遍失效, 此因子因取负可能放大回撤'
+  - '低流动性/小盘股集中: adv60 在小票上噪声大, 相关性估计不稳, 因子信号失真'
+  risk_notes: 因子值已取负, 实际使用需明确多空方向; 多步算子导致对数据质量 (缺失值、停牌、复权) 极度敏感, 建议做严格的前置清洗; 截面 rank
+    与 ts_rank 共存, 需保证面板数据完整无明显断层

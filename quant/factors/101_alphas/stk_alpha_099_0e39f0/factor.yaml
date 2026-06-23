@@ -1,0 +1,90 @@
+name: stk_alpha_099_0e39f0
+display_name: 'Alpha #99'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((rank(correlation(sum(((high + low) / 2), 19.8975), sum(adv60, 19.8975),
+    8.8136)) < rank(correlation(low, volume, 6.28259))) * -1)
+  formula: ((rank(correlation(sum(((high + low) / 2), 19.8975), sum(adv60, 19.8975),
+    8.8136)) < rank(correlation(low, volume, 6.28259))) * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - low
+  - volume
+  - adv60
+  - close
+  - open
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算中期价格与成交量的滚动相关性：先对20日窗口的(high+low)/2求和得到 sum_mid，对20日窗口的 adv60（60日均量）求和得到
+      sum_adv60，再在9日窗口上计算 sum_mid 与 sum_adv60 的滚动相关系数 corr1
+    formula: corr1 = rolling_corr(sum_mid_20, sum_adv60_20, window=9)
+  - step: 2
+    description: 计算短期低价与成交量的滚动相关性：在6日窗口上计算 low 与 volume 的滚动相关系数 corr2
+    formula: corr2 = rolling_corr(low, volume, window=6)
+  - step: 3
+    description: 对两个相关性分别做截面 rank，得到 rank1 和 rank2
+    formula: rank1 = rank(corr1) over date; rank2 = rank(corr2) over date
+  - step: 4
+    description: 比较 rank1 与 rank2 的大小：若 rank1 < rank2 则输出 -1，否则输出 0，形成二元因子信号
+    formula: factor = (rank1 < rank2) * -1
+  edge_case_handling: 滚动窗口前期数据不足时，相关性及 rolling sum 返回 null，参与 rank 排序与比较时按 Polars
+    默认行为处理；二元输出仅在 -1 与 0 之间取值
+  missing_value_handling: rolling_corr 与 rolling_sum 在窗口不足时返回 null，rank 对 null 的处理依赖底层实现（通常按缺失值排序于尾部），比较时
+    null 视为不满足 < 条件故输出 0
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 比较长周期均价-均量协同性与短周期低价-成交量协同性的相对强弱：短周期低价放量相关性越强于长周期趋势性量价相关性时，视为异常资金行为，发出做空信号。
+  market_behavior: 捕捉短端资金在低位放量推动价格时，与长期趋势性量价背离所反映的弱势结构；因子偏向识别无量阴跌或低位放量出货的弱势个股。
+  theoretical_basis: 基于量价关系的多时间尺度对比：长期均价-均量协动反映趋势稳健性，短期低价-量相关反映即博弈强度；当短期博弈信号压制长期趋势信号时，预示价格下行概率较高。
+  historical_effectiveness: 原始 101 Alphas 公式之一，在美股历史回测中具备统计显著的负向超额收益；A 股因涨跌停与 T+1
+    制度，信号分布偏稀疏。
+  related_factors: 量价相关性因子（如 Alpha#101 中的 corr(price, volume) 族）、换手率与价格背离因子、低位放量识别因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期量价博弈压制长期趋势时做空
+    description: 当短期低价-成交量相关性排名高于长期均价-均量相关性排名（rank1<rank2）时，反映短期资金在低位拉锯加剧、长期趋势性买盘不足，未来收益偏弱，因子做空有效。
+    expected_ic_sign: 负
+    source: 原始公式逻辑：输出 -1 即代表看空信号
+    priority: 主假设
+  - id: H2
+    name: 量价关系多尺度背离
+    description: 长周期量价同向（趋势确认）而短周期量价背向（短期抛压）时，组合信号为 -1，预期未来 N 日收益为负。
+    expected_ic_sign: 负
+    source: 量价背离经典技术分析理论
+    priority: 次假设
+  - id: H3
+    name: 二元信号稀疏性导致 IC 不稳定
+    description: 因子仅取 -1/0 两值，截面覆盖率低，IC 估计噪声大；不同市场环境下相关性强弱关系可能反转，方向不稳定。
+    expected_ic_sign: 不确定
+    source: 二元离散因子统计性质
+    priority: 辅助假设
+  meaning_summary: 通过多时间尺度量价相关性的相对排序差异生成二元做空信号，本质是识别短期资金行为破坏长期趋势稳健性的弱势标的。
+  key_insights:
+  - 因子是离散的二元信号（-1/0），覆盖股票比例受截面 rank 分布决定
+  - 两个相关性使用不同窗口（20+9 vs 6），对短长周期量价关系的敏感度不同
+  - adv60 充当成交量基准的平滑项，弱化短期成交脉冲对长期相关性的干扰
+  uncertainty: adv60 的近似处理（60 日均量）与原文 dollar volume 的定义有差异；窗口长度取整（19.8975→20、8.8136→9、6.28259→6）会轻微改变信号分布；二元输出的稀疏性使回测
+    IC 噪声较大。
+l6:
+  industry_concentration: 在成交活跃、量价关系明显的行业（如周期、券商、有色）中信号更丰富；在成交稀薄的行业中 corr 估计不稳定，信号噪声大。
+  crowding_level: 原始 101 Alphas 公式，公开已久，被广泛研究复制，拥挤度中等偏高；A 股实盘中属于较常见的量价类反转因子变体。
+  failure_conditions:
+  - 强趋势单边行情中：量价长期同向，短期相关性难以压制长期相关性，因子做空信号缺失，失效
+  - 涨跌停板频发或停牌较多的标的：low/volume 受制度干扰，corr 估计偏离真实关系
+  - 市场整体低波动或风格快速切换期：截面 rank 关系不稳定，二元信号频繁翻转，因子表现恶化
+  risk_notes: 因子为纯空头信号（-1/0），需结合多空对冲或多因子组合使用；离散取值使因子暴露不稳定，回撤波动可能较大；建议在流动性较好的中大盘股票池中应用。

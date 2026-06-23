@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_073_b43fc6",
+  "display_name": "Alpha #73",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 73,
+  "code_hash": "b43fc6",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

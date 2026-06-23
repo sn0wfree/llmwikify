@@ -1,0 +1,90 @@
+name: stk_alpha_028_15294b
+display_name: 'Alpha #28'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: scale(((correlation(adv20, low, 5) + ((high + low) / 2)) - close))
+  formula: scale(((correlation(adv20, low, 5) + ((high + low) / 2)) - close))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - low
+  - close
+  - adv20
+  - open
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算20日平均成交量ADV20
+    formula: ADV20 = ts_mean(volume, 20)
+  - step: 2
+    description: 计算ADV20与最低价在过去5日的滚动相关系数
+    formula: corr = correlation(ADV20, low, 5)
+  - step: 3
+    description: 计算当日中间价(高低均价)
+    formula: mid = (high + low) / 2
+  - step: 4
+    description: '合成原始信号: 相关性 + 中间价 - 收盘价'
+    formula: raw = corr + mid - close
+  - step: 5
+    description: 按交易日截面进行scale标准化(保留符号, 除以∑|x|)
+    formula: factor = scale(raw).over('date')
+  edge_case_handling: scale在截面|x|之和为0或常数时退化为NaN/0; 涨跌停板日high=low导致mid=close使价格分量失效;
+    ADV20与correlation在上市初期不足20日/5日时输出NaN
+  missing_value_handling: ts_mean与rolling correlation在窗口不足时产生NaN并向前传播; scale在截面上遇到全NaN或全零时整段输出NaN;
+    缺失值不主动填充
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子将'量在低点的同向性'(资金逢低吸纳)与'收盘价在日内区间的相对位置'(尾盘强弱)相加, 试图捕捉资金面与日内形态共振的个股,
+    属于复合量价信号。
+  market_behavior: 适用于波动率较高、量价关系活跃的市场; 高因子值常对应'放量推升低点+尾盘走弱'形态, 偏反转/超跌; 低因子值对应'量价背离+收盘强势',
+    偏动量
+  theoretical_basis: 基于量价关系理论(VPT/OBV类)与日内价格形态分析, 借鉴101 Alphas中复合量价信号构建思路
+  historical_effectiveness: 在A股日频横截面上单独IC偏低(绝对值约0.02-0.04), 适合作为反转/量价类因子的辅助增强项, 与close-to-mid、量价相关性因子互补
+  related_factors: 反转因子(ret_1d, ret_5d)、量价相关性因子(VPcorr, OBV相关性)、尾盘位置因子(close-to-mid)、资金流因子(MFI)
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价共振反转
+    description: 当ADV20与low正相关(资金推升低点)且收盘价低于中间价(尾盘偏弱)时, 视为'放量洗盘+尾盘走弱', 次日存在反弹机会, 高因子值预示正收益
+    expected_ic_sign: 正
+    source: 量价背离与日内反转文献
+    priority: 主假设
+  - id: H2
+    name: 尾盘弱势动量延续
+    description: mid-close为正(收盘在日线下半部)本身反映当日资金流出的弱势, 在趋势市中次日可能延续下跌, 高因子值对应负收益
+    expected_ic_sign: 负
+    source: 日内价格动量文献
+    priority: 副假设
+  - id: H3
+    name: 流动性分层
+    description: ADV20与low的相关性在低流动性股票中噪声大、信号弱, 因子在中高流动性股票上IC更显著
+    expected_ic_sign: 正
+    source: 流动性溢价与流动性分层文献
+    priority: 副假设
+  meaning_summary: 因子值高表示'量与低点同向+尾盘偏弱'的复合信号, 含义取决于市场状态(反转vs趋势); 因子值低表示'量与低点背离+收盘强势'。
+  key_insights:
+  - 相关性分量方向不明确, 需结合其他量价因子联合判断
+  - mid-close是日内价格位置的代理, 与反转/动量因子高度相关
+  - scale使得因子仅可横截面比较, 不能跨期比较; 绝对值大小无经济意义
+  uncertainty: 公式同时叠加'量价共振'与'尾盘弱势'两个语义相反的分量, 因子方向依赖主导分量, 在牛/熊市中表现差异显著, IC符号不稳定是主要风险。
+l6:
+  industry_concentration: 中等偏高, 量价关系在周期性、交易型行业(钢铁、煤炭、券商、有色)信号更强, 在消费、医药等低换手行业信号偏弱
+  crowding_level: 低, 该组合属于101 Alphas中较冷门公式, 公开复现少, 市场拥挤度低
+  failure_conditions:
+  - '低流动性小盘股: ADV20波动剧烈, 5日相关系数噪声放大, 因子失效'
+  - '单边趋势行情中段: 量价持续正相关确认趋势而非反转, H1主假设失效, 因子方向反转'
+  - '涨跌停或停牌恢复日: high=low或价格受约束, mid-close 信息含量丧失, 价格分量失真'
+  risk_notes: 因子对市场状态敏感, 单独使用稳定性差; 建议先做行业/规模中性化, 再与反转、动量因子合成; T+1时点存在隔夜跳空风险, 需注意交易成本与开盘流动性

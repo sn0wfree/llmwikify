@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 4,
+  "factor_name": "alpha-004",
+  "formula_brief": "(-1 * Ts_Rank(rank(low), 9))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Cross-sectional rank of low per date\n    ranked_low = rank(pl.col('low')).over('date')\n    \n    # Time-series rank with window of 9\n    ts_ranked = ts_rank(ranked_low, window=9)\n    \n    # Multiply by -1\n    factor = -1 * ts_ranked\n    \n    return df.select(factor).to_series()",
+  "code_chars": 334,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_004.h5",
+  "ic_mean": 0.00550292369461023,
+  "icir": 0.03879577234046483,
+  "ic_winrate": 0.5423728813559322,
+  "elapsed_sec": 6.5834443140774965
+}

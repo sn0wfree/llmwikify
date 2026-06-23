@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_022_06d6aa",
+  "display_name": "Alpha #22",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 22,
+  "code_hash": "06d6aa",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

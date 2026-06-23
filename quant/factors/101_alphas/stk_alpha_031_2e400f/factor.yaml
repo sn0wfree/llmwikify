@@ -1,0 +1,103 @@
+name: stk_alpha_031_2e400f
+display_name: 'Alpha #31'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (rank(rank(rank(decay_linear((-1 * rank(rank(delta(close, 10)))), 10))))
+    + rank((-1 * delta(close, 3)))) + sign(scale(correlation(adv20, low, 12))))
+  formula: (rank(rank(rank(decay_linear((-1 * rank(rank(delta(close, 10)))), 10))))
+    + rank((-1 * delta(close, 3)))) + sign(scale(correlation(adv20, low, 12))))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - low
+  - close
+  - adv20
+  - open
+  - high
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 'Part A 中间层: 计算 close 的 10 日差分, 横截面双排名, 取负号, 再做 10 日线性衰减加权'
+    formula: decay_linear(-1 × rank(rank(Δclose_10)), 10)
+  - step: 2
+    description: 'Part A 输出: 对衰减序列做横截面三阶排名, 强化相对位置信号'
+    formula: rank(rank(rank(decayed_10)))
+  - step: 3
+    description: 'Part B 短期反转: 计算 close 的 3 日差分取负, 横截面排名'
+    formula: rank(-1 × Δclose_3)
+  - step: 4
+    description: 'Part C 量价相关性方向: 20 日均量 (adv20) 与 low 的 12 日滚动相关系数, 横截面 scale 标准化,
+      取 sign'
+    formula: sign(scale(corr(adv20, low, 12)))
+  - step: 5
+    description: 三部分逐日相加, 得到最终因子值
+    formula: Part_A + Part_B + Part_C
+  edge_case_handling: delta 窗口期不足时产生 null; scale 标准化时若截面标准差为 0 会产生 nan/inf, sign(0)
+    返回 0; decay_linear 在窗口不足时按可用长度衰减或产生 null
+  missing_value_handling: 滚动窗口 (delta、decay_linear、correlation) 在初始若干日产出 null, 依赖
+    ts_mean/delta 实现的边界填充策略, 一般按窗口不足返回 null 处理, 不前向填充
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 融合中期反转 (10 日) 与短期反转 (3 日) 的负向价格动量信号, 叠加量价相关性方向作为市场状态调节项, 整体捕捉超买回调的均值回归机会。
+  market_behavior: 在震荡市/正常波动环境中表现较好, 价格偏离后倾向于回吐; 在强趋势市中易被 momentum 主导而失效。
+  theoretical_basis: 基于 Overreaction Hypothesis (De Bondt & Thaler) 与短期价格反转 (Jegadeesh
+    1990), 量价相关性 sign 提供流动性和买卖压力方向信息。
+  historical_effectiveness: 在 A 股月度调仓频率下, 中期反转类因子历史 IC 多在 -0.03 至 -0.06 区间, 单独使用回撤较大,
+    与其他因子组合可提升 Sharpe。
+  related_factors: Alpha#1 (短期反转)、Alpha#4 (低波动)、Alpha#13 (量价相关)、Alpha#98 原始论文编号对应公式
+l4:
+  hypotheses:
+  - id: H1
+    name: 中期价格反转
+    description: 过去 10 日涨幅越大 (decay_linear 加权后排名越靠前), 因子值越低 (因取负), 下一期收益越低, 即中期超买回调
+    expected_ic_sign: 负
+    source: Part A, 对应 Alpha#98 主体逻辑
+    priority: 主假设
+  - id: H2
+    name: 短期价格反转
+    description: 过去 3 日上涨的股票下一期倾向于下跌, rank(-Δclose_3) 排名越靠前 (涨幅越小或下跌越大), 未来收益越高
+    expected_ic_sign: 负
+    source: Part B, 经典短期反转效应
+    priority: 主假设
+  - id: H3
+    name: 量价相关性方向 (市场状态)
+    description: 'sign(scale(corr(adv20, low, 12))) 反映截面量价同步性的极性: 正值表示放量伴随价格抬升 (强势),
+      负值表示放量伴随价格走弱 (弱势); 作为离散调节项, 整体 IC 方向不确定'
+    expected_ic_sign: 不确定
+    source: Part C, 流动性-价格同步性文献
+    priority: 辅助假设
+  - id: H4
+    name: 复合反转信号的鲁棒性
+    description: 两套不同窗口的反转信号相加可以平滑噪声, 三阶排名进一步压缩极端值, 使因子在截面上更具单调性, 预期 IC 绝对值略强于单一反转因子
+    expected_ic_sign: 负
+    source: 组合层假设, 基于 Alpha#98 原始设计意图
+    priority: 次假设
+  meaning_summary: 因子本质是带量价状态过滤的加权反转信号, 因子值越高代表'超跌 + 量价负相关'特征越强, 预期未来反弹概率越大。
+  key_insights:
+  - 双窗口反转 (10 日 + 3 日) 比单窗口更稳健, 短期捕获过度反应, 中期过滤趋势延续
+  - 三阶 rank(rank(rank(...))) 极端值压缩能力强, 但损失了部分幅度信息
+  - Part C 的 sign 项使因子离散值出现 +1/-1/0 三档, 相当于给反转信号加了一个市场 regime 开关
+  uncertainty: Part C 的量价相关 sign 在不同市场周期下方向不稳定, 可能稀释或抵消 Part A/B 的反转信号; sign 函数截断信息,
+    可能削弱复合因子的区分度。
+l6:
+  industry_concentration: 中等。Part C 的量价相关性在不同行业 (周期 vs 消费 vs TMT) 极性差异显著, 可能导致因子在行业中性化后表现改善;
+    Part A/B 相对行业中性。
+  crowding_level: 中高。反转类因子是量化最拥挤的策略族之一, Alpha#98 类组合在 A 股已有大量同质化产品, 拥挤度集中在中小盘流动性较好的标的。
+  failure_conditions:
+  - '强趋势/单边行情 (如 2014-2015 上半年、2020 结构性牛市): 反转因子被 momentum 压制, 因子回撤显著'
+  - '低流动性/小微盘环境: 量价相关系数噪声大, Part C 失效; 同时 delta 信号本身不稳定'
+  - '市场 regime 切换期 (政策突变、流动性危机): 量价同步性发生结构性变化, sign 方向反转, 因子失效'
+  risk_notes: 因子对回撤敏感, 建议与其他低相关因子 (如低波、质量) 组合使用; 注意 Part C 仅取 sign 损失幅度信息, 实盘中可考虑替换为分位数或连续函数以保留区分度;
+    需监控反转拥挤度指标。

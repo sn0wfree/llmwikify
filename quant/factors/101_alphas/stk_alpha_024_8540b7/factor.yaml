@@ -1,0 +1,109 @@
+name: stk_alpha_024_8540b7
+display_name: 'Alpha #24'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: '((((delta((sum(close, 100) / 100), 100) / delay(close, 100)) < 0.05)
+    || ((delta((sum(close, 100) / 100), 100) / delay(close, 100)) == 0.05)) ? (-1
+    * (close - ts_min(close, 100))) : (-1 * delta(close, '
+  formula: '((((delta((sum(close, 100) / 100), 100) / delay(close, 100)) < 0.05) ||
+    ((delta((sum(close, 100) / 100), 100) / delay(close, 100)) == 0.05)) ? (-1 * (close
+    - ts_min(close, 100))) : (-1 * delta(close, 3)))'
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 对 close 计算 100 日滚动均值 (sum(close,100)/100)
+    formula: mean_close_100 = rolling_mean(close, 100)
+  - step: 2
+    description: 计算 100 日均值的 100 日变化量, 并除以 100 日前的收盘价, 得到长期趋势比率
+    formula: ratio = (mean_close_100_t - mean_close_100_{t-100}) / close_{t-100}
+  - step: 3
+    description: '构造市场状态条件: 长期趋势比率 ≤ 0.05 时为盘整/低趋势市场'
+    formula: cond = (ratio <= 0.05)
+  - step: 4
+    description: '分支 1 (盘整市场): 取当前 close 相对 100 日最低价的距离并取负'
+    formula: branch1 = -(close - ts_min(close, 100))
+  - step: 5
+    description: '分支 2 (趋势市场): 取 close 的 3 日 delta 并取负, 即短期反转信号'
+    formula: branch2 = -(close_t - close_{t-3})
+  - step: 6
+    description: 根据 cond 二选一, cond 为真取 branch1, 否则取 branch2, 作为最终因子值
+    formula: factor = when(cond).then(branch1).otherwise(branch2)
+  edge_case_handling: ratio 由 delta_mean / delay_close 构成, 当 delay_close 接近 0 时可能出现极端值或除零,
+    代码未做额外截尾; close - ts_min 始终 ≤ 0, 因子下限受限于历史最低价距离
+  missing_value_handling: 滚动窗口/滞后操作在序列起始不足窗口长度处自然产生 null, 不做填充
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '用长期均线变化率判断市场状态: 盘整时做 100 日新低反转 (买超跌), 趋势时做 3 日反转 (买短期回调),
+    体现''低赔率环境下两种均值回归策略的自适应组合''。'
+  market_behavior: 盘整市中投资者倾向于抄底 100 日低点; 趋势市中短期获利盘回吐形成反转机会, 因子通过 regime 自适应捕捉这两种行为
+  theoretical_basis: 'Regime-switching 均值回归理论: 不同波动/趋势状态下均值回复的速度和幅度不同, 短期反转因子 (3-day
+    reversal) 与长期支撑反转 (100-day low) 互补'
+  historical_effectiveness: 'Alpha #42 在 101 Alphas 原论文中 IC 约 0.06-0.08, 在 A 股中盘整期表现优于单边趋势期'
+  related_factors:
+  - 'Alpha #1 (3日反转)'
+  - 'Alpha #4 (ts_min反转)'
+  - 'Alpha #101'
+  - 短期反转 (STR) 因子
+  - 支撑位反转因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 盘整市场 100 日低点支撑反转
+    description: 当长期趋势平缓时, 接近 100 日最低价的股票存在技术性反弹动力, 因子值越接近 0 (即越接近新低) 预期收益越高
+    expected_ic_sign: 正
+    source: Branch 1 的 -1*(close-ts_min) 设计意图, 典型支撑位反转逻辑
+    priority: 主假设
+  - id: H2
+    name: 趋势市场短期反转
+    description: 在明显上行/下行趋势中, 3 日累计下跌的股票存在短期超卖反弹, 因子值为正 (即 3 日下跌) 预期未来收益更高
+    expected_ic_sign: 正
+    source: Branch 2 的 -1*delta(close,3) 即经典短期反转因子
+    priority: 主假设
+  - id: H3
+    name: Regime 自适应增强假设
+    description: 通过 100 日均线变化率作为 regime 判别, 在正确市场状态下激活对应策略, 应比单一反转因子在不同环境下更稳健
+    expected_ic_sign: 正
+    source: '101 Alphas #42 原始设计逻辑, Hamilton (1989) regime-switching 框架'
+    priority: 辅助假设
+  - id: H4
+    name: 动量崩盘失效风险
+    description: 在持续单边趋势市场中短期反转可能失效 (动量崩盘), 但分支 2 仍使用反转信号, 可能带来负贡献
+    expected_ic_sign: 负
+    source: Jegadeesh & Titman (1993) 动量效应与短期反转的矛盾, 趋势持续性研究
+    priority: 对立假设
+  meaning_summary: 'Regime-conditional 自适应反转因子: 盘整时捕捉 100 日低点支撑反弹, 趋势时捕捉 3 日短期反转,
+    两路逻辑在低赔率环境下均产生正向 IC。'
+  key_insights:
+  - 因子值越接近 0 或越正, 预期未来收益越高 (两个分支均设计为'低位/回调 → 买入')
+  - regime 判别阈值 0.05 偏严格, 在 A 股低波动环境中分支 1 触发频率可能高于分支 2
+  - 由于分支选择按日切换, 因子时间序列存在不连续性, 可能影响截面排序稳定性
+  uncertainty: regime 阈值 0.05 未经自适应校准, 不同标的/时段的最优阈值可能差异较大; 盘整到趋势切换点附近因子跳变风险较高
+l6:
+  industry_concentration: 纯价格驱动, 无行业中性化, 但因子在低 beta / 高波动板块 (如周期、小盘) 上可能更显著, 行业暴露偏中性
+  crowding_level: '中等偏低, Alpha #42 在 101 Alphas 中关注度一般, 但短期反转 (branch 2) 与低支撑反转 (branch
+    1) 均属常见策略类型, 整体拥挤度不高'
+  failure_conditions:
+  - '持续单边强趋势市场 (如牛市主升浪): branch 2 短期反转被趋势压制, branch 1 因 ratio > 0.05 长期不触发, 因子退化为短期反转'
+  - '高波动 regime 切换期 (盘整突然转趋势): cond 频繁翻转, 因子值跳变导致截面排序不稳定'
+  - '小盘流动性危机: ts_min(close,100) 受停牌/异常单影响失真, branch 1 信号噪声放大'
+  risk_notes: 两路分支因子量纲不一致 (分支 1 与价格水平相关, 分支 2 为收益率), 直接拼接导致因子值在 regime 切换时可能跨量级, 建议在截面排序前做标准化或分别评估
+    IC

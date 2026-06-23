@@ -1,0 +1,88 @@
+name: stk_alpha_004_55fcd1
+display_name: 'Alpha #4'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * Ts_Rank(rank(low), 9))
+  formula: (-1 * Ts_Rank(rank(low), 9))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - low
+  - close
+  - open
+  - high
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 对每日横截面上所有股票的 low (最低价) 进行排序, 得到 0-1 之间的截面秩
+    formula: rank(low)_t,i = cross_sectional_rank(low_t,i | date=t)
+  - step: 2
+    description: 对截面秩序列在 9 日滚动窗口内做时序秩归一化, 度量当前截面秩在过去 9 日的相对位置
+    formula: Ts_Rank(rank(low), 9) = percentile_rank(rank(low)_t,i, window=[t-8, t])
+  - step: 3
+    description: 取负号, 使因子值与'过去 9 日持续处于低价弱势地位'的程度同向
+    formula: factor = -1 × Ts_Rank(rank(low), 9)
+  edge_case_handling: 截面 rank 对极端值稳健; ts_rank 窗口不足 9 日时 (上市初期) 输出 NaN 或部分窗口值, 由 ts_rank
+    自身实现决定; 价格非负, 无除零问题
+  missing_value_handling: low 缺失时 rank 与 ts_rank 均按 NaN 传播, 最终因子为 NaN; 通常在调入因子时 dropna
+    或填充行业均值
+  data_alignment: T+1
+  complexity: O(T × N), 其中 T 为交易日数, N 为股票数; 截面 rank O(N log N) per day, ts_rank O(9)
+    per stock per day
+l3:
+  financial_intuition: '捕捉短期反转效应: 近期内最低价持续处于全市场弱势区间的个股 (即持续走弱的股票) 倾向于出现均值回归式反弹, 因子值越高,
+    未来收益预期越强'
+  market_behavior: '依赖市场短期反转 / 均值回归行为: 强势股短期超买后回调, 弱势股短期超卖后反弹, 9 日窗口对应约两周的短期反转周期'
+  theoretical_basis: '行为金融学中的过度反应与反应不足: 投资者对坏消息过度反应导致弱势股被低估, 随后价格修正; 与 Jegadeesh (1990)
+    短期反转文献及 101 Alphas 系列中价格低位反转类因子 (如 Alpha#86 等) 同源'
+  historical_effectiveness: 在 A 股日频/周频截面选股中, 低价反转类因子长期 IC 多为正, 但绝对 IC 不高 (约 0.02-0.04),
+    换手率较高, 适合与其他低相关因子组合
+  related_factors: Alpha#4 (low/ts_rank 变体), Alpha#86, 经典短期反转因子 (short-term reversal),
+    low-price factor, 价格动量反转组合
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期反转主效应
+    description: 过去 9 日 low 截面秩持续偏低的股票 (弱势股) 在下一期出现均值回归反弹, 因子与下期收益正相关
+    expected_ic_sign: 正
+    source: 101 Alphas 公式语义 + Jegadeesh (1990) 短期反转
+    priority: 主假设
+  - id: H2
+    name: low 价格信息含量
+    description: low 价格包含日内下行信息, 截面秩时序偏低反映持续抛压, 因子捕捉的是抛压耗尽后的反弹
+    expected_ic_sign: 正
+    source: 价格信息含量文献 + 101 Alphas 系列 low 类因子共性
+    priority: 次假设
+  - id: H3
+    name: 趋势市失效
+    description: 在强趋势 (单边上涨或下跌) 行情中, 弱势股可能持续弱势而非反转, 因子 IC 可能转负或失效
+    expected_ic_sign: 不确定
+    source: 反转因子在趋势市普遍失效的经验
+    priority: 辅助假设
+  meaning_summary: 因子值越大, 表示该股近 9 日 low 价格的截面秩越持续偏低 (即日内低点持续位于全市场弱势端), 隐含短期超卖, 预期下一期收益更高
+  key_insights:
+  - 双重排序 (截面 + 时序) 放大了'持续弱势'信号, 相比单次截面 rank 更稳定
+  - low 而非 close 引入日内下行风险信息, 对弱势更敏感
+  - 窗口 9 日较短, 对短期反转敏感, 但也意味着对噪声敏感, 换手率高
+  uncertainty: 因子纯基于价格 low, 未考虑成交量、基本面、行业等, 噪声较大; 双重 rank 进一步压缩信号幅度, IC 绝对值预期不高, 需多因子组合使用
+l6:
+  industry_concentration: 低价 / 小盘股暴露较明显, 因子对低价股板块 (如 ST、低价小盘) 倾斜较大, 需做行业与市值中性化以避免风格偏移
+  crowding_level: 中高拥挤, 短期反转 + 低价因子在 101 Alphas 普及后被广泛复制, 学术界与业界均有大量类似信号, 拥挤度上升导致边际
+    alpha 衰减
+  failure_conditions:
+  - '强趋势市场 (单边牛/熊): 弱势股持续下跌不反转, 因子失效甚至反向'
+  - '小盘 / ST 流动性枯竭: 低价股流动性极差时, 反弹假设不成立, 因子收益无法实现'
+  - '风格切换至动量: 短期动量占主导时, 持续弱势的股票继续跑输, 因子 IC 转负'
+  risk_notes: 因子对换手率与流动性敏感, 实际持仓需考虑交易成本与冲击成本; 需做行业、市值、风险因子中性化以剥离风格暴露; 窗口 9 日较短, 信号稳定性差,
+    建议与其他中低相关因子 (如质量、价值) 组合

@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 77,
+  "factor_name": "alpha-077",
+  "formula_brief": "min(rank(decay_linear(((((high + low) / 2) + high) - (vwap + high)), 20.0451)), rank(decay_linear(correlation(((high + low) / 2), adv40, 3.1614), 5.64125)))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already sorted by (code, date); do NOT re-sort\n    df = df.sort(['code', 'date'])\n\n    # adv40: 40-day rolling mean of volume\n    adv40 = rolling_mean(pl.col('volume'), window=40)\n\n    # ----- Inner expression 1 -----\n    # ((((high + low) / 2) + high) - (vwap + high)) simplifies to\n    # (high + low) / 2 - vwap\n    expr1 = ((pl.col('high') + pl.col('low')) / 2) - pl.col('vwap')\n    decayed1 = decay_linear(expr1, window=20)         # period 20.0451 -> 20\n    rank1 = rank(decayed1).over('date')\n\n    # ----- Inner expression 2 -----\n    mid = (pl.col('high') + pl.col('low')) / 2\n    corr_expr = rolling_corr(mid, adv40, window=3)   # period 3.1614 -> 3\n    decayed2 = decay_linear(corr_expr, window=6)     # period 5.64125 -> 6\n    rank2 = rank(decayed2).over('date')\n\n    # Element-wise min of the two cross-sectional ranks\n    factor = pl.min_horizontal(rank1, rank2)\n\n    return df.select(factor).to_series()",
+  "code_chars": 979,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_077.h5",
+  "ic_mean": -0.04355026261779499,
+  "icir": -0.22117490322388556,
+  "ic_winrate": 0.3728813559322034,
+  "elapsed_sec": 14.124409647658467
+}

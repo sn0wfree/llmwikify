@@ -1,0 +1,104 @@
+name: stk_alpha_086_632b8e
+display_name: 'Alpha #86'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((Ts_Rank(correlation(close, sum(adv20, 14.7444), 6.00049), 20.4195)
+    < rank(((open + close) - (vwap + open)))) * -1)
+  formula: ((Ts_Rank(correlation(close, sum(adv20, 14.7444), 6.00049), 20.4195) <
+    rank(((open + close) - (vwap + open)))) * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - close
+  - adv20
+  - vwap
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 20 日滚动平均成交量 adv20，作为基准活跃度
+    formula: adv20 = rolling_mean(volume, 20)
+  - step: 2
+    description: 对 adv20 做 15 期差分，近似 sum(adv20, 14.7444) 的累计成交活跃度
+    formula: sum_adv20 = adv20_t - adv20_{t-15}
+  - step: 3
+    description: 计算 close 与累计成交活跃度在过去 6 日窗口内的滚动相关系数
+    formula: corr = rolling_corr(close, sum_adv20, 6)
+  - step: 4
+    description: 对相关系数做 20 日时间序列秩 (Ts_Rank)，衡量近期量价联动在历史中的相对位置
+    formula: ts_rank = ts_rank(corr, 20)
+  - step: 5
+    description: 横截面排序 (close - vwap)，刻画收盘价相对 VWAP 的日内强势程度
+    formula: rank_val = rank(close - vwap) over(date)
+  - step: 6
+    description: 条件赋分：若 ts_rank 小于横截面 rank，则取 -1，否则为 0
+    formula: factor = (ts_rank < rank_val) * -1
+  edge_case_handling: sum(adv20, 14.7444) 用 delta(periods=15) 近似，丢失前 14 期累加的绝对水平信息；窗口起点处
+    adv20 不足 20 日时 rolling_mean 产生 NaN，会向后传播
+  missing_value_handling: rolling_corr 在窗口不足或含 NaN 时返回 NaN；ts_rank 与比较运算对 NaN 传播为
+    False，最终因子值在缺失期为空（非 -1/0）
+  data_alignment: T+1
+  complexity: O(T × N)，T 为时间序列长度，N 为截面股票数；主要由多次滚动窗口 (6/15/20) 主导
+l3:
+  financial_intuition: 捕捉量价联动减弱但股价强势收于 VWAP 之上的背离信号：收盘强势若无成交配合易回落，因子对该类股票给出 -1 的负向暴露。
+  market_behavior: 市场处于'缩量上涨'或日内尾盘拉升但缺乏持续买盘的状态时，close-vwap 偏高而近期量价相关性偏低，因子触发卖出信号
+  theoretical_basis: 基于量价背离 (volume-price divergence) 与日内锚定 (VWAP) 的均值回归理论：缺乏成交量确认的价格位移倾向于回吐
+  historical_effectiveness: 在 101 Alphas 论文回测中属于多条件复合因子，IC 绝对值中等偏弱但稳定性较好，适合作为多因子组合的辅助信号而非主驱动
+  related_factors: 量价相关性类 (Alpha 53)、VWAP 偏离类 (Alpha 36)、时间序列秩类 (Alpha 6/20)，与 Alpha
+    98 结构最接近
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价背离反转
+    description: 当近期 close 与累计成交活跃度的相关性处于历史低位 (ts_rank 低) 但 close 仍显著高于 VWAP (横截面
+      rank 高) 时，股价上涨缺乏成交基础，未来收益倾向于下行
+    expected_ic_sign: 负
+    source: 量价背离理论 + VWAP 锚定回归
+    priority: 主假设
+  - id: H2
+    name: 尾部拉升不可持续
+    description: close - vwap 偏高常对应尾盘拉升或日内强势收尾，若无成交量同步放大 (相关性弱) 则属于'无量拉升'，短期反转概率高
+    expected_ic_sign: 负
+    source: 日内微观结构 + 流动性溢价
+    priority: 次假设
+  - id: H3
+    name: 条件稀疏因子中性
+    description: 由于输出是 0/-1 的稀疏信号，非触发日不提供暴露，整体 IC 受触发日比例影响显著，截面覆盖率仅约 50%
+    expected_ic_sign: 不确定
+    source: 101 Alphas 稀疏信号设计思路
+    priority: 辅助假设
+  - id: H4
+    name: sum(adv20) 差分近似偏差
+    description: 用 delta(adv20, 15) 替代真正的 15 日累加，丢失绝对量级信息；adv20 变化不大的股票信号会偏向噪声，影响因子在低波动股票上的有效性
+    expected_ic_sign: 不确定
+    source: 实现近似误差分析
+    priority: 辅助假设
+  meaning_summary: 因子是 -1/0 的条件信号：仅当'近期量价相关性处于历史低位'且'当日收盘相对 VWAP 强势'同时成立时输出 -1，表征缺乏成交确认的虚假强势，预期未来回吐。
+  key_insights:
+  - 量价相关性的时间序列秩是核心：低秩意味着量价背离正在发生
+  - close - vwap 的横截面 rank 提供了日内强势的相对度量
+  - 两个独立维度的'低量价相关 + 高 VWAP 强势'组合才是有效信号
+  - 近似 delta 实现会让因子对低波动股票噪声敏感
+  uncertainty: 近似 sum(adv20) 引入的偏差以及 6/15/20 三个窗口参数的非整化处理 (14.7444/6.00049/20.4195)
+    会改变信号的真实含义；稀疏输出使 IC 估计方差较大
+l6:
+  industry_concentration: 在成交量信息可靠的行业中更有效 (金融、大盘蓝筹)，对小盘/低流动性股票量价相关性本身不稳定，信号噪声大
+  crowding_level: 中等偏低，复合多条件因子难以被简单复刻，但量价背离类思路在量化社区普及度上升，拥挤度有上行风险
+  failure_conditions:
+  - 强趋势行情中量价同向放大，ts_rank 持续偏高，触发条件极少，因子近似失效
+  - 小盘/低流动性股票 rolling_corr 波动剧烈，ts_rank 噪声淹没真实信号
+  - 市场风格切换或流动性危机时 VWAP 偏离不再回归历史水平，H1 假设失效
+  risk_notes: 近似 sum(adv20) 改变了原始量纲，IC 与论文 101 Alphas 参考值不可直接对齐；条件因子截面覆盖率约 50%，多空对冲时需注意权重归一化与换手率

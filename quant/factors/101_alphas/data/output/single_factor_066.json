@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 66,
+  "factor_name": "alpha-066",
+  "formula_brief": "((rank(decay_linear(delta(vwap, 3.51013), 7.23052)) + Ts_Rank(decay_linear(((((low * 0.96633) + (low * (1 - 0.96633))) - vwap) / (open - ((high + low) / 2))), 11.4157), 6.72611)) * -1)",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code', 'date'])\n    \n    # Part 1: rank(decay_linear(delta(vwap, 3.51013), 7.23052))\n    delta_vwap = delta(pl.col('vwap'), periods=int(3.51013))\n    decay1 = decay_linear(delta_vwap, window=int(7.23052))\n    rank1 = rank(decay1).over('date')\n    \n    # Part 2: Ts_Rank(decay_linear((((low*0.96633 + low*(1-0.96633)) - vwap) / (open - (high+low)/2)), 11.4157), 6.72611)\n    inner = (\n        ((pl.col('low') * 0.96633) + (pl.col('low') * (1 - 0.96633)) - pl.col('vwap')) /\n        (pl.col('open') - ((pl.col('high') + pl.col('low')) / 2))\n    )\n    decay2 = decay_linear(inner, window=int(11.4157))\n    ts_rank1 = ts_rank(decay2, window=int(6.72611))\n    \n    # Combine and multiply by -1\n    factor = (rank1 + ts_rank1) * -1\n    \n    return df.select(factor).to_series()",
+  "code_chars": 841,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_066.h5",
+  "ic_mean": 0.0013013965301278904,
+  "icir": 0.008471992038535527,
+  "ic_winrate": 0.5084745762711864,
+  "elapsed_sec": 25.39997774735093
+}

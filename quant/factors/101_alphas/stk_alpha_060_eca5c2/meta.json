@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_060_eca5c2",
+  "display_name": "Alpha #60",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 60,
+  "code_hash": "eca5c2",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

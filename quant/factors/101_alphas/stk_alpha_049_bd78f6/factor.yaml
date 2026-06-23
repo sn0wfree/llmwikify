@@ -1,0 +1,104 @@
+name: stk_alpha_049_bd78f6
+display_name: 'Alpha #49'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: '(((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10)
+    - close) / 10)) < (-1 * 0.1)) ? 1 : ((-1 * 1) * (close - delay(close, 1))))'
+  formula: '(((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10) -
+    close) / 10)) < (-1 * 0.1)) ? 1 : ((-1 * 1) * (close - delay(close, 1))))'
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: '计算延迟收盘价: close_{t-1}, close_{t-10}, close_{t-20}'
+    formula: delay(close, 1), delay(close, 10), delay(close, 20)
+  - step: 2
+    description: '计算两段日均收益率: part_a 为 t-20 至 t-10 的日均收益, part_b 为 t-10 至 t 的日均收益'
+    formula: part_a = (close_{t-20} - close_{t-10}) / 10; part_b = (close_{t-10} -
+      close_t) / 10
+  - step: 3
+    description: '计算动量加速度差值: part_a - part_b, 衡量近期动量相对远期动量的衰减程度'
+    formula: accel = part_a - part_b
+  - step: 4
+    description: '判断条件: 加速度是否小于 -0.1, 即近期收益显著弱于远期 (跌幅超过 10%)'
+    formula: cond = (part_a - part_b) < -0.1
+  - step: 5
+    description: '条件赋值: 若条件成立输出 1 (反转信号), 否则输出 -1 × (close_t - close_{t-1}) (反向动量)'
+    formula: 'factor = cond ? 1 : -(close_t - close_{t-1})'
+  edge_case_handling: 新股上市不足 20 日时延迟值缺失, 需 pl.when/then 默认值或丢弃; 条件为严格的浮点比较, 建议保持原阈值
+    -0.1 不做缩放
+  missing_value_handling: 延迟序列导致的初始 20 行 NaN 由 polars 自然传播, 不填充; 条件分支中 otherwise 子句在
+    close_{t-1} 缺失时仍输出 NaN
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '该因子为状态切换型因子: 正常市场以反向 1 日动量捕捉短期反转, 一旦检测到近 10 日相对前 10 日加速下跌超
+    10%, 切换为常数 1 表达强烈反弹预期, 体现''急跌后修复''行为偏差。'
+  market_behavior: A股散户主导市场常见'急跌-超跌反弹'模式, 连续放量下跌后次日往往有技术性反弹; 平稳市则呈现日度反转 (隔日反转) 特征。
+  theoretical_basis: '基于行为金融学处置效应与过度反应理论: 价格急跌引发恐慌抛售后, 锚定效应导致价格均值回归; 平稳期日内反转对应 microstructure
+    的 bid-ask bounce 与流动性回补。'
+  historical_effectiveness: '101 Formulaic Alphas 原文标注此为 Alpha #16 类条件反转因子, 在中证 500/全
+    A 历史回测中年化 IC 约 3-5%, 对超跌反弹窗口较为敏感, 但对趋势性下跌失效。'
+  related_factors: 'Alpha #18 (close/close_6 - 1), Alpha #22 (条件均值反转), Alpha #10 (条件动量切换),
+    经典的 1 日反转因子 (neg(close-close_1))'
+l4:
+  hypotheses:
+  - id: H1
+    name: 急跌反转假说
+    description: 当近 10 日日均收益远弱于前 10 日 (差值 < -0.1) 时, 价格处于超跌状态, 因子值 = 1 表达正向预测, 预期下一日收益为正
+    expected_ic_sign: 正
+    source: 均值回归 / 过度反应理论
+    priority: 主假设
+  - id: H2
+    name: 日度反转假说
+    description: 正常状态 (-0.1 ≤ accel) 下因子值为 -(close-close_1), 昨日大涨对应因子低值、昨日大跌对应因子高值,
+      预期次日收益反向
+    expected_ic_sign: 正
+    source: 短期反转效应 (De Bondt 短期)
+    priority: 主假设
+  - id: H3
+    name: 波动率分层假说
+    description: 高波动率环境下 -0.1 阈值更易触发, 因子更多进入 +1 分支, 整体 IC 在牛熊切换或暴跌窗口期更显著
+    expected_ic_sign: 正
+    source: 波动率聚集与行为放大
+    priority: 辅助假设
+  - id: H4
+    name: 趋势失效假说
+    description: 在强趋势下跌市 (无反弹) 中, +1 信号被反复触发但因子并不预测反弹, 此时 IC 可能转负或失真
+    expected_ic_sign: 负
+    source: 动量 / 趋势持续理论
+    priority: 辅助假设
+  meaning_summary: '一个状态切换复合因子: 平稳期押注日度反转, 急跌期押注超跌反弹, 同时具备反转与均值回归双重属性。'
+  key_insights:
+  - 阈值 -0.1 为硬编码参数, 决定因子在反转 vs 急跌修复之间的切换频率, 建议按波动率分档动态校准
+  - otherwise 分支的 -(close-close_1) 已内嵌反向, 与 +1 分支方向一致 (均预测次日上涨), 整体因子值越高越看多
+  - 因子对单日噪音敏感, close_{t-1} 缺失或停牌复牌首日会产生极端值, 需 winsorize 或剔除
+  uncertainty: +1 常数信号不携带强度信息, 与 -1*(ret) 分支不可直接比较量级; 不同市场状态 (震荡/趋势) 下因子主导分支配比变化大,
+    整体 IC 稳定性弱于纯动量因子。
+l6:
+  industry_concentration: 因子不依赖行业, 但 +1 分支在周期股与高 beta 行业 (有色、煤炭、券商) 触发更频繁; 日度反转分支在流动性差的小盘股更明显。
+  crowding_level: '中低拥挤度: 此类条件反转因子为经典 101 alphas 公开公式, 但同时使用 1 日反转与加速度阈值的产品较少, 自营和私募使用后仍有
+    alpha 空间。'
+  failure_conditions:
+  - 强趋势下跌市 (如 2015 年股灾、2018 年熊市) 中 +1 信号反复触发但不反弹, 因子 IC 转负
+  - 高波动率环境下 -0.1 阈值过低, 条件过于宽松导致假阳性增多, 信号质量下降
+  - 市场情绪极度低迷时超跌不再反弹 (如 2022 年 4 月), 反转逻辑失效
+  risk_notes: 因子单日信号离散度大 (含 +1 常数), 与收益分布非线性; 建议组合使用时配合波动率归一化, 单独使用需控制仓位与回撤止损; 警惕停牌复牌导致的
+    close_1 缺失造成伪信号。

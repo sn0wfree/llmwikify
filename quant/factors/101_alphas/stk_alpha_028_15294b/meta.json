@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_028_15294b",
+  "display_name": "Alpha #28",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 28,
+  "code_hash": "15294b",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

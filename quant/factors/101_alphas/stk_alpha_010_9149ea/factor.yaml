@@ -1,0 +1,97 @@
+name: stk_alpha_010_9149ea
+display_name: 'Alpha #10'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: 'rank(((0 < ts_min(delta(close, 1), 4)) ? delta(close, 1) : ((ts_max(delta(close,
+    1), 4) < 0) ? delta(close, 1) : (-1 * delta(close, 1)))))'
+  formula: 'rank(((0 < ts_min(delta(close, 1), 4)) ? delta(close, 1) : ((ts_max(delta(close,
+    1), 4) < 0) ? delta(close, 1) : (-1 * delta(close, 1)))))'
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: '计算 close 的 1 周期差分: delta(close, 1) = close_t - close_{t-1}, 表示单日涨跌幅'
+    formula: delta_close = close_t - close_{t-1}
+  - step: 2
+    description: 计算 delta_close 在 4 日滚动窗口内的最小值与最大值, 用于判断近期价格走势的一致性
+    formula: ts_min(delta, 4), ts_max(delta, 4)
+  - step: 3
+    description: '条件赋值: 若 min>0 (4 日全部上涨, 一致上行) 或 max<0 (4 日全部下跌, 一致下行), 取原始 delta;
+      否则 (涨跌混杂) 取 -delta (反转信号)'
+    formula: 'inner = min>0 ? delta : (max<0 ? delta : -delta)'
+  - step: 4
+    description: 按日期做横截面 rank 标准化, 得到最终因子值
+    formula: factor = rank(inner) over('date')
+  edge_case_handling: 当 4 日内涨跌方向一致时保留原始 momentum 信号; 当涨跌混杂时强制反转, 避免震荡市中的虚假动量信号
+  missing_value_handling: delta 计算需 t-1 数据, 序列首日产生 NaN; ts_min/ts_max 在窗口不足 4 期时产生
+    NaN, 这些 NaN 会通过 rank 在横截面中按缺失值处理
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '自适应趋势/反转因子: 近期价格同向运动时捕捉动量延续, 涨跌震荡时捕捉均值回归, 在不同市场状态间自动切换策略'
+  market_behavior: 在单边趋势行情中表现为动量因子, 贡献正收益; 在区间震荡行情中表现为反转因子, 贡献正收益; 两种状态下均期望获取超额收益
+  theoretical_basis: '基于市场状态依赖的资产价格动态: 趋势市服从动量效应, 震荡市服从反转效应, 该因子通过 min/max 判定隐式区分两种状态'
+  historical_effectiveness: 源自 Kakushadze 101 Alphas 第 35 号, 在美股 A 股历史回测中均显示稳定正 IC,
+    属于经典多空对冲因子
+  related_factors: 动量因子 (Momentum), 反转因子 (Reversal/Short-term Reversal), Alpha035
+    变体, Regime-Switching 因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 一致上涨延续动量
+    description: 当近 4 日 delta 全部为正 (ts_min>0) 时, 标的处于强势趋势, 未来收益仍为正, rank 高的股票后续表现优于
+      rank 低的股票
+    expected_ic_sign: 正
+    source: 动量效应文献 (Jegadeesh & Titman 1993)
+    priority: 主假设
+  - id: H2
+    name: 震荡反转效应
+    description: 当 4 日 delta 涨跌混合 (min≤0 且 max≥0) 时, 标的处于震荡状态, -delta 隐含均值回归预期, 即昨日下跌的股票倾向于反弹
+    expected_ic_sign: 正
+    source: 短期反转文献 (Lehmann 1990)
+    priority: 主假设
+  - id: H3
+    name: 一致下跌捕捉空头
+    description: 当 4 日 delta 全部为负 (ts_max<0) 时, 取原始 delta (负值), 经 rank 后做空弱势股, 在熊市或下跌趋势中贡献空头收益
+    expected_ic_sign: 正
+    source: 下跌动量 / 熊市动量文献
+    priority: 次假设
+  - id: H4
+    name: 状态切换时因子不稳定
+    description: 在趋势与震荡状态快速切换的过渡期, 因子信号可能产生错误的趋势/反转判断, 导致 IC 短暂为负
+    expected_ic_sign: 不确定
+    source: Regime-switching 模型与行为金融学
+    priority: 辅助假设
+  meaning_summary: 因子值 rank 越大, 表示该股票处于一致上涨趋势的信号越强, 预期未来表现越好; rank 越小表示处于一致下跌趋势, 预期表现越差
+  key_insights:
+  - min/max 判断实现隐式的市场状态分类器, 趋势延续与均值回归在同一公式中并存
+  - 4 日窗口对短周期噪声敏感, 需配合波动率或流动性过滤使用
+  - 横截面 rank 使因子值域归一化, 天然适合多空组合构建
+  uncertainty: 因子在 4 日窗口恰好触及 0 的边界情况下可能频繁切换信号方向, 实际效果对窗口长度和交易摩擦较为敏感
+l6:
+  industry_concentration: '中等偏低: 因子对单只股票价格序列的统计特征敏感, 与行业 beta 关联不直接, 但在高 beta/高波动行业
+    (科技、新能源) 中信号更频繁触发'
+  crowding_level: '中高: Alpha035 为公开 101 Alphas 公式, 被大量量化机构复现使用, 存在显著策略拥挤风险, 近年超额收益有衰减趋势'
+  failure_conditions:
+  - 市场处于剧烈风格切换 (如牛熊急转) 时, 4 日 min/max 判断滞后导致信号方向错误
+  - 个股因停复牌、跳空涨跌停导致 delta 失真, 污染窗口内 min/max 判定
+  - 全市场低波动横盘时, 大量股票触发混合信号分支, -delta 反转策略在低波动环境下收益空间被压缩
+  risk_notes: '需注意交易成本: 因子换手率较高 (4 日窗口 + 横截面 rank), 实盘中需叠加流动性与换手率约束; 同时在政策驱动或流动性冲击事件中,
+    历史统计规律可能短期失效'

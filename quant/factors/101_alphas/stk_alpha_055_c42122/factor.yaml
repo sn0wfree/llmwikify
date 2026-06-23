@@ -1,0 +1,100 @@
+name: stk_alpha_055_c42122
+display_name: 'Alpha #55'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * correlation(rank(((close - ts_min(low, 12)) / (ts_max(high, 12)
+    - ts_min(low, 12)))), rank(volume), 6))
+  formula: (-1 * correlation(rank(((close - ts_min(low, 12)) / (ts_max(high, 12) -
+    ts_min(low, 12)))), rank(volume), 6))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - low
+  - close
+  - volume
+  - open
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 12 日滚动窗口内的 low 最小值和 high 最大值, 确定近期价格区间
+    formula: low_min = ts_min(low, 12); high_max = ts_max(high, 12)
+  - step: 2
+    description: 计算收盘价在 12 日高低点区间中的归一化位置 (类似 KDJ/STO 指标), 越接近 1 表示越接近 12 日高点
+    formula: inner = (close - low_min) / (high_max - low_min)
+  - step: 3
+    description: 对归一化位置和成交量分别做截面排名, 得到每日股票间的相对位置排名和相对量能排名
+    formula: rank_inner = rank(inner).over('date'); rank_volume = rank(volume).over('date')
+  - step: 4
+    description: 计算两个截面排名序列在 6 日滚动窗口内的相关系数
+    formula: corr = rolling_corr(rank_inner, rank_volume, window=6)
+  - step: 5
+    description: 对相关系数取负, 得到最终因子值
+    formula: factor = -1 * corr
+  edge_case_handling: 当 high_max == low_min 时分母为零, 会产生 inf/nan; 滚动窗口初期数据不足时会得到 null;
+    代码未显式处理 inf 情况, 实际计算中需要价格无波动时跳过
+  missing_value_handling: rolling_corr 窗口不足 6 期返回 null; ts_min/ts_max 窗口不足 12 期返回
+    null; 这些 null 在 rank 和后续运算中按 polars 默认行为传播, 最终因子值为 null
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子衡量个股收盘价在近 12 日高低区间中的相对位置与成交量的截面排名的 6 日相关性并取负, 捕捉的是'高位放量'的均值回归信号——价格创阶段新高且量能放大的个股倾向于回落。
+  market_behavior: 在震荡或风格切换市场中, 突破放量往往是假突破, 跟风资金高位接盘后股价回归; 在强趋势市场中该信号容易失效
+  theoretical_basis: '基于行为金融学中的反应过度与均值回归理论: 价格快速突破区间上沿时, 散户追涨导致成交量放大, 后续获利回吐压力使价格回落'
+  historical_effectiveness: 'Alpha #12 是 101 Alphas 中经典反转因子之一, 在 A 股市场对中小盘高频反转有较好效果,
+    但在 2017-2020 核心资产趋势行情中表现一般'
+  related_factors: KDJ/Stochastic 指标、量价背离因子、反转类因子 (Alpha 12/15/22 等)、换手率因子、布林带突破因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 高位放量反转
+    description: 当个股收盘价接近 12 日高点且成交量截面排名靠前时, 该股存在反应过度, 未来收益倾向于负向
+    expected_ic_sign: 负
+    source: '101 Alphas 论文 Alpha #12 经典解释 + 量价反转行为金融理论'
+    priority: 主假设
+  - id: H2
+    name: 量价背离增强
+    description: 6 日滚动相关窗口强化了量价关系的稳定性, 持续的高位放量比单日突破更具有反转预测力
+    expected_ic_sign: 负
+    source: 滚动相关性平滑 + 量价持续性研究
+    priority: 次假设
+  - id: H3
+    name: 小盘效应
+    description: 该因子在中小市值股票上效果更显著, 因为小盘股更容易出现放量突破后的回落, 而大盘股的突破更具趋势持续性
+    expected_ic_sign: 负
+    source: A 股截面收益异象研究 (小盘反转效应更强)
+    priority: 辅假设
+  - id: H4
+    name: 市场状态依赖
+    description: 因子在低波动率/震荡市中表现更好, 在高波动率/趋势市中可能失效甚至反向
+    expected_ic_sign: 不确定
+    source: 因子择时研究 + 市场状态依赖性文献
+    priority: 辅假设
+  meaning_summary: '因子本质是一个''量价反转''信号: 综合价格位置和成交量的截面排名, 持续在高位放量的个股被做空 (因子值越负, 做空信号越强)'
+  key_insights:
+  - 该因子是反转因子而非动量因子, 取负号是关键设计——正相关(高位+放量)对应负因子值, 表示预期下跌
+  - 先做截面排名再做时序相关, 消除了量价绝对水平差异, 聚焦于量价的相对关系
+  - 12 日高低点 + 6 日相关窗口组合, 对短期 (1-2 周) 量价异动较为敏感
+  uncertainty: 因子方向取决于对'高位放量'是反应过度还是趋势确认的判断; 不同市场环境下结论可能反转, 需结合市场状态择时使用
+l6:
+  industry_concentration: 因子在周期性行业 (如钢铁、有色、煤炭) 和题材股中信号较强, 因为这些行业容易出现放量突破后回落的模式; 消费、医药等防御性行业中信号较弱
+  crowding_level: '中高, Alpha #12 是 101 Alphas 经典公式之一, 被广泛学习和使用, 但因包含滚动相关和双重排名, 实际复现难度较大,
+    完全复刻的策略相对不算极度拥挤'
+  failure_conditions:
+  - 强趋势/牛市行情中, 放量突破往往是真突破, 反转信号失效甚至反向 (典型如 2019-2020 核心资产牛市)
+  - 流动性极低的股票或一字板涨跌停时, 收盘价固定在极值, 排名信号失真
+  - 政策驱动或重大事件冲击下, 量价关系被外生因素打破, 6 日相关窗口无法及时反映
+  risk_notes:
+  - 因子在截面上排序后取负, 实际投资中需做多低因子值股票、做空高因子值股票 (或等价的反转组合), 单边做多低因子值股票在牛市中风险较大
+  - 滚动相关 + 双重排名导致因子值变化较慢, 信号滞后约 3-6 日, 在快速反转行情中可能错过最佳入场点
+  - 对分母为零 (high_max == low_min, 涨跌停或停牌期间) 需做 inf 处理, 否则排名计算会出错

@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_020_c6f4ce",
+  "display_name": "Alpha #20",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 20,
+  "code_hash": "c6f4ce",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

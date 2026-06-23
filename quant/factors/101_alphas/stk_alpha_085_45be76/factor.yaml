@@ -1,0 +1,107 @@
+name: stk_alpha_085_45be76
+display_name: 'Alpha #85'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (rank(correlation(((high * 0.876703) + (close * (1 - 0.876703))), adv30,
+    9.61331))^rank(correlation(Ts_Rank(((high + low) / 2), 3.70596), Ts_Rank(volume,
+    10.1595), 7.11408)))
+  formula: (rank(correlation(((high * 0.876703) + (close * (1 - 0.876703))), adv30,
+    9.61331))^rank(correlation(Ts_Rank(((high + low) / 2), 3.70596), Ts_Rank(volume,
+    10.1595), 7.11408)))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - low
+  - close
+  - volume
+  - adv30
+  - open
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算高收盘加权价格 weighted_hc = high * 0.876703 + close * 0.123297, 强调高价权重
+    formula: weighted_hc = high * 0.876703 + close * (1 - 0.876703)
+  - step: 2
+    description: 计算 30 日平均成交量 adv30, 反映中期流动性基准
+    formula: adv30 = rolling_mean(volume, 30)
+  - step: 3
+    description: '计算分量 A: weighted_hc 与 adv30 在 9.6 日窗口上的滚动相关系数, 并做横截面排名'
+    formula: A = rank(corr(weighted_hc, adv30, 9))
+  - step: 4
+    description: '计算分量 B: 先对 mid=(high+low)/2 做 3.7 日时序排名、对 volume 做 10.16 日时序排名,
+      再取 7.1 日窗口滚动相关系数并横截面排名'
+    formula: B = rank(corr(Ts_Rank(mid, 3.7), Ts_Rank(volume, 10.16), 7.1))
+  - step: 5
+    description: 用幂运算合成最终因子 A^B, 保留符号同时放大极端相关值
+    formula: factor = A ^ B
+  edge_case_handling: 滚动窗口内若相关系数因常数序列或 NaN 输出 NaN, 排名按 polars 默认行为处理; 幂运算中底数 A 经 rank
+    归一化在 [0,1], 指数 B 在 [0,1] 范围内, 数值有限; 0 的负数次幂或 NaN 底数会产生 NaN 或 Inf, 需在下游做截尾处理
+  missing_value_handling: 滚动窗口和 ts_rank 初始化阶段会因窗口不足产生缺失值, 由 polars 自然产生, 通常按 NaN 传播处理,
+    排名时缺失值不参与排序
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '该因子融合两个量价相关性信号: A 捕捉高价加权价格与中期均量的同步性, B 捕捉中价与成交量的短周期时序协同度,
+    通过幂运算合成反映量价非线性耦合强度。'
+  market_behavior: 当股票量价关系出现稳定的正或负相关结构时因子取极值, 反映量价配合或背离的持续性; 幂运算使两端排名信号互相放大, 强化极端量价组合的选股力度。
+  theoretical_basis: 基于量价关系理论 (volume-price analysis), 即成交量是价格变动背后的驱动信号, 短中期时序相关结构蕴含信息不对称与资金流向信息;
+    时序排名 (Ts_Rank) 借鉴 autocorrelogram 在因子模型中的常见用法以提升平稳性。
+  historical_effectiveness: 在 101 Formulaic Alphas 系列中属于多层 rank/corr 复合结构, 通常在 A 股与美股中频多因子模型中作为辅助量价因子使用,
+    单因子 IC 表现中等但与其他量价因子互补性较好。
+  related_factors:
+  - alpha-005
+  - alpha-009
+  - alpha-018
+  - 量价相关性类因子 (OBV, PVT, Volume-Price Correlation)
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价正协同效应
+    description: 当高价加权价格与均量、短周期中价与成交量均呈正相关时 (A、B 同正), 反映资金推动型趋势, 因子值取大, 预期未来收益为正
+    expected_ic_sign: 正
+    source: 量价趋势跟随假说
+    priority: 主假设
+  - id: H2
+    name: 量价背离反转
+    description: 当 A 与 B 异号 (量价背离) 时, 幂运算使因子值偏向 0 或 1 的极端, 可能捕捉反转机会, 但方向不确定
+    expected_ic_sign: 不确定
+    source: 量价背离反转假说
+    priority: 备选假设
+  - id: H3
+    name: 高加权价格信号主导
+    description: weighted_hc 中 87.7% 权重赋予 high, 使 A 侧重价格高位与成交量的关系, 反映阻力位附近的成交活跃度,
+      预期正 IC 偏向突破行情
+    expected_ic_sign: 正
+    source: 价格区间微观结构假说
+    priority: 辅助假设
+  - id: H4
+    name: 幂运算非线性放大
+    description: B 的 [0,1] 排名作为指数使因子在两端尾部更敏感, 实际等价于对 A 的非线性变换, 在截面分布两端强化选股
+    expected_ic_sign: 不确定
+    source: rank 幂变换特征假说
+    priority: 辅助假设
+  meaning_summary: 因子综合刻画股票量价之间的多窗口、多尺度相关结构, 通过横截面排名幂运算突出两端极端相关组合, 反映资金行为与价格走势的耦合强度。
+  key_insights:
+  - 高权重重心在 high 而非 close, 偏向捕捉阻力位附近的价格行为
+  - A 与 B 分别覆盖中期均量与短期时序量, 多尺度互补
+  - 幂运算 A^B 同时保留符号并增强两端信号, 实际是非线性加权而非简单加法
+  uncertainty: 幂运算对底数与指数的微小变动敏感, 不同市场环境下 IC 方向可能反转; 相关系数本身不稳定, 在高换手与低换手股票上行为差异较大
+l6:
+  industry_concentration: 在金融、地产、钢铁等量价信号明显的周期性行业中信号更强; 在医药、消费等低换手行业中信号偏弱
+  crowding_level: 中等, 101 alphas 系列公开多年, 学术界与量化机构普遍使用, 但该复合因子的非线性幂运算形式未广泛复制, 仍有一定的差异化空间
+  failure_conditions:
+  - 市场处于极端单边行情 (急涨/急跌) 时, 量价相关性失真, 因子 IC 衰减明显
+  - 小市值低流动性股票, adv30 与 ts_rank 噪声大, 相关系数不稳定导致因子失真
+  - 风格切换期 (如成长/价值轮动) 期间, 量价信号与收益关联被宏观因子主导, 因子失效
+  risk_notes: 因子输出经过幂运算, 极端值尾部风险较高, 需做 winsorize; 相关系数对缺失值敏感, 上市未满 30 日的次新股应剔除; 在因子组合中需控制与同类量价因子的相关性以避免重复暴露。

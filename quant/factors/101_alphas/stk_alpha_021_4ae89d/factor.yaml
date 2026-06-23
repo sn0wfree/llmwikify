@@ -1,0 +1,101 @@
+name: stk_alpha_021_4ae89d
+display_name: 'Alpha #21'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: '((((sum(close, 8) / 8) + stddev(close, 8)) < (sum(close, 2) / 2)) ?
+    (-1 * 1) : (((sum(close, 2) / 2) < ((sum(close, 8) / 8) - stddev(close, 8))) ?
+    1 : (((1 < (volume / adv20)) || ((volume / adv20) == '
+  formula: '((((sum(close, 8) / 8) + stddev(close, 8)) < (sum(close, 2) / 2)) ? (-1
+    * 1) : (((sum(close, 2) / 2) < ((sum(close, 8) / 8) - stddev(close, 8))) ? 1 :
+    (((1 < (volume / adv20)) || ((volume / adv20) == 1)) ? 1 : (-1 * 1))))'
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - volume
+  - adv20
+  - open
+  - high
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 close 的 8 日简单移动平均 (MA8)、2 日简单移动平均 (MA2)、8 日滚动标准差 (STD8)，以及 volume
+      的 20 日平均 (adv20)
+    formula: MA8 = mean(close,8), MA2 = mean(close,2), STD8 = stddev(close,8), adv20
+      = mean(volume,20)
+  - step: 2
+    description: 构建类似布林带的上轨 (MA8 + STD8) 和下轨 (MA8 - STD8)，并计算量比 VR = volume / adv20
+    formula: upper = MA8 + STD8, lower = MA8 - STD8, VR = volume / adv20
+  - step: 3
+    description: 判断短期均线是否突破上轨：若 MA2 > upper 则因子 = -1 (超买做空信号)
+    formula: if (MA8 + STD8) < MA2 → -1
+  - step: 4
+    description: 否则判断短期均线是否跌破下轨：若 MA2 < lower 则因子 = +1 (超卖做多信号)
+    formula: else if MA2 < (MA8 - STD8) → +1
+  - step: 5
+    description: 若价格处于中性区间，根据量比 VR 决定方向：VR ≥ 1 则 +1，否则 -1 (高量能偏向做多)
+    formula: else if VR >= 1 → 1, else → -1
+  edge_case_handling: 当 8 日窗口或 20 日窗口不足时，rolling 函数按可用样本计算 (或返回 NaN，由调用方处理)；VR 分母为
+    0 时需依赖 polars 默认行为 (产生 inf/null)；三段条件为互斥的 if-else 嵌套，最后一段兜底为 -1
+  missing_value_handling: rolling 初始化阶段 (前 7/1/19 个交易日) 的 NaN 会自然传播至比较运算中，最终因子值在对应位置表现为
+    null，不参与后续 IC 计算
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 布林带式均值回归因子：短期均线突破上轨视为超买做空，跌破下轨视为超卖做多，中性区以量能为辅判方向，整体捕捉短期价格的极端波动回归。
+  market_behavior: 在震荡市中，短期均线频繁触及布林带上下轨，因子信号丰富；在趋势市中价格沿单边运行，触及极端后继续延伸，造成因子失效
+  theoretical_basis: 基于统计均值回归与价格波动聚集性：close 在 8 日窗口内服从近似正态分布，MA2 偏离 MA8 超过 1 个标准差属于小概率事件，预期回归；同时量能放大提供方向确认
+  historical_effectiveness: 在 A 股日频横截面上，纯粹的布林带突破因子 IC 偏低 (约 ±0.02~0.04)，加入量能过滤后稳健性有所提升，但整体属于弱-中等级别
+    alpha
+  related_factors: Alpha#101 原始公式、RSRS、BBAND、mean_reversion_8_2、量价背离类因子 (VPT/OBV)
+l4:
+  hypotheses:
+  - id: H1
+    name: 超买反转 (上轨突破做空)
+    description: 当 2 日均线升穿 8 日均线 + 1 个标准差时，短期价格严重超买，后续存在回调压力，因子给出 -1 应对应负收益
+    expected_ic_sign: 负
+    source: 布林带均值回归理论 + Alpha#101 原始设定
+    priority: 主假设
+  - id: H2
+    name: 超卖反弹 (下轨跌破做多)
+    description: 当 2 日均线跌破 8 日均线 - 1 个标准差时，短期恐慌性抛售已过度，存在技术性反弹空间，因子给出 +1 对应正收益
+    expected_ic_sign: 正
+    source: 统计均值回归 + 行为金融过度反应
+    priority: 主假设
+  - id: H3
+    name: 中性区量能确认
+    description: 价格处于中性区间 (未触及上下轨) 时，量比 VR ≥ 1 表明资金流入倾向，预期正收益；VR < 1 表明缩量阴跌，预期负收益
+    expected_ic_sign: 正
+    source: 量价理论 '量先价行'，成交量是方向领先指标
+    priority: 次假设
+  - id: H4
+    name: 对称信号在截面排序上仍单调
+    description: 虽然因子值仅为 {-1, +1} 的离散信号，但 +1 组合长期跑赢 -1 组合，因子横截面排序有效
+    expected_ic_sign: 正
+    source: 多空对冲回测框架下的预期
+    priority: 辅助假设
+  meaning_summary: 本质是'布林带 + 量能'复合均值回归信号：极端突破反向、中性区顺势偏多、低量偏空
+  key_insights:
+  - 信号被离散化为 ±1，非连续型 alpha，IC 绝对值偏低但胜率相对稳定
+  - 量能分支仅在中性区生效，作为极端突破的次级过滤层
+  - 因子对参数 (8/2/20) 较敏感，建议在样本期内做参数稳健性测试
+  uncertainty: 三段条件互斥但优先级硬编码，上轨突破信号占比若过高会显著拖累多头端收益；'超买做空' 在强势趋势行情中可能持续亏损
+l6:
+  industry_concentration: 行业集中度低——因子基于价量技术指标计算，理论上适用于全 A，不存在行业偏倚；但成交活跃的 TMT、消费板块触发上下轨的频率更高
+  crowding_level: 中等等级——布林带类因子在量化圈广泛使用，原始 101 Alphas 公开度高，存在一定策略拥挤；但本公式嵌套了量能过滤和离散赋值，相对差异化
+  failure_conditions:
+  - 强趋势 / 单边市：价格突破上轨后持续走高，'做空' 信号持续亏损
+  - 低流动性小票：量比 VR 噪声大，中性区量能信号失效
+  - 重大事件窗口 (财报/公告)：价格跳空突破布林带属于基本面驱动而非情绪驱动，均值回归失效
+  risk_notes: 因子输出为离散 {-1, +1}，空头暴露较高 (突破上轨+低量情境均输出 -1)，需关注换手与回撤；建议叠加市值/流动性中性化处理后再使用

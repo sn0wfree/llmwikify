@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 58,
+  "factor_name": "alpha-058",
+  "formula_brief": "(-1 * Ts_Rank(decay_linear(correlation(IndNeutralize(vwap, IndClass.sector), volume, 3.92795), 7.89291), 5.50322))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # IndNeutralize(vwap, IndClass.sector) - use neutralize as substitute (sector data not available)\n    neutralized_vwap = neutralize(pl.col('vwap')).over('date')\n    \n    # correlation(neutralized_vwap, volume, 3.92795) -> window=4\n    corr = rolling_corr(neutralized_vwap, pl.col('volume'), window=4)\n    \n    # decay_linear(corr, 7.89291) -> window=8\n    decayed = decay_linear(corr, window=8)\n    \n    # Ts_Rank(decayed, 5.50322) -> window=6\n    ts_ranked = ts_rank(decayed, window=6)\n    \n    # -1 * Ts_Rank(...)\n    factor = -1 * ts_ranked\n    \n    return df.select(factor).to_series()",
+  "code_chars": 644,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_058.h5",
+  "ic_mean": -0.02554918816132528,
+  "icir": -0.1672955381540883,
+  "ic_winrate": 0.4915254237288136,
+  "elapsed_sec": 40.017743807286024
+}

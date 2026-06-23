@@ -1,0 +1,102 @@
+name: stk_alpha_056_ed63e6
+display_name: 'Alpha #56'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (0 - (1 * (rank((sum(returns, 10) / sum(sum(returns, 2), 3))) * rank((returns
+    * cap)))))
+  formula: (0 - (1 * (rank((sum(returns, 10) / sum(sum(returns, 2), 3))) * rank((returns
+    * cap)))))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - returns
+  - cap
+  - close
+  - open
+  - high
+  - low
+  - volume
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 先对 returns 做 2 周期滚动求和得到 sum_ret_2, 再对 sum_ret_2 做 3 周期滚动求和, 得到对最近约
+      4 天收益的加权求和(权重近似 1,2,2,1)
+    formula: sum_sum_ret_2_3[t] = Σ_{k=0}^{2} Σ_{j=0}^{1} returns[t-k-j]
+  - step: 2
+    description: 计算 returns 的 10 周期滚动求和 sum_ret_10, 与上一步得到的加权短期求和相除, 形成 10 日累计 / 近
+      4 日加权 的动量比率
+    formula: ratio[t] = Σ_{k=0}^{9} returns[t-k] / sum_sum_ret_2_3[t]
+  - step: 3
+    description: 对 ratio 做截面 rank, 得到 rank_ratio(同一 date 内排序)
+    formula: rank_ratio = rank(ratio) .over('date')
+  - step: 4
+    description: 计算 returns 与 cap 的乘积(代码中以 vwap 代理 cap), 再做截面 rank 得到 rank_ret_cap
+    formula: rank_ret_cap = rank(returns * vwap) .over('date')
+  - step: 5
+    description: 将两个截面 rank 相乘再取负, 即 0 - rank_ratio * rank_ret_cap, 作为最终因子
+    formula: factor = - (rank_ratio * rank_ret_cap)
+  edge_case_handling: 分母 sum_sum_ret_2_3 为 0 时 ratio 出现 inf/NaN, 截面 rank 前需 dropna
+    或以极值替换; 前期窗口不足产生的 NaN 会向下传播, 影响前若干行 rank
+  missing_value_handling: rolling 不足处自动 NaN, 截面 rank 默认跳过 NaN; cap(vwap) 缺失时 ret_cap
+    为 NaN, 该股票在 rank_ret_cap 中被忽略, 不影响其余股票排名
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子做空'大市值 + 10日涨但近期加速度衰减'的蓝筹股, 押注大盘动量耗尽后的均值回归; 乘法结构使两个维度必须同向才产生显著因子值,
+    起到交叉验证作用。
+  market_behavior: 大盘蓝筹在中期动量进入'远端驱动 + 当日仍涨'阶段时, 容易出现获利回吐与短线反转; 中小盘或近期加速上涨的股票不受该因子惩罚。
+  theoretical_basis: '行为金融过度反应与处置效应: 大盘股因关注度高、信息扩散快, 动量透支后存在系统性回调; 101 Alphas 中 #4/#12/#23/#60
+    等动量反转族因子的同源思路。'
+  historical_effectiveness: 在 A 股大盘蓝筹占优的震荡市中表现较好; 在单边趋势市中可能持续亏损(动量延续); 与传统动量因子方向相反,
+    可作为对冲。
+  related_factors: 'Alpha #4(反转)、Alpha #12(动量×反转)、Alpha #23(vwap 加权反转)、Alpha #60(动量比率)、时间序列动量与截面反转因子族'
+l4:
+  hypotheses:
+  - id: H1
+    name: 大盘动量耗尽反转
+    description: 10 日累计涨幅远超近 4 日加权(动量集中于远端)且当日仍上涨的大盘股, 短期会因获利回吐而跑输市场; 因子值越负(双重高分),
+      未来收益越低
+    expected_ic_sign: 正
+    source: Jegadeesh & Titman (1993) 动量反转文献; 行为金融过度反应
+    priority: 主假设
+  - id: H2
+    name: cap 加权放大信息效应
+    description: returns*cap 项使大盘股对因子值贡献远高于小盘, 因子实质捕捉的是大盘蓝筹的截面反转, 而非全市场反转
+    expected_ic_sign: 正
+    source: Cap-weighted return 构造; 大盘股注意力溢价文献
+    priority: 次假设
+  - id: H3
+    name: 比值结构过滤动量延续
+    description: ratio 用 10日/近4日 比值代替差值, 在分母为负(近期下跌)时仍保持单调, 过滤掉'10日涨但近期加速上涨'的伪反转信号
+    expected_ic_sign: 正
+    source: Time-Series Momentum 文献(Moskowitz, Ooi, Pedersen 2012)
+    priority: 辅助假设
+  meaning_summary: 因子值 = -rank_ratio × rank_ret_cap, 即把'10日/近4日动量比'与'cap 加权当日收益'两个截面
+    rank 相乘后取负; 双重高分的股票(远端驱动的大盘赢家)因子值最负, 预期未来跑输; 其余股票因子值趋近 0, 预期跑赢或中性。
+  key_insights:
+  - 乘法结构要求两个维度同向才显著, 单一维度信号被压制为 0, 起到交叉验证与降噪作用
+  - vwap 作为 cap 代理会引入流动性/换手率偏差, 与真实市值加权存在系统性偏离, 小盘股 cap 信号噪声更大
+  - 因子方向与经典动量因子相反, 组合中可作为对冲腿; 但 cap 加权使其在 size 因子上的暴露很高, 需做 size 中性化
+  uncertainty: '因子方向高度依赖市场状态: 趋势市/动量市会持续亏损; 震荡市/反转市有效; vwap 代理 cap 的有效性受个股流动性影响, 在小盘股上信号失真较严重。'
+l6:
+  industry_concentration: 因 ret_cap 项 cap 加权, 因子天然偏向大盘蓝筹, 在金融、白酒、地产等大市值行业暴露较高, 中小盘行业暴露低,
+    组合层面需做行业/规模中性化。
+  crowding_level: '中等偏高: 动量反转是经典 alpha 思路, 101 Alphas 中已存在多个变体(#4/#12/#23/#60 等),
+    拥挤度随市场对反转因子的关注度提升而上升, 大盘蓝筹上的反转交易尤为拥挤。'
+  failure_conditions:
+  - '单边上涨或下跌趋势市: 动量持续, 做空强势大盘股持续亏损, 因子 IC 转负'
+  - '政策驱动/主题行情: 大盘股因政策刺激或行业 beta 持续走强, 反转信号被反复证伪'
+  - '流动性危机或极端波动: 小盘股流动性枯竭导致 vwap 严重偏离真实 cap, ret_cap 噪声剧增, 因子值失真'
+  risk_notes:
+  - cap 加权带来的行业与规模集中度风险, 必须用行业中性化与 size 中性化处理, 否则组合回撤主要来自大盘 beta
+  - 乘法结构在两维分歧时输出趋近 0, 实际持仓集中于双重高分公司, 集中度风险与流动性风险较高
+  - T+1 调仓假设下隔夜跳空与涨跌停会导致回测与实盘偏离, 大盘股流动性好偏离较小, 但小盘股上的负向跳空不可忽视

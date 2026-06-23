@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_031_2e400f",
+  "display_name": "Alpha #31",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 31,
+  "code_hash": "2e400f",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

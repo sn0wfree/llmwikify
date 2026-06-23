@@ -1,0 +1,98 @@
+name: stk_alpha_094_65c8c3
+display_name: 'Alpha #94'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((rank((vwap - ts_min(vwap, 11.5783)))^Ts_Rank(correlation(Ts_Rank(vwap,
+    19.6462), Ts_Rank(adv60, 4.02992), 18.0926), 2.70756)) * -1)
+  formula: ((rank((vwap - ts_min(vwap, 11.5783)))^Ts_Rank(correlation(Ts_Rank(vwap,
+    19.6462), Ts_Rank(adv60, 4.02992), 18.0926), 2.70756)) * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - adv60
+  - vwap
+  - close
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 vwap 与其约 11 日滚动最低价的差值，再在截面上做 rank，得到短期价格相对低点的偏离度排名
+    formula: rank(vwap - ts_min(vwap, 11))
+  - step: 2
+    description: 对 vwap 做 19 日 ts_rank，对 60 日均量 adv60 做 4 日 ts_rank，分别刻画价格与成交量的近端时序位置
+    formula: Ts_Rank(vwap, 19), Ts_Rank(adv60, 4)
+  - step: 3
+    description: 在 18 日窗口上滚动计算上述两个 ts_rank 序列的相关系数，衡量量价趋势的同步性
+    formula: rolling_corr(Ts_Rank(vwap, 19), Ts_Rank(adv60, 4), 18)
+  - step: 4
+    description: 对滚动相关系数再做 3 日 ts_rank，提炼量价同步性的近期变化
+    formula: Ts_Rank(corr, 3)
+  - step: 5
+    description: 将 rank 部分以 ts_rank_corr 为指数做幂运算，再用 -1 反转，得到最终因子值
+    formula: (rank_part ^ ts_rank_corr) * -1
+  edge_case_handling: rolling_min、rolling_corr、ts_rank 的窗口均四舍五入取整；rank 使用 cross-sectional
+    排名；vwap - min 可能为负，rank 后归一到 [0,1]
+  missing_value_handling: rolling 窗口不足时产生 null，依赖 polars 默认行为不填充；adv60 前 60 日为 NaN
+    会传播
+  data_alignment: T+1
+  complexity: O(T × N × max_window)，max_window ≈ 60（adv60 计算）
+l3:
+  financial_intuition: 因子融合短期价格反弹力度与近期量价同步性，并以幂运算非线性放大尾部信号，再取负捕捉'量价齐升后的均值回归'现象。
+  market_behavior: 在反弹初期、量价配合良好的强势股上因子为负（看空），预期其短期超买回调；在低位且量价背离的股票上因子为正（看多），预期补涨。
+  theoretical_basis: 基于行为金融的过度反应与均值回归理论：短期价格对信息的过度反应会在量价趋势确认后通过反向交易修正。
+  historical_effectiveness: 在 101 Formulaic Alphas 原始回测中表现中等，IC 符号为负；A 股高频及短周期反转因子实证中类似结构亦有一定预测力。
+  related_factors: Alpha#55（量价相关性反转）、Alpha#101（短期动量反转）、经典 1 个月反转因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价齐升的短期反转
+    description: 当股价从 11 日低点大幅反弹且近期量价相关性处于高位时，股价存在短期超买，未来收益为负
+    expected_ic_sign: 负
+    source: '101 Alphas #55 思想 + 均值回归文献'
+    priority: 主假设
+  - id: H2
+    name: 价格偏离低点的反转
+    description: vwap 相对 11 日低点偏离度排名越高（越接近近期高点），未来短期收益越低
+    expected_ic_sign: 负
+    source: 短期反转因子文献（Jegadeesh 1990）
+    priority: 次假设
+  - id: H3
+    name: 量价背离的补涨
+    description: 当量价相关性低（背离）且价格接近近期低点时，预期有补涨空间
+    expected_ic_sign: 正
+    source: 量价背离策略相关研究
+    priority: 辅助假设
+  - id: H4
+    name: 幂运算的非线性放大
+    description: ts_rank_corr 接近 1 时幂运算放大高 rank 股票信号，接近 0 时压缩信号，使得因子的市场暴露时变
+    expected_ic_sign: 不确定
+    source: 公式结构推演
+    priority: 辅助假设
+  meaning_summary: 因子综合短期价格反弹力度与量价同步性，核心捕捉'量价共振后的短期反转'，信号经幂运算非线性加权后取负。
+  key_insights:
+  - 双层时序 rank 设计使得因子对噪声不敏感
+  - 幂运算将 [0,1] 区间进一步压缩或放大，强化极端信号的边际贡献
+  - 最终取负意味着因子本质是反转型，应在震荡市或反弹末期表现更佳
+  uncertainty: 幂运算指数本身为 ts_rank 值（0~1），使因子暴露在时间维度上不稳定，回测期不同 IC 可能翻转；vwap 字段在低频数据中代表性下降，预测力可能减弱
+l6:
+  industry_concentration: 在成交活跃、量价弹性大的行业（如科技、消费、医药）信号更强；金融、公用事业等低弹性行业信号较弱
+  crowding_level: 中等偏高，量价相关性类因子在量化圈被广泛使用，但因加入幂运算非线性，差异化程度尚可
+  failure_conditions:
+  - 强单边趋势行情中，量价齐升持续而非反转，负 IC 假设失效
+  - 市场流动性骤降时，rolling_corr 估计不稳定，因子噪声放大
+  - 政策驱动或突发消息导致量价背离常态化时，量价同步性信号失效
+  risk_notes: 因子对短期反转高度依赖，需控制持仓周期在 1~5 日；对交易成本敏感，高换手策略下应扣除双边手续费与冲击成本；幂运算放大尾部风险，建议在组合层面对极端值做
+    winsorize 处理

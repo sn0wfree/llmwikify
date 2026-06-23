@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_077_eaf64e",
+  "display_name": "Alpha #77",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 77,
+  "code_hash": "eaf64e",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

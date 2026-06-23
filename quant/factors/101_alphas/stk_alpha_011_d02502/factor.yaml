@@ -1,0 +1,96 @@
+name: stk_alpha_011_d02502
+display_name: 'Alpha #11'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((rank(ts_max((vwap - close), 3)) + rank(ts_min((vwap - close), 3)))
+    * rank(delta(volume, 3)))
+  formula: ((rank(ts_max((vwap - close), 3)) + rank(ts_min((vwap - close), 3))) *
+    rank(delta(volume, 3)))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - volume
+  - vwap
+  - open
+  - high
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算每日 vwap 与 close 的差值，反映日内价格压力方向与幅度
+    formula: vwap_close_diff = vwap - close
+  - step: 2
+    description: 在 3 日滚动窗口内分别计算差值的最大值与最小值，刻画短期日内反转的极差
+    formula: max_diff = ts_max(vwap - close, 3); min_diff = ts_min(vwap - close, 3)
+  - step: 3
+    description: 对 max_diff 和 min_diff 在截面上分别做排名后求和
+    formula: sum_ranks = rank(max_diff) + rank(min_diff)
+  - step: 4
+    description: 计算成交量的 3 期变化量并在截面上排名
+    formula: rank_vol_delta = rank(delta(volume, 3))
+  - step: 5
+    description: 将日内反转排名之和乘以成交量变化排名，得到最终因子值
+    formula: factor = (rank(ts_max) + rank(ts_min)) * rank(delta(volume, 3))
+  edge_case_handling: ts_max/ts_min 窗口内若有 NaN 会按序列前向传播，delta(periods=3) 前 3 行产生 NaN，参与后续
+    rank 时被自然忽略
+  missing_value_handling: 依赖上游数据已对齐 code/date；NaN 沿时间序列保留，截面 rank 自动跳过缺失值
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子衡量日内 VWAP-Close 反转的极差幅度与成交量放大的叠加效应，捕捉量价配合下的短期过度交易行为。
+  market_behavior: 当某只股票近 3 日日内反转幅度大（max 与 min 差距大）且成交量明显放大时，暗示多空博弈激烈、短线交易拥挤，往往对应后续均值回归或动能衰竭。
+  theoretical_basis: 基于日内价格微观结构（VWAP 偏离反映知情交易方向）与量价背离理论，过度放量叠加日内反复反转通常意味着短期超买/超卖与情绪过热。
+  historical_effectiveness: 在 101 Alphas 原始回测中表现为中等强度负 Alpha 因子，在 A 股对中频反转有较好的解释力。
+  related_factors: Alpha#18 (vwap 相关)、Alpha#36 (量价综合)、反转类因子、换手率因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 日内反转极差越大、未来收益越低
+    description: ts_max 与 ts_min 排名之和越高，说明近 3 日 vwap-close 波动越剧烈，市场短期情绪过度释放，预期 IC
+      为负
+    expected_ic_sign: 负
+    source: '101 Alphas #24 原始设计逻辑'
+    priority: 主假设
+  - id: H2
+    name: 成交量放大放大信号强度
+    description: 因子乘以 rank(delta(volume,3))，在量能放大的样本中日内反转信号更可靠，量缩时信号失效
+    expected_ic_sign: 负
+    source: 量价交互文献与原始 alpha 公式结构
+    priority: 次假设
+  - id: H3
+    name: 极小市值/低流动性股票存在噪声偏离
+    description: 小盘股 vwap 与 close 偏差大但缺乏持续性，截面 rank 后可能与实际信号脱节，IC 方向不确定
+    expected_ic_sign: 不确定
+    source: A 股微观结构经验
+    priority: 辅假设
+  - id: H4
+    name: 趋势行情中因子失效
+    description: 强趋势下日内反转持续出现但并非过度交易，因子与未来收益的相关性显著下降
+    expected_ic_sign: 不确定
+    source: 趋势/反转风格轮动文献
+    priority: 辅假设
+  meaning_summary: 因子核心是『日内反转剧烈 + 成交量放大』组合，刻画短线过度交易与情绪过热，是典型的量价反转型因子。
+  key_insights:
+  - rank(ts_max)+rank(ts_min) 实际等效于对日内反转极差做截面排名，最大值与最小值的符号差异通过 rank 被消除
+  - 乘以 rank(delta(volume,3)) 起门控作用，仅在放量样本中发出信号，降低量缩噪声干扰
+  - T+1 对齐意味着因子基于当日及前两日数据预测次日收益
+  uncertainty: 小盘流动性差、涨跌停导致 vwap/close 失真、停牌复牌等场景下，rank 与 volume delta 均可能出现统计偏差，影响因子稳定性。
+l6:
+  industry_concentration: 中等偏高；在交易活跃、量价波动剧烈的行业（如周期、TMT）信号更强，防御性行业信号偏弱。
+  crowding_level: 中等；属于经典 101 Alphas 公式之一，机构使用率较高但因涉及 rank + delta(volume) 组合仍有一定分散度。
+  failure_conditions:
+  - 涨跌停板或停牌导致 vwap/close 异常偏离，使 ts_max/ts_min 与真实日内波动脱节
+  - 市场处于强趋势阶段时，日内反复反转并不预示反转而是被趋势吸收，因子失效
+  - 极端低流动性股票或小市值壳股，volume 突变失真，rank(delta(volume,3)) 噪声主导
+  risk_notes: 需对涨跌停、停牌、上市不足 3 日的样本做过滤；同时建议分行业或分市值做中性化，以消除量价分布在截面上的系统性偏差。

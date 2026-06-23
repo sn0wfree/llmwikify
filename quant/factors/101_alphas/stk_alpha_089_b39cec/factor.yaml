@@ -1,0 +1,107 @@
+name: stk_alpha_089_b39cec
+display_name: 'Alpha #89'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (Ts_Rank(decay_linear(correlation(((low * 0.967285) + (low * (1 - 0.967285))),
+    adv10, 6.94279), 5.51607), 3.79744) - Ts_Rank(decay_linear(delta(IndNeutralize(vwap,
+    IndClass.industry), 3.48158), 10.146
+  formula: (Ts_Rank(decay_linear(correlation(((low * 0.967285) + (low * (1 - 0.967285))),
+    adv10, 6.94279), 5.51607), 3.79744) - Ts_Rank(decay_linear(delta(IndNeutralize(vwap,
+    IndClass.industry), 3.48158), 10.1466), 15.3012))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - low
+  - vwap
+  - industry
+  - close
+  - open
+  - high
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 'Part 1 预处理: 计算 low 的加权和 (代数上等于 low, 但按公式执行) 作为基准价格, 并计算 10 日均量作为
+      adv10'
+    formula: low_expr = low * 0.967285 + low * (1 - 0.967285); adv10 = rolling_mean(volume,
+      10)
+  - step: 2
+    description: 'Part 1 核心: 计算 low_expr 与 adv10 的 7 日滚动相关系数, 然后用 5.5 周期线性衰减加权, 再取
+      4 日时序排名'
+    formula: part1 = Ts_Rank(decay_linear(rolling_corr(low_expr, adv10, 7), 5.5),
+      4)
+  - step: 3
+    description: 'Part 2 核心: 对行业中性化后的 vwap 取 3.5 周期差分, 再用 10 周期线性衰减加权, 最后取 15 日时序排名'
+    formula: part2 = Ts_Rank(decay_linear(delta(IndNeutralize(vwap, industry), 3.5),
+      10), 15)
+  - step: 4
+    description: '组合: Part 1 减去 Part 2, 得到最终因子值, 该因子倾向捕捉''低点放量但短期动量未跟上''的特征'
+    formula: factor = part1 - part2
+  edge_case_handling: 滚动窗口初期 (< 7 日或 < 15 日) 产生 NaN; 相关性计算要求窗口内至少两个有效数据点; 行业中性化在无行业分类时退化为原始
+    vwap (代码中已做此简化)
+  missing_value_handling: 滚动相关系数、差分、时序排名在窗口不足时输出 NaN, 后续运算将传播 NaN; 实际使用中通常以 min_periods
+    缩短或前向填充处理
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子比较'低价位与成交量的相关性'与'短期价格动量'两个维度, 识别那些在低位出现放量但短期动量尚未充分释放的股票,
+    即'被低估的积累型'机会。
+  market_behavior: 在震荡市或均值回归行情中表现较好; 捕捉主力低位吸筹后的潜在反转, 同时避免追入已经强势上涨的标的。
+  theoretical_basis: '基于行为金融的''低吸高抛''理论: 投资者倾向于在低位放量时积累筹码, 此类股票未来超额收益来源于被压制的动量释放。'
+  historical_effectiveness: 在 101 Alphas 原始回测中属于排名靠中上的多空因子; 对成交活跃的中小盘股效果更显著, 蓝筹股上信号偏弱。
+  related_factors: alpha_001 (volume-price correlation), alpha_009 (min/max delta),
+    alpha_022 (industry-neutralized momentum), alpha_024 (VWAP momentum)
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价低相关信号有效性
+    description: Part 1 捕捉的'低价位与放量同向变化'代表主力低位吸筹, Part 1 越高, 未来收益越强
+    expected_ic_sign: 正
+    source: Part 1 = correlation(low, adv10) 经衰减与 ts_rank 处理后, 暗示买入信号
+    priority: 主假设
+  - id: H2
+    name: 短期动量抑制效应
+    description: Part 2 衡量行业中性后的短期动量, 减号意味着回避已上涨的股票, 偏好'动量滞后'标的
+    expected_ic_sign: 负 (Part 2)
+    source: 因子设计为 part1 - part2, 等价于做空短期动量
+    priority: 主假设
+  - id: H3
+    name: 行业中性化的稳健性
+    description: Part 2 中对 vwap 做行业中性化, 降低了行业层面的动量传染, 使因子在行业内部更可比
+    expected_ic_sign: 正
+    source: IndNeutralize(vwap, industry) 表明因子希望剥离行业 beta
+    priority: 辅助假设
+  - id: H4
+    name: 时序排名稳定化
+    description: Part 2 使用 15 日 ts_rank 窗口 (大于 Part 1 的 4 日), 使动量信号更平滑, 减弱噪音
+    expected_ic_sign: 不确定
+    source: Ts_Rank 窗口差异, Part 2 动量信号更稳定但反应更慢
+    priority: 辅助假设
+  meaning_summary: 该因子本质是'量价低位共振 + 短期动量未启动'的双重筛选, 通过相减构造, 高分股票应处于'被市场忽略但有资金关注'的状态。
+  key_insights:
+  - low * 0.967285 + low * (1 - 0.967285) 代数上等于 low, 公式中可能保留是出于因子遗传/进化的历史原因
+  - Part 1 窗口较短 (3-7 日), 反映短期量价结构; Part 2 窗口较长 (10-15 日), 反映中期动量, 两者时间尺度差异是该因子的关键设计
+  - 两个部分都经过线性衰减和时序排名, 增强了对极端值的鲁棒性
+  uncertainty: 原始公式参数 (如 6.94279, 5.51607) 多为小数, 暗示经过遗传算法优化, 真实金融含义可能被过度拟合; 行业中性化在代码中被简化,
+    实际效果依赖行业分类数据质量。
+l6:
+  industry_concentration: '中等偏低: Part 2 显式做行业中性化, 因子在行业间相对均衡; 但 Part 1 涉及量价关系, 周期性行业
+    (如钢铁、化工) 可能贡献更多信号'
+  crowding_level: '中: 该因子源自 101 Alphas 公开论文, 被广泛研究和使用, 但其复杂性 (含 8 个嵌套算子) 一定程度限制了纯因子复制的吸引力,
+    拥挤度低于简单量价因子'
+  failure_conditions:
+  - 单边趋势行情中, Part 2 动量信号持续增强, 导致因子持续做空强势股, 错失趋势收益
+  - 低成交量/低流动性股票中, 滚动相关系数 (Part 1) 噪声大, 信号失真
+  - 行业风格切换剧烈时, 行业中性化基准不稳, Part 2 误差放大, 因子表现恶化
+  risk_notes: 因子对回看窗口敏感, 参数微调 (如窗口取整) 可能显著改变 IC 方向; 行业中性化在缺乏精细行业分类时需谨慎; Part 1 退化后等价于单纯
+    low 与成交量的相关性, 需关注低频反转风险。

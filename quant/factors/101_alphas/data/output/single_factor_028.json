@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 28,
+  "factor_name": "alpha-028",
+  "formula_brief": "scale(((correlation(adv20, low, 5) + ((high + low) / 2)) - close))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already sorted by (code, date) — do not re-sort\n\n    # ADV20: 20-day average of volume\n    adv20 = ts_mean(pl.col('volume'), 20)\n\n    # 5-day rolling correlation between ADV20 and low\n    corr = correlation(adv20, pl.col('low'), 5)\n\n    # (high + low) / 2  — mid price\n    mid_price = (pl.col('high') + pl.col('low')) / 2\n\n    # Combine: correlation + mid_price - close\n    expr = corr + mid_price - pl.col('close')\n\n    # Cross-sectional scale (preserves sign, normalizes by sum of |x|)\n    factor = scale(expr).over('date')\n\n    return df.select(factor).to_series()",
+  "code_chars": 630,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_028.h5",
+  "ic_mean": 0.0174311164545656,
+  "icir": 0.09816694902970131,
+  "ic_winrate": 0.5084745762711864,
+  "elapsed_sec": 126.60181698948145
+}

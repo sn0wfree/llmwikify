@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 82,
+  "factor_name": "alpha-082",
+  "formula_brief": "(min(rank(decay_linear(delta(open, 1.46063), 14.8717)), Ts_Rank(decay_linear(correlation(IndNeutralize(volume, IndClass.sector), ((open * 0.634196) + (open * (1 - 0.634196))), 17.4842), 6.92131), 13.4283)) * -1)",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code', 'date'])\n\n    # Part 1: rank(decay_linear(delta(open, 1.46063), 14.8717))\n    delta_open = delta(pl.col('open'), periods=1)\n    decay_1 = decay_linear(delta_open, window=15)\n    rank_1 = rank(decay_1).over('date')\n\n    # Part 2: Ts_Rank(decay_linear(correlation(IndNeutralize(volume, sector), open, 17.4842), 6.92131), 13.4283)\n    # (open * 0.634196) + (open * (1 - 0.634196)) simplifies to open\n    # Using neutralize as substitute for IndNeutralize (no sector classification available)\n    neutralized_volume = neutralize(pl.col('volume')).over('date')\n    corr = rolling_corr(neutralized_volume, pl.col('open'), window=17)\n    decay_2 = decay_linear(corr, window=7)\n    ts_rank_2 = ts_rank(decay_2, window=13)\n\n    # min of the two parts, then negate\n    factor = -1 * pl.min_horizontal([rank_1, ts_rank_2])\n\n    return df.select(factor).to_series()",
+  "code_chars": 930,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_082.h5",
+  "ic_mean": -0.008292282072630537,
+  "icir": -0.06629591476959446,
+  "ic_winrate": 0.4406779661016949,
+  "elapsed_sec": 25.56457059830427
+}

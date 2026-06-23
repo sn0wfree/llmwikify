@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_033_67adca",
+  "display_name": "Alpha #33",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 33,
+  "code_hash": "67adca",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

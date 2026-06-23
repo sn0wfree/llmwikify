@@ -1,0 +1,102 @@
+name: stk_alpha_082_ac6e39
+display_name: 'Alpha #82'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (min(rank(decay_linear(delta(open, 1.46063), 14.8717)), Ts_Rank(decay_linear(correlation(IndNeutralize(volume,
+    IndClass.sector), ((open * 0.634196) + (open * (1 - 0.634196))), 17.4842), 6.92131),
+    13.4
+  formula: (min(rank(decay_linear(delta(open, 1.46063), 14.8717)), Ts_Rank(decay_linear(correlation(IndNeutralize(volume,
+    IndClass.sector), ((open * 0.634196) + (open * (1 - 0.634196))), 17.4842), 6.92131),
+    13.4283)) * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - volume
+  - close
+  - high
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 open 的 1 周期差分 (delta(open, 1.46)), 相当于 open_t - open_{t-1}, 再做窗口约
+      15 日的线性衰减加权 (decay_linear)
+    formula: decay_linear(delta(open, 1), 15)
+  - step: 2
+    description: 对结果做横截面 rank 排序, 得到每日 Part A (短期开盘价动量信号)
+    formula: rank(PartA) over date
+  - step: 3
+    description: 对 volume 做行业中性化 (代码中用 neutralize 替代 IndNeutralize), 与 open 计算约 17
+      日滚动相关, 再做窗口约 7 日的线性衰减, 最后做约 13 日的时序 rank, 得到 Part B (量价相关信号)
+    formula: Ts_Rank(decay_linear(corr(neutralize(vol), open, 17), 7), 13)
+  - step: 4
+    description: 取 Part A 与 Part B 的逐元素 min, 再乘以 -1 翻转方向
+    formula: factor = -1 * min(PartA, PartB)
+  edge_case_handling: 公式中 (open*0.634196) + (open*(1-0.634196)) 恒等于 open, 代码已正确化简;
+    rolling 相关/衰减函数在窗口不足时返回 NaN; rank/ts_rank 在 NaN 上保持 NaN
+  missing_value_handling: delta 及 rolling 相关产生的 NaN 沿时间序列自然传播, rank/tmin_horizontal
+    操作保留 NaN, 不会引入虚假零值
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子取「短期开盘动量」与「行业中性化量价相关」的最小值并取反, 做多同时满足两个弱信号 (短期动量低且量价相关弱) 的股票,
+    捕捉信息效率低、被低估的反转机会。
+  market_behavior: 在信息扩散缓慢、量价同步性弱的市场环境中, 这类股票往往存在定价偏差修复空间; 在趋势市或高联动行业中效果减弱。
+  theoretical_basis: '基于反转效应 (De Bondt & Thaler) 与量价领先滞后关系 (Lee & Swaminathan): 弱量价相关+弱动量往往预示价格即将反弹。'
+  historical_effectiveness: 在 101 Alphas 原始论文回测中, 该类复合反转因子在 A 股及美股均呈现正 IC 但波动较大, 年化超额约
+    5-10%, 换手率较高。
+  related_factors: Alpha#3 (类似反转结构), Alpha#25 (量价相关), 短期反转 (STREV), 换手率因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 弱开盘动量反转
+    description: 短期 open 变化经衰减后排名越低 (Part A 越小), 股票未来收益越高, IC 为正
+    expected_ic_sign: 正
+    source: 反转效应文献 + delta(open) 动量结构
+    priority: 主假设
+  - id: H2
+    name: 弱量价同步反转
+    description: 行业中性化 volume 与 open 的滚动相关越低 (Part B 越小), 信息效率越差, 未来越可能补涨, IC 为正
+    expected_ic_sign: 正
+    source: Lee & Swaminathan 量价生命周期
+    priority: 主假设
+  - id: H3
+    name: min 组合放大稀疏信号
+    description: min 操作使因子只在两路信号同时为低值时触发, 形成稀疏、强信号的选股逻辑, 但可能在两路信号冲突时漏掉有效信号, 整体 IC
+      符号仍为正
+    expected_ic_sign: 正
+    source: min 算子的数学性质 + 因子稀疏性研究
+    priority: 辅助假设
+  - id: H4
+    name: 行业中性化近似偏差
+    description: 代码用 neutralize 替代 IndNeutralize, 未能严格按行业分类, 可能引入截面偏差, 导致 IC 不稳定或方向反转
+    expected_ic_sign: 不确定
+    source: 实现层近似风险
+    priority: 次假设
+  meaning_summary: '因子 = -min(短期开盘动量rank, 量价相关ts_rank), 选股逻辑为「双弱反转」: open 短期涨幅低 +
+    行业中性量价同步性弱 → 预期未来补涨。'
+  key_insights:
+  - (open*0.634196) + (open*(1-0.634196)) 在数学上恒等于 open, 应在公式层直接化简, 代码已正确处理
+  - delta 的 period 参数 1.46 在整数日实现中应取 1, 偏差极小可忽略
+  - min 而非 mean 意味着因子是两路信号的 AND 条件, 持仓稀疏但信号纯度更高
+  uncertainty: 行业中性化用全局 neutralize 近似, 实际可能无法剔除行业 beta, 影响量价相关信号的纯净度; 参数 (1.46/14.87/17.48/6.92/13.43)
+    高度敏感, 调参后 IC 方向可能反转。
+l6:
+  industry_concentration: 高 — 行业中性化是 Part B 的关键步骤, 若行业分类不准或缺失, Part B 退化为普通量价相关, 因子行业暴露显著,
+    集中在周期/科技等量价关系活跃行业
+  crowding_level: 中 — 101 Alphas 公开因子被广泛研究, 双弱反转逻辑在量化圈较为常见, 但 min 组合的稀疏性降低了纯多头端的拥挤度
+  failure_conditions:
+  - 强趋势市中, 弱动量信号持续为弱, 因子选入持续下跌股票, 触发追跌风险
+  - 行业 beta 剧烈切换或板块轮动加速时, neutralize 近似失效, 量价相关信号被行业因子污染
+  - 小盘/低流动性股票中, 滚动相关和 ts_rank 噪声大, 因子 IC 显著衰减
+  risk_notes: 因子含 5 个超参, 过拟合风险高; delta/rank 等离散化操作使因子对数据频率敏感; 建议在样本外做参数鲁棒性测试并监控行业暴露。

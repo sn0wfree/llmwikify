@@ -1,0 +1,98 @@
+name: stk_alpha_029_a81d02
+display_name: 'Alpha #29'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (min(product(rank(rank(scale(log(sum(ts_min(rank(rank((-1 * rank(delta((close
+    - 1), 5))))), 2), 1))))), 1), 5) + ts_rank(delay((-1 * returns), 6), 5))
+  formula: (min(product(rank(rank(scale(log(sum(ts_min(rank(rank((-1 * rank(delta((close
+    - 1), 5))))), 2), 1))))), 1), 5) + ts_rank(delay((-1 * returns), 6), 5))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - returns
+  - open
+  - high
+  - low
+  - volume
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 close-1 的 5 日差分, 截面 rank 后取负, 再连续两次截面 rank, 然后取 2 日滚动最小值
+    formula: ts_min(rank(rank(-1 * rank(delta(close - 1, 5)))), 2)
+  - step: 2
+    description: 对上一步结果取对数, 做截面 scale (z-score), 再连续两次截面 rank
+    formula: rank(rank(scale(log(...))))
+  - step: 3
+    description: 对双重 rank 后的结果取 5 日滚动最小值 (product(..., 1) 为恒等)
+    formula: min(..., 5)
+  - step: 4
+    description: 计算 -1*returns 滞后 6 期的 5 日时间序列 rank, 并与第三步结果相加
+    formula: min(...) + ts_rank(delay(-1*returns, 6), 5)
+  edge_case_handling: close-1 可能出现 close=0 或极小值; log() 在值 ≤0 时返回 NaN/inf; rolling_min
+    在窗口不足时返回 NaN; scale 在截面 std=0 时退化为 0
+  missing_value_handling: 各步骤产生的 NaN 沿时间序列传播, 最终因子值为 NaN; 截面 rank/scale 按当日非空值排序
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 该因子融合短期价格反转信号 (经多重 rank 平滑的 close 变化) 与中期收益反转信号 (6 日滞后负收益的时序
+    rank), 共同捕捉横截面相对价格位置对未来收益的预测能力。
+  market_behavior: 短期超跌/超涨股票倾向于反转, 中期负收益股票亦存在回归倾向, 因子在均值回归特征明显的市场更有效。
+  theoretical_basis: 基于行为金融的过度反应与反应不足理论, 短期价格偏离和近期负收益均提供均值回归套利机会。
+  historical_effectiveness: 101 Alphas 论文中 Alpha#83 的回测显示其属于弱有效因子, 单独 IC 较低, 多用于因子组合而非单独使用。
+  related_factors:
+  - Alpha#1 (滞后 returns 时序 rank)
+  - Alpha#34 (rank 化价格差)
+  - 短期反转因子 (ST_REV)
+  - 中期反转因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期价格反转
+    description: 第一项通过 close 的 5 日变化多重 rank, 捕捉短期价格的横截面相对位置, 预期超跌股票未来有正收益
+    expected_ic_sign: 正
+    source: 短周期反转效应文献 (Jegadeesh 1990)
+    priority: 主假设
+  - id: H2
+    name: 中期收益反转
+    description: 第二项用 6 日前负收益的 5 日 ts_rank, 历史上负收益的股票倾向于在之后反弹
+    expected_ic_sign: 正
+    source: De Bondt & Thaler 1985 中期反转
+    priority: 主假设
+  - id: H3
+    name: 非线性变换增强鲁棒性
+    description: 三重 rank + log + scale 的多层非线性变换降低对极端值敏感度, 提高因子在肥尾分布下的稳定性
+    expected_ic_sign: 不确定
+    source: 101 Alphas 经验设计
+    priority: 辅助假设
+  - id: H4
+    name: 趋势市场失效
+    description: 在强趋势行情中, 反转因子会被动量主导, 因子预测能力下降
+    expected_ic_sign: 负
+    source: 市场状态依赖文献
+    priority: 辅助假设
+  meaning_summary: 因子通过短期价格位置和中期收益反转的双重信号, 度量股票在横截面和时间维度上偏离均衡的程度, 偏离越大未来回归概率越高。
+  key_insights:
+  - 多重 rank 变换显著抑制异常值影响, 适合高噪声的 close 价格序列
+  - log + scale 将序列标准化为可比尺度, 增强跨周期稳定性
+  - 6 日滞后使第二项捕捉中期 (周频) 趋势的反转, 与第一项的日频反转形成互补
+  uncertainty: 因子对截面排名 (rank) 操作极为依赖, 股票池变化或停复牌会导致截面不稳定; log() 在 close<1 时可能产生负值,
+    影响后续 scale 的均值假设
+l6:
+  industry_concentration: 无明显行业偏向, rank 操作天然做了行业中性化, 但在行业轮动剧烈的市场可能因截面排序不稳定而出现伪信号
+  crowding_level: 中低, 由于公式复杂且 IC 较弱, 机构实际使用率不高, 拥挤度风险有限
+  failure_conditions:
+  - 强趋势/动量主导行情中反转信号被持续压制, 因子失效
+  - 市场整体波动率极低时, 短期价格变化噪声主导信号, IC 衰减
+  - 大量股票涨跌停或停牌导致截面 rank 排序剧烈波动, 因子值失真
+  risk_notes: 因子 IC 绝对值通常较低 (<0.03), 单独使用收益贡献有限; 5 日滚动 min 对近期极值敏感, 在暴跌市可能产生极端负值;
+    建议与其他反转/动量因子组合使用, 并设置行业与市值中性化。

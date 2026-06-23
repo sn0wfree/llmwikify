@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 38,
+  "factor_name": "alpha-038",
+  "formula_brief": "((-1 * rank(Ts_Rank(close, 10))) * rank((close / open)))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Ts_Rank(close, 10) - time-series rank over 10-day window\n    ts_rank_close = ts_rank(pl.col('close'), window=10)\n    \n    # Cross-section rank of Ts_Rank\n    rank1 = rank(ts_rank_close).over('date')\n    \n    # Close to open ratio\n    ratio = pl.col('close') / pl.col('open')\n    \n    # Cross-section rank of close/open\n    rank2 = rank(ratio).over('date')\n    \n    # Final factor: (-1 * rank1) * rank2\n    factor = (-1 * rank1) * rank2\n    \n    return df.select(factor).to_series()",
+  "code_chars": 538,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_038.h5",
+  "ic_mean": 0.03683834672455014,
+  "icir": 0.22417507725267313,
+  "ic_winrate": 0.6101694915254238,
+  "elapsed_sec": 25.349044043570757
+}

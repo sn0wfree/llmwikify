@@ -1,0 +1,93 @@
+name: stk_alpha_012_56b188
+display_name: 'Alpha #12'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (sign(delta(volume, 1)) * (-1 * delta(close, 1)))
+  formula: (sign(delta(volume, 1)) * (-1 * delta(close, 1)))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - volume
+  - open
+  - high
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算成交量的 1 周期变化量 (今日成交量 - 昨日成交量)
+    formula: delta(volume, 1) = volume_t - volume_{t-1}
+  - step: 2
+    description: 计算收盘价的 1 周期变化量 (今日收盘价 - 昨日收盘价)
+    formula: delta(close, 1) = close_t - close_{t-1}
+  - step: 3
+    description: 对成交量变化量取符号函数, 得到 +1 / 0 / -1
+    formula: sign(delta(volume, 1)) ∈ {-1, 0, +1}
+  - step: 4
+    description: 将成交量变化符号与价格变化取负相乘, 得到最终因子值
+    formula: factor = sign(delta(volume, 1)) * (-1 * delta(close, 1))
+  edge_case_handling: 当 delta(volume,1)=0 时, sign 返回 0, 因子输出为 0; 首行因无前一期数据产生 NaN,
+    需向前填充或丢弃
+  missing_value_handling: volume 或 close 缺失时 delta 产生 null, sign(null) 传播为 null, 建议对首行
+    NaN 做 dropna 或 bfill 处理
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '结合量价方向的短期反转因子: 放量下跌(恐慌抛售)或缩量上涨(无量拉升)给予正向打分, 视为短期超跌/反转机会; 反之放量上涨、缩量下跌给予负向打分。'
+  market_behavior: 捕捉 A 股市场常见的'放量见顶、缩量见底'短期情绪反转模式, 反映恐慌抛售后均值回归以及无量上涨的脆弱性。
+  theoretical_basis: '基于行为金融学的过度反应与反应不足理论: 放量下跌反映恐慌情绪极端化, 短期反转概率高; 缩量上涨缺乏买盘支撑, 易回调。'
+  historical_effectiveness: 在震荡市、风格频繁切换的 A 股小盘股中效果较好; 在强势单边趋势市中可能失效, 因放量上涨可持续。
+  related_factors: VPV (量价相关性反转)、换手率反转因子、20 日反转、Alpha#22 (高量价相关性的反转)
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期量价反转
+    description: 因子值越大 (放量下跌) 代表短期超卖, 下一期价格反弹概率越高, 因子与未来收益正相关
+    expected_ic_sign: 正
+    source: 行为金融学过度反应理论, 与 101 Alphas 中量价反转类因子同源
+    priority: 主假设
+  - id: H2
+    name: 缩量上涨脆弱性
+    description: 缩量上涨信号 (sign(vol) = -1, close↑) 因子为正, 暗示上涨缺乏买盘, 后续回调概率高, 因子与未来收益负相关
+      (因该信号对应 +1 的因子值, 负收益预期)
+    expected_ic_sign: 不确定
+    source: 量价背离技术分析理论, 缩量上涨常被视为'价量背离'反转信号
+    priority: 副假设
+  - id: H3
+    name: 小盘高换手有效性
+    description: 因子在小盘股、高换手股票中 IC 更显著, 因为这些标的散户参与度高, 情绪驱动的量价反转更明显
+    expected_ic_sign: 正
+    source: 'A 股市场微观结构研究: 小盘股投机性强, 反转效应更突出'
+    priority: 副假设
+  - id: H4
+    name: 趋势市失效
+    description: 在强势单边上涨/下跌行情中, 放量上涨可能持续而非反转, 因子 IC 减弱甚至反号
+    expected_ic_sign: 不确定
+    source: 动量与反转的周期性研究
+    priority: 副假设
+  meaning_summary: 该因子是 1 期量价方向组合的反转信号, 核心逻辑是'量价配合方向'决定短期反转预期, 输出范围在 {-2, -1, 0, +1,
+    +2} 量级 (因 sign×delta 的实际范围由 delta 大小决定, 但符号由 sign 和 delta(close) 共同决定)。
+  key_insights:
+  - sign 函数使因子只保留方向信息, 丢失了量价变化的幅度, 实际为一个方向性反转信号
+  - 因子对'放量下跌'和'缩量上涨'都给出正分, 两种情境的金融含义不同, 可能导致信号冲突
+  - 1 期窗口对噪声极其敏感, 因子波动大, 单独使用胜率有限, 建议与其他反转类因子组合
+  uncertainty: 因子输出为 5 档离散值 ({-2,-1,0,1,2} 或类似), 信息量较低; 两种'正分'场景 (放量跌 vs 缩量涨) 在市场状态不同时可能主导,
+    因子含义不唯一。
+l6:
+  industry_concentration: 低, 量价信号跨行业适用, 但在周期性行业 (有色、煤炭) 及小盘成长股中信号可能更强
+  crowding_level: 中高, 短期反转策略在量化圈普遍使用, 量价反转变体易被同类策略捕获, 拥挤度较高
+  failure_conditions:
+  - '强势单边趋势市: 放量上涨持续, 反转假设不成立, 因子失效甚至反向'
+  - '低成交量/低换手环境: delta(volume) 频繁为 0, 因子被截断在 0, 信号稀疏'
+  - '事件驱动行情 (如重大公告、重组): 量价信号被事件冲击主导, 行为金融逻辑失效'
+  risk_notes: 因子离散度大且仅基于 1 期数据, 换手率与回撤风险较高; 与动量因子负相关, 在动量策略占优的周期中可能持续亏损; 建议搭配趋势/动量因子做多空对冲或风格中性化处理。

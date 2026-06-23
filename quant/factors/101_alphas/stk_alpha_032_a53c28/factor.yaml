@@ -1,0 +1,98 @@
+name: stk_alpha_032_a53c28
+display_name: 'Alpha #32'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (scale(((sum(close, 7) / 7) - close)) + (20 * scale(correlation(vwap,
+    delay(close, 5), 230))))
+  formula: (scale(((sum(close, 7) / 7) - close)) + (20 * scale(correlation(vwap, delay(close,
+    5), 230))))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - vwap
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 close 的 7 日滚动均值,减去当日 close,得到短期均线偏离度 (time-series)
+    formula: part1_ts = mean(close, 7) - close
+  - step: 2
+    description: 对 part1_ts 按截面 (date) 进行标准化 (scale),消除横截面上量纲差异
+    formula: part1 = scale(part1_ts)  // cross-section per date
+  - step: 3
+    description: 计算 vwap 与 5 日延迟 close 的 230 日滚动相关系数,刻画中期量价联动结构 (time-series)
+    formula: part2_ts = correlation(vwap, delay(close, 5), 230)
+  - step: 4
+    description: 对 part2_ts 按截面 (date) 进行标准化
+    formula: part2 = scale(part2_ts)  // cross-section per date
+  - step: 5
+    description: 将两部分线性合成,part2 权重 20,反映相关性结构对因子信号的放大效应
+    formula: factor = part1 + 20 * part2
+  edge_case_handling: 滚动窗口初期 (close 不足 7 日 / vwap 不足 230 日 + 5 日延迟) 产生 NaN;scale 对常量序列或
+    NaN 全列返回 NaN
+  missing_value_handling: 未显式填充,依赖上游数据完整;rolling/correlation 产生 NaN 需在截面上丢弃或前置 ffill
+  data_alignment: T+1 (close 与 vwap 为日频,信号在收盘后计算,次日开盘交易)
+  complexity: O(T × N),主要为两次滚动计算 (7 日、230 日) + 一次 230 日相关
+l3:
+  financial_intuition: 捕捉短期价格均值回归 (close 偏离 7 日均线) 与中期 VWAP-滞后 close 相关结构的组合;近期下跌但量价关系稳定的股票预期反弹。
+  market_behavior: 震荡/反转行情中表现较好;趋势市中可能因持续偏离而被错误信号干扰;高换手/流动性正常时相关性结构稳定。
+  theoretical_basis: 基于均值回归 (mean reversion) 与量价关系 (price-volume linkage) 的行为金融理论,7
+    日偏离衡量短期超卖,230 日相关刻画量价协同的稳态。
+  historical_effectiveness: '源自 Kakushadze 101 Alphas 论文 (Alpha #53),在美股 A 股历史回测中具有正期望收益,属中频中强度因子。'
+  related_factors: 'Alpha #53 同族因子、均线偏离类 (MA deviation)、量价相关性因子 (price-volume correlation)、反转因子
+    (reversal)'
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期均值回归
+    description: close 显著低于 7 日均线时,反映短期超卖,价格存在向均线回归的动能,因子值越大预期收益越高
+    expected_ic_sign: 正
+    source: 均值回归理论 (De Bondt & Thaler, 1985; Jegadeesh 1990)
+    priority: 主假设
+  - id: H2
+    name: VWAP-滞后 close 相关性越低越优
+    description: VWAP 与 5 日前 close 的 230 日相关越低,意味着近期量价关系发生结构性变化,常对应转折点,提供额外 alpha
+    expected_ic_sign: 负
+    source: 量价背离与趋势转折的行为金融文献
+    priority: 主假设
+  - id: H3
+    name: 复合信号增强
+    description: 7 日均线偏离 (反转信号) 与 230 日量价相关性结构互补,加权 20 倍后放大了相关性部分的边际信息,提升整体预测能力
+    expected_ic_sign: 正
+    source: 101 Alphas 论文经验设计
+    priority: 辅助假设
+  - id: H4
+    name: 流动性与规模依赖
+    description: 因子在小市值/低流动性股票上信号更强 (Amihud 非流动性溢价),但噪声也更大
+    expected_ic_sign: 不确定
+    source: 流动性溢价文献 (Amihud 2002)
+    priority: 辅助假设
+  meaning_summary: 因子核心逻辑是 '短期超卖 + 量价结构突变' 的复合反转信号,预期对中频反转行情具有正预测能力。
+  key_insights:
+  - part1 (7 日均线偏离) 贡献短期反转信号
+  - part2 (230 日 VWAP-close 相关) 经 20 倍加权,主导因子方向
+  - 相关性部分需要较长回看期,数据冷启动期 (~235 日) 因子值为 NaN
+  uncertainty: part2 的方向依赖于具体市场制度 (A股中相关性高=趋势稳定=正 vs 相关性低=背离=反转,两种解读均有合理性),需在样本内验证其真实符号。
+l6:
+  industry_concentration: 中等:金融、消费等蓝筹行业 VWAP-close 关系稳定,信号较纯;科技/小盘/题材股量价关系易突变,part2
+    噪声较大。
+  crowding_level: '中-高:Alpha #53 属于公开 101 Alphas 公式,被广泛复制使用,在大票上拥挤度较高,小票仍有空间。'
+  failure_conditions:
+  - 强趋势/单边行情:7 日均线偏离持续扩大,均值回归假设失效,因子持续亏损
+  - 市场极端波动/流动性枯竭:VWAP 失真,230 日相关估计不稳定,part2 噪声爆炸
+  - 小盘/次新股冷启动期:数据不足 230 日,因子为 NaN 或基于极短窗口估计,不可靠
+  risk_notes: part2 权重 20 显著放大量价相关性的波动,因子整体波动率较大;需关注截面 scale 后的极端值 (|z|>3) 截尾处理,避免被离群点主导。

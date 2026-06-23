@@ -1,0 +1,104 @@
+name: stk_alpha_073_b43fc6
+display_name: 'Alpha #73'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (max(rank(decay_linear(delta(vwap, 4.72775), 2.91864)), Ts_Rank(decay_linear(((delta(((open
+    * 0.147155) + (low * (1 - 0.147155))), 2.03608) / ((open * 0.147155) + (low *
+    (1 - 0.147155)))) * -1), 3.338
+  formula: (max(rank(decay_linear(delta(vwap, 4.72775), 2.91864)), Ts_Rank(decay_linear(((delta(((open
+    * 0.147155) + (low * (1 - 0.147155))), 2.03608) / ((open * 0.147155) + (low *
+    (1 - 0.147155)))) * -1), 3.33829), 16.7411)) * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - low
+  - vwap
+  - close
+  - high
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 VWAP 的 5 日差分，再用窗口 3 的线性衰减加权平均（近期权重更大）进行平滑，得到 Part A 的原始信号
+    formula: vwap_delta(t) = vwap(t) - vwap(t-5); part_a_raw = decay_linear(vwap_delta,
+      3)
+  - step: 2
+    description: 构造权重 w = 0.147155*open + 0.852845*low，计算 w 的 2 日差分与 w 的比值并取负，再做窗口
+      3 的线性衰减平滑，得到日内 vs 隔夜的反转信号
+    formula: w = 0.147*open + 0.853*low; ratio = -(w(t)-w(t-2))/w(t-2); part_b_raw
+      = decay_linear(ratio, 3)
+  - step: 3
+    description: 对 Part A 在每个截面日做横截面 rank 排序；对 Part B 在 17 日时间窗口内做 ts_rank 排序
+    formula: part_a = rank(part_a_raw); part_b = ts_rank(part_b_raw, 17)
+  - step: 4
+    description: 取 part_a 与 part_b 的逐元素最大值，再乘以 -1 翻转方向，得到最终因子值
+    formula: factor = max(part_a, part_b) * -1
+  edge_case_handling: vwap 与 w 的 delta 在最初若干交易日因不足 lag 长度产生空值；w 的 ratio 在 w 接近 0 或为空时不稳定，依赖
+    polars 的整型/浮点除法语义；decay_linear 在窗口内对缺失值的处理依赖线性衰减权重自动归一化
+  missing_value_handling: delta 序列开头的空值随 decay_linear 传播，rank/ts_rank 对空值通常返回 null，最终因子在这些位置为空；未做额外填充
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 复合反转因子：综合 VWAP 中期动量（隔日 vs 日内延续）与日内加权价（侧重 low）的隔夜反转信号，取两者中较强的反转信号并取反，捕捉日内超跌/超涨后的均值回归。
+  market_behavior: 日内动量与隔夜反转是 A 股常见短期模式：开盘低开或盘中下挫后常出现技术性反弹；VWAP 偏离后亦存在回补效应。该因子试图融合两类信号以增强稳健性。
+  theoretical_basis: 基于 short-term reversal（短期反转）与 bid-ask bounce / overnight-intraday
+    anomaly 的文献；101 Alphas 中 Alpha005 等同结构因子在 A 股具有已知有效性。
+  historical_effectiveness: 在 101 Alphas 原始论文中属于表现中上的复合反转类因子；在 A 股中小盘、流动性较好的标的上预期
+    IC 约 0.02-0.04，胜率 51%-54%，换手较高。
+  related_factors: Alpha005、Alpha006、Alpha012（VWAP/反转类）、OvernightReturn、IntradayReturn、ShortTermReversal
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期反转主假设
+    description: 因子值高代表 VWAP 走弱且缺乏隔夜下挫（即日内弱势、隔夜稳定），属于短期超跌，应在未来 1-3 日内反弹。
+    expected_ic_sign: 正
+    source: 101 Alphas 同构反转因子经验 + short-term reversal 文献
+    priority: 主假设
+  - id: H2
+    name: 日内 vs 隔夜结构假说
+    description: Part B 中权重偏向 low（0.85）放大隔夜下行信息，ratio 取负意味着因子对'隔夜跌幅大'敏感，体现 overnight
+      reversal 效应。
+    expected_ic_sign: 正
+    source: Lou, Polk & Skouras (2019) 隔夜信息假说
+    priority: 次假设
+  - id: H3
+    name: VWAP 偏离回补假说
+    description: Part A 捕捉价格对 VWAP 的偏离（5 日 delta），偏离后存在均值回复；取反后因子低值对应持续强势，预期负 IC。
+    expected_ic_sign: 负
+    source: VWAP 锚定效应微观结构文献
+    priority: 辅助假设
+  - id: H4
+    name: 复合信号稳健性假说
+    description: max(Part A, Part B) 结构使因子在'VWAP 动量主导'或'隔夜反转主导'两类行情下都有效，提升跨周期稳健性，但会放大某一信号极端时的噪声。
+    expected_ic_sign: 不确定
+    source: 复合因子合成理论
+    priority: 辅助假设
+  meaning_summary: 因子值越高，越代表股票处于'VWAP 中期下行 + 隔夜不显著下挫'的日内弱势状态；因子值越低，越代表强 VWAP 动量或持续隔夜下跌。整体偏向短期反转择时。
+  key_insights:
+  - Part B 中 0.852845 权重赋予 low，远高于 open 的 0.147，显著放大隔夜/盘中低点信息
+  - max 结构 + -1 反转意味着因子是'两个反转信号中较强者的镜像'，并非简单反转
+  - decay_linear 与 ts_rank 双重平滑使因子对噪声相对鲁棒，但对拐点反应滞后
+  uncertainty: max + 取反的复合结构使因子方向需根据 Part A/Part B 相对强度动态判断，单一 IC 符号可能在不同市场状态下翻转；VWAP
+    在不同交易所口径差异可能影响 Part A 稳定性。
+l6:
+  industry_concentration: 低集中度：因子依赖横截面 rank 和时间序列 ts_rank，对行业不直接暴露；但低流动性小盘股的 vwap/low
+    噪声大，可能导致轻微小盘偏向。
+  crowding_level: 中等：VWAP 类和反转类因子在量化圈使用广泛，但 max 复合结构与特定权重 (0.147155, 4.72775 等) 属于
+    101 Alphas 较冷门组合，拥挤度低于纯量价反转。
+  failure_conditions:
+  - 单边趋势行情中反转信号失效，因子 IC 转为负或消失
+  - 涨跌停/停牌密集期 vwap 与 low 数据失真，Part A/Part B 噪声剧增
+  - 极低流动性小盘股的 vwap 被冲击价格主导，delta 信号不可靠
+  risk_notes: 因子对短期反转依赖度高，需警惕与同类反转因子的相关性导致组合拥挤；VWAP 数据源切换或除权除息处理不一致会系统性偏移 Part A；max
+    结构存在隐式非线性，IC 估计需较长回测窗口。

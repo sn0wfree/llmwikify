@@ -1,0 +1,103 @@
+name: stk_alpha_002_9dcba7
+display_name: 'Alpha #2'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * correlation(rank(delta(log(volume), 2)), rank(((close - open)
+    / open)), 6))
+  formula: (-1 * correlation(rank(delta(log(volume), 2)), rank(((close - open) / open)),
+    6))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - close
+  - volume
+  - high
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 对每只股票的成交量取对数, 然后计算 2 期差分, 得到 log(volume_t) - log(volume_{t-2})
+    formula: delta_log_vol = log(volume) - log(volume).shift(2)
+  - step: 2
+    description: 在每个交易日截面上, 对 delta_log_vol 进行截面排名, 得到 rank1
+    formula: rank1 = rank(delta_log_vol) over date
+  - step: 3
+    description: 计算日内收益率 (close - open) / open, 衡量当日开盘到收盘的价格变化
+    formula: price_change = (close - open) / open
+  - step: 4
+    description: 在每个交易日截面上, 对 price_change 进行截面排名, 得到 rank2
+    formula: rank2 = rank(price_change) over date
+  - step: 5
+    description: 计算 rank1 与 rank2 在过去 6 个交易日的滚动 Pearson 相关系数
+    formula: corr = rolling_corr(rank1, rank2, window=6)
+  - step: 6
+    description: 对相关系数取负号, 得到最终因子值
+    formula: factor = -1 * corr
+  edge_case_handling: log(volume) 在 volume<=0 时产生 NaN/-inf, 截面排名会自动跳过无效值; 滚动相关系数在窗口内数据不足或序列常数时返回
+    NaN
+  missing_value_handling: 缺失值在排名和相关系数计算中被默认忽略, 滚动窗口不足 6 期时输出 NaN
+  data_alignment: T+1
+  complexity: O(T × N × 6)
+  code_location: null
+l3:
+  financial_intuition: '因子捕捉近期''量价背离''特征: 当股票出现放量伴随日内下跌时(成交量上升但日内收益为负), 因子值为正, 反映短期超卖或知情交易者抛售信号.'
+  market_behavior: 在高波动、恐慌抛售或行业轮动加速的市场中, 量价背离信号更显著; 在低波动、趋势性牛市中信号减弱甚至失效.
+  theoretical_basis: 量价关系理论(放量见顶/见底)、短期反转效应、信息不对称下的知情交易者假说(Kyle 1985)
+  historical_effectiveness: 'Alpha #6 在 101 Formulaic Alphas 中属于中等有效性反转类因子, 美股历史回测中
+    IC 约 0.02~0.04, 年化超额收益约 3~5%'
+  related_factors: Alpha#12 (类似量价结构), Alpha#18 (反转), 短期反转因子, 量价背离因子(VPD), OBV 反转类信号
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价背离短期反弹
+    description: 当股票近期出现'放量+日内下跌'模式时(因子值为正), 反映短期超卖, 后续 1~5 日存在技术性反弹动力, 预期未来收益为正
+    expected_ic_sign: 正
+    source: 短期反转效应文献, 101 alphas paper 实证
+    priority: 主假设
+  - id: H2
+    name: 知情交易者持续抛压
+    description: 放量下跌可能反映知情交易者的卖出行为, 负面信息尚未充分定价, 后续仍有持续下跌压力, 预期未来收益为负
+    expected_ic_sign: 负
+    source: 信息不对称理论, Kyle (1985) 模型
+    priority: 备选假设
+  - id: H3
+    name: 行业与规模异质性
+    description: 小盘股和周期性行业的量价关系更显著, 因子在这些子样本中信号更强, IC 绝对值更高
+    expected_ic_sign: 不确定
+    source: 101 alphas 实证经验, A 股截面特征
+    priority: 辅助假设
+  - id: H4
+    name: 波动率状态依赖
+    description: 低波动环境下量价背离信号更稳定可靠; 高波动环境下噪声增大, 信号衰减甚至反向
+    expected_ic_sign: 不确定
+    source: 行为金融学, 投资者注意力理论
+    priority: 辅助假设
+  meaning_summary: 因子值越高, 说明该股票近 6 日'成交量上升+日内下跌'的背离模式越明显, 反映短期抛压或超卖状态.
+  key_insights:
+  - 截面排名+滚动相关的设计剥离了绝对量级干扰, 增强跨股票可比性
+  - 取负号意味着因子值与'量价同向'程度负相关、与'量价背离'程度正相关
+  - 6 日窗口在信号稳定性和时效性之间取得平衡
+  uncertainty: 因子有效性高度依赖市场状态; H1(反弹)与 H2(持续抛压)方向相反, 实际 IC 符号需在具体数据/时段上验证, 在不同市场结构中可能反转.
+l6:
+  industry_concentration: 中等. 金融、周期、可选消费等行业的量价关系更明显, TMT 行业次之, 公用事业等防御性行业信号较弱.
+  crowding_level: 中高. 101 alphas 是公开学术成果, Alpha#6 已被业界广泛复制使用, 存在一定策略拥挤和 alpha 衰减风险,
+    在 A 股尤其需关注.
+  failure_conditions:
+  - '极端事件/崩盘市场: 流动性枯竭导致量价关系扭曲, 排名和相关性失真, 因子失效'
+  - '低流动性小票/题材股: volume 序列噪声大、含大量零值, 排名和滚动相关系数不稳定'
+  - '政策驱动单边市: 政策预期或重大事件主导行情, 量价背离信号被覆盖, 因子方向反转'
+  risk_notes:
+  - 排名+滚动相关带来 6 日天然滞后, 在快速反转或跳空行情中可能错过拐点
+  - 因子对窗口长度 6 较敏感, 不同市场节奏(波动率/换手率结构)下需重新校准窗口
+  - 建议结合波动率、流动性、行业中性化等过滤条件使用, 避免在极端样本和 ST/退市股上交易

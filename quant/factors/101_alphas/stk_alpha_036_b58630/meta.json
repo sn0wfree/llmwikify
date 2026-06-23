@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_036_b58630",
+  "display_name": "Alpha #36",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 36,
+  "code_hash": "b58630",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

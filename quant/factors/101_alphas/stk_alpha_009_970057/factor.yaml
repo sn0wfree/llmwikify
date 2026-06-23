@@ -1,0 +1,97 @@
+name: stk_alpha_009_970057
+display_name: 'Alpha #9'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: '((0 < ts_min(delta(close, 1), 5)) ? delta(close, 1) : ((ts_max(delta(close,
+    1), 5) < 0) ? delta(close, 1) : (-1 * delta(close, 1))))'
+  formula: '((0 < ts_min(delta(close, 1), 5)) ? delta(close, 1) : ((ts_max(delta(close,
+    1), 5) < 0) ? delta(close, 1) : (-1 * delta(close, 1))))'
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算每日收盘价变化量 delta(close, 1) = close_t - close_{t-1}
+    formula: delta_close = close_t - close_{t-1}
+  - step: 2
+    description: 计算 delta(close, 1) 的 5 日滚动最小值与最大值, 用于判断近 5 日价格变化的方向一致性
+    formula: min_5 = ts_min(delta_close, 5); max_5 = ts_max(delta_close, 5)
+  - step: 3
+    description: '条件分支一: 若 min_5 > 0 (近 5 日全部上涨, 趋势一致向上), 取 delta(close,1) 原值 (顺势做多)'
+    formula: 'if min_5 > 0: factor = delta_close'
+  - step: 4
+    description: '条件分支二: 若 max_5 < 0 (近 5 日全部下跌, 趋势一致向下), 取 delta(close,1) 原值 (逆境反弹/顺势)'
+    formula: 'elif max_5 < 0: factor = delta_close'
+  - step: 5
+    description: '条件分支三: 其余情形 (min_5 <= 0 且 max_5 >= 0, 涨跌交替/震荡), 取 -delta(close,1)
+      (反向/反转)'
+    formula: 'else: factor = -1 * delta_close'
+  edge_case_handling: 首日无法计算 delta 时, 滚动窗口内产生空值, min/max 及最终因子值均为 null; 5 日窗口未填满时仍按已有数据计算
+    rolling 函数
+  missing_value_handling: delta(close,1) 在首行为空, 该空值会传染到 rolling min/max 及最终因子输出, 不做额外填充
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子在价格趋势一致(连涨或连跌)时顺势捕捉动量, 在价格震荡反复时押注反转, 本质是对趋势与反转两种市场状态的非对称响应。
+  market_behavior: 在单边趋势行情中放大顺势信号, 在区间震荡/高换手行情中执行反转策略, 对市场微观结构变化敏感
+  theoretical_basis: 基于动量效应 (Jegadeesh & Titman, 1993) 与短期反转效应 (Lehmann, 1990; Jegadeesh,
+    1990) 的组合, 根据近期波动方向切换策略
+  historical_effectiveness: 来自 Kakushadze 101 Alphas 经典公式, 在 A 股日频截面测试中通常具有显著的负 rank
+    IC (因反转分支占比较高, 而 A 股短期反转效应较强)
+  related_factors: Alpha#4 (动量因子)、Alpha#1 (反转因子)、ts_min/ts_max 类极值反转因子、动量-反转混合因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 震荡市反转主导
+    description: 当近 5 日价格涨跌交替 (min<=0 且 max>=0) 时, 取负的 delta 押注次日反转, 假设 A 股短期反转效应显著
+    expected_ic_sign: 正
+    source: Lehmann (1990) 短期反转理论 + 101 Alphas 实证
+    priority: 主假设
+  - id: H2
+    name: 连涨动量延续
+    description: 当近 5 日全部上涨 (min>0) 时, 取正的 delta 顺势做多, 假设连涨后存在短期惯性
+    expected_ic_sign: 正
+    source: Jegadeesh & Titman (1993) 动量效应
+    priority: 次假设
+  - id: H3
+    name: 连跌后反弹
+    description: 当近 5 日全部下跌 (max<0) 时, 取正的 delta 押注超跌反弹, 假设极端卖压后存在均值回归
+    expected_ic_sign: 正
+    source: 超跌反弹/均值回归文献
+    priority: 次假设
+  - id: H4
+    name: 趋势市整体表现不确定
+    description: 在强趋势行情中, 顺势分支表现可能优于反转分支, 但整体因子 rank IC 方向取决于两类分支的截面占比
+    expected_ic_sign: 不确定
+    source: 市场状态依赖性 (regime-dependent alpha)
+    priority: 辅助假设
+  meaning_summary: '该因子是一个趋势/反转自适应信号: 趋势一致时跟随动量, 趋势混乱时押注反转, 通过条件分支将两种效应的优势结合起来。'
+  key_insights:
+  - 因子逻辑是非线性的条件门控, 不同市场状态产生截然不同的持仓方向, 不适合线性 IC 解释框架, 需分状态检验
+  - 反转分支 (else 分支) 触发概率通常高于趋势分支, 在 A 股短期反转效应更强的背景下, 因子整体表现为正 IC 的反转因子
+  uncertainty: '因子的方向与有效性高度依赖市场微观结构和波动率状态: 在强趋势行情中, 反转分支可能失效导致回撤; 在高换手震荡市中效果最佳'
+l6:
+  industry_concentration: 低, 因子基于纯价格序列, 不涉及行业或基本面变量, 截面分布较均匀
+  crowding_level: 中等偏高, 来源于 101 Alphas 公开文献, 业内广泛复制, 存在策略拥挤与 alpha 衰减风险
+  failure_conditions:
+  - '强单边趋势行情: 反转分支持续触发, 但价格继续单边运动, 导致连续亏损'
+  - '高波动率/跳空缺口频发环境: delta(close,1) 噪声增大, 条件分支误判概率上升'
+  - '市场风格切换/制度变更 (如涨跌停板放宽、T+0 试点): 短期反转规律可能失效'
+  risk_notes: 因子值仅取决于价格, 对停牌/复牌/涨跌停等极端行情敏感 (delta 被截断); 建议配合换手率、成交额等流动性指标做中性化与过滤,
+    避免在极端波动个股上集中暴露

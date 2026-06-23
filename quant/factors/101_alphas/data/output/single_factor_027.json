@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 27,
+  "factor_name": "alpha-027",
+  "formula_brief": "((0.5 < rank((sum(correlation(rank(volume), rank(vwap), 6), 2) / 2.0))) ? (-1 * 1) : 1)",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Cross-sectional ranks of volume and vwap per date\n    rank_volume = rank(pl.col('volume')).over('date')\n    rank_vwap = rank(pl.col('vwap')).over('date')\n    \n    # Rolling correlation of the two ranked series with window 6\n    corr = rolling_corr(rank_volume, rank_vwap, window=6)\n    \n    # Rolling sum of the correlation with window 2\n    summed = rolling_sum(corr, window=2)\n    \n    # Divide by 2\n    divided = summed / 2.0\n    \n    # Cross-sectional rank of the result per date\n    ranked = rank(divided).over('date')\n    \n    # Conditional: if rank > 0.5 then -1 else 1\n    factor = pl.when(ranked > 0.5).then(-1).otherwise(1)\n    \n    return df.select(factor).to_series()",
+  "code_chars": 736,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Int32",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_027.h5",
+  "ic_mean": -0.011076476748155643,
+  "icir": -0.08562837824812561,
+  "ic_winrate": 0.4915254237288136,
+  "elapsed_sec": 17.081404762342572
+}

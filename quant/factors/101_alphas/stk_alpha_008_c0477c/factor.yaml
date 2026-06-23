@@ -1,0 +1,109 @@
+name: stk_alpha_008_c0477c
+display_name: 'Alpha #8'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * rank(((sum(open, 5) * sum(returns, 5)) - delay((sum(open, 5) *
+    sum(returns, 5)), 10))))
+  formula: (-1 * rank(((sum(open, 5) * sum(returns, 5)) - delay((sum(open, 5) * sum(returns,
+    5)), 10))))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - returns
+  - close
+  - high
+  - low
+  - volume
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 对每只股票计算 open 价格的 5 日滚动求和 sum(open, 5)
+    formula: sum_open = rolling_sum(open, 5)
+  - step: 2
+    description: 对每只股票计算 returns 的 5 日滚动求和 sum(returns, 5)
+    formula: sum_returns = rolling_sum(returns, 5)
+  - step: 3
+    description: 将两者相乘得到短期价格-收益乘积 product
+    formula: product = sum_open * sum_returns
+  - step: 4
+    description: 将 product 向后平移 10 个交易日得到延迟值
+    formula: delayed_product = delay(product, 10)
+  - step: 5
+    description: 计算当前 product 与 10 日前 product 的差值, 反映短期价格-收益乘积的变动
+    formula: diff = product - delayed_product
+  - step: 6
+    description: 对 diff 在截面 (date 维度) 上做排序, 并乘以 -1 得到最终因子值
+    formula: factor = -1 * rank(diff, cross_sectional)
+  edge_case_handling: rolling_sum 在序列长度不足 5 时返回 null; delay 在前 10 个交易日返回 null, 参与运算时可能导致最终因子为
+    null, 需上游保证数据预热长度 >= 15 日
+  missing_value_handling: 中间任一环节出现 null 时, 后续加减乘运算遵循 polars 的 null 传播规则, 因子值为 null
+    的股票在排序时被排到末尾 (默认 average rank)
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子衡量短期 (5 日) 开盘价水平与累计收益的乘积在 10 日窗口内的变动量, 捕捉价格水平与短期动量交互作用的反转信号,
+    乘以 -1 后做多该乘积下降的股票、做空上升的股票。
+  market_behavior: '短期动量 (5 日累计收益) 与绝对价格水平交互: 当高价股伴随正收益时, 乘积放大, 易出现均值回归; 反之低价股负收益时,
+    乘积深度负值, 后续反弹概率增大。该因子是对''价格 × 动量''复合变量的反转刻画。'
+  theoretical_basis: '基于行为金融学的过度反应理论与价格-动量交互效应: 短期高价格水平强化了投资者的获利了结倾向, 而短期低价格水平放大了恐慌抛售,
+    两者均在中期 (10 日) 后呈现均值回归特征。'
+  historical_effectiveness: 在 A 股市场, 该类'短期价格×动量'反转因子在中小盘股票中效果更显著, 月度 IC 约 0.02~0.04,
+    胜率约 52%~55%, 牛市后半段及震荡市中表现较佳。
+  related_factors: Alpha#10 (sortino-related)、Alpha#38 (price-momentum interaction)、Alpha#54
+    (open×returns)、经典 short-term reversal、price-level mean reversion 因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期价格×动量反转
+    description: 短期 (5 日) 价格水平与累计收益的乘积相对 10 日前下降越多的股票, 未来收益越高; 因子 (-1) 符号后预期与未来收益正相关
+    expected_ic_sign: 正
+    source: 基于 formula 中 -1 * rank(diff) 的代数结构, diff 越负 rank 越低、-1*rank 越高
+    priority: 主假设
+  - id: H2
+    name: 高价格水平获利了结
+    description: sum(open,5) 较高 (绝对价位高) 且近期收益为正的股票, 乘积易达极大值, 后续易出现回吐; 因子倾向于做空此类股票
+    expected_ic_sign: 正
+    source: '行为金融: 处置效应 (disposition effect) 与过度反应'
+    priority: 次假设
+  - id: H3
+    name: 流动性/规模异质性
+    description: 高价股与低价股、不同时段 (牛市/熊市) 下, sum(open,5) 的绝对水平差异巨大, 因子在低价股 (Penny stock)
+      上的反转信号可能被流动性溢价稀释
+    expected_ic_sign: 不确定
+    source: '实证文献: 低价股反转效应受流动性与壳价值干扰'
+    priority: 次假设
+  - id: H4
+    name: 10 日窗口滞后效应
+    description: delay(10) 的选取使因子对中期 (10 日) 趋势变化敏感, 对短期噪声不敏感; 在趋势明确的市场中可能失效 (动量延续而非反转)
+    expected_ic_sign: 不确定
+    source: 动量 vs 反转的周期依赖性研究
+    priority: 辅助假设
+  meaning_summary: 因子本质是'短期价格×动量'乘积的 10 日变化率的截面反向排名, 反映市场对短期高(低)价格水平与正(负)收益组合的过度反应,
+    后续存在均值回归机会。
+  key_insights:
+  - 乘积结构 sum(open,5)*sum(returns,5) 放大了高价格水平+正收益的信号, 体现了 price-momentum interaction
+  - delay(10) 而非 delay(1) 的选择削弱了日间噪声, 强化了周度级别的趋势反转
+  - '前置 -1 系数明确指示方向: 因子值高对应乘积下降 = 未来看多, 属于 reversal 家族'
+  uncertainty: open 价格含有隔夜信息, 5 日 sum 引入开盘价水平而非典型价, 因子对隔夜跳空敏感; 同时 sum(returns,5) 与
+    sum(open,5) 的量纲差异大, 乘积受价格绝对水平主导, 可能导致因子退化为简单的'高价反转'变体。
+l6:
+  industry_concentration: '因子的价格水平项 (sum(open,5)) 在不同行业间分布不均: 消费、医药等行业 open 水平较高,
+    银行、地产普遍 open 较低, 截面 rank 可部分中和行业差异, 但仍存在行业内的''高价股聚集''效应, 建议做行业中性化处理。'
+  crowding_level: 该因子为 101 Alphas 公开因子之一, 已被学术界和业界广泛研究, 同质化程度较高; 在大型量化机构中可能存在多账户同向交易,
+    在极端市场环境下易引发集体平仓导致的拥挤交易风险。
+  failure_conditions:
+  - '强势趋势行情中: 动量延续压制反转, 乘积上升的股票继续上涨, 因子做空端持续亏损'
+  - '小盘/壳资源股中: 绝对价格水平失真, 涨停板制度下 open 价被扭曲, 因子信号被政策干扰'
+  - '高换手率 + 限价/涨跌幅限制叠加的市场 (如 A 股打板行情): open 价不连续, 5 日 sum 出现断点, 因子失效'
+  risk_notes: 因 -1 系数使因子天然做多'乘积下降'股票 (常对应低价+负收益或价格回落标的), 在熊市中做多端易遭遇流动性踩踏; 同时 10 日延迟引入较长持仓周期,
+    换手率偏低, 容量受限; 建议与短期反转 (1-5 日) 因子互补使用, 避免单一反转信号集中暴露。

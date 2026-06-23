@@ -1,0 +1,83 @@
+name: stk_alpha_013_e10e08
+display_name: 'Alpha #13'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * rank(covariance(rank(close), rank(volume), 5)))
+  formula: (-1 * rank(covariance(rank(close), rank(volume), 5)))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - volume
+  - open
+  - high
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 对每日横截面, 分别对 close 和 volume 做排名 (rank)
+    formula: rank(close)_t, rank(volume)_t,  group by date
+  - step: 2
+    description: 对每只股票, 在时间序列上计算 rank(close) 与 rank(volume) 的 5 日滚动协方差
+    formula: cov_5 = Cov(rank(close), rank(volume), window=5)
+  - step: 3
+    description: 对每日横截面, 对协方差值再做一次 rank 标准化
+    formula: rank(cov_5)_t, group by date
+  - step: 4
+    description: 取负号, 得到最终因子值
+    formula: factor = -1 * rank(cov_5)_t
+  edge_case_handling: 窗口不足 5 日时 cov_5 为 NaN, rank 后仍为 NaN, 最终因子值为 NaN
+  missing_value_handling: close/volume 缺失则该日 rank 与 cov 均为 NaN, 沿用缺失传播
+  data_alignment: T+1
+  complexity: O(T × N × log N) — 滚动协方差为 O(T×N×5), 横截面 rank 为 O(T×N×log N)
+l3:
+  financial_intuition: '捕捉价量同向波动 (正协方差) 的反向效应: 价量齐升的动量股短期倾向于反转, 价量背离的股票则相对强势, 做空前者做多后者。'
+  market_behavior: 在散户情绪驱动的反转行情中表现较好; 在强趋势、单边上涨/下跌市中动量延续, 因子易失效。
+  theoretical_basis: '行为金融: 投资者对''量价齐升''过度反应 → 短期反转; 量价背离 (放量滞涨/缩量上涨) 暗示供需失衡, 后续更可能修正。'
+  historical_effectiveness: 原始 101 Alphas 中 Alpha 26, 长期回测有正向 IC 但波动较大, 单独使用效果一般,
+    适合作为多因子组合的辅助。
+  related_factors: Alpha 10 (ts_rank 价量), Alpha 32 (量价回归), 价量相关性类因子, OBV 衍生因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价同动反转
+    description: 过去 5 日 rank(close) 与 rank(volume) 协方差越高的股票, 未来收益越低 (因子取负后 IC 为正)
+    expected_ic_sign: 正
+    source: 原始 Alpha 26 设计逻辑 + 行为金融反转理论
+    priority: 主假设
+  - id: H2
+    name: 量价背离动量
+    description: 协方差为负 (价量背离) 的股票实际是强势股, 做多这类股票可获得正向收益
+    expected_ic_sign: 正
+    source: 量价背离常被视为趋势确认信号, 与 H1 互为镜像
+    priority: 辅助假设
+  - id: H3
+    name: 横截面 rank 增强
+    description: 因子最后再做横截面 rank, 使其成为纯相对强弱因子, 适合做多空组合, 而非绝对方向
+    expected_ic_sign: 正
+    source: rank 化处理消除量纲, 增强因子在组合中的稳定性
+    priority: 辅助假设
+  meaning_summary: 因子值越大, 表明该股票过去 5 日 rank 价量协方差越低 (或越负), 即价量背离; 反之因子值越小, 表明价量同动越强。
+  key_insights:
+  - 双重 rank 设计 (输入与输出) 使因子对极端值鲁棒
+  - 5 日窗口较短, 因子换手率高, 对短期反转敏感
+  - 价量协方差而非相关性, 对波动率差异有一定容忍
+  uncertainty: 价量关系在不同市场状态 (牛/熊/震荡) 下表现差异大, 单边趋势市中反转假设不成立, 因子 IC 容易翻负。
+l6:
+  industry_concentration: 高换手、高波动行业 (如小盘成长、TMT、题材股) 价量协方差波动更大, 因子在这些行业暴露较重; 大盘蓝筹信号较稳定但贡献小。
+  crowding_level: 中等偏高 — 价量反转是经典量价因子, 101 Alphas 公开后被广泛使用, 拥挤交易可能导致 alpha 衰减。
+  failure_conditions:
+  - '强趋势单边市: 动量效应压制反转, 因子持续回撤'
+  - '流动性枯竭/政策干预: 量价关系失真, 协方差噪声大'
+  - '行业风格切换期: 横截面 rank 易被错估, 多空组合漂移'
+  risk_notes: 因子在熊市/急跌时 short 端 (动量股) 可能受流动性冲击, 需要控制单边敞口; 建议搭配趋势/动量因子做对冲, 并设置行业中性化。

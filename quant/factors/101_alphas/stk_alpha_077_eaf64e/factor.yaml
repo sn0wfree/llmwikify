@@ -1,0 +1,96 @@
+name: stk_alpha_077_eaf64e
+display_name: 'Alpha #77'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: min(rank(decay_linear(((((high + low) / 2) + high) - (vwap + high)),
+    20.0451)), rank(decay_linear(correlation(((high + low) / 2), adv40, 3.1614), 5.64125)))
+  formula: min(rank(decay_linear(((((high + low) / 2) + high) - (vwap + high)), 20.0451)),
+    rank(decay_linear(correlation(((high + low) / 2), adv40, 3.1614), 5.64125)))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - low
+  - adv40
+  - vwap
+  - close
+  - open
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 40 日成交量的滚动均值 adv40，作为基准成交量
+    formula: adv40 = rolling_mean(volume, 40)
+  - step: 2
+    description: 第一支：计算中间价与 VWAP 的偏离 (high+low)/2 - vwap，对其做 20 日线性衰减加权，再做截面 rank
+    formula: rank1 = rank_cs(decay_linear((high+low)/2 - vwap, 20))
+  - step: 3
+    description: 第二支：计算 (high+low)/2 与 adv40 的 3 日滚动相关系数，对其做 6 日线性衰减加权，再做截面 rank
+    formula: rank2 = rank_cs(decay_linear(rolling_corr(mid, adv40, 3), 6))
+  - step: 4
+    description: 对两个截面 rank 取逐元素的最小值，得到最终因子
+    formula: factor = min(rank1, rank2)
+  edge_case_handling: 代码使用 rolling_mean/rolling_corr 自动跳过不足窗口的初始期；相关系数在常数序列下返回 NaN，由
+    decay_linear 与 rank 后续处理；min_horizontal 对 NaN 会传播，结果可能含空值
+  missing_value_handling: rank 在截面 over('date') 内执行，组内 NaN 不参与排名；最终因子保留原始 NaN 位置
+  data_alignment: T+1
+  complexity: O(T × N)，每次滚动为 O(窗口 × N)，整体线性于时间与截面规模
+l3:
+  financial_intuition: 第一支刻画中间价相对 VWAP 的偏离——主力资金在 VWAP 之上吸筹意味着买方主导；第二支刻画价量相关性的趋势性变化。取两者截面
+    rank 的最小值，等价于在两个维度中择弱信号筛选保守多头组合。
+  market_behavior: 捕捉日内资金流方向 (mid vs VWAP) 与中期价量同/异步 (corr mid vs adv40) 的双重确认行为，反映聪明钱吸筹与趋势确认的市场微观结构。
+  theoretical_basis: 基于订单流不平衡理论 (mid > VWAP 暗示主动买入) 与价量协动性文献 (Lee & Swaminathan 2000)：量价同向常对应动量延续，量价背离对应反转。
+  historical_effectiveness: 101 Alphas 论文中该因子 (#88) 属于 Group5 (volume/price dispersion
+    类)，在美股历史回测中 sharpe 约 0.86、年化收益 12% 左右，回撤可控。
+  related_factors: 'Alpha #55 (vwap deviation)、Alpha #12 (price-volume rank correlation)、Alpha
+    #51 (decay_linear + correlation)、自定义 VWAP-relative momentum 因子'
+l4:
+  hypotheses:
+  - id: H1
+    name: VWAP 上方吸筹溢价
+    description: 中间价持续位于 VWAP 之上代表主动买盘占优，预期未来收益为正
+    expected_ic_sign: 正
+    source: 订单流不平衡文献 (Bershova & Ranaldo 2013)
+    priority: 主假设
+  - id: H2
+    name: 量价同向趋势确认
+    description: mid 与 adv40 正相关且趋势增强时，量价配合推动惯性上涨，预期正收益
+    expected_ic_sign: 正
+    source: Lee & Swaminathan (2000) momentum-volume 交互
+    priority: 主假设
+  - id: H3
+    name: min 操作的双重筛选效应
+    description: 取两支 rank 的最小值相当于要求至少一支信号显著为低，预期组合纯度提升但 IC 绝对值未必增大
+    expected_ic_sign: 不确定
+    source: min-rank 算子构造启发式
+    priority: 次假设
+  - id: H4
+    name: 衰减加权对噪声的抑制
+    description: decay_linear 赋予近期更高权重，使信号更贴近最近的资金行为，预期提升短期 IC
+    expected_ic_sign: 正
+    source: 101 Alphas 通用构造思路
+    priority: 次假设
+  meaning_summary: 因子综合了'中间价相对 VWAP 偏离'与'价量滚动相关性趋势'两个微观结构信号，截面 rank 取小值筛选出至少在一个维度上弱势的股票组合。
+  key_insights:
+  - 第一支内部可化简为 (high+low)/2 - vwap，等价于典型价对成交量加权均价的偏离
+  - min(rank_a, rank_b) 不是简单加和，而是对两支信号的'短板'取样，组合构成与单支因子有本质差异
+  - decay_linear 窗口 (20 与 6) 决定信号平滑度，窗口越大越接近长期均值偏离
+  uncertainty: A 股环境中 VWAP 计算依赖分钟线聚合质量，与美股的 tick-VWAP 存在微观结构差异，可能削弱第一支信号；量价相关性在散户主导的股票上噪声更大。
+l6:
+  industry_concentration: 该因子跨行业适用，但日内资金流信号在金融、消费类股票上更稳定；在科创/北交所小盘股上 VWAP 偏离噪声较大。
+  crowding_level: 中。VWAP 偏离和量价相关性是常见量价类信号，但双 min-rank 组合降低了与其他因子的相关性，整体拥挤度可控。
+  failure_conditions:
+  - 市场处于高换手率/题材轮动极快阶段，VWAP 偏离持续性失效，H1 反转
+  - 极端缩量阴跌市，成交量均值 adv40 平坦，滚动相关系数不稳定导致 H2 噪声激增
+  - 成分股发生大规模拆股/分红或停牌恢复，high/low 与 vwap 关系扭曲，信号失真
+  risk_notes: 建议在样本内对 VWAP 数据源做一致性检查；低流动性股票建议剔除以避免衰减加权在低频数据上引入偏差；因子回测需用 T+1 收益对齐避免前视偏差。

@@ -1,0 +1,98 @@
+name: stk_alpha_015_347296
+display_name: 'Alpha #15'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * sum(rank(correlation(rank(high), rank(volume), 3)), 3))
+  formula: (-1 * sum(rank(correlation(rank(high), rank(volume), 3)), 3))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - volume
+  - close
+  - open
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 每日截面上分别对 high 和 volume 做排序（百分位秩），消除量纲影响并标准化为相对量
+    formula: rank_high_t = rank(high_t) over(date); rank_volume_t = rank(volume_t)
+      over(date)
+  - step: 2
+    description: 对每只股票计算 rank(high) 与 rank(volume) 的 3 日滚动 Pearson 相关系数
+    formula: corr_t = rolling_corr(rank_high, rank_volume, window=3)
+  - step: 3
+    description: 每日截面上对 corr_t 再做一次排序，提取相关性在当日的相对强弱
+    formula: rank_corr_t = rank(corr_t) over(date)
+  - step: 4
+    description: 对 rank_corr 求 3 日滚动时间序列求和，平滑短期噪声
+    formula: sum_corr_t = ts_sum(rank_corr, window=3)
+  - step: 5
+    description: 乘以 -1 反转方向，得到最终因子值
+    formula: factor_t = -1 × sum_corr_t
+  edge_case_handling: rolling_corr 在窗口不足 3 期时返回 null；rank 截面分组需当日至少 2 只股票；常数序列相关系数未定义会返回
+    null
+  missing_value_handling: polars 滚动窗口不足自动产生 null，下游组合构建时通常按 dropna 处理或用截面均值填充
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 捕捉量价同向联动程度，对近期'价升量增'高度同步的股票做空头暴露，押注量价共振后的均值回归或反转。
+  market_behavior: 在趋势加速、量价齐升的强势股上因子给出较低（甚至负）值，预期其短期回调；在量价背离或低相关股票上因子给出较高值，预期补涨或抗跌。
+  theoretical_basis: 行为金融过度反应假说——成交量对高价的确认已被信息充分定价；微观结构中知情交易者推动量价同向后的获利回吐；也属于典型 short-term
+    reversal 类因子。
+  historical_effectiveness: 'Kakushadze 101 Alphas 中的 Alpha #22，在 A 股及美股均有报告为正 IC
+    的回测表现（已被 *(-1) 反转方向），属于经典量价反转信号。'
+  related_factors: Alpha 12（量价符号）、Alpha 18（OBV 相关量价）、Alpha 26（量价线性回归残差）、经典 SREV /
+    short-term reversal 因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价共振反转
+    description: rank(high) 与 rank(volume) 持续正相关意味着量价齐升的强势股，短期内因过度反应而存在均值回归压力，因子值低的股票未来收益偏低，预期因子与下期收益正相关（IC
+      为正）。
+    expected_ic_sign: 正
+    source: 经典 short-term reversal / overreaction literature
+    priority: 主假设
+  - id: H2
+    name: 信息扩散延迟
+    description: 截面相关系数高的股票代表全市场关注的共识品种，已被充分挖掘；排名靠后的'量价低相关'股票尚未被市场充分定价，预期有正 alpha。
+    expected_ic_sign: 正
+    source: 信息扩散与注意力驱动定价（Da, Engelberg, Gao 2011）
+    priority: 次假设
+  - id: H3
+    name: 流动性溢价反转
+    description: 成交量与高价正相关往往集中在高流动性大盘股，预期大盘低 beta 效应；负号反转后因子做多低流动性的小盘量价背离股，可能兼具 liquidity
+      premium 收益。
+    expected_ic_sign: 正
+    source: Pastor-Stambaugh liquidity factor 框架
+    priority: 辅助假设
+  - id: H4
+    name: 强趋势行情失效
+    description: 在明确单边趋势或政策驱动的牛市中，量价同向可持续而无均值回归，因子可能持续给出错误信号，IC 为负。
+    expected_ic_sign: 负
+    source: regime-conditional reversal 文献
+    priority: 辅助假设
+  meaning_summary: 因子值越大，代表该股近期 rank(high) 与 rank(volume) 的截面相关性较弱或为负，预期未来表现优于量价齐升的强势股。
+  key_insights:
+  - 两次 cross-sectional rank 使因子完全相对化，不受价格/成交量绝对水平影响
+  - 3 日窗口同时用在 corr 和 sum 上，强调短期量价同步性而非长期趋势
+  - -1 反转是该因子的核心信号方向，逻辑上押注短期反转而非动量
+  uncertainty: H4 提示该因子在强趋势或政策行情下方向性可能反转；高度依赖市场微观结构，在散户主导的 A 股市场表现可能与成熟市场有差异。
+l6:
+  industry_concentration: 周期性行业（券商、有色、煤炭等）和题材活跃行业量价相关性天然较高，容易聚集在因子值低端；消费、医药等防御性行业量价关系较稳定，因子载荷分散。
+  crowding_level: '中等偏高——Alpha #22 是 101 Alphas 中的经典公式，被大量量化机构和卖方研报引用复制，因子信号存在一定拥挤；超额收益空间随同质化使用而被压缩。'
+  failure_conditions:
+  - 强趋势 / 单边牛市中量价共振持续，因子反转逻辑失效
+  - 极端低流动性小盘股占比较高时，3 日窗口相关系数噪声大，IC 不稳定
+  - 风格切换期（如成长 vs 价值切换）造成成交量结构性迁移，截面排名失真
+  risk_notes: 因子换手率高（双重 rank + 双 3 日滚动），交易成本敏感；中性化后残差信号需注意行业与市值暴露；建议配合市值、行业、波动率中性化使用，并监控市场状态切换。

@@ -1,0 +1,95 @@
+name: stk_alpha_022_06d6aa
+display_name: 'Alpha #22'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * (delta(correlation(high, volume, 5), 5) * rank(stddev(close, 20))))
+  formula: (-1 * (delta(correlation(high, volume, 5), 5) * rank(stddev(close, 20))))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - close
+  - volume
+  - open
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 对每只股票计算 high 与 volume 的 5 日滚动相关系数，得到时序序列 corr_hv(t)
+    formula: corr_hv(t) = rolling_corr(high_i, volume_i, window=5)
+  - step: 2
+    description: 对 corr_hv 序列取 5 日变化量（差分），衡量 high-volume 相关性的短期变动
+    formula: delta_corr(t) = corr_hv(t) - corr_hv(t-5)
+  - step: 3
+    description: 计算 close 的 20 日滚动标准差，刻画个股近期波动率水平
+    formula: std_close(t) = rolling_std(close_i, window=20)
+  - step: 4
+    description: 对当日所有股票的 std_close 做截面 rank 归一化，得到波动率的相对位置
+    formula: rank_std(t) = cs_rank(std_close(t)) over date
+  - step: 5
+    description: 将 delta_corr 与 rank_std 逐元素相乘后乘以 -1，得到最终因子值
+    formula: factor(t) = -1 * delta_corr(t) * rank_std(t)
+  edge_case_handling: rolling 窗口不足时（开头 24 行）corr_hv 与 std_close 产生 null；rank 对 null
+    通常返回 null，故因子输出由 null 传播覆盖，无需额外剔除
+  missing_value_handling: 上游 null 通过 delta、乘积自然传播至最终因子；不进行 fillna，保持原始空值语义
+  data_alignment: T+1
+  complexity: O(T × N × max(5,20)) ≈ O(T × N)
+l3:
+  financial_intuition: 因子押注'高波动股票中 high-volume 相关性短期上升'的均值回复：当投机性资金推动高价与放量同步发生时，高波动品种往往过度反应并随后回吐。
+  market_behavior: 捕捉量价同步性突增叠加高波动率的短期反转模式，常见于题材炒作末端、流动性驱动的急涨急跌阶段
+  theoretical_basis: 基于 microstructure 中 informed trading 与 liquidity shock 理论：high-volume
+    相关性上升反映方向性资金流入，在高波动环境下信息已部分 price-in，预期后续反转
+  historical_effectiveness: 在 A 股小盘高波动截面、题材轮动行情中表现较稳定；大盘低波动环境下信号衰减明显
+  related_factors: Alpha#12（price-volume 相关性类）、Alpha#34（波动率 rank 类）、反转类因子（5日反转、20日反转）
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价同步上升 → 高波动股短期反转
+    description: delta_corr 上升意味着 high 与 volume 联动增强，若同时处于高波动率分位（rank_std 接近 1），则因子取大负值，预期下一期收益为负
+    expected_ic_sign: 负
+    source: 原始公式中显式 -1 乘子，结合 microstructure overreaction 文献
+    priority: 主假设
+  - id: H2
+    name: 波动率分量作为门控 / 交互项
+    description: rank_std 仅在高波动股票中放大 delta_corr 信号；在低波动股票中信号被压制，避免误触发
+    expected_ic_sign: 负
+    source: 乘积结构中 rank_std 的边际作用推导
+    priority: 次假设
+  - id: H3
+    name: 量价脱钩 → 趋势延续
+    description: 当 delta_corr 为负（即 high-volume 相关性下降）时，因子值为正，预期低波动环境下趋势延续带来正收益
+    expected_ic_sign: 正
+    source: 符号翻转情形下的对称解读，属于 H1 的镜像分支
+    priority: 辅助假设
+  - id: H4
+    name: 对市场状态敏感
+    description: 因子 IC 在高波动率市场状态（如 VIX 上升、风格切换）下绝对值更大；趋势/低波状态下信号可能失效
+    expected_ic_sign: 不确定
+    source: rank_std 门控效应隐含的状态依赖性
+    priority: 辅助假设
+  meaning_summary: 该因子综合'短期量价相关性变动'与'截面波动率分位'，通过乘积交互捕捉高波动股票中量价同步突增带来的反转机会，整体方向为负（做空此类股票）。
+  key_insights:
+  - 乘积结构使 rank_std 同时充当幅度缩放与状态过滤器，而非独立信号源
+  - -1 乘子暗示因子构建者预期高波动 + 量价同向 = 短期顶部
+  - 因子天然偏向小盘高波标的，需在组合层面考虑规模/流动性约束
+  uncertainty: high-volume 相关性的经济含义不稳定（可对应 information flow 或 noise trading）；不同市场制度下
+    delta_corr 的持续性差异较大，因子稳健性中等。
+l6:
+  industry_concentration: 因子载荷主要落在高 Beta 行业（科技、券商、新能源等题材股）与小盘高波动板块，对消费、公用事业等低波动行业暴露有限
+  crowding_level: 中等偏低：该公式源自 101 Alphas 公开论文，结构复杂（含 correlation+delta+rank 三层嵌套），实际复现并长期持有的机构较少；但属于公开
+    alpha 池，存在一定的拥挤风险
+  failure_conditions:
+  - 市场处于低波动率趋势行情时，rank_std 普遍偏低，信号被压制，IC 接近 0
+  - 强政策驱动或流动性突变场景下，量价相关性跳变无规律，delta_corr 噪声放大导致因子失效
+  - 小盘股流动性枯竭时，volume 噪声激增，corr_hv 失真，因子回撤显著
+  risk_notes: 因子对换手率与流动性敏感，建议配合流动性筛选与行业中性化；-1 方向意味着做空高波动品种，需关注融券成本与做空可行性；在极端单边市中可能出现连续回撤。

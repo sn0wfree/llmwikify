@@ -1,0 +1,105 @@
+name: stk_alpha_067_897127
+display_name: 'Alpha #67'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((rank((high - ts_min(high, 2.14593)))^rank(correlation(IndNeutralize(vwap,
+    IndClass.sector), IndNeutralize(adv20, IndClass.subindustry), 6.02936))) * -1)
+  formula: ((rank((high - ts_min(high, 2.14593)))^rank(correlation(IndNeutralize(vwap,
+    IndClass.sector), IndNeutralize(adv20, IndClass.subindustry), 6.02936))) * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - adv20
+  - vwap
+  - industry
+  - close
+  - open
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: '计算短期突破幅度: 当日 high 减去过去约 2.14593 日(代码取整为 2)high 的最小值, 得到 high 距短期低点的距离'
+    formula: high_diff = high - ts_min(high, 2)
+  - step: 2
+    description: 对突破幅度做截面 rank, 得到 rank1 ∈ (0, 1), 表示该股票当日 high 在截面中的相对位置
+    formula: rank1 = rank(high - ts_min(high, 2))
+  - step: 3
+    description: 对 vwap 按 sector 行业中性化, 对 adv20 (20日均量) 按 subindustry 子行业中性化, 再计算两者约
+      6.02936 日(取整为 6)的滚动相关系数, 刻画行业中性后量价同向运动程度
+    formula: corr = rolling_corr(IndNeut(vwap, sector), IndNeut(adv20, subindustry),
+      6)
+  - step: 4
+    description: 对相关系数做截面 rank, 得到 rank2 ∈ (0, 1), 作为幂指数, 控制 rank1 的非线性放大程度
+    formula: rank2 = rank(corr)
+  - step: 5
+    description: 将 rank1 的 rank2 次方后乘以 -1, 因子值越负代表短期突破越强且量价共动越显著
+    formula: factor = -1 * rank1^rank2
+  edge_case_handling: 非整数窗口 2.14593 和 6.02936 在代码中被四舍五入取整为 2 和 6; 行业分类字段缺失时 IndNeutralize
+    退化为恒等映射; 滚动窗口前期数据不足时产生 NaN, 后续 rank/幂运算会传播 NaN
+  missing_value_handling: rolling_mean/rolling_corr 在窗口不足时返回 NaN; rank 与幂运算对 NaN 输入输出
+    NaN; adv20 与 corr 在前 19/5 个交易日为 NaN
+  data_alignment: T+1 (代码无显式 shift, 按 101 alphas 惯例对齐次日收益)
+  complexity: O(T × N), 其中 T 为交易日数, N 为截面股票数
+l3:
+  financial_intuition: '捕捉短期价格突破与量价共动极端组合: high 距 2 日低点越远、且行业中性后 vwap-adv20 相关性越强,
+    因子越负, 暗示短期超买后均值回归。'
+  market_behavior: 短期价格快速冲高伴随流动性/资金流同步放大时, 过度反应后倾向回吐; 单独使用突破或量价信号效果较弱, 二者交互后非线性放大反转效应。
+  theoretical_basis: 行为金融学过度反应假说 (DeBondt-Thaler) 与短期价格反转; 技术分析中突破失败/假突破模式; 量价配合理论
+    (成交量确认趋势)。
+  historical_effectiveness: 在中等频率 (1-5 日) 横截面回归中 IC 显著为负; 在强趋势/动量市中效果衰减; 对低流动性小盘股噪声较大。
+  related_factors: Alpha#10 (类似量价结构反转), Alpha#6 (相关性结构), 短期反转 (STR), 换手率-价格相关性因子,
+    资金流因子。
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期突破反转
+    description: 当日 high 显著高于近 2 日 high 最低点的股票, 在次日存在短期均值回归压力, 预期收益为负
+    expected_ic_sign: 负
+    source: 过度反应假说 + 短期反转文献 (Jegadeesh 1990)
+    priority: 主假设
+  - id: H2
+    name: 量价共动非线性放大
+    description: 行业中性后 vwap 与成交量滚动相关性高, 反映信息流/资金流同步性, 在幂运算交互下增强 H1 的反转强度, 而非独立方向性信号
+    expected_ic_sign: 不确定
+    source: '量价关系文献 (Karpoff 1987), 101 alphas #10 结构'
+    priority: 主假设
+  - id: H3
+    name: 行业中性化提纯信号
+    description: 对 vwap 按 sector、adv20 按 subindustry 中性化, 剥离行业/子行业层面的量价结构差异, 使信号聚焦于个股特异性反转
+    expected_ic_sign: 不确定
+    source: Barra 行业中性化框架
+    priority: 辅助假设
+  - id: H4
+    name: 幂运算极端化尾部
+    description: rank1^rank2 使双高组合靠近 1、双低组合靠近 0, 再 *-1 产生强尾部负值, 强化赢家/输家不对称性
+    expected_ic_sign: 不确定
+    source: 101 alphas 非线性变换范式
+    priority: 辅助假设
+  meaning_summary: 因子值越负 = 短期突破幅度大 + 量价共动强 → 预期短期反转下跌; 因子值越接近 0 = 突破弱或量价不协同 → 无明显反转信号。
+  key_insights:
+  - 'rank2 作为幂指数, 在 (0,1) 区间对 rank1 施加非线性压缩: rank2 越大, 中低 rank1 被压扁, 突出极端突破个股'
+  - 因子本质是 *短期突破 × 量价确认* 的反向加权, 单独看任一子信号均不构成显著 alpha
+  - 行业/子行业双重中性化减少截面可比性问题, 但也消除了跨行业轮动信号
+  uncertainty: 幂运算对 rank 的微小变化敏感, 样本量较小时因子分布不稳定; 子行业中性化在行业分类缺失时退化为无中性化, 跨样本可比性下降。
+l6:
+  industry_concentration: 因子本身对 vwap 做了 sector 中性化、adv20 做了 subindustry 中性化, 但子行业分类缺失时中性化失效,
+    此时 vwap/adv20 受行业β驱动, 因子隐含行业暴露
+  crowding_level: '中等: 突破反转 + 量价相关均为常见研究主题, 但交互幂运算结构较特殊, 实际拥挤度低于纯反转或纯量价因子'
+  failure_conditions:
+  - 强单边趋势/动量行情中, 突破信号被趋势强化而非反转, 因子失效
+  - 低流动性小盘股 rolling_corr 噪声大, adv20 不稳定, 因子失效
+  - 财报披露、指数调样、政策事件窗口附近, 量价结构被外生冲击扭曲, 因子失效
+  risk_notes: rank∈(0,1) 经幂运算后分布严重右偏, *-1 后左偏, 因子标准化/中性化时需注意; 两个 NaN 源 (adv20 暖期 19
+    日, corr 暖期 5 日) 导致前 19 日因子覆盖率不足; 子行业分类变化 (再平衡) 会引入历史与当前不可比性。

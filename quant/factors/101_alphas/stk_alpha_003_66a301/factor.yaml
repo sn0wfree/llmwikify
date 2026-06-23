@@ -1,0 +1,102 @@
+name: stk_alpha_003_66a301
+display_name: 'Alpha #3'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * correlation(rank(open), rank(volume), 10))
+  formula: (-1 * correlation(rank(open), rank(volume), 10))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - volume
+  - close
+  - high
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 对每个交易日横截面上对 open 价格做升序排名 (cross-sectional rank)
+    formula: rank_open_{i,t} = rank(open_{i,t}) over date t
+  - step: 2
+    description: 对每个交易日横截面上对 volume 做升序排名
+    formula: rank_volume_{i,t} = rank(volume_{i,t}) over date t
+  - step: 3
+    description: 对每只股票计算其 rank(open) 与 rank(volume) 在过去 10 个交易日的滚动相关系数
+    formula: corr_{i,t} = rolling_corr(rank_open_{i,t}, rank_volume_{i,t}, window=10)
+  - step: 4
+    description: 对相关系数取负号, 得到因子值
+    formula: factor_{i,t} = -1 * corr_{i,t}
+  edge_case_handling: Polars 的 rolling_corr 在窗口内若某日 rank_open 或 rank_volume 缺失会自动跳过;
+    但 cross-sectional rank 在某日缺失值时会传播 NaN; 不足 10 个交易日的新股返回 NaN
+  missing_value_handling: open 或 volume 缺失 → 该日横截面排名缺失 → 滚动相关窗口内有效样本不足时 corr 返回 NaN
+  data_alignment: T+1
+  complexity: O(T × N × 10) (滚动窗口 10 日, 每只股票每日一次相关系数计算)
+l3:
+  financial_intuition: 捕捉个股开盘价相对强弱与成交量相对强弱之间的背离。开盘强势但量能萎缩 (或反之) 的个股暗示价格走势缺乏成交量支撑,
+    存在均值回归压力。
+  market_behavior: '开盘跳空或高开常由隔夜消息或集合竞价行为驱动, 不一定有成交量配合; 量价背离常出现在: 拉高出货、对倒放量、尾盘抢筹后高开无量等情形,
+    此类异常通常在下个交易日反转。'
+  theoretical_basis: '基于价量关系理论 (Price-Volume Relationship) 与行为金融的均值回归假说: 缺乏成交量确认的价格变动是不可持续的,
+    市场会通过后续交易将其修正。'
+  historical_effectiveness: '源自 101 Alphas 论文 #10, 在 A 股市场实证中, 该因子在中小盘票上 IC 较显著 (~3-5%
+    绝对值), 但在牛市趋势期或抱团行情中效果衰减; 近年随量化拥挤度提升, 边际收益有所下降。'
+  related_factors: '量价背离类因子 (VPVR)、反转因子 (short-term reversal)、换手率异动因子、开盘跳空因子、Alpha
+    #12 (volume momentum) 等'
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价背离反转
+    description: 开盘价相对强弱与成交量相对强弱呈负相关的个股 (高开无量或低开放巨量), 后续存在超额反转收益; 取负号后因子值为正时做多, IC
+      应为正。
+    expected_ic_sign: 正
+    source: '价量关系理论 + 101 Alphas #10 原文逻辑'
+    priority: 主假设
+  - id: H2
+    name: 小盘股效应更强
+    description: 小市值/低流动性股票更易出现量价背离 (操纵或异动成本低), 该因子在小盘股组合中 IC 绝对值更大, 有效性更强。
+    expected_ic_sign: 正
+    source: 行为金融异质性假说
+    priority: 次假设
+  - id: H3
+    name: 趋势行情失效
+    description: 在强势单边趋势中, 价量背离可能持续 (量缩价涨的健康趋势), 此时反转假设失效, 因子 IC 转负或显著衰减。
+    expected_ic_sign: 不确定
+    source: 趋势跟随与均值回归的周期性切换
+    priority: 辅助假设
+  - id: H4
+    name: 行业/事件扰动
+    description: 个股因停牌重组、突发利好/利空等事件导致的开盘跳空配合异常量能, 可能使 rank(open) 与 rank(volume) 出现伪相关性,
+      影响因子纯度。
+    expected_ic_sign: 不确定
+    source: 微观结构噪声
+    priority: 辅助假设
+  meaning_summary: 因子值为正 = 个股近期开盘价相对强弱与成交量相对强弱负相关, 暗示量价背离, 预期未来反转。
+  key_insights:
+  - rank() 横截面归一化消除了市场整体涨跌和成交总量波动的影响, 聚焦个股相对行为
+  - 10 日滚动窗口捕捉短期 (近 2 周) 量价关系模式, 对突发事件的反应较敏感
+  - '取负号是核心: 负相关 (背离) 被映射到正因子值, 与''做多反转''的方向一致'
+  uncertainty: IC 稳定性受市场状态影响较大 (震荡市有效、趋势市失效); 横截面 rank 对极端值敏感, 异常开盘或异常量能交易日可能扭曲信号;
+    10 日窗口在高频环境下已属较长, 引入较多滞后。
+l6:
+  industry_concentration: '中等: 因子值在周期性行业 (化工、钢铁) 和小盘题材股 (传媒、计算机) 上分布较多; 消费/医药等防御板块因成交稳定,
+    量价背离信号较弱。'
+  crowding_level: '中等偏低: 101 Alphas #10 是经典学术因子, 但国内量化机构实际使用中常做变体 (窗口长度调整、rank 方式改进),
+    纯原始版本拥挤度不高。'
+  failure_conditions:
+  - '单边趋势行情 (牛市持续放量上攻或熊市无量阴跌): 量价背离假设被打破, 因子失效甚至反向'
+  - '高换手高波动期 (题材炒作、板块轮动加速): 开盘与成交的对应关系不稳定, 滚动相关噪声大, 信号纯度下降'
+  - '流动性极差的小微盘股或流动性极强的指数成分股: 一端信号过弱 (缺乏交易) 另一端信号过弱 (难以背离), 因子在两端失效'
+  risk_notes:
+  - 因子为短期反转类, 换手率高, 交易成本敏感, 需扣除双边手续费和冲击成本后评估净 IC
+  - 横截面 rank 对当日停牌/一字板股票处理需统一, 避免排名跳变引入噪声
+  - 建议与动量/趋势因子做互补或对冲, 避免在趋势行情中暴露纯反转风险

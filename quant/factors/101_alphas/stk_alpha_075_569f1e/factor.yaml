@@ -1,0 +1,93 @@
+name: stk_alpha_075_569f1e
+display_name: 'Alpha #75'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (rank(correlation(vwap, volume, 4.24304)) < rank(correlation(rank(low),
+    rank(adv50), 12.4413)))
+  formula: (rank(correlation(vwap, volume, 4.24304)) < rank(correlation(rank(low),
+    rank(adv50), 12.4413)))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - low
+  - volume
+  - adv50
+  - vwap
+  - close
+  - open
+  - high
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 50 日滚动成交量均值 adv50（adv50 = rolling_mean(volume, 50)）
+    formula: adv50 = mean(volume, 50)
+  - step: 2
+    description: 计算 vwap 与 volume 的 4 日滚动相关系数（窗口近似 4.24304）
+    formula: corr1 = rolling_corr(vwap, volume, 4)
+  - step: 3
+    description: 对 corr1 做截面秩 rank1，同时对 low 与 adv50 各自截面秩得到 rank_low、rank_adv50
+    formula: rank1 = rank(corr1); rank_low = rank(low); rank_adv50 = rank(adv50)
+  - step: 4
+    description: 计算 rank_low 与 rank_adv50 的 12 日滚动相关系数 corr2（窗口近似 12.4413）
+    formula: corr2 = rolling_corr(rank_low, rank_adv50, 12)
+  - step: 5
+    description: 对 corr2 做截面秩 rank2，输出布尔信号 factor = (rank1 < rank2)
+    formula: factor = rank(corr1) < rank(corr2)
+  edge_case_handling: 窗口长度 4.24304 / 12.4413 在代码中分别取整为 4 与 12；adv50 起始 50 行因窗口不足为
+    NaN，会随相关系数与 rank 传播为缺失；vwap/volume/low 中任一缺失导致 corr 为 NaN。
+  missing_value_handling: rolling 相关与 rolling mean 对 NaN 跳过/产出 NaN；rank 函数对 NaN 保留为
+    NaN；最终 < 比较中 NaN 视为 False（polars 默认行为），等效于不入选。
+  data_alignment: T+1
+  complexity: O(T × N)，主要来自两条滚动相关系数与 4 次截面 rank
+l3:
+  financial_intuition: 比较短期价量联动强度与中期低价/资金联动强度的相对强弱：当期价量相关性截面排名低于低价与中期均量相关性排名时，视为多空信号。
+  market_behavior: 捕捉短期价格-成交联动相对中长期低价-流动性联动出现'脱钩'或'反转'的股票；反映资金流与价格行为节奏不一致的异常状态。
+  theoretical_basis: 基于行为金融的'注意力脱节'与'信息扩散滞后'理论：短期价量同向减弱而中长期量价仍同步，往往预示价格即将修复或趋势延续切换。
+  historical_effectiveness: 属于 101 Alphas 中典型的双相关比较型因子；在 A 股截面排序测试中 IC 较薄但胜率稳定，常用于多因子合成而非单因子打榜。
+  related_factors: Alpha#27、Alpha#52（同样基于 correlation 比较）、量价背离类因子（VPVI、PVT 衍生）、资金流因子（MFI、OBV
+    截面）
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期价量联动弱 + 中期量价同步强 ⇒ 上涨
+    description: 当 vwap-volume 相关性截面排名偏低，而 rank(low) 与 adv50 的相关性排名偏高时，股价存在正向预期收益（均值回归
+      + 流动性支持）。
+    expected_ic_sign: 正
+    source: 公式 rank1 < rank2 输出 1 时对应 H1 方向；101 Alphas 经典双相关比较逻辑
+    priority: 主假设
+  - id: H2
+    name: 量价脱钩预示动量切换
+    description: 价量短期相关性排名更低暗示近期资金未跟随价格，可能预示前期趋势动量衰减，存在反转收益。
+    expected_ic_sign: 负
+    source: 动量/反转文献：价量背离常作为反转信号
+    priority: 次假设
+  - id: H3
+    name: 低流动性股票信号更显著
+    description: adv50 排名靠后（小成交股）的信号在双相关比较中噪声更大，预期在小票上 IC 不稳定。
+    expected_ic_sign: 不确定
+    source: 流动性溢价文献（小盘股效应）
+    priority: 辅助假设
+  meaning_summary: 因子为布尔信号：当短期价量相关性截面秩 < 中期低价-均量相关性截面秩时取 1，否则取 0/NaN。
+  key_insights:
+  - 窗口 4 与 12 体现'快慢双速'：短期联动 vs 中期结构性联动
+  - 使用 cross-section rank 而非时间序列 rank，剥离绝对水平影响、仅看相对位置
+  - 对 low/adv50 预先 rank 可使相关性更稳健，不受量价极端值影响
+  uncertainty: 原始公式使用 4.24304 / 12.4413 非整数窗口，代码取整为 4 / 12 会引入轻微数值偏差；布尔输出导致 IC 分布双峰，难以直接走线性回归评估。
+l6:
+  industry_concentration: 中性：动量/相关性类因子在 30 个一级行业上 IC 分布较均匀，但金融、地产等大票聚集行业因成交量稳定可能信号偏弱。
+  crowding_level: 中：101 Alphas 系列因子在量化圈被广泛复制，量价相关比较类因子拥挤度较高，alpha 衰减风险中等。
+  failure_conditions:
+  - 市场剧烈波动或流动性危机期，rolling correlation 失稳，rank 分布被极端值主导
+  - 小盘/壳股成交稀疏时，adv50 噪声放大，corr2 信号不可靠
+  - 涨跌停/停牌密集窗口，vwap、low 出现非市场化定价，相关系数结构失真
+  risk_notes: 布尔信号不便于加权合成，建议转为 [0,1] 软信号或结合波动率/流动性过滤；需注意 NaN 在 < 比较中的语义偏差，避免样本自我选择。

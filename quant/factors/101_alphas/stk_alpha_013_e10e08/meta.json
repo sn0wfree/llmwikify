@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_013_e10e08",
+  "display_name": "Alpha #13",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 13,
+  "code_hash": "e10e08",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

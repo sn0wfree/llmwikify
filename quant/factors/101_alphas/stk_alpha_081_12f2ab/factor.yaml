@@ -1,0 +1,101 @@
+name: stk_alpha_081_12f2ab
+display_name: 'Alpha #81'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((rank(Log(product(rank((rank(correlation(vwap, sum(adv10, 49.6054),
+    8.47743))^4)), 14.9655))) < rank(correlation(rank(vwap), rank(volume), 5.07914)))
+    * -1)
+  formula: ((rank(Log(product(rank((rank(correlation(vwap, sum(adv10, 49.6054), 8.47743))^4)),
+    14.9655))) < rank(correlation(rank(vwap), rank(volume), 5.07914))) * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - volume
+  - vwap
+  - close
+  - open
+  - high
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算10日均量adv10，再对其做50日滚动求和，得到中长期成交量累积量
+    formula: sum_adv10 = rolling_sum(rolling_mean(volume, 10), 50)
+  - step: 2
+    description: 计算VWAP与sum_adv10的8日滚动相关系数，截面rank，再做4次幂后再次截面rank
+    formula: rank_corr = rank(corr(vwap, sum_adv10, 8)) → pow4 → rank
+  - step: 3
+    description: 对rank(pow4)序列做15日滚动求log-sum（等价于log(product(·,15))），再截面rank得到左侧信号left
+    formula: left = rank(ts_sum(log(rank_pow4 + ε), 15))
+  - step: 4
+    description: 对rank(vwap)与rank(volume)做5日滚动相关系数，截面rank得到右侧信号right
+    formula: right = rank(corr(rank(vwap), rank(volume), 5))
+  - step: 5
+    description: 比较左右两侧截面rank，left<right时输出-1，否则输出0
+    formula: factor = (left < right) * -1
+  edge_case_handling: log前对rank_pow4加1e-10防止log(0)；相关系数与rolling函数在窗口不足时产生NaN，rank后保留至比较步骤；rolling_sum/log等在窗口未填满时自然产生缺失值
+  missing_value_handling: 依赖rolling系列函数的内部NaN传播；pl.when中NaN<right判定为False，自然输出0；最终因子值为离散{-1,
+    0}
+  data_alignment: T+1
+  complexity: O(T × N)，T为交易日数，N为截面股票数，滚动窗口均为常数
+l3:
+  financial_intuition: 因子比较短期量价联动（5日）与中期价格-资金流关系（8日对50日累计均量）的相对强弱：当下游短期量价共振明显强于中期价格-资金流趋势时，视为短期过度反应，发出做空信号。
+  market_behavior: 捕捉量价短期背离引发的均值回归：在成交活跃推动的急涨急跌中，若与中期资金流方向不一致，短期价格存在回吐压力。
+  theoretical_basis: 基于量价关系的反转效应——短期高量价相关性往往是情绪驱动、过度交易的信号，而非基本面驱动的趋势；同时中期价格-资金流关系反映机构持仓的方向性参考。
+  historical_effectiveness: 在101 Alphas原始回测中表现稳健，对中低频反转类策略有显著贡献；但在强趋势行情或政策驱动行情中信号易失效。
+  related_factors:
+  - Alpha-6 (量价相关性)
+  - Alpha-12 (量价动量差)
+  - 反转类量价因子（如STR/VP反转）
+  - OBV类资金流因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价短期超动反转
+    description: 当短期(5日)量价相关性显著强于中期(8日)价格-资金流关系时，股票存在短期过度反应，未来收益倾向回吐，因子值为-1应对应负收益。
+    expected_ic_sign: 负
+    source: 101 Alphas公式反转逻辑推导
+    priority: 主假设
+  - id: H2
+    name: 资金流方向确认效应
+    description: 当短期量价共振与中期价格-资金流同向时（left<right不成立，因子=0），股票处于健康趋势中；因子=0对应中性或正收益。
+    expected_ic_sign: 正
+    source: 量价趋势一致性理论
+    priority: 次假设
+  - id: H3
+    name: 离散信号稀疏性
+    description: 因子仅取{-1, 0}二值，IC绝对值在多数截面样本上为0，信号稀疏，需关注信号触发后的单笔收益而非连续IC。
+    expected_ic_sign: 不确定
+    source: 离散信号统计特性
+    priority: 辅助假设
+  - id: H4
+    name: 幂次4放大尾部信号
+    description: 对rank(corr)取4次幂后rank，显著放大极端相关性的权重，捕捉量价极端共振的尾部事件。
+    expected_ic_sign: 负
+    source: 公式构造特征
+    priority: 次假设
+  meaning_summary: 因子输出离散-1信号，标记短期量价共振强于中期价格-资金流关系的股票，预期这些股票存在短期反转。
+  key_insights:
+  - 左右两侧分别捕捉不同时间尺度的量价关系：左=中期价格vs资金流，右=短期价格vs成交量
+  - left<right时输出-1，本质是识别'短期量价过热但偏离中期资金流方向'的异常状态
+  - log(product(·,15))等价于15日log-sum，4次幂放大极端信号，rank化保证截面可比
+  uncertainty: 离散信号在截面中样本稀疏且不平衡，IC估计波动大；4次幂与50日sum等长窗口参数对调参敏感；高换手与高波动环境下易产生伪信号。
+l6:
+  industry_concentration: 中等：量价信号在金融、地产、消费等成交活跃板块中信号更显著；科创板/北交所等小票稀疏流动性板块信号噪声大。
+  crowding_level: 较高：Alpha-7为公开学术因子，被广泛研究、复现并用于多因子模型，存在显著策略拥挤；超额收益随使用者增多而衰减。
+  failure_conditions:
+  - 强趋势/政策驱动行情中，短期量价共振往往延续而非反转，-1信号被反复止损
+  - 市场整体流动性骤降时，相关系数估计失真，rank排序不稳定
+  - 小盘低流动性股票中，vwap与volume的rank相关性与全市场不可比，截面rank偏差放大
+  risk_notes: 因子为离散{-1,0}信号，-1的负收益假设依赖反转效应成立；使用时建议叠加趋势/波动率过滤，并控制单因子敞口；注意原始公式参数(49.6054,
+    8.47743, 14.9655, 5.07914)已被四舍五入到整数窗口，真实最优参数可能不同，需做参数敏感性测试。

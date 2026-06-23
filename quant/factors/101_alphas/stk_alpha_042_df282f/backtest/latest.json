@@ -1,0 +1,12 @@
+{
+  "run_id": "pipeline_a_042",
+  "created_at": "2026-06-23T10:06:09+08:00",
+  "status": "success",
+  "metrics": {
+    "ic_mean": -0.047767054015998296,
+    "icir": -0.28455317131793023,
+    "win_rate": 0.3125,
+    "annual_return": 4.925698203872564e-05,
+    "longshort_max_dd": -0.026100578502945598
+  }
+}

@@ -1,0 +1,99 @@
+name: stk_alpha_034_05b515
+display_name: 'Alpha #34'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: rank(((1 - rank((stddev(returns, 2) / stddev(returns, 5)))) + (1 - rank(delta(close,
+    1)))))
+  formula: rank(((1 - rank((stddev(returns, 2) / stddev(returns, 5)))) + (1 - rank(delta(close,
+    1)))))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - returns
+  - open
+  - high
+  - low
+  - volume
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算过去 2 日收益的滚动标准差 (std_2)，衡量极短期波动
+    formula: std_2 = rolling_std(returns, window=2)
+  - step: 2
+    description: 计算过去 5 日收益的滚动标准差 (std_5)，衡量中期波动
+    formula: std_5 = rolling_std(returns, window=5)
+  - step: 3
+    description: 取短期/中期波动率比值，并横截面秩化；用 (1 - rank) 偏好低比值 (即近 2 日比近 5 日更稳定的股票)
+    formula: A = 1 - rank(std_2 / std_5) (cross-sectional)
+  - step: 4
+    description: 计算收盘价 1 期变化量 (delta(close, 1))，横截面秩化后用 (1 - rank) 偏好近 1 日下跌的股票 (反转)
+    formula: B = 1 - rank(close_t - close_{t-1}) (cross-sectional)
+  - step: 5
+    description: 将稳定性子信号 A 与反转子信号 B 等权相加，再做一次横截面秩化得到最终因子值
+    formula: factor = rank(A + B) (cross-sectional)
+  edge_case_handling: std_5 为 0 (收益序列完全无波动) 时比值会产生 inf/NaN，需在实现中加 eps 保护或置 NaN；窗口首几日
+    (returns 或 close 序列不足) 输出为 NaN，不参与排序
+  missing_value_handling: rolling_std 与 delta 对 NaN 输入自然返回 NaN；横截面 rank 函数对 NaN 通常置为
+    NaN 或排在末尾，缺失股票当因子值缺失处理，不影响其他股票
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子将'低波动比 (近 2 日波动小于近 5 日波动)'与'短期价格反转'两个子信号叠加，偏好当前波动收敛且近期回调的股票，捕捉均值回复叠加低风险溢价的复合效应。
+  market_behavior: 震荡市或风格切换期表现较佳：波动率从扩张回到收敛、短期超跌的标的往往迎来技术性反弹；在单边趋势市中低波动+反转信号可能与动量冲突而失效。
+  theoretical_basis: 基于行为金融的过度反应-均值回复假说 (De Bondt & Thaler) 与低波动异象 (Baker, Bradley
+    & Wurgler)，两个异象在该公式中以等权方式合成。
+  historical_effectiveness: 在 A 股中低波动+反转类因子长期有正超额收益，但绝对 IC 偏低 (~2-4%)，在 2015-2017、2020
+    年后的成长风格占优期收益压缩明显。
+  related_factors: Alpha#25 (volatility ratio + volume), Alpha#18 (close vs open reversal),
+    Alpha#28 (low vol + momentum), 经典 lowvol 因子, 1-day reversal 因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 短期反转假说
+    description: 近 1 日下跌的股票 (1 - rank(delta(close,1)) 高) 在未来 1-5 日倾向于反弹，因子与下期收益正相关
+    expected_ic_sign: 正
+    source: 经典 1-day reversal 文献 (Jegadeesh 1990)
+    priority: 主假设
+  - id: H2
+    name: 波动率结构收敛假说
+    description: 近 2 日波动率低于近 5 日波动率 (std_2/std_5 低) 的股票，意味波动率正在收敛，市场对其风险定价下降，未来收益更高
+    expected_ic_sign: 正
+    source: Volatility-of-volatility 与低波动异象文献 (Bali et al.)
+    priority: 主假设
+  - id: H3
+    name: 双信号叠加增强假说
+    description: 稳定性子信号 A 与反转子信号 B 在低相关时合成能提升 IC 稳定性；两者同向时增强信号、方向相反时相互对冲
+    expected_ic_sign: 正
+    source: 多因子合成理论 (Grinold & Kahn)
+    priority: 辅假设
+  - id: H4
+    name: 微结构噪声风险
+    description: std(returns, 2) 在样本极少时易受单日异常收益污染，可能把事件驱动型跳价误判为'波动收敛'，在因子值中引入噪声而非真实信号
+    expected_ic_sign: 不确定
+    source: 微观结构文献 (Bid-ask bounce, Roll 1984)
+    priority: 辅假设
+  meaning_summary: 因子本质是'低波动结构 + 短期反转'的等权复合，预期 IC 为正但偏低，对市场状态敏感。
+  key_insights:
+  - '1 - rank(...) 的两次取反使得公式天然偏好两类股票: 波动率比值低 (A 高) 且近 1 日下跌 (B 高)'
+  - std(returns, 2) 窗口极短，对单日异常收益极度敏感，稳健性弱于 std(returns, 5)
+  - 因子对涨跌停、停牌恢复等异常行情容易给出极端值，需要在组合层做缩尾/中性化处理
+  uncertainty: 两个子信号权重硬编码为 1:1，缺乏自适应权重；若 B 在牛市中退化为追跌止损信号，因子方向可能反转。窗口 2 与 5 的选择缺乏经济学依据，参数敏感度需做鲁棒性测试。
+l6:
+  industry_concentration: '中等偏高: 低波动+反转因子倾向在消费、医药、公用事业等防御性行业暴露较多，对高 beta 的 TMT、资源股暴露为负'
+  crowding_level: '中: 1-day reversal 是最经典低门槛因子之一，被大量量化私募使用，因子拥挤度在 A 股较高；波动率比子信号使用相对小众，略有差异化空间'
+  failure_conditions:
+  - '单边趋势市/动量主导行情 (如 2014 末、2019Q1、2020 成长牛市): 1 日反转信号失效，IC 转负'
+  - '波动率突变期 (政策落地、流动性危机): std(returns, 2) 被尾部跳价主导，子信号信噪比急剧下降'
+  - '行业/风格急剧切换: 低波动暴露与新风格方向背离时，复合因子因双重错配而放大回撤'
+  risk_notes: 因子对回撤敏感 (max DD 可能显著高于纯反转或纯低波单因子); 建议在合成前对两个子信号分别做行业与市值中性化以控制共线性，并监控
+    IC 在动量周期下的稳定性。

@@ -1,0 +1,55 @@
+# 101 Alphas 工作族配置
+# 所有路径相对于 scripts/ 目录
+
+workspace:
+  name: 101_alphas
+  display_name: "101 Formulaic Alphas"
+  description: "WorldQuant 2015 年发表的 101 个公式化 alpha"
+
+# 路径配置
+paths:
+  workspace_root: ..
+  data_dir: ../data
+  output_dir: ../data/output
+  track_b: ../data/track_b_checkpoint.json
+  pass2: ../data/pass2.json
+  h5_dir: ../data/h5
+  factors_dir: ..
+
+# 日期配置
+date_range:
+  start: 20200101
+  end: 20241231
+
+# 数据列配置
+data_columns:
+  - close
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  - vwap
+  - id_citic1
+
+# LLM 配置
+llm:
+  config_path: ~/.llmwikify/llmwikify.json
+
+# DB 配置
+database:
+  db_path: ~/.llmwikify/agent/reproduction.db
+  wiki_id: default
+  paper_id: 101_alphas_minimal
+  source_type: pipeline_a
+
+# 回测配置
+backtest:
+  n_groups: 5
+  cost_bps: 15
+
+# 命名规则
+naming:
+  asset_class: stk
+  category: alpha
+  hash_length: 6

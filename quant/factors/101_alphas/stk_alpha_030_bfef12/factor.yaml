@@ -1,0 +1,106 @@
+name: stk_alpha_030_bfef12
+display_name: 'Alpha #30'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (((1.0 - rank(((sign((close - delay(close, 1))) + sign((delay(close,
+    1) - delay(close, 2)))) + sign((delay(close, 2) - delay(close, 3)))))) * sum(volume,
+    5)) / sum(volume, 20))
+  formula: (((1.0 - rank(((sign((close - delay(close, 1))) + sign((delay(close, 1)
+    - delay(close, 2)))) + sign((delay(close, 2) - delay(close, 3)))))) * sum(volume,
+    5)) / sum(volume, 20))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - volume
+  - open
+  - high
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: '计算过去 3 个交易日的方向性符号: sign1=sign(close_t - close_{t-1}), sign2=sign(close_{t-1}
+      - close_{t-2}), sign3=sign(close_{t-2} - close_{t-3}), 表征每日涨跌方向 (+1/-1/0)'
+    formula: s_i = sign(close_{t-i} - close_{t-i-1}), i=0,1,2
+  - step: 2
+    description: 将三个方向符号相加得到 3 日动量评分, 取值范围 [-3, +3], 越大表示连续上涨越多, 越小表示连续下跌越多
+    formula: S = s_1 + s_2 + s_3
+  - step: 3
+    description: 横截面 rank(S), 再取 1 - rank, 使得连续 3 日下跌的股票获得较大权重, 连续 3 日上涨的股票获得较小权重
+      (反转信号)
+    formula: w = 1 - rank(S)
+  - step: 4
+    description: '计算短期成交量比率: 5 日成交量滚动和除以 20 日成交量滚动和, 反映近期成交量相对中期均量的活跃度'
+    formula: v_ratio = sum(volume, 5) / sum(volume, 20)
+  - step: 5
+    description: 将反转权重乘以成交量比率, 筛选出连续下跌且近期放量 (卖压沉重/超跌) 的股票
+    formula: factor = w * v_ratio
+  edge_case_handling: sign() 对 close==delay 的情况返回 0 (横盘), 仍参与 rank 计算; rolling_sum
+    在序列前端不足窗口时返回空值, 因子相应位置为 NaN; 分母 sum(volume,20) 为 0 时产生 inf/nan
+  missing_value_handling: 由 delay 与 rolling_sum 产生的 null 值会沿信号链路传播, 3 个 sign 中任一为
+    null 会导致 sign_sum 为 null, 进而 rank 与最终因子为 null; 此类股票在当日被自然排除
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '捕捉 ''三连阴 + 近期放量'' 的超跌反转机会: 连续 3 日下跌且短期成交量相对中期放大的股票, 倾向于出现技术性反弹;
+    量能放大验证卖压释放, 提高反转胜率。'
+  market_behavior: A 股市场对短期超跌存在显著反转效应, 连续下跌后放量常伴随恐慌盘出清与空头回补; T+1 制度下放量下跌次日易触发反弹
+  theoretical_basis: '基于行为金融的过度反应与反应不足理论: 短期连续下跌引发过度悲观, 放量确认恐慌出尽, 后续均值回归带来正向收益'
+  historical_effectiveness: 在震荡市与反弹初期效果较佳; 单边下跌或强趋势市中效果衰减甚至失效 (动量延续), A 股日频反转因子历史上
+    IC 多为正 1%~3%
+  related_factors: Alpha 25 (rank + volume ratio 变体)、反转因子 (REV_1D, REV_3D)、量价反转 (PVOL_REV)、换手率反转、RSI
+    超卖
+l4:
+  hypotheses:
+  - id: H1
+    name: 三日反转主假设
+    description: 连续 3 日下跌的股票在次日存在显著正向反转收益, 1-rank(S) 越高表示跌势越深, 未来收益越高
+    expected_ic_sign: 正
+    source: 行为金融反转效应 (Jegadeesh 1990), A 股三日反转文献
+    priority: 主假设
+  - id: H2
+    name: 放量确认假设
+    description: '短期成交量比率 (5d/20d) 放大起到信号增强作用: 放量下跌反映恐慌盘释放完毕, 提升后续反弹概率与幅度'
+    expected_ic_sign: 正
+    source: 量价反转理论 (Lee & Swaminathan 2000 风格), 恐慌出清假说
+    priority: 主假设
+  - id: H3
+    name: 流动性/活跃度过滤
+    description: v_ratio 同时也是流动性代理, 过滤掉长期低迷无成交的股票, 提升因子在可交易池中的稳健性
+    expected_ic_sign: 正
+    source: 换手率/流动性溢价研究 (Amihud 2002)
+    priority: 辅助假设
+  - id: H4
+    name: T+1 制度增强
+    description: A 股 T+1 交易制度下, 放量阴线后次日卖压减弱, 配合反转信号可获得额外收益增强
+    expected_ic_sign: 正
+    source: A 股市场微观结构研究
+    priority: 辅助假设
+  meaning_summary: 因子值越大, 表明该股票过去 3 日连续下跌且近期成交量相对中期放大, 属于典型超跌放量形态, 预期次日出现反弹。
+  key_insights:
+  - '纯反转逻辑 + 量能过滤: 量能不仅确认反转, 还起到剔除低流动性噪声股的作用'
+  - '3 日窗口选择平衡了反转力度与信息衰减: 1 日太短噪声大, 5 日以上已偏向动量'
+  - 横截面 rank 保证因子在不同市值/价格水平股票间可比
+  uncertainty: 在强趋势下跌 (如熊市主跌浪) 中, 放量可能代表趋势加速而非反转, 因子失效; 此外, 涨跌停板制度会扭曲 sign() 的真实方向
+    (一字跌停与一字涨停对应极端放量场景)
+l6:
+  industry_concentration: 中小市值、周期性、高 Beta 行业 (如小盘成长、券商、半导体、地产) 因子载荷更高; 大盘蓝筹与防御性行业载荷较低
+  crowding_level: '中-高: 反转 + 量价是 A 股常见 alpha 范式, 多数量化机构均有类似变体, 拥挤度较高, 需关注 alpha 衰减与因子相关性'
+  failure_conditions:
+  - '单边下跌趋势市/熊市主跌浪: 放量阴线后继续下跌, 反转逻辑失效, 因子显著回撤'
+  - '涨跌停板频繁出现时: 一字跌停无法真实成交, sign 与 volume 失真, 信号被污染'
+  - '市场流动性枯竭或政策干预期: 量能信号失效, 因子噪声增大, IC 衰减'
+  risk_notes:
+  - 因子换手率较高 (3 日窗口 + 每日重排), 交易成本敏感, 需扣除双边千一以上手续费后评估净 IC
+  - 建议结合大盘环境/趋势过滤器使用, 强趋势市降低权重或屏蔽
+  - 需监控涨跌停占比与一字板比例, 异常时段谨慎使用

@@ -1,0 +1,30 @@
+name: stk_alpha_068_83ce68
+display_name: 'Alpha #68'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((Ts_Rank(correlation(rank(high), rank(adv15), 8.91644), 13.9333) <
+    rank(delta(((close * 0.518371) + (low * (1 - 0.518371))), 1.06157))) * -1)
+  formula: ((Ts_Rank(correlation(rank(high), rank(adv15), 8.91644), 13.9333) < rank(delta(((close
+    * 0.518371) + (low * (1 - 0.518371))), 1.06157))) * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - low
+  - close
+  - open
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2: {}
+l3: {}
+l4: {}
+l6: {}

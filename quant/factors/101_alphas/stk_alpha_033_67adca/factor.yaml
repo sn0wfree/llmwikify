@@ -1,0 +1,86 @@
+name: stk_alpha_033_67adca
+display_name: 'Alpha #33'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: rank((-1 * ((1 - (open / close))^1)))
+  formula: rank((-1 * ((1 - (open / close))^1)))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - close
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: '计算日内收益的相反数: 1 - (open / close), 即 (close - open) / close, 等价于负的日内收益率'
+    formula: inner = 1 - open / close
+  - step: 2
+    description: 取负号, 等价于 open/close - 1, 即 (open - close) / close, 衡量高开低走的程度 (隔夜跳空收益减去日内反转)
+    formula: signed = -1 * inner = open / close - 1
+  - step: 3
+    description: 对横截面 (同日所有股票) 进行百分位排名, 归一化到 [0, 1] 区间
+    formula: factor = rank(signed).over('date')
+  edge_case_handling: open 或 close 为 0 时除法会得到 inf / NaN, 代码未显式处理, 需依赖输入数据清洗 (停牌/退市股不参与计算)
+  missing_value_handling: 未处理 NaN, 缺失值会传播到排名结果; 实际部署建议先 drop_na 或 fill_null(0) 再 rank
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子衡量高开低走幅度, 排名高代表隔夜跳空高开后日内大幅回落的股票, 反映隔夜收益与日内反转的相对强弱。
+  market_behavior: 捕捉跳空缺口后被回补的失败突破模式, 或隔夜信息在盘中被逐步消化/反转的行为, 与 overnight return puzzle
+    和 intraday reversal 文献密切相关。
+  theoretical_basis: 基于日内均值回复假说 (open-to-close reversal) 与隔夜动量/反转的二元定价理论; 高 open/close
+    比率意味着隔夜累积的正收益在日内被反转。
+  historical_effectiveness: 在 A 股市场日内收益长期为负, 该因子(取负号后)与次日收益历史上呈弱正相关, 单独 IC 约 0.02-0.04,
+    属于弱但稳健的 alpha 来源。
+  related_factors: 'Overnight return factor, Gap factor, Intraday reversal (close-to-open
+    vs open-to-close), Alpha #6 原式, 101 Alphas 中多个 open/close 类变体'
+l4:
+  hypotheses:
+  - id: H1
+    name: 日内反转假说
+    description: 高开低走的股票 (因子值高) 在次日出现均值回复, 收盘价回升, 因子与次日收益呈正相关
+    expected_ic_sign: 正
+    source: Intraday reversal literature (Heston, Sadka 2010; Gao et al. 2018)
+    priority: 主假设
+  - id: H2
+    name: 隔夜动量延续假说
+    description: 高开低走代表隔夜信息被市场部分定价, 若信息持续有效, 下一日继续承压, 因子与次日收益呈负相关
+    expected_ic_sign: 负
+    source: Overnight momentum (Lou, Polk, Skouras 2019)
+    priority: 备选假设
+  - id: H3
+    name: 隔夜信息衰减假说
+    description: 高开是隔夜累积的乐观信息, 日内回落是理性重定价, 次日开盘后信息基本消化, IC 不显著但与波动率负相关
+    expected_ic_sign: 不确定
+    source: Information decay & price discovery theory
+    priority: 辅助假设
+  meaning_summary: 因子本质是 'open/close - 1' 的横截面排名, 等价于按日内负收益排序, 头部为跳空高开后大幅回落的股票, 尾部为低开高走的强势股。
+  key_insights:
+  - open/close 比值对涨跌停敏感, 需注意涨停板次日 open=close 导致的分母异常
+  - 该因子与换手率、波动率存在结构性相关, 可能携带流动性/风险溢价
+  - 在 T+1 制度下, 收盘后无法交易, 因子信号需通过次日开盘执行, 存在开盘跳空损耗
+  uncertainty: 主假设 (日内反转) 在不同市场状态 (牛市/熊市/震荡) 下表现差异显著, A 股因 T+1 约束使因子实际可执行性受限, IC 方向需要分阶段、分行业验证。
+l6:
+  industry_concentration: '中等偏高: 周期股 (有色、煤炭) 在大宗商品波动期易出现高 open/close 比值, 科技/消费类日内反转特征较弱,
+    因子分行业 IC 离散度较大。'
+  crowding_level: '高: 该公式是 101 Alphas 最经典的几个 open/close 类因子之一, 已被量化机构广泛实现, 单纯使用 alpha
+    衰减明显, 建议与流动性、低相关性因子组合。'
+  failure_conditions:
+  - 强趋势行情中日内反转失效, 持续跳空高开高走/低开低走时因子 IC 反转
+  - 涨跌停密集日, open/close 比率被截断导致排名失真, 因子信号扭曲
+  - 市场流动性枯竭/极端波动期 (如 2015 股灾、2020 疫情), 跳空被基本面主导而非均值回复, 因子失效
+  risk_notes: A 股 T+1 制度下因子无法当日执行, 信号需 T+1 开盘建仓, 承担隔夜跳空风险; 此外因子对涨跌停、停牌、复牌等微观结构事件敏感,
+    需在数据预处理阶段剔除 ST、停牌及一字板个股。

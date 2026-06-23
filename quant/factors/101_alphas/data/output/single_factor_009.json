@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 9,
+  "factor_name": "alpha-009",
+  "formula_brief": "((0 < ts_min(delta(close, 1), 5)) ? delta(close, 1) : ((ts_max(delta(close, 1), 5) < 0) ? delta(close, 1) : (-1 * delta(close, 1))))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already sorted by (code, date)\n\n    # 1) delta(close, 1) — today's close minus yesterday's close\n    delta_close = delta(pl.col('close'), periods=1)\n\n    # 2) 5-day rolling min and max of delta(close, 1)\n    min_delta = rolling_min(delta_close, window=5)\n    max_delta = rolling_max(delta_close, window=5)\n\n    # 3) Conditional logic from the formula:\n    #    if ts_min(delta,5) > 0        -> delta(close,1)\n    #    elif ts_max(delta,5) < 0      -> delta(close,1)\n    #    else                          -> -1 * delta(close,1)\n    factor = (\n        pl.when(min_delta > 0)\n        .then(delta_close)\n        .otherwise(\n            pl.when(max_delta < 0)\n            .then(delta_close)\n            .otherwise(-1 * delta_close)\n        )\n    )\n\n    return df.select(factor).to_series()",
+  "code_chars": 848,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_009.h5",
+  "ic_mean": 0.0010889420418684216,
+  "icir": 0.006955477914824623,
+  "ic_winrate": 0.4915254237288136,
+  "elapsed_sec": 17.977854050695896
+}

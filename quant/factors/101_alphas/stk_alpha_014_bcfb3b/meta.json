@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_014_bcfb3b",
+  "display_name": "Alpha #14",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 14,
+  "code_hash": "bcfb3b",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

@@ -1,0 +1,106 @@
+name: stk_alpha_072_6ba715
+display_name: 'Alpha #72'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (rank(decay_linear(correlation(((high + low) / 2), adv40, 8.93345),
+    10.1519)) / rank(decay_linear(correlation(Ts_Rank(vwap, 3.72469), Ts_Rank(volume,
+    18.5188), 6.86671), 2.95011)))
+  formula: (rank(decay_linear(correlation(((high + low) / 2), adv40, 8.93345), 10.1519))
+    / rank(decay_linear(correlation(Ts_Rank(vwap, 3.72469), Ts_Rank(volume, 18.5188),
+    6.86671), 2.95011)))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - high
+  - low
+  - volume
+  - adv40
+  - vwap
+  - close
+  - open
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 40 日平均成交量 adv40，以及中间价 mid_price = (high + low) / 2
+    formula: adv40 = mean(volume, 40); mid_price = (high + low) / 2
+  - step: 2
+    description: 计算 mid_price 与 adv40 的 9 日滚动相关系数，再经过 10 日线性衰减(decay_linear)，得到分子序列
+    formula: corr1 = rolling_corr(mid_price, adv40, 9); decay1 = decay_linear(corr1,
+      10)
+  - step: 3
+    description: 对分子序列在截面上做横截面 rank 归一化
+    formula: rank1 = rank(decay1) across stocks per date
+  - step: 4
+    description: 分别计算 vwap 的 4 日时间排序(Ts_Rank) 与 volume 的 19 日时间排序，再求二者 7 日滚动相关系数
+    formula: corr2 = rolling_corr(Ts_Rank(vwap, 4), Ts_Rank(volume, 19), 7)
+  - step: 5
+    description: 对 corr2 进行 3 日线性衰减，再做横截面 rank 得到分母序列
+    formula: decay2 = decay_linear(corr2, 3); rank2 = rank(decay2) across stocks per
+      date
+  - step: 6
+    description: 用分子 rank 除以分母 rank 得到最终因子值
+    formula: factor = rank1 / rank2
+  edge_case_handling: 窗口起始期数据不足时滚动函数返回 NaN；分母 rank 接近 0 时产生极端大值或 inf；代码未显式截尾，需在调用层过滤
+    inf/-inf
+  missing_value_handling: 所有滚动/排序/相关系数操作对缺失值自然向下传播，因子输出 NaN；不进行显式填充
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子衡量中期价格-成交量协同关系相对于短期 vwap-量能协同关系的强弱，本质上筛选出存在持续性机构吸筹或派发、且短期交易噪声不显著的股票。
+  market_behavior: 当一只股票在 ~40 日时间尺度上呈现量价同向运动（吸筹特征），同时短期 vwap 与成交量的时序排序没有显著共振时，因子值偏高，预期后续收益延续。
+  theoretical_basis: 基于量价关系的趋势确认假说：稳定的中期量价同向代表真实资金面驱动，而短期 vwap-量能排序更易受高频交易噪声干扰；二者比值可剥离噪声、放大信号。
+  historical_effectiveness: 在 101 Alphas 原始回测中属于表现中上的复合量价因子；A 股市场中对中低频换手率、中等市值、机构参与度较高的股票效果较稳定。
+  related_factors: Alpha#57 (量价相关), Alpha#58 (vwap 相关), 传统 OBV/PVT, 资金流因子, 量比/换手率因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 中期量价同向 → 持续性收益
+    description: 中期(9-10 日)内 (high+low)/2 与 40 日均量正相关且线性衰减后仍强，意味着价格与中长期资金面共振，存在持续性吸筹/派发，预期未来收益延续。
+    expected_ic_sign: 正
+    source: 由公式分子结构直接推导；101 Alphas 论文实证
+    priority: 主假设
+  - id: H2
+    name: 分母压制短期噪声
+    description: 分母捕捉短期 vwap 与 volume 排序的同向运动，反映高频/投机资金对价格的瞬时拉动；分母越大则短期噪声越显著，因子通过比值结构剔除此类噪声股。
+    expected_ic_sign: 正
+    source: 公式分母的对偶结构（rank/rank 形式）暗示去噪目的
+    priority: 主假设
+  - id: H3
+    name: 流动性分层与失效风险
+    description: 在低流动性或极端波动行情下，量价相关系数结构不稳定（符号频繁反转），分子分母都可能失效甚至出现极端比值，因子预期收益不明确。
+    expected_ic_sign: 不确定
+    source: 量价因子在低流动性/危机期普遍失灵的文献经验
+    priority: 副假设
+  - id: H4
+    name: 行业/规模风格暴露
+    description: 由于 40 日均量与中期相关系数对大盘股更稳定，分子对大盘/低换手股票天然偏好；分母 vwap-量能排序对小盘高频股更敏感，比值结构可能在规模/换手因子上有隐含暴露。
+    expected_ic_sign: 不确定
+    source: 量价类因子的常见风格暴露经验
+    priority: 副假设
+  meaning_summary: 因子 = 中期(40 日均量基准)量价正相关性的衰减序列 / 短期(vwap×volume 排序)量价相关性的衰减序列，本质是用短期噪声做分母来归一化中期量价信号。
+  key_insights:
+  - 分子用 40 日均量作锚，捕捉更稳定的资金面趋势而非日级别波动
+  - 分母采用 Ts_Rank 而非原始值，对短期 vwap 与成交量的相对位置而非绝对水平更敏感，天然抗价格水平漂移
+  - rank/rank 比值结构使因子对横截面分布变化较稳健，但在分母密集接近 0 时易产生极端值
+  - decay_linear 给近期观测更高权重，与短周期预测目标匹配
+  uncertainty: 因子在低流动性小盘股、风格急剧切换期、临近涨跌停限制时表现不稳定；相关系数在样本量小的窗口(7-9 日)本身统计噪声较大，可能掩盖真实信号。
+l6:
+  industry_concentration: 中等偏高：对机构参与度高的中大盘价值股、消费/医药/金融等板块更有效；小盘成长/题材股因相关系数不稳定效果较差
+  crowding_level: 中低：公式结构复杂（双层相关+衰减+比值），实际部署时微调窗口即可生成众多变体，叠加难度较高，拥挤度低于简单量价因子
+  failure_conditions:
+  - 市场进入高换手/题材轮动加速期，量价同步关系被打破，相关系数符号频繁反转
+  - 个股处于停牌、连续涨跌停或低流动性阶段，滚动相关系数失效或被极端值主导
+  - 风格切换/行业轮动剧烈时期（如政策驱动突发行情），中期量价信号被宏观冲击淹没
+  risk_notes: 1) 相关系数在 7-9 日短窗口下统计噪声大，IC 估计本身有较大方差；2) adv40 与 vwap、volume 来自同一数据源，存在隐含自相关；3)
+    rank/rank 比值对分母靠近 0 极度敏感，建议在因子合成前对分母做截尾或加常数平滑；4) T+1 对齐下回测需注意使用未来函数风险（adv40 需滚动而非
+    expanding）

@@ -1,0 +1,13 @@
+{
+  "name": "stk_alpha_025_258c09",
+  "display_name": "Alpha #25",
+  "asset_type": "stk",
+  "category": "alpha",
+  "source": "101_alphas",
+  "alpha_index": 25,
+  "code_hash": "258c09",
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23",
+  "version": 1,
+  "status": "已验证"
+}

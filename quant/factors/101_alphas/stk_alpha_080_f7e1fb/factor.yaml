@@ -1,0 +1,101 @@
+name: stk_alpha_080_f7e1fb
+display_name: 'Alpha #80'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((rank(Sign(delta(IndNeutralize(((open * 0.868128) + (high * (1 - 0.868128))),
+    IndClass.industry), 4.04545)))^Ts_Rank(correlation(high, adv10, 5.11456), 5.53756))
+    * -1)
+  formula: ((rank(Sign(delta(IndNeutralize(((open * 0.868128) + (high * (1 - 0.868128))),
+    IndClass.industry), 4.04545)))^Ts_Rank(correlation(high, adv10, 5.11456), 5.53756))
+    * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - high
+  - industry
+  - close
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算加权价格：以 open 为主 (权重 0.868128)，high 为辅 (权重 0.131872)，合成类 VWAP 的日内强势价格代理
+    formula: wp_t = 0.868128 * open_t + 0.131872 * high_t
+  - step: 2
+    description: 对加权价格做行业中性化 (demean by industry)，再计算 4 期差分并取符号，得到行业中性化的方向性动量信号
+    formula: s_t = sign(delta(IndNeutralize(wp, industry), 4))
+  - step: 3
+    description: 对符号化信号做截面 rank，得到 [-0.5, 0.5] 区间的方向排名
+    formula: r_t = rank(s_t)
+  - step: 4
+    description: 计算 high 与 adv10 (10 日均量) 的 5 日滚动相关系数，度量量价同步性
+    formula: corr_t = rolling_corr(high, adv10, window=5)
+  - step: 5
+    description: 对相关系数做 5 日时间序列 rank，得到量价同步性的相对强度
+    formula: tsr_t = Ts_Rank(corr_t, window=5)
+  - step: 6
+    description: 用 ts_rank 作为指数对 rank 做幂运算 (放大尾部差异)，再取负号
+    formula: factor_t = -(r_t ^ tsr_t)
+  edge_case_handling: 中性化/差分/sign 操作中若行业分组缺失或窗口不足，neutralize 与 rolling_* 默认按降级或 NaN
+    处理；sign(0) 返回 0 不引发异常
+  missing_value_handling: rolling 窗口不足时 corr 返回 NaN，ts_rank 也会传播 NaN，最终因子值为缺失；rank
+    对 NaN 的处理依赖实现 (通常保持 NaN)
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 捕捉行业中性化方向动量与量价同步性的非线性交互：当下行/上行动量方向与近期量价高相关时段共振时，因子值被指数放大并取负，预示反向收益。
+  market_behavior: 在趋势加速阶段，开盘价相对高点的偏移反映隔夜信息不对称；与高成交量同步出现时往往意味着趋势接近末端，触发反转。
+  theoretical_basis: 基于行为金融的反转效应与量价背离理论：极端动量叠加量价高度同步往往是过度交易的标志，预示短期反转。
+  historical_effectiveness: 原始 101 Alphas 中 Alpha#56 为收益型因子 (因整体取负故适合做空头组合)，在美股 1990s-2007
+    回测中表现稳健，但 2008 后衰减明显。
+  related_factors:
+  - Alpha#1 (量价相关性)
+  - Alpha#54 (open/high 加权)
+  - Alpha#55 (open/low 加权)
+  - 反转类因子 (短周期 reversal)
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价同步共振反转
+    description: 当行业中性化动量方向 (sign of delta) 与近期 high-vol 相关性的时序强度同时处于极端时，因子取极值，预示短期反转
+    expected_ic_sign: 负
+    source: 原始公式取 -1 表明 rank^ts_rank 越大，未来收益越低
+    priority: 主假设
+  - id: H2
+    name: 方向动量不对称
+    description: sign(delta) 为负 (下跌) 的股票若伴随高量价相关 ts_rank，因子值被指数放大，预测更强的反弹
+    expected_ic_sign: 正
+    source: 对负向动量的非线性放大隐含均值回归预期
+    priority: 次假设
+  - id: H3
+    name: 行业中性化有效性依赖
+    description: 在行业分类粗或行业轮动剧烈的环境下，IndNeutralize 失效会导致因子 IC 显著下降
+    expected_ic_sign: 不确定
+    source: 因子对行业分类粒度的敏感性
+    priority: 辅助假设
+  meaning_summary: 该因子是方向动量与量价同步性的幂函数交互再取反，本质上衡量"被放大的方向信号×高量价共振"的极端组合，预期在均值回归窗口内具有预测力。
+  key_insights:
+  - 指数运算 (rank^ts_rank) 极大放大双重极端值，形成肥尾分布
+  - open 权重 0.868 占绝对主导，high 仅作为微调项，等价于以开盘价为锚的动量信号
+  - Sign 操作使因子退化为 {-1, 0, 1} 离散信号，再被 rank 平滑到连续区间
+  uncertainty: ts_rank 作为指数的取值范围不稳定 (可能为负)，导致 rank 的负值出现 NaN 或复数风险；行业中性化的实现方式 (demean
+    vs regress) 对结果影响显著。
+l6:
+  industry_concentration: 中等偏高 — IndNeutralize 是核心步骤，若行业分类不均衡或行业数量过少，信号会被少数行业主导
+  crowding_level: 中 — Alpha#56 属于较早期经典因子，在量化圈使用广泛但因取负结构不易被简单复制，存在一定拥挤
+  failure_conditions:
+  - 强趋势行情中 (单边牛/熊)：反转假设失效，因子持续亏损
+  - 行业分类粒度变化或不可获得时：IndNeutralize 降级为全局 demean，IC 显著衰减
+  - 高换手/小盘股流动性突变：adv10 与 high 的相关性结构性断裂，corr 噪声放大
+  risk_notes: 幂运算对极端值极度敏感，建议在组合层面做 winsorize 或缩尾；行业中性化列缺失时必须明确降级方案并做压力测试；因子值分布高度右偏，需注意回测中的换手率虚高。

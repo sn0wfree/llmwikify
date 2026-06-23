@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "alpha_index": 22,
+  "factor_name": "alpha-022",
+  "formula_brief": "(-1 * (delta(correlation(high, volume, 5), 5) * rank(stddev(close, 20))))",
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # correlation(high, volume, 5) - rolling correlation per code\n    corr_hv = correlation(pl.col('high'), pl.col('volume'), window=5)\n\n    # delta(correlation(...), 5)\n    delta_corr = delta(corr_hv, periods=5)\n\n    # stddev(close, 20) - rolling std per code\n    std_close = rolling_std(pl.col('close'), window=20)\n\n    # rank(stddev(close, 20)) - cross-sectional rank per date\n    rank_std = rank(std_close).over('date')\n\n    # (-1) * (delta_corr * rank_std)\n    factor = -1 * (delta_corr * rank_std)\n\n    return df.select(factor).to_series()",
+  "code_chars": 596,
+  "factor_series_len": 65250,
+  "factor_series_dtype": "Float64",
+  "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_022.h5",
+  "ic_mean": 0.018383337737005626,
+  "icir": 0.12592341125060041,
+  "ic_winrate": 0.559322033898305,
+  "elapsed_sec": 12.180233627557755
+}

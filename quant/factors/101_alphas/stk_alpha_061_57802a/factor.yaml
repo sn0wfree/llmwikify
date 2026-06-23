@@ -1,0 +1,99 @@
+name: stk_alpha_061_57802a
+display_name: 'Alpha #61'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (rank((vwap - ts_min(vwap, 16.1219))) < rank(correlation(vwap, adv180,
+    17.9282)))
+  formula: (rank((vwap - ts_min(vwap, 16.1219))) < rank(correlation(vwap, adv180,
+    17.9282)))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - vwap
+  - close
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算 VWAP 在过去 16 个交易日的滚动最小值
+    formula: ts_min(vwap, 16)
+  - step: 2
+    description: 计算 VWAP 相对其 16 日最低价的偏离量 (短期反弹强度)
+    formula: diff = vwap - ts_min(vwap, 16)
+  - step: 3
+    description: 用 180 日滚动均值近似 180 日平均日成交量 ADV180
+    formula: adv180 = rolling_mean(volume, 180)
+  - step: 4
+    description: 计算 VWAP 与 ADV180 在过去 18 日的滚动相关系数
+    formula: corr = rolling_corr(vwap, adv180, 18)
+  - step: 5
+    description: 对 diff 和 corr 分别做截面 rank, 然后比较 rank(diff) < rank(corr), 输出 0/1 布尔因子
+    formula: factor = (rank(diff) < rank(corr)).cast(float)
+  edge_case_handling: rolling_mean 窗口不足 180 时返回 NaN, rolling_corr 窗口不足 18 时返回 NaN;
+    bool 比较中 NaN 传播为 False, 因子值缺失
+  missing_value_handling: 因依赖 180 日 ADV180, 新上市或成交量历史不足 180 日的股票因子值为 NaN; ts_min/corr
+    窗口不足同样产生 NaN
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 因子同时刻画短期价格反弹强度与量价联动强度, 选出价格已脱离短期低点但量价相关性相对偏弱的股票, 隐含'价格先行于成交'的动能延续信号
+  market_behavior: '捕捉量价背离驱动的短期动量: 当价格上涨脱离短期低位, 而大成交量尚未跟随确认时, 后续仍存在补涨空间'
+  theoretical_basis: 基于量价关系的非对称信息假说——价格反映私有信息先于成交量反映机构调仓, 低量价相关意味着价格变化更多由预期而非流动性需求驱动
+  historical_effectiveness: 在 A 股/美股均报告一定正 alpha; 因子值离散为 0/1, 持仓集中度较高, 换手较频繁
+  related_factors: Alpha#52 (ts_min/vwap 偏离), 量价相关性类因子 (Alpha#10, Alpha#34), 短期反转/动量混合因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 价格先行于量的动量延续
+    description: 当 VWAP 显著脱离 16 日最低值 (高 rank) 且量价相关性偏弱 (低 rank) 时, 价格驱动未充分被成交确认, 次日仍有上行惯性
+    expected_ic_sign: 正
+    source: 量价信息不对称理论 + 101 Alphas 原始设计
+    priority: 主假设
+  - id: H2
+    name: 低量价相关的资金分散信号
+    description: corr 较低说明价格变化不依赖大资金推动, 此类股票受机构调仓影响小, 截面排名稳定性更强
+    expected_ic_sign: 正
+    source: 流动性驱动 vs 信息驱动分离文献
+    priority: 辅助假设
+  - id: H3
+    name: 短期反转风险
+    description: 若 diff 排名很高但 corr 也极高, 表明反弹已伴随巨量换手, 因子为 0, 避免追高已确认的动量末端
+    expected_ic_sign: 不确定
+    source: 动量崩溃 (momentum crash) 风险控制逻辑
+    priority: 辅助假设
+  - id: H4
+    name: 低成交冷门股噪声
+    description: corr 接近 0 或缺失的冷门股因 rank 随机性导致信号不稳定, 因子可能受小市值噪声主导
+    expected_ic_sign: 负
+    source: 小盘股流动性溢价反转经验
+    priority: 备择假设
+  meaning_summary: 因子为 1 表示该股票当日 VWAP 相对 16 日低点的反弹幅度在截面上排名靠前, 同时其 VWAP-ADV180 的 18
+    日相关性排名靠后, 即'强势价格+弱量价耦合'
+  key_insights:
+  - 因子输出为离散 0/1, 天然适合做 long-short 或 long-only 多空混合组合
+  - 双 rank 比较结构使其对极端值不敏感, 抗异常波动能力优于直接乘法/差值
+  - 180 日 ADV 窗口要求较高, 上市不足半年的股票不可用, 实际可用股票池收窄
+  uncertainty: 'H1 的方向依赖市场状态: 牛市中量价齐升场景下 corr 排名同样偏高, 因子大面积为 0; H4 的噪声问题在中小盘暴露较高'
+l6:
+  industry_concentration: 中等 — 量价相关性在不同行业差异大, 周期/成长股 corr 偏高, 公用事业/消费偏低, 因子自然在低 corr
+    行业暴露更多
+  crowding_level: 中低 — Alpha#30 类复合因子使用门槛较高, 实际部署机构较少, 但同源量价因子 (Alpha#10/34) 存在一定拥挤溢出
+  failure_conditions:
+  - 趋势行情中量价高度同向, rank(corr) 普遍偏高, 因子大面积触发, 选股区分度丧失
+  - 市场整体处于低波动低成交环境, rolling_corr 接近 0, rank 随机化导致信号失效
+  - 小盘/壳股主导行情中, 180 日 ADV 不可靠, corr 受异常成交干扰, 因子噪声显著放大
+  risk_notes: 因子为布尔信号, 持仓集中度天然较高, 需配合市值/行业中性化; T+1 信号在涨停板/停牌股票上无法执行; 180 日窗口导致因子对新股不可用,
+    存在生存者偏差

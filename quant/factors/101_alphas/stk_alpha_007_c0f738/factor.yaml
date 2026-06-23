@@ -1,0 +1,106 @@
+name: stk_alpha_007_c0f738
+display_name: 'Alpha #7'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: '((adv20 < volume) ? ((-1 * ts_rank(abs(delta(close, 7)), 60)) * sign(delta(close,
+    7))) : (-1 * 1))'
+  formula: '((adv20 < volume) ? ((-1 * ts_rank(abs(delta(close, 7)), 60)) * sign(delta(close,
+    7))) : (-1 * 1))'
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - volume
+  - adv20
+  - open
+  - high
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 计算20日均量 adv20 = mean(volume, 20)
+    formula: adv20 = rolling_mean(volume, 20)
+  - step: 2
+    description: 计算7日价格变动 delta(close,7) = close_t - close_{t-7}，并取绝对值与符号
+    formula: delta_close = close - delay(close, 7); abs_delta = |delta_close|; sign_delta
+      = sign(delta_close)
+  - step: 3
+    description: 在60日窗口内对 abs(delta(close,7)) 做时序排名 ts_rank
+    formula: ts_rank_val = ts_rank(|delta_close|, 60)
+  - step: 4
+    description: '构造条件分支: 当日量 > 20日均量时, 取 -1 × ts_rank × sign; 否则取 -1'
+    formula: 'factor = (adv20 < volume) ? (-1 * ts_rank * sign) : (-1)'
+  edge_case_handling: sign(delta) 在 close=close_{t-7} 时为 0, 此时真实分支输出 0, 与固定 -1 分支不同,
+    造成轻微跳变; abs(0) 进入 ts_rank 仍为合法值
+  missing_value_handling: delta(close,7) 在前7行产生 NaN, ts_rank 输出 NaN, 条件分支依赖 adv20<volume
+    的逻辑值, NaN 在 polars 比较中默认为 False, 落入 -1 分支, 即前期因子恒为 -1
+  data_alignment: T+1
+  complexity: O(T × N) — 单标的滚动窗口计算, T 为时间序列长度, N 为股票数量
+l3:
+  financial_intuition: 放量日下的价格急涨/急跌体现短期超买超卖, 通过 ts_rank 衡量偏离幅度并用 sign 标记方向, 取负后押注均值回归;
+    缩量日直接给 -1 作为保底空头信号。
+  market_behavior: '捕捉量价配合下的短期反转行为: 放量长上影/长下影后的反向运动, 同时对低量环境施加系统性偏空倾向。'
+  theoretical_basis: '经典量价反转假说 (Overreaction + Volume Confirmation), 101 Alphas 原始公式
+    #101, 属于反转族因子, 强调 ts_rank 的横纵比照与 sign 的方向性修正。'
+  historical_effectiveness: 在 A 股中短期 (1-5 日) 反转效应显著, 但因子混杂固定 -1 值, 实际 IC 偏弱且易受低量股稀释;
+    需对低量分支做再处理 (如置 NaN 或加权重) 提升纯度。
+  related_factors: 'Alpha #1 (volume 条件), Alpha #4 (ts_rank), Alpha #5 (|delta|*sign),
+    Alpha #10 (sign*ts_rank), 通用 Short-Term Reversal 因子'
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价反转
+    description: 放量配合大幅下跌时, 因子为正 → 预期短期反弹; 放量配合大幅上涨时, 因子为负 → 预期短期回调。核心逻辑为均值回归。
+    expected_ic_sign: 正
+    source: 'Overreaction Hypothesis + Volume 信号 (101 Alphas #101 原始论文)'
+    priority: 主假设
+  - id: H2
+    name: 缩量空头偏置
+    description: 当 volume < adv20 时, 因子恒为 -1, 隐含做空/回避低活跃度股票。该分支提供稳定的负向贡献, 等同于低成交量惩罚。
+    expected_ic_sign: 负
+    source: Amihud 非流动性、换手率因子相关文献
+    priority: 次假设
+  - id: H3
+    name: ts_rank 标准化收益
+    description: ts_rank 在 60 日内做排名, 消除绝对波动率影响, 使因子对不同波动率股票可比; |delta| 体现信息含量, sign
+      恢复方向。
+    expected_ic_sign: 正
+    source: ts_rank 类因子的横截面可比性研究
+    priority: 辅助假设
+  - id: H4
+    name: 趋势行情失效风险
+    description: 在强单边趋势 (如牛市主升/熊市主跌) 中, 放量上涨并非反转信号而是趋势确认, 因子会发出错误空头信号, IC 转负。
+    expected_ic_sign: 不确定
+    source: Regime-dependent factor performance (牛熊市切换研究)
+    priority: 辅助假设
+  meaning_summary: 'Alpha #101 核心是''放量 + 极端波动 → 反向操作''的均值回归因子, 用 ts_rank 衡量幅度、sign
+    恢复方向, 再用成交量条件过滤; 低量环境直接以 -1 收口, 体现对不活跃股票的系统性偏空。'
+  key_insights:
+  - 真实分支 (-ts_rank × sign) 等价于 -sign × ts_rank(|delta|), 价涨 → 大负值, 价跌 → 大正值, 鲜明反转特征
+  - 固定 -1 分支占比极高 (约 50% 时间 adv20 ≥ volume), 显著拉低因子均值与换手率, 实际表现为低换手偏空组合
+  - 缺失值期因子恒为 -1, 引入前 7 行的虚假空头信号, 回测需丢弃暖机期
+  uncertainty: 低量 -1 分支是设计瑕疵还是有意构造, 原文未明确; 不同市场环境 (A 股 vs 美股) 该分支的 IC 贡献方向可能反转, 需做分支诊断。
+l6:
+  industry_concentration: 高 — 反转因子在周期性行业 (有色、煤炭、化工) 与小盘成长股上负载较重, 行业中性化是必需步骤; 低量 -1
+    分支会使流动性差的小盘/冷门股持续获得负值, 形成隐性小市值暴露。
+  crowding_level: '中等偏高 — 101 Alphas #101 属于公开学术因子, 量化机构广泛使用反转族, 但其混合结构 (-1 分支) 降低了纯反转拥挤度,
+    仍有部分 alpha 残余。'
+  failure_conditions:
+  - '强趋势/单边行情: 放量上涨被误判为反转信号, 实际趋势延续, 因子空头端持续亏损'
+  - '波动率急剧下降 (低波动率 regime): ts_rank 对小波动的分辨力下降, 真实分支区分度变弱, 因子退化为噪声'
+  - '小盘/低流动性股票聚集: 固定 -1 分支集中触发, 形成非预期的负向小市值暴露, 在小盘股反弹期跑输基准'
+  risk_notes:
+  - 固定 -1 分支约 50% 触发率, 显著降低因子均值, 组合多头端需叠加其他因子平衡
+  - 前期 7 行 (warmup) 因子恒为 -1, 建议在回测中丢弃, 否则虚增空头收益
+  - 建议做行业+市值中性化, 并将低量分支单独提取为子因子分别评估
+  - 反转因子波动大, 与动量因子负相关, 可构建反转-动量对冲组合降低回撤

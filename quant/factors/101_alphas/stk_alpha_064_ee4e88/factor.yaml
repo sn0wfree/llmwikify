@@ -1,0 +1,109 @@
+name: stk_alpha_064_ee4e88
+display_name: 'Alpha #64'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: ((rank(correlation(sum(((open * 0.178404) + (low * (1 - 0.178404))),
+    12.7054), sum(adv120, 12.7054), 16.6208)) < rank(delta(((((high + low) / 2) *
+    0.178404) + (vwap * (1 - 0.178404))), 3.69741))) * -1
+  formula: ((rank(correlation(sum(((open * 0.178404) + (low * (1 - 0.178404))), 12.7054),
+    sum(adv120, 12.7054), 16.6208)) < rank(delta(((((high + low) / 2) * 0.178404)
+    + (vwap * (1 - 0.178404))), 3.69741))) * -1)
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - high
+  - low
+  - adv120
+  - vwap
+  - close
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: '计算加权价格 A: open*0.178404 + low*(1-0.178404), 该权重偏低价格'
+    formula: price_A = open * 0.178404 + low * 0.821596
+  - step: 2
+    description: 计算 120 日成交量滚动均值 adv120, 然后对 price_A 与 adv120 分别做 13 日滚动求和
+    formula: sum_A = rolling_sum(price_A, 13), sum_adv = rolling_sum(rolling_mean(volume,
+      120), 13)
+  - step: 3
+    description: 计算 sum_A 与 sum_adv 在 17 日窗口上的滚动 Pearson 相关系数, 截面 rank
+    formula: rank_A = rank(corr(sum_A, sum_adv, 17))
+  - step: 4
+    description: '计算加权价格 B: midprice*0.178404 + vwap*(1-0.178404), 该权重偏 vwap; 取 4
+      日差分并截面 rank'
+    formula: rank_B = rank(delta(midprice * 0.178404 + vwap * 0.821596, 4))
+  - step: 5
+    description: '组合信号: 当 rank_A < rank_B 时赋 -1, 否则 0'
+    formula: factor = -1 * I(rank_A < rank_B)
+  edge_case_handling: 窗口长度向上取整 (12.7054→13, 16.6208→17, 3.69741→4); rolling 均值/求和/相关在窗口未满时返回
+    NaN; 输出为离散三值 (-1/0), 非连续
+  missing_value_handling: code 未显式 fill_null, 依赖 polars rolling 函数在窗口未填满时返回 null,
+    后续 rank 会跳过 null
+  data_alignment: T+1
+  complexity: O(T × N), 其中 T≈252 交易日, N≈全 A 截面股票数
+l3:
+  financial_intuition: 捕捉'低权重价与成交额相关性走弱、但 vwap 加权中价反而上行'的背离信号——常出现于主力高位派发、量价关系钝化的情境,
+    视为做空信号。
+  market_behavior: '量价钝化与均价上行的并存通常意味着: 买盘推升均价但未能有效放量, 或卖盘在低位被持续吸收, 是短线见顶/反转向下的典型技术形态'
+  theoretical_basis: 基于量价关系 (price-volume correlation) 与均价动量 (vwap momentum) 的交叉信号;
+    经典技术分析中'量价背离'的量化实现
+  historical_effectiveness: 属于 101 Alphas 公开因子集, 在美股长周期回测中具一定负向超额 (针对信号为 -1 的做空篮子);
+    在 A 股需验证做空可行性
+  related_factors: Alpha#98 (101 Formulaic Alphas); 类似量价背离因子如 Alpha#5, Alpha#12, 以及
+    PV correlation 类自定义因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价背离做空假设
+    description: 当 13 日'open+low'加权价与 adv120 求和的相关性走弱, 同时 vwap 加权中价 4 日动量为正时, 股票倾向于回落,
+      因子值 -1 应有负向收益
+    expected_ic_sign: 负
+    source: 原始 alpha 设计意图 + 量价背离文献
+    priority: 主假设
+  - id: H2
+    name: 离散信号衰减假设
+    description: 由于输出仅取 -1/0 二值, IC 绝对值受截面 -1 占比影响, 当市场单边趋势时 -1 占比可能膨胀或萎缩, 导致 IC 漂移
+    expected_ic_sign: 不确定
+    source: 因子离散化理论
+    priority: 次假设
+  - id: H3
+    name: 低流动性溢价假设
+    description: 量价相关性弱 + vwap 抬头 的组合在低换手率小票上更频繁, 因子可能隐含小盘/低流动性风险溢价
+    expected_ic_sign: 不确定
+    source: 流动性溢价文献 (Amihud 2002)
+    priority: 辅助假设
+  - id: H4
+    name: 行业轮动失效假设
+    description: 在行业普涨/普跌的 beta 行情中, 截面 rank 区分度下降, 因子失效
+    expected_ic_sign: 不确定
+    source: 动量/反转因子在 Beta 行情表现
+    priority: 辅助假设
+  meaning_summary: 该因子本质是一个'量价钝化 × 均价抬头'的复合做空信号, 通过离散化(-1/0)直接构造空头篮子
+  key_insights:
+  - Part A 用低权重价 + 120 日均量求和做相关, 衡量'中长周期量价协同度'
+  - Part B 用 vwap 加权 + 短周期 delta, 衡量'短周期均价动量'
+  - 两者背离 → 视为量价关系恶化中的短期强势, 是经典见顶形态
+  uncertainty: 离散 -1/0 输出使得因子对参数不敏感但收益分布稀疏; A 股做空受限, 直接做多有偏; 行业与市值中性化效果需额外验证
+l6:
+  industry_concentration: '中等: 量价信号在周期性行业 (化工/钢铁) 与小盘成长股上信号更密集; 消费/公用事业信号稀疏'
+  crowding_level: '中低: Alpha#98 在公开因子库中知名度一般, 拥挤度低于 Alpha#101 等热门因子, 但仍属可被复制使用'
+  failure_conditions:
+  - 成交量极低 (月均换手 < 1%) 的小盘股, adv120 不稳定导致相关计算失效
+  - vwap 在开盘集合竞价或涨跌停板日失真, 导致 Part B delta 异常跳变
+  - 市场单边趋势行情 (如 2014-2015 杠杆牛), 量价背离信号被基本面/资金面压制而失效
+  risk_notes:
+  - 输出为离散 -1/0, 多空不对称 (仅做空一侧), 多头组合需取反向或与其他因子合成
+  - A 股做空成本高且券源稀缺, 直接等权做空 -1 篮子难以实施
+  - 因子对回看窗口 (13/17/4) 较敏感, 偏离原始参数可能完全改变因子方向

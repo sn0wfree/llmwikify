@@ -1,0 +1,96 @@
+name: stk_alpha_042_df282f
+display_name: 'Alpha #42'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (rank((vwap - close)) / rank((vwap + close)))
+  formula: (rank((vwap - close)) / rank((vwap + close)))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - vwap
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 在每日横截面上, 对每只股票分别计算 vwap 与 close 的差值和加值, 得到 diff = vwap - close 和
+      summ = vwap + close
+    formula: diff_i = vwap_i - close_i,  summ_i = vwap_i + close_i
+  - step: 2
+    description: 对 diff 和 summ 在每个交易日 (date) 内进行横截面排名 (rank), 排名值归一化到 [0, 1] 区间
+    formula: rank_t(diff_i),  rank_t(summ_i)   (cross-sectional, per date)
+  - step: 3
+    description: 将两个排名值相除, 得到最终因子值; 该比值衡量了'日内资金流信号'相对于'价格水平'的位置
+    formula: factor_i = rank(diff_i) / rank(summ_i)
+  edge_case_handling: 分母 rank(summ) 可能非常接近 0 (排名末位的低价股), 相除时可能产生极端值或 inf; 实际使用中通常需对分母加
+    epsilon 或 winsorize 极端比值
+  missing_value_handling: vwap 或 close 缺失时, 对应的 diff/summ 为 null, 排名函数通常将 null 排在末尾
+    (最小或最大), 应在数据预处理阶段剔除缺失或停牌股票
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: 分子 rank(vwap-close) 捕捉日内资金流方向 (vwap 高于 close 暗示买盘推动价格走高), 分母
+    rank(vwap+close) 近似价格水平排名, 因子将日内资金流信号按价格水平标准化, 试图剥离绝对价位影响、提纯纯量价关系。
+  market_behavior: 反映个股日内成交均价与收盘价之间的相对位置差异, 是经典的 VWAP 偏离类微观结构信号; 在高价位股中识别日内资金强势流入者,
+    在低价位股中识别日内资金强势流出者。
+  theoretical_basis: '基于成交量加权价格 (VWAP) 作为''公允交易价''的微观结构理论: 当收盘价显著偏离 VWAP 时, 反映尾盘有大单冲击,
+    短期可能存在价格反转或动量效应。'
+  historical_effectiveness: 在 101 Alphas 体系中属于纯横截面价量结构类因子; VWAP-Close 偏离信号在 A 股实证中
+    IC 方向不稳定, 但经价格水平标准化后, 在中低频 (5-10 日) 持仓周期下具有一定选股能力。
+  related_factors: Alpha#98 (vwap 与 close 排名差), Alpha#5 (vwap 排名 vs 开盘价排名), VWAP 偏离因子,
+    资金流因子, 尾盘异动因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 日内资金流强度主导
+    description: 分子 rank(vwap-close) 反映日内买方力量强弱, vwap 越高于 close 说明买盘越强, 因子值越高, 预期未来收益越高
+    expected_ic_sign: 正
+    source: VWAP 微观结构理论
+    priority: 主假设
+  - id: H2
+    name: 价格水平标准化效应
+    description: 除以 rank(vwap+close) 旨在消除绝对价格水平的影响, 使因子在高价股与低价股间可比, 增强跨价位段稳定性
+    expected_ic_sign: 不确定
+    source: 横截面可比性原则
+    priority: 辅助假设
+  - id: H3
+    name: 尾盘冲击反转
+    description: 若 vwap 与 close 偏离反映尾盘大单导致的价格扭曲, 则偏离越大, 短期反转概率越高, 因子 IC 可能为负
+    expected_ic_sign: 负
+    source: 短期价格反转文献
+    priority: 次假设
+  - id: H4
+    name: 分母极端值风险
+    description: 分母 rank(summ) 接近 0 或 1 的股票 (极低价/极高价股) 会放大因子值, 导致尾部不稳定, 实际 IC 易受极值扭曲
+    expected_ic_sign: 不确定
+    source: 横截面比率类因子经验
+    priority: 辅助假设
+  meaning_summary: 该因子用日内 VWAP 与收盘价的相对偏离排名除以价格水平排名, 核心思想是剥离绝对价位后捕捉日内资金流的纯量价信号, 属于横截面标准化类微观结构因子。
+  key_insights:
+  - 分子分母均使用横截面 rank, 因子对单只股票自身的价格量级不敏感, 仅依赖其在当日截面中的相对位置
+  - rank 比值类因子的核心风险是分母过小导致尾部极值, 必须配合 winsorize 或分母加 epsilon
+  - VWAP-Close 偏离是经典的尾盘异动/资金流代理变量, 在不同市场 (T+0 vs T+1) 表现可能差异显著
+  uncertainty: 因子的真实方向高度依赖市场微观结构 (涨跌幅限制、T+1 制度、尾盘流动性), A 股 T+1 制度下 vwap-close 偏离可能被高估,
+    实测 IC 方向需以回测为准。
+l6:
+  industry_concentration: 中等偏高, 资金流类因子在金融、地产、消费等成交活跃行业信号更明显, 在低成交行业 (如部分公用事业) 噪声较大
+  crowding_level: 中, VWAP-Close 偏离类因子属于公开 101 Alphas 体系, 已被广泛挖掘, 存在一定拥挤, 但经价格水平标准化后仍有一定差异化空间
+  failure_conditions:
+  - 市场极端波动或流动性枯竭时, vwap 本身失真 (如尾盘无量拉升/砸盘), 因子信号失效
+  - 高换手率/低换手率股之间, 日内资金流信号质量差异巨大, 简单横截面排名会混入噪声
+  - 分母排名接近 0 的极低价股 (如仙股、退市股) 会导致因子值爆炸, 需严格剔除
+  risk_notes: 比率类因子对分母极值极度敏感, 上线前必须做 winsorize 与分母下限处理; 同时建议分层 (按价格区间/市值) 检验因子的稳健性,
+    避免被少数极值股票主导组合权重。

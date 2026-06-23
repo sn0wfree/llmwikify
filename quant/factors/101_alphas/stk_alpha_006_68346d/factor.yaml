@@ -1,0 +1,89 @@
+name: stk_alpha_006_68346d
+display_name: 'Alpha #6'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-23'
+updated_at: '2026-06-23'
+l1:
+  definition: (-1 * correlation(open, volume, 10))
+  formula: (-1 * correlation(open, volume, 10))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - open
+  - volume
+  - close
+  - high
+  - low
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l2:
+  calculation_steps:
+  - step: 1
+    description: 对每只股票, 计算 open 与 volume 在过去 10 个交易日的滚动相关系数
+    formula: corr_t = rolling_corr(open_{t-9:t}, volume_{t-9:t}, window=10)
+  - step: 2
+    description: 将相关系数乘以 -1, 符号反转得到最终因子值
+    formula: factor_t = -1 * corr_t
+  - step: 3
+    description: 输出截面因子序列, 数值越大表示 open 与 volume 的负相关性越强 (量价背离)
+    formula: factor = -corr(open, volume, 10)
+  edge_case_handling: 当 rolling window 内 volume 或 open 几乎无波动 (标准差接近 0) 时, 相关系数未定义,
+    polars 默认返回 NaN; 代码未显式处理
+  missing_value_handling: 输入列缺失或 rolling 前期不足 10 个观测值时, 输出 NaN
+  data_alignment: T+1
+  complexity: O(T × N)
+l3:
+  financial_intuition: '捕捉开盘价与成交量的负相关关系: 价升量缩或价跌量增暗示趋势缺乏共识支撑, 反映筹码派发或恐慌抛售, 是经典的量价背离信号。'
+  market_behavior: 上涨无量表明买方力量虚弱, 上涨不可持续; 下跌放量则代表卖方主导, 弱势格局延续。负相关越强, 后续反转/下跌概率越大。
+  theoretical_basis: '基于量价理论 (Price-Volume Theory) 与市场微观结构: 成交量是价格变动的''确认信号'', 量价背离常被视为趋势衰竭的先行指标。'
+  historical_effectiveness: 在 A 股及成熟市场中均有报告正 alpha, 但近年随量化拥挤度上升、ETF 化与被动交易占比提高, 量价关系信号有所衰减。
+  related_factors: Alpha#10 (ts_rank(corr(close, volume, 5), 10))、量价背离类因子、OBV、资金流因子、Amihud
+    非流动性因子
+l4:
+  hypotheses:
+  - id: H1
+    name: 量价背离 → 未来负收益
+    description: open 与 volume 负相关性越强, 说明上涨缺乏量能配合或下跌放量, 反映趋势不可持续, 预期未来收益为负
+    expected_ic_sign: 负
+    source: 经典量价理论 + Kakushadze 101 Alphas 系列因子构造
+    priority: 主假设
+  - id: H2
+    name: 信息不对称下的派发信号
+    description: 负相关常出现在主力派发阶段 (拉高出货), 此时应做空/减仓, 该因子可作为派发行为的代理变量
+    expected_ic_sign: 负
+    source: 市场微观结构理论 (Kyle 1985, Easley-O'Hara)
+    priority: 次假设
+  - id: H3
+    name: 低流动性股票效应更显著
+    description: 在小盘/低流动性股票中, 量价背离信号更强, 因为此类股票更易被主力操控, 信号噪声比更高
+    expected_ic_sign: 不确定
+    source: 流动性溢价文献 (Amihud 2002)
+    priority: 辅助假设
+  - id: H4
+    name: 牛市/熊市非对称性
+    description: 因子在熊市或震荡市中更有效 (量价背离预示下行), 在牛市中可能失效或反向, 存在显著市场状态依赖
+    expected_ic_sign: 不确定
+    source: Regime-dependent alpha 文献
+    priority: 辅助假设
+  meaning_summary: 因子值为 -1 倍过去 10 日 open-volume 相关系数, 衡量量价背离程度; 数值越大, 负相关性越强, 预期未来股价表现越弱。
+  key_insights:
+  - 纯量价类因子, 不引入基本面信息, 对价格冲击和成交结构敏感
+  - 简单 -1*correlation 形式容易过拟合, 实际 alpha paper 中通常搭配 ts_rank 或 decay 加权
+  - 因子对窗口长度 (10 日) 较敏感, 不同周期可能捕捉不同频率的量价关系
+  uncertainty: 量价关系的统计显著性受市场微观结构变化影响大 (如算法交易占比、ETF 申赎), 跨周期稳健性需谨慎验证; 单一相关系数指标噪声较高,
+    实际 IC 可能较弱且不稳定。
+l6:
+  industry_concentration: 无明显行业偏向, 因子来源于纯量价数据, 截面差异主要来自个股流动性与换手率特征, 但低换手/低流动性股票信号更强。
+  crowding_level: 中等。量价类因子是量化经典策略, 在国内私募与海外量化基金中均有广泛使用, 近 5 年拥挤度持续上升, 信号衰减明显。
+  failure_conditions:
+  - '市场剧烈反转 / 流动性危机时: 所有股票同步放量或缩量, 量价相关性结构被打破, 因子失效'
+  - '高换手 / 算法主导股票: 程序化交易使量价关系被人为平滑或扭曲, 相关系数趋于 0, 信号噪声比急剧下降'
+  - '牛市趋势行情: 价升量增的正相关主导市场, -corr 因子选出的''量价背离''股实为震荡整理的优质标的, 因子方向反转'
+  risk_notes: 因子为纯时序滚动计算, 不依赖横截面排序, 使用时需自行做标准化 (z-score) 与行业/市值中性化; 此外窗口期较短 (10 日)
+    易受单日异常成交 (如解禁、增发) 干扰, 建议结合波动率过滤或 winsorize 处理。
