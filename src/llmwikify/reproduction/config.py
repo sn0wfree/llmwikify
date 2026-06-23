@@ -145,7 +145,17 @@ class Config:
         return DEFAULTS.get(key, default)
 
     def _get_nested(self, data: dict, key: str) -> Any:
-        """Get nested value from dict using dotted path."""
+        """Get value from dict using dotted path.
+
+        Supports two formats:
+        1. Flat dotted key: {"clickhouse.host": "x"} (current JSON format)
+        2. Nested dict: {"clickhouse": {"host": "x"}} (intuitive)
+        """
+        # 1. Try flat dotted key first
+        if key in data:
+            return data[key]
+
+        # 2. Fall back to nested dict traversal
         parts = key.split(".")
         current = data
         for part in parts:
