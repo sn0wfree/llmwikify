@@ -3,13 +3,13 @@
   "alpha_index": 37,
   "factor_name": "alpha-037",
   "formula_brief": "(rank(correlation(delay((open - close), 1), close, 200)) + rank((open - close)))",
-  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 1. Compute (open - close)\n    diff = pl.col('open') - pl.col('close')\n\n    # 2. Materialize the time-series correlation BEFORE cross-section rank\n    #    correlation( delay(open-close, 1), close, window=200 )\n    df = df.with_columns(\n        correlation(\n            delay(diff, periods=1),\n            pl.col('close'),\n            window=200\n        ).alias('_corr')\n    )\n\n    # 3. Cross-sectional: rank(correlation) + rank(open - close)\n    factor = (\n        rank(pl.col('_corr')).over('date')\n        + rank(diff).over('date')\n    )\n\n    return df.select(factor).to_series()",
-  "code_chars": 638,
+  "code": "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: open - close\n    df = df.with_columns(\n        (pl.col('open') - pl.col('close')).alias('_oc')\n    )\n    # Step 2: delay by 1 period\n    df = df.with_columns(\n        delay(pl.col('_oc'), periods=1).alias('_oc_lag1')\n    )\n    # Step 3: materialize 200-day correlation (Rule 2)\n    df = df.with_columns(\n        correlation(pl.col('_oc_lag1'), pl.col('close'), window=200).alias('_corr')\n    )\n    # Step 4: rank the correlation cross-sectionally\n    df = df.with_columns(\n        rank(pl.col('_corr')).over('date').alias('_rank_corr')\n    )\n    # Step 5: rank (open - close) cross-sectionally\n    df = df.with_columns(\n        rank(pl.col('_oc')).over('date').alias('_rank_oc')\n    )\n    # Step 6: sum of the two ranks\n    factor = pl.col('_rank_corr') + pl.col('_rank_oc')\n    return df.select(factor).to_series()",
+  "code_chars": 880,
   "factor_series_len": 65250,
   "factor_series_dtype": "Float64",
   "h5_path": "/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_037.h5",
   "ic_mean": 0.03586862161404755,
   "icir": 0.2732020698861871,
   "ic_winrate": 0.6440677966101694,
-  "elapsed_sec": 31.305473355576396
+  "elapsed_sec": 27.487376974895597
 }

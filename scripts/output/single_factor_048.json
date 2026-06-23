@@ -13,89 +13,89 @@
         "state": "REASON",
         "error_kind": "none",
         "error_message": "",
-        "code_chars": 1494,
-        "elapsed_sec": 68.027
+        "code_chars": 1076,
+        "elapsed_sec": 50.283
       },
       {
         "state": "ACT",
         "error_kind": "execute_error",
         "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
-        "code_chars": 1480,
-        "elapsed_sec": 0.02
+        "code_chars": 1062,
+        "elapsed_sec": 0.011
       },
       {
         "state": "OBSERVE",
         "error_kind": "execute_error",
         "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
-        "code_chars": 1480,
+        "code_chars": 1062,
         "elapsed_sec": 0.0
       },
       {
         "state": "REASON",
         "error_kind": "none",
         "error_message": "",
-        "code_chars": 1303,
-        "elapsed_sec": 230.885
+        "code_chars": 1435,
+        "elapsed_sec": 72.46
       },
       {
         "state": "ACT",
         "error_kind": "execute_error",
         "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
-        "code_chars": 1289,
-        "elapsed_sec": 0.01
-      },
-      {
-        "state": "OBSERVE",
-        "error_kind": "execute_error",
-        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
-        "code_chars": 1289,
-        "elapsed_sec": 0.0
-      },
-      {
-        "state": "REASON",
-        "error_kind": "none",
-        "error_message": "",
-        "code_chars": 985,
-        "elapsed_sec": 6.182
-      },
-      {
-        "state": "ACT",
-        "error_kind": "execute_error",
-        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
-        "code_chars": 971,
+        "code_chars": 1421,
         "elapsed_sec": 0.008
       },
       {
         "state": "OBSERVE",
         "error_kind": "execute_error",
         "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
-        "code_chars": 971,
+        "code_chars": 1421,
         "elapsed_sec": 0.0
       },
       {
         "state": "REASON",
         "error_kind": "none",
         "error_message": "",
-        "code_chars": 1147,
-        "elapsed_sec": 8.36
+        "code_chars": 1268,
+        "elapsed_sec": 199.948
       },
       {
         "state": "ACT",
         "error_kind": "execute_error",
         "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
-        "code_chars": 1133,
+        "code_chars": 1254,
+        "elapsed_sec": 0.007
+      },
+      {
+        "state": "OBSERVE",
+        "error_kind": "execute_error",
+        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
+        "code_chars": 1254,
+        "elapsed_sec": 0.0
+      },
+      {
+        "state": "REASON",
+        "error_kind": "none",
+        "error_message": "",
+        "code_chars": 959,
+        "elapsed_sec": 5.525
+      },
+      {
+        "state": "ACT",
+        "error_kind": "execute_error",
+        "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
+        "code_chars": 945,
         "elapsed_sec": 0.008
       },
       {
         "state": "OBSERVE",
         "error_kind": "execute_error",
         "error_message": "DangerousCodeError: Execution error: the truth value of an Expr is ambiguous\n\nYou probably got here by using a Python standard library function instead of the native expressions API.\nHere are some thi",
-        "code_chars": 1133,
+        "code_chars": 945,
         "elapsed_sec": 0.0
       }
     ],
-    "elapsed_sec": 313.501
+    "elapsed_sec": 328.25
   },
-  "elapsed_sec": 313.9733880236745,
+  "elapsed_sec": 335.9400950651616,
   "alpha_index": 48
 }
