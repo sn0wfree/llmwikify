@@ -113,7 +113,7 @@ Python 模块本身就是单例 — `import` 多次只执行一次。多数 "单
 | **适配器** | `ChatBridgeBackend` (3 方法委托 `_truncate_messages`/`_get_toolspec`/`_llm_stream_with_retry`) + `BusAdapter` (SSE→WS 翻译) | `apps/chat/agent/bridge_backend.py` + `apps/chat/bus/adapter.py` | ✅ 完善 |
 | **桥接** | `AgentHook` 抽象基类 + `WikiHook`/`DreamSyncHook`/`AutoIngestHook` 具体实现 (3 个业务 hook, 共 113 LOC) | `foundation/callback/` + `integrations/` | ✅ 完善 |
 | **组合** | `CompositeHook` (13 钩子点 fan-out + 错误隔离) + `CompositeToolRegistry` | `foundation/callback/composite.py` + `apps/agent/tools/skill_adapter.py` | ✅ 完善 |
-| **装饰器** | `_V2PersistenceHook` (包装 tool result 持久化) + `microcompact_fn` (替换过长 tool result) + `measure_latency` CM (Pass5 D-2) + `@track_llm_call` 装饰器 (Pass5 D-4) | `apps/chat/agent/orchestrator.py` + `apps/chat/agent/microcompact.py` + `foundation/utils_timing.py` + `foundation/callback/track_llm_call.py` | ✅ 完善 + Pass5 深度应用 (见 §3.4) |
+| **装饰器** | `_V2PersistenceHook` (包装 tool result 持久化) + `microcompact_fn` (替换过长 tool result) + `measure_latency` CM (Pass5 D-2) | `apps/chat/agent/orchestrator.py` + `apps/chat/agent/microcompact.py` + `foundation/utils_timing.py` | ✅ 完善 + Pass5 深度应用 (见 §3.4) |
 | **外观** | `AgentService` (7 依赖 composition root, 555 LOC) + `MemoryManager` (6 stores 门面) + `ChatDatabase._facade` (99 委托) + `ChatOrchestrator` | `apps/chat/agent/agent_service.py` + `apps/chat/memory/__init__.py` + `apps/chat/db/_facade.py` | ✅ 完善 |
 | **享元** | `events.MESSAGE_DELTA` 等 15 字符串常量 (共享) + `microcompact.DEFAULT_COMPACTABLE_TOOLS` frozenset (7 tool names 共享) | `apps/chat/agent/events.py` + `apps/chat/agent/microcompact.py` | ✅ 完善 |
 | **代理** | `ChatBridgeBackend` (chat_service adapter, 3 方法控访问) | `apps/chat/agent/bridge_backend.py` | ✅ 完善, 决定保留 (改接口 churn ~500 行测试) |
@@ -180,26 +180,32 @@ yield {
 }
 ```
 
-**D-4 `@track_llm_call(metrics_getter)`** (foundation/callback/track_llm_call.py, 130 LOC):
+**R-1 `iter_with_metrics` / `call_with_metrics`** (apps/chat/agent/llm_metrics.py, 2026-06-23):
 
 | 属性 | 值 |
 |---|---|
-| 模式形式 | Python `@decorator` 函数装饰器 |
-| 应用位置 | 装饰器已就绪, 接入推迟到 Phase 8 microcompact metrics endpoint |
-| 行为 | 自动记录 `LLMCallMetrics` 到 `MetricsCollector` |
-| 借鉴来源 | `research_engine/actions.py:tracked` (装饰器模式模块统一) |
+| 模式形式 | async generator wrapper (Context Manager 协议 + yield 重定向) |
+| 应用位置 | `runner_v2._stream_llm` 3 路径 (retry / astream_chat / chat fallback) |
+| 行为 | 自动记录 latency / chars_in / success / error 到 `LLMMetricsCollector` |
+| 取代方案 | Pass5 D-4 `@track_llm_call` 装饰器 (callee 层), 改用 caller 层 CM (避免装饰 `streamable.py` 5 处方法的兼容性) |
+| 借鉴来源 | Pass5 装饰器思路, 但 CM 形式更易与 async generator 配合 |
 
 ```python
-# 使用 (示例, 推迟到 Phase 8 接入)
-@track_llm_call(lambda self: self._metrics_collector)
-async def chat(self, messages, **kwargs):
-    return await self._provider.chat(messages, **kwargs)
+# 使用 (R-1 实际方案)
+async for ev in iter_with_metrics(
+    lambda: retry(messages, tools),
+    prompt_name="chat_reason",
+    chars_in=chars_in,
+):
+    yield ev
 ```
+
+> **Pass7 演进**: R-1 实际替代了 Pass5 D-4 的 `@track_llm_call` 装饰器方案。原装饰器文件 `foundation/callback/track_llm_call.py` (143 LOC) 因 0 引用且功能被 R-1 覆盖, 于 2026-06-23 删除 (F-1 死代码清理)。
 
 #### 3.4.4 装饰器模式设计警示 (来自菜鸟笔记)
 
-1. **装饰顺序重要** (笔记 7): `addtime(blk_bitch(blk_jb(text)))` 中如果顺序错, 后加的 blk 会屏蔽前加的 addtime 时间戳中的字符。chat 装饰器链是 `@check_token_budget` → `@track_llm_call` (装饰器外层), 顺序必须测试验证。
-2. **多层装饰增加复杂性** (GoF 缺点): chat 已有 3 层装饰器 (CompositeHook + _V2PersistenceHook + WikiHook), Pass5 加 1-2 层。装饰层次 ≤ 5 层是安全的。
+1. **装饰顺序重要** (笔记 7): `addtime(blk_bitch(blk_jb(text)))` 中如果顺序错, 后加的 blk 会屏蔽前加的 addtime 时间戳中的字符。LLM metrics 改用 R-1 caller 层 CM (`iter_with_metrics` / `call_with_metrics`), 不再依赖装饰器链。
+2. **多层装饰增加复杂性** (GoF 缺点): chat 已有 3 层装饰器 (CompositeHook + _V2PersistenceHook + WikiHook)。装饰层次 ≤ 5 层是安全的。
 3. **Python 装饰器灵活性**: 既可装饰函数 (single dispatch), 也可装饰类 (override `__init_subclass__`), 也可装饰 async 函数 + async generator。
 
 #### 3.4.5 装饰器模式决策树 (供后续模块参考)
