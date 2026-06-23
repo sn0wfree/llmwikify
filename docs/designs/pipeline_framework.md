@@ -1,7 +1,7 @@
 # Pipeline 框架设计文档
 
 > 最后更新: 2026-06-23
-> 状态: 设计阶段 → 实施阶段 (20 阶段 + 单元测试 + AI 执行原则已规划)
+> 状态: 设计阶段 → 实施阶段 (20 阶段 + 单元测试 + AI 执行原则 + 测试规划 + 设计模式 + 部署与运维)
 
 ## 1. 设计目标
 
@@ -226,8 +226,51 @@ src/llmwikify/reproduction/
 
 ```python
 # pipeline/stages/base.py
+@dataclass
+class StageContext:
+    """整个流水线的累积上下文, 替代纯 dict 提供类型标注.
+
+    各 Stage 只读需要的字段, 写自己产出的字段. 中间产物落盘.
+    """
+    # Stage 0 (paper_understanding)
+    paper_dir: Path | None = None
+    tier1_path: Path | None = None
+    tier2_path: Path | None = None
+    track_b_path: Path | None = None
+    pass2_path: Path | None = None
+
+    # Stage 1 (codegen)
+    formula: str | None = None
+    code: str | None = None
+    code_path: Path | None = None
+    factor_json_path: Path | None = None
+    factor_h5_path: Path | None = None
+
+    # Stage 2 (backtest)
+    backtest_report_path: Path | None = None
+    backtest_metrics: dict | None = None
+
+    # Stage 3 (persist)
+    factor_dir: Path | None = None
+    factor_yaml_path: Path | None = None
+    meta_json_path: Path | None = None
+    backtest_latest_path: Path | None = None
+    db_session_id: str | None = None
+
+    # 运行状态 (跨 stage 共享)
+    error: str | None = None
+    alpha_index: int | None = None
+
+
 class Stage(ABC):
-    """Stage 是 pipeline 编排的最小单元, 薄包装, 不含业务逻辑"""
+    """Stage 是 pipeline 编排的最小单元, 薄包装, 不含业务逻辑.
+
+    设计选择: 用 ctx 字典 (强类型 dataclass) 而非 Generic[IT, OT]:
+      - 14 字段累积, Generic 难以表达
+      - 各 Stage 输出类型多样 (Path / dict / dataclass)
+      - PipelineRunner 需要 thread 整个 ctx
+      - 类型安全靠内部 stage 方法签名, 不靠 ABC
+    """
     name: str
     required_prompts: list[str] = []   # 声明 Prompt 依赖
 
@@ -235,48 +278,41 @@ class Stage(ABC):
         self.workspace = workspace
 
     @abstractmethod
-    def run(self, ctx: dict, config: WorkspaceConfig, prompts: PromptRegistry) -> dict:
+    def run(self, ctx: StageContext, config: WorkspaceConfig, prompts: PromptRegistry) -> StageContext:
         """调子包业务逻辑, 返回更新后的 ctx, 中间产物落盘"""
         ...
 
-    def load(self, ctx: dict) -> dict:
+    def load(self, ctx: StageContext) -> StageContext:
         """从磁盘加载中间产物, 供后续 Stage 恢复 (默认实现: 无)"""
         return ctx
 
-    def exists(self, ctx: dict) -> bool:
+    def exists(self, ctx: StageContext) -> bool:
         """检查中间产物是否已存在, 支持 --skip-existing (默认实现: False)"""
         return False
 ```
 
-### 3.2 Context 设计
+**StageContext vs dict 选择**:
+- StageContext dataclass 提供类型标注 + IDE 补全
+- 仍可当 dict 用 (`ctx.code`, `ctx.factor_dir`)
+- 字段默认 None, 各 Stage 只设关心的字段
+- 替代纯 dict 避免 14 字段拼写错误
 
-```python
-# 整个流水线的 context, 累积所有中间产物路径
-ctx = {
-    # Stage 0
-    "paper_dir": Path,
-    "tier1_path": Path,
-    "tier2_path": Path,
-    "track_b_path": Path,
-    "pass2_path": Path,
+### 3.2 Context 字段说明
 
-    # Stage 1
-    "formula": Formula,
-    "code_path": Path,
-    "factor_json_path": Path,
-    "factor_h5_path": Path,
+字段顺序与所属 Stage 已在 StageContext 定义中标注 (Section 3.1)。
 
-    # Stage 2
-    "backtest_report_path": Path,
-    "backtest_metrics": dict,
+**关键约定**:
+- 各 Stage 只**读**自己依赖的字段, **写**自己产出的字段
+- 中间产物立即落盘 (写 `code_path` / `factor_json_path` 等), ctx 只保留**路径**不保留大数据
+- `error` 字段跨 stage 传递, 用于 Level 2 ReAct 决策
+- `alpha_index` 是当前处理的 alpha 序号, 用于多 alpha 批处理
 
-    # Stage 3
-    "factor_dir": Path,
-    "factor_yaml_path": Path,
-    "meta_json_path": Path,
-    "backtest_latest_path": Path,
-    "db_session_id": str,
-}
+**ctx 演化** (典型 101_alphas 流程):
+```
+Stage 0: paper_dir, tier1_path, tier2_path, track_b_path (LLM 抽取)
+Stage 1: + formula, code, code_path, factor_json_path, factor_h5_path (LLM 编码)
+Stage 2: + backtest_report_path, backtest_metrics (回测)
+Stage 3: + factor_dir, factor_yaml_path, meta_json_path, backtest_latest_path, db_session_id
 ```
 
 ### 3.3 可组合性体现
@@ -762,10 +798,21 @@ metadata:
 | `track_b` | v2 | Stage 0 | system + user |
 | `code_gen` | v2 | Stage 1 | system + user + feedback |
 | `react_feedback` | v2 | Stage 1 | system + user + feedback |
-| `metadata_extract` | v2 | Stage 3 | system + user |
-| `hypothesis_test` | v1 | Stage 3 | system + user |
-| `risk_analyze` | v1 | Stage 3 | system + user |
+| `metadata_extract` | v2 | **Stage 1** (codegen 时同步提取) | system + user |
+| `hypothesis_test` | v1 | Stage 2 (backtest 后期) | system + user |
+| `risk_analyze` | v1 | Stage 2 (backtest 后期) | system + user |
 | `strategy_compose` | v1 | Stage 4 (占位) | system + user |
+
+**注**: `metadata_extract` 归属 Stage 1 而非 Stage 3, 因为:
+- `factor_extractor.py::extract_factor_metadata(llm, formula_brief, code)` 需要 `code` 作为输入
+- 必须在 codegen 产生 code 之后才能抽取 metadata
+- `codegen/metadata.py` 与 `codegen/llm_code.py` 同包, 共享 LLM client
+- Stage 3 (persist) 只写 YAML/DB, 不调 LLM
+
+`hypothesis_test` / `risk_analyze` 归属 Stage 2, 因为:
+- 需要 backtest_metrics (IC, ICIR) 作为输入
+- 属于"回测后分析", 与 backtest 阶段逻辑连续
+- 实际在 `backtest/l5_orchestrator.py` 实现
 
 ### 6.7 Stage 声明 Prompt 依赖
 
@@ -817,6 +864,24 @@ def generate_factor_code(..., prompts: PromptRegistry):
 
 ## 7. CLI 设计
 
+### 7.1 双入口并存
+
+CLI 存在**两个入口**, 服务不同场景, **不冲突**:
+
+| 入口 | 命令 | 用途 | 用户群 |
+|------|------|------|--------|
+| **旧 CLI** (已有, 保留) | `llmwikify reproduce single <paper.pdf>` / `llmwikify reproduce batch <dir>/` | 论文 → 因子 (走 Stage 0 LLM 抽取) | 论文阅读用户 |
+| **新 CLI** (Phase 14E 新增) | `python -m llmwikify.reproduction.cli run 101_alphas` | 配置驱动批量 (跳过 Stage 0, 跑 Stage 1-3) | 因子研究用户 |
+
+**两 CLI 共用 `PipelineRunner` 内核**, 不同入口。
+
+**过渡策略**:
+1. Phase 14E 上线时, 旧 CLI 标记 `deprecated` (在 docstring 警告)
+2. 1-2 个月后 (Phase 14F2 之后) 视情况删除旧 CLI
+3. 删除前, 新旧 CLI 必须**功能等价** (旧 CLI 也能跑 101_alphas)
+
+### 7.2 新 CLI (Phase 14E)
+
 ```bash
 # 跑全部
 python -m llmwikify.reproduction.cli run 101_alphas
@@ -855,6 +920,18 @@ python -m llmwikify.reproduction.cli list
 
 # 创建 workspace 模板
 python -m llmwikify.reproduction.cli new my_paper
+```
+
+### 7.3 旧 CLI 兼容层 (Phase 1-14E 之间)
+
+旧 CLI 位于 `src/llmwikify/interfaces/cli/commands/reproduce_cmd.py`, 调用 `llm_extraction.run_one_paper`。
+**不删除**, 通过兼容层 (`reproduction/__init__.py` PEP 562) 保持工作。
+
+Phase 14E 完成后, 旧 CLI 可选切换到 `PipelineRunner` (功能等价):
+```python
+# interfaces/cli/commands/reproduce_cmd.py 内部 (Phase 14E 后)
+from llmwikify.reproduction.pipeline import PipelineRunner  # 新
+# from llmwikify.reproduction.llm_extraction import run_one_paper  # 旧
 ```
 
 ## 8. 与 WebUI 集成
@@ -1223,15 +1300,29 @@ H2-B: patch 失败时给出清晰错误信息
 H2-C: 考虑把 patch 上游贡献给 QuantNodes
 ```
 
-#### 🔴 H3. `nanobot` 缺失导致 import 失败 (现有问题)
+#### 🔴 H3. `nanobot` 缺失导致 import 失败 (现有问题) — **待验证**
 
-**验证**: 已观察到 `ModuleNotFoundError: No module named 'nanobot'`
+**状态**: 2026-06-23 文档中标记, **但实际未验证**。
 
-**建议方案**:
+**grep 结果** (2026-06-23 验证):
+- 全代码库**无** `import nanobot` 或 `from nanobot`
+- 仅 8 处注释: `"# Borrowed from nanobot v0.2.1"` / `"# Vendored from nanobot ..."`
+- 这些是 **vendored code** (已复制到本地), 不需要外部 nanobot 依赖
+
+**结论**: H3 假设**可能不成立**。`reproduction/__init__.py` 用 PEP 562 懒加载**仍然必要** (避免循环依赖, 减少启动时间), 但动因不是"nanobot 缺失"。
+
+**待 Phase 1 实施前验证**:
+```bash
+python -c "from llmwikify.reproduction.factor_library import read_factor_yaml"
+# 如果成功 → nanobot 不是问题
+# 如果 ModuleNotFoundError: No module named 'nanobot' → 假设成立, 需懒加载
 ```
-H3-A: 把 nanobot import 全部延迟 (lazy import)
+
+**建议方案** (无论假设是否成立):
+```
+H3-A: 把外部 import 全部延迟 (lazy import) — 防患于未然
   - reproduction/__init__.py 用 __getattr__ 实现 PEP 562 懒加载
-H3-B: 调研 nanobot 是什么, 是否真有必要
+H3-B: 调研是否有循环依赖 — 即使无 nanobot, 循环依赖也常出现
 ```
 
 ---
@@ -1663,13 +1754,8 @@ def test_import(import_stmt):
 
 ### 17.4 验证节点 (Gate)
 
-| Gate | 验证项 | 不通过则不进入下一 Phase |
-|------|--------|------------------------|
-| G1 (Phase 1 后) | 20+ 关键 import 可用, WebUI 健康检查通过 | 不通过 → 修复 common/ 兼容层 |
-| G2 (Phase 2 后) | 论文页面 API 正常, reproduce_cmd 跑通 | 不通过 → 修复 paper_understanding/ |
-| G3 (Phase 3 后) | 1 个 alpha codegen 成功, 旧脚本 stage_c_* 仍可 import | 不通过 → 修复 codegen/ 兼容层 |
-| G4 (Phase 4 后) | 1 个 alpha 完整流程 (codegen+backtest+persist) 成功 | 不通过 → 修复 backtest+persist |
-| G5 (Phase 5 后) | 99/99 success, 旧数据完全一致 | 不通过 → 修复 pipeline/ |
+> **本节已废弃** — Phase 5 已演进到 14 → 20 阶段, 详细 Gate 验证节点见 **Section 21.4 (新版, 20 阶段对应 Gate)**。
+> 保留本节仅为历史参考, 实施时**以 Section 21.4 为准**。
 
 ### 17.5 文档同步
 
@@ -3239,6 +3325,9 @@ pytest tests/ -v
 | v1.1 | 2026-06-23 | 加入实施风险评估 (Section 14-19) |
 | v1.2 | 2026-06-23 | 加入 14 → 20 阶段细化 + 单元测试要求 (Section 20-27) |
 | v1.3 | 2026-06-23 | 加入 AI 执行原则 (Section 28) — **G5 前不主动暂停** |
+| v1.4 | 2026-06-23 | 加入单元测试完整规划 (Section 29) — **5 阶段, 13 天, ~300 新测试** |
+| v1.5 | 2026-06-23 | 加入 Python 设计模式评估 (Section 30) — **7 类模式集成, +2.5d** |
+| **v1.6** | 2026-06-23 | **修复 5 个内部矛盾 + 加部署与运维 (Section 31)** — Stage ABC 用 StageContext dataclass / metadata_extract 改 Stage 1 / CLI 双入口 / 删除旧 5-Phase Gate 表 / Strategy for FactorCompiler 改为配置选择 / 加 nanobot 待验证 / 加 Section 31 部署与运维 |
 
 ---
 
@@ -3506,4 +3595,1017 @@ Phase 14F2[G5]┘ ⏸ 硬暂停 (L2 最终报告 + 等待用户最终确认)
 
 ---
 
-**文档完成**. 涵盖 101 alpha 端到端设计 + 4 层架构 + prompts/ 子系统 + 三层 ReAct + 7 子包拆分 + 20 阶段实施计划 + 单元测试纪律 + 5 个 Gate 验证 + 风险评估 + 决策记录 + AI 执行原则.
+# 第五部分: 单元测试规划
+
+> Section 29 是 2026-06-23 关于 reproduction/ 56 个模块的完整测试规划。
+
+## 29. 单元测试完整规划
+
+### 29.1 用户决策 (6/6)
+
+| # | 决策 | 内容 |
+|---|------|------|
+| 1 | **a** 范围 | 顶层 40 + llm_extraction 16 = **56 个文件** |
+| 2 | **a** 策略 | 完整 5 阶段, 13 天 |
+| 3 | **a** 风格 | **严格 0 回归**: 只新增文件, 不动旧测试 |
+| 4 | **b** 时机 | **测试与 refactor 并行**: refactor 阶段必先有测试 |
+| 5 | **a** CI | **立即接入 GHA** |
+| 6 | **b** 数据源 | **mock 优先 + 1 个真实冒烟** (GHA secret gating) |
+
+### 29.2 现状基线
+
+| 指标 | 当前值 |
+|------|--------|
+| Python | 3.10.12 (CI 3.10/3.11/3.12) |
+| 现有 tests | **784 collected**, 抽样 67/67 通过 |
+| pytest 配置 | `[tool.pytest.ini_options]` 已含 `addopts=-v --tb=short`, markers=e2e |
+| coverage 配置 | `[tool.coverage]` 已含 `branch=true`, `source=["src/llmwikify"]` |
+| GHA | `tests.yml` + `lint.yml` 已有 (基础跑 pytest) |
+| pyproject extras | dev: pytest/pytest-cov/black/ruff/mypy |
+| **目标覆盖率** | **80% line** (fail_under) |
+
+### 29.3 测试覆盖矩阵 (56 个模块)
+
+| 类别 | 数量 | 模块 |
+|------|------|------|
+| **完全覆盖** ✅ | 19 | defer, extract, extract_factors, extract_paper, factor_backtest, factor_compiler_react, llm_extraction/orchestrator, llm_extraction/plan_saver, llm_extraction/retry, llm_extraction/runlog, llm_extraction/stage0_ingest, llm_extraction/track_b, llm_extraction/validator, sessions, router, run, universe, utils, llm_extraction/section_detector(部分) |
+| **零覆盖** ❌ | **15** | akshare_data, ast_compiler, ast_complexity, ast_extractor, clickhouse_data, config, contracts, error_categorizer, factor_library, ifind_data, paths, run_id, telemetry, llm_extraction/config, llm_extraction/llm_factory |
+| **部分覆盖** ⚠️ | **18** | ast_nodes, backtest, codegen_utils, factor_compiler, factor_extractor, factor_value_store, l5_validation, metrics, quant_wiki, quantnodes_adapter, quantnodes_repro, schemas, self_repairing, strategies, llm_extraction/planner, llm_extraction/preview, llm_extraction/section_detector, llm_extraction/track_a |
+
+### 29.4 五阶段总览
+
+| 阶段 | 内容 | 文件数 | 新测试 | 时间 | 累计 |
+|------|------|--------|--------|------|------|
+| **0** | 基础设施 (imports/inventory/smoke) | 3 | 87+ | 1d | 1d |
+| **1** | 零覆盖模块 | 15 | ~120 | 5d | 6d |
+| **2** | 部分覆盖补充 | 18 | ~180 | 4d | 10d |
+| **3** | 集成 + 行为等价性 | 6 | ~40 | 3d | 13d |
+| **4** | 覆盖率报告 + CI 完善 | 2 | - | 1d | 14d |
+| **总计** | | **44** | **~430** | **14d** | |
+
+### 29.5 阶段 0: 基础设施 (D1, 1 天)
+
+**目标**: 建立"全模块可导入 + 全模块有基本测试"的最低基线。
+
+#### 29.5.1 `tests/reproduction/test_imports.py` (新)
+
+```python
+ALL_MODULES = [
+    # 40 顶层模块
+    "akshare_data", "ast_compiler", "ast_complexity", "ast_extractor",
+    "ast_nodes", "backtest", "clickhouse_data", "codegen_utils",
+    "config", "contracts", "error_categorizer", "extract",
+    "extract_factors", "extract_paper", "factor_backtest",
+    "factor_compiler", "factor_compiler_react", "factor_extractor",
+    "factor_library", "factor_value_store", "ifind_data",
+    "l5_orchestrator", "l5_validation", "metrics", "paths",
+    "quant_wiki", "quantnodes_adapter", "quantnodes_repro",
+    "router", "run", "run_id", "schemas", "self_repairing",
+    "sessions", "strategies", "telemetry", "universe", "utils",
+    # 16 llm_extraction/ 模块
+    "llm_extraction.config", "llm_extraction.defer",
+    "llm_extraction.llm_factory", "llm_extraction.log_decorator",
+    "llm_extraction.orchestrator", "llm_extraction.plan_saver",
+    "llm_extraction.planner", "llm_extraction.preview",
+    "llm_extraction.retry", "llm_extraction.runlog",
+    "llm_extraction.section_detector", "llm_extraction.stage0_ingest",
+    "llm_extraction.track_a", "llm_extraction.track_b",
+    "llm_extraction.validator",
+]
+
+@pytest.mark.parametrize("module_name", ALL_MODULES)
+def test_module_imports(module_name):
+    __import__(f"llmwikify.reproduction.{module_name}")
+```
+
+**测试数**: 56 (parametrized)
+
+#### 29.5.2 `tests/reproduction/test_module_inventory.py` (新)
+
+锁定每个模块的公共 API, 防止重构时意外破坏。
+
+```python
+EXPECTED_PUBLIC_API = {
+    "factor_library": ["read_factor_yaml", "write_factor_yaml",
+                        "list_factors", "update_index", ...],
+    # ... 56 个模块
+}
+```
+
+**测试数**: ~30 (parametrized)
+
+#### 29.5.3 `tests/reproduction/test_no_uncovered_smoke.py` (新)
+
+```python
+# 列出所有 reproduction/ 下的模块
+# 检查每个模块是否在 tests/ 中有对应测试文件
+# 无测试文件的: fail
+```
+
+**测试数**: 1 (skipif override)
+
+**阶段 0 产出**: 3 个新文件, 87+ 测试, **1 天完成**
+
+---
+
+### 29.6 阶段 1: 零覆盖模块 (D2-D6, 5 天)
+
+#### 29.6.1 测试规格 (按优先级)
+
+| 序号 | 模块 | 行数 | 测试文件 | 测试数 | 估算 |
+|------|------|------|---------|--------|------|
+| **P0 (立即)** | | | | | |
+| 1 | `factor_library.py` | 314 | `test_factor_library.py` | 25 | 0.5d |
+| **P1 (核心)** | | | | | |
+| 2 | `paths.py` | 187 | `test_paths.py` | 12 | 0.25d |
+| 3 | `run_id.py` | 70 | `test_run_id.py` | 5 | 0.1d |
+| 4 | `telemetry.py` | 80 | `test_telemetry.py` | 8 | 0.15d |
+| 5 | `error_categorizer.py` | 156 | `test_error_categorizer.py` | 10 | 0.25d |
+| 6 | `config.py` | 250 | `test_repro_config.py` | 12 | 0.3d |
+| 7 | `contracts.py` | 468 | `test_contracts.py` | 18 | 0.5d |
+| **P2 (AST)** | | | | | |
+| 8 | `ast_extractor.py` | 98 | `test_ast_extractor.py` | 10 | 0.25d |
+| 9 | `ast_complexity.py` | 113 | `test_ast_complexity.py` | 8 | 0.2d |
+| 10 | `ast_compiler.py` | 192 | `test_ast_compiler.py` | 12 | 0.4d |
+| **P3 (LLM 子包)** | | | | | |
+| 11 | `llm_extraction/config.py` | 245 | `test_llm_extraction_config.py` | 10 | 0.3d |
+| 12 | `llm_extraction/llm_factory.py` | 82 | `test_llm_factory.py` | 8 | 0.2d |
+| **P4 (数据源)** | | | | | |
+| 13 | `akshare_data.py` | 212 | `test_akshare_data.py` | 10 | 0.4d |
+| 14 | `clickhouse_data.py` | 209 | `test_clickhouse_data.py` | 8 | 0.4d |
+| 15 | `ifind_data.py` | 685 | `test_ifind_data.py` | 14 | 0.5d |
+
+**小计**: ~4.25 天, **15 个新文件**, **~170 测试**
+
+#### 29.6.2 factor_library.py 详细测试设计 (示例, 最重要)
+
+```python
+# test_factor_library.py
+
+class TestReadFactorYaml:
+    def test_new_dir_format(self, tmp_path):         # 101_alphas/.../factor.yaml
+    def test_old_single_file_format(self, tmp_path): # 旧 *.yaml 平铺
+    def test_missing_file_returns_none(self, tmp_path):
+    def test_invalid_yaml_returns_none(self, tmp_path):
+    def test_loads_code_py(self, tmp_path):         # 单独 code.py
+    def test_loads_backtest_latest(self, tmp_path):  # backtest/latest.json
+    def test_loads_meta_json(self, tmp_path):
+    def test_handles_unicode(self, tmp_path):
+
+class TestWriteFactorYaml:
+    def test_writes_factor_yaml(self, tmp_path):
+    def test_writes_code_py(self, tmp_path):
+    def test_writes_backtest(self, tmp_path):
+    def test_atomic_write(self, tmp_path):          # 防止半成品
+
+class TestListFactors:
+    def test_empty_dir(self, tmp_path):
+    def test_lists_all_factors(self, tmp_path):
+    def test_filters_by_category(self, tmp_path):
+
+class TestUpdateIndex:
+    def test_creates_index_if_missing(self, tmp_path):
+    def test_appends_new_factor(self, tmp_path):
+    def test_idempotent(self, tmp_path):
+
+# 约 25 个测试
+```
+
+---
+
+### 29.7 阶段 2: 部分覆盖补充 (D7-D10, 4 天)
+
+#### 29.7.1 重点补充方向 (不修改旧测试, 全部新文件)
+
+| 模块 | 已有测试 | 补充方向 | 估算 |
+|------|---------|---------|------|
+| `ast_nodes.py` | - | AST 节点构造/序列化/深拷贝 | 0.3d |
+| `backtest.py` | factor_api, p0_fixes | 与 factor_backtest 差异 + run_backtest 主流程 | 0.3d |
+| `codegen_utils.py` | factor_compiler_react | extract_python/validate_safety/execute_code 完整路径 | 0.4d |
+| `factor_compiler.py` | loop_v4 | AST 路径 + L5 fallback + 错误 | 0.4d |
+| `factor_extractor.py` | extract_factor_metadata, multi | existing_metadata merge + batch_size | 0.4d |
+| `factor_value_store.py` | parquet_and_formula | H5/Parquet 读写 + Polars 兼容 | 0.3d |
+| `l5_validation.py` | l4_sync, l5_* | hypothesis sync + 风险校验 | 0.4d |
+| `metrics.py` | quant | IC/ICIR/winrate 计算 | 0.3d |
+| `quant_wiki.py` | paper_api | Wiki 写入 + Markdown 转换 | 0.3d |
+| `quantnodes_adapter.py` | quant, cross_section | PipelineRunner 12 节点 | 0.4d |
+| `quantnodes_repro.py` | factor_backtest, quant | Reproduce 端到端 | 0.4d |
+| `schemas.py` | routes | Schema 验证 + 序列化 | 0.3d |
+| `self_repairing.py` | factor_compiler_react | 自动修复错误分类 + 重试 | 0.3d |
+| `strategies.py` | strategy_api, loop_v4 | 策略组合 + 资金曲线 | 0.3d |
+| `llm_extraction/planner.py` | planner_helpers | Plan 生成 + token budget | 0.3d |
+| `llm_extraction/preview.py` | validator_preview | 预览生成 + 校验 | 0.3d |
+| `llm_extraction/section_detector.py` | section_detector_helpers | 16-section typology | 0.3d |
+| `llm_extraction/track_a.py` | - (缺) | Tier 1/2 metadata 提取 | 0.3d |
+
+**小计**: ~5.6 天, **18 个新文件**, **~180 测试**
+
+---
+
+### 29.8 阶段 3: 集成 + 行为等价性 (D11-D12, 3 天)
+
+#### 29.8.1 文件清单
+
+| 文件 | 内容 | 测试数 | 估算 |
+|------|------|--------|------|
+| `test_pipeline_equivalence.py` | 旧 reproduction/ 实现 vs 新 pipeline/ 实现的输出对比 (refactor 时使用) | 6 | 0.5d |
+| `test_pipeline_e2e_5alphas.py` | alpha-001/002/003/004/005 端到端 (~10min, gated) | 5 | 0.5d |
+| `test_pipeline_99alphas.py` | 99 alpha 完整 (~60min, CI nightly only) | 1 | 0.5d |
+| `test_webui_factor_pages.py` | WebUI /factor/{id} 路由 + 渲染 (FastAPI TestClient) | 12 | 0.5d |
+| `test_data_source_integration.py` | akshare/clickhouse/ifind 切换 + 数据一致性 | 10 | 0.5d |
+| `test_react_self_repair_e2e.py` | ReAct 主循环 + 自动修复完整流程 | 6 | 0.5d |
+
+**小计**: ~3 天, **6 个新文件**, **~40 测试**
+
+#### 29.8.2 行为等价性测试模板
+
+```python
+# test_pipeline_equivalence.py
+
+def test_factor_library_read_old_vs_new_format():
+    """旧 *.yaml 与新 {name}/factor.yaml 行为等价."""
+    old_result = read_factor_yaml_old("stock/price/momentum")
+    new_result = read_factor_yaml_new("stock/price/momentum")
+    assert new_result["name"] == old_result["name"]
+    assert new_result["l5"]["ast"] == old_result["l5"]["ast"]
+```
+
+---
+
+### 29.9 阶段 4: 覆盖率报告 (D13, 1 天)
+
+#### 29.9.1 pyproject 门槛
+
+```toml
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = [...]
+```
+
+#### 29.9.2 CI 集成
+
+- codecov.io 接入
+- PR 评论显示覆盖率 diff
+- main 分支覆盖率追踪
+
+#### 29.9.3 HTML 报告
+
+- 保留本地生成 (`htmlcov/`)
+- 加 .gitignore
+
+---
+
+### 29.10 CI 增强 (1 天)
+
+#### 29.10.1 修改 `.github/workflows/tests.yml`
+
+```yaml
+name: Tests
+on: [push, pull_request]
+jobs:
+  unit:               # 快, < 2min, 必跑
+  unit-mock-only:     # 不连真实, 默认 gating
+  integration:        # DB/H5, ~10min
+  llm-smoke:          # 真实 LLM, GHA secret gating
+  coverage:           # codecov 上传
+```
+
+**关键设计**:
+- `unit` job: 全 mock, 默认触发, ~30s
+- `integration` job: 真实 DB/H5, ~5min, push to main + PR
+- `llm-smoke` job: 真实 LLM, `if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.LLM_API_KEY` gating
+- `coverage`: codecov 上传, 门槛 80% line
+
+#### 29.10.2 新增 GHA secrets
+
+- `LLM_API_KEY` (minimax)
+- `LLM_BASE_URL`
+- `CODECOV_TOKEN`
+
+#### 29.10.3 修改 pyproject.toml
+
+- 新增 marker: `mock` (默认) / `integration` (push to main) / `llm` (gated)
+- `addopts` 增加 `--strict-markers`
+
+---
+
+### 29.11 测试模板
+
+#### 29.11.1 通用测试文件模板
+
+```python
+"""Tests for {module_name}.
+
+覆盖:
+  - 公开 API 主要路径
+  - 边界 (空/None/Unicode)
+  - 错误处理 (异常路径)
+  - 性能 (大输入不超 2x)
+"""
+from __future__ import annotations
+
+import pytest
+from llmwikify.reproduction.{module_name} import (
+    public_function_1, public_function_2, ...
+)
+
+
+class TestPublicFunction1:
+    def test_basic(self):
+        ...
+
+    def test_edge_case_empty(self):
+        ...
+
+    def test_invalid_input_raises(self):
+        with pytest.raises(ValueError):
+            ...
+
+
+class TestPublicFunction2:
+    ...
+```
+
+#### 29.11.2 fixture 复用
+
+复用 `tests/reproduction/conftest.py` 已有的:
+- `FakeWiki` (in-memory wiki mock)
+- `FakeRegistry`
+- `FakeLLMClient`
+- `paper_client`, `repro_client`, `factor_client`, `strategy_client`
+- `tmp_path` (pytest built-in)
+
+---
+
+### 29.12 时间表 (Gantt)
+
+```
+D1   ┃ ████ 阶段 0 (基础设施)               ████
+     ┃   test_imports.py (56)
+     ┃   test_module_inventory.py (30)
+     ┃   test_no_uncovered_smoke.py (1)
+D2-3 ┃ ████ 阶段 1.1-1.2 factor_library + paths/run_id/telemetry
+D4   ┃ ████ 阶段 1.3-1.4 error_categorizer/config/contracts
+D5   ┃ ████ 阶段 1.5-1.7 ast 4 + llm_extraction 2
+D6   ┃ ████ 阶段 1.8 数据源 3 (mock 优先)
+D7-9 ┃ ████ 阶段 2 补充 18 文件 (重点)
+D10  ┃ ████ 阶段 2 补充 (剩余)
+D11  ┃ ████ 阶段 3.1-3.2 集成 + 等价性
+D12  ┃ ████ 阶段 3.3-3.4 e2e + WebUI
+D13  ┃ ████ 阶段 4 覆盖率报告 + CI
+```
+
+---
+
+### 29.13 风险与缓解
+
+| 风险 | 概率 | 影响 | 缓解 |
+|------|------|------|------|
+| iFinD/ClickHouse mock 复杂 | 高 | 测试慢 | 写接口契约测试, 真实调用仅 1 个冒烟 |
+| Polars 兼容性差异 | 中 | 断言 flaky | tolerance + 业务结果对比, 不比 bit-level |
+| LLM 真实测试不稳定 | 中 | CI 失败 | 严格 gating, 仅 nightly + main |
+| 文档未与代码同步 | 中 | 信任降低 | 阶段 0 test_module_inventory 锁定 API |
+| 18 个部分覆盖补充慢 | 中 | 进度推迟 | P0 优先, P1+ 可后续 |
+| 20 阶段 refactor 冲突 | 中 | 工作量翻倍 | 阶段 0 严格 smoke test 先建立, refactor 必先有测试 |
+
+---
+
+### 29.14 验证清单 (Definition of Done)
+
+每个阶段必须满足:
+
+- [ ] 所有新测试通过 (`pytest -m mock`)
+- [ ] 已有 784 测试**全部仍然通过** (0 回归)
+- [ ] 阶段报告中说明: 文件数 / 新增测试数 / 覆盖率
+- [ ] 旧测试**完全未修改** (用 `git diff tests/reproduction/`)
+- [ ] 新增文件命名遵循 `test_<module>_<aspect>.py` 规范
+- [ ] 中文 commit message 风格 `test(repro): 阶段 X.Y <说明>`
+- [ ] GHA unit job 跑通 (5min 内)
+
+**最终交付物** (D13):
+- 56 个模块全部有测试
+- 零覆盖模块: 0
+- 部分覆盖模块: ≤ 5 (剩 13 个有完整覆盖)
+- 总测试数: ~1300+ (从 784 → 1300+)
+- Coverage ≥ 80% line
+- GHA 5 jobs 全部跑通
+- 20 阶段 refactor 可安全进行
+
+---
+
+### 29.15 与 20 阶段 refactor 关系 (决策 4.b)
+
+按决策 4.b (**测试与 refactor 并行**), 实施时序:
+
+| refactor 阶段 | 前置测试 | 并行 |
+|--------------|---------|------|
+| Phase 1 (common/) | test_common.py | 阶段 0-1 |
+| Phase 2 (data_source/) | test_data_source.py | 阶段 1.13-1.15 |
+| Phase 3 (兼容层) | test_imports.py (33 parametrized) | 阶段 0 |
+| Phase 5 (codegen/) | test_codegen.py | 阶段 1.4 (codegen_utils) + 阶段 2.3 |
+| Phase 7 (backtest/) | test_backtest.py | 阶段 2.2 |
+| Phase 8 (persist/) | test_persist.py | 阶段 2.x |
+| Phase 11 (metadata_extract) | test_metadata.py | 阶段 2.5 |
+| Phase 14C (pipeline/ 业务) | test_pipeline_equivalence.py | 阶段 3.1 |
+
+**强约束**: refactor 一个模块前, 该模块必须有完整测试。
+
+---
+
+### 29.16 立即执行清单 (退出 Plan Mode 后)
+
+| 步骤 | 操作 | 时间 |
+|------|------|------|
+| **1** | 修改 `pyproject.toml` (新 marker, fail_under) | 5min |
+| **2** | 改写 `.github/workflows/tests.yml` (5 jobs) | 30min |
+| **3** | 创建 `tests/reproduction/test_imports.py` (56 测试) | 1h |
+| **4** | 创建 `tests/reproduction/test_module_inventory.py` (30 测试) | 1h |
+| **5** | 创建 `tests/reproduction/test_no_uncovered_smoke.py` (1 测试) | 15min |
+| **6** | 跑 `pytest -m mock` 验证基线 | 5min |
+| **7** | commit: "test(repro): 阶段 0 基础设施 — 56 模块 import + 公共 API 锁定" | 5min |
+| **8** | 进入阶段 1, 按 4.25 天分批 | ... |
+
+**Day 1 总计**: ~3.5h, 产出 87+ 测试, CI 跑通
+
+---
+
+### 29.17 原则总结
+
+| 决策点 | 选择 | 理由 |
+|--------|------|------|
+| 测试范围 | 56 个文件 | 全面, 避免盲点 |
+| 执行策略 | 5 阶段, 13 天 | 渐进, 风险可控 |
+| 测试风格 | 严格 0 回归 | 保护现有 784 测试 |
+| refactor 时机 | 测试先行 | 安全 refactor, 不破 |
+| CI 集成 | 立即 GHA | 5 jobs, 早发现早修复 |
+| 数据源 | mock 优先 + 1 冒烟 | 稳定 + 真实覆盖 |
+
+---
+
+**Section 29 完成**. 涵盖 56 个模块的完整单元测试规划: 5 阶段, 13 天, 44 个新文件, ~430 个新测试, 80% 覆盖率门槛, 决策记录.
+
+---
+
+# 第六部分: Python 设计模式集成
+
+> Section 30 是 2026-06-23 关于 reproduction/ 56 个模块的设计模式评估与重构建议。
+
+## 30. Python 设计模式评估
+
+### 30.1 用户决策 (5/5)
+
+| # | 决策点 | 决策 |
+|---|--------|------|
+| 1 | 模式范围 | **(a) 必用 3 类 + (b) 推荐 4 类** = 7 类集成 |
+| 2 | 引入顺序 | **(b) refactor 时引入** (与决策 4.b 一致) |
+| 3 | ABC vs Protocol | **(b) ABC + Protocol 混用** (Pythonic) |
+| 4 | 何时开始 | **(b) 先完成 Phase 0 测试** (安全) |
+| 5 | Pydantic | **(a) 不引入** (overkill) |
+
+### 30.2 现状勘察
+
+| 维度 | 现状 | 评估 |
+|------|------|------|
+| **ABC/抽象基类** | 0 文件使用 | ⚠️ 重大空白 |
+| **Protocol** | 1 个 (router.py:27 DataSource) | 🟡 仅 1 个, 远不够 |
+| **@dataclass** | 18 文件 | ✅ 已成熟 |
+| **Enum** | 0 个 (状态用 string) | ⚠️ 重复定义 3+ 次 |
+| **Context Manager** | 0 个 | 🟡 缺 |
+| **Factory** | llm_factory.py 已有 | ✅ 局部 |
+| **Registry** | 0 个 | 🟡 缺 |
+| **Builder** | 0 | 🟡 缺 |
+| **Singleton** | 0 (依赖 module-level globals) | 🟢 Python 推荐 |
+| **frozen=True** | 0 个 @dataclass | 🟡 18 个文件可加 |
+
+### 30.3 代码异味 (Code Smells)
+
+| 异味 | 位置 | 重复 | 影响 |
+|------|------|------|------|
+| **read_factor_yaml 散布 3 文件** | factor_library / quant_wiki / quantnodes_repro | 3× | 维护成本 |
+| **Config 双份** | config.py (250) + llm_extraction/config.py (245) | 2× | 概念分裂 |
+| **VALID_STATUSES 硬编码** | sessions.py:54 | 1× | 散落难改 |
+| **DataSource 签名不一致** | akshare/clickhouse/ifind 3 文件 | 3× 接口不同 | 替换困难 |
+| **3 个数据源** | akshare/clickhouse/ifind 不走 DataSource Protocol | 3× | 未统一 |
+| **module logger 散落 29 文件** | 全部 | 29× | 风格不一致 |
+| **@dataclass 无 frozen** | 18 文件 | 18× | 不可变数据保护 |
+
+### 30.4 候选模式 × 适用场景矩阵
+
+| 模式 | 适用模块 | 价值 | 成本 | 当前状态 | 建议 |
+|------|---------|------|------|---------|------|
+| **ABC (抽象基类)** | `Stage` (7 子包) | 🟢 高 | 🟢 低 | 未应用 | **必用** (Phase 14D) |
+| **ABC** | `DataSource` | 🟢 高 | 🟡 中 | 已有 Protocol | **升级为 ABC** (Phase 2) |
+| **ABC** | `LLMClient` | 🟡 中 | 🟢 低 | 未应用 | **Phase 11** (llm_factory) |
+| **ABC** | `CodeValidator` | 🟡 中 | 🟢 低 | 未应用 | **Phase 5** (codegen) |
+| **Strategy** | `DataSource` (3 impl) | 🟢 高 | 🟡 中 | 散落 | **Phase 2** |
+| **Strategy** | `LLMProvider` (minimax/openai) | 🟡 中 | 🟡 中 | 部分 | **Phase 11** |
+| **Strategy** | `FactorCompiler` (AST vs ReAct) | 🟡 中 | 🟡 中 | 并存 | **Phase 5** 统一接口 |
+| **Factory** | `LLMClient.create()` | 🟡 中 | 🟢 低 | 已有 | **保留** |
+| **Factory** | `Stage.create(name)` | 🟢 高 | 🟢 低 | 未应用 | **Phase 14D** |
+| **Factory** | `DataSource.create(name)` | 🟡 中 | 🟢 低 | 部分 | **Phase 2** |
+| **Registry** | `Stage` 注册表 | 🟢 高 | 🟢 低 | 未应用 | **Phase 14A** (planned) |
+| **Registry** | `PromptTemplate` | 🟢 高 | 🟢 低 | 未应用 | **Phase 4** (planned) |
+| **Builder** | `WorkspaceConfig` | 🟡 中 | 🟢 低 | 未应用 | **Phase 14A** (planned) |
+| **Builder** | `PaperBacktestReport` | 🟡 中 | 🟢 低 | 未应用 | **Phase 7** |
+| **Context Manager** | `pipeline.run()` (start/end) | 🟡 中 | 🟢 低 | 未应用 | **Phase 14A** |
+| **Context Manager** | `Config.override()` (temp) | 🟡 中 | 🟢 低 | 未应用 | **可选** |
+| **Enum** | `SessionStatus` (替代 VALID_STATUSES) | 🟢 高 | 🟢 低 | 字符串 | **Phase 1** (common/) |
+| **Enum** | `ReactErrorKind` | 🟢 高 | 🟢 低 | 已有 | **保留** |
+| **frozen=True** | `BacktestConfig` / `FactorMetadata` | 🟡 中 | 🟢 低 | 未用 | **Phase 1** (common/) |
+| **Pydantic** | configs, contracts | 🟡 中 | 🟡 中 (新依赖) | 未用 | **不推荐** (overkill) |
+| **Singleton** | `Config`, `LLMClient` | 🟡 中 | 🟢 低 | module-level | **不推荐** (Pythonic: globals) |
+| **Template Method** | Stage.run() | 🟡 中 | 🟡 中 | 未用 | **不推荐** (过度抽象) |
+| **Observer** | Telemetry events | 🟢 高 | 🟡 中 | 未用 | **可选** (Phase 14A) |
+| **Chain of Responsibility** | Stage pipeline | 🟡 中 | 🟡 中 | 部分 (3 层 ReAct) | **保留** |
+| **Memento/State** | Session.status 转移 | 🟡 中 | 🟡 中 | 字符串 | **可选** (Phase 1) |
+
+### 30.5 强烈推荐 (3 类)
+
+#### 30.5.1 🟢 ABC + Registry for Stages (Phase 14A/14D)
+
+**现有问题**: 7 子包无统一接口 (paper_understanding/codegen/backtest/persist/strategy 各有 run() 但签名不同)
+
+```python
+# 方案: pipeline/stages/base.py
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+@dataclass
+class StageContext:
+    """累积 14 字段的 ctx, 替代纯 dict 提供类型标注 (Section 3.1)"""
+    paper_dir: Path | None = None
+    formula: str | None = None
+    code: str | None = None
+    # ... 14 字段 (详见 Section 3.1)
+    error: str | None = None
+    alpha_index: int | None = None
+
+
+class Stage(ABC):
+    """Stage 是 pipeline 编排的最小单元, 薄包装.
+
+    选择 ctx 字典 (StageContext dataclass) 而非 Generic[IT, OT]:
+      - 14 字段累积, Generic 难以表达
+      - 各 Stage 输出类型多样
+      - 类型安全靠内部方法签名
+    """
+    name: str
+    required_prompts: list[str] = []
+
+    def __init__(self, workspace: "Workspace"):
+        self.workspace = workspace
+
+    @abstractmethod
+    def run(self, ctx: StageContext, config: WorkspaceConfig, prompts: PromptRegistry) -> StageContext: ...
+    def load(self, ctx: StageContext) -> StageContext: ...  # 默认 noop
+    def exists(self, ctx: StageContext) -> bool: ...  # 默认 False
+
+
+# 5 个 Stage 实现
+class PaperUnderstandingStage(Stage):
+    name = "paper_understanding"
+    required_prompts = ["track_a", "track_b", "paper_ingest"]
+
+
+class CodegenStage(Stage):
+    name = "codegen"
+    required_prompts = ["code_gen", "react_feedback", "metadata_extract"]
+
+
+class BacktestStage(Stage):
+    name = "backtest"
+    required_prompts = ["hypothesis_test", "risk_analyze"]
+
+
+class PersistFactorStage(Stage):
+    name = "persist_factor"
+    required_prompts = []  # 不需 LLM
+
+
+class StrategyStage(Stage):
+    name = "strategy"  # 占位
+    required_prompts = ["strategy_compose"]
+
+
+# Registry
+class StageRegistry:
+    _stages: dict[str, type[Stage]] = {}
+    @classmethod
+    def register(cls, name: str, stage_cls: type[Stage]): ...
+    @classmethod
+    def create(cls, name: str, workspace: "Workspace") -> Stage: ...
+    @classmethod
+    def all_stages(cls) -> list[type[Stage]]: ...
+```
+
+**位置**: `pipeline/stages/base.py` (与具体 stages 同包, 不放 common/)
+**理由**: ABC 与具体 stage 紧耦合, 放 pipeline/stages/ 方便查找; common/ 只放**与 stage 无关的横切关注点** (config, paths, errors)。
+
+**收益**:
+- 5 个 Stage 统一契约 (Section 3.1 详细设计)
+- pipeline/ 编排不再 if/elif
+- 单元测试 mock 简化
+- 新增 stage 自动注册 (Registry 模式)
+
+**成本**: ~150 行代码, Phase 14A + 14D 各 0.5d
+
+#### 30.5.2 🟢 ABC + Strategy for DataSource (Phase 2)
+
+**现有问题**: 3 个数据源签名不一致
+- `akshare_data.py`: `fetch_hs300_constituents()` / `fetch_close_panel()`
+- `clickhouse_data.py`: `fetch_hs300_constituents()` / `fetch_close_panel()`
+- `ifind_data.py`: `fetch_tradability_batch()` / `fetch_ipo_dates()` / ...
+
+```python
+# 方案: data_source/base.py
+from abc import ABC, abstractmethod
+import pandas as pd
+
+class DataSource(ABC):
+    name: str
+    @abstractmethod
+    def fetch_universe(self, date: str) -> list[str]: ...
+    @abstractmethod
+    def fetch_panel(self, field: str, start: str, end: str) -> pd.DataFrame: ...
+    @abstractmethod
+    def fetch_tradable_matrix(self, date: str) -> pd.DataFrame: ...
+
+class AkShareDataSource(DataSource):
+    name = "akshare"
+    def fetch_universe(self, date: str) -> list[str]:
+        return fetch_hs300_constituents()  # 内部委托现有函数
+```
+
+**收益**:
+- 3 数据源统一接口
+- router.py 简化
+- 新增数据源 (Tushare/JoinQuant) 模板化
+- 单元测试 mock 更简单
+
+**成本**: ~200 行代码, Phase 2 (0.5d)
+
+#### 30.5.3 🟢 Enum for SessionStatus (Phase 1)
+
+**现有问题**: `sessions.py:54` 散落字符串
+```python
+VALID_STATUSES = {"pending", "extracting", "backtesting", "analyzing", "done", "error"}
+TERMINAL_STATUSES = {"done", "error"}
+```
+
+```python
+# 方案: common/enums.py
+from enum import Enum
+
+class SessionStatus(str, Enum):
+    PENDING = "pending"
+    EXTRACTING = "extracting"
+    BACKTESTING = "backtesting"
+    ANALYZING = "analyzing"
+    DONE = "done"
+    ERROR = "error"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {SessionStatus.DONE, SessionStatus.ERROR}
+
+# 配合 dataclass
+@dataclass(frozen=True)
+class Session:
+    status: SessionStatus = SessionStatus.PENDING
+```
+
+**收益**:
+- 类型安全 (mypy 友好)
+- IDE 自动补全
+- 状态机可序列化
+- 拼写错误编译期发现
+
+**成本**: ~30 行, Phase 1 顺手做
+
+### 30.6 推荐 (4 类)
+
+#### 30.6.1 🟡 Context Manager for Pipeline Run (Phase 14A)
+
+**现有问题**: 21 文件有 with/CM (5 文件) 但无 pipeline 级别
+
+```python
+# 方案: pipeline/runner.py
+from contextlib import contextmanager
+import time
+
+@contextmanager
+def pipeline_run(name: str, ctx: PipelineContext):
+    start = time.time()
+    log.info(f"pipeline {name} start")
+    try:
+        yield ctx
+        log.info(f"pipeline {name} done ({time.time()-start:.1f}s)")
+    except Exception as exc:
+        log.exception(f"pipeline {name} failed")
+        ctx.record_error(exc)
+        raise
+
+# 用法
+with pipeline_run("alpha-001", ctx) as run:
+    for stage in stages:
+        run(stage)
+```
+
+**收益**: 自动异常捕获 + 时长记录 + 统一入口
+**成本**: ~50 行
+
+#### 30.6.2 🟡 Builder for WorkspaceConfig (Phase 14A, planned)
+
+```python
+@dataclass
+class WorkspaceConfig:
+    name: str
+    data_source: str
+    l5_provider: str
+    # ... ~18 字段
+
+class WorkspaceConfigBuilder:
+    def with_name(self, name): ...
+    def with_data_source(self, name): ...
+    def with_l5(self, provider): ...
+    def build(self) -> WorkspaceConfig: ...
+
+# 用法
+ws = (WorkspaceConfigBuilder()
+      .with_name("101_alphas")
+      .with_data_source("quantnodes_h5_long")
+      .with_l5("minimax")
+      .build())
+```
+
+**收益**: 可选字段不传 None, 必填字段强制
+**成本**: ~80 行
+
+#### 30.6.3 🟡 frozen=True for Config Dataclasses (Phase 1)
+
+**现有问题**: 18 个 @dataclass 全部无 frozen, 可被无意修改
+
+```python
+# 现状
+@dataclass
+class BacktestConfig:
+    start: str
+    end: str
+    universe: str = "HS300"
+
+# 方案
+@dataclass(frozen=True)
+class BacktestConfig:  # 不可变
+    start: str
+    end: str
+    universe: str = "HS300"
+```
+
+**收益**: 防止意外修改, 线程安全, 哈希可用
+**成本**: 0 (只改装饰器), 需扫描现有 18 个 @dataclass
+
+#### 30.6.4 🟡 Strategy for FactorCompiler (Phase 5)
+
+**现有问题**: `factor_compiler.py::FactorCompiler` (AST + LLM 多样本 Loop v4) + `factor_compiler_react.py::compile_to_code_react` (ReAct 状态机) 并存, **两个接口不兼容**:
+
+| 维度 | FactorCompiler (AST Loop v4) | compile_to_code_react (ReAct) |
+|------|---------------------------|------------------------------|
+| 输入 | `formula_brief, llm_client, max_iterations=2, n_samples=3` | `formula_brief, system_prompt, llm, max_repair_rounds=3, df` |
+| 输出 | `(code: str, valid: bool, ast: dict, errors: list)` | `ReactResult (steps, is_valid, code, feedback)` |
+| LLM 调用 | 多样本 K=3 + 迭代 | 串行 4 轮 ReAct |
+| 状态 | 无 (无状态函数) | 有 (ReactState 累积) |
+
+**强行套用 Strategy 模式需要大量适配层** (~200 行而非 60 行), 实际可能得不偿失。
+
+**替代方案** (推荐):
+
+```python
+# 方案 A: 不统一接口, 保留两个独立函数 (现状)
+# codegen/llm_code.py
+def generate_factor_code(formula_brief, df, llm, ...) -> tuple[str, pl.Series, ...]: ...
+# codegen/react_engine.py
+def compile_to_code_react(formula_brief, system_prompt, llm, max_repair_rounds, df, ...) -> ReactResult: ...
+
+# PipelineRunner 内部根据配置选择
+if config.codegen.strategy == "react":
+    result = compile_to_code_react(...)
+else:  # 默认 "ast" 路径
+    code, series, _, _ = generate_factor_code(...)
+```
+
+**最终选择**: **不强行 Strategy**, 用**配置切换**。理由:
+1. 两接口差异大, 适配层成本 > 收益
+2. 实际只用 ReAct 路径 (Loop v4 是已弃用路径)
+3. 适配层 = 隐藏实际差异, 增加维护成本
+4. Pythonic: 配置选择 > 多态
+
+**实施**: Phase 5 创建 `codegen/strategies.py` 仅作为**选择器**, 不创建统一接口:
+```python
+# codegen/strategies.py
+def select_compiler(config: WorkspaceConfig) -> str:
+    """根据 config 返回编译器名, 由 PipelineRunner 决定调哪个函数."""
+    return config.codegen.strategy  # "react" / "ast"
+```
+
+**收益**:
+- 0 适配层代码
+- 保持两函数独立
+- 配置切换透明
+
+**成本**: ~20 行, Phase 5 顺手做
+
+**若坚持 Strategy 模式**: 预估 200+ 行适配层, Phase 5 0.5d → 1.0d, 不推荐。
+
+### 30.7 不推荐 (4 类)
+
+| 模式 | 原因 |
+|------|------|
+| **Singleton** | Python module-level globals 已足够, Singleton 是 Java/C++ 思维 |
+| **Template Method** | 过度抽象, Python duck typing 更灵活 |
+| **Pydantic** | 项目用 dataclass, 新增依赖不值得, 性能差异不大 |
+| **Observer (telemetry)** | 当前 logger 够用, 事件总线增加复杂度 |
+
+### 30.8 与 20 阶段 refactor 整合
+
+| Refactor 阶段 | 引入模式 | 优先级 |
+|--------------|---------|--------|
+| **Phase 1** (common/) | Enum (SessionStatus) + frozen=True + ABC 基类 | 🟢 |
+| **Phase 2** (data_source/) | ABC (DataSource) + Strategy (3 impl) | 🟢 |
+| **Phase 4** (prompts/) | Registry (PromptTemplate) (planned) | 🟢 |
+| **Phase 5** (codegen/) | ABC (CodeValidator) + Strategy (FactorCompiler) | 🟡 |
+| **Phase 7** (backtest/) | frozen=True (BacktestConfig) + Builder (Report) | 🟡 |
+| **Phase 11** (metadata_extract) | ABC (LLMClient) + Factory 增强 | 🟡 |
+| **Phase 14A** (pipeline/ 框架) | ABC (Stage) + Registry + Context Manager + Builder | 🟢 |
+| **Phase 14D** (4 stages) | 4 个 Stage ABC 实现 + 自动注册 | 🟢 |
+| **Phase 14C** (pipeline/ 业务) | 保留 3 层 ReAct (Chain of Responsibility) | 🟢 |
+
+### 30.9 风险评估
+
+| 风险 | 概率 | 缓解 |
+|------|------|------|
+| ABC 过度约束 (新需求难加方法) | 中 | 文档化契约, 留出 `*args, **kwargs` 逃生口 |
+| Registry 隐式导入 (难调试) | 中 | 注册时显式日志, 启动时打印已注册 stage |
+| Enum 兼容 (旧字符串数据迁移) | 中 | `str, Enum` 兼容序列化, dataclass 双向转换 |
+| Strategy 模式增加间接性 | 低 | 简单场景不用, 仅复杂切换才用 |
+| Builder 字段爆炸 | 低 | 必填字段在 `__post_init__` 校验 |
+
+### 30.10 工作量估算
+
+| 类别 | 数量 | 时间 |
+|------|------|------|
+| 必用 (🟢) | 3 类 | +1.5d (总 refactor 14d → 15.5d) |
+| 推荐 (🟡) | 4 类 | +1.0d (16.5d) |
+| 不推荐 | 4 类 | 0d |
+| **总计** | **7 类新模式** | **+2.5d** (从 13d → 15.5d) |
+
+**单模式平均成本**:
+- ABC: 50-200 行, 0.25-0.5d
+- Strategy: 60-150 行, 0.25-0.5d
+- Registry: 50-100 行, 0.25d
+- Builder: 60-100 行, 0.25-0.4d
+- Context Manager: 30-50 行, 0.1-0.2d
+- Enum: 20-50 行, 0.1d
+- frozen=True: 0 行 (1 行装饰器)
+
+### 30.11 与 13d 单元测试 + 20 阶段总时长
+
+| 项目 | 估算 |
+|------|------|
+| 20 阶段 refactor | 10d |
+| 单元测试 5 阶段 | 13d |
+| 7 类新模式集成 | +2.5d (含在 refactor 中, 不增加) |
+| **总工作量** | **23d** (refactor + 测试并行) |
+
+注: 模式引入**已经在 20 阶段计划中预留时间**, 不额外增加总时长。
+
+### 30.12 立即可执行 (3 步, 等待用户放行)
+
+按决策 1.a + 4.b (测试先行 + 与 refactor 并行), 立即可做:
+
+1. **Phase 0 单元测试基础设施** (1d) — 不动设计模式
+2. **Phase 1 common/** (0.5d) — 引入 Enum + frozen=True + ABC 基类
+3. **Stage ABC 接口测试** (0.25d) — 在 Phase 0 加 test_stage_abc.py 占位
+
+### 30.13 7 类模式引入顺序 (推荐)
+
+| 顺序 | 模式 | 阶段 | 风险 |
+|------|------|------|------|
+| 1 | **Enum** (SessionStatus) | Phase 1 | 极低 |
+| 2 | **frozen=True** (Config) | Phase 1 | 极低 |
+| 3 | **ABC** (DataSource) | Phase 2 | 中 (有 3 个 impl 需改) |
+| 4 | **Strategy** (DataSource 3 impl) | Phase 2 | 中 |
+| 5 | **ABC** (Stage) | Phase 14A | 高 (7 子包依赖) |
+| 6 | **Registry** (Stage + Prompt) | Phase 14A + 4 | 中 |
+| 7 | **Context Manager** (pipeline.run) | Phase 14A | 低 |
+| 8 | **Builder** (WorkspaceConfig) | Phase 14A | 中 |
+| 9 | **ABC + Strategy** (FactorCompiler) | Phase 5 | 中 |
+| 10 | **ABC** (LLMClient) | Phase 11 | 中 |
+| 11 | **Builder** (PaperBacktestReport) | Phase 7 | 低 |
+
+### 30.14 与 AGENTS.md 关系
+
+| AGENTS.md 原则 | 强化/补充 |
+|----------------|----------|
+| 2. Simplicity First | **不推荐 4 类** (避免过度抽象) |
+| 3. Surgical Changes | C1 (最小 diff), ABC 强制接口降低长期维护成本 |
+| 5. Context First | A4 (读设计文档), Enum/frozen 提供类型安全 |
+| 7. Loop Until Done | A2, D5, refactor 时引入模式分批验证 |
+
+### 30.15 修订历史 (本节)
+
+| 版本 | 日期 | 变更 |
+|------|------|------|
+| v1.4 测试规划版 | 2026-06-23 | 5 阶段, 13 天, ~430 新测试 |
+| **v1.5 设计模式版 (当前)** | 2026-06-23 | **7 类模式集成, +2.5d**, 含必用 3 + 推荐 4, 不推荐 4 类已记录理由 |
+| v1.6 修复版 | 2026-06-23 | 修复 5 个内部矛盾 + 加部署与运维章节 |
+
+---
+
+# 第七部分: 部署与运维
+
+> Section 31 是 2026-06-23 关于 20 阶段 refactor 实施时的非功能性需求。
+
+## 31. 部署与运维 (1 页)
+
+### 31.1 用户与并发
+
+| 维度 | 本期方案 | 未来 |
+|------|---------|------|
+| **用户数** | **单用户, 单进程** | 多用户 (Phase 15+) |
+| **并发安全** | 写文件用 `tmp + rename` 原子操作 | `Workspace.lock` 文件锁 |
+| **多 workspace 并行** | 不支持 (默认串行) | 支持 (Phase 15+) |
+
+**原因**: 本期是 dev/research 阶段, 单用户足够。多用户需求待 Phase 14F2 验证后再评估。
+
+**原子写示例** (各 Stage 产物保存):
+```python
+def atomic_write(path: Path, content: str) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    tmp.rename(path)  # 原子 rename
+```
+
+### 31.2 Secrets 管理
+
+**LLM API key 来源**: 环境变量 `LLMWIKIFY_API_KEY` (必须)
+
+**读取方式**:
+```python
+api_key = os.environ["LLMWIKIFY_API_KEY"]  # 缺失时 KeyError
+base_url = os.environ.get("LLMWIKIFY_BASE_URL", "https://api.minimaxi.com")
+```
+
+**优先级**: env (最高) > config.yaml (中) > 硬编码默认 (最低)
+
+**错误处理**: 缺失时**立即 raise**, 不 fallback 到 dummy
+```python
+if not os.environ.get("LLMWIKIFY_API_KEY"):
+    raise EnvironmentError("LLMWIKIFY_API_KEY not set. See docs/setup.md")
+```
+
+**git 保护**: `config.yaml` 永远**不含 API key**, 只引用 env var 名字。
+
+### 31.3 性能目标
+
+| 任务 | 目标 | 备注 |
+|------|------|------|
+| 99 alpha 全量 | **< 2 小时** | 含 LLM 调用 |
+| 单 alpha codegen | < 30s | mock LLM |
+| 单 alpha backtest | < 60s | QuantNodes PipelineRunner |
+| WebUI `/api/health` | < 100ms | FastAPI |
+
+**性能瓶颈**: LLM 响应 (~80% 时间), 不是代码。优化 LLM 调用的 ROI 最高。
+
+### 31.4 成本估算 (脚本, 不进 doc)
+
+**详细估算见**: `scripts/estimate_llm_cost.py` (Phase 0 创建)
+
+**粗估** (minimax M3, ~¥0.001/call):
+- 99 alpha × 4 轮 ReAct × 1 LLM call = ~400 calls
+- 99 alpha 总成本: **~¥0.4** (可忽略)
+- 调试期 (重试): ×3 = ~¥1.2
+- 全量回归 (3 轮): ~¥3.6
+
+### 31.5 环境区分
+
+| 环境 | 用途 | LLM | 数据 |
+|------|------|-----|------|
+| **dev** | 本地开发 | minimax API (env) | sample H5 |
+| **prod** | 暂不实现 (Phase 15+) | 待评估 | 待评估 |
+
+本期**只有 dev 环境**, 单一配置。
+
+### 31.6 部署与运维检查清单
+
+- [ ] `LLMWIKIFY_API_KEY` env var 已设置
+- [ ] `LLMWIKIFY_BASE_URL` 已设置 (默认 minimax)
+- [ ] `quant/factors/<workspace>/` 目录权限可写
+- [ ] `~/.llmwikify/akshare_cache/quantnodes_h5_long/` H5 数据存在 (~2GB)
+- [ ] 99 alpha 单次跑 < 2h
+- [ ] WebUI `/api/health` 200 OK
+- [ ] `git status` 无未提交改动 (避免半成品)
+
+---
+
+**文档完成**. 涵盖 101 alpha 端到端设计 + 4 层架构 + prompts/ 子系统 + 三层 ReAct + 7 子包拆分 + 20 阶段实施计划 + 单元测试纪律 + 5 个 Gate 验证 + 风险评估 + 决策记录 + AI 执行原则 + 单元测试完整规划 + Python 设计模式集成 + 部署与运维.
