@@ -47,14 +47,35 @@ class _FakeRunResult:
 
 
 class _StubParentRunner:
-    """Minimal parent runner stand-in: SubagentManager only reads
-    these private attributes when constructing the child runner."""
+    """Minimal parent runner stand-in: implements the
+    :meth:`AgentRunner.execution_context` contract (Phase 16+).
+
+    Pre-Phase-16+ the stub also exposed ``_chat_service`` /
+    ``_tool_executor`` / ``_prompt_builder`` / ``_config`` as
+    private attributes that the manager read directly; that 4-field
+    ``hasattr`` gate has been removed in favour of the public ABC
+    method. We keep ``_chat_service`` etc. only because the new
+    ``ChatRunnerV2.__init__`` still references them when
+    constructing a child from a fresh ctx.
+    """
 
     def __init__(self) -> None:
+        from llmwikify.apps.chat.agent.execution_context import (
+            AgentExecutionContext,
+        )
         self._chat_service = MagicMock()
         self._tool_executor = MagicMock()
         self._prompt_builder = MagicMock()
         self._config = {}
+        self._ctx = AgentExecutionContext(
+            chat_service=self._chat_service,
+            tool_executor=self._tool_executor,
+            prompt_builder=self._prompt_builder,
+            config=self._config,
+        )
+
+    def execution_context(self):
+        return self._ctx
 
 
 def _make_manager(max_concurrent: int = 2) -> SubagentManager:
@@ -150,8 +171,9 @@ async def test_run_timeout_returns_timeout_status(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_child_runner_uses_noop_hook_no_memory_manager(monkeypatch) -> None:
     """The child must not bubble SSE events to the parent and must
-    not trigger memory consolidation. We capture the constructor
-    kwargs to verify."""
+    not trigger memory consolidation. Phase 16+: the manager passes a
+    fresh :class:`AgentExecutionContext` to the child; we capture
+    that ctx and verify ``hook``/``memory_manager``."""
     mgr = _make_manager()
     captured: dict[str, Any] = {}
 
@@ -181,9 +203,13 @@ async def test_child_runner_uses_noop_hook_no_memory_manager(monkeypatch) -> Non
         parent_session_id="p1",
     )
     await mgr.run(spec)
+    # Phase 16+: manager constructs a fresh ctx; verify its
+    # hook/memory_manager overrides.
     from llmwikify.foundation.callback import NoOpHook
-    assert isinstance(captured["hook"], NoOpHook)
-    assert captured["memory_manager"] is None
+    assert "ctx" in captured
+    child_ctx = captured["ctx"]
+    assert isinstance(child_ctx.hook, NoOpHook)
+    assert child_ctx.memory_manager is None
 
 
 @pytest.mark.asyncio

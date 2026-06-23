@@ -31,13 +31,23 @@
     或改用 builder pattern
   - ``WorkflowActor`` / ``CronSkill`` 复用 — 后续 Phase
   - Provider / Tool registry 抽进 ABC — 后续 Phase
+
+Phase 16+ (2026-06-23) added ``execution_context()`` to the ABC so
+that :class:`SubagentManager` can dispatch any ``AgentRunner``
+subclass (not just ``ChatRunnerV2``). See
+:mod:`apps/chat/agent/execution_context` for the context dataclass.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
+
+if TYPE_CHECKING:
+    from llmwikify.apps.chat.agent.execution_context import (
+        AgentExecutionContext,
+    )
 
 # TypeVars: subclasses bind concrete spec/result types.
 # Default to ``Any`` so callers that don't parameterize (rare) still work.
@@ -111,6 +121,21 @@ class AgentRunner(ABC, Generic[SpecT, ResultT]):
 
         MUST raise :class:`asyncio.CancelledError` if the task is
         cancelled (subprocess / channel disconnect).
+        """
+        raise NotImplementedError
+
+    # ── collaborator access (Phase 16+) ────────────────────────
+
+    @abstractmethod
+    def execution_context(self) -> AgentExecutionContext:
+        """Return the execution context for spawning a child runner.
+
+        Phase 16+: lets :class:`SubagentManager` (and any future
+        dispatch helper) construct a child runner from the parent's
+        collaborator bundle **without** reading private attributes.
+        Implementations should return a stable, freshly-allocated
+        :class:`AgentExecutionContext` capturing the current
+        collaborators.
         """
         raise NotImplementedError
 

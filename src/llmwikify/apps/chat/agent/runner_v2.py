@@ -120,12 +120,14 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
 
     def __init__(
         self,
-        chat_service: Any,
-        tool_executor: Any,
-        prompt_builder: Any,
+        chat_service: Any = None,
+        tool_executor: Any = None,
+        prompt_builder: Any = None,
         config: dict | None = None,
         hook: AgentHook | None = None,
         memory_manager: Any | None = None,
+        *,
+        ctx: Any = None,
     ) -> None:
         # Pass7 (2026-06-22, M-2): ``chat_service`` duck-types the
         # :class:`ChatServiceAdapter` Protocol (apps/chat/agent/protocols.py).
@@ -134,6 +136,42 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         # the Protocol documents the contract for IDE / mypy navigation.
         # Production wiring uses ``ChatBridgeBackend`` which satisfies the
         # Protocol structurally.
+        #
+        # Phase 16+ (2026-06-23): back-compat dual signature — caller
+        # may pass an :class:`AgentExecutionContext` via ``ctx=`` (new
+        # path used by :class:`SubagentManager`) or the legacy 4
+        # keyword args (existing call sites unchanged).
+        if ctx is not None:
+            chat_service = ctx.chat_service
+            tool_executor = ctx.tool_executor
+            prompt_builder = ctx.prompt_builder
+            config = ctx.config if config is None else config
+            memory_manager = ctx.memory_manager if memory_manager is None else memory_manager
+            hook = ctx.hook if hook is None else hook
+        else:
+            # Reject the "all-None" case unless the caller is
+            # explicitly building a no-op skeleton (used by
+            # ``test_skeleton_works_without_db_llm_sse`` and the
+            # ``Phase 16+`` AgentRunner ABC base class — they pass
+            # ``None`` for all 3 collaborators and only call
+            # ``run_stream`` for stream-shape tests).
+            non_none = (
+                chat_service is not None,
+                tool_executor is not None,
+                prompt_builder is not None,
+            )
+            if not any(non_none):
+                # All-None is allowed; the runner is a skeleton.
+                pass
+            elif not all(non_none):
+                raise TypeError(
+                    "ChatRunnerV2 requires either ctx= "
+                    "(AgentExecutionContext) or the legacy 3 "
+                    "collaborator kwargs "
+                    "(chat_service, tool_executor, prompt_builder); "
+                    "got a partial set."
+                )
+        self._ctx_ref = ctx
         self._chat_service = chat_service
         self._tool_executor = tool_executor
         self._prompt_builder = prompt_builder
@@ -146,6 +184,28 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         # after each iteration (after the existing ``after_iteration`` hook).
         # See ``docs/poc/apply-plan.md`` §6 for the rationale.
         self._memory_manager = memory_manager
+
+    def execution_context(self) -> Any:
+        """Return the :class:`AgentExecutionContext` for spawning a child runner.
+
+        Phase 16+ (2026-06-23): satisfies the
+        :meth:`AgentRunner.execution_context` ABC contract. The returned
+        context captures the current collaborators; if this runner was
+        itself built from an :class:`AgentExecutionContext`, we return a
+        fresh copy so mutations to the child's hook / config do not
+        leak back into the parent.
+        """
+        from llmwikify.apps.chat.agent.execution_context import (
+            AgentExecutionContext,
+        )
+        return AgentExecutionContext(
+            chat_service=self._chat_service,
+            tool_executor=self._tool_executor,
+            prompt_builder=self._prompt_builder,
+            config=self._config,
+            memory_manager=self._memory_manager,
+            hook=self._hook,
+        )
 
     async def run_stream(
         self, spec: ChatRunSpec,

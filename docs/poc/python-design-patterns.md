@@ -235,6 +235,28 @@ async for ev in iter_with_metrics(
 | `@validate_message_schema` | messages 是 dict, 无 schema 验证需求 |
 | `@memoize` | chat 流程是 stateful, 缓存破坏流式语义 |
 
+#### 3.4.7 Generic ABC + 上下文对象 (Phase 16+, LSP 修复, 2026-06-23)
+
+**问题**: `SubagentManager` 类型 hint 是 `AgentRunner` (通用 ABC), 但运行时检查 4 个 `ChatRunnerV2` 私有属性 (`_chat_service` / `_tool_executor` / `_prompt_builder` / `_config`), 违反 LSP。任何非 `ChatRunnerV2` 子类 (`FakeAgentRunner` 测试 stub / 未来 `WorkflowRunner` / `CronRunner`) 都被拒。
+
+**方案**: 抽 `AgentExecutionContext` dataclass 作为 collaborator 集合, `AgentRunner` ABC 加 `execution_context()` 抽象方法, `ChatRunnerV2` 实现返回 ctx, `SubagentManager` 用 ctx 构造 child runner。
+
+| 角色 | 实施 | 文件 |
+|---|---|---|
+| **Context 对象** (Facade) | `AgentExecutionContext` dataclass 含 6 collaborators | `apps/chat/agent/execution_context.py` |
+| **ABC 扩展** | `AgentRunner.execution_context() -> AgentExecutionContext` (abstract) | `apps/chat/agent/agent_runner.py` |
+| **实现** | `ChatRunnerV2.execution_context` property 返回 ctx | `apps/chat/agent/runner_v2.py` |
+| **消费方** | `SubagentManager` 改用 `parent.execution_context()`, 删除 hasattr 4 字段检查 | `apps/chat/agent/subagent_manager.py` |
+
+**Back-compat 双签名**: `ChatRunnerV2.__init__(self, ctx=None, **overrides)` — 接受 `ctx` (新) 或 `chat_service` / `tool_executor` / `prompt_builder` / `config` (旧)。老调用方零修改。
+
+**借鉴来源**: nanobot v0.2.1 `agent/runner.py` 的 Generic ABC 思路, 加上 Spring `ApplicationContext` / DDD `AggregateContext` 模式 (collaborator 集合对象化)。
+
+**LSP 收益**:
+- 任何 `AgentRunner` 子类可被 `SubagentManager` 使用
+- `FakeAgentRunner` 测试 stub 满足 ABC, 子代理测试不再 mock 私有属性
+- 未来 `WorkflowRunner` / `CronRunner` 直接复用
+
 ### 3.4 模式实施密度
 
 ```

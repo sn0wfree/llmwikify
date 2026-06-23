@@ -92,19 +92,17 @@ class SubagentManager:
     """In-process subagent dispatcher.
 
     Owns a semaphore (caps concurrent children) and reuses the
-    parent runner's collaborators (``chat_service``,
-    ``prompt_builder``, ``tool_executor``, ``config``) so children
-    inherit LLM connectivity without re-wiring providers.
+    parent runner's collaborators via the
+    :meth:`AgentRunner.execution_context` contract (Phase 16+,
+    2026-06-23) so children inherit LLM connectivity without
+    re-wiring providers.
 
-    Phase 15 (2026-06-21): ``parent_runner`` is now typed as
-    :class:`AgentRunner` (the shared abstract base). The runtime
-    check ``isinstance(parent_runner, ChatRunnerV2)`` still gates
-    the collaborator-reuse path because the manager reads
-    ``parent._chat_service`` / ``_tool_executor`` / ``_prompt_builder``
-    / ``_config`` which are ``ChatRunnerV2``-specific. Passing a
-    non-ChatRunnerV2 instance raises ``TypeError`` with a clear
-    message (Phase 16+ will add a generic spec-only path that
-    doesn't depend on these private attributes).
+    Phase 16+ LSP fix: ``parent_runner`` is now an honest
+    :class:`AgentRunner` (any subclass works). The collaborator
+    bundle is read through ``parent.execution_context()`` (a
+    public ABC method) instead of four private attribute reads,
+    so ``WorkflowRunner`` / ``CronRunner`` / test
+    ``FakeAgentRunner`` instances are all valid.
     """
 
     def __init__(
@@ -112,25 +110,11 @@ class SubagentManager:
         parent_runner: AgentRunner,
         max_concurrent: int = 2,
     ) -> None:
-        # Phase 15: duck-type check. ``ChatRunnerV2`` carries
-        # ``_chat_service`` / ``_tool_executor`` / ``_prompt_builder`` /
-        # ``_config`` private attributes that the child builder reads;
-        # the base ``AgentRunner`` doesn't expose those. Test stubs
-        # can pass anything that has the same attributes (see
-        # ``_StubParentRunner`` in tests/test_apps_chat_agent_subagent_manager.py).
-        missing = [
-            attr for attr in
-            ("_chat_service", "_tool_executor", "_prompt_builder", "_config")
-            if not hasattr(parent_runner, attr)
-        ]
-        if missing:
-            raise TypeError(
-                "SubagentManager parent_runner is missing required "
-                f"collaborator attributes: {missing} (got "
-                f"{type(parent_runner).__name__}). Today only "
-                "ChatRunnerV2 (or sibling subclasses) qualify. "
-                "Phase 16+ will accept any AgentRunner via spec-only path."
-            )
+        # Phase 16+: trust the ABC. ``parent_runner`` is validated by
+        # being an instance of :class:`AgentRunner` (the constructor
+        # would have raised ``TypeError`` if it didn't implement the
+        # abstract methods). The 4-field ``hasattr`` gate that used to
+        # be here is now redundant.
         self._parent = parent_runner
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._max_concurrent = max_concurrent
@@ -147,14 +131,27 @@ class SubagentManager:
         """
         async with self._semaphore:
             child_spec = self._build_child_spec(spec)
-            child_runner = ChatRunnerV2(
-                chat_service=self._parent._chat_service,
-                tool_executor=self._parent._tool_executor,
-                prompt_builder=self._parent._prompt_builder,
-                config=self._parent._config,
-                hook=NoOpHook(),
-                memory_manager=None,
+            # Phase 16+: pull the parent's collaborators through the
+            # public ABC method. The child uses ``NoOpHook`` so its
+            # SSE events don't bubble up into the parent's stream, and
+            # ``memory_manager=None`` so the child doesn't recursively
+            # consolidate. Both overrides happen on the **fresh ctx
+            # copy** (ChatRunnerV2.execution_context always allocates
+            # a new dataclass), so the parent's hook / memory are
+            # untouched.
+            parent_ctx = self._parent.execution_context()
+            from llmwikify.apps.chat.agent.execution_context import (
+                AgentExecutionContext,
             )
+            child_ctx = AgentExecutionContext(
+                chat_service=parent_ctx.chat_service,
+                tool_executor=parent_ctx.tool_executor,
+                prompt_builder=parent_ctx.prompt_builder,
+                config=parent_ctx.config,
+                memory_manager=None,
+                hook=NoOpHook(),
+            )
+            child_runner = ChatRunnerV2(ctx=child_ctx)
             try:
                 result = await asyncio.wait_for(
                     child_runner.run_to_completion(child_spec),
