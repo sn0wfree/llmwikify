@@ -132,7 +132,32 @@ def _validate_syntax(code: str) -> tuple[bool, str]:
 
 
 def _validate_safety(code: str) -> tuple[bool, str]:
-    """CodeSandbox safety check."""
+    """CodeSandbox safety check + pattern check for common LLM mistakes."""
+    import re
+
+    # Check for Python boolean on polars expressions (causes DangerousCodeError)
+    # Pattern: `if rank(`, `if pl.col(`, `if rolling_`, `if ts_`, `if correlation(`
+    if_patterns = [
+        r'if\s+rank\s*\(',
+        r'if\s+pl\.col\s*\(',
+        r'if\s+rolling_\w+\s*\(',
+        r'if\s+ts_\w+\s*\(',
+        r'if\s+correlation\s*\(',
+        r'if\s+scale\s*\(',
+        r'if\s+zscore\s*\(',
+        r'elif\s+rank\s*\(',
+        r'elif\s+pl\.col\s*\(',
+        r'elif\s+rolling_\w+\s*\(',
+        r'elif\s+ts_\w+\s*\(',
+    ]
+    for pat in if_patterns:
+        if re.search(pat, code):
+            return False, (
+                f"Detected `if/elif` on polars expression (matches pattern: {pat}). "
+                "Use `pl.when(condition).then(value).otherwise(value)` instead. "
+                "Example: `factor = pl.when(rank(a) < rank(b)).then(-1).otherwise(0)`"
+            )
+
     from QuantNodes.ai.sandbox import CodeSandbox
 
     sandbox = CodeSandbox(max_code_length=500_000)
@@ -212,6 +237,40 @@ def _execute_code(code: str, df: pl.DataFrame, timeout_sec: float = 120.0) -> pl
     return series
 
 
+def _sanitize_code(code: str) -> str:
+    """Auto-fix common LLM mistakes before execution.
+
+    Fixes:
+    - `if expr:` → wraps with pl.when() (best-effort, simple cases only)
+    - `and` → `&`, `or` → `|`, `not` → `~` (on polars expressions)
+    """
+    import re
+
+    # Fix boolean operators on polars expressions
+    # Only replace 'and'/'or'/'not' when used as Python keywords (not in strings/comments)
+    lines = code.split('\n')
+    fixed_lines = []
+    for line in lines:
+        stripped = line.strip()
+        # Skip comments and strings
+        if stripped.startswith('#') or stripped.startswith('"""') or stripped.startswith("'''"):
+            fixed_lines.append(line)
+            continue
+
+        # Replace ' and ' with ' & ' (but not inside strings)
+        # Simple heuristic: replace only if preceded/followed by whitespace or paren
+        new_line = line
+        # Replace 'and' keyword used as boolean operator
+        new_line = re.sub(r'(?<=[\s)])and(?=[\s(])', '&', new_line)
+        new_line = re.sub(r'(?<=[\s)])or(?=[\s(])', '|', new_line)
+        # Replace 'not' keyword used as boolean operator (but not 'notnull')
+        new_line = re.sub(r'(?<=[\s(])not(?=[\s(])(?!null)', '~', new_line)
+
+        fixed_lines.append(new_line)
+
+    return '\n'.join(fixed_lines)
+
+
 # ── ReAct driver ─────────────────────────────────────────────────
 
 
@@ -225,13 +284,41 @@ Error:
 
 {context}
 
-Please re-emit a CORRECTED ```python``` code block. Keep the same overall approach but fix the specific issue above. Use FUNCTION FORM for QuantNodes operators (e.g. `rolling_std(pl.col('x'), window=20)`, NOT `pl.col('x').rolling_std(...)`). Use `.over('date')` for cross-section operators (rank, scale) and `.over('code')` for per-code time-series.
+## FIX GUIDE
 
-IMPORTANT: If the error mentions "truth value of an Expr is ambiguous":
-- Do NOT use Python `if/elif/else`, `and`, `or`, `not` on polars expressions.
-- Use `pl.when(cond).then(x).otherwise(y)` for conditional logic.
-- Use `&` (not `and`), `|` (not `or`), `~` (not `not`) for boolean operations.
-- Materialize intermediate results with `with_columns()` before applying `.over('date')`.
+### If "truth value of an Expr is ambiguous":
+You used Python `if/and/or` on a polars expression. This is NOT allowed.
+
+BEFORE (broken):
+```python
+if rank(pl.col('a')) < rank(pl.col('b')):
+    factor = -1
+else:
+    factor = 0
+```
+
+AFTER (fixed):
+```python
+factor = pl.when(rank(pl.col('a')) < rank(pl.col('b'))).then(-1).otherwise(0)
+```
+
+Also replace:
+- `expr and expr` → `expr & expr`
+- `expr or expr` → `expr | expr`
+- `not expr` → `~expr`
+
+### If "TimeoutError":
+Your code has an infinite loop or too-slow computation.
+- Use `with_columns()` to materialize intermediate results
+- Avoid nested rolling operations without materialization
+
+### If "NameError: name 'xxx' is not defined":
+Check operator name. Available: rolling_*, ts_*, rank, scale, neutralize, etc.
+
+### General rules:
+- Use FUNCTION FORM: `rolling_std(pl.col('x'), window=20)` NOT `pl.col('x').rolling_std(...)`
+- Use `.over('date')` for cross-section operators (rank, scale, etc.)
+- Use `neutralize(f, group=pl.col('industry'))` for industry neutralization
 
 Output ONLY the corrected code block, no prose."""
 
@@ -349,6 +436,9 @@ Output ONLY the code block (use FUNCTION FORM for QuantNodes operators)."""
             last_error_kind = ReactErrorKind.EXTRACT_FAILED
             last_error_message = "no ```python``` fence"
             continue
+
+        # Auto-fix common LLM mistakes (and/or/not on Expr)
+        new_code = _sanitize_code(new_code)
 
         syntax_ok, syntax_err = _validate_syntax(new_code)
         if not syntax_ok:
