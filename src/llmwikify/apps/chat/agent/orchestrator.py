@@ -407,38 +407,16 @@ class ChatOrchestrator:
                 ctx, message, session_id,
             )
 
-            # Check if already aborted
-            if abort_event.is_set():
-                yield ChatEvent.error("Session aborted")
-                return
-
-            # Delegate to ChatRunnerV2 (Plan B)
-            async for event in self._chat_via_runner_v2(
+            # Delegate to ChatRunnerV2 (Plan B) with abort + per-event
+            # logging extracted to ``_stream_runner_events``.
+            async for event in self._stream_runner_events(
                 messages_for_llm=messages_for_llm,
                 system_prompt=system_prompt,
                 tool_registry=tool_registry,
                 session_id=session_id,
                 ctx=ctx,
+                abort_event=abort_event,
             ):
-                if abort_event.is_set():
-                    yield ChatEvent.error("Session aborted")
-                    return
-                # Log non-streaming events (skip message_delta for volume)
-                if event.get("type") != events.MESSAGE_DELTA:
-                    self.event_log.log(session_id, event)
-                if event.get("type") == events.CONFIRMATION_REQUIRED:
-                    tool = event.get("tool", "tool")
-                    self.tool_executor.save_message(
-                        session_id,
-                        "assistant",
-                        f"Confirmation required for {tool}: {event.get('confirmation_id', '')}",
-                    )
-                elif event.get("type") == events.ERROR:
-                    self.tool_executor.save_message(
-                        session_id,
-                        "assistant",
-                        f"Error: {event.get('message', '')}",
-                    )
                 yield event
 
         except Exception as e:
@@ -881,6 +859,64 @@ class ChatOrchestrator:
             extract_research_run_id_from_tools,
         )
         return extract_research_run_id_from_tools(tool_calls)
+
+    async def _stream_runner_events(
+        self,
+        messages_for_llm: list[dict[str, str]],
+        system_prompt: str,
+        tool_registry: Any,
+        session_id: str,
+        ctx: Any,
+        abort_event: asyncio.Event,
+    ) -> AsyncIterator[dict]:
+        """Delegate to ``_chat_via_runner_v2`` with abort + per-event side effects.
+
+        Extracted from ``chat()`` (O-1, 2026-06-23) to:
+
+          - give the runner streaming loop its own single-responsibility
+            method (was the longest block in ``chat()``)
+          - make the abort precheck + mid-stream abort behaviour directly
+            testable
+          - keep ``chat()`` focused on session lifecycle and dispatch
+
+        Yields the same events the runner produces, after applying
+        per-event side effects (event log, assistant message
+        persistence for CONFIRMATION / ERROR). Short-circuits to an
+        ``error`` event if ``abort_event`` is set before or during the
+        stream.
+        """
+        if abort_event.is_set():
+            yield ChatEvent.error("Session aborted")
+            return
+
+        async for event in self._chat_via_runner_v2(
+            messages_for_llm=messages_for_llm,
+            system_prompt=system_prompt,
+            tool_registry=tool_registry,
+            session_id=session_id,
+            ctx=ctx,
+        ):
+            if abort_event.is_set():
+                yield ChatEvent.error("Session aborted")
+                return
+            # Log non-streaming events (skip message_delta for volume).
+            if event.get("type") != events.MESSAGE_DELTA:
+                self.event_log.log(session_id, event)
+            if event.get("type") == events.CONFIRMATION_REQUIRED:
+                tool = event.get("tool", "tool")
+                self.tool_executor.save_message(
+                    session_id,
+                    "assistant",
+                    f"Confirmation required for {tool}: "
+                    f"{event.get('confirmation_id', '')}",
+                )
+            elif event.get("type") == events.ERROR:
+                self.tool_executor.save_message(
+                    session_id,
+                    "assistant",
+                    f"Error: {event.get('message', '')}",
+                )
+            yield event
 
     async def _load_history(self, session_id: str) -> list[dict]:
         """Load conversation history from MemoryManager or DB."""
