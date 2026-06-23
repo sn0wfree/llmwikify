@@ -261,12 +261,7 @@ class TestListFactorsByCategory:
         assert result == {}
 
     def test_groups_by_category(self, factor_workspace: Path, factor_data: dict) -> None:
-        """按 category 字段分组.
-
-        Known issue: 当前实现对每个因子计 2 次 (新+旧 格式同时匹配).
-        这是因为新格式的 factor.yaml 也匹配 *.yaml 旧 glob.
-        等 Phase 2 优化 update_index 逻辑时修复, 见 docs/TODO.md.
-        """
+        """按 category 字段分组 (新格式每个因子计 1 次, 不重复)."""
         import yaml
         factors_dir = factor_workspace / "quant" / "factors"
         # 创建 2 个 alpha + 1 个 momentum 因子 (新格式)
@@ -281,9 +276,9 @@ class TestListFactorsByCategory:
         result = fl.list_factors_by_category(project_root=factor_workspace)
         assert "alpha" in result
         assert "momentum" in result
-        # 当前实现计 2 次 (新格式 factor.yaml 1 次, 旧 *.yaml glob 再 1 次)
-        assert len(result["alpha"]) == 4  # 2 因子 × 2 次
-        assert len(result["momentum"]) == 2  # 1 因子 × 2 次
+        # 修复后每个因子计 1 次 (新格式 1, 旧格式因 sibling factor.yaml 跳过)
+        assert len(result["alpha"]) == 2
+        assert len(result["momentum"]) == 1
 
     def test_handles_invalid_yaml(self, factor_workspace: Path, factor_data: dict) -> None:
         """单个 YAML 损坏不阻塞其他因子."""
@@ -306,11 +301,7 @@ class TestUpdateIndex:
     """Test update_index: 3 个测试."""
 
     def test_creates_index_if_missing(self, factor_workspace: Path, factor_data: dict) -> None:
-        """无 index 时创建新的.
-
-        Known issue: 当前实现对每个因子计 2 次 (新+旧 格式同时匹配).
-        等 Phase 2 修复.
-        """
+        """无 index 时创建新的 (修复后每个因子计 1 次)."""
         import yaml
         factors_dir = factor_workspace / "quant" / "factors"
         d = factors_dir / "new_factor"
@@ -322,14 +313,11 @@ class TestUpdateIndex:
         assert index_path.exists()
         index = yaml.safe_load(index_path.read_text(encoding="utf-8"))
         assert "factors" in index
-        # 1 因子 × 2 次 = 2
-        assert len(index["factors"]) == 2
+        # 修复后: 1 因子 × 1 次 = 1
+        assert len(index["factors"]) == 1
 
     def test_idempotent(self, factor_workspace: Path, factor_data: dict) -> None:
-        """多次调用结果一致.
-
-        Known issue: 2x 计数 (见上).
-        """
+        """多次调用结果一致 (修复后每次 1 因子 = 1)."""
         import yaml
         factors_dir = factor_workspace / "quant" / "factors"
         d = factors_dir / "factor_x"
@@ -344,14 +332,11 @@ class TestUpdateIndex:
         # factors 数量应一致 (timestamp 可能不同)
         first_data = yaml.safe_load(first)
         second_data = yaml.safe_load(second)
-        # 1 因子 × 2 次 = 2
-        assert len(first_data["factors"]) == len(second_data["factors"]) == 2
+        # 修复后: 1 因子
+        assert len(first_data["factors"]) == len(second_data["factors"]) == 1
 
     def test_stats_accurate(self, factor_workspace: Path, factor_data: dict) -> None:
-        """stats 字段正确统计.
-
-        Known issue: 2x 计数.
-        """
+        """stats 字段正确统计 (修复后无重复)."""
         import yaml
         factors_dir = factor_workspace / "quant" / "factors"
         # 3 个 stk 因子 + 2 个 momentum
@@ -367,8 +352,8 @@ class TestUpdateIndex:
 
         fl.update_index(project_root=factor_workspace)
         index = yaml.safe_load((factors_dir / "index.yaml").read_text(encoding="utf-8"))
-        # 3 因子 × 2 = 6
-        assert index["stats"]["total"] == 6
-        assert index["stats"]["by_asset_type"]["stk"] == 6
-        assert index["stats"]["by_category"]["alpha"] == 4
-        assert index["stats"]["by_category"]["momentum"] == 2
+        # 修复后: 3 因子 = 3
+        assert index["stats"]["total"] == 3
+        assert index["stats"]["by_asset_type"]["stk"] == 3
+        assert index["stats"]["by_category"]["alpha"] == 2
+        assert index["stats"]["by_category"]["momentum"] == 1

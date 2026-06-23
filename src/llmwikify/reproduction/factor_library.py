@@ -201,6 +201,9 @@ def list_factors_by_category(project_root: Path | None = None) -> dict[str, list
             continue
         if yaml_file.parent.name == "backtest":
             continue
+        # Skip new-format sibling: factors/{name}/factor.yaml is already handled above
+        if (yaml_file.parent / "factor.yaml").exists():
+            continue
         try:
             content = yaml_file.read_text(encoding="utf-8")
             data = yaml.safe_load(content)
@@ -271,6 +274,9 @@ def update_index(project_root: Path | None = None) -> None:
         if yaml_file.name in ("index.yaml", "_meta.yaml", "config.yaml"):
             continue
         if yaml_file.parent.name == "backtest":
+            continue
+        # Skip new-format sibling: factors/{name}/factor.yaml is already handled above
+        if (yaml_file.parent / "factor.yaml").exists():
             continue
         try:
             content = yaml_file.read_text(encoding="utf-8")
