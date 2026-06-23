@@ -30,7 +30,10 @@ import logging
 import threading
 import time
 from collections import deque
+from collections.abc import AsyncIterator, Callable
 from typing import Any
+
+from llmwikify.foundation.utils_timing import measure_latency
 
 logger = logging.getLogger(__name__)
 
@@ -182,4 +185,112 @@ def get_llm_metrics_collector() -> LLMMetricsCollector:
     return _singleton
 
 
-__all__ = ["LLMMetricsCollector", "get_llm_metrics_collector"]
+# ─── Async stream helpers (R-1) ─────────────────────────────────
+
+
+async def iter_with_metrics(
+    source: Callable[[], Any] | AsyncIterator[dict],
+    prompt_name: str,
+    chars_in: int,
+) -> AsyncIterator[dict]:
+    """Wrap an async-iter source with latency+metrics recording.
+
+    ``source`` may be either:
+      - a zero-arg callable returning an async iterable (preferred
+        when the source itself is eagar — defers creation until
+        inside the timing window); or
+      - an already-built async iterable (e.g. the result of calling
+        ``llm.astream_chat(...)`` directly).
+
+    On exit (success, exhaustion, or exception) one ``LLMCallMetrics``
+    entry is recorded via the process-wide collector. Any exception is
+    re-raised after recording ``success=False``.
+
+    Args:
+        source: Async-iter factory or pre-built async iterable.
+        prompt_name: Logical name (e.g. ``"chat_reason"``).
+        chars_in: Approximate input size in chars for the call.
+
+    Yields:
+        The events produced by the source iterable, unchanged.
+    """
+    success_flag = True
+    error_str = ""
+    with measure_latency() as get_ms:
+        try:
+            if callable(source) and not hasattr(source, "__aiter__"):
+                iterable = source()
+            else:
+                iterable = source
+            async for ev in iterable:
+                yield ev
+        except Exception as exc:
+            success_flag = False
+            error_str = f"{type(exc).__name__}: {exc}"
+            raise
+        finally:
+            get_llm_metrics_collector().record(
+                prompt_name=prompt_name,
+                latency_ms=get_ms(),
+                chars_in=chars_in,
+                success=success_flag,
+                error=error_str,
+            )
+
+
+async def call_with_metrics(
+    call_factory: Callable[[], Any],
+    prompt_name: str,
+    chars_in: int,
+) -> AsyncIterator[dict]:
+    """Wrap a sync single-shot LLM call with latency+metrics + DONE event.
+
+    Calls ``call_factory()`` once, wraps the result in a single
+    ``{"type": "done", "content": ...}`` event (using
+    ``getattr(reply, "content", "") or ""`` for safety). Records a
+    single metrics entry on exit. Re-raises any exception after
+    recording ``success=False``.
+
+    Args:
+        call_factory: Zero-arg callable invoking the LLM
+            (e.g. ``lambda: llm.chat(messages, tools=tools)``).
+        prompt_name: Logical name (e.g. ``"chat_fallback"``).
+        chars_in: Approximate input size in chars for the call.
+
+    Yields:
+        Exactly one ``{"type": "done", "content": str}`` event.
+    """
+    # Imported here to avoid a top-level circular import (events.py
+    # is a leaf module; llm_metrics.py is also leaf, but we keep the
+    # import local as documentation of the dependency direction).
+    from llmwikify.apps.chat.agent.events import DONE
+
+    success_flag = True
+    error_str = ""
+    with measure_latency() as get_ms:
+        try:
+            reply = call_factory()
+            yield {
+                "type": DONE,
+                "content": getattr(reply, "content", "") or "",
+            }
+        except Exception as exc:
+            success_flag = False
+            error_str = f"{type(exc).__name__}: {exc}"
+            raise
+        finally:
+            get_llm_metrics_collector().record(
+                prompt_name=prompt_name,
+                latency_ms=get_ms(),
+                chars_in=chars_in,
+                success=success_flag,
+                error=error_str,
+            )
+
+
+__all__ = [
+    "LLMMetricsCollector",
+    "call_with_metrics",
+    "get_llm_metrics_collector",
+    "iter_with_metrics",
+]

@@ -698,14 +698,15 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
     async def _stream_llm(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
     ) -> Any:
-        # Pass7 (2026-06-22, Phase 8): wrap the LLM stream with
-        # ``measure_latency`` and record to the process-wide
-        # ``LLMMetricsCollector``. Gives ``/api/llm/metrics`` real data
-        # without invasive changes to ``StreamableLLMClient`` itself.
-        # Records only on the primary LLM path (excludes fallback
-        # ``llm.chat`` single-shot which is the last-resort path).
+        # Pass7+R-1 (2026-06-23): the per-path ``measure_latency`` +
+        # metrics-recording boilerplate was extracted into the
+        # ``iter_with_metrics`` / ``call_with_metrics`` helpers in
+        # ``apps/chat/agent/llm_metrics.py``. This method is now a
+        # thin dispatcher that picks one of three LLM source paths
+        # and delegates timing+recording to the helper.
         from llmwikify.apps.chat.agent.llm_metrics import (
-            get_llm_metrics_collector,
+            call_with_metrics,
+            iter_with_metrics,
         )
 
         retry = getattr(self._chat_service, "_llm_stream_with_retry", None)
@@ -722,70 +723,31 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                     chars_in += len(str(m.get("content", "")))
 
         if retry is not None:
-            with measure_latency() as get_ms:
-                success_flag = True
-                error_str = ""
-                try:
-                    async for ev in retry(messages, tools):
-                        yield ev
-                except Exception as exc:
-                    success_flag = False
-                    error_str = f"{type(exc).__name__}: {exc}"
-                    raise
-                finally:
-                    get_llm_metrics_collector().record(
-                        prompt_name="chat_reason",
-                        latency_ms=get_ms(),
-                        chars_in=chars_in,
-                        success=success_flag,
-                        error=error_str,
-                    )
+            async for ev in iter_with_metrics(
+                lambda: retry(messages, tools),
+                prompt_name="chat_reason",
+                chars_in=chars_in,
+            ):
+                yield ev
             return
         if llm is None:
             yield {"type": events.DONE, "content": ""}
             return
         if hasattr(llm, "astream_chat"):
-            with measure_latency() as get_ms:
-                success_flag = True
-                error_str = ""
-                try:
-                    async for ev in llm.astream_chat(messages, tools=tools):
-                        yield ev
-                except Exception as exc:
-                    success_flag = False
-                    error_str = f"{type(exc).__name__}: {exc}"
-                    raise
-                finally:
-                    get_llm_metrics_collector().record(
-                        prompt_name="chat_reason",
-                        latency_ms=get_ms(),
-                        chars_in=chars_in,
-                        success=success_flag,
-                        error=error_str,
-                    )
+            async for ev in iter_with_metrics(
+                llm.astream_chat(messages, tools=tools),
+                prompt_name="chat_reason",
+                chars_in=chars_in,
+            ):
+                yield ev
             return
-        # Fallback single-shot — still record but tagged differently.
-        with measure_latency() as get_ms:
-            success_flag = True
-            error_str = ""
-            try:
-                reply = llm.chat(messages, tools=tools)
-                yield {
-                    "type": events.DONE,
-                    "content": getattr(reply, "content", "") or "",
-                }
-            except Exception as exc:
-                success_flag = False
-                error_str = f"{type(exc).__name__}: {exc}"
-                raise
-            finally:
-                get_llm_metrics_collector().record(
-                    prompt_name="chat_fallback",
-                    latency_ms=get_ms(),
-                    chars_in=chars_in,
-                    success=success_flag,
-                    error=error_str,
-                )
+        # Fallback single-shot — recorded under "chat_fallback" tag.
+        async for ev in call_with_metrics(
+            lambda: llm.chat(messages, tools=tools),
+            prompt_name="chat_fallback",
+            chars_in=chars_in,
+        ):
+            yield ev
 
     async def _execute_tool(
         self,
