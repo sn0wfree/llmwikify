@@ -669,31 +669,66 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             "compacted_count": ctx.compacted_count,
         }
 
-    def _safe_truncate(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        truncate_fn = getattr(self._chat_service, "_truncate_messages", None)
-        if truncate_fn is None:
-            return messages
+    def _call_service_method(
+        self,
+        attr_name: str,
+        *args: Any,
+        default: Any = None,
+        log_label: str | None = None,
+    ) -> Any:
+        """Invoke an optional sync method on ``self._chat_service``.
+
+        Defensive adapter access pattern used for the duck-typed
+        methods on ``ChatServiceAdapter`` (``_truncate_messages``,
+        ``_get_toolspec``, ``_llm_stream_with_retry``). Returns
+        ``default`` if:
+
+          - the attribute is missing on ``chat_service``
+          - the call raises any exception
+          - the result is a coroutine (this helper is sync — async
+            callers should call the method directly via the Protocol)
+
+        Args:
+            attr_name: Method name to look up on ``chat_service``.
+            *args: Positional arguments forwarded to the method.
+            default: Fallback value when method is missing, raises,
+                or returns a coroutine.
+            log_label: Optional label for the warning log; defaults
+                to ``attr_name``.
+
+        Returns:
+            The method's return value, or ``default`` on any failure.
+        """
+        method = getattr(self._chat_service, attr_name, None)
+        if method is None:
+            return default
         try:
-            result = truncate_fn(messages)
+            result = method(*args)
             if inspect.iscoroutine(result):
-                return messages
+                return default
             return result
         except Exception:
-            logger.warning("truncate failed", exc_info=True)
-            return messages
+            logger.warning(
+                "%s failed", log_label or attr_name, exc_info=True,
+            )
+            return default
+
+    def _safe_truncate(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return self._call_service_method(
+            "_truncate_messages",
+            messages,
+            default=messages,
+            log_label="truncate",
+        )
 
     def _get_tool_specs(self, tool_registry: Any) -> list[dict[str, Any]]:
-        get_specs = getattr(self._chat_service, "_get_toolspec", None)
-        if get_specs is None:
-            return []
-        try:
-            result = get_specs(tool_registry)
-            if inspect.iscoroutine(result):
-                return []
-            return result or []
-        except Exception:
-            logger.warning("get_toolspec failed", exc_info=True)
-            return []
+        result = self._call_service_method(
+            "_get_toolspec",
+            tool_registry,
+            default=[],
+            log_label="get_toolspec",
+        )
+        return result or []
 
     async def _stream_llm(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
