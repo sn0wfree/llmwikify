@@ -484,6 +484,88 @@ def _extract_retry_after(resp: Any, max_seconds: float) -> float | None:
     return None
 
 
+def _parse_sse_line(
+    line: str,
+    accumulated: str,
+    tool_call_buffer: dict[int, dict],
+) -> tuple[list[dict], str, dict | None] | None:
+    """Parse one SSE line from an OpenAI-compatible streaming response.
+
+    Returns:
+        ``(events, new_accumulated, raw_chunk)`` when the line produces
+        events, or ``None`` when the line should be skipped (blank,
+        non-JSON, or an intermediate chunk with no output).
+
+        ``raw_chunk`` is the parsed JSON dict (for callers that need
+        access to fields beyond delta, e.g. ``message.content``).  It is
+        ``None`` for ``[DONE]``.
+
+        On ``finish_reason`` the events list includes the final
+        ``{"type": "done", ...}`` entry; the caller should yield all
+        events and then ``return``.
+    """
+    if not line:
+        return None
+    if line.startswith("data: "):
+        line = line[6:]
+    if line == "[DONE]":
+        return ([{"type": "done", "content": accumulated}], accumulated, None)
+    try:
+        chunk = json.loads(line)
+    except Exception:
+        return None
+
+    events: list[dict] = []
+    delta = chunk.get("choices", [{}])[0].get("delta", {})
+
+    # Reasoning / thinking
+    if "reasoning_content" in delta and delta["reasoning_content"]:
+        events.append({"type": "thinking", "text": delta["reasoning_content"]})
+
+    # Content
+    if "content" in delta and delta["content"]:
+        accumulated += delta["content"]
+        events.append({"type": "content", "text": delta["content"]})
+
+    # Tool call accumulation by index
+    if "tool_calls" in delta:
+        for tc in delta["tool_calls"]:
+            idx = tc.get("index", 0)
+            if idx not in tool_call_buffer:
+                tool_call_buffer[idx] = {
+                    "id": tc.get("id", ""),
+                    "name": "",
+                    "args_parts": [],
+                }
+            entry = tool_call_buffer[idx]
+            if "id" in tc and tc["id"]:
+                entry["id"] = tc["id"]
+            func = tc.get("function", {})
+            if "name" in func and func["name"]:
+                entry["name"] = func["name"]
+            if "arguments" in func and func["arguments"]:
+                entry["args_parts"].append(func["arguments"])
+
+    # Finish — flush tool calls and emit done
+    finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
+    if finish in ("stop", "tool_calls", "length"):
+        for entry in tool_call_buffer.values():
+            events.append({
+                "type": "tool_call",
+                "tool": entry["name"],
+                "args": "".join(entry["args_parts"]),
+                "id": entry.get("id", ""),
+            })
+        tool_call_buffer.clear()
+        events.append({
+            "type": "done",
+            "content": accumulated,
+            "finish_reason": finish,
+        })
+
+    return (events, accumulated, chunk) if events else None
+
+
 # ─── Retry metrics ──────────────────────────────────────────────
 
 
@@ -1054,6 +1136,39 @@ class StreamableLLMClient(LLMClient):
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
+    def _build_payload(
+        self,
+        messages: list[dict[str, str]],
+        tools: list[dict[str, Any]] | None = None,
+        *,
+        stream: bool = False,
+        json_mode: bool = False,
+        **generation_params: Any,
+    ) -> dict[str, Any]:
+        """Build the JSON payload for an OpenAI-compatible chat request.
+
+        Centralises model, messages, tools, stream flag, reasoning_split,
+        and generation-parameter injection that was previously duplicated
+        across ``chat_with_tools``, ``stream_chat``, ``astream_chat`` and
+        ``achat``.
+        """
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+        }
+        if stream:
+            payload["stream"] = True
+        if tools:
+            payload["tools"] = tools
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+        if self.reasoning_split:
+            payload["reasoning_split"] = True
+        for key in ("temperature", "max_tokens", "top_p"):
+            if key in generation_params:
+                payload[key] = generation_params[key]
+        return payload
+
     @check_token_budget(lambda self: self._budget_checker)
     def chat(
         self,
@@ -1107,17 +1222,7 @@ class StreamableLLMClient(LLMClient):
 
         url = self._chat_url()
         headers = self._build_headers()
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-        }
-        if tools:
-            payload["tools"] = tools
-        if self.reasoning_split:
-            payload["reasoning_split"] = True
-        for key in ("temperature", "max_tokens", "top_p"):
-            if key in generation_params:
-                payload[key] = generation_params[key]
+        payload = self._build_payload(messages, tools=tools, **generation_params)
 
         resp = _post_with_retry_sync(
             url,
@@ -1168,18 +1273,7 @@ class StreamableLLMClient(LLMClient):
 
         url = self._chat_url()
         headers = self._build_headers()
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "stream": True,
-        }
-        if tools:
-            payload["tools"] = tools
-        if self.reasoning_split:
-            payload["reasoning_split"] = True
-        for key in ("temperature", "max_tokens", "top_p"):
-            if key in generation_params:
-                payload[key] = generation_params[key]
+        payload = self._build_payload(messages, tools=tools, stream=True, **generation_params)
 
         config = RetryConfig.from_env()
         last_exc: BaseException | None = None
@@ -1241,65 +1335,21 @@ class StreamableLLMClient(LLMClient):
             accumulated = ""
             tool_call_buffer: dict[int, dict] = {}
             for line in resp.iter_lines():
-                if not line:
+                result = _parse_sse_line(line, accumulated, tool_call_buffer)
+                if result is None:
                     continue
-                if line.startswith("data: "):
-                    line = line[6:]
-                if line == "[DONE]":
-                    yield {"type": "done", "content": accumulated}
-                    return
-                try:
-                    chunk = json.loads(line)
-                except Exception:
-                    continue
-
-                delta = chunk.get("choices", [{}])[0].get("delta", {})
-                if "reasoning_content" in delta and delta["reasoning_content"]:
-                    yield {"type": "thinking", "text": delta["reasoning_content"]}
-                if "content" in delta and delta["content"]:
-                    accumulated += delta["content"]
-                    yield {"type": "content", "text": delta["content"]}
-                # Some providers return full content in first chunk via message.content
-                # (not streaming despite stream=True) or put it in reasoning_content.
-                msg = chunk.get("choices", [{}])[0].get("message", {})
-                msg_content = msg.get("content", "") or msg.get("reasoning_content", "")
-                if msg_content:
-                    accumulated += msg_content
-                    yield {"type": "content", "text": msg_content}
-
-                if "tool_calls" in delta:
-                    for tc in delta["tool_calls"]:
-                        idx = tc.get("index", 0)
-                        if idx not in tool_call_buffer:
-                            tool_call_buffer[idx] = {
-                                "id": tc.get("id", ""),
-                                "name": "",
-                                "args_parts": [],
-                            }
-                        entry = tool_call_buffer[idx]
-                        if "id" in tc and tc["id"]:
-                            entry["id"] = tc["id"]
-                        func = tc.get("function", {})
-                        if "name" in func and func["name"]:
-                            entry["name"] = func["name"]
-                        if "arguments" in func and func["arguments"]:
-                            entry["args_parts"].append(func["arguments"])
-
-                finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
-                if finish in ("stop", "tool_calls", "length"):
-                    for entry in tool_call_buffer.values():
-                        yield {
-                            "type": "tool_call",
-                            "tool": entry["name"],
-                            "args": "".join(entry["args_parts"]),
-                            "id": entry.get("id", ""),
-                        }
-                    tool_call_buffer.clear()
-                    yield {
-                        "type": "done",
-                        "content": accumulated,
-                        "finish_reason": finish,
-                    }
+                events, accumulated, chunk = result
+                yield from events
+                # Some providers return full content in first chunk via
+                # message.content (not streaming despite stream=True).
+                # This is sync-only; async variant does not need it.
+                if chunk is not None:
+                    msg = chunk.get("choices", [{}])[0].get("message", {})
+                    msg_content = msg.get("content", "") or msg.get("reasoning_content", "")
+                    if msg_content:
+                        accumulated += msg_content
+                        yield {"type": "content", "text": msg_content}
+                if events and events[-1].get("type") == "done":
                     return
         finally:
             stream_ctx.__exit__(None, None, None)
@@ -1329,18 +1379,7 @@ class StreamableLLMClient(LLMClient):
 
         url = self._chat_url()
         headers = self._build_headers()
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "stream": True,
-        }
-        if tools:
-            payload["tools"] = tools
-        if self.reasoning_split:
-            payload["reasoning_split"] = True
-        for key in ("temperature", "max_tokens", "top_p"):
-            if key in generation_params:
-                payload[key] = generation_params[key]
+        payload = self._build_payload(messages, tools=tools, stream=True, **generation_params)
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(connect=30, read=300, write=30, pool=30)) as client:
             config = RetryConfig.from_env()
@@ -1403,67 +1442,13 @@ class StreamableLLMClient(LLMClient):
                 accumulated = ""
                 tool_call_buffer: dict[int, dict] = {}
                 async for line in resp.aiter_lines():
-                    if not line:
+                    result = _parse_sse_line(line, accumulated, tool_call_buffer)
+                    if result is None:
                         continue
-                    if line.startswith("data: "):
-                        line = line[6:]
-                    if line == "[DONE]":
-                        yield {"type": "done", "content": accumulated}
-                        return
-                    try:
-                        import json as _json
-                        chunk = _json.loads(line)
-                    except Exception:
-                        continue
-
-                    delta = chunk.get("choices", [{}])[0].get("delta", {})
-                    # Handle reasoning_content (MiniMax reasoning_split mode).
-                    # Chain-of-thought is yielded as a "thinking" event but is
-                    # NOT mixed into the final "content" — downstream consumers
-                    # that wait for the final string should get only the answer.
-                    if "reasoning_content" in delta and delta["reasoning_content"]:
-                        yield {"type": "thinking", "text": delta["reasoning_content"]}
-                    # Handle regular content (only this goes into accumulated)
-                    if "content" in delta and delta["content"]:
-                        accumulated += delta["content"]
-                        yield {"type": "content", "text": delta["content"]}
-
-                    if "tool_calls" in delta:
-                        for tc in delta["tool_calls"]:
-                            idx = tc.get("index", 0)
-                            if idx not in tool_call_buffer:
-                                tool_call_buffer[idx] = {
-                                    "id": tc.get("id", ""),
-                                    "name": "",
-                                    "args_parts": [],
-                                }
-                            entry = tool_call_buffer[idx]
-                            if "id" in tc and tc["id"]:
-                                entry["id"] = tc["id"]
-                            func = tc.get("function", {})
-                            if "name" in func and func["name"]:
-                                entry["name"] = func["name"]
-                            if "arguments" in func and func["arguments"]:
-                                entry["args_parts"].append(func["arguments"])
-
-                    finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
-                    # "length" must also emit "done" — otherwise callers waiting
-                    # for the done event would hang when the model hits
-                    # max_tokens mid-stream.
-                    if finish in ("stop", "tool_calls", "length"):
-                        for entry in tool_call_buffer.values():
-                            yield {
-                                "type": "tool_call",
-                                "tool": entry["name"],
-                                "args": "".join(entry["args_parts"]),
-                                "id": entry.get("id", ""),
-                            }
-                        tool_call_buffer.clear()
-                        yield {
-                            "type": "done",
-                            "content": accumulated,
-                            "finish_reason": finish,
-                        }
+                    events, accumulated, _chunk = result
+                    for ev in events:
+                        yield ev
+                    if events and events[-1].get("type") == "done":
                         return
             finally:
                 await stream_ctx.__aexit__(None, None, None)
@@ -1482,17 +1467,7 @@ class StreamableLLMClient(LLMClient):
 
         url = self._chat_url()
         headers = self._build_headers()
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-        }
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
-        if self.reasoning_split:
-            payload["reasoning_split"] = True
-        for key in ("temperature", "max_tokens", "top_p"):
-            if key in generation_params:
-                payload[key] = generation_params[key]
+        payload = self._build_payload(messages, json_mode=json_mode, **generation_params)
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(connect=30, read=300, write=30, pool=30)) as client:
             resp = await _post_with_retry_async(
