@@ -1,6 +1,24 @@
 # Paper Reproduction Pipeline
 
 > LLM-driven paper → factor metadata extraction. v3.2 hybrid mode (2026-06-19).
+> **20-phase refactor complete** (2026-06-24): 8 subpackages, 0 top-level files.
+
+## Module Structure
+
+```
+reproduction/
+├── common/              # 基础设施 (config, paths, errors, utils, llm_factory)
+├── data_source/         # 数据源 (router, universe, akshare, clickhouse, ifind)
+├── codegen/             # 代码生成 (llm_code, react_engine, compiler, repair, semantic, metadata)
+│   └── ast/             # AST 处理 (compiler, nodes, complexity, extractor)
+├── prompts/             # Prompt 系统 (group, registry, loader, renderer, store)
+│   └── builtin/         # 内置模板 (code_gen, react_feedback, metadata_extract, track_a/b, hypothesis_test, risk_analyze)
+├── backtest_pkg/        # 回测 (factor_backtest, run_backtest, metrics, strategies, l5_validation, l5_orchestrator, factor_value_store, quantnodes_repro)
+├── persist/             # 持久化 (factor_library, sessions, run)
+├── paper_understanding/ # 论文理解 (extract_paper, extract_factors, extract_strategy, quant_wiki, schemas, contracts)
+│   └── llm_extraction/  # LLM 提取 (orchestrator, planner, track_a, track_b, validator, ...)
+└── pipeline/            # 流水线框架 (config, runner, workspace, react, stages/)
+```
 
 ## Quick Start
 
@@ -119,7 +137,7 @@ See `docs/summaries/pipeline_optimization_summary.md` for full history.
 
 ## Configuration
 
-All v3.2 hybrid config (in `src/llmwikify/reproduction/llm_extraction/track_b.py`):
+All v3.2 hybrid config (in `paper_understanding/llm_extraction/track_b.py`):
 
 ```python
 # Smart mode selection
@@ -181,7 +199,7 @@ l4:
 ## API Reference
 
 ```python
-from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper
+from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import run_one_paper
 
 result = run_one_paper(
     paper_id="my_paper",
@@ -195,7 +213,23 @@ result = run_one_paper(
 
 ## Related
 
+- `docs/designs/pipeline_framework.md` — 20-phase refactor design + implementation summary
 - `docs/designs/paper_extraction_pipeline.md` — pipeline design
 - `docs/designs/adaptive_pass2_multiturn.md` — adaptive mode design
 - `docs/summaries/pipeline_optimization_summary.md` — optimization history (v1 → v3.2)
 - `docs/plan/paper-reproduction.md` — implementation plan
+
+## Refactor Status
+
+**20-phase refactor complete** (2026-06-24):
+
+| Gate | Phase | Status | Verification |
+|------|-------|--------|--------------|
+| G1 | Phase 3 | ✅ | 91/91 import compatibility tests |
+| G4 | Phase 12B | ✅ | 16 files moved, internal imports pass |
+| **G5** | **Phase 14F2** | ✅ | **99/99 alpha e2e, 1313 unit tests** |
+
+- **Unit tests**: 1313 passed, 0 failed, 13 skipped
+- **E2E**: 99 alpha all completed (H5 + YAML)
+- **Commits**: 18 (each independently revertable)
+- **Module**: 8 subpackages, 0 top-level files

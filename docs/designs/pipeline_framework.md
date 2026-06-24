@@ -4608,4 +4608,177 @@ if not os.environ.get("LLMWIKIFY_API_KEY"):
 
 ---
 
-**文档完成**. 涵盖 101 alpha 端到端设计 + 4 层架构 + prompts/ 子系统 + 三层 ReAct + 7 子包拆分 + 20 阶段实施计划 + 单元测试纪律 + 5 个 Gate 验证 + 风险评估 + 决策记录 + AI 执行原则 + 单元测试完整规划 + Python 设计模式集成 + 部署与运维.
+# 第八部分: 实施总结
+
+> 2026-06-24: 20 阶段 refactor 全部完成.
+
+## 32. 实施总结
+
+### 32.1 完成状态
+
+| Gate | Phase | 状态 | 验证 |
+|------|-------|------|------|
+| G1 | Phase 3 | ✅ | 91/91 import 兼容性测试 |
+| G4 | Phase 12B | ✅ | 16 文件搬迁, 内部 import 全部通过 |
+| **G5** | **Phase 14F2** | ✅ | **99/99 alpha e2e, 1313 单元测试** |
+
+### 32.2 最终模块结构
+
+```
+reproduction/
+├── common/              (7) 基础设施
+│   ├── config.py        # 全局配置
+│   ├── paths.py         # 路径常量
+│   ├── run_id.py        # run ID 生成
+│   ├── telemetry.py     # 遥测
+│   ├── errors.py        # 错误处理
+│   ├── utils.py         # 工具函数
+│   └── llm_factory.py   # LLM 客户端工厂
+│
+├── data_source/         (6) 数据源
+│   ├── router.py        # 数据源路由
+│   ├── universe.py      # 股票池管理
+│   ├── quantnodes_adapter.py  # QuantNodes 适配
+│   ├── akshare.py       # AkShare 数据
+│   ├── clickhouse.py    # ClickHouse 数据
+│   └── ifind.py         # iFinD 数据
+│
+├── codegen/             (6) 代码生成
+│   ├── llm_code.py      # LLM 代码生成
+│   ├── react_engine.py  # ReAct 引擎
+│   ├── compiler.py      # 代码编译
+│   ├── repair.py        # 代码修复
+│   ├── semantic.py      # 语义分析
+│   ├── metadata.py      # 元数据提取
+│   └── ast/             (4) AST 处理
+│       ├── compiler.py  # AST 编译器
+│       ├── nodes.py     # AST 节点
+│       ├── complexity.py # 复杂度分析
+│       └── extractor.py # 代码提取
+│
+├── prompts/             (6) Prompt 系统
+│   ├── group.py         # Prompt 分组
+│   ├── registry.py      # Prompt 注册
+│   ├── loader.py        # Prompt 加载
+│   ├── renderer.py      # Prompt 渲染
+│   ├── store.py         # Prompt 存储
+│   └── builtin/         (9) 内置模板
+│       ├── code_gen/v1.yaml, v2.yaml
+│       ├── react_feedback/v1.yaml
+│       ├── metadata_extract/v1.yaml, v2.yaml
+│       ├── track_a/v1.yaml
+│       ├── track_b/v1.yaml
+│       ├── hypothesis_test/v1.yaml
+│       └── risk_analyze/v1.yaml
+│
+├── backtest_pkg/        (8) 回测
+│   ├── factor_backtest.py
+│   ├── run_backtest.py
+│   ├── metrics.py
+│   ├── strategies.py
+│   ├── l5_validation.py
+│   ├── l5_orchestrator.py
+│   ├── factor_value_store.py
+│   └── quantnodes_repro.py
+│
+├── persist/             (3) 持久化
+│   ├── factor_library.py
+│   ├── sessions.py
+│   └── run.py
+│
+├── paper_understanding/ (6) 论文理解
+│   ├── extract_paper.py
+│   ├── extract_factors.py
+│   ├── extract_strategy.py
+│   ├── quant_wiki.py
+│   ├── schemas.py
+│   ├── contracts.py
+│   └── llm_extraction/  (15) LLM 提取
+│       ├── orchestrator.py
+│       ├── planner.py
+│       ├── track_a.py
+│       ├── track_b.py
+│       ├── validator.py
+│       └── ... (11 more)
+│
+└── pipeline/            (5) 流水线框架
+    ├── config.py        # WorkspaceConfig
+    ├── runner.py        # PipelineRunner
+    ├── workspace.py     # Workspace 管理
+    ├── react.py         # FailureClassifier + PipelineReAct
+    ├── stages/          (5) Stage 实现
+    │   ├── base.py      # Stage 抽象基类
+    │   ├── paper_understanding.py
+    │   ├── codegen.py
+    │   ├── backtest.py
+    │   └── persist_factor.py
+    ├── data_loader.py   # 数据加载
+    ├── backtest_config.py # 回测配置
+    ├── backtest_extract.py # 回测结果提取
+    ├── score.py         # 评分计算
+    ├── persist.py       # 持久化
+    ├── factor_fix.py    # 因子修复
+    └── quantnodes_patch.py # QuantNodes 修复
+```
+
+### 32.3 Commits 记录
+
+| Phase | Commit | 说明 |
+|-------|--------|------|
+| 1 | `936e1cb` | common/ 基础设施 |
+| 2 | `e5f335f` | data_source/ 数据源 |
+| 3 | `e2fc83d` | PEP 562 兼容层 [G1] |
+| 4 | `b48091b` | prompts/ 骨架 |
+| 5 | `02edc11` | codegen/ 主包 |
+| 6 | `e7ae49b` | codegen/ast/ 子包 |
+| 7 | `dccd381` | backtest_pkg/ 子包 |
+| 8 | `b10cd86` | persist/ 子包 |
+| 9 | `c4a9f62` | prompts/builtin/ 核心 |
+| 10 | `65ace89` | codegen/ 接入 PromptRegistry |
+| 11 | `2582b0b` | metadata_extract + 接入 |
+| 12A | `ea6dfef` | paper_understanding/ |
+| 12B | `21a54df` | llm_extraction/ 搬入 [G4] |
+| 13 | `ef8b145` | prompts/builtin/ 边缘 |
+| 14A-B | `7588f59` | pipeline/ 框架 + ReAct |
+| 14C-E | `9bd79b4` | 业务模块 + Stage + CLI |
+| 14F1 | `5a4742d` | import 修复 + 5 alpha e2e |
+
+### 32.4 测试统计
+
+| 类型 | 数量 | 说明 |
+|------|------|------|
+| 单元测试 | 1313 passed | 0 failed, 13 skipped |
+| E2E (5 alpha) | 5/5 | avg ICIR=0.0507 |
+| E2E (99 alpha) | 99/99 | 全部完成 |
+| 测试文件 | 89+ | 覆盖所有子包 |
+
+### 32.5 Gate 验证结果
+
+**G1 [Phase 3] - Import 兼容性**:
+- 33 项 import 路径测试全部通过
+- 旧路径 `reproduction.X` 自动重定向到新子包
+- 无破坏性变更
+
+**G4 [Phase 12B] - 内部搬迁**:
+- llm_extraction/ 16 文件全部搬迁
+- 内部 import 使用 `...X` (3 层相对路径)
+- 所有内部测试通过
+
+**G5 [Phase 14F2] - 全量验证**:
+- 99 alpha 全部完成 LLM 代码生成 + 回测 + 持久化
+- 因子目录数量不变 (99)
+- 无回归 (1313 单元测试全过)
+
+### 32.6 下一步
+
+| 优先级 | 任务 | 说明 |
+|--------|------|------|
+| P0 | `git push` | 推送到远端 |
+| P0 | 创建 PR | refactor/pass2-config-v4 → main |
+| P1 | 代码审查 | 检查每个 commit |
+| P2 | 文档更新 | 更新 README.md |
+| P3 | 清理旧文件 | 删除 scripts/test_one_factor_llm_code.py |
+
+---
+
+**文档完成**. 涵盖 101 alpha 端到端设计 + 4 层架构 + prompts/ 子系统 + 三层 ReAct + 7 子包拆分 + 20 阶段实施计划 + 单元测试纪律 + 5 个 Gate 验证 + 风险评估 + 决策记录 + AI 执行原则 + 单元测试完整规划 + Python 设计模式集成 + 部署与运维 + 实施总结.
