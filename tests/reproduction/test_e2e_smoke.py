@@ -38,14 +38,14 @@ ALL_TOP_MODULES = [
 ]
 
 LLM_EXTRACTION_MODULES = [
-    "llm_extraction.config", "llm_extraction.defer",
-    "llm_extraction.log_decorator",
-    "llm_extraction.orchestrator", "llm_extraction.plan_saver",
-    "llm_extraction.planner", "llm_extraction.preview",
-    "llm_extraction.retry", "llm_extraction.runlog",
-    "llm_extraction.section_detector", "llm_extraction.stage0_ingest",
-    "llm_extraction.track_a", "llm_extraction.track_b",
-    "llm_extraction.validator", "llm_extraction",
+    "paper_understanding.llm_extraction.config", "paper_understanding.llm_extraction.defer",
+    "paper_understanding.llm_extraction.log_decorator",
+    "paper_understanding.llm_extraction.orchestrator", "paper_understanding.llm_extraction.plan_saver",
+    "paper_understanding.llm_extraction.planner", "paper_understanding.llm_extraction.preview",
+    "paper_understanding.llm_extraction.retry", "paper_understanding.llm_extraction.runlog",
+    "paper_understanding.llm_extraction.section_detector", "paper_understanding.llm_extraction.stage0_ingest",
+    "paper_understanding.llm_extraction.track_a", "paper_understanding.llm_extraction.track_b",
+    "paper_understanding.llm_extraction.validator", "paper_understanding.llm_extraction",
 ]
 
 

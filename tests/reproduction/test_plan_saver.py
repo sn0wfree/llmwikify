@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from llmwikify.reproduction.llm_extraction.plan_saver import save_plan
+from llmwikify.reproduction.paper_understanding.llm_extraction.plan_saver import save_plan
 
 
 def _make_stage0(**overrides):

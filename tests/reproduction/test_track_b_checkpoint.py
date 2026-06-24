@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from llmwikify.reproduction.llm_extraction.track_b import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     SignalDetail,
     SignalStub,
     _delete_checkpoint,

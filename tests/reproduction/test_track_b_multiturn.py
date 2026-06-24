@@ -17,8 +17,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from llmwikify.reproduction.llm_extraction.planner import PlanResult
-from llmwikify.reproduction.llm_extraction.track_b import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.planner import PlanResult
+from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     MAX_CONSECUTIVE_ZERO,
     MAX_ROUNDS,
     PASS1_MAX_TOKENS_DEFAULT,

@@ -20,11 +20,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from llmwikify.reproduction.llm_extraction.preview import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.preview import (
     generate_preview,
     write_preview,
 )
-from llmwikify.reproduction.llm_extraction.validator import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.validator import (
     ValidationIssue,
     validate_paper_outputs,
 )
@@ -35,7 +35,7 @@ from llmwikify.reproduction.llm_extraction.validator import (
 
 class TestValidatePlan:
     def test_valid_plan(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_plan
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_plan
         data = {
             "paper_id": "p1",
             "source_path": "/x.pdf",
@@ -49,13 +49,13 @@ class TestValidatePlan:
         assert len(issues) == 0
 
     def test_missing_paper_id(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_plan
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_plan
         data = {"stage1_call2_plan": {"success": True, "schema_choice": "factor"}}
         issues = _validate_plan(data)
         assert any(i.level == "error" and "paper_id" in i.message for i in issues)
 
     def test_low_confidence(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_plan
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_plan
         data = {
             "paper_id": "p1",
             "stage1_call2_plan": {
@@ -68,7 +68,7 @@ class TestValidatePlan:
         assert any(i.level == "warning" and "low" in i.message for i in issues)
 
     def test_invalid_schema(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_plan
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_plan
         data = {
             "paper_id": "p1",
             "stage1_call2_plan": {
@@ -83,7 +83,7 @@ class TestValidatePlan:
 
 class TestValidateTrackA:
     def test_valid_track_a(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_track_a
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_track_a
         data = {
             "success": True,
             "schema_choice": "factor",
@@ -99,13 +99,13 @@ class TestValidateTrackA:
         assert not any(i.level == "error" for i in issues)
 
     def test_failed_track_a(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_track_a
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_track_a
         data = {"success": False, "error": "JSON parse failed"}
         issues = _validate_track_a(data)
         assert any(i.level == "error" and "failed" in i.message for i in issues)
 
     def test_empty_tier1(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_track_a
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_track_a
         data = {"success": True, "schema_choice": "factor", "tier1": {}}
         issues = _validate_track_a(data)
         assert any(i.level == "error" and "tier1" in i.message for i in issues)
@@ -113,7 +113,7 @@ class TestValidateTrackA:
 
 class TestValidatePass1:
     def test_valid_pass1(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_track_b_pass1
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_track_b_pass1
         data = {
             "schema_choice": "factor",
             "enabled": True,
@@ -128,7 +128,7 @@ class TestValidatePass1:
         assert not any(i.level == "error" for i in issues)
 
     def test_zero_signals(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_track_b_pass1
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_track_b_pass1
         data = {
             "schema_choice": "factor",
             "enabled": True,
@@ -139,13 +139,13 @@ class TestValidatePass1:
         assert any(i.level == "error" and "no signals" in i.message for i in issues)
 
     def test_summary_skipped_ok(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_track_b_pass1
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_track_b_pass1
         data = {"schema_choice": "summary", "enabled": False}
         issues = _validate_track_b_pass1(data)
         assert issues == []
 
     def test_empty_name(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_track_b_pass1
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_track_b_pass1
         data = {
             "schema_choice": "factor",
             "enabled": True,
@@ -159,7 +159,7 @@ class TestValidatePass1:
         assert any(i.level == "warning" and "empty name" in i.message for i in issues)
 
     def test_batched_but_few(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_track_b_pass1
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_track_b_pass1
         data = {
             "schema_choice": "factor",
             "enabled": True,
@@ -173,7 +173,7 @@ class TestValidatePass1:
 
 class TestValidatePass2:
     def test_valid_pass2(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_track_b_pass2
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_track_b_pass2
         data = {
             "n_pass1": 2,
             "n_pass2_complete": 2,
@@ -187,7 +187,7 @@ class TestValidatePass2:
         assert not any(i.level == "error" for i in issues)
 
     def test_all_failed(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_track_b_pass2
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_track_b_pass2
         data = {
             "n_pass1": 2,
             "n_pass2_complete": 0,
@@ -201,7 +201,7 @@ class TestValidatePass2:
         assert any(i.level == "error" and "all" in i.message for i in issues)
 
     def test_missing_l1(self):
-        from llmwikify.reproduction.llm_extraction.validator import _validate_track_b_pass2
+        from llmwikify.reproduction.paper_understanding.llm_extraction.validator import _validate_track_b_pass2
         data = {
             "n_pass1": 1,
             "n_pass2_complete": 1,

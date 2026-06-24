@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llmwikify.reproduction.llm_extraction.planner import PlanResult
-from llmwikify.reproduction.llm_extraction.track_b import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.planner import PlanResult
+from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     SignalDetail,
     SignalStub,
     _get_signal_context,
@@ -468,22 +468,22 @@ class TestUnwrapFactors:
     """Test JSON response unwrapping."""
 
     def test_list_format(self):
-        from llmwikify.reproduction.llm_extraction.track_b import _unwrap_factors
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _unwrap_factors
         result = _unwrap_factors([{"name": "A"}, {"name": "B"}])
         assert result == [{"name": "A"}, {"name": "B"}]
 
     def test_factors_key(self):
-        from llmwikify.reproduction.llm_extraction.track_b import _unwrap_factors
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _unwrap_factors
         result = _unwrap_factors({"factors": [{"name": "A"}]})
         assert result == [{"name": "A"}]
 
     def test_legacy_factor_key(self):
-        from llmwikify.reproduction.llm_extraction.track_b import _unwrap_factors
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _unwrap_factors
         result = _unwrap_factors({"factor": {"name": "A"}})
         assert result == [{"name": "A"}]
 
     def test_invalid_input(self):
-        from llmwikify.reproduction.llm_extraction.track_b import _unwrap_factors
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _unwrap_factors
         assert _unwrap_factors(None) is None
         assert _unwrap_factors("not a dict") is None
         assert _unwrap_factors({"random": "key"}) is None
@@ -496,7 +496,7 @@ class TestBuildSignalDetail:
     """Test _build_signal_detail with new and legacy schemas."""
 
     def test_new_schema(self):
-        from llmwikify.reproduction.llm_extraction.track_b import _build_signal_detail
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _build_signal_detail
         stub = SignalStub(index=1, name="X", formula_brief="f")
         factor = {
             "name": "X", "description": "d",
@@ -509,14 +509,14 @@ class TestBuildSignalDetail:
         assert detail.latency_ms == 1000
 
     def test_invalid_factor(self):
-        from llmwikify.reproduction.llm_extraction.track_b import _build_signal_detail
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _build_signal_detail
         stub = SignalStub(index=1, name="X", formula_brief="f")
         detail = _build_signal_detail(stub, "not a dict", 500)
         assert detail.success is False
         assert detail.error == "invalid_factor_format"
 
     def test_missing_l1_returns_empty_dict(self):
-        from llmwikify.reproduction.llm_extraction.track_b import _build_signal_detail
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _build_signal_detail
         stub = SignalStub(index=1, name="X", formula_brief="f")
         factor = {"name": "X", "description": "d"}
         detail = _build_signal_detail(stub, factor, 0)

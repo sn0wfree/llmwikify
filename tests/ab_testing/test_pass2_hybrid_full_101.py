@@ -15,8 +15,8 @@ from pathlib import Path
 ROOT = Path("/home/ll/llmwikify")
 sys.path.insert(0, str(ROOT / "src"))
 
-from llmwikify.reproduction.llm_extraction.llm_factory import build_default_client
-from llmwikify.reproduction.llm_extraction.track_b import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import build_default_client
+from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     PROMPT_PASS2_SUPPLEMENT,
     SignalDetail,
     SignalStub,
@@ -24,7 +24,7 @@ from llmwikify.reproduction.llm_extraction.track_b import (
     _run_pass2_adaptive,
     _select_supplement_targets,
 )
-from llmwikify.reproduction.llm_extraction.planner import plan_paper
+from llmwikify.reproduction.paper_understanding.llm_extraction.planner import plan_paper
 
 PAPER_ID = "101_alphas_hybrid_full"
 WORK_DIR = ROOT / "quant" / "papers" / PAPER_ID

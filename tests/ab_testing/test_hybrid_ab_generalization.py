@@ -29,7 +29,7 @@ from pathlib import Path
 ROOT = Path("/home/ll/llmwikify")
 sys.path.insert(0, str(ROOT / "src"))
 
-from llmwikify.reproduction.llm_extraction import run_one_paper
+from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper
 
 WORK_DIR_ROOT = ROOT / "quant/papers"
 

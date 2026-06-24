@@ -20,7 +20,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from llmwikify.reproduction.llm_extraction.runlog import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.runlog import (
     Checkpoint,
     RunEvent,
     RunLogger,

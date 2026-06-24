@@ -28,13 +28,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from llmwikify.reproduction.llm_extraction.log_decorator import with_logging
-from llmwikify.reproduction.llm_extraction.retry import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.log_decorator import with_logging
+from llmwikify.reproduction.paper_understanding.llm_extraction.retry import (
     DeferError,
     RetryConfig,
     with_retry,
 )
-from llmwikify.reproduction.llm_extraction.runlog import RunLogger
+from llmwikify.reproduction.paper_understanding.llm_extraction.runlog import RunLogger
 
 
 # ── Helpers ────────────────────────────────────────────
@@ -124,7 +124,7 @@ class TestBackoff:
         def fn():
             raise RuntimeError("fail")
 
-        with patch("llmwikify.reproduction.llm_extraction.retry.time.sleep") as mock_sleep:
+        with patch("llmwikify.reproduction.paper_understanding.llm_extraction.retry.time.sleep") as mock_sleep:
             with pytest.raises(DeferError):
                 fn()
             # 2 sleeps for 3 attempts
@@ -145,7 +145,7 @@ class TestBackoff:
         def fn():
             raise RuntimeError("fail")
 
-        with patch("llmwikify.reproduction.llm_extraction.retry.time.sleep") as mock_sleep:
+        with patch("llmwikify.reproduction.paper_understanding.llm_extraction.retry.time.sleep") as mock_sleep:
             with pytest.raises(DeferError):
                 fn()
             for call in mock_sleep.call_args_list:
@@ -159,7 +159,7 @@ class TestBackoff:
         def fn():
             raise RuntimeError("fail")
 
-        with patch("llmwikify.reproduction.llm_extraction.retry.time.sleep") as mock_sleep:
+        with patch("llmwikify.reproduction.paper_understanding.llm_extraction.retry.time.sleep") as mock_sleep:
             with pytest.raises(DeferError):
                 fn()
             # 1 sleep for 2 attempts, base=1.0, jitter adds up to 0.5

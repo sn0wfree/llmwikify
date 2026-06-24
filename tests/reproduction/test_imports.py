@@ -88,23 +88,23 @@ CODEGEN_MODULES = [
     "codegen.metadata",
 ]
 
-# ── llm_extraction/ 子包 (15 个, 除 llm_factory 外) ────────
+# ── paper_understanding/llm_extraction/ 子包 (15 个, 除 llm_factory 外) ────────
 LLM_EXTRACTION_MODULES = [
-    "llm_extraction.config",
-    "llm_extraction.defer",
-    "llm_extraction.log_decorator",
-    "llm_extraction.orchestrator",
-    "llm_extraction.plan_saver",
-    "llm_extraction.planner",
-    "llm_extraction.preview",
-    "llm_extraction.retry",
-    "llm_extraction.runlog",
-    "llm_extraction.section_detector",
-    "llm_extraction.stage0_ingest",
-    "llm_extraction.track_a",
-    "llm_extraction.track_b",
-    "llm_extraction.validator",
-    "llm_extraction",
+    "paper_understanding.llm_extraction.config",
+    "paper_understanding.llm_extraction.defer",
+    "paper_understanding.llm_extraction.log_decorator",
+    "paper_understanding.llm_extraction.orchestrator",
+    "paper_understanding.llm_extraction.plan_saver",
+    "paper_understanding.llm_extraction.planner",
+    "paper_understanding.llm_extraction.preview",
+    "paper_understanding.llm_extraction.retry",
+    "paper_understanding.llm_extraction.runlog",
+    "paper_understanding.llm_extraction.section_detector",
+    "paper_understanding.llm_extraction.stage0_ingest",
+    "paper_understanding.llm_extraction.track_a",
+    "paper_understanding.llm_extraction.track_b",
+    "paper_understanding.llm_extraction.validator",
+    "paper_understanding.llm_extraction",
 ]
 
 ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + CODEGEN_MODULES + CODEGEN_AST_MODULES + BACKTEST_MODULES + PERSIST_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
@@ -221,15 +221,6 @@ def test_module_count_matches_plan() -> None:
             for f in os.listdir(bt_path)
             if f.endswith(".py") and f != "__init__.py"
         }
-    # llm_extraction/ 子包
-    llm_ext_path = os.path.join(pkg_path, "llm_extraction")
-    actual_llm_ext = set()
-    if os.path.isdir(llm_ext_path):
-        actual_llm_ext = {
-            f"llm_extraction.{f[:-3]}"
-            for f in os.listdir(llm_ext_path)
-            if f.endswith(".py") and f != "__init__.py" and f != "conftest.py"
-        }
     # paper_understanding/ 子包
     pu_path = os.path.join(pkg_path, "paper_understanding")
     actual_pu = set()
@@ -238,6 +229,15 @@ def test_module_count_matches_plan() -> None:
             f"paper_understanding.{f[:-3]}"
             for f in os.listdir(pu_path)
             if f.endswith(".py") and f != "__init__.py"
+        }
+    # paper_understanding/llm_extraction/ 子包
+    llm_ext_path = os.path.join(pu_path, "llm_extraction")
+    actual_llm_ext = set()
+    if os.path.isdir(llm_ext_path):
+        actual_llm_ext = {
+            f"paper_understanding.llm_extraction.{f[:-3]}"
+            for f in os.listdir(llm_ext_path)
+            if f.endswith(".py") and f != "__init__.py" and f != "conftest.py"
         }
     # 至少 ≥ 计划数 (允许新增模块)
     assert len(actual_top) >= len(TOP_LEVEL_MODULES) - len(actual_pu), (

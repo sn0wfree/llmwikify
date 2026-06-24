@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.reproduction.llm_extraction.track_b import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     HYBRID_INTUITION_THRESHOLD,
     HYBRID_SUPPLEMENT_RATIO,
     HYBRID_MIN_SUPPLEMENTS,
@@ -278,7 +278,7 @@ class TestSelectPass2ModeHybrid:
 
     def test_override_hybrid(self):
         """PASS2_MODE_OVERRIDE='hybrid' returns hybrid."""
-        import llmwikify.reproduction.llm_extraction.track_b as tb
+        import llmwikify.reproduction.paper_understanding.llm_extraction.track_b as tb
         original = tb.PASS2_MODE_OVERRIDE
         tb.PASS2_MODE_OVERRIDE = "hybrid"
         try:
@@ -298,7 +298,7 @@ class TestSelectPass2ModeHybrid:
         # Should recommend adaptive normally → hybrid auto-promotes
         complexity = estimate_complexity(stubs)
         # Override PASS2_HYBRID_ENABLED temporarily
-        import llmwikify.reproduction.llm_extraction.track_b as tb
+        import llmwikify.reproduction.paper_understanding.llm_extraction.track_b as tb
         original = tb.PASS2_HYBRID_ENABLED
         tb.PASS2_HYBRID_ENABLED = True
         try:
@@ -316,7 +316,7 @@ class TestSelectPass2ModeHybrid:
         """When PASS2_HYBRID_ENABLED=False, returns adaptive/parallel."""
         stubs = [_stub(f"Alpha#{i}", formula="x" * 30, context="y" * 2500)
                  for i in range(50)]
-        import llmwikify.reproduction.llm_extraction.track_b as tb
+        import llmwikify.reproduction.paper_understanding.llm_extraction.track_b as tb
         original_hybrid = tb.PASS2_HYBRID_ENABLED
         original_override = tb.PASS2_MODE_OVERRIDE
         tb.PASS2_HYBRID_ENABLED = False
@@ -332,7 +332,7 @@ class TestSelectPass2ModeHybrid:
         """< 30 signals → no hybrid even if complexity suggests adaptive."""
         stubs = [_stub(f"Alpha#{i}", formula="x" * 30, context="y" * 2500)
                  for i in range(20)]
-        import llmwikify.reproduction.llm_extraction.track_b as tb
+        import llmwikify.reproduction.paper_understanding.llm_extraction.track_b as tb
         original_hybrid = tb.PASS2_HYBRID_ENABLED
         tb.PASS2_HYBRID_ENABLED = True
         try:
@@ -505,7 +505,7 @@ class TestRunPass2AdaptivePromptParam:
     def test_default_prompt_is_pass2(self):
         """Default prompt_file in _run_pass2_adaptive should be PROMPT_PASS2."""
         import inspect
-        from llmwikify.reproduction.llm_extraction.track_b import _run_pass2_adaptive
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _run_pass2_adaptive
         sig = inspect.signature(_run_pass2_adaptive)
         assert "prompt_file" in sig.parameters
         # Default should be PROMPT_PASS2
@@ -514,7 +514,7 @@ class TestRunPass2AdaptivePromptParam:
     def test_supplement_prompt_acceptable(self):
         """prompt_file parameter should accept PROMPT_PASS2_SUPPLEMENT."""
         import inspect
-        from llmwikify.reproduction.llm_extraction.track_b import _run_pass2_adaptive
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _run_pass2_adaptive
         sig = inspect.signature(_run_pass2_adaptive)
         # Type annotation should be str (or have default str)
         param = sig.parameters["prompt_file"]
@@ -536,18 +536,18 @@ class TestHybridUsesSupplementPrompt:
             return ([], 0)
 
         monkeypatch.setattr(
-            "llmwikify.reproduction.llm_extraction.track_b._run_pass2_adaptive",
+            "llmwikify.reproduction.paper_understanding.llm_extraction.track_b._run_pass2_adaptive",
             fake_adaptive,
         )
         monkeypatch.setattr(
-            "llmwikify.reproduction.llm_extraction.track_b._run_pass2_parallel",
+            "llmwikify.reproduction.paper_understanding.llm_extraction.track_b._run_pass2_parallel",
             lambda *a, **kw: asyncio_gather_return([], 0),
         )
 
         # Need to actually call _hybrid_pass2 with shallow factors
         # Build a small client + plan + signals
         # This test is integration-level; verify the wiring exists via imports
-        from llmwikify.reproduction.llm_extraction.track_b import _hybrid_pass2
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _hybrid_pass2
         # Just verify it accepts the same signature
         import inspect
         sig = inspect.signature(_hybrid_pass2)

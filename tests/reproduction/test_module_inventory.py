@@ -158,7 +158,7 @@ EXPECTED_PUBLIC_API = {
     "backtest_pkg.quantnodes_repro": [
         "run_factor_backtest",
     ],
-    "llm_extraction": [
+    "paper_understanding.llm_extraction": [
         "run_one_paper",
     ],
     "persist.run": [
@@ -194,43 +194,43 @@ EXPECTED_PUBLIC_API = {
         "extract_factors",
     ],
     # ── llm_extraction/ ──
-    "llm_extraction.orchestrator": [
+    "paper_understanding.llm_extraction.orchestrator": [
         "run_one_paper",
     ],
-    "llm_extraction.track_a": [
+    "paper_understanding.llm_extraction.track_a": [
         "run_track_a",
     ],
-    "llm_extraction.track_b": [
+    "paper_understanding.llm_extraction.track_b": [
         "run_track_b",
     ],
-    "llm_extraction.planner": [
+    "paper_understanding.llm_extraction.planner": [
         "plan_paper",
     ],
-    "llm_extraction.validator": [
+    "paper_understanding.llm_extraction.validator": [
         "validate_paper_outputs",
     ],
-    "llm_extraction.retry": [
+    "paper_understanding.llm_extraction.retry": [
         "with_retry",
     ],
-    "llm_extraction.defer": [
+    "paper_understanding.llm_extraction.defer": [
         "DeferredQueue",
     ],
-    "llm_extraction.runlog": [
+    "paper_understanding.llm_extraction.runlog": [
         "RunLogger",
     ],
-    "llm_extraction.section_detector": [
+    "paper_understanding.llm_extraction.section_detector": [
         "detect_sections",
     ],
-    "llm_extraction.plan_saver": [
+    "paper_understanding.llm_extraction.plan_saver": [
         "save_plan",
     ],
-    "llm_extraction.preview": [
+    "paper_understanding.llm_extraction.preview": [
         "generate_preview",
     ],
-    "llm_extraction.log_decorator": [
+    "paper_understanding.llm_extraction.log_decorator": [
         "with_logging",
     ],
-    "llm_extraction.stage0_ingest": [
+    "paper_understanding.llm_extraction.stage0_ingest": [
         "run_stage0_ingest",
     ],
 }
@@ -264,9 +264,9 @@ def test_inventory_coverage() -> None:
 
 @pytest.mark.mock
 def test_inventory_includes_llm_extraction() -> None:
-    """验证 llm_extraction/ 子包有 API 锁定."""
-    llm_ext_keys = [k for k in EXPECTED_PUBLIC_API if k.startswith("llm_extraction.")]
+    """验证 paper_understanding/llm_extraction/ 子包有 API 锁定."""
+    llm_ext_keys = [k for k in EXPECTED_PUBLIC_API if k.startswith("paper_understanding.llm_extraction.")]
     assert len(llm_ext_keys) >= 8, (
-        f"llm_extraction/ coverage: {len(llm_ext_keys)} modules. "
+        f"paper_understanding/llm_extraction/ coverage: {len(llm_ext_keys)} modules. "
         f"Should be ≥ 8 (out of 16 total)."
     )

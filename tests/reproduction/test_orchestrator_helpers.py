@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from llmwikify.reproduction.llm_extraction.orchestrator import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import (
     _slugify,
     _write_factor_yamls,
 )

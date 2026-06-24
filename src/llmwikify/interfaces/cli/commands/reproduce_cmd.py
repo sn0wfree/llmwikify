@@ -51,7 +51,7 @@ def run_one_paper_cli(args: Any, wiki_root: Path) -> int:
     Returns:
         0 on success, 1 on failure.
     """
-    from llmwikify.reproduction.llm_extraction import run_one_paper
+    from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper
 
     source = Path(args.source)
     if not source.exists():
@@ -113,7 +113,7 @@ def run_batch(args: Any, wiki_root: Path) -> int:
     Returns:
         0 on success, 1 if any paper failed.
     """
-    from llmwikify.reproduction.llm_extraction import run_one_paper
+    from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper
 
     source_dir = Path(args.source)
     if not source_dir.is_dir():

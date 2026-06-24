@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from llmwikify.reproduction.llm_extraction.track_b import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     PASS2_SUCCESS_THRESHOLD_HIGH,
     PASS2_SUCCESS_THRESHOLD_LOW,
     PASS2_MAX_RETRY_ROUNDS,
@@ -174,7 +174,7 @@ class TestOrchestratorIntegration:
     def test_summary_includes_success_rate_fields(self):
         """Orchestrator summary should include success rate fields."""
         # This is a structural test - actual integration tested in e2e
-        from llmwikify.reproduction.llm_extraction.orchestrator import run_one_paper
+        from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import run_one_paper
         import inspect
         
         # Check that run_one_paper exists and has the expected signature

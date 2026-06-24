@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction.llm_extraction import track_a as ta
+from llmwikify.reproduction.paper_understanding.llm_extraction import track_a as ta
 
 
 class TestTrackAResult:

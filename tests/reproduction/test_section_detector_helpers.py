@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction.llm_extraction.section_detector import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.section_detector import (
     Section,
     SectionDetectionResult,
     _extract_json,

@@ -111,7 +111,7 @@ class TestRunOnePaperCli:
             }
 
         with patch(
-            "llmwikify.reproduction.llm_extraction.run_one_paper",
+            "llmwikify.reproduction.paper_understanding.llm_extraction.run_one_paper",
             side_effect=fake_run,
         ):
             result = run_one_paper_cli(args, tmp_path)
@@ -128,7 +128,7 @@ class TestRunOnePaperCli:
         args = _build_args(source=str(pdf_path), output=str(output_root))
 
         with patch(
-            "llmwikify.reproduction.llm_extraction.run_one_paper"
+            "llmwikify.reproduction.paper_understanding.llm_extraction.run_one_paper"
         ) as mock_run:
             mock_run.return_value = {
                 "success": False,
@@ -151,7 +151,7 @@ class TestRunOnePaperCli:
         args = _build_args(source=str(pdf_path), output=str(output_root), json=True)
 
         with patch(
-            "llmwikify.reproduction.llm_extraction.run_one_paper"
+            "llmwikify.reproduction.paper_understanding.llm_extraction.run_one_paper"
         ) as mock_run:
             mock_run.return_value = {
                 "success": True,
@@ -243,7 +243,7 @@ class TestRunBatch:
         )
 
         with patch(
-            "llmwikify.reproduction.llm_extraction.run_one_paper"
+            "llmwikify.reproduction.paper_understanding.llm_extraction.run_one_paper"
         ) as mock_run:
             mock_run.return_value = {"success": True}
             run_batch(args, tmp_path)

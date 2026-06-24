@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.reproduction.llm_extraction.stage0_ingest import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.stage0_ingest import (
     Stage0Result,
     _content_hash,
     _slugify_paper_id,

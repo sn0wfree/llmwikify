@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction.llm_extraction import section_detector as sd
+from llmwikify.reproduction.paper_understanding.llm_extraction import section_detector as sd
 
 
 class TestClasses:

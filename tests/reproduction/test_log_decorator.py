@@ -20,8 +20,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from llmwikify.reproduction.llm_extraction.log_decorator import with_logging
-from llmwikify.reproduction.llm_extraction.runlog import RunLogger, make_run_logger
+from llmwikify.reproduction.paper_understanding.llm_extraction.log_decorator import with_logging
+from llmwikify.reproduction.paper_understanding.llm_extraction.runlog import RunLogger, make_run_logger
 
 
 # ── Success path ──────────────────────────────────────

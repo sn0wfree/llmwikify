@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction.llm_extraction import config as c
+from llmwikify.reproduction.paper_understanding.llm_extraction import config as c
 
 
 class TestPass2Config:

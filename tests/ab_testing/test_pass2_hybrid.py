@@ -19,16 +19,16 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from llmwikify.reproduction.llm_extraction.llm_factory import build_default_client
-from llmwikify.reproduction.llm_extraction.planner import plan_paper
-from llmwikify.reproduction.llm_extraction.track_b import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import build_default_client
+from llmwikify.reproduction.paper_understanding.llm_extraction.planner import plan_paper
+from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     _hybrid_pass2,
     _assess_factor_quality,
     HYBRID_SUPPLEMENT_RATIO,
     select_pass2_mode,
 )
-from llmwikify.reproduction.llm_extraction.stage0_ingest import parse_paper
-from llmwikify.reproduction.llm_extraction.track_b import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.stage0_ingest import parse_paper
+from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     SignalDetail, _run_pass2_parallel,
 )
 
@@ -76,7 +76,7 @@ def main():
     # _hybrid_pass2 expects list[SignalStub], but SignalStub is a dataclass
     # For test purposes, the parallel function uses .name, .formula_brief, .context_excerpt
     # So we need actual SignalStub instances
-    from llmwikify.reproduction.llm_extraction.track_b import SignalStub
+    from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import SignalStub
     signals = []
     for i, d in enumerate(pass1_signals_dict):
         signals.append(SignalStub(

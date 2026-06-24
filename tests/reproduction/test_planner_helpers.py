@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from llmwikify.reproduction.llm_extraction.planner import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.planner import (
     TOKEN_BUDGET_FLOOR,
     PlanResult,
     _clamp_token_budget,

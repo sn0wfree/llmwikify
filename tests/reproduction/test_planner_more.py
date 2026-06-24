@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction.llm_extraction import planner as p
+from llmwikify.reproduction.paper_understanding.llm_extraction import planner as p
 
 
 class TestPlanResult:

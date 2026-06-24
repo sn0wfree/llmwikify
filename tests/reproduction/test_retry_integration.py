@@ -18,16 +18,16 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 # Import each module that contains LLM call sites
-from llmwikify.reproduction.llm_extraction import (
+from llmwikify.reproduction.paper_understanding.llm_extraction import (
     DeferError,
     planner,
     section_detector,
     track_a,
     track_b,
 )
-from llmwikify.reproduction.llm_extraction.planner import PlanResult
-from llmwikify.reproduction.llm_extraction.section_detector import Section
-from llmwikify.reproduction.llm_extraction.track_b import (
+from llmwikify.reproduction.paper_understanding.llm_extraction.planner import PlanResult
+from llmwikify.reproduction.paper_understanding.llm_extraction.section_detector import Section
+from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     PASS1_MAX_TOKENS_DEFAULT,
     SignalStub,
 )
