@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import importlib
-import sys
 
 import pytest
 
@@ -143,13 +142,9 @@ def test_module_count_matches_plan() -> None:
 @pytest.mark.mock
 def test_no_unexpected_import_errors() -> None:
     """批量 import 不应触发意外错误 (nanobot / 循环依赖等)."""
-    # 强制清除缓存
-    mods_before = set(sys.modules.keys())
-    for module_name in ALL_MODULES:
-        full_name = f"llmwikify.reproduction.{module_name}"
-        if full_name in sys.modules:
-            del sys.modules[full_name]
-    # 重新 import
+    # 不删除 sys.modules: import_module 对未缓存模块仍会全新导入并暴露错误,
+    # 对已缓存模块返回同一单例。强制 del + 重导会替换 sys.modules 单例与
+    # 父包属性, 污染其他测试已绑定的 imported name (test pollution).
     failed = []
     for module_name in ALL_MODULES:
         try:
