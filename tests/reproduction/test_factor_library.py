@@ -353,7 +353,7 @@ class TestUpdateIndex:
         fl.update_index(project_root=factor_workspace)
         index = yaml.safe_load((factors_dir / "index.yaml").read_text(encoding="utf-8"))
         # 修复后: 3 因子 = 3
-        assert index["stats"]["total"] == 3
-        assert index["stats"]["by_asset_type"]["stk"] == 3
-        assert index["stats"]["by_category"]["alpha"] == 2
-        assert index["stats"]["by_category"]["momentum"] == 1
+        assert index["statistics"]["total"] == 3
+        assert index["statistics"]["by_asset_type"]["stk"] == 3
+        assert index["statistics"]["by_category"]["alpha"] == 2
+        assert index["statistics"]["by_category"]["momentum"] == 1

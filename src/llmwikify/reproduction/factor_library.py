@@ -310,7 +310,7 @@ def update_index(project_root: Path | None = None) -> None:
 
     index = {
         "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "stats": stats,
+        "statistics": stats,
         "factors": factors,
     }
 
