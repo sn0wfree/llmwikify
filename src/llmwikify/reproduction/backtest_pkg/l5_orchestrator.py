@@ -24,7 +24,7 @@ from typing import Any, Optional
 
 import yaml
 
-from .factor_library import read_factor_yaml, write_factor_yaml
+from ..factor_library import read_factor_yaml, write_factor_yaml
 from .l5_validation import run_l5_validation
 
 logger = logging.getLogger(__name__)
@@ -490,7 +490,7 @@ def _run_backtest(factor_data: dict, bt_params: dict) -> Any:
     )
     close_wide = close_wide.sort_index().dropna(how="all")
 
-    from llmwikify.reproduction.factor_backtest import run_factor_backtest_universe
+    from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest_universe
     return run_factor_backtest_universe(
         close_wide=close_wide,
         factor_class=factor_class,

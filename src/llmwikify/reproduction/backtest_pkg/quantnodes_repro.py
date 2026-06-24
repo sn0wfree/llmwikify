@@ -252,7 +252,7 @@ def run_factor_backtest(
     """
     from QuantNodes.research.factor_test.pipeline_runner import PipelineRunner
 
-    from .factor_compiler import FactorCompiler
+    from ..codegen.compiler import FactorCompiler
 
     t0 = time.monotonic()
     yaml_path = Path(factor_yaml_path)
@@ -490,8 +490,8 @@ def _execute_compiled_ast(
     import pandas as pd
     import polars as pl
 
-    from .ast_compiler import CompileError, compile_ast
-    from .ast_nodes import ASTNode
+    from ..codegen.ast.compiler import CompileError, compile_ast
+    from ..codegen.ast.nodes import ASTNode
 
     data_path = Path(data_path)
     # Load stk_daily.h5 keys

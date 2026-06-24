@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
-from .common.config import config
+from ..common.config import config
 
 
 def _safe_div(a: float, b: float, default: float = 0.0) -> float:

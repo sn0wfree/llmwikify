@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from .schemas import FactorBacktestResult
+from ..schemas import FactorBacktestResult
 
 logger = logging.getLogger(__name__)
 
@@ -180,8 +180,8 @@ def _compute_factor_from_ast(data: pd.DataFrame, ast_json: str) -> pd.Series:
     """
     import json
 
-    from .ast_compiler import CompileError, compile_ast
-    from .ast_nodes import ASTNode
+    from ..codegen.ast.compiler import CompileError, compile_ast
+    from ..codegen.ast.nodes import ASTNode
 
     try:
         ast_node = ASTNode(**json.loads(ast_json))
@@ -987,7 +987,7 @@ def run_factor_backtest_universe(
         return FactorBacktestResult(universe=universe, adj_mode=adj_mode)
 
     # 2. Convert to QuantNodes format (int64 yyyymmdd, int codes)
-    from .data_source.quantnodes_adapter import (
+    from ..data_source.quantnodes_adapter import (
         build_code_map,
         build_qn_context,
         convert_wide_to_qn,
@@ -1043,7 +1043,7 @@ def run_factor_backtest_universe(
         })
         processed_qn = fp_node.execute(context=ctx)
         # Convert back to DatetimeIndex+str-codes for our own IC/Group/LongShort
-        from .data_source.quantnodes_adapter import _qn_date_to_str
+        from ..data_source.quantnodes_adapter import _qn_date_to_str
         proc_str_idx = [_qn_date_to_str(d) for d in processed_qn.index]
         proc_date_idx = pd.DatetimeIndex(proc_str_idx)
         # Map int code columns back to str codes
