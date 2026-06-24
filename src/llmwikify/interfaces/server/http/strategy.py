@@ -80,8 +80,8 @@ class StrategyBacktestRequest(BaseModel):
 @router.post("/{slug}/backtest")
 async def backtest_strategy(slug: str, req: StrategyBacktestRequest) -> dict[str, Any]:
     """Run strategy backtest using existing run_backtest pipeline."""
-    from llmwikify.reproduction.backtest import run_backtest
-    from llmwikify.reproduction.metrics import compute_extended_metrics
+    from llmwikify.reproduction.backtest_pkg.run_backtest import run_backtest
+    from llmwikify.reproduction.backtest_pkg.metrics import compute_extended_metrics
     from llmwikify.reproduction.data_source.router import DataRouter
 
     wiki = _get_wiki()

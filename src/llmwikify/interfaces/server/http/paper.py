@@ -340,7 +340,7 @@ async def _run_paper_extraction(
 
         # Import quant storage
         from llmwikify.reproduction.quant_wiki import get_quant_wiki
-        from llmwikify.reproduction.factor_library import write_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import write_factor_yaml
         from llmwikify.reproduction.extract_paper import _extract_factors_from_list
         quant = get_quant_wiki()
 
@@ -387,7 +387,7 @@ async def _run_paper_extraction(
             _DB.record_event(session_id, "backtest.started", symbol=symbol)
             backtest_results: list[dict[str, Any]] = []
             try:
-                from llmwikify.reproduction.factor_backtest import (
+                from llmwikify.reproduction.backtest_pkg.factor_backtest import (
                     _compute_factor_matrix,
                     run_factor_backtest_universe,
                 )
@@ -437,7 +437,7 @@ async def _run_paper_extraction(
                                     close_wide, factor_class, factor_params,
                                 )
                                 if not factor_wide.empty:
-                                    from llmwikify.reproduction.factor_value_store import (
+                                    from llmwikify.reproduction.backtest_pkg.factor_value_store import (
                                         store_factor_values,
                                     )
                                     await asyncio.to_thread(
@@ -536,8 +536,8 @@ async def _run_paper_extraction(
             if signal_type != "unknown":
                 _DB.record_event(session_id, "backtest.started", symbol=symbol)
                 try:
-                    from llmwikify.reproduction.factor_backtest import run_factor_backtest_universe
-                    from llmwikify.reproduction.backtest import run_backtest
+                    from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest_universe
+                    from llmwikify.reproduction.backtest_pkg.run_backtest import run_backtest
                     from llmwikify.reproduction.data_source.router import DataRouter
                     from llmwikify.reproduction.data_source.universe import resolve_universe
 
@@ -782,7 +782,7 @@ async def list_paper_artifacts(paper_id: str) -> dict[str, Any]:
         page_name = f"{prefix}{paper_id}"
         if kind == "Factor":
             # Check if factor YAML exists
-            from llmwikify.reproduction.factor_library import read_factor_yaml
+            from llmwikify.reproduction.persist.factor_library import read_factor_yaml
             factor = read_factor_yaml(f"factor_{paper_id}_{page_name}")
             if factor is not None:
                 artifacts.append({

@@ -19,15 +19,15 @@ from typing import Any
 
 import polars as pl
 
-from ..ast_compiler import CompileError, compile_ast
-from ..ast_complexity import (
+from .ast.compiler import CompileError, compile_ast
+from .ast.complexity import (
     ComplexityVerdict,
     check_complexity,
     collect_ops,
     count_nodes,
 )
-from ..ast_extractor import extract_ast
-from ..ast_nodes import QN_OPS, ASTNode
+from .ast.extractor import extract_ast
+from .ast.nodes import QN_OPS, ASTNode
 from ..common.errors import (
     StructuredError,
     categorize_compile_error,
@@ -591,7 +591,7 @@ def persist_l5_to_yaml(
     Returns:
         write_factor_yaml action string ("Created"/"Updated") or None on failure.
     """
-    from ..factor_library import read_factor_yaml, write_factor_yaml
+    from ..persist.factor_library import read_factor_yaml, write_factor_yaml
 
     try:
         existing = read_factor_yaml(factor_name, project_root=project_root)

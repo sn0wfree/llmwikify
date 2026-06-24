@@ -24,7 +24,7 @@ from typing import Any, Optional
 
 import yaml
 
-from ..factor_library import read_factor_yaml, write_factor_yaml
+from ..persist.factor_library import read_factor_yaml, write_factor_yaml
 from .l5_validation import run_l5_validation
 
 logger = logging.getLogger(__name__)

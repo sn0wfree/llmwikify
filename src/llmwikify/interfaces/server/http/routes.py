@@ -720,7 +720,7 @@ def _register_reproduction_routes(
     from llmwikify.interfaces.server.http.strategy import (
         set_strategy_deps,
     )
-    from llmwikify.reproduction.sessions import ReproductionDatabase
+    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
 
     if data_dir is None:
         data_dir = Path.home() / ".llmwikify" / "agent"

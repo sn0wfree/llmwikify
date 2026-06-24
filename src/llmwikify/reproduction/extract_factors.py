@@ -180,7 +180,7 @@ def read_factor_from_wiki(wiki: Any, slug: str) -> Optional[dict[str, Any]]:
         DeprecationWarning,
         stacklevel=2,
     )
-    from .factor_library import read_factor_yaml
+    from .persist.factor_library import read_factor_yaml
     return read_factor_yaml(slug)
 
 
@@ -200,7 +200,7 @@ def list_factors(wiki: Any) -> list[dict[str, Any]]:
         DeprecationWarning,
         stacklevel=2,
     )
-    from .factor_library import list_factors as lib_list
+    from .persist.factor_library import list_factors as lib_list
     return lib_list()
 
 

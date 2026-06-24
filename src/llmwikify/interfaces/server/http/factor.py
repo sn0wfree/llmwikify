@@ -52,7 +52,7 @@ def _get_wiki(wiki_id: str | None = None) -> Any:
 @router.get("/list")
 async def list_factors() -> dict[str, Any]:
     """List all factors from the factor library."""
-    from llmwikify.reproduction.factor_library import list_factors_by_category
+    from llmwikify.reproduction.persist.factor_library import list_factors_by_category
 
     categories = list_factors_by_category()
     return {"categories": categories}
@@ -64,7 +64,7 @@ async def list_factors() -> dict[str, Any]:
 @router.get("/library/list")
 async def list_factor_library() -> dict[str, Any]:
     """List all factors from the factor library (quant/factors/)."""
-    from llmwikify.reproduction.factor_library import list_factors_by_category
+    from llmwikify.reproduction.persist.factor_library import list_factors_by_category
 
     categories = list_factors_by_category()
     return {"categories": categories}
@@ -73,7 +73,7 @@ async def list_factor_library() -> dict[str, Any]:
 @router.get("/library/{name:path}")
 async def get_factor_library(name: str) -> dict[str, Any]:
     """Get a factor's full 6-layer YAML definition."""
-    from llmwikify.reproduction.factor_library import read_factor_yaml
+    from llmwikify.reproduction.persist.factor_library import read_factor_yaml
 
     factor = read_factor_yaml(name)
     if factor is None:
@@ -84,7 +84,7 @@ async def get_factor_library(name: str) -> dict[str, Any]:
 @router.put("/library/{name:path}")
 async def update_factor_library(name: str, data: dict[str, Any]) -> dict[str, Any]:
     """Update a factor's YAML definition."""
-    from llmwikify.reproduction.factor_library import write_factor_yaml
+    from llmwikify.reproduction.persist.factor_library import write_factor_yaml
 
     result = write_factor_yaml(name, data)
     return {"status": "ok", "message": result}
@@ -93,7 +93,7 @@ async def update_factor_library(name: str, data: dict[str, Any]) -> dict[str, An
 @router.get("/{slug}")
 async def get_factor(slug: str) -> dict[str, Any]:
     """Get a factor's definition from the factor library."""
-    from llmwikify.reproduction.factor_library import read_factor_yaml
+    from llmwikify.reproduction.persist.factor_library import read_factor_yaml
 
     factor = read_factor_yaml(slug)
     if factor is None:
@@ -259,9 +259,9 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
     - ``universe == "single"``: legacy single-stock mode using ``run_factor_backtest``.
     """
     import asyncio
-    from llmwikify.reproduction.factor_library import read_factor_yaml
+    from llmwikify.reproduction.persist.factor_library import read_factor_yaml
     from llmwikify.reproduction.data_source.router import DataRouter
-    from llmwikify.reproduction.sessions import ReproductionDatabase
+    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
     from llmwikify.reproduction.data_source.universe import (
         HEDGE_INDEX_CODE,
         get_index_constituents,
@@ -298,7 +298,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             data, source = await asyncio.to_thread(
                 data_router.get, req.symbol, req.start_date, req.end_date
             )
-            from llmwikify.reproduction.factor_backtest import run_factor_backtest
+            from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest
             result = await asyncio.to_thread(
                 run_factor_backtest,
                 data=data,
@@ -359,7 +359,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             }
 
         # ── Cross-section (universe) mode ─────────────────────────
-        from llmwikify.reproduction.factor_backtest import run_factor_backtest_universe
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest_universe
 
         # 1. Resolve stock universe
         symbols = await asyncio.to_thread(resolve_universe, req.universe)
@@ -408,7 +408,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
 
         # 5b. Store factor values in DuckDB (background, best-effort)
         try:
-            from llmwikify.reproduction.factor_value_store import compute_and_store_factor
+            from llmwikify.reproduction.backtest_pkg.factor_value_store import compute_and_store_factor
             stored_rows = await asyncio.to_thread(
                 compute_and_store_factor,
                 close_wide=close_wide,
@@ -500,7 +500,7 @@ async def get_factor_backtest_results(slug: str, limit: int = 10) -> dict[str, A
     Returns a list of recent backtest runs with IC series and group metrics,
     suitable for rendering L5 charts in the UI.
     """
-    from llmwikify.reproduction.sessions import ReproductionDatabase
+    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
 
     db = ReproductionDatabase()
     results = db.list_results(factor_ref=slug, limit=limit)
@@ -551,7 +551,7 @@ async def validate_factor(slug: str, req: L5ValidateRequest) -> dict[str, Any]:
     Executes: backtest → 7 analysis modules → scoring → (LLM hypothesis testing) → write YAML.
     """
     import asyncio
-    from llmwikify.reproduction.l5_orchestrator import run_l5_pipeline
+    from llmwikify.reproduction.backtest_pkg.l5_orchestrator import run_l5_pipeline
 
     factor = read_factor_yaml(slug)
     if factor is None:

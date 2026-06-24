@@ -543,7 +543,7 @@ def run_factor_compile_for_paper(
     Returns:
         List of {name, compile_result, action} dicts.
     """
-    from .factor_compiler import FactorCompiler
+    from .codegen.compiler import FactorCompiler
 
     compiler = FactorCompiler()
     results: list[dict[str, Any]] = []
