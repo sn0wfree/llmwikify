@@ -19,7 +19,7 @@ from typing import Any, Optional
 import yaml
 from jinja2 import BaseLoader, Environment
 
-from .utils import generate_slug, parse_frontmatter
+from .common.utils import generate_slug, parse_frontmatter
 
 logger = logging.getLogger(__name__)
 

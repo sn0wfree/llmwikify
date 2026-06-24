@@ -21,7 +21,7 @@ import copy
 import logging
 from typing import TYPE_CHECKING
 
-from .error_categorizer import StructuredError
+from .common.errors import StructuredError
 
 if TYPE_CHECKING:
     from .ast_nodes import ASTNode

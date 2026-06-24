@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from llmwikify.reproduction.utils import parse_frontmatter
+from llmwikify.reproduction.common.utils import parse_frontmatter
 
 logger = logging.getLogger(__name__)
 

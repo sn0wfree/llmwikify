@@ -6,7 +6,7 @@ import json
 import pytest
 from unittest.mock import patch
 
-from llmwikify.reproduction.llm_extraction import llm_factory as lf
+from llmwikify.reproduction.common import llm_factory as lf
 
 
 class TestLoadLlmConfig:

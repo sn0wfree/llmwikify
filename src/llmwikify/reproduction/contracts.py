@@ -412,7 +412,7 @@ def parse_frontmatter(content: str) -> dict[str, Any]:
     Returns:
         Dict of frontmatter values.
     """
-    from .utils import parse_frontmatter as _parse_frontmatter
+    from .common.utils import parse_frontmatter as _parse_frontmatter
     return _parse_frontmatter(content)
 
 

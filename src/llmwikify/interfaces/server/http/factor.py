@@ -22,9 +22,9 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from llmwikify.reproduction.common.config import config
 
-from llmwikify.reproduction.config import config
-from llmwikify.reproduction.run_id import generate_run_id, sanitize_run_id
+from llmwikify.reproduction.common.run_id import generate_run_id, sanitize_run_id
 
 logger = logging.getLogger(__name__)
 

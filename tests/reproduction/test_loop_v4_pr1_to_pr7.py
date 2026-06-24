@@ -22,7 +22,7 @@ from src.llmwikify.reproduction.ast_nodes import (
     make_col,
     make_lit,
 )
-from src.llmwikify.reproduction.error_categorizer import StructuredError
+from src.llmwikify.reproduction.common.errors import StructuredError
 from src.llmwikify.reproduction.factor_backtest import _compute_factor_from_ast
 from src.llmwikify.reproduction.self_repairing import (
     build_error_history,
@@ -35,7 +35,7 @@ from src.llmwikify.reproduction.semantic_registry import (
     list_by_family,
     list_ops,
 )
-from src.llmwikify.reproduction.telemetry import Telemetry, get_telemetry
+from src.llmwikify.reproduction.common.telemetry import Telemetry, get_telemetry
 
 
 # ─── PR-1: Public API ──────────────────────────────────────
@@ -551,7 +551,7 @@ def test_stage_a_compile_mock_records_telemetry(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setenv("FACTOR_COMPILER_MOCK", "1")
     from src.llmwikify.reproduction.factor_compiler import FactorCompiler
-    from src.llmwikify.reproduction.telemetry import get_telemetry
+    from src.llmwikify.reproduction.common.telemetry import get_telemetry
 
     t = get_telemetry()
     t.reset()
@@ -606,7 +606,7 @@ def test_stage_a_compile_error_handled_gracefully() -> None:
 
 def test_stage_a_repair_pipeline_e2e() -> None:
     """Stage A: end-to-end repair flow (LLM emit bad AST -> repair -> compile success)."""
-    from src.llmwikify.reproduction.error_categorizer import StructuredError
+    from src.llmwikify.reproduction.common.errors import StructuredError
     from src.llmwikify.reproduction.self_repairing import repair_once
 
     # Simulate LLM emits rolling_mean without window
@@ -635,7 +635,7 @@ def test_stage_a_repair_pipeline_e2e() -> None:
 
 def test_stage_a_telemetry_records_compile_attempts() -> None:
     """Stage A: Telemetry records both success and failure events."""
-    from src.llmwikify.reproduction.telemetry import get_telemetry
+    from src.llmwikify.reproduction.common.telemetry import get_telemetry
 
     t = get_telemetry()
     t.reset()

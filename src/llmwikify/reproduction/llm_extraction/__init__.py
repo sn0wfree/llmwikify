@@ -5,7 +5,7 @@ Stage 0-4 pipeline: Ingest → Plan → Extract → Validate → Save.
 """
 
 from .defer import DeferredItem, DeferredQueue
-from .llm_factory import build_default_client, load_llm_config
+from ..common.llm_factory import build_default_client, load_llm_config
 from .log_decorator import with_logging
 from .orchestrator import run_one_paper
 from .plan_saver import save_plan

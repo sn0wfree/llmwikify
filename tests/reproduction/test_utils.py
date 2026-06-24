@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import pytest
 
-from llmwikify.reproduction.utils import generate_slug, parse_frontmatter
+from llmwikify.reproduction.common.utils import generate_slug, parse_frontmatter
 
 
 # --- generate_slug tests ---

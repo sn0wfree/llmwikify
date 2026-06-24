@@ -447,7 +447,7 @@ def run_l5_pipeline(
 def _run_backtest(factor_data: dict, bt_params: dict) -> Any:
     """Run backtest using existing infrastructure."""
     import asyncio
-    from llmwikify.reproduction.config import config
+    from llmwikify.reproduction.common.config import config
     from llmwikify.reproduction.router import DataRouter
 
     # Check if factor has LLM-generated code (formula class)

@@ -28,13 +28,13 @@ from .ast_complexity import (
 )
 from .ast_extractor import extract_ast
 from .ast_nodes import QN_OPS, ASTNode
-from .error_categorizer import (
+from .common.errors import (
     StructuredError,
     categorize_compile_error,
     categorize_extract_error,
 )
 from .self_repairing import build_error_history, repair_once
-from .telemetry import get_telemetry
+from .common.telemetry import get_telemetry
 
 logger = logging.getLogger(__name__)
 
@@ -240,7 +240,7 @@ def _mock_ast(factor_name: str) -> ASTNode:
 
 def _build_default_llm() -> Any:
     """Build default LLM client from ~/.llmwikify/llmwikify.json."""
-    from .llm_extraction.llm_factory import build_default_client
+    from .common.llm_factory import build_default_client
     try:
         return build_default_client()
     except Exception:

@@ -18,7 +18,7 @@ from typing import Any, Optional
 import yaml
 from jinja2 import BaseLoader, Environment
 
-from .utils import generate_slug, parse_frontmatter
+from .common.utils import generate_slug, parse_frontmatter
 
 logger = logging.getLogger(__name__)
 
@@ -435,7 +435,7 @@ def _extract_factors_from_list(
 
     Returns list of dicts: {name: "asset/category/slug", factor: {l1..l5}}
     """
-    from llmwikify.reproduction.utils import generate_slug
+    from llmwikify.reproduction.common.utils import generate_slug
 
     factor_list = extraction.get("factor_list", [])
     if not factor_list:

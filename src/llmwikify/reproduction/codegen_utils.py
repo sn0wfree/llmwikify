@@ -140,7 +140,7 @@ def build_llm_client(model: str | None = None) -> Any:
     Raises:
         RuntimeError: If config missing, disabled, or required fields absent.
     """
-    from .llm_extraction.llm_factory import build_default_client
+    from .common.llm_factory import build_default_client
     return build_default_client(model=model)
 
 

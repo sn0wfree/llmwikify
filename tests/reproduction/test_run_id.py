@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from llmwikify.reproduction import run_id as rid
+from llmwikify.reproduction.common import run_id as rid
 
 
 class TestGenerateRunId:

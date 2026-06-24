@@ -49,8 +49,8 @@ def _extract_factor_from_page(page: dict, paper_id: str, extraction: dict | None
         name: factor path relative to quant/factors/ (e.g., 'stock/price/momentum_20d')
         factor: the 6-layer factor dict
     """
-    from llmwikify.reproduction.utils import parse_frontmatter
-    from llmwikify.reproduction.utils import generate_slug
+    from llmwikify.reproduction.common.utils import parse_frontmatter
+    from llmwikify.reproduction.common.utils import generate_slug
 
     fm = parse_frontmatter(page.get("content", ""))
     metadata = (extraction or {}).get("factor_metadata", {})

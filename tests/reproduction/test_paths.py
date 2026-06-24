@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from llmwikify.reproduction import paths as p
+from llmwikify.reproduction.common import paths as p
 
 
 class FakeWiki:

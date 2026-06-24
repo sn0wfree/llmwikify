@@ -26,7 +26,7 @@ import pandas as pd
 import requests
 import yaml
 
-from .config import config
+from .common.config import config
 
 logger = logging.getLogger(__name__)
 

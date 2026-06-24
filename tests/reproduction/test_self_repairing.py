@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 from llmwikify.reproduction import self_repairing as sr
 from llmwikify.reproduction.ast_nodes import ASTNode
-from llmwikify.reproduction.error_categorizer import StructuredError
+from llmwikify.reproduction.common.errors import StructuredError
 
 
 class TestFixFunctions:

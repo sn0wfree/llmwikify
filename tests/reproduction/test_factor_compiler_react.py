@@ -29,7 +29,7 @@ from llmwikify.reproduction.factor_compiler_react import (
     _validate_syntax,
     compile_to_code_react,
 )
-from llmwikify.reproduction.telemetry import get_telemetry
+from llmwikify.reproduction.common.telemetry import get_telemetry
 
 # ── Mock LLM helpers ─────────────────────────────────────────────
 

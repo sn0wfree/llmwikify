@@ -33,7 +33,7 @@ from .stage0_ingest import Stage0Result, run_stage0_ingest
 from .track_a import TrackAResult, run_track_a
 from .track_b import TrackBResult, run_track_b, PASS2_SUCCESS_THRESHOLD_HIGH
 from .validator import validate_paper_outputs
-from .llm_factory import build_default_client
+from ..common.llm_factory import build_default_client
 
 logger = logging.getLogger(__name__)
 

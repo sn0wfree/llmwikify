@@ -73,13 +73,13 @@ class TestConfigPrecedence:
 
     def test_default_when_no_source(self, tmp_path: Path) -> None:
         """无任何 source 时返回 DEFAULTS."""
-        from llmwikify.reproduction import config as c
+        from llmwikify.reproduction.common import config as c
         cfg = c.Config(config_path=tmp_path / "nonexistent.json")
         assert cfg.get("akshare.timeout_s") == 5.0  # DEFAULTS
 
     def test_file_overrides_default(self, tmp_path: Path) -> None:
         """文件覆盖 DEFAULTS."""
-        from llmwikify.reproduction import config as c
+        from llmwikify.reproduction.common import config as c
         import json
         config_file = tmp_path / "cfg.json"
         config_file.write_text(
@@ -91,7 +91,7 @@ class TestConfigPrecedence:
 
     def test_env_overrides_file(self, tmp_path: Path, monkeypatch) -> None:
         """env 覆盖 file."""
-        from llmwikify.reproduction import config as c
+        from llmwikify.reproduction.common import config as c
         import json
         config_file = tmp_path / "cfg.json"
         config_file.write_text(

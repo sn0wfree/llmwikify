@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.reproduction import config as c
+from llmwikify.reproduction.common import config as c
 
 
 @pytest.fixture

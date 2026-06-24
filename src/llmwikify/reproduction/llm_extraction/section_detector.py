@@ -22,7 +22,7 @@ from typing import Any
 
 from jinja2 import BaseLoader, Environment
 
-from .llm_factory import build_default_client
+from ..common.llm_factory import build_default_client
 from .retry import DeferError, RetryConfig, with_retry
 
 logger = logging.getLogger(__name__)

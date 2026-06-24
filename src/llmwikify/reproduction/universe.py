@@ -17,7 +17,7 @@ from typing import Optional, Union
 
 import pandas as pd
 
-from .config import config
+from .common.config import config
 
 logger = logging.getLogger(__name__)
 

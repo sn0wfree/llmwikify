@@ -41,7 +41,7 @@ from .codegen_utils import (
     validate_safety,
     validate_syntax,
 )
-from .telemetry import get_telemetry
+from .common.telemetry import get_telemetry
 
 # Backward-compatible aliases for existing test imports
 _extract_python = extract_python

@@ -14,7 +14,7 @@ from llmwikify.reproduction.extract import (
     extract_from_page,
     extract_strategy_config,
 )
-from llmwikify.reproduction.utils import parse_frontmatter as _parse_frontmatter
+from llmwikify.reproduction.common.utils import parse_frontmatter as _parse_frontmatter
 
 
 PAGE_MA_CROSS = """---

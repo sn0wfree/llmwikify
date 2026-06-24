@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction import telemetry as t
+from llmwikify.reproduction.common import telemetry as t
 
 
 class TestTelemetry:

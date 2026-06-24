@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction import error_categorizer as ec
+from llmwikify.reproduction.common import errors as ec
 
 
 class TestStructuredError:
