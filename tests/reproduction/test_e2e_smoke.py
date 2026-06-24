@@ -19,9 +19,9 @@ ALL_TOP_MODULES = [
     "data_source.router", "data_source.universe", "data_source.quantnodes_adapter",
     "data_source.akshare", "data_source.clickhouse", "data_source.ifind",
     # 顶层
-    "contracts", "extract",
-    "extract_factors", "extract_paper",
-    "quant_wiki", "schemas",
+    "paper_understanding.contracts", "paper_understanding.extract_strategy",
+    "paper_understanding.extract_factors", "paper_understanding.extract_paper",
+    "paper_understanding.quant_wiki", "paper_understanding.schemas",
     # persist/ (Phase 8)
     "persist.factor_library", "persist.sessions", "persist.run",
     # backtest_pkg/ (Phase 7)
@@ -110,7 +110,7 @@ class TestWebUICompatibility:
 
     def test_extract_paper_function_exists(self) -> None:
         """extract_paper_structure 存在 (WebUI 论文页面依赖)."""
-        from llmwikify.reproduction import extract_paper
+        from llmwikify.reproduction.paper_understanding import extract_paper
         # 实际函数名是 extract_paper_structure / build_paper_pages
         assert hasattr(extract_paper, "extract_paper_structure") or hasattr(extract_paper, "build_paper_pages")
 

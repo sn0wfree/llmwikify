@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from ..schemas import FactorBacktestResult
+from ..paper_understanding.schemas import FactorBacktestResult
 
 logger = logging.getLogger(__name__)
 

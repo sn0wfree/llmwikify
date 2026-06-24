@@ -117,19 +117,19 @@ EXPECTED_PUBLIC_API = {
         "Artifact",
         "Result",
     ],
-    "schemas": [
+    "paper_understanding.schemas": [
         "BacktestResult",
         "WikiFactor",
         "WikiStrategy",
         "FactorBacktestResult",
     ],
-    "extract_paper": [
+    "paper_understanding.extract_paper": [
         "extract_paper_structure",
         "_extract_factors_from_list",
         "build_paper_pages",
         "run_factor_compile_for_paper",
     ],
-    "quant_wiki": [
+    "paper_understanding.quant_wiki": [
         "get_quant_wiki",
     ],
     # ── backtest_pkg/ 子包 (Phase 7) ──
@@ -184,13 +184,13 @@ EXPECTED_PUBLIC_API = {
     "backtest_pkg.strategies": [
         "SIGNAL_NODE_REGISTRY",
     ],
-    "contracts": [
+    "paper_understanding.contracts": [
         "FactorPage",
     ],
-    "extract": [
+    "paper_understanding.extract_strategy": [
         "extract_strategy_config",
     ],
-    "extract_factors": [
+    "paper_understanding.extract_factors": [
         "extract_factors",
     ],
     # ── llm_extraction/ ──

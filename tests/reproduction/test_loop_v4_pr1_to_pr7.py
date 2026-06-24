@@ -702,7 +702,7 @@ def test_stage_b_persist_l5_to_yaml_creates(tmp_path) -> None:
 
 def test_stage_b_extract_paper_l5_placeholder() -> None:
     """Stage B: extract_paper._extract_factors_from_list sets l5.ast=None placeholder."""
-    from src.llmwikify.reproduction.extract_paper import _extract_factors_from_list
+    from src.llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
 
     extraction = {
         "factor_list": [
@@ -736,7 +736,7 @@ def test_stage_b_run_factor_compile_for_paper_mock(tmp_path) -> None:
     factors_dir.mkdir(parents=True)
     (factors_dir / "index.yaml").write_text("factors: []\n")
 
-    from src.llmwikify.reproduction.extract_paper import (
+    from src.llmwikify.reproduction.paper_understanding.extract_paper import (
         _extract_factors_from_list,
         run_factor_compile_for_paper,
     )

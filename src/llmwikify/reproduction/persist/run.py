@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from ..backtest_pkg.run_backtest import run_backtest
-from ..extract import extract_strategy_config
+from ..paper_understanding.extract_strategy import extract_strategy_config
 from ..data_source.router import DataRouter
 from .sessions import ReproductionDatabase
 

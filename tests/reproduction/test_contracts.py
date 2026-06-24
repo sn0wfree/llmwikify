@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from llmwikify.reproduction import contracts as ct
+from llmwikify.reproduction.paper_understanding import contracts as ct
 
 
 class TestEnums:

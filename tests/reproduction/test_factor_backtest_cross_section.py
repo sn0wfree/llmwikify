@@ -202,7 +202,7 @@ class TestRunFactorBacktestUniverse:
 
     def test_new_fields_zero_by_default(self):
         """Backward compatibility: new fields default to zero."""
-        from llmwikify.reproduction.schemas import FactorBacktestResult
+        from llmwikify.reproduction.paper_understanding.schemas import FactorBacktestResult
         r = FactorBacktestResult()
         d = r.to_dict()
         assert d["rank_ic_mean"] == 0.0
@@ -372,7 +372,7 @@ class TestClickHouseConfig:
 
     def test_factor_result_backward_compat(self):
         """Backward compatibility: FactorBacktestResult default values."""
-        from llmwikify.reproduction.schemas import FactorBacktestResult
+        from llmwikify.reproduction.paper_understanding.schemas import FactorBacktestResult
         r = FactorBacktestResult()
         d = r.to_dict()
         assert d["longshort_curve"] == []

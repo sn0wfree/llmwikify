@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from llmwikify.reproduction.extract_paper import (
+from llmwikify.reproduction.paper_understanding.extract_paper import (
     build_paper_pages,
     extract_paper_structure,
 )

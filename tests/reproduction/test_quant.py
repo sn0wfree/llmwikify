@@ -46,7 +46,7 @@ class TestQuantWiki:
     """Tests for QuantWiki read/write/list operations."""
 
     def test_write_and_read_page(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         result = qw.write_page("test-paper", "# Test Content\n\nHello", "papers")
@@ -57,14 +57,14 @@ class TestQuantWiki:
         assert page["content"] == "# Test Content\n\nHello"
 
     def test_read_nonexistent(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         result = qw.read_page("nonexistent", "papers")
         assert result is None
 
     def test_list_pages(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         qw.write_page("paper-a", "# A", "papers")
@@ -76,7 +76,7 @@ class TestQuantWiki:
         assert "paper-b" in names
 
     def test_write_factor_yaml(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         data = {"factor": {"name": "test", "l1": {"definition": "test factor"}}}
@@ -88,7 +88,7 @@ class TestQuantWiki:
         assert loaded["factor"]["name"] == "test"
 
     def test_list_factor_yamls(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         data1 = {"factor": {"name": "factor_a", "category": "price"}}
@@ -102,7 +102,7 @@ class TestQuantWiki:
         assert names == {"factor_a", "factor_b"}
 
     def test_read_page_with_frontmatter(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         content = "---\ntitle: Test Page\nauthor: test\n---\n\n# Content"
@@ -114,7 +114,7 @@ class TestQuantWiki:
         assert "# Content" in page["content"]
 
     def test_invalid_page_type(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         with pytest.raises(ValueError, match="Unknown page_type"):
@@ -345,7 +345,7 @@ class TestStrategyAPIRedirected:
     """Tests for strategy API reading from quant/strategies/."""
 
     def test_list_empty(self, strategy_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import quant_wiki
+        from llmwikify.reproduction.paper_understanding import quant_wiki
         monkeypatch.setattr(quant_wiki, "_quant_wiki", None)
         monkeypatch.setattr(
             quant_wiki, "get_quant_wiki",
@@ -360,7 +360,7 @@ class TestStrategyAPIRedirected:
         assert r.json()["strategies"] == []
 
     def test_list_with_strategies(self, strategy_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import quant_wiki
+        from llmwikify.reproduction.paper_understanding import quant_wiki
 
         quant_dir = tmp_path / "quant_test"
         quant_dir.mkdir()
@@ -542,7 +542,7 @@ class TestQuantWikiEdgeCases:
     """Edge case tests for QuantWiki."""
 
     def test_ensure_dirs(self, tmp_path):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         root = tmp_path / "quant_new"
         root.mkdir()
@@ -555,21 +555,21 @@ class TestQuantWikiEdgeCases:
         assert (root / "datacache").is_dir()
 
     def test_list_empty_dir(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         pages = qw.list_pages("papers")
         assert pages == []
 
     def test_list_factor_yamls_empty(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         factors = qw.list_factor_yamls()
         assert factors == []
 
     def test_malformed_frontmatter(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         # Write content with broken frontmatter
@@ -582,7 +582,7 @@ class TestQuantWikiEdgeCases:
         assert page is not None
 
     def test_write_page_empty_content(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         result = qw.write_page("empty", "", "papers")
@@ -591,7 +591,7 @@ class TestQuantWikiEdgeCases:
         assert page["content"] == ""
 
     def test_write_and_read_factorbacktest(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         result = qw.write_page("bt-001", "# Backtest Result", "factorbacktest")
@@ -601,7 +601,7 @@ class TestQuantWikiEdgeCases:
         assert "# Backtest Result" in page["content"]
 
     def test_write_and_read_strategies(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
 
         qw = QuantWiki(quant_root)
         result = qw.write_page("strat-001", "# Strategy", "strategies")
@@ -660,7 +660,7 @@ class TestStrategyEdgeCases:
     """Edge case tests for strategy API."""
 
     def test_get_strategy_not_found(self, strategy_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import quant_wiki
+        from llmwikify.reproduction.paper_understanding import quant_wiki
 
         quant_dir = tmp_path / "quant_test"
         quant_dir.mkdir()
@@ -1000,7 +1000,7 @@ class TestExtractFactorsDeprecated:
 
     def test_read_factor_from_wiki_redirects(self):
         import warnings
-        from llmwikify.reproduction.extract_factors import read_factor_from_wiki
+        from llmwikify.reproduction.paper_understanding.extract_factors import read_factor_from_wiki
 
         class FakeWiki:
             def __init__(self):
@@ -1016,7 +1016,7 @@ class TestExtractFactorsDeprecated:
 
     def test_list_factors_redirects(self):
         import warnings
-        from llmwikify.reproduction.extract_factors import list_factors
+        from llmwikify.reproduction.paper_understanding.extract_factors import list_factors
 
         class FakeWiki:
             def __init__(self):
@@ -1033,7 +1033,7 @@ class TestExtractFactorsDeprecated:
 
     def test_build_factor_pages_warns(self):
         import warnings
-        from llmwikify.reproduction.extract_factors import build_factor_pages
+        from llmwikify.reproduction.paper_understanding.extract_factors import build_factor_pages
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -1547,19 +1547,19 @@ class TestQuantWikiExtended:
     """Extended edge cases for quant_wiki."""
 
     def test_read_page_invalid_type_raises(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
         wiki = QuantWiki(quant_root)
         with pytest.raises(ValueError, match="Unknown page_type"):
             wiki.read_page("test", page_type="nonexistent")
 
     def test_list_pages_invalid_type_raises(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
         wiki = QuantWiki(quant_root)
         with pytest.raises(ValueError, match="Unknown page_type"):
             wiki.list_pages("nonexistent")
 
     def test_write_page_overwrites_content(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
         wiki = QuantWiki(quant_root)
         wiki.write_page("test", "version1", page_type="papers")
         wiki.write_page("test", "version2", page_type="papers")
@@ -1567,7 +1567,7 @@ class TestQuantWikiExtended:
         assert result["content"] == "version2"
 
     def test_write_page_returns_action(self, quant_root):
-        from llmwikify.reproduction.quant_wiki import QuantWiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import QuantWiki
         wiki = QuantWiki(quant_root)
         result = wiki.write_page("new_page", "content", page_type="papers")
         assert "Created" in result
@@ -1616,7 +1616,7 @@ class TestModuleImports:
         assert hasattr(m, "update_index")
 
     def test_import_quant_wiki(self):
-        import llmwikify.reproduction.quant_wiki as m
+        import llmwikify.reproduction.paper_understanding.quant_wiki as m
         assert hasattr(m, "QuantWiki")
         assert hasattr(m, "get_quant_root")
         assert hasattr(m, "get_quant_wiki")

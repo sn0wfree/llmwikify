@@ -44,7 +44,7 @@ def _get_wiki(wiki_id: str | None = None) -> Any:
 
 def _read_strategy_from_wiki(wiki: Any, slug: str) -> dict[str, Any] | None:
     """Read a Strategy page from quant/strategies/ directory."""
-    from llmwikify.reproduction.quant_wiki import get_quant_wiki
+    from llmwikify.reproduction.paper_understanding.quant_wiki import get_quant_wiki
     quant = get_quant_wiki()
     return quant.read_page(slug, page_type="strategies")
 
@@ -52,7 +52,7 @@ def _read_strategy_from_wiki(wiki: Any, slug: str) -> dict[str, Any] | None:
 @router.get("/list")
 async def list_strategies() -> dict[str, Any]:
     """List all Strategy pages from quant/."""
-    from llmwikify.reproduction.quant_wiki import get_quant_wiki
+    from llmwikify.reproduction.paper_understanding.quant_wiki import get_quant_wiki
     quant = get_quant_wiki()
     results = quant.list_pages("strategies")
     return {"strategies": results}

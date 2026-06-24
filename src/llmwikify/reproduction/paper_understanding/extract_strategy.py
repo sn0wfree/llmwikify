@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Iterable, Optional
 
-from .common.utils import parse_frontmatter, FRONTMATTER_RE
+from ..common.utils import parse_frontmatter, FRONTMATTER_RE
 
 logger = logging.getLogger(__name__)
 

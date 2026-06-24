@@ -290,7 +290,7 @@ async def _run_paper_extraction(
         _DB.record_event(session_id, "extract.llm_called")
 
         # Lazy import to avoid circulars
-        from llmwikify.reproduction.extract_paper import (
+        from llmwikify.reproduction.paper_understanding.extract_paper import (
             build_paper_pages,
             extract_paper_structure,
         )
@@ -339,9 +339,9 @@ async def _run_paper_extraction(
         wiki = _get_wiki(wiki_id)
 
         # Import quant storage
-        from llmwikify.reproduction.quant_wiki import get_quant_wiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import get_quant_wiki
         from llmwikify.reproduction.persist.factor_library import write_factor_yaml
-        from llmwikify.reproduction.extract_paper import _extract_factors_from_list
+        from llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
         quant = get_quant_wiki()
 
         written: list[str] = []
@@ -749,7 +749,7 @@ async def get_paper_status(session_id: str) -> dict[str, Any]:
 @router.get("/{paper_id}")
 async def get_paper(paper_id: str) -> dict[str, Any]:
     """Legacy: read paper logic page by paper_id."""
-    from llmwikify.reproduction.quant_wiki import get_quant_wiki
+    from llmwikify.reproduction.paper_understanding.quant_wiki import get_quant_wiki
     quant = get_quant_wiki()
     try:
         logic = quant.read_page(f"paper-{paper_id}-logic", page_type="papers")
@@ -761,7 +761,7 @@ async def get_paper(paper_id: str) -> dict[str, Any]:
 @router.get("/{paper_id}/artifacts")
 async def list_paper_artifacts(paper_id: str) -> dict[str, Any]:
     """Legacy: list pages produced for a paper_id from quant/."""
-    from llmwikify.reproduction.quant_wiki import get_quant_wiki
+    from llmwikify.reproduction.paper_understanding.quant_wiki import get_quant_wiki
     quant = get_quant_wiki()
     artifacts = []
 

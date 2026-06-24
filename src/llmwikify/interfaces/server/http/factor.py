@@ -238,7 +238,7 @@ def _persist_factor_result(
     backtest_md = _build_factor_backtest_page(slug, factor, req, result, source, run_id)
     wiki_page = None
     try:
-        from llmwikify.reproduction.quant_wiki import get_quant_wiki
+        from llmwikify.reproduction.paper_understanding.quant_wiki import get_quant_wiki
         quant = get_quant_wiki()
         write_result = quant.write_page(backtest_slug, backtest_md, page_type="factorbacktest")
         if "Created" in write_result or "Updated" in write_result:

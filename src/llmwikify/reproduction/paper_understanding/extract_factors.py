@@ -19,7 +19,7 @@ from typing import Any, Optional
 import yaml
 from jinja2 import BaseLoader, Environment
 
-from .common.utils import generate_slug, parse_frontmatter
+from ..common.utils import generate_slug, parse_frontmatter
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def _load_prompt() -> tuple[str, str, dict[str, Any]]:
         (system_text, user_template, params) tuple.
     """
     prompt_path = (
-        Path(__file__).parent.parent
+        Path(__file__).parent.parent.parent
         / "foundation"
         / "prompts"
         / "_defaults"
@@ -180,7 +180,7 @@ def read_factor_from_wiki(wiki: Any, slug: str) -> Optional[dict[str, Any]]:
         DeprecationWarning,
         stacklevel=2,
     )
-    from .persist.factor_library import read_factor_yaml
+    from ..persist.factor_library import read_factor_yaml
     return read_factor_yaml(slug)
 
 
@@ -200,7 +200,7 @@ def list_factors(wiki: Any) -> list[dict[str, Any]]:
         DeprecationWarning,
         stacklevel=2,
     )
-    from .persist.factor_library import list_factors as lib_list
+    from ..persist.factor_library import list_factors as lib_list
     return lib_list()
 
 

@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import pytest
 
-from llmwikify.reproduction.extract import (
+from llmwikify.reproduction.paper_understanding.extract_strategy import (
     VALID_SIGNAL_TYPES,
     extract_from_page,
     extract_strategy_config,

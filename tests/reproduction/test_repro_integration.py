@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 from llmwikify.reproduction.persist import sessions, factor_library
-from llmwikify.reproduction import schemas
+from llmwikify.reproduction.paper_understanding import schemas
 
 
 class TestSessionToFactorLibrary:

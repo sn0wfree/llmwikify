@@ -4,7 +4,7 @@ All Wiki pages MUST be serializable to/from these Pydantic models.
 This is the single source of truth for page schemas.
 
 Usage:
-    from llmwikify.reproduction.contracts import FactorPage, render_page
+    from llmwikify.reproduction.paper_understanding.contracts import FactorPage, render_page
 
     # Create a factor page
     page = FactorPage(
@@ -412,7 +412,7 @@ def parse_frontmatter(content: str) -> dict[str, Any]:
     Returns:
         Dict of frontmatter values.
     """
-    from .common.utils import parse_frontmatter as _parse_frontmatter
+    from ..common.utils import parse_frontmatter as _parse_frontmatter
     return _parse_frontmatter(content)
 
 

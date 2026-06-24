@@ -15,7 +15,7 @@ from typing import Any
 import pandas as pd
 
 from .metrics import compute_metrics_from_trades, compute_monthly_returns
-from ..schemas import BacktestResult
+from ..paper_understanding.schemas import BacktestResult
 from .strategies import SIGNAL_NODE_REGISTRY, get_strategy_node
 
 logger = logging.getLogger(__name__)

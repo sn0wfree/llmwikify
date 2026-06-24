@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from llmwikify.reproduction.schemas import BacktestResult
+from llmwikify.reproduction.paper_understanding.schemas import BacktestResult
 
 
 # ─── BacktestResult equity_curve / monthly_returns ─────────────────────

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction import schemas as s
+from llmwikify.reproduction.paper_understanding import schemas as s
 
 
 class TestBacktestResult:

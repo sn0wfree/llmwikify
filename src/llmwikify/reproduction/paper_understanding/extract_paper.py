@@ -18,7 +18,7 @@ from typing import Any, Optional
 import yaml
 from jinja2 import BaseLoader, Environment
 
-from .common.utils import generate_slug, parse_frontmatter
+from ..common.utils import generate_slug, parse_frontmatter
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ def _load_prompt() -> tuple[str, str, dict[str, Any]]:
         (system_text, user_template, params) tuple.
     """
     prompt_path = (
-        Path(__file__).parent.parent
+        Path(__file__).parent.parent.parent
         / "foundation"
         / "prompts"
         / "_defaults"
@@ -543,7 +543,7 @@ def run_factor_compile_for_paper(
     Returns:
         List of {name, compile_result, action} dicts.
     """
-    from .codegen.compiler import FactorCompiler
+    from ..codegen.compiler import FactorCompiler
 
     compiler = FactorCompiler()
     results: list[dict[str, Any]] = []

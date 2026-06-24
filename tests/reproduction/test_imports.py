@@ -43,12 +43,12 @@ DATA_SOURCE_MODULES = [
 
 # ── 顶层模块 (未搬迁, 28 个) ──────────────────────────────
 TOP_LEVEL_MODULES = [
-    "contracts",
-    "extract",
-    "extract_factors",
-    "extract_paper",
-    "quant_wiki",
-    "schemas",
+    "paper_understanding.contracts",
+    "paper_understanding.extract_strategy",
+    "paper_understanding.extract_factors",
+    "paper_understanding.extract_paper",
+    "paper_understanding.quant_wiki",
+    "paper_understanding.schemas",
 ]
 
 # ── persist/ 子包 (3 个, Phase 8 搬迁) ──────────────────────
@@ -149,10 +149,10 @@ CRITICAL_IMPORTS = [
     "from llmwikify.reproduction.persist.sessions import ReproductionDatabase",
     "from llmwikify.reproduction.persist.run import run_reproduction, RunContext",
     # 顶层 (5)
-    "from llmwikify.reproduction.quant_wiki import get_quant_wiki",
-    "from llmwikify.reproduction.extract_paper import extract_paper_structure, _extract_factors_from_list",
-    "from llmwikify.reproduction.schemas import BacktestResult, WikiFactor, FactorBacktestResult",
-    "from llmwikify.reproduction.contracts import FactorPage",
+    "from llmwikify.reproduction.paper_understanding.quant_wiki import get_quant_wiki",
+    "from llmwikify.reproduction.paper_understanding.extract_paper import extract_paper_structure, _extract_factors_from_list",
+    "from llmwikify.reproduction.paper_understanding.schemas import BacktestResult, WikiFactor, FactorBacktestResult",
+    "from llmwikify.reproduction.paper_understanding.contracts import FactorPage",
 ]
 
 
@@ -230,10 +230,19 @@ def test_module_count_matches_plan() -> None:
             for f in os.listdir(llm_ext_path)
             if f.endswith(".py") and f != "__init__.py" and f != "conftest.py"
         }
+    # paper_understanding/ 子包
+    pu_path = os.path.join(pkg_path, "paper_understanding")
+    actual_pu = set()
+    if os.path.isdir(pu_path):
+        actual_pu = {
+            f"paper_understanding.{f[:-3]}"
+            for f in os.listdir(pu_path)
+            if f.endswith(".py") and f != "__init__.py"
+        }
     # 至少 ≥ 计划数 (允许新增模块)
-    assert len(actual_top) >= len(TOP_LEVEL_MODULES), (
-        f"Top-level modules shrunk: {len(actual_top)} < {len(TOP_LEVEL_MODULES)}. "
-        f"Missing: {set(TOP_LEVEL_MODULES) - actual_top}"
+    assert len(actual_top) >= len(TOP_LEVEL_MODULES) - len(actual_pu), (
+        f"Top-level modules shrunk: {len(actual_top)} < {len(TOP_LEVEL_MODULES) - len(actual_pu)}. "
+        f"Missing: {set(TOP_LEVEL_MODULES) - actual_pu - actual_top}"
     )
     assert len(actual_common) >= len(COMMON_MODULES), (
         f"common/ modules shrunk: {len(actual_common)} < {len(COMMON_MODULES)}. "
@@ -246,8 +255,12 @@ def test_module_count_matches_plan() -> None:
     assert len(actual_codegen) >= len(CODEGEN_MODULES) + len(CODEGEN_AST_MODULES), (
         f"codegen/ modules shrunk: {len(actual_codegen)} < {len(CODEGEN_MODULES) + len(CODEGEN_AST_MODULES)}. "
     )
-    assert len(actual_bt) >= len(TOP_LEVEL_MODULES) - len(actual_top), (
+    assert len(actual_bt) >= len(TOP_LEVEL_MODULES) - len(actual_top) - len(actual_pu), (
         f"backtest_pkg/ modules shrunk: {len(actual_bt)} < expected."
+    )
+    assert len(actual_pu) >= len(TOP_LEVEL_MODULES), (
+        f"paper_understanding/ modules shrunk: {len(actual_pu)} < {len(TOP_LEVEL_MODULES)}. "
+        f"Missing: {set(TOP_LEVEL_MODULES) - actual_pu}"
     )
     assert len(actual_llm_ext) >= len(LLM_EXTRACTION_MODULES) - 1, (
         f"llm_extraction modules shrunk: {len(actual_llm_ext)} < {len(LLM_EXTRACTION_MODULES) - 1}. "

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .backtest_pkg.run_backtest import run_backtest
-    from .schemas import BacktestResult, WikiFactor, WikiStrategy, FactorBacktestResult
+    from .paper_understanding.schemas import BacktestResult, WikiFactor, WikiStrategy, FactorBacktestResult
 
 __all__ = [
     "run_backtest",
@@ -20,10 +20,10 @@ __all__ = [
 
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "run_backtest": (".backtest_pkg.run_backtest", "run_backtest"),
-    "BacktestResult": (".schemas", "BacktestResult"),
-    "WikiFactor": (".schemas", "WikiFactor"),
-    "WikiStrategy": (".schemas", "WikiStrategy"),
-    "FactorBacktestResult": (".schemas", "FactorBacktestResult"),
+    "BacktestResult": (".paper_understanding.schemas", "BacktestResult"),
+    "WikiFactor": (".paper_understanding.schemas", "WikiFactor"),
+    "WikiStrategy": (".paper_understanding.schemas", "WikiStrategy"),
+    "FactorBacktestResult": (".paper_understanding.schemas", "FactorBacktestResult"),
 }
 
 
