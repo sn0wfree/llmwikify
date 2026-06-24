@@ -2,15 +2,10 @@
 
 防止 refactor 时意外删除/重命名公共函数/类, 破坏 WebUI/CLI/外部调用.
 
-设计原则:
-  - 锁定**关键**公共 API (非全部, 全部会太脆)
-  - 函数名 + 类名层级 (不锁定签名, 留 refactor 空间)
-  - **新模块可加**, 已锁定项**不能删/改名**
-  - 配合 `test_imports.py` 组成 56 模块 × 30 API 锁定的安全网
+Phase 1+2 完成后, common/ 和 data_source/ 子包的模块路径已更新.
 
 详见: docs/designs/pipeline_framework.md Section 29.5.2
 """
-
 from __future__ import annotations
 
 import importlib
@@ -18,7 +13,62 @@ import importlib
 import pytest
 
 # 每个模块的关键公共 API (函数名 + 类名, 不含签名)
+# Phase 3: 更新为新路径 (common.X / data_source.X)
 EXPECTED_PUBLIC_API = {
+    # ── common/ 子包 (Phase 1) ──
+    "common.config": [
+        "config",
+        "Config",
+    ],
+    "common.paths": [
+        "WIKI_DIR_FACTOR",
+        "WIKI_DIR_REPRODUCTION",
+        "WIKI_DIR_SOURCES",
+        "WIKI_DIR_STRATEGY",
+        "page_path",
+        "result_path",
+    ],
+    "common.run_id": [
+        "generate_run_id",
+    ],
+    "common.telemetry": [
+        "get_telemetry",
+    ],
+    "common.errors": [
+        "categorize_compile_error",
+        "categorize_extract_error",
+        "StructuredError",
+    ],
+    "common.utils": [
+        "parse_frontmatter",
+        "generate_slug",
+    ],
+    "common.llm_factory": [
+        "build_default_client",
+    ],
+    # ── data_source/ 子包 (Phase 2) ──
+    "data_source.router": [
+        "DataRouter",
+        "DataSource",
+        "ParquetLocalDataSource",
+        "SynthDataSource",
+    ],
+    "data_source.universe": [
+        "resolve_universe",
+        "get_index_constituents",
+    ],
+    "data_source.quantnodes_adapter": [
+        "build_qn_context",
+    ],
+    "data_source.akshare": [
+        "fetch_hs300_constituents",
+    ],
+    "data_source.clickhouse": [
+        "fetch_hs300_constituents",
+    ],
+    "data_source.ifind": [
+        "build_tradable_matrices",
+    ],
     # ── 顶层模块 ──
     "factor_library": [
         "read_factor_yaml",
@@ -55,19 +105,6 @@ EXPECTED_PUBLIC_API = {
     "factor_extractor": [
         "extract_factor_metadata",
     ],
-    "router": [
-        "DataRouter",
-        "DataSource",
-        "ParquetLocalDataSource",
-        "SynthDataSource",
-    ],
-    "akshare_data": [
-        # 模块无类/函数导出, 主要是 fetch_* 函数
-    ],
-    "utils": [
-        "parse_frontmatter",
-        "generate_slug",
-    ],
     "schemas": [
         "BacktestResult",
         "WikiFactor",
@@ -82,7 +119,10 @@ EXPECTED_PUBLIC_API = {
         "run_backtest",
     ],
     "extract_paper": [
-        "extract_paper",
+        "extract_paper_structure",
+        "_extract_factors_from_list",
+        "build_paper_pages",
+        "run_factor_compile_for_paper",
     ],
     "quant_wiki": [
         "get_quant_wiki",
@@ -138,7 +178,6 @@ EXPECTED_PUBLIC_API = {
         "load_user_registry",
     ],
     "self_repairing": [
-        # 待补
     ],
     "strategies": [
         "SIGNAL_NODE_REGISTRY",
@@ -146,42 +185,11 @@ EXPECTED_PUBLIC_API = {
     "contracts": [
         "FactorPage",
     ],
-    "error_categorizer": [
-        "categorize_compile_error",
-        "categorize_extract_error",
-        "StructuredError",
-    ],
-    "telemetry": [
-        "get_telemetry",
-    ],
-    "config": [
-        "config",
-        "Config",
-    ],
-    "paths": [
-        "WIKI_DIR_FACTOR",
-        "WIKI_DIR_REPRODUCTION",
-        "WIKI_DIR_SOURCES",
-        "WIKI_DIR_STRATEGY",
-        "page_path",
-        "result_path",
-    ],
-    "run_id": [
-        "generate_run_id",
-    ],
     "extract": [
         "extract_strategy_config",
     ],
     "extract_factors": [
         "extract_factors",
-    ],
-    "extract_paper": [
-        "extract_paper_structure",
-        "build_paper_pages",
-        "run_factor_compile_for_paper",
-    ],
-    "quant_wiki": [
-        "get_quant_wiki",
     ],
     # ── llm_extraction/ ──
     "llm_extraction.orchestrator": [
@@ -220,9 +228,6 @@ EXPECTED_PUBLIC_API = {
     "llm_extraction.log_decorator": [
         "with_logging",
     ],
-    "llm_extraction.llm_factory": [
-        "build_default_client",
-    ],
     "llm_extraction.stage0_ingest": [
         "run_stage0_ingest",
     ],
@@ -249,7 +254,6 @@ def test_module_public_api_exists(module_name: str, expected_names: list[str]) -
 @pytest.mark.mock
 def test_inventory_coverage() -> None:
     """验证 EXPECTED_PUBLIC_API 至少覆盖 30 个模块."""
-    # 实际锁定 30+ 个模块 (40 顶层 + 16 llm_extraction 中关键)
     assert len(EXPECTED_PUBLIC_API) >= 30, (
         f"Inventory only covers {len(EXPECTED_PUBLIC_API)} modules. "
         f"Add more in EXPECTED_PUBLIC_API to reach 30+."

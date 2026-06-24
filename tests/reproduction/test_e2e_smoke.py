@@ -12,21 +12,28 @@ import pytest
 import importlib
 
 ALL_TOP_MODULES = [
-    "akshare_data", "ast_compiler", "ast_complexity", "ast_extractor",
-    "ast_nodes", "backtest", "clickhouse_data", "codegen_utils",
-    "config", "contracts", "error_categorizer", "extract",
+    # common/ (Phase 1)
+    "common.config", "common.paths", "common.run_id", "common.telemetry",
+    "common.errors", "common.utils", "common.llm_factory",
+    # data_source/ (Phase 2)
+    "data_source.router", "data_source.universe", "data_source.quantnodes_adapter",
+    "data_source.akshare", "data_source.clickhouse", "data_source.ifind",
+    # 顶层
+    "ast_compiler", "ast_complexity", "ast_extractor",
+    "ast_nodes", "backtest", "codegen_utils",
+    "contracts", "extract",
     "extract_factors", "extract_paper", "factor_backtest",
     "factor_compiler", "factor_compiler_react", "factor_extractor",
-    "factor_library", "factor_value_store", "ifind_data",
-    "l5_orchestrator", "l5_validation", "metrics", "paths",
-    "quant_wiki", "quantnodes_adapter", "quantnodes_repro",
-    "router", "run", "run_id", "schemas", "self_repairing",
-    "sessions", "strategies", "telemetry", "universe", "utils",
+    "factor_library", "factor_value_store",
+    "l5_orchestrator", "l5_validation", "metrics",
+    "quant_wiki", "quantnodes_repro",
+    "run", "schemas", "self_repairing",
+    "sessions", "strategies",
 ]
 
 LLM_EXTRACTION_MODULES = [
     "llm_extraction.config", "llm_extraction.defer",
-    "llm_extraction.llm_factory", "llm_extraction.log_decorator",
+    "llm_extraction.log_decorator",
     "llm_extraction.orchestrator", "llm_extraction.plan_saver",
     "llm_extraction.planner", "llm_extraction.preview",
     "llm_extraction.retry", "llm_extraction.runlog",

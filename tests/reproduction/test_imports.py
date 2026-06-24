@@ -1,35 +1,55 @@
-"""Smoke test: 验证 reproduction/ 下 56 个模块全部可导入.
+"""Smoke test: 验证 reproduction/ 下模块全部可导入.
 
-这是 20 阶段 refactor 的安全网. 每个模块 (40 顶层 + 16 llm_extraction) 都需
-能 import, 否则后续 refactor 会破坏 WebUI 或 CLI.
+这是 20 阶段 refactor 的安全网. 每个模块都需能 import, 否则后续 refactor
+会破坏 WebUI 或 CLI.
 
-设计原则:
-  - **不依赖函数签名**: 仅验证模块本身能 import
-  - **不执行函数体**: 大部分模块 import 时已加载, 不主动调函数
-  - **不依赖外部资源**: 不读 H5/DB/网络
+Phase 1+2 完成后模块结构:
+- common/ (7): config, paths, run_id, telemetry, errors, utils, llm_factory
+- data_source/ (6): router, universe, quantnodes_adapter, akshare, clickhouse, ifind
+- 顶层 (28): 未搬迁的模块
+- llm_extraction/ (15): 除 llm_factory 外的子包模块
 
 详见: docs/designs/pipeline_framework.md Section 29.5.1
 """
-
 from __future__ import annotations
 
 import importlib
+import os
 
 import pytest
 
-# 40 顶层模块 (排除 __init__.py, __pycache__, conftest 等)
+import llmwikify.reproduction
+
+# ── common/ 子包 (7 个, Phase 1 搬迁) ──────────────────────
+COMMON_MODULES = [
+    "common.config",
+    "common.paths",
+    "common.run_id",
+    "common.telemetry",
+    "common.errors",
+    "common.utils",
+    "common.llm_factory",
+]
+
+# ── data_source/ 子包 (6 个, Phase 2 搬迁) ─────────────────
+DATA_SOURCE_MODULES = [
+    "data_source.router",
+    "data_source.universe",
+    "data_source.quantnodes_adapter",
+    "data_source.akshare",
+    "data_source.clickhouse",
+    "data_source.ifind",
+]
+
+# ── 顶层模块 (未搬迁, 28 个) ──────────────────────────────
 TOP_LEVEL_MODULES = [
-    "akshare_data",
     "ast_compiler",
     "ast_complexity",
     "ast_extractor",
     "ast_nodes",
     "backtest",
-    "clickhouse_data",
     "codegen_utils",
-    "config",
     "contracts",
-    "error_categorizer",
     "extract",
     "extract_factors",
     "extract_paper",
@@ -39,31 +59,22 @@ TOP_LEVEL_MODULES = [
     "factor_extractor",
     "factor_library",
     "factor_value_store",
-    "ifind_data",
     "l5_orchestrator",
     "l5_validation",
     "metrics",
-    "paths",
     "quant_wiki",
-    "quantnodes_adapter",
     "quantnodes_repro",
-    "router",
     "run",
-    "run_id",
     "schemas",
     "self_repairing",
     "sessions",
     "strategies",
-    "telemetry",
-    "universe",
-    "utils",
 ]
 
-# 16 llm_extraction/ 子包模块
+# ── llm_extraction/ 子包 (15 个, 除 llm_factory 外) ────────
 LLM_EXTRACTION_MODULES = [
     "llm_extraction.config",
     "llm_extraction.defer",
-    "llm_extraction.llm_factory",
     "llm_extraction.log_decorator",
     "llm_extraction.orchestrator",
     "llm_extraction.plan_saver",
@@ -79,24 +90,56 @@ LLM_EXTRACTION_MODULES = [
     "llm_extraction",
 ]
 
-# 共 38 + 16 = 54 个 (实际比 56 少 2, 因为 __init__ 已单列)
-ALL_MODULES = TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
+ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
+
+
+# ── CRITICAL_IMPORTS: 33 个关键 import 语句 ──────────────────
+# Phase 3: 全部改为新路径
+CRITICAL_IMPORTS = [
+    # common/ (7)
+    "from llmwikify.reproduction.common.config import config",
+    "from llmwikify.reproduction.common.paths import page_path, result_path",
+    "from llmwikify.reproduction.common.run_id import generate_run_id, sanitize_run_id",
+    "from llmwikify.reproduction.common.telemetry import get_telemetry",
+    "from llmwikify.reproduction.common.errors import StructuredError, categorize_compile_error",
+    "from llmwikify.reproduction.common.utils import parse_frontmatter, generate_slug",
+    "from llmwikify.reproduction.common.llm_factory import build_default_client",
+    # data_source/ (6)
+    "from llmwikify.reproduction.data_source.router import DataRouter",
+    "from llmwikify.reproduction.data_source.universe import resolve_universe",
+    "from llmwikify.reproduction.data_source.quantnodes_adapter import build_qn_context",
+    "from llmwikify.reproduction.data_source.akshare import fetch_hs300_constituents",
+    "from llmwikify.reproduction.data_source.clickhouse import fetch_close_panel",
+    "from llmwikify.reproduction.data_source.ifind import build_tradable_matrices",
+    # 顶层 (20)
+    "from llmwikify.reproduction.factor_library import read_factor_yaml, write_factor_yaml",
+    "from llmwikify.reproduction.sessions import ReproductionDatabase",
+    "from llmwikify.reproduction.quant_wiki import get_quant_wiki",
+    "from llmwikify.reproduction.extract_paper import extract_paper_structure, _extract_factors_from_list",
+    "from llmwikify.reproduction.factor_backtest import run_factor_backtest, run_factor_backtest_universe",
+    "from llmwikify.reproduction.backtest import run_backtest",
+    "from llmwikify.reproduction.codegen_utils import generate_factor_code, SYSTEM_PROMPT_CODE",
+    "from llmwikify.reproduction.factor_compiler_react import compile_to_code_react, ReactStep, ReactResult",
+    "from llmwikify.reproduction.factor_compiler import FactorCompiler",
+    "from llmwikify.reproduction.ast_compiler import compile_ast, CompileError",
+    "from llmwikify.reproduction.ast_nodes import ASTNode, get_op_spec",
+    "from llmwikify.reproduction.ast_extractor import extract_ast",
+    "from llmwikify.reproduction.semantic_registry import get_op, list_ops",
+    "from llmwikify.reproduction.l5_orchestrator import run_l5_pipeline",
+    "from llmwikify.reproduction.l5_validation import run_l5_validation",
+    "from llmwikify.reproduction.metrics import evaluation",
+    "from llmwikify.reproduction.quantnodes_repro import run_factor_backtest",
+    "from llmwikify.reproduction.factor_value_store import store_factor_values, query_factor_values",
+    "from llmwikify.reproduction.run import run_reproduction, RunContext",
+    "from llmwikify.reproduction.schemas import BacktestResult, WikiFactor, FactorBacktestResult",
+    "from llmwikify.reproduction.contracts import FactorPage",
+]
 
 
 @pytest.mark.mock
-@pytest.mark.parametrize("module_name", TOP_LEVEL_MODULES)
-def test_top_level_module_imports(module_name: str) -> None:
-    """40 个顶层 .py 模块全部能 import."""
-    try:
-        importlib.import_module(f"llmwikify.reproduction.{module_name}")
-    except Exception as exc:
-        pytest.fail(f"Failed to import llmwikify.reproduction.{module_name}: {exc}")
-
-
-@pytest.mark.mock
-@pytest.mark.parametrize("module_name", LLM_EXTRACTION_MODULES)
-def test_llm_extraction_module_imports(module_name: str) -> None:
-    """16 个 llm_extraction/ 子包模块全部能 import."""
+@pytest.mark.parametrize("module_name", ALL_MODULES)
+def test_module_imports(module_name: str) -> None:
+    """全部模块能 import."""
     try:
         importlib.import_module(f"llmwikify.reproduction.{module_name}")
     except Exception as exc:
@@ -111,17 +154,33 @@ def test_reproduction_init_imports() -> None:
 
 @pytest.mark.mock
 def test_module_count_matches_plan() -> None:
-    """验证模块数符合 20 阶段 refactor 计划 (40 顶层 + 16 llm_extraction)."""
-    # 动态扫描 reproduction/ 目录
-    import llmwikify.reproduction
+    """验证模块数符合 20 阶段 refactor 计划."""
     pkg_path = llmwikify.reproduction.__path__[0]
-    import os
     actual_top = {
         f[:-3] for f in os.listdir(pkg_path)
         if f.endswith(".py") and f != "__init__.py" and f != "conftest.py"
     }
-    actual_llm_ext = set()
+    # common/ 子包
+    common_path = os.path.join(pkg_path, "common")
+    actual_common = set()
+    if os.path.isdir(common_path):
+        actual_common = {
+            f"common.{f[:-3]}"
+            for f in os.listdir(common_path)
+            if f.endswith(".py") and f != "__init__.py"
+        }
+    # data_source/ 子包
+    ds_path = os.path.join(pkg_path, "data_source")
+    actual_ds = set()
+    if os.path.isdir(ds_path):
+        actual_ds = {
+            f"data_source.{f[:-3]}"
+            for f in os.listdir(ds_path)
+            if f.endswith(".py") and f != "__init__.py"
+        }
+    # llm_extraction/ 子包
     llm_ext_path = os.path.join(pkg_path, "llm_extraction")
+    actual_llm_ext = set()
     if os.path.isdir(llm_ext_path):
         actual_llm_ext = {
             f"llm_extraction.{f[:-3]}"
@@ -133,6 +192,14 @@ def test_module_count_matches_plan() -> None:
         f"Top-level modules shrunk: {len(actual_top)} < {len(TOP_LEVEL_MODULES)}. "
         f"Missing: {set(TOP_LEVEL_MODULES) - actual_top}"
     )
+    assert len(actual_common) >= len(COMMON_MODULES), (
+        f"common/ modules shrunk: {len(actual_common)} < {len(COMMON_MODULES)}. "
+        f"Missing: {set(COMMON_MODULES) - actual_common}"
+    )
+    assert len(actual_ds) >= len(DATA_SOURCE_MODULES), (
+        f"data_source/ modules shrunk: {len(actual_ds)} < {len(DATA_SOURCE_MODULES)}. "
+        f"Missing: {set(DATA_SOURCE_MODULES) - actual_ds}"
+    )
     assert len(actual_llm_ext) >= len(LLM_EXTRACTION_MODULES) - 1, (
         f"llm_extraction modules shrunk: {len(actual_llm_ext)} < {len(LLM_EXTRACTION_MODULES) - 1}. "
         f"Missing: {set(LLM_EXTRACTION_MODULES) - 1 - actual_llm_ext}"
@@ -142,9 +209,6 @@ def test_module_count_matches_plan() -> None:
 @pytest.mark.mock
 def test_no_unexpected_import_errors() -> None:
     """批量 import 不应触发意外错误 (nanobot / 循环依赖等)."""
-    # 不删除 sys.modules: import_module 对未缓存模块仍会全新导入并暴露错误,
-    # 对已缓存模块返回同一单例。强制 del + 重导会替换 sys.modules 单例与
-    # 父包属性, 污染其他测试已绑定的 imported name (test pollution).
     failed = []
     for module_name in ALL_MODULES:
         try:
@@ -158,3 +222,10 @@ def test_no_unexpected_import_errors() -> None:
     if failed:
         msg = "\n".join(f"  {m}: {e}" for m, e in failed)
         pytest.fail(f"Some modules failed to import:\n{msg}")
+
+
+@pytest.mark.mock
+@pytest.mark.parametrize("import_stmt", CRITICAL_IMPORTS)
+def test_critical_import(import_stmt: str) -> None:
+    """33 个关键 import 语句全部能执行."""
+    exec(import_stmt)
