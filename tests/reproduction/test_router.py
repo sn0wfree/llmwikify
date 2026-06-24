@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from llmwikify.reproduction.router import (
+from llmwikify.reproduction.data_source.router import (
     AKShareDataSource,
     CachedClickHouseDataSource,
     ClickHouseDataSource,
@@ -59,7 +59,7 @@ def test_synth_differs_across_symbols():
 
 def test_akshare_returns_none_when_remote_disconnected(monkeypatch):
     """akshare is best-effort: any network failure must be swallowed."""
-    import llmwikify.reproduction.router as r
+    import llmwikify.reproduction.data_source.router as r
 
     def boom(*a, **kw):
         raise ConnectionError("simulated network failure")

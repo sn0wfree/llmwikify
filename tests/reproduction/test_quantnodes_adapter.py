@@ -6,7 +6,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from llmwikify.reproduction import quantnodes_adapter as qa
+from llmwikify.reproduction.data_source import quantnodes_adapter as qa
 
 
 class TestDateAndCode:

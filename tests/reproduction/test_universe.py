@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from llmwikify.reproduction.universe import (
+from llmwikify.reproduction.data_source.universe import (
     HEDGE_INDEX_CODE,
     INDEX_ALIASES,
     get_index_constituents,
@@ -75,7 +75,7 @@ class TestResolveUniverse:
         mock_ak.index_stock_cons.return_value = pd.DataFrame({"品种代码": ["000001", "600519", "000858"]})
         with patch.dict("sys.modules", {"akshare": mock_ak}):
             # Clear cache so fresh call happens
-            from llmwikify.reproduction import universe
+            from llmwikify.reproduction.data_source import universe
             universe._CACHE.clear()
             result = resolve_universe("HS300")
             assert result == ["000001", "600519", "000858"]
@@ -88,7 +88,7 @@ class TestGetIndexConstituents:
         mock_ak = MagicMock()
         mock_ak.index_stock_cons.return_value = pd.DataFrame({"品种代码": ["000001", "600519"]})
         with patch.dict("sys.modules", {"akshare": mock_ak}):
-            from llmwikify.reproduction import universe
+            from llmwikify.reproduction.data_source import universe
             universe._CACHE.clear()
             result = get_index_constituents("HS300")
             assert result == ["000001", "600519"]
@@ -98,7 +98,7 @@ class TestGetIndexConstituents:
         mock_ak.index_stock_cons.return_value = pd.DataFrame()
         mock_ak.index_stock_cons_csindex.return_value = pd.DataFrame({"成分券代码": ["000001", "600519"]})
         with patch.dict("sys.modules", {"akshare": mock_ak}):
-            from llmwikify.reproduction import universe
+            from llmwikify.reproduction.data_source import universe
             universe._CACHE.clear()
             result = get_index_constituents("HS300")
             assert result == ["000001", "600519"]
@@ -108,7 +108,7 @@ class TestGetIndexConstituents:
         mock_ak.index_stock_cons.side_effect = Exception("network error")
         mock_ak.index_stock_cons_csindex.side_effect = Exception("network error")
         with patch.dict("sys.modules", {"akshare": mock_ak}):
-            from llmwikify.reproduction import universe
+            from llmwikify.reproduction.data_source import universe
             universe._CACHE.clear()
             result = get_index_constituents("HS300")
             assert result == []
@@ -122,7 +122,7 @@ class TestGetIndexConstituents:
         mock_ak = MagicMock()
         mock_ak.index_stock_cons.return_value = pd.DataFrame({"品种代码": ["000001"]})
         with patch.dict("sys.modules", {"akshare": mock_ak}):
-            from llmwikify.reproduction import universe
+            from llmwikify.reproduction.data_source import universe
             universe._CACHE.clear()
             r1 = get_index_constituents("HS300")
             r2 = get_index_constituents("HS300")

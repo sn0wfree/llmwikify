@@ -260,9 +260,9 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
     """
     import asyncio
     from llmwikify.reproduction.factor_library import read_factor_yaml
-    from llmwikify.reproduction.router import DataRouter
+    from llmwikify.reproduction.data_source.router import DataRouter
     from llmwikify.reproduction.sessions import ReproductionDatabase
-    from llmwikify.reproduction.universe import (
+    from llmwikify.reproduction.data_source.universe import (
         HEDGE_INDEX_CODE,
         get_index_constituents,
         resolve_universe,

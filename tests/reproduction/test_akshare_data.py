@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch, MagicMock
 
-from llmwikify.reproduction import akshare_data as ad
+from llmwikify.reproduction.data_source import akshare as ad
 
 
 class TestFetchHs300Constituents:

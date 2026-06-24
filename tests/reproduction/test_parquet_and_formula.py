@@ -29,7 +29,7 @@ class TestParquetLocalDataSource:
 
     def test_get_returns_data(self):
         """ParquetLocalDataSource returns data for valid symbol."""
-        from llmwikify.reproduction.router import ParquetLocalDataSource
+        from llmwikify.reproduction.data_source.router import ParquetLocalDataSource
         with tempfile.TemporaryDirectory() as tmpdir:
             path = self._make_parquet(tmpdir)
             src = ParquetLocalDataSource(path)
@@ -40,7 +40,7 @@ class TestParquetLocalDataSource:
 
     def test_get_bare_code(self):
         """ParquetLocalDataSource handles bare codes without suffix."""
-        from llmwikify.reproduction.router import ParquetLocalDataSource
+        from llmwikify.reproduction.data_source.router import ParquetLocalDataSource
         with tempfile.TemporaryDirectory() as tmpdir:
             path = self._make_parquet(tmpdir)
             src = ParquetLocalDataSource(path)
@@ -50,7 +50,7 @@ class TestParquetLocalDataSource:
 
     def test_get_empty_for_unknown_symbol(self):
         """ParquetLocalDataSource returns None for unknown symbol."""
-        from llmwikify.reproduction.router import ParquetLocalDataSource
+        from llmwikify.reproduction.data_source.router import ParquetLocalDataSource
         with tempfile.TemporaryDirectory() as tmpdir:
             path = self._make_parquet(tmpdir)
             src = ParquetLocalDataSource(path)
@@ -59,7 +59,7 @@ class TestParquetLocalDataSource:
 
     def test_date_range_filter(self):
         """ParquetLocalDataSource filters by date range."""
-        from llmwikify.reproduction.router import ParquetLocalDataSource
+        from llmwikify.reproduction.data_source.router import ParquetLocalDataSource
         with tempfile.TemporaryDirectory() as tmpdir:
             path = self._make_parquet(tmpdir)
             src = ParquetLocalDataSource(path)
@@ -75,7 +75,7 @@ class TestParquetLocalDataSource:
 class TestDataRouterParquet:
     def test_parquet_first_in_chain(self):
         """ParquetLocalDataSource is first in the DataRouter chain."""
-        from llmwikify.reproduction.router import DataRouter, ParquetLocalDataSource
+        from llmwikify.reproduction.data_source.router import DataRouter, ParquetLocalDataSource
         with tempfile.TemporaryDirectory() as tmpdir:
             dates = pd.date_range("2024-01-01", periods=10, freq="B")
             df = pd.DataFrame({"date": dates, "Code": ["000001.SZ"] * 10, "open": 100, "high": 105, "low": 95, "close": 100, "volume": 1000})

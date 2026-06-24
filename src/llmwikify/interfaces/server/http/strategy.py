@@ -82,7 +82,7 @@ async def backtest_strategy(slug: str, req: StrategyBacktestRequest) -> dict[str
     """Run strategy backtest using existing run_backtest pipeline."""
     from llmwikify.reproduction.backtest import run_backtest
     from llmwikify.reproduction.metrics import compute_extended_metrics
-    from llmwikify.reproduction.router import DataRouter
+    from llmwikify.reproduction.data_source.router import DataRouter
 
     wiki = _get_wiki()
     strategy = _read_strategy_from_wiki(wiki, slug)

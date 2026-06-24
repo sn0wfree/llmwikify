@@ -67,7 +67,7 @@ def client(tmp_path, monkeypatch):
     app = FastAPI()
     app.include_router(repro_router)
     monkeypatch.setattr(
-        "llmwikify.reproduction.router.SynthDataSource.get",
+        "llmwikify.reproduction.data_source.router.SynthDataSource.get",
         lambda self, s, st, e: pd.DataFrame({"close": [10.0] * 60}),
     )
     yield TestClient(app)

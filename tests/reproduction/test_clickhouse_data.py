@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch
 
-from llmwikify.reproduction import clickhouse_data as cd
+from llmwikify.reproduction.data_source import clickhouse as cd
 
 
 class TestFetchHs300Constituents:

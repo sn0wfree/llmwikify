@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch
 
-from llmwikify.reproduction import ifind_data as id_
+from llmwikify.reproduction.data_source import ifind as id_
 
 
 class TestFetchTradabilityBatch:

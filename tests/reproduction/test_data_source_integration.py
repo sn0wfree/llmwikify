@@ -11,8 +11,8 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch, MagicMock
 
-from llmwikify.reproduction import (
-    akshare_data, clickhouse_data, ifind_data, router,
+from llmwikify.reproduction.data_source import (
+    akshare as akshare_data, clickhouse as clickhouse_data, ifind as ifind_data, router,
 )
 
 

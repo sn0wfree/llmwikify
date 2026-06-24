@@ -391,8 +391,8 @@ async def _run_paper_extraction(
                     _compute_factor_matrix,
                     run_factor_backtest_universe,
                 )
-                from llmwikify.reproduction.router import DataRouter
-                from llmwikify.reproduction.universe import resolve_universe
+                from llmwikify.reproduction.data_source.router import DataRouter
+                from llmwikify.reproduction.data_source.universe import resolve_universe
 
                 # PR-4 (2026-06-21): Limit concurrent LLM-driven multi-factor backtests
                 backtest_semaphore = asyncio.Semaphore(3)
@@ -538,8 +538,8 @@ async def _run_paper_extraction(
                 try:
                     from llmwikify.reproduction.factor_backtest import run_factor_backtest_universe
                     from llmwikify.reproduction.backtest import run_backtest
-                    from llmwikify.reproduction.router import DataRouter
-                    from llmwikify.reproduction.universe import resolve_universe
+                    from llmwikify.reproduction.data_source.router import DataRouter
+                    from llmwikify.reproduction.data_source.universe import resolve_universe
 
                     router = DataRouter(use_cache=True, parquet_path=str(_PARQUET_PATH) if _PARQUET_PATH else None)
 

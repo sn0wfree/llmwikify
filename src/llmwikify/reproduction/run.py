@@ -18,7 +18,7 @@ from typing import Any, Callable, Optional
 
 from .backtest import run_backtest
 from .extract import extract_strategy_config
-from .router import DataRouter
+from .data_source.router import DataRouter
 from .sessions import ReproductionDatabase
 
 logger = logging.getLogger(__name__)

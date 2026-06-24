@@ -116,7 +116,7 @@ def repro_client(tmp_path, monkeypatch):
 
     # Mock DataRouter so we don't hit real data sources
     monkeypatch.setattr(
-        "llmwikify.reproduction.router.SynthDataSource.get",
+        "llmwikify.reproduction.data_source.router.SynthDataSource.get",
         lambda self, s, st, e: (pd.DataFrame({"close": [10.0] * 60}), "synth"),
     )
 

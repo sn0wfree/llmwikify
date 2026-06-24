@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from llmwikify.reproduction.run import RunContext, run_reproduction
 from llmwikify.reproduction.sessions import ReproductionDatabase
-from llmwikify.reproduction.router import SynthDataSource
+from llmwikify.reproduction.data_source.router import SynthDataSource
 
 PAGE_MA = """---
 title: MA Cross

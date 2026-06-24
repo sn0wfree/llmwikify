@@ -987,7 +987,7 @@ def run_factor_backtest_universe(
         return FactorBacktestResult(universe=universe, adj_mode=adj_mode)
 
     # 2. Convert to QuantNodes format (int64 yyyymmdd, int codes)
-    from .quantnodes_adapter import (
+    from .data_source.quantnodes_adapter import (
         build_code_map,
         build_qn_context,
         convert_wide_to_qn,
@@ -1043,7 +1043,7 @@ def run_factor_backtest_universe(
         })
         processed_qn = fp_node.execute(context=ctx)
         # Convert back to DatetimeIndex+str-codes for our own IC/Group/LongShort
-        from .quantnodes_adapter import _qn_date_to_str
+        from .data_source.quantnodes_adapter import _qn_date_to_str
         proc_str_idx = [_qn_date_to_str(d) for d in processed_qn.index]
         proc_date_idx = pd.DatetimeIndex(proc_str_idx)
         # Map int code columns back to str codes

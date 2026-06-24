@@ -239,7 +239,7 @@ class TestRunFactorBacktestUniverse:
 
     def test_tradable_marks_stocks_nan_in_processed_factor(self, synthetic_close):
         """Verify TradabilityFilterNode marks non-tradable stocks as NaN."""
-        from llmwikify.reproduction.quantnodes_adapter import (
+        from llmwikify.reproduction.data_source.quantnodes_adapter import (
             build_code_map,
             build_qn_context,
             convert_wide_to_qn,
@@ -276,7 +276,7 @@ class TestRunFactorBacktestUniverse:
 class TestBuildTradableMatrices:
     def test_basic(self):
         """Build tradable matrices for a small synthetic universe."""
-        from llmwikify.reproduction.ifind_data import build_tradable_matrices
+        from llmwikify.reproduction.data_source.ifind import build_tradable_matrices
 
         codes = ["000001.SZ", "000002.SZ", "600000.SH"]
         dates = pd.date_range("2024-01-01", periods=30, freq="D")
@@ -309,7 +309,7 @@ class TestBuildTradableMatrices:
 
     def test_with_st_events(self):
         """ST status is applied for the event window."""
-        from llmwikify.reproduction.ifind_data import build_tradable_matrices
+        from llmwikify.reproduction.data_source.ifind import build_tradable_matrices
 
         codes = ["000001.SZ"]
         dates = pd.date_range("2024-04-01", periods=60, freq="D")
@@ -337,7 +337,7 @@ class TestBuildTradableMatrices:
 
     def test_with_suspension(self):
         """Suspension events mark stocks as suspended."""
-        from llmwikify.reproduction.ifind_data import build_tradable_matrices
+        from llmwikify.reproduction.data_source.ifind import build_tradable_matrices
 
         codes = ["000001.SZ"]
         dates = pd.date_range("2024-01-01", periods=30, freq="D")
@@ -365,7 +365,7 @@ class TestBuildTradableMatrices:
 class TestClickHouseConfig:
     def test_load_ch_passwd_default(self):
         """_load_ch_passwd returns string even when config file exists."""
-        from llmwikify.reproduction.router import _load_ch_passwd
+        from llmwikify.reproduction.data_source.router import _load_ch_passwd
         pwd = _load_ch_passwd()
         assert isinstance(pwd, str)
         assert len(pwd) > 0

@@ -448,7 +448,7 @@ def _run_backtest(factor_data: dict, bt_params: dict) -> Any:
     """Run backtest using existing infrastructure."""
     import asyncio
     from llmwikify.reproduction.common.config import config
-    from llmwikify.reproduction.router import DataRouter
+    from llmwikify.reproduction.data_source.router import DataRouter
 
     # Check if factor has LLM-generated code (formula class)
     l1 = factor_data.get("l1", {})
@@ -475,7 +475,7 @@ def _run_backtest(factor_data: dict, bt_params: dict) -> Any:
     data_router = DataRouter(use_cache=True, parquet_path=config.get("parquet.path"))
 
     # Resolve universe
-    from llmwikify.reproduction.universe import resolve_universe
+    from llmwikify.reproduction.data_source.universe import resolve_universe
     symbols = resolve_universe(universe)
     if not symbols:
         raise ValueError(f"Cannot resolve universe '{universe}'")
