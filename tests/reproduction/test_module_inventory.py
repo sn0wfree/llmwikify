@@ -104,14 +104,14 @@ EXPECTED_PUBLIC_API = {
         "extract_factor_metadata",
     ],
     # ── 顶层模块 ──
-    "factor_library": [
+    "persist.factor_library": [
         "read_factor_yaml",
         "write_factor_yaml",
         "list_factors",
         "list_factors_by_category",
         "update_index",
     ],
-    "sessions": [
+    "persist.sessions": [
         "ReproductionDatabase",
         "Session",
         "Artifact",
@@ -161,7 +161,7 @@ EXPECTED_PUBLIC_API = {
     "llm_extraction": [
         "run_one_paper",
     ],
-    "run": [
+    "persist.run": [
         "run_reproduction",
         "RunContext",
     ],

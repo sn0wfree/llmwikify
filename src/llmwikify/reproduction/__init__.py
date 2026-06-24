@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .backtest import run_backtest
+    from .backtest_pkg.run_backtest import run_backtest
     from .schemas import BacktestResult, WikiFactor, WikiStrategy, FactorBacktestResult
 
 __all__ = [
@@ -19,7 +19,7 @@ __all__ = [
 ]
 
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
-    "run_backtest": (".backtest", "run_backtest"),
+    "run_backtest": (".backtest_pkg.run_backtest", "run_backtest"),
     "BacktestResult": (".schemas", "BacktestResult"),
     "WikiFactor": (".schemas", "WikiFactor"),
     "WikiStrategy": (".schemas", "WikiStrategy"),

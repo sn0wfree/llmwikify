@@ -44,7 +44,7 @@ class _FakeRegistry:
 @pytest.fixture
 def paper_client(tmp_path, monkeypatch):
     from llmwikify.interfaces.server.http import paper as mod
-    from llmwikify.reproduction.sessions import ReproductionDatabase
+    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
 
     wiki = _FakeWiki(tmp_path / "wiki")
     wiki.wiki_dir.mkdir(parents=True, exist_ok=True)

@@ -11,7 +11,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from llmwikify.reproduction import factor_library, sessions
+from llmwikify.reproduction.persist import factor_library, sessions
 
 
 class TestFactorToBacktestToPersist:

@@ -12,7 +12,7 @@ import json
 import pytest
 from pathlib import Path
 
-from llmwikify.reproduction import factor_library as fl
+from llmwikify.reproduction.persist import factor_library as fl
 
 
 class TestFactorLibraryFormatEquivalence:
@@ -114,7 +114,7 @@ class TestModuleAPIBackwardCompat:
 
     def test_sessions_public_api(self) -> None:
         """sessions 公共 API 存在."""
-        from llmwikify.reproduction import sessions
+        from llmwikify.reproduction.persist import sessions
         for name in ["ReproductionDatabase", "Session", "Artifact", "Result"]:
             assert hasattr(sessions, name)
 

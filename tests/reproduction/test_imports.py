@@ -47,11 +47,15 @@ TOP_LEVEL_MODULES = [
     "extract",
     "extract_factors",
     "extract_paper",
-    "factor_library",
     "quant_wiki",
-    "run",
     "schemas",
-    "sessions",
+]
+
+# ── persist/ 子包 (3 个, Phase 8 搬迁) ──────────────────────
+PERSIST_MODULES = [
+    "persist.factor_library",
+    "persist.sessions",
+    "persist.run",
 ]
 
 # ── backtest_pkg/ 子包 (8 个, Phase 7 搬迁) ────────────────
@@ -103,7 +107,7 @@ LLM_EXTRACTION_MODULES = [
     "llm_extraction",
 ]
 
-ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + CODEGEN_MODULES + CODEGEN_AST_MODULES + BACKTEST_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
+ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + CODEGEN_MODULES + CODEGEN_AST_MODULES + BACKTEST_MODULES + PERSIST_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
 
 
 # ── CRITICAL_IMPORTS: 33 个关键 import 语句 ──────────────────
@@ -140,12 +144,13 @@ CRITICAL_IMPORTS = [
     "from llmwikify.reproduction.backtest_pkg.l5_validation import run_l5_validation",
     "from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values, query_factor_values",
     "from llmwikify.reproduction.backtest_pkg.quantnodes_repro import run_factor_backtest",
-    # 顶层 (7)
-    "from llmwikify.reproduction.factor_library import read_factor_yaml, write_factor_yaml",
-    "from llmwikify.reproduction.sessions import ReproductionDatabase",
+    # persist/ (3)
+    "from llmwikify.reproduction.persist.factor_library import read_factor_yaml, write_factor_yaml",
+    "from llmwikify.reproduction.persist.sessions import ReproductionDatabase",
+    "from llmwikify.reproduction.persist.run import run_reproduction, RunContext",
+    # 顶层 (5)
     "from llmwikify.reproduction.quant_wiki import get_quant_wiki",
     "from llmwikify.reproduction.extract_paper import extract_paper_structure, _extract_factors_from_list",
-    "from llmwikify.reproduction.run import run_reproduction, RunContext",
     "from llmwikify.reproduction.schemas import BacktestResult, WikiFactor, FactorBacktestResult",
     "from llmwikify.reproduction.contracts import FactorPage",
 ]

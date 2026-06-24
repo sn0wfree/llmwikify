@@ -73,7 +73,7 @@ class FakeLLMClient:
 def paper_client(tmp_path, monkeypatch):
     """Paper router with isolated DB, wiki, raw/upload dirs."""
     from llmwikify.interfaces.server.http import paper as mod
-    from llmwikify.reproduction.sessions import ReproductionDatabase
+    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
 
     wiki = FakeWiki(tmp_path / "wiki")
     wiki.wiki_dir.mkdir(parents=True, exist_ok=True)
@@ -104,7 +104,7 @@ def paper_client(tmp_path, monkeypatch):
 def repro_client(tmp_path, monkeypatch):
     """Reproduction router with isolated DB and wiki."""
     from llmwikify.interfaces.server.http import reproduction as mod
-    from llmwikify.reproduction.sessions import ReproductionDatabase
+    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
 
     db = ReproductionDatabase(db_path=tmp_path / "r.db")
     wiki = FakeWiki(tmp_path / "wiki")

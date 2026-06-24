@@ -11,7 +11,8 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from llmwikify.reproduction import sessions, factor_library, schemas
+from llmwikify.reproduction.persist import sessions, factor_library
+from llmwikify.reproduction import schemas
 
 
 class TestSessionToFactorLibrary:

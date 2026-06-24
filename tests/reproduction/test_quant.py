@@ -128,7 +128,7 @@ class TestFactorLibrary:
     """Tests for factor_library read/write/list operations."""
 
     def test_write_and_read_factor(self, project_root):
-        from llmwikify.reproduction.factor_library import read_factor_yaml, write_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import read_factor_yaml, write_factor_yaml
 
         data = {
             "factor": {
@@ -144,13 +144,13 @@ class TestFactorLibrary:
         assert result["factor"]["l1"]["definition"] == "test"
 
     def test_read_nonexistent(self, project_root):
-        from llmwikify.reproduction.factor_library import read_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import read_factor_yaml
 
         result = read_factor_yaml("nonexistent", project_root)
         assert result is None
 
     def test_list_factors_by_category(self, project_root):
-        from llmwikify.reproduction.factor_library import list_factors_by_category, write_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import list_factors_by_category, write_factor_yaml
 
         write_factor_yaml("stock/price/mom", {"factor": {"name": "mom", "category": "price"}}, project_root)
         write_factor_yaml("stock/price/vol", {"factor": {"name": "vol", "category": "price"}}, project_root)
@@ -163,7 +163,7 @@ class TestFactorLibrary:
         assert len(cats["fundamental"]) == 1
 
     def test_update_index(self, project_root):
-        from llmwikify.reproduction.factor_library import list_factors, update_index, write_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import list_factors, update_index, write_factor_yaml
 
         write_factor_yaml("stock/price/mom", {"factor": {"name": "mom", "category": "price", "status": "已注册"}}, project_root)
         write_factor_yaml("stock/price/vol", {"factor": {"name": "vol", "category": "price", "status": "已通过"}}, project_root)
@@ -175,14 +175,14 @@ class TestFactorLibrary:
         assert names == {"mom", "vol"}
 
     def test_update_index_empty(self, project_root):
-        from llmwikify.reproduction.factor_library import list_factors, update_index
+        from llmwikify.reproduction.persist.factor_library import list_factors, update_index
 
         update_index(project_root)
         factors = list_factors(project_root)
         assert len(factors) == 0
 
     def test_list_factors_empty(self, project_root):
-        from llmwikify.reproduction.factor_library import list_factors
+        from llmwikify.reproduction.persist.factor_library import list_factors
 
         factors = list_factors(project_root)
         assert factors == []
@@ -269,7 +269,7 @@ class TestFactorAPIRedirected:
     """Tests for factor API reading from quant/factors/."""
 
     def test_list_empty(self, factor_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import factor_library
+        from llmwikify.reproduction.persist import factor_library
         monkeypatch.setattr(factor_library, "_get_factors_dir", lambda *a, **k: tmp_path / "nonexistent")
 
         client, _ = factor_client
@@ -277,7 +277,7 @@ class TestFactorAPIRedirected:
         assert r.status_code == 200
 
     def test_list_with_factors(self, factor_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import factor_library
+        from llmwikify.reproduction.persist import factor_library
 
         factors_dir = tmp_path / "quant_factors"
         factors_dir.mkdir()
@@ -305,7 +305,7 @@ class TestFactorAPIRedirected:
         assert "price" in categories
 
     def test_get_factor(self, factor_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import factor_library
+        from llmwikify.reproduction.persist import factor_library
 
         factors_dir = tmp_path / "quant_factors"
         factors_dir.mkdir()
@@ -330,7 +330,7 @@ class TestFactorAPIRedirected:
         assert r.json()["factor"]["factor"]["name"] == "test_factor"
 
     def test_get_not_found(self, factor_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import factor_library
+        from llmwikify.reproduction.persist import factor_library
         monkeypatch.setattr(factor_library, "_get_factors_dir", lambda *a, **k: tmp_path / "nonexistent")
 
         client, _ = factor_client
@@ -391,7 +391,7 @@ class TestFactorLibraryAPI:
     """Tests for GET/PUT /api/factor/library/* endpoints."""
 
     def test_library_list_empty(self, factor_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import factor_library
+        from llmwikify.reproduction.persist import factor_library
         monkeypatch.setattr(factor_library, "_get_factors_dir", lambda *a, **k: tmp_path / "empty")
 
         client, _ = factor_client
@@ -400,7 +400,7 @@ class TestFactorLibraryAPI:
         assert r.json()["categories"] == {}
 
     def test_library_list_with_factors(self, factor_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import factor_library
+        from llmwikify.reproduction.persist import factor_library
 
         factors_dir = tmp_path / "factors"
         factors_dir.mkdir()
@@ -423,7 +423,7 @@ class TestFactorLibraryAPI:
         assert len(cats["fundamental"]) == 1
 
     def test_library_get_factor(self, factor_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import factor_library
+        from llmwikify.reproduction.persist import factor_library
 
         factors_dir = tmp_path / "factors"
         factors_dir.mkdir()
@@ -440,7 +440,7 @@ class TestFactorLibraryAPI:
         assert r.json()["factor"]["factor"]["name"] == "test"
 
     def test_library_get_not_found(self, factor_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import factor_library
+        from llmwikify.reproduction.persist import factor_library
         monkeypatch.setattr(factor_library, "_get_factors_dir", lambda *a, **k: tmp_path / "empty")
 
         client, _ = factor_client
@@ -448,7 +448,7 @@ class TestFactorLibraryAPI:
         assert r.status_code == 404
 
     def test_library_update_factor(self, factor_client, monkeypatch, tmp_path):
-        from llmwikify.reproduction import factor_library
+        from llmwikify.reproduction.persist import factor_library
 
         factors_dir = tmp_path / "factors"
         factors_dir.mkdir()
@@ -614,7 +614,7 @@ class TestFactorLibraryEdgeCases:
     """Edge case tests for factor_library."""
 
     def test_corrupt_yaml(self, project_root):
-        from llmwikify.reproduction.factor_library import read_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import read_factor_yaml
 
         # Write corrupt YAML
         factors_dir = project_root / "quant" / "factors"
@@ -626,7 +626,7 @@ class TestFactorLibraryEdgeCases:
         assert result is None
 
     def test_missing_index(self, project_root):
-        from llmwikify.reproduction.factor_library import list_factors
+        from llmwikify.reproduction.persist.factor_library import list_factors
 
         factors_dir = project_root / "quant" / "factors"
         # index.yaml doesn't exist
@@ -634,7 +634,7 @@ class TestFactorLibraryEdgeCases:
         assert result == []
 
     def test_update_index_stats(self, project_root):
-        from llmwikify.reproduction.factor_library import list_factors, update_index, write_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import list_factors, update_index, write_factor_yaml
 
         write_factor_yaml("stock/price/a", {"factor": {"name": "a", "category": "price", "status": "已注册"}}, project_root)
         write_factor_yaml("stock/price/b", {"factor": {"name": "b", "category": "price", "status": "已通过"}}, project_root)
@@ -1395,7 +1395,7 @@ class TestFactorLibraryIndexSync:
     """Tests that write_factor_yaml auto-syncs index.yaml."""
 
     def test_write_creates_index(self, project_root):
-        from llmwikify.reproduction.factor_library import write_factor_yaml, list_factors
+        from llmwikify.reproduction.persist.factor_library import write_factor_yaml, list_factors
 
         factor_data = {
             "factor": {
@@ -1414,7 +1414,7 @@ class TestFactorLibraryIndexSync:
         assert "test_sync_factor" in names
 
     def test_write_updates_index_stats(self, project_root):
-        from llmwikify.reproduction.factor_library import write_factor_yaml, list_factors
+        from llmwikify.reproduction.persist.factor_library import write_factor_yaml, list_factors
 
         # Write two factors
         for name, cat in [("f1", "price"), ("f2", "fundamental")]:
@@ -1433,7 +1433,7 @@ class TestFactorLibraryIndexSync:
         assert len(factors) == 2
 
     def test_write_overwrites_existing(self, project_root):
-        from llmwikify.reproduction.factor_library import write_factor_yaml, read_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import write_factor_yaml, read_factor_yaml
 
         data1 = {"factor": {"name": "overwrite_test", "l1": {"definition": "version1"}}}
         data2 = {"factor": {"name": "overwrite_test", "l1": {"definition": "version2"}}}
@@ -1516,7 +1516,7 @@ class TestFactorLibraryReadEdgeCases:
     """Edge cases for factor_library.read_factor_yaml."""
 
     def test_read_nested_path(self, project_root):
-        from llmwikify.reproduction.factor_library import write_factor_yaml, read_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import write_factor_yaml, read_factor_yaml
 
         data = {"factor": {"name": "nested_test", "l1": {"definition": "deep"}}}
         write_factor_yaml("stock/price/momentum/nested_test", data, project_root)
@@ -1525,7 +1525,7 @@ class TestFactorLibraryReadEdgeCases:
         assert result["factor"]["l1"]["definition"] == "deep"
 
     def test_read_with_special_chars(self, project_root):
-        from llmwikify.reproduction.factor_library import write_factor_yaml, read_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import write_factor_yaml, read_factor_yaml
 
         data = {"factor": {"name": "special_test", "l1": {"definition": "test with 中文"}}}
         write_factor_yaml("stock/price/special_test", data, project_root)
@@ -1534,7 +1534,7 @@ class TestFactorLibraryReadEdgeCases:
         assert result["factor"]["l1"]["definition"] == "test with 中文"
 
     def test_list_factors_by_category_empty(self, project_root):
-        from llmwikify.reproduction.factor_library import list_factors_by_category
+        from llmwikify.reproduction.persist.factor_library import list_factors_by_category
         result = list_factors_by_category(project_root)
         assert result == {}
 
@@ -1608,7 +1608,7 @@ class TestModuleImports:
         assert hasattr(m, "compute_and_store_factor")
 
     def test_import_factor_library(self):
-        import llmwikify.reproduction.factor_library as m
+        import llmwikify.reproduction.persist.factor_library as m
         assert hasattr(m, "list_factors")
         assert hasattr(m, "read_factor_yaml")
         assert hasattr(m, "write_factor_yaml")

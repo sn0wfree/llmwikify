@@ -64,7 +64,7 @@ def test_l4_hypothesis_status_synced_from_l5(monkeypatch, tmp_path):
     _setup_factor_yaml(tmp_path)
 
     from llmwikify.reproduction.backtest_pkg import l5_orchestrator
-    from llmwikify.reproduction import factor_library
+    from llmwikify.reproduction.persist import factor_library
 
     # Mock the backtest to return a known result
     class MockResult:
@@ -148,7 +148,7 @@ def test_l4_partial_support_status(monkeypatch, tmp_path):
     _setup_factor_yaml(tmp_path)
 
     from llmwikify.reproduction.backtest_pkg import l5_orchestrator
-    from llmwikify.reproduction import factor_library
+    from llmwikify.reproduction.persist import factor_library
 
     class MockResult:
         ic_mean = 0.0

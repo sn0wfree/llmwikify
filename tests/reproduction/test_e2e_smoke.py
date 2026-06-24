@@ -21,10 +21,9 @@ ALL_TOP_MODULES = [
     # 顶层
     "contracts", "extract",
     "extract_factors", "extract_paper",
-    "factor_library",
-    "quant_wiki",
-    "run", "schemas",
-    "sessions",
+    "quant_wiki", "schemas",
+    # persist/ (Phase 8)
+    "persist.factor_library", "persist.sessions", "persist.run",
     # backtest_pkg/ (Phase 7)
     "backtest_pkg.factor_backtest", "backtest_pkg.run_backtest",
     "backtest_pkg.metrics", "backtest_pkg.strategies",
@@ -76,8 +75,8 @@ class TestCrossModuleCompatibility:
     def test_import_does_not_require_order(self) -> None:
         """import 顺序无关."""
         # 先 import 一些模块
-        from llmwikify.reproduction import factor_library
-        from llmwikify.reproduction import sessions
+        from llmwikify.reproduction.persist import factor_library
+        from llmwikify.reproduction.persist import sessions
         from llmwikify.reproduction.codegen import llm_code as codegen_utils
         # 再 import 其他模块, 不应出错
         from llmwikify.reproduction.backtest_pkg import l5_validation
@@ -117,7 +116,7 @@ class TestWebUICompatibility:
 
     def test_factor_library_yaml_io(self) -> None:
         """factor_library YAML 读写 (WebUI 因子页面依赖)."""
-        from llmwikify.reproduction import factor_library
+        from llmwikify.reproduction.persist import factor_library
         assert hasattr(factor_library, "read_factor_yaml")
         assert hasattr(factor_library, "write_factor_yaml")
         assert hasattr(factor_library, "list_factors")

@@ -18,7 +18,7 @@ from llmwikify.interfaces.server.http.reproduction import (
     set_repro_deps,
     router as repro_router,
 )
-from llmwikify.reproduction.sessions import ReproductionDatabase
+from llmwikify.reproduction.persist.sessions import ReproductionDatabase
 
 
 class _FakeWiki:

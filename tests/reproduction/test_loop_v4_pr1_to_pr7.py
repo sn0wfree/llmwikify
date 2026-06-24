@@ -674,7 +674,7 @@ def test_stage_b_persist_l5_to_yaml_creates(tmp_path) -> None:
         CompileResult,
         persist_l5_to_yaml,
     )
-    from src.llmwikify.reproduction.factor_library import read_factor_yaml
+    from src.llmwikify.reproduction.persist.factor_library import read_factor_yaml
 
     compiler = FactorCompiler()
     r = compiler.compile({
@@ -800,7 +800,7 @@ def test_stage_b_l5_yaml_invalid_status(tmp_path) -> None:
         "test_failed_factor", "", failed_result, project_root=proj,
     )
     assert action is not None
-    from src.llmwikify.reproduction.factor_library import read_factor_yaml
+    from src.llmwikify.reproduction.persist.factor_library import read_factor_yaml
     data = read_factor_yaml("test_failed_factor", project_root=proj)
     assert data["factor"]["l5"]["ast_compile_status"] == "failed"
     assert "ast_compile_error" in data["factor"]["l5"]
