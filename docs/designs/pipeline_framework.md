@@ -157,7 +157,6 @@ src/llmwikify/reproduction/
     ├── backtest_extract.py
     ├── score.py
     ├── factor_fix.py
-    ├── quantnodes_patch.py
     ├── persist.py
     └── stages/
         ├── __init__.py
@@ -590,7 +589,7 @@ backtest:
   patches:
     - module: QuantNodes.research.factor_test.nodes.sample_pool_filter_node
       class: SamplePoolFilterNode
-      fix: _patch_sample_pool_filter
+      status: fixed upstream (v2.9.1)
 
 # ── 元数据提取 ──
 metadata:
@@ -1008,7 +1007,6 @@ WebUI 暴露 3 个操作:
 
 | 原位置 | 搬入 |
 |--------|------|
-| `_patch_sample_pool_filter` | `pipeline/quantnodes_patch.py` |
 | `_wide_from_long` | `pipeline/data_loader.py` |
 | `_write_factor_h5` | `pipeline/data_loader.py` |
 | `_load_market_data` | `pipeline/data_loader.py` |
@@ -1039,8 +1037,7 @@ quant/factors/101_alphas/
 │   ├── pass2.json
 │   ├── output/                    # single_factor_NNN.json
 │   └── h5/                        # factor_NNN.h5
-├── scripts/                       # workspace 特定 (QN patch 等)
-│   └── quantnodes_patch.py
+├── scripts/                       # workspace 特定
 └── stk_alpha_NNN_HASH/            # Stage 3 因子目录
     ├── factor.yaml                # L1-L6
     ├── code.py
@@ -1533,7 +1530,6 @@ Week 2
       pipeline/backtest_extract.py
       pipeline/score.py
       pipeline/factor_fix.py
-      pipeline/quantnodes_patch.py
       pipeline/persist.py
       pipeline/stages/base.py
       pipeline/stages/paper_understanding.py
@@ -1543,7 +1539,6 @@ Week 2
       pipeline/stages/strategy.py (占位)
 
 5.2 把 test_one_factor_llm_code.py 拆分到 pipeline/
-    _patch_sample_pool_filter → pipeline/quantnodes_patch.py
     _wide_from_long → pipeline/data_loader.py
     _write_factor_h5 → pipeline/data_loader.py
     _load_market_data → pipeline/data_loader.py
@@ -3000,7 +2995,6 @@ def test_add_noise_preserves_length():
 **操作**:
 ```
 从 test_one_factor_llm_code.py 拆分 7 个函数到 pipeline/:
-  _patch_sample_pool_filter → pipeline/quantnodes_patch.py
   _wide_from_long → pipeline/data_loader.py
   _write_factor_h5 → pipeline/data_loader.py
   _load_market_data → pipeline/data_loader.py
@@ -4717,8 +4711,7 @@ reproduction/
     ├── backtest_extract.py # 回测结果提取
     ├── score.py         # 评分计算
     ├── persist.py       # 持久化
-    ├── factor_fix.py    # 因子修复
-    └── quantnodes_patch.py # QuantNodes 修复
+    └── factor_fix.py    # 因子修复
 ```
 
 ### 32.3 Commits 记录

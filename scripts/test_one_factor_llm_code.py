@@ -52,36 +52,6 @@ LONG_DATE_BEG = 20200101
 LONG_DATE_END = 20241231
 
 
-# ─── QuantNodes SamplePoolFilter bug workaround (2026-06-22) ────────────
-# SamplePoolFilter returns a DataFrame with default RangeIndex (0..n-1) on
-# both axes, instead of the int64 yyyymmdd index / stock-code columns from
-# load_data. When TradabilityFilter multiplies ``if_tradable * sample``,
-# pandas does index/column union → shape doubles (e.g. 1305×50 → 2610×100).
-# We patch the result to carry the correct axes.
-def _patch_sample_pool_filter():
-    """Set proper index/columns on SamplePoolFilter output to fix union bug."""
-    from QuantNodes.research.factor_test.nodes.sample_pool_filter_node import (
-        SamplePoolFilterNode,
-    )
-
-    orig = SamplePoolFilterNode._execute
-
-    def patched(self, input_data=None, **kwargs):
-        result = orig(self, input_data, **kwargs)
-        context = kwargs.get("context", {})
-        load_data = context.get("LoadData") or input_data or {}
-        if "stklist" in load_data and "trade_dt" in load_data:
-            stklist = load_data["stklist"]
-            trade_dt = load_data["trade_dt"]
-            result.index = trade_dt.iloc[:, 0].values
-            result.columns = stklist.iloc[:, 0].values
-        return result
-
-    SamplePoolFilterNode._execute = patched
-
-
-_patch_sample_pool_filter()  # apply on import
-
 # ─── 工具函数 ─────────────────────────────────────────────────────
 
 

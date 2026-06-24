@@ -73,7 +73,6 @@
 | `score.py` | `compute_status()` | ICIR → 状态字符串 |
 | `persist.py` | `persist_code_to_yaml()` | 写 6 层因子 YAML |
 | `persist.py` | `save_backtest_to_db()` | 回测结果入 SQLite |
-| `quantnodes_patch.py` | `patch_sample_pool_filter()` | QN bug workaround |
 | `react.py` | `PipelineReAct` | 失败恢复引擎 |
 | `factor_fix.py` | `detect_binary()` / `add_noise()` | 退化因子修复 |
 
@@ -257,7 +256,6 @@ FOR EACH detail in pass2_details:
 
 **调用链**:
 ```
-patch_sample_pool_filter()
 FOR EACH code_result:
   execute_code(code, df_pl) → series
   wide_from_long(df_pl, series) → wide
@@ -274,7 +272,6 @@ FOR EACH code_result:
 **输出**: `result.backtest_results[]` = [{name, ic_mean, icir, ...}]
 
 **依赖**:
-- `pipeline/quantnodes_patch.py:patch_sample_pool_filter()` — QN bug 修复
 - `pipeline/data_loader.py:wide_from_long()` — 数据格式转换
 - `pipeline/data_loader.py:write_factor_h5()` — 写 H5 文件
 - `pipeline/backtest_config.py:build_qn_config()` — 构建配置
@@ -415,6 +412,5 @@ python -m llmwikify.reproduction.pipeline \
 |------|------|
 | Flow B LLM 调用次数多，速度慢 | 保留 async，后台执行 |
 | Flow C 代码生成可能失败 | 保留 fallback 到 formula |
-| QuantNodes bug | 保留 `patch_sample_pool_filter()` |
 | 测试迁移遗漏 | 逐个对比测试用例 |
 | extract_paper.py 删除后 import 断裂 | paper.py 重构后不再依赖 |

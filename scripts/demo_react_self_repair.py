@@ -31,15 +31,10 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 DATA_PATH = Path("/home/ll/.llmwikify/akshare_cache/quantnodes_h5_long")
 TRACK_B = PROJECT_ROOT / "quant" / "papers" / "101_alphas_minimal" / "track_b_checkpoint.json"
 
-# Apply SamplePoolFilter patch (same as test_one_factor_llm_code.py)
-from test_one_factor_llm_code import _patch_sample_pool_filter  # noqa: E402
-
 from llmwikify.reproduction.codegen_utils import (  # noqa: E402
     SYSTEM_PROMPT_CODE,
     build_llm_client,
 )
-
-_patch_sample_pool_filter()
 
 
 def _load_long_df() -> pl.DataFrame:

@@ -15,7 +15,6 @@ Endpoints:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 import traceback
@@ -36,124 +35,6 @@ _DB: Any = None
 _RAW_DIR: Optional[Path] = None
 _UPLOAD_DIR: Optional[Path] = None
 _PARQUET_PATH: Optional[str] = None
-
-
-def _extract_factor_from_page(page: dict, paper_id: str, extraction: dict | None = None) -> dict:
-    """Convert a factor wiki page to 6-layer YAML structure.
-
-    Uses LLM-extracted factor_metadata (when extraction is provided) for
-    full 6-layer population. Falls back to wiki frontmatter + defaults
-    when extraction is unavailable.
-
-    Returns dict with keys:
-        name: factor path relative to quant/factors/ (e.g., 'stock/price/momentum_20d')
-        factor: the 6-layer factor dict
-    """
-    from llmwikify.reproduction.common.utils import parse_frontmatter
-    from llmwikify.reproduction.common.utils import generate_slug
-
-    fm = parse_frontmatter(page.get("content", ""))
-    metadata = (extraction or {}).get("factor_metadata", {})
-
-    factor_class = fm.get("factor_class", fm.get("signal_type", "unknown"))
-    signal_params = fm.get("signal_params", fm.get("factor_params", {}))
-    if isinstance(signal_params, str):
-        import json
-        try:
-            signal_params = json.loads(signal_params)
-        except (json.JSONDecodeError, TypeError):
-            signal_params = {}
-
-    title = fm.get("title", page.get("page_name", f"factor-{paper_id}"))
-    slug = generate_slug(title)
-
-    # Path: prefer metadata, fall back to fm/frontmatter
-    asset_type = metadata.get("asset_type") or fm.get("asset_type") or "stock"
-    category = metadata.get("category") or fm.get("category") or "price"
-    subcategory = metadata.get("subcategory") or factor_class
-
-    factor_name = f"{asset_type}/{category}/{slug}"
-
-    # L1: prefer metadata.l1, fall back to frontmatter + defaults
-    meta_l1 = metadata.get("l1", {})
-    l1 = {
-        "definition": meta_l1.get("definition") or fm.get("reasoning") or f"Factor extracted from {paper_id}",
-        "formula": meta_l1.get("formula") or "TBD",
-        "input_columns": meta_l1.get("input_columns") or ["close"],
-        "frequency": meta_l1.get("frequency") or "日频",
-        "output_schema": "[date × Code]",
-        "nan_meaning": "TBD",
-        "default_params": meta_l1.get("default_params") or signal_params or {},
-        "param_constraints": meta_l1.get("param_constraints") or "TBD",
-        "business_constraints": meta_l1.get("business_constraints") or "TBD",
-    }
-
-    # L2: prefer metadata.l2, fall back to generic step
-    meta_l2 = metadata.get("l2", {})
-    meta_steps = meta_l2.get("calculation_steps") or []
-    if not meta_steps:
-        sig_gen = (extraction or {}).get("operation_steps", {}).get("signal_generation", "")
-        if sig_gen:
-            meta_steps = [
-                {"step": i + 1, "description": s.strip()}
-                for i, s in enumerate(sig_gen.split("\n")) if s.strip()
-            ]
-        else:
-            meta_steps = [{"step": 1, "description": f"计算 {factor_class} 因子"}]
-    l2 = {
-        "calculation_steps": meta_steps,
-        "edge_case_handling": meta_l2.get("edge_case_handling", "TBD"),
-        "missing_value_handling": meta_l2.get("missing_value_handling", "TBD"),
-        "data_alignment": "T+1",
-        "complexity": meta_l2.get("complexity", "O(T × N)"),
-    }
-
-    # L3: prefer metadata.l3, fall back to strategy_logic
-    meta_l3 = metadata.get("l3", {})
-    strategy_logic = (extraction or {}).get("strategy_logic", {})
-    l3 = {
-        "financial_intuition": meta_l3.get("financial_intuition") or fm.get("reasoning", "TBD"),
-        "market_behavior": meta_l3.get("market_behavior") or strategy_logic.get("alpha_source", "TBD"),
-        "theoretical_basis": meta_l3.get("theoretical_basis") or strategy_logic.get("core_hypothesis", "TBD"),
-        "historical_effectiveness": meta_l3.get("historical_effectiveness") or strategy_logic.get("market_logic", "TBD"),
-        "related_factors": meta_l3.get("related_factors", "TBD"),
-    }
-
-    # L4: prefer metadata.l4, fall back to improvement_directions as insights
-    meta_l4 = metadata.get("l4", {})
-    improvement_dirs = (extraction or {}).get("strengths_weaknesses", {}).get("improvement_directions", [])
-    hypotheses = meta_l4.get("hypotheses", [])
-    # Mark hypotheses as unverified (just registered)
-    for h in hypotheses:
-        if "status" not in h:
-            h["status"] = "未验证"
-    l4 = {
-        "hypotheses": hypotheses,
-        "hypothesis_limit": 5,
-        "archived_hypotheses": [],
-        "meaning_summary": meta_l4.get("meaning_summary") or fm.get("reasoning", "TBD"),
-        "key_insights": meta_l4.get("key_insights", improvement_dirs),
-        "uncertainty": meta_l4.get("uncertainty", "TBD"),
-        "final_meaning": None,
-    }
-
-    factor_dict = {
-        "name": factor_name.replace("/", "_"),
-        "name_cn": title,
-        "asset_type": asset_type,
-        "category": category,
-        "subcategory": subcategory,
-        "version": 1,
-        "status": "已注册",
-        "l1": l1,
-        "l2": l2,
-        "l3": l3,
-        "l4": l4,
-        "l5": {},
-        "l6": {},
-    }
-
-    return {"name": factor_name, "factor": factor_dict}
 
 
 def set_paper_deps(
@@ -284,362 +165,73 @@ async def _run_paper_extraction(
     start_date: str = "2023-01-01",
     end_date: str = "2025-12-31",
 ) -> None:
-    """Background task: extract → build pages → write wiki → auto-backtest → done."""
+    """Background task: 调用 UnifiedWorkflow 执行完整流水线."""
+    from llmwikify.reproduction.pipeline.workflow import UnifiedWorkflow, WorkflowConfig
+
     try:
         _DB.update_status(session_id, "extracting")
         _DB.record_event(session_id, "extract.llm_called")
 
-        # Lazy import to avoid circulars
-        from llmwikify.reproduction.paper_understanding.extract_paper import (
-            build_paper_pages,
-            extract_paper_structure,
-        )
-
         # Resolve raw filenames to full paths using _RAW_DIR
-        # Skip if source_ref is already an absolute path
         if source_type == "raw" and _RAW_DIR is not None and not Path(source_ref).is_absolute():
             source_ref = str(_RAW_DIR / source_ref)
 
-        extraction = await asyncio.to_thread(
-            extract_paper_structure,
-            paper_content=paper_content,
+        config = WorkflowConfig(
             paper_id=paper_id,
             source_type=source_type,
             source_ref=source_ref,
+            paper_content=paper_content,
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
             llm_client=_LLM_CLIENT,
         )
-        logger.info(
-            "paper %s: extraction done, keys=%s, has_factor_list=%s",
-            paper_id,
-            list(extraction.keys()) if extraction else [],
-            bool(extraction.get("factor_list")) if extraction else False,
-        )
+
+        workflow = UnifiedWorkflow(config)
+        result = await asyncio.to_thread(workflow.run)
+
+        # DB 更新: artifacts
+        for factor_name in result.written_factors:
+            _DB.create_artifact(
+                session_id=session_id,
+                kind="Factor",
+                wiki_page=f"factor-{factor_name}",
+            )
+
+        # DB 更新: events
         _DB.record_event(
             session_id,
             "extract.llm_done",
-            has_extraction=bool(extraction),
-            keys=list(extraction.keys()) if extraction else [],
-            extraction=extraction,
+            n_signals=result.n_signals,
+            n_coded=result.n_coded,
         )
+        if result.backtest_results:
+            _DB.record_event(
+                session_id,
+                "backtest.done",
+                results=result.backtest_results,
+            )
 
-        if not extraction:
-            # No LLM or empty result — mark done with note
+        if result.success:
             _DB.update_status(session_id, "done")
             _DB.record_event(
                 session_id,
                 "finalize.done",
-                pages_written=0,
-                note="no extraction (no LLM or empty content)",
+                written_factors=result.written_factors,
+                backtest_results=result.backtest_results,
             )
-            logger.info("paper session %s: empty extraction, done", session_id)
-            return
-
-        _DB.update_status(session_id, "analyzing")
-        pages = build_paper_pages(extraction, paper_id)
-        wiki = _get_wiki(wiki_id)
-
-        # Import quant storage
-        from llmwikify.reproduction.paper_understanding.quant_wiki import get_quant_wiki
-        from llmwikify.reproduction.persist.factor_library import write_factor_yaml
-        from llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
-        quant = get_quant_wiki()
-
-        written: list[str] = []
-
-        # ── Multi-factor branch: factor_list[] from extraction ──
-        factor_list_factors = _extract_factors_from_list(extraction, paper_id)
-        if factor_list_factors:
             logger.info(
-                "paper %s: multi-factor mode, %d factors from factor_list",
-                session_id, len(factor_list_factors),
+                "paper session %s done: %d signals, %d coded, %d written, %d backtests",
+                session_id,
+                result.n_signals,
+                result.n_coded,
+                len(result.written_factors),
+                len(result.backtest_results),
             )
-            for fl in factor_list_factors:
-                try:
-                    write_factor_yaml(fl["name"], {"factor": fl["factor"]})
-                    _DB.create_artifact(
-                        session_id=session_id,
-                        kind="Factor",
-                        wiki_page=f"factor-{fl['name']}",
-                    )
-                    written.append(f"factor-{fl['name']}")
-                except Exception as exc:
-                    logger.warning(
-                        "failed to write factor %s: %s", fl["name"], exc
-                    )
-
-            # Also write Source pages (strategy_logic, data_requirements, etc.)
-            pages = build_paper_pages(extraction, paper_id)
-            for page in pages:
-                pt = page.get("page_type", "Source")
-                if pt == "Source":
-                    try:
-                        quant.write_page(
-                            page["page_name"], page["content"], page_type="papers"
-                        )
-                        _DB.create_artifact(
-                            session_id=session_id, kind=pt, wiki_page=page["page_name"]
-                        )
-                        written.append(page["page_name"])
-                    except Exception as exc:
-                        logger.warning("failed to write page %s: %s", page["page_name"], exc)
-
-            # Auto-backtest all factor_list factors
-            _DB.record_event(session_id, "backtest.started", symbol=symbol)
-            backtest_results: list[dict[str, Any]] = []
-            try:
-                from llmwikify.reproduction.backtest_pkg.factor_backtest import (
-                    _compute_factor_matrix,
-                    run_factor_backtest_universe,
-                )
-                from llmwikify.reproduction.data_source.router import DataRouter
-                from llmwikify.reproduction.data_source.universe import resolve_universe
-
-                # PR-4 (2026-06-21): Limit concurrent LLM-driven multi-factor backtests
-                backtest_semaphore = asyncio.Semaphore(3)
-
-                async def _run_one_backtest(
-                    factor_name: str,
-                    factor_data: dict[str, Any],
-                ) -> dict[str, Any]:
-                    """PR-4: Run a single factor backtest, AST-aware."""
-                    async with backtest_semaphore:
-                        # PR-4: AST path priority (l5.ast > l1.code)
-                        l5_ast = factor_data.get("l5", {}).get("ast") or factor_data.get("l5_ast")
-                        if l5_ast:
-                            factor_class = "ast_compiled"
-                            factor_params = {"ast_json": l5_ast}
-                        else:
-                            code = (
-                                factor_data.get("l1", {}).get("code", "")
-                                or factor_data.get("l2", {}).get("generated_code", "")
-                            )
-                            factor_class = "formula" if code else "momentum"
-                            default_params = factor_data.get("l1", {}).get("default_params", {})
-                            factor_params = (
-                                {**default_params, "code": code} if code else default_params
-                            )
-
-                        try:
-                            bt = await asyncio.to_thread(
-                                run_factor_backtest_universe,
-                                close_wide=close_wide,
-                                factor_class=factor_class,
-                                factor_params=factor_params,
-                                adj_mode="D",
-                                n_groups=5,
-                                universe=universe_spec,
-                            )
-                            # Store factor values to DuckDB (compute separately since
-                            # run_factor_backtest_universe does not return factor_wide)
-                            try:
-                                factor_wide = await asyncio.to_thread(
-                                    _compute_factor_matrix,
-                                    close_wide, factor_class, factor_params,
-                                )
-                                if not factor_wide.empty:
-                                    from llmwikify.reproduction.backtest_pkg.factor_value_store import (
-                                        store_factor_values,
-                                    )
-                                    await asyncio.to_thread(
-                                        store_factor_values,
-                                        factor_name=factor_name,
-                                        factor_wide=factor_wide,
-                                        source=f"paper/{paper_id}",
-                                    )
-                            except Exception as db_exc:
-                                logger.warning(
-                                    "paper %s: DuckDB store failed for %s: %s",
-                                    session_id, factor_name, db_exc,
-                                )
-
-                            return {
-                                "factor_name": factor_name,
-                                "factor_class": factor_class,
-                                "ic_mean": bt.ic_mean,
-                                "icir": bt.icir,
-                                "score": bt.score,
-                                "turnover": getattr(bt, "turnover", None),
-                            }
-                        except Exception as exc:
-                            logger.warning(
-                                "paper %s: backtest failed for %s: %s",
-                                session_id, factor_name, exc,
-                            )
-                            return {"factor_name": factor_name, "error": str(exc)}
-
-                router = DataRouter(use_cache=True, parquet_path=str(_PARQUET_PATH) if _PARQUET_PATH else None)
-                universe_spec = extraction.get("data_requirements", {}).get("universe", "HS300") or "HS300"
-                symbols = await asyncio.to_thread(resolve_universe, universe_spec)
-                if not symbols:
-                    raise RuntimeError(f"Cannot resolve universe '{universe_spec}'")
-
-                # PR-4 (2026-06-21): Pre-fetch close_wide once for all factors.
-                merged_df, source = await asyncio.to_thread(
-                    router.get_universe, symbols, start_date, end_date
-                )
-                if merged_df is None or merged_df.empty:
-                    raise RuntimeError(f"No data for universe '{universe_spec}'")
-                close_wide = merged_df.pivot_table(
-                    index="date", columns="Code", values="close", aggfunc="last"
-                ).sort_index().dropna(how="all")
-
-                # Run all factors concurrently (semaphore=3 limits LLM compile)
-                results = await asyncio.gather(
-                    *[
-                        _run_one_backtest(fl["name"], fl["factor"])
-                        for fl in factor_list_factors
-                    ],
-                    return_exceptions=False,
-                )
-                backtest_results = list(results)
-
-                _DB.record_event(
-                    session_id, "backtest.done",
-                    results=backtest_results, source=source,
-                )
-                logger.info("paper %s: multi-factor backtest done (%d factors)", session_id, len(backtest_results))
-
-            except Exception as bt_exc:
-                logger.warning("paper %s: multi-factor backtest failed: %s", session_id, bt_exc)
-                _DB.record_event(session_id, "backtest.error", error=str(bt_exc))
-
         else:
-            # ── Single-factor branch (legacy) ──
-            pages = build_paper_pages(extraction, paper_id)
-            for page in pages:
-                try:
-                    pt = page.get("page_type", "Source")
-                    if pt == "Factor":
-                        extracted = _extract_factor_from_page(page, paper_id, extraction=extraction)
-                        factor_name = extracted["name"]
-                        factor_data = extracted["factor"]
-                        write_factor_yaml(factor_name, {"factor": factor_data})
-                    else:
-                        quant_page_type = "papers" if pt == "Source" else "strategies"
-                        quant.write_page(
-                            page["page_name"], page["content"], page_type=quant_page_type,
-                        )
-                    _DB.create_artifact(
-                        session_id=session_id, kind=pt, wiki_page=page["page_name"],
-                    )
-                    written.append(page["page_name"])
-                except Exception as exc:
-                    logger.warning("failed to write page %s: %s", page["page_name"], exc)
-
-            _DB.record_event(session_id, "wiki.written", pages_written=len(written))
-
-            # Auto-backtest (single-factor legacy)
-            suggested = extraction.get("suggested_signal", {})
-            signal_type = suggested.get("signal_type", "unknown")
-            backtest_results: list[dict[str, Any]] = []
-
-            if signal_type != "unknown":
-                _DB.record_event(session_id, "backtest.started", symbol=symbol)
-                try:
-                    from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest_universe
-                    from llmwikify.reproduction.backtest_pkg.run_backtest import run_backtest
-                    from llmwikify.reproduction.data_source.router import DataRouter
-                    from llmwikify.reproduction.data_source.universe import resolve_universe
-
-                    router = DataRouter(use_cache=True, parquet_path=str(_PARQUET_PATH) if _PARQUET_PATH else None)
-
-                    # Prefer universe from data_requirements if available
-                    universe_spec = (
-                        extraction.get("data_requirements", {}).get("universe", "HS300")
-                        or "HS300"
-                    )
-                    # Resolve to actual stock list
-                    symbols = await asyncio.to_thread(resolve_universe, universe_spec)
-                    # Fall back to single symbol if universe resolution fails
-                    if not symbols:
-                        symbols = [symbol] if symbol else ["000001.SZ"]
-
-                    merged_df, source = await asyncio.to_thread(
-                        router.get_universe, symbols, start_date, end_date
-                    )
-
-                    if merged_df is not None and not merged_df.empty:
-                        # Pivot to wide format [date × Code]
-                        close_wide = merged_df.pivot_table(
-                            index="date", columns="Code", values="close", aggfunc="last"
-                        )
-                        close_wide = close_wide.sort_index().dropna(how="all")
-
-                        # Factor backtest (cross-section)
-                        factor_slug = None
-                        for p in pages:
-                            if p.get("page_type") == "Factor":
-                                factor_slug = p["page_name"]
-                                break
-
-                        if factor_slug:
-                            factor_class = signal_type
-                            factor_params = suggested.get("signal_params", {})
-                            fb_result = await asyncio.to_thread(
-                                run_factor_backtest_universe,
-                                close_wide=close_wide,
-                                factor_class=factor_class,
-                                factor_params=factor_params,
-                                adj_mode="M-end",
-                                n_groups=5,
-                                universe=universe_spec,
-                            )
-                            backtest_results.append({
-                                "type": "factor",
-                                "slug": factor_slug,
-                                "ic_mean": fb_result.ic_mean,
-                                "rank_ic_mean": fb_result.rank_ic_mean,
-                                "icir": fb_result.icir,
-                                "annual_return": fb_result.annual_return,
-                                "longshort_ann_return": fb_result.longshort_ann_return,
-                                "max_drawdown": fb_result.max_drawdown,
-                            })
-
-                        # Strategy backtest (single stock for now)
-                        data, _ = await asyncio.to_thread(
-                            router.get, symbol, start_date, end_date
-                        )
-                        strategy_class = suggested.get("strategy_class", "trend_following")
-                        sb_result = await asyncio.to_thread(
-                            run_backtest,
-                            strategy=signal_type,
-                            data=data,
-                            config={
-                                "signal_params": suggested.get("signal_params", {}),
-                                "initial_cash": 1_000_000,
-                                "commission": 0.001,
-                            },
-                        )
-                        backtest_results.append({
-                            "type": "strategy",
-                            "status": sb_result.status,
-                            "trades_count": len(sb_result.trades),
-                            "final_cash": sb_result.final_cash,
-                        })
-
-                        _DB.record_event(
-                            session_id, "backtest.done",
-                            results=backtest_results, source=source,
-                        )
-                        logger.info("paper %s: auto-backtest done (%s)", session_id, source)
-                    else:
-                        _DB.record_event(session_id, "backtest.skipped", reason="no data")
-                        logger.warning("paper %s: no data for backtest (%s)", session_id, symbol)
-
-                except Exception as bt_exc:
-                    logger.warning("paper %s: auto-backtest failed: %s", session_id, bt_exc)
-                    _DB.record_event(session_id, "backtest.error", error=str(bt_exc))
-
-        _DB.update_status(session_id, "done")
-        _DB.record_event(
-            session_id, "finalize.done",
-            pages_written=len(written),
-            backtest_results=backtest_results,
-        )
-        logger.info(
-            "paper session %s done: %d pages, %d backtests",
-            session_id, len(written), len(backtest_results),
-        )
+            _DB.update_status(session_id, "error", error=result.error)
+            _DB.record_event(session_id, "error", message=result.error)
+            logger.error("paper session %s failed: %s", session_id, result.error)
 
     except Exception as exc:
         logger.error("paper session %s failed: %s", session_id, exc)
