@@ -107,7 +107,16 @@ LLM_EXTRACTION_MODULES = [
     "paper_understanding.llm_extraction",
 ]
 
-ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + CODEGEN_MODULES + CODEGEN_AST_MODULES + BACKTEST_MODULES + PERSIST_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
+# ── pipeline/ 子包 (Phase 14A-B) ─────────────────────
+PIPELINE_MODULES = [
+    "pipeline.config",
+    "pipeline.runner",
+    "pipeline.stages.base",
+    "pipeline.workspace",
+    "pipeline.react",
+]
+
+ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + CODEGEN_MODULES + CODEGEN_AST_MODULES + BACKTEST_MODULES + PERSIST_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES + PIPELINE_MODULES
 
 
 # ── CRITICAL_IMPORTS: 33 个关键 import 语句 ──────────────────
@@ -153,6 +162,12 @@ CRITICAL_IMPORTS = [
     "from llmwikify.reproduction.paper_understanding.extract_paper import extract_paper_structure, _extract_factors_from_list",
     "from llmwikify.reproduction.paper_understanding.schemas import BacktestResult, WikiFactor, FactorBacktestResult",
     "from llmwikify.reproduction.paper_understanding.contracts import FactorPage",
+    # pipeline/ (Phase 14A-B)
+    "from llmwikify.reproduction.pipeline.config import WorkspaceConfig",
+    "from llmwikify.reproduction.pipeline.runner import PipelineRunner, PipelineResult",
+    "from llmwikify.reproduction.pipeline.stages.base import Stage, StageContext",
+    "from llmwikify.reproduction.pipeline.workspace import Workspace",
+    "from llmwikify.reproduction.pipeline.react import FailureClassifier, PipelineReAct, StageFailure, Decision",
 ]
 
 
@@ -239,6 +254,19 @@ def test_module_count_matches_plan() -> None:
             for f in os.listdir(llm_ext_path)
             if f.endswith(".py") and f != "__init__.py" and f != "conftest.py"
         }
+    # pipeline/ 子包 (Phase 14A-B)
+    pipeline_path = os.path.join(pkg_path, "pipeline")
+    actual_pipeline = set()
+    if os.path.isdir(pipeline_path):
+        for f in os.listdir(pipeline_path):
+            if f.endswith(".py") and f != "__init__.py":
+                actual_pipeline.add(f"pipeline.{f[:-3]}")
+        # pipeline/stages/ 子包
+        stages_path = os.path.join(pipeline_path, "stages")
+        if os.path.isdir(stages_path):
+            for f in os.listdir(stages_path):
+                if f.endswith(".py") and f != "__init__.py":
+                    actual_pipeline.add(f"pipeline.stages.{f[:-3]}")
     # 至少 ≥ 计划数 (允许新增模块)
     assert len(actual_top) >= len(TOP_LEVEL_MODULES) - len(actual_pu), (
         f"Top-level modules shrunk: {len(actual_top)} < {len(TOP_LEVEL_MODULES) - len(actual_pu)}. "
@@ -265,6 +293,10 @@ def test_module_count_matches_plan() -> None:
     assert len(actual_llm_ext) >= len(LLM_EXTRACTION_MODULES) - 1, (
         f"llm_extraction modules shrunk: {len(actual_llm_ext)} < {len(LLM_EXTRACTION_MODULES) - 1}. "
         f"Missing: {set(LLM_EXTRACTION_MODULES) - 1 - actual_llm_ext}"
+    )
+    assert len(actual_pipeline) >= len(PIPELINE_MODULES), (
+        f"pipeline/ modules shrunk: {len(actual_pipeline)} < {len(PIPELINE_MODULES)}. "
+        f"Missing: {set(PIPELINE_MODULES) - actual_pipeline}"
     )
 
 
