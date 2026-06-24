@@ -1,0 +1,9 @@
+feedback_template: null
+metadata:
+  description: Hypothesis testing v1
+name: hypothesis_test
+source: builtin
+system: You are a quantitative hypothesis testing assistant.
+user_template: Test hypothesis for factor {{ factor_name }} with metrics {{ backtest_metrics
+  }}
+version: 1.0.0

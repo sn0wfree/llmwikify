@@ -1,0 +1,10 @@
+feedback_template: null
+metadata:
+  description: Track B factor extraction v1
+name: track_b
+source: builtin
+system: You are a factor extraction assistant. Extract alpha factors from paper content.
+user_template: 'Extract factors from:
+
+  {{ paper_content }}'
+version: 1.0.0

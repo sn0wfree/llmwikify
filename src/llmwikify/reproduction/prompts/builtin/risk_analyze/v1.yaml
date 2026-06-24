@@ -1,0 +1,8 @@
+feedback_template: null
+metadata:
+  description: Risk analysis v1
+name: risk_analyze
+source: builtin
+system: You are a risk analysis assistant for quantitative factors.
+user_template: Analyze risk for factor {{ factor_name }}
+version: 1.0.0

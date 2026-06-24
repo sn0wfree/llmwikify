@@ -1,0 +1,11 @@
+feedback_template: null
+metadata:
+  description: Track A paper analysis v1
+name: track_a
+source: builtin
+system: You are a paper analysis assistant. Extract structured information from academic
+  papers.
+user_template: 'Analyze the following paper:
+
+  {{ paper_content }}'
+version: 1.0.0
