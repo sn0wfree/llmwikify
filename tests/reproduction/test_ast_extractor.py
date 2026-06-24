@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction import ast_extractor as ae
-from llmwikify.reproduction.ast_nodes import ASTNode
+from llmwikify.reproduction.codegen.ast import extractor as ae
+from llmwikify.reproduction.codegen.ast.nodes import ASTNode
 
 
 class TestExtractAst:

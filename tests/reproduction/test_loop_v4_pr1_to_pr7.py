@@ -16,8 +16,8 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from src.llmwikify.reproduction.ast_compiler import CompileError, compile_ast
-from src.llmwikify.reproduction.ast_nodes import (
+from src.llmwikify.reproduction.codegen.ast.compiler import CompileError, compile_ast
+from src.llmwikify.reproduction.codegen.ast.nodes import (
     make_call,
     make_col,
     make_lit,
@@ -47,7 +47,7 @@ def test_pr1_get_operator_public_api() -> None:
 
     import inspect
 
-    from src.llmwikify.reproduction import ast_compiler
+    from src.llmwikify.reproduction.codegen.ast import compiler as ast_compiler
     src = inspect.getsource(ast_compiler)
     # Strip comments (lines starting with #) before checking
     code_lines = [
@@ -61,14 +61,14 @@ def test_pr1_get_operator_public_api() -> None:
 
 def test_pr1_resolves_known_op() -> None:
     """PR-1: _resolve_qn_op finds known op via get_operator."""
-    from src.llmwikify.reproduction.ast_compiler import _resolve_qn_op
+    from src.llmwikify.reproduction.codegen.ast.compiler import _resolve_qn_op
     func = _resolve_qn_op("rank")
     assert callable(func)
 
 
 def test_pr1_unknown_op_raises_compile_error() -> None:
     """PR-1: Unknown op raises CompileError with proper kind."""
-    from src.llmwikify.reproduction.ast_compiler import _resolve_qn_op
+    from src.llmwikify.reproduction.codegen.ast.compiler import _resolve_qn_op
     with pytest.raises(CompileError) as exc_info:
         _resolve_qn_op("totally_made_up_op_xyz")
     assert exc_info.value.kind == "UnknownOp"

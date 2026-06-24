@@ -43,10 +43,6 @@ DATA_SOURCE_MODULES = [
 
 # ── 顶层模块 (未搬迁, 28 个) ──────────────────────────────
 TOP_LEVEL_MODULES = [
-    "ast_compiler",
-    "ast_complexity",
-    "ast_extractor",
-    "ast_nodes",
     "backtest",
     "contracts",
     "extract",
@@ -62,7 +58,16 @@ TOP_LEVEL_MODULES = [
     "quantnodes_repro",
     "run",
     "schemas",
+    "sessions",
     "strategies",
+]
+
+# ── codegen/ast/ 子包 (4 个, Phase 6 搬迁) ────────────────────
+CODEGEN_AST_MODULES = [
+    "codegen.ast.compiler",
+    "codegen.ast.nodes",
+    "codegen.ast.complexity",
+    "codegen.ast.extractor",
 ]
 
 # ── codegen/ 子包 (6 个, Phase 5 搬迁) ─────────────────────
@@ -94,7 +99,7 @@ LLM_EXTRACTION_MODULES = [
     "llm_extraction",
 ]
 
-ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + CODEGEN_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
+ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + CODEGEN_MODULES + CODEGEN_AST_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
 
 
 # ── CRITICAL_IMPORTS: 33 个关键 import 语句 ──────────────────
@@ -120,16 +125,16 @@ CRITICAL_IMPORTS = [
     "from llmwikify.reproduction.codegen.react_engine import compile_to_code_react, ReactStep, ReactResult",
     "from llmwikify.reproduction.codegen.compiler import FactorCompiler",
     "from llmwikify.reproduction.codegen.semantic import get_op, list_ops",
-    # 顶层 (16)
+    # codegen/ast/ (4)
+    "from llmwikify.reproduction.codegen.ast.compiler import compile_ast, CompileError",
+    "from llmwikify.reproduction.codegen.ast.nodes import ASTNode, get_op_spec",
+    # 顶层 (14)
     "from llmwikify.reproduction.factor_library import read_factor_yaml, write_factor_yaml",
     "from llmwikify.reproduction.sessions import ReproductionDatabase",
     "from llmwikify.reproduction.quant_wiki import get_quant_wiki",
     "from llmwikify.reproduction.extract_paper import extract_paper_structure, _extract_factors_from_list",
     "from llmwikify.reproduction.factor_backtest import run_factor_backtest, run_factor_backtest_universe",
     "from llmwikify.reproduction.backtest import run_backtest",
-    "from llmwikify.reproduction.ast_compiler import compile_ast, CompileError",
-    "from llmwikify.reproduction.ast_nodes import ASTNode, get_op_spec",
-    "from llmwikify.reproduction.ast_extractor import extract_ast",
     "from llmwikify.reproduction.l5_orchestrator import run_l5_pipeline",
     "from llmwikify.reproduction.l5_validation import run_l5_validation",
     "from llmwikify.reproduction.metrics import evaluation",

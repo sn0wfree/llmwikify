@@ -5,9 +5,9 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from llmwikify.reproduction import ast_compiler as ac
-from llmwikify.reproduction.ast_compiler import CompileError
-from llmwikify.reproduction.ast_nodes import ASTNode, make_col, make_lit
+from llmwikify.reproduction.codegen.ast import compiler as ac
+from llmwikify.reproduction.codegen.ast.compiler import CompileError
+from llmwikify.reproduction.codegen.ast.nodes import ASTNode, make_col, make_lit
 
 
 def _make_rank() -> ASTNode:

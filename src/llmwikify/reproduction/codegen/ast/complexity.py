@@ -16,7 +16,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .ast_nodes import ASTNode
+    from .nodes import ASTNode
 
 
 class ComplexityVerdict(str, Enum):

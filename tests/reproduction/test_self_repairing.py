@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from llmwikify.reproduction.codegen import repair as sr
-from llmwikify.reproduction.ast_nodes import ASTNode
+from llmwikify.reproduction.codegen.ast.nodes import ASTNode
 from llmwikify.reproduction.common.errors import StructuredError
 
 

@@ -165,19 +165,20 @@ EXPECTED_PUBLIC_API = {
         "run_reproduction",
         "RunContext",
     ],
-    "ast_compiler": [
+    # ── codegen/ast/ 子包 (Phase 6) ──
+    "codegen.ast.compiler": [
         "compile_ast",
         "CompileError",
     ],
-    "ast_nodes": [
+    "codegen.ast.nodes": [
         "ASTNode",
         "get_op_spec",
         "is_known_op",
     ],
-    "ast_extractor": [
+    "codegen.ast.extractor": [
         "extract_ast",
     ],
-    "ast_complexity": [
+    "codegen.ast.complexity": [
         "compute_complexity",
     ],
     "strategies": [

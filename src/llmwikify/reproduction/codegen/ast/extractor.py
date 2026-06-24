@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from .ast_nodes import ASTNode
+from .nodes import ASTNode
 
 _JSON_FENCE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 _BARE_JSON = re.compile(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}")

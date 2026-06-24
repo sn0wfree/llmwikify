@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction import ast_complexity as ac
-from llmwikify.reproduction.ast_nodes import ASTNode, make_col, make_lit
+from llmwikify.reproduction.codegen.ast import complexity as ac
+from llmwikify.reproduction.codegen.ast.nodes import ASTNode, make_col, make_lit
 
 
 def _make_rank() -> ASTNode:
@@ -76,7 +76,7 @@ class TestCheckComplexity:
 
     def test_returns_verdict_tuple(self) -> None:
         """check_complexity 返回 (verdict, message) tuple."""
-        from llmwikify.reproduction.ast_complexity import ComplexityVerdict
+        from llmwikify.reproduction.codegen.ast.complexity import ComplexityVerdict
         result = ac.check_complexity(_make_rank())
         assert isinstance(result, tuple)
         assert len(result) == 2

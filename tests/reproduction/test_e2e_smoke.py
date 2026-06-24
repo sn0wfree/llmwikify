@@ -19,8 +19,7 @@ ALL_TOP_MODULES = [
     "data_source.router", "data_source.universe", "data_source.quantnodes_adapter",
     "data_source.akshare", "data_source.clickhouse", "data_source.ifind",
     # 顶层
-    "ast_compiler", "ast_complexity", "ast_extractor",
-    "ast_nodes", "backtest",
+    "backtest",
     "contracts", "extract",
     "extract_factors", "extract_paper", "factor_backtest",
     "factor_library", "factor_value_store",
@@ -31,6 +30,9 @@ ALL_TOP_MODULES = [
     # codegen/ (Phase 5)
     "codegen.llm_code", "codegen.react_engine", "codegen.compiler",
     "codegen.repair", "codegen.semantic", "codegen.metadata",
+    # codegen/ast/ (Phase 6)
+    "codegen.ast.compiler", "codegen.ast.nodes",
+    "codegen.ast.complexity", "codegen.ast.extractor",
 ]
 
 LLM_EXTRACTION_MODULES = [

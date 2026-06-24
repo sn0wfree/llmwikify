@@ -11,7 +11,7 @@ from typing import Any
 
 import polars as pl
 
-from .ast_nodes import ASTNode, get_op_spec, is_known_op
+from .nodes import ASTNode, get_op_spec, is_known_op
 
 
 class CompileError(Exception):
@@ -113,11 +113,11 @@ def _resolve_semantic_op(op: str, kwargs: dict[str, Any]):
 
     Returns None if op is not a registered semantic op.
     """
-    from .semantic_registry import get_op
+    from ..semantic import get_op
 
     if get_op(op) is None:
         return None
-    from .semantic_registry import instantiate
+    from ..semantic import instantiate
     return instantiate(op, kwargs)
 
 
