@@ -19,6 +19,12 @@ system: |
   - L3 (Financial Understanding): intuition, market behavior, theory
   - L4 (Meaning): testable hypotheses with expected IC sign (L4 meaning_summary filled by L5)
 
+  Classification:
+  - asset_type: stock / futures / options / crypto / bond
+  - category: price (价量) / fundamental (基本面) / composite (复合) / alternative (另类)
+  - subcategory: momentum / reversal / volatility / value / growth / quality / liquidity / size / alpha / signal
+  - If unsure, use "alpha" as default subcategory.
+
   Self-assessment: For EACH signal in the batch, evaluate if
   context_excerpt is sufficient.
 
@@ -71,6 +77,11 @@ user: |
     "factors": [
       {
         "name": "{{ signals[0].name }}",
+        "classification": {
+          "asset_type": "stock",
+          "category": "price",
+          "subcategory": "momentum"
+        },
         "l1": {
           "definition": "string (one-sentence definition in Chinese)",
           "formula": "string (mathematical formula in LaTeX or text)",

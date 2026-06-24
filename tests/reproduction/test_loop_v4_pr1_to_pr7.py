@@ -211,10 +211,10 @@ def test_pr4_compute_factor_values_ast_compiled_branch() -> None:
 
 
 def test_pr4_paper_multi_factor_uses_run_factor_backtest_universe() -> None:
-    """PR-4: paper.py uses run_factor_backtest_universe(close_wide=...) correctly.
+    """PR-4: paper.py delegates to UnifiedWorkflow (workflow-pipeline separation).
 
-    Verifies that the call signature is correct (would have raised TypeError
-    with old data_router/symbols/start_date/end_date args).
+    Verifies that paper.py no longer contains the old multi-factor backtest
+    implementation and instead calls UnifiedWorkflow.run().
     """
     import inspect
 
@@ -223,8 +223,10 @@ def test_pr4_paper_multi_factor_uses_run_factor_backtest_universe() -> None:
     src = inspect.getsource(paper)
     assert "data_router=router" not in src, "old kwargs bug removed"
     assert "cost_bps=15.0" not in src, "old kwargs bug removed"
-    assert "close_wide=close_wide" in src, "new signature adopted"
-    assert "ast_compiled" in src, "AST path adopted"
+    assert "close_wide=close_wide" not in src, "old backtest code removed"
+    assert "ast_compiled" not in src, "old AST path removed"
+    assert "UnifiedWorkflow" in src, "uses UnifiedWorkflow"
+    assert "workflow.run" in src, "calls workflow.run"
 
 
 # ─── PR-5: Semantic Registry ────────────────────────────────

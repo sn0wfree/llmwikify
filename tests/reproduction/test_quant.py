@@ -470,71 +470,6 @@ class TestFactorLibraryAPI:
         assert loaded["factor"]["name"] == "new_factor"
 
 
-# ── _extract_factor_from_page Tests ──────────────────────────
-
-
-class TestExtractFactorFromPage:
-    """Tests for the factor page-to-YAML converter."""
-
-    def test_extract_factor_from_page(self):
-        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
-
-        page = {
-            "page_name": "factor-test-paper-momentum",
-            "content": (
-                "---\ntitle: Momentum Factor\n"
-                "factor_class: momentum\n"
-                "factor_params: {lookback: 20}\n"
-                "signal_type: momentum\n"
-                "signal_params: {lookback: 20}\n"
-                "status: draft\n---\n\n"
-                "# Factor\n\nSome content"
-            ),
-        }
-        result = _extract_factor_from_page(page, "test-paper")
-        # Returns {"name": path, "factor": dict}
-        assert "name" in result
-        assert "factor" in result
-        # Name is a proper path: stock/price/momentum-factor
-        assert result["name"] == "stock/price/momentum-factor"
-        factor = result["factor"]
-        assert factor["l1"]["definition"] == "Factor extracted from test-paper"
-        # frontmatter may parse as string or int depending on YAML parser
-        params = factor["l1"]["default_params"]
-        assert params["lookback"] == 20 or params["lookback"] == "20"
-        assert factor["l2"]["complexity"] == "O(T × N)"
-        assert factor["asset_type"] == "stock"
-        assert factor["category"] == "price"
-
-    def test_extract_factor_string_params(self):
-        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
-
-        page = {
-            "page_name": "factor-test-rsi",
-            "content": (
-                "---\ntitle: RSI\n"
-                "factor_class: rsi\n"
-                "signal_params: '{\"period\": 14}'\n"
-                "signal_type: rsi\n---\n"
-            ),
-        }
-        result = _extract_factor_from_page(page, "test")
-        assert result["factor"]["l1"]["default_params"] == {"period": 14}
-
-    def test_extract_factor_missing_fields(self):
-        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
-
-        page = {
-            "page_name": "factor-test-unknown",
-            "content": "---\ntitle: Unknown\n---\n",
-        }
-        result = _extract_factor_from_page(page, "test")
-        # generate_slug("Unknown") = "unknown"
-        assert result["name"] == "stock/price/unknown"
-        assert result["factor"]["l1"]["definition"] == "Factor extracted from test"
-        assert result["factor"]["l1"]["default_params"] == {}
-
-
 # ── QuantWiki / FactorLibrary Edge Case Tests ────────────────
 
 
@@ -1449,68 +1384,8 @@ class TestFactorLibraryIndexSync:
 # Paper Edge Case Tests
 # ═══════════════════════════════════════════════════════════════
 
-class TestPaperExtractEdgeCases:
-    """Edge cases for _extract_factor_from_page."""
-
-    def test_custom_category(self):
-        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
-        page = {
-            "page_name": "factor-test",
-            "content": "---\ntitle: Value Factor\ncategory: fundamental\nsubcategory: value\nasset_type: stock\n---\n",
-        }
-        result = _extract_factor_from_page(page, "test")
-        assert result["name"] == "stock/fundamental/value-factor"
-        assert result["factor"]["category"] == "fundamental"
-        # subcategory comes from factor_class, not frontmatter subcategory
-        assert result["factor"]["subcategory"] == "unknown"
-
-    def test_nested_signal_params(self):
-        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
-        page = {
-            "page_name": "factor-test",
-            "content": (
-                "---\ntitle: Complex Factor\n"
-                "factor_class: momentum\n"
-                "signal_params: '{\"fast\": 5, \"slow\": 20}'\n---\n"
-            ),
-        }
-        result = _extract_factor_from_page(page, "test")
-        params = result["factor"]["l1"]["default_params"]
-        assert params["fast"] == 5 or params["fast"] == "5"
-        assert params["slow"] == 20 or params["slow"] == "20"
-
-    def test_empty_content(self):
-        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
-        page = {"page_name": "factor-test", "content": ""}
-        result = _extract_factor_from_page(page, "test")
-        assert result["name"] == "stock/price/factor-test"
-        assert result["factor"]["l1"]["definition"] == "Factor extracted from test"
-
-    def test_no_frontmatter(self):
-        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
-        page = {"page_name": "factor-test", "content": "Just some content without frontmatter"}
-        result = _extract_factor_from_page(page, "test")
-        assert result["factor"]["subcategory"] == "unknown"
-
-    def test_factor_has_all_six_layers(self):
-        from llmwikify.interfaces.server.http.paper import _extract_factor_from_page
-        page = {
-            "page_name": "factor-test",
-            "content": "---\ntitle: Test\ncategory: price\n---\n",
-        }
-        result = _extract_factor_from_page(page, "test")
-        factor = result["factor"]
-        assert "l1" in factor
-        assert "l2" in factor
-        assert "l3" in factor
-        assert "l4" in factor
-        assert "l5" in factor
-        assert "l6" in factor
-
-
-# ═══════════════════════════════════════════════════════════════
-# FactorLibrary read_factor_yaml Edge Cases
-# ═══════════════════════════════════════════════════════════════
+class TestFactorLibraryReadEdgeCases:
+    """Edge cases for factor_library.read_factor_yaml."""
 
 class TestFactorLibraryReadEdgeCases:
     """Edge cases for factor_library.read_factor_yaml."""

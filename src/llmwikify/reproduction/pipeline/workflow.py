@@ -79,14 +79,15 @@ def _track_b_to_factor(detail: dict, paper_id: str) -> dict:
     from ..common.utils import generate_slug
 
     slug = generate_slug(detail.get("name", "unknown"))
+    cls = detail.get("classification", {})
     return {
         "name": slug,
         "factor": {
             "name": slug,
             "name_cn": (detail.get("description") or detail.get("name", ""))[:50],
-            "asset_type": "stock",
-            "category": "alpha",
-            "subcategory": "paper_derived",
+            "asset_type": cls.get("asset_type", "stock"),
+            "category": cls.get("category", "price"),
+            "subcategory": cls.get("subcategory", "alpha"),
             "version": 1,
             "source_paper": paper_id,
             "status": "draft",

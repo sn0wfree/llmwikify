@@ -123,6 +123,7 @@ class SignalDetail:
     """Pass 2 output: full L1-L4 factor metadata."""
     name: str
     description: str = ""
+    classification: dict = field(default_factory=dict)
     l1: dict = field(default_factory=dict)
     l2: dict = field(default_factory=dict)
     l3: dict = field(default_factory=dict)
@@ -1058,6 +1059,7 @@ def _run_pass2_one(
     return SignalDetail(
         name=signal_stub.name,
         description=str(factor.get("description", signal_stub.description)),
+        classification=factor.get("classification", {}),
         l1=factor.get("l1", {}),
         l2=factor.get("l2", {}),
         l3=factor.get("l3", {}),
@@ -1154,6 +1156,7 @@ async def _run_pass2_one_async(
         return signal_stub, SignalDetail(
             name=signal_stub.name,
             description=str(factor.get("description", signal_stub.description)),
+            classification=factor.get("classification", {}),
             l1=factor.get("l1", {}),
             l2=factor.get("l2", {}),
             l3=factor.get("l3", {}),
@@ -1267,6 +1270,7 @@ def _build_signal_detail(stub: SignalStub, factor: dict, latency_ms: int) -> Sig
     return SignalDetail(
         name=stub.name,
         description=str(factor.get("description", stub.description)),
+        classification=factor.get("classification", {}),
         l1=l1 if isinstance(l1, dict) else {},
         l2=l2 if isinstance(l2, dict) else {},
         l3=l3 if isinstance(l3, dict) else {},
