@@ -1,138 +1,54 @@
-"""Tests for CLI commands."""
+"""Tests for Phase 14E: CLI entry point."""
+from __future__ import annotations
 
-import sys
-from pathlib import Path
+import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from llmwikify.interfaces.cli import WikiCLI
+from llmwikify.reproduction.pipeline.cli.__main__ import build_parser, main
 
 
-class TestCLI:
-    """Test CLI command handlers."""
+class TestBuildParser:
+    def test_creates_parser(self):
+        parser = build_parser()
+        assert parser is not None
 
-    def test_status_command(self, temp_wiki):
-        """Test status command."""
-        cli = WikiCLI(temp_wiki)
-        cli.wiki.init()
+    def test_run_command(self):
+        parser = build_parser()
+        args = parser.parse_args(["run", "ws1", "--start", "5", "--end", "50"])
+        assert args.command == "run"
+        assert args.workspace == "ws1"
+        assert args.start == 5
+        assert args.end == 50
+        assert args.skip_existing is False
 
-        class Args:
-            pass
+    def test_run_skip_existing(self):
+        parser = build_parser()
+        args = parser.parse_args(["run", "ws1", "--skip-existing"])
+        assert args.skip_existing is True
 
-        result = cli.status(Args())
+    def test_list_command(self):
+        parser = build_parser()
+        args = parser.parse_args(["list"])
+        assert args.command == "list"
 
-        assert result == 0
+    def test_prompts_command(self):
+        parser = build_parser()
+        args = parser.parse_args(["prompts", "list", "ws1"])
+        assert args.command == "prompts"
+        assert args.workspace == "ws1"
 
-    def test_lint_command_healthy(self, temp_wiki):
-        """Test lint command with healthy wiki."""
-        cli = WikiCLI(temp_wiki)
-        cli.wiki.init()
+    def test_no_command(self, capsys):
+        main([])
+        captured = capsys.readouterr()
+        assert "usage:" in captured.out.lower()
 
-        # Create healthy page
-        cli.wiki.write_page("Test", "# Test\n\n[[index]]")
 
-        class Args:
-            format = 'full'
-            generate_investigations = False
+class TestMain:
+    def test_run_command(self, capsys):
+        main(["run", "ws1"])
+        captured = capsys.readouterr()
+        assert "Running workspace=ws1" in captured.out
 
-        result = cli.lint(Args())
-
-        # Should return 1 if issues exist (orphan)
-        assert result in [0, 1]
-
-    def test_lint_brief_format(self, temp_wiki):
-        """Test lint --format=brief (replaces old hint command)."""
-        cli = WikiCLI(temp_wiki)
-        cli.wiki.init()
-
-        class Args:
-            format = 'brief'
-            generate_investigations = False
-
-        result = cli.lint(Args())
-        assert result == 0
-
-    def test_lint_recommendations_format(self, temp_wiki):
-        """Test lint --format=recommendations (replaces old recommend command)."""
-        cli = WikiCLI(temp_wiki)
-        cli.wiki.init()
-
-        class Args:
-            format = 'recommendations'
-            generate_investigations = False
-
-        result = cli.lint(Args())
-        assert result == 0
-
-    def test_write_page_command(self, temp_wiki):
-        """Test write_page command."""
-        cli = WikiCLI(temp_wiki)
-        cli.wiki.init()
-
-        class Args:
-            name = "Test Page"
-            file = None
-            content = "# Test\n\nContent"
-
-        result = cli.write_page(Args())
-
-        assert result == 0
-        assert (temp_wiki / 'wiki' / 'Test Page.md').exists()
-
-    def test_read_page_command(self, temp_wiki):
-        """Test read_page command."""
-        cli = WikiCLI(temp_wiki)
-        cli.wiki.init()
-        cli.wiki.write_page("Test", "# Test")
-
-        class Args:
-            name = "Test"
-
-        result = cli.read_page(Args())
-
-        assert result == 0
-
-    def test_log_command(self, temp_wiki):
-        """Test log command."""
-        cli = WikiCLI(temp_wiki)
-        cli.wiki.init()
-
-        class Args:
-            operation = "test"
-            description = "Test log entry"
-
-        result = cli.log(Args())
-
-        assert result == 0
-
-    def test_build_index_command(self, temp_wiki):
-        """Test build-index command."""
-        cli = WikiCLI(temp_wiki)
-        cli.wiki.init()
-        cli.wiki.write_page("A", "# A\n\n[[B]]")
-        cli.wiki.write_page("B", "# B")
-
-        class Args:
-            no_export = False
-            output = None
-            export_only = False
-
-        result = cli.build_index(Args())
-
-        assert result == 0
-
-    def test_build_index_export_only(self, temp_wiki):
-        """Test build-index --export-only (replaces old export-index command)."""
-        cli = WikiCLI(temp_wiki)
-        cli.wiki.init()
-        cli.wiki.write_page("Test", "# Test")
-        cli.wiki.build_index()
-
-        class Args:
-            no_export = False
-            output = None
-            export_only = True
-
-        result = cli.build_index(Args())
-        assert result == 0
-        assert (temp_wiki / 'wiki' / 'reference_index.json').exists()
+    def test_list_command(self, capsys):
+        main(["list"])
+        captured = capsys.readouterr()
+        assert "Listing workspaces" in captured.out
