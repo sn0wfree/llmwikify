@@ -7,35 +7,37 @@ factor:
     ast_compile_source: null
     ast_compiled_at: 1782094275.9388237
     ast_compile_error: null
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Inner: if returns\
-      \ < 0 then stddev(returns, 20) else close\n    inner = pl.when(pl.col('returns')\
-      \ < 0).then(\n        rolling_std(pl.col('returns'), window=20)\n    ).otherwise(pl.col('close'))\n\
-      \n    # SignedPower: sign(x) * abs(x)^2\n    signed = inner.sign() * (inner.abs()\
-      \ ** 2)\n\n    # Ts_ArgMax with 5-day window\n    argmax = ts_argmax(signed,\
-      \ window=5)\n\n    # Cross-sectional rank, centred around zero\n    factor =\
-      \ rank(argmax).over('date') - 0.5\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Rule 2: materialize\
+      \ rolling_std first\n    df = df.with_columns(rolling_std(pl.col('returns'),\
+      \ window=20).alias('_std'))\n    \n    # Conditional: if returns < 0 then stddev\
+      \ else close\n    inner = pl.when(pl.col('returns') < 0).then(pl.col('_std')).otherwise(pl.col('close'))\n\
+      \    \n    # SignedPower(inner, 2) = sign(x) * |x|^2\n    signed_pow = inner.sign()\
+      \ * (inner.abs() ** 2)\n    \n    # Rule 2: materialize ts_argmax\n    df =\
+      \ df.with_columns(ts_argmax(signed_pow, window=5).alias('_argmax'))\n    \n\
+      \    # Cross-sectional rank, subtract 0.5\n    factor = rank(pl.col('_argmax')).over('date')\
+      \ - 0.5\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 544
+    code_chars: 695
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_001.h5
     overall_assessment:
-      score: 60
+      score: 59
       status: 通过
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.032644310087837906
-      icir: 0.2238193454409272
-      winrate: 0.5932203389830508
+      ic_mean: 0.03292231803690892
+      icir: 0.19790527956601595
+      winrate: 0.559322033898305
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 4.241492464851504e-05
+      annual_return: 6.750127580334997e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.039131664102797434
-      validated_at: 1782144112.1808612
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.03798071193955768
+      validated_at: 1782286406.7817802
+    validation_date: '2026-06-24'
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: '(rank(Ts_ArgMax(SignedPower(((returns < 0) ? stddev(returns, 20)
       : close), 2.), 5)) - 0.5)'

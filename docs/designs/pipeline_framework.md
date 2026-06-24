@@ -4782,3 +4782,5 @@ reproduction/
 ---
 
 **文档完成**. 涵盖 101 alpha 端到端设计 + 4 层架构 + prompts/ 子系统 + 三层 ReAct + 7 子包拆分 + 20 阶段实施计划 + 单元测试纪律 + 5 个 Gate 验证 + 风险评估 + 决策记录 + AI 执行原则 + 单元测试完整规划 + Python 设计模式集成 + 部署与运维 + 实施总结.
+
+**下一步**: 见 [workflow-pipeline-separation.md](workflow-pipeline-separation.md) — pipeline (通用工具) + workflow (任务编排) + paper.py (HTTP 薄包装) 三层分离设计.
