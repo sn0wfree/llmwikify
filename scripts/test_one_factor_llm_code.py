@@ -31,7 +31,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from llmwikify.reproduction.codegen_utils import (
+from llmwikify.reproduction.codegen.llm_code import (
     SYSTEM_PROMPT_CODE,
     build_llm_client,
     execute_code,
@@ -274,7 +274,7 @@ def _llm_code_react(
 
     Returns (code, factor_series, error, react_result_dict).
     """
-    from llmwikify.reproduction.factor_compiler_react import (
+    from llmwikify.reproduction.codegen.react_engine import (
         ReactStep,
         compile_to_code_react,
     )
@@ -490,7 +490,7 @@ def persist_code_to_yaml(
     (FactorDetail.tsx L5Content → OverallAssessment.tsx).
     L2-L6 populated by Phase 3 LLM extraction (overwrites this default).
     """
-    from llmwikify.reproduction.factor_library import (
+    from llmwikify.reproduction.persist.factor_library import (
         read_factor_yaml,
         write_factor_yaml,
     )
@@ -617,7 +617,7 @@ def save_backtest_to_db(
         return None if isinstance(v, float) and math.isnan(v) else v
 
     try:
-        from llmwikify.reproduction.sessions import ReproductionDatabase
+        from llmwikify.reproduction.persist.sessions import ReproductionDatabase
         db = ReproductionDatabase()
         run_id = f"pipeline_a_{alpha_index:03d}"
         # Create a session first (FK constraint on reproduction_results.session_id)
