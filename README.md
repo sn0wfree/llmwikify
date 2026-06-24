@@ -75,13 +75,28 @@ Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
 - **Agent runtime** (`apps/agent/`) — DreamEditor (async proposal + human confirmation), Scheduler (croniter), Hooks, Notifications
 
 ### Quant Reproduction (`reproduction/`) — first-class
+
+> **20-phase refactor complete** (2026-06-24): 8 subpackages, 0 top-level files.
+
+| Subpackage | Purpose |
+|------------|---------|
+| `common/` | 基础设施 (config, paths, errors, utils, llm_factory) |
+| `data_source/` | 数据源 (router, universe, akshare, clickhouse, ifind) |
+| `codegen/` | 代码生成 (llm_code, react_engine, compiler, repair, semantic, metadata, ast/) |
+| `prompts/` | Prompt 系统 (group, registry, loader, renderer, store, builtin/) |
+| `backtest_pkg/` | 回测 (factor_backtest, run_backtest, metrics, strategies, l5_validation, l5_orchestrator) |
+| `persist/` | 持久化 (factor_library, sessions, run) |
+| `paper_understanding/` | 论文理解 (extract_paper, extract_factors, extract_strategy, quant_wiki, schemas, contracts, llm_extraction/) |
+| `pipeline/` | 流水线框架 (config, runner, workspace, react, stages/) |
+
 - **Paper Extraction Pipeline** — Trigger via `POST /api/paper/start`; PDF/Markdown → structured JSON via `repro_extract.yaml`, `repro_factor.yaml`, `repro_factor_full.yaml` prompts
 - **6-layer Factor YAML** — `quant/factors/{asset_type}/{category}/{slug}.yaml` covering L1 logic, L2 computation, L3 financial intuition, L4 hypotheses, L5 validation, L6 risk; see [docs/designs/factor_library_framework.md](docs/designs/factor_library_framework.md)
-- **Factor library API** (`factor_library.py`) — Read/write YAML, rebuild `quant/factors/index.yaml`, list by category
-- **Factor value store** (`factor_value_store.py`) — DuckDB long-table `factor_values(date, stock, factor_name, value)` at `quant/factor.duckdb`
-- **Backtesting** (`factor_backtest.py`) — Single-stock + cross-sectional, IC/RankIC, quantile groups, long-short, tradability filter
-- **L5 reflection** (`l5_orchestrator.py`, `l5_validation.py`) — Stability analysis, OOS K-fold, reflection-driven optimisation
+- **Factor library API** (`persist/factor_library.py`) — Read/write YAML, rebuild `quant/factors/index.yaml`, list by category
+- **Factor value store** (`backtest_pkg/factor_value_store.py`) — DuckDB long-table `factor_values(date, stock, factor_name, value)` at `quant/factor.duckdb`
+- **Backtesting** (`backtest_pkg/factor_backtest.py`) — Single-stock + cross-sectional, IC/RankIC, quantile groups, long-short, tradability filter
+- **L5 reflection** (`backtest_pkg/l5_orchestrator.py`, `l5_validation.py`) — Stability analysis, OOS K-fold, reflection-driven optimisation
 - **Multi-factor / Parquet** — 101 Formulaic Alphas style multi-factor extraction; local Parquet ingestion + LLM-generated factor formula code
+- **Pipeline Framework** (`pipeline/`) — Config-driven pipeline with 4 stages (paper_understanding, codegen, backtest, persist_factor), ReAct-based error recovery, CLI entry point
 
 ### Web UI
 - **React + TypeScript SPA** (Vitest tested)
@@ -474,7 +489,7 @@ See [Configuration Guide](docs/CONFIGURATION_GUIDE.md) for full options.
 ```bash
 pytest                                # 3100+ tests collected
 pytest --cov=src/llmwikify             # With coverage
-pytest tests/reproduction/             # Quant reproduction tests
+pytest tests/reproduction/             # Quant reproduction tests (1313 passed)
 pytest tests/test_apps_chat_agent_react_engine.py  # ReAct engine
 
 # Frontend tests

@@ -141,22 +141,18 @@ src/llmwikify/
 │       ├── scheduler/            # croniter-based task scheduler
 │       └── tools/
 │
-├── reproduction/                 # Quant reproduction pipeline
-│   ├── extract_paper.py          # Stage 1: paper → structured JSON
-│   ├── extract_factors.py        # Stage 2: paper understanding → factor list
-│   ├── llm_extraction/           # 6-layer extraction helpers
-│   ├── factor_library.py         # 6-layer Factor YAML CRUD + index.yaml
-│   ├── factor_value_store.py     # DuckDB factor_values store
-│   ├── factor_backtest.py        # Single + cross-section backtest
-│   ├── backtest.py               # Strategy backtest
-│   ├── strategies.py / universe.py / metrics.py
-│   ├── l5_orchestrator.py        # L5 reflection orchestrator
-│   ├── l5_validation.py          # Stability + OOS K-fold validation
-│   ├── quant_wiki.py             # quant/ directory layout
-│   ├── paths.py / config.py / contracts.py / schemas.py
-│   ├── router.py / run.py / run_id.py / sessions.py
-│   ├── ifind_data.py / quantnodes_adapter.py
-│   └── utils.py
+├── reproduction/                 # Quant reproduction pipeline (20-phase refactor complete)
+│   ├── common/                   # 基础设施 (config, paths, errors, utils, llm_factory, run_id, telemetry)
+│   ├── data_source/              # 数据源 (router, universe, quantnodes_adapter, akshare, clickhouse, ifind)
+│   ├── codegen/                  # 代码生成 (llm_code, react_engine, compiler, repair, semantic, metadata)
+│   │   └── ast/                  # AST 处理 (compiler, nodes, complexity, extractor)
+│   ├── prompts/                  # Prompt 系统 (group, registry, loader, renderer, store)
+│   │   └── builtin/              # 内置模板 (code_gen, react_feedback, metadata_extract, track_a/b, hypothesis_test, risk_analyze)
+│   ├── backtest_pkg/             # 回测 (factor_backtest, run_backtest, metrics, strategies, l5_validation, l5_orchestrator, factor_value_store, quantnodes_repro)
+│   ├── persist/                  # 持久化 (factor_library, sessions, run)
+│   ├── paper_understanding/      # 论文理解 (extract_paper, extract_factors, extract_strategy, quant_wiki, schemas, contracts)
+│   │   └── llm_extraction/       # LLM 提取 (orchestrator, planner, track_a, track_b, validator, ...)
+│   └── pipeline/                 # 流水线框架 (config, runner, workspace, react, stages/)
 │
 └── interfaces/
     ├── cli/
@@ -341,6 +337,8 @@ flow routes every chat request through `ChatReActBridge → ReActEngine`:
 
 ## Reproduction Pipeline (`reproduction/`)
 
+> **20-phase refactor complete** (2026-06-24): 8 subpackages, 0 top-level files.
+
 The reproduction module is intentionally separate from the wiki engine.
 Its canonical storage is the project-level `quant/` directory:
 
@@ -373,17 +371,17 @@ Reference: [docs/designs/factor_library_framework.md](docs/designs/factor_librar
 ```
 POST /api/paper/start
   → kernel.ingest_source()                    # PDF/DOCX/URL/MD via MarkItDown
-  → reproduction.extract_paper.extract_paper_structure()    (repro_extract.yaml)
-  → reproduction.extract_factors.extract_factors()          (repro_factor.yaml)
+  → paper_understanding.extract_paper.extract_paper_structure()    (repro_extract.yaml)
+  → paper_understanding.extract_factors.extract_factors()          (repro_factor.yaml)
         OR repro_factor_full.yaml (single-call 6-layer)
   → interfaces.server.http.paper._extract_factor_from_page()
         → 6-layer dict (L5/L6 left empty by default)
-  → reproduction.factor_library.write_factor_yaml()
+  → persist.factor_library.write_factor_yaml()
         → quant/factors/.../*.yaml
         → rebuild quant/factors/index.yaml
-  → (optional) reproduction.factor_backtest.run_factor_backtest()
+  → (optional) backtest_pkg.factor_backtest.run_factor_backtest()
         → quant/factorbacktest/*.md + DuckDB
-  → (optional) reproduction.l5_orchestrator (stability + OOS K-fold)
+  → (optional) backtest_pkg.l5_orchestrator (stability + OOS K-fold)
         → fill L5 / suggest L6
 ```
 
@@ -391,14 +389,14 @@ POST /api/paper/start
 
 | Module | Function | Purpose |
 |--------|----------|---------|
-| `factor_library.py` | `read_factor_yaml`, `write_factor_yaml`, `list_factors`, `list_factors_by_category`, `update_index` | 6-layer YAML CRUD |
-| `factor_value_store.py` | `compute_and_store_factor`, `query_factor_values`, `list_stored_factors`, `store_factor_values` | DuckDB long-table |
-| `factor_backtest.py` | `run_factor_backtest`, `run_factor_backtest_universe`, `_compute_factor_values` | Single-stock + cross-sectional |
-| `l5_orchestrator.py` / `l5_validation.py` | Reflection + stability + OOS K-fold | Drive L5 |
-| `quant_wiki.py` | Directory layout helpers | `quant/` scaffolding |
-| `extract_paper.py` / `extract_factors.py` | LLM extraction stages | Paper → JSON → factors |
-| `llm_extraction/` | Helpers for 6-layer JSON extraction | Multi-call merge |
-| `ifind_data.py` / `quantnodes_adapter.py` | External data adapters | iFinD + QuantNodes |
+| `persist/factor_library.py` | `read_factor_yaml`, `write_factor_yaml`, `list_factors`, `list_factors_by_category`, `update_index` | 6-layer YAML CRUD |
+| `backtest_pkg/factor_value_store.py` | `compute_and_store_factor`, `query_factor_values`, `list_stored_factors`, `store_factor_values` | DuckDB long-table |
+| `backtest_pkg/factor_backtest.py` | `run_factor_backtest`, `run_factor_backtest_universe`, `_compute_factor_values` | Single-stock + cross-sectional |
+| `backtest_pkg/l5_orchestrator.py` / `l5_validation.py` | Reflection + stability + OOS K-fold | Drive L5 |
+| `paper_understanding/quant_wiki.py` | Directory layout helpers | `quant/` scaffolding |
+| `paper_understanding/extract_paper.py` / `extract_factors.py` | LLM extraction stages | Paper → JSON → factors |
+| `paper_understanding/llm_extraction/` | Helpers for 6-layer JSON extraction | Multi-call merge |
+| `data_source/ifind.py` / `quantnodes_adapter.py` | External data adapters | iFinD + QuantNodes |
 
 ### Supported factor families (`_compute_factor_values`)
 
