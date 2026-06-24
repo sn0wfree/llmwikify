@@ -175,6 +175,7 @@ def extract_factor_metadata(
     existing_metadata: dict | None = None,
     temperature: float = 0.3,
     max_retries: int = 1,
+    prompts: Any | None = None,
 ) -> dict:
     """Single LLM call returns L2/L3/L4/L6 structured metadata.
 
@@ -185,6 +186,8 @@ def extract_factor_metadata(
         existing_metadata: Phase 1 output (l2/l3/l4) for verification.
         temperature: LLM sampling temperature.
         max_retries: Retry on JSON parse failure.
+        prompts: Optional PromptRegistry. When provided, looks up "metadata_extract"
+                 prompt from registry (v2 if existing_metadata, v1 otherwise).
 
     Returns:
         Dict with keys: l2, l3, l4, l6 (each possibly empty dict on failure).
@@ -202,7 +205,15 @@ def extract_factor_metadata(
         user_parts.append("\n请输出 L2/L3/L4/L6 metadata 的 JSON.")
 
     user_prompt = "\n".join(user_parts)
-    system_prompt = SYSTEM_PROMPT_METADATA_V2 if existing_metadata else SYSTEM_PROMPT_METADATA
+    if prompts is not None:
+        try:
+            version = "2.0.0" if existing_metadata else "1.0.0"
+            group = prompts.get("metadata_extract", version=version)
+            system_prompt = group.system
+        except (KeyError, AttributeError):
+            system_prompt = SYSTEM_PROMPT_METADATA_V2 if existing_metadata else SYSTEM_PROMPT_METADATA
+    else:
+        system_prompt = SYSTEM_PROMPT_METADATA_V2 if existing_metadata else SYSTEM_PROMPT_METADATA
 
     logger.info("[factor_extractor] extract_factor_metadata: formula_len=%d, code_len=%d, existing=%s",
                len(formula_brief), len(code), "yes" if existing_metadata else "no")
