@@ -318,7 +318,7 @@ def single(ctx, ..., pass2_mode, max_concurrency, pass2_config):
 ### 5.3 Test Compatibility
 
 - `tests/reproduction/test_track_b_*.py` 中可能 import 模块常量
-- 改为 `from llmwikify.reproduction.llm_extraction.config import Pass2Config`
+- 改为 `from llmwikify.reproduction.paper_understanding.llm_extraction.config import Pass2Config`
 - 显式构造测试 fixture
 
 ## 6. Risk & Mitigation

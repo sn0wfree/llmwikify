@@ -181,7 +181,7 @@ l4:
 ## API Reference
 
 ```python
-from llmwikify.reproduction.llm_extraction import run_one_paper
+from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper
 
 result = run_one_paper(
     paper_id="my_paper",

@@ -931,7 +931,7 @@ Phase 14E 完成后, 旧 CLI 可选切换到 `PipelineRunner` (功能等价):
 ```python
 # interfaces/cli/commands/reproduce_cmd.py 内部 (Phase 14E 后)
 from llmwikify.reproduction.pipeline import PipelineRunner  # 新
-# from llmwikify.reproduction.llm_extraction import run_one_paper  # 旧
+# from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper  # 旧
 ```
 
 ## 8. 与 WebUI 集成
@@ -1208,7 +1208,7 @@ from llmwikify.reproduction.router import DataRouter
 from llmwikify.reproduction.universe import resolve_universe
 from llmwikify.reproduction.factor_value_store import ...
 from llmwikify.reproduction.backtest import run_backtest
-from llmwikify.reproduction.llm_extraction import run_one_paper
+from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper
 ```
 
 #### 🟠 R6. `scripts/` 死代码与 101 alpha 真实代码混在一起
@@ -1395,7 +1395,7 @@ Week 2
 
 验证:
   - python -c "from llmwikify.reproduction.factor_library import read_factor_yaml"
-  - python -c "from llmwikify.reproduction.llm_extraction import run_one_paper"
+  - python -c "from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper"
   - python -c "from llmwikify.reproduction.quant_wiki import get_quant_wiki"
   - 启动 WebUI (curl http://localhost:8765/api/health)
 ```
@@ -1734,7 +1734,7 @@ CRITICAL_IMPORTS = [
     "from llmwikify.reproduction.router import DataRouter",
     "from llmwikify.reproduction.universe import resolve_universe",
     "from llmwikify.reproduction.backtest import run_backtest",
-    "from llmwikify.reproduction.llm_extraction import run_one_paper",
+    "from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper",
     "from llmwikify.reproduction.codegen_utils import generate_factor_code",
     "from llmwikify.reproduction.factor_compiler_react import compile_to_code_react",
     "from llmwikify.reproduction.ast_compiler import compile_ast",
@@ -2128,7 +2128,7 @@ def test_generate_slug():
     assert generate_slug("Hello World") == "hello-world"
 
 def test_build_default_client():
-    from llmwikify.reproduction.llm_extraction.llm_factory import build_default_client
+    from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import build_default_client
     client = build_default_client()
     assert client is not None
 ```
@@ -2198,7 +2198,7 @@ CRITICAL_IMPORTS = [
     "from llmwikify.reproduction.router import DataRouter",
     "from llmwikify.reproduction.universe import resolve_universe",
     "from llmwikify.reproduction.backtest import run_backtest",
-    "from llmwikify.reproduction.llm_extraction import run_one_paper",
+    "from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper",
     "from llmwikify.reproduction.codegen_utils import generate_factor_code, SYSTEM_PROMPT_CODE",
     "from llmwikify.reproduction.factor_compiler_react import compile_to_code_react, ReactStep, ReactResult",
     "from llmwikify.reproduction.factor_compiler import FactorCompiler",
@@ -2708,67 +2708,67 @@ llm_extraction 引用改为 from ..llm_extraction (临时)
 **测试 (前)** — `tests/test_llm_extraction.py` (16 个, 覆盖全部 16 文件):
 ```python
 def test_run_one_paper_import():
-    from llmwikify.reproduction.llm_extraction import run_one_paper
+    from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper
     assert callable(run_one_paper)
 
 def test_run_track_a():
-    from llmwikify.reproduction.llm_extraction import run_track_a
+    from llmwikify.reproduction.paper_understanding.llm_extraction import run_track_a
     assert callable(run_track_a)
 
 def test_run_track_b():
-    from llmwikify.reproduction.llm_extraction import run_track_b
+    from llmwikify.reproduction.paper_understanding.llm_extraction import run_track_b
     assert callable(run_track_b)
 
 def test_stage0_ingest():
-    from llmwikify.reproduction.llm_extraction import run_stage0_ingest
+    from llmwikify.reproduction.paper_understanding.llm_extraction import run_stage0_ingest
     assert callable(run_stage0_ingest)
 
 def test_orchestrator():
-    from llmwikify.reproduction.llm_extraction.orchestrator import run_one_paper
+    from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import run_one_paper
     assert callable(run_one_paper)
 
 def test_planner():
-    from llmwikify.reproduction.llm_extraction.planner import plan_paper
+    from llmwikify.reproduction.paper_understanding.llm_extraction.planner import plan_paper
     assert callable(plan_paper)
 
 def test_track_a_internal():
-    from llmwikify.reproduction.llm_extraction.track_a import run_track_a
+    from llmwikify.reproduction.paper_understanding.llm_extraction.track_a import run_track_a
     assert callable(run_track_a)
 
 def test_track_b_internal():
-    from llmwikify.reproduction.llm_extraction.track_b import run_track_b
+    from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import run_track_b
     assert callable(run_track_b)
 
 def test_validator():
-    from llmwikify.reproduction.llm_extraction.validator import validate_paper_outputs
+    from llmwikify.reproduction.paper_understanding.llm_extraction.validator import validate_paper_outputs
     assert callable(validate_paper_outputs)
 
 def test_runlog():
-    from llmwikify.reproduction.llm_extraction.runlog import RunLogger
+    from llmwikify.reproduction.paper_understanding.llm_extraction.runlog import RunLogger
     assert RunLogger is not None
 
 def test_section_detector():
-    from llmwikify.reproduction.llm_extraction.section_detector import detect_sections
+    from llmwikify.reproduction.paper_understanding.llm_extraction.section_detector import detect_sections
     assert callable(detect_sections)
 
 def test_plan_saver():
-    from llmwikify.reproduction.llm_extraction.plan_saver import save_plan
+    from llmwikify.reproduction.paper_understanding.llm_extraction.plan_saver import save_plan
     assert callable(save_plan)
 
 def test_retry():
-    from llmwikify.reproduction.llm_extraction.retry import with_retry
+    from llmwikify.reproduction.paper_understanding.llm_extraction.retry import with_retry
     assert callable(with_retry)
 
 def test_defer():
-    from llmwikify.reproduction.llm_extraction.defer import DeferredQueue
+    from llmwikify.reproduction.paper_understanding.llm_extraction.defer import DeferredQueue
     assert DeferredQueue is not None
 
 def test_preview():
-    from llmwikify.reproduction.llm_extraction.preview import generate_preview
+    from llmwikify.reproduction.paper_understanding.llm_extraction.preview import generate_preview
     assert callable(generate_preview)
 
 def test_log_decorator():
-    from llmwikify.reproduction.llm_extraction.log_decorator import with_logging
+    from llmwikify.reproduction.paper_understanding.llm_extraction.log_decorator import with_logging
     assert callable(with_logging)
 ```
 
@@ -2821,7 +2821,7 @@ def test_builtin_risk_renders():
 
 def test_run_track_a_with_prompts():
     """run_track_a 接入 prompts 后行为不变"""
-    from llmwikify.reproduction.llm_extraction.track_a import run_track_a
+    from llmwikify.reproduction.paper_understanding.llm_extraction.track_a import run_track_a
     from llmwikify.reproduction.prompts import PromptRegistry
     from unittest.mock import Mock
     

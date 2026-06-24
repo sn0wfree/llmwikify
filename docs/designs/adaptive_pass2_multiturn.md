@@ -570,7 +570,7 @@ rm -f quant/papers/guangfa_full_new/track_b_checkpoint.json
 
 # 3. 跑新方案
 python -c "
-from llmwikify.reproduction.llm_extraction.orchestrator import run_one_paper
+from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import run_one_paper
 result = run_one_paper(
     paper_id='guangfa_full_new',
     source_path=...,
