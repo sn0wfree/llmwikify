@@ -371,6 +371,7 @@ def generate_factor_code(
     temperature: float = 0.3,
     model: str | None = None,
     progress_callback: Any | None = None,
+    prompts: Any | None = None,
 ) -> tuple[str | None, pl.Series | None, str | None, dict]:
     """High-level convenience: build client (if needed) + run ReAct loop.
 
@@ -382,11 +383,13 @@ def generate_factor_code(
         formula_brief: Natural-language formula description.
         df: Polars DataFrame in long format.
         llm: Pre-built LLM client (if None, calls build_llm_client(model)).
-        system_prompt: System prompt (if None, uses SYSTEM_PROMPT_CODE).
+        system_prompt: System prompt (if None, uses SYSTEM_PROMPT_CODE or prompts).
         max_repair_rounds: Max self-repair iterations (default 3).
         temperature: LLM temperature (default 0.3).
         model: Override model name (only used if llm is None).
         progress_callback: Optional hook invoked after each ReactStep.
+        prompts: Optional PromptRegistry. When provided and system_prompt is None,
+                 looks up "code_gen" prompt from registry.
 
     Returns:
         (code, factor_series, error_message, react_result_dict)
@@ -397,7 +400,14 @@ def generate_factor_code(
     if llm is None:
         llm = build_llm_client(model=model)
     if system_prompt is None:
-        system_prompt = SYSTEM_PROMPT_CODE
+        if prompts is not None:
+            try:
+                group = prompts.get("code_gen", version="latest")
+                system_prompt = group.system
+            except (KeyError, AttributeError):
+                system_prompt = SYSTEM_PROMPT_CODE
+        else:
+            system_prompt = SYSTEM_PROMPT_CODE
 
     result = compile_to_code_react(
         factor_name=factor_name,
