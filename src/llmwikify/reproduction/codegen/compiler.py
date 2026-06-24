@@ -19,22 +19,22 @@ from typing import Any
 
 import polars as pl
 
-from .ast_compiler import CompileError, compile_ast
-from .ast_complexity import (
+from ..ast_compiler import CompileError, compile_ast
+from ..ast_complexity import (
     ComplexityVerdict,
     check_complexity,
     collect_ops,
     count_nodes,
 )
-from .ast_extractor import extract_ast
-from .ast_nodes import QN_OPS, ASTNode
-from .common.errors import (
+from ..ast_extractor import extract_ast
+from ..ast_nodes import QN_OPS, ASTNode
+from ..common.errors import (
     StructuredError,
     categorize_compile_error,
     categorize_extract_error,
 )
-from .self_repairing import build_error_history, repair_once
-from .common.telemetry import get_telemetry
+from .repair import build_error_history, repair_once
+from ..common.telemetry import get_telemetry
 
 logger = logging.getLogger(__name__)
 
@@ -240,7 +240,7 @@ def _mock_ast(factor_name: str) -> ASTNode:
 
 def _build_default_llm() -> Any:
     """Build default LLM client from ~/.llmwikify/llmwikify.json."""
-    from .common.llm_factory import build_default_client
+    from ..common.llm_factory import build_default_client
     try:
         return build_default_client()
     except Exception:
@@ -591,7 +591,7 @@ def persist_l5_to_yaml(
     Returns:
         write_factor_yaml action string ("Created"/"Updated") or None on failure.
     """
-    from .factor_library import read_factor_yaml, write_factor_yaml
+    from ..factor_library import read_factor_yaml, write_factor_yaml
 
     try:
         existing = read_factor_yaml(factor_name, project_root=project_root)

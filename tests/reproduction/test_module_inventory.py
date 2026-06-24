@@ -69,6 +69,40 @@ EXPECTED_PUBLIC_API = {
     "data_source.ifind": [
         "build_tradable_matrices",
     ],
+    # ── codegen/ 子包 (Phase 5) ──
+    "codegen.llm_code": [
+        "generate_factor_code",
+        "extract_python",
+        "validate_syntax",
+        "validate_safety",
+        "execute_code",
+        "build_llm_client",
+        "extract_json_from_response",
+    ],
+    "codegen.react_engine": [
+        "compile_to_code_react",
+        "ReactState",
+        "ReactStep",
+        "ReactResult",
+        "ReactErrorKind",
+    ],
+    "codegen.compiler": [
+        "FactorCompiler",
+    ],
+    "codegen.semantic": [
+        "SemanticOp",
+        "get_op",
+        "list_ops",
+        "list_by_family",
+        "get_doc_for_llm",
+        "instantiate",
+        "load_user_registry",
+    ],
+    "codegen.repair": [
+    ],
+    "codegen.metadata": [
+        "extract_factor_metadata",
+    ],
     # ── 顶层模块 ──
     "factor_library": [
         "read_factor_yaml",
@@ -82,28 +116,6 @@ EXPECTED_PUBLIC_API = {
         "Session",
         "Artifact",
         "Result",
-    ],
-    "codegen_utils": [
-        "generate_factor_code",
-        "extract_python",
-        "validate_syntax",
-        "validate_safety",
-        "execute_code",
-        "build_llm_client",
-        "extract_json_from_response",
-    ],
-    "factor_compiler_react": [
-        "compile_to_code_react",
-        "ReactState",
-        "ReactStep",
-        "ReactResult",
-        "ReactErrorKind",
-    ],
-    "factor_compiler": [
-        "FactorCompiler",
-    ],
-    "factor_extractor": [
-        "extract_factor_metadata",
     ],
     "schemas": [
         "BacktestResult",
@@ -167,17 +179,6 @@ EXPECTED_PUBLIC_API = {
     ],
     "ast_complexity": [
         "compute_complexity",
-    ],
-    "semantic_registry": [
-        "SemanticOp",
-        "get_op",
-        "list_ops",
-        "list_by_family",
-        "get_doc_for_llm",
-        "instantiate",
-        "load_user_registry",
-    ],
-    "self_repairing": [
     ],
     "strategies": [
         "SIGNAL_NODE_REGISTRY",

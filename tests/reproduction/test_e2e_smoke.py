@@ -20,15 +20,17 @@ ALL_TOP_MODULES = [
     "data_source.akshare", "data_source.clickhouse", "data_source.ifind",
     # 顶层
     "ast_compiler", "ast_complexity", "ast_extractor",
-    "ast_nodes", "backtest", "codegen_utils",
+    "ast_nodes", "backtest",
     "contracts", "extract",
     "extract_factors", "extract_paper", "factor_backtest",
-    "factor_compiler", "factor_compiler_react", "factor_extractor",
     "factor_library", "factor_value_store",
     "l5_orchestrator", "l5_validation", "metrics",
     "quant_wiki", "quantnodes_repro",
-    "run", "schemas", "self_repairing",
+    "run", "schemas",
     "sessions", "strategies",
+    # codegen/ (Phase 5)
+    "codegen.llm_code", "codegen.react_engine", "codegen.compiler",
+    "codegen.repair", "codegen.semantic", "codegen.metadata",
 ]
 
 LLM_EXTRACTION_MODULES = [
@@ -71,7 +73,7 @@ class TestCrossModuleCompatibility:
         # 先 import 一些模块
         from llmwikify.reproduction import factor_library
         from llmwikify.reproduction import sessions
-        from llmwikify.reproduction import codegen_utils
+        from llmwikify.reproduction.codegen import llm_code as codegen_utils
         # 再 import 其他模块, 不应出错
         from llmwikify.reproduction import l5_validation
         from llmwikify.reproduction import metrics

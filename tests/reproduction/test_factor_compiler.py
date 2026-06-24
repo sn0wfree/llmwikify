@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch, MagicMock
 
-from llmwikify.reproduction import factor_compiler as fc
+from llmwikify.reproduction.codegen import compiler as fc
 
 
 class TestFactorCompiler:
@@ -39,5 +39,5 @@ class TestFactorCompiler:
 
     def test_module_imports(self) -> None:
         """模块可导入."""
-        from llmwikify.reproduction import factor_compiler
+        from llmwikify.reproduction.codegen import compiler as factor_compiler
         assert factor_compiler is not None

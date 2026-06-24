@@ -120,7 +120,7 @@ class TestModuleAPIBackwardCompat:
 
     def test_codegen_utils_public_api(self) -> None:
         """codegen_utils 公共 API 存在."""
-        from llmwikify.reproduction import codegen_utils
+        from llmwikify.reproduction.codegen import llm_code as codegen_utils
         for fn in ["generate_factor_code", "extract_python", "validate_syntax",
                    "validate_safety", "execute_code", "build_llm_client"]:
             assert hasattr(codegen_utils, fn), f"Missing: {fn}"

@@ -48,15 +48,11 @@ TOP_LEVEL_MODULES = [
     "ast_extractor",
     "ast_nodes",
     "backtest",
-    "codegen_utils",
     "contracts",
     "extract",
     "extract_factors",
     "extract_paper",
     "factor_backtest",
-    "factor_compiler",
-    "factor_compiler_react",
-    "factor_extractor",
     "factor_library",
     "factor_value_store",
     "l5_orchestrator",
@@ -66,9 +62,17 @@ TOP_LEVEL_MODULES = [
     "quantnodes_repro",
     "run",
     "schemas",
-    "self_repairing",
-    "sessions",
     "strategies",
+]
+
+# ── codegen/ 子包 (6 个, Phase 5 搬迁) ─────────────────────
+CODEGEN_MODULES = [
+    "codegen.llm_code",
+    "codegen.react_engine",
+    "codegen.compiler",
+    "codegen.repair",
+    "codegen.semantic",
+    "codegen.metadata",
 ]
 
 # ── llm_extraction/ 子包 (15 个, 除 llm_factory 外) ────────
@@ -90,7 +94,7 @@ LLM_EXTRACTION_MODULES = [
     "llm_extraction",
 ]
 
-ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
+ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + CODEGEN_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
 
 
 # ── CRITICAL_IMPORTS: 33 个关键 import 语句 ──────────────────
@@ -111,20 +115,21 @@ CRITICAL_IMPORTS = [
     "from llmwikify.reproduction.data_source.akshare import fetch_hs300_constituents",
     "from llmwikify.reproduction.data_source.clickhouse import fetch_close_panel",
     "from llmwikify.reproduction.data_source.ifind import build_tradable_matrices",
-    # 顶层 (20)
+    # codegen/ (6)
+    "from llmwikify.reproduction.codegen.llm_code import generate_factor_code, SYSTEM_PROMPT_CODE",
+    "from llmwikify.reproduction.codegen.react_engine import compile_to_code_react, ReactStep, ReactResult",
+    "from llmwikify.reproduction.codegen.compiler import FactorCompiler",
+    "from llmwikify.reproduction.codegen.semantic import get_op, list_ops",
+    # 顶层 (16)
     "from llmwikify.reproduction.factor_library import read_factor_yaml, write_factor_yaml",
     "from llmwikify.reproduction.sessions import ReproductionDatabase",
     "from llmwikify.reproduction.quant_wiki import get_quant_wiki",
     "from llmwikify.reproduction.extract_paper import extract_paper_structure, _extract_factors_from_list",
     "from llmwikify.reproduction.factor_backtest import run_factor_backtest, run_factor_backtest_universe",
     "from llmwikify.reproduction.backtest import run_backtest",
-    "from llmwikify.reproduction.codegen_utils import generate_factor_code, SYSTEM_PROMPT_CODE",
-    "from llmwikify.reproduction.factor_compiler_react import compile_to_code_react, ReactStep, ReactResult",
-    "from llmwikify.reproduction.factor_compiler import FactorCompiler",
     "from llmwikify.reproduction.ast_compiler import compile_ast, CompileError",
     "from llmwikify.reproduction.ast_nodes import ASTNode, get_op_spec",
     "from llmwikify.reproduction.ast_extractor import extract_ast",
-    "from llmwikify.reproduction.semantic_registry import get_op, list_ops",
     "from llmwikify.reproduction.l5_orchestrator import run_l5_pipeline",
     "from llmwikify.reproduction.l5_validation import run_l5_validation",
     "from llmwikify.reproduction.metrics import evaluation",

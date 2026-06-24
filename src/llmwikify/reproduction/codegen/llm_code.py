@@ -140,7 +140,7 @@ def build_llm_client(model: str | None = None) -> Any:
     Raises:
         RuntimeError: If config missing, disabled, or required fields absent.
     """
-    from .common.llm_factory import build_default_client
+    from ..common.llm_factory import build_default_client
     return build_default_client(model=model)
 
 
@@ -392,7 +392,7 @@ def generate_factor_code(
         (code, factor_series, error_message, react_result_dict)
         where code/series are None on failure, error is None on success.
     """
-    from .factor_compiler_react import compile_to_code_react
+    from .react_engine import compile_to_code_react
 
     if llm is None:
         llm = build_llm_client(model=model)

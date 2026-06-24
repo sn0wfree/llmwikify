@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .codegen_utils import build_llm_client, extract_json_from_response
+from .llm_code import build_llm_client, extract_json_from_response
 
 logger = logging.getLogger(__name__)
 

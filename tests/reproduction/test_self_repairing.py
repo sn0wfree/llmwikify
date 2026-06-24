@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import MagicMock
 
-from llmwikify.reproduction import self_repairing as sr
+from llmwikify.reproduction.codegen import repair as sr
 from llmwikify.reproduction.ast_nodes import ASTNode
 from llmwikify.reproduction.common.errors import StructuredError
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction import codegen_utils as cu
+from llmwikify.reproduction.codegen import llm_code as cu
 
 
 class TestExtractPython:

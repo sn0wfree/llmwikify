@@ -19,7 +19,7 @@ import pandas as pd
 import polars as pl
 import pytest
 
-from llmwikify.reproduction.factor_compiler_react import (
+from llmwikify.reproduction.codegen.react_engine import (
     ReactErrorKind,
     ReactResult,
     ReactState,

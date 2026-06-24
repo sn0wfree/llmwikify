@@ -1006,7 +1006,7 @@ def instantiate(op_name: str, params: dict[str, Any] | None = None):
         KeyError: If op_name is not registered.
         ValueError: If required param_keys are missing.
     """
-    from .ast_nodes import ASTNode  # noqa: PLC0415  (intentional local import)
+    from ..ast_nodes import ASTNode  # noqa: PLC0415  (intentional local import)
 
     reg = _ensure_loaded()
     if op_name not in reg:

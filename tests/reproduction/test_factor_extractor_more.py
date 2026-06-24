@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch, MagicMock
 
-from llmwikify.reproduction import factor_extractor as fe
+from llmwikify.reproduction.codegen import metadata as fe
 
 
 class TestExtractFactorMetadata:

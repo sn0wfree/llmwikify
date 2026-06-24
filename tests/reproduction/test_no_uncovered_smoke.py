@@ -26,8 +26,8 @@ ALREADY_COVERED = {
     "extract_factors",  # test_extract_factors.py
     "extract_paper",  # test_extract_paper.py
     "factor_backtest",  # test_factor_backtest*.py
-    "factor_compiler_react",  # test_factor_compiler_react.py
-    "factor_extractor",  # test_extract_factor_metadata.py, test_multi_factor_extraction.py
+    "codegen.react_engine",  # test_factor_compiler_react.py
+    "codegen.metadata",  # test_extract_factor_metadata.py, test_multi_factor_extraction.py
     "l5_orchestrator",  # test_l5_*.py
     "l5_validation",  # test_l4_hypothesis_sync.py, test_l5_*.py
     "metrics",  # test_quant.py

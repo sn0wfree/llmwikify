@@ -33,7 +33,7 @@ from typing import Any
 
 import polars as pl
 
-from .codegen_utils import (
+from .llm_code import (
     _PYTHON_FENCE_RE,
     build_execute_namespace,
     execute_code,
@@ -41,7 +41,7 @@ from .codegen_utils import (
     validate_safety,
     validate_syntax,
 )
-from .common.telemetry import get_telemetry
+from ..common.telemetry import get_telemetry
 
 # Backward-compatible aliases for existing test imports
 _extract_python = extract_python

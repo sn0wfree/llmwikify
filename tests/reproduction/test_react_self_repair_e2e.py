@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import MagicMock, patch
 
-from llmwikify.reproduction import factor_compiler_react as fcr
+from llmwikify.reproduction.codegen import react_engine as fcr
 
 
 class TestReactMainLoop:
@@ -115,13 +115,13 @@ class TestReactExports:
 
     def test_system_prompt_in_codegen_utils(self) -> None:
         """SYSTEM_PROMPT_CODE 在 codegen_utils 中 (factor_compiler_react 复用)."""
-        from llmwikify.reproduction import codegen_utils
+        from llmwikify.reproduction.codegen import llm_code as codegen_utils
         assert hasattr(codegen_utils, "SYSTEM_PROMPT_CODE")
         assert "compute_factor" in codegen_utils.SYSTEM_PROMPT_CODE
 
     def test_module_imports(self) -> None:
         """模块可导入."""
-        from llmwikify.reproduction import factor_compiler_react
+        from llmwikify.reproduction.codegen import react_engine as factor_compiler_react
         assert factor_compiler_react is not None
 
     def test_helpers_exist(self) -> None:

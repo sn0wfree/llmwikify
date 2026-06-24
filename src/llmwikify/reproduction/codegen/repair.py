@@ -21,10 +21,10 @@ import copy
 import logging
 from typing import TYPE_CHECKING
 
-from .common.errors import StructuredError
+from ..common.errors import StructuredError
 
 if TYPE_CHECKING:
-    from .ast_nodes import ASTNode
+    from ..ast_nodes import ASTNode
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ def compile_fix(node: ASTNode, err: StructuredError) -> ASTNode | None:
     - UnknownKwarg: strip unknown kwargs
     - WrongArgCount: truncate or pad children with col(lit placeholder)
     """
-    from .ast_nodes import ASTNode, make_col, make_lit
+    from ..ast_nodes import ASTNode, make_col, make_lit
 
     if err.kind == "MissingKwarg":
         ctx = err.context
@@ -112,7 +112,7 @@ def semantic_fix(node: ASTNode, err: StructuredError) -> ASTNode | None:
     If user's op name resembles a semantic template (e.g. "momentum" -> momentum_n),
     suggest replacement. Otherwise return None.
     """
-    from .semantic_registry import get_op, list_ops
+    from .semantic import get_op, list_ops
 
     if err.kind != "UnknownOp":
         return None
@@ -144,7 +144,7 @@ def composite_fix(node: ASTNode, err: StructuredError) -> ASTNode | None:
 
     Strategy: Replace complex op with a simpler primitive (e.g. neutralize -> rank).
     """
-    from .ast_nodes import make_col
+    from ..ast_nodes import make_col
 
     if err.kind not in ("QNCallFailed", "CompileError"):
         return None
@@ -170,7 +170,7 @@ def composite_fix(node: ASTNode, err: StructuredError) -> ASTNode | None:
 
 def runtime_fix(node: ASTNode, err: StructuredError) -> ASTNode | None:
     """RuntimeFix: wrap risky op with type coercion (e.g. cast to Float64)."""
-    from .ast_nodes import make_call
+    from ..ast_nodes import make_call
 
     if err.kind != "QNCallFailed":
         return None
@@ -193,13 +193,13 @@ def quality_fix(
 
     Strategy: rewrite from l2.calculation_steps or fallback to simple momentum.
     """
-    from .ast_nodes import make_call
+    from ..ast_nodes import make_call
 
     if err.kind != "IncompleteAST":
         return None
     logger.info("[SelfRepair] QualityFix: rewrite from l2 / fallback to momentum")
     # Simple fallback: 20-day momentum
-    from .ast_nodes import make_col  # noqa: PLC0415
+    from ..ast_nodes import make_col  # noqa: PLC0415
     return make_call("pct_change", [make_col("close")], periods=20)
 
 

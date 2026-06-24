@@ -24,11 +24,11 @@ from src.llmwikify.reproduction.ast_nodes import (
 )
 from src.llmwikify.reproduction.common.errors import StructuredError
 from src.llmwikify.reproduction.factor_backtest import _compute_factor_from_ast
-from src.llmwikify.reproduction.self_repairing import (
+from src.llmwikify.reproduction.codegen.repair import (
     build_error_history,
     repair_once,
 )
-from src.llmwikify.reproduction.semantic_registry import (
+from src.llmwikify.reproduction.codegen.semantic import (
     get_op,
     get_doc_for_llm,
     instantiate,
@@ -315,7 +315,7 @@ def test_pr5_load_user_registry(tmp_path) -> None:
         },
     }))
 
-    from src.llmwikify.reproduction import semantic_registry
+    from src.llmwikify.reproduction.codegen import semantic as semantic_registry
 
     # Reset registry for test isolation
     semantic_registry._REGISTRY = {}
@@ -409,7 +409,7 @@ def test_pr6_build_error_history() -> None:
 
 def test_pr6_fix_strategies_registered() -> None:
     """PR-6: All 5 FixStrategy functions are registered."""
-    from src.llmwikify.reproduction.self_repairing import FIX_STRATEGIES
+    from src.llmwikify.reproduction.codegen.repair import FIX_STRATEGIES
     assert len(FIX_STRATEGIES) == 5
     strategy_names = [s.__name__ for s in FIX_STRATEGIES]
     assert "schema_fix" in strategy_names
@@ -550,7 +550,7 @@ def test_stage_a_compile_mock_records_telemetry(monkeypatch: pytest.MonkeyPatch)
     import os
 
     monkeypatch.setenv("FACTOR_COMPILER_MOCK", "1")
-    from src.llmwikify.reproduction.factor_compiler import FactorCompiler
+    from src.llmwikify.reproduction.codegen.compiler import FactorCompiler
     from src.llmwikify.reproduction.common.telemetry import get_telemetry
 
     t = get_telemetry()
@@ -594,7 +594,7 @@ def test_stage_a_compile_error_handled_gracefully() -> None:
     import os
 
     os.environ["FACTOR_COMPILER_MOCK"] = "1"
-    from src.llmwikify.reproduction.factor_compiler import FactorCompiler
+    from src.llmwikify.reproduction.codegen.compiler import FactorCompiler
 
     c = FactorCompiler()
     # Empty factor_data triggers compile_ast on a default mock AST
@@ -607,7 +607,7 @@ def test_stage_a_compile_error_handled_gracefully() -> None:
 def test_stage_a_repair_pipeline_e2e() -> None:
     """Stage A: end-to-end repair flow (LLM emit bad AST -> repair -> compile success)."""
     from src.llmwikify.reproduction.common.errors import StructuredError
-    from src.llmwikify.reproduction.self_repairing import repair_once
+    from src.llmwikify.reproduction.codegen.repair import repair_once
 
     # Simulate LLM emits rolling_mean without window
     bad_ast = make_call("rolling_mean", [make_col("close")])
@@ -669,7 +669,7 @@ def test_stage_b_persist_l5_to_yaml_creates(tmp_path) -> None:
     stock_dir = factors_dir / "stock" / "price"
     stock_dir.mkdir(parents=True)
 
-    from src.llmwikify.reproduction.factor_compiler import (
+    from src.llmwikify.reproduction.codegen.compiler import (
         FactorCompiler,
         CompileResult,
         persist_l5_to_yaml,
@@ -777,7 +777,7 @@ def test_stage_b_l5_yaml_invalid_status(tmp_path) -> None:
     from pathlib import Path
     import os
 
-    from src.llmwikify.reproduction.factor_compiler import CompileResult, persist_l5_to_yaml
+    from src.llmwikify.reproduction.codegen.compiler import CompileResult, persist_l5_to_yaml
 
     # Synthesize a failed CompileResult
     failed_result = CompileResult(
