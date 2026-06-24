@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction import strategies as s
+from llmwikify.reproduction.backtest_pkg import strategies as s
 
 
 class TestStrategyNodeClasses:

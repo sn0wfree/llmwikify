@@ -91,7 +91,7 @@ class TestDataRouterParquet:
 class TestComputeFactorFromCode:
     def test_simple_momentum(self):
         """LLM-generated momentum code works."""
-        from llmwikify.reproduction.factor_backtest import _compute_factor_from_code
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_from_code
         data = pd.DataFrame({
             "date": pd.date_range("2024-01-01", periods=30, freq="B"),
             "close": np.random.randn(30).cumsum() + 100,
@@ -108,7 +108,7 @@ def compute_factor(df):
 
     def test_rsi_code(self):
         """LLM-generated RSI code works."""
-        from llmwikify.reproduction.factor_backtest import _compute_factor_from_code
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_from_code
         data = pd.DataFrame({
             "date": pd.date_range("2024-01-01", periods=30, freq="B"),
             "close": np.random.randn(30).cumsum() + 100,
@@ -128,7 +128,7 @@ def compute_factor(df):
 
     def test_unsafe_code_rejected(self):
         """Unsafe code is rejected by sandbox."""
-        from llmwikify.reproduction.factor_backtest import _compute_factor_from_code
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_from_code
         data = pd.DataFrame({"date": pd.date_range("2024-01-01", periods=10, freq="B"), "close": range(10)})
         code = """
 import os
@@ -144,7 +144,7 @@ os.system("rm -rf /")
 class TestFormulaFactorClass:
     def test_formula_branch(self):
         """factor_class='formula' executes code correctly."""
-        from llmwikify.reproduction.factor_backtest import _compute_factor_values
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_values
         data = pd.DataFrame({
             "date": pd.date_range("2024-01-01", periods=30, freq="B"),
             "close": np.random.randn(30).cumsum() + 100,
@@ -159,7 +159,7 @@ def compute_factor(df):
 
     def test_formula_fallback_to_momentum(self):
         """formula without code falls back to momentum."""
-        from llmwikify.reproduction.factor_backtest import _compute_factor_values
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_values
         data = pd.DataFrame({
             "date": pd.date_range("2024-01-01", periods=30, freq="B"),
             "close": np.random.randn(30).cumsum() + 100,

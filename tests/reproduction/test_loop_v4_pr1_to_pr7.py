@@ -23,7 +23,7 @@ from src.llmwikify.reproduction.codegen.ast.nodes import (
     make_lit,
 )
 from src.llmwikify.reproduction.common.errors import StructuredError
-from src.llmwikify.reproduction.factor_backtest import _compute_factor_from_ast
+from src.llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_from_ast
 from src.llmwikify.reproduction.codegen.repair import (
     build_error_history,
     repair_once,
@@ -189,7 +189,7 @@ def test_pr4_compute_factor_from_ast_rolling_mean() -> None:
 
 def test_pr4_compute_factor_values_ast_compiled_branch() -> None:
     """PR-4: _compute_factor_values handles factor_class='ast_compiled'."""
-    from src.llmwikify.reproduction.factor_backtest import _compute_factor_values
+    from src.llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_values
 
     df = pd.DataFrame({
         "date": pd.date_range("2024-01-01", periods=20),

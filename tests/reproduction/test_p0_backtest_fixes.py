@@ -67,14 +67,14 @@ class TestReconstructEquityCurve:
 
     def test_empty_data(self):
         """Empty data returns empty list."""
-        from llmwikify.reproduction.backtest import _reconstruct_equity_curve
+        from llmwikify.reproduction.backtest_pkg.run_backtest import _reconstruct_equity_curve
 
         result = _reconstruct_equity_curve([], pd.DataFrame(), 100000.0)
         assert result == []
 
     def test_no_trades(self):
         """No trades: equity stays at initial_cash."""
-        from llmwikify.reproduction.backtest import _reconstruct_equity_curve
+        from llmwikify.reproduction.backtest_pkg.run_backtest import _reconstruct_equity_curve
 
         data = self._make_data(n_days=5)
         result = _reconstruct_equity_curve([], data, 100000.0)
@@ -85,7 +85,7 @@ class TestReconstructEquityCurve:
 
     def test_buy_and_hold(self):
         """Buy on day 1, hold: equity = cash - cost + position * close."""
-        from llmwikify.reproduction.backtest import _reconstruct_equity_curve
+        from llmwikify.reproduction.backtest_pkg.run_backtest import _reconstruct_equity_curve
 
         data = self._make_data(n_days=5, initial_price=100.0)
         trades = [
@@ -103,7 +103,7 @@ class TestReconstructEquityCurve:
 
     def test_buy_and_sell(self):
         """Buy then sell: track cash through full cycle."""
-        from llmwikify.reproduction.backtest import _reconstruct_equity_curve
+        from llmwikify.reproduction.backtest_pkg.run_backtest import _reconstruct_equity_curve
 
         data = self._make_data(n_days=5, initial_price=100.0)
         trades = [
@@ -118,7 +118,7 @@ class TestReconstructEquityCurve:
 
     def test_dict_trades(self):
         """Trades as dicts with 'side' key (alternative format)."""
-        from llmwikify.reproduction.backtest import _reconstruct_equity_curve
+        from llmwikify.reproduction.backtest_pkg.run_backtest import _reconstruct_equity_curve
 
         data = self._make_data(n_days=3, initial_price=100.0)
         trades = [
@@ -138,7 +138,7 @@ class TestDuckDBPipeline:
 
     def test_store_and_query(self):
         """Store factor values and query them back."""
-        from llmwikify.reproduction.factor_value_store import (
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
             compute_and_store_factor,
             list_stored_factors,
             query_factor_values,
@@ -183,7 +183,7 @@ class TestDuckDBPipeline:
 
     def test_empty_close_wide(self):
         """Empty close_wide returns 0 rows stored."""
-        from llmwikify.reproduction.factor_value_store import compute_and_store_factor
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import compute_and_store_factor
 
         close_wide = pd.DataFrame()
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -199,7 +199,7 @@ class TestDuckDBPipeline:
 
     def test_upsert_no_duplicates(self):
         """Storing same factor twice does not create duplicates."""
-        from llmwikify.reproduction.factor_value_store import (
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
             compute_and_store_factor,
             query_factor_values,
         )

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch, MagicMock
 
-from llmwikify.reproduction import factor_value_store as fvs
+from llmwikify.reproduction.backtest_pkg import factor_value_store as fvs
 
 
 class TestFactorValueStore:

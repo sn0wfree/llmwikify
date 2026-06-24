@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llmwikify.reproduction.l5_orchestrator import (
+from llmwikify.reproduction.backtest_pkg.l5_orchestrator import (
     _build_hypothesis_prompt,
     _parse_llm_response,
     run_l5_pipeline,
@@ -73,7 +73,7 @@ def _mock_backtest_result():
 class TestRunL5Pipeline:
     def test_factor_not_found(self):
         """Returns error when factor not found."""
-        with patch("llmwikify.reproduction.l5_orchestrator.read_factor_yaml", return_value=None):
+        with patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.read_factor_yaml", return_value=None):
             result = run_l5_pipeline("nonexistent")
             assert result["success"] is False
             assert "not found" in result["error"]
@@ -81,8 +81,8 @@ class TestRunL5Pipeline:
     def test_backtest_failure(self):
         """Returns error when backtest fails."""
         mock_factor = _mock_factor_data()
-        with patch("llmwikify.reproduction.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
-             patch("llmwikify.reproduction.l5_orchestrator._run_backtest", side_effect=Exception("backtest error")):
+        with patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
+             patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator._run_backtest", side_effect=Exception("backtest error")):
             result = run_l5_pipeline("stock/price/test_factor")
             assert result["success"] is False
             assert "backtest error" in result["error"]
@@ -97,9 +97,9 @@ class TestRunL5Pipeline:
             written["name"] = name
             written["data"] = data
 
-        with patch("llmwikify.reproduction.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
-             patch("llmwikify.reproduction.l5_orchestrator._run_backtest", return_value=mock_bt), \
-             patch("llmwikify.reproduction.l5_orchestrator.write_factor_yaml", side_effect=capture_write):
+        with patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
+             patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator._run_backtest", return_value=mock_bt), \
+             patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.write_factor_yaml", side_effect=capture_write):
             result = run_l5_pipeline("stock/price/test_factor", llm_client=None)
 
             assert result["success"] is True
@@ -143,9 +143,9 @@ class TestRunL5Pipeline:
         def capture_write(name, data):
             written["data"] = data
 
-        with patch("llmwikify.reproduction.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
-             patch("llmwikify.reproduction.l5_orchestrator._run_backtest", return_value=mock_bt), \
-             patch("llmwikify.reproduction.l5_orchestrator.write_factor_yaml", side_effect=capture_write):
+        with patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
+             patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator._run_backtest", return_value=mock_bt), \
+             patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.write_factor_yaml", side_effect=capture_write):
             result = run_l5_pipeline("stock/price/test_factor", llm_client=mock_llm)
 
             assert result["success"] is True
@@ -169,9 +169,9 @@ class TestRunL5Pipeline:
         mock_llm = MagicMock()
         mock_llm.chat.side_effect = Exception("LLM error")
 
-        with patch("llmwikify.reproduction.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
-             patch("llmwikify.reproduction.l5_orchestrator._run_backtest", return_value=mock_bt), \
-             patch("llmwikify.reproduction.l5_orchestrator.write_factor_yaml"):
+        with patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
+             patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator._run_backtest", return_value=mock_bt), \
+             patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.write_factor_yaml"):
             result = run_l5_pipeline("stock/price/test_factor", llm_client=mock_llm)
             # Pipeline still succeeds
             assert result["success"] is True
@@ -181,9 +181,9 @@ class TestRunL5Pipeline:
         mock_factor = _mock_factor_data()
         mock_bt = _mock_backtest_result()
 
-        with patch("llmwikify.reproduction.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
-             patch("llmwikify.reproduction.l5_orchestrator._run_backtest", return_value=mock_bt), \
-             patch("llmwikify.reproduction.l5_orchestrator.write_factor_yaml"):
+        with patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
+             patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator._run_backtest", return_value=mock_bt), \
+             patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.write_factor_yaml"):
             result = run_l5_pipeline("stock/price/test_factor")
             l5_data = result["l5_data"]
             assert "validation_date" in l5_data
@@ -198,9 +198,9 @@ class TestRunL5Pipeline:
         def capture_write(name, data):
             written["data"] = data
 
-        with patch("llmwikify.reproduction.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
-             patch("llmwikify.reproduction.l5_orchestrator._run_backtest", return_value=mock_bt), \
-             patch("llmwikify.reproduction.l5_orchestrator.write_factor_yaml", side_effect=capture_write):
+        with patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.read_factor_yaml", return_value=mock_factor), \
+             patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator._run_backtest", return_value=mock_bt), \
+             patch("llmwikify.reproduction.backtest_pkg.l5_orchestrator.write_factor_yaml", side_effect=capture_write):
             run_l5_pipeline("stock/price/test_factor")
             assert written["data"]["factor"]["version"] == 2
 

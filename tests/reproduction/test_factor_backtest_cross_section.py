@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from llmwikify.reproduction.factor_backtest import (
+from llmwikify.reproduction.backtest_pkg.factor_backtest import (
     _compute_cross_section_groups,
     _compute_cross_section_ic,
     _compute_factor_matrix,
@@ -149,7 +149,7 @@ class TestComputeLongShort:
         curves = {"G1": g1_curve, "G5": g5_curve}
         adj_dates = [pd.Timestamp(f"2024-01-{i+1:02d}") for i in range(n)]
 
-        from llmwikify.reproduction.factor_backtest import _compute_long_short
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_long_short
         r_pos = _compute_long_short(curves, adj_dates, factor_direction=1)
         r_neg = _compute_long_short(curves, adj_dates, factor_direction=-1)
 

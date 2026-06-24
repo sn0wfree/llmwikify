@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction import quantnodes_repro as qr
+from llmwikify.reproduction.backtest_pkg import quantnodes_repro as qr
 
 
 class TestClasses:

@@ -19,14 +19,17 @@ ALL_TOP_MODULES = [
     "data_source.router", "data_source.universe", "data_source.quantnodes_adapter",
     "data_source.akshare", "data_source.clickhouse", "data_source.ifind",
     # 顶层
-    "backtest",
     "contracts", "extract",
-    "extract_factors", "extract_paper", "factor_backtest",
-    "factor_library", "factor_value_store",
-    "l5_orchestrator", "l5_validation", "metrics",
-    "quant_wiki", "quantnodes_repro",
+    "extract_factors", "extract_paper",
+    "factor_library",
+    "quant_wiki",
     "run", "schemas",
-    "sessions", "strategies",
+    "sessions",
+    # backtest_pkg/ (Phase 7)
+    "backtest_pkg.factor_backtest", "backtest_pkg.run_backtest",
+    "backtest_pkg.metrics", "backtest_pkg.strategies",
+    "backtest_pkg.l5_validation", "backtest_pkg.l5_orchestrator",
+    "backtest_pkg.factor_value_store", "backtest_pkg.quantnodes_repro",
     # codegen/ (Phase 5)
     "codegen.llm_code", "codegen.react_engine", "codegen.compiler",
     "codegen.repair", "codegen.semantic", "codegen.metadata",
@@ -77,8 +80,8 @@ class TestCrossModuleCompatibility:
         from llmwikify.reproduction import sessions
         from llmwikify.reproduction.codegen import llm_code as codegen_utils
         # 再 import 其他模块, 不应出错
-        from llmwikify.reproduction import l5_validation
-        from llmwikify.reproduction import metrics
+        from llmwikify.reproduction.backtest_pkg import l5_validation
+        from llmwikify.reproduction.backtest_pkg import metrics
         # 全部成功
         assert factor_library is not None
         assert sessions is not None
@@ -103,7 +106,7 @@ class TestWebUICompatibility:
 
     def test_factor_backtest_function_exists(self) -> None:
         """factor_backtest.run_factor_backtest 存在 (WebUI 依赖)."""
-        from llmwikify.reproduction import factor_backtest
+        from llmwikify.reproduction.backtest_pkg import factor_backtest
         assert hasattr(factor_backtest, "run_factor_backtest")
 
     def test_extract_paper_function_exists(self) -> None:

@@ -236,7 +236,7 @@ def main():
 
     # Step 2: Run backtest
     logger.info("Step 2: Run backtest via QuantNodes PipelineRunner")
-    from llmwikify.reproduction.quantnodes_repro import run_paper_backtest, save_report
+    from llmwikify.reproduction.backtest_pkg.quantnodes_repro import run_paper_backtest, save_report
 
     # Pick factors
     factors_dir = work_dir / "factors"

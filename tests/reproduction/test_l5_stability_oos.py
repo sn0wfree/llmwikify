@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from llmwikify.reproduction.l5_validation import (
+from llmwikify.reproduction.backtest_pkg.l5_validation import (
     analyze_oos,
     analyze_stability,
     compute_score,

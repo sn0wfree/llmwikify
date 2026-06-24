@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.reproduction import metrics as m
+from llmwikify.reproduction.backtest_pkg import metrics as m
 
 
 class TestEvaluation:

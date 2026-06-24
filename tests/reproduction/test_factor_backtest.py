@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from llmwikify.reproduction.factor_backtest import (
+from llmwikify.reproduction.backtest_pkg.factor_backtest import (
     _compute_factor_values,
     run_factor_backtest,
 )

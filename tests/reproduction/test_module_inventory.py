@@ -123,13 +123,6 @@ EXPECTED_PUBLIC_API = {
         "WikiStrategy",
         "FactorBacktestResult",
     ],
-    "factor_backtest": [
-        "run_factor_backtest",
-        "run_factor_backtest_universe",
-    ],
-    "backtest": [
-        "run_backtest",
-    ],
     "extract_paper": [
         "extract_paper_structure",
         "_extract_factors_from_list",
@@ -139,23 +132,30 @@ EXPECTED_PUBLIC_API = {
     "quant_wiki": [
         "get_quant_wiki",
     ],
-    "factor_value_store": [
+    # ── backtest_pkg/ 子包 (Phase 7) ──
+    "backtest_pkg.factor_backtest": [
+        "run_factor_backtest",
+        "run_factor_backtest_universe",
+    ],
+    "backtest_pkg.run_backtest": [
+        "run_backtest",
+    ],
+    "backtest_pkg.factor_value_store": [
         "store_factor_values",
         "query_factor_values",
         "compute_and_store_factor",
         "list_stored_factors",
     ],
-    "l5_orchestrator": [
+    "backtest_pkg.l5_orchestrator": [
         "run_l5_pipeline",
+    ],
+    "backtest_pkg.l5_validation": [
         "run_l5_validation",
     ],
-    "l5_validation": [
-        "run_l5_validation",
-    ],
-    "metrics": [
+    "backtest_pkg.metrics": [
         "evaluation",
     ],
-    "quantnodes_repro": [
+    "backtest_pkg.quantnodes_repro": [
         "run_factor_backtest",
     ],
     "llm_extraction": [
@@ -181,7 +181,7 @@ EXPECTED_PUBLIC_API = {
     "codegen.ast.complexity": [
         "compute_complexity",
     ],
-    "strategies": [
+    "backtest_pkg.strategies": [
         "SIGNAL_NODE_REGISTRY",
     ],
     "contracts": [

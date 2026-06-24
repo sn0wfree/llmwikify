@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch, MagicMock
 
-from llmwikify.reproduction import backtest as b
+from llmwikify.reproduction.backtest_pkg import run_backtest as b
 
 
 class TestRunBacktestSignature:

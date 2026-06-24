@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import MagicMock
 
-from llmwikify.reproduction import l5_validation as l5v
+from llmwikify.reproduction.backtest_pkg import l5_validation as l5v
 
 
 class TestRunL5Validation:

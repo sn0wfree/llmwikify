@@ -43,23 +43,27 @@ DATA_SOURCE_MODULES = [
 
 # ── 顶层模块 (未搬迁, 28 个) ──────────────────────────────
 TOP_LEVEL_MODULES = [
-    "backtest",
     "contracts",
     "extract",
     "extract_factors",
     "extract_paper",
-    "factor_backtest",
     "factor_library",
-    "factor_value_store",
-    "l5_orchestrator",
-    "l5_validation",
-    "metrics",
     "quant_wiki",
-    "quantnodes_repro",
     "run",
     "schemas",
     "sessions",
-    "strategies",
+]
+
+# ── backtest_pkg/ 子包 (8 个, Phase 7 搬迁) ────────────────
+BACKTEST_MODULES = [
+    "backtest_pkg.factor_backtest",
+    "backtest_pkg.run_backtest",
+    "backtest_pkg.metrics",
+    "backtest_pkg.strategies",
+    "backtest_pkg.l5_validation",
+    "backtest_pkg.l5_orchestrator",
+    "backtest_pkg.factor_value_store",
+    "backtest_pkg.quantnodes_repro",
 ]
 
 # ── codegen/ast/ 子包 (4 个, Phase 6 搬迁) ────────────────────
@@ -99,7 +103,7 @@ LLM_EXTRACTION_MODULES = [
     "llm_extraction",
 ]
 
-ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + CODEGEN_MODULES + CODEGEN_AST_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
+ALL_MODULES = COMMON_MODULES + DATA_SOURCE_MODULES + CODEGEN_MODULES + CODEGEN_AST_MODULES + BACKTEST_MODULES + TOP_LEVEL_MODULES + LLM_EXTRACTION_MODULES
 
 
 # ── CRITICAL_IMPORTS: 33 个关键 import 语句 ──────────────────
@@ -128,18 +132,19 @@ CRITICAL_IMPORTS = [
     # codegen/ast/ (4)
     "from llmwikify.reproduction.codegen.ast.compiler import compile_ast, CompileError",
     "from llmwikify.reproduction.codegen.ast.nodes import ASTNode, get_op_spec",
-    # 顶层 (14)
+    # backtest_pkg/ (8)
+    "from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest, run_factor_backtest_universe",
+    "from llmwikify.reproduction.backtest_pkg.run_backtest import run_backtest",
+    "from llmwikify.reproduction.backtest_pkg.metrics import evaluation",
+    "from llmwikify.reproduction.backtest_pkg.l5_orchestrator import run_l5_pipeline",
+    "from llmwikify.reproduction.backtest_pkg.l5_validation import run_l5_validation",
+    "from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values, query_factor_values",
+    "from llmwikify.reproduction.backtest_pkg.quantnodes_repro import run_factor_backtest",
+    # 顶层 (7)
     "from llmwikify.reproduction.factor_library import read_factor_yaml, write_factor_yaml",
     "from llmwikify.reproduction.sessions import ReproductionDatabase",
     "from llmwikify.reproduction.quant_wiki import get_quant_wiki",
     "from llmwikify.reproduction.extract_paper import extract_paper_structure, _extract_factors_from_list",
-    "from llmwikify.reproduction.factor_backtest import run_factor_backtest, run_factor_backtest_universe",
-    "from llmwikify.reproduction.backtest import run_backtest",
-    "from llmwikify.reproduction.l5_orchestrator import run_l5_pipeline",
-    "from llmwikify.reproduction.l5_validation import run_l5_validation",
-    "from llmwikify.reproduction.metrics import evaluation",
-    "from llmwikify.reproduction.quantnodes_repro import run_factor_backtest",
-    "from llmwikify.reproduction.factor_value_store import store_factor_values, query_factor_values",
     "from llmwikify.reproduction.run import run_reproduction, RunContext",
     "from llmwikify.reproduction.schemas import BacktestResult, WikiFactor, FactorBacktestResult",
     "from llmwikify.reproduction.contracts import FactorPage",
@@ -166,6 +171,7 @@ def test_reproduction_init_imports() -> None:
 def test_module_count_matches_plan() -> None:
     """验证模块数符合 20 阶段 refactor 计划."""
     pkg_path = llmwikify.reproduction.__path__[0]
+    # Top-level .py files
     actual_top = {
         f[:-3] for f in os.listdir(pkg_path)
         if f.endswith(".py") and f != "__init__.py" and f != "conftest.py"
@@ -186,6 +192,28 @@ def test_module_count_matches_plan() -> None:
         actual_ds = {
             f"data_source.{f[:-3]}"
             for f in os.listdir(ds_path)
+            if f.endswith(".py") and f != "__init__.py"
+        }
+    # codegen/ 子包
+    codegen_path = os.path.join(pkg_path, "codegen")
+    actual_codegen = set()
+    if os.path.isdir(codegen_path):
+        for f in os.listdir(codegen_path):
+            if f.endswith(".py") and f != "__init__.py":
+                actual_codegen.add(f"codegen.{f[:-3]}")
+        # codegen/ast/ 子包
+        ast_path = os.path.join(codegen_path, "ast")
+        if os.path.isdir(ast_path):
+            for f in os.listdir(ast_path):
+                if f.endswith(".py") and f != "__init__.py":
+                    actual_codegen.add(f"codegen.ast.{f[:-3]}")
+    # backtest_pkg/ 子包
+    bt_path = os.path.join(pkg_path, "backtest_pkg")
+    actual_bt = set()
+    if os.path.isdir(bt_path):
+        actual_bt = {
+            f"backtest_pkg.{f[:-3]}"
+            for f in os.listdir(bt_path)
             if f.endswith(".py") and f != "__init__.py"
         }
     # llm_extraction/ 子包
@@ -209,6 +237,12 @@ def test_module_count_matches_plan() -> None:
     assert len(actual_ds) >= len(DATA_SOURCE_MODULES), (
         f"data_source/ modules shrunk: {len(actual_ds)} < {len(DATA_SOURCE_MODULES)}. "
         f"Missing: {set(DATA_SOURCE_MODULES) - actual_ds}"
+    )
+    assert len(actual_codegen) >= len(CODEGEN_MODULES) + len(CODEGEN_AST_MODULES), (
+        f"codegen/ modules shrunk: {len(actual_codegen)} < {len(CODEGEN_MODULES) + len(CODEGEN_AST_MODULES)}. "
+    )
+    assert len(actual_bt) >= len(TOP_LEVEL_MODULES) - len(actual_top), (
+        f"backtest_pkg/ modules shrunk: {len(actual_bt)} < expected."
     )
     assert len(actual_llm_ext) >= len(LLM_EXTRACTION_MODULES) - 1, (
         f"llm_extraction modules shrunk: {len(actual_llm_ext)} < {len(LLM_EXTRACTION_MODULES) - 1}. "
