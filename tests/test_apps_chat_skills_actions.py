@@ -1,4 +1,4 @@
-"""Unit tests for Phase 5: 24 base Skills (26 actions).
+"""Unit tests for Phase 5: 25 base Skills (27 actions).
 
 Covers:
 
@@ -8,8 +8,10 @@ Covers:
   - The 1 clarify Skill (#23) — rule-based fallback
   - The 1 web_search Skill (#24, v0.39) — see
     ``test_web_search_action.py`` for dedicated coverage
+  - The 1 web_fetch Skill (#25, v0.41) — see
+    ``test_web_fetch_action.py`` for dedicated coverage
   - register_all_actions / unregister_all_actions
-  - The "24 Skills (26 actions)" contract assertion (inventory integrity)
+  - The "25 Skills (27 actions)" contract assertion (inventory integrity)
   - The detect base class (action_name auto-derived from
     DETECT_METHOD)
   - The reason action's rule-based decision tree
@@ -90,9 +92,9 @@ def runtime(populated_registry: SkillRegistry) -> SkillRuntime:
 
 
 class TestInventory:
-    def test_exactly_24_skills(self) -> None:
-        """24 Skills (26 actions including web_search's 3 sub-actions)."""
-        assert len(ALL_ACTIONS) == 24
+    def test_exactly_25_skills(self) -> None:
+        """25 Skills (27 actions including web_search's 3 + web_fetch's 1)."""
+        assert len(ALL_ACTIONS) == 25
 
     def test_all_8_detect_actions(self) -> None:
         assert len(ALL_DETECT_SKILLS) == 8
@@ -108,6 +110,11 @@ class TestInventory:
         """v0.39: web_search_skill is the 24th base skill."""
         assert web_search_skill in ALL_ACTIONS
 
+    def test_web_fetch_in_inventory(self) -> None:
+        """v0.41: web_fetch_skill is the 25th base skill."""
+        from llmwikify.apps.chat.skills.actions import web_fetch_skill
+        assert web_fetch_skill in ALL_ACTIONS
+
     def test_all_action_names_unique(self) -> None:
         names = [s.name for s in ALL_ACTIONS]
         assert len(names) == len(set(names))
@@ -116,14 +123,14 @@ class TestInventory:
         for s in ALL_ACTIONS:
             assert len(s.actions) >= 1, f"{s.name} has no actions"
 
-    def test_register_all_returns_24(self, fresh_registry: SkillRegistry) -> None:
+    def test_register_all_returns_25(self, fresh_registry: SkillRegistry) -> None:
         n = register_all_actions(fresh_registry)
-        assert n == 24
-        assert len(fresh_registry) == 24
+        assert n == 25
+        assert len(fresh_registry) == 25
 
-    def test_unregister_all_returns_24(self, populated_registry: SkillRegistry) -> None:
+    def test_unregister_all_returns_25(self, populated_registry: SkillRegistry) -> None:
         n = unregister_all_actions(populated_registry)
-        assert n == 24
+        assert n == 25
         assert len(populated_registry) == 0
 
     def test_all_skills_have_unique_qualified_actions(self, populated_registry: SkillRegistry) -> None:
@@ -132,9 +139,9 @@ class TestInventory:
             for s in populated_registry
             for a in s.actions.values()
         ]
-        # 23 single-action skills + 1 web_search skill (3 actions) = 26 actions
-        assert len(qualified) == 26
-        assert len(set(qualified)) == 26
+        # 23 single-action skills + web_search (3 actions) + web_fetch (1 action) = 27 actions
+        assert len(qualified) == 27
+        assert len(set(qualified)) == 27
 
 
 # ─── Each action invocation (error path: no wiki) ───────────────

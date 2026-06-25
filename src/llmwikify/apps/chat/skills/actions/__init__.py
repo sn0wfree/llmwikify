@@ -1,7 +1,8 @@
-"""apps/chat/skills/actions/ — 24 base Skills (26 actions).
+"""apps/chat/skills/actions/ — 25 base Skills (27 actions).
 
-Per ``v0.32-skill-restructure.md`` §3.1 + ``v0.39-web-search-skill.md``,
-the v0.32.0 base skills are 24 in total, exposing 26 actions:
+Per ``v0.32-skill-restructure.md`` §3.1 + ``v0.39-web-search-skill.md``
++ ``v0.41-web-fetch-skill.md``, the base skills are 25 in total,
+exposing 27 actions:
 
   14 base Skills (single-action each, #1-#14)
     1.  search_skill       → search
@@ -35,9 +36,12 @@ the v0.32.0 base skills are 24 in total, exposing 26 actions:
   1 web search Skill (3 actions, #24, v0.39)
     24. web_search_skill   → search_web, search_youtube, search_news
 
+  1 web fetch Skill (1 action, #25, v0.41)
+    25. web_fetch_skill    → fetch_url
+
 This ``__init__.py``:
-  1. Imports all 24 Skill instances
-  2. Exposes ``ALL_ACTIONS`` (the list of 24 Skill objects)
+  1. Imports all 25 Skill instances
+  2. Exposes ``ALL_ACTIONS`` (the list of 25 Skill objects)
   3. Exposes ``register_all_actions(registry)`` for the
      default registration at app startup
   4. Exposes ``unregister_all_actions(registry)`` for tests
@@ -46,16 +50,16 @@ This ``__init__.py``:
 Why a single import point
 -------------------------
 
-The SkillRegistry needs a way to discover all 24 skills
+The SkillRegistry needs a way to discover all 25 skills
 without each application site remembering to import them.
 The Phase 6 (research_skill) and Phase 7 (harness eval
-classes) work will rely on these 24 skills being
+classes) work will rely on these 25 skills being
 registered by default when the framework boots.
 
 The list is also a **contract**: the framework ships exactly
-24 skills (26 actions including web_search's 3 sub-actions);
-any deviation (e.g. 25th skill) requires a design update,
-not a silent addition.
+25 skills (27 actions including web_search's 3 sub-actions and
+web_fetch's 1 sub-action); any deviation (e.g. 26th skill)
+requires a design update, not a silent addition.
 """
 
 from __future__ import annotations
@@ -77,6 +81,7 @@ from llmwikify.apps.chat.skills.actions.revise_action import revise_skill
 from llmwikify.apps.chat.skills.actions.score_action import score_skill
 from llmwikify.apps.chat.skills.actions.search_action import search_skill
 from llmwikify.apps.chat.skills.actions.summarize_action import summarize_skill
+from llmwikify.apps.chat.skills.actions.web_fetch_action import web_fetch_skill
 from llmwikify.apps.chat.skills.actions.web_search_action import web_search_skill
 from llmwikify.apps.chat.skills.actions.write_action import write_skill
 from llmwikify.apps.chat.skills.registry import SkillRegistry
@@ -102,24 +107,25 @@ _BASE_ACTIONS = [
 # 1 clarify action
 _CLARIFY_ACTIONS = [clarify_skill]
 
-# 3 web search actions (v0.39)
-_WEB_SEARCH_ACTIONS = [web_search_skill]
+# 4 web actions (v0.39 web_search + v0.41 web_fetch)
+_WEB_ACTIONS = [web_search_skill, web_fetch_skill]
 
 ALL_ACTIONS = (
-    _BASE_ACTIONS + _CLARIFY_ACTIONS + ALL_DETECT_SKILLS + _WEB_SEARCH_ACTIONS
+    _BASE_ACTIONS + _CLARIFY_ACTIONS + ALL_DETECT_SKILLS + _WEB_ACTIONS
 )
 
-assert len(ALL_ACTIONS) == 24, (
-    f"Phase 5 contract violation: expected exactly 24 base "
-    f"skills (26 actions including web_search's 3 sub-actions), "
-    f"got {len(ALL_ACTIONS)} Skills. Update the inventory."
+assert len(ALL_ACTIONS) == 25, (
+    f"Phase 5 contract violation: expected exactly 25 base "
+    f"skills (27 actions including web_search's 3 sub-actions and "
+    f"web_fetch's 1 sub-action), got {len(ALL_ACTIONS)} Skills. "
+    f"Update the inventory."
 )
 
 
 def register_all_actions(registry: SkillRegistry) -> int:
-    """Register all 24 base Skills into ``registry``.
+    """Register all 25 base Skills into ``registry``.
 
-    Returns the count registered (24). Safe to call on a
+    Returns the count registered (25). Safe to call on a
     registry that already has some of these — the
     registry's ``register(replace=True)`` default will
     overwrite, and the Skill instances' ``setup()`` will
@@ -131,7 +137,7 @@ def register_all_actions(registry: SkillRegistry) -> int:
 
 
 def unregister_all_actions(registry: SkillRegistry) -> int:
-    """Unregister all 24 base Skills. Returns the count removed.
+    """Unregister all 25 base Skills. Returns the count removed.
 
     Used by tests that need registry isolation.
     """
@@ -164,5 +170,6 @@ __all__ = [
     "observe_skill",
     "clarify_skill",
     "web_search_skill",
+    "web_fetch_skill",
     "ALL_DETECT_SKILLS",
 ]

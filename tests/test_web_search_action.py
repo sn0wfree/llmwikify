@@ -93,7 +93,7 @@ class TestSkillInventory:
 
     def test_skill_registerable(self, fresh_registry: SkillRegistry) -> None:
         n = register_all_actions(fresh_registry)
-        assert n == 24
+        assert n == 25
         assert fresh_registry.has("web_search")
         # Three qualified actions should be exposed
         qualified = [
