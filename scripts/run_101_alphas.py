@@ -1,31 +1,902 @@
 """Run all 101 alphas in batch mode and produce a summary.
 
-Reuses ``run_one_factor`` from ``test_one_factor_llm_code.py`` (ReAct
-self-repair + QuantNodes PipelineRunner).
+Self-contained: includes run_one_factor and all dependencies (previously
+in test_one_factor_llm_code.py).
 
 Usage:
   python scripts/run_101_alphas.py                  # run all
   python scripts/run_101_alphas.py --start 1 --end 5  # run 1..5
   python scripts/run_101_alphas.py --skip-existing   # skip already-done files
   python scripts/run_101_alphas.py --max-failures 5  # stop after 5 failures
+  python scripts/run_101_alphas.py --output-dir /tmp/alpha_test
 
 Output:
-  scripts/output/multi_alpha_001_to_101.json
-  scripts/output/multi_alpha_summary.md  (human-readable table)
+  <output-dir>/multi_alpha_001_to_101.json
+  <output-dir>/multi_alpha_summary.md  (human-readable table)
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import signal
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-# Ensure the parent dir is importable
-sys.path.insert(0, str(Path(__file__).parent))
+import numpy as np
+import pandas as pd
+import polars as pl
 
-from test_one_factor_llm_code import run_one_factor
+from llmwikify.reproduction.codegen.llm_code import (
+    SYSTEM_PROMPT_CODE,
+    build_llm_client,
+    execute_code,
+    extract_python,
+    validate_safety,
+    validate_syntax,
+)
+
+# ─── Constants ───────────────────────────────────────────────────────
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_STAGE_NAMES = {-1: "llm", 0: "extract", 1: "syntax", 2: "safety", 3: "execute"}
+
+
+@dataclass
+class RunConfig:
+    """Centralized configuration for batch alpha runs."""
+
+    data_path: Path = field(default_factory=lambda: Path.home() / ".llmwikify" / "akshare_cache" / "quantnodes_h5_long")
+    track_b_path: Path = field(default_factory=lambda: PROJECT_ROOT / "quant" / "papers" / "101_alphas_minimal" / "track_b_checkpoint.json")
+    output_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "scripts" / "output")
+    date_beg: int = 20200101
+    date_end: int = 20241231
+    sample_index: str = "all"
+    paper_id: str = "101_alphas_minimal"
+    wiki_id: str = "default"
+    max_repair_rounds: int = 3
+    temperature: float = 0.3
+    h5_filename: str = "stk_daily.h5"
+
+    @property
+    def report_dir(self) -> Path:
+        return self.output_dir / "report"
+
+    @property
+    def date_beg_iso(self) -> str:
+        s = str(self.date_beg)
+        return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+
+    @property
+    def date_end_iso(self) -> str:
+        s = str(self.date_end)
+        return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+
+
+# ─── Data loading ────────────────────────────────────────────────────
+
+
+def _preload_data(data_path: Path, h5_filename: str = "stk_daily.h5") -> dict[str, pd.DataFrame]:
+    """Load all H5 keys once → dict of wide DataFrames (date × code).
+
+    Keys: close, open, high, low, volume, returns, vwap, industry.
+    """
+    h5 = data_path / h5_filename
+    with pd.HDFStore(h5, "r") as store:
+        close_key = "close" if "/close" in store.keys() else "cp"
+    keys = {
+        "close": close_key, "open": "open", "high": "high", "low": "low",
+        "volume": "volume", "returns": "returns", "vwap": "vwap",
+        "industry": "id_citic1",
+    }
+    return {name: pd.read_hdf(h5, h5_key) for name, h5_key in keys.items()}
+
+
+def _build_wide_df(data_cache: dict[str, pd.DataFrame]) -> pl.DataFrame:
+    """Convert cached wide DataFrames → single polars long DataFrame (date, code, ...)."""
+    def wide_to_long(wide: pd.DataFrame, name: str) -> pl.DataFrame:
+        long = wide.stack().reset_index()
+        long.columns = ["date", "code", name]
+        return pl.from_pandas(long)
+
+    result = wide_to_long(data_cache["close"], "close")
+    for col in ("open", "high", "low", "volume", "returns", "vwap", "industry"):
+        result = result.join(wide_to_long(data_cache[col], col), on=["date", "code"])
+    return result.sort(["date", "code"])
+
+
+def _load_and_build_df(data_path: Path, h5_filename: str = "stk_daily.h5") -> pl.DataFrame:
+    """Fallback: load H5 data fresh and build long DataFrame (used when data_cache is None)."""
+    h5 = data_path / h5_filename
+    with pd.HDFStore(h5, "r") as _store:
+        _close_key = "close" if "/close" in _store.keys() else "cp"
+    cp_wide = pd.read_hdf(h5, _close_key)
+    open_wide = pd.read_hdf(h5, "open")
+    high_wide = pd.read_hdf(h5, "high")
+    low_wide = pd.read_hdf(h5, "low")
+    volume_wide = pd.read_hdf(h5, "volume")
+    returns_wide = pd.read_hdf(h5, "returns")
+    vwap_wide = pd.read_hdf(h5, "vwap")
+    id_citic1_wide = pd.read_hdf(h5, "id_citic1")
+
+    def wide_to_long(wide: pd.DataFrame, name: str) -> pl.DataFrame:
+        long = wide.stack().reset_index()
+        long.columns = ["date", "code", name]
+        return pl.from_pandas(long)
+
+    return (
+        wide_to_long(cp_wide, "close")
+        .join(wide_to_long(open_wide, "open"), on=["date", "code"])
+        .join(wide_to_long(high_wide, "high"), on=["date", "code"])
+        .join(wide_to_long(low_wide, "low"), on=["date", "code"])
+        .join(wide_to_long(volume_wide, "volume"), on=["date", "code"])
+        .join(wide_to_long(returns_wide, "returns"), on=["date", "code"])
+        .join(wide_to_long(vwap_wide, "vwap"), on=["date", "code"])
+        .join(wide_to_long(id_citic1_wide, "industry"), on=["date", "code"])
+        .sort(["date", "code"])
+    )
+
+
+# ─── Utility functions ──────────────────────────────────────────────
+
+
+def _safe_float(x: Any, default: float | None = None) -> float | None:
+    """Safely cast to float, handling NaN/None/non-numeric."""
+    if x is None:
+        return default
+    try:
+        v = float(x)
+        if v != v:  # NaN check
+            return default
+        return v
+    except (TypeError, ValueError):
+        return default
+
+
+def _wide_from_long(df_pl: pl.DataFrame, factor_series: pl.Series) -> pd.DataFrame:
+    """Convert long (date, code, value) → wide [date × code] for QuantNodes H5.
+
+    Note: df_pl.date is polars Int64 (yyyymmdd). When pivoting, we keep it as
+    int64 — converting via pd.to_datetime(int) interprets int as nanoseconds
+    since epoch and produces 1970-01-01 dates, which corrupts the factor file.
+
+    DATA ORDERING: input df_pl is sorted by (date, code). LLM code may have
+    re-sorted by (code, date) inside `compute_factor`, which means the
+    returned `factor_series` is in (code, date) order — misaligned with
+    df_pl. We force sort by (code, date) here so pivot input is always
+    in (code, date) order, matching factor_series. This eliminates the
+    misalignment that causes GroupAnalyzer "Bin labels must be unique" errors.
+    """
+    assert len(df_pl) == len(factor_series), f"length mismatch: {len(df_pl)} vs {len(factor_series)}"
+    # Force (code, date) order to match the sort done by LLM code
+    df_sorted = df_pl.sort(['code', 'date'])
+    df_with = df_sorted.with_columns(factor_series.alias("__factor__"))
+    pdf = df_with.select(["date", "code", "__factor__"]).to_pandas()
+    # Pivot keeps date as int64 (yyyymmdd) — required for QuantNodes valid_date()
+    wide = pdf.pivot(index="date", columns="code", values="__factor__")
+    return wide
+
+
+def _write_factor_h5(wide: pd.DataFrame, factor_name: str, output_dir: Path, h5_filename: str = "stk_daily.h5") -> Path:
+    """Write wide DataFrame to QuantNodes-compatible H5 file.
+
+    Output file must live INSIDE data_path (PipelineRunner joins factor_dir with data_path).
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    h5_path = output_dir / f"factor_{factor_name}.h5"
+    # Use a sanitized H5 key (alphanumeric + underscore only)
+    safe_key = re.sub(r"[^A-Za-z0-9_]", "_", factor_name)
+    with pd.HDFStore(h5_path, mode="w") as store:
+        store.put(safe_key, wide)
+    return h5_path
+
+
+def _build_qn_config(factor_name: str, h5_path: Path, expression: str, config: RunConfig | None = None) -> dict:
+    """Build SingleFactorTestConfig-compatible dict for PipelineRunner.
+
+    Schema (from QuantNodes/research/factor_test/config.py):
+    - risk_corr.factors: str ('all' or comma-sep, NOT list)
+    - output.format: list[str] (NOT str)
+    - load_keys: list[str] (NOT None)
+
+    Convention (from quantnodes_repro.py):
+    - factor_dir is just the filename (PipelineRunner joins with data_path)
+    - factor H5 file must live in data_path directory
+    - factor.name is the H5 key (LoadDataNode uses this for store.get)
+    """
+    config = config or RunConfig()
+    # LoadDataNode uses factor.name (not factor_key) to look up the H5 key.
+    # We sanitize to alphanumeric+underscore so natural naming works.
+    safe_name = re.sub(r"[^A-Za-z0-9_]", "_", factor_name)
+    return {
+        "factor": {
+            "name": safe_name,
+            "factor_dir": h5_path.name,  # PipelineRunner joins with data_path
+            "factor_key": safe_name,
+            "format": "h5",
+            "hypothesis": "Test LLM-generated code via PipelineRunner",
+            "description": "alpha-001 via LLM code path",
+            "expression": expression[:500],
+        },
+        "data_path": str(h5_path.parent),
+        "load_keys": [
+            "stklist", "trade_dt", "cp", "id_citic1", "mv_float",
+            "st", "suspend", "ud_limit", "ipo_days",
+        ],
+        "preprocess": {
+            "adj_date_beg": config.date_beg,
+            "adj_date_end": config.date_end,
+            "adj_mode": ["M", "end"],
+            "sample_index": config.sample_index,
+            "sample_industry": "all",
+            "tradable": {
+                "no_st": True,
+                "no_suspended": True,
+                "no_up_down_limit": False,
+                "min_ipo_days": 60,
+            },
+            "missing": "",
+            "extreme": "",
+            "norm": "",
+            "industry_neutral": False,
+            "risk_neutral": False,
+            "risk_factors": [],
+            "mad_n": 5.0,
+            "pct_low": 0.025,
+            "pct_high": 0.975,
+        },
+        "analysis": {
+            "ic": {"min_group_size": 3},
+            "group": {
+                "groups": 5,
+                "factor_direction": 1,
+                "floor_mode": "group",
+                "hedge": "equal",
+                "hedge_path": None,
+            },
+            "longshort": {"factor_direction": 1},
+            "score": {"enabled": False},
+            "risk_corr": {"factors": "all"},
+        },
+        "output": {
+            "dir": str(config.report_dir),
+            "format": ["parquet", "json"],
+        },
+    }
+
+
+# ─── LLM code generation ────────────────────────────────────────────
+
+
+def _llm_code_oneshot(
+    factor_name: str,
+    formula_brief: str,
+    df_pl: pl.DataFrame,
+    llm: Any,
+    temperature: float = 0.3,
+) -> tuple[str | None, pl.Series | None, str | None, int]:
+    """Old 1-shot path: single LLM call → extract → validate → execute.
+
+    Returns (code, factor_series, error, stage_idx) where stage_idx maps to
+    "llm" / "extract" / "syntax" / "safety" / "execute" / None on success.
+    Used by `--no-react` mode.
+    """
+    user_prompt = f"""Factor: {factor_name}
+Formula (pseudo-code): {formula_brief}
+
+Write a Python function `compute_factor(df: pl.DataFrame) -> pl.Series` that computes
+this factor. Use QuantNodes operators (rank, ts_argmax, rolling_std, etc.) which are
+in the namespace, and use polars expressions otherwise.
+
+Output ONLY the code block."""
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT_CODE},
+        {"role": "user", "content": user_prompt},
+    ]
+    try:
+        content = llm.chat(messages=messages, temperature=temperature)
+    except Exception as exc:
+        return None, None, f"{type(exc).__name__}: {exc}", -1
+
+    print(f"\n[LLM] raw response ({len(content)} chars):")
+    print(content[:500] + ("..." if len(content) > 500 else ""))
+
+    code = extract_python(content)
+    if not code:
+        return None, None, "no code fence", 0
+    print(f"\n[extract] code ({len(code)} chars):")
+    print(code)
+
+    syntax_ok, syntax_err = validate_syntax(code)
+    if not syntax_ok:
+        return None, None, syntax_err, 1
+    print("[syntax] OK")
+
+    safe_ok, safe_err = validate_safety(code)
+    if not safe_ok:
+        return None, None, safe_err, 2
+    print("[safety] OK")
+
+    try:
+        series = execute_code(code, df_pl)
+    except Exception as exc:
+        return None, None, f"{type(exc).__name__}: {exc}", 3
+    print(f"[execute] OK: factor_series len={len(series)}, dtype={series.dtype}")
+    print(f"[execute] sample: {series.head(5).to_list()}")
+    return code, series, None, None
+
+
+def _llm_code_react(
+    factor_name: str,
+    formula_brief: str,
+    df_pl: pl.DataFrame,
+    llm: Any,
+    max_repair_rounds: int = 3,
+    temperature: float = 0.3,
+) -> tuple[str | None, pl.Series | None, str | None, dict]:
+    """ReAct self-retry path: LLM emits code, executes, on failure feeds
+    error back to LLM up to max_repair_rounds times.
+
+    Returns (code, factor_series, error, react_result_dict).
+    """
+    from llmwikify.reproduction.codegen.react_engine import (
+        ReactStep,
+        compile_to_code_react,
+    )
+
+    def _progress(step: ReactStep) -> None:
+        state = step.state.value
+        ek = step.error_kind.value
+        if ek == "none":
+            print(f"  [ReAct/{state}] OK ({step.elapsed_sec * 1000:.0f}ms)")
+        else:
+            print(
+                f"  [ReAct/{state}] {ek}: {step.error_message[:120]}"
+                f" ({step.elapsed_sec * 1000:.0f}ms)"
+            )
+
+    result = compile_to_code_react(
+        factor_name=factor_name,
+        formula_brief=formula_brief,
+        system_prompt=SYSTEM_PROMPT_CODE,
+        df=df_pl,
+        llm=llm,
+        max_repair_rounds=max_repair_rounds,
+        temperature=temperature,
+        progress_callback=_progress,
+    )
+
+    print(f"\n[ReAct] iterations={result.iterations}, "
+          f"is_valid={result.is_valid}, error_kind={result.error_kind.value}")
+    for i, step in enumerate(result.steps):
+        print(f"  step {i}: {step.state.value} "
+              f"({step.error_kind.value if step.error_kind.value != 'none' else 'OK'})")
+
+    if not result.is_valid:
+        return None, None, result.error_message, result.to_dict()
+
+    # Re-execute the final code to get the Series (compile_to_code_react
+    # doesn't return the Series; we re-run the validated code)
+    try:
+        series = execute_code(result.code, df_pl)
+    except Exception as exc:
+        return None, None, f"final execute failed: {exc}", result.to_dict()
+    return result.code, series, None, result.to_dict()
+
+
+# ─── Backtest extraction ─────────────────────────────────────────────
+
+
+def _extract_full_backtest_from_ctx(ctx: dict) -> dict:
+    """Extract full backtest data from PipelineRunner ctx.
+
+    Returns dict with:
+      - ic_mean, rank_ic_mean, icir, rank_icir, win_rate, ic_std
+      - ic_series: [{date, ic}, ...]
+      - group_metrics: {G1: {annual_return, sharpe, ...}, ...}
+      - equity_curve: {G1: [{date, nav}, ...], ...}
+      - longshort_ann_return, longshort_sharpe, longshort_max_dd
+
+    Defensive: missing fields → None (not crash).
+    """
+    out: dict = {
+        "ic_mean": None,
+        "rank_ic_mean": None,
+        "icir": None,
+        "rank_icir": None,
+        "win_rate": None,
+        "ic_std": None,
+        "ic_series": [],
+        "group_metrics": {},
+        "longshort_ann_return": None,
+        "longshort_sharpe": None,
+        "longshort_max_dd": None,
+    }
+
+    # ICAnalyzer
+    ic_node = ctx.get("ICAnalyzer") or {}
+    ic_result = ic_node.get("ic_result") if isinstance(ic_node, dict) else None
+    if ic_result is not None and hasattr(ic_result, "get"):
+        out["ic_mean"] = _safe_float(ic_result.get("IC均值"))
+        out["ic_std"] = _safe_float(ic_result.get("IC标准差"))
+        out["icir"] = _safe_float(ic_result.get("ICIR"))
+        out["win_rate"] = _safe_float(ic_result.get("IC为正比例"))
+
+    rank_ic_result = ic_node.get("rank_ic_result") if isinstance(ic_node, dict) else None
+    if rank_ic_result is not None and hasattr(rank_ic_result, "get"):
+        out["rank_ic_mean"] = _safe_float(rank_ic_result.get("Rank IC均值"))
+        out["rank_icir"] = _safe_float(rank_ic_result.get("Rank ICIR"))
+
+    ic_series_obj = ic_node.get("ic") if isinstance(ic_node, dict) else None
+    if ic_series_obj is not None and hasattr(ic_series_obj, "items"):
+        out["ic_series"] = [
+            {"date": int(d), "ic": _safe_float(v, 0.0)}
+            for d, v in ic_series_obj.items()
+            if _safe_float(v) is not None
+        ]
+
+    # GroupAnalyzer
+    ga = ctx.get("GroupAnalyzer") or {}
+    if isinstance(ga, dict):
+        group_eva_abs = ga.get("group_eva_abs")
+        turnover_obj = ga.get("turnover")
+        n_groups = ga.get("n_groups", 5)
+
+        if group_eva_abs is not None and hasattr(group_eva_abs, "loc"):
+            gm: dict = {}
+            for g in range(1, n_groups + 1):
+                if g not in group_eva_abs.columns:
+                    continue
+                gm[f"G{g}"] = {
+                    "annual_return": _safe_float(group_eva_abs.loc["AnnualRt", g], 0.0),
+                    "sharpe": _safe_float(group_eva_abs.loc["SR", g], 0.0),
+                    "max_drawdown": _safe_float(group_eva_abs.loc["MDD", g], 0.0),
+                    "win_rate": _safe_float(group_eva_abs.loc["WinRatio", g], 0.0),
+                    "turnover": (
+                        _safe_float(turnover_obj.loc[g], 0.0)
+                        if (
+                            turnover_obj is not None
+                            and hasattr(turnover_obj, "loc")
+                            and g in turnover_obj.index
+                        )
+                        else 0.0
+                    ),
+                    "n_stocks": 0,
+                }
+            out["group_metrics"] = gm
+
+        # Extract group NAV time series from GroupAnalyzer ctx
+        daily_net = ga.get("daily_net_simp")
+        if daily_net is not None and hasattr(daily_net, "columns"):
+            nav_series: dict = {}
+            for g in daily_net.columns:
+                col = daily_net[g].dropna()
+                nav_series[f"G{g}"] = [
+                    {"date": int(d.timestamp() * 1000) if hasattr(d, "timestamp") else int(d), "nav": float(v)}
+                    for d, v in col.items()
+                ]
+            out["equity_curve"] = nav_series
+            out["group_nav_series"] = nav_series
+
+    # LongShort
+    ls = ctx.get("LongShort") or {}
+    if isinstance(ls, dict):
+        net = ls.get("net")
+        if net is not None and hasattr(net, "iloc"):
+            try:
+                ls_curve = net.iloc[:, 0] if hasattr(net, "iloc") else None
+                if ls_curve is not None and len(ls_curve) > 1:
+                    n_periods = len(ls_curve)
+                    # Monthly rebalance → annualize
+                    periods_per_year = 12
+                    total_ret = float(ls_curve.iloc[-1] / ls_curve.iloc[0] - 1)
+                    out["longshort_ann_return"] = (1 + total_ret) ** (periods_per_year / n_periods) - 1 if n_periods > 0 else 0.0
+                    # MDD
+                    peak = ls_curve.cummax()
+                    dd = (ls_curve - peak) / peak
+                    out["longshort_max_dd"] = float(dd.min())
+                    # Sharpe (monthly)
+                    if hasattr(ls, "period_ret") and ls["period_ret"] is not None:
+                        pr = ls["period_ret"]
+                        if hasattr(pr, "std"):
+                            std = float(pr.std(ddof=1))
+                            mean = float(pr.mean())
+                            out["longshort_sharpe"] = (mean / std * (periods_per_year ** 0.5)) if std > 0 else 0.0
+            except Exception as exc:
+                print(f"[extract] longshort calc warning: {exc}")
+
+    return out
+
+
+# ─── Persist functions ───────────────────────────────────────────────
+
+
+def _compute_score(icir: float | None, win_rate: float | None) -> int:
+    """Compute L5 overall_assessment.score (0-100) from ICIR + WinRate.
+
+    Weighted: 70% ICIR (dominant) + 30% WinRate.
+    """
+    import math
+    if icir is None or (isinstance(icir, float) and math.isnan(icir)):
+        return 50
+    icir_score = max(0, min(100, 50 + round(icir * 50)))
+    if win_rate is None or (isinstance(win_rate, float) and math.isnan(win_rate)):
+        return icir_score
+    wr_score = round(win_rate * 100)
+    return round(icir_score * 0.7 + wr_score * 0.3)
+
+
+def _compute_status(icir: float | None) -> str:
+    """Compute L5 overall_assessment.status from ICIR.
+
+    Mapping (matches WebUI OverallAssessment.tsx STATUS_CONFIG):
+      通过  — ICIR > 0.10  (positive edge)
+      失败  — ICIR < -0.05 (negative edge)
+      待更新 — default
+    """
+    import math
+    if icir is None or (isinstance(icir, float) and math.isnan(icir)):
+        return "待验证"
+    if icir > 0.10:
+        return "通过"
+    if icir < -0.05:
+        return "失败"
+    return "待更新"
+
+
+def _derive_input_columns(formula_brief: str) -> list[str]:
+    """Extract input column names from formula_brief text.
+
+    Matches 101 alpha paper's common column tokens.
+    """
+    candidates = [
+        "open", "high", "low", "close", "volume", "adv20", "adv30", "adv40",
+        "adv50", "adv60", "adv81", "adv120", "adv150", "vwap", "returns",
+        "cap", "industry",
+    ]
+    text = formula_brief.lower()
+    found = [c for c in candidates if c in text]
+    # Always include base OHLCV if any price-like token present
+    if any(t in text for t in ["close", "open", "high", "low", "vwap", "returns"]):
+        for base in ["close", "open", "high", "low", "volume", "returns"]:
+            if base not in found:
+                found.append(base)
+    return found[:10]
+
+
+def persist_code_to_yaml(
+    factor_name: str,
+    code: str,
+    formula_brief: str,
+    backtest: dict,
+    h5_path: str,
+    code_chars: int,
+) -> str | None:
+    """Persist code-path factor YAML (6-layer) to quant/factors/.
+
+    Mirrors ``factor_compiler.persist_l5_to_yaml`` pattern:
+      read_factor_yaml → modify l5.* → write_factor_yaml → log.
+
+    WebUI L5 reads l5.overall_assessment.{score, status, pass_threshold, final_meaning}
+    (FactorDetail.tsx L5Content → OverallAssessment.tsx).
+    L2-L6 populated by Phase 3 LLM extraction (overwrites this default).
+    """
+    from llmwikify.reproduction.persist.factor_library import (
+        read_factor_yaml,
+        write_factor_yaml,
+    )
+
+    slug = factor_name.replace("-", "_")
+
+    try:
+        existing = read_factor_yaml(slug)
+        if existing is None:
+            data = {
+                "factor": {
+                    "name": slug,
+                    "asset_type": "stock",
+                    "category": "formulaic",
+                    "status": "已验证",
+                }
+            }
+        else:
+            data = existing
+
+        factor = data.setdefault("factor", {})
+        factor["name"] = slug
+        factor["asset_type"] = factor.get("asset_type", "stock")
+        factor["category"] = factor.get("category", "formulaic")
+        factor["status"] = "已验证"
+        factor["updated_at"] = time.strftime("%Y-%m-%d")
+
+        l1 = factor.setdefault("l1", {})
+        if not l1.get("definition"):
+            l1["definition"] = formula_brief[:200]
+        l1["formula"] = formula_brief
+        l1["frequency"] = "日频"
+        l1["output_schema"] = "[date × Code]"
+        l1["input_columns"] = _derive_input_columns(formula_brief)
+        l1["nan_meaning"] = "上市不足或窗口期数据不足"
+        l1["default_params"] = {}
+        l1["param_constraints"] = {}
+        l1["business_constraints"] = "支持日频调仓, T+1 信号"
+
+        l5 = factor.setdefault("l5", {})
+        l5["code"] = code
+        l5["code_compile_status"] = "success"
+        l5["code_chars"] = code_chars
+        l5["h5_path"] = h5_path
+        l5["ast"] = None
+        l5["ast_compile_status"] = None
+        l5["ast_compile_iterations"] = None
+        l5["ast_compile_source"] = None
+        l5["ast_compile_error"] = None
+
+        import math
+        def _nan_to_none(v):
+            return None if isinstance(v, float) and math.isnan(v) else v
+
+        icir = _nan_to_none(backtest.get("icir"))
+        win_rate = _nan_to_none(backtest.get("win_rate"))
+        l5["overall_assessment"] = {
+            "score": _compute_score(icir, win_rate),
+            "status": _compute_status(icir),
+            "pass_threshold": 60,
+            "final_meaning": "",
+            "ic_mean": _nan_to_none(backtest.get("ic_mean")),
+            "icir": icir,
+            "winrate": win_rate,
+            "rank_ic_mean": _nan_to_none(backtest.get("rank_ic_mean")),
+            "rank_icir": _nan_to_none(backtest.get("rank_icir")),
+            "annual_return": _nan_to_none(backtest.get("longshort_ann_return")),
+            "longshort_sharpe": _nan_to_none(backtest.get("longshort_sharpe")),
+            "longshort_max_dd": _nan_to_none(backtest.get("longshort_max_dd")),
+            "validated_at": time.time(),
+        }
+        l5["validation_date"] = time.strftime("%Y-%m-%d")
+
+        action = write_factor_yaml(slug, data)
+        print(f"[yaml] {action} (slug={slug})")
+        return action
+    except Exception as exc:
+        print(f"[yaml] persist_code_to_yaml failed for {factor_name}: {exc}")
+        return None
+
+
+def save_backtest_to_db(
+    slug: str,
+    alpha_index: int,
+    backtest: dict,
+    config: RunConfig | None = None,
+) -> bool:
+    """Persist backtest result to reproduction_results table."""
+    config = config or RunConfig()
+    import math
+    def _nan_to_none(v):
+        return None if isinstance(v, float) and math.isnan(v) else v
+
+    try:
+        from llmwikify.reproduction.persist.sessions import ReproductionDatabase
+        db = ReproductionDatabase()
+        run_id = f"pipeline_a_{alpha_index:03d}"
+        session_id = db.create_session(
+            wiki_id=config.wiki_id,
+            paper_id=config.paper_id,
+            source_type="pipeline_a",
+            source_ref=f"alpha_{alpha_index:03d}",
+            symbol="universe:all",
+            start_date=config.date_beg_iso,
+            end_date=config.date_end_iso,
+        )
+        db.create_result(
+            run_id=run_id,
+            session_id=session_id,
+            result_type="factor_backtest",
+            factor_ref=slug,
+            strategy_ref=None,
+            universe=config.sample_index,
+            start_date=config.date_beg_iso,
+            end_date=config.date_end_iso,
+            status="success",
+            error=None,
+            wiki_path=None,
+            adj_mode="M-end",
+            hedge="equal",
+            data_source="quantnodes_pipeline",
+            ic_mean=_nan_to_none(backtest.get("ic_mean")),
+            rank_ic_mean=_nan_to_none(backtest.get("rank_ic_mean")),
+            icir=_nan_to_none(backtest.get("icir")),
+            rank_icir=_nan_to_none(backtest.get("rank_icir")),
+            win_rate=_nan_to_none(backtest.get("win_rate")),
+            annual_return=_nan_to_none(backtest.get("longshort_ann_return")),
+            longshort_ann_return=_nan_to_none(backtest.get("longshort_ann_return")),
+            longshort_sharpe=_nan_to_none(backtest.get("longshort_sharpe")),
+            longshort_max_dd=_nan_to_none(backtest.get("longshort_max_dd")),
+            ic_series=backtest.get("ic_series", []),
+            group_metrics=backtest.get("group_metrics", {}),
+            equity_curve=backtest.get("equity_curve") or backtest.get("group_nav_series"),
+        )
+        print(f"[db] created result run_id={run_id} factor_ref={slug}")
+        return True
+    except Exception as exc:
+        print(f"[db] save_backtest_to_db failed for {slug}: {exc}")
+        return False
+
+
+# ─── run_one_factor ──────────────────────────────────────────────────
+
+
+def run_one_factor(
+    alpha_index: int = 1,
+    use_react: bool = True,
+    config: RunConfig | None = None,
+    data_cache: dict[str, pd.DataFrame] | None = None,
+) -> dict:
+    t0 = time.monotonic()
+    config = config or RunConfig()
+
+    # 1. Load formula_brief from track_b_checkpoint.json
+    track_b = json.loads(config.track_b_path.read_text(encoding="utf-8"))
+    alpha = next(s for s in track_b["pass1_signals"] if s["index"] == alpha_index)
+    factor_name = f"alpha-{alpha_index:03d}"
+    formula_brief = alpha["formula_brief"]
+
+    print(f"\n{'='*70}")
+    print(f"[alpha-{alpha_index:03d}] formula_brief: {formula_brief}")
+    print(f"{'='*70}")
+
+    # 2. Build polars long DataFrame (from cache or fresh load)
+    if data_cache is not None:
+        df_pl = _build_wide_df(data_cache)
+    else:
+        df_pl = _load_and_build_df(config.data_path, config.h5_filename)
+    print(f"[data] shape: {df_pl.shape}, columns: {df_pl.columns}")
+    print(f"[data] date range: {df_pl['date'].min()} - {df_pl['date'].max()}")
+
+    # 3. LLM call to generate Python code (ReAct self-retry by default)
+    print(f"\n[LLM] calling model via {('ReAct' if use_react else '1-shot')} loop...")
+    llm = build_llm_client()
+
+    # 4. LLM generates code (ReAct or 1-shot)
+    react_meta: dict = {}
+    if use_react:
+        code, factor_series, error, react_meta = _llm_code_react(
+            factor_name=factor_name,
+            formula_brief=formula_brief,
+            df_pl=df_pl,
+            llm=llm,
+            max_repair_rounds=config.max_repair_rounds,
+            temperature=config.temperature,
+        )
+        if error is not None:
+            return {
+                "status": "failed",
+                "stage": "react",
+                "error": error,
+                "react_meta": react_meta,
+                "elapsed_sec": time.monotonic() - t0,
+            }
+    else:
+        code, factor_series, error, stage_idx = _llm_code_oneshot(
+            factor_name=factor_name,
+            formula_brief=formula_brief,
+            df_pl=df_pl,
+            llm=llm,
+            temperature=config.temperature,
+        )
+        if error is not None:
+            return {
+                "status": "failed",
+                "stage": _STAGE_NAMES.get(stage_idx, "unknown"),
+                "error": error,
+                "code": code,
+                "elapsed_sec": time.monotonic() - t0,
+            }
+
+    # 5. Convert to wide + write H5
+    unique_vals = factor_series.drop_nulls().unique()
+    if len(unique_vals) <= 2:
+        print(f"[execute] constant/binary factor detected ({len(unique_vals)} unique values), adding noise")
+        noise = pl.Series("__noise", np.random.uniform(-1e-7, 1e-7, len(factor_series)))
+        factor_series = factor_series.cast(pl.Float64) + noise
+    factor_wide = _wide_from_long(df_pl, factor_series)
+    print(f"[h5] wide shape: {factor_wide.shape}, dates: {factor_wide.index.min()} - {factor_wide.index.max()}")
+    safe_factor_name = re.sub(r"[^A-Za-z0-9_]", "_", factor_name)
+    h5_path = _write_factor_h5(factor_wide, safe_factor_name, config.data_path, config.h5_filename)
+    print(f"[h5] written: {h5_path}")
+
+    # 6. Build QN config + run PipelineRunner
+    print("\n[PipelineRunner] building config...")
+    qn_config = _build_qn_config(factor_name, h5_path, code, config=config)
+    print("[PipelineRunner] running 12-node pipeline...")
+
+    from QuantNodes.research.factor_test.pipeline_runner import PipelineRunner
+
+    try:
+        runner = PipelineRunner.from_dict(qn_config)
+        ctx = runner.run()
+    except Exception as exc:
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[PipelineRunner] FAILED: {type(exc).__name__}: {exc}")
+        print(tb[-1500:])
+        return {
+            "status": "failed",
+            "stage": "pipeline",
+            "error": f"{type(exc).__name__}: {exc}",
+            "traceback": tb[-1500:],
+            "code": code,
+            "elapsed_sec": time.monotonic() - t0,
+        }
+
+    # 7. Extract metrics
+    print(f"\n[result] PipelineRunner ctx keys: {list(ctx.keys())}")
+    ic_node = ctx.get("ICAnalyzer")
+    ic_result = ic_node.get("ic_result") if isinstance(ic_node, dict) else None
+    if ic_result is not None and hasattr(ic_result, "get"):
+        ic_mean = ic_result.get("IC均值") or ic_result.get("IC_mean")
+        icir = ic_result.get("ICIR")
+        ic_winrate = ic_result.get("IC为正比例") or ic_result.get("IC胜率") or ic_result.get("win_rate")
+        print(f"[IC] 均值: {ic_mean}, ICIR: {icir}, 胜率: {ic_winrate}")
+    else:
+        ic_mean = icir = ic_winrate = None
+        print(f"[IC] no IC result; ctx ICAnalyzer: {type(ic_node)}, val: {str(ic_node)[:200] if ic_node else 'None'}")
+
+    group_result = ctx.get("GroupAnalyzer")
+    print(f"[Group] type: {type(group_result)}, preview: {str(group_result)[:300] if group_result else None}")
+
+    backtest = _extract_full_backtest_from_ctx(ctx)
+    if ic_winrate is not None and backtest.get("win_rate") is None:
+        backtest["win_rate"] = ic_winrate
+    if ic_mean is not None and backtest.get("ic_mean") is None:
+        backtest["ic_mean"] = ic_mean
+    if icir is not None and backtest.get("icir") is None:
+        backtest["icir"] = icir
+    print(f"[backtest] ic_mean={backtest.get('ic_mean')}, icir={backtest.get('icir')}, "
+          f"groups={len(backtest.get('group_metrics', {}))}, "
+          f"ic_series_pts={len(backtest.get('ic_series', []))}")
+
+    slug = factor_name.replace("-", "_")
+    persist_code_to_yaml(
+        factor_name=factor_name,
+        code=code,
+        formula_brief=formula_brief,
+        backtest=backtest,
+        h5_path=str(h5_path),
+        code_chars=len(code),
+    )
+    save_backtest_to_db(
+        slug=slug,
+        alpha_index=alpha_index,
+        backtest=backtest,
+        config=config,
+    )
+
+    elapsed = time.monotonic() - t0
+    print(f"\n[done] elapsed: {elapsed:.1f}s")
+
+    return {
+        "status": "success",
+        "alpha_index": alpha_index,
+        "factor_name": factor_name,
+        "formula_brief": formula_brief,
+        "code": code,
+        "code_chars": len(code),
+        "factor_series_len": len(factor_series),
+        "factor_series_dtype": str(factor_series.dtype),
+        "h5_path": str(h5_path),
+        "ic_mean": ic_mean,
+        "icir": icir,
+        "ic_winrate": ic_winrate,
+        "elapsed_sec": elapsed,
+    }
+
+
+# ─── Batch runner ────────────────────────────────────────────────────
 
 
 class _AlphaTimeout(Exception):
@@ -37,7 +908,12 @@ def _alarm_handler(signum, frame):
     raise _AlphaTimeout("alpha run exceeded timeout")
 
 
-def _run_with_timeout(idx: int, timeout_sec: int) -> dict:
+def _run_with_timeout(
+    idx: int,
+    timeout_sec: int,
+    config: RunConfig | None = None,
+    data_cache: dict[str, pd.DataFrame] | None = None,
+) -> dict:
     """Run a single alpha with a hard timeout via SIGALRM.
 
     On timeout, returns a failure dict instead of hanging the whole batch.
@@ -46,7 +922,7 @@ def _run_with_timeout(idx: int, timeout_sec: int) -> dict:
     signal.alarm(timeout_sec)
     t0 = time.monotonic()
     try:
-        result = run_one_factor(idx, use_react=True)
+        result = run_one_factor(idx, use_react=True, config=config, data_cache=data_cache)
         return result
     except _AlphaTimeout:
         return {
@@ -66,13 +942,10 @@ def _run_with_timeout(idx: int, timeout_sec: int) -> dict:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, old_handler)
 
-OUTPUT_DIR = Path("/home/ll/llmwikify/scripts/output")
-TRACK_B = Path("/home/ll/llmwikify/quant/papers/101_alphas_minimal/track_b_checkpoint.json")
 
-
-def _load_formula_briefs() -> list[dict]:
+def _load_formula_briefs(track_b_path: Path) -> list[dict]:
     """Load all alpha records from track_b_checkpoint.json."""
-    data = json.loads(TRACK_B.read_text(encoding="utf-8"))
+    data = json.loads(track_b_path.read_text(encoding="utf-8"))
     return data["pass1_signals"]
 
 
@@ -204,7 +1077,7 @@ def _write_markdown(results: list[dict], path: Path) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _run_llm_extract(args: argparse.Namespace) -> None:
+def _run_llm_extract(args: argparse.Namespace, output_dir: Path) -> None:
     """Phase 3: extract L2-L6 metadata from existing single_factor_NNN.json files.
 
     Uses factor_extractor.extract_batch (3 concurrent LLM calls, ~60s/alpha).
@@ -217,11 +1090,10 @@ def _run_llm_extract(args: argparse.Namespace) -> None:
     print("  Phase 3: LLM Extract L2-L6 Metadata")
     print("=" * 80)
     print(f"  Indices: {args.start}-{args.end}")
-    print(f"  Output dir: {OUTPUT_DIR}")
+    print(f"  Output dir: {output_dir}")
     print()
 
-    # Filter: only alphas with existing single_factor_NNN.json
-    available = [i for i in indices if (OUTPUT_DIR / f"single_factor_{i:03d}.json").exists()]
+    available = [i for i in indices if (output_dir / f"single_factor_{i:03d}.json").exists()]
     if not available:
         print("  [error] no single_factor_NNN.json found in output/")
         print("  Run Phase 1 first (without --llm-extract)")
@@ -229,14 +1101,12 @@ def _run_llm_extract(args: argparse.Namespace) -> None:
     print(f"  Available: {len(available)} alphas with JSON ({available[:5]}...)")
     print()
 
-    # L5 hypothesis via run_l5_pipeline (optional, adds ~5min)
     print("  [info] L5 hypothesis_testing skipped (requires FastAPI server)")
     print("  [info] To enable: start server, then POST /api/factor/{slug}/validate")
     print()
 
-    results = extract_batch(available, output_dir=OUTPUT_DIR, max_workers=3)
+    results = extract_batch(available, output_dir=output_dir, max_workers=3)
 
-    # Summary
     success = [r for r in results if r.get("status") == "success"]
     failed = [r for r in results if r.get("status") != "success"]
     print()
@@ -260,21 +1130,55 @@ def main() -> None:
     parser.add_argument("--no-delay", action="store_true", help="Disable inter-alpha delay (for testing only)")
     parser.add_argument("--timeout", type=int, default=180, help="Per-alpha timeout in seconds (default: 180)")
     parser.add_argument("--llm-extract", action="store_true", help="Phase 3: LLM extract L2-L6 metadata (reads existing JSONs, no LLM code re-run)")
+    parser.add_argument("--output-dir", type=Path, default=None, help="Output directory for JSON results (default: scripts/output)")
+    parser.add_argument("--data-path", type=Path, default=None, help="Path to H5 data directory (default: ~/.llmwikify/akshare_cache/quantnodes_h5_long)")
+    parser.add_argument("--track-b", type=Path, default=None, help="Path to track_b_checkpoint.json (default: auto)")
+    parser.add_argument("--date-beg", type=int, default=20200101, help="Backtest start date YYYYMMDD (default: 20200101)")
+    parser.add_argument("--date-end", type=int, default=20241231, help="Backtest end date YYYYMMDD (default: 20241231)")
+    parser.add_argument("--sample-index", type=str, default="all", help="Sample index: all/HS300/ZZ500 (default: all)")
+    parser.add_argument("--paper-id", type=str, default="101_alphas_minimal", help="Paper ID for DB session")
+    parser.add_argument("--wiki-id", type=str, default="default", help="Wiki ID for DB session")
+    parser.add_argument("--h5-filename", type=str, default="stk_daily.h5", help="H5 filename within data-path (default: stk_daily.h5)")
     args = parser.parse_args()
+
+    config = RunConfig(
+        data_path=args.data_path or Path.home() / ".llmwikify" / "akshare_cache" / "quantnodes_h5_long",
+        track_b_path=args.track_b or PROJECT_ROOT / "quant" / "papers" / "101_alphas_minimal" / "track_b_checkpoint.json",
+        output_dir=args.output_dir or PROJECT_ROOT / "scripts" / "output",
+        date_beg=args.date_beg,
+        date_end=args.date_end,
+        sample_index=args.sample_index,
+        paper_id=args.paper_id,
+        wiki_id=args.wiki_id,
+        max_repair_rounds=args.rounds,
+        h5_filename=args.h5_filename,
+    )
+    config.output_dir.mkdir(parents=True, exist_ok=True)
 
     # Phase 3: LLM extraction mode (fast, no LLM code re-run)
     if args.llm_extract:
-        _run_llm_extract(args)
+        _run_llm_extract(args, config.output_dir)
         return
 
     _print_header()
     t0 = time.monotonic()
 
+    # Preload H5 data once (shared across all alpha runs)
+    print(f"  Data path: {config.data_path}")
+    print(f"  Track B:   {config.track_b_path}")
+    print(f"  Date range: {config.date_beg} - {config.date_end}")
+    print(f"  Sample index: {config.sample_index}")
+    print(f"  H5 filename: {config.h5_filename}")
+    print()
+    data_cache = _preload_data(config.data_path, config.h5_filename)
+    print(f"  Preloaded {len(data_cache)} H5 keys: {list(data_cache.keys())}")
+    print()
+
     # Optionally skip already-done alphas
     skip: set[int] = set()
     if args.skip_existing:
         for idx in range(args.start, args.end + 1):
-            p = OUTPUT_DIR / f"single_factor_{idx:03d}.json"
+            p = config.output_dir / f"single_factor_{idx:03d}.json"
             if p.exists():
                 skip.add(idx)
         if skip:
@@ -285,8 +1189,7 @@ def main() -> None:
 
     for idx in range(args.start, args.end + 1):
         if idx in skip:
-            # Load existing result
-            p = OUTPUT_DIR / f"single_factor_{idx:03d}.json"
+            p = config.output_dir / f"single_factor_{idx:03d}.json"
             loaded = json.loads(p.read_text(encoding="utf-8"))
             if "alpha_index" not in loaded:
                 loaded["alpha_index"] = idx
@@ -296,16 +1199,14 @@ def main() -> None:
         elapsed_cum = time.monotonic() - t0
         print(f"\n[{time.strftime('%H:%M:%S')}] alpha-{idx:03d} (elapsed: {elapsed_cum:.0f}s, failures: {failures})")
 
-        result = run_one_factor(idx, use_react=True)
-        # Inject alpha_index if missing (run_one_factor omits it on failure)
+        result = run_one_factor(idx, use_react=True, config=config, data_cache=data_cache)
         if "alpha_index" not in result:
             result["alpha_index"] = idx
         results.append(result)
 
         _print_row(idx, result, elapsed_cum)
 
-        # Save individual result
-        out_file = OUTPUT_DIR / f"single_factor_{idx:03d}.json"
+        out_file = config.output_dir / f"single_factor_{idx:03d}.json"
         out_file.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
 
         if result.get("status") != "success":
@@ -319,13 +1220,13 @@ def main() -> None:
             time.sleep(args.delay)
 
     # Write summary files
-    _write_json(results, OUTPUT_DIR / "multi_alpha_001_to_101.json")
-    _write_markdown(results, OUTPUT_DIR / "multi_alpha_summary.md")
+    _write_json(results, config.output_dir / "multi_alpha_001_to_101.json")
+    _write_markdown(results, config.output_dir / "multi_alpha_summary.md")
     _print_summary(results)
 
     total_elapsed = time.monotonic() - t0
     print(f"\n  Total elapsed: {total_elapsed:.1f}s ({total_elapsed / 60:.1f} min)")
-    print(f"  Results saved to: {OUTPUT_DIR}")
+    print(f"  Results saved to: {config.output_dir}")
 
 
 if __name__ == "__main__":

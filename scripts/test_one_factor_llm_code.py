@@ -378,6 +378,19 @@ def _extract_full_backtest_from_ctx(ctx: dict) -> dict:
                 }
             out["group_metrics"] = gm
 
+        # Extract group NAV time series from GroupAnalyzer ctx
+        daily_net = ga.get("daily_net_simp")
+        if daily_net is not None and hasattr(daily_net, "columns"):
+            nav_series: dict = {}
+            for g in daily_net.columns:
+                col = daily_net[g].dropna()
+                nav_series[f"G{g}"] = [
+                    {"date": int(d.timestamp() * 1000) if hasattr(d, "timestamp") else int(d), "nav": float(v)}
+                    for d, v in col.items()
+                ]
+            out["equity_curve"] = nav_series
+            out["group_nav_series"] = nav_series
+
     # ─── LongShort ────────────────────────────────────────
     ls = ctx.get("LongShort") or {}
     if isinstance(ls, dict):
@@ -491,7 +504,8 @@ def persist_code_to_yaml(
 
         # ─── L1 (Phase 2 derivation done here for cohesion) ───
         l1 = factor.setdefault("l1", {})
-        l1["definition"] = formula_brief[:200]
+        if not l1.get("definition"):
+            l1["definition"] = formula_brief[:200]
         l1["formula"] = formula_brief
         l1["frequency"] = "日频"
         l1["output_schema"] = "[date × Code]"
@@ -626,6 +640,7 @@ def save_backtest_to_db(
             longshort_max_dd=_nan_to_none(backtest.get("longshort_max_dd")),
             ic_series=backtest.get("ic_series", []),
             group_metrics=backtest.get("group_metrics", {}),
+            equity_curve=backtest.get("equity_curve") or backtest.get("group_nav_series"),
         )
         print(f"[db] created result run_id={run_id} factor_ref={slug}")
         return True
