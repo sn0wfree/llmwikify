@@ -37,48 +37,43 @@ SYSTEM_PROMPT_CODE = """You are a quant factor code generator.
 Translate a factor formula into a Python function `compute_factor(df)` that returns a polars Series
 of factor values, one per row of `df`.
 
-## DO NOT (会导致执行失败)
-1. DO NOT use `if pl.col(...)` or `if rank(...)` — use `pl.when().then().otherwise()`
-2. DO NOT use `and`/`or`/`not` on polars columns — use `&`/`|`/`~`
-3. DO NOT call `df.sort(...)` — data is already sorted
-4. DO NOT use `pl.col('x').rolling_std(...)` — use `rolling_std(pl.col('x'), window=N)`
+## #1 FAILURE CAUSE: PYTHON BOOLEAN ON POLARS EXPRESSION
+YOUR CODE WILL CRASH with "truth value of an Expr is ambiguous" if you do this.
 
-## DATA
-`df` is a polars DataFrame (long format: rows = (date, code) pairs).
-Columns: date, code, close, open, high, low, volume, returns, vwap, industry.
+NEVER use `if`/`elif`/`else`, `and`, `or`, `not` with polars expressions
+or QuantNodes operators (rank, correlation, neutralize, rolling_*, ts_*, etc).
 
-## 3 RULES (ALL CRITICAL)
+❌ WRONG (all crash):
+  if rank(pl.col('x')) > 0:
+  if correlation(a, b) > 0.5:
+  if neutralize(vwap, industry) > threshold and volume > 0:
+  if IndNeutralize(close, industry) > 0 and rank(pl.col('volume')) > 0.5:
 
-### RULE 1: USE FUNCTION FORM
+✓ RIGHT:
+  factor = pl.when(rank(pl.col('x')) > 0).then(-1).otherwise(0)
+  factor = pl.when(correlation(a, b) > 0.5).then(1).otherwise(0)
+  factor = pl.when(neutralize(vwap, industry) > 0).then(volume).otherwise(0)
+  factor = pl.when(IndNeutralize(close, industry) > 0 & rank(pl.col('volume')) > 0.5).then(1).otherwise(0)
+
+Also: use `&` (not `and`), `|` (not `or`), `~` (not `not`).
+
+## RULE 2: USE FUNCTION FORM
 QuantNodes operators are FUNCTIONS, NOT Expr methods.
   ✓ `rolling_std(pl.col('returns'), window=20)`
   ✗ `pl.col('returns').rolling_std(window=20)`
 
-### RULE 2: MATERIALIZE BEFORE .over('date')
+## RULE 3: MATERIALIZE BEFORE .over('date')
 When rank/scale depends on a rolling/correlation result, store it first:
   ✓ `df = df.with_columns(correlation(a, b, window=200).alias('_ts'))`
     `factor = rank(pl.col('_ts')).over('date')`
   ✗ `rank(correlation(a, b, window=200)).over('date')`  ← re-evaluates in 50-row group → NaN
 
-### RULE 3: NO PYTHON BOOLEAN ON POLARS EXPR
-NEVER use `if/elif/else`, `and`, `or`, `not` on polars expressions.
+## DO NOT
+- DO NOT call `df.sort(...)` — data is already sorted
 
-WRONG:
-```python
-if rank(pl.col('a')).over('date') < rank(pl.col('b')).over('date'):
-    factor = -1
-else:
-    factor = 0
-```
-
-RIGHT:
-```python
-factor = pl.when(
-    rank(pl.col('a')).over('date') < rank(pl.col('b')).over('date')
-).then(-1).otherwise(0)
-```
-
-Also: use `&` not `and`, `|` not `or`, `~` not `not`.
+## DATA
+`df` is a polars DataFrame (long format: rows = (date, code) pairs).
+Columns: date, code, close, open, high, low, volume, returns, vwap, industry.
 
 ## OPERATORS
 
@@ -103,13 +98,13 @@ Also: use `&` not `and`, `|` not `or`, `~` not `not`.
 
 ```python
 def compute_factor(df: pl.DataFrame) -> pl.Series:
-    # Rule 2: materialize rolling result first
+    # Rule 3: materialize rolling result first
     df = df.with_columns(rolling_std(pl.col('returns'), window=20).alias('_std'))
-    # Rule 3: use pl.when, not if
+    # Rule 1: use pl.when, not if
     inner = pl.when(pl.col('returns') < 0).then(pl.col('_std')).otherwise(pl.col('close'))
-    # Rule 2: materialize ts_argmax
+    # Rule 3: materialize ts_argmax
     df = df.with_columns(ts_argmax(inner.sign() * (inner.abs() ** 2), window=5).alias('_argmax'))
-    # Rule 2+1: rank on materialized column, function form
+    # Rule 3+2: rank on materialized column, function form
     factor = rank(pl.col('_argmax')).over('date') - 0.5
     return df.select(factor).to_series()
 ```
@@ -190,10 +185,7 @@ def validate_syntax(code: str) -> tuple[bool, str]:
 # ─── Safety validation ────────────────────────────────────────────
 
 def validate_safety(code: str) -> tuple[bool, str]:
-    """CodeSandbox safety check + pattern check for common LLM mistakes.
-
-    Checks for Python boolean operators on polars expressions
-    (causes DangerousCodeError), then delegates to CodeSandbox.validate.
+    """Delegate to CodeSandbox.validate for safety check.
 
     Args:
         code: Python source code string.
@@ -201,28 +193,6 @@ def validate_safety(code: str) -> tuple[bool, str]:
     Returns:
         (is_safe, error_message) where error_message is empty on success.
     """
-    # Check for Python boolean on polars expressions
-    if_patterns = [
-        r'if\s+rank\s*\(',
-        r'if\s+pl\.col\s*\(',
-        r'if\s+rolling_\w+\s*\(',
-        r'if\s+ts_\w+\s*\(',
-        r'if\s+correlation\s*\(',
-        r'if\s+scale\s*\(',
-        r'if\s+zscore\s*\(',
-        r'elif\s+rank\s*\(',
-        r'elif\s+pl\.col\s*\(',
-        r'elif\s+rolling_\w+\s*\(',
-        r'elif\s+ts_\w+\s*\(',
-    ]
-    for pat in if_patterns:
-        if re.search(pat, code):
-            return False, (
-                f"Detected `if/elif` on polars expression (matches pattern: {pat}). "
-                "Use `pl.when(condition).then(value).otherwise(value)` instead. "
-                "Example: `factor = pl.when(rank(a) < rank(b)).then(-1).otherwise(0)`"
-            )
-
     from QuantNodes.ai.sandbox import CodeSandbox
 
     sandbox = CodeSandbox(max_code_length=500_000)

@@ -33,6 +33,7 @@ from typing import Any
 
 import polars as pl
 
+from ..common.telemetry import get_telemetry
 from .llm_code import (
     _PYTHON_FENCE_RE,
     build_execute_namespace,
@@ -41,7 +42,6 @@ from .llm_code import (
     validate_safety,
     validate_syntax,
 )
-from ..common.telemetry import get_telemetry
 
 # Backward-compatible aliases for existing test imports
 _extract_python = extract_python
@@ -121,39 +121,6 @@ class ReactResult:
 
 
 
-
-
-def _sanitize_code(code: str) -> str:
-    """Auto-fix common LLM mistakes before execution.
-
-    Fixes:
-    - `if expr:` → wraps with pl.when() (best-effort, simple cases only)
-    - `and` → `&`, `or` → `|`, `not` → `~` (on polars expressions)
-    """
-
-    # Fix boolean operators on polars expressions
-    # Only replace 'and'/'or'/'not' when used as Python keywords (not in strings/comments)
-    lines = code.split('\n')
-    fixed_lines = []
-    for line in lines:
-        stripped = line.strip()
-        # Skip comments and strings
-        if stripped.startswith('#') or stripped.startswith('"""') or stripped.startswith("'''"):
-            fixed_lines.append(line)
-            continue
-
-        # Replace ' and ' with ' & ' (but not inside strings)
-        # Simple heuristic: replace only if preceded/followed by whitespace or paren
-        new_line = line
-        # Replace 'and' keyword used as boolean operator
-        new_line = re.sub(r'(?<=[\s)])and(?=[\s(])', '&', new_line)
-        new_line = re.sub(r'(?<=[\s)])or(?=[\s(])', '|', new_line)
-        # Replace 'not' keyword used as boolean operator (but not 'notnull')
-        new_line = re.sub(r'(?<=[\s(])not(?=[\s(])(?!null)', '~', new_line)
-
-        fixed_lines.append(new_line)
-
-    return '\n'.join(fixed_lines)
 
 
 # ── ReAct driver ─────────────────────────────────────────────────
@@ -321,9 +288,6 @@ Output ONLY the code block (use FUNCTION FORM for QuantNodes operators)."""
             last_error_kind = ReactErrorKind.EXTRACT_FAILED
             last_error_message = "no ```python``` fence"
             continue
-
-        # Auto-fix common LLM mistakes (and/or/not on Expr)
-        new_code = _sanitize_code(new_code)
 
         syntax_ok, syntax_err = _validate_syntax(new_code)
         if not syntax_ok:

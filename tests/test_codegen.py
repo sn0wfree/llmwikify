@@ -21,15 +21,16 @@ def test_validate_syntax():
     assert ok is False
 
 
-def test_validate_safety_rejects_if():
+def test_validate_safety_delegates_to_sandbox():
     from llmwikify.reproduction.codegen.llm_code import validate_safety
-    ok, err = validate_safety("if rank(x): pass")
-    assert ok is False
+    ok, _ = validate_safety("if rank(x): pass")
+    assert ok is True  # no longer regex-filtered; caught at execution via ReAct
 
 
 def test_execute_code():
-    from llmwikify.reproduction.codegen.llm_code import execute_code
     import polars as pl
+
+    from llmwikify.reproduction.codegen.llm_code import execute_code
     df = pl.DataFrame({"x": [1, 2, 3]})
     code = "def compute_factor(df): return df['x'] * 2"
     series = execute_code(code, df)

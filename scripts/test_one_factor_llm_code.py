@@ -691,7 +691,7 @@ def run_one_factor(alpha_index: int = 1, use_react: bool = True) -> dict:
             formula_brief=formula_brief,
             df_pl=df_pl,
             llm=llm,
-            max_repair_rounds=3,
+            max_repair_rounds=5,
             temperature=0.3,
         )
         if error is not None:
