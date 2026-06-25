@@ -72,6 +72,9 @@ wiki/reference_index.json
 raw/**/*.pdf
 *.db
 
+# Jupyter notebook auto-save checkpoints (regenerated on every save)
+.ipynb_checkpoints/
+
 # macOS
 .DS_Store
 
