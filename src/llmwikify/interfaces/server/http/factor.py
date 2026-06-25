@@ -205,6 +205,7 @@ def _load_metrics_for_family(family_slug: str, slugs: list[str] | None = None) -
 @router.get("/families")
 async def list_families() -> dict[str, Any]:
     """List all factor families (directories with _meta.yaml)."""
+    import yaml
     families = _detect_families()
     for fam in families:
         members = _list_members(fam["slug"])
@@ -215,18 +216,35 @@ async def list_families() -> dict[str, Any]:
             s = m["status"]
             status_counts[s] = status_counts.get(s, 0) + 1
         fam["status_counts"] = status_counts
-        # IC coverage (match by alpha_index)
+        # IC coverage + avg_ic (match by alpha_index)
         all_metrics = _load_metrics_for_family(fam["slug"])
-        ic_count = sum(
-            1 for m in members
-            if m.get("alpha_index") and str(m["alpha_index"]) in all_metrics
-            and all_metrics[str(m["alpha_index"])].get("ic_mean") is not None
-        )
+        ic_count = 0
+        ic_values: list[float] = []
+        for m in members:
+            ai = m.get("alpha_index")
+            if ai and str(ai) in all_metrics:
+                val = all_metrics[str(ai)].get("ic_mean")
+                if val is not None:
+                    ic_count += 1
+                    ic_values.append(val)
         fam["ic_coverage"] = f"{ic_count}/{len(members)}" if members else "0/0"
+        fam["avg_ic"] = round(sum(ic_values) / len(ic_values), 4) if ic_values else None
     # Standalone factors (yaml files not in families)
     standalone = []
     for f in sorted(_FACTORS_ROOT.glob("*.yaml")):
-        standalone.append({"slug": f.stem, "name": f.stem})
+        if f.name in ("index.yaml", "_meta.yaml", "config.yaml"):
+            continue
+        if f.name.startswith("test_"):
+            continue
+        entry = {"slug": f.stem, "name": f.stem}
+        try:
+            data = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+            entry["category"] = data.get("category", "")
+            raw_status = data.get("status", "")
+            entry["status"] = _normalize_status(raw_status) if raw_status else ""
+        except Exception:
+            pass
+        standalone.append(entry)
     return {"families": families, "standalone": standalone}
 
 
@@ -434,7 +452,7 @@ def _persist_factor_result(
     return wiki_page
 
 
-@router.post("/{slug}/backtest")
+@router.post("/{slug:path}/backtest")
 async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, Any]:
     """Run factor backtest.
 
@@ -676,7 +694,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
         )
 
 
-@router.get("/{slug}/backtest")
+@router.get("/{slug:path}/backtest")
 async def get_factor_backtest_results(slug: str, limit: int = 10) -> dict[str, Any]:
     """Get past backtest results for a factor.
 
@@ -727,13 +745,14 @@ class L5ValidateRequest(BaseModel):
     cost_bps: float = Field(default=15.0, ge=0, le=100)
 
 
-@router.post("/{slug}/validate")
+@router.post("/{slug:path}/validate")
 async def validate_factor(slug: str, req: L5ValidateRequest) -> dict[str, Any]:
     """Run L5 automated validation pipeline for a factor.
 
     Executes: backtest → 7 analysis modules → scoring → (LLM hypothesis testing) → write YAML.
     """
     import asyncio
+    from llmwikify.reproduction.persist.factor_library import read_factor_yaml
     from llmwikify.reproduction.backtest_pkg.l5_orchestrator import run_l5_pipeline
 
     factor = read_factor_yaml(slug)

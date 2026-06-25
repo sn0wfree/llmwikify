@@ -396,4 +396,49 @@ l5: {...}                      # 族级回测 (schema 留位, 本次不实现)
   `_archive/`, 加注释头标为 "composite 型 schema 参考样例" (其 `MegaAlpha = Sum(wi*ai)`
   是 composite 雏形, 留作将来参考); 归档不删, 但不被因子库扫描
 
+## 11. 已知 bug 修复记录
+
+### 11.1 standalone 区误收录 index.yaml 和 test_telemetry_mock.yaml (已修, 2026-06-25)
+
+**症状**: L0 库首页"独立因子"区出现两个非因子文件: `index` 和 `test_telemetry_mock`。
+同时 101_alphas 族卡显示"101 成员"(实际仅 99 个磁盘成员目录), 疑似这两个文件也被误算入成员。
+
+**根因**: 后端扫描 `quant/factors/*.yaml` 时仅按精确文件名跳过 `index.yaml`/`_meta.yaml`/`config.yaml`,
+未跳过 `test_*.yaml` 模式; 且 `_list_members` / `update_index` 等旧格式扫描也未过滤 test_ 前缀。
+
+**修复**: 在以下 3 处扫描逻辑添加 `if f.name.startswith("test_"): continue`:
+1. `src/llmwikify/interfaces/server/http/factor.py` 的 `/families` 接口 standalone 扫描
+   (list_families, ~L233)
+2. `src/llmwikify/reproduction/persist/factor_library.py` 的 `list_factors_by_category`
+   旧格式扫描 (~L199)
+3. 同文件的 `update_index` 旧格式扫描 (~L273)
+
+**验证**: 语法检查通过; 过滤逻辑单元测试:
+`quant/factors/*.yaml` 经过滤后独立文件列表为空 (正确, 真正因子均在族目录或子目录中)。
+
+**遗留注意**:
+- `_meta.yaml` 的 `factor_count: 101` 与磁盘实际 99 个成员目录不一致 (缺 alpha_057、alpha_100),
+  这是数据问题, 不是代码 bug; 族卡的 `member_count` 来自 `_meta.yaml`,
+  若需反映真实磁盘数应改为动态统计 `len(_list_members(slug))`。
+- 服务器进程 (pid 4148785) 需重启才能加载修复后的代码。
+
+### 11.2 validate_factor 端点 500 NameError (已修, 2026-06-25)
+
+**症状**: `POST /api/factor/{slug:path}/validate` 返回 500 错误,
+日志 `NameError: name 'read_factor_yaml' is not defined`, 触发于
+`src/llmwikify/interfaces/server/http/factor.py:757`。
+
+**根因**: `validate_factor` 函数体内调用了 `read_factor_yaml(slug)` 但**未在函数体内局部 import**;
+其他端点 (如 `get_factor` line 99) 都有 `from ... import read_factor_yaml` 的局部导入,
+本次重构 (从 `reproduction.factor_library` 迁至 `reproduction.persist.factor_library`)
+时漏掉了该端点的 import。
+
+**修复**: `src/llmwikify/interfaces/server/http/factor.py` `validate_factor` 函数体内 (line 754 之后)
+新增 1 行:
+```python
+from llmwikify.reproduction.persist.factor_library import read_factor_yaml
+```
+
+**验证**: 语法检查通过。服务器重启后该端点应恢复正常。
+
 

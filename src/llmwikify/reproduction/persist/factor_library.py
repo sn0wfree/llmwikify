@@ -199,6 +199,8 @@ def list_factors_by_category(project_root: Path | None = None) -> dict[str, list
     for yaml_file in sorted(factors_dir.rglob("*.yaml")):
         if yaml_file.name in ("index.yaml", "_meta.yaml", "config.yaml"):
             continue
+        if yaml_file.name.startswith("test_"):
+            continue
         if yaml_file.parent.name == "backtest":
             continue
         # Skip new-format sibling: factors/{name}/factor.yaml is already handled above
@@ -272,6 +274,8 @@ def update_index(project_root: Path | None = None) -> None:
     # Scan for old single-file format (for backward compatibility)
     for yaml_file in sorted(factors_dir.rglob("*.yaml")):
         if yaml_file.name in ("index.yaml", "_meta.yaml", "config.yaml"):
+            continue
+        if yaml_file.name.startswith("test_"):
             continue
         if yaml_file.parent.name == "backtest":
             continue
