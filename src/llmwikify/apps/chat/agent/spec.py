@@ -22,7 +22,6 @@ DEFAULT_COMPACTABLE_TOOLS: frozenset[str] = frozenset({
     "grep",
     "find_files",
     "web_search",
-    "web_fetch",
     "list_dir",
 })
 

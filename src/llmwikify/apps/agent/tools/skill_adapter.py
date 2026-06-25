@@ -37,7 +37,7 @@ class SkillToolAdapter:
         # (caller's responsibility) — children cannot grandchild.
         self.subagent_manager = subagent_manager
         self.child_tool_registry = child_tool_registry
-        default_exposed = ["dynamic_workflow", "autoresearch_compound"]
+        default_exposed = ["dynamic_workflow", "autoresearch_compound", "web_search", "web_fetch"]
         if subagent_manager is not None:
             default_exposed.append("subagent")
         self.exposed_skills = set(exposed_skills or default_exposed)

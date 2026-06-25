@@ -2643,7 +2643,7 @@ def test_microcompact_default_compactable_matches_nanobot() -> None:
     spec = _make_spec(microcompact=True, microcompact_keep_chars=10)
     nanobot_set = {
         "read_file", "exec", "grep", "find_files",
-        "web_search", "web_fetch", "list_dir",
+        "web_search", "list_dir",
     }
     for tool in nanobot_set:
         content, compacted, _ = microcompact_serialize(
