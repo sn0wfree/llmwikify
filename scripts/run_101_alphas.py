@@ -607,6 +607,11 @@ def persist_code_to_yaml(
     full_name = _make_factor_dir_name(alpha_index, code) if alpha_index > 0 else slug
 
     try:
+        # Ensure directory exists so write_factor_yaml uses directory format
+        from llmwikify.reproduction.persist.factor_library import _get_factors_dir
+        factors_dir = _get_factors_dir()
+        (factors_dir / full_name).mkdir(parents=True, exist_ok=True)
+
         # Try reading existing YAML (by full_name first, then slug)
         existing = read_factor_yaml(full_name)
         if existing is None:
