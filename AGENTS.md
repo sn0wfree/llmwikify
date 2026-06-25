@@ -7,6 +7,7 @@
 
 ### 1. Think Before Coding（编码前思考）
 不假设。多解就列出。困惑就停下问。资深工程师会嫌复杂就重写。
+**When in doubt, ask。** 停下来，说出困惑，问清楚再动手。
 
 ### 2. Simplicity First（简洁优先）
 200 行能 50 行就重写。无推测功能、无单次抽象、无用不到的"灵活性"。
@@ -14,6 +15,7 @@
 ### 3. Surgical Changes（精准修改）
 只动该动的。匹配现有风格。每一行 diff 可追溯到用户请求。
 顺手重构 / 改格式 / 删预存死代码 = 禁止。
+发现无关死代码 → **提，不删**。发现无关未跟踪文件 → **不动，除非用户请求**。
 
 ### 4. Goal-Driven Execution（目标驱动）
 "修 bug" → "写复现测试，让它通过"。多步任务先列 [步骤] → [verify]。
@@ -34,11 +36,28 @@
 中文 commit `<type>(<scope>): 说明`。archive 不删（保留 rename）。
 stash 遗留改动 commit 前主动提醒。
 
+### Before Acting Checklist（操作前清单）
+**每次修改文件/删除/提交前，必须过这 5 步：**
+
+1. 这个操作需要做吗？（YAGNI — 不需要就别做）
+2. 这是用户明确请求的吗？（未请求 → 不动）
+3. 会影响其他文件吗？（grep 改动范围）
+4. 改完后 ruff / test 会过吗？（验证）
+5. 用户确认了吗？（commit/删除/大改动必须确认）
+
 ## 项目规约
 
 **开发节奏**：3-5 边界测试 / helper，不写穷举；pre-edit grep 一次改全；commit 前 `git status + git diff --stat + ruff + pytest`。
 
-**提交**：不主动 commit/push/PR，commit 后 stash 提醒。中文 message 风格 `fix(chat): 修复 /study reload 卡片丢失`。
+**提交**：不主动 commit/push/PR。用户说「commit」/「提交」/「git」时，**先列出要提交的文件清单 + diff stat，等用户确认**。commit 前必须 `git status` 并报告 untracked 文件。stash 遗留改动 **commit 前主动提醒**。中文 message 风格 `fix(chat): 修复 /study reload 卡片丢失`。
+
+**commit 前 checklist（缺一不可）**：
+1. `git status` → 报告所有变更 + untracked
+2. `git diff --stat` → 列出实际改了什么
+3. ruff check（相关文件）
+4. pytest（相关测试）
+5. 用户确认文件清单
+6. 确认 stash / untracked 处理方式
 
 **架构**：单一消息真源（业务数据绑 assistant message）；SSE 契约 `{type: 'save_warning'; reason}` 对齐 `ui/webui/src/api.ts:34`；SkillResult.ok 序列化为 `{"data":..., "status":"ok"}`；RunState 字段 `inputs_data (dict)` 非 `inputs`，时间戳是 float 非 ISO 字符串。
 
