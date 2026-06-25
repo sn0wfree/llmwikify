@@ -1240,6 +1240,7 @@ class StreamableLLMClient(LLMClient):
             if "tool_calls" in message and message["tool_calls"]:
                 result["tool_calls"] = [
                     {
+                        "id": tc.get("id", ""),
                         "name": tc["function"]["name"],
                         "args": tc["function"]["arguments"],
                     }
