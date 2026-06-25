@@ -167,6 +167,11 @@ async def _act_gather(args: dict, ctx: SkillContext) -> SkillResult:
             "sources": state["sources"],
             "_new_sources": 0,
         })
+    # Read ``research.enable_web_search`` from config (default ON,
+    # so the pipeline falls back to web search when wiki yields no
+    # results — see ``gather_skill.gather_for_research``).
+    research_cfg = (ctx.config or {}).get("research", {}) if ctx else {}
+    enable_web_search = bool(research_cfg.get("enable_web_search", True))
     # Delegate to the gather pipeline
     from llmwikify.apps.chat.skills.pipelines.gather_skill import (
         gather_skill as _gather,
@@ -175,6 +180,7 @@ async def _act_gather(args: dict, ctx: SkillContext) -> SkillResult:
         {
             "sub_queries": ungathered,
             "sources": state.get("sources", []),
+            "enable_web_search": enable_web_search,
         }, ctx,
     )
     if r.status != "ok":
