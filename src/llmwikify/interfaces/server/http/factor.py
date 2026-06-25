@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -88,6 +89,188 @@ async def update_factor_library(name: str, data: dict[str, Any]) -> dict[str, An
 
     result = write_factor_yaml(name, data)
     return {"status": "ok", "message": result}
+
+
+# ─── Factor Family endpoints ────────────────────────────────
+# Must be defined before /{slug} to avoid route conflicts.
+
+_FACTORS_ROOT = Path(__file__).resolve().parents[5] / "quant" / "factors"
+_OUTPUT_DIR = Path(__file__).resolve().parents[5] / "scripts" / "output"
+
+_STATUS_MAP = {
+    "verified": "已验证",
+    "validated": "已验证",
+    "已通过": "已验证",
+    "draft": "草稿",
+    "registered": "已注册",
+    "deprecated": "已废弃",
+    "已废弃": "已废弃",
+}
+
+
+def _normalize_status(raw: str | None) -> str:
+    if not raw:
+        return "草稿"
+    return _STATUS_MAP.get(raw, raw)
+
+
+def _detect_families() -> list[dict[str, Any]]:
+    """Scan quant/factors/ for directories with _meta.yaml."""
+    families = []
+    if not _FACTORS_ROOT.exists():
+        return families
+    for entry in sorted(_FACTORS_ROOT.iterdir()):
+        if not entry.is_dir():
+            continue
+        meta_path = entry / "_meta.yaml"
+        if not meta_path.exists():
+            continue
+        import yaml
+        meta = yaml.safe_load(meta_path.read_text(encoding="utf-8")) or {}
+        slug = meta.get("name", entry.name)
+        families.append({
+            "slug": slug,
+            "display_name": meta.get("display_name", slug),
+            "description": meta.get("description", ""),
+            "source": meta.get("source"),
+            "asset_class": meta.get("asset_class", ""),
+            "category": meta.get("category", ""),
+            "type": "composite" if (entry / "_composite.yaml").exists() else "collection",
+            "member_count": meta.get("factor_count", 0),
+        })
+    return families
+
+
+def _list_members(family_slug: str) -> list[dict[str, Any]]:
+    """List member factors in a family directory."""
+    family_dir = _FACTORS_ROOT / family_slug
+    if not family_dir.exists():
+        return []
+    members = []
+    for entry in sorted(family_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        factor_yaml = entry / "factor.yaml"
+        if not factor_yaml.exists():
+            continue
+        import yaml
+        data = yaml.safe_load(factor_yaml.read_text(encoding="utf-8")) or {}
+        meta_json = entry / "meta.json"
+        meta = {}
+        if meta_json.exists():
+            meta = json.loads(meta_json.read_text(encoding="utf-8"))
+        alpha_index = meta.get("alpha_index")
+        members.append({
+            "slug": f"{family_slug}/{entry.name}",
+            "name": data.get("name", entry.name),
+            "display_name": data.get("display_name", data.get("name", entry.name)),
+            "status": _normalize_status(data.get("status") or meta.get("status")),
+            "alpha_index": alpha_index,
+            "layers_present": [k for k in ("l1", "l2", "l3", "l4", "l5", "l6") if data.get(k)],
+        })
+    return members
+
+
+def _load_metrics_for_family(family_slug: str, slugs: list[str] | None = None) -> dict[str, Any]:
+    """Load IC/ICIR/winrate from scripts/output/single_factor_*.json.
+
+    Returns dict keyed by alpha_index (int) for easy matching with members.
+    """
+    if not _OUTPUT_DIR.exists():
+        return {}
+    metrics: dict[str, Any] = {}
+    for f in sorted(_OUTPUT_DIR.glob("single_factor_*.json")):
+        if "_noreact" in f.stem:
+            continue
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        alpha_idx = d.get("alpha_index")
+        if alpha_idx is None:
+            continue
+        # Key by alpha_index as int for matching with member alpha_index
+        key = str(alpha_idx)
+        if slugs and key not in slugs:
+            continue
+        metrics[key] = {
+            "ic_mean": d.get("ic_mean"),
+            "icir": d.get("icir"),
+            "ic_winrate": d.get("ic_winrate"),
+            "elapsed_sec": d.get("elapsed_sec"),
+        }
+    return metrics
+
+
+@router.get("/families")
+async def list_families() -> dict[str, Any]:
+    """List all factor families (directories with _meta.yaml)."""
+    families = _detect_families()
+    for fam in families:
+        members = _list_members(fam["slug"])
+        fam["member_count"] = len(members)
+        # Status distribution
+        status_counts: dict[str, int] = {}
+        for m in members:
+            s = m["status"]
+            status_counts[s] = status_counts.get(s, 0) + 1
+        fam["status_counts"] = status_counts
+        # IC coverage (match by alpha_index)
+        all_metrics = _load_metrics_for_family(fam["slug"])
+        ic_count = sum(
+            1 for m in members
+            if m.get("alpha_index") and str(m["alpha_index"]) in all_metrics
+            and all_metrics[str(m["alpha_index"])].get("ic_mean") is not None
+        )
+        fam["ic_coverage"] = f"{ic_count}/{len(members)}" if members else "0/0"
+    # Standalone factors (yaml files not in families)
+    standalone = []
+    for f in sorted(_FACTORS_ROOT.glob("*.yaml")):
+        standalone.append({"slug": f.stem, "name": f.stem})
+    return {"families": families, "standalone": standalone}
+
+
+@router.get("/families/{family}")
+async def get_family(family: str) -> dict[str, Any]:
+    """Get family detail: meta + members (without metrics)."""
+    meta_path = _FACTORS_ROOT / family / "_meta.yaml"
+    if not meta_path.exists():
+        raise HTTPException(status_code=404, detail=f"Family '{family}' not found")
+    import yaml
+    meta = yaml.safe_load(meta_path.read_text(encoding="utf-8")) or {}
+    members = _list_members(family)
+    composite = None
+    composite_path = _FACTORS_ROOT / family / "_composite.yaml"
+    if composite_path.exists():
+        composite = yaml.safe_load(composite_path.read_text(encoding="utf-8"))
+    return {
+        "slug": family,
+        "meta": meta,
+        "type": "composite" if composite else "collection",
+        "composite": composite,
+        "members": members,
+    }
+
+
+@router.get("/families/{family}/metrics")
+async def get_family_metrics(family: str, slugs: str | None = None) -> dict[str, Any]:
+    """Get metrics for family members (batch, lazy-loaded)."""
+    slug_list = [s.strip() for s in slugs.split(",")] if slugs else None
+    metrics = _load_metrics_for_family(family, slug_list)
+    return {"family": family, "metrics": metrics}
+
+
+@router.get("/families/{family}/search")
+async def search_family_members(family: str, q: str = "") -> dict[str, Any]:
+    """Search members in a family by name/display_name."""
+    members = _list_members(family)
+    if q:
+        q_lower = q.lower()
+        members = [
+            m for m in members
+            if q_lower in m["name"].lower() or q_lower in m["display_name"].lower()
+        ]
+    return {"family": family, "members": members}
 
 
 @router.get("/{slug}")

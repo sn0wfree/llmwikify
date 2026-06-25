@@ -33,6 +33,12 @@ const PaperPanel = lazy(() =>
 const FactorList = lazy(() =>
   import('./components/factor/FactorList').then(m => ({ default: m.FactorList }))
 );
+const FactorFamilyList = lazy(() =>
+  import('./components/factor/FactorFamilyList').then(m => ({ default: m.FactorFamilyList }))
+);
+const FamilyDetail = lazy(() =>
+  import('./components/factor/FamilyDetail').then(m => ({ default: m.FamilyDetail }))
+);
 const FactorDetail = lazy(() =>
   import('./components/factor/FactorDetail').then(m => ({ default: m.FactorDetail }))
 );
@@ -71,8 +77,10 @@ function App() {
             <Route path="autoresearch" element={<AutoResearchPanel />} />
             <Route path="reproduction" element={<ReproductionPanel />} />
             <Route path="paper" element={<PaperPanel />} />
-            <Route path="factor" element={<FactorList />} />
-            <Route path="factor/:name" element={<FactorDetail />} />
+            <Route path="factor" element={<FactorFamilyList />} />
+            <Route path="factor/fam/:family" element={<FamilyDetail />} />
+            <Route path="factor/families" element={<FactorFamilyList />} />
+            <Route path="factor/*" element={<FactorDetail />} />
             <Route path="strategy" element={<StrategyList />} />
             <Route path="strategy/:name" element={<StrategyDetail />} />
             <Route path="backtest" element={<BacktestPlatform />} />

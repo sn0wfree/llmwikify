@@ -11,7 +11,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Beaker, CheckCircle2, XCircle, AlertTriangle,
   Loader2, BookOpen, Calculator, TrendingUp, HelpCircle,
@@ -70,8 +70,11 @@ const STATUS_CONFIG: Record<string, { variant: 'default' | 'secondary' | 'destru
 // ─── Component ──────────────────────────────────────────────
 
 export function FactorDetail() {
-  const { name } = useParams<{ name: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
+  // Extract the factor path from the URL (handles both /factor/name and /factor/fam/family/member)
+  const factorPath = location.pathname.replace(/^\/agent\/factor\//, '');
+  const name = decodeURIComponent(factorPath);
   const [factor, setFactor] = useState<FactorData['factor'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
