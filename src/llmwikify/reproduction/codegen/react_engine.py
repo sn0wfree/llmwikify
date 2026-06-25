@@ -107,8 +107,9 @@ class ReactResult:
                 {
                     "state": s.state.value,
                     "error_kind": s.error_kind.value,
-                    "error_message": s.error_message[:200],
+                    "error_message": s.error_message,
                     "code_chars": len(s.code),
+                    "code": s.code,
                     "elapsed_sec": round(s.elapsed_sec, 3),
                 }
                 for s in self.steps
@@ -317,7 +318,7 @@ Output ONLY the code block (use FUNCTION FORM for QuantNodes operators)."""
             import traceback
             tb = traceback.format_exc()
             kind = ReactErrorKind.EXECUTE_ERROR
-            msg = f"{type(exc).__name__}: {exc}\n{tb[-400:]}"
+            msg = f"{type(exc).__name__}: {exc}\n{tb}"
             _record_act_failure(
                 steps, progress_callback, factor_name, iterations, kind, msg, new_code, t_act,
             )

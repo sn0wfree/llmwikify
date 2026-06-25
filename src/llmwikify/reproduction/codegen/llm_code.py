@@ -89,7 +89,8 @@ Columns: date, code, close, open, high, low, volume, returns, vwap, industry.
 
 ### Cross-sectional (require .over('date'))
   rank, scale, zscore, winsorize, neutralize
-  -> neutralize(f, group=pl.col('industry')): industry neutralization
+  -> neutralize(f): cross-section neutralization (subtract mean)
+  -> neutralized = f - f.mean().over(['date', 'industry']): industry neutralization
 
 ### Polars native
   pl.when(cond).then(x).otherwise(y), pl.col('x').abs(), .sign(), .log(), .sqrt()
