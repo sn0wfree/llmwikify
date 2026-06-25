@@ -322,3 +322,259 @@ def update_index(project_root: Path | None = None) -> None:
     content = yaml.dump(index, default_flow_style=False, allow_unicode=True, sort_keys=False)
     index_path.write_text(content, encoding="utf-8")
     logger.info("index.yaml updated with %d factors", len(factors))
+
+
+# ─── DuckDB backtest storage ────────────────────────────────────────
+
+
+def _resolve_factor_dir(name: str, project_root: Path | None = None) -> Path:
+    """Resolve factor directory path from name.
+
+    Supports:
+    1. Exact match: factors/{name}/factor.yaml exists
+    2. Fuzzy match: name is 'alpha_001', dir is '101_alphas/stk_alpha_001_xxx'
+    3. Fallback: create factors/{name}/ directory
+    """
+    factors_dir = _get_factors_dir(project_root)
+
+    # Exact match
+    exact = factors_dir / name
+    if exact.is_dir():
+        return exact
+
+    # Fuzzy match: search for *{name}* in subdirectories
+    for subdir in factors_dir.iterdir():
+        if not subdir.is_dir():
+            continue
+        for child in subdir.iterdir():
+            if not child.is_dir():
+                continue
+            if name in child.name:
+                return child
+
+    # Fallback: create directory
+    exact.mkdir(parents=True, exist_ok=True)
+    return exact
+
+
+def save_backtest_duckdb(
+    factor_name: str,
+    run_id: str,
+    backtest: dict,
+    factor_wide: Any | None = None,
+    project_root: Path | None = None,
+) -> Path:
+    """Write backtest + factor_values to factor's factor.duckdb.
+
+    Args:
+        factor_name: slug or full path (e.g. "alpha_001" or "101_alphas/stk_alpha_001_f9f371")
+        run_id: unique run identifier
+        backtest: dict with ic_series, equity_curve, scalar metrics
+        factor_wide: optional pandas DataFrame [date x code] of factor values
+        project_root: project root
+
+    Returns:
+        Path to the DuckDB file.
+    """
+    import duckdb
+    import math
+
+    dir_path = _resolve_factor_dir(factor_name, project_root)
+    dir_path.mkdir(parents=True, exist_ok=True)
+    db_path = dir_path / "factor.duckdb"
+
+    def _nan(v: Any) -> float | None:
+        if v is None:
+            return None
+        try:
+            f = float(v)
+            return None if math.isnan(f) else f
+        except (TypeError, ValueError):
+            return None
+
+    conn = duckdb.connect(str(db_path))
+    try:
+        # Create tables
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS backtest_runs (
+                run_id VARCHAR PRIMARY KEY,
+                created_at TIMESTAMP,
+                status VARCHAR,
+                ic_mean DOUBLE,
+                rank_ic_mean DOUBLE,
+                icir DOUBLE,
+                rank_icir DOUBLE,
+                win_rate DOUBLE,
+                annual_return DOUBLE,
+                longshort_sharpe DOUBLE,
+                longshort_max_dd DOUBLE
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ic_series (
+                run_id VARCHAR,
+                date BIGINT,
+                ic DOUBLE
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS equity_curve (
+                run_id VARCHAR,
+                group_name VARCHAR,
+                date BIGINT,
+                nav DOUBLE
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS factor_values (
+                date DATE,
+                stock VARCHAR,
+                value DOUBLE
+            )
+        """)
+
+        # Upsert backtest_runs
+        conn.execute("""
+            INSERT OR REPLACE INTO backtest_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            run_id,
+            backtest.get("created_at") or __import__("datetime").datetime.now().isoformat(),
+            backtest.get("status", "success"),
+            _nan(backtest.get("ic_mean")),
+            _nan(backtest.get("rank_ic_mean")),
+            _nan(backtest.get("icir")),
+            _nan(backtest.get("rank_icir")),
+            _nan(backtest.get("win_rate")),
+            _nan(backtest.get("longshort_ann_return")),
+            _nan(backtest.get("longshort_sharpe")),
+            _nan(backtest.get("longshort_max_dd")),
+        ])
+
+        # Insert ic_series
+        for pt in backtest.get("ic_series", []):
+            conn.execute(
+                "INSERT INTO ic_series VALUES (?, ?, ?)",
+                [run_id, pt.get("date"), _nan(pt.get("ic"))],
+            )
+
+        # Insert equity_curve
+        equity = backtest.get("equity_curve") or backtest.get("group_nav_series") or {}
+        for group_name, points in equity.items():
+            for pt in points:
+                conn.execute(
+                    "INSERT INTO equity_curve VALUES (?, ?, ?, ?)",
+                    [run_id, group_name, pt.get("date"), _nan(pt.get("nav"))],
+                )
+
+        # Insert factor_values (from wide DataFrame)
+        if factor_wide is not None and hasattr(factor_wide, "reset_index"):
+            import pandas as pd
+            factor_wide.index.name = "date"
+            melted = factor_wide.reset_index().melt(
+                id_vars=["date"], var_name="stock", value_name="value",
+            )
+            melted = melted.dropna(subset=["value"])
+            if not melted.empty:
+                melted["date"] = pd.to_datetime(melted["date"])
+                melted["stock"] = melted["stock"].astype(str)
+                melted["value"] = melted["value"].astype(float)
+                # Clear old values and insert new
+                conn.execute("DELETE FROM factor_values")
+                conn.executemany(
+                    "INSERT INTO factor_values VALUES (?, ?, ?)",
+                    melted[["date", "stock", "value"]].values.tolist(),
+                )
+
+        logger.info("saved backtest to %s (run_id=%s)", db_path, run_id)
+    finally:
+        conn.close()
+
+    return db_path
+
+
+def read_backtest_duckdb(
+    factor_name: str,
+    limit: int = 10,
+    include_values: bool = False,
+    project_root: Path | None = None,
+) -> list[dict]:
+    """Read backtest runs from factor's DuckDB.
+
+    Args:
+        factor_name: slug or full path
+        limit: max number of runs to return
+        include_values: if True, include factor_values in each run
+        project_root: project root
+
+    Returns:
+        List of run dicts with metrics + ic_series + equity_curve.
+    """
+    import duckdb
+
+    dir_path = _resolve_factor_dir(factor_name, project_root)
+    db_path = dir_path / "factor.duckdb"
+    if not db_path.exists():
+        return []
+
+    conn = duckdb.connect(str(db_path), read_only=True)
+    try:
+        # Check tables exist
+        tables = {r[0] for r in conn.execute("SHOW TABLES").fetchall()}
+        if "backtest_runs" not in tables:
+            return []
+
+        runs_df = conn.execute(
+            "SELECT * FROM backtest_runs ORDER BY created_at DESC LIMIT ?", [limit]
+        ).fetchdf()
+
+        results = []
+        for _, row in runs_df.iterrows():
+            rid = row["run_id"]
+
+            # IC series
+            ic_data = []
+            if "ic_series" in tables:
+                ic_df = conn.execute(
+                    "SELECT date, ic FROM ic_series WHERE run_id = ? ORDER BY date", [rid]
+                ).fetchdf()
+                ic_data = ic_df.to_dict("records")
+
+            # Equity curve
+            equity: dict[str, list] = {}
+            if "equity_curve" in tables:
+                eq_df = conn.execute(
+                    "SELECT group_name, date, nav FROM equity_curve WHERE run_id = ? ORDER BY group_name, date",
+                    [rid],
+                ).fetchdf()
+                for gn, grp in eq_df.groupby("group_name"):
+                    equity[gn] = grp[["date", "nav"]].to_dict("records")
+
+            run: dict[str, Any] = {
+                "run_id": rid,
+                "created_at": str(row.get("created_at", "")),
+                "status": row.get("status", ""),
+                "metrics": {
+                    "ic_mean": row.get("ic_mean"),
+                    "rank_ic_mean": row.get("rank_ic_mean"),
+                    "icir": row.get("icir"),
+                    "rank_icir": row.get("rank_icir"),
+                    "win_rate": row.get("win_rate"),
+                    "annual_return": row.get("annual_return"),
+                    "longshort_sharpe": row.get("longshort_sharpe"),
+                    "longshort_max_dd": row.get("longshort_max_dd"),
+                },
+                "ic_series": ic_data,
+                "equity_curve": equity,
+            }
+
+            if include_values and "factor_values" in tables:
+                fv_df = conn.execute(
+                    "SELECT date, stock, value FROM factor_values"
+                ).fetchdf()
+                run["factor_values"] = fv_df.to_dict("records")
+
+            results.append(run)
+
+        return results
+    finally:
+        conn.close()

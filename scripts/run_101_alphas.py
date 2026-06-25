@@ -17,6 +17,7 @@ Output:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import signal
@@ -568,6 +569,12 @@ def _derive_input_columns(formula_brief: str) -> list[str]:
     return found[:10]
 
 
+def _make_factor_dir_name(alpha_index: int, code: str) -> str:
+    """Generate directory name: stk_alpha_{index:03d}_{md5(code)[:6]}."""
+    code_hash = hashlib.md5(code.encode()).hexdigest()[:6]
+    return f"stk_alpha_{alpha_index:03d}_{code_hash}"
+
+
 def persist_code_to_yaml(
     factor_name: str,
     code: str,
@@ -575,7 +582,8 @@ def persist_code_to_yaml(
     backtest: dict,
     h5_path: str,
     code_chars: int,
-) -> str | None:
+    alpha_index: int = 0,
+) -> tuple[str | None, Path | None]:
     """Persist code-path factor YAML (6-layer) to quant/factors/.
 
     Mirrors ``factor_compiler.persist_l5_to_yaml`` pattern:
@@ -584,16 +592,25 @@ def persist_code_to_yaml(
     WebUI L5 reads l5.overall_assessment.{score, status, pass_threshold, final_meaning}
     (FactorDetail.tsx L5Content → OverallAssessment.tsx).
     L2-L6 populated by Phase 3 LLM extraction (overwrites this default).
+
+    Returns:
+        (action, factor_dir_path) or (None, None) on failure.
     """
     from llmwikify.reproduction.persist.factor_library import (
+        _get_factors_dir,
         read_factor_yaml,
         write_factor_yaml,
     )
 
     slug = factor_name.replace("-", "_")
+    # Generate proper directory name with code hash
+    full_name = _make_factor_dir_name(alpha_index, code) if alpha_index > 0 else slug
 
     try:
-        existing = read_factor_yaml(slug)
+        # Try reading existing YAML (by full_name first, then slug)
+        existing = read_factor_yaml(full_name)
+        if existing is None:
+            existing = read_factor_yaml(slug)
         if existing is None:
             data = {
                 "factor": {
@@ -659,12 +676,14 @@ def persist_code_to_yaml(
         }
         l5["validation_date"] = time.strftime("%Y-%m-%d")
 
-        action = write_factor_yaml(slug, data)
-        print(f"[yaml] {action} (slug={slug})")
-        return action
+        action = write_factor_yaml(full_name, data)
+        factors_dir = _get_factors_dir()
+        dir_path = factors_dir / full_name
+        print(f"[yaml] {action} (dir={dir_path})")
+        return action, dir_path
     except Exception as exc:
         print(f"[yaml] persist_code_to_yaml failed for {factor_name}: {exc}")
-        return None
+        return None, None
 
 
 def save_backtest_to_db(
@@ -861,19 +880,25 @@ def run_one_factor(
           f"ic_series_pts={len(backtest.get('ic_series', []))}")
 
     slug = factor_name.replace("-", "_")
-    persist_code_to_yaml(
+    _, factor_dir = persist_code_to_yaml(
         factor_name=factor_name,
         code=code,
         formula_brief=formula_brief,
         backtest=backtest,
         h5_path=str(h5_path),
         code_chars=len(code),
-    )
-    save_backtest_to_db(
-        slug=slug,
         alpha_index=alpha_index,
+    )
+
+    # Save backtest + factor_values to per-factor DuckDB
+    from llmwikify.reproduction.persist.factor_library import save_backtest_duckdb
+    run_id = f"pipeline_a_{alpha_index:03d}"
+    factor_dir_name = factor_dir.name if factor_dir else slug
+    save_backtest_duckdb(
+        factor_name=factor_dir_name,
+        run_id=run_id,
         backtest=backtest,
-        config=config,
+        factor_wide=factor_wide,
     )
 
     elapsed = time.monotonic() - t0

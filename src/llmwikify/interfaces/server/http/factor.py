@@ -700,39 +700,38 @@ async def get_factor_backtest_results(slug: str, limit: int = 10) -> dict[str, A
 
     Returns a list of recent backtest runs with IC series and group metrics,
     suitable for rendering L5 charts in the UI.
+    Reads from per-factor DuckDB ({factor_dir}/factor.duckdb).
     """
-    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
+    from llmwikify.reproduction.persist.factor_library import read_backtest_duckdb
 
-    db = ReproductionDatabase()
-    results = db.list_results(factor_ref=slug, limit=limit)
+    runs = read_backtest_duckdb(slug, limit=limit)
 
-    runs = []
-    for r in results:
-        ic_series = json.loads(r.ic_series) if r.ic_series else []
-        group_metrics = json.loads(r.group_metrics) if r.group_metrics else {}
-        equity_curve = json.loads(r.equity_curve) if r.equity_curve else {}
-        runs.append({
-            "run_id": r.run_id,
-            "created_at": r.created_at,
-            "status": r.status,
-            "universe": r.universe,
-            "start_date": r.start_date,
-            "end_date": r.end_date,
-            "metrics": {
-                "ic_mean": r.ic_mean,
-                "rank_ic_mean": r.rank_ic_mean,
-                "icir": r.icir,
-                "rank_icir": r.rank_icir,
-                "win_rate": r.win_rate,
-                "annual_return": r.annual_return,
-                "longshort_ann_return": r.longshort_ann_return,
-                "longshort_sharpe": r.longshort_sharpe,
-                "longshort_max_dd": r.longshort_max_dd,
-            },
-            "ic_series": ic_series,
-            "group_metrics": group_metrics,
-            "equity_curve": equity_curve,
-        })
+    # Fallback: try SQLite if DuckDB has no data
+    if not runs:
+        try:
+            from llmwikify.reproduction.persist.sessions import ReproductionDatabase
+            db = ReproductionDatabase()
+            results = db.list_results(factor_ref=slug, limit=limit)
+            for r in results:
+                runs.append({
+                    "run_id": r.run_id,
+                    "created_at": r.created_at,
+                    "status": r.status,
+                    "metrics": {
+                        "ic_mean": r.ic_mean,
+                        "rank_ic_mean": r.rank_ic_mean,
+                        "icir": r.icir,
+                        "rank_icir": r.rank_icir,
+                        "win_rate": r.win_rate,
+                        "annual_return": r.annual_return,
+                        "longshort_sharpe": r.longshort_sharpe,
+                        "longshort_max_dd": r.longshort_max_dd,
+                    },
+                    "ic_series": json.loads(r.ic_series) if r.ic_series else [],
+                    "equity_curve": json.loads(r.equity_curve) if r.equity_curve else {},
+                })
+        except Exception:
+            pass
 
     return {"slug": slug, "runs": runs, "total": len(runs)}
 
