@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: '((((sum(close, 8) / 8) + stddev(close, 8)) < (sum(close, 2) / 2)) ?
-    (-1 * 1) : (((sum(close, 2) / 2) < ((sum(close, 8) / 8) - stddev(close, 8))) ?
-    1 : (((1 < (volume / adv20)) || ((volume / adv20) == '
+  definition: 基于波动率调整布林带的多区间alpha策略，比较2日均线与8日均线加/减1倍标准差的相对位置，结合成交量确认信号方向。
   formula: '((((sum(close, 8) / 8) + stddev(close, 8)) < (sum(close, 2) / 2)) ? (-1
     * 1) : (((sum(close, 2) / 2) < ((sum(close, 8) / 8) - stddev(close, 8))) ? 1 :
     (((1 < (volume / adv20)) || ((volume / adv20) == 1)) ? 1 : (-1 * 1))))'
@@ -99,3 +97,36 @@ l6:
   - 低流动性小票：量比 VR 噪声大，中性区量能信号失效
   - 重大事件窗口 (财报/公告)：价格跳空突破布林带属于基本面驱动而非情绪驱动，均值回归失效
   risk_notes: 因子输出为离散 {-1, +1}，空头暴露较高 (突破上轨+低量情境均输出 -1)，需关注换手与回撤；建议叠加市值/流动性中性化处理后再使用
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    close = pl.col('close')\n\
+    \    volume = pl.col('volume')\n    \n    mean8 = rolling_mean(close, window=8)\n\
+    \    std8 = rolling_std(close, window=8)\n    mean2 = rolling_mean(close, window=2)\n\
+    \    adv20 = rolling_mean(volume, window=20)\n    \n    cond1 = (mean8 + std8)\
+    \ < mean2\n    cond2 = mean2 < (mean8 - std8)\n    cond3 = (1 < (volume / adv20))\
+    \ | ((volume / adv20) == 1)\n    \n    factor = (\n        pl.when(cond1).then(-1)\n\
+    \        .otherwise(\n            pl.when(cond2).then(1)\n            .otherwise(\n\
+    \                pl.when(cond3).then(1).otherwise(-1)\n            )\n       \
+    \ )\n    )\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 677
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_021.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 50
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.003948211049115945
+    icir: 0.025866151857986706
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 8.256247198290545e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.031614388892232524
+    validated_at: 1782306206.32813
+  validation_date: '2026-06-24'

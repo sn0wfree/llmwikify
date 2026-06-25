@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: min(rank(decay_linear(((rank(open) + rank(low)) - (rank(high) + rank(close))),
-    8.06882)), Ts_Rank(decay_linear(correlation(Ts_Rank(close, 8.44728), Ts_Rank(adv60,
-    20.6966), 8.01266), 6.65053), 2.61957
+  definition: Alpha#88取价格结构因子（基于开盘价/最低价与最高价/收盘价的排名组合经衰减加权）与量价相关性时序排名因子（基于收盘价与60日均量经衰减加权的时间排名相关性）的最小值，捕捉价格结构反转与量价趋势共振的机会。
   formula: min(rank(decay_linear(((rank(open) + rank(low)) - (rank(high) + rank(close))),
     8.06882)), Ts_Rank(decay_linear(correlation(Ts_Rank(close, 8.44728), Ts_Rank(adv60,
     20.6966), 8.01266), 6.65053), 2.61957))
@@ -99,3 +97,48 @@ l6:
   - '震荡市快速反转: 双 min 条件难以同时满足, 信号稀疏, 持仓过少影响收益'
   - '小盘股流动性枯竭: adv60 计算不可靠, 量价相关性估计噪声大, 因子失效'
   risk_notes: 因子属于反转型, 与动量因子呈负相关, 在风格切换期可能出现回撤; 建议与动量或质量因子搭配以平衡; 注意 60 日均量在 IPO/解禁等事件后的数值突变对相关性的影响。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv60: 60-day average\
+    \ dollar volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume')\
+    \ * pl.col('close'), window=60).alias('_adv60')\n    )\n\n    # Cross-sectional\
+    \ ranks for OHLC\n    df = df.with_columns([\n        rank(pl.col('open')).over('date').alias('_r_open'),\n\
+    \        rank(pl.col('low')).over('date').alias('_r_low'),\n        rank(pl.col('high')).over('date').alias('_r_high'),\n\
+    \        rank(pl.col('close')).over('date').alias('_r_close'),\n    ])\n\n   \
+    \ # Term 1 inner: (rank(open) + rank(low)) - (rank(high) + rank(close))\n    df\
+    \ = df.with_columns(\n        decay_linear(\n            (pl.col('_r_open') +\
+    \ pl.col('_r_low')) - (pl.col('_r_high') + pl.col('_r_close')),\n            window=int(8.06882)\n\
+    \        ).alias('_t1_decay')\n    )\n    # rank of decay result\n    df = df.with_columns(\n\
+    \        rank(pl.col('_t1_decay')).over('date').alias('_t1')\n    )\n\n    # Term\
+    \ 2: ts_rank of close and ts_rank of adv60\n    df = df.with_columns(\n      \
+    \  ts_rank(pl.col('close'), window=int(8.44728)).alias('_tsr_close')\n    )\n\
+    \    df = df.with_columns(\n        ts_rank(pl.col('_adv60'), window=int(20.6966)).alias('_tsr_adv60')\n\
+    \    )\n\n    # correlation using materialized ts_rank columns\n    df = df.with_columns(\n\
+    \        rolling_corr(pl.col('_tsr_close'), pl.col('_tsr_adv60'), window=int(8.01266)).alias('_corr')\n\
+    \    )\n\n    # decay_linear then ts_rank\n    df = df.with_columns(\n       \
+    \ decay_linear(pl.col('_corr'), window=int(6.65053)).alias('_corr_decay')\n  \
+    \  )\n    df = df.with_columns(\n        ts_rank(pl.col('_corr_decay'), window=int(2.61957)).alias('_t2')\n\
+    \    )\n\n    # Element-wise min of the two terms\n    factor = pl.min_horizontal(pl.col('_t1'),\
+    \ pl.col('_t2'))\n\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1771
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_088.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 41
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.03397464614445063
+    icir: -0.21661694757558395
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -1.1151196266268038e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.030307054107470383
+    validated_at: 1782351519.4842024
+  validation_date: '2026-06-25'

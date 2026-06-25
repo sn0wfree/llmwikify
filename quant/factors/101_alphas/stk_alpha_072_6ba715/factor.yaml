@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (rank(decay_linear(correlation(((high + low) / 2), adv40, 8.93345),
-    10.1519)) / rank(decay_linear(correlation(Ts_Rank(vwap, 3.72469), Ts_Rank(volume,
-    18.5188), 6.86671), 2.95011)))
+  definition: 两个排名衰减加权相关性的比值：简单价格中点与成交量关系的强度，除以VWAP与成交量的时序排名相关性强度，用于捕捉价格发现效率与成交量信息的相对关系。
   formula: (rank(decay_linear(correlation(((high + low) / 2), adv40, 8.93345), 10.1519))
     / rank(decay_linear(correlation(Ts_Rank(vwap, 3.72469), Ts_Rank(volume, 18.5188),
     6.86671), 2.95011)))
@@ -104,3 +102,45 @@ l6:
   risk_notes: 1) 相关系数在 7-9 日短窗口下统计噪声大，IC 估计本身有较大方差；2) adv40 与 vwap、volume 来自同一数据源，存在隐含自相关；3)
     rank/rank 比值对分母靠近 0 极度敏感，建议在因子合成前对分母做截尾或加常数平滑；4) T+1 对齐下回测需注意使用未来函数风险（adv40 需滚动而非
     expanding）
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv40 = 40-day\
+    \ rolling mean of volume\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+    \ window=40).alias('_adv40'))\n    \n    # Numerator: rank(decay_linear(correlation((high+low)/2,\
+    \ adv40, 8.93), 10.15))\n    mid_price = (pl.col('high') + pl.col('low')) / 2\n\
+    \    \n    # Materialize correlation result first (Rule 2)\n    df = df.with_columns(\n\
+    \        correlation(mid_price, pl.col('_adv40'), window=9).alias('_corr1')\n\
+    \    )\n    df = df.with_columns(\n        decay_linear(pl.col('_corr1'), window=10).alias('_decay1')\n\
+    \    )\n    df = df.with_columns(\n        rank(pl.col('_decay1')).over('date').alias('_rank1')\n\
+    \    )\n    \n    # Denominator: rank(decay_linear(correlation(Ts_Rank(vwap, 3.72),\
+    \ Ts_Rank(volume, 18.52), 6.87), 2.95))\n    # Materialize ts_rank first (Rule\
+    \ 2)\n    df = df.with_columns(\n        ts_rank(pl.col('vwap'), window=4).alias('_ts_rank_vwap')\n\
+    \    )\n    df = df.with_columns(\n        ts_rank(pl.col('volume'), window=19).alias('_ts_rank_volume')\n\
+    \    )\n    # Materialize correlation\n    df = df.with_columns(\n        correlation(pl.col('_ts_rank_vwap'),\
+    \ pl.col('_ts_rank_volume'), window=7).alias('_corr2')\n    )\n    df = df.with_columns(\n\
+    \        decay_linear(pl.col('_corr2'), window=3).alias('_decay2')\n    )\n  \
+    \  df = df.with_columns(\n        rank(pl.col('_decay2')).over('date').alias('_rank2')\n\
+    \    )\n    \n    # Final factor: ratio\n    factor = pl.col('_rank1') / pl.col('_rank2')\n\
+    \    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1505
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_072.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 55
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.009046766573539936
+    icir: 0.06770215844652937
+    winrate: 0.6
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -3.4280424964117095e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.01759339589673063
+    validated_at: 1782349977.0125165
+  validation_date: '2026-06-25'

@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (rank(correlation(delay((open - close), 1), close, 200)) + rank((open
-    - close)))
+  definition: 将200日相关性（昨日日间收益与今日收盘价的滞后相关）与今日日间收益秩次相加，构建融合长期动量持续性与短期方向信号的复合排序因子。
   formula: (rank(correlation(delay((open - close), 1), close, 200)) + rank((open -
     close)))
   frequency: 日频
@@ -100,3 +99,36 @@ l6:
   - 小盘股、ST 股、停牌复牌股因 open-close 异常跳动产生极端 rank 值，导致因子失真
   - 宏观事件或政策冲击期（如央行降息、贸易战升级），价格水平相关性结构突变，200 日窗口的相关系数失去预测意义
   risk_notes: 需注意因子值在牛市中与反转信号冲突，组合中应与其他动量/反转因子做对冲；高拥挤度意味着因子拥挤交易（crowded trade）风险显著，需监控因子相关性集中度
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Rule 2: materialize\
+    \ delayed (open-close) first\n    df = df.with_columns(\n        delay((pl.col('open')\
+    \ - pl.col('close')), periods=1).alias('_delay_oc')\n    )\n    # Rule 2: materialize\
+    \ rolling correlation before rank over date\n    df = df.with_columns(\n     \
+    \   correlation(pl.col('_delay_oc'), pl.col('close'), window=200).alias('_corr')\n\
+    \    )\n    # Cross-sectional rank of the correlation + cross-sectional rank of\
+    \ (open - close)\n    factor = (\n        rank(pl.col('_corr')).over('date')\n\
+    \        + rank(pl.col('open') - pl.col('close')).over('date')\n    )\n    return\
+    \ df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 654
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_037.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 64
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.03586862161404755
+    icir: 0.2732020698861871
+    winrate: 0.6440677966101694
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00042792631728483244
+    longshort_sharpe: null
+    longshort_max_dd: -0.010900152203411135
+    validated_at: 1782306704.1242054
+  validation_date: '2026-06-24'

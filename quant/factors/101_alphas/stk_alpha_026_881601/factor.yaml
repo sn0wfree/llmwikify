@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * ts_max(correlation(ts_rank(volume, 5), ts_rank(high, 5), 5), 3))
+  definition: 计算成交量与最高价的5日时序秩相关系数的3日滚动最大值并取负值，用于捕捉成交量-价格关系的持续性并生成反向做空信号
   formula: (-1 * ts_max(correlation(ts_rank(volume, 5), ts_rank(high, 5), 5), 3))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -99,3 +99,36 @@ l6:
   - 事件驱动窗口（除权除息、重大公告、停牌复牌）：量价关系被外生事件扭曲，短期窗口需剔除
   risk_notes: 因子对窗口参数 (5/5/3) 较敏感，建议做参数敏感性扫描；建议叠加行业/市值中性化；回测时注意 survivorship bias
     与 look-ahead bias（rolling 用到未来 5 日数据，需严格 T+1 对齐）。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: ts_rank(volume,\
+    \ 5) and ts_rank(high, 5)\n    df = df.with_columns([\n        ts_rank(pl.col('volume'),\
+    \ window=5).alias('_ts_rank_vol'),\n        ts_rank(pl.col('high'), window=5).alias('_ts_rank_high'),\n\
+    \    ])\n    # Step 2: correlation of the two ts_ranks over 5 periods (materialize)\n\
+    \    df = df.with_columns(\n        correlation(pl.col('_ts_rank_vol'), pl.col('_ts_rank_high'),\
+    \ window=5).alias('_corr')\n    )\n    # Step 3: ts_max of correlation over 3\
+    \ periods (materialize)\n    df = df.with_columns(\n        ts_max(pl.col('_corr'),\
+    \ window=3).alias('_ts_max')\n    )\n    # Step 4: -1 * ts_max(...)\n    factor\
+    \ = -1 * pl.col('_ts_max')\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 736
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_026.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 49
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.005782173556347754
+    icir: -0.0382881394650983
+    winrate: 0.5084745762711864
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -4.2030507962920183e-07
+    longshort_sharpe: null
+    longshort_max_dd: -0.02452794204264394
+    validated_at: 1782306314.5324779
+  validation_date: '2026-06-24'

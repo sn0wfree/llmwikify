@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * rank(covariance(rank(close), rank(volume), 5)))
+  definition: 5日收盘价排名与成交量排名的时序协方差的负排名值，用于捕捉价格与成交量的联合分布关系。
   formula: (-1 * rank(covariance(rank(close), rank(volume), 5)))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -81,3 +81,35 @@ l6:
   - '流动性枯竭/政策干预: 量价关系失真, 协方差噪声大'
   - '行业风格切换期: 横截面 rank 易被错估, 多空组合漂移'
   risk_notes: 因子在熊市/急跌时 short 端 (动量股) 可能受流动性冲击, 需要控制单边敞口; 建议搭配趋势/动量因子做对冲, 并设置行业中性化。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: Cross-sectional\
+    \ rank of close and volume\n    df = df.with_columns([\n        rank(pl.col('close')).over('date').alias('_rank_close'),\n\
+    \        rank(pl.col('volume')).over('date').alias('_rank_volume')\n    ])\n \
+    \   # Step 2: Materialize the 5-day rolling covariance of the two ranks\n    df\
+    \ = df.with_columns(\n        covariance(pl.col('_rank_close'), pl.col('_rank_volume'),\
+    \ window=5).alias('_cov')\n    )\n    # Step 3: Cross-sectional rank of covariance,\
+    \ then multiply by -1\n    factor = -1 * rank(pl.col('_cov')).over('date')\n \
+    \   return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 627
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_013.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 52
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.0051368029441945925
+    icir: 0.03481269935950045
+    winrate: 0.5084745762711864
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00026129375148253864
+    longshort_sharpe: null
+    longshort_max_dd: -0.020677781524076486
+    validated_at: 1782305963.6694453
+  validation_date: '2026-06-24'

@@ -98,3 +98,38 @@ l6:
   - 因子在截面上排序后取负, 实际投资中需做多低因子值股票、做空高因子值股票 (或等价的反转组合), 单边做多低因子值股票在牛市中风险较大
   - 滚动相关 + 双重排名导致因子值变化较慢, 信号滞后约 3-6 日, 在快速反转行情中可能错过最佳入场点
   - 对分母为零 (high_max == low_min, 涨跌停或停牌期间) 需做 inf 处理, 否则排名计算会出错
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: Materialize\
+    \ the rolling price ratio (close - ts_min(low,12)) / (ts_max(high,12) - ts_min(low,12))\n\
+    \    df = df.with_columns(\n        ((pl.col('close') - ts_min(pl.col('low'),\
+    \ 12)) / \n         (ts_max(pl.col('high'), 12) - ts_min(pl.col('low'), 12))).alias('_inner')\n\
+    \    )\n    \n    # Step 2: Cross-sectional rank the inner ratio and volume\n\
+    \    df = df.with_columns(\n        rank(pl.col('_inner')).over('date').alias('_rank_inner'),\n\
+    \        rank(pl.col('volume')).over('date').alias('_rank_volume')\n    )\n  \
+    \  \n    # Step 3: Materialize the 6-period rolling correlation on the ranked\
+    \ series\n    df = df.with_columns(\n        correlation(pl.col('_rank_inner'),\
+    \ pl.col('_rank_volume'), 6).alias('_corr')\n    )\n    \n    # Step 4: Apply\
+    \ the -1 multiplier\n    factor = -1 * pl.col('_corr')\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 891
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_055.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 52
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.0026705827426818977
+    icir: 0.017169602071217947
+    winrate: 0.559322033898305
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00013836450657578325
+    longshort_sharpe: null
+    longshort_max_dd: -0.01910136233526973
+    validated_at: 1782307588.4855368
+  validation_date: '2026-06-24'

@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: rank((-1 * ((1 - (open / close))^1)))
+  definition: 对当日开盘到收盘收益率的负值进行横截面排名，取值越高表示当日收盘价相对开盘价下跌越多。
   formula: rank((-1 * ((1 - (open / close))^1)))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -84,3 +84,30 @@ l6:
   - 市场流动性枯竭/极端波动期 (如 2015 股灾、2020 疫情), 跳空被基本面主导而非均值回复, 因子失效
   risk_notes: A 股 T+1 制度下因子无法当日执行, 信号需 T+1 开盘建仓, 承担隔夜跳空风险; 此外因子对涨跌停、停牌、复牌等微观结构事件敏感,
     需在数据预处理阶段剔除 ST、停牌及一字板个股。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    inner = -1 * ((1\
+    \ - (pl.col('open') / pl.col('close'))) ** 1)\n    factor = rank(inner).over('date')\n\
+    \    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 194
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_033.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 62
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.040004817351488246
+    icir: 0.2871360246443578
+    winrate: 0.5932203389830508
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.0003672665584086854
+    longshort_sharpe: null
+    longshort_max_dd: -0.017299188745745243
+    validated_at: 1782306600.0493417
+  validation_date: '2026-06-24'

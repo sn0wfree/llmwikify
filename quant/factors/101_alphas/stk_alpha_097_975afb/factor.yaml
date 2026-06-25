@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank(decay_linear(delta(IndNeutralize(((low * 0.721001) + (vwap *
-    (1 - 0.721001))), IndClass.industry), 3.3705), 20.4523)) - Ts_Rank(decay_linear(Ts_Rank(correlation(Ts_Rank(low,
-    7.87871), Ts_Rank(a
+  definition: 行业中性化加权价格动量因子与成交量相关性强度的差值取负，用于捕捉短期价格反转与量价关系的相对变化。
   formula: ((rank(decay_linear(delta(IndNeutralize(((low * 0.721001) + (vwap * (1
     - 0.721001))), IndClass.industry), 3.3705), 20.4523)) - Ts_Rank(decay_linear(Ts_Rank(correlation(Ts_Rank(low,
     7.87871), Ts_Rank(adv60, 17.255), 4.97547), 18.5925), 15.7152), 6.71659)) * -1)
@@ -109,3 +107,47 @@ l6:
   - '低流动性/小盘股集中: adv60 在小票上噪声大, 相关性估计不稳, 因子信号失真'
   risk_notes: 因子值已取负, 实际使用需明确多空方向; 多步算子导致对数据质量 (缺失值、停牌、复权) 极度敏感, 建议做严格的前置清洗; 截面 rank
     与 ts_rank 共存, 需保证面板数据完整无明显断层
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv60: 60-day average\
+    \ daily volume\n    adv60 = ts_mean(pl.col('volume'), window=60)\n\n    # ---\
+    \ Inner expression 1 ---\n    # Weighted combination of low and vwap\n    weighted\
+    \ = (pl.col('low') * 0.721001) + (pl.col('vwap') * (1 - 0.721001))\n\n    # Industry\
+    \ neutralize substitute (cross-sectional neutralize since no industry col)\n \
+    \   ind_neutralized = neutralize(weighted).over('date')\n\n    # delta with period\
+    \ 3 (floor of 3.3705)\n    delta_val = delta(ind_neutralized, periods=3)\n\n \
+    \   # decay_linear with window 20 (floor of 20.4523)\n    decayed1 = decay_linear(delta_val,\
+    \ window=20)\n\n    # cross-sectional rank\n    ranked = rank(decayed1).over('date')\n\
+    \n    # --- Inner expression 2 ---\n    # Ts_Rank of low with window 7 (floor\
+    \ of 7.87871)\n    ts_rank_low = ts_rank(pl.col('low'), window=7)\n\n    # Ts_Rank\
+    \ of adv60 with window 17 (floor of 17.255)\n    ts_rank_adv = ts_rank(adv60,\
+    \ window=17)\n\n    # correlation between the two ts_ranks with window 4 (floor\
+    \ of 4.97547)\n    corr_val = ts_corr(ts_rank_low, ts_rank_adv, window=4)\n\n\
+    \    # Ts_Rank of correlation with window 18 (floor of 18.5925)\n    ts_rank_corr\
+    \ = ts_rank(corr_val, window=18)\n\n    # decay_linear with window 15 (floor of\
+    \ 15.7152)\n    decayed2 = decay_linear(ts_rank_corr, window=15)\n\n    # Ts_Rank\
+    \ of decay_linear with window 6 (floor of 6.71659)\n    ts_rank_decayed = ts_rank(decayed2,\
+    \ window=6)\n\n    # --- Final expression ---\n    factor = (ranked - ts_rank_decayed)\
+    \ * -1\n\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1536
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_097.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 56
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.025002145110025513
+    icir: 0.10877158486282214
+    winrate: 0.576271186440678
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -0.00011336617544688288
+    longshort_sharpe: null
+    longshort_max_dd: -0.06169466645759286
+    validated_at: 1782174684.7858872
+  validation_date: '2026-06-23'

@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank(Log(product(rank((rank(correlation(vwap, sum(adv10, 49.6054),
-    8.47743))^4)), 14.9655))) < rank(correlation(rank(vwap), rank(volume), 5.07914)))
-    * -1)
+  definition: Alpha#81通过比较VWAP与10日加权平均成交量的相关性四次方经滚动乘积对数排名，与VWAP排名与成交量排名的相关性排名的相对大小，来衡量VWAP-成交量关系的强度变化，并取反向信号。
   formula: ((rank(Log(product(rank((rank(correlation(vwap, sum(adv10, 49.6054), 8.47743))^4)),
     14.9655))) < rank(correlation(rank(vwap), rank(volume), 5.07914))) * -1)
   frequency: 日频
@@ -99,3 +97,47 @@ l6:
   - 小盘低流动性股票中，vwap与volume的rank相关性与全市场不可比，截面rank偏差放大
   risk_notes: 因子为离散{-1,0}信号，-1的负收益假设依赖反转效应成立；使用时建议叠加趋势/波动率过滤，并控制单因子敞口；注意原始公式参数(49.6054,
     8.47743, 14.9655, 5.07914)已被四舍五入到整数窗口，真实最优参数可能不同，需做参数敏感性测试。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv10 = 10-day\
+    \ mean of (close * volume) as proxy for dollar volume\n    df = df.with_columns(ts_mean(pl.col('close')\
+    \ * pl.col('volume'), 10).alias('_adv10'))\n    # sum(adv10, 49.6054) -> window\
+    \ 50\n    df = df.with_columns(rolling_sum(pl.col('_adv10'), window=50).alias('_sum_adv10'))\n\
+    \    # correlation(vwap, sum_adv10, 8.47743) -> window 8\n    df = df.with_columns(rolling_corr(pl.col('vwap'),\
+    \ pl.col('_sum_adv10'), window=8).alias('_corr1'))\n    # rank(corr1)\n    df\
+    \ = df.with_columns(rank(pl.col('_corr1')).over('date').alias('_r_corr1'))\n \
+    \   # (rank)^4\n    df = df.with_columns((pl.col('_r_corr1') ** 4).alias('_pow4'))\n\
+    \    # rank(pow4)\n    df = df.with_columns(rank(pl.col('_pow4')).over('date').alias('_r_pow4'))\n\
+    \    # Log(product(rank_pow4, 14.9655)) = ts_sum(Log(rank_pow4), 14.9655)\n  \
+    \  df = df.with_columns(pl.col('_r_pow4').log().alias('_log_rpow4'))\n    df =\
+    \ df.with_columns(ts_sum(pl.col('_log_rpow4'), window=15).alias('_sum_log'))\n\
+    \    # rank(sum_log)\n    df = df.with_columns(rank(pl.col('_sum_log')).over('date').alias('_r_sum_log'))\n\
+    \    # rank(vwap), rank(volume)\n    df = df.with_columns(rank(pl.col('vwap')).over('date').alias('_r_vwap'))\n\
+    \    df = df.with_columns(rank(pl.col('volume')).over('date').alias('_r_volume'))\n\
+    \    # correlation(rank_vwap, rank_volume, 5.07914) -> window 5\n    df = df.with_columns(rolling_corr(pl.col('_r_vwap'),\
+    \ pl.col('_r_volume'), window=5).alias('_corr2'))\n    # rank(corr2)\n    df =\
+    \ df.with_columns(rank(pl.col('_corr2')).over('date').alias('_r_corr2'))\n   \
+    \ # (left < right) * -1\n    factor = pl.when(pl.col('_r_sum_log') < pl.col('_r_corr2')).then(-1).otherwise(0)\n\
+    \    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1712
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_081.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 50
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.004687971072673325
+    icir: 0.03329357041717337
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -8.145555180760766e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.029845684543524417
+    validated_at: 1782350832.6026733
+  validation_date: '2026-06-25'

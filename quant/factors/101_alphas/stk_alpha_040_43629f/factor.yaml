@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((-1 * rank(stddev(high, 10))) * correlation(high, volume, 10))
+  definition: 做空10日高价波动率排名，同时乘以10日高价与成交量的相关性，捕捉低价量齐升的稳定强势股。
   formula: ((-1 * rank(stddev(high, 10))) * correlation(high, volume, 10))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -95,3 +95,34 @@ l6:
   - 'correlation(high, volume) 整体转负的市场 (系统性下跌放量): 第二项贡献反转, 因子值被压低, 失去选股能力'
   risk_notes: 因子对市场 beta 敏感度低, 在牛市中可能持续跑输基准; 量价相关性在 A 股受涨跌停制度与流动性事件干扰, 极端日 (如 2015
     年股灾、2020 年春节后) 相关系数失真, 需做稳健性处理或剔除异常窗口。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Rule 2: materialize\
+    \ rolling std of high\n    df = df.with_columns(rolling_std(pl.col('high'), window=10).alias('_std_high'))\n\
+    \    # Rule 2: materialize rolling correlation between high and volume\n    df\
+    \ = df.with_columns(correlation(pl.col('high'), pl.col('volume'), window=10).alias('_corr'))\n\
+    \    # Cross-sectional rank of std, negated, multiplied by correlation\n    factor\
+    \ = (-1 * rank(pl.col('_std_high')).over('date')) * pl.col('_corr')\n    return\
+    \ df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 536
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_040.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 43
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.017365891030164293
+    icir: -0.11916582644787574
+    winrate: 0.4067796610169492
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 2.988038718920727e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.02431769522934993
+    validated_at: 1782306784.0251064
+  validation_date: '2026-06-24'

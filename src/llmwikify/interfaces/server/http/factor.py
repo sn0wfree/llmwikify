@@ -710,6 +710,7 @@ async def get_factor_backtest_results(slug: str, limit: int = 10) -> dict[str, A
     for r in results:
         ic_series = json.loads(r.ic_series) if r.ic_series else []
         group_metrics = json.loads(r.group_metrics) if r.group_metrics else {}
+        equity_curve = json.loads(r.equity_curve) if r.equity_curve else {}
         runs.append({
             "run_id": r.run_id,
             "created_at": r.created_at,
@@ -730,6 +731,7 @@ async def get_factor_backtest_results(slug: str, limit: int = 10) -> dict[str, A
             },
             "ic_series": ic_series,
             "group_metrics": group_metrics,
+            "equity_curve": equity_curve,
         })
 
     return {"slug": slug, "runs": runs, "total": len(runs)}

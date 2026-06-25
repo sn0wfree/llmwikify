@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank(correlation(sum(((high + low) / 2), 19.8975), sum(adv60, 19.8975),
-    8.8136)) < rank(correlation(low, volume, 6.28259))) * -1)
+  definition: 比较中长期价格-成交量相关性与短期低价格-成交量相关性的排名差异，取负值输出。当短期低量相关性排名高于中长期价格-成交量相关性排名时输出1，否则输出0，最后取反。
   formula: ((rank(correlation(sum(((high + low) / 2), 19.8975), sum(adv60, 19.8975),
     8.8136)) < rank(correlation(low, volume, 6.28259))) * -1)
   frequency: 日频
@@ -88,3 +87,39 @@ l6:
   - 涨跌停板频发或停牌较多的标的：low/volume 受制度干扰，corr 估计偏离真实关系
   - 市场整体低波动或风格快速切换期：截面 rank 关系不稳定，二元信号频繁翻转，因子表现恶化
   risk_notes: 因子为纯空头信号（-1/0），需结合多空对冲或多因子组合使用；离散取值使因子暴露不稳定，回撤波动可能较大；建议在流动性较好的中大盘股票池中应用。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # midprice = (high\
+    \ + low) / 2\n    midprice = (pl.col('high') + pl.col('low')) / 2\n    \n    #\
+    \ Materialize rolling sums (windows rounded from 19.8975 -> 20)\n    df = df.with_columns(rolling_sum(midprice,\
+    \ window=20).alias('_sum_mid'))\n    df = df.with_columns(rolling_sum(pl.col('volume'),\
+    \ window=20).alias('_sum_vol'))\n    \n    # Materialize rolling correlations\
+    \ (8.8136 -> 9, 6.28259 -> 6)\n    df = df.with_columns(\n        rolling_corr(pl.col('_sum_mid'),\
+    \ pl.col('_sum_vol'), window=9).alias('_corr1')\n    )\n    df = df.with_columns(\n\
+    \        rolling_corr(pl.col('low'), pl.col('volume'), window=6).alias('_corr2')\n\
+    \    )\n    \n    # Cross-sectional rank on materialized columns, then pl.when\
+    \ comparison\n    factor = pl.when(\n        rank(pl.col('_corr1')).over('date')\
+    \ < rank(pl.col('_corr2')).over('date')\n    ).then(-1).otherwise(0)\n    \n \
+    \   return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 933
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_099.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 48
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.004445964873063634
+    icir: -0.03475529743445019
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00015105751045041416
+    longshort_sharpe: null
+    longshort_max_dd: -0.028308082920259124
+    validated_at: 1782352741.0315843
+  validation_date: '2026-06-25'

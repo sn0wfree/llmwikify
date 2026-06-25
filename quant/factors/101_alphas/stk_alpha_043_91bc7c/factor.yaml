@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (ts_rank((volume / adv20), 20) * ts_rank((-1 * delta(close, 7)), 8))
+  definition: 该因子将成交量相对均量的时间序列排名与近期价格下跌幅度的时间序列排名相乘，捕捉量价齐跌后反弹的均值回复机会。
   formula: (ts_rank((volume / adv20), 20) * ts_rank((-1 * delta(close, 7)), 8))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -93,3 +93,36 @@ l6:
   - 低流动性/小盘股中, 成交量比值波动剧烈, ts_rank 噪声大, 信号失真严重
   - 政策利好/利空冲击或停牌复牌初期, 异常放量不代表市场情绪, 而是事件驱动, 因子失效
   risk_notes: '需警惕''反转陷阱'': 放量下跌后继续下跌的概率不可忽视; 建议配合波动率、流动性、行业景气度等辅助因子做组合过滤, 并严格控制单股持仓上限与回撤止损。'
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = 20-day\
+    \ average volume\n    df = df.with_columns(rolling_mean(pl.col('volume'), window=20).alias('_adv20'))\n\
+    \    # volume / adv20\n    df = df.with_columns((pl.col('volume') / pl.col('_adv20')).alias('_vol_ratio'))\n\
+    \    # ts_rank((volume / adv20), 20)\n    df = df.with_columns(ts_rank(pl.col('_vol_ratio'),\
+    \ window=20).alias('_tsrank1'))\n    # -1 * delta(close, 7)\n    df = df.with_columns((-1\
+    \ * delta(pl.col('close'), periods=7)).alias('_neg_delta'))\n    # ts_rank((-1\
+    \ * delta(close, 7)), 8)\n    df = df.with_columns(ts_rank(pl.col('_neg_delta'),\
+    \ window=8).alias('_tsrank2'))\n    # final factor: product of the two ts_ranks\n\
+    \    factor = pl.col('_tsrank1') * pl.col('_tsrank2')\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 777
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_043.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 42
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.02580825524455978
+    icir: -0.15804196279271684
+    winrate: 0.4067796610169492
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -0.0002640123337341871
+    longshort_sharpe: null
+    longshort_max_dd: -0.04847496517119499
+    validated_at: 1782306819.7401035
+  validation_date: '2026-06-24'

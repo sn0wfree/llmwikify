@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((-1 * ((low - close) * (open^5))) / ((low - high) * (close^5)))
+  definition: 衡量收盘价在日内价格区间中的相对位置，经开盘价和收盘价的5次方进行调整，并通过取反捕捉价格反转特征。
   formula: ((-1 * ((low - close) * (open^5))) / ((low - high) * (close^5)))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -91,3 +91,32 @@ l6:
   - '大幅跳空+极端行情: open^5/close^5 数值溢出, 因子主导由价差变成纯价格量级, 失定价量含义'
   risk_notes: '建议: 1) 对 |low - high| < ε 的样本直接剔除或置 NaN; 2) 对 open/close 做分位数截尾; 3)
     因子在行业内或市值组内做 z-score 标准化以消除价量级影响; 4) 关注因子右偏分布对组合权重的扭曲, 必要时做符号反转或取负使用。'
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    numerator = -1 *\
+    \ (pl.col('low') - pl.col('close')) * (pl.col('open') ** 5)\n    denominator =\
+    \ (pl.col('low') - pl.col('high')) * (pl.col('close') ** 5)\n    \n    # Avoid\
+    \ division by zero / inf\n    factor = pl.when(denominator != 0).then(numerator\
+    \ / denominator).otherwise(0)\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 373
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_054.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 56
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.012174473054710885
+    icir: 0.08721899620517405
+    winrate: 0.6101694915254238
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 9.537424350636314e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.02081875327360086
+    validated_at: 1782307552.0889523
+  validation_date: '2026-06-24'

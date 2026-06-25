@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (rank((open - (sum(vwap, 10) / 10))) * (-1 * abs(rank((close - vwap)))))
+  definition: 结合开盘价相对于10日VWAP均值的偏离排名与收盘价对VWAP偏离程度的负绝对排名，捕捉开盘强势但收盘回归VWAP的均值回归特征。
   formula: (rank((open - (sum(vwap, 10) / 10))) * (-1 * abs(rank((close - vwap)))))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -91,3 +91,33 @@ l6:
   - 市场流动性骤降或风格剧变 (如政策事件冲击) 时, VWAP 偏离的微观结构逻辑被破坏
   - 高换手小盘股流动性踩踏场景下, |close-vwap| 信号被噪音淹没, 因子失效
   risk_notes: 因子做空部分依赖融券资源, 实际投资中需关注做空成本与券源可得性; 建议配合趋势强度过滤器在牛市中降低权重, 并对小盘股施加流动性与涨跌幅限制
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize rolling-dependent\
+    \ expression first (Rule 2)\n    df = df.with_columns(\n        (pl.col('open')\
+    \ - rolling_mean(pl.col('vwap'), window=10)).alias('_a')\n    )\n    # rank(A)\
+    \ * (-1 * abs(rank(B))), where B = close - vwap (no rolling -> no materialize\
+    \ needed)\n    factor = rank(pl.col('_a')).over('date') * (\n        -1 * rank((pl.col('close')\
+    \ - pl.col('vwap'))).over('date').abs()\n    )\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 490
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_005.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 54
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.015165623620479502
+    icir: 0.10121369274105307
+    winrate: 0.5254237288135594
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -6.901658527791454e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.030226007587540175
+    validated_at: 1782305817.261514
+  validation_date: '2026-06-24'

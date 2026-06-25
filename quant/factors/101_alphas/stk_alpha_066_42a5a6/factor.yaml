@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank(decay_linear(delta(vwap, 3.51013), 7.23052)) + Ts_Rank(decay_linear(((((low
-    * 0.96633) + (low * (1 - 0.96633))) - vwap) / (open - ((high + low) / 2))), 11.4157),
-    6.72611)) * -1)
+  definition: 结合VWAP动量与低价比公允价值比较的复合alpha，取负后反转信号方向。
   formula: ((rank(decay_linear(delta(vwap, 3.51013), 7.23052)) + Ts_Rank(decay_linear(((((low
     * 0.96633) + (low * (1 - 0.96633))) - vwap) / (open - ((high + low) / 2))), 11.4157),
     6.72611)) * -1)
@@ -104,3 +102,38 @@ l6:
   - '风格切换/小盘失效: 当小盘溢价崩塌、流动性溢价压缩 (如 2017 蓝筹行情、2024 微盘股冲击), 因子 IC 显著下降'
   risk_notes: '因子存在明显长尾风险: 个股日线数据中 vwap=0/open=0/异常停牌会污染 inner; 建议在回测中加入停牌过滤、涨跌停剔除、流动性中位数换手过滤,
     并对因子值做行业与市值中性化后再使用。'
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Part 1: rank(decay_linear(delta(vwap,\
+    \ 3.51013), 7.23052))\n    # Cast floats to int for window/period args\n    df\
+    \ = df.with_columns(\n        delta(pl.col('vwap'), int(3.51013)).alias('_delta_vwap')\n\
+    \    )\n    df = df.with_columns(\n        decay_linear(pl.col('_delta_vwap'),\
+    \ int(7.23052)).alias('_decay1')\n    )\n    \n    # Part 2: (low*0.96633 + low*(1-0.96633))\
+    \ simplifies to low\n    inner_expr = (pl.col('low') - pl.col('vwap')) / (pl.col('open')\
+    \ - (pl.col('high') + pl.col('low')) / 2)\n    df = df.with_columns(inner_expr.alias('_inner'))\n\
+    \    df = df.with_columns(\n        decay_linear(pl.col('_inner'), int(11.4157)).alias('_decay2')\n\
+    \    )\n    \n    # Cross-sectional rank and ts_rank\n    rank1 = rank(pl.col('_decay1')).over('date')\n\
+    \    ts_rank2 = ts_rank(pl.col('_decay2'), int(6.72611))\n    \n    # Combine\
+    \ and negate\n    factor = (rank1 + ts_rank2) * -1\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 955
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_066.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 55
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.02597757189861955
+    icir: 0.17078847584376164
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 1.0669387140227471e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.023405017331419153
+    validated_at: 1782349361.9020026
+  validation_date: '2026-06-25'

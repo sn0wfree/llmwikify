@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((((2.21 * rank(correlation((close - open), delay(volume, 1), 15)))
-    + (0.7 * rank((open - close)))) + (0.73 * rank(Ts_Rank(delay((-1 * returns), 6),
-    5)))) + rank(abs(correlation(vwap, adv20, 6)))) + (
+  definition: 加权多因子Alpha，结合动量、交易量和估值信号，通过五个成分的加权组合预测资产未来收益。
   formula: ((((2.21 * rank(correlation((close - open), delay(volume, 1), 15))) + (0.7
     * rank((open - close)))) + (0.73 * rank(Ts_Rank(delay((-1 * returns), 6), 5))))
     + rank(abs(correlation(vwap, adv20, 6)))) + (0.6 * rank((((sum(close, 200) / 200)
@@ -105,3 +103,44 @@ l6:
   - 低流动性/极端行情:成交量信号 (Part 1, Part 4) 噪声增大,200 日均线锚定失效
   - 宏观事件冲击/风格切换:VWAP-成交量相关性结构突变,因子 IC 急剧衰减
   risk_notes: 需关注 200 日窗口在次新股/小盘股上的数据可用性;Part 4 取绝对值可能导致多空对冲不充分,建议结合市场状态动态调节子项权重
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    import polars as\
+    \ pl\n\n    # adv20: average daily volume over 20 days\n    df = df.with_columns(ts_mean(pl.col('volume'),\
+    \ window=20).alias('_adv20'))\n\n    # correlation((close - open), delay(volume,\
+    \ 1), 15)\n    df = df.with_columns(\n        correlation(\n            pl.col('close')\
+    \ - pl.col('open'),\n            delay(pl.col('volume'), periods=1),\n       \
+    \     window=15\n        ).alias('_corr1')\n    )\n\n    # ts_rank(delay(-1 *\
+    \ returns, 6), 5)\n    df = df.with_columns(\n        ts_rank(delay(-1 * pl.col('returns'),\
+    \ periods=6), window=5).alias('_tsrank')\n    )\n\n    # abs(correlation(vwap,\
+    \ adv20, 6))\n    df = df.with_columns(\n        correlation(pl.col('vwap'), pl.col('_adv20'),\
+    \ window=6).abs().alias('_corr2')\n    )\n\n    # ((sum(close, 200) / 200) - open)\
+    \ * (close - open)\n    df = df.with_columns(\n        (((ts_sum(pl.col('close'),\
+    \ window=200) / 200) - pl.col('open')) * (pl.col('close') - pl.col('open'))).alias('_inner5')\n\
+    \    )\n\n    # Final factor: weighted sum of cross-sectional ranks\n    factor\
+    \ = (\n        2.21 * rank(pl.col('_corr1')).over('date')\n        + 0.7 * rank(pl.col('open')\
+    \ - pl.col('close')).over('date')\n        + 0.73 * rank(pl.col('_tsrank')).over('date')\n\
+    \        + rank(pl.col('_corr2')).over('date')\n        + 0.6 * rank(pl.col('_inner5')).over('date')\n\
+    \    )\n\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1380
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_036.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 55
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.015040769684518123
+    icir: 0.11111259636268674
+    winrate: 0.5423728813559322
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00020242235114875662
+    longshort_sharpe: null
+    longshort_max_dd: -0.018198901839703574
+    validated_at: 1782306683.0452898
+  validation_date: '2026-06-24'

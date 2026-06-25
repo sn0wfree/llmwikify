@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank(ts_max(delta(IndNeutralize(vwap, IndClass.industry), 2.72412),
-    4.79344))^Ts_Rank(correlation(((close * 0.490655) + (vwap * (1 - 0.490655))),
-    adv20, 4.92416), 9.0615)) * -1)
+  definition: 基于行业中性化VWAP动量与成交量加权价格相关性的时间序列排名幂因子，取反后输出
   formula: ((rank(ts_max(delta(IndNeutralize(vwap, IndClass.industry), 2.72412), 4.79344))^Ts_Rank(correlation(((close
     * 0.490655) + (vwap * (1 - 0.490655))), adv20, 4.92416), 9.0615)) * -1)
   frequency: 日频
@@ -110,3 +108,42 @@ l6:
   - '行业剧烈轮动期: 即使行业中性化后, 行业内个股同步性增强, 横截面 rank 信息量下降'
   - '低流动性小盘股: adv20 噪声大, 量价相关性估计不稳, 因子波动加剧'
   risk_notes: 因子依赖行业分类准确性, 分类标准变化会导致历史回测与实盘表现不一致; 幂运算放大了极端值, 需关注因子分布的尾部风险及换手率控制。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20: 20-day average\
+    \ daily volume\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n    \n\
+    \    # Step 1: Industry neutralize vwap (using neutralize as proxy since no industry\
+    \ column)\n    ind_neutral_vwap = neutralize(pl.col('vwap')).over('date')\n  \
+    \  \n    # Step 2: delta with period ~3 (rounded from 2.72412)\n    delta_vwap\
+    \ = delta(ind_neutral_vwap, periods=3)\n    \n    # Step 3: ts_max with window\
+    \ ~5 (rounded from 4.79344)\n    ts_max_delta = ts_max(delta_vwap, window=5)\n\
+    \    \n    # Step 4: cross-sectional rank\n    rank1 = rank(ts_max_delta).over('date')\n\
+    \    \n    # Step 5: weighted close/vwap combo\n    close_vwap_combo = pl.col('close')\
+    \ * 0.490655 + pl.col('vwap') * (1 - 0.490655)\n    \n    # Step 6: rolling correlation\
+    \ with adv20 over ~5 days (rounded from 4.92416)\n    corr = rolling_corr(close_vwap_combo,\
+    \ adv20, window=5)\n    \n    # Step 7: Ts_Rank over ~9 days (rounded from 9.0615)\n\
+    \    ts_rank_corr = ts_rank(corr, window=9)\n    \n    # Step 8: rank1 ^ ts_rank_corr,\
+    \ then multiply by -1\n    factor = (rank1 ** ts_rank_corr) * -1\n    \n    return\
+    \ df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1144
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_069.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 45
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.013500117253834895
+    icir: -0.0907566249231631
+    winrate: 0.4406779661016949
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -8.176029605022617e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.03431539183103862
+    validated_at: 1782149874.023521
+  validation_date: '2026-06-23'

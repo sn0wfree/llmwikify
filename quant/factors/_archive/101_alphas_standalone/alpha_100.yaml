@@ -1,0 +1,84 @@
+factor:
+  name: alpha_100
+  asset_type: stock
+  category: formulaic
+  status: 已验证
+  updated_at: '2026-06-25'
+  l1:
+    definition: (0 - (1 * (((1.5 * scale(indneutralize(indneutralize(rank(((((close
+      - low) - (high - close)) / (high - low)) * volume)), IndClass.subindustry),
+      IndClass.subindustry))) - scale(indneutralize((correlati
+    formula: (0 - (1 * (((1.5 * scale(indneutralize(indneutralize(rank(((((close -
+      low) - (high - close)) / (high - low)) * volume)), IndClass.subindustry), IndClass.subindustry)))
+      - scale(indneutralize((correlation(close, rank(adv20), 5) - rank(ts_argmin(close,
+      30))), IndClass.subindustry))) * (volume / adv20))))
+    frequency: 日频
+    output_schema: '[date × Code]'
+    input_columns:
+    - high
+    - low
+    - close
+    - volume
+    - adv20
+    - industry
+    - open
+    - returns
+    nan_meaning: 上市不足或窗口期数据不足
+    default_params: {}
+    param_constraints: {}
+    business_constraints: 支持日频调仓, T+1 信号
+  l5:
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Compute adv20\
+      \ (20-day average daily volume)\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+      \ window=20).alias('_adv20')\n    )\n    \n    # Inner expression: ((close -\
+      \ low) - (high - close)) / (high - low) * volume\n    inner = (((pl.col('close')\
+      \ - pl.col('low')) - (pl.col('high') - pl.col('close'))) / (pl.col('high') -\
+      \ pl.col('low'))) * pl.col('volume')\n    \n    # rank(inner) cross-sectionally\n\
+      \    df = df.with_columns(rank(inner).over('date').alias('_r1'))\n    \n   \
+      \ # indneutralize twice (subtract mean by industry)\n    df = df.with_columns(\n\
+      \        (pl.col('_r1') - pl.col('_r1').mean().over(['date', 'industry'])).alias('_n1')\n\
+      \    )\n    df = df.with_columns(\n        (pl.col('_n1') - pl.col('_n1').mean().over(['date',\
+      \ 'industry'])).alias('_n2')\n    )\n    \n    # scale and multiply by 1.5 ->\
+      \ first part\n    df = df.with_columns(\n        scale(pl.col('_n2')).over('date').alias('_s1')\n\
+      \    )\n    df = df.with_columns(\n        (1.5 * pl.col('_s1')).alias('_p1')\n\
+      \    )\n    \n    # rank(adv20) cross-sectionally\n    df = df.with_columns(\n\
+      \        rank(pl.col('_adv20')).over('date').alias('_r_adv20')\n    )\n    \n\
+      \    # correlation(close, rank(adv20), 5) - 5-day rolling correlation\n    df\
+      \ = df.with_columns(\n        rolling_corr(pl.col('close'), pl.col('_r_adv20'),\
+      \ window=5).alias('_c1')\n    )\n    \n    # ts_argmin(close, 30) - 30-day argmin\n\
+      \    df = df.with_columns(\n        ts_argmin(pl.col('close'), window=30).alias('_am')\n\
+      \    )\n    \n    # rank(ts_argmin(close, 30)) cross-sectionally\n    df = df.with_columns(\n\
+      \        rank(pl.col('_am')).over('date').alias('_r2')\n    )\n    \n    # correlation\
+      \ - rank\n    df = df.with_columns(\n        (pl.col('_c1') - pl.col('_r2')).alias('_d1')\n\
+      \    )\n    \n    # indneutralize (subtract mean by industry)\n    df = df.with_columns(\n\
+      \        (pl.col('_d1') - pl.col('_d1').mean().over(['date', 'industry'])).alias('_n3')\n\
+      \    )\n    \n    # scale -> second part\n    df = df.with_columns(\n      \
+      \  scale(pl.col('_n3')).over('date').alias('_p2')\n    )\n    \n    # part1\
+      \ - part2\n    df = df.with_columns(\n        (pl.col('_p1') - pl.col('_p2')).alias('_combined')\n\
+      \    )\n    \n    # multiply by (volume / adv20)\n    df = df.with_columns(\n\
+      \        (pl.col('_combined') * (pl.col('volume') / pl.col('_adv20'))).alias('_final')\n\
+      \    )\n    \n    # 0 - (1 * X) = -X\n    factor = -pl.col('_final')\n    return\
+      \ df.select(factor).to_series()"
+    code_compile_status: success
+    code_chars: 2423
+    h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_100.h5
+    ast: null
+    ast_compile_status: null
+    ast_compile_iterations: null
+    ast_compile_source: null
+    ast_compile_error: null
+    overall_assessment:
+      score: 42
+      status: 失败
+      pass_threshold: 60
+      final_meaning: ''
+      ic_mean: -0.021708501524813663
+      icir: -0.1691281234257708
+      winrate: 0.4067796610169492
+      rank_ic_mean: null
+      rank_icir: null
+      annual_return: -0.0001508993966566896
+      longshort_sharpe: null
+      longshort_max_dd: -0.023150044521016256
+      validated_at: 1782364669.3647506
+    validation_date: '2026-06-25'

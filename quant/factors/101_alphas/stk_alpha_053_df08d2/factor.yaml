@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * delta((((close - low) - (high - close)) / (close - low)), 9))
+  definition: 衡量收盘价在当日价格区间内相对位置的9日变化量的相反数，用于捕捉均值回归机会
   formula: (-1 * delta((((close - low) - (high - close)) / (close - low)), 9))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -91,3 +91,31 @@ l6:
   - close 集中分布在振幅下沿的小盘股，inner 出现 -∞ 异常值，污染因子分布
   risk_notes: 未做极值处理与中性化，原始因子存在显著市值/波动率暴露；建议在使用前对 inner 与因子分别做 winsorize 与市值中性化；注意
     division by zero 与 null 传播
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    inner = ((pl.col('close')\
+    \ - pl.col('low')) - (pl.col('high') - pl.col('close'))) / (pl.col('close') -\
+    \ pl.col('low'))\n    df = df.with_columns(delta(inner, periods=9).alias('_delta'))\n\
+    \    factor = -1 * pl.col('_delta')\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 313
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_053.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 50
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.0026693193366095335
+    icir: 0.01819557909882926
+    winrate: 0.4915254237288136
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -5.5282660021194197e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.02469951213909271
+    validated_at: 1782307531.8134758
+  validation_date: '2026-06-24'

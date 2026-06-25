@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * ts_max(rank(correlation(rank(volume), rank(vwap), 5)), 5))
+  definition: 计算成交量与VWAP的5日滚动相关性的横截面排名，再取5日滚动最大值并取负值，用于捕捉交易活动与公平价值的持续对齐程度。
   formula: (-1 * ts_max(rank(correlation(rank(volume), rank(vwap), 5)), 5))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -103,3 +103,37 @@ l6:
   - 因子对市场状态 (regime) 高度敏感, 建议配合趋势/波动率过滤器使用
   - 建议与动量因子做负向组合配置以分散风险
   - 回测需考虑换手率约束 (5 日窗口 + 截面 rank 导致日频换手较高), 交易成本敏感
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1 & 2: cross-sectional\
+    \ ranks of volume and vwap\n    df = df.with_columns([\n        rank(pl.col('volume')).over('date').alias('_rank_volume'),\n\
+    \        rank(pl.col('vwap')).over('date').alias('_rank_vwap')\n    ])\n    #\
+    \ Step 3: rolling correlation (must materialize before rank().over('date'))\n\
+    \    df = df.with_columns(\n        correlation(pl.col('_rank_volume'), pl.col('_rank_vwap'),\
+    \ window=5).alias('_corr')\n    )\n    # Step 4: cross-sectional rank of the correlation\n\
+    \    df = df.with_columns(\n        rank(pl.col('_corr')).over('date').alias('_rank_corr')\n\
+    \    )\n    # Step 5 & 6: ts_max with window 5, then negate\n    df = df.with_columns(\n\
+    \        ts_max(pl.col('_rank_corr'), window=5).alias('_tsmax')\n    )\n    factor\
+    \ = -1 * pl.col('_tsmax')\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 847
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_050.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 51
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.0005637156915422922
+    icir: -0.004332771183666475
+    winrate: 0.5254237288135594
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -3.0777427363348764e-06
+    longshort_sharpe: null
+    longshort_max_dd: -0.03499545901747234
+    validated_at: 1782307462.598472
+  validation_date: '2026-06-24'

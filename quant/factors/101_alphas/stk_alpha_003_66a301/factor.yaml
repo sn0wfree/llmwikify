@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * correlation(rank(open), rank(volume), 10))
+  definition: 10日滚动窗口内，股票开盘价与成交量的横截面排序负相关系数，反映价格水平与交易活动强度的背离程度。
   formula: (-1 * correlation(rank(open), rank(volume), 10))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -100,3 +100,34 @@ l6:
   - 因子为短期反转类, 换手率高, 交易成本敏感, 需扣除双边手续费和冲击成本后评估净 IC
   - 横截面 rank 对当日停牌/一字板股票处理需统一, 避免排名跳变引入噪声
   - 建议与动量/趋势因子做互补或对冲, 避免在趋势行情中暴露纯反转风险
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Cross-sectional\
+    \ ranks per date\n    df = df.with_columns([\n        rank(pl.col('open')).over('date').alias('_rank_open'),\n\
+    \        rank(pl.col('volume')).over('date').alias('_rank_volume'),\n    ])\n\
+    \    # Time-series correlation of the two ranks over a 10-day window\n    df =\
+    \ df.with_columns(\n        correlation(pl.col('_rank_open'), pl.col('_rank_volume'),\
+    \ window=10).alias('_corr')\n    )\n    factor = -1 * pl.col('_corr')\n    return\
+    \ df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 518
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_003.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 42
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.026409004909145894
+    icir: -0.1638339093658101
+    winrate: 0.423728813559322
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -3.922268642364557e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.01886134268726723
+    validated_at: 1782305763.676671
+  validation_date: '2026-06-24'

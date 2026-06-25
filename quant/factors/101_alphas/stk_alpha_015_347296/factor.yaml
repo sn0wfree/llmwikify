@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * sum(rank(correlation(rank(high), rank(volume), 3)), 3))
+  definition: 计算3日窗口内高频价格与成交量的相关性排名的累积和，并取负值作为做空动能信号。
   formula: (-1 * sum(rank(correlation(rank(high), rank(volume), 3)), 3))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -96,3 +96,38 @@ l6:
   - 极端低流动性小盘股占比较高时，3 日窗口相关系数噪声大，IC 不稳定
   - 风格切换期（如成长 vs 价值切换）造成成交量结构性迁移，截面排名失真
   risk_notes: 因子换手率高（双重 rank + 双 3 日滚动），交易成本敏感；中性化后残差信号需注意行业与市值暴露；建议配合市值、行业、波动率中性化使用，并监控市场状态切换。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: cross-sectional\
+    \ rank of high and volume\n    df = df.with_columns([\n        rank(pl.col('high')).over('date').alias('_rank_high'),\n\
+    \        rank(pl.col('volume')).over('date').alias('_rank_volume')\n    ])\n \
+    \   \n    # Step 2: rolling correlation of the two ranks (window=3) - materialize\
+    \ first\n    df = df.with_columns(\n        correlation(pl.col('_rank_high'),\
+    \ pl.col('_rank_volume'), window=3).alias('_corr')\n    )\n    \n    # Step 3:\
+    \ cross-sectional rank of the correlation (on materialized column)\n    df = df.with_columns(\n\
+    \        rank(pl.col('_corr')).over('date').alias('_rank_corr')\n    )\n    \n\
+    \    # Step 4: rolling sum with window=3\n    df = df.with_columns(\n        rolling_sum(pl.col('_rank_corr'),\
+    \ window=3).alias('_sum')\n    )\n    \n    # Step 5: negate\n    factor = -1\
+    \ * pl.col('_sum')\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 904
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_015.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 54
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.013847823705963682
+    icir: 0.10135717777733957
+    winrate: 0.5084745762711864
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00011946579276500557
+    longshort_sharpe: null
+    longshort_max_dd: -0.031099500988817294
+    validated_at: 1782306001.9015648
+  validation_date: '2026-06-24'

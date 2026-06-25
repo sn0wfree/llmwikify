@@ -54,7 +54,8 @@ def persist_code_to_yaml(
         from llmwikify.reproduction.pipeline.data_loader import derive_input_columns
 
         l1 = factor.setdefault("l1", {})
-        l1["definition"] = formula_brief[:200]
+        if not l1.get("definition"):
+            l1["definition"] = formula_brief[:200]
         l1["formula"] = formula_brief
         l1["frequency"] = "日频"
         l1["output_schema"] = "[date × Code]"
@@ -155,6 +156,7 @@ def save_backtest_to_db(
             longshort_max_dd=_nan_to_none(backtest.get("longshort_max_dd")),
             ic_series=backtest.get("ic_series", []),
             group_metrics=backtest.get("group_metrics", {}),
+            equity_curve=backtest.get("equity_curve") or backtest.get("group_nav_series"),
         )
         print(f"[db] created result run_id={run_id} factor_ref={slug}")
         return True

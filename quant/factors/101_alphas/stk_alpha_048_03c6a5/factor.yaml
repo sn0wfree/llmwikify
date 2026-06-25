@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (indneutralize(((correlation(delta(close, 1), delta(delay(close, 1),
-    1), 250) * delta(close, 1)) / close), IndClass.subindustry) / sum(((delta(close,
-    1) / delay(close, 1))^2), 250))
+  definition: 行业中性动量因子，通过计算250日滚动窗口内当日收益率与前日收益率的相关系数，乘以当日收益率，再除以250日收益率方差（波动率）来捕捉价格的持续性运动。
   formula: (indneutralize(((correlation(delta(close, 1), delta(delay(close, 1), 1),
     250) * delta(close, 1)) / close), IndClass.subindustry) / sum(((delta(close, 1)
     / delay(close, 1))^2), 250))
@@ -31,3 +29,44 @@ l2: {}
 l3: {}
 l4: {}
 l6: {}
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # delta(close, 1)\
+    \ = close(t) - close(t-1)\n    # delta(delay(close, 1), 1) = close(t-1) - close(t-2)\n\
+    \    df = df.with_columns([\n        (pl.col('close') - pl.col('close').shift(1)).alias('_d_close'),\n\
+    \        (pl.col('close').shift(1) - pl.col('close').shift(2)).alias('_d_delay_close')\n\
+    \    ])\n\n    # correlation(delta(close,1), delta(delay(close,1),1), 250)\n \
+    \   df = df.with_columns(\n        rolling_corr(pl.col('_d_close'), pl.col('_d_delay_close'),\
+    \ window=250).alias('_corr')\n    )\n\n    # (corr * delta(close, 1)) / close\n\
+    \    df = df.with_columns(\n        ((pl.col('_corr') * pl.col('_d_close')) /\
+    \ pl.col('close')).alias('_inner')\n    )\n\n    # indneutralize = subtract industry\
+    \ mean within each date\n    df = df.with_columns(\n        pl.col('_inner').mean().over(['date',\
+    \ 'industry']).alias('_ind_mean')\n    )\n    df = df.with_columns(\n        (pl.col('_inner')\
+    \ - pl.col('_ind_mean')).alias('_numer')\n    )\n\n    # delta(close, 1) / delay(close,\
+    \ 1)\n    df = df.with_columns(\n        ((pl.col('close') - pl.col('close').shift(1))\
+    \ / pl.col('close').shift(1)).alias('_ret')\n    )\n\n    # sum((delta(close,1)/delay(close,1))^2,\
+    \ 250)\n    df = df.with_columns(\n        rolling_sum(pl.col('_ret') * pl.col('_ret'),\
+    \ window=250).alias('_denom')\n    )\n\n    factor = pl.col('_numer') / pl.col('_denom')\n\
+    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1387
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_048.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 48
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.003239208165061282
+    icir: 0.022979915709183785
+    winrate: 0.423728813559322
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.0001578440324803143
+    longshort_sharpe: null
+    longshort_max_dd: -0.03221312231882652
+    validated_at: 1782307401.6592407
+  validation_date: '2026-06-24'

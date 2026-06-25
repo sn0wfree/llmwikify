@@ -28,3 +28,43 @@ l2: {}
 l3: {}
 l4: {}
 l6: {}
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv15 = rolling\
+    \ mean of volume over 15 days\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+    \ window=15).alias('_adv15'))\n\n    # cross-sectional ranks of high and adv15\n\
+    \    df = df.with_columns([\n        rank(pl.col('high')).over('date').alias('_rank_high'),\n\
+    \        rank(pl.col('_adv15')).over('date').alias('_rank_adv15')\n    ])\n\n\
+    \    # rolling correlation of the two ranks (window rounded from 8.91644 -> 9)\n\
+    \    df = df.with_columns(\n        rolling_corr(pl.col('_rank_high'), pl.col('_rank_adv15'),\
+    \ window=9).alias('_corr')\n    )\n\n    # ts_rank of correlation (window rounded\
+    \ from 13.9333 -> 14)\n    df = df.with_columns(\n        ts_rank(pl.col('_corr'),\
+    \ window=14).alias('_ts_rank_corr')\n    )\n\n    # weighted close+low combination,\
+    \ then delta (period rounded from 1.06157 -> 1)\n    weighted = pl.col('close')\
+    \ * 0.518371 + pl.col('low') * (1 - 0.518371)\n    df = df.with_columns(delta(weighted,\
+    \ 1).alias('_delta'))\n\n    # cross-sectional rank of delta\n    df = df.with_columns(\n\
+    \        rank(pl.col('_delta')).over('date').alias('_rank_delta')\n    )\n\n \
+    \   # compare and multiply by -1\n    factor = pl.when(pl.col('_ts_rank_corr')\
+    \ < pl.col('_rank_delta')).then(-1).otherwise(0)\n\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1283
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_068.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 38
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.027627394862131196
+    icir: -0.2238151941564845
+    winrate: 0.3728813559322034
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.0002726300688196126
+    longshort_sharpe: null
+    longshort_max_dd: -0.01882058389794977
+    validated_at: 1782349504.6221805
+  validation_date: '2026-06-25'

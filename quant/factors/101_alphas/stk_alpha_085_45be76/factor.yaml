@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (rank(correlation(((high * 0.876703) + (close * (1 - 0.876703))), adv30,
-    9.61331))^rank(correlation(Ts_Rank(((high + low) / 2), 3.70596), Ts_Rank(volume,
-    10.1595), 7.11408)))
+  definition: 价格-成交量相关性因子：结合加权价格（87.7%最高价+12.3%收盘价）与30日均成交量的相关性排名，和中价与成交量时间排名的相关性排名，取幂运算进行信号放大
   formula: (rank(correlation(((high * 0.876703) + (close * (1 - 0.876703))), adv30,
     9.61331))^rank(correlation(Ts_Rank(((high + low) / 2), 3.70596), Ts_Rank(volume,
     10.1595), 7.11408)))
@@ -105,3 +103,40 @@ l6:
   - 小市值低流动性股票, adv30 与 ts_rank 噪声大, 相关系数不稳定导致因子失真
   - 风格切换期 (如成长/价值轮动) 期间, 量价信号与收益关联被宏观因子主导, 因子失效
   risk_notes: 因子输出经过幂运算, 极端值尾部风险较高, 需做 winsorize; 相关系数对缺失值敏感, 上市未满 30 日的次新股应剔除; 在因子组合中需控制与同类量价因子的相关性以避免重复暴露。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv30: 30-day average\
+    \ daily volume\n    df = df.with_columns(rolling_mean(pl.col('volume'), window=30).alias('_adv30'))\n\
+    \n    # Part 1: weighted price correlation with adv30\n    weighted_price = (pl.col('high')\
+    \ * 0.876703) + (pl.col('close') * (1 - 0.876703))\n    df = df.with_columns(\n\
+    \        rolling_corr(weighted_price, pl.col('_adv30'), window=10).alias('_corr1')\n\
+    \    )\n    df = df.with_columns(\n        rank(pl.col('_corr1')).over('date').alias('_rank1')\n\
+    \    )\n\n    # Part 2: ts_rank based correlation\n    df = df.with_columns(\n\
+    \        ts_rank((pl.col('high') + pl.col('low')) / 2, window=4).alias('_tsrank1')\n\
+    \    )\n    df = df.with_columns(\n        ts_rank(pl.col('volume'), window=10).alias('_tsrank2')\n\
+    \    )\n    df = df.with_columns(\n        rolling_corr(pl.col('_tsrank1'), pl.col('_tsrank2'),\
+    \ window=7).alias('_corr2')\n    )\n    df = df.with_columns(\n        rank(pl.col('_corr2')).over('date').alias('_rank2')\n\
+    \    )\n\n    # Final: rank1 ^ rank2\n    factor = pl.col('_rank1') ** pl.col('_rank2')\n\
+    \    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1100
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_085.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 44
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.01945359824394518
+    icir: -0.13477737626036623
+    winrate: 0.4576271186440678
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 8.480815838485256e-07
+    longshort_sharpe: null
+    longshort_max_dd: -0.031943683696642244
+    validated_at: 1782351218.180463
+  validation_date: '2026-06-25'

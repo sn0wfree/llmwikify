@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (rank((vwap - close)) / rank((vwap + close)))
+  definition: 基于VWAP与收盘价价差和的横截面排序比值，衡量收盘价相对于VWAP的偏离程度，属于延迟0日均值回归Alpha
   formula: (rank((vwap - close)) / rank((vwap + close)))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -94,3 +94,30 @@ l6:
   - 分母排名接近 0 的极低价股 (如仙股、退市股) 会导致因子值爆炸, 需严格剔除
   risk_notes: 比率类因子对分母极值极度敏感, 上线前必须做 winsorize 与分母下限处理; 同时建议分层 (按价格区间/市值) 检验因子的稳健性,
     避免被少数极值股票主导组合权重。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    rank_diff = rank(pl.col('vwap')\
+    \ - pl.col('close')).over('date')\n    rank_sum = rank(pl.col('vwap') + pl.col('close')).over('date')\n\
+    \    factor = rank_diff / rank_sum\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 260
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_042.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 34
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.047767054015998296
+    icir: -0.28455317131793023
+    winrate: 0.3125
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 4.925698203872564e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.026100578502945598
+    validated_at: 1782306805.8277397
+  validation_date: '2026-06-24'

@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (max(Ts_Rank(decay_linear(correlation(rank(vwap), rank(volume), 3.83878),
-    4.16783), 8.38151), Ts_Rank(decay_linear(Ts_ArgMax(correlation(Ts_Rank(close,
-    7.45404), Ts_Rank(adv60, 4.13242), 3.65459), 12.
+  definition: 取两个时序排名指标的最大值再取负：第一个是VWAP与成交量的排名相关性经时间指数加权后的排名，第二个是收盘价排名与60日均量排名的相关性在特定窗口内的最大相关点经时间加权后的排名。
   formula: (max(Ts_Rank(decay_linear(correlation(rank(vwap), rank(volume), 3.83878),
     4.16783), 8.38151), Ts_Rank(decay_linear(Ts_ArgMax(correlation(Ts_Rank(close,
     7.45404), Ts_Rank(adv60, 4.13242), 3.65459), 12.6556), 14.0365), 13.4143)) * -1)
@@ -108,3 +106,48 @@ l6:
   - 市场结构性切换 (如风格切换、行业轮动加速) 使 adv60 与 close 的协同模式发生突变, ts_argmax 锁定的历史极值失效
   risk_notes: 需关注因子对成长/价值、流动性、市值等风格因子的暴露; decay_linear 加重近期权重, 对尾部事件 (闪崩/暴涨) 敏感; max
     结构存在路径依赖, 回测与实盘窗口参数一致性需严格控制。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv60 = average\
+    \ daily volume over 60 days\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+    \ window=60).alias('_adv60')\n    )\n\n    # Cross-sectional ranks (materialized\
+    \ before correlation per Rule 2)\n    df = df.with_columns(\n        rank(pl.col('vwap')).over('date').alias('_rank_vwap'),\n\
+    \        rank(pl.col('volume')).over('date').alias('_rank_volume'),\n    )\n\n\
+    \    # Part 1: Ts_Rank(decay_linear(correlation(rank(vwap), rank(volume), 3.83878),\
+    \ 4.16783), 8.38151)\n    df = df.with_columns(\n        correlation(pl.col('_rank_vwap'),\
+    \ pl.col('_rank_volume'), window=4).alias('_corr1')\n    )\n    df = df.with_columns(\n\
+    \        decay_linear(pl.col('_corr1'), window=4).alias('_decay1')\n    )\n  \
+    \  df = df.with_columns(\n        ts_rank(pl.col('_decay1'), window=8).alias('_tsrank1')\n\
+    \    )\n\n    # Part 2: Ts_Rank(decay_linear(Ts_ArgMax(correlation(Ts_Rank(close,\
+    \ 7.45404), Ts_Rank(adv60, 4.13242), 3.65459), 12.6556), 14.0365), 13.4143)\n\
+    \    df = df.with_columns(\n        ts_rank(pl.col('close'), window=7).alias('_tsrank_close'),\n\
+    \        ts_rank(pl.col('_adv60'), window=4).alias('_tsrank_adv60'),\n    )\n\
+    \    df = df.with_columns(\n        correlation(pl.col('_tsrank_close'), pl.col('_tsrank_adv60'),\
+    \ window=4).alias('_corr2')\n    )\n    df = df.with_columns(\n        ts_argmax(pl.col('_corr2'),\
+    \ window=13).alias('_argmax1')\n    )\n    df = df.with_columns(\n        decay_linear(pl.col('_argmax1'),\
+    \ window=14).alias('_decay2')\n    )\n    df = df.with_columns(\n        ts_rank(pl.col('_decay2'),\
+    \ window=13).alias('_tsrank2')\n    )\n\n    # max(part1, part2) * -1\n    factor\
+    \ = pl.max_horizontal(pl.col('_tsrank1'), pl.col('_tsrank2')) * -1\n\n    return\
+    \ df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1736
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_096.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 48
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.005239506640681287
+    icir: -0.03764198864233903
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -8.154966968521027e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.04845842142637815
+    validated_at: 1782352291.0486798
+  validation_date: '2026-06-25'
