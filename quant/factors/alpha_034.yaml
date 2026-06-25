@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: rank(((1 - rank((stddev(returns, 2) / stddev(returns, 5)))) + (1 -
       rank(delta(close, 1)))))
@@ -23,18 +23,16 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Time-series operators\
-      \ (df already sorted by code, date)\n    std_2 = rolling_std(pl.col('returns'),\
-      \ window=2)\n    std_5 = rolling_std(pl.col('returns'), window=5)\n\n    # Ratio\
-      \ of short-term to medium-term return volatility\n    ratio = std_2 / std_5\n\
-      \n    # Cross-sectional rank of the ratio\n    rank_ratio = rank(ratio).over('date')\n\
-      \n    # Delta of close over 1 period, cross-sectionally ranked\n    rank_delta\
-      \ = rank(delta(pl.col('close'), periods=1)).over('date')\n\n    # Combine: (1\
-      \ - rank(ratio)) + (1 - rank(delta))\n    inner = (1 - rank_ratio) + (1 - rank_delta)\n\
-      \n    # Final cross-sectional rank\n    factor = rank(inner).over('date')\n\n\
-      \    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize rolling\
+      \ results first (Rule 2)\n    df = df.with_columns(\n        rolling_std(pl.col('returns'),\
+      \ window=2).alias('_std2')\n    )\n    df = df.with_columns(\n        rolling_std(pl.col('returns'),\
+      \ window=5).alias('_std5')\n    )\n    df = df.with_columns(\n        (pl.col('_std2')\
+      \ / pl.col('_std5')).alias('_ratio')\n    )\n    df = df.with_columns(\n   \
+      \     delta(pl.col('close'), 1).alias('_delta_close')\n    )\n    \n    part1\
+      \ = 1 - rank(pl.col('_ratio')).over('date')\n    part2 = 1 - rank(pl.col('_delta_close')).over('date')\n\
+      \    factor = rank((part1 + part2)).over('date')\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 735
+    code_chars: 680
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_034.h5
     ast: null
     ast_compile_status: null
@@ -46,16 +44,16 @@ factor:
       status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.00831212557335476
-      icir: 0.05507406920325752
-      winrate: 0.5423728813559322
+      ic_mean: 0.00540990906831438
+      icir: 0.03741969161202864
+      winrate: 0.559322033898305
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.0001626879255649527
+      annual_return: 0.00010546367266761614
       longshort_sharpe: null
-      longshort_max_dd: -0.01499991180539219
-      validated_at: 1782145220.3629205
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.014863556242005279
+      validated_at: 1782306615.9027674
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

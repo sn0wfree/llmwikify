@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (-1 * correlation(rank(open), rank(volume), 10))
     formula: (-1 * correlation(rank(open), rank(volume), 10))
@@ -22,12 +22,14 @@ factor:
     business_constraints: 支持日频调仓, T+1 信号
   l5:
     code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Cross-sectional\
-      \ ranks per date\n    ranked_open = rank(pl.col('open')).over('date')\n    ranked_volume\
-      \ = rank(pl.col('volume')).over('date')\n\n    # 10-day rolling correlation\
-      \ per code\n    corr = rolling_corr(ranked_open, ranked_volume, window=10)\n\
-      \n    # Negate\n    factor = -1 * corr\n\n    return df.select(factor).to_series()"
+      \ ranks per date\n    df = df.with_columns([\n        rank(pl.col('open')).over('date').alias('_rank_open'),\n\
+      \        rank(pl.col('volume')).over('date').alias('_rank_volume'),\n    ])\n\
+      \    # Time-series correlation of the two ranks over a 10-day window\n    df\
+      \ = df.with_columns(\n        correlation(pl.col('_rank_open'), pl.col('_rank_volume'),\
+      \ window=10).alias('_corr')\n    )\n    factor = -1 * pl.col('_corr')\n    return\
+      \ df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 380
+    code_chars: 518
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_003.h5
     ast: null
     ast_compile_status: null
@@ -47,8 +49,8 @@ factor:
       annual_return: -3.922268642364557e-05
       longshort_sharpe: null
       longshort_max_dd: -0.01886134268726723
-      validated_at: 1782144163.5365932
-    validation_date: '2026-06-23'
+      validated_at: 1782305763.676671
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

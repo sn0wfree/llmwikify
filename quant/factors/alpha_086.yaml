@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: ((Ts_Rank(correlation(close, sum(adv20, 14.7444), 6.00049), 20.4195)
       < rank(((open + close) - (vwap + open)))) * -1)
@@ -25,20 +25,20 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20: 20-day\
-      \ rolling mean of volume\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n\
-      \    \n    # sum(adv20, 14.7444) -> delta(adv20, periods=15) [rounded]\n   \
-      \ sum_adv20 = delta(adv20, periods=15)\n    \n    # correlation(close, sum_adv20,\
-      \ 6.00049) -> window=6 [rounded]\n    corr_expr = correlation(pl.col('close'),\
-      \ sum_adv20, window=6)\n    \n    # Ts_Rank(corr_expr, 20.4195) -> window=20\
-      \ [rounded]\n    ts_rank_expr = ts_rank(corr_expr, window=20)\n    \n    # Materialize\
-      \ the time-series result before cross-section comparison\n    df = df.with_columns(ts_rank_expr.alias('_ts_rank'))\n\
-      \    \n    # rank(((open + close) - (vwap + open))) = rank(close - vwap)\n \
-      \   rank_expr = rank(pl.col('close') - pl.col('vwap')).over('date')\n    \n\
-      \    # (ts_rank < rank) * -1\n    factor = (pl.col('_ts_rank') < rank_expr)\
-      \ * -1\n    \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = 20-day\
+      \ average of volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+      \ window=20).alias('_adv20')\n    )\n    # sum(adv20, 14.7444) -> window 15\n\
+      \    df = df.with_columns(\n        rolling_sum(pl.col('_adv20'), window=15).alias('_sum_adv')\n\
+      \    )\n    # correlation(close, sum(adv20,...), 6.00049) -> window 6\n    df\
+      \ = df.with_columns(\n        rolling_corr(pl.col('close'), pl.col('_sum_adv'),\
+      \ window=6).alias('_corr')\n    )\n    # Ts_Rank(corr, 20.4195) -> window 20\n\
+      \    df = df.with_columns(\n        ts_rank(pl.col('_corr'), window=20).alias('_ts_rank')\n\
+      \    )\n    # rank((open+close) - (vwap+open)) = rank(close - vwap), cross-sectional\n\
+      \    rank_vwap = rank(pl.col('close') - pl.col('vwap')).over('date')\n    #\
+      \ condition * -1: if ts_rank < rank_vwap then -1 else 0\n    factor = pl.when(pl.col('_ts_rank')\
+      \ < rank_vwap).then(-1).otherwise(0)\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 910
+    code_chars: 959
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_086.h5
     ast: null
     ast_compile_status: null
@@ -50,16 +50,16 @@ factor:
       status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.010369455793321415
-      icir: 0.0688327389217422
-      winrate: 0.576271186440678
+      ic_mean: 0.012745946119967115
+      icir: 0.09789139803233557
+      winrate: 0.5254237288135594
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.0002538475942366336
+      annual_return: 0.00017257294452766025
       longshort_sharpe: null
-      longshort_max_dd: -0.033162554097279445
-      validated_at: 1782181933.6672595
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.009748950547742895
+      validated_at: 1782351258.3804567
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1

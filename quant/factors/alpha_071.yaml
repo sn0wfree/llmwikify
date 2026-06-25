@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: max(Ts_Rank(decay_linear(correlation(Ts_Rank(close, 3.43976), Ts_Rank(adv180,
       12.0647), 18.0175), 4.20501), 15.6948), Ts_Rank(decay_linear((rank(((low + open)
@@ -26,22 +26,28 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv180 = rolling\
-      \ mean of volume over 180 days\n    adv180 = rolling_mean(pl.col('volume'),\
-      \ window=180)\n\n    # Part 1: Ts_Rank(decay_linear(correlation(Ts_Rank(close,\
-      \ 3.43976),\n    #                       Ts_Rank(adv180, 12.0647), 18.0175),\
-      \ 4.20501), 15.6948)\n    ts_rank_close = ts_rank(pl.col('close'), window=3)\n\
-      \    ts_rank_adv180 = ts_rank(adv180, window=12)\n    corr = rolling_corr(ts_rank_close,\
-      \ ts_rank_adv180, window=18)\n    decay1 = decay_linear(corr, window=4)\n  \
-      \  part1 = ts_rank(decay1, window=15)\n\n    # Part 2: Ts_Rank(decay_linear((rank(((low\
-      \ + open) - (vwap + vwap)))^2),\n    #                       16.4662), 4.4388)\n\
-      \    inner2 = (pl.col('low') + pl.col('open')) - (pl.col('vwap') + pl.col('vwap'))\n\
-      \    ranked = rank(inner2).over('date')\n    squared = ranked ** 2\n    decay2\
-      \ = decay_linear(squared, window=16)\n    part2 = ts_rank(decay2, window=4)\n\
-      \n    # Max of the two parts\n    factor = pl.max_horizontal([part1, part2])\n\
-      \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv180 = 180-day\
+      \ average daily volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+      \ window=180).alias('_adv180')\n    )\n    \n    # Ts_Rank(close, ~3)\n    df\
+      \ = df.with_columns(\n        ts_rank(pl.col('close'), window=3).alias('_tsrank_close')\n\
+      \    )\n    \n    # Ts_Rank(adv180, ~12)\n    df = df.with_columns(\n      \
+      \  ts_rank(pl.col('_adv180'), window=12).alias('_tsrank_adv180')\n    )\n  \
+      \  \n    # correlation, window ~18\n    df = df.with_columns(\n        correlation(pl.col('_tsrank_close'),\
+      \ pl.col('_tsrank_adv180'), window=18).alias('_corr')\n    )\n    \n    # decay_linear\
+      \ of correlation, window ~4\n    df = df.with_columns(\n        decay_linear(pl.col('_corr'),\
+      \ window=4).alias('_decay1')\n    )\n    \n    # Ts_Rank of decay_linear, window\
+      \ ~16\n    df = df.with_columns(\n        ts_rank(pl.col('_decay1'), window=16).alias('_tsrank1')\n\
+      \    )\n    \n    # rank((low + open) - (vwap + vwap)) then square\n    diff_expr\
+      \ = (pl.col('low') + pl.col('open')) - (pl.col('vwap') + pl.col('vwap'))\n \
+      \   df = df.with_columns(\n        (rank(diff_expr).over('date') ** 2).alias('_rank_diff_sq')\n\
+      \    )\n    \n    # decay_linear, window ~16\n    df = df.with_columns(\n  \
+      \      decay_linear(pl.col('_rank_diff_sq'), window=16).alias('_decay2')\n \
+      \   )\n    \n    # Ts_Rank, window ~4\n    df = df.with_columns(\n        ts_rank(pl.col('_decay2'),\
+      \ window=4).alias('_tsrank2')\n    )\n    \n    # max of the two branches\n\
+      \    factor = pl.max_horizontal(pl.col('_tsrank1'), pl.col('_tsrank2'))\n  \
+      \  \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1036
+    code_chars: 1571
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_071.h5
     ast: null
     ast_compile_status: null
@@ -53,16 +59,16 @@ factor:
       status: 失败
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: -0.013478571051416524
-      icir: -0.0995006097749152
-      winrate: 0.4745762711864407
+      ic_mean: -0.013244875866919026
+      icir: -0.09770261331937094
+      winrate: 0.4915254237288136
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 8.022331713308795e-05
+      annual_return: 0.00015934343990164912
       longshort_sharpe: null
-      longshort_max_dd: -0.022944316892609222
-      validated_at: 1782150195.1713595
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.01547716971407487
+      validated_at: 1782349948.8434057
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1

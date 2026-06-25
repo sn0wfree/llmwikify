@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: ((rank(correlation(((open * 0.00817205) + (vwap * (1 - 0.00817205))),
       sum(adv60, 8.6911), 6.40374)) < rank((open - ts_min(open, 13.635)))) * -1)
@@ -25,22 +25,23 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv60: average\
-      \ daily volume over 60 days\n    adv60 = rolling_mean(pl.col('volume'), window=60)\n\
-      \    \n    # Weighted combination of open and vwap\n    w_open = pl.col('open')\
-      \ * 0.00817205 + pl.col('vwap') * (1 - 0.00817205)\n    \n    # Rolling sum\
-      \ of adv60 with window 9 (rounded from 8.6911)\n    sum_adv60 = rolling_sum(adv60,\
-      \ window=9)\n    \n    # Rolling correlation with window 6 (rounded from 6.40374)\n\
-      \    corr = rolling_corr(w_open, sum_adv60, window=6)\n    \n    # Cross-sectional\
-      \ rank of correlation\n    rank1 = rank(corr).over('date')\n    \n    # ts_min\
-      \ of open with window 14 (rounded from 13.635)\n    min_open = ts_min(pl.col('open'),\
-      \ window=14)\n    \n    # Open minus rolling min\n    diff_open = pl.col('open')\
-      \ - min_open\n    \n    # Cross-sectional rank of (open - ts_min)\n    rank2\
-      \ = rank(diff_open).over('date')\n    \n    # Boolean comparison, cast to numeric,\
-      \ multiply by -1\n    factor = (rank1 < rank2).cast(pl.Int32) * -1\n    \n \
-      \   return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    alpha = 0.00817205\n\
+      \    # adv60 = 60-day rolling mean of volume\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+      \ window=60).alias('_adv60'))\n    # x = open * alpha + vwap * (1 - alpha)\n\
+      \    df = df.with_columns(\n        (pl.col('open') * alpha + pl.col('vwap')\
+      \ * (1 - alpha)).alias('_x')\n    )\n    # sum(adv60, 8.6911) -> rolling sum\
+      \ of adv60\n    df = df.with_columns(\n        rolling_sum(pl.col('_adv60'),\
+      \ window=int(8.6911)).alias('_sum_adv60')\n    )\n    # correlation(x, sum_adv60,\
+      \ 6.40374) -> materialise first (Rule 2)\n    df = df.with_columns(\n      \
+      \  rolling_corr(pl.col('_x'), pl.col('_sum_adv60'), window=int(6.40374)).alias('_corr')\n\
+      \    )\n    # ts_min(open, 13.635) -> materialise first\n    df = df.with_columns(\n\
+      \        ts_min(pl.col('open'), window=int(13.635)).alias('_min_open')\n   \
+      \ )\n    # rank(corr) < rank(open - ts_min(open, 13))\n    cond = (\n      \
+      \  rank(pl.col('_corr')).over('date')\n        < rank(pl.col('open') - pl.col('_min_open')).over('date')\n\
+      \    )\n    # cond * -1  -> -1 if true else 0\n    factor = pl.when(cond).then(-1).otherwise(0)\n\
+      \    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1032
+    code_chars: 1163
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_065.h5
     ast: null
     ast_compile_status: null
@@ -48,20 +49,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 49
+      score: 50
       status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: -0.01413992276389192
-      icir: -0.049747602334815066
-      winrate: 0.5254237288135594
+      ic_mean: -0.0018352720776255594
+      icir: -0.01153267662386784
+      winrate: 0.5084745762711864
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 1.3327364188242541e-05
+      annual_return: 2.9055164085800556e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.048369389066084484
-      validated_at: 1782149720.1674666
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.0194256015802906
+      validated_at: 1782349328.9808745
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1

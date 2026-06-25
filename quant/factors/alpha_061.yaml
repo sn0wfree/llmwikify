@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: (rank((vwap - ts_min(vwap, 16.1219))) < rank(correlation(vwap, adv180,
       17.9282)))
@@ -24,20 +24,19 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize ts_min(vwap,\
-      \ 16) - convert float window to int\n    df = df.with_columns(ts_min(pl.col('vwap'),\
-      \ window=16).alias('_ts_min_vwap'))\n    # First component: vwap - ts_min(vwap,\
-      \ 16)\n    df = df.with_columns((pl.col('vwap') - pl.col('_ts_min_vwap')).alias('_diff'))\n\
-      \    # Materialize adv180 = rolling mean of volume over 180 days\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
-      \ window=180).alias('_adv180'))\n    # Materialize rolling correlation between\
-      \ vwap and adv180\n    df = df.with_columns(rolling_corr(pl.col('vwap'), pl.col('_adv180'),\
-      \ window=18).alias('_corr'))\n    # Cross-sectional ranks for both components\n\
-      \    df = df.with_columns([\n        rank(pl.col('_diff')).over('date').alias('_rank1'),\n\
-      \        rank(pl.col('_corr')).over('date').alias('_rank2')\n    ])\n    # Compare:\
-      \ rank(diff) < rank(corr) -> cast to float factor\n    factor = (pl.col('_rank1')\
-      \ < pl.col('_rank2')).cast(pl.Float32)\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv180 = rolling_mean\
+      \ of volume over 180 days\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+      \ window=180).alias('_adv180'))\n    # ts_min(vwap, ~16.1219) -> window 16\n\
+      \    df = df.with_columns(ts_min(pl.col('vwap'), window=16).alias('_tsmin_vwap'))\n\
+      \    # vwap - ts_min(vwap, 16)\n    df = df.with_columns((pl.col('vwap') - pl.col('_tsmin_vwap')).alias('_diff_vwap'))\n\
+      \    # correlation(vwap, adv180, ~17.9282) -> window 18 (materialized before\
+      \ .over('date'))\n    df = df.with_columns(correlation(pl.col('vwap'), pl.col('_adv180'),\
+      \ window=18).alias('_corr'))\n    \n    # cross-sectional ranks (after materialization\
+      \ per Rule 2)\n    r1 = rank(pl.col('_diff_vwap')).over('date')\n    r2 = rank(pl.col('_corr')).over('date')\n\
+      \    \n    # boolean comparison via pl.when (Rule 3)\n    factor = pl.when(r1\
+      \ < r2).then(1).otherwise(0)\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1012
+    code_chars: 922
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_061.h5
     ast: null
     ast_compile_status: null
@@ -49,16 +48,16 @@ factor:
       status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: -1.2187893628595454e-06
-      icir: -8.011640443537585e-06
-      winrate: 0.5423728813559322
+      ic_mean: 0.0006624319905851925
+      icir: 0.00434910143200181
+      winrate: 0.5254237288135594
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 4.2738760340554904e-05
+      annual_return: 0.00013100814962041518
       longshort_sharpe: null
-      longshort_max_dd: -0.021157924320452406
-      validated_at: 1782183474.097513
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.018570960272389008
+      validated_at: 1782348900.5033188
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1

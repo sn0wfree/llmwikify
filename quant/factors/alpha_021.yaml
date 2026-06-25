@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: '((((sum(close, 8) / 8) + stddev(close, 8)) < (sum(close, 2) / 2))
       ? (-1 * 1) : (((sum(close, 2) / 2) < ((sum(close, 8) / 8) - stddev(close, 8)))
@@ -26,19 +26,17 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 8-day and 2-day\
-      \ moving averages of close\n    ma8 = rolling_mean(pl.col('close'), window=8)\n\
-      \    ma2 = rolling_mean(pl.col('close'), window=2)\n\n    # 8-day rolling stddev\
-      \ of close\n    std8 = rolling_std(pl.col('close'), window=8)\n\n    # 20-day\
-      \ average volume (adv20)\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n\
-      \n    # Nested conditional logic\n    cond1 = (ma8 + std8) < ma2\n    cond2\
-      \ = ma2 < (ma8 - std8)\n    cond3 = (pl.col('volume') / adv20) >= 1  # (1 <\
-      \ vol/adv20) || (vol/adv20 == 1)\n\n    factor = (\n        pl.when(cond1)\n\
-      \        .then(-1)\n        .otherwise(\n            pl.when(cond2)\n      \
-      \      .then(1)\n            .otherwise(\n                pl.when(cond3).then(1).otherwise(-1)\n\
-      \            )\n        )\n    )\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    close = pl.col('close')\n\
+      \    volume = pl.col('volume')\n    \n    mean8 = rolling_mean(close, window=8)\n\
+      \    std8 = rolling_std(close, window=8)\n    mean2 = rolling_mean(close, window=2)\n\
+      \    adv20 = rolling_mean(volume, window=20)\n    \n    cond1 = (mean8 + std8)\
+      \ < mean2\n    cond2 = mean2 < (mean8 - std8)\n    cond3 = (1 < (volume / adv20))\
+      \ | ((volume / adv20) == 1)\n    \n    factor = (\n        pl.when(cond1).then(-1)\n\
+      \        .otherwise(\n            pl.when(cond2).then(1)\n            .otherwise(\n\
+      \                pl.when(cond3).then(1).otherwise(-1)\n            )\n     \
+      \   )\n    )\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 826
+    code_chars: 677
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_021.h5
     ast: null
     ast_compile_status: null
@@ -50,16 +48,16 @@ factor:
       status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.003948211004723681
-      icir: 0.025866151528699075
+      ic_mean: 0.003948211049115945
+      icir: 0.025866151857986706
       winrate: 0.4745762711864407
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.00013535133562947443
+      annual_return: 8.256247198290545e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.02462275814137817
-      validated_at: 1782144592.3359132
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.031614388892232524
+      validated_at: 1782306206.32813
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

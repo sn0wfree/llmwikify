@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: ((-1 * sign(((close - delay(close, 7)) + delta(close, 7)))) * (1 +
       rank((1 + sum(returns, 250)))))
@@ -23,17 +23,18 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Part 1: -1 *\
-      \ sign((close - delay(close, 7)) + delta(close, 7))\n    close_delay_7 = delay(pl.col('close'),\
-      \ periods=7)\n    close_delta_7 = delta(pl.col('close'), periods=7)\n    inner\
-      \ = (pl.col('close') - close_delay_7) + close_delta_7\n    sign_part = -1 *\
-      \ inner.sign()\n    \n    # Part 2: 1 + rank(1 + sum(returns, 250))\n    # Materialize\
-      \ the rolling sum first to avoid cross-code contamination\n    df = df.with_columns(rolling_sum(pl.col('returns'),\
-      \ window=250).alias('_sum_ret'))\n    rank_part = 1 + rank(pl.col('_sum_ret')\
-      \ + 1).over('date')\n    \n    # Combine\n    factor = sign_part * rank_part\n\
-      \    \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize rolling\
+      \ sum (must materialize before .over('date') per Rule 2)\n    df = df.with_columns(\n\
+      \        rolling_sum(pl.col('returns'), window=250).alias('_sum_ret_250')\n\
+      \    )\n    \n    # sign of ((close - delay(close, 7)) + delta(close, 7))\n\
+      \    delay_close_7 = delay(pl.col('close'), periods=7)\n    delta_close_7 =\
+      \ delta(pl.col('close'), periods=7)\n    sign_part = ((pl.col('close') - delay_close_7)\
+      \ + delta_close_7).sign()\n    \n    # rank(1 + sum(returns, 250)) cross-sectional\n\
+      \    rank_part = rank(pl.col('_sum_ret_250') + 1).over('date')\n    \n    #\
+      \ Final formula: (-1 * sign_part) * (1 + rank_part)\n    factor = -1 * sign_part\
+      \ * (1 + rank_part)\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 697
+    code_chars: 749
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_019.h5
     ast: null
     ast_compile_status: null
@@ -53,8 +54,8 @@ factor:
       annual_return: 3.466707431054594e-05
       longshort_sharpe: null
       longshort_max_dd: -0.02210869832232518
-      validated_at: 1782177640.1589139
-    validation_date: '2026-06-23'
+      validated_at: 1782306163.6673775
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

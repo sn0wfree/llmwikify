@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: scale(((correlation(adv20, low, 5) + ((high + low) / 2)) - close))
     formula: scale(((correlation(adv20, low, 5) + ((high + low) / 2)) - close))
@@ -22,16 +22,17 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already\
-      \ sorted by (code, date) — do not re-sort\n\n    # ADV20: 20-day average of\
-      \ volume\n    adv20 = ts_mean(pl.col('volume'), 20)\n\n    # 5-day rolling correlation\
-      \ between ADV20 and low\n    corr = correlation(adv20, pl.col('low'), 5)\n\n\
-      \    # (high + low) / 2  — mid price\n    mid_price = (pl.col('high') + pl.col('low'))\
-      \ / 2\n\n    # Combine: correlation + mid_price - close\n    expr = corr + mid_price\
-      \ - pl.col('close')\n\n    # Cross-sectional scale (preserves sign, normalizes\
-      \ by sum of |x|)\n    factor = scale(expr).over('date')\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = rolling\
+      \ mean of volume over 20 days\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+      \ window=20).alias('_adv20'))\n    \n    # correlation(adv20, low, 5) - materialize\
+      \ before scale\n    df = df.with_columns(rolling_corr(pl.col('_adv20'), pl.col('low'),\
+      \ window=5).alias('_corr'))\n    \n    # ((high + low) / 2) - close, combined\
+      \ with correlation\n    df = df.with_columns(\n        (pl.col('_corr') + (pl.col('high')\
+      \ + pl.col('low')) / 2 - pl.col('close')).alias('_raw')\n    )\n    \n    #\
+      \ scale cross-sectionally\n    factor = scale(pl.col('_raw')).over('date')\n\
+      \    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 630
+    code_chars: 669
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_028.h5
     ast: null
     ast_compile_status: null
@@ -39,20 +40,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 54
-      status: 待更新
+      score: 37
+      status: 失败
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.0174311164545656
-      icir: 0.09816694902970131
-      winrate: 0.5084745762711864
+      ic_mean: -0.036706379780287596
+      icir: -0.25811426498056445
+      winrate: 0.3559322033898305
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.00016714663947103858
+      annual_return: -0.00024955421275274503
       longshort_sharpe: null
-      longshort_max_dd: -0.024476178747675527
-      validated_at: 1782144919.4342122
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.03625625655669806
+      validated_at: 1782306365.6532567
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

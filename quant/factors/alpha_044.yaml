@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (-1 * correlation(high, rank(volume), 5))
     formula: (-1 * correlation(high, rank(volume), 5))
@@ -21,13 +21,14 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Cross-sectional\
-      \ rank of volume per date\n    rank_vol = rank(pl.col('volume')).over('date')\n\
-      \n    # 5-day rolling correlation between high and rank(volume)\n    corr =\
-      \ correlation(pl.col('high'), rank_vol, window=5)\n\n    # Multiply by -1\n\
-      \    factor = -1 * corr\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize cross-sectional\
+      \ rank of volume first\n    df = df.with_columns(\n        rank(pl.col('volume')).over('date').alias('_rank_vol')\n\
+      \    )\n    # Rolling correlation between high and rank(volume) over 5-period\
+      \ window\n    df = df.with_columns(\n        correlation(pl.col('high'), pl.col('_rank_vol'),\
+      \ window=5).alias('_corr')\n    )\n    # Multiply by -1\n    factor = -1 * pl.col('_corr')\n\
+      \    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 356
+    code_chars: 487
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_044.h5
     ast: null
     ast_compile_status: null
@@ -47,8 +48,8 @@ factor:
       annual_return: -9.52227455045529e-05
       longshort_sharpe: null
       longshort_max_dd: -0.03177117748728313
-      validated_at: 1782145927.5725884
-    validation_date: '2026-06-23'
+      validated_at: 1782306843.338196
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

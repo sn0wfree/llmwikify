@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: ((Ts_Rank(volume, 32) * (1 - Ts_Rank(((close + high) - low), 16)))
       * (1 - Ts_Rank(returns, 32)))
@@ -23,15 +23,16 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Part 1: Ts_Rank(volume,\
-      \ 32)\n    rank_volume = ts_rank(pl.col('volume'), window=32)\n\n    # Part\
-      \ 2: 1 - Ts_Rank((close + high - low), 16)\n    inner_expr = pl.col('close')\
-      \ + pl.col('high') - pl.col('low')\n    rank_inner = ts_rank(inner_expr, window=16)\n\
-      \n    # Part 3: 1 - Ts_Rank(returns, 32)\n    rank_returns = ts_rank(pl.col('returns'),\
-      \ window=32)\n\n    # Combine: part1 * part2 * part3\n    factor = rank_volume\
-      \ * (1 - rank_inner) * (1 - rank_returns)\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize ts_rank\
+      \ results first (Rule 2)\n    df = df.with_columns([\n        ts_rank(pl.col('volume'),\
+      \ window=32).alias('_ts_rank_vol'),\n        ts_rank((pl.col('close') + pl.col('high')\
+      \ - pl.col('low')), window=16).alias('_ts_rank_chl'),\n        ts_rank(pl.col('returns'),\
+      \ window=32).alias('_ts_rank_ret'),\n    ])\n    # Compute the factor: (A *\
+      \ (1 - B)) * (1 - C)\n    factor = (\n        pl.col('_ts_rank_vol')\n     \
+      \   * (1 - pl.col('_ts_rank_chl'))\n        * (1 - pl.col('_ts_rank_ret'))\n\
+      \    )\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 548
+    code_chars: 593
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_035.h5
     ast: null
     ast_compile_status: null
@@ -51,8 +52,8 @@ factor:
       annual_return: -0.00020547904404732975
       longshort_sharpe: null
       longshort_max_dd: -0.04830262844812814
-      validated_at: 1782145237.2518766
-    validation_date: '2026-06-23'
+      validated_at: 1782306634.0418327
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

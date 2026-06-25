@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (-1 * rank(((stddev(abs((close - open)), 5) + (close - open)) + correlation(close,
       open, 10))))
@@ -23,13 +23,17 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    close_open = pl.col('close')\
-      \ - pl.col('open')\n    abs_diff = close_open.abs()\n    std_5 = rolling_std(abs_diff,\
-      \ window=5)\n    corr_10 = rolling_corr(pl.col('close'), pl.col('open'), window=10)\n\
-      \    inner = std_5 + close_open + corr_10\n    factor = -1 * rank(inner).over('date')\n\
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # close - open\n\
+      \    co = pl.col('close') - pl.col('open')\n    # abs(close - open)\n    abs_co\
+      \ = co.abs()\n    # stddev(abs(close - open), 5) - materialize first\n    df\
+      \ = df.with_columns(rolling_std(abs_co, window=5).alias('_std_5'))\n    # correlation(close,\
+      \ open, 10) - materialize first\n    df = df.with_columns(correlation(pl.col('close'),\
+      \ pl.col('open'), window=10).alias('_corr_10'))\n    # combined: stddev + (close\
+      \ - open) + correlation\n    combined = pl.col('_std_5') + co + pl.col('_corr_10')\n\
+      \    # rank cross-sectionally and negate\n    factor = -1 * rank(combined).over('date')\n\
       \    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 372
+    code_chars: 678
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_018.h5
     ast: null
     ast_compile_status: null
@@ -37,20 +41,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 62
+      score: 64
       status: 通过
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.034822093257814435
-      icir: 0.22793973036272705
-      winrate: 0.6440677966101694
+      ic_mean: 0.03738175772968624
+      icir: 0.27647657544172405
+      winrate: 0.6271186440677966
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.00041219597332498026
+      annual_return: 0.00035871660589426035
       longshort_sharpe: null
-      longshort_max_dd: -0.016360495837931362
-      validated_at: 1782144523.3661523
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.01789274270636334
+      validated_at: 1782306113.6686318
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

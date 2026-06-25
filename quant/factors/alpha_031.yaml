@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (rank(rank(rank(decay_linear((-1 * rank(rank(delta(close, 10)))),
       10)))) + rank((-1 * delta(close, 3)))) + sign(scale(correlation(adv20, low,
@@ -25,19 +25,29 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
-      \ 'date'])\n\n    # Part A: rank(rank(rank(decay_linear((-1 * rank(rank(delta(close,\
-      \ 10)))), 10))))\n    delta_10 = delta(pl.col('close'), periods=10)\n    rr_delta\
-      \ = rank(rank(delta_10).over('date')).over('date')\n    neg_rr = -1 * rr_delta\n\
-      \    decayed = decay_linear(neg_rr, window=10)\n    part_a = rank(rank(rank(decayed).over('date')).over('date')).over('date')\n\
-      \n    # Part B: rank((-1 * delta(close, 3)))\n    delta_3 = delta(pl.col('close'),\
-      \ periods=3)\n    part_b = rank((-1 * delta_3)).over('date')\n\n    # Part C:\
-      \ sign(scale(correlation(adv20, low, 12)))\n    adv20 = ts_mean(pl.col('volume'),\
-      \ window=20)\n    corr = correlation(adv20, pl.col('low'), window=12)\n    part_c\
-      \ = scale(corr).over('date').sign()\n\n    factor = (part_a + part_b) + part_c\n\
-      \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 - 20-day\
+      \ average daily volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+      \ window=20).alias('_adv20')\n    )\n    \n    # Part 1: rank(rank(rank(decay_linear(-1\
+      \ * rank(rank(delta(close, 10))), 10))))\n    df = df.with_columns(\n      \
+      \  delta(pl.col('close'), period=10).alias('_d10')\n    )\n    df = df.with_columns(\n\
+      \        rank(pl.col('_d10')).over('date').alias('_r1')\n    )\n    df = df.with_columns(\n\
+      \        rank(pl.col('_r1')).over('date').alias('_r2')\n    )\n    df = df.with_columns(\n\
+      \        (-1 * pl.col('_r2')).alias('_neg_rr')\n    )\n    df = df.with_columns(\n\
+      \        decay_linear(pl.col('_neg_rr'), window=10).alias('_dl')\n    )\n  \
+      \  df = df.with_columns(\n        rank(pl.col('_dl')).over('date').alias('_r3')\n\
+      \    )\n    df = df.with_columns(\n        rank(pl.col('_r3')).over('date').alias('_r4')\n\
+      \    )\n    df = df.with_columns(\n        rank(pl.col('_r4')).over('date').alias('_part1')\n\
+      \    )\n    \n    # Part 2: rank(-1 * delta(close, 3))\n    df = df.with_columns(\n\
+      \        delta(pl.col('close'), period=3).alias('_d3')\n    )\n    df = df.with_columns(\n\
+      \        rank((-1 * pl.col('_d3'))).over('date').alias('_part2')\n    )\n  \
+      \  \n    # Part 3: sign(scale(correlation(adv20, low, 12)))\n    df = df.with_columns(\n\
+      \        correlation(pl.col('_adv20'), pl.col('low'), window=12).alias('_corr')\n\
+      \    )\n    df = df.with_columns(\n        scale(pl.col('_corr')).over('date').alias('_scaled')\n\
+      \    )\n    df = df.with_columns(\n        pl.col('_scaled').sign().alias('_part3')\n\
+      \    )\n    \n    factor = pl.col('_part1') + pl.col('_part2') + pl.col('_part3')\n\
+      \    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 863
+    code_chars: 1662
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_031.h5
     ast: null
     ast_compile_status: null
@@ -45,20 +55,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 54
+      score: 50
       status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.011122674071252052
-      icir: 0.05194958937766991
-      winrate: 0.559322033898305
+      ic_mean: -0.0027880928311818766
+      icir: -0.025255018800684367
+      winrate: 0.5423728813559322
       rank_ic_mean: null
       rank_icir: null
-      annual_return: -0.0002489392232263299
+      annual_return: 1.7013571971924435e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.03723032516951137
-      validated_at: 1782145099.7216716
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.024100983960260478
+      validated_at: 1782306502.1220078
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

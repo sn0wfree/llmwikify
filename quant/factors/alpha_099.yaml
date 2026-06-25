@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: ((rank(correlation(sum(((high + low) / 2), 19.8975), sum(adv60, 19.8975),
       8.8136)) < rank(correlation(low, volume, 6.28259))) * -1)
@@ -24,18 +24,18 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already\
-      \ sorted by (code, date); do NOT re-sort\n\n    # adv60: 60-day rolling mean\
-      \ of volume (proxy for adv60)\n    adv60 = rolling_mean(pl.col('volume'), window=60)\n\
-      \n    # sum((high + low) / 2, 20)\n    mid_price = (pl.col('high') + pl.col('low'))\
-      \ / 2\n    sum_mid = rolling_sum(mid_price, window=20)\n\n    # sum(adv60, 20)\n\
-      \    sum_adv60 = rolling_sum(adv60, window=20)\n\n    # correlation(sum_mid,\
-      \ sum_adv60, 9)\n    corr1 = rolling_corr(sum_mid, sum_adv60, window=9)\n\n\
-      \    # rank(corr1) cross-section\n    rank1 = rank(corr1).over('date')\n\n \
-      \   # correlation(low, volume, 6)\n    corr2 = rolling_corr(pl.col('low'), pl.col('volume'),\
-      \ window=6)\n\n    # rank(corr2) cross-section\n    rank2 = rank(corr2).over('date')\n\
-      \n    # (rank1 < rank2) * -1  → -1 if true, else 0\n    factor = pl.when(rank1\
-      \ < rank2).then(pl.lit(-1)).otherwise(pl.lit(0))\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # midprice = (high\
+      \ + low) / 2\n    midprice = (pl.col('high') + pl.col('low')) / 2\n    \n  \
+      \  # Materialize rolling sums (windows rounded from 19.8975 -> 20)\n    df =\
+      \ df.with_columns(rolling_sum(midprice, window=20).alias('_sum_mid'))\n    df\
+      \ = df.with_columns(rolling_sum(pl.col('volume'), window=20).alias('_sum_vol'))\n\
+      \    \n    # Materialize rolling correlations (8.8136 -> 9, 6.28259 -> 6)\n\
+      \    df = df.with_columns(\n        rolling_corr(pl.col('_sum_mid'), pl.col('_sum_vol'),\
+      \ window=9).alias('_corr1')\n    )\n    df = df.with_columns(\n        rolling_corr(pl.col('low'),\
+      \ pl.col('volume'), window=6).alias('_corr2')\n    )\n    \n    # Cross-sectional\
+      \ rank on materialized columns, then pl.when comparison\n    factor = pl.when(\n\
+      \        rank(pl.col('_corr1')).over('date') < rank(pl.col('_corr2')).over('date')\n\
+      \    ).then(-1).otherwise(0)\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
     code_chars: 933
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_099.h5
@@ -45,20 +45,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 61
-      status: 通过
+      score: 48
+      status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.037237559267598086
-      icir: 0.24469566734517498
-      winrate: 0.576271186440678
+      ic_mean: -0.004445964873063634
+      icir: -0.03475529743445019
+      winrate: 0.4745762711864407
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 4.629538421974111e-05
+      annual_return: 0.00015105751045041416
       longshort_sharpe: null
-      longshort_max_dd: -0.020498558350672814
-      validated_at: 1782175019.0466053
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.028308082920259124
+      validated_at: 1782352741.0315843
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1

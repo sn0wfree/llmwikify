@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: '((0.5 < rank((sum(correlation(rank(volume), rank(vwap), 6), 2) /
       2.0))) ? (-1 * 1) : 1)'
@@ -24,18 +24,23 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Cross-sectional\
-      \ ranks of volume and vwap per date\n    rank_volume = rank(pl.col('volume')).over('date')\n\
-      \    rank_vwap = rank(pl.col('vwap')).over('date')\n    \n    # Rolling correlation\
-      \ of the two ranked series with window 6\n    corr = rolling_corr(rank_volume,\
-      \ rank_vwap, window=6)\n    \n    # Rolling sum of the correlation with window\
-      \ 2\n    summed = rolling_sum(corr, window=2)\n    \n    # Divide by 2\n   \
-      \ divided = summed / 2.0\n    \n    # Cross-sectional rank of the result per\
-      \ date\n    ranked = rank(divided).over('date')\n    \n    # Conditional: if\
-      \ rank > 0.5 then -1 else 1\n    factor = pl.when(ranked > 0.5).then(-1).otherwise(1)\n\
-      \    \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: cross-sectional\
+      \ rank of volume and vwap (materialize first)\n    df = df.with_columns([\n\
+      \        rank(pl.col('volume')).over('date').alias('_rank_volume'),\n      \
+      \  rank(pl.col('vwap')).over('date').alias('_rank_vwap')\n    ])\n    \n   \
+      \ # Step 2: 6-period rolling correlation between the two ranks (materialize)\n\
+      \    df = df.with_columns(\n        correlation(pl.col('_rank_volume'), pl.col('_rank_vwap'),\
+      \ window=6).alias('_corr')\n    )\n    \n    # Step 3: 2-period rolling sum\
+      \ of correlation (materialize before cross-section)\n    df = df.with_columns(\n\
+      \        rolling_sum(pl.col('_corr'), window=2).alias('_sum_corr')\n    )\n\
+      \    \n    # Step 4: divide by 2.0\n    df = df.with_columns(\n        (pl.col('_sum_corr')\
+      \ / 2.0).alias('_div')\n    )\n    \n    # Step 5: cross-sectional rank of the\
+      \ result\n    df = df.with_columns(\n        rank(pl.col('_div')).over('date').alias('_rank_final')\n\
+      \    )\n    \n    # Step 6: ternary condition using pl.when (Rule 3)\n    factor\
+      \ = pl.when(pl.col('_rank_final') > 0.5).then(-1).otherwise(1)\n    \n    return\
+      \ df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 736
+    code_chars: 1124
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_027.h5
     ast: null
     ast_compile_status: null
@@ -43,20 +48,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 47
-      status: 失败
+      score: 50
+      status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: -0.011076476748155643
-      icir: -0.08562837824812561
-      winrate: 0.4915254237288136
+      ic_mean: -0.0017568933341858997
+      icir: -0.013406192391081135
+      winrate: 0.5254237288135594
       rank_ic_mean: null
       rank_icir: null
-      annual_return: -0.00010830689823104755
+      annual_return: 9.105452743907172e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.041231717916034305
-      validated_at: 1782144784.8617833
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.024370096394788293
+      validated_at: 1782306347.667032
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

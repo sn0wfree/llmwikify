@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: ((Ts_Rank(correlation(rank(high), rank(adv15), 8.91644), 13.9333)
       < rank(delta(((close * 0.518371) + (low * (1 - 0.518371))), 1.06157))) * -1)
@@ -23,26 +23,24 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv15: 15-day\
-      \ average daily volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
-      \ window=15).alias('_adv15')\n    )\n\n    # Cross-sectional ranks of high and\
-      \ adv15 (materialized before correlation)\n    df = df.with_columns(\n     \
-      \   rank(pl.col('high')).over('date').alias('_rank_high'),\n        rank(pl.col('_adv15')).over('date').alias('_rank_adv15')\n\
-      \    )\n\n    # Rolling correlation between the ranks (window 8.91644 -> 9)\n\
-      \    df = df.with_columns(\n        correlation(pl.col('_rank_high'), pl.col('_rank_adv15'),\
-      \ window=9).alias('_corr')\n    )\n\n    # Time-series rank of the correlation\
-      \ (window 13.9333 -> 14)\n    df = df.with_columns(\n        ts_rank(pl.col('_corr'),\
-      \ window=14).alias('_ts_rank_corr')\n    )\n\n    # Weighted price: 0.518371\
-      \ * close + (1 - 0.518371) * low\n    weighted = pl.col('close') * 0.518371\
-      \ + pl.col('low') * (1 - 0.518371)\n\n    # Delta with period 1.06157 -> 1\n\
-      \    df = df.with_columns(\n        delta(weighted, periods=1).alias('_delta_weighted')\n\
-      \    )\n\n    # Cross-sectional rank of the delta\n    df = df.with_columns(\n\
-      \        rank(pl.col('_delta_weighted')).over('date').alias('_rank_delta')\n\
-      \    )\n\n    # (ts_rank_corr < rank_delta) * -1\n    cond = pl.col('_ts_rank_corr')\
-      \ < pl.col('_rank_delta')\n    factor = cond.cast(pl.Float64) * -1.0\n\n   \
-      \ return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv15 = rolling\
+      \ mean of volume over 15 days\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+      \ window=15).alias('_adv15'))\n\n    # cross-sectional ranks of high and adv15\n\
+      \    df = df.with_columns([\n        rank(pl.col('high')).over('date').alias('_rank_high'),\n\
+      \        rank(pl.col('_adv15')).over('date').alias('_rank_adv15')\n    ])\n\n\
+      \    # rolling correlation of the two ranks (window rounded from 8.91644 ->\
+      \ 9)\n    df = df.with_columns(\n        rolling_corr(pl.col('_rank_high'),\
+      \ pl.col('_rank_adv15'), window=9).alias('_corr')\n    )\n\n    # ts_rank of\
+      \ correlation (window rounded from 13.9333 -> 14)\n    df = df.with_columns(\n\
+      \        ts_rank(pl.col('_corr'), window=14).alias('_ts_rank_corr')\n    )\n\
+      \n    # weighted close+low combination, then delta (period rounded from 1.06157\
+      \ -> 1)\n    weighted = pl.col('close') * 0.518371 + pl.col('low') * (1 - 0.518371)\n\
+      \    df = df.with_columns(delta(weighted, 1).alias('_delta'))\n\n    # cross-sectional\
+      \ rank of delta\n    df = df.with_columns(\n        rank(pl.col('_delta')).over('date').alias('_rank_delta')\n\
+      \    )\n\n    # compare and multiply by -1\n    factor = pl.when(pl.col('_ts_rank_corr')\
+      \ < pl.col('_rank_delta')).then(-1).otherwise(0)\n\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1382
+    code_chars: 1283
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_068.h5
     ast: null
     ast_compile_status: null
@@ -50,17 +48,17 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 52
-      status: 待更新
+      score: 38
+      status: 失败
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.009129632964046267
-      icir: 0.08111041108754102
-      winrate: 0.4915254237288136
+      ic_mean: -0.027627394862131196
+      icir: -0.2238151941564845
+      winrate: 0.3728813559322034
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.00021149772599948768
+      annual_return: 0.0002726300688196126
       longshort_sharpe: null
-      longshort_max_dd: -0.017023544317382608
-      validated_at: 1782180489.851495
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.01882058389794977
+      validated_at: 1782349504.6221805
+    validation_date: '2026-06-25'

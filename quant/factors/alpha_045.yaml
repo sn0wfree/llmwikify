@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (-1 * ((rank((sum(delay(close, 5), 20) / 20)) * correlation(close,
       volume, 2)) * rank(correlation(sum(close, 5), sum(close, 20), 2))))
@@ -24,21 +24,24 @@ factor:
     business_constraints: 支持日频调仓, T+1 信号
   l5:
     code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # delay(close,\
-      \ 5) - delay close by 5 periods\n    close_delayed = delay(pl.col('close'),\
-      \ periods=5)\n    \n    # sum(delay(close, 5), 20) / 20\n    avg_delayed = rolling_sum(close_delayed,\
-      \ window=20) / 20\n    \n    # rank(sum(delay(close, 5), 20) / 20)\n    rank_avg\
-      \ = rank(avg_delayed).over('date')\n    \n    # correlation(close, volume, 2)\n\
-      \    corr_cv = rolling_corr(pl.col('close'), pl.col('volume'), window=2)\n \
-      \   \n    # sum(close, 5)\n    sum_close_5 = rolling_sum(pl.col('close'), window=5)\n\
-      \    \n    # sum(close, 20)\n    sum_close_20 = rolling_sum(pl.col('close'),\
-      \ window=20)\n    \n    # correlation(sum(close, 5), sum(close, 20), 2)\n  \
-      \  corr_sums = rolling_corr(sum_close_5, sum_close_20, window=2)\n    \n   \
-      \ # rank(correlation(sum(close, 5), sum(close, 20), 2))\n    rank_corr_sums\
-      \ = rank(corr_sums).over('date')\n    \n    # -1 * rank(...) * correlation(...)\
-      \ * rank(...)\n    factor = -1 * rank_avg * corr_cv * rank_corr_sums\n    \n\
-      \    return df.select(factor).to_series()"
+      \ 5)\n    df = df.with_columns(\n        delay(pl.col('close'), 5).alias('_delay_close')\n\
+      \    )\n    # sum(delay(close, 5), 20) / 20\n    df = df.with_columns(\n   \
+      \     (rolling_sum(pl.col('_delay_close'), window=20) / 20).alias('_term1')\n\
+      \    )\n    # correlation(close, volume, 2)\n    df = df.with_columns(\n   \
+      \     rolling_corr(pl.col('close'), pl.col('volume'), window=2).alias('_corr1')\n\
+      \    )\n    # sum(close, 5) and sum(close, 20)\n    df = df.with_columns(\n\
+      \        rolling_sum(pl.col('close'), window=5).alias('_sum5')\n    )\n    df\
+      \ = df.with_columns(\n        rolling_sum(pl.col('close'), window=20).alias('_sum20')\n\
+      \    )\n    # correlation(sum(close, 5), sum(close, 20), 2)\n    df = df.with_columns(\n\
+      \        rolling_corr(pl.col('_sum5'), pl.col('_sum20'), window=2).alias('_corr2')\n\
+      \    )\n    # rank((sum(delay(close, 5), 20) / 20)) * correlation(close, volume,\
+      \ 2)\n    df = df.with_columns(\n        (rank(pl.col('_term1')).over('date')\
+      \ * pl.col('_corr1')).alias('_part1')\n    )\n    # rank(correlation(sum(close,\
+      \ 5), sum(close, 20), 2))\n    df = df.with_columns(\n        rank(pl.col('_corr2')).over('date').alias('_part2')\n\
+      \    )\n    # final factor: -1 * (part1 * part2)\n    factor = -1 * (pl.col('_part1')\
+      \ * pl.col('_part2'))\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1021
+    code_chars: 1328
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_045.h5
     ast: null
     ast_compile_status: null
@@ -46,20 +49,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 54
-      status: 待更新
+      score: 63
+      status: 通过
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.011492804163405337
-      icir: 0.06457342729553948
-      winrate: 0.559322033898305
+      ic_mean: 0.03797416022895049
+      icir: 0.24230271415338342
+      winrate: 0.6440677966101694
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.00016382964084260543
+      annual_return: 0.00037755317944743183
       longshort_sharpe: null
-      longshort_max_dd: -0.017157042651151203
-      validated_at: 1782145960.4704907
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.011994377843218416
+      validated_at: 1782306871.5444431
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

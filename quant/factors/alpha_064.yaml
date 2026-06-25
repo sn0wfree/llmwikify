@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: ((rank(correlation(sum(((open * 0.178404) + (low * (1 - 0.178404))),
       12.7054), sum(adv120, 12.7054), 16.6208)) < rank(delta(((((high + low) / 2)
@@ -27,28 +27,26 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "import math\n\ndef compute_factor(df: pl.DataFrame) -> pl.Series:\n   \
-      \ # Window sizes (ceiling of non-integer values)\n    w_sum1 = math.ceil(12.7054)\
-      \   # 13\n    w_corr = math.ceil(16.6208)   # 17\n    w_delta = math.ceil(3.69741)\
-      \  # 4\n    \n    # adv120: 120-day rolling mean of volume\n    df = df.with_columns(\n\
-      \        rolling_mean(pl.col('volume'), window=120).alias('_adv120')\n    )\n\
-      \    \n    # Part A: weighted price = open * 0.178404 + low * (1 - 0.178404)\n\
-      \    a_price = (pl.col('open') * 0.178404) + (pl.col('low') * (1 - 0.178404))\n\
-      \    \n    # Materialize rolling sums first\n    df = df.with_columns(\n   \
-      \     rolling_sum(a_price, window=w_sum1).alias('_a_price_sum'),\n        rolling_sum(pl.col('_adv120'),\
-      \ window=w_sum1).alias('_a_adv_sum')\n    )\n    \n    # Rolling correlation\
-      \ between price sum and adv sum\n    df = df.with_columns(\n        correlation(pl.col('_a_price_sum'),\
-      \ pl.col('_a_adv_sum'), window=w_corr).alias('_a_corr')\n    )\n    \n    #\
-      \ Part B: weighted price = ((high+low)/2) * 0.178404 + vwap * (1 - 0.178404)\n\
-      \    b_price = ((pl.col('high') + pl.col('low')) / 2) * 0.178404 + pl.col('vwap')\
-      \ * (1 - 0.178404)\n    \n    # Delta with periods=4\n    df = df.with_columns(\n\
-      \        delta(b_price, periods=w_delta).alias('_b_delta')\n    )\n    \n  \
-      \  # Cross-sectional ranks\n    a_rank = rank(pl.col('_a_corr')).over('date')\n\
-      \    b_rank = rank(pl.col('_b_delta')).over('date')\n    \n    # Final: -1 if\
-      \ rank(corr) < rank(delta), else 0\n    factor = pl.when(a_rank < b_rank).then(-1).otherwise(0)\n\
-      \    \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv120: 120-day\
+      \ average of volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+      \ window=120).alias('_adv120')\n    )\n    \n    # Sum1: sum((open * 0.178404)\
+      \ + (low * (1 - 0.178404)), 12)\n    df = df.with_columns(\n        rolling_sum(\n\
+      \            (pl.col('open') * 0.178404) + (pl.col('low') * (1 - 0.178404)),\n\
+      \            window=12\n        ).alias('_sum1')\n    )\n    \n    # Sum2: sum(adv120,\
+      \ 12)\n    df = df.with_columns(\n        rolling_sum(pl.col('_adv120'), window=12).alias('_sum2')\n\
+      \    )\n    \n    # Correlation between sum1 and sum2, window 16\n    df = df.with_columns(\n\
+      \        correlation(pl.col('_sum1'), pl.col('_sum2'), window=16).alias('_corr')\n\
+      \    )\n    \n    # Delta of (high+low)/2 * 0.178404 + vwap * (1 - 0.178404),\
+      \ period 3\n    df = df.with_columns(\n        delta(\n            ((pl.col('high')\
+      \ + pl.col('low')) / 2 * 0.178404) + (pl.col('vwap') * (1 - 0.178404)),\n  \
+      \          periods=3\n        ).alias('_delta')\n    )\n    \n    # Cross-sectional\
+      \ ranks\n    df = df.with_columns(\n        rank(pl.col('_corr')).over('date').alias('_rank_corr')\n\
+      \    )\n    df = df.with_columns(\n        rank(pl.col('_delta')).over('date').alias('_rank_delta')\n\
+      \    )\n    \n    # Final factor: -1 if rank_corr < rank_delta, else 0\n   \
+      \ factor = pl.when(\n        pl.col('_rank_corr') < pl.col('_rank_delta')\n\
+      \    ).then(-1).otherwise(0)\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1541
+    code_chars: 1441
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_064.h5
     ast: null
     ast_compile_status: null
@@ -56,20 +54,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 52
-      status: 待更新
+      score: 41
+      status: 失败
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.005420589543653548
-      icir: 0.04250790344628165
-      winrate: 0.5254237288135594
+      ic_mean: -0.025656437987609478
+      icir: -0.18408858889525448
+      winrate: 0.423728813559322
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 4.012728475721872e-05
+      annual_return: -2.803492073988334e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.01979473906247855
-      validated_at: 1782178827.3578932
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.019058669229065888
+      validated_at: 1782349299.2476041
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1

@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: SignedPower(Ts_Rank((vwap - ts_max(vwap, 15.3217)), 20.7127), delta(close,
       4.96796))
@@ -24,17 +24,19 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
-      \ 'date'])\n\n    # Step 1: ts_max(vwap, 15.3217) — window truncated to 15\n\
-      \    vwap_max = ts_max(pl.col('vwap'), window=15)\n\n    # Step 2: vwap - ts_max(vwap,\
-      \ 15)\n    diff_vwap = pl.col('vwap') - vwap_max\n\n    # Step 3: Ts_Rank(...,\
-      \ 20.7127) — window truncated to 20\n    ts_rank_val = ts_rank(diff_vwap, window=20)\n\
-      \n    # Step 4: delta(close, 4.96796) — periods truncated to 4\n    close_delta\
-      \ = delta(pl.col('close'), periods=4)\n\n    # Step 5: SignedPower(x, y) = sign(x)\
-      \ * |x|^y\n    signed_power = ts_rank_val.sign() * (ts_rank_val.abs() ** close_delta)\n\
-      \n    return df.select(signed_power).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: vwap\
+      \ - ts_max(vwap, 15.3217)\n    df = df.with_columns(\n        ts_max(pl.col('vwap'),\
+      \ window=int(15.3217)).alias('_ts_max_vwap')\n    )\n    df = df.with_columns(\n\
+      \        (pl.col('vwap') - pl.col('_ts_max_vwap')).alias('_diff_vwap')\n   \
+      \ )\n    \n    # Step 2: Ts_Rank of the difference, window 20.7127\n    df =\
+      \ df.with_columns(\n        ts_rank(pl.col('_diff_vwap'), window=int(20.7127)).alias('_ts_rank')\n\
+      \    )\n    \n    # Step 3: delta(close, 4.96796)\n    df = df.with_columns(\n\
+      \        delta(pl.col('close'), period=int(4.96796)).alias('_delta_close')\n\
+      \    )\n    \n    # Step 4: SignedPower(x, n) = sign(x) * |x|^n\n    x = pl.col('_ts_rank')\n\
+      \    n = pl.col('_delta_close')\n    factor = x.sign() * (x.abs() ** n)\n  \
+      \  \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 675
+    code_chars: 816
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_084.h5
     ast: null
     ast_compile_status: null
@@ -42,20 +44,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 45
+      score: 47
       status: 失败
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: -0.01689718636441489
-      icir: -0.11445390921889814
+      ic_mean: -0.009531077371489288
+      icir: -0.0572017369935854
       winrate: 0.4576271186440678
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.00011461968336323736
+      annual_return: -9.946639337155005e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.022735200187458234
-      validated_at: 1782150712.9522789
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.03519500217006369
+      validated_at: 1782351141.967387
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1

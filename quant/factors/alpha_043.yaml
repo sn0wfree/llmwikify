@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (ts_rank((volume / adv20), 20) * ts_rank((-1 * delta(close, 7)), 8))
     formula: (ts_rank((volume / adv20), 20) * ts_rank((-1 * delta(close, 7)), 8))
@@ -23,15 +23,16 @@ factor:
     business_constraints: 支持日频调仓, T+1 信号
   l5:
     code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = 20-day\
-      \ average volume (per-code time-series, no .over needed)\n    adv20 = ts_mean(pl.col('volume'),\
-      \ 20)\n\n    # term1: ts_rank((volume / adv20), 20)\n    vol_ratio = pl.col('volume')\
-      \ / adv20\n    part1 = ts_rank(vol_ratio, 20)\n\n    # term2: ts_rank((-1 *\
-      \ delta(close, 7)), 8)\n    delta_close = delta(pl.col('close'), periods=7)\n\
-      \    neg_delta = -1 * delta_close\n    part2 = ts_rank(neg_delta, 8)\n\n   \
-      \ # factor = product of the two terms\n    factor = part1 * part2\n\n    return\
-      \ df.select(factor).to_series()"
+      \ average volume\n    df = df.with_columns(rolling_mean(pl.col('volume'), window=20).alias('_adv20'))\n\
+      \    # volume / adv20\n    df = df.with_columns((pl.col('volume') / pl.col('_adv20')).alias('_vol_ratio'))\n\
+      \    # ts_rank((volume / adv20), 20)\n    df = df.with_columns(ts_rank(pl.col('_vol_ratio'),\
+      \ window=20).alias('_tsrank1'))\n    # -1 * delta(close, 7)\n    df = df.with_columns((-1\
+      \ * delta(pl.col('close'), periods=7)).alias('_neg_delta'))\n    # ts_rank((-1\
+      \ * delta(close, 7)), 8)\n    df = df.with_columns(ts_rank(pl.col('_neg_delta'),\
+      \ window=8).alias('_tsrank2'))\n    # final factor: product of the two ts_ranks\n\
+      \    factor = pl.col('_tsrank1') * pl.col('_tsrank2')\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 566
+    code_chars: 777
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_043.h5
     ast: null
     ast_compile_status: null
@@ -51,8 +52,8 @@ factor:
       annual_return: -0.0002640123337341871
       longshort_sharpe: null
       longshort_max_dd: -0.04847496517119499
-      validated_at: 1782145905.8006566
-    validation_date: '2026-06-23'
+      validated_at: 1782306819.7401035
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

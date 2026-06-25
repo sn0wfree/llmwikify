@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (-1 * (delta(correlation(high, volume, 5), 5) * rank(stddev(close,
       20))))
@@ -22,16 +22,18 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # correlation(high,\
-      \ volume, 5) - rolling correlation per code\n    corr_hv = correlation(pl.col('high'),\
-      \ pl.col('volume'), window=5)\n\n    # delta(correlation(...), 5)\n    delta_corr\
-      \ = delta(corr_hv, periods=5)\n\n    # stddev(close, 20) - rolling std per code\n\
-      \    std_close = rolling_std(pl.col('close'), window=20)\n\n    # rank(stddev(close,\
-      \ 20)) - cross-sectional rank per date\n    rank_std = rank(std_close).over('date')\n\
-      \n    # (-1) * (delta_corr * rank_std)\n    factor = -1 * (delta_corr * rank_std)\n\
-      \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: rolling\
+      \ correlation between high and volume, window=5\n    df = df.with_columns(\n\
+      \        correlation(pl.col('high'), pl.col('volume'), window=5).alias('_corr')\n\
+      \    )\n    # Step 2: delta of the correlation with period=5\n    df = df.with_columns(\n\
+      \        delta(pl.col('_corr'), 5).alias('_delta_corr')\n    )\n    # Step 3:\
+      \ rolling stddev of close, window=20\n    df = df.with_columns(\n        rolling_std(pl.col('close'),\
+      \ window=20).alias('_stddev_close')\n    )\n    # Step 4: cross-sectional rank\
+      \ of the stddev\n    df = df.with_columns(\n        rank(pl.col('_stddev_close')).over('date').alias('_rank_stddev')\n\
+      \    )\n    # Step 5: combine: -1 * (delta_corr * rank_stddev)\n    factor =\
+      \ -1 * (pl.col('_delta_corr') * pl.col('_rank_stddev'))\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 596
+    code_chars: 838
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_022.h5
     ast: null
     ast_compile_status: null
@@ -39,20 +41,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 56
+      score: 57
       status: 通过
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.018383337737005626
-      icir: 0.12592341125060041
-      winrate: 0.559322033898305
+      ic_mean: 0.016035486956123272
+      icir: 0.11953524312060598
+      winrate: 0.576271186440678
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.00021661835321440392
+      annual_return: 0.0002977094509906131
       longshort_sharpe: null
-      longshort_max_dd: -0.02174137722972192
-      validated_at: 1782144612.4855301
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.01818478908252027
+      validated_at: 1782306235.687669
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

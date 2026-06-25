@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (0 - (1 * (rank((sum(returns, 10) / sum(sum(returns, 2), 3))) * rank((returns
       * cap)))))
@@ -24,19 +24,24 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Inner: sum(returns,\
-      \ 2) - 2-period rolling sum of returns\n    sum_ret_2 = rolling_sum(pl.col('returns'),\
-      \ window=2)\n    \n    # Outer: sum(sum(returns, 2), 3) - 3-period rolling sum\
-      \ of the above\n    sum_sum_ret_2_3 = rolling_sum(sum_ret_2, window=3)\n   \
-      \ \n    # Ratio: sum(returns, 10) / sum(sum(returns, 2), 3)\n    ratio = rolling_sum(pl.col('returns'),\
-      \ window=10) / sum_sum_ret_2_3\n    \n    # Cross-sectional rank of the ratio\n\
-      \    rank_ratio = rank(ratio).over('date')\n    \n    # returns * cap (using\
-      \ vwap as proxy since cap is not in the schema)\n    ret_cap = pl.col('returns')\
-      \ * pl.col('vwap')\n    \n    # Cross-sectional rank of returns*cap\n    rank_ret_cap\
-      \ = rank(ret_cap).over('date')\n    \n    # Final factor: -(rank_ratio * rank_ret_cap)\n\
-      \    factor = -(rank_ratio * rank_ret_cap)\n    \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # sum(returns,\
+      \ 10)\n    df = df.with_columns(\n        rolling_sum(pl.col('returns'), window=10).alias('_sum_ret_10')\n\
+      \    )\n    # sum(returns, 2)\n    df = df.with_columns(\n        rolling_sum(pl.col('returns'),\
+      \ window=2).alias('_sum_ret_2')\n    )\n    # sum(sum(returns, 2), 3) - rolling\
+      \ sum of the 2-period sums over 3 periods\n    df = df.with_columns(\n     \
+      \   rolling_sum(pl.col('_sum_ret_2'), window=3).alias('_sum_sum_ret_2_3')\n\
+      \    )\n    # ratio: sum(returns, 10) / sum(sum(returns, 2), 3)\n    df = df.with_columns(\n\
+      \        (pl.col('_sum_ret_10') / pl.col('_sum_sum_ret_2_3')).alias('_ratio')\n\
+      \    )\n    # cap proxy using close * volume (no cap column available)\n   \
+      \ df = df.with_columns(\n        (pl.col('returns') * pl.col('close') * pl.col('volume')).alias('_ret_cap')\n\
+      \    )\n    # rank(ratio) - cross-sectional\n    df = df.with_columns(\n   \
+      \     rank(pl.col('_ratio')).over('date').alias('_rank_ratio')\n    )\n    #\
+      \ rank(returns * cap) - cross-sectional\n    df = df.with_columns(\n       \
+      \ rank(pl.col('_ret_cap')).over('date').alias('_rank_ret_cap')\n    )\n    #\
+      \ 0 - (1 * (rank(ratio) * rank(ret_cap)))\n    factor = -(pl.col('_rank_ratio')\
+      \ * pl.col('_rank_ret_cap'))\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 885
+    code_chars: 1261
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_056.h5
     ast: null
     ast_compile_status: null
@@ -48,16 +53,16 @@ factor:
       status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.001369186952700995
-      icir: 0.00974974314226246
-      winrate: 0.5254237288135594
+      ic_mean: 0.006262951227695148
+      icir: 0.04441692024950088
+      winrate: 0.4915254237288136
       rank_ic_mean: null
       rank_icir: null
-      annual_return: -0.00027657218618470925
+      annual_return: -0.0002519873071400447
       longshort_sharpe: null
-      longshort_max_dd: -0.038707344043584814
-      validated_at: 1782146351.6102545
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.034570609005198275
+      validated_at: 1782307626.789772
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

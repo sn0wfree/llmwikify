@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (((high * low)^0.5) - vwap)
     formula: (((high * low)^0.5) - vwap)
@@ -23,7 +23,7 @@ factor:
     business_constraints: 支持日频调仓, T+1 信号
   l5:
     code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    factor = (pl.col('high')\
-      \ * pl.col('low')) ** 0.5 - pl.col('vwap')\n    return df.select(factor).to_series()"
+      \ * pl.col('low')).sqrt() - pl.col('vwap')\n    return df.select(factor).to_series()"
     code_compile_status: success
     code_chars: 161
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_041.h5
@@ -45,8 +45,8 @@ factor:
       annual_return: 0.0001381249897818293
       longshort_sharpe: null
       longshort_max_dd: -0.022170028318706434
-      validated_at: 1782145828.5184171
-    validation_date: '2026-06-23'
+      validated_at: 1782306792.082924
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

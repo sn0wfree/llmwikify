@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: rank(((((-1 * returns) * adv20) * vwap) * (high - close)))
     formula: rank(((((-1 * returns) * adv20) * vwap) * (high - close)))
@@ -23,14 +23,14 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20: 20-day\
-      \ rolling mean of volume (per code)\n    adv20 = rolling_mean(pl.col('volume'),\
-      \ window=20)\n\n    # Inner expression: ((-1 * returns) * adv20) * vwap * (high\
-      \ - close)\n    inner = (-1 * pl.col('returns')) * adv20 * pl.col('vwap') *\
-      \ (pl.col('high') - pl.col('close'))\n\n    # Cross-sectional rank per date\n\
-      \    factor = rank(inner).over('date')\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize adv20\
+      \ (20-day average daily volume) first\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+      \ window=20).alias('_adv20'))\n    \n    # Inner expression: ((-1 * returns)\
+      \ * adv20) * vwap * (high - close)\n    inner = (-pl.col('returns') * pl.col('_adv20'))\
+      \ * pl.col('vwap') * (pl.col('high') - pl.col('close'))\n    \n    # Cross-sectional\
+      \ rank\n    factor = rank(inner).over('date')\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 448
+    code_chars: 494
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_025.h5
     ast: null
     ast_compile_status: null
@@ -38,20 +38,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 52
+      score: 50
       status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.0041563089985187365
-      icir: 0.0273620740197717
-      winrate: 0.559322033898305
+      ic_mean: 0.0017052802707732562
+      icir: 0.01337403228112719
+      winrate: 0.4745762711864407
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 3.439081149214651e-05
+      annual_return: -0.00020120178715021808
       longshort_sharpe: null
-      longshort_max_dd: -0.019934733246765233
-      validated_at: 1782144682.8597033
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.02963594431062089
+      validated_at: 1782306296.679547
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

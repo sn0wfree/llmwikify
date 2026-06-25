@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (-1 * Ts_Rank(rank(low), 9))
     formula: (-1 * Ts_Rank(rank(low), 9))
@@ -21,13 +21,14 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Cross-sectional\
-      \ rank of low per date\n    ranked_low = rank(pl.col('low')).over('date')\n\
-      \    \n    # Time-series rank with window of 9\n    ts_ranked = ts_rank(ranked_low,\
-      \ window=9)\n    \n    # Multiply by -1\n    factor = -1 * ts_ranked\n    \n\
-      \    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: Materialize\
+      \ cross-sectional rank of low prices (Rule 2)\n    df = df.with_columns(rank(pl.col('low')).over('date').alias('_rank_low'))\n\
+      \    # Step 2: Apply ts_rank with window=9 on the materialized rank\n    df\
+      \ = df.with_columns(ts_rank(pl.col('_rank_low'), window=9).alias('_ts_rank'))\n\
+      \    # Step 3: Multiply by -1\n    factor = -1 * pl.col('_ts_rank')\n    return\
+      \ df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 334
+    code_chars: 455
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_004.h5
     ast: null
     ast_compile_status: null
@@ -47,8 +48,8 @@ factor:
       annual_return: 0.0002476528187722593
       longshort_sharpe: null
       longshort_max_dd: -0.023599938886297765
-      validated_at: 1782144178.1833243
-    validation_date: '2026-06-23'
+      validated_at: 1782305789.1391017
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

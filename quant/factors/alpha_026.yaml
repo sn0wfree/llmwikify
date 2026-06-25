@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (-1 * ts_max(correlation(ts_rank(volume, 5), ts_rank(high, 5), 5),
       3))
@@ -22,15 +22,17 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # ts_rank(volume,\
-      \ 5)\n    rank_volume = ts_rank(pl.col('volume'), window=5)\n\n    # ts_rank(high,\
-      \ 5)\n    rank_high = ts_rank(pl.col('high'), window=5)\n\n    # correlation(ts_rank(volume,\
-      \ 5), ts_rank(high, 5), 5)\n    corr = correlation(rank_volume, rank_high, window=5)\n\
-      \n    # ts_max(correlation, 3) — use rolling_max as ts_max equivalent\n    max_corr\
-      \ = rolling_max(corr, window=3)\n\n    # -1 * ts_max(...)\n    factor = -1 *\
-      \ max_corr\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: ts_rank(volume,\
+      \ 5) and ts_rank(high, 5)\n    df = df.with_columns([\n        ts_rank(pl.col('volume'),\
+      \ window=5).alias('_ts_rank_vol'),\n        ts_rank(pl.col('high'), window=5).alias('_ts_rank_high'),\n\
+      \    ])\n    # Step 2: correlation of the two ts_ranks over 5 periods (materialize)\n\
+      \    df = df.with_columns(\n        correlation(pl.col('_ts_rank_vol'), pl.col('_ts_rank_high'),\
+      \ window=5).alias('_corr')\n    )\n    # Step 3: ts_max of correlation over\
+      \ 3 periods (materialize)\n    df = df.with_columns(\n        ts_max(pl.col('_corr'),\
+      \ window=3).alias('_ts_max')\n    )\n    # Step 4: -1 * ts_max(...)\n    factor\
+      \ = -1 * pl.col('_ts_max')\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 525
+    code_chars: 736
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_026.h5
     ast: null
     ast_compile_status: null
@@ -50,8 +52,8 @@ factor:
       annual_return: -4.2030507962920183e-07
       longshort_sharpe: null
       longshort_max_dd: -0.02452794204264394
-      validated_at: 1782144759.6161668
-    validation_date: '2026-06-23'
+      validated_at: 1782306314.5324779
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

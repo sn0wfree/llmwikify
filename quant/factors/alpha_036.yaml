@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: ((((2.21 * rank(correlation((close - open), delay(volume, 1), 15)))
       + (0.7 * rank((open - close)))) + (0.73 * rank(Ts_Rank(delay((-1 * returns),
@@ -28,32 +28,25 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Part 1: 2.21\
-      \ * rank(correlation((close - open), delay(volume, 1), 15))\n    df = df.with_columns(\n\
-      \        correlation(\n            (pl.col('close') - pl.col('open')),\n   \
-      \         delay(pl.col('volume'), periods=1),\n            window=15\n     \
-      \   ).alias('_corr1')\n    )\n    part1 = 2.21 * rank(pl.col('_corr1')).over('date')\n\
-      \n    # Part 2: 0.7 * rank((open - close))\n    df = df.with_columns(\n    \
-      \    (pl.col('open') - pl.col('close')).alias('_oc')\n    )\n    part2 = 0.7\
-      \ * rank(pl.col('_oc')).over('date')\n\n    # Part 3: 0.73 * rank(Ts_Rank(delay((-1\
-      \ * returns), 6), 5))\n    df = df.with_columns(\n        delay((-1 * pl.col('returns')),\
-      \ periods=6).alias('_neg_ret_d6')\n    )\n    df = df.with_columns(\n      \
-      \  ts_rank(pl.col('_neg_ret_d6'), window=5).alias('_ts_rank1')\n    )\n    part3\
-      \ = 0.73 * rank(pl.col('_ts_rank1')).over('date')\n\n    # Part 4: rank(abs(correlation(vwap,\
-      \ adv20, 6)))\n    # adv20 = 20-day average volume\n    df = df.with_columns(\n\
-      \        rolling_mean(pl.col('volume'), window=20).alias('_adv20')\n    )\n\
-      \    df = df.with_columns(\n        correlation(\n            pl.col('vwap'),\n\
-      \            pl.col('_adv20'),\n            window=6\n        ).alias('_corr2')\n\
-      \    )\n    df = df.with_columns(\n        pl.col('_corr2').abs().alias('_abs_corr2')\n\
-      \    )\n    part4 = rank(pl.col('_abs_corr2')).over('date')\n\n    # Part 5:\
-      \ 0.6 * rank((((sum(close, 200) / 200) - open) * (close - open)))\n    df =\
-      \ df.with_columns(\n        rolling_mean(pl.col('close'), window=200).alias('_close_mean200')\n\
-      \    )\n    df = df.with_columns(\n        ((pl.col('_close_mean200') - pl.col('open'))\
-      \ * (pl.col('close') - pl.col('open'))).alias('_term5')\n    )\n    part5 =\
-      \ 0.6 * rank(pl.col('_term5')).over('date')\n\n    # Final factor\n    factor\
-      \ = part1 + part2 + part3 + part4 + part5\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    import polars as\
+      \ pl\n\n    # adv20: average daily volume over 20 days\n    df = df.with_columns(ts_mean(pl.col('volume'),\
+      \ window=20).alias('_adv20'))\n\n    # correlation((close - open), delay(volume,\
+      \ 1), 15)\n    df = df.with_columns(\n        correlation(\n            pl.col('close')\
+      \ - pl.col('open'),\n            delay(pl.col('volume'), periods=1),\n     \
+      \       window=15\n        ).alias('_corr1')\n    )\n\n    # ts_rank(delay(-1\
+      \ * returns, 6), 5)\n    df = df.with_columns(\n        ts_rank(delay(-1 * pl.col('returns'),\
+      \ periods=6), window=5).alias('_tsrank')\n    )\n\n    # abs(correlation(vwap,\
+      \ adv20, 6))\n    df = df.with_columns(\n        correlation(pl.col('vwap'),\
+      \ pl.col('_adv20'), window=6).abs().alias('_corr2')\n    )\n\n    # ((sum(close,\
+      \ 200) / 200) - open) * (close - open)\n    df = df.with_columns(\n        (((ts_sum(pl.col('close'),\
+      \ window=200) / 200) - pl.col('open')) * (pl.col('close') - pl.col('open'))).alias('_inner5')\n\
+      \    )\n\n    # Final factor: weighted sum of cross-sectional ranks\n    factor\
+      \ = (\n        2.21 * rank(pl.col('_corr1')).over('date')\n        + 0.7 * rank(pl.col('open')\
+      \ - pl.col('close')).over('date')\n        + 0.73 * rank(pl.col('_tsrank')).over('date')\n\
+      \        + rank(pl.col('_corr2')).over('date')\n        + 0.6 * rank(pl.col('_inner5')).over('date')\n\
+      \    )\n\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1859
+    code_chars: 1380
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_036.h5
     ast: null
     ast_compile_status: null
@@ -65,16 +58,16 @@ factor:
       status: 通过
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.01511709705535261
-      icir: 0.11178804377124812
+      ic_mean: 0.015040769684518123
+      icir: 0.11111259636268674
       winrate: 0.5423728813559322
       rank_ic_mean: null
       rank_icir: null
       annual_return: 0.00020242235114875662
       longshort_sharpe: null
       longshort_max_dd: -0.018198901839703574
-      validated_at: 1782177831.8115191
-    validation_date: '2026-06-23'
+      validated_at: 1782306683.0452898
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

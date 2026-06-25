@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: min(Ts_Rank(decay_linear(((((high + low) / 2) + close) < (low + open)),
       14.7221), 18.8683), Ts_Rank(decay_linear(correlation(rank(low), rank(adv30),
@@ -26,20 +26,24 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
-      \ 'date'])\n\n    # Part 1: decay_linear of boolean condition, then ts_rank\n\
-      \    cond1 = (((pl.col('high') + pl.col('low')) / 2) + pl.col('close')) < (pl.col('low')\
-      \ + pl.col('open'))\n    cond1_float = cond1.cast(pl.Float64)\n    decay1 =\
-      \ decay_linear(cond1_float, window=int(14.7221))\n    part1 = ts_rank(decay1,\
-      \ window=int(18.8683))\n\n    # Part 2: correlation of cross-section ranks,\
-      \ then decay, then ts_rank\n    rank_low = rank(pl.col('low')).over('date')\n\
-      \    adv30 = rolling_mean(pl.col('volume'), window=30)\n    rank_adv30 = rank(adv30).over('date')\n\
-      \    corr = correlation(rank_low, rank_adv30, window=int(7.58555))\n    decay2\
-      \ = decay_linear(corr, window=int(6.94024))\n    part2 = ts_rank(decay2, window=int(6.80584))\n\
-      \n    # Final: element-wise min of the two parts\n    factor = pl.min_horizontal([part1,\
-      \ part2])\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv30: rolling\
+      \ mean of volume over 30 days\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+      \ window=30).alias('_adv30')\n    )\n\n    # Materialize cross-sectional ranks\
+      \ before rolling (Rule 2)\n    df = df.with_columns([\n        rank(pl.col('low')).over('date').alias('_rank_low'),\n\
+      \        rank(pl.col('_adv30')).over('date').alias('_rank_adv30')\n    ])\n\n\
+      \    # Component 1: Ts_Rank(decay_linear(((high+low)/2+close) < (low+open),\
+      \ 14.7221), 18.8683)\n    cond1 = ((pl.col('high') + pl.col('low')) / 2 + pl.col('close'))\
+      \ < (pl.col('low') + pl.col('open'))\n    df = df.with_columns(cond1.cast(pl.Float64).alias('_c1'))\n\
+      \    df = df.with_columns(decay_linear(pl.col('_c1'), 15).alias('_d1'))\n  \
+      \  df = df.with_columns(ts_rank(pl.col('_d1'), 19).alias('_t1'))\n\n    # Component\
+      \ 2: Ts_Rank(decay_linear(correlation(rank(low), rank(adv30), 7.58555), 6.94024),\
+      \ 6.80584)\n    df = df.with_columns(\n        rolling_corr(pl.col('_rank_low'),\
+      \ pl.col('_rank_adv30'), window=8).alias('_corr')\n    )\n    df = df.with_columns(decay_linear(pl.col('_corr'),\
+      \ 7).alias('_d2'))\n    df = df.with_columns(ts_rank(pl.col('_d2'), 7).alias('_t2'))\n\
+      \n    # Final: min of the two components\n    factor = pl.min_horizontal(pl.col('_t1'),\
+      \ pl.col('_t2'))\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 929
+    code_chars: 1327
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_092.h5
     ast: null
     ast_compile_status: null
@@ -47,20 +51,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 56
-      status: 待更新
+      score: 46
+      status: 失败
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.01334525126698289
-      icir: 0.0914669279755797
-      winrate: 0.5932203389830508
+      ic_mean: -0.012762233219293082
+      icir: -0.0915454038414289
+      winrate: 0.4745762711864407
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.0001420238060059198
+      annual_return: 7.158850444510811e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.021236212804945864
-      validated_at: 1782151023.3307903
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.022045370061175042
+      validated_at: 1782351828.528622
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1

@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: '((((delta((sum(close, 100) / 100), 100) / delay(close, 100)) < 0.05)
       || ((delta((sum(close, 100) / 100), 100) / delay(close, 100)) == 0.05)) ? (-1
@@ -25,21 +25,21 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Sort by (code,\
-      \ date) for per-code rolling operations\n    df = df.sort(['code', 'date'])\n\
-      \n    # Step 1: sum(close, 100) / 100  (equivalent to rolling_mean)\n    mean_close_100\
-      \ = rolling_mean(pl.col('close'), window=100)\n\n    # Step 2: delta(mean_close_100,\
-      \ 100)\n    delta_mean = delta(mean_close_100, periods=100)\n\n    # Step 3:\
-      \ delay(close, 100)\n    delay_close = delay(pl.col('close'), periods=100)\n\
-      \n    # Step 4: ratio = delta_mean / delay_close\n    ratio = delta_mean / delay_close\n\
-      \n    # Step 5: condition (ratio < 0.05) || (ratio == 0.05)  ->  ratio <= 0.05\n\
-      \    cond = (ratio <= 0.05)\n\n    # Branch 1: -1 * (close - ts_min(close, 100))\n\
-      \    branch1 = -1 * (pl.col('close') - ts_min(pl.col('close'), window=100))\n\
-      \n    # Branch 2: -1 * delta(close, 3)\n    branch2 = -1 * delta(pl.col('close'),\
-      \ periods=3)\n\n    # Select branch based on condition\n    factor = pl.when(cond).then(branch1).otherwise(branch2)\n\
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Compute sum(close,\
+      \ 100) / 100  ==  rolling_mean(close, 100)\n    df = df.with_columns(rolling_mean(pl.col('close'),\
+      \ window=100).alias('_mean100'))\n\n    # delta(rolling_mean(close, 100), 100)\n\
+      \    df = df.with_columns(delta(pl.col('_mean100'), periods=100).alias('_delta_mean'))\n\
+      \n    # delay(close, 100)\n    df = df.with_columns(delay(pl.col('close'), periods=100).alias('_delay_close'))\n\
+      \n    # ts_min(close, 100)\n    df = df.with_columns(ts_min(pl.col('close'),\
+      \ window=100).alias('_ts_min_close'))\n\n    # delta(close, 3)\n    df = df.with_columns(delta(pl.col('close'),\
+      \ periods=3).alias('_delta3'))\n\n    # Condition: (delta/delay) < 0.05  OR\
+      \  (delta/delay) == 0.05   <=>   <= 0.05\n    cond = (pl.col('_delta_mean')\
+      \ / pl.col('_delay_close')) <= 0.05\n\n    # Apply piecewise formula\n    true_branch\
+      \ = -1 * (pl.col('close') - pl.col('_ts_min_close'))\n    false_branch = -1\
+      \ * pl.col('_delta3')\n\n    factor = pl.when(cond).then(true_branch).otherwise(false_branch)\n\
       \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1004
+    code_chars: 1054
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_024.h5
     ast: null
     ast_compile_status: null
@@ -47,20 +47,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 55
-      status: 通过
+      score: 51
+      status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.01918911213256201
-      icir: 0.12077305643781805
+      ic_mean: -8.67167593313519e-05
+      icir: -0.0005742460314360725
       winrate: 0.5423728813559322
       rank_ic_mean: null
       rank_icir: null
-      annual_return: -1.0397931120564863e-05
+      annual_return: 6.0558506810082235e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.027680486124722417
-      validated_at: 1782144658.1818542
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.01931015793074964
+      validated_at: 1782306279.3701847
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

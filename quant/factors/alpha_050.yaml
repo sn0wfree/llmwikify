@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (-1 * ts_max(rank(correlation(rank(volume), rank(vwap), 5)), 5))
     formula: (-1 * ts_max(rank(correlation(rank(volume), rank(vwap), 5)), 5))
@@ -22,16 +22,18 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 1. Cross-sectional\
-      \ rank of volume\n    rank_volume = rank(pl.col('volume')).over('date')\n\n\
-      \    # 2. Cross-sectional rank of vwap\n    rank_vwap = rank(pl.col('vwap')).over('date')\n\
-      \n    # 3. Rolling correlation (window=5) between rank(volume) and rank(vwap)\n\
-      \    corr = correlation(rank_volume, rank_vwap, window=5)\n\n    # 4. Cross-sectional\
-      \ rank of the correlation\n    rank_corr = rank(corr).over('date')\n\n    #\
-      \ 5. Rolling max over 5-day window\n    ts_max_corr = ts_max(rank_corr, window=5)\n\
-      \n    # 6. Multiply by -1\n    factor = -1 * ts_max_corr\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1 & 2: cross-sectional\
+      \ ranks of volume and vwap\n    df = df.with_columns([\n        rank(pl.col('volume')).over('date').alias('_rank_volume'),\n\
+      \        rank(pl.col('vwap')).over('date').alias('_rank_vwap')\n    ])\n   \
+      \ # Step 3: rolling correlation (must materialize before rank().over('date'))\n\
+      \    df = df.with_columns(\n        correlation(pl.col('_rank_volume'), pl.col('_rank_vwap'),\
+      \ window=5).alias('_corr')\n    )\n    # Step 4: cross-sectional rank of the\
+      \ correlation\n    df = df.with_columns(\n        rank(pl.col('_corr')).over('date').alias('_rank_corr')\n\
+      \    )\n    # Step 5 & 6: ts_max with window 5, then negate\n    df = df.with_columns(\n\
+      \        ts_max(pl.col('_rank_corr'), window=5).alias('_tsmax')\n    )\n   \
+      \ factor = -1 * pl.col('_tsmax')\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 640
+    code_chars: 847
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_050.h5
     ast: null
     ast_compile_status: null
@@ -43,16 +45,16 @@ factor:
       status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.0003328754057680873
-      icir: 0.002728464848499516
+      ic_mean: -0.0005637156915422922
+      icir: -0.004332771183666475
       winrate: 0.5254237288135594
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 8.075564782683564e-05
+      annual_return: -3.0777427363348764e-06
       longshort_sharpe: null
-      longshort_max_dd: -0.03696483781248952
-      validated_at: 1782146148.4327278
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.03499545901747234
+      validated_at: 1782307462.598472
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

@@ -8,16 +8,16 @@ factor:
     ast_compiled_at: 1782094275.9388237
     ast_compile_error: null
     code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Rule 2: materialize\
-      \ rolling_std first\n    df = df.with_columns(rolling_std(pl.col('returns'),\
-      \ window=20).alias('_std'))\n    \n    # Conditional: if returns < 0 then stddev\
-      \ else close\n    inner = pl.when(pl.col('returns') < 0).then(pl.col('_std')).otherwise(pl.col('close'))\n\
-      \    \n    # SignedPower(inner, 2) = sign(x) * |x|^2\n    signed_pow = inner.sign()\
-      \ * (inner.abs() ** 2)\n    \n    # Rule 2: materialize ts_argmax\n    df =\
-      \ df.with_columns(ts_argmax(signed_pow, window=5).alias('_argmax'))\n    \n\
-      \    # Cross-sectional rank, subtract 0.5\n    factor = rank(pl.col('_argmax')).over('date')\
-      \ - 0.5\n    \n    return df.select(factor).to_series()"
+      \ rolling_std result first\n    df = df.with_columns(rolling_std(pl.col('returns'),\
+      \ window=20).alias('_std'))\n    # Rule 3: use pl.when instead of ternary on\
+      \ polars expressions\n    inner = pl.when(pl.col('returns') < 0).then(pl.col('_std')).otherwise(pl.col('close'))\n\
+      \    # SignedPower(x, 2) = sign(x) * |x|^2; then ts_argmax with window=5\n \
+      \   df = df.with_columns(\n        ts_argmax(inner.sign() * (inner.abs() **\
+      \ 2), window=5).alias('_argmax')\n    )\n    # Rule 1+2: rank on materialized\
+      \ column using function form\n    factor = rank(pl.col('_argmax')).over('date')\
+      \ - 0.5\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 695
+    code_chars: 686
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_001.h5
     overall_assessment:
       score: 59
@@ -32,7 +32,7 @@ factor:
       annual_return: 6.750127580334997e-05
       longshort_sharpe: null
       longshort_max_dd: -0.03798071193955768
-      validated_at: 1782286406.7817802
+      validated_at: 1782305723.1632895
     validation_date: '2026-06-24'
   asset_type: stock
   category: formulaic

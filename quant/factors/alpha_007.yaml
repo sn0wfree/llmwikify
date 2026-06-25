@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: '((adv20 < volume) ? ((-1 * ts_rank(abs(delta(close, 7)), 60)) * sign(delta(close,
       7))) : (-1 * 1))'
@@ -25,16 +25,17 @@ factor:
     business_constraints: 支持日频调仓, T+1 信号
   l5:
     code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = 20-day\
-      \ average daily volume\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n\
-      \n    # delta(close, 7) = close - close shifted by 7\n    delta_close = delta(pl.col('close'),\
-      \ periods=7)\n\n    # ts_rank(abs(delta(close, 7)), 60)\n    ts_rank_val = ts_rank(delta_close.abs(),\
-      \ window=60)\n\n    # sign(delta(close, 7))\n    sign_val = delta_close.sign()\n\
-      \n    # Condition: adv20 < volume\n    cond = adv20 < pl.col('volume')\n\n \
-      \   # True branch: -1 * ts_rank(abs(delta(close,7)), 60) * sign(delta(close,\
-      \ 7))\n    true_val = -1 * ts_rank_val * sign_val\n\n    # False branch: -1\n\
-      \    factor = pl.when(cond).then(true_val).otherwise(-1)\n\n    return df.select(factor).to_series()"
+      \ average volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+      \ window=20).alias('_adv20')\n    )\n    # delta(close, 7) - materialize since\
+      \ used in multiple places\n    df = df.with_columns(\n        delta(pl.col('close'),\
+      \ periods=7).alias('_delta7')\n    )\n    # ts_rank(abs(delta(close, 7)), 60)\
+      \ - materialize\n    df = df.with_columns(\n        ts_rank(pl.col('_delta7').abs(),\
+      \ window=60).alias('_ts_rank_delta')\n    )\n    # inner branch: -1 * ts_rank(...)\
+      \ * sign(delta(close, 7))\n    inner = -1 * pl.col('_ts_rank_delta') * pl.col('_delta7').sign()\n\
+      \    # conditional: (adv20 < volume) ? inner : -1\n    factor = pl.when(pl.col('_adv20')\
+      \ < pl.col('volume')).then(inner).otherwise(-1)\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 726
+    code_chars: 808
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_007.h5
     ast: null
     ast_compile_status: null
@@ -54,8 +55,8 @@ factor:
       annual_return: -0.00010728887602440285
       longshort_sharpe: null
       longshort_max_dd: -0.03624798870042878
-      validated_at: 1782144259.488812
-    validation_date: '2026-06-23'
+      validated_at: 1782305847.501713
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

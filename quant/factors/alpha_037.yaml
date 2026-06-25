@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (rank(correlation(delay((open - close), 1), close, 200)) + rank((open
       - close)))
@@ -23,19 +23,17 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: open\
-      \ - close\n    df = df.with_columns(\n        (pl.col('open') - pl.col('close')).alias('_oc')\n\
-      \    )\n    # Step 2: delay by 1 period\n    df = df.with_columns(\n       \
-      \ delay(pl.col('_oc'), periods=1).alias('_oc_lag1')\n    )\n    # Step 3: materialize\
-      \ 200-day correlation (Rule 2)\n    df = df.with_columns(\n        correlation(pl.col('_oc_lag1'),\
-      \ pl.col('close'), window=200).alias('_corr')\n    )\n    # Step 4: rank the\
-      \ correlation cross-sectionally\n    df = df.with_columns(\n        rank(pl.col('_corr')).over('date').alias('_rank_corr')\n\
-      \    )\n    # Step 5: rank (open - close) cross-sectionally\n    df = df.with_columns(\n\
-      \        rank(pl.col('_oc')).over('date').alias('_rank_oc')\n    )\n    # Step\
-      \ 6: sum of the two ranks\n    factor = pl.col('_rank_corr') + pl.col('_rank_oc')\n\
-      \    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Rule 2: materialize\
+      \ delayed (open-close) first\n    df = df.with_columns(\n        delay((pl.col('open')\
+      \ - pl.col('close')), periods=1).alias('_delay_oc')\n    )\n    # Rule 2: materialize\
+      \ rolling correlation before rank over date\n    df = df.with_columns(\n   \
+      \     correlation(pl.col('_delay_oc'), pl.col('close'), window=200).alias('_corr')\n\
+      \    )\n    # Cross-sectional rank of the correlation + cross-sectional rank\
+      \ of (open - close)\n    factor = (\n        rank(pl.col('_corr')).over('date')\n\
+      \        + rank(pl.col('open') - pl.col('close')).over('date')\n    )\n    return\
+      \ df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 880
+    code_chars: 654
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_037.h5
     ast: null
     ast_compile_status: null
@@ -55,8 +53,8 @@ factor:
       annual_return: 0.00042792631728483244
       longshort_sharpe: null
       longshort_max_dd: -0.010900152203411135
-      validated_at: 1782185466.635926
-    validation_date: '2026-06-23'
+      validated_at: 1782306704.1242054
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

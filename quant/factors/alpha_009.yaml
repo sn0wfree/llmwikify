@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: '((0 < ts_min(delta(close, 1), 5)) ? delta(close, 1) : ((ts_max(delta(close,
       1), 5) < 0) ? delta(close, 1) : (-1 * delta(close, 1))))'
@@ -23,19 +23,18 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already\
-      \ sorted by (code, date)\n\n    # 1) delta(close, 1) — today's close minus yesterday's\
-      \ close\n    delta_close = delta(pl.col('close'), periods=1)\n\n    # 2) 5-day\
-      \ rolling min and max of delta(close, 1)\n    min_delta = rolling_min(delta_close,\
-      \ window=5)\n    max_delta = rolling_max(delta_close, window=5)\n\n    # 3)\
-      \ Conditional logic from the formula:\n    #    if ts_min(delta,5) > 0     \
-      \   -> delta(close,1)\n    #    elif ts_max(delta,5) < 0      -> delta(close,1)\n\
-      \    #    else                          -> -1 * delta(close,1)\n    factor =\
-      \ (\n        pl.when(min_delta > 0)\n        .then(delta_close)\n        .otherwise(\n\
-      \            pl.when(max_delta < 0)\n            .then(delta_close)\n      \
-      \      .otherwise(-1 * delta_close)\n        )\n    )\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: materialize\
+      \ delta(close, 1)\n    df = df.with_columns(delta(pl.col('close'), periods=1).alias('_delta'))\n\
+      \    \n    # Step 2: materialize ts_min and ts_max of delta over window=5 (Rule\
+      \ 2)\n    df = df.with_columns([\n        ts_min(pl.col('_delta'), window=5).alias('_ts_min'),\n\
+      \        ts_max(pl.col('_delta'), window=5).alias('_ts_max')\n    ])\n    \n\
+      \    # Step 3: nested when logic using pl.when (Rule 3)\n    # If ts_min > 0\
+      \ -> delta; elif ts_max < 0 -> delta; else -> -delta\n    factor = pl.when(pl.col('_ts_min')\
+      \ > 0).then(pl.col('_delta')).otherwise(\n        pl.when(pl.col('_ts_max')\
+      \ < 0).then(pl.col('_delta')).otherwise(-1 * pl.col('_delta'))\n    )\n    \n\
+      \    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 848
+    code_chars: 760
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_009.h5
     ast: null
     ast_compile_status: null
@@ -55,8 +54,8 @@ factor:
       annual_return: 4.000528088798916e-06
       longshort_sharpe: null
       longshort_max_dd: -0.02275699427126054
-      validated_at: 1782144309.3568523
-    validation_date: '2026-06-23'
+      validated_at: 1782305883.2207732
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (-1 * sum(rank(correlation(rank(high), rank(volume), 3)), 3))
     formula: (-1 * sum(rank(correlation(rank(high), rank(volume), 3)), 3))
@@ -21,16 +21,20 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
-      \ 'date'])\n    \n    # Cross-sectional ranks\n    rank_high = rank(pl.col('high')).over('date')\n\
-      \    rank_volume = rank(pl.col('volume')).over('date')\n    \n    # 3-day rolling\
-      \ correlation between ranked high and ranked volume\n    corr = rolling_corr(rank_high,\
-      \ rank_volume, window=3)\n    \n    # Cross-sectional rank of the correlation\n\
-      \    rank_corr = rank(corr).over('date')\n    \n    # 3-day rolling sum of the\
-      \ ranked correlation\n    sum_corr = ts_sum(rank_corr, window=3)\n    \n   \
-      \ # Multiply by -1\n    factor = -1 * sum_corr\n    \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: cross-sectional\
+      \ rank of high and volume\n    df = df.with_columns([\n        rank(pl.col('high')).over('date').alias('_rank_high'),\n\
+      \        rank(pl.col('volume')).over('date').alias('_rank_volume')\n    ])\n\
+      \    \n    # Step 2: rolling correlation of the two ranks (window=3) - materialize\
+      \ first\n    df = df.with_columns(\n        correlation(pl.col('_rank_high'),\
+      \ pl.col('_rank_volume'), window=3).alias('_corr')\n    )\n    \n    # Step\
+      \ 3: cross-sectional rank of the correlation (on materialized column)\n    df\
+      \ = df.with_columns(\n        rank(pl.col('_corr')).over('date').alias('_rank_corr')\n\
+      \    )\n    \n    # Step 4: rolling sum with window=3\n    df = df.with_columns(\n\
+      \        rolling_sum(pl.col('_rank_corr'), window=3).alias('_sum')\n    )\n\
+      \    \n    # Step 5: negate\n    factor = -1 * pl.col('_sum')\n    \n    return\
+      \ df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 643
+    code_chars: 904
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_015.h5
     ast: null
     ast_compile_status: null
@@ -38,20 +42,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 46
-      status: 失败
+      score: 54
+      status: 通过
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: -0.016156805286019073
-      icir: -0.10706679762869341
-      winrate: 0.4745762711864407
+      ic_mean: 0.013847823705963682
+      icir: 0.10135717777733957
+      winrate: 0.5084745762711864
       rank_ic_mean: null
       rank_icir: null
-      annual_return: -0.00017981209940187703
+      annual_return: 0.00011946579276500557
       longshort_sharpe: null
-      longshort_max_dd: -0.04948271710638941
-      validated_at: 1782144446.2642217
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.031099500988817294
+      validated_at: 1782306001.9015648
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

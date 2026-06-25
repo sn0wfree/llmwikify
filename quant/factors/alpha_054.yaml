@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: ((-1 * ((low - close) * (open^5))) / ((low - high) * (close^5)))
     formula: ((-1 * ((low - close) * (open^5))) / ((low - high) * (close^5)))
@@ -21,16 +21,13 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # df is already\
-      \ sorted by (code, date) - DO NOT sort again\n    \n    # Numerator: -1 * (low\
-      \ - close) * (open^5)\n    low_minus_close = pl.col('low') - pl.col('close')\n\
-      \    open_pow5 = pl.col('open') ** 5\n    numerator = -1 * low_minus_close *\
-      \ open_pow5\n    \n    # Denominator: (low - high) * (close^5)\n    low_minus_high\
-      \ = pl.col('low') - pl.col('high')\n    close_pow5 = pl.col('close') ** 5\n\
-      \    denominator = low_minus_high * close_pow5\n    \n    # Final factor\n \
-      \   factor = numerator / denominator\n    \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    numerator = -1\
+      \ * (pl.col('low') - pl.col('close')) * (pl.col('open') ** 5)\n    denominator\
+      \ = (pl.col('low') - pl.col('high')) * (pl.col('close') ** 5)\n    \n    # Avoid\
+      \ division by zero / inf\n    factor = pl.when(denominator != 0).then(numerator\
+      \ / denominator).otherwise(0)\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 596
+    code_chars: 373
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_054.h5
     ast: null
     ast_compile_status: null
@@ -50,8 +47,8 @@ factor:
       annual_return: 9.537424350636314e-05
       longshort_sharpe: null
       longshort_max_dd: -0.02081875327360086
-      validated_at: 1782146245.9010193
-    validation_date: '2026-06-23'
+      validated_at: 1782307552.0889523
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (min(product(rank(rank(scale(log(sum(ts_min(rank(rank((-1 * rank(delta((close
       - 1), 5))))), 2), 1))))), 1), 5) + ts_rank(delay((-1 * returns), 6), 5))
@@ -23,25 +23,28 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 1. Sort by (code,\
-      \ date) for per-code rolling\n    df = df.sort(['code', 'date'])\n\n    # 2.\
-      \ delta(close - 1, 5)\n    close_minus_1 = pl.col('close') - 1\n    d = delta(close_minus_1,\
-      \ periods=5)\n\n    # 3. rank(delta(close - 1, 5))\n    r1 = rank(d).over('date')\n\
-      \n    # 4. -1 * rank(...)\n    neg_r1 = -1 * r1\n\n    # 5. rank(-1 * rank(...))\n\
-      \    r2 = rank(neg_r1).over('date')\n\n    # 6. rank(rank(-1 * rank(delta(close\
-      \ - 1, 5))))\n    r3 = rank(r2).over('date')\n\n    # 7. ts_min(..., 2)  (use\
-      \ rolling_min since ts_min not in namespace)\n    tmin = rolling_min(r3, window=2)\n\
-      \n    # 8. sum(..., 1)  — rolling_sum window 1 is identity\n    s = rolling_sum(tmin,\
-      \ window=1)\n\n    # 9. log(...)\n    logged = s.log()\n\n    # 10. scale(log(...))\n\
-      \    sc = scale(logged).over('date')\n\n    # 11. rank(scale(log(...)))\n  \
-      \  r4 = rank(sc).over('date')\n\n    # 12. rank(rank(scale(log(...))))\n   \
-      \ r5 = rank(r4).over('date')\n\n    # 13. product(..., 1) — window 1 product\
-      \ is identity\n    p = r5\n\n    # 14. min(..., 5)\n    m = rolling_min(p, window=5)\n\
-      \n    # 15. Second term: ts_rank(delay(-1 * returns, 6), 5)\n    neg_ret = -1\
-      \ * pl.col('returns')\n    delayed = delay(neg_ret, periods=6)\n    tr = ts_rank(delayed,\
-      \ window=5)\n\n    # 16. Combine\n    factor = m + tr\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Inner part: rank(rank(scale(log(sum(ts_min(rank(rank((-1\
+      \ * rank(delta((close - 1), 5))))), 2), 1)))))\n    \n    # Step 1: delta((close\
+      \ - 1), 5)\n    df = df.with_columns(delta(pl.col('close') - 1, 5).alias('_delta'))\n\
+      \    \n    # Step 2: rank(delta((close - 1), 5))\n    df = df.with_columns(rank(pl.col('_delta')).over('date').alias('_r1'))\n\
+      \    \n    # Step 3: -1 * rank(delta((close - 1), 5))\n    df = df.with_columns((-pl.col('_r1')).alias('_neg_r1'))\n\
+      \    \n    # Step 4: rank(-1 * rank(delta((close - 1), 5)))\n    df = df.with_columns(rank(pl.col('_neg_r1')).over('date').alias('_r2'))\n\
+      \    \n    # Step 5: rank(rank(-1 * rank(delta((close - 1), 5))))\n    df =\
+      \ df.with_columns(rank(pl.col('_r2')).over('date').alias('_r3'))\n    \n   \
+      \ # Step 6: ts_min(rank(rank(-1 * rank(delta((close - 1), 5)))), 2)\n    df\
+      \ = df.with_columns(ts_min(pl.col('_r3'), 2).alias('_tsmin'))\n    \n    # Step\
+      \ 7: sum(ts_min(...), 1) - window 1 is identity\n    # Step 8: log(sum(...))\n\
+      \    df = df.with_columns(pl.col('_tsmin').log().alias('_log'))\n    \n    #\
+      \ Step 9: scale(log(...))\n    df = df.with_columns(scale(pl.col('_log')).over('date').alias('_scale'))\n\
+      \    \n    # Step 10: rank(scale(log(...)))\n    df = df.with_columns(rank(pl.col('_scale')).over('date').alias('_r4'))\n\
+      \    \n    # Step 11: rank(rank(scale(log(...))))\n    df = df.with_columns(rank(pl.col('_r4')).over('date').alias('_r5'))\n\
+      \    \n    # Step 12: product(rank(rank(scale(...))), 1) - window 1 is identity\n\
+      \    # Step 13: min(product(...), 5)\n    df = df.with_columns(ts_min(pl.col('_r5'),\
+      \ 5).alias('_min_prod'))\n    \n    # Second part: ts_rank(delay(-1 * returns,\
+      \ 6), 5)\n    factor = pl.col('_min_prod') + ts_rank(delay(-pl.col('returns'),\
+      \ 6), 5)\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1328
+    code_chars: 1784
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_029.h5
     ast: null
     ast_compile_status: null
@@ -49,20 +52,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 52
-      status: 待更新
+      score: 47
+      status: 失败
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.004044219845140185
-      icir: 0.027974467060728557
-      winrate: 0.5423728813559322
+      ic_mean: -0.007981232245756574
+      icir: -0.05397374654086884
+      winrate: 0.4576271186440678
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.0001205542827000805
+      annual_return: -0.00013093854608337008
       longshort_sharpe: null
-      longshort_max_dd: -0.02257790168618298
-      validated_at: 1782144988.895878
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.029865906775846884
+      validated_at: 1782306423.0513408
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

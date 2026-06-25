@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: ((rank((vwap - ts_min(vwap, 11.5783)))^Ts_Rank(correlation(Ts_Rank(vwap,
       19.6462), Ts_Rank(adv60, 4.02992), 18.0926), 2.70756)) * -1)
@@ -25,20 +25,24 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv60 = 60-day\
-      \ average daily volume\n    adv60 = ts_mean(pl.col('volume'), 60)\n\n    # ts_min(vwap,\
-      \ 11.5783) -> rolling_min, window must be int\n    vwap_min = rolling_min(pl.col('vwap'),\
-      \ window=11)\n\n    # rank(vwap - ts_min(vwap, 11.5783)) -- cross-sectional\
-      \ rank per date\n    rank_part = rank(pl.col('vwap') - vwap_min).over('date')\n\
-      \n    # Ts_Rank(vwap, 19.6462) -> cast to int\n    ts_rank_vwap = ts_rank(pl.col('vwap'),\
-      \ 19)\n\n    # Ts_Rank(adv60, 4.02992) -> cast to int\n    ts_rank_adv60 = ts_rank(adv60,\
-      \ 4)\n\n    # correlation(Ts_Rank(vwap, 19.6462), Ts_Rank(adv60, 4.02992), 18.0926)\
-      \ -> int\n    corr = rolling_corr(ts_rank_vwap, ts_rank_adv60, 18)\n\n    #\
-      \ Ts_Rank(correlation(...), 2.70756) -> cast to int\n    ts_rank_corr = ts_rank(corr,\
-      \ 2)\n\n    # (rank_part ^ ts_rank_corr) * -1\n    factor = (rank_part ** ts_rank_corr)\
-      \ * -1\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv60 = rolling\
+      \ mean of volume over 60 days\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+      \ window=60).alias('_adv60')\n    )\n    # Ts_Rank(vwap, 19.6462) -> window=20\n\
+      \    df = df.with_columns(\n        ts_rank(pl.col('vwap'), window=20).alias('_tsrank_vwap')\n\
+      \    )\n    # Ts_Rank(adv60, 4.02992) -> window=4\n    df = df.with_columns(\n\
+      \        ts_rank(pl.col('_adv60'), window=4).alias('_tsrank_adv60')\n    )\n\
+      \    # correlation(Ts_Rank(vwap), Ts_Rank(adv60), 18.0926) -> window=18\n  \
+      \  df = df.with_columns(\n        rolling_corr(pl.col('_tsrank_vwap'), pl.col('_tsrank_adv60'),\
+      \ window=18).alias('_corr')\n    )\n    # Ts_Rank(correlation(...), 2.70756)\
+      \ -> window=3\n    df = df.with_columns(\n        ts_rank(pl.col('_corr'), window=3).alias('_tsrank_corr')\n\
+      \    )\n    # vwap - ts_min(vwap, 11.5783) -> window=12\n    df = df.with_columns(\n\
+      \        ts_min(pl.col('vwap'), window=12).alias('_tsmin_vwap')\n    )\n   \
+      \ # (vwap - ts_min(vwap))^Ts_Rank(correlation(...))\n    df = df.with_columns(\n\
+      \        (pl.col('vwap') - pl.col('_tsmin_vwap')).pow(pl.col('_tsrank_corr')).alias('_inner')\n\
+      \    )\n    # rank(...) * -1\n    factor = rank(pl.col('_inner')).over('date')\
+      \ * -1\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 925
+    code_chars: 1265
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_094.h5
     ast: null
     ast_compile_status: null
@@ -46,20 +50,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 50
-      status: 待更新
+      score: 48
+      status: 失败
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: -0.0003401994108857873
-      icir: -0.0019823754993341333
-      winrate: 0.5084745762711864
+      ic_mean: -0.007997629281360833
+      icir: -0.05099117315804723
+      winrate: 0.4915254237288136
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 9.142173683107657e-05
+      annual_return: -2.159623734021565e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.030981823775598473
-      validated_at: 1782151103.431158
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.033566299577195764
+      validated_at: 1782352127.5992935
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1

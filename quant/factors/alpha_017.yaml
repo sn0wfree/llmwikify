@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (((-1 * rank(ts_rank(close, 10))) * rank(delta(delta(close, 1), 1)))
       * rank(ts_rank((volume / adv20), 5)))
@@ -24,18 +24,20 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Component 1:\
-      \ -1 * rank(ts_rank(close, 10))\n    ts_rank_close_10 = ts_rank(pl.col('close'),\
-      \ window=10)\n    part1 = -1 * rank(ts_rank_close_10).over('date')\n\n    #\
-      \ Component 2: rank(delta(delta(close, 1), 1))\n    delta_close_1 = delta(pl.col('close'),\
-      \ periods=1)\n    delta_delta_close = delta(delta_close_1, periods=1)\n    part2\
-      \ = rank(delta_delta_close).over('date')\n\n    # Component 3: rank(ts_rank((volume\
-      \ / adv20), 5))\n    adv20 = rolling_mean(pl.col('volume'), window=20)\n   \
-      \ vol_ratio = pl.col('volume') / adv20\n    ts_rank_vol_5 = ts_rank(vol_ratio,\
-      \ window=5)\n    part3 = rank(ts_rank_vol_5).over('date')\n\n    # Combine all\
-      \ three components\n    factor = part1 * part2 * part3\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize ts_rank(close,\
+      \ 10)\n    df = df.with_columns(\n        ts_rank(pl.col('close'), window=10).alias('_ts_rank_close')\n\
+      \    )\n    # Materialize delta(delta(close, 1), 1)\n    df = df.with_columns(\n\
+      \        delta(delta(pl.col('close'), periods=1), periods=1).alias('_delta2_close')\n\
+      \    )\n    # Materialize adv20 (rolling mean of volume)\n    df = df.with_columns(\n\
+      \        rolling_mean(pl.col('volume'), window=20).alias('_adv20')\n    )\n\
+      \    # Materialize ts_rank(volume / adv20, 5)\n    df = df.with_columns(\n \
+      \       ts_rank(pl.col('volume') / pl.col('_adv20'), window=5).alias('_ts_rank_vol')\n\
+      \    )\n\n    # Cross-sectional ranks applied to materialized columns\n    part1\
+      \ = -1 * rank(pl.col('_ts_rank_close')).over('date')\n    part2 = rank(pl.col('_delta2_close')).over('date')\n\
+      \    part3 = rank(pl.col('_ts_rank_vol')).over('date')\n\n    factor = part1\
+      \ * part2 * part3\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 779
+    code_chars: 963
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_017.h5
     ast: null
     ast_compile_status: null
@@ -47,16 +49,16 @@ factor:
       status: 通过
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.019700407786963265
-      icir: 0.12514732623669625
-      winrate: 0.559322033898305
+      ic_mean: 0.01905123844731134
+      icir: 0.13893336021376812
+      winrate: 0.5254237288135594
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.00017529893028145338
+      annual_return: 5.748003850403194e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.01882346919965661
-      validated_at: 1782144501.9199028
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.02643590504064722
+      validated_at: 1782306098.8783545
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

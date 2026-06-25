@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (-1 * correlation(rank(delta(log(volume), 2)), rank(((close - open)
       / open)), 6))
@@ -23,16 +23,20 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # 1. delta of log(volume)\
-      \ with period 2\n    log_vol = pl.col('volume').log()\n    delta_log_vol = delta(log_vol,\
-      \ periods=2)\n\n    # 2. cross-section rank of delta_log_vol\n    rank1 = rank(delta_log_vol).over('date')\n\
-      \n    # 3. (close - open) / open\n    price_change = (pl.col('close') - pl.col('open'))\
-      \ / pl.col('open')\n\n    # 4. cross-section rank of price change\n    rank2\
-      \ = rank(price_change).over('date')\n\n    # 5. 6-period rolling correlation\
-      \ between the two ranked series\n    corr = correlation(rank1, rank2, window=6)\n\
-      \n    # 6. negate\n    factor = -1 * corr\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: log(volume)\n\
+      \    log_vol = pl.col('volume').log()\n    # Step 2: delta(log(volume), 2)\n\
+      \    delta_log_vol = delta(log_vol, periods=2)\n    # Step 3: cross-sectional\
+      \ rank of delta\n    rank_delta = rank(delta_log_vol).over('date')\n    \n \
+      \   # Step 4: (close - open) / open\n    co_open = (pl.col('close') - pl.col('open'))\
+      \ / pl.col('open')\n    # Step 5: cross-sectional rank of that\n    rank_co\
+      \ = rank(co_open).over('date')\n    \n    # Materialize ranks first\n    df\
+      \ = df.with_columns([\n        rank_delta.alias('_rank_delta'),\n        rank_co.alias('_rank_co')\n\
+      \    ])\n    \n    # Step 6: rolling correlation with window 6 (materialize\
+      \ rolling result)\n    df = df.with_columns(\n        correlation(pl.col('_rank_delta'),\
+      \ pl.col('_rank_co'), window=6).alias('_corr')\n    )\n    \n    # Step 7: multiply\
+      \ by -1\n    factor = -1 * pl.col('_corr')\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 658
+    code_chars: 940
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_002.h5
     ast: null
     ast_compile_status: null
@@ -52,8 +56,8 @@ factor:
       annual_return: 0.00018280447259955146
       longshort_sharpe: null
       longshort_max_dd: -0.019127186707011416
-      validated_at: 1782144142.8185308
-    validation_date: '2026-06-23'
+      validated_at: 1782305741.60475
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

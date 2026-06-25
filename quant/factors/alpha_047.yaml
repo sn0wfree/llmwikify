@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: ((((rank((1 / close)) * volume) / adv20) * ((high * rank((high - close)))
       / (sum(high, 5) / 5))) - rank((vwap - delay(vwap, 5))))
@@ -25,21 +25,20 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Part 1: (rank(1/close)\
-      \ * volume) / adv20\n    inv_close = 1.0 / pl.col('close')\n    rank_inv_close\
-      \ = rank(inv_close).over('date')\n    part1_inner = rank_inv_close * pl.col('volume')\n\
-      \    adv20 = rolling_mean(pl.col('volume'), window=20)\n    part1 = part1_inner\
-      \ / adv20\n    \n    # Part 2: (high * rank(high - close)) / (sum(high, 5) /\
-      \ 5)\n    high_close_diff = pl.col('high') - pl.col('close')\n    rank_hcd =\
-      \ rank(high_close_diff).over('date')\n    high_rank = pl.col('high') * rank_hcd\n\
-      \    sum_high_5 = rolling_mean(pl.col('high'), window=5)  # sum(high, 5) / 5\n\
-      \    part2 = high_rank / sum_high_5\n    \n    # Combined first part\n    combined\
-      \ = part1 * part2\n    \n    # Part 3: rank(vwap - delay(vwap, 5))\n    vwap_delay\
-      \ = delay(pl.col('vwap'), periods=5)\n    vwap_diff = pl.col('vwap') - vwap_delay\n\
-      \    rank_vwap = rank(vwap_diff).over('date')\n    \n    # Final\n    factor\
-      \ = combined - rank_vwap\n    \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize rolling/lag\
+      \ columns first (Rule 2)\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+      \ window=20).alias('_adv20')\n    )\n    df = df.with_columns(\n        rolling_mean(pl.col('high'),\
+      \ window=5).alias('_high5')\n    )\n    df = df.with_columns(\n        delay(pl.col('vwap'),\
+      \ periods=5).alias('_vwap_lag5')\n    )\n    \n    # Cross-sectional ranks (need\
+      \ .over('date'))\n    r1 = rank(1 / pl.col('close')).over('date')\n    r2 =\
+      \ rank(pl.col('high') - pl.col('close')).over('date')\n    \n    # (rank(1/close)\
+      \ * volume) / adv20\n    part1 = (r1 * pl.col('volume')) / pl.col('_adv20')\n\
+      \    \n    # (high * rank(high - close)) / (sum(high,5)/5)\n    part2 = (pl.col('high')\
+      \ * r2) / pl.col('_high5')\n    \n    inner = part1 * part2\n    \n    # rank(vwap\
+      \ - delay(vwap, 5))\n    rank_lag = rank(pl.col('vwap') - pl.col('_vwap_lag5')).over('date')\n\
+      \    \n    factor = inner - rank_lag\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 992
+    code_chars: 979
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_047.h5
     ast: null
     ast_compile_status: null
@@ -47,20 +46,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 51
+      score: 54
       status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.0029211413821016827
-      icir: 0.018905345826309868
-      winrate: 0.5084745762711864
+      ic_mean: 0.007693423808241174
+      icir: 0.05450328661610103
+      winrate: 0.559322033898305
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.0001816613897909214
+      annual_return: 0.00010813549526189625
       longshort_sharpe: null
-      longshort_max_dd: -0.026827086366780797
-      validated_at: 1782146053.6670973
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.02345907984790144
+      validated_at: 1782306953.0297306
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

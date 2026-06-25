@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: ((close - open) / ((high - low) + .001))
     formula: ((close - open) / ((high - low) + .001))
@@ -45,8 +45,8 @@ factor:
       annual_return: -0.0004432015250135368
       longshort_sharpe: null
       longshort_max_dd: -0.05006468054445161
-      validated_at: 1782175292.8842003
-    validation_date: '2026-06-23'
+      validated_at: 1782353456.3778248
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1

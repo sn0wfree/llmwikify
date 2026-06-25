@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: '(((sum(high, 20) / 20) < high) ? (-1 * delta(high, 2)) : 0)'
     formula: '(((sum(high, 20) / 20) < high) ? (-1 * delta(high, 2)) : 0)'
@@ -21,14 +21,14 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Rolling mean\
-      \ of high over 20 days\n    high_mean = rolling_mean(pl.col('high'), window=20)\n\
-      \n    # 2-period delta of high\n    high_delta = delta(pl.col('high'), periods=2)\n\
-      \n    # Conditional: if rolling_mean(high, 20) < high, then -delta(high, 2),\
-      \ else 0\n    factor = pl.when(high_mean < pl.col('high')).then(-high_delta).otherwise(0)\n\
-      \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize rolling\
+      \ mean of high first (Rule 2)\n    df = df.with_columns(rolling_mean(pl.col('high'),\
+      \ window=20).alias('_mean_high'))\n    # If rolling mean < high, return -1 *\
+      \ delta(high, 2), else 0\n    factor = pl.when(pl.col('_mean_high') < pl.col('high'))\
+      \ \\\n              .then(-1 * delta(pl.col('high'), periods=2)) \\\n      \
+      \        .otherwise(0)\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 431
+    code_chars: 447
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_023.h5
     ast: null
     ast_compile_status: null
@@ -48,8 +48,8 @@ factor:
       annual_return: 0.0007231350211496235
       longshort_sharpe: null
       longshort_max_dd: -0.016314480067189406
-      validated_at: 1782144635.1664975
-    validation_date: '2026-06-23'
+      validated_at: 1782306248.5730646
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

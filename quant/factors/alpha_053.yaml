@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-24'
   l1:
     definition: (-1 * delta((((close - low) - (high - close)) / (close - low)), 9))
     formula: (-1 * delta((((close - low) - (high - close)) / (close - low)), 9))
@@ -21,14 +21,12 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Inner expression:\
-      \ ((close - low) - (high - close)) / (close - low)\n    close = pl.col('close')\n\
-      \    low = pl.col('low')\n    high = pl.col('high')\n\n    numerator = (close\
-      \ - low) - (high - close)\n    denominator = close - low\n    inner = numerator\
-      \ / denominator\n\n    # Apply delta with periods=9\n    d = delta(inner, periods=9)\n\
-      \n    # Multiply by -1\n    factor = -1 * d\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    inner = ((pl.col('close')\
+      \ - pl.col('low')) - (pl.col('high') - pl.col('close'))) / (pl.col('close')\
+      \ - pl.col('low'))\n    df = df.with_columns(delta(inner, periods=9).alias('_delta'))\n\
+      \    factor = -1 * pl.col('_delta')\n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 465
+    code_chars: 313
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_053.h5
     ast: null
     ast_compile_status: null
@@ -48,8 +46,8 @@ factor:
       annual_return: -5.5282660021194197e-05
       longshort_sharpe: null
       longshort_max_dd: -0.02469951213909271
-      validated_at: 1782146207.5231946
-    validation_date: '2026-06-23'
+      validated_at: 1782307531.8134758
+    validation_date: '2026-06-24'
   l2:
     calculation_steps:
     - step: 1

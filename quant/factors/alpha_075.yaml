@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: (rank(correlation(vwap, volume, 4.24304)) < rank(correlation(rank(low),
       rank(adv50), 12.4413)))
@@ -25,20 +25,22 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv50: 50-day\
-      \ rolling mean of volume (per code, since df is already sorted by code,date)\n\
-      \    adv50 = rolling_mean(pl.col('volume'), window=50)\n\n    # First rolling\
-      \ correlation: vwap vs volume, window ~ 4.24304\n    corr1 = rolling_corr(pl.col('vwap'),\
-      \ pl.col('volume'), window=4)\n\n    # Cross-sectional rank of corr1 (per date)\n\
-      \    rank1 = rank(corr1).over('date')\n\n    # Cross-sectional ranks of low\
-      \ and adv50 (per date)\n    rank_low = rank(pl.col('low')).over('date')\n  \
-      \  rank_adv50 = rank(adv50).over('date')\n\n    # Second rolling correlation:\
-      \ rank(low) vs rank(adv50), window ~ 12.4413\n    corr2 = rolling_corr(rank_low,\
-      \ rank_adv50, window=12)\n\n    # Cross-sectional rank of corr2 (per date)\n\
-      \    rank2 = rank(corr2).over('date')\n\n    # Boolean comparison: rank1 < rank2\n\
-      \    factor = rank1 < rank2\n\n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv50 = average\
+      \ daily volume over 50 days\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+      \ window=50).alias('_adv50'))\n    \n    # First correlation: vwap vs volume,\
+      \ window=4 (rounded from 4.24304)\n    df = df.with_columns(\n        correlation(pl.col('vwap'),\
+      \ pl.col('volume'), window=4).alias('_corr1')\n    )\n    \n    # Materialize\
+      \ rank(low) and rank(adv50) cross-sectionally\n    df = df.with_columns(rank(pl.col('low')).over('date').alias('_rank_low'))\n\
+      \    df = df.with_columns(rank(pl.col('_adv50')).over('date').alias('_rank_adv50'))\n\
+      \    \n    # Second correlation: rank(low) vs rank(adv50), window=12 (rounded\
+      \ from 12.4413)\n    df = df.with_columns(\n        correlation(pl.col('_rank_low'),\
+      \ pl.col('_rank_adv50'), window=12).alias('_corr2')\n    )\n    \n    # Rank\
+      \ both correlation series cross-sectionally\n    df = df.with_columns(rank(pl.col('_corr1')).over('date').alias('_rank_corr1'))\n\
+      \    df = df.with_columns(rank(pl.col('_corr2')).over('date').alias('_rank_corr2'))\n\
+      \    \n    # Compare the two ranked correlations\n    factor = pl.when(pl.col('_rank_corr1')\
+      \ < pl.col('_rank_corr2')).then(1).otherwise(0)\n    \n    return df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 898
+    code_chars: 1219
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_075.h5
     ast: null
     ast_compile_status: null
@@ -46,20 +48,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 56
+      score: 59
       status: 通过
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.04064360833981485
-      icir: 0.162582860830995
-      winrate: 0.5254237288135594
+      ic_mean: 0.03208506161509595
+      icir: 0.2079845838603339
+      winrate: 0.576271186440678
       rank_ic_mean: null
       rank_icir: null
-      annual_return: -8.53995508481864e-05
+      annual_return: 0.00012402246420251117
       longshort_sharpe: null
-      longshort_max_dd: -0.0374246486686722
-      validated_at: 1782150332.5366948
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.016496817219592997
+      validated_at: 1782350080.4522493
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1

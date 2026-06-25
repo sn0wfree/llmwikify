@@ -3,7 +3,7 @@ factor:
   asset_type: stock
   category: formulaic
   status: 已验证
-  updated_at: '2026-06-23'
+  updated_at: '2026-06-25'
   l1:
     definition: (max(Ts_Rank(decay_linear(correlation(rank(vwap), rank(volume), 3.83878),
       4.16783), 8.38151), Ts_Rank(decay_linear(Ts_ArgMax(correlation(Ts_Rank(close,
@@ -28,25 +28,29 @@ factor:
     param_constraints: {}
     business_constraints: 支持日频调仓, T+1 信号
   l5:
-    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: compute\
-      \ adv60 and basic ranks\n    df = df.with_columns(\n        adv60=rolling_mean(pl.col('volume'),\
-      \ window=60),\n        rank_vwap=rank(pl.col('vwap')).over('date'),\n      \
-      \  rank_volume=rank(pl.col('volume')).over('date'),\n    )\n    \n    # Step\
-      \ 2: First branch - correlation of ranks\n    df = df.with_columns(\n      \
-      \  corr1=rolling_corr(pl.col('rank_vwap'), pl.col('rank_volume'), window=4)\n\
-      \    )\n    df = df.with_columns(\n        decay1=decay_linear(pl.col('corr1'),\
-      \ 4)\n    )\n    df = df.with_columns(\n        ts_rank1=ts_rank(pl.col('decay1'),\
-      \ 8)\n    )\n    \n    # Step 3: Second branch - ts_rank of close and adv60\n\
-      \    df = df.with_columns(\n        ts_rank_close=ts_rank(pl.col('close'), 7),\n\
-      \        ts_rank_adv60=ts_rank(pl.col('adv60'), 4),\n    )\n    df = df.with_columns(\n\
-      \        corr2=rolling_corr(pl.col('ts_rank_close'), pl.col('ts_rank_adv60'),\
-      \ window=4)\n    )\n    df = df.with_columns(\n        ts_argmax2=ts_argmax(pl.col('corr2'),\
-      \ 13)\n    )\n    df = df.with_columns(\n        decay2=decay_linear(pl.col('ts_argmax2'),\
-      \ 14),\n        ts_rank2=ts_rank(pl.col('ts_argmax2'), 13)\n    )\n    \n  \
-      \  # Final: max(...) * -1\n    factor = pl.max_horizontal(pl.col('ts_rank1'),\
-      \ pl.col('ts_rank2')) * -1\n    \n    return df.select(factor).to_series()"
+    code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv60 = average\
+      \ daily volume over 60 days\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+      \ window=60).alias('_adv60')\n    )\n\n    # Cross-sectional ranks (materialized\
+      \ before correlation per Rule 2)\n    df = df.with_columns(\n        rank(pl.col('vwap')).over('date').alias('_rank_vwap'),\n\
+      \        rank(pl.col('volume')).over('date').alias('_rank_volume'),\n    )\n\
+      \n    # Part 1: Ts_Rank(decay_linear(correlation(rank(vwap), rank(volume), 3.83878),\
+      \ 4.16783), 8.38151)\n    df = df.with_columns(\n        correlation(pl.col('_rank_vwap'),\
+      \ pl.col('_rank_volume'), window=4).alias('_corr1')\n    )\n    df = df.with_columns(\n\
+      \        decay_linear(pl.col('_corr1'), window=4).alias('_decay1')\n    )\n\
+      \    df = df.with_columns(\n        ts_rank(pl.col('_decay1'), window=8).alias('_tsrank1')\n\
+      \    )\n\n    # Part 2: Ts_Rank(decay_linear(Ts_ArgMax(correlation(Ts_Rank(close,\
+      \ 7.45404), Ts_Rank(adv60, 4.13242), 3.65459), 12.6556), 14.0365), 13.4143)\n\
+      \    df = df.with_columns(\n        ts_rank(pl.col('close'), window=7).alias('_tsrank_close'),\n\
+      \        ts_rank(pl.col('_adv60'), window=4).alias('_tsrank_adv60'),\n    )\n\
+      \    df = df.with_columns(\n        correlation(pl.col('_tsrank_close'), pl.col('_tsrank_adv60'),\
+      \ window=4).alias('_corr2')\n    )\n    df = df.with_columns(\n        ts_argmax(pl.col('_corr2'),\
+      \ window=13).alias('_argmax1')\n    )\n    df = df.with_columns(\n        decay_linear(pl.col('_argmax1'),\
+      \ window=14).alias('_decay2')\n    )\n    df = df.with_columns(\n        ts_rank(pl.col('_decay2'),\
+      \ window=13).alias('_tsrank2')\n    )\n\n    # max(part1, part2) * -1\n    factor\
+      \ = pl.max_horizontal(pl.col('_tsrank1'), pl.col('_tsrank2')) * -1\n\n    return\
+      \ df.select(factor).to_series()"
     code_compile_status: success
-    code_chars: 1308
+    code_chars: 1736
     h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_096.h5
     ast: null
     ast_compile_status: null
@@ -54,20 +58,20 @@ factor:
     ast_compile_source: null
     ast_compile_error: null
     overall_assessment:
-      score: 64
-      status: 通过
+      score: 48
+      status: 待更新
       pass_threshold: 60
       final_meaning: ''
-      ic_mean: 0.03859836729078309
-      icir: 0.32555151630825185
-      winrate: 0.576271186440678
+      ic_mean: -0.005239506640681287
+      icir: -0.03764198864233903
+      winrate: 0.4745762711864407
       rank_ic_mean: null
       rank_icir: null
-      annual_return: 0.00020287752713099572
+      annual_return: -8.154966968521027e-05
       longshort_sharpe: null
-      longshort_max_dd: -0.015589696750857678
-      validated_at: 1782174587.5453844
-    validation_date: '2026-06-23'
+      longshort_max_dd: -0.04845842142637815
+      validated_at: 1782352291.0486798
+    validation_date: '2026-06-25'
   l2:
     calculation_steps:
     - step: 1
