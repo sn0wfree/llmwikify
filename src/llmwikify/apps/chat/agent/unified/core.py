@@ -205,7 +205,10 @@ class UnifiedContext:
     tools_used: list[str] = field(default_factory=list)
     steps: list[dict[str, Any]] = field(default_factory=list)
     compacted_count: int = 0
+    total_compacted_chars_saved: int = 0
+    usage: dict[str, Any] = field(default_factory=dict)
     last_output: Any = None
+    last_act_result: Any = None
 
     def __post_init__(self) -> None:
         # 延迟导入避免循环依赖

@@ -12,10 +12,12 @@ from typing import Any
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import StepResult
+from llmwikify.apps.chat.agent.unified.core import StepHandler, StepResult, UnifiedHook
 from llmwikify.apps.chat.agent.unified.handlers.chat_reasoner import ChatReasoner
 from llmwikify.apps.chat.agent.unified.handlers.tool_actor import ToolActor
+from llmwikify.apps.chat.agent.unified.loop import UnifiedAgentLoop
 from llmwikify.apps.chat.agent.unified.spec import ActResult, ChatSpec, ReasonResponse
+from llmwikify.apps.chat.agent.unified.steps import CheckEmptyStep
 
 
 # ── Mock services ─────────────────────────────────────────
@@ -46,6 +48,29 @@ class _StubExecutor:
         if tool_name in self.results:
             return self.results[tool_name]
         return {"status": "ok", "tool": tool_name}
+
+
+class _MockChatReasoner(StepHandler):
+    """Mock reasoner that returns pre-built ReasonResponses."""
+    def __init__(self, responses: list[ReasonResponse]) -> None:
+        self._responses = list(responses)
+        self._call_count = 0
+
+    async def handle(self, input, spec, ctx):
+        if self._call_count < len(self._responses):
+            resp = self._responses[self._call_count]
+            self._call_count += 1
+            return StepResult.ok(resp)
+        return StepResult.ok(ReasonResponse(tool_calls=[]))
+
+
+class _MockToolActor(StepHandler):
+    """Mock actor that returns success ActResult."""
+    async def handle(self, input, spec, ctx):
+        return StepResult.ok(ActResult(
+            success=True, output="ok",
+            messages_to_inject=[{"role": "tool", "content": "ok"}],
+        ))
 
 
 # ── ChatReasoner tests ────────────────────────────────────
@@ -302,3 +327,155 @@ async def test_tool_actor_tool_message_format():
     assert msg["name"] == "wiki_read"
     assert msg["tool_call_id"] == "call_abc123"
     assert isinstance(msg["content"], str)
+
+
+# ─── SESSION_INIT 事件 ──────────────────────────────────────────
+
+
+class _WantsStreamingHook(UnifiedHook):
+    def wants_streaming(self) -> bool:
+        return True
+
+
+@pytest.mark.asyncio
+async def test_loop_yields_session_init():
+    """Loop yields SESSION_INIT event when hook wants_streaming."""
+    reasoner = _MockChatReasoner(responses=[])
+    actor = _MockToolActor()
+    loop = UnifiedAgentLoop(
+        reasoner=reasoner, actor=actor,
+        deciders={"after_reason": CheckEmptyStep("tool_calls", "no_tool_calls")},
+        hook=_WantsStreamingHook(),
+    )
+    spec = ChatSpec(messages=[{"role": "user", "content": "hi"}], session_id="s123")
+    events = []
+    async for event in loop.run_stream(spec):
+        events.append(event)
+
+    session_inits = [e for e in events if e.get("type") == "session_init"]
+    assert len(session_inits) == 1
+    assert session_inits[0]["session_id"] == "s123"
+
+
+# ─── assistant tool_calls 注入 ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_loop_injects_assistant_tool_calls():
+    """Loop injects assistant message with tool_calls array after REASON."""
+    reasoner = _MockChatReasoner(responses=[
+        ReasonResponse(
+            raw_content="I'll read the file",
+            tool_calls=[{"id": "call_0", "name": "read_file", "arguments": '{"path": "/tmp"}'}],
+        ),
+    ])
+    actor = _MockToolActor()
+    loop = UnifiedAgentLoop(
+        reasoner=reasoner, actor=actor,
+        deciders={"after_reason": CheckEmptyStep("tool_calls", "no_tool_calls")},
+    )
+    spec = ChatSpec(messages=[{"role": "user", "content": "read"}])
+    result = await loop.run_to_completion(spec)
+
+    # Messages should contain the assistant message with tool_calls
+    assistant_msgs = [m for m in result.messages if m.get("role") == "assistant" and m.get("tool_calls")]
+    assert len(assistant_msgs) >= 1
+    assert assistant_msgs[0]["tool_calls"][0]["id"] == "call_0"
+    assert assistant_msgs[0]["tool_calls"][0]["function"]["name"] == "read_file"
+
+
+# ─── cancelled / paused ──────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_loop_cancelled():
+    """Loop stops when spec.cancelled is True."""
+    reasoner = _MockChatReasoner(responses=[])
+    actor = _MockToolActor()
+    loop = UnifiedAgentLoop(reasoner=reasoner, actor=actor)
+    spec = ChatSpec(messages=[{"role": "user", "content": "hi"}], cancelled=True)
+    result = await loop.run_to_completion(spec)
+    assert result.stop_reason == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_loop_paused():
+    """Loop stops when spec.paused is True."""
+    reasoner = _MockChatReasoner(responses=[])
+    actor = _MockToolActor()
+    loop = UnifiedAgentLoop(reasoner=reasoner, actor=actor)
+    spec = ChatSpec(messages=[{"role": "user", "content": "hi"}], paused=True)
+    result = await loop.run_to_completion(spec)
+    assert result.stop_reason == "paused"
+
+
+# ─── tools_used 累积 ─────────────────────────────────────────────
+
+
+class _ToolNameActor(_MockToolActor):
+    """Mock actor that sets tool_name on ActResult."""
+    async def handle(self, input, spec, ctx):
+        return StepResult.ok(ActResult(
+            success=True,
+            output="ok",
+            tool_name="read_file",
+            messages_to_inject=[{"role": "tool", "content": "ok", "tool_call_id": "c0", "name": "read_file"}],
+        ))
+
+
+@pytest.mark.asyncio
+async def test_loop_tools_used_accumulated():
+    """Loop accumulates tools_used from actor results."""
+    reasoner = _MockChatReasoner(responses=[
+        ReasonResponse(tool_calls=[{"id": "c0", "name": "read_file", "arguments": "{}"}]),
+    ])
+    loop = UnifiedAgentLoop(
+        reasoner=reasoner, actor=_ToolNameActor(),
+        deciders={"after_reason": CheckEmptyStep("tool_calls", "no_tool_calls")},
+    )
+    spec = ChatSpec(messages=[{"role": "user", "content": "read"}])
+    result = await loop.run_to_completion(spec)
+    assert "read_file" in result.tools_used
+
+
+# ─── ChatSpec 新字段 ──────────────────────────────────────────────
+
+
+def test_chat_spec_has_missing_fields():
+    """ChatSpec has all fields needed for ChatRunSpec compatibility."""
+    spec = ChatSpec(
+        messages=[],
+        model="gpt-4o",
+        max_tokens=4096,
+        reasoning_effort="high",
+        max_tool_result_chars=10000,
+        fail_on_tool_error=True,
+        context_window_tokens=128000,
+        cancelled=False,
+        paused=False,
+        memory_manager=None,
+    )
+    assert spec.model == "gpt-4o"
+    assert spec.max_tokens == 4096
+    assert spec.reasoning_effort == "high"
+    assert spec.max_tool_result_chars == 10000
+    assert spec.fail_on_tool_error is True
+    assert spec.context_window_tokens == 128000
+    assert spec.cancelled is False
+    assert spec.paused is False
+
+
+# ─── UnifiedResult 新字段 ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_result_has_messages():
+    """UnifiedResult.messages is populated from ctx.messages."""
+    reasoner = _MockChatReasoner(responses=[])
+    actor = _MockToolActor()
+    loop = UnifiedAgentLoop(reasoner=reasoner, actor=actor)
+    spec = ChatSpec(messages=[{"role": "user", "content": "hi"}])
+    result = await loop.run_to_completion(spec)
+    assert isinstance(result.messages, list)
+    assert len(result.messages) >= 1
+    assert result.messages[0]["role"] == "user"

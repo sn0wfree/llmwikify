@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from llmwikify.apps.chat.agent.unified.core import StepHandler, StreamingHandler, UnifiedHook
-from llmwikify.apps.chat.agent.unified.spec import BaseSpec
+from llmwikify.apps.chat.agent.unified.spec import BaseSpec, ChatSpec
 
 
 @dataclass
@@ -143,7 +143,7 @@ def _register_chat_mode() -> None:
 
         register_mode(AgentModeConfig(
             name="chat",
-            spec_cls=BaseSpec,  # ChatSpec 在 handlers/chat_reasoner.py 中定义后更新
+            spec_cls=ChatSpec,
             reasoner=_make_chat_reasoner,
             actor=_make_tool_actor,
             deciders={"after_reason": CheckEmptyStep("tool_calls", "no_tool_calls")},

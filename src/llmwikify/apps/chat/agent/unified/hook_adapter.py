@@ -83,8 +83,8 @@ class AgentHookAdapter(UnifiedHook):
         return AgentHookContext(
             iteration=ctx.iteration,
             messages=ctx.messages,
-            response=None,
-            usage={},
+            response=ctx.last_output,
+            usage=dict(ctx.usage),
             tool_calls=[],
             tool_results=[],
             tool_events=[],
@@ -94,8 +94,8 @@ class AgentHookAdapter(UnifiedHook):
             stop_reason=ctx.stop_reason,
             error=ctx.error,
             observations=[],
-            cancelled=False,
-            paused=False,
+            cancelled=getattr(ctx.spec, "cancelled", False),
+            paused=getattr(ctx.spec, "paused", False),
             compacted_count=ctx.compacted_count,
-            chars_saved=0,
+            chars_saved=ctx.total_compacted_chars_saved,
         )

@@ -64,13 +64,28 @@ class UnifiedAgentLoop:
         ctx = UnifiedContext(spec=spec)
         spec._last_ctx = ctx  # 让 run_to_completion 能访问 ctx
 
+        # ── SESSION_INIT（Chat 流式模式）──
+        if self._hook.wants_streaming():
+            session_id = getattr(spec, "session_id", "")
+            yield {"type": "session_init", "session_id": session_id}
+
         try:
             for iteration in range(spec.max_iterations):
                 ctx.iteration = iteration
 
-                # ── PRECHECK ──
+                # ── PRECHECK（含 cancel/pause 检查）──
                 if self._precheck and self._precheck(ctx):
                     yield {"type": "phase", "phase": ctx.stop_reason or "timeout"}
+                    break
+
+                # 额外检查 cancelled/paused（ChatSpec 字段）
+                if getattr(spec, "cancelled", False):
+                    ctx.stop_reason = "cancelled"
+                    yield {"type": "phase", "phase": "cancelled"}
+                    break
+                if getattr(spec, "paused", False):
+                    ctx.stop_reason = "paused"
+                    yield {"type": "phase", "phase": "paused"}
                     break
 
                 await _maybe_await(self._hook.before_iteration, ctx)
@@ -119,6 +134,26 @@ class UnifiedAgentLoop:
                         ctx.stop_reason = reason
                         break
 
+                # ── assistant tool_calls 注入（Chat 多轮必需）──
+                tool_calls = getattr(response, "tool_calls", None)
+                if tool_calls:
+                    assistant_msg: dict[str, Any] = {
+                        "role": "assistant",
+                        "content": getattr(response, "raw_content", "") or "",
+                        "tool_calls": [
+                            {
+                                "id": tc.get("id", f"call_{iteration}_{i}"),
+                                "type": "function",
+                                "function": {
+                                    "name": tc.get("name", ""),
+                                    "arguments": tc.get("arguments", "{}"),
+                                },
+                            }
+                            for i, tc in enumerate(tool_calls)
+                        ],
+                    }
+                    ctx.messages.append(assistant_msg)
+
                 # ── ACT ──
                 await _maybe_await(self._hook.on_act_start, ctx)
                 result = None
@@ -156,6 +191,11 @@ class UnifiedAgentLoop:
                 ctx.last_act_result = result
                 await _maybe_await(self._hook.on_act_end, ctx, result)
 
+                # ── tools_used 累积 ──
+                tool_name = getattr(result, "tool_name", "")
+                if tool_name:
+                    ctx.tools_used.append(tool_name)
+
                 if result.needs_confirmation:
                     ctx.stop_reason = "confirmation_required"
                     yield {"type": "confirmation_required"}
@@ -182,6 +222,14 @@ class UnifiedAgentLoop:
                     if stop:
                         ctx.stop_reason = reason
                         break
+
+                # ── memory consolidation（Chat 用）──
+                memory_mgr = getattr(spec, "memory_manager", None)
+                if memory_mgr and hasattr(memory_mgr, "consolidate_session"):
+                    try:
+                        await _maybe_await(memory_mgr.consolidate_session)
+                    except Exception as exc:
+                        logger.warning("Memory consolidation failed: %s", exc)
 
                 await _maybe_await(self._hook.after_iteration, ctx)
 
@@ -210,7 +258,6 @@ class UnifiedAgentLoop:
     async def run_to_completion(self, spec: BaseSpec) -> UnifiedResult:
         """drain run_stream，构建 UnifiedResult。"""
         result = UnifiedResult()
-        ctx_ref = None
         async for event in self.run_stream(spec):
             kind = event.get("type")
             if kind == "done":
@@ -223,16 +270,22 @@ class UnifiedAgentLoop:
                 result.error = event.get("message")
                 result.stop_reason = "error"
 
-        # 从 last_act_result 提取 code / factor_series
-        # run_stream 内部的 ctx 已被 GC，但 last_act_result 在 break 前已赋值
-        # 需要重新获取 — 通过检查 spec 的 _last_ctx 属性（run_stream 设置）
+        # 从 ctx 提取累积数据
         if hasattr(spec, "_last_ctx"):
-            last_act = getattr(spec._last_ctx, "last_act_result", None)
+            ctx = spec._last_ctx
+            # codegen: code / factor_series
+            last_act = getattr(ctx, "last_act_result", None)
             if last_act is not None:
                 if hasattr(last_act, "code") and last_act.code:
                     result.code = last_act.code
                 if hasattr(last_act, "output") and last_act.output is not None:
                     result.factor_series = last_act.output
+            # chat: messages / tools_used / compacted_count / usage
+            result.messages = list(ctx.messages)
+            result.tools_used = list(ctx.tools_used)
+            result.compacted_count = ctx.compacted_count
+            result.total_compacted_chars_saved = ctx.total_compacted_chars_saved
+            result.usage = dict(ctx.usage)
 
         return result
 

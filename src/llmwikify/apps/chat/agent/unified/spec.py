@@ -46,6 +46,19 @@ class ChatSpec(BaseSpec):
     hook: Any | None = None  # AgentHook
     goal_active_predicate: Callable[[], bool] | None = None
 
+    # ── 对齐 ChatRunSpec 的缺失字段 ──
+    model: str = ""
+    max_tokens: int = 0
+    reasoning_effort: str = ""
+    max_tool_result_chars: int = 0
+    fail_on_tool_error: bool = False
+    progress_callback: Callable[[dict[str, Any]], None] | None = None
+    context_window_tokens: int = 0
+    _compacted_results: dict[str, Any] = field(default_factory=dict)
+    memory_manager: Any | None = None
+    cancelled: bool = False
+    paused: bool = False
+
 
 @dataclass
 class CodegenSpec(BaseSpec):
@@ -128,10 +141,13 @@ class UnifiedResult:
     error: str | None = None
     iterations: int = 0
     tools_used: list[str] = field(default_factory=list)
+    messages: list[dict[str, Any]] = field(default_factory=list)
     steps: list[dict[str, Any]] = field(default_factory=list)
     state_trace: list[dict[str, Any]] = field(default_factory=list)
     elapsed_sec: float = 0.0
     compacted_count: int = 0
+    total_compacted_chars_saved: int = 0
+    usage: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """序列化为 dict（兼容 ReactResult.to_dict() 接口）。"""
