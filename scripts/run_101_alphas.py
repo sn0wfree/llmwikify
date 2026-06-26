@@ -69,6 +69,7 @@ class RunConfig:
     max_repair_rounds: int = 3
     temperature: float = 0.3
     h5_filename: str = "stk_daily.h5"
+    factors_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "quant" / "factors")
 
     # ── 业务配置（参数化）──
     strategy_dir: str = "101_alphas"          # 输出子目录
@@ -613,7 +614,6 @@ def persist_code_to_yaml(
     """
     config = config or RunConfig()
     from llmwikify.reproduction.persist.factor_library import (
-        _get_factors_dir,
         read_factor_yaml,
         write_factor_yaml,
     )
@@ -625,8 +625,7 @@ def persist_code_to_yaml(
 
     try:
         # Ensure directory exists so write_factor_yaml uses directory format
-        from llmwikify.reproduction.persist.factor_library import _get_factors_dir
-        factors_dir = _get_factors_dir()
+        factors_dir = config.factors_dir
         (factors_dir / full_name).mkdir(parents=True, exist_ok=True)
 
         # Try reading existing YAML (by full_name first, then slug)
@@ -699,8 +698,7 @@ def persist_code_to_yaml(
         l5["validation_date"] = time.strftime("%Y-%m-%d")
 
         action = write_factor_yaml(full_name, data)
-        factors_dir = _get_factors_dir()
-        dir_path = factors_dir / full_name
+        dir_path = config.factors_dir / full_name
         print(f"[yaml] {action} (dir={dir_path})")
         return action, dir_path
     except Exception as exc:
@@ -901,12 +899,21 @@ def run_one_factor(
     # Save backtest + factor_values to per-factor DuckDB
     from llmwikify.reproduction.persist.factor_library import save_backtest_duckdb
     run_id = f"pipeline_a_{alpha_index:03d}"
-    factor_dir_name = factor_dir.name if factor_dir else slug
+    # 传完整相对路径（含 strategy_dir 前缀）以便 _resolve_factor_dir 定位
+    # project_root 需要是 quant/factors/ 的父目录的父目录（即包含 quant/ 的根目录）
+    if factor_dir:
+        factors_dir = config.factors_dir  # e.g., ~/Public/strategy/quant/factors
+        project_root = factors_dir.parent.parent  # e.g., ~/Public/strategy/
+        rel_path = str(factor_dir.relative_to(factors_dir))  # e.g., 101_alphas/stk_alpha_001_abc
+    else:
+        project_root = None
+        rel_path = slug
     save_backtest_duckdb(
-        factor_name=factor_dir_name,
+        factor_name=rel_path,
         run_id=run_id,
         backtest=backtest,
         factor_wide=factor_wide,
+        project_root=project_root,
     )
 
     elapsed = time.monotonic() - t0
@@ -1209,6 +1216,7 @@ def main() -> None:
     parser.add_argument("--hedge", type=str, default="equal", help="Hedge mode (default: equal)")
     parser.add_argument("--adj-mode", type=str, default="M-end", help="Adjustment mode (default: M-end)")
     parser.add_argument("--min-group-size", type=int, default=3, help="Minimum group size (default: 3)")
+    parser.add_argument("--factors-dir", type=Path, default=None, help="Base factors directory (default: <project>/quant/factors)")
     args = parser.parse_args()
 
     config = RunConfig(
@@ -1228,6 +1236,7 @@ def main() -> None:
         hedge=args.hedge,
         adj_mode=args.adj_mode,
         min_group_size=args.min_group_size,
+        factors_dir=args.factors_dir or PROJECT_ROOT / "quant" / "factors",
     )
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
