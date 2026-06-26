@@ -44,7 +44,7 @@ from llmwikify.reproduction.codegen.llm_code import (
 from llmwikify.apps.chat.agent.unified.core import UnifiedHook
 from CodersWheel.QuickTool.timer import timer
 from llmwikify.reproduction.pipeline.backtest_extract import safe_float, extract_full_backtest_from_ctx
-from llmwikify.reproduction.pipeline.data_loader import wide_from_long, write_factor_h5
+from llmwikify.reproduction.pipeline.data_loader import wide_from_long, write_factor_h5, derive_input_columns
 from llmwikify.reproduction.pipeline.score import compute_score, compute_status
 
 # ─── Constants ───────────────────────────────────────────────────────
@@ -137,37 +137,6 @@ def _build_wide_df(data_cache: dict[str, pd.DataFrame]) -> pl.DataFrame:
     return result.sort(["date", "code"])
 
 
-def _load_and_build_df(data_path: Path, h5_filename: str = "stk_daily.h5") -> pl.DataFrame:
-    """Fallback: load H5 data fresh and build long DataFrame (used when data_cache is None)."""
-    h5 = data_path / h5_filename
-    with pd.HDFStore(h5, "r") as _store:
-        _close_key = "close" if "/close" in _store.keys() else "cp"
-    cp_wide = pd.read_hdf(h5, _close_key)
-    open_wide = pd.read_hdf(h5, "open")
-    high_wide = pd.read_hdf(h5, "high")
-    low_wide = pd.read_hdf(h5, "low")
-    volume_wide = pd.read_hdf(h5, "volume")
-    returns_wide = pd.read_hdf(h5, "returns")
-    vwap_wide = pd.read_hdf(h5, "vwap")
-    id_citic1_wide = pd.read_hdf(h5, "id_citic1")
-
-    def wide_to_long(wide: pd.DataFrame, name: str) -> pl.DataFrame:
-        long = wide.stack().reset_index()
-        long.columns = ["date", "code", name]
-        return pl.from_pandas(long)
-
-    return (
-        wide_to_long(cp_wide, "close")
-        .join(wide_to_long(open_wide, "open"), on=["date", "code"])
-        .join(wide_to_long(high_wide, "high"), on=["date", "code"])
-        .join(wide_to_long(low_wide, "low"), on=["date", "code"])
-        .join(wide_to_long(volume_wide, "volume"), on=["date", "code"])
-        .join(wide_to_long(returns_wide, "returns"), on=["date", "code"])
-        .join(wide_to_long(vwap_wide, "vwap"), on=["date", "code"])
-        .join(wide_to_long(id_citic1_wide, "industry"), on=["date", "code"])
-        .sort(["date", "code"])
-    )
-
 
 # ─── Utility functions ──────────────────────────────────────────────
 
@@ -181,139 +150,12 @@ def _write_factor_h5(wide: pd.DataFrame, factor_name: str, output_dir: Path, h5_
 
 
 def _build_qn_config(factor_name: str, h5_path: Path, expression: str, config: RunConfig | None = None) -> dict:
-    """Build SingleFactorTestConfig-compatible dict for PipelineRunner.
-
-    Schema (from QuantNodes/research/factor_test/config.py):
-    - risk_corr.factors: str ('all' or comma-sep, NOT list)
-    - output.format: list[str] (NOT str)
-    - load_keys: list[str] (NOT None)
-
-    Convention (from quantnodes_repro.py):
-    - factor_dir is just the filename (PipelineRunner joins with data_path)
-    - factor H5 file must live in data_path directory
-    - factor.name is the H5 key (LoadDataNode uses this for store.get)
-    """
-    config = config or RunConfig()
-    # LoadDataNode uses factor.name (not factor_key) to look up the H5 key.
-    # We sanitize to alphanumeric+underscore so natural naming works.
-    safe_name = re.sub(r"[^A-Za-z0-9_]", "_", factor_name)
-    return {
-        "factor": {
-            "name": safe_name,
-            "factor_dir": h5_path.name,  # PipelineRunner joins with data_path
-            "factor_key": safe_name,
-            "format": "h5",
-            "hypothesis": "Test LLM-generated code via PipelineRunner",
-            "description": "alpha-001 via LLM code path",
-            "expression": expression[:500],
-        },
-        "data_path": str(h5_path.parent),
-        "load_keys": [
-            "stklist", "trade_dt", "cp", "id_citic1", "mv_float",
-            "st", "suspend", "ud_limit", "ipo_days",
-        ],
-        "preprocess": {
-            "adj_date_beg": config.date_beg,
-            "adj_date_end": config.date_end,
-            "adj_mode": [config.adj_mode.split("-")[0], config.adj_mode.split("-")[1]] if "-" in config.adj_mode else ["M", "end"],
-            "sample_index": config.sample_index,
-            "sample_industry": "all",
-            "tradable": {
-                "no_st": True,
-                "no_suspended": True,
-                "no_up_down_limit": False,
-                "min_ipo_days": 60,
-            },
-            "missing": "",
-            "extreme": "",
-            "norm": "",
-            "industry_neutral": False,
-            "risk_neutral": False,
-            "risk_factors": [],
-            "mad_n": 5.0,
-            "pct_low": 0.025,
-            "pct_high": 0.975,
-        },
-        "analysis": {
-            "ic": {"min_group_size": config.min_group_size},
-            "group": {
-                "groups": config.groups,
-                "factor_direction": config.factor_direction,
-                "floor_mode": "group",
-                "hedge": config.hedge,
-                "hedge_path": None,
-            },
-            "longshort": {"factor_direction": config.factor_direction},
-            "score": {"enabled": False},
-            "risk_corr": {"factors": "all"},
-        },
-        "output": {
-            "dir": str(config.report_dir),
-            "format": config.output_format,
-        },
-    }
+    """Build SingleFactorTestConfig-compatible dict for PipelineRunner (delegates to backtest_config)."""
+    from llmwikify.reproduction.pipeline.backtest_config import build_qn_config as _build_qn_base
+    return _build_qn_base(factor_name, h5_path, expression, config=config)
 
 
 # ─── LLM code generation ────────────────────────────────────────────
-
-
-def _llm_code_oneshot(
-    factor_name: str,
-    formula_brief: str,
-    df_pl: pl.DataFrame,
-    llm: Any,
-    temperature: float = 0.3,
-) -> tuple[str | None, pl.Series | None, str | None, int]:
-    """Old 1-shot path: single LLM call → extract → validate → execute.
-
-    Returns (code, factor_series, error, stage_idx) where stage_idx maps to
-    "llm" / "extract" / "syntax" / "safety" / "execute" / None on success.
-    Used by `--no-react` mode.
-    """
-    user_prompt = f"""Factor: {factor_name}
-Formula (pseudo-code): {formula_brief}
-
-Write a Python function `compute_factor(df: pl.DataFrame) -> pl.Series` that computes
-this factor. Use QuantNodes operators (rank, ts_argmax, rolling_std, etc.) which are
-in the namespace, and use polars expressions otherwise.
-
-Output ONLY the code block."""
-
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT_CODE},
-        {"role": "user", "content": user_prompt},
-    ]
-    try:
-        content = llm.chat(messages=messages, temperature=temperature)
-    except Exception as exc:
-        return None, None, f"{type(exc).__name__}: {exc}", -1
-
-    print(f"\n[LLM] raw response ({len(content)} chars):")
-    print(content[:500] + ("..." if len(content) > 500 else ""))
-
-    code = extract_python(content)
-    if not code:
-        return None, None, "no code fence", 0
-    print(f"\n[extract] code ({len(code)} chars):")
-    print(code)
-
-    syntax_ok, syntax_err = validate_syntax(code)
-    if not syntax_ok:
-        return None, None, syntax_err, 1
-    print("[syntax] OK")
-
-    safe_ok, safe_err = validate_safety(code)
-    if not safe_ok:
-        return None, None, safe_err, 2
-    print("[safety] OK")
-
-    try:
-        series = execute_code(code, df_pl)
-    except Exception as exc:
-        return None, None, f"{type(exc).__name__}: {exc}", 3
-    print(f"[execute] OK: factor_series len={len(series)}, dtype={series.dtype}")
-    print(f"[execute] sample: {series.head(5).to_list()}")
-    return code, series, None, None
 
 
 @timer
@@ -371,25 +213,6 @@ def _llm_code_react(
 
 
 
-def _derive_input_columns(formula_brief: str) -> list[str]:
-    """Extract input column names from formula_brief text.
-
-    Matches 101 alpha paper's common column tokens.
-    """
-    candidates = [
-        "open", "high", "low", "close", "volume", "adv20", "adv30", "adv40",
-        "adv50", "adv60", "adv81", "adv120", "adv150", "vwap", "returns",
-        "cap", "industry",
-    ]
-    text = formula_brief.lower()
-    found = [c for c in candidates if c in text]
-    # Always include base OHLCV if any price-like token present
-    if any(t in text for t in ["close", "open", "high", "low", "vwap", "returns"]):
-        for base in ["close", "open", "high", "low", "volume", "returns"]:
-            if base not in found:
-                found.append(base)
-    return found[:10]
-
 
 def _make_factor_dir_name(alpha_index: int, code: str) -> str:
     """Generate directory name: stk_alpha_{index:03d}_{md5(code)[:6]}."""
@@ -407,170 +230,14 @@ def persist_code_to_yaml(
     alpha_index: int = 0,
     config: RunConfig | None = None,
 ) -> tuple[str | None, Path | None]:
-    """Persist code-path factor YAML (6-layer) to quant/factors/.
-
-    Mirrors ``factor_compiler.persist_l5_to_yaml`` pattern:
-      read_factor_yaml → modify l5.* → write_factor_yaml → log.
-
-    WebUI L5 reads l5.overall_assessment.{score, status, pass_threshold, final_meaning}
-    (FactorDetail.tsx L5Content → OverallAssessment.tsx).
-    L2-L6 populated by Phase 3 LLM extraction (overwrites this default).
-
-    Returns:
-        (action, factor_dir_path) or (None, None) on failure.
-    """
+    """Persist code-path factor YAML (delegates to pipeline.persist)."""
+    from llmwikify.reproduction.pipeline.persist import persist_code_to_yaml as _persist
     config = config or RunConfig()
-    from llmwikify.reproduction.persist.factor_library import (
-        read_factor_yaml,
-        write_factor_yaml,
+    return _persist(
+        factor_name, code, formula_brief, backtest, h5_path, code_chars,
+        config=config,
+        alpha_index=alpha_index,
     )
-
-    slug = factor_name.replace("-", "_")
-    # Generate proper directory name with code hash
-    dir_name = _make_factor_dir_name(alpha_index, code) if alpha_index > 0 else slug
-    full_name = f"{config.strategy_dir}/{dir_name}" if config.strategy_dir and alpha_index > 0 else dir_name
-
-    try:
-        # Ensure directory exists so write_factor_yaml uses directory format
-        factors_dir = config.factors_dir
-        (factors_dir / full_name).mkdir(parents=True, exist_ok=True)
-
-        # Try reading existing YAML (by full_name first, then slug)
-        existing = read_factor_yaml(full_name)
-        if existing is None:
-            existing = read_factor_yaml(slug)
-        if existing is None:
-            data = {
-                "factor": {
-                    "name": slug,
-                    "asset_type": config.asset_type,
-                    "category": config.category,
-                    "status": "已验证",
-                }
-            }
-        else:
-            data = existing
-
-        factor = data.setdefault("factor", {})
-        factor["name"] = slug
-        factor["asset_type"] = factor.get("asset_type", config.asset_type)
-        factor["category"] = factor.get("category", config.category)
-        factor["status"] = "已验证"
-        factor["updated_at"] = time.strftime("%Y-%m-%d")
-
-        l1 = factor.setdefault("l1", {})
-        if not l1.get("definition"):
-            l1["definition"] = formula_brief[:200]
-        l1["formula"] = formula_brief
-        l1["frequency"] = config.frequency
-        l1["output_schema"] = "[date × Code]"
-        l1["input_columns"] = _derive_input_columns(formula_brief)
-        l1["nan_meaning"] = config.nan_meaning
-        l1["default_params"] = {}
-        l1["param_constraints"] = {}
-        l1["business_constraints"] = config.business_constraints
-
-        l5 = factor.setdefault("l5", {})
-        l5["code"] = code
-        l5["code_compile_status"] = "success"
-        l5["code_chars"] = code_chars
-        l5["h5_path"] = h5_path
-        l5["ast"] = None
-        l5["ast_compile_status"] = None
-        l5["ast_compile_iterations"] = None
-        l5["ast_compile_source"] = None
-        l5["ast_compile_error"] = None
-
-        import math
-        def _nan_to_none(v):
-            return None if isinstance(v, float) and math.isnan(v) else v
-
-        icir = _nan_to_none(backtest.get("icir"))
-        win_rate = _nan_to_none(backtest.get("win_rate"))
-        l5["overall_assessment"] = {
-            "score": compute_score(icir, win_rate),
-            "status": compute_status(icir),
-            "pass_threshold": config.pass_threshold,
-            "final_meaning": "",
-            "ic_mean": _nan_to_none(backtest.get("ic_mean")),
-            "icir": icir,
-            "winrate": win_rate,
-            "rank_ic_mean": _nan_to_none(backtest.get("rank_ic_mean")),
-            "rank_icir": _nan_to_none(backtest.get("rank_icir")),
-            "annual_return": _nan_to_none(backtest.get("longshort_ann_return")),
-            "longshort_sharpe": _nan_to_none(backtest.get("longshort_sharpe")),
-            "longshort_max_dd": _nan_to_none(backtest.get("longshort_max_dd")),
-            "validated_at": time.time(),
-        }
-        l5["validation_date"] = time.strftime("%Y-%m-%d")
-
-        action = write_factor_yaml(full_name, data)
-        dir_path = config.factors_dir / full_name
-        print(f"[yaml] {action} (dir={dir_path})")
-        return action, dir_path
-    except Exception as exc:
-        print(f"[yaml] persist_code_to_yaml failed for {factor_name}: {exc}")
-        return None, None
-
-
-def save_backtest_to_db(
-    slug: str,
-    alpha_index: int,
-    backtest: dict,
-    config: RunConfig | None = None,
-) -> bool:
-    """Persist backtest result to reproduction_results table."""
-    config = config or RunConfig()
-    import math
-    def _nan_to_none(v):
-        return None if isinstance(v, float) and math.isnan(v) else v
-
-    try:
-        from llmwikify.reproduction.persist.sessions import ReproductionDatabase
-        db = ReproductionDatabase()
-        run_id = f"pipeline_a_{alpha_index:03d}"
-        session_id = db.create_session(
-            wiki_id=config.wiki_id,
-            paper_id=config.paper_id,
-            source_type="pipeline_a",
-            source_ref=f"alpha_{alpha_index:03d}",
-            symbol="universe:all",
-            start_date=config.date_beg_iso,
-            end_date=config.date_end_iso,
-        )
-        db.create_result(
-            run_id=run_id,
-            session_id=session_id,
-            result_type="factor_backtest",
-            factor_ref=slug,
-            strategy_ref=None,
-            universe=config.sample_index,
-            start_date=config.date_beg_iso,
-            end_date=config.date_end_iso,
-            status="success",
-            error=None,
-            wiki_path=None,
-            adj_mode=config.adj_mode,
-            hedge=config.hedge,
-            data_source="quantnodes_pipeline",
-            ic_mean=_nan_to_none(backtest.get("ic_mean")),
-            rank_ic_mean=_nan_to_none(backtest.get("rank_ic_mean")),
-            icir=_nan_to_none(backtest.get("icir")),
-            rank_icir=_nan_to_none(backtest.get("rank_icir")),
-            win_rate=_nan_to_none(backtest.get("win_rate")),
-            annual_return=_nan_to_none(backtest.get("longshort_ann_return")),
-            longshort_ann_return=_nan_to_none(backtest.get("longshort_ann_return")),
-            longshort_sharpe=_nan_to_none(backtest.get("longshort_sharpe")),
-            longshort_max_dd=_nan_to_none(backtest.get("longshort_max_dd")),
-            ic_series=backtest.get("ic_series", []),
-            group_metrics=backtest.get("group_metrics", {}),
-            equity_curve=backtest.get("equity_curve") or backtest.get("group_nav_series"),
-        )
-        print(f"[db] created result run_id={run_id} factor_ref={slug}")
-        return True
-    except Exception as exc:
-        print(f"[db] save_backtest_to_db failed for {slug}: {exc}")
-        return False
 
 
 # ─── run_one_factor ──────────────────────────────────────────────────
@@ -744,57 +411,6 @@ def run_one_factor(
 
 
 # ─── Batch runner ────────────────────────────────────────────────────
-
-
-class _AlphaTimeout(Exception):
-    """Raised when an alpha run exceeds the per-alpha timeout."""
-    pass
-
-
-def _alarm_handler(signum, frame):
-    raise _AlphaTimeout("alpha run exceeded timeout")
-
-
-def _run_with_timeout(
-    idx: int,
-    timeout_sec: int,
-    config: RunConfig | None = None,
-    data_cache: dict[str, pd.DataFrame] | None = None,
-    df_pl: pl.DataFrame | None = None,
-) -> dict:
-    """Run a single alpha with a hard timeout via SIGALRM.
-
-    On timeout, returns a failure dict instead of hanging the whole batch.
-    """
-    old_handler = signal.signal(signal.SIGALRM, _alarm_handler)
-    signal.alarm(timeout_sec)
-    t0 = time.monotonic()
-    try:
-        result = run_one_factor(idx, use_react=True, config=config, data_cache=data_cache, df_pl=df_pl)
-        return result
-    except _AlphaTimeout:
-        return {
-            "status": "failed",
-            "stage": "timeout",
-            "error": f"Alpha {idx} exceeded {timeout_sec}s timeout",
-            "elapsed_sec": time.monotonic() - t0,
-        }
-    except Exception as exc:
-        return {
-            "status": "failed",
-            "stage": "exception",
-            "error": f"{type(exc).__name__}: {exc}",
-            "elapsed_sec": time.monotonic() - t0,
-        }
-    finally:
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, old_handler)
-
-
-def _load_formula_briefs(track_b_path: Path) -> list[dict]:
-    """Load all alpha records from track_b_checkpoint.json."""
-    data = json.loads(track_b_path.read_text(encoding="utf-8"))
-    return data["pass1_signals"]
 
 
 def _print_header() -> None:
