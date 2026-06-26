@@ -275,6 +275,7 @@ class ChatOrchestrator:
             CompositeToolRegistry,
             SkillToolAdapter,
         )
+        from llmwikify.apps.agent.tools.quant_adapter import QuantToolAdapter
         adapter_kwargs: dict[str, Any] = {
             "wiki": self.wiki_service.get_wiki(wiki_id),
             "db": self.db,
@@ -288,6 +289,7 @@ class ChatOrchestrator:
         registry = CompositeToolRegistry(
             wiki_registry,
             SkillToolAdapter(self.skill_service, **adapter_kwargs),
+            QuantToolAdapter(),
         )
         if not expose_subagent:
             self._tool_registries[cache_key] = registry
