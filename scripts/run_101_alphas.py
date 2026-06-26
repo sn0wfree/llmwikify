@@ -759,6 +759,7 @@ def run_one_factor(
     use_react: bool = True,
     config: RunConfig | None = None,
     data_cache: dict[str, pd.DataFrame] | None = None,
+    df_pl: pl.DataFrame | None = None,
 ) -> dict:
     t0 = time.monotonic()
     config = config or RunConfig()
@@ -773,11 +774,12 @@ def run_one_factor(
     print(f"[alpha-{alpha_index:03d}] formula_brief: {formula_brief}")
     print(f"{'='*70}")
 
-    # 2. Build polars long DataFrame (from cache or fresh load)
-    if data_cache is not None:
-        df_pl = _build_wide_df(data_cache)
-    else:
-        df_pl = _load_and_build_df(config.data_path, config.h5_filename)
+    # 2. Use pre-built polars DataFrame, or build from cache/fresh
+    if df_pl is None:
+        if data_cache is not None:
+            df_pl = _build_wide_df(data_cache)
+        else:
+            df_pl = _load_and_build_df(config.data_path, config.h5_filename)
     print(f"[data] shape: {df_pl.shape}, columns: {df_pl.columns}")
     print(f"[data] date range: {df_pl['date'].min()} - {df_pl['date'].max()}")
 
@@ -857,29 +859,8 @@ def run_one_factor(
             "elapsed_sec": time.monotonic() - t0,
         }
 
-    # 7. Extract metrics
-    print(f"\n[result] PipelineRunner ctx keys: {list(ctx.keys())}")
-    ic_node = ctx.get("ICAnalyzer")
-    ic_result = ic_node.get("ic_result") if isinstance(ic_node, dict) else None
-    if ic_result is not None and hasattr(ic_result, "get"):
-        ic_mean = ic_result.get("IC均值") or ic_result.get("IC_mean")
-        icir = ic_result.get("ICIR")
-        ic_winrate = ic_result.get("IC为正比例") or ic_result.get("IC胜率") or ic_result.get("win_rate")
-        print(f"[IC] 均值: {ic_mean}, ICIR: {icir}, 胜率: {ic_winrate}")
-    else:
-        ic_mean = icir = ic_winrate = None
-        print(f"[IC] no IC result; ctx ICAnalyzer: {type(ic_node)}, val: {str(ic_node)[:200] if ic_node else 'None'}")
-
-    group_result = ctx.get("GroupAnalyzer")
-    print(f"[Group] type: {type(group_result)}, preview: {str(group_result)[:300] if group_result else None}")
-
+    # 7. Extract metrics (single source of truth via backtest_extract)
     backtest = _extract_full_backtest_from_ctx(ctx)
-    if ic_winrate is not None and backtest.get("win_rate") is None:
-        backtest["win_rate"] = ic_winrate
-    if ic_mean is not None and backtest.get("ic_mean") is None:
-        backtest["ic_mean"] = ic_mean
-    if icir is not None and backtest.get("icir") is None:
-        backtest["icir"] = icir
     print(f"[backtest] ic_mean={backtest.get('ic_mean')}, icir={backtest.get('icir')}, "
           f"groups={len(backtest.get('group_metrics', {}))}, "
           f"ic_series_pts={len(backtest.get('ic_series', []))}")
@@ -919,9 +900,9 @@ def run_one_factor(
         "factor_series_len": len(factor_series),
         "factor_series_dtype": str(factor_series.dtype),
         "h5_path": str(h5_path),
-        "ic_mean": ic_mean,
-        "icir": icir,
-        "ic_winrate": ic_winrate,
+        "ic_mean": backtest.get("ic_mean"),
+        "icir": backtest.get("icir"),
+        "ic_winrate": backtest.get("win_rate"),
         "elapsed_sec": elapsed,
     }
 
@@ -943,6 +924,7 @@ def _run_with_timeout(
     timeout_sec: int,
     config: RunConfig | None = None,
     data_cache: dict[str, pd.DataFrame] | None = None,
+    df_pl: pl.DataFrame | None = None,
 ) -> dict:
     """Run a single alpha with a hard timeout via SIGALRM.
 
@@ -952,7 +934,7 @@ def _run_with_timeout(
     signal.alarm(timeout_sec)
     t0 = time.monotonic()
     try:
-        result = run_one_factor(idx, use_react=True, config=config, data_cache=data_cache)
+        result = run_one_factor(idx, use_react=True, config=config, data_cache=data_cache, df_pl=df_pl)
         return result
     except _AlphaTimeout:
         return {
@@ -1202,6 +1184,8 @@ def main() -> None:
     print()
     data_cache = _preload_data(config.data_path, config.h5_filename)
     print(f"  Preloaded {len(data_cache)} H5 keys: {list(data_cache.keys())}")
+    df_pl = _build_wide_df(data_cache)
+    print(f"  Built polars long DF: {df_pl.shape}")
     print()
 
     # Optionally skip already-done alphas
@@ -1229,7 +1213,7 @@ def main() -> None:
         elapsed_cum = time.monotonic() - t0
         print(f"\n[{time.strftime('%H:%M:%S')}] alpha-{idx:03d} (elapsed: {elapsed_cum:.0f}s, failures: {failures})")
 
-        result = run_one_factor(idx, use_react=True, config=config, data_cache=data_cache)
+        result = run_one_factor(idx, use_react=True, config=config, df_pl=df_pl)
         if "alpha_index" not in result:
             result["alpha_index"] = idx
         results.append(result)
