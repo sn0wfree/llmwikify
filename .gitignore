@@ -133,3 +133,4 @@ quant/factors/101_alphas/stk_alpha_*/backtest/*.json
 quant/factors/index.yaml
 quant/factors/alpha_*.yaml
 quant/factors/stk_alpha_*/
+quant/factors/101_alphas/*.yaml

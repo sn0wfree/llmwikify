@@ -43,6 +43,9 @@ from llmwikify.reproduction.codegen.llm_code import (
 )
 from llmwikify.apps.chat.agent.unified.core import UnifiedHook
 from CodersWheel.QuickTool.timer import timer
+from llmwikify.reproduction.pipeline.backtest_extract import safe_float, extract_full_backtest_from_ctx
+from llmwikify.reproduction.pipeline.data_loader import wide_from_long, write_factor_h5
+from llmwikify.reproduction.pipeline.score import compute_score, compute_status
 
 # ─── Constants ───────────────────────────────────────────────────────
 
@@ -169,56 +172,12 @@ def _load_and_build_df(data_path: Path, h5_filename: str = "stk_daily.h5") -> pl
 # ─── Utility functions ──────────────────────────────────────────────
 
 
-def _safe_float(x: Any, default: float | None = None) -> float | None:
-    """Safely cast to float, handling NaN/None/non-numeric."""
-    if x is None:
-        return default
-    try:
-        v = float(x)
-        if v != v:  # NaN check
-            return default
-        return v
-    except (TypeError, ValueError):
-        return default
-
-
-def _wide_from_long(df_pl: pl.DataFrame, factor_series: pl.Series) -> pd.DataFrame:
-    """Convert long (date, code, value) → wide [date × code] for QuantNodes H5.
-
-    Note: df_pl.date is polars Int64 (yyyymmdd). When pivoting, we keep it as
-    int64 — converting via pd.to_datetime(int) interprets int as nanoseconds
-    since epoch and produces 1970-01-01 dates, which corrupts the factor file.
-
-    DATA ORDERING: input df_pl is sorted by (date, code). LLM code may have
-    re-sorted by (code, date) inside `compute_factor`, which means the
-    returned `factor_series` is in (code, date) order — misaligned with
-    df_pl. We force sort by (code, date) here so pivot input is always
-    in (code, date) order, matching factor_series. This eliminates the
-    misalignment that causes GroupAnalyzer "Bin labels must be unique" errors.
-    """
-    assert len(df_pl) == len(factor_series), f"length mismatch: {len(df_pl)} vs {len(factor_series)}"
-    # Force (code, date) order to match the sort done by LLM code
-    df_sorted = df_pl.sort(['code', 'date'])
-    df_with = df_sorted.with_columns(factor_series.alias("__factor__"))
-    pdf = df_with.select(["date", "code", "__factor__"]).to_pandas()
-    # Pivot keeps date as int64 (yyyymmdd) — required for QuantNodes valid_date()
-    wide = pdf.pivot(index="date", columns="code", values="__factor__")
-    return wide
 
 
 @timer
 def _write_factor_h5(wide: pd.DataFrame, factor_name: str, output_dir: Path, h5_filename: str = "stk_daily.h5") -> Path:
-    """Write wide DataFrame to QuantNodes-compatible H5 file.
-
-    Output file must live INSIDE data_path (PipelineRunner joins factor_dir with data_path).
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    h5_path = output_dir / f"factor_{factor_name}.h5"
-    # Use a sanitized H5 key (alphanumeric + underscore only)
-    safe_key = re.sub(r"[^A-Za-z0-9_]", "_", factor_name)
-    with pd.HDFStore(h5_path, mode="w") as store:
-        store.put(safe_key, wide)
-    return h5_path
+    """Write wide DataFrame to QuantNodes-compatible H5 file (delegates to data_loader)."""
+    return write_factor_h5(wide, factor_name, output_dir)
 
 
 def _build_qn_config(factor_name: str, h5_path: Path, expression: str, config: RunConfig | None = None) -> dict:
@@ -407,161 +366,9 @@ def _llm_code_react(
 # ─── Backtest extraction ─────────────────────────────────────────────
 
 
-def _extract_full_backtest_from_ctx(ctx: dict) -> dict:
-    """Extract full backtest data from PipelineRunner ctx.
-
-    Returns dict with:
-      - ic_mean, rank_ic_mean, icir, rank_icir, win_rate, ic_std
-      - ic_series: [{date, ic}, ...]
-      - group_metrics: {G1: {annual_return, sharpe, ...}, ...}
-      - equity_curve: {G1: [{date, nav}, ...], ...}
-      - longshort_ann_return, longshort_sharpe, longshort_max_dd
-
-    Defensive: missing fields → None (not crash).
-    """
-    out: dict = {
-        "ic_mean": None,
-        "rank_ic_mean": None,
-        "icir": None,
-        "rank_icir": None,
-        "win_rate": None,
-        "ic_std": None,
-        "ic_series": [],
-        "group_metrics": {},
-        "longshort_ann_return": None,
-        "longshort_sharpe": None,
-        "longshort_max_dd": None,
-    }
-
-    # ICAnalyzer
-    ic_node = ctx.get("ICAnalyzer") or {}
-    ic_result = ic_node.get("ic_result") if isinstance(ic_node, dict) else None
-    if ic_result is not None and hasattr(ic_result, "get"):
-        out["ic_mean"] = _safe_float(ic_result.get("IC均值"))
-        out["ic_std"] = _safe_float(ic_result.get("IC标准差"))
-        out["icir"] = _safe_float(ic_result.get("ICIR"))
-        out["win_rate"] = _safe_float(ic_result.get("IC为正比例"))
-
-    rank_ic_result = ic_node.get("rank_ic_result") if isinstance(ic_node, dict) else None
-    if rank_ic_result is not None and hasattr(rank_ic_result, "get"):
-        out["rank_ic_mean"] = _safe_float(rank_ic_result.get("Rank IC均值"))
-        out["rank_icir"] = _safe_float(rank_ic_result.get("Rank ICIR"))
-
-    ic_series_obj = ic_node.get("ic") if isinstance(ic_node, dict) else None
-    if ic_series_obj is not None and hasattr(ic_series_obj, "items"):
-        out["ic_series"] = [
-            {"date": int(d), "ic": _safe_float(v, 0.0)}
-            for d, v in ic_series_obj.items()
-            if _safe_float(v) is not None
-        ]
-
-    # GroupAnalyzer
-    ga = ctx.get("GroupAnalyzer") or {}
-    if isinstance(ga, dict):
-        group_eva_abs = ga.get("group_eva_abs")
-        turnover_obj = ga.get("turnover")
-        n_groups = ga.get("n_groups", 5)
-
-        if group_eva_abs is not None and hasattr(group_eva_abs, "loc"):
-            gm: dict = {}
-            for g in range(1, n_groups + 1):
-                if g not in group_eva_abs.columns:
-                    continue
-                gm[f"G{g}"] = {
-                    "annual_return": _safe_float(group_eva_abs.loc["AnnualRt", g], 0.0),
-                    "sharpe": _safe_float(group_eva_abs.loc["SR", g], 0.0),
-                    "max_drawdown": _safe_float(group_eva_abs.loc["MDD", g], 0.0),
-                    "win_rate": _safe_float(group_eva_abs.loc["WinRatio", g], 0.0),
-                    "turnover": (
-                        _safe_float(turnover_obj.loc[g], 0.0)
-                        if (
-                            turnover_obj is not None
-                            and hasattr(turnover_obj, "loc")
-                            and g in turnover_obj.index
-                        )
-                        else 0.0
-                    ),
-                    "n_stocks": 0,
-                }
-            out["group_metrics"] = gm
-
-        # Extract group NAV time series from GroupAnalyzer ctx
-        daily_net = ga.get("daily_net_simp")
-        if daily_net is not None and hasattr(daily_net, "columns"):
-            nav_series: dict = {}
-            for g in daily_net.columns:
-                col = daily_net[g].dropna()
-                nav_series[f"G{g}"] = [
-                    {"date": int(d.timestamp() * 1000) if hasattr(d, "timestamp") else int(d), "nav": float(v)}
-                    for d, v in col.items()
-                ]
-            out["equity_curve"] = nav_series
-            out["group_nav_series"] = nav_series
-
-    # LongShort
-    ls = ctx.get("LongShort") or {}
-    if isinstance(ls, dict):
-        net = ls.get("net")
-        if net is not None and hasattr(net, "iloc"):
-            try:
-                ls_curve = net.iloc[:, 0] if hasattr(net, "iloc") else None
-                if ls_curve is not None and len(ls_curve) > 1:
-                    n_periods = len(ls_curve)
-                    # Monthly rebalance → annualize
-                    periods_per_year = 12
-                    total_ret = float(ls_curve.iloc[-1] / ls_curve.iloc[0] - 1)
-                    out["longshort_ann_return"] = (1 + total_ret) ** (periods_per_year / n_periods) - 1 if n_periods > 0 else 0.0
-                    # MDD
-                    peak = ls_curve.cummax()
-                    dd = (ls_curve - peak) / peak
-                    out["longshort_max_dd"] = float(dd.min())
-                    # Sharpe (monthly)
-                    if hasattr(ls, "period_ret") and ls["period_ret"] is not None:
-                        pr = ls["period_ret"]
-                        if hasattr(pr, "std"):
-                            std = float(pr.std(ddof=1))
-                            mean = float(pr.mean())
-                            out["longshort_sharpe"] = (mean / std * (periods_per_year ** 0.5)) if std > 0 else 0.0
-            except Exception as exc:
-                print(f"[extract] longshort calc warning: {exc}")
-
-    return out
-
 
 # ─── Persist functions ───────────────────────────────────────────────
 
-
-def _compute_score(icir: float | None, win_rate: float | None) -> int:
-    """Compute L5 overall_assessment.score (0-100) from ICIR + WinRate.
-
-    Weighted: 70% ICIR (dominant) + 30% WinRate.
-    """
-    import math
-    if icir is None or (isinstance(icir, float) and math.isnan(icir)):
-        return 50
-    icir_score = max(0, min(100, 50 + round(icir * 50)))
-    if win_rate is None or (isinstance(win_rate, float) and math.isnan(win_rate)):
-        return icir_score
-    wr_score = round(win_rate * 100)
-    return round(icir_score * 0.7 + wr_score * 0.3)
-
-
-def _compute_status(icir: float | None) -> str:
-    """Compute L5 overall_assessment.status from ICIR.
-
-    Mapping (matches WebUI OverallAssessment.tsx STATUS_CONFIG):
-      通过  — ICIR > 0.10  (positive edge)
-      失败  — ICIR < -0.05 (negative edge)
-      待更新 — default
-    """
-    import math
-    if icir is None or (isinstance(icir, float) and math.isnan(icir)):
-        return "待验证"
-    if icir > 0.10:
-        return "通过"
-    if icir < -0.05:
-        return "失败"
-    return "待更新"
 
 
 def _derive_input_columns(formula_brief: str) -> list[str]:
@@ -681,8 +488,8 @@ def persist_code_to_yaml(
         icir = _nan_to_none(backtest.get("icir"))
         win_rate = _nan_to_none(backtest.get("win_rate"))
         l5["overall_assessment"] = {
-            "score": _compute_score(icir, win_rate),
-            "status": _compute_status(icir),
+            "score": compute_score(icir, win_rate),
+            "status": compute_status(icir),
             "pass_threshold": config.pass_threshold,
             "final_meaning": "",
             "ic_mean": _nan_to_none(backtest.get("ic_mean")),
@@ -851,7 +658,7 @@ def run_one_factor(
         print(f"[execute] constant/binary factor detected ({len(unique_vals)} unique values), adding noise")
         noise = pl.Series("__noise", np.random.uniform(-1e-7, 1e-7, len(factor_series)))
         factor_series = factor_series.cast(pl.Float64) + noise
-    factor_wide = _wide_from_long(df_pl, factor_series)
+    factor_wide = wide_from_long(df_pl, factor_series)
     print(f"[h5] wide shape: {factor_wide.shape}, dates: {factor_wide.index.min()} - {factor_wide.index.max()}")
     safe_factor_name = re.sub(r"[^A-Za-z0-9_]", "_", factor_name)
     h5_path = _write_factor_h5(factor_wide, safe_factor_name, config.data_path, config.h5_filename)
@@ -879,7 +686,7 @@ def run_one_factor(
         }
 
     # 7. Extract metrics (single source of truth via backtest_extract)
-    backtest = _extract_full_backtest_from_ctx(ctx)
+    backtest = extract_full_backtest_from_ctx(ctx)
     print(f"[backtest] ic_mean={backtest.get('ic_mean')}, icir={backtest.get('icir')}, "
           f"groups={len(backtest.get('group_metrics', {}))}, "
           f"ic_series_pts={len(backtest.get('ic_series', []))}")
