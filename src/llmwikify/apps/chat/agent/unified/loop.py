@@ -83,6 +83,7 @@ class UnifiedAgentLoop:
                         if isinstance(event, StepResult):
                             if not event.success:
                                 ctx.error = event.error
+                                ctx.stop_reason = "error"
                                 yield {"type": "error", "message": event.error}
                                 break
                             response = event.output
@@ -96,12 +97,15 @@ class UnifiedAgentLoop:
                         yield ev
                     if not result.success:
                         ctx.error = result.error
+                        ctx.stop_reason = "error"
                         yield {"type": "error", "message": result.error}
                         break
                     response = result.output
 
                 if response is None:
-                    yield {"type": "error", "message": "Reasoner returned no response"}
+                    ctx.error = "Reasoner returned no response"
+                    ctx.stop_reason = "error"
+                    yield {"type": "error", "message": ctx.error}
                     break
 
                 await _maybe_await(self._hook.on_reason_end, ctx, response)
@@ -123,6 +127,7 @@ class UnifiedAgentLoop:
                         if isinstance(event, StepResult):
                             if not event.success:
                                 ctx.error = event.error
+                                ctx.stop_reason = "error"
                                 yield {"type": "error", "message": event.error}
                                 break
                             result = event.output
@@ -136,12 +141,15 @@ class UnifiedAgentLoop:
                         yield ev
                     if not act_result.success:
                         ctx.error = act_result.error
+                        ctx.stop_reason = "error"
                         yield {"type": "error", "message": act_result.error}
                         break
                     result = act_result.output
 
                 if result is None:
-                    yield {"type": "error", "message": "Actor returned no result"}
+                    ctx.error = "Actor returned no result"
+                    ctx.stop_reason = "error"
+                    yield {"type": "error", "message": ctx.error}
                     break
 
                 await _maybe_await(self._hook.on_act_end, ctx, result)

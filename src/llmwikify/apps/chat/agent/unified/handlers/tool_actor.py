@@ -100,6 +100,7 @@ class ToolActor(StreamingHandler):
                     "call_id": call_id,
                 }
                 yield StepResult.ok(ActResult(
+                    success=True,
                     needs_confirmation=True,
                     tool_name=tool_name,
                     messages_to_inject=messages_to_inject,
