@@ -70,6 +70,21 @@ class RunConfig:
     temperature: float = 0.3
     h5_filename: str = "stk_daily.h5"
 
+    # ── 业务配置（参数化）──
+    strategy_dir: str = "101_alphas"          # 输出子目录
+    asset_type: str = "stock"                 # 资产类型
+    category: str = "formulaic"               # 因子分类
+    frequency: str = "日频"                    # 频率
+    nan_meaning: str = "上市不足或窗口期数据不足"  # NaN 含义
+    business_constraints: str = "支持日频调仓, T+1 信号"
+    pass_threshold: int = 60                  # 通过阈值
+    hedge: str = "equal"                      # 对冲方式
+    adj_mode: str = "M-end"                   # 复权模式
+    groups: int = 5                           # 分组数
+    factor_direction: int = 1                 # 因子方向
+    output_format: list[str] = field(default_factory=lambda: ["parquet", "json"])
+    min_group_size: int = 3                   # 最小组大小
+
     @property
     def report_dir(self) -> Path:
         return self.output_dir / "report"
@@ -240,7 +255,7 @@ def _build_qn_config(factor_name: str, h5_path: Path, expression: str, config: R
         "preprocess": {
             "adj_date_beg": config.date_beg,
             "adj_date_end": config.date_end,
-            "adj_mode": ["M", "end"],
+            "adj_mode": [config.adj_mode.split("-")[0], config.adj_mode.split("-")[1]] if "-" in config.adj_mode else ["M", "end"],
             "sample_index": config.sample_index,
             "sample_industry": "all",
             "tradable": {
@@ -260,21 +275,21 @@ def _build_qn_config(factor_name: str, h5_path: Path, expression: str, config: R
             "pct_high": 0.975,
         },
         "analysis": {
-            "ic": {"min_group_size": 3},
+            "ic": {"min_group_size": config.min_group_size},
             "group": {
-                "groups": 5,
-                "factor_direction": 1,
+                "groups": config.groups,
+                "factor_direction": config.factor_direction,
                 "floor_mode": "group",
-                "hedge": "equal",
+                "hedge": config.hedge,
                 "hedge_path": None,
             },
-            "longshort": {"factor_direction": 1},
+            "longshort": {"factor_direction": config.factor_direction},
             "score": {"enabled": False},
             "risk_corr": {"factors": "all"},
         },
         "output": {
             "dir": str(config.report_dir),
-            "format": ["parquet", "json"],
+            "format": config.output_format,
         },
     }
 
@@ -582,6 +597,7 @@ def persist_code_to_yaml(
     h5_path: str,
     code_chars: int,
     alpha_index: int = 0,
+    config: RunConfig | None = None,
 ) -> tuple[str | None, Path | None]:
     """Persist code-path factor YAML (6-layer) to quant/factors/.
 
@@ -595,6 +611,7 @@ def persist_code_to_yaml(
     Returns:
         (action, factor_dir_path) or (None, None) on failure.
     """
+    config = config or RunConfig()
     from llmwikify.reproduction.persist.factor_library import (
         _get_factors_dir,
         read_factor_yaml,
@@ -603,7 +620,8 @@ def persist_code_to_yaml(
 
     slug = factor_name.replace("-", "_")
     # Generate proper directory name with code hash
-    full_name = _make_factor_dir_name(alpha_index, code) if alpha_index > 0 else slug
+    dir_name = _make_factor_dir_name(alpha_index, code) if alpha_index > 0 else slug
+    full_name = f"{config.strategy_dir}/{dir_name}" if config.strategy_dir and alpha_index > 0 else dir_name
 
     try:
         # Ensure directory exists so write_factor_yaml uses directory format
@@ -619,8 +637,8 @@ def persist_code_to_yaml(
             data = {
                 "factor": {
                     "name": slug,
-                    "asset_type": "stock",
-                    "category": "formulaic",
+                    "asset_type": config.asset_type,
+                    "category": config.category,
                     "status": "已验证",
                 }
             }
@@ -629,8 +647,8 @@ def persist_code_to_yaml(
 
         factor = data.setdefault("factor", {})
         factor["name"] = slug
-        factor["asset_type"] = factor.get("asset_type", "stock")
-        factor["category"] = factor.get("category", "formulaic")
+        factor["asset_type"] = factor.get("asset_type", config.asset_type)
+        factor["category"] = factor.get("category", config.category)
         factor["status"] = "已验证"
         factor["updated_at"] = time.strftime("%Y-%m-%d")
 
@@ -638,13 +656,13 @@ def persist_code_to_yaml(
         if not l1.get("definition"):
             l1["definition"] = formula_brief[:200]
         l1["formula"] = formula_brief
-        l1["frequency"] = "日频"
+        l1["frequency"] = config.frequency
         l1["output_schema"] = "[date × Code]"
         l1["input_columns"] = _derive_input_columns(formula_brief)
-        l1["nan_meaning"] = "上市不足或窗口期数据不足"
+        l1["nan_meaning"] = config.nan_meaning
         l1["default_params"] = {}
         l1["param_constraints"] = {}
-        l1["business_constraints"] = "支持日频调仓, T+1 信号"
+        l1["business_constraints"] = config.business_constraints
 
         l5 = factor.setdefault("l5", {})
         l5["code"] = code
@@ -666,7 +684,7 @@ def persist_code_to_yaml(
         l5["overall_assessment"] = {
             "score": _compute_score(icir, win_rate),
             "status": _compute_status(icir),
-            "pass_threshold": 60,
+            "pass_threshold": config.pass_threshold,
             "final_meaning": "",
             "ic_mean": _nan_to_none(backtest.get("ic_mean")),
             "icir": icir,
@@ -727,8 +745,8 @@ def save_backtest_to_db(
             status="success",
             error=None,
             wiki_path=None,
-            adj_mode="M-end",
-            hedge="equal",
+            adj_mode=config.adj_mode,
+            hedge=config.hedge,
             data_source="quantnodes_pipeline",
             ic_mean=_nan_to_none(backtest.get("ic_mean")),
             rank_ic_mean=_nan_to_none(backtest.get("rank_ic_mean")),
@@ -877,6 +895,7 @@ def run_one_factor(
         h5_path=str(h5_path),
         code_chars=len(code),
         alpha_index=alpha_index,
+        config=config,
     )
 
     # Save backtest + factor_values to per-factor DuckDB
@@ -1184,6 +1203,12 @@ def main() -> None:
     parser.add_argument("--paper-id", type=str, default="101_alphas_minimal", help="Paper ID for DB session")
     parser.add_argument("--wiki-id", type=str, default="default", help="Wiki ID for DB session")
     parser.add_argument("--h5-filename", type=str, default="stk_daily.h5", help="H5 filename within data-path (default: stk_daily.h5)")
+    parser.add_argument("--strategy-dir", type=str, default="101_alphas", help="Output subdirectory under quant/factors/ (default: 101_alphas)")
+    parser.add_argument("--groups", type=int, default=5, help="Number of groups for analysis (default: 5)")
+    parser.add_argument("--factor-direction", type=int, default=1, help="Factor direction: 1 or -1 (default: 1)")
+    parser.add_argument("--hedge", type=str, default="equal", help="Hedge mode (default: equal)")
+    parser.add_argument("--adj-mode", type=str, default="M-end", help="Adjustment mode (default: M-end)")
+    parser.add_argument("--min-group-size", type=int, default=3, help="Minimum group size (default: 3)")
     args = parser.parse_args()
 
     config = RunConfig(
@@ -1197,6 +1222,12 @@ def main() -> None:
         wiki_id=args.wiki_id,
         max_repair_rounds=args.rounds,
         h5_filename=args.h5_filename,
+        strategy_dir=args.strategy_dir,
+        groups=args.groups,
+        factor_direction=args.factor_direction,
+        hedge=args.hedge,
+        adj_mode=args.adj_mode,
+        min_group_size=args.min_group_size,
     )
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
