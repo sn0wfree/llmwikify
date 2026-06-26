@@ -132,3 +132,4 @@ quant/factors/101_alphas/stk_alpha_*/backtest/*.json
 # 因子库 regenerable artifacts (由 chore(repro) 重跑产出)
 quant/factors/index.yaml
 quant/factors/alpha_*.yaml
+quant/factors/stk_alpha_*/

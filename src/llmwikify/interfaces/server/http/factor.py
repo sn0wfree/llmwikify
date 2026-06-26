@@ -729,6 +729,7 @@ async def get_factor_backtest_results(slug: str, limit: int = 10) -> dict[str, A
                     },
                     "ic_series": json.loads(r.ic_series) if r.ic_series else [],
                     "equity_curve": json.loads(r.equity_curve) if r.equity_curve else {},
+                    "group_metrics": json.loads(r.group_metrics) if hasattr(r, "group_metrics") and r.group_metrics else {},
                 })
         except Exception:
             pass

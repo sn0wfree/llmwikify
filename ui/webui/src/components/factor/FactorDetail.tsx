@@ -526,7 +526,7 @@ function L5Content({ data, factorName }: { data: Record<string, unknown> | undef
             )}
 
             {/* Group Returns */}
-            {Object.keys(latestRun.group_metrics).length > 0 && (
+            {Object.keys(latestRun.group_metrics || {}).length > 0 && (
               <div>
                 <h4 className="text-xs font-medium text-muted-foreground mb-2">分组年化收益</h4>
                 <GroupReturnBar

@@ -426,6 +426,19 @@ def save_backtest_duckdb(
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS group_metrics (
+                run_id VARCHAR,
+                group_name VARCHAR,
+                annual_return DOUBLE,
+                sharpe DOUBLE,
+                max_drawdown DOUBLE,
+                win_rate DOUBLE,
+                turnover DOUBLE,
+                n_stocks INTEGER,
+                PRIMARY KEY (run_id, group_name)
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS factor_values (
                 date DATE,
                 stock VARCHAR,
@@ -475,6 +488,24 @@ def save_backtest_duckdb(
             conn.register("_eq_df", eq_df)
             conn.execute("INSERT INTO equity_curve SELECT * FROM _eq_df")
             conn.unregister("_eq_df")
+
+        # Insert group_metrics (bulk)
+        gm = backtest.get("group_metrics") or {}
+        gm_rows = [
+            [run_id, gn, _nan(v.get("annual_return")), _nan(v.get("sharpe")),
+             _nan(v.get("max_drawdown")), _nan(v.get("win_rate")),
+             _nan(v.get("turnover")), v.get("n_stocks", 0)]
+            for gn, v in gm.items()
+        ]
+        if gm_rows:
+            import pandas as pd
+            gm_df = pd.DataFrame(gm_rows, columns=[
+                "run_id", "group_name", "annual_return", "sharpe",
+                "max_drawdown", "win_rate", "turnover", "n_stocks",
+            ])
+            conn.register("_gm_df", gm_df)
+            conn.execute("INSERT OR REPLACE INTO group_metrics SELECT * FROM _gm_df")
+            conn.unregister("_gm_df")
 
         # Insert factor_values (bulk from wide DataFrame)
         if factor_wide is not None and hasattr(factor_wide, "reset_index"):
@@ -559,6 +590,24 @@ def read_backtest_duckdb(
                 for gn, grp in eq_df.groupby("group_name"):
                     equity[gn] = grp[["date", "nav"]].to_dict("records")
 
+            # Group metrics
+            group_metrics: dict[str, dict] = {}
+            if "group_metrics" in tables:
+                gm_df = conn.execute(
+                    "SELECT group_name, annual_return, sharpe, max_drawdown, win_rate, turnover, n_stocks "
+                    "FROM group_metrics WHERE run_id = ?",
+                    [rid],
+                ).fetchdf()
+                for _, gm_row in gm_df.iterrows():
+                    group_metrics[gm_row["group_name"]] = {
+                        "annual_return": gm_row.get("annual_return"),
+                        "sharpe": gm_row.get("sharpe"),
+                        "max_drawdown": gm_row.get("max_drawdown"),
+                        "win_rate": gm_row.get("win_rate"),
+                        "turnover": gm_row.get("turnover"),
+                        "n_stocks": int(gm_row.get("n_stocks") or 0),
+                    }
+
             run: dict[str, Any] = {
                 "run_id": rid,
                 "created_at": str(row.get("created_at", "")),
@@ -575,6 +624,7 @@ def read_backtest_duckdb(
                 },
                 "ic_series": ic_data,
                 "equity_curve": equity,
+                "group_metrics": group_metrics,
             }
 
             if include_values and "factor_values" in tables:
