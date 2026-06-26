@@ -132,3 +132,18 @@ class UnifiedResult:
     state_trace: list[dict[str, Any]] = field(default_factory=list)
     elapsed_sec: float = 0.0
     compacted_count: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        """序列化为 dict（兼容 ReactResult.to_dict() 接口）。"""
+        return {
+            "code": self.code or "",
+            "is_valid": self.stop_reason == "completed" and self.error is None,
+            "error_kind": "none" if self.error is None else "execute_error",
+            "error_message": self.error or "",
+            "iterations": self.iterations,
+            "steps": self.steps,
+            "state_trace": self.state_trace,
+            "elapsed_sec": round(self.elapsed_sec, 3),
+            "stop_reason": self.stop_reason,
+            "final_content_len": len(self.final_content) if self.final_content else 0,
+        }

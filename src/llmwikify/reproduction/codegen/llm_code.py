@@ -344,10 +344,9 @@ def generate_factor_code(
     progress_callback: Any | None = None,
     prompts: Any | None = None,
 ) -> tuple[str | None, pl.Series | None, str | None, dict]:
-    """High-level convenience: build client (if needed) + run ReAct loop.
+    """High-level convenience: build client (if needed) + run unified codegen loop.
 
-    Combines build_llm_client + compile_to_code_react into a single call.
-    Returns (code, factor_series, error, react_result_dict).
+    Returns (code, factor_series, error, result_dict).
 
     Args:
         factor_name: Display name (e.g. "alpha-001").
@@ -358,15 +357,15 @@ def generate_factor_code(
         max_repair_rounds: Max self-repair iterations (default 3).
         temperature: LLM temperature (default 0.3).
         model: Override model name (only used if llm is None).
-        progress_callback: Optional hook invoked after each ReactStep.
+        progress_callback: Unused (kept for backward compat).
         prompts: Optional PromptRegistry. When provided and system_prompt is None,
                  looks up "code_gen" prompt from registry.
 
     Returns:
-        (code, factor_series, error_message, react_result_dict)
+        (code, factor_series, error_message, result_dict)
         where code/series are None on failure, error is None on success.
     """
-    from .react_engine import compile_to_code_react
+    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code_sync
 
     if llm is None:
         llm = build_llm_client(model=model)
@@ -380,27 +379,20 @@ def generate_factor_code(
         else:
             system_prompt = SYSTEM_PROMPT_CODE
 
-    result = compile_to_code_react(
+    result = generate_factor_code_sync(
         factor_name=factor_name,
         formula_brief=formula_brief,
-        system_prompt=system_prompt,
         df=df,
-        llm=llm,
+        llm_client=llm,
+        system_prompt=system_prompt,
         max_repair_rounds=max_repair_rounds,
         temperature=temperature,
-        progress_callback=progress_callback,
     )
 
-    if not result.is_valid:
-        return None, None, result.error_message, result.to_dict()
+    if result.error:
+        return None, None, result.error, result.to_dict()
 
-    # Re-execute the final code to get the Series (compile_to_code_react
-    # validates but doesn't return the Series)
-    try:
-        series = execute_code(result.code, df)
-    except Exception as exc:
-        return None, None, f"final execute failed: {exc}", result.to_dict()
-    return result.code, series, None, result.to_dict()
+    return result.code, result.factor_series, None, result.to_dict()
 
 
 __all__ = [

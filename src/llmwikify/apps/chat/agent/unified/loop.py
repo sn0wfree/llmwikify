@@ -62,6 +62,7 @@ class UnifiedAgentLoop:
 
     async def run_stream(self, spec: BaseSpec) -> AsyncIterator[dict[str, Any]]:
         ctx = UnifiedContext(spec=spec)
+        spec._last_ctx = ctx  # 让 run_to_completion 能访问 ctx
 
         try:
             for iteration in range(spec.max_iterations):
@@ -152,6 +153,7 @@ class UnifiedAgentLoop:
                     yield {"type": "error", "message": ctx.error}
                     break
 
+                ctx.last_act_result = result
                 await _maybe_await(self._hook.on_act_end, ctx, result)
 
                 if result.needs_confirmation:
@@ -208,6 +210,7 @@ class UnifiedAgentLoop:
     async def run_to_completion(self, spec: BaseSpec) -> UnifiedResult:
         """drain run_stream，构建 UnifiedResult。"""
         result = UnifiedResult()
+        ctx_ref = None
         async for event in self.run_stream(spec):
             kind = event.get("type")
             if kind == "done":
@@ -219,6 +222,18 @@ class UnifiedAgentLoop:
             elif kind == "error":
                 result.error = event.get("message")
                 result.stop_reason = "error"
+
+        # 从 last_act_result 提取 code / factor_series
+        # run_stream 内部的 ctx 已被 GC，但 last_act_result 在 break 前已赋值
+        # 需要重新获取 — 通过检查 spec 的 _last_ctx 属性（run_stream 设置）
+        if hasattr(spec, "_last_ctx"):
+            last_act = getattr(spec._last_ctx, "last_act_result", None)
+            if last_act is not None:
+                if hasattr(last_act, "code") and last_act.code:
+                    result.code = last_act.code
+                if hasattr(last_act, "output") and last_act.output is not None:
+                    result.factor_series = last_act.output
+
         return result
 
     def execution_context(self) -> Any:

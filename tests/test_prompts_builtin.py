@@ -16,5 +16,5 @@ def test_hardcoded_metadata_prompts():
 
 
 def test_hardcoded_react_feedback():
-    from llmwikify.reproduction.codegen.react_engine import OBSERVE_FEEDBACK_TEMPLATE
+    from llmwikify.reproduction.codegen.feedback_templates import OBSERVE_FEEDBACK_TEMPLATE
     assert "error" in OBSERVE_FEEDBACK_TEMPLATE

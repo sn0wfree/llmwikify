@@ -18,7 +18,7 @@ class BuildFeedbackStep(StepHandler):
     """
 
     async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
-        from llmwikify.reproduction.codegen.react_engine import OBSERVE_FEEDBACK_TEMPLATE
+        from llmwikify.reproduction.codegen.feedback_templates import OBSERVE_FEEDBACK_TEMPLATE
         from llmwikify.apps.chat.agent.unified.steps.code import CodeExecResult
 
         result = input

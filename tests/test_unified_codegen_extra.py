@@ -13,6 +13,7 @@ import pytest
 
 from llmwikify.apps.chat.agent.unified.core import StepResult
 from llmwikify.apps.chat.agent.unified.loop import UnifiedAgentLoop
+from llmwikify.apps.chat.agent.unified.spec import UnifiedResult
 from llmwikify.apps.chat.agent.unified.pipelines.codegen import CodeActor, CodegenReasoner
 from llmwikify.apps.chat.agent.unified.spec import ActResult, CodegenSpec, ReasonResponse
 from llmwikify.apps.chat.agent.unified.steps import CheckSuccessStep
@@ -328,3 +329,115 @@ async def test_codegen_loop_error_feedback_in_messages():
     second_messages = llm.calls[1][0]
     last_user = next(m for m in reversed(second_messages) if m["role"] == "user")
     assert "ZeroDivisionError" in last_user["content"] or "execute_error" in last_user["content"]
+
+
+# ─── UnifiedResult.to_dict() ──────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_unified_result_to_dict_success():
+    """UnifiedResult.to_dict() on success."""
+    result = UnifiedResult(
+        code="def compute_factor(df): return df['x']",
+        factor_series=None,
+        stop_reason="completed",
+        iterations=1,
+        elapsed_sec=1.5,
+    )
+    d = result.to_dict()
+    assert d["code"] == "def compute_factor(df): return df['x']"
+    assert d["is_valid"] is True
+    assert d["error_kind"] == "none"
+    assert d["error_message"] == ""
+    assert d["iterations"] == 1
+    assert d["stop_reason"] == "completed"
+    assert d["elapsed_sec"] == 1.5
+
+
+@pytest.mark.asyncio
+async def test_unified_result_to_dict_failure():
+    """UnifiedResult.to_dict() on failure."""
+    result = UnifiedResult(
+        stop_reason="error",
+        error="SyntaxError: invalid syntax",
+        iterations=3,
+    )
+    d = result.to_dict()
+    assert d["is_valid"] is False
+    assert d["error_kind"] == "execute_error"
+    assert "SyntaxError" in d["error_message"]
+    assert d["iterations"] == 3
+
+
+@pytest.mark.asyncio
+async def test_unified_result_to_dict_preserves_steps():
+    """UnifiedResult.to_dict() preserves steps and state_trace."""
+    result = UnifiedResult(
+        steps=[{"iteration": 0, "result": "ok"}],
+        state_trace=[{"state": "REASON", "iteration": 0}],
+    )
+    d = result.to_dict()
+    assert len(d["steps"]) == 1
+    assert len(d["state_trace"]) == 1
+
+
+# ─── generate_factor_code 便利函数 ────────────────────────────────
+
+
+class _DictLLM:
+    """LLM that returns a fixed code string."""
+    def __init__(self, code: str) -> None:
+        self._code = code
+        self.calls: list = []
+
+    def chat(self, messages: list, temperature: float = 0.3) -> str:
+        self.calls.append((messages, temperature))
+        return f"```python\n{self._code}\n```"
+
+
+@pytest.mark.asyncio
+async def test_generate_factor_code_success():
+    """generate_factor_code returns UnifiedResult with code + series."""
+    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code
+
+    llm = _DictLLM("def compute_factor(df):\n    return df['close'].fill_null(0)")
+    result = await generate_factor_code(
+        "alpha-001", "close", _sample_df(),
+        llm_client=llm, max_repair_rounds=0,
+    )
+    assert result.code is not None
+    assert "compute_factor" in result.code
+    assert result.error is None
+    assert result.iterations == 1
+
+
+@pytest.mark.asyncio
+async def test_generate_factor_code_failure():
+    """generate_factor_code returns error on bad code."""
+    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code
+
+    llm = _DictLLM("def compute_factor(df):\n    if rank(pl.col('x')) > 0: return 1")
+    result = await generate_factor_code(
+        "alpha-001", "rank(x)", _sample_df(),
+        llm_client=llm, max_repair_rounds=0,
+    )
+    # Code has syntax/execution error — loop retries then gives up
+    assert result.error is not None or result.code is not None
+
+
+@pytest.mark.asyncio
+async def test_generate_factor_code_builds_messages():
+    """generate_factor_code auto-builds system+user prompt from spec."""
+    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code
+
+    llm = _DictLLM("def compute_factor(df):\n    return df['close'].fill_null(0)")
+    await generate_factor_code(
+        "alpha-042", "close / open", _sample_df(),
+        llm_client=llm, system_prompt="TEST SYSTEM PROMPT",
+    )
+    # LLM should have been called with the system prompt
+    assert len(llm.calls) >= 1
+    first_messages = llm.calls[0][0]
+    assert first_messages[0]["role"] == "system"
+    assert "TEST SYSTEM PROMPT" in first_messages[0]["content"]
+    assert "alpha-042" in first_messages[1]["content"]

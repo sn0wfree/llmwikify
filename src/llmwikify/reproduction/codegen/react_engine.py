@@ -130,50 +130,7 @@ class ReactResult:
 # Prompt template for the OBSERVE → REASON error feedback. Mirrors the
 # pattern runner_v2.py uses to inject tool errors back into the message
 # history (see ``_reason`` around line 415).
-OBSERVE_FEEDBACK_TEMPLATE = """[ReAct OBSERVE] Your previous code failed at stage: {stage}
-
-Error:
-{error}
-
-{context}
-
-## FIX GUIDE
-
-### If "truth value of an Expr is ambiguous":
-You used Python `if/and/or` on a polars expression. This is NOT allowed.
-
-BEFORE (broken):
-```python
-if rank(pl.col('a')) < rank(pl.col('b')):
-    factor = -1
-else:
-    factor = 0
-```
-
-AFTER (fixed):
-```python
-factor = pl.when(rank(pl.col('a')) < rank(pl.col('b'))).then(-1).otherwise(0)
-```
-
-Also replace:
-- `expr and expr` → `expr & expr`
-- `expr or expr` → `expr | expr`
-- `not expr` → `~expr`
-
-### If "TimeoutError":
-Your code has an infinite loop or too-slow computation.
-- Use `with_columns()` to materialize intermediate results
-- Avoid nested rolling operations without materialization
-
-### If "NameError: name 'xxx' is not defined":
-Check operator name. Available: rolling_*, ts_*, rank, scale, neutralize, etc.
-
-### General rules:
-- Use FUNCTION FORM: `rolling_std(pl.col('x'), window=20)` NOT `pl.col('x').rolling_std(...)`
-- Use `.over('date')` for cross-section operators (rank, scale, etc.)
-- Use `neutralize(f, group=pl.col('industry'))` for industry neutralization
-
-Output ONLY the corrected code block, no prose."""
+from .feedback_templates import OBSERVE_FEEDBACK_TEMPLATE  # noqa: F401 — backward compat re-export
 
 
 def compile_to_code_react(
@@ -188,6 +145,17 @@ def compile_to_code_react(
     progress_callback: Callable[[ReactStep], None] | None = None,
 ) -> ReactResult:
     """ReAct-style self-retry: LLM emits code → execute → on error, re-prompt.
+
+    .. deprecated::
+        Use ``llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync`` instead.
+    """
+    import warnings
+    warnings.warn(
+        "compile_to_code_react is deprecated. Use "
+        "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     Args:
         factor_name: Display name (for logging / telemetry).

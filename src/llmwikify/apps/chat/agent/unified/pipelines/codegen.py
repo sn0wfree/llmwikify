@@ -2,22 +2,33 @@
 
 - CodegenReasoner(Pipeline): LLMCallStep(sync) + ExtractCodeStep → ReasonResponse
 - CodeActor(StepHandler): ValidateAndExecuteStep + BuildFeedbackStep → ActResult
+- generate_factor_code(): 便利函数，一步完成 codegen
 
 用法::
 
     from llmwikify.apps.chat.agent.unified.pipelines.codegen import (
-        CodegenReasoner, CodeActor,
+        CodegenReasoner, CodeActor, generate_factor_code,
     )
 
     reasoner = CodegenReasoner(llm_client)
     actor = CodeActor()
+
+    # 便利函数
+    result = await generate_factor_code("alpha-001", formula_brief, df)
+    print(result.code, result.factor_series, result.error)
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from llmwikify.apps.chat.agent.unified.core import Pipeline, StepHandler, StepResult
-from llmwikify.apps.chat.agent.unified.spec import ActResult, ReasonResponse
+from llmwikify.apps.chat.agent.unified.spec import (
+    ActResult,
+    CodegenSpec,
+    ReasonResponse,
+    UnifiedResult,
+)
 from llmwikify.apps.chat.agent.unified.steps import (
     BuildFeedbackStep,
     CodeExecResult,
@@ -42,13 +53,38 @@ class CodegenReasoner(Pipeline):
         super().__init__(LLMCallStep(llm_client), ExtractCodeStep())
 
     async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
+        # 首轮：从 spec 构建初始 messages（system + user prompt）
+        messages = input if input else []
+        if not messages and ctx is not None and hasattr(ctx, "messages"):
+            messages = ctx.messages
+        if not messages and hasattr(spec, "factor_name") and spec.factor_name:
+            user_prompt = f"""Factor: {spec.factor_name}
+Formula (pseudo-code): {spec.formula_brief}
+
+Write a Python function `compute_factor(df: pl.DataFrame) -> pl.Series` that computes
+this factor. Use QuantNodes operators (rank, ts_argmax, rolling_std, etc.) which are
+in the namespace, and use polars expressions otherwise.
+
+Output ONLY the code block (use FUNCTION FORM for QuantNodes operators)."""
+            messages = [
+                {"role": "system", "content": spec.system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+            if ctx is not None and hasattr(ctx, "messages"):
+                ctx.messages = messages
+
         # Pipeline: messages → LLM text → code
-        pipeline_result = await super().handle(input, spec, ctx)
+        pipeline_result = await super().handle(messages, spec, ctx)
         if not pipeline_result.success:
             return StepResult.ok(ReasonResponse(
                 error=pipeline_result.error,
                 is_valid=False,
             ))
+
+        # 追加 assistant 消息到历史（供下轮 feedback 用）
+        if pipeline_result.output and ctx is not None and hasattr(ctx, "messages"):
+            ctx.messages.append({"role": "assistant", "content": pipeline_result.output})
+
         return StepResult.ok(ReasonResponse(
             code=pipeline_result.output,
             is_valid=pipeline_result.output is not None,
@@ -122,3 +158,82 @@ class CodeActor(StepHandler):
             code=code_result.code,
             messages_to_inject=[feedback_result.output] if feedback_result.output else [],
         ))
+
+
+# ─── 便利函数 ──────────────────────────────────────────────
+
+
+async def generate_factor_code(
+    factor_name: str,
+    formula_brief: str,
+    df: Any,
+    *,
+    llm_client: Any = None,
+    system_prompt: str = "",
+    max_repair_rounds: int = 3,
+    temperature: float = 0.3,
+    max_iterations: int = 0,
+    hook: Any = None,
+) -> UnifiedResult:
+    """一步完成 codegen：构建 spec + loop → run_to_completion。
+
+    替代旧 ``react_engine.compile_to_code_react`` + ``llm_code.generate_factor_code``。
+
+    Args:
+        factor_name: 因子名（如 "alpha-001"）
+        formula_brief: 自然语言公式描述
+        df: polars DataFrame（长格式）
+        llm_client: LLM 客户端（None 则自动构建）
+        system_prompt: 系统提示词（空则用 SYSTEM_PROMPT_CODE）
+        max_repair_rounds: 最大修复轮数（默认 3）
+        temperature: LLM 温度
+        max_iterations: Loop 最大迭代数（0 = max_repair_rounds + 1）
+        hook: UnifiedHook 子类（可选，用于 progress_callback 等）
+
+    Returns:
+        UnifiedResult（含 .code, .factor_series, .error, .to_dict()）
+    """
+    from llmwikify.apps.chat.agent.unified.loop import UnifiedAgentLoop
+    from llmwikify.reproduction.codegen.llm_code import SYSTEM_PROMPT_CODE
+
+    if not system_prompt:
+        system_prompt = SYSTEM_PROMPT_CODE
+    if max_iterations <= 0:
+        max_iterations = max_repair_rounds + 1
+
+    spec = CodegenSpec(
+        messages=[],
+        df=df,
+        factor_name=factor_name,
+        formula_brief=formula_brief,
+        max_repair_rounds=max_repair_rounds,
+        system_prompt=system_prompt,
+        temperature=temperature,
+        max_iterations=max_iterations,
+    )
+
+    reasoner = CodegenReasoner(llm_client)
+    actor = CodeActor()
+
+    from llmwikify.apps.chat.agent.unified.steps.checks import CheckSuccessStep
+    loop = UnifiedAgentLoop(
+        reasoner=reasoner,
+        actor=actor,
+        deciders={"after_act": CheckSuccessStep()},
+        hook=hook,
+    )
+
+    return await loop.run_to_completion(spec)
+
+
+def generate_factor_code_sync(
+    factor_name: str,
+    formula_brief: str,
+    df: Any,
+    **kwargs: Any,
+) -> UnifiedResult:
+    """同步版 generate_factor_code（内部 asyncio.run）。
+
+    用于 run_101_alphas.py 等同步脚本。
+    """
+    return asyncio.run(generate_factor_code(factor_name, formula_brief, df, **kwargs))

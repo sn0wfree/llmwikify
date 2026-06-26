@@ -39,6 +39,7 @@ from llmwikify.reproduction.codegen.llm_code import (
     validate_safety,
     validate_syntax,
 )
+from llmwikify.apps.chat.agent.unified.core import UnifiedHook
 
 # ─── Constants ───────────────────────────────────────────────────────
 
@@ -339,54 +340,42 @@ def _llm_code_react(
     max_repair_rounds: int = 3,
     temperature: float = 0.3,
 ) -> tuple[str | None, pl.Series | None, str | None, dict]:
-    """ReAct self-retry path: LLM emits code, executes, on failure feeds
-    error back to LLM up to max_repair_rounds times.
+    """ReAct self-retry path: unified agent loop.
 
     Returns (code, factor_series, error, react_result_dict).
     """
-    from llmwikify.reproduction.codegen.react_engine import (
-        ReactStep,
-        compile_to_code_react,
-    )
+    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code_sync
 
-    def _progress(step: ReactStep) -> None:
-        state = step.state.value
-        ek = step.error_kind.value
-        if ek == "none":
-            print(f"  [ReAct/{state}] OK ({step.elapsed_sec * 1000:.0f}ms)")
-        else:
-            print(
-                f"  [ReAct/{state}] {ek}: {step.error_message[:120]}"
-                f" ({step.elapsed_sec * 1000:.0f}ms)"
-            )
+    class _ProgressHook(UnifiedHook):
+        """Print progress like the old progress_callback."""
+        def on_reason_start(self, ctx):
+            print(f"  [REASON] iteration {ctx.iteration}...")
 
-    result = compile_to_code_react(
+        def on_act_end(self, ctx, result):
+            if hasattr(result, "success") and result.success:
+                print(f"  [ACT] OK ({getattr(result, 'error_kind', 'none')})")
+            else:
+                ek = getattr(result, "error_kind", "unknown")
+                em = getattr(result, "error", "")[:120]
+                print(f"  [ACT] {ek}: {em}")
+
+    result = generate_factor_code_sync(
         factor_name=factor_name,
         formula_brief=formula_brief,
-        system_prompt=SYSTEM_PROMPT_CODE,
         df=df_pl,
-        llm=llm,
+        llm_client=llm,
         max_repair_rounds=max_repair_rounds,
         temperature=temperature,
-        progress_callback=_progress,
+        hook=_ProgressHook(),
     )
 
-    print(f"\n[ReAct] iterations={result.iterations}, "
-          f"is_valid={result.is_valid}, error_kind={result.error_kind.value}")
-    for i, step in enumerate(result.steps):
-        print(f"  step {i}: {step.state.value} "
-              f"({step.error_kind.value if step.error_kind.value != 'none' else 'OK'})")
+    print(f"\n[Unified] iterations={result.iterations}, "
+          f"stop_reason={result.stop_reason}, error={result.error}")
 
-    if not result.is_valid:
-        return None, None, result.error_message, result.to_dict()
+    if result.error:
+        return None, None, result.error, result.to_dict()
 
-    # Re-execute the final code to get the Series (compile_to_code_react
-    # doesn't return the Series; we re-run the validated code)
-    try:
-        series = execute_code(result.code, df_pl)
-    except Exception as exc:
-        return None, None, f"final execute failed: {exc}", result.to_dict()
-    return result.code, series, None, result.to_dict()
+    return result.code, result.factor_series, None, result.to_dict()
 
 
 # ─── Backtest extraction ─────────────────────────────────────────────
