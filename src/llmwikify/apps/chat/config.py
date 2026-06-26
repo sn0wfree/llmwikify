@@ -90,7 +90,7 @@ _SIX_STEP_EXTRAS: dict[str, Any] = {
     "llm_params": {
         "research_plan":   {"max_tokens": 2048, "temperature": 0.3, "json_mode": True},
         "research_replan": {"max_tokens": 1024, "temperature": 0.3, "json_mode": True},
-        "research_clarify":{"max_tokens": 1024, "temperature": 0.3, "json_mode": True},
+        "research_clarify":{"max_tokens": 4096, "temperature": 0.3, "json_mode": True},
         "research_reason": {"max_tokens": 1024, "temperature": 0.1, "json_mode": True},
         "research_report": {"max_tokens": 8192, "temperature": 0.3, "json_mode": False},
         "research_review": {"max_tokens": 2048, "temperature": 0.1, "json_mode": True},
