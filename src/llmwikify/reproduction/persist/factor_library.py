@@ -450,23 +450,33 @@ def save_backtest_duckdb(
             _nan(backtest.get("longshort_max_dd")),
         ])
 
-        # Insert ic_series
-        for pt in backtest.get("ic_series", []):
-            conn.execute(
-                "INSERT INTO ic_series VALUES (?, ?, ?)",
-                [run_id, pt.get("date"), _nan(pt.get("ic"))],
-            )
+        # Insert ic_series (bulk)
+        ic_rows = [
+            [run_id, pt.get("date"), _nan(pt.get("ic"))]
+            for pt in backtest.get("ic_series", [])
+        ]
+        if ic_rows:
+            import pandas as pd
+            ic_df = pd.DataFrame(ic_rows, columns=["run_id", "date", "ic"])
+            conn.register("_ic_df", ic_df)
+            conn.execute("INSERT INTO ic_series SELECT * FROM _ic_df")
+            conn.unregister("_ic_df")
 
-        # Insert equity_curve
+        # Insert equity_curve (bulk)
         equity = backtest.get("equity_curve") or backtest.get("group_nav_series") or {}
-        for group_name, points in equity.items():
-            for pt in points:
-                conn.execute(
-                    "INSERT INTO equity_curve VALUES (?, ?, ?, ?)",
-                    [run_id, group_name, pt.get("date"), _nan(pt.get("nav"))],
-                )
+        eq_rows = [
+            [run_id, gn, pt.get("date"), _nan(pt.get("nav"))]
+            for gn, points in equity.items()
+            for pt in points
+        ]
+        if eq_rows:
+            import pandas as pd
+            eq_df = pd.DataFrame(eq_rows, columns=["run_id", "group_name", "date", "nav"])
+            conn.register("_eq_df", eq_df)
+            conn.execute("INSERT INTO equity_curve SELECT * FROM _eq_df")
+            conn.unregister("_eq_df")
 
-        # Insert factor_values (from wide DataFrame)
+        # Insert factor_values (bulk from wide DataFrame)
         if factor_wide is not None and hasattr(factor_wide, "reset_index"):
             import pandas as pd
             factor_wide.index.name = "date"
@@ -478,12 +488,12 @@ def save_backtest_duckdb(
                 melted["date"] = pd.to_datetime(melted["date"])
                 melted["stock"] = melted["stock"].astype(str)
                 melted["value"] = melted["value"].astype(float)
-                # Clear old values and insert new
+                fv_df = melted[["date", "stock", "value"]].reset_index(drop=True)
+                # Clear old values and insert new (bulk)
                 conn.execute("DELETE FROM factor_values")
-                conn.executemany(
-                    "INSERT INTO factor_values VALUES (?, ?, ?)",
-                    melted[["date", "stock", "value"]].values.tolist(),
-                )
+                conn.register("_fv_df", fv_df)
+                conn.execute("INSERT INTO factor_values SELECT * FROM _fv_df")
+                conn.unregister("_fv_df")
 
         logger.info("saved backtest to %s (run_id=%s)", db_path, run_id)
     finally:
