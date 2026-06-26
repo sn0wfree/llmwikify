@@ -201,6 +201,17 @@ def _try_parse_json(text: str) -> dict[str, Any]:
                 return parsed
         except json.JSONDecodeError:
             pass
+    # 4. raw_decode: find first valid JSON object anywhere in text
+    #    Handles "prose + {valid json}" patterns from LLMs like minimax.
+    decoder = json.JSONDecoder()
+    for start_idx in range(len(candidate)):
+        if candidate[start_idx] == "{":
+            try:
+                parsed, _ = decoder.raw_decode(candidate, start_idx)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
     return {"raw_text": text}
 
 

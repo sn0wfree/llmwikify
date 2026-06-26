@@ -102,11 +102,16 @@ class DuckDuckGoProvider:
 
     async def search(self, query: str, num_results: int) -> list[SearchResult]:
         import asyncio
-        from duckduckgo_search import DDGS
+
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
 
         def _search():
             with DDGS() as ddgs:
-                return list(ddgs.text(query, max_results=num_results))
+                results = ddgs.text(query, max_results=num_results)
+                return list(results) if results else []
 
         results = await asyncio.to_thread(_search)
         return [

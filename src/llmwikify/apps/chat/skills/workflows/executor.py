@@ -480,7 +480,7 @@ class WorkflowExecutor:
                 )
             except KeyError:
                 val = None
-            actual = len(val) if val is not None else 0
+            actual = len(val) if isinstance(val, list) else 0
             return _eval_int_compare(actual, op, n)
         logger.warning("phase %r: unparseable skip_if=%r; not skipping", phase.id, expr)
         return False
@@ -521,6 +521,19 @@ class WorkflowExecutor:
                 self._mark_failed(phase_id, f"fan_out upstream ref: {e}")
                 continue
             if not isinstance(upstream_value, list):
+                # Try skip_if before marking failed — the YAML may
+                # have a skip condition for this exact case
+                # (e.g. skip_if: len($research_plan.xxx) < 1).
+                if self._should_skip(phase):
+                    self._skipped.add(phase_id)
+                    self._outputs[phase_id] = {"_skipped": True}
+                    self._emit("phase_skipped", phase_id=phase_id)
+                    logger.info(
+                        "phase %s skipped (fan_out upstream %s is %s, skip_if matched)",
+                        phase_id, phase.fan_out.from_ref,
+                        type(upstream_value).__name__,
+                    )
+                    continue
                 self._mark_failed(
                     phase_id,
                     f"fan_out.from={phase.fan_out.from_ref!r} resolved to "
@@ -630,7 +643,7 @@ class WorkflowExecutor:
 
     def _halt(self, reason: str) -> WorkflowRunResult:
         self._emit("workflow_halted", reason=reason)
-        return WorkflowRunResult(
+        result = WorkflowRunResult(
             run_id=self.run_id,
             status="halted",
             outputs=dict(self._outputs),
@@ -639,6 +652,35 @@ class WorkflowExecutor:
             duration_seconds=time.monotonic() - self._started_at,
             phase_summaries=self._phase_summaries(),
         )
+        # Persist halted state so the status action sees the right value.
+        state = RunState(
+            run_id=self.run_id,
+            workflow_name=self.spec.name,
+            source_path=str(self.spec.source_path) if self.spec.source_path else None,
+            started_at=self._started_at,
+            status="halted",
+            inputs_data=dict(self.inputs.data),
+            session_id=self.session_id,
+            phases={
+                pid: {
+                    "status": (
+                        "complete" if pid in self._completed
+                        else "failed" if pid in self._failed
+                        else "skipped" if pid in self._skipped
+                        else "pending"
+                    ),
+                    "output": self._outputs.get(pid, {}),
+                }
+                for pid in self._live_phases
+            },
+            total_tokens_used=self._total_tokens,
+            total_agents_spawned=self._total_agents,
+        )
+        try:
+            self.run_store.save(state)
+        except Exception as e:  # pragma: no cover
+            logger.warning("failed to persist halted run state: %s", e)
+        return result
 
     def _finalize(self) -> WorkflowRunResult:
         if not self._failed:
