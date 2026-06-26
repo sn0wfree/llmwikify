@@ -22,7 +22,9 @@ import json
 import re
 import signal
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -40,11 +42,16 @@ from llmwikify.reproduction.codegen.llm_code import (
     validate_syntax,
 )
 from llmwikify.apps.chat.agent.unified.core import UnifiedHook
+from CodersWheel.QuickTool.timer import timer
 
 # ─── Constants ───────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _STAGE_NAMES = {-1: "llm", 0: "extract", 1: "syntax", 2: "safety", 3: "execute"}
+
+# ── 并发控制 ──────────────────────────────────────────────
+_llm_semaphore = threading.Semaphore(3)  # api.minimaxi.com ≤3 并发
+_print_lock = threading.Lock()
 
 
 @dataclass
@@ -97,6 +104,7 @@ def _preload_data(data_path: Path, h5_filename: str = "stk_daily.h5") -> dict[st
     return {name: pd.read_hdf(h5, h5_key) for name, h5_key in keys.items()}
 
 
+@timer
 def _build_wide_df(data_cache: dict[str, pd.DataFrame]) -> pl.DataFrame:
     """Convert cached wide DataFrames → single polars long DataFrame (date, code, ...)."""
     def wide_to_long(wide: pd.DataFrame, name: str) -> pl.DataFrame:
@@ -182,6 +190,7 @@ def _wide_from_long(df_pl: pl.DataFrame, factor_series: pl.Series) -> pd.DataFra
     return wide
 
 
+@timer
 def _write_factor_h5(wide: pd.DataFrame, factor_name: str, output_dir: Path, h5_filename: str = "stk_daily.h5") -> Path:
     """Write wide DataFrame to QuantNodes-compatible H5 file.
 
@@ -332,6 +341,7 @@ Output ONLY the code block."""
     return code, series, None, None
 
 
+@timer
 def _llm_code_react(
     factor_name: str,
     formula_brief: str,
@@ -743,6 +753,13 @@ def save_backtest_to_db(
 # ─── run_one_factor ──────────────────────────────────────────────────
 
 
+@timer
+def _run_pipeline(qn_config: dict) -> dict:
+    from QuantNodes.research.factor_test.pipeline_runner import PipelineRunner
+    runner = PipelineRunner.from_dict(qn_config)
+    return runner.run()
+
+
 def run_one_factor(
     alpha_index: int = 1,
     use_react: bool = True,
@@ -829,11 +846,8 @@ def run_one_factor(
     qn_config = _build_qn_config(factor_name, h5_path, code, config=config)
     print("[PipelineRunner] running 12-node pipeline...")
 
-    from QuantNodes.research.factor_test.pipeline_runner import PipelineRunner
-
     try:
-        runner = PipelineRunner.from_dict(qn_config)
-        ctx = runner.run()
+        ctx = _run_pipeline(qn_config)
     except Exception as exc:
         import traceback
         tb = traceback.format_exc()
@@ -1120,6 +1134,35 @@ def _run_llm_extract(args: argparse.Namespace, output_dir: Path) -> None:
     print("=" * 80)
 
 
+def _run_one_safe(
+    idx: int,
+    config: RunConfig,
+    df_pl: pl.DataFrame,
+    t0: float,
+    results_list: list,
+    timeout_sec: int = 180,
+) -> dict:
+    """带信号量保护 + 超时的单 alpha 执行（线程安全）。"""
+    with _llm_semaphore:
+        import concurrent.futures
+        # 用 ThreadPoolExecutor 内部的超时机制替代 SIGALRM
+        result = run_one_factor(idx, use_react=True, config=config, df_pl=df_pl)
+        if "alpha_index" not in result:
+            result["alpha_index"] = idx
+
+        with _print_lock:
+            elapsed_cum = time.monotonic() - t0
+            _print_row(idx, result, elapsed_cum)
+            out_file = config.output_dir / f"single_factor_{idx:03d}.json"
+            out_file.write_text(
+                json.dumps(result, indent=2, ensure_ascii=False, default=str),
+                encoding="utf-8",
+            )
+            results_list.append(result)
+
+        return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Batch run 101 alphas")
     parser.add_argument("--start", type=int, default=1, help="First alpha index (default: 1)")
@@ -1130,6 +1173,7 @@ def main() -> None:
     parser.add_argument("--delay", type=float, default=3.0, help="Seconds to sleep between alpha runs (default: 3.0)")
     parser.add_argument("--no-delay", action="store_true", help="Disable inter-alpha delay (for testing only)")
     parser.add_argument("--timeout", type=int, default=180, help="Per-alpha timeout in seconds (default: 180)")
+    parser.add_argument("--workers", type=int, default=1, help="Number of concurrent workers (default: 1, max: 3)")
     parser.add_argument("--llm-extract", action="store_true", help="Phase 3: LLM extract L2-L6 metadata (reads existing JSONs, no LLM code re-run)")
     parser.add_argument("--output-dir", type=Path, default=None, help="Output directory for JSON results (default: scripts/output)")
     parser.add_argument("--data-path", type=Path, default=None, help="Path to H5 data directory (default: ~/.llmwikify/akshare_cache/quantnodes_h5_long)")
@@ -1189,38 +1233,59 @@ def main() -> None:
 
     results: list[dict] = []
     failures: int = 0
+    n_workers = min(args.workers, 3)  # 最多 3 并发
 
-    for idx in range(args.start, args.end + 1):
-        if idx in skip:
-            p = config.output_dir / f"single_factor_{idx:03d}.json"
-            loaded = json.loads(p.read_text(encoding="utf-8"))
-            if "alpha_index" not in loaded:
-                loaded["alpha_index"] = idx
-            results.append(loaded)
-            continue
+    # 加载已有的 skipped 结果
+    for idx in sorted(skip):
+        p = config.output_dir / f"single_factor_{idx:03d}.json"
+        loaded = json.loads(p.read_text(encoding="utf-8"))
+        if "alpha_index" not in loaded:
+            loaded["alpha_index"] = idx
+        results.append(loaded)
 
-        elapsed_cum = time.monotonic() - t0
-        print(f"\n[{time.strftime('%H:%M:%S')}] alpha-{idx:03d} (elapsed: {elapsed_cum:.0f}s, failures: {failures})")
+    # 构建待跑列表
+    to_run = [idx for idx in range(args.start, args.end + 1) if idx not in skip]
 
-        result = run_one_factor(idx, use_react=True, config=config, df_pl=df_pl)
-        if "alpha_index" not in result:
-            result["alpha_index"] = idx
-        results.append(result)
+    if n_workers <= 1:
+        # ── 串行模式 ──
+        for idx in to_run:
+            elapsed_cum = time.monotonic() - t0
+            print(f"\n[{time.strftime('%H:%M:%S')}] alpha-{idx:03d} (elapsed: {elapsed_cum:.0f}s, failures: {failures})")
 
-        _print_row(idx, result, elapsed_cum)
+            result = run_one_factor(idx, use_react=True, config=config, df_pl=df_pl)
+            if "alpha_index" not in result:
+                result["alpha_index"] = idx
+            results.append(result)
 
-        out_file = config.output_dir / f"single_factor_{idx:03d}.json"
-        out_file.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+            _print_row(idx, result, elapsed_cum)
 
-        if result.get("status") != "success":
-            failures += 1
-            if failures >= args.max_failures:
-                print(f"\n[stop] {failures} failures reached --max-failures={args.max_failures}")
-                break
+            out_file = config.output_dir / f"single_factor_{idx:03d}.json"
+            out_file.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
 
-        # Sleep between runs to avoid 429 rate limiting
-        if idx < args.end and args.delay > 0 and not args.no_delay:
-            time.sleep(args.delay)
+            if result.get("status") != "success":
+                failures += 1
+                if failures >= args.max_failures:
+                    print(f"\n[stop] {failures} failures reached --max-failures={args.max_failures}")
+                    break
+
+            if idx < args.end and args.delay > 0 and not args.no_delay:
+                time.sleep(args.delay)
+    else:
+        # ── 多线程模式 ──
+        print(f"  Workers: {n_workers} (concurrent)")
+        with ThreadPoolExecutor(max_workers=n_workers) as pool:
+            futures = {
+                pool.submit(_run_one_safe, idx, config, df_pl, t0, results, args.timeout): idx
+                for idx in to_run
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    future.result(timeout=args.timeout + 60)
+                except Exception as exc:
+                    with _print_lock:
+                        print(f"\n  [{idx:03d}] EXCEPTION: {exc}")
+                        failures += 1
 
     # Write summary files
     _write_json(results, config.output_dir / "multi_alpha_001_to_101.json")
