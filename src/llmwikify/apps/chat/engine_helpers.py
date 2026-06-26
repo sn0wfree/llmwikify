@@ -30,6 +30,92 @@ import logging
 from typing import Any
 
 
+def _repair_truncated_json(text: str) -> Any | None:
+    """Try to parse truncated JSON by closing open brackets.
+
+    LLM responses often get cut mid-string due to max_tokens.
+    This finds the last safe position (after a complete value)
+    and closes any open objects/arrays.
+
+    Returns the parsed object, or None if repair fails.
+    """
+    # Track open brackets to know what to close
+    stack: list[str] = []
+    last_safe = -1  # position after last complete key-value pair
+    in_string = False
+    escape_next = False
+
+    for i, c in enumerate(text):
+        if escape_next:
+            escape_next = False
+            continue
+        if c == '\\' and in_string:
+            escape_next = True
+            continue
+        if c == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        # Outside string
+        if c in '{[':
+            stack.append('}' if c == '{' else ']')
+        elif c in '}]':
+            if stack and stack[-1] == c:
+                stack.pop()
+        elif c == ',' and not in_string:
+            last_safe = i  # position after a complete value
+
+    if last_safe >= 0:
+        # Truncate at last safe position and re-scan for bracket state
+        truncated = text[:last_safe].rstrip()
+        # Re-scan truncated text to get correct bracket stack
+        t_stack: list[str] = []
+        t_in_string = False
+        t_escape = False
+        for c in truncated:
+            if t_escape:
+                t_escape = False
+                continue
+            if c == '\\' and t_in_string:
+                t_escape = True
+                continue
+            if c == '"':
+                t_in_string = not t_in_string
+                continue
+            if t_in_string:
+                continue
+            if c in '{[':
+                t_stack.append('}' if c == '{' else ']')
+            elif c in '}]':
+                if t_stack and t_stack[-1] == c:
+                    t_stack.pop()
+        closing = ''
+        if t_in_string:
+            closing += '"'
+        closing += ''.join(reversed(t_stack))
+        candidate = truncated + closing
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+    # No comma-separated safe point: try closing the unterminated
+    # string and any open brackets directly.
+    if in_string or stack:
+        closing = ''
+        if in_string:
+            closing += '"'
+        closing += ''.join(reversed(stack))
+        candidate = text + closing
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+    return None
+
+
 def safe_json_loads(raw: str, *, allow_truncate: bool = True) -> Any:
     """Robustly parse JSON returned by an LLM.
 
@@ -67,6 +153,11 @@ def safe_json_loads(raw: str, *, allow_truncate: bool = True) -> Any:
             obj, _end = json.JSONDecoder().raw_decode(text, idx=start)
             return obj
         except json.JSONDecodeError:
+            # 3. Truncation repair: LLM response cut mid-string.
+            #    Find the last safe position and close brackets.
+            repaired = _repair_truncated_json(text[start:])
+            if repaired is not None:
+                return repaired
             raise
 
 
