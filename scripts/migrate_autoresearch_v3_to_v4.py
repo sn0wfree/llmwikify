@@ -159,9 +159,13 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    logging.basicConfig(
+    from llmwikify.foundation.logging import setup_logging
+
+    setup_logging(
         level=logging.ERROR if args.json else logging.INFO,
-        format="%(message)s",
+        log_file=None,
+        fmt="%(message)s",
+        force=True,
     )
     if not args.json:
         logger.info("=== autoresearch v4 migration audit ===")

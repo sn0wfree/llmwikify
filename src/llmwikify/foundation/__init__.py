@@ -15,6 +15,8 @@ Subpackages:
 
 Top-level modules:
     - config: configuration loading and defaults
+    - logging: unified ``setup_logging`` entry point + ``log_timing``
+      decorator (single source for root logger configuration)
     - llm_client: the LLMClient base class (re-exported as
       ``llmwikify.foundation.llm.LLMClient``)
 """

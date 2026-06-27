@@ -275,9 +275,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
+    from llmwikify.foundation.logging import setup_logging
+
+    setup_logging(
         level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(message)s",
+        log_file=None,
+        fmt="%(message)s",
+        force=True,
     )
 
     data_dir = Path(args.data_dir).expanduser()

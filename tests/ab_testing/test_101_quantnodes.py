@@ -19,9 +19,13 @@ from pathlib import Path
 ROOT = Path("/home/ll/llmwikify")
 sys.path.insert(0, str(ROOT / "src"))
 
-logging.basicConfig(
+from llmwikify.foundation.logging import setup_logging  # noqa: E402
+
+setup_logging(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    log_file=None,
+    fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    force=True,
 )
 logger = logging.getLogger("test_101_quantnodes")
 

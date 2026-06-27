@@ -157,10 +157,14 @@ def main():
     )
     args = parser.parse_args()
 
-    logging.basicConfig(
+    from llmwikify.foundation.logging import setup_logging
+
+    setup_logging(
         level=logging.INFO,
-        format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s",
+        log_file=None,
+        fmt="%(asctime)s %(levelname)-5s [%(name)s] %(message)s",
         datefmt="%H:%M:%S",
+        force=True,
     )
     logger = logging.getLogger("ab_test")
 

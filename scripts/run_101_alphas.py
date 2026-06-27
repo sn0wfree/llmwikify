@@ -43,11 +43,10 @@ from llmwikify.reproduction.codegen.llm_code import (
     validate_syntax,
 )
 from llmwikify.apps.chat.agent.unified.core import UnifiedHook
-from CodersWheel.QuickTool.timer import timer
+from llmwikify.foundation.logging import log_timing, setup_logging
 from llmwikify.reproduction.pipeline.backtest_extract import safe_float, extract_full_backtest_from_ctx
 from llmwikify.reproduction.pipeline.data_loader import wide_from_long, write_factor_h5, derive_input_columns
 from llmwikify.reproduction.pipeline.score import compute_score, compute_status
-from CodersWheel.QuickTool.logger import LoggerHelper
 
 # ─── Constants ───────────────────────────────────────────────────────
 
@@ -55,10 +54,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _STAGE_NAMES = {-1: "llm", 0: "extract", 1: "syntax", 2: "safety", 3: "execute"}
 
 # ─── Logger ──────────────────────────────────────────────────────────
-logger = LoggerHelper(
-    app_name='run_101_alphas',
-    file_path=str(PROJECT_ROOT / "scripts" / "output" / "run_101_alphas.log"),
+setup_logging(
+    log_dir=PROJECT_ROOT / "scripts" / "output",
+    log_file="run_101_alphas.log",
+    force=True,
 )
+logger = logging.getLogger("run_101_alphas")
 
 # ── 并发控制 ──────────────────────────────────────────────
 _llm_semaphore = threading.Semaphore(3)  # api.minimaxi.com ≤3 并发
@@ -152,7 +153,7 @@ def _preload_data(data_path: Path, h5_filename: str = "stk_daily.h5") -> dict[st
     return {name: pd.read_hdf(h5, h5_key) for name, h5_key in keys.items()}
 
 
-@timer
+@log_timing(logger=logger)
 def _build_wide_df(data_cache: dict[str, pd.DataFrame]) -> pl.DataFrame:
     """Convert cached wide DataFrames → single polars long DataFrame (date, code, ...)."""
     def wide_to_long(wide: pd.DataFrame, name: str) -> pl.DataFrame:
@@ -172,7 +173,7 @@ def _build_wide_df(data_cache: dict[str, pd.DataFrame]) -> pl.DataFrame:
 
 
 
-@timer
+@log_timing(logger=logger)
 def _write_factor_h5(wide: pd.DataFrame, factor_name: str, output_dir: Path, h5_filename: str = "stk_daily.h5") -> Path:
     """Write wide DataFrame to QuantNodes-compatible H5 file (delegates to data_loader)."""
     return write_factor_h5(wide, factor_name, output_dir)
@@ -187,7 +188,7 @@ def _build_qn_config(factor_name: str, h5_path: Path, expression: str, config: R
 # ─── LLM code generation ────────────────────────────────────────────
 
 
-@timer
+@log_timing(logger=logger)
 def _llm_code_react(
     factor_name: str,
     formula_brief: str,
@@ -272,14 +273,14 @@ def persist_code_to_yaml(
 # ─── run_one_factor ──────────────────────────────────────────────────
 
 
-@timer
+@log_timing(logger=logger)
 def _run_pipeline(qn_config: dict) -> dict:
     from QuantNodes.research.factor_test.pipeline_runner import PipelineRunner
     runner = PipelineRunner.from_dict(qn_config)
     return runner.run()
 
 
-@logger.deco(level='info', timer=True, extra_name='alpha')
+@log_timing(logger=logger, label='alpha')
 def run_one_factor(
     alpha_index: int = 1,
     use_react: bool = True,
@@ -326,7 +327,7 @@ def run_one_factor(
             temperature=config.temperature,
         )
         if error is not None:
-            logger.warn("[alpha-%03d] failed at react: %s", alpha_index, error[:100])
+            logger.warning("[alpha-%03d] failed at react: %s", alpha_index, error[:100])
             return {
                 "status": "failed",
                 "stage": "react",
@@ -343,7 +344,7 @@ def run_one_factor(
             temperature=config.temperature,
         )
         if error is not None:
-            logger.warn("[alpha-%03d] failed at %s: %s", alpha_index, _STAGE_NAMES.get(stage_idx, "unknown"), error[:100])
+            logger.warning("[alpha-%03d] failed at %s: %s", alpha_index, _STAGE_NAMES.get(stage_idx, "unknown"), error[:100])
             return {
                 "status": "failed",
                 "stage": _STAGE_NAMES.get(stage_idx, "unknown"),
@@ -374,7 +375,7 @@ def run_one_factor(
     except Exception as exc:
         import traceback
         tb = traceback.format_exc()
-        logger.warn("[alpha-%03d] failed at pipeline: %s: %s", alpha_index, type(exc).__name__, str(exc)[:100])
+        logger.warning("[alpha-%03d] failed at pipeline: %s: %s", alpha_index, type(exc).__name__, str(exc)[:100])
         print(f"[PipelineRunner] FAILED: {type(exc).__name__}: {exc}")
         print(tb[-1500:])
         return {
@@ -579,7 +580,7 @@ def _write_markdown(results: list[dict], path: Path) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-@logger.deco(level='info', timer=True, extra_name='paper')
+@log_timing(logger=logger, label='paper')
 def _run_paper_extract(config: RunConfig) -> Path:
     """Stage 1: Run paper extraction and return track_b_checkpoint.json path."""
     from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import run_one_paper
@@ -603,12 +604,12 @@ def _run_paper_extract(config: RunConfig) -> Path:
     )
 
     if not summary["success"]:
-        logger.warn("[paper] Failed: %s", summary.get("error"))
+        logger.warning("[paper] Failed: %s", summary.get("error"))
         raise RuntimeError(f"Paper extraction failed: {summary.get('error')}")
 
     track_b_path = output_root / config.paper_id / "track_b_checkpoint.json"
     if not track_b_path.exists():
-        logger.warn("[paper] track_b_checkpoint.json not found after extraction")
+        logger.warning("[paper] track_b_checkpoint.json not found after extraction")
         raise FileNotFoundError("track_b_checkpoint.json not found after extraction")
 
     logger.info("[paper] Success: %d signals extracted", summary["n_signals"])
@@ -617,7 +618,7 @@ def _run_paper_extract(config: RunConfig) -> Path:
     return track_b_path
 
 
-@logger.deco(level='info', timer=True, extra_name='meta')
+@log_timing(logger=logger, label='meta')
 def _run_llm_extract(config: RunConfig) -> None:
     """Stage 2b: Extract L2-L6 metadata from existing single_factor_NNN.json files."""
     from llmwikify.reproduction.factor_extractor import extract_batch
@@ -628,8 +629,8 @@ def _run_llm_extract(config: RunConfig) -> None:
 
     available = [i for i in indices if (config.output_dir / f"single_factor_{i:03d}.json").exists()]
     if not available:
-        logger.warn("[meta] No single_factor_NNN.json found in output/")
-        logger.warn("[meta] Run Stage 2 first (without --llm-extract)")
+        logger.warning("[meta] No single_factor_NNN.json found in output/")
+        logger.warning("[meta] Run Stage 2 first (without --llm-extract)")
         return
     logger.info("[meta] Available: %d alphas with JSON (%s...)", len(available), available[:5])
 
@@ -642,7 +643,7 @@ def _run_llm_extract(config: RunConfig) -> None:
     logger.info("[meta] Complete: %d/%d success", len(success), len(results))
     if failed:
         for r in failed:
-            logger.warn("[meta] Failed: alpha-%03d: %s", r["alpha_index"], r.get("error", "?")[:80])
+            logger.warning("[meta] Failed: alpha-%03d: %s", r["alpha_index"], r.get("error", "?")[:80])
 
 
 def _run_one_safe(
@@ -674,7 +675,7 @@ def _run_one_safe(
         return result
 
 
-@logger.deco(level='info', timer=True, extra_name='factor')
+@log_timing(logger=logger, label='factor')
 def _run_batch_processing(config: RunConfig) -> None:
     """Stage 2: Run batch alpha processing."""
     logger.info("[factor] Starting batch processing: alpha %d-%d", config.alpha_start, config.alpha_end)
@@ -737,9 +738,9 @@ def _run_batch_processing(config: RunConfig) -> None:
 
             if result.get("status") != "success":
                 failures += 1
-                logger.warn("[factor] alpha-%03d: failed (%s)", idx, result.get("error", "?")[:80])
+                logger.warning("[factor] alpha-%03d: failed (%s)", idx, result.get("error", "?")[:80])
                 if failures >= config.max_failures:
-                    logger.warn("[factor] Reached max failures (%d), stopping", config.max_failures)
+                    logger.warning("[factor] Reached max failures (%d), stopping", config.max_failures)
                     break
             else:
                 logger.info("[factor] alpha-%03d: success (%.1fs)", idx, result.get("elapsed_sec", 0))
@@ -759,7 +760,7 @@ def _run_batch_processing(config: RunConfig) -> None:
                 try:
                     future.result(timeout=config.timeout + 60)
                 except Exception as exc:
-                    logger.warn("[factor] alpha-%03d: EXCEPTION: %s", idx, exc)
+                    logger.warning("[factor] alpha-%03d: EXCEPTION: %s", idx, exc)
                     failures += 1
 
     # Write summary files
@@ -820,12 +821,14 @@ def main() -> None:
     args = parser.parse_args()
 
     # Re-initialize logger with user-specified log file
-    log_file = args.log_file or PROJECT_ROOT / "scripts" / "output" / "run_101_alphas.log"
-    logger = LoggerHelper(
-        app_name='run_101_alphas',
-        file_path=str(log_file),
-        log_level=logging.DEBUG if args.verbose else logging.INFO,
+    log_path = Path(args.log_file) if args.log_file else PROJECT_ROOT / "scripts" / "output" / "run_101_alphas.log"
+    setup_logging(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        log_dir=log_path.parent,
+        log_file=log_path.name,
+        force=True,
     )
+    logger = logging.getLogger("run_101_alphas")
 
     config = RunConfig(
         # Paper extraction
@@ -847,7 +850,7 @@ def main() -> None:
         llm_extract=args.llm_extract,
 
         # Logging
-        log_file=log_file,
+        log_file=log_path,
 
         # Common
         data_path=args.data_path or Path.home() / ".llmwikify" / "akshare_cache" / "quantnodes_h5_long",

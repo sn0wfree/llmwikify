@@ -19,7 +19,6 @@ import logging
 import shutil
 from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -126,6 +125,10 @@ def ensure_directories(wiki_dir: Path, dry_run: bool = False) -> None:
 
 
 def main() -> None:
+    from llmwikify.foundation.logging import setup_logging
+
+    setup_logging(level=logging.INFO, log_file=None, fmt="%(message)s", force=True)
+
     parser = argparse.ArgumentParser(description="Migrate Wiki directory structure")
     parser.add_argument(
         "--dry-run",

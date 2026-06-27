@@ -8,13 +8,12 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from llmwikify.foundation.logging import setup_logging
 from llmwikify.interfaces.server.constants import DEFAULT_HOST, DEFAULT_PORT
 from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
@@ -26,26 +25,7 @@ from .utils.webui import mount_webui
 
 logger = logging.getLogger(__name__)
 
-def setup_logging(log_dir: Path | None = None) -> None:
-    """Configure root logger with file + stream handlers."""
-    root = logging.getLogger()
-    if root.handlers:
-        return
-
-    root.setLevel(logging.INFO)
-    fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-
-    if log_dir is None:
-        log_dir = Path.home() / ".llmwikify" / "agent"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    fh = RotatingFileHandler(log_dir / "server.log", maxBytes=10 * 1024 * 1024, backupCount=5)
-    fh.setFormatter(fmt)
-    root.addHandler(fh)
-
-    sh = logging.StreamHandler()
-    sh.setFormatter(fmt)
-    root.addHandler(sh)
+__all__ = ["WikiServer", "setup_logging"]
 
 class WikiServer:
     """llmwikify Unified Server - combines all service layers.

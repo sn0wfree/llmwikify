@@ -18,7 +18,9 @@ from pathlib import Path
 
 import yaml
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+from llmwikify.foundation.logging import setup_logging
+
+setup_logging(level=logging.INFO, log_file=None, fmt="%(asctime)s [%(levelname)s] %(message)s", force=True)
 logger = logging.getLogger(__name__)
 
 FIXTURES_DIR = Path("/home/ll/llmwikify/tests/fixtures/comparison")
