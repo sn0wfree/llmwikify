@@ -52,3 +52,39 @@ def derive_input_columns(formula_brief: str) -> list[str]:
             if base not in found:
                 found.append(base)
     return found[:10]
+
+
+def load_and_build_df(data_path: Path, h5_filename: str = "stk_daily.h5") -> pl.DataFrame:
+    """Load H5 data and build a polars long DataFrame (date, code, ...).
+
+    Composes the two-step pipeline that run_one_factor needs when no
+    pre-loaded data_cache or df_pl is supplied:
+      1. Preload 8 H5 keys (close/open/high/low/volume/returns/vwap/industry)
+         into a dict of wide DataFrames.
+      2. Convert that dict to a single polars long DataFrame sorted by
+         (date, code).
+
+    Moved from scripts/run_101_alphas.py:310 (which was previously broken
+    with NameError) so it can be reused and tested independently.
+    """
+    h5 = Path(data_path) / h5_filename
+    with pd.HDFStore(h5, "r") as store:
+        close_key = "close" if "/close" in store.keys() else "cp"
+    keys = {
+        "close": close_key, "open": "open", "high": "high", "low": "low",
+        "volume": "volume", "returns": "returns", "vwap": "vwap",
+        "industry": "id_citic1",
+    }
+    data_cache: dict[str, pd.DataFrame] = {
+        name: pd.read_hdf(h5, h5_key) for name, h5_key in keys.items()
+    }
+
+    def wide_to_long(wide: pd.DataFrame, name: str) -> pl.DataFrame:
+        long = wide.stack().reset_index()
+        long.columns = ["date", "code", name]
+        return pl.from_pandas(long)
+
+    result = wide_to_long(data_cache["close"], "close")
+    for col in ("open", "high", "low", "volume", "returns", "vwap", "industry"):
+        result = result.join(wide_to_long(data_cache[col], col), on=["date", "code"])
+    return result.sort(["date", "code"])

@@ -45,7 +45,8 @@ from llmwikify.reproduction.codegen.llm_code import (
 from llmwikify.apps.chat.agent.unified.core import UnifiedHook
 from llmwikify.foundation.logging import log_timing, setup_logging
 from llmwikify.reproduction.pipeline.backtest_extract import safe_float, extract_full_backtest_from_ctx
-from llmwikify.reproduction.pipeline.data_loader import wide_from_long, write_factor_h5, derive_input_columns
+from llmwikify.reproduction.pipeline.data_loader import wide_from_long, write_factor_h5, derive_input_columns, load_and_build_df
+from llmwikify.reproduction.pipeline.stages.codegen import llm_code_oneshot
 from llmwikify.reproduction.pipeline.score import compute_score, compute_status
 
 # ─── Constants ───────────────────────────────────────────────────────
@@ -307,7 +308,7 @@ def run_one_factor(
         if data_cache is not None:
             df_pl = _build_wide_df(data_cache)
         else:
-            df_pl = _load_and_build_df(config.data_path, config.h5_filename)
+            df_pl = load_and_build_df(config.data_path, config.h5_filename)
     print(f"[data] shape: {df_pl.shape}, columns: {df_pl.columns}")
     print(f"[data] date range: {df_pl['date'].min()} - {df_pl['date'].max()}")
 
@@ -336,7 +337,7 @@ def run_one_factor(
                 "elapsed_sec": time.monotonic() - t0,
             }
     else:
-        code, factor_series, error, stage_idx = _llm_code_oneshot(
+        code, factor_series, error, stage_idx = llm_code_oneshot(
             factor_name=factor_name,
             formula_brief=formula_brief,
             df_pl=df_pl,
