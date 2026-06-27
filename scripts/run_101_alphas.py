@@ -19,13 +19,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import re
 import signal
 import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -46,11 +47,18 @@ from CodersWheel.QuickTool.timer import timer
 from llmwikify.reproduction.pipeline.backtest_extract import safe_float, extract_full_backtest_from_ctx
 from llmwikify.reproduction.pipeline.data_loader import wide_from_long, write_factor_h5, derive_input_columns
 from llmwikify.reproduction.pipeline.score import compute_score, compute_status
+from CodersWheel.QuickTool.logger import LoggerHelper
 
 # ─── Constants ───────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _STAGE_NAMES = {-1: "llm", 0: "extract", 1: "syntax", 2: "safety", 3: "execute"}
+
+# ─── Logger ──────────────────────────────────────────────────────────
+logger = LoggerHelper(
+    app_name='run_101_alphas',
+    file_path=str(PROJECT_ROOT / "scripts" / "output" / "run_101_alphas.log"),
+)
 
 # ── 并发控制 ──────────────────────────────────────────────
 _llm_semaphore = threading.Semaphore(3)  # api.minimaxi.com ≤3 并发
@@ -88,6 +96,27 @@ class RunConfig:
     factor_direction: int = 1                 # 因子方向
     output_format: list[str] = field(default_factory=lambda: ["parquet", "json"])
     min_group_size: int = 3                   # 最小组大小
+
+    # ── Stage 1: Paper extraction ──
+    paper_path: Path | None = None            # PDF 路径（触发 Stage 1）
+    paper_output_root: Path | None = None     # paper 输出根目录（默认 quant/papers/）
+    run_pass2: bool = True                    # 是否跑 Track B Pass 2
+
+    # ── Stage 2: Factor processing ──
+    alpha_start: int = 1                      # 起始 alpha index
+    alpha_end: int = 101                      # 结束 alpha index
+    skip_existing: bool = False               # 跳过已有 JSON 的 alpha
+    max_failures: int = 999                   # 最大失败数
+    delay: float = 3.0                        # alpha 间延迟（秒）
+    no_delay: bool = False                    # 禁用延迟
+    timeout: int = 180                        # 单 alpha 超时（秒）
+    workers: int = 1                          # 并发数（max 3）
+
+    # ── Stage 2b: LLM extraction ──
+    llm_extract: bool = False                 # 是否跑 LLM 元数据提取
+
+    # ── Logging ──
+    log_file: Path | None = None              # 日志文件路径（默认 scripts/output/run_101_alphas.log）
 
     @property
     def report_dir(self) -> Path:
@@ -250,6 +279,7 @@ def _run_pipeline(qn_config: dict) -> dict:
     return runner.run()
 
 
+@logger.deco(level='info', timer=True, extra_name='alpha')
 def run_one_factor(
     alpha_index: int = 1,
     use_react: bool = True,
@@ -266,6 +296,7 @@ def run_one_factor(
     factor_name = f"alpha-{alpha_index:03d}"
     formula_brief = alpha["formula_brief"]
 
+    logger.info("[alpha-%03d] formula_brief: %s", alpha_index, formula_brief[:100])
     print(f"\n{'='*70}")
     print(f"[alpha-{alpha_index:03d}] formula_brief: {formula_brief}")
     print(f"{'='*70}")
@@ -295,6 +326,7 @@ def run_one_factor(
             temperature=config.temperature,
         )
         if error is not None:
+            logger.warn("[alpha-%03d] failed at react: %s", alpha_index, error[:100])
             return {
                 "status": "failed",
                 "stage": "react",
@@ -311,6 +343,7 @@ def run_one_factor(
             temperature=config.temperature,
         )
         if error is not None:
+            logger.warn("[alpha-%03d] failed at %s: %s", alpha_index, _STAGE_NAMES.get(stage_idx, "unknown"), error[:100])
             return {
                 "status": "failed",
                 "stage": _STAGE_NAMES.get(stage_idx, "unknown"),
@@ -341,6 +374,7 @@ def run_one_factor(
     except Exception as exc:
         import traceback
         tb = traceback.format_exc()
+        logger.warn("[alpha-%03d] failed at pipeline: %s: %s", alpha_index, type(exc).__name__, str(exc)[:100])
         print(f"[PipelineRunner] FAILED: {type(exc).__name__}: {exc}")
         print(tb[-1500:])
         return {
@@ -354,6 +388,9 @@ def run_one_factor(
 
     # 7. Extract metrics (single source of truth via backtest_extract)
     backtest = extract_full_backtest_from_ctx(ctx)
+    logger.info("[alpha-%03d] backtest IC=%.4f, ICIR=%.4f, WinRate=%.1f%%",
+                alpha_index, backtest.get("ic_mean", 0), backtest.get("icir", 0),
+                (backtest.get("win_rate", 0) or 0) * 100)
     print(f"[backtest] ic_mean={backtest.get('ic_mean')}, icir={backtest.get('icir')}, "
           f"groups={len(backtest.get('group_metrics', {}))}, "
           f"ic_series_pts={len(backtest.get('ic_series', []))}")
@@ -391,6 +428,7 @@ def run_one_factor(
     )
 
     elapsed = time.monotonic() - t0
+    logger.info("[alpha-%03d] success (%.1fs)", alpha_index, elapsed)
     print(f"\n[done] elapsed: {elapsed:.1f}s")
 
     return {
@@ -541,46 +579,70 @@ def _write_markdown(results: list[dict], path: Path) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _run_llm_extract(args: argparse.Namespace, output_dir: Path) -> None:
-    """Phase 3: extract L2-L6 metadata from existing single_factor_NNN.json files.
+@logger.deco(level='info', timer=True, extra_name='paper')
+def _run_paper_extract(config: RunConfig) -> Path:
+    """Stage 1: Run paper extraction and return track_b_checkpoint.json path."""
+    from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import run_one_paper
 
-    Uses factor_extractor.extract_batch (3 concurrent LLM calls, ~60s/alpha).
-    Skips alphas without JSON (no LLM code re-run needed).
-    """
+    if not config.paper_path or not config.paper_path.exists():
+        raise FileNotFoundError(f"Paper not found: {config.paper_path}")
+
+    output_root = config.paper_output_root or PROJECT_ROOT / "quant" / "papers"
+
+    logger.info("[paper] Starting paper extraction")
+    logger.info("[paper] Paper: %s", config.paper_path)
+    logger.info("[paper] Paper ID: %s", config.paper_id)
+    logger.info("[paper] Output root: %s", output_root)
+    logger.info("[paper] Pass 2: %s", config.run_pass2)
+
+    summary = run_one_paper(
+        paper_id=config.paper_id,
+        source_path=config.paper_path,
+        output_root=output_root,
+        run_pass2=config.run_pass2,
+    )
+
+    if not summary["success"]:
+        logger.warn("[paper] Failed: %s", summary.get("error"))
+        raise RuntimeError(f"Paper extraction failed: {summary.get('error')}")
+
+    track_b_path = output_root / config.paper_id / "track_b_checkpoint.json"
+    if not track_b_path.exists():
+        logger.warn("[paper] track_b_checkpoint.json not found after extraction")
+        raise FileNotFoundError("track_b_checkpoint.json not found after extraction")
+
+    logger.info("[paper] Success: %d signals extracted", summary["n_signals"])
+    logger.info("[paper] Output: %s", track_b_path)
+
+    return track_b_path
+
+
+@logger.deco(level='info', timer=True, extra_name='meta')
+def _run_llm_extract(config: RunConfig) -> None:
+    """Stage 2b: Extract L2-L6 metadata from existing single_factor_NNN.json files."""
     from llmwikify.reproduction.factor_extractor import extract_batch
 
-    indices = list(range(args.start, args.end + 1))
-    print("=" * 80)
-    print("  Phase 3: LLM Extract L2-L6 Metadata")
-    print("=" * 80)
-    print(f"  Indices: {args.start}-{args.end}")
-    print(f"  Output dir: {output_dir}")
-    print()
+    indices = list(range(config.alpha_start, config.alpha_end + 1))
+    logger.info("[meta] Starting LLM extraction: alpha %d-%d", config.alpha_start, config.alpha_end)
+    logger.info("[meta] Output dir: %s", config.output_dir)
 
-    available = [i for i in indices if (output_dir / f"single_factor_{i:03d}.json").exists()]
+    available = [i for i in indices if (config.output_dir / f"single_factor_{i:03d}.json").exists()]
     if not available:
-        print("  [error] no single_factor_NNN.json found in output/")
-        print("  Run Phase 1 first (without --llm-extract)")
+        logger.warn("[meta] No single_factor_NNN.json found in output/")
+        logger.warn("[meta] Run Stage 2 first (without --llm-extract)")
         return
-    print(f"  Available: {len(available)} alphas with JSON ({available[:5]}...)")
-    print()
+    logger.info("[meta] Available: %d alphas with JSON (%s...)", len(available), available[:5])
 
-    print("  [info] L5 hypothesis_testing skipped (requires FastAPI server)")
-    print("  [info] To enable: start server, then POST /api/factor/{slug}/validate")
-    print()
+    logger.info("[meta] L5 hypothesis_testing skipped (requires FastAPI server)")
 
-    results = extract_batch(available, output_dir=output_dir, max_workers=3)
+    results = extract_batch(available, output_dir=config.output_dir, max_workers=3)
 
     success = [r for r in results if r.get("status") == "success"]
     failed = [r for r in results if r.get("status") != "success"]
-    print()
-    print("=" * 80)
-    print(f"  Phase 3 complete: {len(success)}/{len(results)} success")
+    logger.info("[meta] Complete: %d/%d success", len(success), len(results))
     if failed:
-        print("  Failed:")
         for r in failed:
-            print(f"    alpha-{r['alpha_index']:03d}: {r.get('error', '?')[:80]}")
-    print("=" * 80)
+            logger.warn("[meta] Failed: alpha-%03d: %s", r["alpha_index"], r.get("error", "?")[:80])
 
 
 def _run_one_safe(
@@ -612,8 +674,115 @@ def _run_one_safe(
         return result
 
 
+@logger.deco(level='info', timer=True, extra_name='factor')
+def _run_batch_processing(config: RunConfig) -> None:
+    """Stage 2: Run batch alpha processing."""
+    logger.info("[factor] Starting batch processing: alpha %d-%d", config.alpha_start, config.alpha_end)
+
+    _print_header()
+    t0 = time.monotonic()
+
+    logger.info("[factor] Data path: %s", config.data_path)
+    logger.info("[factor] Track B: %s", config.track_b_path)
+    logger.info("[factor] Date range: %d - %d", config.date_beg, config.date_end)
+    logger.info("[factor] Sample index: %s", config.sample_index)
+    logger.info("[factor] H5 filename: %s", config.h5_filename)
+    logger.info("[factor] Workers: %d", config.workers)
+
+    data_cache = _preload_data(config.data_path, config.h5_filename)
+    logger.info("[factor] Preloaded %d H5 keys: %s", len(data_cache), list(data_cache.keys()))
+
+    df_pl = _build_wide_df(data_cache)
+    logger.info("[factor] Built polars long DF: %s", df_pl.shape)
+
+    # Skip existing
+    skip: set[int] = set()
+    if config.skip_existing:
+        for idx in range(config.alpha_start, config.alpha_end + 1):
+            p = config.output_dir / f"single_factor_{idx:03d}.json"
+            if p.exists():
+                skip.add(idx)
+        if skip:
+            logger.info("[factor] Skipping %d alphas: %s...", len(skip), sorted(skip)[:10])
+
+    results: list[dict] = []
+    failures: int = 0
+
+    # Load skipped results
+    for idx in sorted(skip):
+        p = config.output_dir / f"single_factor_{idx:03d}.json"
+        loaded = json.loads(p.read_text(encoding="utf-8"))
+        if "alpha_index" not in loaded:
+            loaded["alpha_index"] = idx
+        results.append(loaded)
+
+    to_run = [idx for idx in range(config.alpha_start, config.alpha_end + 1) if idx not in skip]
+    logger.info("[factor] To run: %d alphas", len(to_run))
+
+    if config.workers <= 1:
+        # Serial mode
+        for idx in to_run:
+            elapsed_cum = time.monotonic() - t0
+            logger.info("[factor] alpha-%03d: starting (elapsed: %.0fs, failures: %d)", idx, elapsed_cum, failures)
+
+            result = run_one_factor(idx, use_react=True, config=config, df_pl=df_pl)
+            if "alpha_index" not in result:
+                result["alpha_index"] = idx
+            results.append(result)
+
+            _print_row(idx, result, elapsed_cum)
+
+            out_file = config.output_dir / f"single_factor_{idx:03d}.json"
+            out_file.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+
+            if result.get("status") != "success":
+                failures += 1
+                logger.warn("[factor] alpha-%03d: failed (%s)", idx, result.get("error", "?")[:80])
+                if failures >= config.max_failures:
+                    logger.warn("[factor] Reached max failures (%d), stopping", config.max_failures)
+                    break
+            else:
+                logger.info("[factor] alpha-%03d: success (%.1fs)", idx, result.get("elapsed_sec", 0))
+
+            if idx < config.alpha_end and config.delay > 0 and not config.no_delay:
+                time.sleep(config.delay)
+    else:
+        # Multi-threaded mode
+        logger.info("[factor] Using %d concurrent workers", config.workers)
+        with ThreadPoolExecutor(max_workers=config.workers) as pool:
+            futures = {
+                pool.submit(_run_one_safe, idx, config, df_pl, t0, results, config.timeout): idx
+                for idx in to_run
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    future.result(timeout=config.timeout + 60)
+                except Exception as exc:
+                    logger.warn("[factor] alpha-%03d: EXCEPTION: %s", idx, exc)
+                    failures += 1
+
+    # Write summary files
+    _write_json(results, config.output_dir / "multi_alpha_001_to_101.json")
+    _write_markdown(results, config.output_dir / "multi_alpha_summary.md")
+    _print_summary(results)
+
+    total_elapsed = time.monotonic() - t0
+    logger.info("[factor] Total elapsed: %.1fs (%.1f min)", total_elapsed, total_elapsed / 60)
+    logger.info("[factor] Results saved to: %s", config.output_dir)
+
+
 def main() -> None:
+    global logger
+
     parser = argparse.ArgumentParser(description="Batch run 101 alphas")
+
+    # Stage 1: Paper extraction
+    parser.add_argument("--paper-path", type=Path, default=None, help="Path to paper PDF (triggers Stage 1)")
+    parser.add_argument("--paper-output-root", type=Path, default=None, help="Output root for paper extraction (default: quant/papers/)")
+    parser.add_argument("--no-pass2", action="store_true", help="Skip Track B Pass 2 (only extract formulas)")
+
+    # Stage 2: Factor processing
     parser.add_argument("--start", type=int, default=1, help="First alpha index (default: 1)")
     parser.add_argument("--end", type=int, default=101, help="Last alpha index (default: 101)")
     parser.add_argument("--skip-existing", action="store_true", help="Skip alphas that already have output JSON")
@@ -623,26 +792,64 @@ def main() -> None:
     parser.add_argument("--no-delay", action="store_true", help="Disable inter-alpha delay (for testing only)")
     parser.add_argument("--timeout", type=int, default=180, help="Per-alpha timeout in seconds (default: 180)")
     parser.add_argument("--workers", type=int, default=1, help="Number of concurrent workers (default: 1, max: 3)")
-    parser.add_argument("--llm-extract", action="store_true", help="Phase 3: LLM extract L2-L6 metadata (reads existing JSONs, no LLM code re-run)")
+
+    # Stage 2b: LLM metadata extraction
+    parser.add_argument("--llm-extract", action="store_true", help="Stage 2b: LLM extract L2-L6 metadata")
+
+    # Logging
+    parser.add_argument("--log-file", type=Path, default=None, help="Log file path (default: scripts/output/run_101_alphas.log)")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
+
+    # Common
     parser.add_argument("--output-dir", type=Path, default=None, help="Output directory for JSON results (default: scripts/output)")
-    parser.add_argument("--data-path", type=Path, default=None, help="Path to H5 data directory (default: ~/.llmwikify/akshare_cache/quantnodes_h5_long)")
+    parser.add_argument("--data-path", type=Path, default=None, help="Path to H5 data directory")
     parser.add_argument("--track-b", type=Path, default=None, help="Path to track_b_checkpoint.json (default: auto)")
     parser.add_argument("--date-beg", type=int, default=20200101, help="Backtest start date YYYYMMDD (default: 20200101)")
     parser.add_argument("--date-end", type=int, default=20241231, help="Backtest end date YYYYMMDD (default: 20241231)")
     parser.add_argument("--sample-index", type=str, default="all", help="Sample index: all/HS300/ZZ500 (default: all)")
-    parser.add_argument("--paper-id", type=str, default="101_alphas_minimal", help="Paper ID for DB session")
-    parser.add_argument("--wiki-id", type=str, default="default", help="Wiki ID for DB session")
-    parser.add_argument("--h5-filename", type=str, default="stk_daily.h5", help="H5 filename within data-path (default: stk_daily.h5)")
-    parser.add_argument("--strategy-dir", type=str, default="101_alphas", help="Output subdirectory under quant/factors/ (default: 101_alphas)")
-    parser.add_argument("--groups", type=int, default=5, help="Number of groups for analysis (default: 5)")
+    parser.add_argument("--paper-id", type=str, default="101_alphas_minimal", help="Paper ID")
+    parser.add_argument("--wiki-id", type=str, default="default", help="Wiki ID")
+    parser.add_argument("--h5-filename", type=str, default="stk_daily.h5", help="H5 filename (default: stk_daily.h5)")
+    parser.add_argument("--strategy-dir", type=str, default="101_alphas", help="Output subdirectory (default: 101_alphas)")
+    parser.add_argument("--groups", type=int, default=5, help="Number of groups (default: 5)")
     parser.add_argument("--factor-direction", type=int, default=1, help="Factor direction: 1 or -1 (default: 1)")
     parser.add_argument("--hedge", type=str, default="equal", help="Hedge mode (default: equal)")
     parser.add_argument("--adj-mode", type=str, default="M-end", help="Adjustment mode (default: M-end)")
     parser.add_argument("--min-group-size", type=int, default=3, help="Minimum group size (default: 3)")
-    parser.add_argument("--factors-dir", type=Path, default=None, help="Base factors directory (default: <project>/quant/factors)")
+    parser.add_argument("--factors-dir", type=Path, default=None, help="Base factors directory")
     args = parser.parse_args()
 
+    # Re-initialize logger with user-specified log file
+    log_file = args.log_file or PROJECT_ROOT / "scripts" / "output" / "run_101_alphas.log"
+    logger = LoggerHelper(
+        app_name='run_101_alphas',
+        file_path=str(log_file),
+        log_level=logging.DEBUG if args.verbose else logging.INFO,
+    )
+
     config = RunConfig(
+        # Paper extraction
+        paper_path=args.paper_path,
+        paper_output_root=args.paper_output_root,
+        run_pass2=not args.no_pass2,
+
+        # Batch processing
+        alpha_start=args.start,
+        alpha_end=args.end,
+        skip_existing=args.skip_existing,
+        max_failures=args.max_failures,
+        delay=args.delay,
+        no_delay=args.no_delay,
+        timeout=args.timeout,
+        workers=min(args.workers, 3),
+
+        # LLM extraction
+        llm_extract=args.llm_extract,
+
+        # Logging
+        log_file=log_file,
+
+        # Common
         data_path=args.data_path or Path.home() / ".llmwikify" / "akshare_cache" / "quantnodes_h5_long",
         track_b_path=args.track_b or PROJECT_ROOT / "quant" / "papers" / "101_alphas_minimal" / "track_b_checkpoint.json",
         output_dir=args.output_dir or PROJECT_ROOT / "scripts" / "output",
@@ -663,101 +870,24 @@ def main() -> None:
     )
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Phase 3: LLM extraction mode (fast, no LLM code re-run)
-    if args.llm_extract:
-        _run_llm_extract(args, config.output_dir)
-        return
+    logger.info("RunConfig: %s", config)
 
-    _print_header()
-    t0 = time.monotonic()
+    # ── Stage 1: Paper extraction (optional) ──
+    track_b_path = args.track_b
+    if config.paper_path:
+        track_b_path = _run_paper_extract(config)
 
-    # Preload H5 data once (shared across all alpha runs)
-    print(f"  Data path: {config.data_path}")
-    print(f"  Track B:   {config.track_b_path}")
-    print(f"  Date range: {config.date_beg} - {config.date_end}")
-    print(f"  Sample index: {config.sample_index}")
-    print(f"  H5 filename: {config.h5_filename}")
-    print()
-    data_cache = _preload_data(config.data_path, config.h5_filename)
-    print(f"  Preloaded {len(data_cache)} H5 keys: {list(data_cache.keys())}")
-    df_pl = _build_wide_df(data_cache)
-    print(f"  Built polars long DF: {df_pl.shape}")
-    print()
+    # Update config with resolved track_b_path
+    if track_b_path:
+        config = replace(config, track_b_path=track_b_path)
 
-    # Optionally skip already-done alphas
-    skip: set[int] = set()
-    if args.skip_existing:
-        for idx in range(args.start, args.end + 1):
-            p = config.output_dir / f"single_factor_{idx:03d}.json"
-            if p.exists():
-                skip.add(idx)
-        if skip:
-            print(f"  [skip] {len(skip)} alphas already done: {sorted(skip)[:10]}...")
+    # ── Stage 2: Factor processing ──
+    if not config.llm_extract:
+        _run_batch_processing(config)
 
-    results: list[dict] = []
-    failures: int = 0
-    n_workers = min(args.workers, 3)  # 最多 3 并发
-
-    # 加载已有的 skipped 结果
-    for idx in sorted(skip):
-        p = config.output_dir / f"single_factor_{idx:03d}.json"
-        loaded = json.loads(p.read_text(encoding="utf-8"))
-        if "alpha_index" not in loaded:
-            loaded["alpha_index"] = idx
-        results.append(loaded)
-
-    # 构建待跑列表
-    to_run = [idx for idx in range(args.start, args.end + 1) if idx not in skip]
-
-    if n_workers <= 1:
-        # ── 串行模式 ──
-        for idx in to_run:
-            elapsed_cum = time.monotonic() - t0
-            print(f"\n[{time.strftime('%H:%M:%S')}] alpha-{idx:03d} (elapsed: {elapsed_cum:.0f}s, failures: {failures})")
-
-            result = run_one_factor(idx, use_react=True, config=config, df_pl=df_pl)
-            if "alpha_index" not in result:
-                result["alpha_index"] = idx
-            results.append(result)
-
-            _print_row(idx, result, elapsed_cum)
-
-            out_file = config.output_dir / f"single_factor_{idx:03d}.json"
-            out_file.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-
-            if result.get("status") != "success":
-                failures += 1
-                if failures >= args.max_failures:
-                    print(f"\n[stop] {failures} failures reached --max-failures={args.max_failures}")
-                    break
-
-            if idx < args.end and args.delay > 0 and not args.no_delay:
-                time.sleep(args.delay)
-    else:
-        # ── 多线程模式 ──
-        print(f"  Workers: {n_workers} (concurrent)")
-        with ThreadPoolExecutor(max_workers=n_workers) as pool:
-            futures = {
-                pool.submit(_run_one_safe, idx, config, df_pl, t0, results, args.timeout): idx
-                for idx in to_run
-            }
-            for future in as_completed(futures):
-                idx = futures[future]
-                try:
-                    future.result(timeout=args.timeout + 60)
-                except Exception as exc:
-                    with _print_lock:
-                        print(f"\n  [{idx:03d}] EXCEPTION: {exc}")
-                        failures += 1
-
-    # Write summary files
-    _write_json(results, config.output_dir / "multi_alpha_001_to_101.json")
-    _write_markdown(results, config.output_dir / "multi_alpha_summary.md")
-    _print_summary(results)
-
-    total_elapsed = time.monotonic() - t0
-    print(f"\n  Total elapsed: {total_elapsed:.1f}s ({total_elapsed / 60:.1f} min)")
-    print(f"  Results saved to: {config.output_dir}")
+    # ── Stage 2b: LLM metadata extraction ──
+    if config.llm_extract:
+        _run_llm_extract(config)
 
 
 if __name__ == "__main__":
