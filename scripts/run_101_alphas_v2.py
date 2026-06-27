@@ -716,9 +716,15 @@ class FactorRunner(BaseStage):
 
 
 class FactorStage(FactorRunner):
-    """Stage 2: 批量 alpha 处理（继承 FactorRunner 复用 run_one_factor）。"""
+    """Stage 2: 批量 alpha 处理（继承 FactorRunner 复用 run_one_factor）。
 
-    __slots__ = ("results", "failures")
+    复用 v1 重复逻辑（方案 A+B+C）:
+    - 提取 _run_one_with_recording（共享 run + record）
+    - 拆分 _record_result 为 _update_state / _persist_result / _log_outcome
+    - batch_t0 区分批量计时与生命周期计时
+    """
+
+    __slots__ = ("results", "failures", "batch_t0")
 
     label = "factor"
 
@@ -726,13 +732,14 @@ class FactorStage(FactorRunner):
         super().__init__(config)
         self.results: list[dict] = []
         self.failures: int = 0
+        self.batch_t0: float = 0.0
 
     def run(self) -> list[dict]:
         """批量执行入口。"""
         self._log_start()
         self._log_config()
         _print_header()
-        self.t0 = time.monotonic()
+        self.batch_t0 = time.monotonic()
         self._preload_data()
         self._process_skip_existing()
         to_run: list[int] = self._compute_to_run()
@@ -787,13 +794,21 @@ class FactorStage(FactorRunner):
                     if (self.config.output_dir / f"single_factor_{idx:03d}.json").exists()}
         return [idx for idx in range(self.config.alpha_start, self.config.alpha_end + 1) if idx not in skip]
 
+    def _run_one_with_recording(self, idx: int) -> dict:
+        """Run single alpha + record result. 共享给 serial 和 parallel 路径。
+
+        Lock-free: caller is responsible for thread safety if needed.
+        """
+        elapsed_cum: float = time.monotonic() - self.batch_t0
+        logger.info("[factor] alpha-%03d: starting (elapsed: %.0fs, failures: %d)",
+                    idx, elapsed_cum, self.failures)
+        result = self.run_one_factor(idx, use_react=True)
+        self._record_result(idx, result, elapsed_cum)
+        return result
+
     def _run_serial(self, to_run: list[int]) -> None:
         for idx in to_run:
-            elapsed_cum: float = time.monotonic() - self.t0
-            logger.info("[factor] alpha-%03d: starting (elapsed: %.0fs, failures: %d)",
-                        idx, elapsed_cum, self.failures)
-            result = self.run_one_factor(idx, use_react=True)
-            self._record_result(idx, result, elapsed_cum)
+            self._run_one_with_recording(idx)
             if self._reached_max_failures():
                 break
             self._maybe_delay(idx)
@@ -813,24 +828,35 @@ class FactorStage(FactorRunner):
     def _run_one_safe(self, idx: int) -> dict:
         """线程安全的单 alpha 执行。"""
         with _llm_semaphore:
-            result = self.run_one_factor(idx, use_react=True)
             with _print_lock:
-                elapsed_cum: float = time.monotonic() - self.t0
-                self._record_result(idx, result, elapsed_cum)
-            return result
+                return self._run_one_with_recording(idx)
 
-    def _record_result(self, idx: int, result: dict, elapsed_cum: float) -> None:
+    def _update_state(self, idx: int, result: dict) -> None:
+        """Update in-memory state: results list + failure counter."""
         if "alpha_index" not in result:
             result["alpha_index"] = idx
         self.results.append(result)
-        _print_row(idx, result, elapsed_cum)
-        out_file = self.config.output_dir / f"single_factor_{idx:03d}.json"
-        out_file.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
         if result.get("status") != "success":
             self.failures += 1
+
+    def _persist_result(self, idx: int, result: dict) -> None:
+        """Write single alpha JSON to output_dir."""
+        out_file = self.config.output_dir / f"single_factor_{idx:03d}.json"
+        out_file.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+
+    def _log_outcome(self, idx: int, result: dict) -> None:
+        """Log success or failure for one alpha."""
+        if result.get("status") != "success":
             logger.warning("[factor] alpha-%03d: failed (%s)", idx, (result.get("error", "?") or "")[:80])
         else:
             logger.info("[factor] alpha-%03d: success (%.1fs)", idx, result.get("elapsed_sec", 0))
+
+    def _record_result(self, idx: int, result: dict, elapsed_cum: float) -> None:
+        """Compose: state update + print row + persist + log outcome."""
+        self._update_state(idx, result)
+        _print_row(idx, result, elapsed_cum)
+        self._persist_result(idx, result)
+        self._log_outcome(idx, result)
 
     def _reached_max_failures(self) -> bool:
         if self.failures >= self.config.max_failures:
@@ -846,7 +872,7 @@ class FactorStage(FactorRunner):
         _write_json(self.results, self.config.output_dir / "multi_alpha_001_to_101.json")
         _write_markdown(self.results, self.config.output_dir / "multi_alpha_summary.md")
         _print_summary(self.results)
-        total_elapsed: float = time.monotonic() - self.t0
+        total_elapsed: float = time.monotonic() - self.batch_t0
         logger.info("[factor] Total elapsed: %.1fs (%.1f min)", total_elapsed, total_elapsed / 60)
         logger.info("[factor] Results saved to: %s", self.config.output_dir)
 
