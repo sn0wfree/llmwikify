@@ -432,7 +432,7 @@ def chart_9_three_country_macro():
 
     # 三国 M2 增速
     cn_m2 = [d['yoy'] for d in china_data['M2_2005_2008']]
-    us_m2 = [4.3, 4.9, 5.6, 7.1]
+    us_m2 = [4.1, 5.9, 5.7, 9.6]
     jp_m2 = [1.0, 1.0, 1.4, 2.1]
 
 
