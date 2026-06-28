@@ -76,6 +76,9 @@ class FactorResult:
             "icir": self.backtest.get("icir"),
             "ic_winrate": self.backtest.get("win_rate"),
             "elapsed_sec": self.elapsed_sec,
+            "factor_name": self.signal.name,        # v2 compat: was "factor_name"
+            "formula_brief": self.signal.formula_brief,  # v2 compat
+            "signal_id": self.signal.id,            # PR2-PR4 specific
         }
         if alpha_idx is not None:
             out["alpha_index"] = alpha_idx

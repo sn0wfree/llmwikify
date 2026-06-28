@@ -1131,3 +1131,49 @@ diff <(jq -S . /tmp/before/multi_alpha_001_to_101.json) <(jq -S . /tmp/after/mul
 **Commit**: 见 git log（PR3 commit）
 **结果**: 22 + 143 = 165 tests passed
 
+
+### 17.13 PR4 详细计划
+
+> 状态: ✅ COMPLETED
+
+**目标**: Sink 抽象 + 3 实现（Single JSON / YAML+DuckDB / Batch Summary）
+
+**文件**:
+- `src/llmwikify/reproduction/sink/__init__.py` (公共 API)
+- `src/llmwikify/reproduction/sink/base.py` (Sink Protocol)
+- `src/llmwikify/reproduction/sink/single_json.py` (SingleJsonSink)
+- `src/llmwikify/reproduction/sink/yaml_duckdb.py` (YamlDuckdbSink)
+- `src/llmwikify/reproduction/sink/batch_summary.py` (BatchSummarySink)
+
+**Sink Protocol 3 方法**:
+- `write_one(result) → Path`: per-signal write
+- `write_batch(results) → list[Path]`: end-of-batch aggregation
+- `flush() → None`: cleanup
+
+**3 实现对比**:
+
+| Sink | write_one | write_batch | 替换 v2 哪里 |
+|---|---|---|---|
+| SingleJsonSink | output_dir/single_factor_<id>.json | noop | `_persist_result(idx, result)` |
+| YamlDuckdbSink | factors/<dir>/factor.{yaml,duckdb} | noop | `_persist_factor` + `_save_to_duckdb` |
+| BatchSummarySink | noop | output_dir/multi_alpha_<id>.{json,md} | `_write_summary` (BatchSerializer) |
+
+**关键设计**:
+- SingleJsonSink: 用 `signal.id`（不是 idx）→ 自动支持 招商/1601 命名
+- SingleJsonSink: `_filename` 替换 `/` 和 `\` → 防止嵌套目录
+- YamlDuckdbSink: failed signal 不持久化（mirrors v2）
+- YamlDuckdbSink: alpha_index 优先 metadata.alpha_index，回退 metadata.index
+- YamlDuckdbSink: persist 异常不 raise，返回 Path("/dev/null") sentinel
+- BatchSummarySink: PR4 内联实现简单聚合，PR5 会 refactor 到 BatchSerializer
+- BatchSummarySink: NaN-safe 平均（math.isnan 过滤）
+- FactorResult.to_dict() 新增 `factor_name`/`formula_brief`/`signal_id` 字段（v2 兼容）
+
+**测试**: `tests/test_sink.py` (27 tests)
+- TestSinkProtocol (2): 3 sink 都有 write_one/batch/flush + 最小 sink 也满足 Protocol
+- TestSingleJsonSink (8): 写文件 / 创建父目录 / JSON content / id sanitize / 中文 / failed 仍写 / write_batch noop / flush
+- TestYamlDuckdbSink (6): 构造 / skip failed / 调 persist_code_to_yaml 验证 / alpha_index 优先级 / 异常处理 / write_batch
+- TestBatchSummarySink (11): write_one noop / write_batch 创建 2 文件 / aggregate NaN-safe / 空 / 全 failed / JSON 内容 / MD 格式 / Failed 段 / 父目录
+
+**Commit**: 见 git log
+**结果**: 27 + 165 = 192 tests passed
+
