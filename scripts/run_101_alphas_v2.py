@@ -883,10 +883,22 @@ class FactorStage(FactorRunner):
         logger.warning("[factor] alpha-%03d: EXCEPTION (%s): %s", idx, stage, error[:100])
 
     def _run_one_safe(self, idx: int) -> dict:
-        """线程安全的单 alpha 执行。"""
+        """Thread-safe single alpha execution.
+
+        Lock placement (mimics v1):
+          - _llm_semaphore (max 3 concurrent LLM calls to api.minimaxi.com)
+          - _print_lock only around in-memory state mutation + JSON write
+            (NOT around the LLM call itself, to avoid serializing the 3 workers)
+        """
         with _llm_semaphore:
+            result = self.run_one_factor(idx, use_react=True)
+            elapsed_cum = time.monotonic() - self.batch_t0
             with _print_lock:
-                return self._run_one_with_recording(idx)
+                self._update_state(idx, result)
+                FactorReporter.log_row(idx, result, elapsed_cum)
+                self._persist_result(idx, result)
+            self._log_outcome(idx, result)
+            return result
 
     def _update_state(self, idx: int, result: dict) -> None:
         """Update in-memory state: results list + failure counter."""
