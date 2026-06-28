@@ -1,0 +1,266 @@
+{
+  "US_GDP_real": [
+    {
+      "date": "2005",
+      "value": 3.5,
+      "unit": "%"
+    },
+    {
+      "date": "2006",
+      "value": 2.9,
+      "unit": "%"
+    },
+    {
+      "date": "2007",
+      "value": 1.9,
+      "unit": "%"
+    },
+    {
+      "date": "2008",
+      "value": 0.0,
+      "unit": "%"
+    }
+  ],
+  "US_CPI": [
+    {
+      "date": "2005",
+      "value": 3.4,
+      "unit": "%"
+    },
+    {
+      "date": "2006",
+      "value": 3.2,
+      "unit": "%"
+    },
+    {
+      "date": "2007",
+      "value": 2.8,
+      "unit": "%"
+    },
+    {
+      "date": "2008",
+      "value": 3.8,
+      "unit": "%"
+    }
+  ],
+  "Japan_GDP_real": [
+    {
+      "date": "2005",
+      "value": 0.6,
+      "unit": "%"
+    },
+    {
+      "date": "2006",
+      "value": 0.5,
+      "unit": "%"
+    },
+    {
+      "date": "2007",
+      "value": 0.8,
+      "unit": "%"
+    },
+    {
+      "date": "2008",
+      "value": -1.2,
+      "unit": "%"
+    }
+  ],
+  "Japan_CPI": [
+    {
+      "date": "2005",
+      "value": -0.3,
+      "unit": "%"
+    },
+    {
+      "date": "2006",
+      "value": 0.2,
+      "unit": "%"
+    },
+    {
+      "date": "2007",
+      "value": 0.0,
+      "unit": "%"
+    },
+    {
+      "date": "2008",
+      "value": 1.4,
+      "unit": "%"
+    }
+  ],
+  "US_fiscal_deficit": [
+    {
+      "date": "2005",
+      "value": 2.5,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2006",
+      "value": 2.6,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2007",
+      "value": 3.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2008",
+      "value": 6.6,
+      "unit": "% of GDP"
+    }
+  ],
+  "China_fiscal_deficit": [
+    {
+      "date": "2005",
+      "value": 0.8,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2006",
+      "value": 0.6,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2007",
+      "value": 0.3,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2008",
+      "value": 0.7,
+      "unit": "% of GDP"
+    }
+  ],
+  "Japan_fiscal_deficit": [
+    {
+      "date": "2005",
+      "value": 4.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2006",
+      "value": 3.6,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2007",
+      "value": 2.5,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2008",
+      "value": 4.2,
+      "unit": "% of GDP"
+    }
+  ],
+  "US_govt_debt": [
+    {
+      "date": "2005",
+      "value": 64.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2006",
+      "value": 64.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2007",
+      "value": 64.5,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2008",
+      "value": 76.0,
+      "unit": "% of GDP"
+    }
+  ],
+  "China_govt_debt": [
+    {
+      "date": "2005",
+      "value": 26.5,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2006",
+      "value": 25.5,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2007",
+      "value": 24.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2008",
+      "value": 21.5,
+      "unit": "% of GDP"
+    }
+  ],
+  "Japan_govt_debt": [
+    {
+      "date": "2005",
+      "value": 175.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2006",
+      "value": 172.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2007",
+      "value": 173.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2008",
+      "value": 183.0,
+      "unit": "% of GDP"
+    }
+  ],
+  "US_household_debt": [
+    {
+      "date": "2005",
+      "value": 95.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2006",
+      "value": 98.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2007",
+      "value": 99.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2008",
+      "value": 96.0,
+      "unit": "% of GDP"
+    }
+  ],
+  "China_corp_debt": [
+    {
+      "date": "2005",
+      "value": 105.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2006",
+      "value": 115.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2007",
+      "value": 125.0,
+      "unit": "% of GDP"
+    },
+    {
+      "date": "2008",
+      "value": 130.0,
+      "unit": "% of GDP"
+    }
+  ]
+}

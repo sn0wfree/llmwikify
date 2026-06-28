@@ -1,0 +1,150 @@
+{
+  "2005_yearly": [
+    {
+      "metal": "\u94dc",
+      "price_2005_start": 3175,
+      "price_2005_end": 4580,
+      "return": "+47%",
+      "driver": "\u4e2d\u56fd\u6d88\u8d39CAGR 18%"
+    },
+    {
+      "metal": "\u94dd",
+      "price_2005_start": 1830,
+      "price_2005_end": 2260,
+      "return": "+24%",
+      "driver": "\u8ddf\u968f\u5b8f\u89c2\u666f\u6c14"
+    },
+    {
+      "metal": "\u950c",
+      "price_2005_start": 1010,
+      "price_2005_end": 1810,
+      "return": "+80%",
+      "driver": "\u5e93\u5b58<10\u4e07\u5428\uff0c\u903c\u7a7a"
+    },
+    {
+      "metal": "\u954d",
+      "price_2005_start": 14000,
+      "price_2005_end": 16900,
+      "return": "+21%",
+      "driver": "\u4e0d\u9508\u94a2\u9700\u6c42+\u6295\u673a"
+    },
+    {
+      "metal": "\u9ec4\u91d1",
+      "price_2005_start": 438,
+      "price_2005_end": 515,
+      "return": "+18%",
+      "driver": "\u7f8e\u5143\u8d70\u5f31+\u901a\u80c0"
+    },
+    {
+      "metal": "\u767d\u94f6",
+      "price_2005_start": 6.85,
+      "price_2005_end": 8.83,
+      "return": "+30%",
+      "driver": "\u8d35\u91d1\u5c5e\u5f39\u6027\u54c1\u79cd"
+    }
+  ],
+  "2006_yearly": [
+    {
+      "metal": "\u94dc",
+      "price_2006_start": 4580,
+      "price_2006_end": 6280,
+      "return_2005_2006": "+98%"
+    },
+    {
+      "metal": "\u94dd",
+      "price_2006_start": 2260,
+      "price_2006_end": 2850,
+      "return_2005_2006": "+56%"
+    },
+    {
+      "metal": "\u950c",
+      "price_2006_start": 1810,
+      "price_2006_end": 4580,
+      "return_2005_2006": "+354%"
+    },
+    {
+      "metal": "\u954d",
+      "price_2006_start": 16900,
+      "price_2006_end": 33800,
+      "return_2005_2006": "+141%"
+    },
+    {
+      "metal": "\u9ec4\u91d1",
+      "price_2006_start": 515,
+      "price_2006_end": 635,
+      "return_2005_2006": "+44%"
+    },
+    {
+      "metal": "\u767d\u94f6",
+      "price_2006_start": 8.83,
+      "price_2006_end": 13.0,
+      "return_2005_2006": "+90%"
+    }
+  ],
+  "peak_2008": [
+    {
+      "metal": "\u94dc",
+      "peak_date": "2008-07-03",
+      "peak_price": 8985,
+      "return_2005_2008": "+183%"
+    },
+    {
+      "metal": "\u94dd",
+      "peak_date": "2008-07-04",
+      "peak_price": 3380,
+      "return_2005_2008": "+85%"
+    },
+    {
+      "metal": "\u950c",
+      "peak_date": "2006-11-01",
+      "peak_price": 4580,
+      "return_2005_2006": "+354%"
+    },
+    {
+      "metal": "\u954d",
+      "peak_date": "2007-05-15",
+      "peak_price": 51800,
+      "return_2005_2007": "+270%"
+    },
+    {
+      "metal": "\u9ec4\u91d1",
+      "peak_date": "2008-03-17",
+      "peak_price": 1032,
+      "return_2005_2008": "+136%"
+    },
+    {
+      "metal": "\u767d\u94f6",
+      "peak_date": "2008-03-17",
+      "peak_price": 21.34,
+      "return_2005_2008": "+212%"
+    }
+  ],
+  "\u5e02\u573a\u4efd\u989d_2005_2007": [
+    {
+      "country": "\u4e2d\u56fd",
+      "copper_consumption_share": 0.3,
+      "note": "\u5360\u5168\u7403\u589e\u91cf\u768460%+"
+    },
+    {
+      "country": "\u7f8e\u56fd",
+      "copper_consumption_share": 0.15
+    },
+    {
+      "country": "\u65e5\u672c",
+      "copper_consumption_share": 0.08
+    },
+    {
+      "country": "\u6b27\u6d32",
+      "copper_consumption_share": 0.2
+    }
+  ],
+  "\u4e2d\u94dd\u8d44\u4ea7\u6ce8\u5165": [
+    {
+      "date": "2007-04-30",
+      "event": "\u4e2d\u94ddA\u80a1\u4e0a\u5e02+\u5438\u6536\u5408\u5e76\u5c71\u94dd/\u5170\u94dd",
+      "market_cap_2007": 7000,
+      "unit": "\u4ebf\u5143",
+      "stock_return_2007": "+300%"
+    }
+  ]
+}

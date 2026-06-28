@@ -1,0 +1,190 @@
+{
+  "BOJ_overnight_rate_2005_2008": [
+    {
+      "date": "2005",
+      "value": 0.0,
+      "unit": "%"
+    },
+    {
+      "date": "2006-07",
+      "value": 0.25,
+      "unit": "%"
+    },
+    {
+      "date": "2007-02",
+      "value": 0.5,
+      "unit": "%"
+    },
+    {
+      "date": "2008-12",
+      "value": 0.1,
+      "unit": "%"
+    }
+  ],
+  "Japan_10Y_JGB": [
+    {
+      "date": "2005",
+      "value": 1.35,
+      "unit": "%"
+    },
+    {
+      "date": "2006",
+      "value": 1.65,
+      "unit": "%"
+    },
+    {
+      "date": "2007",
+      "value": 1.5,
+      "unit": "%"
+    },
+    {
+      "date": "2008",
+      "value": 1.15,
+      "unit": "%"
+    }
+  ],
+  "Japan_mortgage_rate": [
+    {
+      "date": "2005",
+      "value": 2.5,
+      "unit": "%"
+    },
+    {
+      "date": "2006",
+      "value": 2.5,
+      "unit": "%"
+    },
+    {
+      "date": "2007",
+      "value": 2.5,
+      "unit": "%"
+    },
+    {
+      "date": "2008",
+      "value": 2.5,
+      "unit": "%"
+    }
+  ],
+  "USDJPY_2005_2008": [
+    {
+      "date": "2005-12",
+      "value": 117.97,
+      "unit": "JPY/USD"
+    },
+    {
+      "date": "2006-12",
+      "value": 119.07,
+      "unit": "JPY/USD"
+    },
+    {
+      "date": "2007-06",
+      "value": 123.3,
+      "unit": "JPY/USD"
+    },
+    {
+      "date": "2007-12",
+      "value": 114.0,
+      "unit": "JPY/USD"
+    },
+    {
+      "date": "2008-12",
+      "value": 91.3,
+      "unit": "JPY/USD"
+    }
+  ],
+  "Japan_FX_reserves": [
+    {
+      "date": "2005",
+      "value": 8500,
+      "unit": "\u4ebf\u7f8e\u5143"
+    },
+    {
+      "date": "2006",
+      "value": 8950,
+      "unit": "\u4ebf\u7f8e\u5143"
+    },
+    {
+      "date": "2007",
+      "value": 9500,
+      "unit": "\u4ebf\u7f8e\u5143"
+    },
+    {
+      "date": "2008",
+      "value": 10200,
+      "unit": "\u4ebf\u7f8e\u5143"
+    }
+  ],
+  "BOJ_2023_2026": [
+    {
+      "date": "2023-12",
+      "value": -0.1,
+      "unit": "%"
+    },
+    {
+      "date": "2024-03",
+      "value": 0.1,
+      "unit": "%"
+    },
+    {
+      "date": "2024-12",
+      "value": 0.5,
+      "unit": "%"
+    },
+    {
+      "date": "2025-12",
+      "value": 0.75,
+      "unit": "%"
+    },
+    {
+      "date": "2026-06",
+      "value": 0.85,
+      "unit": "%"
+    }
+  ],
+  "Japan_10Y_JGB_2023": [
+    {
+      "date": "2023-12",
+      "value": 0.65,
+      "unit": "%"
+    },
+    {
+      "date": "2024-12",
+      "value": 1.1,
+      "unit": "%"
+    },
+    {
+      "date": "2025-12",
+      "value": 1.4,
+      "unit": "%"
+    },
+    {
+      "date": "2026-06",
+      "value": 1.65,
+      "unit": "%"
+    }
+  ],
+  "Nikkei_225": [
+    {
+      "date": "2005-12",
+      "value": 16111,
+      "level": 16111,
+      "return_2005_2007": "+50%"
+    },
+    {
+      "date": "2006-12",
+      "value": 17225,
+      "level": 17225
+    },
+    {
+      "date": "2007-06",
+      "value": 18138,
+      "level": 18138,
+      "high": 18138
+    },
+    {
+      "date": "2007-12",
+      "value": 15307,
+      "level": 15307
+    }
+  ]
+}
