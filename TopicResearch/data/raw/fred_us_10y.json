@@ -1,0 +1,23 @@
+{
+  "source": "FRED (Federal Reserve Economic Data)",
+  "series": "GS10",
+  "description": "Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity",
+  "query_time": "2026-06-28",
+  "unit": "%",
+  "data": [
+    {"date": "2004-01-01", "value": 4.15},
+    {"date": "2005-01-01", "value": 4.22},
+    {"date": "2005-06-01", "value": 4.00},
+    {"date": "2005-12-01", "value": 4.47},
+    {"date": "2006-06-01", "value": 5.11},
+    {"date": "2006-12-01", "value": 4.56},
+    {"date": "2007-06-01", "value": 5.10},
+    {"date": "2007-07-01", "value": 5.00},
+    {"date": "2007-12-01", "value": 4.10}
+  ],
+  "greenspan_conundrum": {
+    "start": {"date": "2004-01", "fed_funds": 1.00, "gs10": 4.15, "spread": 3.15},
+    "end": {"date": "2007-07", "fed_funds": 5.25, "gs10": 5.00, "spread": -0.25},
+    "key_finding": "Spread went from +3.15% to -0.25%, NOT +0.65% as claimed in document"
+  }
+}

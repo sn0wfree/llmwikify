@@ -1,0 +1,16 @@
+{
+  "source": "FRED (Federal Reserve Economic Data)",
+  "series": "NIKKEI225",
+  "description": "Nikkei 225 Stock Market Index",
+  "query_time": "2026-06-28",
+  "data_year_end": [
+    {"date": "2004-12-30", "value": 11488.76},
+    {"date": "2005-12-30", "value": 16111.43},
+    {"date": "2006-12-29", "value": 17225.83}
+  ],
+  "calculated_returns": [
+    {"period": "2005", "return_pct": 40.2, "calc": "(16111.43-11488.76)/11488.76*100"},
+    {"period": "2005-2007 cumulative", "note": "Data file shows +50% which is cumulative, not single-year"}
+  ],
+  "key_finding": "Nikkei 2005 single-year return = +40.2% (document's 40.24% is correct)"
+}

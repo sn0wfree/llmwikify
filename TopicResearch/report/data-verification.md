@@ -127,4 +127,40 @@
 | M2 增速 | FRED M2SL（美国）/ PBoC（中国）| — | m2sl_clean.json / china_macro_data.json |
 | AI 板块 | SEC 10-Q + 公司 IR | Bloomberg | ai_sector_data.json |
 | IPO 数据 | 上交所/深交所公告 | Wind | ipo_data.json |
+
+---
+
+## 五、ifind/EDB 原始数据溯源
+
+> 以下数据来自同花顺 ifind EDB 查询，已保存为原始 JSON 文件，可直接查验。
+
+### 5.1 数据文件清单
+
+| 文件 | 来源 | 查询内容 | 关键发现 |
+|------|------|---------|---------|
+| `ifind_china_m2.json` | ifind EDB M001625222 | 中国 M2 同比 2005-2008 月度 | 2007-12=16.7%（非 18.5%） |
+| `ifind_china_cpi.json` | ifind EDB | 中国 CPI 年度 2005-2008 | 2007=4.8% ✓ |
+| `ifind_china_loan_rate.json` | ifind EDB | 中国 1Y 贷款基准 2007 月度 | 2007-12=7.47% ✓ |
+| `ifind_china_deposit_rate.json` | ifind EDB | 中国 1Y 存款基准 2007 月度 | 2007-12=4.14% ✓ |
+| `ifind_china_10y_bond.json` | ifind EDB | 中国 10Y 国债 2007 日度 | 2007-12-29=4.43%（≈4.5%）|
+| `ifind_usdcny.json` | ifind EDB | USD/CNY 中间价 2007 | 2007-08 破 7.60 ✓ |
+| `ifind_nvda_quotes.json` | ifind 全球行情 | NVDA 日度行情 | 2022-11=$169.23, 2026-06=$192 |
+| `fred_japan_cpi.json` | FRED FPCPITOTLZGJPN | 日本 CPI 年度 | 2005=-0.28%, 2006=0.25% |
+| `fred_us_m2.json` | FRED M2SL | 美国 M2 Dec 值 | YoY: 4.1%/5.9%/5.7%/9.6% |
+| `fred_us_10y.json` | FRED GS10 | 美国 10Y 月度 | 格潘利差 +3.15%→-0.25% |
+| `fred_nikkei225.json` | FRED NIKKEI225 | 日经年末值 | 2005 收益 +40.2% ✓ |
+
+### 5.2 文档修正记录（结构性比较2.docx）
+
+| # | 旧值 | 新值 | 出现次数 | 数据来源 | 原始文件 |
+|---|------|------|---------|---------|---------|
+| 1 | M2 18.5% | **16.7%** | 3 | ifind EDB | ifind_china_m2.json |
+| 2 | M2 4.9% | **5.9%** | 1 | FRED M2SL | fred_us_m2.json |
+| 3 | NVDA +800% | **+1,035%** | 1 | ifind 全球行情 | ifind_nvda_quotes.json |
+| 4 | NVDA $130 | **$192** | 验证通过 | ifind 全球行情 | ifind_nvda_quotes.json |
+| 5 | 格潘 +0.65% | **接近零** | 1 | FRED GS10 | fred_us_10y.json |
+
+### 5.3 关键发现：M2 18.5% 的来源
+
+ifind EDB 数据揭示：**18.5% 是 2007 年 7 月/9-11 月的月度值**，但 2007 年 12 月（年末）降至 **16.7%**。文档引用年末值时误用了月度峰值。
 | 日经 225 | FRED NIKKEI225 | Yahoo Finance | japan_macro_data.json |

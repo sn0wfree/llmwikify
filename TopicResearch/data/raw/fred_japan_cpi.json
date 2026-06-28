@@ -1,0 +1,16 @@
+{
+  "source": "FRED (Federal Reserve Economic Data)",
+  "series": "FPCPITOTLZGJPN",
+  "description": "Inflation, consumer prices for Japan (annual %)",
+  "query_time": "2026-06-28",
+  "unit": "%",
+  "data": [
+    {"date": "2004-01-01", "value": -0.009},
+    {"date": "2005-01-01", "value": -0.283},
+    {"date": "2006-01-01", "value": 0.249},
+    {"date": "2007-01-01", "value": 0.060},
+    {"date": "2008-01-01", "value": 1.380},
+    {"date": "2009-01-01", "value": -1.353}
+  ],
+  "key_finding": "Japan CPI 2005=-0.28% (deflation), 2006=0.25%, 2007=0.06%. Our data file rounds to -0.3%, 0.2%, 0.0%."
+}
