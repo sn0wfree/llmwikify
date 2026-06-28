@@ -1092,3 +1092,42 @@ diff <(jq -S . /tmp/before/multi_alpha_001_to_101.json) <(jq -S . /tmp/after/mul
 - TestAcademicPdfSignalSource (10): paper_id / count / paper prefix / name / formula / alpha_index / non-alpha / metadata source / real 1601 / override
 
 **风险**: 真实数据 (招商 idx 2, idx 8) `l1` 为空 dict → 测试需用 `isinstance` 而非真值验证
+
+### 17.12 PR3 详细计划
+
+> 状态: ✅ COMPLETED
+
+**目标**: BacktestEngine 抽象 + QuantNodes 适配器 + FactorResult dataclass
+
+**文件**:
+- `src/llmwikify/reproduction/backtest/__init__.py` (公共 API)
+- `src/llmwikify/reproduction/backtest/base.py` (BacktestEngine Protocol + FactorResult dataclass)
+- `src/llmwikify/reproduction/backtest/quantnodes.py` (QuantNodes PipelineRunner 适配器)
+
+**核心设计**:
+
+`FactorResult` dataclass — 每个 signal 一次跑出来的结果：
+- 字段: signal / status / code / code_chars / factor_series / h5_path / backtest / stage / error / elapsed_sec / metadata
+- `to_dict()` 方法：序列化 JSON-friendly dict，mirrors v2 single_factor_NNN.json
+- `alpha_index` 从 signal.metadata 提取（alpha_index 优先，回退到 index），v2 兼容
+
+`BacktestEngine` Protocol — `run(code, h5_path, signal) -> dict`，结构化类型
+
+`QuantNodesBacktest` 适配器 — 替换 v2 的 `_run_pipeline_backtest`：
+1. 内部 `build_qn_config(factor_name, h5_path, code, config=...)`
+2. `PipelineRunner.from_dict(qn_config).run()` → ctx
+3. `extract_full_backtest_from_ctx(ctx)` → metrics dict
+
+**关键设计点**:
+- `factor_name_resolver`：默认用 `signal.id`（总是 filesystem-safe），可被 callable 覆盖
+- 中文 name 不影响：`signal.id` 是 `signal-001` 等 ascii safe id
+- Pipeline 异常不 raise：返回 `{"error": ..., "ic_mean": None, ...}` dict，caller 决定是否标记 failed
+
+**测试**: `tests/test_backtest_quantnodes.py` (22 tests)
+- TestFactorResult (10): 构造 / 完整构造 / to_dict keys / status failed / alpha_index 解析（3 种情况）/ factor_series 信息 / h5_path
+- TestBacktestEngineProtocol (2): QuantNodes / stub 都满足 Protocol
+- TestQuantNodesBacktest (8): 构造 / config / resolver / 中文 signal / 异常处理 / 错误 dict / config 透传
+
+**Commit**: 见 git log（PR3 commit）
+**结果**: 22 + 143 = 165 tests passed
+
