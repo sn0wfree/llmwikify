@@ -412,21 +412,16 @@ def run_one_factor(
     # Save backtest + factor_values to per-factor DuckDB
     from llmwikify.reproduction.persist.factor_library import save_backtest_duckdb
     run_id = f"pipeline_a_{alpha_index:03d}"
-    # 传完整相对路径（含 strategy_dir 前缀）以便 _resolve_factor_dir 定位
-    # project_root 需要是 quant/factors/ 的父目录的父目录（即包含 quant/ 的根目录）
     if factor_dir:
-        factors_dir = config.factors_dir  # e.g., ~/Public/strategy/quant/factors
-        project_root = factors_dir.parent.parent  # e.g., ~/Public/strategy/
-        rel_path = str(factor_dir.relative_to(factors_dir))  # e.g., 101_alphas/stk_alpha_001_abc
+        rel_path = str(factor_dir.relative_to(config.factors_dir))
     else:
-        project_root = None
         rel_path = slug
     save_backtest_duckdb(
         factor_name=rel_path,
         run_id=run_id,
         backtest=backtest,
         factor_wide=factor_wide,
-        project_root=project_root,
+        factors_dir=config.factors_dir,
     )
 
     elapsed = time.monotonic() - t0

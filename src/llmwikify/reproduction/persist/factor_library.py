@@ -22,19 +22,24 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
-def _get_factors_dir(project_root: Path | None = None) -> Path:
-    """Get the quant/factors/ directory path."""
+def _get_factors_dir(project_root: Path | None = None, factors_dir: Path | None = None) -> Path:
+    """Get the quant/factors/ directory path.
+
+    Priority: factors_dir > project_root/quant/factors > Path.cwd()/quant/factors
+    """
+    if factors_dir is not None:
+        return Path(factors_dir)
     root = project_root or Path.cwd()
     return root / "quant" / "factors"
 
 
-def list_factors(project_root: Path | None = None) -> list[dict[str, Any]]:
+def list_factors(project_root: Path | None = None, factors_dir: Path | None = None) -> list[dict[str, Any]]:
     """Read quant/factors/index.yaml and return factor list.
 
     Returns:
         List of factor summary dicts from the index.
     """
-    factors_dir = _get_factors_dir(project_root)
+    factors_dir = _get_factors_dir(project_root, factors_dir)
     index_path = factors_dir / "index.yaml"
 
     if not index_path.exists():
@@ -49,7 +54,7 @@ def list_factors(project_root: Path | None = None) -> list[dict[str, Any]]:
         return []
 
 
-def read_factor_yaml(name: str, project_root: Path | None = None) -> dict[str, Any] | None:
+def read_factor_yaml(name: str, project_root: Path | None = None, factors_dir: Path | None = None) -> dict[str, Any] | None:
     """Read a single factor YAML file.
 
     Supports two formats:
@@ -62,7 +67,7 @@ def read_factor_yaml(name: str, project_root: Path | None = None) -> dict[str, A
     Returns:
         Full 6-layer factor dict, or None if not found.
     """
-    factors_dir = _get_factors_dir(project_root)
+    factors_dir = _get_factors_dir(project_root, factors_dir)
 
     # Try new directory format first
     dir_path = factors_dir / name
@@ -103,7 +108,7 @@ def read_factor_yaml(name: str, project_root: Path | None = None) -> dict[str, A
         return None
 
 
-def write_factor_yaml(name: str, data: dict, project_root: Path | None = None) -> str:
+def write_factor_yaml(name: str, data: dict, project_root: Path | None = None, factors_dir: Path | None = None) -> str:
     """Write a factor YAML file and update index.yaml.
 
     Supports two formats:
@@ -117,7 +122,7 @@ def write_factor_yaml(name: str, data: dict, project_root: Path | None = None) -
     Returns:
         "Created: factors/{name}" or "Updated: factors/{name}"
     """
-    factors_dir = _get_factors_dir(project_root)
+    factors_dir = _get_factors_dir(project_root, factors_dir)
 
     # Check if it's a directory format
     dir_path = factors_dir / name
@@ -159,7 +164,7 @@ def write_factor_yaml(name: str, data: dict, project_root: Path | None = None) -
 
     # Keep index.yaml in sync
     try:
-        update_index(project_root)
+        update_index(project_root, factors_dir)
     except Exception as exc:
         logger.warning("index.yaml update failed after writing %s: %s", name, exc)
 
@@ -167,13 +172,13 @@ def write_factor_yaml(name: str, data: dict, project_root: Path | None = None) -
     return f"{action}: factors/{name}"
 
 
-def list_factors_by_category(project_root: Path | None = None) -> dict[str, list[dict]]:
+def list_factors_by_category(project_root: Path | None = None, factors_dir: Path | None = None) -> dict[str, list[dict]]:
     """List all factors grouped by category.
 
     Returns:
         Dict like {'alpha': [...], 'momentum': [...], 'value': [...]}
     """
-    factors_dir = _get_factors_dir(project_root)
+    factors_dir = _get_factors_dir(project_root, factors_dir)
     if not factors_dir.exists():
         return {}
 
@@ -222,12 +227,12 @@ def list_factors_by_category(project_root: Path | None = None) -> dict[str, list
     return categories
 
 
-def update_index(project_root: Path | None = None) -> None:
+def update_index(project_root: Path | None = None, factors_dir: Path | None = None) -> None:
     """Regenerate quant/factors/index.yaml from actual YAML files.
 
     Scans all factor YAML files and rebuilds the index.
     """
-    factors_dir = _get_factors_dir(project_root)
+    factors_dir = _get_factors_dir(project_root, factors_dir)
     if not factors_dir.exists():
         return
 
@@ -327,7 +332,7 @@ def update_index(project_root: Path | None = None) -> None:
 # ─── DuckDB backtest storage ────────────────────────────────────────
 
 
-def _resolve_factor_dir(name: str, project_root: Path | None = None) -> Path:
+def _resolve_factor_dir(name: str, project_root: Path | None = None, factors_dir: Path | None = None) -> Path:
     """Resolve factor directory path from name.
 
     Supports:
@@ -335,7 +340,7 @@ def _resolve_factor_dir(name: str, project_root: Path | None = None) -> Path:
     2. Fuzzy match: name is 'alpha_001', dir is '101_alphas/stk_alpha_001_xxx'
     3. Fallback: create factors/{name}/ directory
     """
-    factors_dir = _get_factors_dir(project_root)
+    factors_dir = _get_factors_dir(project_root, factors_dir)
 
     # Exact match
     exact = factors_dir / name
@@ -363,6 +368,7 @@ def save_backtest_duckdb(
     backtest: dict,
     factor_wide: Any | None = None,
     project_root: Path | None = None,
+    factors_dir: Path | None = None,
 ) -> Path:
     """Write backtest + factor_values to factor's factor.duckdb.
 
@@ -371,7 +377,7 @@ def save_backtest_duckdb(
         run_id: unique run identifier
         backtest: dict with ic_series, equity_curve, scalar metrics
         factor_wide: optional pandas DataFrame [date x code] of factor values
-        project_root: project root
+        factors_dir: explicit path to factors directory (takes priority over project_root)
 
     Returns:
         Path to the DuckDB file.
@@ -379,7 +385,7 @@ def save_backtest_duckdb(
     import duckdb
     import math
 
-    dir_path = _resolve_factor_dir(factor_name, project_root)
+    dir_path = _resolve_factor_dir(factor_name, project_root, factors_dir)
     dir_path.mkdir(parents=True, exist_ok=True)
     db_path = dir_path / "factor.duckdb"
 
@@ -538,6 +544,7 @@ def read_backtest_duckdb(
     limit: int = 10,
     include_values: bool = False,
     project_root: Path | None = None,
+    factors_dir: Path | None = None,
 ) -> list[dict]:
     """Read backtest runs from factor's DuckDB.
 
@@ -545,14 +552,14 @@ def read_backtest_duckdb(
         factor_name: slug or full path
         limit: max number of runs to return
         include_values: if True, include factor_values in each run
-        project_root: project root
+        factors_dir: explicit path to factors directory (takes priority over project_root)
 
     Returns:
         List of run dicts with metrics + ic_series + equity_curve.
     """
     import duckdb
 
-    dir_path = _resolve_factor_dir(factor_name, project_root)
+    dir_path = _resolve_factor_dir(factor_name, project_root, factors_dir)
     db_path = dir_path / "factor.duckdb"
     if not db_path.exists():
         return []

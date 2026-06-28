@@ -74,9 +74,9 @@ def persist_code_to_yaml(
         dir_path = base_dir / full_name
         dir_path.mkdir(parents=True, exist_ok=True)
 
-        existing = read_factor_yaml(full_name)
+        existing = read_factor_yaml(full_name, factors_dir=Path(factors_dir) if factors_dir else None)
         if existing is None:
-            existing = read_factor_yaml(slug)
+            existing = read_factor_yaml(slug, factors_dir=Path(factors_dir) if factors_dir else None)
         if existing is None:
             data = {
                 "factor": {
@@ -138,7 +138,7 @@ def persist_code_to_yaml(
         }
         l5["validation_date"] = time.strftime("%Y-%m-%d")
 
-        action = write_factor_yaml(full_name, data)
+        action = write_factor_yaml(full_name, data, factors_dir=Path(factors_dir) if factors_dir else None)
         print(f"[yaml] {action} (dir={dir_path})")
         return action, dir_path
     except Exception as exc:

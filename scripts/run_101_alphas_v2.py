@@ -736,20 +736,16 @@ class FactorRunner(BaseStage):
     ) -> None:
         from llmwikify.reproduction.persist.factor_library import save_backtest_duckdb
         run_id: str = f"pipeline_a_{alpha_index:03d}"
-        slug: str = f"alpha_{alpha_index:03d}"
         if factor_dir:
-            factors_dir: Path = config.factors_dir
-            project_root = factors_dir.parent.parent
-            rel_path: str = str(factor_dir.relative_to(factors_dir))
+            rel_path: str = str(factor_dir.relative_to(config.factors_dir))
         else:
-            project_root = None
-            rel_path = slug
+            rel_path = f"alpha_{alpha_index:03d}"
         save_backtest_duckdb(
             factor_name=rel_path,
             run_id=run_id,
             backtest=backtest,
             factor_wide=factor_wide,
-            project_root=project_root,
+            factors_dir=config.factors_dir,
         )
 
 
