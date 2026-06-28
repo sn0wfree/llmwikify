@@ -32,6 +32,8 @@ __all__ = [
     "MetaStage",
     "FactorRunner",
     "FactorStage",
+    # Reporting
+    "FactorReporter",
     # Stateless utilities
     "preload_market_data",
     "build_long_dataframe",
@@ -202,138 +204,174 @@ def _make_factor_dir_name(alpha_index: int, code: str) -> str:
 
 
 # ─── Batch runner ────────────────────────────────────────────────────
-def _print_header() -> None:
-    """Print batch runner header (统一 logger.info)."""
-    logger.info("=" * 100)
-    logger.info("  101-Alpha Batch Runner (v2)")
-    logger.info("=" * 100)
 
 
-def _print_row(idx: int, result: dict, elapsed_cum: float) -> None:
-    """Print one alpha row result."""
-    status: str = result.get("status", "unknown")
-    ic = result.get("ic_mean")
-    icir = result.get("icir")
-    wr = result.get("ic_winrate")
-    elapsed: float = result.get("elapsed_sec", 0)
+class FactorReporter:
+    """Report and write aggregated batch results.
 
-    ic_str = f"{ic:+.4f}" if isinstance(ic, (int, float)) and ic == ic else "  NaN"
-    icir_str = f"{icir:+.4f}" if isinstance(icir, (int, float)) and icir == icir else "  NaN"
-    wr_str = f"{wr * 100:5.1f}%" if isinstance(wr, (int, float)) and wr == wr else "  NaN"
-    note: str = result.get("stage", "") if status != "success" else ""
+    Pure functions organized as @staticmethod for namespace clarity.
+    No instance state needed; can be called directly as FactorReporter.log_banner().
+    """
 
-    logger.info("  %3d  %-8s %10s %10s %8s  %6.1fs  %s", idx, status, ic_str, icir_str, wr_str, elapsed, note)
+    __slots__ = ()
 
+    @staticmethod
+    def aggregate(results: list[dict]) -> dict[str, Any]:
+        """Compute aggregate metrics over successful results (NaN-filtered).
 
-def _print_summary(results: list[dict]) -> None:
-    """Print batch summary."""
-    success = [r for r in results if r.get("status") == "success"]
-    failed = [r for r in results if r.get("status") != "success"]
+        Returns dict with keys: total, success_count, failed_count,
+        ic_mean, icir, winrate.
+        """
+        import math
 
-    ic_means = [r["ic_mean"] for r in success if r.get("ic_mean") is not None and r["ic_mean"] == r["ic_mean"]]
-    icirs = [r["icir"] for r in success if r.get("icir") is not None and r["icir"] == r["icir"]]
-    winrates = [r["ic_winrate"] for r in success if r.get("ic_winrate") is not None and r["ic_winrate"] == r["ic_winrate"]]
+        success = [r for r in results if r.get("status") == "success"]
+        failed = [r for r in results if r.get("status") != "success"]
 
-    avg_ic = sum(ic_means) / len(ic_means) if ic_means else None
-    avg_icir = sum(icirs) / len(icirs) if icirs else None
-    avg_wr = sum(winrates) / len(winrates) if winrates else None
+        def _finite(xs: list[float]) -> list[float]:
+            return [x for x in xs if isinstance(x, (int, float)) and not math.isnan(x)]
 
-    logger.info("=" * 100)
-    logger.info("  Summary")
-    logger.info("=" * 100)
-    logger.info("  Total:  %d  |  Success: %d  |  Failed: %d", len(results), len(success), len(failed))
-    if ic_means:
-        logger.info("  Avg IC: %+.4f  |  Avg ICIR: %+.4f  |  Avg Winrate: %.1f%%",
-                    avg_ic, avg_icir, (avg_wr or 0) * 100)
-    if failed:
-        logger.info("  Failed alphas:")
-        for r in failed:
+        ic_means = _finite([r.get("ic_mean", 0) for r in success])
+        icirs = _finite([r.get("icir", 0) for r in success])
+        winrates = _finite([r.get("ic_winrate", 0) for r in success])
+
+        return {
+            "total": len(results),
+            "success_count": len(success),
+            "failed_count": len(failed),
+            "ic_mean": round(sum(ic_means) / len(ic_means), 4) if ic_means else None,
+            "icir": round(sum(icirs) / len(icirs), 4) if icirs else None,
+            "winrate": round(sum(winrates) / len(winrates), 4) if winrates else None,
+        }
+
+    @staticmethod
+    def format_metric(value: float | None, fmt: str = "+.4f", na: str = "  NaN") -> str:
+        """Format a single metric with NaN-safe fallback."""
+        import math
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            return na
+        return f"{value:{fmt}}"
+
+    @staticmethod
+    def log_banner() -> None:
+        """Log batch runner header."""
+        logger.info("=" * 100)
+        logger.info("  101-Alpha Batch Runner (v2)")
+        logger.info("=" * 100)
+
+    @staticmethod
+    def log_row(idx: int, result: dict, elapsed_cum: float) -> None:
+        """Log one alpha row result."""
+        status: str = result.get("status", "unknown")
+        elapsed: float = result.get("elapsed_sec", 0)
+        note: str = result.get("stage", "") if status != "success" else ""
+
+        ic_str = FactorReporter.format_metric(result.get("ic_mean"))
+        icir_str = FactorReporter.format_metric(result.get("icir"))
+        wr = result.get("ic_winrate")
+        wr_str = f"{wr * 100:5.1f}%" if isinstance(wr, (int, float)) else "  NaN"
+
+        logger.info("  %3d  %-8s %10s %10s %8s  %6.1fs  %s",
+                    idx, status, ic_str, icir_str, wr_str, elapsed, note)
+
+    @staticmethod
+    def log_summary(results: list[dict]) -> None:
+        """Log batch summary."""
+        agg = FactorReporter.aggregate(results)
+        success = agg["success_count"]
+        failed = agg["failed_count"]
+
+        logger.info("=" * 100)
+        logger.info("  Summary")
+        logger.info("=" * 100)
+        logger.info("  Total:  %d  |  Success: %d  |  Failed: %d", agg["total"], success, failed)
+        if agg["ic_mean"] is not None:
+            wr_pct = (agg["winrate"] or 0) * 100
+            logger.info("  Avg IC: %+.4f  |  Avg ICIR: %+.4f  |  Avg Winrate: %.1f%%",
+                        agg["ic_mean"], agg["icir"], wr_pct)
+        if failed:
+            logger.info("  Failed alphas:")
+            for r in results:
+                if r.get("status") == "success":
+                    continue
+                idx = r.get("alpha_index")
+                idx_s = f"{idx:03d}" if isinstance(idx, int) else str(idx)
+                logger.info("    alpha-%s: %s - %s",
+                            idx_s, r.get("stage", "?"), (r.get("error", "?") or "")[:80])
+        logger.info("=" * 100)
+
+    @staticmethod
+    def write_json(results: list[dict], path: Path) -> None:
+        """Write batch summary as JSON."""
+        agg = FactorReporter.aggregate(results)
+        summary: dict[str, Any] = {
+            "total": agg["total"],
+            "success_count": agg["success_count"],
+            "failed_count": agg["failed_count"],
+            "aggregate": {
+                "ic_mean_avg": agg["ic_mean"],
+                "icir_avg": agg["icir"],
+                "winrate_avg": agg["winrate"],
+            },
+            "alphas": [
+                {
+                    "index": r.get("alpha_index"),
+                    "status": r.get("status"),
+                    "ic_mean": r.get("ic_mean"),
+                    "icir": r.get("icir"),
+                    "ic_winrate": r.get("ic_winrate"),
+                    "code_chars": r.get("code_chars"),
+                    "elapsed_sec": r.get("elapsed_sec"),
+                    "stage": r.get("stage", ""),
+                    "error": r.get("error", "")[:200],
+                }
+                for r in results
+            ],
+        }
+        path.write_text(json.dumps(summary, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+
+    @staticmethod
+    def write_markdown(results: list[dict], path: Path) -> None:
+        """Write batch summary as Markdown."""
+        agg = FactorReporter.aggregate(results)
+
+        lines: list[str] = [
+            "# 101-Alpha Batch Results (v2)",
+            "",
+            f"- Total: {agg['total']} | Success: {agg['success_count']} | Failed: {agg['failed_count']}",
+        ]
+        if agg["ic_mean"] is not None:
+            wr_pct = (agg["winrate"] or 0) * 100
+            lines.append(
+                f"- Avg IC: {agg['ic_mean']:+.4f} | Avg ICIR: {agg['icir']:+.4f} | Avg Winrate: {wr_pct:.1f}%"
+            )
+        lines += [
+            "",
+            "| Alpha | Status | IC | ICIR | Winrate | Code | Elapsed |",
+            "|-------|--------|----|------|---------|------|---------|",
+        ]
+        for r in results:
             idx = r.get("alpha_index")
+            st: str = r.get("status", "?")
             idx_s = f"{idx:03d}" if isinstance(idx, int) else str(idx)
-            logger.info("    alpha-%s: %s - %s", idx_s, r.get("stage", "?"), (r.get("error", "?") or "")[:80])
-    logger.info("=" * 100)
+            ic_s = FactorReporter.format_metric(r.get("ic_mean"), na="NaN")
+            icir_s = FactorReporter.format_metric(r.get("icir"), na="NaN")
+            wr = r.get("ic_winrate")
+            wr_s = f"{wr * 100:.1f}%" if isinstance(wr, float) and wr == wr else "NaN"
+            cc = r.get("code_chars", 0) or 0
+            el = r.get("elapsed_sec", 0) or 0
+            lines.append(f"| alpha-{idx_s} | {st} | {ic_s} | {icir_s} | {wr_s} | {cc} | {el:.1f}s |")
 
+        failed = [r for r in results if r.get("status") != "success"]
+        if failed:
+            lines += ["", "## Failed Alphas", ""]
+            for r in failed:
+                idx = r.get("alpha_index")
+                idx_s = f"{idx:03d}" if isinstance(idx, int) else str(idx)
+                lines.append(
+                    f"- alpha-{idx_s}: `{r.get('stage', '?')}` - {(r.get('error', '?') or '')[:100]}"
+                )
 
-def _write_json(results: list[dict], path: Path) -> None:
-    """Write batch summary as JSON."""
-    success = [r for r in results if r.get("status") == "success"]
-    failed = [r for r in results if r.get("status") != "success"]
-    ic_means = [r["ic_mean"] for r in success if r.get("ic_mean") is not None and r["ic_mean"] == r["ic_mean"]]
-    icirs = [r["icir"] for r in success if r.get("icir") is not None and r["icir"] == r["icir"]]
-    winrates = [r["ic_winrate"] for r in success if r.get("ic_winrate") is not None and r["ic_winrate"] == r["ic_winrate"]]
-
-    summary: dict[str, Any] = {
-        "total": len(results),
-        "success_count": len(success),
-        "failed_count": len(failed),
-        "aggregate": {
-            "ic_mean_avg": round(sum(ic_means) / len(ic_means), 4) if ic_means else None,
-            "icir_avg": round(sum(icirs) / len(icirs), 4) if icirs else None,
-            "winrate_avg": round(sum(winrates) / len(winrates), 4) if winrates else None,
-        },
-        "alphas": [
-            {
-                "index": r.get("alpha_index"),
-                "status": r.get("status"),
-                "ic_mean": r.get("ic_mean"),
-                "icir": r.get("icir"),
-                "ic_winrate": r.get("ic_winrate"),
-                "code_chars": r.get("code_chars"),
-                "elapsed_sec": r.get("elapsed_sec"),
-                "stage": r.get("stage", ""),
-                "error": r.get("error", "")[:200],
-            }
-            for r in results
-        ],
-    }
-    path.write_text(json.dumps(summary, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-
-
-def _write_markdown(results: list[dict], path: Path) -> None:
-    """Write batch summary as Markdown."""
-    success = [r for r in results if r.get("status") == "success"]
-    failed = [r for r in results if r.get("status") != "success"]
-    ic_means = [r["ic_mean"] for r in success if r.get("ic_mean") is not None and r["ic_mean"] == r["ic_mean"]]
-    icirs = [r["icir"] for r in success if r.get("icir") is not None and r["icir"] == r["icir"]]
-    winrates = [r["ic_winrate"] for r in success if r.get("ic_winrate") is not None and r["ic_winrate"] == r["ic_winrate"]]
-
-    lines: list[str] = [
-        "# 101-Alpha Batch Results (v2)",
-        "",
-        f"- Total: {len(results)} | Success: {len(success)} | Failed: {len(failed)}",
-    ]
-    if ic_means:
-        avg_ic = sum(ic_means) / len(ic_means)
-        avg_icir = sum(icirs) / len(icirs)
-        avg_wr = sum(winrates) / len(winrates)
-        lines.append(f"- Avg IC: {avg_ic:+.4f} | Avg ICIR: {avg_icir:+.4f} | Avg Winrate: {avg_wr * 100:.1f}%")
-    lines += [
-        "",
-        "| Alpha | Status | IC | ICIR | Winrate | Code | Elapsed |",
-        "|-------|--------|----|------|---------|------|---------|",
-    ]
-    for r in results:
-        idx = r.get("alpha_index")
-        st: str = r.get("status", "?")
-        ic = r.get("ic_mean")
-        icir = r.get("icir")
-        wr = r.get("ic_winrate")
-        ic_s = f"{ic:+.4f}" if isinstance(ic, float) and ic == ic else "NaN"
-        icir_s = f"{icir:+.4f}" if isinstance(icir, float) and icir == icir else "NaN"
-        wr_s = f"{wr * 100:.1f}%" if isinstance(wr, float) and wr == wr else "NaN"
-        cc = r.get("code_chars", 0) or 0
-        el = r.get("elapsed_sec", 0) or 0
-        idx_s = f"{idx:03d}" if isinstance(idx, int) else str(idx)
-        lines.append(f"| alpha-{idx_s} | {st} | {ic_s} | {icir_s} | {wr_s} | {cc} | {el:.1f}s |")
-
-    if failed:
-        lines += ["", "## Failed Alphas", ""]
-        for r in failed:
-            idx = r.get("alpha_index")
-            idx_s = f"{idx:03d}" if isinstance(idx, int) else str(idx)
-            lines.append(f"- alpha-{idx_s}: `{r.get('stage', '?')}` - {(r.get('error', '?') or '')[:100]}")
-
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def load_formula_brief(alpha_index: int, track_b_path: Path) -> tuple[str, str]:
@@ -452,7 +490,7 @@ class MetaStage(BaseStage):
             logger.warning("[meta] No single_factor_NNN.json found in output/")
             logger.warning("[meta] Run Stage 2 first (without --llm-extract)")
             return
-        self._log_start_batch(available)
+        self._log_meta_overview(available)
         results: list[dict] = self._call_extractor(available)
         self._log_done_results(results)
         self._log_done()
@@ -463,7 +501,7 @@ class MetaStage(BaseStage):
         logger.info("[meta] Output dir: %s", self.config.output_dir)
         return [i for i in indices if (self.config.output_dir / f"single_factor_{i:03d}.json").exists()]
 
-    def _log_start_batch(self, available: list[int]) -> None:
+    def _log_meta_overview(self, available: list[int]) -> None:
         logger.info("[meta] Available: %d alphas with JSON (%s...)", len(available), available[:5])
         logger.info("[meta] L5 hypothesis_testing skipped (requires FastAPI server)")
 
@@ -738,11 +776,11 @@ class FactorStage(FactorRunner):
         """批量执行入口。"""
         self._log_start()
         self._log_config()
-        _print_header()
+        FactorReporter.log_banner()
         self.batch_t0 = time.monotonic()
         self._preload_data()
-        self._process_skip_existing()
-        to_run: list[int] = self._compute_to_run()
+        skip: set[int] = self._process_skip_existing()
+        to_run: list[int] = self._compute_to_run(skip)
         logger.info("[factor] To run: %d alphas", len(to_run))
         if self.config.workers <= 1:
             self._run_serial(to_run)
@@ -768,15 +806,17 @@ class FactorStage(FactorRunner):
         logger.info("[factor] Built polars long DF: %s", self.df_pl.shape)
 
     def _process_skip_existing(self) -> set[int]:
+        """Scan output_dir, return set of idx to skip (and load their cached results)."""
         skip: set[int] = set()
-        if self.config.skip_existing:
-            for idx in range(self.config.alpha_start, self.config.alpha_end + 1):
-                p = self.config.output_dir / f"single_factor_{idx:03d}.json"
-                if p.exists():
-                    skip.add(idx)
-            if skip:
-                logger.info("[factor] Skipping %d alphas: %s...", len(skip), sorted(skip)[:10])
-                self._load_skipped_results(skip)
+        if not self.config.skip_existing:
+            return skip
+        for idx in range(self.config.alpha_start, self.config.alpha_end + 1):
+            p = self.config.output_dir / f"single_factor_{idx:03d}.json"
+            if p.exists():
+                skip.add(idx)
+        if skip:
+            logger.info("[factor] Skipping %d alphas: %s...", len(skip), sorted(skip)[:10])
+            self._load_skipped_results(skip)
         return skip
 
     def _load_skipped_results(self, skip: set[int]) -> None:
@@ -787,12 +827,10 @@ class FactorStage(FactorRunner):
                 loaded["alpha_index"] = idx
             self.results.append(loaded)
 
-    def _compute_to_run(self) -> list[int]:
-        skip: set[int] = set()
-        if self.config.skip_existing:
-            skip = {idx for idx in range(self.config.alpha_start, self.config.alpha_end + 1)
-                    if (self.config.output_dir / f"single_factor_{idx:03d}.json").exists()}
-        return [idx for idx in range(self.config.alpha_start, self.config.alpha_end + 1) if idx not in skip]
+    def _compute_to_run(self, skip: set[int]) -> list[int]:
+        """Return alpha indices to run (excluding skipped ones)."""
+        return [idx for idx in range(self.config.alpha_start, self.config.alpha_end + 1)
+                if idx not in skip]
 
     def _run_one_with_recording(self, idx: int) -> dict:
         """Run single alpha + record result. 共享给 serial 和 parallel 路径。
@@ -811,7 +849,7 @@ class FactorStage(FactorRunner):
             self._run_one_with_recording(idx)
             if self._reached_max_failures():
                 break
-            self._maybe_delay(idx)
+            self._inter_alpha_delay(idx)
 
     def _run_parallel(self, to_run: list[int]) -> None:
         logger.info("[factor] Using %d concurrent workers", self.config.workers)
@@ -822,8 +860,27 @@ class FactorStage(FactorRunner):
                 try:
                     future.result(timeout=self.config.timeout + 60)
                 except Exception as exc:
-                    logger.warning("[factor] alpha-%03d: EXCEPTION: %s", idx, exc)
-                    self.failures += 1
+                    import traceback
+                    tb = traceback.format_exc()
+                    self._handle_parallel_failure(idx, type(exc).__name__,
+                                                  f"{exc}\n{tb[-500:]}")
+
+    def _handle_parallel_failure(self, idx: int, stage: str, error: str) -> None:
+        """Append a synthetic failed result so Total = Success + Failed stays consistent.
+
+        Called from _run_parallel when future.result() raises (i.e., _run_one_safe
+        crashed before _update_state could append to self.results).
+        """
+        result = {
+            "alpha_index": idx,
+            "status": "failed",
+            "stage": stage,
+            "error": error[:200],
+            "elapsed_sec": 0.0,
+        }
+        self.results.append(result)
+        self.failures += 1
+        logger.warning("[factor] alpha-%03d: EXCEPTION (%s): %s", idx, stage, error[:100])
 
     def _run_one_safe(self, idx: int) -> dict:
         """线程安全的单 alpha 执行。"""
@@ -854,7 +911,7 @@ class FactorStage(FactorRunner):
     def _record_result(self, idx: int, result: dict, elapsed_cum: float) -> None:
         """Compose: state update + print row + persist + log outcome."""
         self._update_state(idx, result)
-        _print_row(idx, result, elapsed_cum)
+        FactorReporter.log_row(idx, result, elapsed_cum)
         self._persist_result(idx, result)
         self._log_outcome(idx, result)
 
@@ -864,14 +921,15 @@ class FactorStage(FactorRunner):
             return True
         return False
 
-    def _maybe_delay(self, idx: int) -> None:
+    def _inter_alpha_delay(self, idx: int) -> None:
+        """Sleep between alpha runs (if not last and delay > 0 and --no-delay not set)."""
         if idx < self.config.alpha_end and self.config.delay > 0 and not self.config.no_delay:
             time.sleep(self.config.delay)
 
     def _write_summary(self) -> None:
-        _write_json(self.results, self.config.output_dir / "multi_alpha_001_to_101.json")
-        _write_markdown(self.results, self.config.output_dir / "multi_alpha_summary.md")
-        _print_summary(self.results)
+        FactorReporter.write_json(self.results, self.config.output_dir / "multi_alpha_001_to_101.json")
+        FactorReporter.write_markdown(self.results, self.config.output_dir / "multi_alpha_summary.md")
+        FactorReporter.log_summary(self.results)
         total_elapsed: float = time.monotonic() - self.batch_t0
         logger.info("[factor] Total elapsed: %.1fs (%.1f min)", total_elapsed, total_elapsed / 60)
         logger.info("[factor] Results saved to: %s", self.config.output_dir)

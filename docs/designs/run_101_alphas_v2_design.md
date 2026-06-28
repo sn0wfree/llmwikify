@@ -372,7 +372,110 @@ diff <(jq -S . scripts/output/single_factor_001.json) <(jq -S . /tmp/v1_single_f
 - [x] 提取 `_run_one_with_recording` (方案 A)
 - [x] 拆分 `_record_result` 为 3 个职责方法 (方案 B)
 - [x] 引入 `batch_t0` 区分计时语义 (方案 C)
-- [ ] 拆分 `FactorRunner.run_one_factor` 内部 7 步骤为更小的方法
+- [x] 修复 Bug 1: `_process_skip_existing` 返回值丢失（不重复扫描）
+- [x] 修复 Bug 2: `_run_parallel` 异常未 append 到 results（保证 Total = Success + Failed）
+- [x] 提取 `FactorReporter` 类（7 个 @staticmethod：aggregate / format_metric / log_banner / log_row / log_summary / write_json / write_markdown）
+- [x] 命名清理: `_print_*` → `log_*`、`_maybe_delay` → `_inter_alpha_delay`、`_log_start_batch` → `_log_meta_overview`
+- [x] 抽样验证: 1-3 alpha 对比 v1，JSON/Markdown 输出等价
+- [ ] 拆分 `FactorRunner.run_one_factor` 内部 7 步骤为更小的方法（后续讨论）
 - [ ] 提取 `_llm_code_react` 和 `_run_pipeline_backtest` 为顶层函数
 - [ ] 添加单元测试（每个 stage 一个测试文件）
-- [ ] 验证 v1 与 v2 输出完全等价
+- [ ] 跑全量 101 alpha 验证 v1 vs v2 输出等价
+
+## 12. 第二轮梳理（v2 内部代码质量）
+
+### 12.1 Bug 修复
+
+#### Bug 1: `_process_skip_existing` 返回值丢失
+
+**症状**:
+```python
+# 旧代码 (line 743-745):
+self._preload_data()
+self._process_skip_existing()              # ← 返回 set，但被丢弃
+to_run = self._compute_to_run()            # ← 内部又重新扫描一遍 output_dir
+```
+
+**后果**: 双倍扫描 output_dir + `_compute_to_run` 内联了 skip_existing 逻辑（DRY 违反）
+
+**修复**: `_process_skip_existing` 返回 skip 给 `_compute_to_run(skip)` 复用：
+```python
+skip: set[int] = self._process_skip_existing()
+to_run: list[int] = self._compute_to_run(skip)
+```
+
+#### Bug 2: `_run_parallel` 异常未 append
+
+**症状**:
+```python
+# 旧代码 (line 820-826):
+for future in as_completed(futures):
+    idx = futures[future]
+    try:
+        future.result(timeout=...)
+    except Exception as exc:
+        logger.warning(...)
+        self.failures += 1   # ← 计数 +1，但 self.results 不变
+```
+
+**后果**: Total = Success + Failed 不成立（并行模式下崩溃 alpha 不计入 results）
+
+**修复**: 新增 `_handle_parallel_failure` 方法，构造合成 result 并 append：
+```python
+def _handle_parallel_failure(self, idx: int, stage: str, error: str) -> None:
+    result = {
+        "alpha_index": idx,
+        "status": "failed",
+        "stage": stage,
+        "error": error[:200],
+        "elapsed_sec": 0.0,
+    }
+    self.results.append(result)
+    self.failures += 1
+```
+
+### 12.2 `FactorReporter` 类（7 个 @staticmethod）
+
+原 5 个顶层私有函数（`_print_header` / `_print_row` / `_print_summary` / `_write_json` / `_write_markdown`）合并为一个 `FactorReporter` 类，加上 2 个辅助函数：
+
+| 方法 | 职责 |
+|---|---|
+| `aggregate(results)` | 计算 total / success_count / failed_count / avg IC / avg ICIR / avg Winrate（NaN-safe） |
+| `format_metric(value, fmt, na)` | 单个数值格式化（NaN-safe，用 `math.isnan`） |
+| `log_banner()` | batch runner header |
+| `log_row(idx, result, elapsed_cum)` | 单 alpha 行结果 |
+| `log_summary(results)` | batch summary |
+| `write_json(results, path)` | 写 multi_alpha_001_to_101.json |
+| `write_markdown(results, path)` | 写 multi_alpha_summary.md |
+
+**设计**: 全部 `@staticmethod`，零状态。调用形态 `FactorReporter.log_row(idx, result, 12.5)` 与原 `_print_row(...)` 等价。
+
+**收益**:
+- 消除 3 处复制粘贴的 NaN-aware 过滤（`x == x` 换成 `math.isnan(x)`）
+- 报告逻辑集中一处，方便单测（`FactorReporter.aggregate([...])` 不依赖 LLM）
+- `__slots__ = ()` 防止意外实例化
+
+### 12.3 命名清理
+
+| 旧 | 新 | 理由 |
+|---|---|---|
+| `_print_header` | `FactorReporter.log_banner` | 与 logger 风格一致 |
+| `_print_row` | `FactorReporter.log_row` | 同上 |
+| `_print_summary` | `FactorReporter.log_summary` | 同上 |
+| `_write_json` | `FactorReporter.write_json` | 显式所属 |
+| `_write_markdown` | `FactorReporter.write_markdown` | 同上 |
+| `_maybe_delay` | `_inter_alpha_delay` | 语义清晰（是延迟而非检查） |
+| `_log_start_batch` | `_log_meta_overview` | 不更新 t0，命名误导 |
+| `BaseStage.label = "base"` | 删除 | 占位无意义 |
+
+### 12.4 验证结果
+
+```
+✅ FactorReporter.aggregate 单测：3 mock results → ic_mean=0.015, icir=0.1, winrate=0.515
+✅ FactorReporter.aggregate 边界：empty + all-NaN → 正确返回 None
+✅ FactorReporter.format_metric：None/0.05/NaN 三种情况
+✅ Bug 1 修复验证：--skip-existing 一次性扫描 (0.1s 完成，无 LLM 调用)
+✅ Bug 2 修复验证：_handle_parallel_failure mock 测试 (3 failures → 3 results, Total 一致)
+✅ v1 vs v2 抽样 (alpha 1-3)：JSON / Markdown 输出格式完全等价
+✅ IC/ICIR/WinRate 在 4 位小数精度内一致（LLM 随机性导致 code_chars / elapsed_sec 略不同）
+```
