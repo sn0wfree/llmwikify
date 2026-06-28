@@ -435,10 +435,7 @@ def chart_9_three_country_macro():
     us_m2 = [4.3, 4.9, 5.6, 7.1]
     jp_m2 = [1.0, 1.0, 1.4, 2.1]
 
-    # 三国外储/GDP
-    cn_fx = [1.4, 1.7, 1.7]  # 美国
-    us_fx = [38, 45, 48]  # 中国
-    jp_fx = [20, 21, 21]  # 日本
+
 
     fig = make_subplots(
         rows=2, cols=2,
