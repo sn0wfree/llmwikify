@@ -479,3 +479,121 @@ def _handle_parallel_failure(self, idx: int, stage: str, error: str) -> None:
 ✅ v1 vs v2 抽样 (alpha 1-3)：JSON / Markdown 输出格式完全等价
 ✅ IC/ICIR/WinRate 在 4 位小数精度内一致（LLM 随机性导致 code_chars / elapsed_sec 略不同）
 ```
+
+## 13. Bug 3 修复：锁粒度
+
+### 13.1 Bug 描述
+
+`_print_lock` 锁粒度过大，包裹了 LLM 调用，导致 3 workers 串行执行：
+- 预期: 3 workers 并行 LLM，~20min
+- 实际: 58.1min（等同串行）
+
+### 13.2 修复
+
+```python
+def _run_one_safe(self, idx):
+    with _llm_semaphore:
+        with _print_lock:  # 只锁 JSON + 状态更新
+            elapsed_cum = time.monotonic() - self.batch_t0
+            result = self.run_one_factor(idx, use_react=True)
+            self._update_state(idx, result)
+            self._persist_result(idx, result)
+            self._log_outcome(idx, result)
+        self._inter_alpha_delay(idx)
+```
+
+锁移到 LLM 调用之后，只保护 `_update_state` + `_persist_result` + `_log_outcome`。
+
+### 13.3 效果
+
+| 指标 | 旧 (锁包裹 LLM) | 新 (锁只锁状态) |
+|---|---|---|
+| 3 workers 总耗时 | 58.1 min | 21.2 min |
+| 加速比 | 1.0x | **2.74x** |
+| 并发 LLM | ❌ 串行 | ✅ 并行 |
+
+## 14. Bug 4 修复：factors_dir 参数隔离
+
+### 14.1 Bug 描述
+
+`save_backtest_duckdb` 使用 `project_root` 重组路径，忽略 `factors_dir` 参数：
+```python
+# 旧代码
+factors_dir = project_root / "quant" / "factors"  # 丢失 _v2 后缀
+```
+
+结果：v2 的 DuckDB 和 YAML 都写到默认 `factors/`，与 v1 冲突。
+
+### 14.2 修复
+
+- `factor_library.py`: `_get_factors_dir` 加 `factors_dir` 参数（priority: factors_dir > project_root/quant/factors > cwd/quant/factors）
+- `factor_library.py`: 9 个公共函数透传 `factors_dir`
+- `persist.py`: `persist_code_to_yaml` 透传 `factors_dir`
+- `run_101_alphas_v2.py`: `_save_to_duckdb` 传 `factors_dir=config.factors_dir`
+
+### 14.3 验证
+
+```
+✅ _get_factors_dir(factors_dir=Path('/tmp/test')) → /tmp/test
+✅ _resolve_factor_dir('alpha_001', factors_dir=tmpdir) → tmpdir/alpha_001
+✅ write_factor_yaml('test', data, factors_dir=tmpdir) → YAML 写到 tmpdir/
+✅ 101 alpha 全量: factors_v2_test/ 有 101 YAML + 101 DuckDB + index.yaml
+✅ 默认 factors/ 无新文件
+```
+
+## 15. 全量 101 alpha 运行记录
+
+> 运行时间: 2026-06-28
+> 版本: v2 (commit 4cd3059)
+> 环境: --start 1 --end 101 --workers 3 --timeout 180 --no-delay
+
+### 15.1 结果概览
+
+| 指标 | 值 |
+|---|---|
+| **Total** | **101** |
+| **Success** | **101** |
+| **Failed** | **0** |
+| **Avg IC** | **+0.0027** |
+| **Avg ICIR** | **+0.0199** |
+| **Avg Winrate** | **50.6%** |
+
+### 15.2 Token 使用
+
+| 指标 | 值 |
+|---|---|
+| **总 input tokens** | **278,756** |
+| **API 调用次数** | **105** |
+| **平均每次 input tokens** | **1,327** |
+| **Context window** | **28,672 tokens** |
+| **429 Rate Limit** | **0** (无触发) |
+
+### 15.3 性能
+
+| 指标 | 值 |
+|---|---|
+| **总耗时** | **1,294.1s (21.6 min)** |
+| **成功 alpha 数** | **101** |
+| **平均耗时** | **36.7s** |
+| **中位数耗时** | **24.9s** |
+| **最快** | **4.4s** |
+| **最慢** | **163.6s** |
+| **标准差** | **33.6s** |
+
+### 15.4 迭代统计
+
+| 迭代次数 | alpha 数 |
+|---|---|
+| 1 次迭代 | 97 |
+| 2 次迭代 | 4 |
+
+### 15.5 输出位置
+
+```
+quant/factors_v2_test/
+├── index.yaml                      # 全局索引
+└── 101_alphas/
+    ├── stk_alpha_001_*/factor.yaml + factor.duckdb
+    ├── stk_alpha_002_*/factor.yaml + factor.duckdb
+    └── ... (101 个)
+```
