@@ -1177,3 +1177,54 @@ diff <(jq -S . /tmp/before/multi_alpha_001_to_101.json) <(jq -S . /tmp/after/mul
 **Commit**: 见 git log
 **结果**: 27 + 165 = 192 tests passed
 
+
+### 17.14 PR5 详细计划
+
+> 状态: ✅ COMPLETED
+
+**目标**: BatchAggregator/Reporter/Serializer 从 v2 搬出到 reporting/，
+让 BatchSummarySink 委托给它（而非内联聚合逻辑）
+
+**文件**:
+- `src/llmwikify/reproduction/reporting/__init__.py` (公共 API)
+- `src/llmwikify/reproduction/reporting/aggregator.py` (BatchAggregator)
+- `src/llmwikify/reproduction/reporting/reporter.py` (BatchReporter)
+- `src/llmwikify/reproduction/reporting/serializer.py` (BatchSerializer)
+- `src/llmwikify/reproduction/reporting/adapters.py` (factor_results_to_dicts)
+
+**v2 backward compat**:
+- scripts/run_101_alphas_v2.py 删除内联 BatchAggregator/Reporter/Serializer (~180 行)
+- 改为 `from llmwikify.reproduction.reporting.X import X` re-export
+- v2 import `from scripts.run_101_alphas_v2 import BatchSerializer` 仍可用
+- PR6 切换到直接 import reporting/
+
+**BatchSummarySink 简化**:
+- 移除 inline `_aggregate_metrics` / `_aggregate_json` / `_aggregate_markdown`
+- write_batch 现在调 `BatchSerializer.write_json/markdown` + `BatchReporter.log_summary`
+- factor_results_to_dicts 作为 FactorResult → dict 适配器
+- log_summary 参数化（默认 True，可关闭）
+
+**关键设计**:
+- BatchAggregator.aggregate / format_metric: 全 @staticmethod, NaN-safe
+- BatchSerializer: v2 兼容的 JSON/MD schema（保留 `index` 字段名）
+- BatchReporter.log_banner: 保留 v2 "101-Alpha Batch Runner" 字面 (legacy)
+- adapters.factor_results_to_dicts: 用 FactorResult.to_dict() 复用 reporting/dict 路径
+
+**测试**: `tests/test_reporting.py` (34 tests)
+- TestBatchAggregator (10): aggregate basic/empty/all-failed/NaN/round +
+  format_metric basic/None/NaN/custom
+- TestBatchReporter (5): banner / row success / row failed / summary basic /
+  summary with failed (caplog 验证)
+- TestBatchSerializer (8): write_json basic/empty/unicode +
+  write_markdown header/total/table/failed/no-metrics
+- TestFactorResultsToDicts (3): import alias / conversion / empty
+- TestBatchSummarySinkDelegation (4): 调 BatchSerializer / log_summary default /
+  log_summary skip / output matches old inline
+- TestV2BackwardCompat (4): re-export / aggregate 仍可用
+
+**测试清理**: tests/test_sink.py 移除 8 个 _aggregate_* 测试
+  （已迁到 tests/test_reporting.py）
+
+**Commit**: 见 git log
+**结果**: 34 + 184 = 218 tests passed (19 sink + 199 其他)
+

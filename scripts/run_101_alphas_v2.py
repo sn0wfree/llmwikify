@@ -32,7 +32,7 @@ __all__ = [
     "MetaStage",
     "FactorRunner",
     "FactorStage",
-    # Reporting (P1: split into 3 single-responsibility classes)
+    # Reporting (re-exported from reporting/ in PR5)
     "BatchAggregator",
     "BatchReporter",
     "BatchSerializer",
@@ -207,185 +207,13 @@ def _make_factor_dir_name(alpha_index: int, code: str) -> str:
 
 
 # ─── Batch runner ────────────────────────────────────────────────────
-
-
-class BatchAggregator:
-    """Pure computation: NaN-safe metrics over batch results.
-
-    Bug 7 副作用解决：aggregate + format_metric 共享同一 `import math`（拆类后只需 1 次）。
-    """
-
-    __slots__ = ()
-
-    @staticmethod
-    def aggregate(results: list[dict]) -> dict[str, Any]:
-        """Compute aggregate metrics over successful results (NaN-filtered).
-
-        Returns dict with keys: total, success_count, failed_count,
-        ic_mean, icir, winrate.
-        """
-        import math
-
-        success = [r for r in results if r.get("status") == "success"]
-        failed = [r for r in results if r.get("status") != "success"]
-
-        def _finite(xs: list[float]) -> list[float]:
-            return [x for x in xs if isinstance(x, (int, float)) and not math.isnan(x)]
-
-        ic_means = _finite([r.get("ic_mean", 0) for r in success])
-        icirs = _finite([r.get("icir", 0) for r in success])
-        winrates = _finite([r.get("ic_winrate", 0) for r in success])
-
-        return {
-            "total": len(results),
-            "success_count": len(success),
-            "failed_count": len(failed),
-            "ic_mean": round(sum(ic_means) / len(ic_means), 4) if ic_means else None,
-            "icir": round(sum(icirs) / len(icirs), 4) if icirs else None,
-            "winrate": round(sum(winrates) / len(winrates), 4) if winrates else None,
-        }
-
-    @staticmethod
-    def format_metric(value: float | None, fmt: str = "+.4f", na: str = "  NaN") -> str:
-        """Format a single metric with NaN-safe fallback."""
-        import math
-        if value is None or (isinstance(value, float) and math.isnan(value)):
-            return na
-        return f"{value:{fmt}}"
-
-
-class BatchReporter:
-    """Logger output: banner / row / summary."""
-
-    __slots__ = ()
-
-    @staticmethod
-    def log_banner() -> None:
-        """Log batch runner header."""
-        logger.info("=" * 100)
-        logger.info("  101-Alpha Batch Runner (v2)")
-        logger.info("=" * 100)
-
-    @staticmethod
-    def log_row(idx: int, result: dict, elapsed_cum: float) -> None:
-        """Log one alpha row result."""
-        status: str = result.get("status", "unknown")
-        elapsed: float = result.get("elapsed_sec", 0)
-        note: str = result.get("stage", "") if status != "success" else ""
-
-        ic_str = BatchAggregator.format_metric(result.get("ic_mean"))
-        icir_str = BatchAggregator.format_metric(result.get("icir"))
-        wr = result.get("ic_winrate")
-        wr_str = f"{wr * 100:5.1f}%" if isinstance(wr, (int, float)) else "  NaN"
-
-        logger.info("  %3d  %-8s %10s %10s %8s  %6.1fs  %s",
-                    idx, status, ic_str, icir_str, wr_str, elapsed, note)
-
-    @staticmethod
-    def log_summary(results: list[dict]) -> None:
-        """Log batch summary."""
-        agg = BatchAggregator.aggregate(results)
-        success = agg["success_count"]
-        failed = agg["failed_count"]
-
-        logger.info("=" * 100)
-        logger.info("  Summary")
-        logger.info("=" * 100)
-        logger.info("  Total:  %d  |  Success: %d  |  Failed: %d", agg["total"], success, failed)
-        if agg["ic_mean"] is not None:
-            wr_pct = (agg["winrate"] or 0) * 100
-            logger.info("  Avg IC: %+.4f  |  Avg ICIR: %+.4f  |  Avg Winrate: %.1f%%",
-                        agg["ic_mean"], agg["icir"], wr_pct)
-        if failed:
-            logger.info("  Failed alphas:")
-            for r in results:
-                if r.get("status") == "success":
-                    continue
-                idx = r.get("alpha_index")
-                idx_s = f"{idx:03d}" if isinstance(idx, int) else str(idx)
-                logger.info("    alpha-%s: %s - %s",
-                            idx_s, r.get("stage", "?"), (r.get("error", "?") or "")[:80])
-        logger.info("=" * 100)
-
-
-class BatchSerializer:
-    """JSON / Markdown writers for batch summary."""
-
-    __slots__ = ()
-
-    @staticmethod
-    def write_json(results: list[dict], path: Path) -> None:
-        """Write batch summary as JSON."""
-        agg = BatchAggregator.aggregate(results)
-        summary: dict[str, Any] = {
-            "total": agg["total"],
-            "success_count": agg["success_count"],
-            "failed_count": agg["failed_count"],
-            "aggregate": {
-                "ic_mean_avg": agg["ic_mean"],
-                "icir_avg": agg["icir"],
-                "winrate_avg": agg["winrate"],
-            },
-            "alphas": [
-                {
-                    "index": r.get("alpha_index"),
-                    "status": r.get("status"),
-                    "ic_mean": r.get("ic_mean"),
-                    "icir": r.get("icir"),
-                    "ic_winrate": r.get("ic_winrate"),
-                    "code_chars": r.get("code_chars"),
-                    "elapsed_sec": r.get("elapsed_sec"),
-                    "stage": r.get("stage", ""),
-                    "error": r.get("error", "")[:200],
-                }
-                for r in results
-            ],
-        }
-        path.write_text(json.dumps(summary, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-
-    @staticmethod
-    def write_markdown(results: list[dict], path: Path) -> None:
-        """Write batch summary as Markdown."""
-        agg = BatchAggregator.aggregate(results)
-
-        lines: list[str] = [
-            "# 101-Alpha Batch Results (v2)",
-            "",
-            f"- Total: {agg['total']} | Success: {agg['success_count']} | Failed: {agg['failed_count']}",
-        ]
-        if agg["ic_mean"] is not None:
-            wr_pct = (agg["winrate"] or 0) * 100
-            lines.append(
-                f"- Avg IC: {agg['ic_mean']:+.4f} | Avg ICIR: {agg['icir']:+.4f} | Avg Winrate: {wr_pct:.1f}%"
-            )
-        lines += [
-            "",
-            "| Alpha | Status | IC | ICIR | Winrate | Code | Elapsed |",
-            "|-------|--------|----|------|---------|------|---------|",
-        ]
-        for r in results:
-            idx = r.get("alpha_index")
-            st: str = r.get("status", "?")
-            idx_s = f"{idx:03d}" if isinstance(idx, int) else str(idx)
-            ic_s = BatchAggregator.format_metric(r.get("ic_mean"), na="NaN")
-            icir_s = BatchAggregator.format_metric(r.get("icir"), na="NaN")
-            wr = r.get("ic_winrate")
-            wr_s = f"{wr * 100:.1f}%" if isinstance(wr, float) and wr == wr else "NaN"
-            cc = r.get("code_chars", 0) or 0
-            el = r.get("elapsed_sec", 0) or 0
-            lines.append(f"| alpha-{idx_s} | {st} | {ic_s} | {icir_s} | {wr_s} | {cc} | {el:.1f}s |")
-
-        failed = [r for r in results if r.get("status") != "success"]
-        if failed:
-            lines += ["", "## Failed Alphas", ""]
-            for r in failed:
-                idx = r.get("alpha_index")
-                idx_s = f"{idx:03d}" if isinstance(idx, int) else str(idx)
-                lines.append(
-                    f"- alpha-{idx_s}: `{r.get('stage', '?')}` - {(r.get('error', '?') or '')[:100]}"
-                )
-
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+# PR5: BatchAggregator/Reporter/Serializer moved to
+# src/llmwikify/reproduction/reporting/. Re-exported here for backward compat
+# (existing imports `from scripts.run_101_alphas_v2 import BatchSerializer`
+# keep working). PR6 will switch internal usage to direct imports.
+from llmwikify.reproduction.reporting.aggregator import BatchAggregator
+from llmwikify.reproduction.reporting.reporter import BatchReporter
+from llmwikify.reproduction.reporting.serializer import BatchSerializer
 
 
 def load_formula_brief(alpha_index: int, track_b_path: Path) -> tuple[str, str]:
