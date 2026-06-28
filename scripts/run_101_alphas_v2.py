@@ -32,8 +32,10 @@ __all__ = [
     "MetaStage",
     "FactorRunner",
     "FactorStage",
-    # Reporting
-    "FactorReporter",
+    # Reporting (P1: split into 3 single-responsibility classes)
+    "BatchAggregator",
+    "BatchReporter",
+    "BatchSerializer",
     # Stateless utilities
     "preload_market_data",
     "build_long_dataframe",
@@ -206,11 +208,10 @@ def _make_factor_dir_name(alpha_index: int, code: str) -> str:
 # ─── Batch runner ────────────────────────────────────────────────────
 
 
-class FactorReporter:
-    """Report and write aggregated batch results.
+class BatchAggregator:
+    """Pure computation: NaN-safe metrics over batch results.
 
-    Pure functions organized as @staticmethod for namespace clarity.
-    No instance state needed; can be called directly as FactorReporter.log_banner().
+    Bug 7 副作用解决：aggregate + format_metric 共享同一 `import math`（拆类后只需 1 次）。
     """
 
     __slots__ = ()
@@ -251,6 +252,12 @@ class FactorReporter:
             return na
         return f"{value:{fmt}}"
 
+
+class BatchReporter:
+    """Logger output: banner / row / summary."""
+
+    __slots__ = ()
+
     @staticmethod
     def log_banner() -> None:
         """Log batch runner header."""
@@ -265,8 +272,8 @@ class FactorReporter:
         elapsed: float = result.get("elapsed_sec", 0)
         note: str = result.get("stage", "") if status != "success" else ""
 
-        ic_str = FactorReporter.format_metric(result.get("ic_mean"))
-        icir_str = FactorReporter.format_metric(result.get("icir"))
+        ic_str = BatchAggregator.format_metric(result.get("ic_mean"))
+        icir_str = BatchAggregator.format_metric(result.get("icir"))
         wr = result.get("ic_winrate")
         wr_str = f"{wr * 100:5.1f}%" if isinstance(wr, (int, float)) else "  NaN"
 
@@ -276,7 +283,7 @@ class FactorReporter:
     @staticmethod
     def log_summary(results: list[dict]) -> None:
         """Log batch summary."""
-        agg = FactorReporter.aggregate(results)
+        agg = BatchAggregator.aggregate(results)
         success = agg["success_count"]
         failed = agg["failed_count"]
 
@@ -299,10 +306,16 @@ class FactorReporter:
                             idx_s, r.get("stage", "?"), (r.get("error", "?") or "")[:80])
         logger.info("=" * 100)
 
+
+class BatchSerializer:
+    """JSON / Markdown writers for batch summary."""
+
+    __slots__ = ()
+
     @staticmethod
     def write_json(results: list[dict], path: Path) -> None:
         """Write batch summary as JSON."""
-        agg = FactorReporter.aggregate(results)
+        agg = BatchAggregator.aggregate(results)
         summary: dict[str, Any] = {
             "total": agg["total"],
             "success_count": agg["success_count"],
@@ -332,7 +345,7 @@ class FactorReporter:
     @staticmethod
     def write_markdown(results: list[dict], path: Path) -> None:
         """Write batch summary as Markdown."""
-        agg = FactorReporter.aggregate(results)
+        agg = BatchAggregator.aggregate(results)
 
         lines: list[str] = [
             "# 101-Alpha Batch Results (v2)",
@@ -353,8 +366,8 @@ class FactorReporter:
             idx = r.get("alpha_index")
             st: str = r.get("status", "?")
             idx_s = f"{idx:03d}" if isinstance(idx, int) else str(idx)
-            ic_s = FactorReporter.format_metric(r.get("ic_mean"), na="NaN")
-            icir_s = FactorReporter.format_metric(r.get("icir"), na="NaN")
+            ic_s = BatchAggregator.format_metric(r.get("ic_mean"), na="NaN")
+            icir_s = BatchAggregator.format_metric(r.get("icir"), na="NaN")
             wr = r.get("ic_winrate")
             wr_s = f"{wr * 100:.1f}%" if isinstance(wr, float) and wr == wr else "NaN"
             cc = r.get("code_chars", 0) or 0
@@ -854,7 +867,7 @@ class FactorStage(FactorRunner):
         """批量执行入口。"""
         self._log_start()
         self._log_config()
-        FactorReporter.log_banner()
+        BatchReporter.log_banner()
         self.batch_t0 = time.monotonic()
         self._preload_data()
         skip: set[int] = self._process_skip_existing()
@@ -994,7 +1007,7 @@ class FactorStage(FactorRunner):
         调用方负责锁包装（serial 无锁，parallel 在 _print_lock 内）。
         """
         self._update_state(idx, result)
-        FactorReporter.log_row(idx, result, elapsed_cum)
+        BatchReporter.log_row(idx, result, elapsed_cum)
         self._persist_result(idx, result)
         self._log_outcome(idx, result)
 
@@ -1030,9 +1043,9 @@ class FactorStage(FactorRunner):
             time.sleep(self.config.delay)
 
     def _write_summary(self) -> None:
-        FactorReporter.write_json(self.results, self.config.output_dir / "multi_alpha_001_to_101.json")
-        FactorReporter.write_markdown(self.results, self.config.output_dir / "multi_alpha_summary.md")
-        FactorReporter.log_summary(self.results)
+        BatchSerializer.write_json(self.results, self.config.output_dir / "multi_alpha_001_to_101.json")
+        BatchSerializer.write_markdown(self.results, self.config.output_dir / "multi_alpha_summary.md")
+        BatchReporter.log_summary(self.results)
         total_elapsed: float = time.monotonic() - self.batch_t0
         logger.info("[factor] Total elapsed: %.1fs (%.1f min)", total_elapsed, total_elapsed / 60)
         logger.info("[factor] Results saved to: %s", self.config.output_dir)

@@ -20,7 +20,7 @@ from unittest.mock import patch
 import pytest
 
 from scripts.run_101_alphas_v2 import (
-    FactorReporter,
+    BatchReporter,
     FactorStage,
     RunConfig,
 )
@@ -67,7 +67,7 @@ class TestRecordOne:
         # acts as a descriptor that handles self binding at call time.
         with patch.object(FactorStage, "_update_state",
                           side_effect=lambda i, r: call_order.append("update_state")):
-            with patch.object(FactorReporter, "log_row",
+            with patch.object(BatchReporter, "log_row",
                               side_effect=lambda i, r, t: call_order.append("log_row")):
                 with patch.object(FactorStage, "_persist_result",
                                   side_effect=lambda i, r: call_order.append("persist")):
