@@ -394,6 +394,60 @@ def load_formula_brief(alpha_index: int, track_b_path: Path) -> tuple[str, str]:
     return f"alpha-{alpha_index:03d}", alpha["formula_brief"]
 
 
+# ─── LLM code generation ─────────────────────────────────────────────
+
+
+class _ReActProgressHook(UnifiedHook):
+    """Unified hook: prints ReAct iteration progress."""
+
+    def on_reason_start(self, ctx: Any) -> None:
+        logger.info("[REASON] iteration %s...", ctx.iteration)
+
+    def on_act_end(self, ctx: Any, result: Any) -> None:
+        if hasattr(result, "success") and result.success:
+            logger.info("[ACT] OK (%s)", getattr(result, "error_kind", "none"))
+        else:
+            ek = getattr(result, "error_kind", "unknown")
+            em = (getattr(result, "error", "") or "")[:120]
+            logger.info("[ACT] %s: %s", ek, em)
+
+
+def llm_code_react(
+    factor_name: str, formula_brief: str,
+    df_pl: pl.DataFrame, llm: Any, config: RunConfig,
+) -> tuple[str | None, pl.Series | None, str | None, dict]:
+    """ReAct self-retry code generation (public, reusable).
+
+    P2 refactor: extracted from FactorRunner._llm_code_react as top-level function
+    since it doesn't depend on `self` (only `config`).
+
+    Returns:
+        (code, factor_series, error, react_meta):
+          - code: 生成代码（失败时 None）
+          - factor_series: 因子序列（失败时 None）
+          - error: 错误信息（成功时 None）
+          - react_meta: UnifiedResult.to_dict()（含 iterations / stop_reason）
+    """
+    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code_sync
+
+    result = generate_factor_code_sync(
+        factor_name=factor_name,
+        formula_brief=formula_brief,
+        df=df_pl,
+        llm_client=llm,
+        max_repair_rounds=config.max_repair_rounds,
+        temperature=config.temperature,
+        hook=_ReActProgressHook(),
+    )
+
+    logger.info("[Unified] iterations=%s, stop_reason=%s, error=%s",
+                result.iterations, result.stop_reason, result.error)
+
+    if result.error:
+        return None, None, result.error, result.to_dict()
+    return result.code, result.factor_series, None, result.to_dict()
+
+
 
 
 
@@ -767,36 +821,12 @@ class FactorRunner(BaseStage):
         self, factor_name: str, formula_brief: str,
         df_pl: pl.DataFrame, llm: Any, config: RunConfig,
     ) -> tuple[str | None, pl.Series | None, str | None, dict]:
-        from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code_sync
+        """Thin wrapper delegating to top-level `llm_code_react` (P2 refactor).
 
-        class _ProgressHook(UnifiedHook):
-            def on_reason_start(self, ctx: Any) -> None:
-                logger.info("[REASON] iteration %s...", ctx.iteration)
-
-            def on_act_end(self, ctx: Any, result: Any) -> None:
-                if hasattr(result, "success") and result.success:
-                    logger.info("[ACT] OK (%s)", getattr(result, "error_kind", "none"))
-                else:
-                    ek = getattr(result, "error_kind", "unknown")
-                    em = (getattr(result, "error", "") or "")[:120]
-                    logger.info("[ACT] %s: %s", ek, em)
-
-        result = generate_factor_code_sync(
-            factor_name=factor_name,
-            formula_brief=formula_brief,
-            df=df_pl,
-            llm_client=llm,
-            max_repair_rounds=config.max_repair_rounds,
-            temperature=config.temperature,
-            hook=_ProgressHook(),
-        )
-
-        logger.info("[Unified] iterations=%s, stop_reason=%s, error=%s",
-                    result.iterations, result.stop_reason, result.error)
-
-        if result.error:
-            return None, None, result.error, result.to_dict()
-        return result.code, result.factor_series, None, result.to_dict()
+        Kept for backward compatibility with any external callers that may have
+        imported `_llm_code_react` as a method.
+        """
+        return llm_code_react(factor_name, formula_brief, df_pl, llm, config)
 
     def _run_pipeline_backtest(
         self, factor_name: str, h5_path: Path, code: str, config: RunConfig,
