@@ -1031,7 +1031,9 @@ diff <(jq -S . /tmp/before/multi_alpha_001_to_101.json) <(jq -S . /tmp/after/mul
 | 7 PR 跨度过大 | 每 PR 独立 ruff + pytest + commit |
 | `core/` 模块依赖 `signal_source` (PR2) 和 `backtest` (PR3) | PR1 用 TYPE_CHECKING + Protocol，PR2-3 实现后回填 |
 
-### 17.10 PR1 详细计划（当前）
+### 17.10 PR1 详细计划
+
+> 状态: ✅ COMPLETED (commit cdab7b7)
 
 **目标**: 提供 Pipeline 框架骨架，不依赖具体 signal/backtest/sink 实现（用 Protocol/ABC）
 
@@ -1046,9 +1048,47 @@ diff <(jq -S . /tmp/before/multi_alpha_001_to_101.json) <(jq -S . /tmp/after/mul
 - `src/llmwikify/reproduction/pipeline/workspace.py` 改为 deprecated shim (re-export)
 - 删除 `scripts/run_101_alphas_pkg/` 空目录
 
-**测试**: `tests/test_paper_pipeline.py` (10 tests)
-- PaperPipeline.run() serial + parallel
-- 锁行为验证
-- indices 参数过滤
-- empty result 处理
-- shim 模块 import 不破
+**测试**: `tests/test_paper_pipeline.py` (17 tests)
+- TestPaperRecipe (4): 构造 / paper_id 校验 / workers 校验 / cap 警告
+- TestPaperPipelineSerial (6): 全部跑 / 记录 / 索引过滤 / 空信号 / 日志
+- TestPaperPipelineParallel (3): workers=2 / 3 / 6 信号
+- TestShimBackwardCompat (4): shim 重导出 + 旧 Workspace 仍可用 + DeprecationWarning
+
+**Commit**: `cdab7b7 refactor(repro): PR1 - core/ Pipeline framework skeleton`
+**结果**: 17 + 92 = 109 tests passed
+
+### 17.11 PR2 详细计划（当前）
+
+> 状态: 🟡 IN PROGRESS
+
+**目标**: SignalSource 抽象 + 3 实现，覆盖 3 种典型论文格式
+
+**文件**:
+- `src/llmwikify/reproduction/signal_source/__init__.py` (公共 API)
+- `src/llmwikify/reproduction/signal_source/base.py` (Signal dataclass + SignalSource Protocol)
+- `src/llmwikify/reproduction/signal_source/track_b.py` (101 alphas: pass1_signals)
+- `src/llmwikify/reproduction/signal_source/track_b_pass2.py` (招商/浙商: pass2_details)
+- `src/llmwikify/reproduction/signal_source/academic_pdf.py` (1601: pass2_details + paper_id prefix)
+
+**3 实现对比**:
+
+| Source | 读 | signal_id | name | formula_brief |
+|---|---|---|---|---|
+| TrackBSignalSource | `pass1_signals` | `alpha-{idx:03d}` | `Alpha#N` | direct field |
+| TrackBPass2SignalSource | `pass2_details` | `signal-{idx:03d}` | 任意（中文） | `l1.formula` |
+| AcademicPdfSignalSource | `pass2_details` | `{paper_id}_alpha-{idx:03d}` | `Alpha#N` | `l1.formula` |
+
+**设计要点**:
+- `Signal.id` 唯一且 filesystem-safe
+- `Signal.metadata` 携带 paper_id / index / source 类型 / 原始 detail 字段
+- 失败信号 (success=False) 在 pass2 sources 中自动跳过
+- 缺失 l1 → formula_brief 为空字符串（真实数据有这种情况，如招商 idx 2/8）
+- paper_id 优先使用 __init__ 参数，回退到 JSON 字段，最后回退到目录名
+
+**测试**: `tests/test_signal_source.py` (34 tests)
+- TestSignalDataclass (2): 构造 / metadata 独立
+- TestTrackBSignalSource (10): paper_id / count / id format / name / formula_brief / metadata / iter / empty / real 101 / missing file / override
+- TestTrackBPass2SignalSource (9): paper_id / count / id / Chinese name / formula / metadata / skip failed / empty / missing l1 / real 招商
+- TestAcademicPdfSignalSource (10): paper_id / count / paper prefix / name / formula / alpha_index / non-alpha / metadata source / real 1601 / override
+
+**风险**: 真实数据 (招商 idx 2, idx 8) `l1` 为空 dict → 测试需用 `isinstance` 而非真值验证
