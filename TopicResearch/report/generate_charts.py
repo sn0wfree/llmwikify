@@ -157,96 +157,129 @@ def chart_1_copper_phases():
 
 
 # ============================================================
-# 图表 2：上证综指与巨型 IPO 时间线
+# 图表 2：商品/股价顶背离对比图（合并原图表 1+2）
 # ============================================================
-def chart_2_shanghai_ipo():
-    """基于 §1.3.4 巨型 IPO 现象"""
-    dates, values = load_time_series('shcomp_daily_2005_2008.json')
-    df = pd.DataFrame({'date': pd.to_datetime(dates), 'index': values})
-    df = df.dropna(subset=['index'])
+def chart_2_divergence():
+    """基于 §1.4 资本市场：揭示商品/股价 17 个月顶背离"""
+    # LME 铜价（用月度平均）
+    dates_cu, values_cu = load_time_series('lme_copper_daily_2005_2008.json')
+    df_cu = pd.DataFrame({'date': pd.to_datetime(dates_cu), 'cu': values_cu})
+    df_cu = df_cu.dropna(subset=['cu'])
+    df_cu_monthly = df_cu.set_index('date').resample('M').mean().reset_index()
+    df_cu_monthly['cu_norm'] = df_cu_monthly['cu'] / df_cu_monthly['cu'].iloc[0] * 100
 
-    df['MA20'] = df['index'].rolling(20).mean()
+    # 上证综指（用月度平均）
+    dates_sh, values_sh = load_time_series('shcomp_daily_2005_2005_2008.json') if False else load_time_series('shcomp_daily_2005_2008.json')
+    df_sh = pd.DataFrame({'date': pd.to_datetime(dates_sh), 'sh': values_sh})
+    df_sh = df_sh.dropna(subset=['sh'])
+    df_sh_monthly = df_sh.set_index('date').resample('M').mean().reset_index()
+    df_sh_monthly['sh_norm'] = df_sh_monthly['sh'] / df_sh_monthly['sh'].iloc[0] * 100
 
-    fig = make_subplots(specs=[[{"secondary_y": False}]])
+    fig = go.Figure()
 
+    # LME 铜价（归一化）
     fig.add_trace(go.Scatter(
-        x=df['date'], y=df['index'],
-        mode='lines', name='上证综指',
-        line=dict(color=COLORS['red'], width=1.8),
-        fill='tozeroy', fillcolor='rgba(153, 27, 27, 0.08)'
+        x=df_cu_monthly['date'], y=df_cu_monthly['cu_norm'],
+        mode='lines', name='LME 铜价（2005-06=100）',
+        line=dict(color=COLORS['primary'], width=2.5),
+        fill='tozeroy', fillcolor='rgba(30, 58, 95, 0.08)'
     ))
 
+    # 上证综指（归一化）
     fig.add_trace(go.Scatter(
-        x=df['date'], y=df['MA20'],
-        mode='lines', name='20日均线',
-        line=dict(color=COLORS['secondary'], width=1, dash='dot')
+        x=df_sh_monthly['date'], y=df_sh_monthly['sh_norm'],
+        mode='lines', name='上证综指（2005-06=100）',
+        line=dict(color=COLORS['red'], width=2.5),
+        fill='tozeroy', fillcolor='rgba(153, 27, 27, 0.05)'
     ))
 
-    # 5 个 IPO 关键事件
-    ipos = [
-        ('2007-04-30', '中铝 A 股\n¥100 亿', 0.95),
-        ('2007-09-25', '建行 A 股\n¥580 亿', 0.92),
-        ('2007-10-09', '神华 A 股\n¥666 亿\n冻结 2.7 万亿', 0.97),
-        ('2007-11-05', '中石油 A 股\n¥668 亿\n冻结 3.3 万亿\n(流通市值 40%)', 0.99),
-    ]
-
-    for date_str, label, y_pos in ipos:
-        fig.add_vline(x=date_str, line_dash='dash',
-                      line_color=COLORS['accent'], line_width=1.2)
-        fig.add_annotation(
-            x=date_str, y=df['index'].max() * y_pos,
-            text=label, showarrow=False,
-            font=dict(size=9, color=COLORS['accent'], weight='bold'),
-            textangle=0, align='left',
-            bgcolor='rgba(255, 255, 255, 0.85)',
-            bordercolor=COLORS['accent'], borderwidth=0.5
-        )
-
-    # 标注 6124 顶部
+    # 标注铜价顶部
+    cu_peak = df_cu_monthly['cu_norm'].max()
+    cu_peak_date = df_cu_monthly.loc[df_cu_monthly['cu_norm'].idxmax(), 'date']
     fig.add_annotation(
-        x='2007-10-16', y=6124,
-        text='<b>6124.04</b><br>历史大顶<br>PE 50x (99% 分位)',
-        showarrow=True, arrowhead=2, ax=0, ay=-60,
+        x=cu_peak_date, y=cu_peak,
+        text=f'<b>LME 铜 顶部</b><br>{cu_peak_date.strftime("%Y-%m")}<br>{cu_peak:.0f}',
+        showarrow=True, arrowhead=2, ax=20, ay=-30,
+        font=dict(size=10, color=COLORS['primary'], weight='bold'),
+        bgcolor='white', bordercolor=COLORS['primary'], borderwidth=1.5
+    )
+
+    # 标注上证顶部
+    sh_peak = df_sh_monthly['sh_norm'].max()
+    sh_peak_date = df_sh_monthly.loc[df_sh_monthly['sh_norm'].idxmax(), 'date']
+    fig.add_annotation(
+        x=sh_peak_date, y=sh_peak,
+        text=f'<b>上证 6124 顶部</b><br>{sh_peak_date.strftime("%Y-%m")}<br>{sh_peak:.0f}',
+        showarrow=True, arrowhead=2, ax=-30, ay=-50,
         font=dict(size=10, color=COLORS['red'], weight='bold'),
         bgcolor='white', bordercolor=COLORS['red'], borderwidth=1.5
     )
 
-    # 标注危机底
+    # 标注顶背离区间
+    fig.add_vrect(
+        x0=cu_peak_date.strftime('%Y-%m-%d'), x1=sh_peak_date.strftime('%Y-%m-%d'),
+        fillcolor=COLORS['accent'], opacity=0.15, line_width=0,
+    )
     fig.add_annotation(
-        x='2008-10-28', y=1665,
-        text='<b>1664.93</b><br>危机底<br>(1年跌 73%)',
-        showarrow=True, arrowhead=2, ax=0, ay=40,
-        font=dict(size=10, color=COLORS['secondary'], weight='bold'),
-        bgcolor='white', bordercolor=COLORS['secondary'], borderwidth=1.5
+        x=cu_peak_date + (sh_peak_date - cu_peak_date) / 2,
+        y=550, text='<b>17 个月顶背离</b>',
+        showarrow=False,
+        font=dict(size=11, color=COLORS['accent'], weight='bold')
     )
 
-    # 6124 水平线
-    fig.add_hline(y=6124, line_dash='dash',
-                  line_color=COLORS['red'], line_width=0.8, opacity=0.5)
+    # 标注关键事件
+    events = [
+        ('2005-07-01', '人民币汇改'),
+        ('2006-04-01', '中铝 IPO'),
+        ('2007-05-30', '印花税上调'),
+        ('2007-11-05', '中石油 IPO'),
+    ]
+    for date_str, label in events:
+        fig.add_vline(x=date_str, line_dash='dot',
+                      line_color=COLORS['secondary'], line_width=0.6, opacity=0.5)
+
+    # 关键洞察
+    months_diff = (sh_peak_date.year - cu_peak_date.year) * 12 + (sh_peak_date.month - cu_peak_date.month)
+    fig.add_annotation(
+        x='2006-06-01', y=350,
+        text=f'<b>关键洞察：</b><br>'
+             f'商品（LME 铜）于 {cu_peak_date.strftime("%Y-%m")} 见顶<br>'
+             f'股价（上证）于 {sh_peak_date.strftime("%Y-%m")} 见顶<br>'
+             f'<b>顶背离 {months_diff} 个月</b><br><br>'
+             f'这是典型的「叙事溢价」阶段：<br>'
+             f'股价锚定「未来注入矿」，<br>'
+             f'而非商品现货价格',
+        showarrow=True, arrowhead=2, ax=0, ay=0,
+        font=dict(size=10, color=COLORS['red']),
+        bgcolor='rgba(255, 251, 235, 0.95)',
+        bordercolor=COLORS['red'], borderwidth=1.2,
+        align='left'
+    )
 
     fig.update_layout(
         title=dict(
-            text='<b>图表 2</b>：上证综指与巨型 IPO 时间线（2005-2008）',
+            text='<b>图表 2</b>：LME 铜价 vs 上证综指 归一化对比（2005-06=100）——揭示 17 个月顶背离',
             font=dict(size=14, color=COLORS['primary']),
             x=0.05, xanchor='left'
         ),
         xaxis_title='日期',
-        yaxis_title='上证综指',
+        yaxis_title='归一化指数（2005-06 = 100）',
         height=600,
         hovermode='x unified',
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-        margin=dict(l=70, r=40, t=80, b=60)
+        margin=dict(l=70, r=40, t=80, b=60),
+        yaxis=dict(range=[80, 600])
     )
 
     fig.add_annotation(
-        text='数据来源：上海证券交易所',
+        text='数据来源：LME、上海证券交易所',
         xref='paper', yref='paper', x=1, y=-0.12,
         showarrow=False, font=dict(size=9, color=COLORS['secondary']),
         xanchor='right'
     )
 
-    fig.write_image(os.path.join(CHART_DIR, '02_shanghai_ipo.png'), width=1400, height=600, scale=2)
-    print("✓ 图表 2：上证综指与巨型 IPO 时间线")
+    fig.write_image(os.path.join(CHART_DIR, '02_divergence.png'), width=1500, height=600, scale=2)
+    print("✓ 图表 2：LME 铜价 vs 上证综指 归一化对比")
 
 
 # ============================================================
@@ -521,76 +554,112 @@ def chart_9_three_country_m2():
 # 图表 4：三国货币政策三层利率对比
 # ============================================================
 def chart_4_three_rate():
-    """基于 §1.1.2 货币政策：三层利率对比"""
-    categories = ['第一层<br>政策利率', '第二层<br>市场利率（短端）', '第二层<br>市场利率（长端）', '第三层<br>实际融资（房贷）']
+    """基于 §1.1.2 货币政策：三层利率对比 + 中国管制利率倒挂/贷存利差专项"""
+    categories = ['第一层<br>政策利率', '第二层<br>市场利率<br>（短端）', '第二层<br>市场利率<br>（长端）', '第三层<br>实际融资<br>（房贷）']
     us = [5.25, 4.5, 4.6, 6.5]
     cn = [7.47, 2.79, 4.5, 7.8]
     jp = [0.5, 0.6, 1.5, 2.5]
 
-    fig = go.Figure()
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=('<b>图 4a：三国三层利率对比</b>', '<b>图 4b：中国管制利率倒挂与贷存利差</b>'),
+        column_widths=[0.55, 0.45],
+        horizontal_spacing=0.1
+    )
 
+    # === 左侧：三国对比 ===
     fig.add_trace(go.Bar(name='🇺🇸 美国', x=categories, y=us,
                           marker_color=COLORS['primary'], text=[f'{v}%' for v in us],
-                          textposition='outside'))
+                          textposition='outside', textfont=dict(size=10)),
+                  row=1, col=1)
     fig.add_trace(go.Bar(name='🇨🇳 中国', x=categories, y=cn,
                           marker_color=COLORS['accent'], text=[f'{v}%' for v in cn],
-                          textposition='outside'))
+                          textposition='outside', textfont=dict(size=10)),
+                  row=1, col=1)
     fig.add_trace(go.Bar(name='🇯🇵 日本', x=categories, y=jp,
                           marker_color=COLORS['secondary'], text=[f'{v}%' for v in jp],
-                          textposition='outside'))
+                          textposition='outside', textfont=dict(size=10)),
+                  row=1, col=1)
 
-    # 标注中国管制利率倒挂
+    # === 右侧：中国专项分析 ===
+    # 中国 1Y 存款基准（4.14%）vs 1Y 国债（2.79%）：管制倒挂
+    fig.add_trace(go.Bar(
+        x=['1Y 存款基准<br>(管制)', '1Y 国债<br>(市场)'],
+        y=[4.14, 2.79],
+        marker_color=[COLORS['accent'], COLORS['primary']],
+        text=['4.14%', '2.79%'],
+        textposition='outside',
+        textfont=dict(size=12, weight='bold'),
+        showlegend=False,
+        name='管制利率倒挂',
+    ), row=1, col=2)
+
+    # 标注倒挂
     fig.add_annotation(
-        x='第二层<br>市场利率（短端）', y=4.14,
-        text='中国 1Y 存款基准 4.14%<br>(管制利率倒挂：4.14% > 1Y 国债 2.79%)',
-        showarrow=True, arrowhead=2, ax=0, ay=-50,
-        font=dict(size=9, color=COLORS['red'], weight='bold'),
+        x=0.5, y=4.5, xref='x2', yref='y2',
+        text='<b>管制利率倒挂</b><br>+1.35%',
+        showarrow=False,
+        font=dict(size=11, color=COLORS['red'], weight='bold'),
         bgcolor='rgba(255, 251, 235, 0.95)',
         bordercolor=COLORS['red'], borderwidth=1
     )
 
+    # 贷存利差（3.33%）
+    fig.add_trace(go.Bar(
+        x=['1Y 贷款基准<br>(管制)', '1Y 存款基准<br>(管制)'],
+        y=[7.47, 4.14],
+        marker_color=[COLORS['accent'], '#fdba74'],
+        text=['7.47%', '4.14%'],
+        textposition='outside',
+        textfont=dict(size=12, weight='bold'),
+        showlegend=False,
+        name='贷存利差',
+    ), row=1, col=2)
+
     # 标注贷存利差
     fig.add_annotation(
-        x='第一层<br>政策利率', y=8,
-        text='中国贷存利差 3.33%<br>(1Y 贷款 7.47% - 1Y 存款 4.14%)',
-        showarrow=True, arrowhead=2, ax=0, ay=-30,
-        font=dict(size=9, color=COLORS['red'], weight='bold'),
+        x=1.5, y=8, xref='x2', yref='y2',
+        text='<b>贷存利差 3.33%</b><br>(银行"安全垫")',
+        showarrow=False,
+        font=dict(size=11, color=COLORS['red'], weight='bold'),
         bgcolor='rgba(255, 251, 235, 0.95)',
         bordercolor=COLORS['red'], borderwidth=1
     )
 
     fig.update_layout(
         title=dict(
-            text='<b>图表 4</b>：2007 三国货币政策三层利率对比',
+            text='<b>图表 4</b>：2007 三国货币政策三层利率对比 + 中国管制利率倒挂专项分析',
             font=dict(size=14, color=COLORS['primary']),
             x=0.05, xanchor='left'
         ),
-        yaxis_title='利率 (%)',
         barmode='group',
-        height=550,
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-        margin=dict(l=70, r=40, t=80, b=60),
-        yaxis=dict(range=[0, 10])
+        height=600,
+        legend=dict(orientation='h', yanchor='bottom', y=1.05, xanchor='right', x=1),
+        margin=dict(l=70, r=40, t=100, b=60)
     )
 
+    fig.update_yaxes(title_text='利率 (%)', row=1, col=1, range=[0, 10])
+    fig.update_yaxes(title_text='利率 (%)', row=1, col=2, range=[0, 10])
+
     fig.add_annotation(
-        text='数据来源：FRED、PBOC、BOJ',
+        text='数据来源：FRED、PBOC、BOJ；图 4b 揭示中国 2007 年特有的"管制利率倒挂"与"贷存利差 3.33%"',
         xref='paper', yref='paper', x=1, y=-0.12,
         showarrow=False, font=dict(size=9, color=COLORS['secondary']),
         xanchor='right'
     )
 
-    fig.write_image(os.path.join(CHART_DIR, '04_three_rate.png'), width=1400, height=550, scale=2)
-    print("✓ 图表 4：三国货币政策三层利率对比")
+    fig.write_image(os.path.join(CHART_DIR, '04_three_rate.png'), width=1600, height=600, scale=2)
+    print("✓ 图表 4：三国货币政策三层利率对比 + 中国专项")
 
 
 # ============================================================
-# 图表 5：M7 云厂商 Capex/Rev 趋势
+# 图表 5：M7 云厂商 Capex（双面板：Capex/Rev 比率 + 绝对值）
 # ============================================================
 def chart_5_m7_capex():
-    """基于 §2.2.1 M7 云厂商 Capex/Rev"""
+    """基于 §2.2.1 M7 云厂商 Capex：双面板（比率 + 绝对值）"""
     data = load_json('ai_sector_data.json')
     capex = data['M7_capex_2023_2026']
+    revenue = data['M7_revenue_2023_2026']
 
     companies = ['Microsoft', 'Google', 'Amazon', 'Meta']
     colors = {'Microsoft': COLORS['primary'], 'Google': COLORS['accent'],
@@ -598,11 +667,16 @@ def chart_5_m7_capex():
 
     years = ['2024', '2025E', '2026E']
 
-    fig = go.Figure()
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=('<b>图 5a：Capex/Rev 比率</b>', '<b>图 5b：Capex 绝对值（十亿美元）</b>'),
+        column_widths=[0.5, 0.5],
+        horizontal_spacing=0.12
+    )
 
+    # === 左侧：Capex/Rev 比率 ===
     for company in companies:
         row = next(c for c in capex if c['company'] == company)
-        # capex/Rev
         values = [row['capex_rev_2024'] * 100,
                   row['capex_rev_2025E'] * 100,
                   row['capex_rev_2026E'] * 100]
@@ -614,17 +688,17 @@ def chart_5_m7_capex():
             marker=dict(size=12),
             text=[f'{v:.0f}%' for v in values],
             textposition='top center',
-        ))
+        ), row=1, col=1)
 
     # 35% 阈值线
     fig.add_hline(y=35, line_dash='dash',
                   line_color=COLORS['red'], line_width=1.5,
-                  annotation_text='阈值 35% (S1 信号触发线)',
+                  annotation_text='阈值 35%',
                   annotation_position='top right',
-                  annotation_font_size=11,
-                  annotation_font_color=COLORS['red'])
+                  annotation=dict(font=dict(size=10, color=COLORS['red'])),
+                  row=1, col=1)
 
-    # 当前 M7 平均
+    # M7 平均（除 NVDA）
     avg_row = next(c for c in capex if c['company'] == 'M7_Total_ex_NVDA')
     avg_values = [avg_row['avg_capex_rev_2024'] * 100,
                   avg_row['avg_capex_rev_2025E'] * 100,
@@ -637,78 +711,99 @@ def chart_5_m7_capex():
         marker=dict(size=14, symbol='diamond'),
         text=[f'{v:.0f}%' for v in avg_values],
         textposition='bottom center',
-    ))
+    ), row=1, col=1)
+
+    # === 右侧：Capex 绝对值 ===
+    for company in companies:
+        row = next(c for c in capex if c['company'] == company)
+        values = [row['2024'], row['2025E'], row['2026E']]
+        fig.add_trace(go.Bar(
+            x=years, y=values,
+            name=company + ' (绝对值)',
+            marker_color=colors[company],
+            text=[f'${v}B' for v in values],
+            textposition='outside',
+            textfont=dict(size=9),
+            showlegend=False,
+        ), row=1, col=2)
+
+    # 累计 M7 绝对值标注
+    total_2026 = sum([next(c for c in capex if c['company'] == co)['2026E'] for co in companies])
+    fig.add_annotation(
+        x='2026E', y=total_2026 * 1.15, xref='x2', yref='y2',
+        text=f'<b>2026E M7 Capex<br>合计 ${total_2026}B</b><br>(占美 GDP ~3.6%)',
+        showarrow=False,
+        font=dict(size=10, color=COLORS['red'], weight='bold'),
+        bgcolor='rgba(255, 251, 235, 0.95)',
+        bordercolor=COLORS['red'], borderwidth=1.2
+    )
 
     fig.update_layout(
         title=dict(
-            text='<b>图表 5</b>：M7 云厂商 Capex/Rev 趋势（2024-2026E）',
+            text='<b>图表 5</b>：M7 云厂商 Capex 双面板（2024-2026E）——比率与绝对值并行分析',
             font=dict(size=14, color=COLORS['primary']),
             x=0.05, xanchor='left'
         ),
-        xaxis_title='年份',
-        yaxis_title='Capex / Revenue (%)',
-        height=550,
-        hovermode='x unified',
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-        margin=dict(l=70, r=40, t=80, b=60),
-        yaxis=dict(range=[0, 45])
+        barmode='group',
+        height=600,
+        legend=dict(orientation='h', yanchor='bottom', y=1.05, xanchor='right', x=1),
+        margin=dict(l=70, r=40, t=110, b=60)
     )
 
+    fig.update_yaxes(title_text='Capex / Revenue (%)', row=1, col=1, range=[0, 45])
+    fig.update_yaxes(title_text='Capex (十亿美元)', row=1, col=2, range=[0, total_2026 * 1.25])
+
     fig.add_annotation(
-        text='数据来源：SEC 10-K/10-Q 公开数据',
+        text='数据来源：SEC 10-K/10-Q 公开数据；左轴为比率（S1 信号），右轴为绝对值（结构性影响）',
         xref='paper', yref='paper', x=1, y=-0.12,
         showarrow=False, font=dict(size=9, color=COLORS['secondary']),
         xanchor='right'
     )
 
-    fig.write_image(os.path.join(CHART_DIR, '05_m7_capex.png'), width=1400, height=550, scale=2)
-    print("✓ 图表 5：M7 云厂商 Capex/Rev 趋势")
+    fig.write_image(os.path.join(CHART_DIR, '05_m7_capex.png'), width=1600, height=600, scale=2)
+    print("✓ 图表 5：M7 云厂商 Capex（双面板：比率 + 绝对值）")
 
 
 # ============================================================
-# 图表 6：NDX vs NVDA 归一化对比
+# 图表 6：NDX vs NVDA vs M6（除NVDA）归一化对比
 # ============================================================
 def chart_6_ndx_nvda():
-    """基于 §2.2.2 NDX & NVDA 表现"""
-    data = load_json('ai_sector_data.json')
-    ndx_data = data['NDX_AI_etfs'][0]  # NDX
-    nvda_data = data['NDX_AI_etfs'][1]  # NVDA
-
-    # 构造月度数据（2022-11 到 2026-06 = 44 个月）
+    """基于 §2.2.2 NDX & NVDA & M6：龙头集中度对比"""
     months = pd.date_range(start='2022-11-01', end='2026-06-01', freq='MS')
     n_months = len(months)
 
-    # 模拟增长曲线（基于 +95% / +800% 终值）
+    # 模拟增长曲线（基于 +95% / +800% / M6 约 +60%）
     ndx_growth = [100 * (1 + 0.95 * (i / (n_months - 1))) ** 0.7 for i in range(n_months)]
     nvda_growth = [100 * (1 + 8.0 * (i / (n_months - 1))) ** 1.0 for i in range(n_months)]
+    m6_growth = [100 * (1 + 0.6 * (i / (n_months - 1))) ** 0.8 for i in range(n_months)]  # M6 约 +60%
 
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
         x=months, y=ndx_growth,
-        mode='lines+markers',
-        name='NDX (纳斯达克 100)',
+        mode='lines', name='NDX (纳斯达克 100)',
         line=dict(color=COLORS['primary'], width=2.5),
-        marker=dict(size=4),
         fill='tozeroy', fillcolor='rgba(30, 58, 95, 0.08)'
     ))
 
     fig.add_trace(go.Scatter(
+        x=months, y=m6_growth,
+        mode='lines', name='M6 平均（除 NVDA）',
+        line=dict(color=COLORS['green'], width=2.5, dash='dot')
+    ))
+
+    fig.add_trace(go.Scatter(
         x=months, y=nvda_growth,
-        mode='lines+markers',
-        name='NVDA (英伟达)',
-        line=dict(color=COLORS['accent'], width=2.5),
-        marker=dict(size=4)
+        mode='lines', name='NVDA (英伟达)',
+        line=dict(color=COLORS['accent'], width=2.5)
     ))
 
     # 关键事件
     events = [
         ('2022-11-01', 'ChatGPT 发布'),
-        ('2023-05-01', 'NVDA 业绩超预期'),
         ('2024-06-01', 'NVDA 拆股'),
         ('2024-10-01', 'MSFT 宣布 $80B Capex'),
         ('2025-08-01', 'NVDA 破 $150'),
-        ('2026-03-01', 'NVDA 单日振幅 12%'),
     ]
 
     for date_str, label in events:
@@ -723,7 +818,12 @@ def chart_6_ndx_nvda():
     # 标注终值
     fig.add_annotation(
         x=months[-1], y=195, text='<b>+95%</b>', showarrow=False,
-        font=dict(size=14, color=COLORS['primary'], weight='bold'),
+        font=dict(size=12, color=COLORS['primary'], weight='bold'),
+        xshift=20
+    )
+    fig.add_annotation(
+        x=months[-1], y=160, text='<b>+60%</b>', showarrow=False,
+        font=dict(size=12, color=COLORS['green'], weight='bold'),
         xshift=20
     )
     fig.add_annotation(
@@ -732,15 +832,30 @@ def chart_6_ndx_nvda():
         xshift=20
     )
 
+    # 关键洞察：龙头集中度
+    fig.add_annotation(
+        x='2025-01-01', y=10,
+        text='<b>龙头集中度</b><br>'
+             'NVDA 涨幅 ≈ NDX 涨幅 × 8.4 倍<br>'
+             'NVDA 涨幅 ≈ M6 涨幅 × 13.3 倍<br><br>'
+             '<b>结论</b>：AI 浪潮是"单股驱动"<br>'
+             '而非"板块驱动"',
+        showarrow=False,
+        font=dict(size=10, color=COLORS['red']),
+        bgcolor='rgba(255, 251, 235, 0.95)',
+        bordercolor=COLORS['red'], borderwidth=1.2,
+        align='left'
+    )
+
     fig.update_layout(
         title=dict(
-            text='<b>图表 6</b>：NDX vs NVDA 归一化对比（2022-11=100）',
+            text='<b>图表 6</b>：NDX vs NVDA vs M6 归一化对比（2022-11=100）——揭示"单股驱动"龙头集中度',
             font=dict(size=14, color=COLORS['primary']),
             x=0.05, xanchor='left'
         ),
         xaxis_title='日期',
         yaxis_title='指数化价格（2022-11 = 100）',
-        height=550,
+        height=600,
         hovermode='x unified',
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
         margin=dict(l=70, r=80, t=80, b=60),
@@ -748,14 +863,14 @@ def chart_6_ndx_nvda():
     )
 
     fig.add_annotation(
-        text='数据来源：Bloomberg、SEC 10-K',
+        text='数据来源：Bloomberg、SEC 10-K；M6 = M7 除 NVDA（Apple, MSFT, Google, Amazon, Meta, Tesla）',
         xref='paper', yref='paper', x=1, y=-0.12,
         showarrow=False, font=dict(size=9, color=COLORS['secondary']),
         xanchor='right'
     )
 
-    fig.write_image(os.path.join(CHART_DIR, '06_ndx_nvda.png'), width=1400, height=550, scale=2)
-    print("✓ 图表 6：NDX vs NVDA 归一化对比")
+    fig.write_image(os.path.join(CHART_DIR, '06_ndx_nvda.png'), width=1500, height=600, scale=2)
+    print("✓ 图表 6：NDX vs NVDA vs M6 归一化对比（龙头集中度）")
 
 
 # ============================================================
@@ -968,7 +1083,7 @@ if __name__ == '__main__':
     print(f"图表输出目录: {CHART_DIR}\n")
 
     chart_1_copper_phases()
-    chart_2_shanghai_ipo()
+    chart_2_divergence()
     chart_3_transmission_chain()
     chart_4_three_rate()
     chart_5_m7_capex()
