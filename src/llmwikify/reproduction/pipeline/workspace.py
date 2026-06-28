@@ -1,17 +1,37 @@
-"""Workspace — manages stage registry and execution for a project root."""
+"""DEPRECATED: Workspace stub kept for backward compatibility.
+
+`Workspace` is the old stage-registry pattern. The new framework uses
+`PaperPipeline` + `PaperRecipe` from `llmwikify.reproduction.core`.
+
+This file is preserved (not removed) so that existing tests / scripts that
+import `Workspace` continue to work. New code should use `PaperPipeline`.
+
+See docs/designs/run_101_alphas_v2_design.md §17 for the PR1-PR7 refactor plan.
+"""
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import Any
 
+from llmwikify.reproduction.core.stage import Stage, StageContext
+
 from .config import WorkspaceConfig
-from .stages.base import Stage, StageContext
+
+warnings.warn(
+    "llmwikify.reproduction.pipeline.workspace.Workspace is deprecated. "
+    "Use llmwikify.reproduction.core.PaperPipeline instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class Workspace:
     """Manages a set of named stages bound to a workspace directory.
+
+    DEPRECATED: kept for backward compatibility. Use `PaperPipeline` for new code.
 
     Args:
         config: WorkspaceConfig providing paths and settings.
@@ -39,15 +59,7 @@ class Workspace:
         stage_names: list[str] | None = None,
         ctx: StageContext | None = None,
     ) -> StageContext:
-        """Execute requested stages in order.
-
-        Args:
-            stage_names: Subset of stages to run.  ``None`` runs all.
-            ctx: Optional pre-built context.  One is created if omitted.
-
-        Returns:
-            The final StageContext after all stages have run.
-        """
+        """Execute requested stages in order (legacy)."""
         if ctx is None:
             ctx = StageContext(workspace_path=self.config.workspace_path)
 

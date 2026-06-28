@@ -814,3 +814,241 @@ def _find_available(self):
 | `@log_timing` 与 `_log_start/done` 冲突 | `_log_start/done` 保留供 batch_t0 / 内部用 |
 | Bug 8 回退 | P0 后跑 3 workers 1 alpha 验证并发 |
 | Bug 9 scandir 与 `exists()` 行为差异 | scandir 一次返回现有文件名集合，语义等价 |
+
+## 17. 第四轮重构：模块化框架（PR1-PR7）
+
+> 开始日期: 2026-06-28
+> 状态: PR1 in progress
+> 目标: v2 → 通用论文复现框架
+
+### 17.1 动机
+
+v2 经过 P0-P3 后，1217 行的 `scripts/run_101_alphas_v2.py` 内部已充分模块化，但**整体仍是 101 alphas 特化**：
+
+- 信号源 `load_formula_brief(idx, track_b_path)` 假设 `pass1_signals[idx].formula_brief` 结构
+- 数据源 `preload_market_data` 写死 akshare H5 cache
+- 因子命名 `alpha-{idx:03d}` 与 `single_factor_{idx:03d}.json` 硬编码
+- 回测 `_run_pipeline_backtest` 强绑定 QuantNodes PipelineRunner
+- Banner "101-Alpha Batch Runner (v2)" 字面特化
+
+`quant/papers/` 已有 4 类不同形态的论文待复用：
+
+| Paper | 类型 | 关键差异 |
+|---|---|---|
+| `101_alphas_minimal` | 公式集 | pass1_signals + 固定 101 |
+| `1601_00991v3` | 学术 PDF | track_a/b_pass1/pass2 多 pass |
+| `20180302-招商证券-A股涅槃论（捌）` | 卖方研报 | 中文 + track_b_pass2 |
+| `20181125-浙商证券-A股行业比较周报` | 周报 | 中文 + track_b_pass2 |
+
+### 17.2 重构原则
+
+- **Simplicity First**: 每个新模块只做一件事，主入口变薄
+- **Surgical Changes**: 不动 v1（baseline），不动 v2 现有调用链直到 PR6
+- **Goal-Driven**: 7 个独立 PR，每步 ruff + pytest + 设计文档 + commit
+- **Verify-Then-Proceed**: PR6 diff v2 输出；PR7 smoke test 3 papers
+- **Backward Compat**: 旧 `pipeline/workspace.py` / `pipeline/stages/base.py` 留 deprecated shim
+- **Terminology**: 新建 `sink/` 而非复用 `persist/`（dataflow 标准词，可扩展 webhook/MQ/Iceberg）
+
+### 17.3 模块拆分
+
+```
+src/llmwikify/reproduction/
+├── core/                              # 🆕 Pipeline 框架
+│   ├── pipeline.py                    # PaperPipeline（合并 workspace + workflow）
+│   ├── stage.py                       # Stage 基类（替代 pipeline/stages/base.py）
+│   └── recipe.py                      # PaperRecipe dataclass
+│
+├── signal_source/                     # 🆕 信号提取抽象
+│   ├── base.py                        # Signal + SignalSource ABC
+│   ├── track_b.py                     # 101 alphas (PR2)
+│   ├── track_b_pass2.py               # 招商/浙商 (PR2)
+│   └── academic_pdf.py                # 1601_00991v3 (PR2)
+│
+├── backtest/                          # 🆕 回测引擎抽象
+│   ├── base.py                        # BacktestEngine ABC + FactorResult
+│   └── quantnodes.py                  # QuantNodes adapter (PR3)
+│
+├── sink/                              # 🆕 结果输出抽象
+│   ├── base.py                        # Sink ABC
+│   ├── yaml_duckdb.py                 # factor_library 包装 (PR4)
+│   ├── single_json.py                 # single_factor_NNN.json (PR4)
+│   └── batch_summary.py               # multi_alpha_*.json/md (PR4)
+│
+├── reporting/                         # 🆕 从 v2 搬出
+│   ├── aggregator.py                  # BatchAggregator (PR5)
+│   ├── reporter.py                    # BatchReporter (PR5)
+│   └── serializer.py                  # BatchSerializer (PR5)
+│
+├── data_source/                       # 已有 (DataSource Protocol)
+├── codegen/                           # 已有
+├── paper_understanding/               # 已有
+├── persist/                           # 降级 (PR4 后成 deprecated wrapper)
+└── pipeline/                          # 旧 (workspace/stages deprecated, workflow.py PR6 删除)
+
+scripts/
+├── run_101_alphas_v2.py               # PR6: 缩到 ~150 行 recipe 组装
+└── run_paper.py                       # PR7: 通用入口 (--recipe / --paper-id)
+```
+
+### 17.4 PR 列表
+
+| PR | 内容 | 新文件 | 测试 |
+|---|---|---|---|
+| **PR1** | 合并 workspace + workflow 为 PaperPipeline | `core/{pipeline,stage,recipe}.py` | `test_paper_pipeline.py` (10) |
+| **PR2** | SignalSource 抽象 + 3 实现 | `signal_source/{base,track_b,track_b_pass2,academic_pdf}.py` | `test_signal_source_*.py` (15) |
+| **PR3** | BacktestEngine 抽象 + QuantNodes 适配 | `backtest/{base,quantnodes}.py` | `test_backtest_quantnodes.py` (8) |
+| **PR4** | Sink 抽象 + yaml/single_json 实现 | `sink/{base,yaml_duckdb,single_json,batch_summary}.py` | `test_sink_*.py` (12) |
+| **PR5** | reporting/ 提取 | `reporting/{aggregator,reporter,serializer}.py` | 迁移 29 tests |
+| **PR6** | v2 改用新模块 | v2 缩到 ~150 行 | `test_v2_byte_equal.py` (3) |
+| **PR7** | 通用 run_paper.py + 3 papers 验证 | `scripts/run_paper.py` + 3 paper.yaml | 3 smoke tests |
+
+依赖图：
+
+```
+PR1 ─┬─→ PR2 ─┐
+     ├─→ PR3 ─┤
+     ├─→ PR4 ─┼─→ PR6 ─→ PR7
+     └─→ PR5 ─┘
+```
+
+### 17.5 核心抽象设计（最终版）
+
+```python
+# signal_source/base.py
+@dataclass
+class Signal:
+    id: str                                  # 论文特异 ID
+    name: str                                # 人读名
+    formula_brief: str                       # LLM 输入
+    metadata: dict = field(default_factory=dict)
+
+class SignalSource(ABC):
+    @abstractmethod
+    def iter_signals(self) -> Iterable[Signal]: ...
+
+# backtest/base.py
+@dataclass
+class FactorResult:
+    signal: Signal
+    code: str | None
+    code_chars: int
+    factor_series: pl.Series | None
+    backtest: dict[str, Any]
+    status: str                              # "success" / "failed"
+    stage: str | None
+    error: str | None
+    elapsed_sec: float
+
+class BacktestEngine(ABC):
+    @abstractmethod
+    def run(self, code: str, h5_path: Path, signal: Signal) -> dict: ...
+
+# sink/base.py
+class Sink(ABC):
+    @abstractmethod
+    def write_one(self, result: FactorResult) -> Path: ...
+
+# core/recipe.py
+@dataclass
+class PaperRecipe:
+    paper_id: str
+    signal_source: SignalSource
+    data_source: DataSource
+    backtest_engine: BacktestEngine
+    sinks: list[Sink]
+    reporter: Any                             # BatchReporter (PR5)
+    delay: float = 3.0
+    workers: int = 1
+    timeout: int = 180
+
+# core/pipeline.py
+class PaperPipeline:
+    def __init__(self, recipe: PaperRecipe): ...
+    def run(self, indices: range | None = None) -> list[FactorResult]: ...
+```
+
+### 17.6 v2 → PaperRecipe 组装（PR6 目标）
+
+```python
+# scripts/run_101_alphas_v2.py (PR6 后 ~150 行)
+def main():
+    args = build_argparser().parse_args()
+    config = build_runconfig(args)            # 现有 CLI 兼容
+
+    recipe = PaperRecipe(
+        paper_id=config.paper_id,
+        signal_source=TrackBSignalSource(config.track_b_path),
+        data_source=AkShareH5DataSource(config.data_path, config.h5_filename),
+        backtest_engine=QuantNodesBacktest(),
+        sinks=[
+            SingleJsonSink(config.output_dir),
+            YamlDuckdbSink(config.factors_dir),
+            BatchSummarySink(config.output_dir),
+        ],
+        reporter=BatchReporter,
+        delay=config.delay,
+        workers=config.workers,
+        timeout=config.timeout,
+    )
+
+    pipeline = PaperPipeline(recipe)
+    results = pipeline.run(
+        indices=range(config.alpha_start, config.alpha_end + 1)
+    )
+```
+
+### 17.7 v2 100% 等价保证（PR6 验证）
+
+```bash
+# baseline（PR5 完成后，PR6 前）
+python scripts/run_101_alphas_v2.py --start 1 --end 1 --no-delay --output-dir /tmp/before
+
+# PR6 后
+python scripts/run_101_alphas_v2.py --start 1 --end 1 --no-delay --output-dir /tmp/after
+
+# 验证 byte-equal
+diff <(jq -S . /tmp/before/single_factor_001.json) <(jq -S . /tmp/after/single_factor_001.json)
+diff <(jq -S . /tmp/before/multi_alpha_001_to_101.json) <(jq -S . /tmp/after/multi_alpha_001_to_101.json)
+```
+
+### 17.8 4 papers 验证（PR7 smoke）
+
+| Paper | SignalSource | 关键差异 | Smoke 目标 |
+|---|---|---|---|
+| `101_alphas_minimal` | `TrackBSignalSource` | 公式-only，固定 101 | 1 signal, byte-equal |
+| `1601_00991v3` | `AcademicPdfSignalSource` | 学术 PDF, track_a → signals | 1 signal, pipeline 通 |
+| `20180302-招商证券-...` | `TrackBPass2SignalSource` | 卖方研报, 中文 | 1 signal, 中文 verify |
+| `20181125-浙商证券-...` | `TrackBPass2SignalSource` | 周报类 | 1 signal, 不同 schema |
+
+### 17.9 风险与缓解
+
+| 风险 | 缓解 |
+|---|---|
+| v2 输出 byte-equal 失败 | PR6 diff 验证；失败回退到 Recipe 内顺序调整 |
+| Pipeline 重组破坏 `pipeline/workspace.py` 用户 | PR1 留 re-export shim，标 deprecated |
+| 3 papers 数据 schema 不同 | SignalSource 各自负责解析，最终输出统一 Signal/FactorResult |
+| `persist/factor_library.py` 删除破坏外部用户 | PR4 保留 deprecated wrapper |
+| 7 PR 跨度过大 | 每 PR 独立 ruff + pytest + commit |
+| `core/` 模块依赖 `signal_source` (PR2) 和 `backtest` (PR3) | PR1 用 TYPE_CHECKING + Protocol，PR2-3 实现后回填 |
+
+### 17.10 PR1 详细计划（当前）
+
+**目标**: 提供 Pipeline 框架骨架，不依赖具体 signal/backtest/sink 实现（用 Protocol/ABC）
+
+**文件**:
+- `src/llmwikify/reproduction/core/__init__.py` (公共 API)
+- `src/llmwikify/reproduction/core/stage.py` (Stage 基类 + StageContext)
+- `src/llmwikify/reproduction/core/recipe.py` (PaperRecipe dataclass + Protocols)
+- `src/llmwikify/reproduction/core/pipeline.py` (PaperPipeline 主体)
+
+**修改**:
+- `src/llmwikify/reproduction/pipeline/stages/base.py` 改为 deprecated shim (re-export)
+- `src/llmwikify/reproduction/pipeline/workspace.py` 改为 deprecated shim (re-export)
+- 删除 `scripts/run_101_alphas_pkg/` 空目录
+
+**测试**: `tests/test_paper_pipeline.py` (10 tests)
+- PaperPipeline.run() serial + parallel
+- 锁行为验证
+- indices 参数过滤
+- empty result 处理
+- shim 模块 import 不破
