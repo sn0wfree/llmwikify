@@ -46,6 +46,7 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -563,10 +564,22 @@ class MetaStage(BaseStage):
         self._log_done()
 
     def _find_available(self) -> list[int]:
+        """Find alpha indices with single_factor_NNN.json in output_dir.
+
+        P3 Bug 9 修复: 用 os.scandir 一次扫描，替代 N 次 .exists() stat 调用。
+        旧实现: 对每个 alpha index 调一次 exists() → 101 次 stat（O(N * IO)）
+        新实现: scandir 一次列出所有文件名 → 1 次 IO（O(1) directory + O(N) filter）
+        """
         indices: list[int] = list(range(self.config.alpha_start, self.config.alpha_end + 1))
         logger.info("[meta] Starting LLM extraction: alpha %d-%d", self.config.alpha_start, self.config.alpha_end)
         logger.info("[meta] Output dir: %s", self.config.output_dir)
-        return [i for i in indices if (self.config.output_dir / f"single_factor_{i:03d}.json").exists()]
+
+        try:
+            with os.scandir(self.config.output_dir) as it:
+                existing = {e.name for e in it if e.is_file()}
+        except FileNotFoundError:
+            return []
+        return [i for i in indices if f"single_factor_{i:03d}.json" in existing]
 
     def _log_meta_overview(self, available: list[int]) -> None:
         logger.info("[meta] Available: %d alphas with JSON (%s...)", len(available), available[:5])
