@@ -141,9 +141,9 @@
     {
       "name": "NVDA",
       "start_date": "2022-11-01",
-      "start_value": 14,
-      "current_2026-06": 130,
-      "return": "+800%"
+      "start_value": 16.92,
+      "current_2026-06": 192,
+      "return": "+1035%"
     },
     {
       "name": "M7_weight_NDX",
@@ -153,37 +153,37 @@
   ],
   "AI_a_share_etf_2023_2026": [
     {
-      "name": "\u4e2d\u9645\u65ed\u521b",
+      "name": "中际旭创",
       "2023_avg": 75,
       "2026_PE": 38,
       "increase": "+200%"
     },
     {
-      "name": "\u65b0\u6613\u76db",
+      "name": "新易盛",
       "2023_avg": 35,
       "2026_PE": 32,
       "increase": "+300%"
     },
     {
-      "name": "\u5bd2\u6b66\u7eaa",
+      "name": "寒武纪",
       "2023_avg": 90,
       "2026_PE": 80,
       "increase": "+150%"
     },
     {
-      "name": "\u6d77\u5149\u4fe1\u606f",
+      "name": "海光信息",
       "2023_avg": 45,
       "2026_PE": 60,
       "increase": "+180%"
     },
     {
-      "name": "\u91d1\u5c71\u529e\u516c",
+      "name": "金山办公",
       "2023_avg": 280,
       "2026_PE": 75,
       "increase": "+50%"
     },
     {
-      "name": "\u79d1\u5927\u8baf\u98de",
+      "name": "科大讯飞",
       "2023_avg": 60,
       "2026_PE": 65,
       "increase": "+50%"
