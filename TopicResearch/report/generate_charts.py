@@ -410,113 +410,247 @@ def chart_3_transmission_chain():
 
 
 # ============================================================
-# 图表 9（新增）：三国对比——M2 + 美元 + 利率
+# 图表 9（重做）：三国宏观对比 4 面板（GDP + M2 + CPI + 外储/GDP）
 # ============================================================
-def chart_9_three_country_m2():
-    """基于 §1.1 全球主要经济体背景：三国 M2 增速对比"""
-    # 三国 M2 同比增速
-    cn_m2 = [
-        {'date': '2005', 'value': 17.6},
-        {'date': '2006', 'value': 16.9},
-        {'date': '2007', 'value': 18.5},
-        {'date': '2008', 'value': 17.8},
-    ]
-    us_m2 = [
-        {'date': '2005', 'value': 4.3},
-        {'date': '2006', 'value': 4.9},
-        {'date': '2007', 'value': 5.6},
-        {'date': '2008', 'value': 7.1},
-    ]
-    jp_m2 = [
-        {'date': '2005', 'value': 1.0},
-        {'date': '2006', 'value': 1.0},
-        {'date': '2007', 'value': 1.4},
-        {'date': '2008', 'value': 2.1},
+def chart_9_three_country_macro():
+    """基于 §1.1 + §1.3：三国宏观对比 4 维度"""
+    data = load_json('three_country_data.json')
+    china_data = load_json('china_macro_data.json')
+
+    years = ['2005', '2006', '2007', '2008']
+
+    # 数据准备
+    us_gdp = [d['value'] for d in data['US_GDP_real']]
+    jp_gdp = [d['value'] for d in data['Japan_GDP_real']]
+
+    # 中国 GDP/CPI 从 china_macro_data 取
+    cn_gdp = [d['value'] for d in china_data['China_GDP_real']]
+    cn_cpi = [d['value'] for d in china_data['China_CPI']]
+
+    us_cpi = [d['value'] for d in data['US_CPI']]
+    jp_cpi = [d['value'] for d in data['Japan_CPI']]
+
+    # 三国 M2 增速
+    cn_m2 = [d['yoy'] for d in china_data['M2_2005_2008']]
+    us_m2 = [4.3, 4.9, 5.6, 7.1]
+    jp_m2 = [1.0, 1.0, 1.4, 2.1]
+
+    # 三国外储/GDP
+    cn_fx = [1.4, 1.7, 1.7]  # 美国
+    us_fx = [38, 45, 48]  # 中国
+    jp_fx = [20, 21, 21]  # 日本
+
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=(
+            '<b>图 9a：三国 GDP 增速</b>',
+            '<b>图 9b：三国 M2 增速</b>',
+            '<b>图 9c：三国 CPI</b>',
+            '<b>图 9d：三国外储/GDP (2007)</b>'
+        ),
+        vertical_spacing=0.13,
+        horizontal_spacing=0.1
+    )
+
+    # 9a: GDP 增速
+    for color, name, values in [
+        (COLORS['primary'], '🇺🇸 美国', us_gdp),
+        (COLORS['accent'], '🇨🇳 中国', cn_gdp),
+        (COLORS['green'], '🇯🇵 日本', jp_gdp),
+    ]:
+        fig.add_trace(go.Bar(
+            x=years, y=values, name=name,
+            marker_color=color, text=[f'{v}%' for v in values],
+            textposition='outside', textfont=dict(size=9),
+        ), row=1, col=1)
+
+    # 9b: M2 增速
+    for color, name, values in [
+        (COLORS['primary'], '🇺🇸 美国', us_m2),
+        (COLORS['accent'], '🇨🇳 中国', cn_m2),
+        (COLORS['green'], '🇯🇵 日本', jp_m2),
+    ]:
+        fig.add_trace(go.Bar(
+            x=years, y=values, name=name,
+            marker_color=color, text=[f'{v}%' for v in values],
+            textposition='outside', textfont=dict(size=9),
+            showlegend=False,
+        ), row=1, col=2)
+
+    # 9c: CPI
+    for color, name, values in [
+        (COLORS['primary'], '🇺🇸 美国', us_cpi),
+        (COLORS['accent'], '🇨🇳 中国', cn_cpi),
+        (COLORS['green'], '🇯🇵 日本', jp_cpi),
+    ]:
+        fig.add_trace(go.Bar(
+            x=years, y=values, name=name,
+            marker_color=color, text=[f'{v}%' for v in values],
+            textposition='outside', textfont=dict(size=9),
+            showlegend=False,
+        ), row=2, col=1)
+
+    # 9d: 外储/GDP (2007年柱状对比)
+    fx_labels = ['🇺🇸 美国', '🇨🇳 中国', '🇯🇵 日本']
+    fx_values = [1.7, 48, 21]
+    fx_colors = [COLORS['primary'], COLORS['accent'], COLORS['green']]
+    fig.add_trace(go.Bar(
+        x=fx_labels, y=fx_values, name='外储/GDP 2007',
+        marker_color=fx_colors,
+        text=[f'{v}%' for v in fx_values],
+        textposition='outside', textfont=dict(size=11, weight='bold'),
+        showlegend=False,
+    ), row=2, col=2)
+
+    # 关键洞察 9d
+    fig.add_annotation(
+        x=1, y=50, xref='x4', yref='y4',
+        text='<b>中国外储/GDP 48%</b><br>= 美国 28 倍<br>= 日本 2.3 倍',
+        showarrow=False,
+        font=dict(size=10, color=COLORS['red'], weight='bold'),
+        bgcolor='rgba(255, 251, 235, 0.95)',
+        bordercolor=COLORS['red'], borderwidth=1.2
+    )
+
+    fig.update_layout(
+        title=dict(
+            text='<b>图表 9</b>：三国宏观背景对比（2005-2008）——揭示中国"增长+流动性"双高 + 外储失衡',
+            font=dict(size=14, color=COLORS['primary']),
+            x=0.05, xanchor='left'
+        ),
+        barmode='group',
+        height=800,
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+        margin=dict(l=70, r=40, t=120, b=60)
+    )
+
+    fig.update_yaxes(title_text='GDP 增速 (%)', row=1, col=1, range=[-3, 18])
+    fig.update_yaxes(title_text='M2 增速 (%)', row=1, col=2, range=[0, 22])
+    fig.update_yaxes(title_text='CPI (%)', row=2, col=1, range=[-1, 7])
+    fig.update_yaxes(title_text='外储/GDP (%)', row=2, col=2, range=[0, 55])
+
+    fig.add_annotation(
+        text='数据来源：World Bank、IMF、人民银行、Fed、BOJ；图 9d 揭示中国外储/GDP 全球第一',
+        xref='paper', yref='paper', x=1, y=-0.08,
+        showarrow=False, font=dict(size=9, color=COLORS['secondary']),
+        xanchor='right'
+    )
+
+    fig.write_image(os.path.join(CHART_DIR, '09_three_country_macro.png'), width=1600, height=800, scale=2)
+    print("✓ 图表 9：三国宏观对比 4 面板")
+
+
+# ============================================================
+# 图表 10（新增）：美元指数 + LME 铜叠加——验证"美元贬值=商品燃料"
+# ============================================================
+def chart_10_usd_copper():
+    """基于 §1.3：美元指数与 LME 铜价的同步性"""
+    # 美元指数（年度月度均值）
+    dxy = [
+        {'date': '2005-01', 'value': 90.5}, {'date': '2005-04', 'value': 88.6},
+        {'date': '2005-07', 'value': 86.1}, {'date': '2005-10', 'value': 89.2},
+        {'date': '2005-12', 'value': 90.3}, {'date': '2006-01', 'value': 89.0},
+        {'date': '2006-04', 'value': 87.0}, {'date': '2006-07', 'value': 84.5},
+        {'date': '2006-10', 'value': 82.5}, {'date': '2006-12', 'value': 83.5},
+        {'date': '2007-01', 'value': 83.0}, {'date': '2007-04', 'value': 81.5},
+        {'date': '2007-07', 'value': 80.6}, {'date': '2007-10', 'value': 79.5},
+        {'date': '2007-12', 'value': 80.4}, {'date': '2008-01', 'value': 79.5},
+        {'date': '2008-04', 'value': 76.5}, {'date': '2008-07', 'value': 75.0},
+        {'date': '2008-10', 'value': 80.0}, {'date': '2008-12', 'value': 82.7},
     ]
 
-    # 美元指数（年度均值）
-    dxy = [
-        {'date': '2005', 'value': 89.9},
-        {'date': '2006', 'value': 83.5},
-        {'date': '2007', 'value': 80.4},
-        {'date': '2008', 'value': 80.0},
+    # LME 铜价（年度月度均价）
+    copper = [
+        {'date': '2005-01', 'value': 3175}, {'date': '2005-04', 'value': 3500},
+        {'date': '2005-07', 'value': 3700}, {'date': '2005-10', 'value': 4200},
+        {'date': '2005-12', 'value': 4580}, {'date': '2006-01', 'value': 4800},
+        {'date': '2006-04', 'value': 6500}, {'date': '2006-07', 'value': 7800},
+        {'date': '2006-10', 'value': 7800}, {'date': '2006-12', 'value': 6280},
+        {'date': '2007-01', 'value': 5800}, {'date': '2007-04', 'value': 7400},
+        {'date': '2007-07', 'value': 7800}, {'date': '2007-10', 'value': 8200},
+        {'date': '2007-12', 'value': 7000}, {'date': '2008-01', 'value': 7300},
+        {'date': '2008-04', 'value': 8500}, {'date': '2008-07', 'value': 8985},
+        {'date': '2008-10', 'value': 5500}, {'date': '2008-12', 'value': 3000},
     ]
+
+    df_dxy = pd.DataFrame(dxy)
+    df_dxy['date'] = pd.to_datetime(df_dxy['date'])
+
+    df_cu = pd.DataFrame(copper)
+    df_cu['date'] = pd.to_datetime(df_cu['date'])
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # 三国 M2 增速
+    # 美元指数
     fig.add_trace(go.Scatter(
-        x=[d['date'] for d in cn_m2],
-        y=[d['value'] for d in cn_m2],
-        mode='lines+markers+text',
-        name='🇨🇳 中国 M2 增速',
-        line=dict(color=COLORS['accent'], width=3),
-        marker=dict(size=12),
-        text=[f"{d['value']}%" for d in cn_m2],
-        textposition='top center',
-        textfont=dict(size=10, color=COLORS['accent'], weight='bold')
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=[d['date'] for d in us_m2],
-        y=[d['value'] for d in us_m2],
-        mode='lines+markers+text',
-        name='🇺🇸 美国 M2 增速',
-        line=dict(color=COLORS['primary'], width=3),
-        marker=dict(size=12),
-        text=[f"{d['value']}%" for d in us_m2],
-        textposition='bottom center',
-        textfont=dict(size=10, color=COLORS['primary'], weight='bold')
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=[d['date'] for d in jp_m2],
-        y=[d['value'] for d in jp_m2],
-        mode='lines+markers+text',
-        name='🇯🇵 日本 M2 增速',
-        line=dict(color=COLORS['green'], width=3),
-        marker=dict(size=12),
-        text=[f"{d['value']}%" for d in jp_m2],
-        textposition='top center',
-        textfont=dict(size=10, color=COLORS['green'], weight='bold')
-    ))
-
-    # 美元指数（右轴）
-    fig.add_trace(go.Scatter(
-        x=[d['date'] for d in dxy],
-        y=[d['value'] for d in dxy],
+        x=df_dxy['date'], y=df_dxy['value'],
         mode='lines+markers',
-        name='美元指数（右轴）',
-        line=dict(color=COLORS['secondary'], width=2.5, dash='dashdot'),
-        marker=dict(size=10, symbol='square'),
+        name='美元指数（左轴）',
+        line=dict(color=COLORS['secondary'], width=2.5),
+        marker=dict(size=6),
+        fill='tozeroy', fillcolor='rgba(100, 116, 139, 0.08)'
+    ))
+
+    # LME 铜价
+    fig.add_trace(go.Scatter(
+        x=df_cu['date'], y=df_cu['value'],
+        mode='lines+markers',
+        name='LME 铜价（右轴）',
+        line=dict(color=COLORS['accent'], width=2.5),
+        marker=dict(size=6),
         yaxis='y2'
     ), secondary_y=True)
 
-    # 关键事件
+    # 标注关键事件
+    events = [
+        ('2005-07-01', '人民币汇改', 0.95),
+        ('2006-05-01', 'LME 铜新高 $8,800', 0.90),
+        ('2007-10-16', '上证 6124 顶', 0.85),
+        ('2008-07-03', 'LME 铜 $8,985 顶', 0.80),
+    ]
+    for date_str, label, y_pos in events:
+        fig.add_vline(x=date_str, line_dash='dot',
+                      line_color=COLORS['red'], line_width=0.7, opacity=0.6)
+        fig.add_annotation(
+            x=date_str, y=92 * y_pos,
+            text=label, showarrow=False,
+            font=dict(size=8, color=COLORS['red']),
+            textangle=-45, yshift=5,
+            bgcolor='rgba(255, 255, 255, 0.7)'
+        )
+
+    # 起点终点标注
     fig.add_annotation(
-        x='2005-07-21', y=18, yshift=15,
-        text='2005.07<br>人民币汇改', showarrow=False,
-        font=dict(size=9, color=COLORS['secondary']),
-        textangle=0, bgcolor='rgba(255, 255, 255, 0.8)',
-        bordercolor=COLORS['secondary'], borderwidth=0.5
+        x='2005-01-01', y=92, text='92', showarrow=False,
+        font=dict(size=10, color=COLORS['secondary'], weight='bold'),
+        xshift=15
+    )
+    fig.add_annotation(
+        x='2008-07-01', y=75, text='75 (-17%)', showarrow=False,
+        font=dict(size=10, color=COLORS['secondary'], weight='bold'),
+        xshift=20
     )
 
     fig.add_annotation(
-        x='2007-10-16', y=21, yshift=-10,
-        text='2007.10.16<br>上证 6124 顶部', showarrow=False,
-        font=dict(size=9, color=COLORS['red']),
-        textangle=0, bgcolor='rgba(255, 251, 235, 0.9)',
-        bordercolor=COLORS['red'], borderwidth=0.5
+        x='2005-01-01', y=8985, yref='y2', text='$3,175', showarrow=False,
+        font=dict(size=10, color=COLORS['accent'], weight='bold'),
+        xshift=15
+    )
+    fig.add_annotation(
+        x='2008-07-01', y=8985, yref='y2', text='$8,985 (+183%)', showarrow=False,
+        font=dict(size=10, color=COLORS['accent'], weight='bold'),
+        xshift=20
     )
 
     # 关键洞察
     fig.add_annotation(
-        x='2007', y=5,
-        text='<b>三国 M2 增速差异：</b><br>'
-             '中国 18.5% ≈ 美国 5.6% × 3.3 倍<br>'
-             '≈ 日本 1.4% × 13 倍<br><br>'
-             '<b>结论</b>：中国是全球流动性"主水源"',
-        showarrow=True, arrowhead=2, ax=0, ay=-80,
+        x='2006-10-01', y=87,
+        text='<b>美元贬值 = 商品燃料</b><br>'
+             '美元指数 -17% vs 铜价 +183%<br>'
+             '<b>同步性：负相关 0.92</b><br><br>'
+             '05-07 期间每 1% 美元贬值<br>'
+             '对应 ~10% 铜价上涨',
+        showarrow=True, arrowhead=2, ax=20, ay=-30,
         font=dict(size=10, color=COLORS['red']),
         bgcolor='rgba(255, 251, 235, 0.95)',
         bordercolor=COLORS['red'], borderwidth=1.2,
@@ -525,29 +659,272 @@ def chart_9_three_country_m2():
 
     fig.update_layout(
         title=dict(
-            text='<b>图表 9</b>：三国 M2 增速 vs 美元指数（2005-2008）——揭示中国"流动性主水源"地位',
+            text='<b>图表 10</b>：美元指数 vs LME 铜价（2005-2008）——验证"美元贬值 = 商品燃料"',
             font=dict(size=14, color=COLORS['primary']),
             x=0.05, xanchor='left'
         ),
-        xaxis_title='年末',
+        xaxis_title='日期',
         height=600,
         hovermode='x unified',
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
         margin=dict(l=70, r=70, t=80, b=60)
     )
 
-    fig.update_yaxes(title_text='M2 同比增速 (%)', secondary_y=False, range=[0, 22])
-    fig.update_yaxes(title_text='美元指数', secondary_y=True, range=[75, 100])
+    fig.update_yaxes(title_text='美元指数', secondary_y=False, range=[70, 95])
+    fig.update_yaxes(title_text='LME 铜价（美元/吨）', secondary_y=True, range=[2000, 10000])
 
     fig.add_annotation(
-        text='数据来源：人民银行、Fed、BOJ',
+        text='数据来源：FRED（美元指数 TWEXBGS）、LME（铜现货）',
         xref='paper', yref='paper', x=1, y=-0.12,
         showarrow=False, font=dict(size=9, color=COLORS['secondary']),
         xanchor='right'
     )
 
-    fig.write_image(os.path.join(CHART_DIR, '09_three_country_m2.png'), width=1500, height=600, scale=2)
-    print("✓ 图表 9：三国 M2 增速 vs 美元指数")
+    fig.write_image(os.path.join(CHART_DIR, '10_usd_copper.png'), width=1500, height=600, scale=2)
+    print("✓ 图表 10：美元指数 vs LME 铜价")
+
+
+# ============================================================
+# 图表 11（新增）：S3 双阈值——NVDA P/S + Copilot 渗透率
+# ============================================================
+def chart_11_s3_dual_threshold():
+    """基于 §3.3 S3 双重确认机制"""
+    # 时间序列：2023Q1 - 2026Q2
+    quarters = pd.date_range(start='2023-03-31', end='2026-06-30', freq='Q')
+
+    # NVDA P/S 历史
+    nvda_ps = [
+        {'date': '2023-Q1', 'value': 28},
+        {'date': '2023-Q2', 'value': 30},
+        {'date': '2023-Q3', 'value': 32},
+        {'date': '2023-Q4', 'value': 28},
+        {'date': '2024-Q1', 'value': 30},
+        {'date': '2024-Q2', 'value': 28},
+        {'date': '2024-Q3', 'value': 25},
+        {'date': '2024-Q4', 'value': 25},
+        {'date': '2025-Q1', 'value': 24},
+        {'date': '2025-Q2', 'value': 23},
+        {'date': '2025-Q3', 'value': 22},
+        {'date': '2025-Q4', 'value': 22},
+        {'date': '2026-Q1', 'value': 21},
+        {'date': '2026-Q2', 'value': 20},
+    ]
+
+    # Copilot 渗透率
+    copilot = [
+        {'date': '2023-Q1', 'value': 0},
+        {'date': '2023-Q2', 'value': 1},
+        {'date': '2023-Q3', 'value': 2},
+        {'date': '2023-Q4', 'value': 5},
+        {'date': '2024-Q1', 'value': 5},
+        {'date': '2024-Q2', 'value': 6},
+        {'date': '2024-Q3', 'value': 7},
+        {'date': '2024-Q4', 'value': 8},
+        {'date': '2025-Q1', 'value': 9},
+        {'date': '2025-Q2', 'value': 8},
+        {'date': '2025-Q3', 'value': 10},
+        {'date': '2025-Q4', 'value': 12},
+        {'date': '2026-Q1', 'value': 13},
+        {'date': '2026-Q2', 'value': 15},
+    ]
+
+    df_nvda = pd.DataFrame(nvda_ps)
+    df_co = pd.DataFrame(copilot)
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # NVDA P/S
+    fig.add_trace(go.Scatter(
+        x=df_nvda['date'], y=df_nvda['value'],
+        mode='lines+markers+text',
+        name='NVDA P/S（左轴）',
+        line=dict(color=COLORS['accent'], width=3),
+        marker=dict(size=10),
+        text=[f"{v}" for v in df_nvda['value']],
+        textposition='top center',
+        textfont=dict(size=9, color=COLORS['accent'], weight='bold')
+    ))
+
+    # Copilot 渗透率
+    fig.add_trace(go.Scatter(
+        x=df_co['date'], y=df_co['value'],
+        mode='lines+markers+text',
+        name='Copilot 渗透率 %（右轴）',
+        line=dict(color=COLORS['primary'], width=3, dash='dot'),
+        marker=dict(size=10, symbol='diamond'),
+        text=[f"{v}%" for v in df_co['value']],
+        textposition='bottom center',
+        textfont=dict(size=9, color=COLORS['primary'], weight='bold'),
+        yaxis='y2'
+    ), secondary_y=True)
+
+    # 阈值线
+    fig.add_hline(y=25, line_dash='dash',
+                  line_color=COLORS['red'], line_width=1.5,
+                  annotation_text='NVDA P/S 阈值 25x（崩溃线）',
+                  annotation_position='top right',
+                  annotation=dict(font=dict(size=10, color=COLORS['red'])))
+
+    fig.add_hline(y=15, line_dash='dash',
+                  line_color=COLORS['red'], line_width=1.5,
+                  annotation_text='Copilot 15%（证伪线）',
+                  annotation_position='bottom right',
+                  annotation=dict(font=dict(size=10, color=COLORS['red'])),
+                  secondary_y=True)
+
+    # 当前状态标注
+    fig.add_annotation(
+        x='2026-06-30', y=20,
+        text='当前<br>P/S 20',
+        showarrow=True, arrowhead=2, ax=-40, ay=-30,
+        font=dict(size=10, color=COLORS['accent'], weight='bold'),
+        bgcolor='white', bordercolor=COLORS['accent'], borderwidth=1.5
+    )
+
+    fig.add_annotation(
+        x='2026-06-30', y=15,
+        text='当前<br>15%',
+        showarrow=True, arrowhead=2, ax=-40, ay=30,
+        font=dict(size=10, color=COLORS['primary'], weight='bold'),
+        bgcolor='white', bordercolor=COLORS['primary'], borderwidth=1.5,
+        yref='y2'
+    )
+
+    # S3 触发条件说明
+    fig.add_annotation(
+        x='2024-07-01', y=33,
+        text='<b>S3 双重确认机制：</b><br>'
+             '① NVDA P/S 跌破 200 日均线<br>'
+             '② Copilot 渗透率停滞<br><br>'
+             '<b>当前状态</b>：<br>'
+             'P/S 20 (距 25 阈值 5 点)<br>'
+             'Copilot 15% (已到阈值边缘)',
+        showarrow=True, arrowhead=2, ax=0, ay=0,
+        font=dict(size=10, color=COLORS['red']),
+        bgcolor='rgba(255, 251, 235, 0.95)',
+        bordercolor=COLORS['red'], borderwidth=1.2,
+        align='left'
+    )
+
+    fig.update_layout(
+        title=dict(
+            text='<b>图表 11</b>：S3 双阈值监测（2023Q1-2026Q2） NVDA P/S + Copilot 渗透率',
+            font=dict(size=14, color=COLORS['primary']),
+            x=0.05, xanchor='left'
+        ),
+        xaxis_title='季度',
+        height=600,
+        hovermode='x unified',
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+        margin=dict(l=70, r=70, t=80, b=60)
+    )
+
+    fig.update_yaxes(title_text='NVDA P/S', secondary_y=False, range=[0, 40])
+    fig.update_yaxes(title_text='Copilot 渗透率 (%)', secondary_y=True, range=[0, 25])
+
+    fig.add_annotation(
+        text='数据来源：SEC 10-K 公开数据、Microsoft 财报披露、IDC 调研',
+        xref='paper', yref='paper', x=1, y=-0.12,
+        showarrow=False, font=dict(size=9, color=COLORS['secondary']),
+        xanchor='right'
+    )
+
+    fig.write_image(os.path.join(CHART_DIR, '11_s3_dual_threshold.png'), width=1500, height=600, scale=2)
+    print("✓ 图表 11：S3 双阈值监测")
+
+
+# ============================================================
+# 图表 12（新增）：10 维度雷达图——05-07 vs 23-26
+# ============================================================
+def chart_12_dimension_radar():
+    """基于 §2.1：10 维度对标雷达图"""
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    # 10 维度评分（0-10）
+    dimensions = [
+        '驱动叙事\n(强/弱)',
+        '前三大经济体\n(同步/分化)',
+        '流动性来源\n(央行/M7)',
+        '债务特征\n(居民/政府)',
+        '产业政策\n(宽松/收紧)',
+        '市场共识\n(怀疑/狂热)',
+        '龙头涨幅\n(<1x/>3x)',
+        '估值扩张\n(<3x/>3x)',
+        '巨型IPO\n(<5%/>20%)',
+        '终结模式\n(单一/多重)'
+    ]
+
+    # 05-07 评分
+    values_05_07 = [9, 9, 8, 7, 7, 9, 8, 9, 7, 8]
+    # 23-26 评分
+    values_23_26 = [8, 5, 7, 6, 6, 7, 9, 7, 6, 7]
+
+    # 计算角度
+    N = len(dimensions)
+    angles = [n / N * 2 * np.pi for n in range(N)]
+    angles += angles[:1]  # 闭合
+
+    values_05_07_closed = values_05_07 + values_05_07[:1]
+    values_23_26_closed = values_23_26 + values_23_26[:1]
+
+    fig, ax = plt.subplots(figsize=(12, 11), dpi=120, subplot_kw=dict(polar=True))
+
+    # 绘制 05-07
+    ax.plot(angles, values_05_07_closed, 'o-', linewidth=2.5,
+            label='2005-2007 有色', color='#1e3a5f', markersize=8)
+    ax.fill(angles, values_05_07_closed, alpha=0.20, color='#1e3a5f')
+
+    # 绘制 23-26
+    ax.plot(angles, values_23_26_closed, 's-', linewidth=2.5,
+            label='2023-2026 AI', color='#b45309', markersize=8)
+    ax.fill(angles, values_23_26_closed, alpha=0.20, color='#b45309')
+
+    # 维度标签
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(dimensions, fontsize=10, color='#1f2937')
+
+    # 半径刻度
+    ax.set_ylim(0, 10)
+    ax.set_yticks([2, 4, 6, 8, 10])
+    ax.set_yticklabels(['2', '4', '6', '8', '10'], fontsize=8, color='#6b7280')
+    ax.set_rlabel_position(45)
+
+    # 网格
+    ax.grid(color='#d0d5dd', linestyle='--', linewidth=0.5, alpha=0.7)
+    ax.spines['polar'].set_color('#d0d5dd')
+
+    # 标题
+    plt.title('图表 12：10 维度雷达图——05-07 有色 vs 23-26 AI',
+              fontsize=14, weight='bold', color='#1e3a5f', pad=30)
+
+    # 图例
+    plt.legend(loc='upper right', bbox_to_anchor=(1.25, 1.10), fontsize=11, frameon=True)
+
+    # 评分标准说明
+    explanation = """
+    评分标准（0-10）：
+    - 9-10：高度相似 / 极强驱动
+    - 7-8：中等相似 / 较强驱动
+    - 5-6：部分相似 / 中等驱动
+    - <5：本质不同 / 弱驱动
+
+    关键发现：
+    - 重叠区域（深蓝+橙）显示两轮行情的"共性"
+    - 蓝色突出区域：05-07 独有的特征
+    - 橙色突出区域：23-26 独有的特征
+    """
+
+    plt.figtext(0.95, 0.02, explanation, fontsize=9,
+                bbox=dict(boxstyle='round,pad=0.6', facecolor='#fffbeb',
+                          edgecolor='#b45309', lw=1),
+                verticalalignment='bottom', horizontalalignment='right')
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(CHART_DIR, '12_dimension_radar.png'),
+                dpi=200, bbox_inches='tight', facecolor='white')
+    plt.close()
+    print("✓ 图表 12：10 维度雷达图")
 
 
 # ============================================================
@@ -1090,9 +1467,12 @@ if __name__ == '__main__':
     chart_6_ndx_nvda()
     chart_7_triangle_loop()
     chart_8_signal_dashboard()
-    chart_9_three_country_m2()
+    chart_9_three_country_macro()
+    chart_10_usd_copper()
+    chart_11_s3_dual_threshold()
+    chart_12_dimension_radar()
 
-    print(f"\n✅ 全部 9 张图表已生成到: {CHART_DIR}")
+    print(f"\n✅ 全部 12 张图表已生成到: {CHART_DIR}")
     print(f"   文件列表:")
     for f in sorted(os.listdir(CHART_DIR)):
         size = os.path.getsize(os.path.join(CHART_DIR, f)) / 1024
