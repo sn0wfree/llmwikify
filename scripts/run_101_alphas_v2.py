@@ -538,58 +538,37 @@ class FactorRunner(BaseStage):
         ...
 
     def run_one_factor(self, alpha_index: int, use_react: bool = True) -> dict:
-        """原 run_one_factor 函数逻辑（迁移为方法）。
+        """7 步编排（每步调一个单一职责方法）。
 
-        7 步骤聚在一起（按用户要求暂不拆分）。
+        Step 1: _load_formula
+        Step 2: _ensure_df_pl (via _load_dataframe_for_alpha)
+        Step 3: _generate_code (ReAct or 1-shot)
+        Step 4: _save_factor_h5 (already exists)
+        Step 5: _run_pipeline_backtest (with _fail_pipeline_result)
+        Step 6: _log_backtest_metrics + extract_full_backtest_from_ctx
+        Step 7: _persist_factor + _save_to_duckdb (already exist)
         """
         t0: float = time.monotonic()
         config = self.config
 
         # Step 1: Load formula_brief
-        factor_name, formula_brief = load_formula_brief(alpha_index, config.track_b_path)
+        factor_name, formula_brief = self._load_formula(alpha_index)
         logger.info("[alpha-%03d] === formula_brief ===", alpha_index)
         logger.info("[alpha-%03d] %s", alpha_index, formula_brief)
 
-        # Step 2: Ensure df_pl
+        # Step 2: Ensure df_pl + log shape
         df_pl: pl.DataFrame = self._ensure_df_pl(config)
         logger.info("[alpha-%03d] data: shape=%s, range=%s - %s",
                     alpha_index, df_pl.shape, df_pl['date'].min(), df_pl['date'].max())
 
         # Step 3: LLM code generation
         logger.info("[alpha-%03d] LLM: %s mode", alpha_index, "ReAct" if use_react else "1-shot")
-        llm = build_llm_client()
-
-        if use_react:
-            code, factor_series, error, react_meta = self._llm_code_react(
-                factor_name, formula_brief, df_pl, llm, config,
-            )
-            if error is not None:
-                logger.warning("[alpha-%03d] failed at react: %s", alpha_index, error[:100])
-                return {
-                    "status": "failed",
-                    "stage": "react",
-                    "error": error,
-                    "react_meta": react_meta,
-                    "elapsed_sec": time.monotonic() - t0,
-                }
-        else:
-            code, factor_series, error, stage_idx = llm_code_oneshot(
-                factor_name=factor_name,
-                formula_brief=formula_brief,
-                df_pl=df_pl,
-                llm=llm,
-                temperature=config.temperature,
-            )
-            if error is not None:
-                logger.warning("[alpha-%03d] failed at %s: %s",
-                               alpha_index, _STAGE_NAMES.get(stage_idx, "unknown"), error[:100])
-                return {
-                    "status": "failed",
-                    "stage": _STAGE_NAMES.get(stage_idx, "unknown"),
-                    "error": error,
-                    "code": code,
-                    "elapsed_sec": time.monotonic() - t0,
-                }
+        code, factor_series, error, stage = self._generate_code(
+            factor_name, formula_brief, df_pl, use_react,
+        )
+        if error is not None:
+            logger.warning("[alpha-%03d] failed at %s: %s", alpha_index, stage, error[:100])
+            return self._fail_codegen_result(alpha_index, stage, error, code, t0)
 
         # Step 4: Save factor H5
         factor_wide, h5_path = self._save_factor_h5(factor_series, factor_name, df_pl, config)
@@ -598,34 +577,108 @@ class FactorRunner(BaseStage):
         try:
             ctx = self._run_pipeline_backtest(factor_name, h5_path, code, config)
         except Exception as exc:
-            import traceback
-            tb: str = traceback.format_exc()
-            logger.warning("[alpha-%03d] failed at pipeline: %s: %s",
-                           alpha_index, type(exc).__name__, str(exc)[:100])
-            return {
-                "status": "failed",
-                "stage": "pipeline",
-                "error": f"{type(exc).__name__}: {exc}",
-                "traceback": tb[-1500:],
-                "code": code,
-                "elapsed_sec": time.monotonic() - t0,
-            }
+            return self._fail_pipeline_result(alpha_index, code, exc, t0)
 
-        # Step 6: Extract metrics
+        # Step 6: Extract metrics + log
         backtest: dict = extract_full_backtest_from_ctx(ctx)
+        self._log_backtest_metrics(alpha_index, backtest)
+
+        # Step 7: Persist YAML + DuckDB
+        factor_dir = self._persist_factor(factor_name, code, formula_brief, backtest, h5_path, alpha_index, config)
+        self._save_to_duckdb(factor_dir, alpha_index, backtest, factor_wide, config)
+
+        # Step 8: Build success result
+        return self._success_result(
+            alpha_index, factor_name, formula_brief,
+            code, factor_series, h5_path, backtest, t0,
+        )
+
+    def _load_formula(self, alpha_index: int) -> tuple[str, str]:
+        """Step 1: 从 track_b_checkpoint.json 加载 factor_name + formula_brief。"""
+        return load_formula_brief(alpha_index, self.config.track_b_path)
+
+    def _generate_code(
+        self, factor_name: str, formula_brief: str,
+        df_pl: pl.DataFrame, use_react: bool,
+    ) -> tuple[str | None, pl.Series | None, str | None, str]:
+        """Step 3: LLM 代码生成（ReAct 或 1-shot）。
+
+        Returns:
+            (code, factor_series, error, stage):
+              - code: 生成的代码（失败时为 None 或部分代码）
+              - factor_series: 因子序列（失败时为 None）
+              - error: 错误信息（成功时为 None）
+              - stage: 失败阶段名（"react" / "llm" / "extract" / "syntax" / "safety" / "execute"）
+        """
+        llm = build_llm_client()
+        if use_react:
+            code, factor_series, error, _react_meta = self._llm_code_react(
+                factor_name, formula_brief, df_pl, llm, self.config,
+            )
+            return code, factor_series, error, "react"
+        code, factor_series, error, stage_idx = llm_code_oneshot(
+            factor_name=factor_name,
+            formula_brief=formula_brief,
+            df_pl=df_pl,
+            llm=llm,
+            temperature=self.config.temperature,
+        )
+        return code, factor_series, error, _STAGE_NAMES.get(stage_idx, "unknown")
+
+    def _fail_codegen_result(
+        self, alpha_index: int, stage: str, error: str,
+        code: str | None, t0: float,
+    ) -> dict:
+        """Step 3 failure: 构造 codegen 失败的统一 result dict（见 P3 Bug 5 字段约定）。"""
+        return {
+            "status": "failed",
+            "stage": stage,
+            "error": error,
+            "code": code,
+            "code_chars": len(code) if code else 0,
+            "ic_mean": None,
+            "icir": None,
+            "ic_winrate": None,
+            "elapsed_sec": time.monotonic() - t0,
+        }
+
+    def _fail_pipeline_result(
+        self, alpha_index: int, code: str, exc: Exception, t0: float,
+    ) -> dict:
+        """Step 5 failure: 构造 pipeline 失败的统一 result dict（带 traceback[-1500:]）。"""
+        import traceback
+        tb: str = traceback.format_exc()
+        logger.warning("[alpha-%03d] failed at pipeline: %s: %s",
+                       alpha_index, type(exc).__name__, str(exc)[:100])
+        return {
+            "status": "failed",
+            "stage": "pipeline",
+            "error": f"{type(exc).__name__}: {exc}",
+            "traceback": tb[-1500:],
+            "code": code,
+            "code_chars": len(code) if code else 0,
+            "ic_mean": None,
+            "icir": None,
+            "ic_winrate": None,
+            "elapsed_sec": time.monotonic() - t0,
+        }
+
+    def _log_backtest_metrics(self, alpha_index: int, backtest: dict) -> None:
+        """Step 6: 输出 backtest 指标日志（IC / ICIR / WinRate）。"""
         logger.info("[alpha-%03d] backtest: IC=%.4f, ICIR=%.4f, WinRate=%.1f%%",
                     alpha_index,
                     backtest.get("ic_mean", 0),
                     backtest.get("icir", 0),
                     (backtest.get("win_rate", 0) or 0) * 100)
 
-        # Step 7: Persist YAML + DuckDB
-        factor_dir = self._persist_factor(factor_name, code, formula_brief, backtest, h5_path, alpha_index, config)
-        self._save_to_duckdb(factor_dir, alpha_index, backtest, factor_wide, config)
-
+    def _success_result(
+        self, alpha_index: int, factor_name: str, formula_brief: str,
+        code: str, factor_series: pl.Series, h5_path: Path,
+        backtest: dict, t0: float,
+    ) -> dict:
+        """Step 7-8: 构造成功 result dict。"""
         elapsed: float = time.monotonic() - t0
         logger.info("[alpha-%03d] success (%.1fs)", alpha_index, elapsed)
-
         return {
             "status": "success",
             "alpha_index": alpha_index,
@@ -641,6 +694,35 @@ class FactorRunner(BaseStage):
             "ic_winrate": backtest.get("win_rate"),
             "elapsed_sec": elapsed,
         }
+
+    def _fail_result(
+        self, alpha_index: int, stage: str, error: str,
+        t0: float, *, code: str | None = None, **extra: Any,
+    ) -> dict:
+        """统一失败 result 工厂（P3 Bug 5 复用：_handle_parallel_failure 用此）。
+
+        Args:
+            alpha_index: alpha index
+            stage: 失败阶段名
+            error: 错误信息
+            t0: 起始时间（monotonic）
+            code: 失败时已生成的 code（可能 None）
+            **extra: 额外字段（如 traceback / react_meta）
+        """
+        result: dict = {
+            "status": "failed",
+            "alpha_index": alpha_index,
+            "stage": stage,
+            "error": error,
+            "code": code,
+            "code_chars": len(code) if code else 0,
+            "ic_mean": None,
+            "icir": None,
+            "ic_winrate": None,
+            "elapsed_sec": time.monotonic() - t0,
+        }
+        result.update(extra)
+        return result
 
     def _ensure_df_pl(self, config: RunConfig) -> pl.DataFrame:
         if self.df_pl is not None:
@@ -816,9 +898,17 @@ class FactorStage(FactorRunner):
         return skip
 
     def _load_skipped_results(self, skip: set[int]) -> None:
+        """Load JSON results for skipped alphas.
+
+        Bug 6 fix: skip corrupt JSON instead of crashing the batch.
+        """
         for idx in sorted(skip):
             p = self.config.output_dir / f"single_factor_{idx:03d}.json"
-            loaded: dict = json.loads(p.read_text(encoding="utf-8"))
+            try:
+                loaded: dict = json.loads(p.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning("[factor] skip-corrupt: alpha-%03d: %s", idx, exc)
+                continue
             if "alpha_index" not in loaded:
                 loaded["alpha_index"] = idx
             self.results.append(loaded)
@@ -829,15 +919,15 @@ class FactorStage(FactorRunner):
                 if idx not in skip]
 
     def _run_one_with_recording(self, idx: int) -> dict:
-        """Run single alpha + record result. 共享给 serial 和 parallel 路径。
+        """Serial 路径：单线程，无需锁。
 
-        Lock-free: caller is responsible for thread safety if needed.
+        调用链: run_one_factor → _record_one (atomic)
         """
         elapsed_cum: float = time.monotonic() - self.batch_t0
         logger.info("[factor] alpha-%03d: starting (elapsed: %.0fs, failures: %d)",
                     idx, elapsed_cum, self.failures)
         result = self.run_one_factor(idx, use_react=True)
-        self._record_result(idx, result, elapsed_cum)
+        self._record_one(idx, result, elapsed_cum)
         return result
 
     def _run_serial(self, to_run: list[int]) -> None:
@@ -866,35 +956,47 @@ class FactorStage(FactorRunner):
 
         Called from _run_parallel when future.result() raises (i.e., _run_one_safe
         crashed before _update_state could append to self.results).
+
+        P3 Bug 5 修复：synthetic result 复用 _fail_result 工厂，字段全（含 code_chars）。
         """
-        result = {
-            "alpha_index": idx,
-            "status": "failed",
-            "stage": stage,
-            "error": error[:200],
-            "elapsed_sec": 0.0,
-        }
+        result = self._fail_result(
+            alpha_index=idx,
+            stage=stage,
+            error=error[:200],
+            t0=time.monotonic(),
+        )
         self.results.append(result)
         self.failures += 1
         logger.warning("[factor] alpha-%03d: EXCEPTION (%s): %s", idx, stage, error[:100])
 
     def _run_one_safe(self, idx: int) -> dict:
-        """Thread-safe single alpha execution.
+        """Parallel 路径：_llm_semaphore + _print_lock 包住 record。
 
-        Lock placement (mimics v1):
+        Lock placement (mimics v1, Bug 3 修复后保持):
           - _llm_semaphore (max 3 concurrent LLM calls to api.minimaxi.com)
-          - _print_lock only around in-memory state mutation + JSON write
+          - _print_lock only around _record_one (state + log + JSON write)
             (NOT around the LLM call itself, to avoid serializing the 3 workers)
+
+        Bug 8 回归: _record_one 内 _persist_result 在 _print_lock 内串行 IO
+        是有意的 — 防止 3 workers 同时写 JSON 时错位（与 Bug 3 修复一致）。
         """
         with _llm_semaphore:
             result = self.run_one_factor(idx, use_react=True)
             elapsed_cum = time.monotonic() - self.batch_t0
             with _print_lock:
-                self._update_state(idx, result)
-                FactorReporter.log_row(idx, result, elapsed_cum)
-                self._persist_result(idx, result)
-            self._log_outcome(idx, result)
+                self._record_one(idx, result, elapsed_cum)
             return result
+
+    def _record_one(self, idx: int, result: dict, elapsed_cum: float) -> None:
+        """Atomic record: state + row log + persist + outcome.
+
+        共享给 serial (_run_one_with_recording) 和 parallel (_run_one_safe) 路径。
+        调用方负责锁包装（serial 无锁，parallel 在 _print_lock 内）。
+        """
+        self._update_state(idx, result)
+        FactorReporter.log_row(idx, result, elapsed_cum)
+        self._persist_result(idx, result)
+        self._log_outcome(idx, result)
 
     def _update_state(self, idx: int, result: dict) -> None:
         """Update in-memory state: results list + failure counter."""
@@ -915,13 +1017,6 @@ class FactorStage(FactorRunner):
             logger.warning("[factor] alpha-%03d: failed (%s)", idx, (result.get("error", "?") or "")[:80])
         else:
             logger.info("[factor] alpha-%03d: success (%.1fs)", idx, result.get("elapsed_sec", 0))
-
-    def _record_result(self, idx: int, result: dict, elapsed_cum: float) -> None:
-        """Compose: state update + print row + persist + log outcome."""
-        self._update_state(idx, result)
-        FactorReporter.log_row(idx, result, elapsed_cum)
-        self._persist_result(idx, result)
-        self._log_outcome(idx, result)
 
     def _reached_max_failures(self) -> bool:
         if self.failures >= self.config.max_failures:

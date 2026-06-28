@@ -597,3 +597,220 @@ quant/factors_v2_test/
     ├── stk_alpha_002_*/factor.yaml + factor.duckdb
     └── ... (101 个)
 ```
+
+## 16. 第三轮梳理：run_one_factor 拆分 + FactorReporter 拆 3 类
+
+### 16.1 动机
+
+v2 上一轮重构解决了 Bug 1-4 并通过全量 101 alpha 验证（21.6 min / 0 个 429）。
+代码虽然通过验证，但仍有以下问题：
+
+| 问题 | 当前 | 目标 |
+|---|---|---|
+| `FactorRunner.run_one_factor` 仍 103 行 | 7 步聚一起 | 拆 7 个单一职责方法 |
+| `_run_one_safe` + `_run_one_with_recording` 重复「run + record」 | 30 行重复 | 共享 `_record_one` |
+| `FactorReporter` 7 个 @staticmethod 混一个类 | 167 行 | 拆 `BatchAggregator` / `BatchReporter` / `BatchSerializer` 3 类 |
+| `_llm_code_react` 是类方法但与 self 无关 | 33 行 | 提到顶层函数 |
+| `BaseStage._log_start/_log_done` 手写 | — | 改 `@log_timing` decorator |
+| `import math` 在 `format_metric` + `aggregate` 各一次 | 重复 | 拆类后自然解决 |
+| `_handle_parallel_failure` synthetic result 缺 `code_chars` 字段 | Bug 5 | 复用 `_fail_result` 工厂 |
+| `_load_skipped_results` 无 JSON 验证 | Bug 6 | try/except |
+| `_record_one` 内 persist 在 `_print_lock` 内串行 IO | Bug 8 验证 | P0 完成后回归测试 |
+| `MetaStage._find_available` 101 次 `exists()` | Bug 9 | `os.scandir` + 早 break |
+
+### 16.2 重构原则（沿用 Karpathy 4 原则 + 本项目 4 原则）
+
+- **Simplicity First**: 每个方法单一职责，主方法变薄编排
+- **Surgical Changes**: 不动 v1（对比基准），不动 `scripts/test_one_factor_llm_code.py`
+- **Goal-Driven Execution**: 4 个独立 PR，每步 ruff + pytest + 设计文档同步
+- **Verify-Then-Proceed**: 每 PR 后跑 1 alpha 对比 result dict
+
+### 16.3 P0 — run_one_factor 拆 7 步 + _record_one 共享
+
+#### 16.3.1 拆方法清单
+
+| 新方法 | 职责 | 行数（估） |
+|---|---|---|
+| `_load_formula(alpha_index)` | 调 `load_formula_brief` | 2 |
+| `_generate_code(factor_name, formula_brief, df_pl, use_react)` | ReAct / oneshot 分支 + 返回 (code, factor_series, error, stage) | 25 |
+| `_fail_codegen_result(alpha_index, stage, error, code, react_meta, t0)` | 构造 codegen 失败 result | 10 |
+| `_fail_pipeline_result(alpha_index, code, exc, t0)` | 构造 pipeline 失败 result（带 traceback） | 12 |
+| `_log_backtest_metrics(alpha_index, backtest)` | 输出 backtest 指标日志 | 5 |
+| `_success_result(alpha_index, factor_name, formula_brief, code, factor_series, h5_path, backtest, t0)` | 构造成功 result | 18 |
+
+主 `run_one_factor` 缩为 ~30 行编排。
+
+#### 16.3.2 `_record_one` 共享
+
+`FactorStage._run_one_with_recording`（serial）和 `_run_one_safe`（parallel）共享：
+
+```python
+def _record_one(self, idx, result, elapsed_cum):
+    """Atomic record: state + row log + persist + outcome."""
+    self._update_state(idx, result)
+    BatchReporter.log_row(idx, result, elapsed_cum)
+    self._persist_result(idx, result)
+    self._log_outcome(idx, result)
+
+def _run_one_with_recording(self, idx):
+    """Serial 路径：单线程，无锁。"""
+    elapsed_cum = time.monotonic() - self.batch_t0
+    logger.info("[factor] alpha-%03d: starting (elapsed: %.0fs, failures: %d)",
+                idx, elapsed_cum, self.failures)
+    result = self.run_one_factor(idx, use_react=True)
+    self._record_one(idx, result, elapsed_cum)
+    return result
+
+def _run_one_safe(self, idx):
+    """Parallel 路径：_llm_semaphore + _print_lock 包住 record。"""
+    with _llm_semaphore:
+        result = self.run_one_factor(idx, use_react=True)
+        elapsed_cum = time.monotonic() - self.batch_t0
+        with _print_lock:
+            self._record_one(idx, result, elapsed_cum)
+        return result
+```
+
+旧 `_record_result`（已拆分但与 `_record_one` 重复）删除。
+
+#### 16.3.3 Bug 8 回归测试
+
+P0 后验证：3 workers `_record_one` 内 `_persist_result` 仍在 `_print_lock` 内，与 Bug 3 修复一致。
+预期：`multi_alpha_001_to_101.json` 正确生成，无并发错位。
+
+### 16.4 P1 — FactorReporter 拆 3 类
+
+#### 16.4.1 三个职责类
+
+| 类 | 方法 | 职责 |
+|---|---|---|
+| `BatchAggregator` | `aggregate(results)` | NaN-safe metrics 计算 |
+| `BatchAggregator` | `format_metric(value, fmt, na)` | 单数值格式化 |
+| `BatchReporter` | `log_banner()` | batch runner header |
+| `BatchReporter` | `log_row(idx, result, elapsed_cum)` | 单 alpha 行结果 |
+| `BatchReporter` | `log_summary(results)` | batch summary |
+| `BatchSerializer` | `write_json(results, path)` | multi_alpha_001_to_101.json |
+| `BatchSerializer` | `write_markdown(results, path)` | multi_alpha_summary.md |
+
+#### 16.4.2 `__all__` 更新
+
+```python
+__all__ = [
+    "RunConfig",
+    "BaseStage",
+    "PaperStage", "MetaStage",
+    "FactorRunner", "FactorStage",
+    "BatchAggregator", "BatchReporter", "BatchSerializer",  # 替代 FactorReporter
+    "preload_market_data", "build_long_dataframe", "load_formula_brief",
+]
+```
+
+#### 16.4.3 Bug 7 副作用解决
+
+拆类后 `import math` 只需在 `BatchAggregator` 顶部 1 次（`aggregate` + `format_metric` 共享），消除重复。
+
+### 16.5 P2 — llm_code_react 顶层化 + @log_timing
+
+#### 16.5.1 顶层函数
+
+```python
+class _ReActProgressHook(UnifiedHook):
+    def on_reason_start(self, ctx): logger.info("[REASON] iteration %s...", ctx.iteration)
+    def on_act_end(self, ctx, result):
+        if hasattr(result, "success") and result.success:
+            logger.info("[ACT] OK (%s)", getattr(result, "error_kind", "none"))
+        else:
+            ek = getattr(result, "error_kind", "unknown")
+            em = (getattr(result, "error", "") or "")[:120]
+            logger.info("[ACT] %s: %s", ek, em)
+
+def llm_code_react(factor_name, formula_brief, df_pl, llm, config) -> tuple[...]:
+    """ReAct self-retry code generation (public, reusable)."""
+    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code_sync
+    result = generate_factor_code_sync(
+        factor_name=factor_name, formula_brief=formula_brief, df=df_pl,
+        llm_client=llm, max_repair_rounds=config.max_repair_rounds,
+        temperature=config.temperature, hook=_ReActProgressHook(),
+    )
+    logger.info("[Unified] iterations=%s, stop_reason=%s, error=%s",
+                result.iterations, result.stop_reason, result.error)
+    if result.error:
+        return None, None, result.error, result.to_dict()
+    return result.code, result.factor_series, None, result.to_dict()
+```
+
+`FactorRunner._llm_code_react` 改为薄包装 `return llm_code_react(...)`。
+
+#### 16.5.2 `@log_timing` decorator 替代手写
+
+```python
+class BaseStage(ABC):
+    @log_timing(logger=logger, label=None)
+    def run_with_timing(self) -> Any:
+        """Decorator wrapper that auto-times using self.label."""
+        return self.run()
+```
+
+### 16.6 P3 — Bug 9 修复（Bug 5/6 已提前到 P0）
+
+> 注: Bug 5 和 Bug 6 在 P0 拆分 `_handle_parallel_failure` / `_load_skipped_results` 时已修复，
+> 详见 §16.3 和 commit `refactor(v2): split run_one_factor...`。这里只记录 Bug 9。
+
+#### 16.6.1 Bug 5: synthetic result 字段不全 (✅ P0 修复)
+
+**症状**: `_handle_parallel_failure` 旧代码生成的 result dict 缺 `code_chars` / `ic_mean` / `icir` / `ic_winrate`。
+
+**修复（方案 B：复用 P0 工厂）**: 引入 `_fail_result(alpha_index, stage, error, t0, *, code=None, **extra)`
+工厂方法，被 `_fail_codegen_result` / `_fail_pipeline_result` / `_handle_parallel_failure` 共同使用。
+
+#### 16.6.2 Bug 6: _load_skipped_results 无 JSON 验证 (✅ P0 修复)
+
+**症状**: 损坏 JSON 会抛 `JSONDecodeError`，整个 batch 中断。
+
+**修复**: try/except + skip。
+
+#### 16.6.3 Bug 9: MetaStage._find_available IO 多
+
+**症状**: 101 次 `exists()` 调用，每次都 stat。
+
+**修复**: 用 `os.scandir` 一次扫描：
+
+```python
+def _find_available(self):
+    with os.scandir(self.config.output_dir) as it:
+        existing = {e.name for e in it if e.is_file()}
+    indices = range(self.config.alpha_start, self.config.alpha_end + 1)
+    available = [i for i in indices if f"single_factor_{i:03d}.json" in existing]
+    return available
+```
+
+### 16.7 单元测试计划
+
+| 测试文件 | 覆盖 | 行数 |
+|---|---|---|
+| `tests/test_runner_v2_factor_runner_steps.py` | `_load_formula` / `_generate_code` / `_fail_*_result` / `_success_result` / `run_one_factor` 编排 | ~150 |
+| `tests/test_runner_v2_factor_stage_record.py` | `_record_one` / `_run_one_with_recording` / `_run_one_safe` | ~100 |
+| `tests/test_runner_v2_batch_aggregator.py` | `aggregate` 3 mock + empty + all-NaN / `format_metric` 4 case | ~80 |
+| `tests/test_runner_v2_batch_reporter.py` | `log_banner` / `log_row` / `log_summary` caplog 验证 | ~80 |
+| `tests/test_runner_v2_batch_serializer.py` | `write_json` / `write_markdown` tmp_path 验证 | ~80 |
+| `tests/test_runner_v2_llm_code_react.py` | `llm_code_react` mock / `_ReActProgressHook` log | ~80 |
+| `tests/test_runner_v2_bug5_9.py` | Bug 5 synthetic 字段全 / Bug 6 JSON 损坏跳过 / Bug 9 scandir | ~100 |
+
+### 16.8 Commit 计划（4 个 PR）
+
+| Commit | 内容 | 测试 |
+|---|---|---|
+| `refactor(v2): split run_one_factor into 7 SR methods + shared _record_one` | P0 16.3 | test_factor_runner_steps + test_factor_stage_record |
+| `refactor(v2): split FactorReporter into BatchAggregator/Reporter/Serializer` | P1 16.4 | test_batch_* (3 个) |
+| `refactor(v2): extract llm_code_react as top-level + @log_timing decorator` | P2 16.5 | test_llm_code_react |
+| `fix(v2): Bug 5-9 (synthetic fields, JSON validation, MetaStage scan, parallel failure factory)` | P3 16.6 | test_bug5_9 |
+
+### 16.9 风险与缓解
+
+| 风险 | 缓解 |
+|---|---|
+| `_record_one` 共享后改变现有行为 | 拆方法前后跑 1 alpha 对比 result dict |
+| 3 类拆开后内部调用变多 | 全部用 `@staticmethod`，零状态 |
+| `@log_timing` 与 `_log_start/done` 冲突 | `_log_start/done` 保留供 batch_t0 / 内部用 |
+| Bug 8 回退 | P0 后跑 3 workers 1 alpha 验证并发 |
+| Bug 9 scandir 与 `exists()` 行为差异 | scandir 一次返回现有文件名集合，语义等价 |
