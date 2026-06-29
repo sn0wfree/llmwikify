@@ -18,8 +18,8 @@ class BuildFeedbackStep(StepHandler):
     """
 
     async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
-        from llmwikify.reproduction.codegen.feedback_templates import OBSERVE_FEEDBACK_TEMPLATE
         from llmwikify.apps.chat.agent.unified.steps.code import CodeExecResult
+        from llmwikify.kernel.quant.codegen import OBSERVE_FEEDBACK_TEMPLATE
 
         result = input
         if not isinstance(result, CodeExecResult):

@@ -1593,3 +1593,127 @@ if backtest.get("error"):
 - **Phase C2**: 跑 1601 academic paper (98 signals)
 - **Phase A (next sprint)**: `paper.yaml` schema + `run_paper.py --recipe`
 - **Phase D (later)**: Plugin registry auto-discovery
+
+---
+
+## 17.20 C1: 拆 kernel/quant/codegen/ — 破 reproduction ↔ chat cycle
+
+> 状态: 🟡 IN PROGRESS
+> 动机: 架构评估报告 P0: 12 个 import sites 跨越 `reproduction/codegen/` ↔ `apps/chat/agent/unified/` 层边界, 形成 3-way 闭环. C1 把 codegen building blocks 抽到 `kernel/quant/codegen/`, 让 reproduction 不再依赖 apps.
+
+### 17.20.1 Cycle 详细 (12 sites)
+
+**apps/chat/ → reproduction/codegen/ (8 sites):**
+- `apps/chat/agent/unified/steps/code.py:40` → `extract_python`
+- `apps/chat/agent/unified/steps/code.py:57` → `validate_syntax`
+- `apps/chat/agent/unified/steps/code.py:74` → `validate_safety`
+- `apps/chat/agent/unified/steps/code.py:93` → `execute_code`
+- `apps/chat/agent/unified/steps/feedback.py:21` → `OBSERVE_FEEDBACK_TEMPLATE`
+- `apps/chat/agent/unified/steps/llm.py:54` → `extract_json_from_response`
+- `apps/chat/agent/unified/pipelines/codegen.py:51` → `build_llm_client`
+- `apps/chat/agent/unified/pipelines/codegen.py:197` → `SYSTEM_PROMPT_CODE`
+
+**reproduction/codegen/ → apps/chat/ (4 sites):**
+- `reproduction/codegen/react_runner.py:24` ← `UnifiedHook`
+- `reproduction/codegen/react_runner.py:70` ← `generate_factor_code_sync`
+- `reproduction/codegen/llm_code.py:368` ← `generate_factor_code_sync`
+- `reproduction/pipeline/workflow.py:280` ← `generate_factor_code_sync`
+
+### 17.20.2 解决方案
+
+`kernel/quant/codegen/` 作为**双向死胡同**:
+- 不依赖 apps/ (无 runner, 无 UnifiedHook)
+- 不依赖 reproduction/ (无 paper_understanding, 无 persist)
+- 仅依赖: polars + QuantNodes (第三方)
+
+**位置**: `src/llmwikify/kernel/quant/codegen/`
+
+**模块拆分** (4 NEW + 1 __init__ + 2 pkg init):
+```
+src/llmwikify/kernel/__init__.py
+src/llmwikify/kernel/quant/__init__.py
+src/llmwikify/kernel/quant/codegen/__init__.py
+src/llmwikify/kernel/quant/codegen/code_extract.py
+src/llmwikify/kernel/quant/codegen/prompts.py
+src/llmwikify/kernel/quant/codegen/json_extract.py
+src/llmwikify/kernel/quant/codegen/feedback_templates.py
+```
+
+### 17.20.3 code_extract.py 内容
+
+从 `reproduction/codegen/llm_code.py` 抽 4 个函数:
+- `extract_python(text)` - 从 LLM 响应提取 python code block
+- `validate_syntax(code)` - ast.parse 验证
+- `validate_safety(code)` - CodeSandbox.validate 安全检查
+- `execute_code(code, df, timeout_sec)` - CodeSandbox 实际执行
+- `build_execute_namespace()` - 构造 namespace (helpers)
+
+### 17.20.4 修改的 5 个 import sites (9 sites)
+
+| 文件 | 旧 import | 新 import |
+|---|---|---|
+| `apps/chat/agent/unified/steps/code.py:40,57,74,93` | `from llmwikify.reproduction.codegen.llm_code import ...` | `from llmwikify.kernel.quant.codegen import ...` |
+| `apps/chat/agent/unified/steps/feedback.py:21` | `from llmwikify.reproduction.codegen.feedback_templates import OBSERVE_FEEDBACK_TEMPLATE` | `from llmwikify.kernel.quant.codegen import OBSERVE_FEEDBACK_TEMPLATE` |
+| `apps/chat/agent/unified/steps/llm.py:54` | `from llmwikify.reproduction.codegen.llm_code import extract_json_from_response` | `from llmwikify.kernel.quant.codegen import extract_json_from_response` |
+| `apps/chat/agent/unified/pipelines/codegen.py:51,197` | `from llmwikify.reproduction.codegen.llm_code import build_llm_client` / `SYSTEM_PROMPT_CODE` | `from llmwikify.kernel.quant.codegen import ...` |
+| `reproduction/codegen/react_runner.py:70` | `from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code_sync` | **保持不变** (PR9 L1 已 commit, 不动) |
+
+**注意**: react_runner.py:70 跨层 import 是**反向 cycle** (reproduction → apps), 但 PR9 L1 已 commit, C1 暂不动, 留给未来 C4 统一 ReAct 时处理.
+
+### 17.20.5 llm_code.py 变薄包装
+
+`reproduction/codegen/llm_code.py` 改为 re-export `kernel/quant/codegen/`, 加 deprecation warning.
+
+```python
+from llmwikify.kernel.quant.codegen import (
+    SYSTEM_PROMPT_CODE,
+    build_execute_namespace,
+    execute_code,
+    extract_json_from_response,
+    extract_python,
+    validate_safety,
+    validate_syntax,
+)
+```
+
+保留 `build_llm_client` (含 provider 解析) 和 `generate_factor_code` (高层 ReAct entry), 这两个是 reproduction 特有, 不移到 kernel.
+
+### 17.20.6 验证清单
+
+- [ ] `python3 -c "import llmwikify.kernel.quant.codegen"` 无错
+- [ ] `grep -rn "from llmwikify.reproduction.codegen.llm_code" src/llmwikify/apps/` 应返回 **0** 行 (apps 不再依赖 reproduction)
+- [ ] `grep -rn "from llmwikify.apps" src/llmwikify/kernel/` 应返回 **0** 行 (kernel 不依赖 apps)
+- [ ] 跑 `tests/reproduction/test_codegen*.py` 验证 reproduction/ 仍工作
+- [ ] 跑 `tests/test_runner_v2_*.py` (128 tests) 验证 v2 不破
+- [ ] 跑 `tests/test_react_runner.py` (9 tests) 验证 react_runner 仍工作
+- [ ] byte-equal 验证 (招商 idx=1)
+- [ ] ruff clean (0 错误)
+
+### 17.20.7 风险
+
+| 风险 | 概率 | 缓解 |
+|---|---|---|
+| `llm_code.py` 函数签名变 → reproduction 行为变 | 中 | 函数签名保持不变, 只改 import 路径 |
+| apps/chat 测试 mock `llm_code` 函数路径 | 中 | 633 tests 中 ~10 个可能跟改, 分批跑 |
+| deprecation warning 触发 noise | 中 | reproduction/ 路径加 `# noqa: F401` 标记 |
+| `reproduction/pipeline/workflow.py:280` 反向 cycle 残留 | 中 | C1 暂不动, 留给 C4 |
+
+### 17.20.8 预期结果
+
+| | 前 | 后 |
+|---|---|---|
+| `src/llmwikify/kernel/quant/codegen/` | 0 | 7 NEW files (~600 行) |
+| `src/llmwikify/reproduction/codegen/llm_code.py` | 410 行 | ~150 行 (薄包装) |
+| `src/llmwikify/reproduction/codegen/feedback_templates.py` | 50 行 | 0 (移到 kernel) |
+| `tests/kernel/quant/codegen/` | 0 | 1 NEW file (~150 行) |
+| apps → reproduction codegen imports | 8 | 0 |
+| reproduction → apps codegen imports | 4 (保留 react_runner) | 4 (保留 react_runner) |
+| 测试 | 128 (PR9a) | 138+ (PR9a + 10 new) |
+| cycle sites | 12 | 4 (reproduction → apps, 留给 C4) |
+
+### 17.20.9 后续
+
+- **C4a/b/c**: 统一 ReAct (3 sub-PR), 会把 `reproduction/codegen/react_runner.py:70` 反向 cycle 也打破
+- **C2**: 修 `llm_factory` 走 provider registry (破 hardcoded minimax)
+- **C3**: `data_source` 重组
+- **PR9b/c**: factor/ SkipLoader + RecordStage (v2 内部 cleanup, 与 C1 正交)

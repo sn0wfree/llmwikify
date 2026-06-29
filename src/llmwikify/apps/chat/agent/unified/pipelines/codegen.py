@@ -32,8 +32,8 @@ from llmwikify.apps.chat.agent.unified.spec import (
 from llmwikify.apps.chat.agent.unified.steps import (
     BuildFeedbackStep,
     CodeExecResult,
-    LLMCallStep,
     ExtractCodeStep,
+    LLMCallStep,
     ValidateAndExecuteStep,
 )
 
@@ -194,7 +194,7 @@ async def generate_factor_code(
         UnifiedResult（含 .code, .factor_series, .error, .to_dict()）
     """
     from llmwikify.apps.chat.agent.unified.loop import UnifiedAgentLoop
-    from llmwikify.reproduction.codegen.llm_code import SYSTEM_PROMPT_CODE
+    from llmwikify.kernel.quant.codegen import SYSTEM_PROMPT_CODE
 
     if not system_prompt:
         system_prompt = SYSTEM_PROMPT_CODE

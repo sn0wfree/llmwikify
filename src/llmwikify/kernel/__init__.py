@@ -12,6 +12,7 @@ Subpackages:
     - graph: knowledge graph analysis, export, visualization
     - search: QMD hybrid full-text + vector search
     - multi_wiki: registry/instance/discovery/remote
+    - quant: quant-domain shared code (codegen, data_source) — C1 added
 
 Top-level modules:
     - principle_checker: validates wiki content against the
