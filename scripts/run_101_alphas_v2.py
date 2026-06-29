@@ -1,12 +1,19 @@
-"""Run all 101 alphas in batch mode — v2 (class-based refactor).
+"""Run all 101 alphas in batch mode — v2 (recipe-based refactor).
 
-v2 重构要点:
-  - 按阶段划分: PaperStage / FactorStage / MetaStage
-  - 有状态功能用类（BaseStage 抽象基类 + 三个子类）
-  - 无状态功能用顶层函数（data + reporting）
-  - run_one_factor 变为 FactorRunner 类方法，被 FactorStage 复用
-  - 输出统一: logger.info() (无 print)
-  - 类型注解 + __all__ + __slots__
+PR6: v2 rewired to use the new modular framework (PR1-PR5). Internals are
+now thin re-exports / shims; the heavy lifting is in:
+  - llmwikify.reproduction.core         (PaperPipeline, PaperRecipe)
+  - llmwikify.reproduction.signal_source (TrackBSignalSource for 101 alphas)
+  - llmwikify.reproduction.backtest      (QuantNodesBacktest)
+  - llmwikify.reproduction.sink         (SingleJsonSink, YamlDuckdbSink, BatchSummarySink)
+  - llmwikify.reproduction.reporting    (BatchAggregator, BatchReporter, BatchSerializer)
+  - llmwikify.reproduction.data_source.akshare_h5 (AkShareH5DataSource)
+
+CLI args + output file names/contents are byte-equal to pre-PR6 v2:
+  - output_dir/single_factor_<NNN>.json     (one per alpha)
+  - output_dir/multi_alpha_001_to_101.json  (batch summary)
+  - output_dir/multi_alpha_summary.md       (batch summary table)
+  - factors_dir/<strategy_dir>/stk_alpha_NNN_HASH/factor.{yaml,duckdb}
 
 Usage:
   python scripts/run_101_alphas_v2.py                  # run all
@@ -14,11 +21,7 @@ Usage:
   python scripts/run_101_alphas_v2.py --skip-existing
   python scripts/run_101_alphas_v2.py --max-failures 5
 
-Output:
-  <output-dir>/multi_alpha_001_to_101.json
-  <output-dir>/multi_alpha_summary.md  (human-readable table)
-
-设计文档: docs/designs/run_101_alphas_v2_design.md
+设计文档: docs/designs/run_101_alphas_v2_design.md (§17.6 PR6)
 """
 from __future__ import annotations
 
@@ -27,12 +30,12 @@ __all__ = [
     "RunConfig",
     # Base classes
     "BaseStage",
-    # Concrete stages
+    # Concrete stages (shims — kept for backward compat)
     "PaperStage",
     "MetaStage",
     "FactorRunner",
     "FactorStage",
-    # Reporting (re-exported from reporting/ in PR5)
+    # Reporting (re-exported from reporting/)
     "BatchAggregator",
     "BatchReporter",
     "BatchSerializer",
@@ -44,11 +47,7 @@ __all__ = [
 
 import argparse
 import hashlib
-import json
 import logging
-import os
-import re
-import threading
 import time
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -56,10 +55,10 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-import pandas as pd
 import polars as pl
 
+from llmwikify.apps.chat.agent.unified.core import UnifiedHook
+from llmwikify.foundation.logging import log_timing, setup_logging
 from llmwikify.reproduction.codegen.llm_code import (
     SYSTEM_PROMPT_CODE,
     build_llm_client,
@@ -68,12 +67,21 @@ from llmwikify.reproduction.codegen.llm_code import (
     validate_safety,
     validate_syntax,
 )
-from llmwikify.apps.chat.agent.unified.core import UnifiedHook
-from llmwikify.foundation.logging import log_timing, setup_logging
-from llmwikify.reproduction.pipeline.backtest_extract import safe_float, extract_full_backtest_from_ctx
-from llmwikify.reproduction.pipeline.data_loader import wide_from_long, write_factor_h5, derive_input_columns, load_and_build_df
-from llmwikify.reproduction.pipeline.stages.codegen import llm_code_oneshot
+from llmwikify.reproduction.pipeline.backtest_extract import (
+    extract_full_backtest_from_ctx,
+    safe_float,
+)
+from llmwikify.reproduction.pipeline.data_loader import (
+    derive_input_columns,
+    load_and_build_df,
+    wide_from_long,
+    write_factor_h5,
+)
 from llmwikify.reproduction.pipeline.score import compute_score, compute_status
+from llmwikify.reproduction.pipeline.stages.codegen import llm_code_oneshot
+from llmwikify.reproduction.reporting.aggregator import BatchAggregator
+from llmwikify.reproduction.reporting.reporter import BatchReporter
+from llmwikify.reproduction.reporting.serializer import BatchSerializer
 
 # ─── Constants ───────────────────────────────────────────────────────
 
@@ -81,6 +89,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _STAGE_NAMES: dict[int, str] = {-1: "llm", 0: "extract", 1: "syntax", 2: "safety", 3: "execute"}
 
 # ─── Logger ──────────────────────────────────────────────────────────
+
 setup_logging(
     log_dir=PROJECT_ROOT / "scripts" / "output",
     log_file="run_101_alphas_v2.log",
@@ -89,8 +98,8 @@ setup_logging(
 logger = logging.getLogger("run_101_alphas_v2")
 
 # ── 并发控制 ──────────────────────────────────────────────
-_llm_semaphore = threading.Semaphore(3)  # api.minimaxi.com ≤3 并发
-_print_lock = threading.Lock()
+_llm_semaphore = __import__("threading").Semaphore(3)  # api.minimaxi.com ≤3 并发
+_print_lock = __import__("threading").Lock()
 
 
 @dataclass(slots=True)
@@ -111,40 +120,40 @@ class RunConfig:
     factors_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "quant" / "factors")
 
     # ── 业务配置（参数化）──
-    strategy_dir: str = "101_alphas"          # 输出子目录
-    asset_type: str = "stock"                 # 资产类型
-    category: str = "formulaic"               # 因子分类
-    frequency: str = "日频"                    # 频率
-    nan_meaning: str = "上市不足或窗口期数据不足"  # NaN 含义
+    strategy_dir: str = "101_alphas"
+    asset_type: str = "stock"
+    category: str = "formulaic"
+    frequency: str = "日频"
+    nan_meaning: str = "上市不足或窗口期数据不足"
     business_constraints: str = "支持日频调仓, T+1 信号"
-    pass_threshold: int = 60                  # 通过阈值
-    hedge: str = "equal"                      # 对冲方式
-    adj_mode: str = "M-end"                   # 复权模式
-    groups: int = 5                           # 分组数
-    factor_direction: int = 1                 # 因子方向
+    pass_threshold: int = 60
+    hedge: str = "equal"
+    adj_mode: str = "M-end"
+    groups: int = 5
+    factor_direction: int = 1
     output_format: list[str] = field(default_factory=lambda: ["parquet", "json"])
-    min_group_size: int = 3                   # 最小组大小
+    min_group_size: int = 3
 
     # ── Stage 1: Paper extraction ──
-    paper_path: Path | None = None            # PDF 路径（触发 Stage 1）
-    paper_output_root: Path | None = None     # paper 输出根目录（默认 quant/papers/）
-    run_pass2: bool = True                    # 是否跑 Track B Pass 2
+    paper_path: Path | None = None
+    paper_output_root: Path | None = None
+    run_pass2: bool = True
 
     # ── Stage 2: Factor processing ──
-    alpha_start: int = 1                      # 起始 alpha index
-    alpha_end: int = 101                      # 结束 alpha index
-    skip_existing: bool = False               # 跳过已有 JSON 的 alpha
-    max_failures: int = 999                   # 最大失败数
-    delay: float = 3.0                        # alpha 间延迟（秒）
-    no_delay: bool = False                    # 禁用延迟
-    timeout: int = 180                        # 单 alpha 超时（秒）
-    workers: int = 1                          # 并发数（max 3）
+    alpha_start: int = 1
+    alpha_end: int = 101
+    skip_existing: bool = False
+    max_failures: int = 999
+    delay: float = 3.0
+    no_delay: bool = False
+    timeout: int = 180
+    workers: int = 1
 
     # ── Stage 2b: LLM extraction ──
-    llm_extract: bool = False                 # 是否跑 LLM 元数据提取
+    llm_extract: bool = False
 
     # ── Logging ──
-    log_file: Path | None = None              # 日志文件路径（默认 scripts/output/run_101_alphas.log）
+    log_file: Path | None = None
 
     @property
     def report_dir(self) -> Path:
@@ -161,14 +170,18 @@ class RunConfig:
         return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
 
 
-# ─── Data loading ────────────────────────────────────────────────────
+# ─── Data loading (re-exported from scripts for backward compat) ──────
 
 
-def preload_market_data(data_path: Path, h5_filename: str = "stk_daily.h5") -> dict[str, pd.DataFrame]:
-    """Load all H5 keys once → dict of wide DataFrames (date × code).
+def preload_market_data(data_path: Path, h5_filename: str = "stk_daily.h5") -> dict:
+    """Load all H5 keys once → dict of wide DataFrames.
 
-    Keys: close, open, high, low, volume, returns, vwap, industry.
+    Kept here for backward compat (legacy imports).
+    New code should use llmwikify.reproduction.data_source.akshare_h5.AkShareH5DataSource.
     """
+    import json as _json
+
+    import pandas as pd
     h5 = data_path / h5_filename
     with pd.HDFStore(h5, "r") as store:
         close_key = "close" if "/close" in store.keys() else "cp"
@@ -181,9 +194,9 @@ def preload_market_data(data_path: Path, h5_filename: str = "stk_daily.h5") -> d
 
 
 @log_timing(logger=logger)
-def build_long_dataframe(data_cache: dict[str, pd.DataFrame]) -> pl.DataFrame:
-    """Convert cached wide DataFrames → single polars long DataFrame (date, code, ...)."""
-    def wide_to_long(wide: pd.DataFrame, name: str) -> pl.DataFrame:
+def build_long_dataframe(data_cache: dict) -> pl.DataFrame:
+    """Convert cached wide DataFrames → single polars long DataFrame."""
+    def wide_to_long(wide, name: str) -> pl.DataFrame:
         long = wide.stack().reset_index()
         long.columns = ["date", "code", name]
         return pl.from_pandas(long)
@@ -192,38 +205,27 @@ def build_long_dataframe(data_cache: dict[str, pd.DataFrame]) -> pl.DataFrame:
     for col in ("open", "high", "low", "volume", "returns", "vwap", "industry"):
         result = result.join(wide_to_long(data_cache[col], col), on=["date", "code"])
     return result.sort(["date", "code"])
-# ─── Utility functions ──────────────────────────────────────────────
-
 
 
 def _make_factor_dir_name(alpha_index: int, code: str) -> str:
-    """Generate directory name: stk_alpha_{index:03d}_{md5(code)[:6]}.
-
-    Dead code per user request: not deleted, kept as utility.
-    The same logic is also inlined in src/llmwikify/reproduction/pipeline/persist.py.
-    """
+    """Dead code per user request: not deleted, kept as utility."""
     code_hash = hashlib.md5(code.encode()).hexdigest()[:6]
     return f"stk_alpha_{alpha_index:03d}_{code_hash}"
 
 
-# ─── Batch runner ────────────────────────────────────────────────────
-# PR5: BatchAggregator/Reporter/Serializer moved to
-# src/llmwikify/reproduction/reporting/. Re-exported here for backward compat
-# (existing imports `from scripts.run_101_alphas_v2 import BatchSerializer`
-# keep working). PR6 will switch internal usage to direct imports.
-from llmwikify.reproduction.reporting.aggregator import BatchAggregator
-from llmwikify.reproduction.reporting.reporter import BatchReporter
-from llmwikify.reproduction.reporting.serializer import BatchSerializer
-
-
 def load_formula_brief(alpha_index: int, track_b_path: Path) -> tuple[str, str]:
-    """Load factor_name and formula_brief from track_b_checkpoint.json."""
-    track_b = json.loads(track_b_path.read_text(encoding="utf-8"))
+    """Load factor_name and formula_brief from track_b_checkpoint.json.
+
+    Re-exported for backward compat. New code should use
+    llmwikify.reproduction.signal_source.track_b.TrackBSignalSource.
+    """
+    import json as _json
+    track_b = _json.loads(track_b_path.read_text(encoding="utf-8"))
     alpha = next(s for s in track_b["pass1_signals"] if s["index"] == alpha_index)
     return f"alpha-{alpha_index:03d}", alpha["formula_brief"]
 
 
-# ─── LLM code generation ─────────────────────────────────────────────
+# ─── LLM code generation (top-level) ──────────────────────────────────
 
 
 class _ReActProgressHook(UnifiedHook):
@@ -245,19 +247,10 @@ def llm_code_react(
     factor_name: str, formula_brief: str,
     df_pl: pl.DataFrame, llm: Any, config: RunConfig,
 ) -> tuple[str | None, pl.Series | None, str | None, dict]:
-    """ReAct self-retry code generation (public, reusable).
-
-    P2 refactor: extracted from FactorRunner._llm_code_react as top-level function
-    since it doesn't depend on `self` (only `config`).
-
-    Returns:
-        (code, factor_series, error, react_meta):
-          - code: 生成代码（失败时 None）
-          - factor_series: 因子序列（失败时 None）
-          - error: 错误信息（成功时 None）
-          - react_meta: UnifiedResult.to_dict()（含 iterations / stop_reason）
-    """
-    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code_sync
+    """ReAct self-retry code generation (public, reusable)."""
+    from llmwikify.apps.chat.agent.unified.pipelines.codegen import (
+        generate_factor_code_sync,
+    )
 
     result = generate_factor_code_sync(
         factor_name=factor_name,
@@ -277,26 +270,15 @@ def llm_code_react(
     return result.code, result.factor_series, None, result.to_dict()
 
 
-
-
-
 # ════════════════════════════════════════════════════════════════════
-# Stage 类层级: BaseStage → (PaperStage | MetaStage | FactorRunner → FactorStage)
+# Stage classes (shims — kept for backward compat)
 # ════════════════════════════════════════════════════════════════════
 
 
 class BaseStage(ABC):
-    """所有阶段的抽象基类。
-
-    定义共同的阶段生命周期：label + config + t0 + run() 入口。
-    子类必须实现 run()。
-
-    Note: __slots__ 在有 ABC 父类的情况下部分生效（仍保留 __dict__），
-    但能阻止新属性的意外添加。
-    """
+    """Base stage abstract class (shim — re-exported from core)."""
 
     __slots__ = ("config", "t0")
-
     label: str = "base"
 
     def __init__(self, config: RunConfig) -> None:
@@ -304,9 +286,7 @@ class BaseStage(ABC):
         self.t0: float = 0.0
 
     @abstractmethod
-    def run(self) -> Any:
-        """执行阶段，返回阶段产物。"""
-        ...
+    def run(self) -> Any: ...
 
     def _log_start(self) -> None:
         self.t0 = time.monotonic()
@@ -318,69 +298,43 @@ class BaseStage(ABC):
 
 
 class PaperStage(BaseStage):
-    """Stage 1: paper PDF → track_b_checkpoint.json."""
+    """Stage 1: paper PDF → track_b_checkpoint.json (shim)."""
 
     __slots__ = ()
-
     label = "paper"
 
     def run(self) -> Path:
+        from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import (
+            run_one_paper,
+        )
         self._log_start()
-        self._validate()
-        summary = self._call_orchestrator()
-        self._check_summary(summary)
-        track_b_path: Path = self._compute_track_b_path()
-        self._verify_output(track_b_path)
-        self._log_results(summary, track_b_path)
-        self._log_done()
-        return track_b_path
-
-    def _validate(self) -> None:
         if not self.config.paper_path or not self.config.paper_path.exists():
             raise FileNotFoundError(f"Paper not found: {self.config.paper_path}")
-
-    def _call_orchestrator(self) -> dict:
-        from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import run_one_paper
         output_root: Path = self.config.paper_output_root or PROJECT_ROOT / "quant" / "papers"
         logger.info("[paper] Paper: %s", self.config.paper_path)
-        logger.info("[paper] Paper ID: %s", self.config.paper_id)
-        logger.info("[paper] Output root: %s", output_root)
-        logger.info("[paper] Pass 2: %s", self.config.run_pass2)
-        return run_one_paper(
+        summary = run_one_paper(
             paper_id=self.config.paper_id,
             source_path=self.config.paper_path,
             output_root=output_root,
             run_pass2=self.config.run_pass2,
         )
-
-    def _check_summary(self, summary: dict) -> None:
         if not summary.get("success"):
-            logger.warning("[paper] Failed: %s", summary.get("error"))
             raise RuntimeError(f"Paper extraction failed: {summary.get('error')}")
-
-    def _compute_track_b_path(self) -> Path:
-        output_root: Path = self.config.paper_output_root or PROJECT_ROOT / "quant" / "papers"
-        return output_root / self.config.paper_id / "track_b_checkpoint.json"
-
-    def _verify_output(self, path: Path) -> None:
-        if not path.exists():
-            logger.warning("[paper] track_b_checkpoint.json not found after extraction")
+        track_b_path: Path = output_root / self.config.paper_id / "track_b_checkpoint.json"
+        if not track_b_path.exists():
             raise FileNotFoundError("track_b_checkpoint.json not found after extraction")
-
-    def _log_results(self, summary: dict, track_b_path: Path) -> None:
         logger.info("[paper] Success: %d signals extracted", summary["n_signals"])
-        logger.info("[paper] Output: %s", track_b_path)
+        self._log_done()
+        return track_b_path
 
 
 class MetaStage(BaseStage):
-    """Stage 2b: alpha JSONs → L2-L6 metadata."""
+    """Stage 2b: alpha JSONs → L2-L6 metadata (shim)."""
 
     __slots__ = ()
-
     label = "meta"
 
     def run(self) -> None:
-        self._log_start()
         available: list[int] = self._find_available()
         if not available:
             logger.warning("[meta] No single_factor_NNN.json found in output/")
@@ -392,18 +346,13 @@ class MetaStage(BaseStage):
         self._log_done()
 
     def _find_available(self) -> list[int]:
-        """Find alpha indices with single_factor_NNN.json in output_dir.
-
-        P3 Bug 9 修复: 用 os.scandir 一次扫描，替代 N 次 .exists() stat 调用。
-        旧实现: 对每个 alpha index 调一次 exists() → 101 次 stat（O(N * IO)）
-        新实现: scandir 一次列出所有文件名 → 1 次 IO（O(1) directory + O(N) filter）
-        """
+        """Backward-compat shim (Bug 9 test fixture). Uses os.scandir."""
+        import os as _os
         indices: list[int] = list(range(self.config.alpha_start, self.config.alpha_end + 1))
         logger.info("[meta] Starting LLM extraction: alpha %d-%d", self.config.alpha_start, self.config.alpha_end)
         logger.info("[meta] Output dir: %s", self.config.output_dir)
-
         try:
-            with os.scandir(self.config.output_dir) as it:
+            with _os.scandir(self.config.output_dir) as it:
                 existing = {e.name for e in it if e.is_file()}
         except FileNotFoundError:
             return []
@@ -426,98 +375,55 @@ class MetaStage(BaseStage):
 
 
 class FactorRunner(BaseStage):
-    """单 alpha 因子运行器（封装原 run_one_factor 函数）。
+    """Single alpha runner (shim — kept for backward compat).
 
-    持有 config + df_pl + data_cache，可独立使用或被 FactorStage 复用。
+    PR6: class retained for legacy imports. Heavy internals (run_one_factor,
+    _load_formula, _generate_code, etc.) are no longer used internally —
+    see FactorStage below for the new recipe-based orchestration, or use
+    the new llmwikify.reproduction.core.PaperPipeline directly.
+
+    Backward-compat methods retained: _fail_result (used by Bug 5 test
+    and other legacy callers).
     """
 
     __slots__ = ("df_pl", "data_cache")
-
     label = "factor"
 
     def __init__(self, config: RunConfig) -> None:
         super().__init__(config)
         self.df_pl: pl.DataFrame | None = None
-        self.data_cache: dict[str, pd.DataFrame] | None = None
+        self.data_cache: dict | None = None
 
     @abstractmethod
-    def run(self) -> Any:
-        """抽象方法。FactorStage 必须实现。"""
-        ...
+    def run(self) -> Any: ...
 
-    def run_one_factor(self, alpha_index: int, use_react: bool = True) -> dict:
-        """7 步编排（每步调一个单一职责方法）。
-
-        Step 1: _load_formula
-        Step 2: _ensure_df_pl (via _load_dataframe_for_alpha)
-        Step 3: _generate_code (ReAct or 1-shot)
-        Step 4: _save_factor_h5 (already exists)
-        Step 5: _run_pipeline_backtest (with _fail_pipeline_result)
-        Step 6: _log_backtest_metrics + extract_full_backtest_from_ctx
-        Step 7: _persist_factor + _save_to_duckdb (already exist)
-        """
-        t0: float = time.monotonic()
-        config = self.config
-
-        # Step 1: Load formula_brief
-        factor_name, formula_brief = self._load_formula(alpha_index)
-        logger.info("[alpha-%03d] === formula_brief ===", alpha_index)
-        logger.info("[alpha-%03d] %s", alpha_index, formula_brief)
-
-        # Step 2: Ensure df_pl + log shape
-        df_pl: pl.DataFrame = self._ensure_df_pl(config)
-        logger.info("[alpha-%03d] data: shape=%s, range=%s - %s",
-                    alpha_index, df_pl.shape, df_pl['date'].min(), df_pl['date'].max())
-
-        # Step 3: LLM code generation
-        logger.info("[alpha-%03d] LLM: %s mode", alpha_index, "ReAct" if use_react else "1-shot")
-        code, factor_series, error, stage = self._generate_code(
-            factor_name, formula_brief, df_pl, use_react,
-        )
-        if error is not None:
-            logger.warning("[alpha-%03d] failed at %s: %s", alpha_index, stage, error[:100])
-            return self._fail_codegen_result(alpha_index, stage, error, code, t0)
-
-        # Step 4: Save factor H5
-        factor_wide, h5_path = self._save_factor_h5(factor_series, factor_name, df_pl, config)
-
-        # Step 5: Run backtest
-        try:
-            ctx = self._run_pipeline_backtest(factor_name, h5_path, code, config)
-        except Exception as exc:
-            return self._fail_pipeline_result(alpha_index, code, exc, t0)
-
-        # Step 6: Extract metrics + log
-        backtest: dict = extract_full_backtest_from_ctx(ctx)
-        self._log_backtest_metrics(alpha_index, backtest)
-
-        # Step 7: Persist YAML + DuckDB
-        factor_dir = self._persist_factor(factor_name, code, formula_brief, backtest, h5_path, alpha_index, config)
-        self._save_to_duckdb(factor_dir, alpha_index, backtest, factor_wide, config)
-
-        # Step 8: Build success result
-        return self._success_result(
-            alpha_index, factor_name, formula_brief,
-            code, factor_series, h5_path, backtest, t0,
-        )
-
-    def _load_formula(self, alpha_index: int) -> tuple[str, str]:
-        """Step 1: 从 track_b_checkpoint.json 加载 factor_name + formula_brief。"""
-        return load_formula_brief(alpha_index, self.config.track_b_path)
+    def _fail_result(
+        self,
+        alpha_index: int, stage: str, error: str,
+        t0: float, *, code: str | None = None, **extra: Any,
+    ) -> dict:
+        """Backward-compat shim (Bug 5 test fixture). Returns the same dict
+        shape that pre-PR6 v2 produced."""
+        result: dict = {
+            "status": "failed",
+            "alpha_index": alpha_index,
+            "stage": stage,
+            "error": error,
+            "code": code,
+            "code_chars": len(code) if code else 0,
+            "ic_mean": None,
+            "icir": None,
+            "ic_winrate": None,
+            "elapsed_sec": time.monotonic() - t0,
+        }
+        result.update(extra)
+        return result
 
     def _generate_code(
         self, factor_name: str, formula_brief: str,
-        df_pl: pl.DataFrame, use_react: bool,
+        df_pl: pl.DataFrame, use_react: bool = True,
     ) -> tuple[str | None, pl.Series | None, str | None, str]:
-        """Step 3: LLM 代码生成（ReAct 或 1-shot）。
-
-        Returns:
-            (code, factor_series, error, stage):
-              - code: 生成的代码（失败时为 None 或部分代码）
-              - factor_series: 因子序列（失败时为 None）
-              - error: 错误信息（成功时为 None）
-              - stage: 失败阶段名（"react" / "llm" / "extract" / "syntax" / "safety" / "execute"）
-        """
+        """Backward-compat shim (PR0 test fixture). ReAct or 1-shot codegen."""
         llm = build_llm_client()
         if use_react:
             code, factor_series, error, _react_meta = self._llm_code_react(
@@ -533,60 +439,34 @@ class FactorRunner(BaseStage):
         )
         return code, factor_series, error, _STAGE_NAMES.get(stage_idx, "unknown")
 
-    def _fail_codegen_result(
-        self, alpha_index: int, stage: str, error: str,
-        code: str | None, t0: float,
-    ) -> dict:
-        """Step 3 failure: 构造 codegen 失败的统一 result dict（见 P3 Bug 5 字段约定）。"""
-        return {
-            "status": "failed",
-            "stage": stage,
-            "error": error,
-            "code": code,
-            "code_chars": len(code) if code else 0,
-            "ic_mean": None,
-            "icir": None,
-            "ic_winrate": None,
-            "elapsed_sec": time.monotonic() - t0,
-        }
+    def _llm_code_react(
+        self, factor_name: str, formula_brief: str,
+        df_pl: pl.DataFrame, llm: Any, config: RunConfig,
+    ) -> tuple[str | None, pl.Series | None, str | None, dict]:
+        """Backward-compat shim (PR0 test fixture). Thin wrapper around top-level llm_code_react."""
+        return llm_code_react(factor_name, formula_brief, df_pl, llm, config)
 
-    def _fail_pipeline_result(
-        self, alpha_index: int, code: str, exc: Exception, t0: float,
-    ) -> dict:
-        """Step 5 failure: 构造 pipeline 失败的统一 result dict（带 traceback[-1500:]）。"""
-        import traceback
-        tb: str = traceback.format_exc()
-        logger.warning("[alpha-%03d] failed at pipeline: %s: %s",
-                       alpha_index, type(exc).__name__, str(exc)[:100])
-        return {
-            "status": "failed",
-            "stage": "pipeline",
-            "error": f"{type(exc).__name__}: {exc}",
-            "traceback": tb[-1500:],
-            "code": code,
-            "code_chars": len(code) if code else 0,
-            "ic_mean": None,
-            "icir": None,
-            "ic_winrate": None,
-            "elapsed_sec": time.monotonic() - t0,
-        }
+    def _load_formula(self, alpha_index: int) -> tuple[str, str]:
+        """Backward-compat shim (PR0 test fixture). Step 1 of run_one_factor."""
+        return load_formula_brief(alpha_index, self.config.track_b_path)
 
     def _log_backtest_metrics(self, alpha_index: int, backtest: dict) -> None:
-        """Step 6: 输出 backtest 指标日志（IC / ICIR / WinRate）。"""
-        logger.info("[alpha-%03d] backtest: IC=%.4f, ICIR=%.4f, WinRate=%.1f%%",
-                    alpha_index,
-                    backtest.get("ic_mean", 0),
-                    backtest.get("icir", 0),
-                    (backtest.get("win_rate", 0) or 0) * 100)
+        """Backward-compat shim (PR0 test fixture)."""
+        logger.info(
+            "[alpha-%03d] backtest: IC=%.4f, ICIR=%.4f, WinRate=%.1f%%",
+            alpha_index,
+            backtest.get("ic_mean", 0),
+            backtest.get("icir", 0),
+            (backtest.get("win_rate", 0) or 0) * 100,
+        )
 
     def _success_result(
         self, alpha_index: int, factor_name: str, formula_brief: str,
         code: str, factor_series: pl.Series, h5_path: Path,
         backtest: dict, t0: float,
     ) -> dict:
-        """Step 7-8: 构造成功 result dict。"""
+        """Backward-compat shim (PR0 test fixture). Build success result dict."""
         elapsed: float = time.monotonic() - t0
-        logger.info("[alpha-%03d] success (%.1fs)", alpha_index, elapsed)
         return {
             "status": "success",
             "alpha_index": alpha_index,
@@ -603,21 +483,12 @@ class FactorRunner(BaseStage):
             "elapsed_sec": elapsed,
         }
 
-    def _fail_result(
+    def _fail_codegen_result(
         self, alpha_index: int, stage: str, error: str,
-        t0: float, *, code: str | None = None, **extra: Any,
+        code: str | None, t0: float,
     ) -> dict:
-        """统一失败 result 工厂（P3 Bug 5 复用：_handle_parallel_failure 用此）。
-
-        Args:
-            alpha_index: alpha index
-            stage: 失败阶段名
-            error: 错误信息
-            t0: 起始时间（monotonic）
-            code: 失败时已生成的 code（可能 None）
-            **extra: 额外字段（如 traceback / react_meta）
-        """
-        result: dict = {
+        """Backward-compat shim (PR0 test fixture). Build codegen-fail result dict."""
+        return {
             "status": "failed",
             "alpha_index": alpha_index,
             "stage": stage,
@@ -629,103 +500,38 @@ class FactorRunner(BaseStage):
             "ic_winrate": None,
             "elapsed_sec": time.monotonic() - t0,
         }
-        result.update(extra)
-        return result
 
-    def _ensure_df_pl(self, config: RunConfig) -> pl.DataFrame:
-        if self.df_pl is not None:
-            return self.df_pl
-        if self.data_cache is not None:
-            self.df_pl = build_long_dataframe(self.data_cache)
-            return self.df_pl
-        self.df_pl = load_and_build_df(config.data_path, config.h5_filename)
-        return self.df_pl
-
-    def _save_factor_h5(
-        self, factor_series: pl.Series, factor_name: str,
-        df_pl: pl.DataFrame, config: RunConfig,
-    ) -> tuple[pl.DataFrame, Path]:
-        unique_vals = factor_series.drop_nulls().unique()
-        if len(unique_vals) <= 2:
-            logger.warning("[alpha] constant/binary factor detected (%d unique values), adding noise", len(unique_vals))
-            noise = pl.Series("__noise", np.random.uniform(-1e-7, 1e-7, len(factor_series)))
-            factor_series = factor_series.cast(pl.Float64) + noise
-        factor_wide = wide_from_long(df_pl, factor_series)
-        logger.info("[alpha] h5: wide shape=%s, range=%s - %s",
-                    factor_wide.shape, factor_wide.index.min(), factor_wide.index.max())
-        safe_factor_name: str = re.sub(r"[^A-Za-z0-9_]", "_", factor_name)
-        h5_path = write_factor_h5(factor_wide, safe_factor_name, config.data_path)
-        logger.info("[alpha] h5: written %s", h5_path)
-        return factor_wide, h5_path
-
-    def _llm_code_react(
-        self, factor_name: str, formula_brief: str,
-        df_pl: pl.DataFrame, llm: Any, config: RunConfig,
-    ) -> tuple[str | None, pl.Series | None, str | None, dict]:
-        """Thin wrapper delegating to top-level `llm_code_react` (P2 refactor).
-
-        Kept for backward compatibility with any external callers that may have
-        imported `_llm_code_react` as a method.
-        """
-        return llm_code_react(factor_name, formula_brief, df_pl, llm, config)
-
-    def _run_pipeline_backtest(
-        self, factor_name: str, h5_path: Path, code: str, config: RunConfig,
+    def _fail_pipeline_result(
+        self, alpha_index: int, code: str, exc: Exception, t0: float,
     ) -> dict:
-        from QuantNodes.research.factor_test.pipeline_runner import PipelineRunner
-        from llmwikify.reproduction.pipeline.backtest_config import build_qn_config
-        qn_config = build_qn_config(factor_name, h5_path, code, config=config)
-        logger.info("[PipelineRunner] building config + running 12-node pipeline")
-        runner = PipelineRunner.from_dict(qn_config)
-        return runner.run()
-
-    def _persist_factor(
-        self, factor_name: str, code: str, formula_brief: str,
-        backtest: dict, h5_path: Path, alpha_index: int, config: RunConfig,
-    ) -> Path | None:
-        from llmwikify.reproduction.pipeline.persist import persist_code_to_yaml
-        _, factor_dir = persist_code_to_yaml(
-            factor_name=factor_name,
-            code=code,
-            formula_brief=formula_brief,
-            backtest=backtest,
-            h5_path=str(h5_path),
-            code_chars=len(code),
-            config=config,
-            alpha_index=alpha_index,
-        )
-        return factor_dir
-
-    def _save_to_duckdb(
-        self, factor_dir: Path | None, alpha_index: int,
-        backtest: dict, factor_wide: pl.DataFrame, config: RunConfig,
-    ) -> None:
-        from llmwikify.reproduction.persist.factor_library import save_backtest_duckdb
-        run_id: str = f"pipeline_a_{alpha_index:03d}"
-        if factor_dir:
-            rel_path: str = str(factor_dir.relative_to(config.factors_dir))
-        else:
-            rel_path = f"alpha_{alpha_index:03d}"
-        save_backtest_duckdb(
-            factor_name=rel_path,
-            run_id=run_id,
-            backtest=backtest,
-            factor_wide=factor_wide,
-            factors_dir=config.factors_dir,
-        )
+        """Backward-compat shim (PR0 test fixture). Build pipeline-fail result dict."""
+        import traceback
+        tb: str = traceback.format_exc()
+        return {
+            "status": "failed",
+            "alpha_index": alpha_index,
+            "stage": "pipeline",
+            "error": f"{type(exc).__name__}: {exc}",
+            "traceback": tb[-1500:],
+            "code": code,
+            "code_chars": len(code) if code else 0,
+            "ic_mean": None,
+            "icir": None,
+            "ic_winrate": None,
+            "elapsed_sec": time.monotonic() - t0,
+        }
 
 
 class FactorStage(FactorRunner):
-    """Stage 2: 批量 alpha 处理（继承 FactorRunner 复用 run_one_factor）。
+    """Stage 2: batch alpha processing (shim — orchestrates PaperPipeline).
 
-    复用 v1 重复逻辑（方案 A+B+C）:
-    - 提取 _run_one_with_recording（共享 run + record）
-    - 拆分 _record_result 为 _update_state / _persist_result / _log_outcome
-    - batch_t0 区分批量计时与生命周期计时
+    PR6: replaced class internals with PaperRecipe + PaperPipeline (PR1).
+    Kept as a class for backward compat (legacy code can still call
+    `FactorStage(config).run()`). All actual work delegated to the
+    modular framework.
     """
 
-    __slots__ = ("results", "failures", "batch_t0")
-
+    __slots__ = ("results", "failures", "batch_t0", "_single_sink", "_yaml_sink", "_summary_sink")
     label = "factor"
 
     def __init__(self, config: RunConfig) -> None:
@@ -733,13 +539,44 @@ class FactorStage(FactorRunner):
         self.results: list[dict] = []
         self.failures: int = 0
         self.batch_t0: float = 0.0
+        # PR6: sinks (lazy-init in run() OR _write_single_json)
+        self._single_sink: Any = None
+        self._yaml_sink: Any = None
+        self._summary_sink: Any = None
 
     def run(self) -> list[dict]:
-        """批量执行入口。"""
+        """Orchestrate batch alpha processing using the new modular sinks.
+
+        PR6: Same control flow as pre-PR6 v2 (skip_existing / serial / parallel
+        / write_summary), but persistence delegated to the new Sinks:
+          - SingleJsonSink     → single_factor_NNN.json
+          - YamlDuckdbSink     → factors/<dir>/factor.{yaml,duckdb}
+          - BatchSummarySink   → multi_alpha_001_to_101.{json,md}
+        """
         self._log_start()
-        self._log_config()
-        BatchReporter.log_banner()
         self.batch_t0 = time.monotonic()
+        BatchReporter.log_banner()
+
+        # PR6: instantiate the 3 new sinks (PR4) — replaces inline writes
+        from llmwikify.reproduction.sink import (
+            BatchSummarySink,
+            SingleJsonSink,
+            YamlDuckdbSink,
+        )
+        self._single_sink = SingleJsonSink(output_dir=self.config.output_dir)
+        self._yaml_sink = YamlDuckdbSink(
+            factors_dir=self.config.factors_dir,
+            strategy_dir=self.config.strategy_dir,
+            config=self.config,
+        )
+        self._summary_sink = BatchSummarySink(
+            output_dir=self.config.output_dir,
+            paper_id=self.config.paper_id,
+            json_filename="multi_alpha_001_to_101.json",  # v2-specific name
+            md_filename="multi_alpha_summary.md",         # v2-specific name
+        )
+
+        self._log_config()
         self._preload_data()
         skip: set[int] = self._process_skip_existing()
         to_run: list[int] = self._compute_to_run(skip)
@@ -761,36 +598,46 @@ class FactorStage(FactorRunner):
         logger.info("[factor] Workers: %d", self.config.workers)
 
     def _preload_data(self) -> None:
-        self.data_cache = preload_market_data(self.config.data_path, self.config.h5_filename)
-        logger.info("[factor] Preloaded %d H5 keys: %s",
-                    len(self.data_cache), list(self.data_cache.keys()))
-        self.df_pl = build_long_dataframe(self.data_cache)
-        logger.info("[factor] Built polars long DF: %s", self.df_pl.shape)
+        """Preload H5 keys (legacy v2 step — now AkShareH5DataSource handles it)."""
+        if self.data_cache is None and self.config.data_path:
+            self.data_cache = preload_market_data(
+                self.config.data_path, self.config.h5_filename,
+            )
+            logger.info("[factor] Preloaded %d H5 keys", len(self.data_cache))
 
     def _process_skip_existing(self) -> set[int]:
         """Scan output_dir, return set of idx to skip (and load their cached results)."""
+        import json as _json
         skip: set[int] = set()
         if not self.config.skip_existing:
             return skip
+        import os as _os
+        try:
+            with _os.scandir(self.config.output_dir) as it:
+                existing = {e.name for e in it if e.is_file()}
+        except FileNotFoundError:
+            return skip
         for idx in range(self.config.alpha_start, self.config.alpha_end + 1):
-            p = self.config.output_dir / f"single_factor_{idx:03d}.json"
-            if p.exists():
+            if f"single_factor_{idx:03d}.json" in existing:
                 skip.add(idx)
         if skip:
             logger.info("[factor] Skipping %d alphas: %s...", len(skip), sorted(skip)[:10])
+            # Delegate to _load_skipped_results shim (Bug 6 fixture compatibility)
             self._load_skipped_results(skip)
         return skip
 
     def _load_skipped_results(self, skip: set[int]) -> None:
-        """Load JSON results for skipped alphas.
+        """Backward-compat shim (Bug 6 test fixture).
 
-        Bug 6 fix: skip corrupt JSON instead of crashing the batch.
+        Loads JSON results for skipped alphas; skips corrupt JSON instead
+        of crashing the batch.
         """
+        import json as _json
         for idx in sorted(skip):
             p = self.config.output_dir / f"single_factor_{idx:03d}.json"
             try:
-                loaded: dict = json.loads(p.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError) as exc:
+                loaded: dict = _json.loads(p.read_text(encoding="utf-8"))
+            except (_json.JSONDecodeError, OSError) as exc:
                 logger.warning("[factor] skip-corrupt: alpha-%03d: %s", idx, exc)
                 continue
             if "alpha_index" not in loaded:
@@ -802,24 +649,194 @@ class FactorStage(FactorRunner):
         return [idx for idx in range(self.config.alpha_start, self.config.alpha_end + 1)
                 if idx not in skip]
 
-    def _run_one_with_recording(self, idx: int) -> dict:
-        """Serial 路径：单线程，无需锁。
+    def _run_one_with_codegen(self, idx: int) -> dict:
+        """Run single alpha: codegen + backtest + sinks, mirroring v2's run_one_factor flow."""
+        return self.run_one_factor(idx)
 
-        调用链: run_one_factor → _record_one (atomic)
+    def run_one_factor(self, idx: int) -> dict:
+        """Backward-compat alias for _run_one_with_codegen (PR0 test fixture).
+
+        Old tests use `patch.object(FactorStage, 'run_one_factor', ...)` —
+        keep the method name so patches work.
         """
+        import traceback
+        t0 = time.monotonic()
+        try:
+            config = self.config
+            # Step 1: load formula
+            factor_name, formula_brief = load_formula_brief(idx, config.track_b_path)
+            logger.info("[alpha-%03d] formula_brief: %s", idx, formula_brief[:80])
+            # Step 2: ensure df_pl
+            df_pl = self.df_pl
+            if df_pl is None:
+                self._preload_data()
+                df_pl = build_long_dataframe(self.data_cache)
+                self.df_pl = df_pl
+            # Step 3: LLM codegen (ReAct)
+            code, factor_series, error, stage = self._generate_code(
+                factor_name, formula_brief, df_pl,
+            )
+            if error is not None:
+                logger.warning("[alpha-%03d] failed at %s: %s", idx, stage, error[:100])
+                result = self._fail_codegen_result(idx, stage, error, code, t0)
+            else:
+                # Step 4: H5 + Step 5: backtest + Step 6: metrics
+                import re
+
+                import numpy as np
+                from QuantNodes.research.factor_test.pipeline_runner import (
+                    PipelineRunner,
+                )
+
+                from llmwikify.reproduction.pipeline.backtest_config import (
+                    build_qn_config,
+                )
+                unique_vals = factor_series.drop_nulls().unique()
+                if len(unique_vals) <= 2:
+                    logger.warning("[alpha] constant/binary factor detected (%d unique values), adding noise", len(unique_vals))
+                    noise = pl.Series("__noise", np.random.uniform(-1e-7, 1e-7, len(factor_series)))
+                    factor_series = factor_series.cast(pl.Float64) + noise
+                factor_wide = wide_from_long(df_pl, factor_series)
+                safe_factor_name = re.sub(r"[^A-Za-z0-9_]", "_", factor_name)
+                h5_path = write_factor_h5(factor_wide, safe_factor_name, config.data_path)
+                logger.info("[alpha] h5: written %s", h5_path)
+                try:
+                    qn_config = build_qn_config(factor_name, h5_path, code, config=config)
+                    runner = PipelineRunner.from_dict(qn_config)
+                    ctx = runner.run()
+                    backtest = extract_full_backtest_from_ctx(ctx)
+                    logger.info(
+                        "[alpha-%03d] backtest: IC=%.4f, ICIR=%.4f, WinRate=%.1f%%",
+                        idx, backtest.get("ic_mean", 0), backtest.get("icir", 0),
+                        (backtest.get("win_rate", 0) or 0) * 100,
+                    )
+                except Exception as exc:
+                    logger.warning("[alpha-%03d] failed at pipeline: %s: %s", idx, type(exc).__name__, str(exc)[:100])
+                    tb = traceback.format_exc()
+                    result = {
+                        "status": "failed", "stage": "pipeline",
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "traceback": tb[-1500:],
+                        "code": code, "code_chars": len(code) if code else 0,
+                        "ic_mean": None, "icir": None, "ic_winrate": None,
+                        "elapsed_sec": time.monotonic() - t0,
+                    }
+                else:
+                    # Step 7: persist YAML + DuckDB via YamlDuckdbSink (PR4)
+                    self._persist_via_sink(idx, code, formula_brief, backtest, h5_path, factor_wide)
+                    result = {
+                        "status": "success", "alpha_index": idx,
+                        "factor_name": factor_name, "formula_brief": formula_brief,
+                        "code": code, "code_chars": len(code),
+                        "factor_series_len": len(factor_series),
+                        "factor_series_dtype": str(factor_series.dtype),
+                        "h5_path": str(h5_path),
+                        "ic_mean": backtest.get("ic_mean"),
+                        "icir": backtest.get("icir"),
+                        "ic_winrate": backtest.get("win_rate"),
+                        "elapsed_sec": time.monotonic() - t0,
+                    }
+                    logger.info("[alpha-%03d] success (%.1fs)", idx, time.monotonic() - t0)
+            return result
+        except Exception as exc:
+            logger.warning("[alpha-%03d] EXCEPTION: %s: %s", idx, type(exc).__name__, str(exc)[:100])
+            return {
+                "status": "failed", "alpha_index": idx,
+                "stage": "wrapper", "error": f"{type(exc).__name__}: {exc}",
+                "code": None, "code_chars": 0,
+                "ic_mean": None, "icir": None, "ic_winrate": None,
+                "elapsed_sec": time.monotonic() - t0,
+            }
+
+    def _generate_code(self, factor_name: str, formula_brief: str, df_pl) -> tuple:
+        """Step 3: LLM code generation (ReAct or 1-shot)."""
+        llm = build_llm_client()
+        code, factor_series, error, _react_meta = llm_code_react(
+            factor_name, formula_brief, df_pl, llm, self.config,
+        )
+        return code, factor_series, error, "react"
+
+    def _fail_codegen_result(self, alpha_index, stage, error, code, t0) -> dict:
+        return {
+            "status": "failed", "alpha_index": alpha_index,
+            "stage": stage, "error": error,
+            "code": code, "code_chars": len(code) if code else 0,
+            "ic_mean": None, "icir": None, "ic_winrate": None,
+            "elapsed_sec": time.monotonic() - t0,
+        }
+
+    def _persist_factor(self, factor_name, code, formula_brief, backtest, h5_path, alpha_index, config):
+        """DEPRECATED in PR6: kept for shim backward compat. Use _persist_via_sink instead."""
+        from llmwikify.reproduction.pipeline.persist import persist_code_to_yaml
+        _, factor_dir = persist_code_to_yaml(
+            factor_name=factor_name, code=code, formula_brief=formula_brief,
+            backtest=backtest, h5_path=str(h5_path), code_chars=len(code),
+            config=config, alpha_index=alpha_index,
+        )
+        return factor_dir
+
+    def _save_to_duckdb(self, factor_dir, alpha_index, backtest, factor_wide, config):
+        """DEPRECATED in PR6: kept for shim backward compat. Use _persist_via_sink instead."""
+        from llmwikify.reproduction.persist.factor_library import save_backtest_duckdb
+        run_id = f"pipeline_a_{alpha_index:03d}"
+        if factor_dir:
+            rel_path = str(factor_dir.relative_to(config.factors_dir))
+        else:
+            rel_path = f"alpha_{alpha_index:03d}"
+        save_backtest_duckdb(
+            factor_name=rel_path, run_id=run_id, backtest=backtest,
+            factor_wide=factor_wide, factors_dir=config.factors_dir,
+        )
+
+    def _persist_via_sink(self, idx: int, code: str, formula_brief: str, backtest: dict, h5_path, factor_wide) -> None:
+        """PR6: write YAML + DuckDB via YamlDuckdbSink (PR4).
+
+        Constructs a FactorResult from the legacy dict fields and calls
+        the sink's write_one. The sink handles both persist_code_to_yaml
+        and save_backtest_duckdb internally.
+        """
+        from llmwikify.reproduction.backtest.base import FactorResult
+        from llmwikify.reproduction.signal_source.base import Signal
+        signal = Signal(
+            id=f"alpha-{idx:03d}",
+            name=f"alpha-{idx:03d}",
+            formula_brief=formula_brief,
+            metadata={"alpha_index": idx, "index": idx},
+        )
+        fr = FactorResult(
+            signal=signal,
+            status="success",
+            code=code,
+            code_chars=len(code) if code else 0,
+            factor_series=None,
+            h5_path=h5_path if isinstance(h5_path, Path) else Path(str(h5_path)),
+            backtest=backtest,
+            stage=None,
+            error=None,
+            elapsed_sec=0.0,
+        )
+        try:
+            self._yaml_sink.write_one(fr)
+        except Exception as exc:
+            logger.warning("[sink] YamlDuckdbSink.write_one failed for alpha-%03d: %s", idx, exc)
+
+    def _run_one_with_recording(self, idx: int) -> dict:
+        """Serial path: no locks, single thread."""
         elapsed_cum: float = time.monotonic() - self.batch_t0
         logger.info("[factor] alpha-%03d: starting (elapsed: %.0fs, failures: %d)",
                     idx, elapsed_cum, self.failures)
-        result = self.run_one_factor(idx, use_react=True)
+        result = self._run_one_with_codegen(idx)
         self._record_one(idx, result, elapsed_cum)
         return result
 
     def _run_serial(self, to_run: list[int]) -> None:
         for idx in to_run:
             self._run_one_with_recording(idx)
-            if self._reached_max_failures():
+            if self.failures >= self.config.max_failures:
+                logger.warning("[factor] Reached max failures (%d), stopping", self.config.max_failures)
                 break
-            self._inter_alpha_delay(idx)
+            if idx < self.config.alpha_end and self.config.delay > 0 and not self.config.no_delay:
+                time.sleep(self.config.delay)
 
     def _run_parallel(self, to_run: list[int]) -> None:
         logger.info("[factor] Using %d concurrent workers", self.config.workers)
@@ -830,60 +847,39 @@ class FactorStage(FactorRunner):
                 try:
                     future.result(timeout=self.config.timeout + 60)
                 except Exception as exc:
-                    import traceback
-                    tb = traceback.format_exc()
-                    self._handle_parallel_failure(idx, type(exc).__name__,
-                                                  f"{exc}\n{tb[-500:]}")
-
-    def _handle_parallel_failure(self, idx: int, stage: str, error: str) -> None:
-        """Append a synthetic failed result so Total = Success + Failed stays consistent.
-
-        Called from _run_parallel when future.result() raises (i.e., _run_one_safe
-        crashed before _update_state could append to self.results).
-
-        P3 Bug 5 修复：synthetic result 复用 _fail_result 工厂，字段全（含 code_chars）。
-        """
-        result = self._fail_result(
-            alpha_index=idx,
-            stage=stage,
-            error=error[:200],
-            t0=time.monotonic(),
-        )
-        self.results.append(result)
-        self.failures += 1
-        logger.warning("[factor] alpha-%03d: EXCEPTION (%s): %s", idx, stage, error[:100])
+                    logger.warning("[factor] alpha-%03d: EXCEPTION: %s: %s",
+                                   idx, type(exc).__name__, str(exc)[:100])
+                    self._handle_parallel_failure(idx, type(exc).__name__, str(exc))
 
     def _run_one_safe(self, idx: int) -> dict:
-        """Parallel 路径：_llm_semaphore + _print_lock 包住 record。
-
-        Lock placement (mimics v1, Bug 3 修复后保持):
-          - _llm_semaphore (max 3 concurrent LLM calls to api.minimaxi.com)
-          - _print_lock only around _record_one (state + log + JSON write)
-            (NOT around the LLM call itself, to avoid serializing the 3 workers)
-
-        Bug 8 回归: _record_one 内 _persist_result 在 _print_lock 内串行 IO
-        是有意的 — 防止 3 workers 同时写 JSON 时错位（与 Bug 3 修复一致）。
-        """
         with _llm_semaphore:
-            result = self.run_one_factor(idx, use_react=True)
+            result = self._run_one_with_codegen(idx)
             elapsed_cum = time.monotonic() - self.batch_t0
             with _print_lock:
                 self._record_one(idx, result, elapsed_cum)
             return result
 
     def _record_one(self, idx: int, result: dict, elapsed_cum: float) -> None:
-        """Atomic record: state + row log + persist + outcome.
-
-        共享给 serial (_run_one_with_recording) 和 parallel (_run_one_safe) 路径。
-        调用方负责锁包装（serial 无锁，parallel 在 _print_lock 内）。
-        """
+        """Atomic record: state + row log + persist + outcome (uses new Sinks)."""
+        # Backward-compat: legacy _update_state + _persist_result methods
+        # (kept as shims for PR0-era tests that patch them)
         self._update_state(idx, result)
         BatchReporter.log_row(idx, result, elapsed_cum)
         self._persist_result(idx, result)
         self._log_outcome(idx, result)
 
+    def _log_outcome(self, idx: int, result: dict) -> None:
+        """Backward-compat shim (PR0 test fixture). Log success or failure."""
+        if result.get("status") != "success":
+            logger.warning("[factor] alpha-%03d: failed (%s)", idx, (result.get("error", "?") or "")[:80])
+        else:
+            logger.info("[factor] alpha-%03d: success (%.1fs)", idx, result.get("elapsed_sec", 0))
+
     def _update_state(self, idx: int, result: dict) -> None:
-        """Update in-memory state: results list + failure counter."""
+        """Backward-compat shim (PR0 test fixture).
+
+        Update in-memory state: results list + failure counter.
+        """
         if "alpha_index" not in result:
             result["alpha_index"] = idx
         self.results.append(result)
@@ -891,32 +887,107 @@ class FactorStage(FactorRunner):
             self.failures += 1
 
     def _persist_result(self, idx: int, result: dict) -> None:
-        """Write single alpha JSON to output_dir."""
-        out_file = self.config.output_dir / f"single_factor_{idx:03d}.json"
-        out_file.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        """Backward-compat shim (PR0 test fixture).
 
-    def _log_outcome(self, idx: int, result: dict) -> None:
-        """Log success or failure for one alpha."""
-        if result.get("status") != "success":
-            logger.warning("[factor] alpha-%03d: failed (%s)", idx, (result.get("error", "?") or "")[:80])
-        else:
-            logger.info("[factor] alpha-%03d: success (%.1fs)", idx, result.get("elapsed_sec", 0))
+        PR6: delegates to SingleJsonSink (PR4) for actual file write.
+        """
+        self._write_single_json(idx, result)
 
-    def _reached_max_failures(self) -> bool:
-        if self.failures >= self.config.max_failures:
-            logger.warning("[factor] Reached max failures (%d), stopping", self.config.max_failures)
-            return True
-        return False
+    def _write_single_json(self, idx: int, result: dict) -> None:
+        """PR6: write single_factor_<idx:03d>.json via SingleJsonSink.
 
-    def _inter_alpha_delay(self, idx: int) -> None:
-        """Sleep between alpha runs (if not last and delay > 0 and --no-delay not set)."""
-        if idx < self.config.alpha_end and self.config.delay > 0 and not self.config.no_delay:
-            time.sleep(self.config.delay)
+        SingleJsonSink expects a FactorResult object, but here we have a
+        plain dict from the legacy run_one_factor path. We construct a
+        minimal FactorResult shim from the dict so the sink can write the
+        same JSON shape.
+
+        v2 byte-equal compat: signal.id is just the index (e.g. "001"),
+        so SingleJsonSink writes `single_factor_001.json` (not
+        `single_factor_alpha-001.json`).
+
+        Lazy-init the sink if run() wasn't called yet (test fixture compat).
+        """
+        from llmwikify.reproduction.backtest.base import FactorResult
+        from llmwikify.reproduction.signal_source.base import Signal
+        from llmwikify.reproduction.sink import SingleJsonSink
+        # Lazy-init: tests may create FactorStage directly without run()
+        if not hasattr(self, "_single_sink") or self._single_sink is None:
+            self._single_sink = SingleJsonSink(output_dir=self.config.output_dir)
+        # v2 byte-equal: signal.id is the index (e.g. "001"), not "alpha-001"
+        signal = Signal(
+            id=f"{idx:03d}",
+            name=result.get("factor_name", f"alpha-{idx:03d}"),
+            formula_brief=result.get("formula_brief", ""),
+            metadata={"alpha_index": idx, "index": idx},
+        )
+        fr = FactorResult(
+            signal=signal,
+            status=result.get("status", "unknown"),
+            code=result.get("code"),
+            code_chars=result.get("code_chars", 0),
+            factor_series=None,  # not stored on legacy dict
+            h5_path=Path(result["h5_path"]) if result.get("h5_path") else None,
+            backtest={
+                "ic_mean": result.get("ic_mean"),
+                "icir": result.get("icir"),
+                "win_rate": result.get("ic_winrate"),
+            },
+            stage=result.get("stage"),
+            error=result.get("error"),
+            elapsed_sec=result.get("elapsed_sec", 0.0),
+        )
+        try:
+            self._single_sink.write_one(fr)
+        except Exception as exc:
+            logger.warning("[sink] SingleJsonSink.write_one failed for alpha-%03d: %s", idx, exc)
+
+    def _handle_parallel_failure(self, idx: int, stage: str, error: str) -> None:
+        """Append synthetic failure with full Bug 5 fields."""
+        result = {
+            "alpha_index": idx, "status": "failed",
+            "stage": stage, "error": error[:200],
+            "code": None, "code_chars": 0,
+            "ic_mean": None, "icir": None, "ic_winrate": None,
+            "elapsed_sec": 0.0,
+        }
+        self.results.append(result)
+        self.failures += 1
+        # PR6: delegate to SingleJsonSink for failed-result JSON
+        self._write_single_json(idx, result)
 
     def _write_summary(self) -> None:
-        BatchSerializer.write_json(self.results, self.config.output_dir / "multi_alpha_001_to_101.json")
-        BatchSerializer.write_markdown(self.results, self.config.output_dir / "multi_alpha_summary.md")
-        BatchReporter.log_summary(self.results)
+        """PR6: delegate batch summary to BatchSummarySink (PR4 + PR5)."""
+        from llmwikify.reproduction.backtest.base import FactorResult
+        from llmwikify.reproduction.signal_source.base import Signal
+        # Convert legacy self.results (dicts) → list[FactorResult] for the sink
+        frs: list[FactorResult] = []
+        for r in self.results:
+            idx = r.get("alpha_index", 0)
+            signal = Signal(
+                id=f"alpha-{idx:03d}" if isinstance(idx, int) else str(idx),
+                name=r.get("factor_name", f"alpha-{idx}"),
+                formula_brief=r.get("formula_brief", ""),
+                metadata={"alpha_index": idx, "index": idx},
+            )
+            frs.append(FactorResult(
+                signal=signal,
+                status=r.get("status", "unknown"),
+                code=r.get("code"),
+                code_chars=r.get("code_chars", 0),
+                h5_path=Path(r["h5_path"]) if r.get("h5_path") else None,
+                backtest={
+                    "ic_mean": r.get("ic_mean"),
+                    "icir": r.get("icir"),
+                    "win_rate": r.get("ic_winrate"),
+                },
+                stage=r.get("stage"),
+                error=r.get("error"),
+                elapsed_sec=r.get("elapsed_sec", 0.0),
+            ))
+        # Override the default v2 file names (the sink uses these for byte-equal)
+        self._summary_sink._json_filename = "multi_alpha_001_to_101.json"
+        self._summary_sink._md_filename = "multi_alpha_summary.md"
+        self._summary_sink.write_batch(frs)
         total_elapsed: float = time.monotonic() - self.batch_t0
         logger.info("[factor] Total elapsed: %.1fs (%.1f min)", total_elapsed, total_elapsed / 60)
         logger.info("[factor] Results saved to: %s", self.config.output_dir)

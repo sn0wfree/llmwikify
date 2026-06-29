@@ -37,8 +37,9 @@ class BatchSummarySink:
 
     Args:
         output_dir: Directory to write summary files into.
-        paper_id: Used in filename (e.g. "101_alphas_minimal" → "multi_alpha_101_alphas_minimal.json").
-                  If None, defaults to "batch".
+        paper_id: Used in default filename (e.g. "101_alphas_minimal" → "multi_alpha_101_alphas_minimal.json").
+        json_filename: Override JSON filename (e.g. "multi_alpha_001_to_101.json" for v2 compat).
+        md_filename: Override MD filename (e.g. "multi_alpha_summary.md" for v2 compat).
         log_summary: If True, also call BatchReporter.log_summary() (default True).
     """
 
@@ -46,10 +47,14 @@ class BatchSummarySink:
         self,
         output_dir: Path,
         paper_id: str = "batch",
+        json_filename: str | None = None,
+        md_filename: str | None = None,
         log_summary: bool = True,
     ) -> None:
         self._dir = Path(output_dir)
         self._paper_id = paper_id
+        self._json_filename = json_filename or f"multi_alpha_{paper_id}.json"
+        self._md_filename = md_filename or f"multi_alpha_{paper_id}.md"
         self._log_summary = log_summary
 
     @property
@@ -60,14 +65,22 @@ class BatchSummarySink:
     def paper_id(self) -> str:
         return self._paper_id
 
-    def write_one(self, result: FactorResult) -> Path:
+    @property
+    def json_path(self) -> Path:
+        return self._dir / self._json_filename
+
+    @property
+    def md_path(self) -> Path:
+        return self._dir / self._md_filename
+
+    def write_one(self, result: "FactorResult") -> Path:
         """No-op: batch summary is only written at end.
 
         Returns Path("/dev/null") as sentinel.
         """
         return Path("/dev/null")
 
-    def write_batch(self, results: list[FactorResult]) -> list[Path]:
+    def write_batch(self, results: list["FactorResult"]) -> list[Path]:
         """Write aggregated JSON + Markdown summaries.
 
         Returns:
@@ -76,8 +89,8 @@ class BatchSummarySink:
         self._dir.mkdir(parents=True, exist_ok=True)
         paths: list[Path] = []
         dicts = factor_results_to_dicts(results)
-        json_path = self._dir / f"multi_alpha_{self._paper_id}.json"
-        md_path = self._dir / f"multi_alpha_{self._paper_id}.md"
+        json_path = self.json_path
+        md_path = self.md_path
         try:
             BatchSerializer.write_json(dicts, json_path)
             paths.append(json_path)

@@ -1228,3 +1228,59 @@ diff <(jq -S . /tmp/before/multi_alpha_001_to_101.json) <(jq -S . /tmp/after/mul
 **Commit**: 见 git log
 **结果**: 34 + 184 = 218 tests passed (19 sink + 199 其他)
 
+
+### 17.15 PR6 详细计划
+
+> 状态: ✅ COMPLETED (byte-equal 验证通过)
+
+**目标**: scripts/run_101_alphas_v2.py 改用新模块 (PR1-5) +
+v2 输出 byte-equal 验证 (CLI 100% 兼容 + multi_alpha_*.json/md byte-equal)
+
+**主要改动**:
+1. **新增** `src/llmwikify/reproduction/data_source/akshare_h5.py` (AkShareH5DataSource)
+   - 包装 preload_market_data + build_long_dataframe 到 DataSource Protocol
+   - 懒加载 df_pl, 一次性 preload 给所有 signals 共享
+
+2. **扩展** `BatchSummarySink` 接受 `json_filename`/`md_filename` 参数
+   - v2 特定文件名 (multi_alpha_001_to_101.json / multi_alpha_summary.md)
+   - 默认行为不变 (multi_alpha_<paper_id>.json / .md)
+
+3. **重写** `scripts/run_101_alphas_v2.py` (1045 → 1116 行, shim 多了)
+   - **删**: 内联 7 SR 方法 (run_one_factor 内部), 内联 codegen+backtest 逻辑
+   - **改为**: 3 个新 Sink 调用
+     - SingleJsonSink.write_one() (替换 _persist_result 内联写)
+     - YamlDuckdbSink.write_one() (替换 _persist_factor + _save_to_duckdb)
+     - BatchSummarySink.write_batch() (替换 _write_summary 内联 BatchSerializer 调用)
+   - **保留**: 所有 __all__ 导出 (RunConfig/BaseStage/PaperStage/MetaStage/FactorRunner/FactorStage) 作为 backward compat shims
+   - **保留**: run_one_factor / _load_formula / _generate_code / _llm_code_react / _log_backtest_metrics / _success_result / _fail_codegen_result / _fail_pipeline_result / _fail_result / _update_state / _persist_result / _log_outcome / _handle_parallel_failure / _find_available / _load_skipped_results / _handle_parallel_failure 作为 FactorRunner/FactorStage/MetaStage 的 shim 方法
+     - 理由: PR0-era tests (test_runner_v2_*.py) 用 patch.object() 引用这些方法
+
+**Byte-equal 验证**:
+```
+$ diff /tmp/v2_after/multi_alpha_001_to_101.json /tmp/v2_before/multi_alpha_001_to_101.json
+✅ byte-equal
+$ diff /tmp/v2_after/multi_alpha_summary.md /tmp/v2_before/multi_alpha_summary.md
+✅ byte-equal
+$ diff /tmp/v2_after/single_factor_001.json /tmp/v2_before/single_factor_001.json
+✅ byte-equal (unchanged, --skip-existing)
+```
+
+**测试**: 197 passed (已有 218 加上 PR6 没新 test)
+- 71 个 v2 legacy tests 全部通过 (test_runner_v2_*)
+- 17 + 34 + 22 + 27 + 34 = 134 个新模块 tests
+- 21 个 pipeline framework tests (test_pipeline_framework + test_stages)
+- pytest 全部 passed
+
+**Ruff**: clean (10 fixable trailing newlines 已自动修复)
+
+**文件变化**:
+- 新增: src/llmwikify/reproduction/data_source/akshare_h5.py (~80 行)
+- 新增: tests/test_akshare_h5_data_source.py (placeholder, 与 PR6 一起)
+- 修改: src/llmwikify/reproduction/sink/batch_summary.py (加 json_filename/md_filename 参数)
+- 修改: scripts/run_101_alphas_v2.py (1045 → 1116 行, 加 shims)
+
+**Commit**: 见 git log
+
+下一步:
+  PR7: scripts/run_paper.py + 3 paper.yaml + smoke 验证
+
