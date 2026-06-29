@@ -59,6 +59,9 @@ import polars as pl
 
 from llmwikify.apps.chat.agent.unified.core import UnifiedHook
 from llmwikify.foundation.logging import log_timing, setup_logging
+
+# L2: FactorResult imported at top (was inside methods in PR6).
+from llmwikify.reproduction.backtest.base import FactorResult
 from llmwikify.reproduction.codegen.llm_code import (
     SYSTEM_PROMPT_CODE,
     build_llm_client,
@@ -66,6 +69,12 @@ from llmwikify.reproduction.codegen.llm_code import (
     extract_python,
     validate_safety,
     validate_syntax,
+)
+
+# L1: ReAct codegen moved out (PR8). Re-exported here for backward compat.
+from llmwikify.reproduction.codegen.react_runner import (  # noqa: F401
+    ReActProgressHook,
+    llm_code_react,
 )
 from llmwikify.reproduction.pipeline.backtest_extract import (
     extract_full_backtest_from_ctx,
@@ -82,6 +91,7 @@ from llmwikify.reproduction.pipeline.stages.codegen import llm_code_oneshot
 from llmwikify.reproduction.reporting.aggregator import BatchAggregator
 from llmwikify.reproduction.reporting.reporter import BatchReporter
 from llmwikify.reproduction.reporting.serializer import BatchSerializer
+from llmwikify.reproduction.signal_source.base import Signal  # L2: for _build_signal
 
 # ─── Constants ───────────────────────────────────────────────────────
 
@@ -225,50 +235,7 @@ def load_formula_brief(alpha_index: int, track_b_path: Path) -> tuple[str, str]:
     return f"alpha-{alpha_index:03d}", alpha["formula_brief"]
 
 
-# ─── LLM code generation (top-level) ──────────────────────────────────
-
-
-class _ReActProgressHook(UnifiedHook):
-    """Unified hook: prints ReAct iteration progress."""
-
-    def on_reason_start(self, ctx: Any) -> None:
-        logger.info("[REASON] iteration %s...", ctx.iteration)
-
-    def on_act_end(self, ctx: Any, result: Any) -> None:
-        if hasattr(result, "success") and result.success:
-            logger.info("[ACT] OK (%s)", getattr(result, "error_kind", "none"))
-        else:
-            ek = getattr(result, "error_kind", "unknown")
-            em = (getattr(result, "error", "") or "")[:120]
-            logger.info("[ACT] %s: %s", ek, em)
-
-
-def llm_code_react(
-    factor_name: str, formula_brief: str,
-    df_pl: pl.DataFrame, llm: Any, config: RunConfig,
-) -> tuple[str | None, pl.Series | None, str | None, dict]:
-    """ReAct self-retry code generation (public, reusable)."""
-    from llmwikify.apps.chat.agent.unified.pipelines.codegen import (
-        generate_factor_code_sync,
-    )
-
-    result = generate_factor_code_sync(
-        factor_name=factor_name,
-        formula_brief=formula_brief,
-        df=df_pl,
-        llm_client=llm,
-        max_repair_rounds=config.max_repair_rounds,
-        temperature=config.temperature,
-        hook=_ReActProgressHook(),
-    )
-
-    logger.info("[Unified] iterations=%s, stop_reason=%s, error=%s",
-                result.iterations, result.stop_reason, result.error)
-
-    if result.error:
-        return None, None, result.error, result.to_dict()
-    return result.code, result.factor_series, None, result.to_dict()
-
+# Note: ReActProgressHook + llm_code_react imported at top (see L1 re-export)
 
 # ════════════════════════════════════════════════════════════════════
 # Stage classes (shims — kept for backward compat)
@@ -427,7 +394,7 @@ class FactorRunner(BaseStage):
         llm = build_llm_client()
         if use_react:
             code, factor_series, error, _react_meta = self._llm_code_react(
-                factor_name, formula_brief, df_pl, llm, self.config,
+                factor_name, formula_brief, df_pl, llm,
             )
             return code, factor_series, error, "react"
         code, factor_series, error, stage_idx = llm_code_oneshot(
@@ -441,10 +408,14 @@ class FactorRunner(BaseStage):
 
     def _llm_code_react(
         self, factor_name: str, formula_brief: str,
-        df_pl: pl.DataFrame, llm: Any, config: RunConfig,
+        df_pl: pl.DataFrame, llm: Any,
     ) -> tuple[str | None, pl.Series | None, str | None, dict]:
-        """Backward-compat shim (PR0 test fixture). Thin wrapper around top-level llm_code_react."""
-        return llm_code_react(factor_name, formula_brief, df_pl, llm, config)
+        """Backward-compat shim (PR0 test fixture). Thin wrapper around new top-level llm_code_react (L1: no RunConfig dep)."""
+        return llm_code_react(
+            factor_name, formula_brief, df_pl, llm,
+            max_repair_rounds=self.config.max_repair_rounds,
+            temperature=self.config.temperature,
+        )
 
     def _load_formula(self, alpha_index: int) -> tuple[str, str]:
         """Backward-compat shim (PR0 test fixture). Step 1 of run_one_factor."""
@@ -521,6 +492,98 @@ class FactorRunner(BaseStage):
             "elapsed_sec": time.monotonic() - t0,
         }
 
+    # ── L2: FactorResult-returning variants (used by FactorStage internally) ──
+
+    def _build_signal(self, alpha_index: int, name: str = "", formula_brief: str = "") -> Signal:
+        """Build a Signal object for the given alpha_index (id="{idx:03d}")."""
+        return Signal(
+            id=f"{alpha_index:03d}",
+            name=name or f"alpha-{alpha_index:03d}",
+            formula_brief=formula_brief,
+            metadata={"alpha_index": alpha_index, "index": alpha_index},
+        )
+
+    def _success_fr(
+        self, alpha_index: int, factor_name: str, formula_brief: str,
+        code: str, factor_series: pl.Series, h5_path: Path,
+        backtest: dict, t0: float,
+    ) -> FactorResult:
+        """L2: Build success FactorResult (replaces inline dict in _run_one_with_codegen)."""
+        elapsed: float = time.monotonic() - t0
+        return FactorResult(
+            signal=self._build_signal(alpha_index, factor_name, formula_brief),
+            status="success",
+            code=code,
+            code_chars=len(code),
+            factor_series=factor_series,
+            h5_path=h5_path,
+            backtest=backtest,
+            stage=None,
+            error=None,
+            elapsed_sec=elapsed,
+        )
+
+    def _fail_codegen_fr(
+        self, alpha_index: int, stage: str, error: str,
+        code: str | None, t0: float,
+    ) -> FactorResult:
+        """L2: Build codegen-fail FactorResult."""
+        return FactorResult(
+            signal=self._build_signal(alpha_index),
+            status="failed",
+            stage=stage,
+            error=error,
+            code=code,
+            code_chars=len(code) if code else 0,
+            backtest={},
+            elapsed_sec=time.monotonic() - t0,
+        )
+
+    def _fail_pipeline_fr(
+        self, alpha_index: int, code: str, exc: Exception, t0: float,
+    ) -> FactorResult:
+        """L2: Build pipeline-fail FactorResult (with traceback[-1500:])."""
+        import traceback
+        tb: str = traceback.format_exc()
+        return FactorResult(
+            signal=self._build_signal(alpha_index),
+            status="failed",
+            stage="pipeline",
+            error=f"{type(exc).__name__}: {exc}",
+            code=code,
+            code_chars=len(code) if code else 0,
+            backtest={},
+            metadata={"traceback": tb[-1500:]},
+            elapsed_sec=time.monotonic() - t0,
+        )
+
+    def _dict_to_factor_result(self, d: dict, idx: int) -> FactorResult:
+        """L2: Convert legacy dict (from single_factor_NNN.json) to FactorResult.
+
+        Used by _load_skipped_results to bridge cached dict → new framework.
+        """
+        signal = Signal(
+            id=f"{idx:03d}",
+            name=d.get("factor_name", f"alpha-{idx:03d}"),
+            formula_brief=d.get("formula_brief", ""),
+            metadata={"alpha_index": idx, "index": idx},
+        )
+        return FactorResult(
+            signal=signal,
+            status=d.get("status", "unknown"),
+            code=d.get("code"),
+            code_chars=d.get("code_chars", 0),
+            h5_path=Path(d["h5_path"]) if d.get("h5_path") else None,
+            backtest={
+                "ic_mean": d.get("ic_mean"),
+                "icir": d.get("icir"),
+                "win_rate": d.get("ic_winrate"),
+            },
+            stage=d.get("stage"),
+            error=d.get("error"),
+            elapsed_sec=d.get("elapsed_sec", 0.0),
+        )
+
 
 class FactorStage(FactorRunner):
     """Stage 2: batch alpha processing (shim — orchestrates PaperPipeline).
@@ -536,7 +599,9 @@ class FactorStage(FactorRunner):
 
     def __init__(self, config: RunConfig) -> None:
         super().__init__(config)
-        self.results: list[dict] = []
+        # L2: state now stores FactorResult objects (not dicts) so that
+        # Sinks can be called directly without dict→FactorResult conversion.
+        self.results: list[FactorResult] = []
         self.failures: int = 0
         self.batch_t0: float = 0.0
         # PR6: sinks (lazy-init in run() OR _write_single_json)
@@ -544,7 +609,7 @@ class FactorStage(FactorRunner):
         self._yaml_sink: Any = None
         self._summary_sink: Any = None
 
-    def run(self) -> list[dict]:
+    def run(self) -> list[FactorResult]:
         """Orchestrate batch alpha processing using the new modular sinks.
 
         PR6: Same control flow as pre-PR6 v2 (skip_existing / serial / parallel
@@ -552,6 +617,9 @@ class FactorStage(FactorRunner):
           - SingleJsonSink     → single_factor_NNN.json
           - YamlDuckdbSink     → factors/<dir>/factor.{yaml,duckdb}
           - BatchSummarySink   → multi_alpha_001_to_101.{json,md}
+
+        L2: Returns list[FactorResult] (was list[dict]). Sinks can be called
+        directly with these objects, no manual dict→FactorResult conversion.
         """
         self._log_start()
         self.batch_t0 = time.monotonic()
@@ -630,7 +698,7 @@ class FactorStage(FactorRunner):
         """Backward-compat shim (Bug 6 test fixture).
 
         Loads JSON results for skipped alphas; skips corrupt JSON instead
-        of crashing the batch.
+        of crashing the batch. L2: appends FactorResult (not dict).
         """
         import json as _json
         for idx in sorted(skip):
@@ -640,24 +708,28 @@ class FactorStage(FactorRunner):
             except (_json.JSONDecodeError, OSError) as exc:
                 logger.warning("[factor] skip-corrupt: alpha-%03d: %s", idx, exc)
                 continue
-            if "alpha_index" not in loaded:
-                loaded["alpha_index"] = idx
-            self.results.append(loaded)
+            # L2: convert dict → FactorResult via helper (1 helper used 3 places)
+            self.results.append(self._dict_to_factor_result(loaded, idx))
 
     def _compute_to_run(self, skip: set[int]) -> list[int]:
         """Return alpha indices to run (excluding skipped ones)."""
         return [idx for idx in range(self.config.alpha_start, self.config.alpha_end + 1)
                 if idx not in skip]
 
-    def _run_one_with_codegen(self, idx: int) -> dict:
-        """Run single alpha: codegen + backtest + sinks, mirroring v2's run_one_factor flow."""
+    def _run_one_with_codegen(self, idx: int) -> FactorResult:
+        """Run single alpha: codegen + backtest + sinks, mirroring v2's run_one_factor flow.
+
+        L2: Returns FactorResult (was dict). State stored in self.results
+        matches Sinks' contract — no dict→FactorResult conversion needed.
+        """
         return self.run_one_factor(idx)
 
-    def run_one_factor(self, idx: int) -> dict:
+    def run_one_factor(self, idx: int) -> FactorResult:
         """Backward-compat alias for _run_one_with_codegen (PR0 test fixture).
 
         Old tests use `patch.object(FactorStage, 'run_one_factor', ...)` —
-        keep the method name so patches work.
+        keep the method name so patches work. Tests return FactorResult
+        mocks (PR0 tests updated to FactorResult in L2).
         """
         import traceback
         t0 = time.monotonic()
@@ -678,7 +750,8 @@ class FactorStage(FactorRunner):
             )
             if error is not None:
                 logger.warning("[alpha-%03d] failed at %s: %s", idx, stage, error[:100])
-                result = self._fail_codegen_result(idx, stage, error, code, t0)
+                # L2: returns FactorResult (was dict via _fail_codegen_result)
+                result: FactorResult = self._fail_codegen_fr(idx, stage, error, code, t0)
             else:
                 # Step 4: H5 + Step 5: backtest + Step 6: metrics
                 import re
@@ -712,47 +785,33 @@ class FactorStage(FactorRunner):
                     )
                 except Exception as exc:
                     logger.warning("[alpha-%03d] failed at pipeline: %s: %s", idx, type(exc).__name__, str(exc)[:100])
-                    tb = traceback.format_exc()
-                    result = {
-                        "status": "failed", "stage": "pipeline",
-                        "error": f"{type(exc).__name__}: {exc}",
-                        "traceback": tb[-1500:],
-                        "code": code, "code_chars": len(code) if code else 0,
-                        "ic_mean": None, "icir": None, "ic_winrate": None,
-                        "elapsed_sec": time.monotonic() - t0,
-                    }
+                    # L2: returns FactorResult with traceback in metadata
+                    result = self._fail_pipeline_fr(idx, code, exc, t0)
                 else:
+                    # L2: build FactorResult first (used by both persist + return)
+                    success_fr = self._success_fr(
+                        idx, factor_name, formula_brief,
+                        code, factor_series, h5_path, backtest, t0,
+                    )
                     # Step 7: persist YAML + DuckDB via YamlDuckdbSink (PR4)
-                    self._persist_via_sink(idx, code, formula_brief, backtest, h5_path, factor_wide)
-                    result = {
-                        "status": "success", "alpha_index": idx,
-                        "factor_name": factor_name, "formula_brief": formula_brief,
-                        "code": code, "code_chars": len(code),
-                        "factor_series_len": len(factor_series),
-                        "factor_series_dtype": str(factor_series.dtype),
-                        "h5_path": str(h5_path),
-                        "ic_mean": backtest.get("ic_mean"),
-                        "icir": backtest.get("icir"),
-                        "ic_winrate": backtest.get("win_rate"),
-                        "elapsed_sec": time.monotonic() - t0,
-                    }
+                    self._persist_via_sink(success_fr)
+                    result = success_fr
                     logger.info("[alpha-%03d] success (%.1fs)", idx, time.monotonic() - t0)
             return result
         except Exception as exc:
             logger.warning("[alpha-%03d] EXCEPTION: %s: %s", idx, type(exc).__name__, str(exc)[:100])
-            return {
-                "status": "failed", "alpha_index": idx,
-                "stage": "wrapper", "error": f"{type(exc).__name__}: {exc}",
-                "code": None, "code_chars": 0,
-                "ic_mean": None, "icir": None, "ic_winrate": None,
-                "elapsed_sec": time.monotonic() - t0,
-            }
+            # L2: wrapper failure also returns FactorResult
+            return self._fail_codegen_fr(
+                idx, "wrapper", f"{type(exc).__name__}: {exc}", None, t0,
+            )
 
     def _generate_code(self, factor_name: str, formula_brief: str, df_pl) -> tuple:
         """Step 3: LLM code generation (ReAct or 1-shot)."""
         llm = build_llm_client()
         code, factor_series, error, _react_meta = llm_code_react(
-            factor_name, formula_brief, df_pl, llm, self.config,
+            factor_name, formula_brief, df_pl, llm,
+            max_repair_rounds=self.config.max_repair_rounds,
+            temperature=self.config.temperature,
         )
         return code, factor_series, error, "react"
 
@@ -788,45 +847,25 @@ class FactorStage(FactorRunner):
             factor_wide=factor_wide, factors_dir=config.factors_dir,
         )
 
-    def _persist_via_sink(self, idx: int, code: str, formula_brief: str, backtest: dict, h5_path, factor_wide) -> None:
-        """PR6: write YAML + DuckDB via YamlDuckdbSink (PR4).
+    def _persist_via_sink(self, fr: FactorResult) -> None:
+        """L2: write YAML + DuckDB via YamlDuckdbSink (PR4) — takes FactorResult.
 
-        Constructs a FactorResult from the legacy dict fields and calls
-        the sink's write_one. The sink handles both persist_code_to_yaml
-        and save_backtest_duckdb internally.
+        L2: now takes FactorResult directly (was 5 positional args + 20-line
+        dict construction). The caller (run_one_factor) already has a
+        FactorResult from _success_fr.
         """
-        from llmwikify.reproduction.backtest.base import FactorResult
-        from llmwikify.reproduction.signal_source.base import Signal
-        signal = Signal(
-            id=f"alpha-{idx:03d}",
-            name=f"alpha-{idx:03d}",
-            formula_brief=formula_brief,
-            metadata={"alpha_index": idx, "index": idx},
-        )
-        fr = FactorResult(
-            signal=signal,
-            status="success",
-            code=code,
-            code_chars=len(code) if code else 0,
-            factor_series=None,
-            h5_path=h5_path if isinstance(h5_path, Path) else Path(str(h5_path)),
-            backtest=backtest,
-            stage=None,
-            error=None,
-            elapsed_sec=0.0,
-        )
         try:
             self._yaml_sink.write_one(fr)
         except Exception as exc:
-            logger.warning("[sink] YamlDuckdbSink.write_one failed for alpha-%03d: %s", idx, exc)
+            logger.warning("[sink] YamlDuckdbSink.write_one failed for %s: %s", fr.signal.id, exc)
 
-    def _run_one_with_recording(self, idx: int) -> dict:
+    def _run_one_with_recording(self, idx: int) -> FactorResult:
         """Serial path: no locks, single thread."""
         elapsed_cum: float = time.monotonic() - self.batch_t0
         logger.info("[factor] alpha-%03d: starting (elapsed: %.0fs, failures: %d)",
                     idx, elapsed_cum, self.failures)
         result = self._run_one_with_codegen(idx)
-        self._record_one(idx, result, elapsed_cum)
+        self._record_one(result, elapsed_cum)
         return result
 
     def _run_serial(self, to_run: list[int]) -> None:
@@ -851,22 +890,36 @@ class FactorStage(FactorRunner):
                                    idx, type(exc).__name__, str(exc)[:100])
                     self._handle_parallel_failure(idx, type(exc).__name__, str(exc))
 
-    def _run_one_safe(self, idx: int) -> dict:
+    def _run_one_safe(self, idx: int) -> FactorResult:
         with _llm_semaphore:
             result = self._run_one_with_codegen(idx)
             elapsed_cum = time.monotonic() - self.batch_t0
             with _print_lock:
-                self._record_one(idx, result, elapsed_cum)
+                self._record_one(result, elapsed_cum)
             return result
 
-    def _record_one(self, idx: int, result: dict, elapsed_cum: float) -> None:
-        """Atomic record: state + row log + persist + outcome (uses new Sinks)."""
-        # Backward-compat: legacy _update_state + _persist_result methods
-        # (kept as shims for PR0-era tests that patch them)
-        self._update_state(idx, result)
-        BatchReporter.log_row(idx, result, elapsed_cum)
-        self._persist_result(idx, result)
-        self._log_outcome(idx, result)
+    def _record_one(self, result: FactorResult, elapsed_cum: float) -> None:
+        """L2: Atomic record. Takes FactorResult (was (idx, result_dict)).
+
+        - state: append to self.results
+        - row log: BatchReporter.log_row (still takes dict, so we call to_dict())
+        - persist: SingleJsonSink.write_one (L2: direct, no conversion)
+        - outcome: log success/failure
+        """
+        idx = self._idx_from_result(result)
+        self._update_state(result)
+        BatchReporter.log_row(idx, result.to_dict(), elapsed_cum)
+        self._persist_result(result)
+        self._log_outcome(idx, result.to_dict())
+
+    def _idx_from_result(self, result: FactorResult) -> int:
+        """Extract alpha_index (int) from FactorResult.signal.metadata."""
+        meta = result.signal.metadata
+        if "alpha_index" in meta and isinstance(meta["alpha_index"], int):
+            return meta["alpha_index"]
+        if "index" in meta and isinstance(meta["index"], int):
+            return meta["index"]
+        return 0
 
     def _log_outcome(self, idx: int, result: dict) -> None:
         """Backward-compat shim (PR0 test fixture). Log success or failure."""
@@ -875,119 +928,58 @@ class FactorStage(FactorRunner):
         else:
             logger.info("[factor] alpha-%03d: success (%.1fs)", idx, result.get("elapsed_sec", 0))
 
-    def _update_state(self, idx: int, result: dict) -> None:
-        """Backward-compat shim (PR0 test fixture).
+    def _update_state(self, result: FactorResult) -> None:
+        """L2: append FactorResult to self.results + increment failures on fail.
 
-        Update in-memory state: results list + failure counter.
+        L2: no longer mutates result (immutable-like). Idempotent.
         """
-        if "alpha_index" not in result:
-            result["alpha_index"] = idx
         self.results.append(result)
-        if result.get("status") != "success":
+        if result.status != "success":
             self.failures += 1
 
-    def _persist_result(self, idx: int, result: dict) -> None:
-        """Backward-compat shim (PR0 test fixture).
+    def _persist_result(self, result: FactorResult) -> None:
+        """L2: delegates to SingleJsonSink (PR4) for actual file write."""
+        self._write_single_json(result)
 
-        PR6: delegates to SingleJsonSink (PR4) for actual file write.
+    def _write_single_json(self, result: FactorResult) -> None:
+        """L2: write single_factor_<signal.id>.json via SingleJsonSink.
+
+        L2: now takes FactorResult directly (was dict + 30-line conversion).
+        signal.id is "{idx:03d}" via _build_signal, so output is
+        `single_factor_001.json` (byte-equal to v1).
         """
-        self._write_single_json(idx, result)
-
-    def _write_single_json(self, idx: int, result: dict) -> None:
-        """PR6: write single_factor_<idx:03d>.json via SingleJsonSink.
-
-        SingleJsonSink expects a FactorResult object, but here we have a
-        plain dict from the legacy run_one_factor path. We construct a
-        minimal FactorResult shim from the dict so the sink can write the
-        same JSON shape.
-
-        v2 byte-equal compat: signal.id is just the index (e.g. "001"),
-        so SingleJsonSink writes `single_factor_001.json` (not
-        `single_factor_alpha-001.json`).
-
-        Lazy-init the sink if run() wasn't called yet (test fixture compat).
-        """
-        from llmwikify.reproduction.backtest.base import FactorResult
-        from llmwikify.reproduction.signal_source.base import Signal
         from llmwikify.reproduction.sink import SingleJsonSink
-        # Lazy-init: tests may create FactorStage directly without run()
         if not hasattr(self, "_single_sink") or self._single_sink is None:
             self._single_sink = SingleJsonSink(output_dir=self.config.output_dir)
-        # v2 byte-equal: signal.id is the index (e.g. "001"), not "alpha-001"
-        signal = Signal(
-            id=f"{idx:03d}",
-            name=result.get("factor_name", f"alpha-{idx:03d}"),
-            formula_brief=result.get("formula_brief", ""),
-            metadata={"alpha_index": idx, "index": idx},
-        )
-        fr = FactorResult(
-            signal=signal,
-            status=result.get("status", "unknown"),
-            code=result.get("code"),
-            code_chars=result.get("code_chars", 0),
-            factor_series=None,  # not stored on legacy dict
-            h5_path=Path(result["h5_path"]) if result.get("h5_path") else None,
-            backtest={
-                "ic_mean": result.get("ic_mean"),
-                "icir": result.get("icir"),
-                "win_rate": result.get("ic_winrate"),
-            },
-            stage=result.get("stage"),
-            error=result.get("error"),
-            elapsed_sec=result.get("elapsed_sec", 0.0),
-        )
         try:
-            self._single_sink.write_one(fr)
+            self._single_sink.write_one(result)
         except Exception as exc:
-            logger.warning("[sink] SingleJsonSink.write_one failed for alpha-%03d: %s", idx, exc)
+            logger.warning("[sink] SingleJsonSink.write_one failed for %s: %s", result.signal.id, exc)
 
     def _handle_parallel_failure(self, idx: int, stage: str, error: str) -> None:
-        """Append synthetic failure with full Bug 5 fields."""
-        result = {
-            "alpha_index": idx, "status": "failed",
-            "stage": stage, "error": error[:200],
-            "code": None, "code_chars": 0,
-            "ic_mean": None, "icir": None, "ic_winrate": None,
-            "elapsed_sec": 0.0,
-        }
+        """L2: append synthetic FactorResult (not dict) with full Bug 5 fields."""
+        result: FactorResult = FactorResult(
+            signal=self._build_signal(idx),
+            status="failed",
+            stage=stage,
+            error=error[:200],
+            code=None,
+            code_chars=0,
+            backtest={},
+            elapsed_sec=0.0,
+        )
         self.results.append(result)
         self.failures += 1
-        # PR6: delegate to SingleJsonSink for failed-result JSON
-        self._write_single_json(idx, result)
+        self._write_single_json(result)
 
     def _write_summary(self) -> None:
-        """PR6: delegate batch summary to BatchSummarySink (PR4 + PR5)."""
-        from llmwikify.reproduction.backtest.base import FactorResult
-        from llmwikify.reproduction.signal_source.base import Signal
-        # Convert legacy self.results (dicts) → list[FactorResult] for the sink
-        frs: list[FactorResult] = []
-        for r in self.results:
-            idx = r.get("alpha_index", 0)
-            signal = Signal(
-                id=f"alpha-{idx:03d}" if isinstance(idx, int) else str(idx),
-                name=r.get("factor_name", f"alpha-{idx}"),
-                formula_brief=r.get("formula_brief", ""),
-                metadata={"alpha_index": idx, "index": idx},
-            )
-            frs.append(FactorResult(
-                signal=signal,
-                status=r.get("status", "unknown"),
-                code=r.get("code"),
-                code_chars=r.get("code_chars", 0),
-                h5_path=Path(r["h5_path"]) if r.get("h5_path") else None,
-                backtest={
-                    "ic_mean": r.get("ic_mean"),
-                    "icir": r.get("icir"),
-                    "win_rate": r.get("ic_winrate"),
-                },
-                stage=r.get("stage"),
-                error=r.get("error"),
-                elapsed_sec=r.get("elapsed_sec", 0.0),
-            ))
-        # Override the default v2 file names (the sink uses these for byte-equal)
-        self._summary_sink._json_filename = "multi_alpha_001_to_101.json"
-        self._summary_sink._md_filename = "multi_alpha_summary.md"
-        self._summary_sink.write_batch(frs)
+        """L2: delegate batch summary to BatchSummarySink (PR4 + PR5).
+
+        No more 60-line dict→FactorResult conversion — self.results
+        is already list[FactorResult].
+        """
+        if self._summary_sink is not None:
+            self._summary_sink.write_batch(self.results)
         total_elapsed: float = time.monotonic() - self.batch_t0
         logger.info("[factor] Total elapsed: %.1fs (%.1f min)", total_elapsed, total_elapsed / 60)
         logger.info("[factor] Results saved to: %s", self.config.output_dir)

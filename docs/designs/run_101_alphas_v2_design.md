@@ -1374,3 +1374,58 @@ sinks:
 
 **下一步**: PR7 完成后, 7 PR 全部完成, 项目 v2 通用化目标达成
 
+
+## 17.18 PR8 详细计划：L1 + L2 抽象完成度提升
+
+> 状态: 🟡 IN PROGRESS
+> 动机: v2 抽象完成度 ~60%. L1 删 45 行 codegen 重复, L2 删 100 行 dict→FR 转换
+
+### 17.18.1 评估背景（详见 §17.17）
+
+v2 抽象缺口：
+- L1: `_ReActProgressHook` + `llm_code_react` 与新模块重复（v2 内联 40+ 行）
+- L2: FactorStage 维护 `self.results: list[dict]`，sink 接收 FactorResult
+  导致 3 处手写 dict→FR 转换（`_write_single_json` 40 行 + `_write_summary` 60 行）
+- L3 (不在本 PR): FactorStage 22 方法拆 6 个 helper class
+- L4 (不在本 PR): `QuantNodesBacktest` 替换内联 backtest
+
+### 17.18.2 L1 实施步骤
+
+| Step | 动作 | 行数 |
+|---|---|---|
+| 1.1 | 新建 `src/llmwikify/reproduction/codegen/react_runner.py` | +60 |
+| 1.2 | 改 `src/llmwikify/reproduction/codegen/__init__.py` re-export | +3 |
+| 1.3 | v2: 删 `_ReActProgressHook` 类 (14 行) + `llm_code_react` 函数 (25 行) + `_llm_code_react` shim (6 行) | -45 |
+| 1.4 | v2: 改 `_generate_code` + `_run_one_with_codegen` 调用为 kwargs 形式 | +2 |
+| 1.5 | 改 `tests/test_runner_v2_llm_code_react.py` import | ±0 |
+| 1.6 | 新建 `tests/test_react_runner.py` | +120 |
+
+### 17.18.3 L2 实施步骤
+
+| Step | 动作 | 行数 |
+|---|---|---|
+| 2.1 | `FactorStage.__init__`: `self.results: list[FactorResult]` | 0 |
+| 2.2 | `run()` 返回 `list[FactorResult]` | 0 |
+| 2.3 | 4 个 result 工厂改返回 `FactorResult` | +20 |
+| 2.4 | `_write_single_json`: 40 行 → 5 行 | -35 |
+| 2.5 | `_write_summary`: 60 行 → 5 行 | -55 |
+| 2.6 | `_handle_parallel_failure`: dict → FactorResult | -5 |
+| 2.7 | `_load_skipped_results`: 调 1 个 10 行 `_dict_to_factor_result` helper | +5 |
+| 2.8 | `_record_one`: 接收 FactorResult，用 `result.to_dict()` 给 BatchReporter | +2 |
+| 2.9 | 71 个 v2 test fixture: dict → FactorResult | +80 |
+| 2.10 | 新建 `tests/test_dict_to_factor_result.py` | +80 |
+
+### 17.18.4 预期结果
+
+| | 前 | 后 | 变化 |
+|---|---|---|---|
+| v2 | 1116 | ~991 | **-125 (-11%)** |
+| 新增 codegen module | 0 | 60 | +60 |
+| 新增测试 | 0 | 200 | +200 |
+| 修改 v2 测试 | 0 | 80 | +80 |
+
+### 17.18.5 验证
+
+- byte-equal 验证（与 PR6 相同流程）
+- ruff clean
+- ≥471 tests passed

@@ -146,9 +146,9 @@ class TestLoadSkippedResultsBug6:
         caplog.set_level(logging.WARNING, logger="run_101_alphas_v2")
         stage._load_skipped_results({1, 2})
 
-        # Only valid appended
+        # Only valid appended (L2: FactorResult, idx in signal.metadata)
         assert len(stage.results) == 1
-        assert stage.results[0]["alpha_index"] == 1
+        assert stage.results[0].signal.metadata["alpha_index"] == 1
         # Warning for corrupt
         assert any("skip-corrupt" in r.message or "002" in r.message
                    for r in caplog.records)

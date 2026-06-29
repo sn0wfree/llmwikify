@@ -232,8 +232,10 @@ class TestFailResult:
         assert result["react_meta"] == {"iterations": 2}
 
     def test_parallel_failure_uses_factory(self, runner: FactorRunner) -> None:
-        """Bug 5: _handle_parallel_failure must call _fail_result so synthetic
-        result has all required fields (code_chars=0 not None).
+        """Bug 5: _handle_parallel_failure must produce FactorResult with all
+        required fields (code_chars=0 not None).
+
+        L2: stage.results is now list[FactorResult] (was list[dict]).
         """
         from scripts.run_101_alphas_v2 import FactorStage
 
@@ -243,18 +245,17 @@ class TestFailResult:
         )
         stage = FactorStage(config)
         # FactorStage uses __slots__, can't patch method; instead verify the
-        # resulting dict structure has all required fields.
+        # resulting FactorResult has all required fields.
         stage._handle_parallel_failure(7, "TimeoutError", "future boom")
         assert len(stage.results) == 1
-        r = stage.results[0]
-        assert r["status"] == "failed"
-        assert r["code_chars"] == 0  # ← Bug 5 fix: not None
-        assert r["stage"] == "TimeoutError"
-        assert r["alpha_index"] == 7
-        assert r["error"].startswith("future boom")
-        assert r["ic_mean"] is None
-        assert r["icir"] is None
-        assert r["ic_winrate"] is None
+        r = stage.results[0]  # FactorResult, not dict
+        assert r.status == "failed"
+        assert r.code_chars == 0  # ← Bug 5 fix: not None
+        assert r.stage == "TimeoutError"
+        assert r.signal.metadata["alpha_index"] == 7  # L2: idx moved to signal.metadata
+        assert r.error.startswith("future boom")
+        assert r.backtest == {}  # L2: backtest empty dict (not None fields)
+        assert r.elapsed_sec == 0.0
         assert stage.failures == 1
 
 

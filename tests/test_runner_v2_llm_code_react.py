@@ -1,10 +1,11 @@
-"""Tests for top-level llm_code_react (P2 refactor).
+"""Tests for top-level llm_code_react (P2 + L1 refactor).
 
 Covers:
   - llm_code_react: returns (code, factor_series, error, react_meta)
-  - _ReActProgressHook: prints iteration progress
+  - ReActProgressHook: prints iteration progress
   - error path: result.error → (None, None, error, meta)
   - success path: result.code → (code, factor_series, None, meta)
+  - L1: kwargs (max_repair_rounds, temperature) override defaults
 """
 from __future__ import annotations
 
@@ -15,11 +16,13 @@ from unittest.mock import MagicMock, patch
 import polars as pl
 import pytest
 
-from scripts.run_101_alphas_v2 import (
-    RunConfig,
-    _ReActProgressHook,
+# L1: ReActProgressHook / llm_code_react moved to codegen/react_runner.py
+# v2 re-exports them for backward compat, but tests should import from new location
+from llmwikify.reproduction.codegen.react_runner import (
+    ReActProgressHook,
     llm_code_react,
 )
+from scripts.run_101_alphas_v2 import RunConfig  # noqa: F401 — kept for fixture compat
 
 # ─── Fixtures ────────────────────────────────────────────────────────
 
@@ -70,7 +73,9 @@ class TestLLMCodeReactSuccess:
             return_value=mock_result,
         ) as gen:
             code, factor_series, error, meta = llm_code_react(
-                "alpha-001", "x = y", df, llm=MagicMock(), config=config,
+                "alpha-001", "x = y", df, llm=MagicMock(),
+                max_repair_rounds=config.max_repair_rounds,
+                temperature=config.temperature,
             )
 
         assert code == "x = y"
@@ -88,13 +93,15 @@ class TestLLMCodeReactSuccess:
             "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync",
             return_value=mock_result,
         ) as gen:
-            llm_code_react("a", "b", df, llm=MagicMock(), config=config)
+            llm_code_react("a", "b", df, llm=MagicMock(),
+                           max_repair_rounds=config.max_repair_rounds,
+                           temperature=config.temperature)
 
         # Verify config fields are forwarded
         kwargs = gen.call_args.kwargs
         assert kwargs["max_repair_rounds"] == 3
         assert kwargs["temperature"] == 0.3
-        assert isinstance(kwargs["hook"], _ReActProgressHook)
+        assert isinstance(kwargs["hook"], ReActProgressHook)
 
 
 # ─── llm_code_react error path ──────────────────────────────────────
@@ -111,7 +118,9 @@ class TestLLMCodeReactError:
             return_value=mock_result,
         ):
             code, factor_series, error, meta = llm_code_react(
-                "alpha-001", "x = y", df, llm=MagicMock(), config=config,
+                "alpha-001", "x = y", df, llm=MagicMock(),
+                max_repair_rounds=config.max_repair_rounds,
+                temperature=config.temperature,
             )
 
         assert code is None
@@ -120,27 +129,27 @@ class TestLLMCodeReactError:
         assert meta["stop_reason"] == "max_iter"
 
 
-# ─── _ReActProgressHook ─────────────────────────────────────────────
+# ─── ReActProgressHook ─────────────────────────────────────────────
 
 
 class TestReActProgressHook:
     def test_on_reason_start_logs_iteration(self, caplog) -> None:
         caplog.set_level(logging.INFO, logger="run_101_alphas_v2")
-        hook = _ReActProgressHook()
+        hook = ReActProgressHook()
         ctx = MagicMock(iteration=3)
         hook.on_reason_start(ctx)
         assert "[REASON] iteration 3" in caplog.text
 
     def test_on_act_end_success(self, caplog) -> None:
         caplog.set_level(logging.INFO, logger="run_101_alphas_v2")
-        hook = _ReActProgressHook()
+        hook = ReActProgressHook()
         result = MagicMock(success=True, error_kind="none")
         hook.on_act_end(MagicMock(), result)
         assert "[ACT] OK (none)" in caplog.text
 
     def test_on_act_end_failure(self, caplog) -> None:
         caplog.set_level(logging.INFO, logger="run_101_alphas_v2")
-        hook = _ReActProgressHook()
+        hook = ReActProgressHook()
         result = MagicMock(spec=["success", "error_kind", "error"])
         result.success = False
         result.error_kind = "syntax"

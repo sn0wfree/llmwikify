@@ -61,11 +61,15 @@ class FactorResult:
         """Serialize to a JSON-friendly dict (mirrors v2 result dict).
 
         Used by SingleJsonSink (PR4) to write single_factor_NNN.json.
+
+        L2 (PR8): coerce `stage` None → "" for v2 byte-equal compat. v1's
+        BatchSerializer used `r.get("stage", "")` which defaults to "".
+        Without this, success results emit `"stage": null` instead of `""`.
         """
         alpha_idx = self._legacy_alpha_index()
         out: dict[str, Any] = {
             "status": self.status,
-            "stage": self.stage,
+            "stage": self.stage or "",  # L2: None → "" (v2 byte-equal)
             "error": self.error,
             "code": self.code,
             "code_chars": self.code_chars,

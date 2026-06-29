@@ -1,11 +1,14 @@
-"""Tests for FactorStage record path (P0 refactor).
+"""Tests for FactorStage record path (P0 + L2 refactor).
 
 Covers:
   - _record_one: calls _update_state / log_row / _persist_result / _log_outcome in order
   - _run_one_with_recording: serial path (no lock)
   - _run_one_safe: parallel path (lock around _record_one)
-  - _handle_parallel_failure: synthetic result uses _fail_result (Bug 5)
-  - _load_skipped_results: handles corrupt JSON gracefully (Bug 6)
+  - _handle_parallel_failure: synthetic FactorResult (Bug 5)
+  - _load_skipped_results: handles corrupt JSON gracefully (Bug 6, L2: dict→FactorResult)
+
+L2: All fixtures now use FactorResult (was dict). _record_one/_update_state/
+_persist_result/_load_skipped_results signatures all changed to take FactorResult.
 
 Note: FactorStage/FactorRunner use __slots__, so mock patches are applied
 at the CLASS level (patch.object(FactorStage, ...)) not at the instance level.
@@ -19,6 +22,8 @@ from unittest.mock import patch
 
 import pytest
 
+from llmwikify.reproduction.backtest.base import FactorResult
+from llmwikify.reproduction.signal_source.base import Signal
 from scripts.run_101_alphas_v2 import (
     BatchReporter,
     FactorStage,
@@ -53,44 +58,62 @@ def stage(track_b_path: Path, tmp_path: Path) -> FactorStage:
     return FactorStage(config)
 
 
+def _make_fr(idx: int, status: str = "success", **kwargs) -> FactorResult:
+    """L2 helper: build a FactorResult with signal.id = '{idx:03d}' for byte-equal."""
+    return FactorResult(
+        signal=Signal(
+            id=f"{idx:03d}",
+            name=f"alpha-{idx:03d}",
+            formula_brief="x",
+            metadata={"alpha_index": idx, "index": idx},
+        ),
+        status=status,
+        backtest={"ic_mean": kwargs.get("ic_mean", 0.02),
+                  "icir": kwargs.get("icir", 0.1),
+                  "win_rate": kwargs.get("ic_winrate", 0.5)},
+        elapsed_sec=kwargs.get("elapsed_sec", 1.0),
+        stage=kwargs.get("stage"),
+        error=kwargs.get("error"),
+        code=kwargs.get("code"),
+        code_chars=kwargs.get("code_chars", 0),
+    )
+
+
 # ─── _record_one ─────────────────────────────────────────────────────
 
 
 class TestRecordOne:
     def test_calls_all_four_steps(self, stage: FactorStage) -> None:
         """_record_one must call update_state → log_row → persist_result → log_outcome in order."""
-        result = {"status": "success", "alpha_index": 1, "elapsed_sec": 1.5,
-                  "ic_mean": 0.02, "icir": 0.1, "ic_winrate": 0.5}
+        result = _make_fr(1, status="success", elapsed_sec=1.5)
         call_order: list[str] = []
 
-        # Note: class-level mock patches pass args only (no self), because mock
-        # acts as a descriptor that handles self binding at call time.
+        # L2: signatures changed — _update_state / _persist_result now take
+        # only (result), no idx. _record_one takes only (result, elapsed_cum).
         with patch.object(FactorStage, "_update_state",
-                          side_effect=lambda i, r: call_order.append("update_state")):
+                          side_effect=lambda r: call_order.append("update_state")):
             with patch.object(BatchReporter, "log_row",
                               side_effect=lambda i, r, t: call_order.append("log_row")):
                 with patch.object(FactorStage, "_persist_result",
-                                  side_effect=lambda i, r: call_order.append("persist")):
+                                  side_effect=lambda r: call_order.append("persist")):
                     with patch.object(FactorStage, "_log_outcome",
                                       side_effect=lambda i, r: call_order.append("log_outcome")):
-                        stage._record_one(1, result, 0.0)
+                        stage._record_one(result, 0.0)
 
         assert call_order == ["update_state", "log_row", "persist", "log_outcome"]
 
     def test_updates_results_and_failures(self, stage: FactorStage) -> None:
         """_update_state inside _record_one appends result + increments failures."""
-        result = {"status": "failed", "stage": "react", "error": "boom",
-                  "alpha_index": 1, "code_chars": 0}
-        stage._record_one(1, result, 0.0)
+        result = _make_fr(1, status="failed", stage="react", error="boom", code_chars=0)
+        stage._record_one(result, 0.0)
         assert len(stage.results) == 1
         assert stage.results[0] is result
         assert stage.failures == 1
 
     def test_persist_writes_json(self, stage: FactorStage) -> None:
         """_record_one's _persist_result writes single_factor_NNN.json to output_dir."""
-        result = {"status": "success", "alpha_index": 1, "ic_mean": 0.02,
-                  "icir": 0.1, "ic_winrate": 0.5, "elapsed_sec": 1.0}
-        stage._record_one(1, result, 0.0)
+        result = _make_fr(1, status="success", ic_mean=0.02, icir=0.1, ic_winrate=0.5, elapsed_sec=1.0)
+        stage._record_one(result, 0.0)
         json_path = stage.config.output_dir / "single_factor_001.json"
         assert json_path.exists()
         loaded = json.loads(json_path.read_text(encoding="utf-8"))
@@ -104,8 +127,7 @@ class TestRecordOne:
 class TestRunOneWithRecording:
     def test_no_lock_serial(self, stage: FactorStage) -> None:
         """Serial path: no lock, calls run_one_factor + _record_one."""
-        fake_result = {"status": "success", "alpha_index": 1, "ic_mean": 0.02,
-                       "icir": 0.1, "ic_winrate": 0.5, "elapsed_sec": 1.0}
+        fake_result = _make_fr(1, status="success", ic_mean=0.02, icir=0.1, ic_winrate=0.5, elapsed_sec=1.0)
         with patch.object(FactorStage, "run_one_factor", return_value=fake_result):
             with patch.object(FactorStage, "_record_one") as record:
                 stage.batch_t0 = 0.0
@@ -115,15 +137,14 @@ class TestRunOneWithRecording:
 
     def test_appends_to_results(self, stage: FactorStage) -> None:
         """Serial path appends to results after _record_one (mocked)."""
-        fake_result = {"status": "success", "alpha_index": 1, "ic_mean": 0.02,
-                       "icir": 0.1, "ic_winrate": 0.5, "elapsed_sec": 1.0}
+        fake_result = _make_fr(1, status="success", ic_mean=0.02, icir=0.1, ic_winrate=0.5, elapsed_sec=1.0)
         with patch.object(FactorStage, "run_one_factor", return_value=fake_result):
             with patch.object(FactorStage, "_record_one",
-                              side_effect=lambda i, r, t: stage.results.append(r)):
+                              side_effect=lambda r, t: stage.results.append(r)):
                 stage.batch_t0 = 0.0
                 stage._run_one_with_recording(1)
                 assert len(stage.results) == 1
-                assert stage.results[0]["alpha_index"] == 1
+                assert stage.results[0].signal.metadata["alpha_index"] == 1
 
 
 # ─── _run_one_safe (parallel path) ──────────────────────────────────
@@ -135,7 +156,7 @@ class TestRunOneSafe:
 
         Bug 3 修复 regression test: ensure the LLM call is OUTSIDE the lock.
         """
-        fake_result = {"status": "success", "alpha_index": 1, "elapsed_sec": 1.0}
+        fake_result = _make_fr(1, status="success", elapsed_sec=1.0)
         call_order: list[str] = []
 
         # Mock the module-level lock so we can observe acquisition order
@@ -158,7 +179,7 @@ class TestRunOneSafe:
                               call_order.append("run_one_factor"), fake_result
                           )[1]):
             with patch.object(FactorStage, "_record_one",
-                              side_effect=lambda i, r, t: call_order.append("record_one")):
+                              side_effect=lambda r, t: call_order.append("record_one")):
                 # Patch the lock used inside _run_one_safe
                 original_lock = v2_mod._print_lock
                 v2_mod._print_lock = _TrackingLock(original_lock)
@@ -178,20 +199,18 @@ class TestRunOneSafe:
 
 class TestHandleParallelFailure:
     def test_appends_synthetic_with_full_fields(self, stage: FactorStage) -> None:
-        """Bug 5: synthetic result must have all required fields (code_chars=0)."""
+        """Bug 5: synthetic FactorResult must have all required fields (code_chars=0)."""
         stage._handle_parallel_failure(42, "TimeoutError", "future boom")
         assert len(stage.results) == 1
         r = stage.results[0]
-        assert r["status"] == "failed"
-        assert r["alpha_index"] == 42
-        assert r["stage"] == "TimeoutError"
-        assert r["error"] == "future boom"
-        assert r["code"] is None
-        assert r["code_chars"] == 0  # ← Bug 5 fix
-        assert r["ic_mean"] is None
-        assert r["icir"] is None
-        assert r["ic_winrate"] is None
-        assert "elapsed_sec" in r
+        assert r.status == "failed"
+        assert r.signal.metadata["alpha_index"] == 42
+        assert r.stage == "TimeoutError"
+        assert r.error == "future boom"
+        assert r.code is None
+        assert r.code_chars == 0  # ← Bug 5 fix
+        assert r.backtest == {}
+        assert r.elapsed_sec == 0.0
 
     def test_increments_failures(self, stage: FactorStage) -> None:
         stage._handle_parallel_failure(1, "Exception", "boom")
@@ -220,15 +239,16 @@ class TestLoadSkippedResults:
         stage._load_skipped_results({1, 2})
         # Only valid result appended
         assert len(stage.results) == 1
-        assert stage.results[0]["alpha_index"] == 1
+        assert stage.results[0].signal.metadata["alpha_index"] == 1
         # Warning logged for corrupt one
         assert any("002" in r.message or "skip-corrupt" in r.message for r in caplog.records)
 
     def test_appends_missing_alpha_index(self, stage: FactorStage) -> None:
-        """If alpha_index not in loaded JSON, fill it from idx."""
+        """If alpha_index not in loaded JSON, fill it from idx (via _dict_to_factor_result)."""
         (stage.config.output_dir / "single_factor_001.json").write_text(
             json.dumps({"status": "success", "ic_mean": 0.01}),
             encoding="utf-8",
         )
         stage._load_skipped_results({1})
-        assert stage.results[0]["alpha_index"] == 1
+        # L2: results is list[FactorResult]; metadata is the new home for idx
+        assert stage.results[0].signal.metadata["alpha_index"] == 1

@@ -66,7 +66,9 @@ class BatchSerializer:
                     "ic_winrate": r.get("ic_winrate"),
                     "code_chars": r.get("code_chars"),
                     "elapsed_sec": r.get("elapsed_sec"),
-                    "stage": r.get("stage", ""),
+                    # L2: `or ""` coerces None → "" (v2 byte-equal). Plain
+                    # `r.get("stage", "")` only defaults when key is missing.
+                    "stage": r.get("stage") or "",
                     "error": (r.get("error", "") or "")[:200],
                 }
                 for r in results
