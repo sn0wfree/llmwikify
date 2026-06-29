@@ -220,12 +220,17 @@ class TestHandleParallelFailure:
         assert len(stage.results) == 3
 
 
-# ─── _load_skipped_results (Bug 6) ──────────────────────────────────
+# ─── SkipLoader integration (PR9b, was _load_skipped_results Bug 6) ─
 
 
-class TestLoadSkippedResults:
+class TestSkipLoaderIntegration:
     def test_skips_corrupt_json(self, stage: FactorStage, caplog) -> None:
-        """Bug 6: corrupt JSON in single_factor_NNN.json should be skipped, not crash."""
+        """Bug 6: corrupt JSON in single_factor_NNN.json should be skipped, not crash.
+
+        PR9b: now uses SkipLoader.load() instead of stage._load_skipped_results.
+        """
+        from llmwikify.reproduction.factor import SkipLoader
+
         (stage.config.output_dir / "single_factor_001.json").write_text(
             json.dumps({"status": "success", "alpha_index": 1, "ic_mean": 0.01}),
             encoding="utf-8",
@@ -235,8 +240,14 @@ class TestLoadSkippedResults:
             encoding="utf-8",
         )
 
-        caplog.set_level(logging.WARNING, logger="run_101_alphas_v2")
-        stage._load_skipped_results({1, 2})
+        caplog.set_level(logging.WARNING, logger="llmwikify.reproduction.factor.skip_loader")
+        loader = SkipLoader(
+            output_dir=stage.config.output_dir,
+            alpha_start=1,
+            alpha_end=2,
+        )
+        results = loader.load([1, 2], stage._factory)
+        stage.results.extend(results)
         # Only valid result appended
         assert len(stage.results) == 1
         assert stage.results[0].signal.metadata["alpha_index"] == 1
@@ -245,10 +256,18 @@ class TestLoadSkippedResults:
 
     def test_appends_missing_alpha_index(self, stage: FactorStage) -> None:
         """If alpha_index not in loaded JSON, fill it from idx (via _dict_to_factor_result)."""
+        from llmwikify.reproduction.factor import SkipLoader
+
         (stage.config.output_dir / "single_factor_001.json").write_text(
             json.dumps({"status": "success", "ic_mean": 0.01}),
             encoding="utf-8",
         )
-        stage._load_skipped_results({1})
+        loader = SkipLoader(
+            output_dir=stage.config.output_dir,
+            alpha_start=1,
+            alpha_end=1,
+        )
+        results = loader.load([1], stage._factory)
+        stage.results.extend(results)
         # L2: results is list[FactorResult]; metadata is the new home for idx
         assert stage.results[0].signal.metadata["alpha_index"] == 1

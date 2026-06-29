@@ -590,42 +590,28 @@ class FactorStage(FactorRunner):
             logger.info("[factor] Preloaded %d H5 keys", len(self.data_cache))
 
     def _process_skip_existing(self) -> set[int]:
-        """Scan output_dir, return set of idx to skip (and load their cached results)."""
-        import json as _json
-        skip: set[int] = set()
-        if not self.config.skip_existing:
-            return skip
-        import os as _os
-        try:
-            with _os.scandir(self.config.output_dir) as it:
-                existing = {e.name for e in it if e.is_file()}
-        except FileNotFoundError:
-            return skip
-        for idx in range(self.config.alpha_start, self.config.alpha_end + 1):
-            if f"single_factor_{idx:03d}.json" in existing:
-                skip.add(idx)
-        if skip:
-            logger.info("[factor] Skipping %d alphas: %s...", len(skip), sorted(skip)[:10])
-            # Delegate to _load_skipped_results shim (Bug 6 fixture compatibility)
-            self._load_skipped_results(skip)
-        return skip
+        """PR9b: delegate to SkipLoader (was inline logic).
 
-    def _load_skipped_results(self, skip: set[int]) -> None:
-        """Backward-compat shim (Bug 6 test fixture).
-
-        Loads JSON results for skipped alphas; skips corrupt JSON instead
-        of crashing the batch. L2: appends FactorResult (not dict).
+        Returns:
+            Set of idx with cached results. Side effect: appends cached
+            FactorResults to self.results.
         """
-        import json as _json
-        for idx in sorted(skip):
-            p = self.config.output_dir / f"single_factor_{idx:03d}.json"
-            try:
-                loaded: dict = _json.loads(p.read_text(encoding="utf-8"))
-            except (_json.JSONDecodeError, OSError) as exc:
-                logger.warning("[factor] skip-corrupt: alpha-%03d: %s", idx, exc)
-                continue
-            # L2: convert dict → FactorResult via shared factory (PR9a)
-            self.results.append(self._factory.from_cached_dict(loaded, idx))
+        from llmwikify.reproduction.factor import SkipLoader
+
+        loader = SkipLoader(
+            output_dir=self.config.output_dir,
+            alpha_start=self.config.alpha_start,
+            alpha_end=self.config.alpha_end,
+            skip_existing=self.config.skip_existing,
+        )
+        skip = loader.scan()
+        if skip:
+            logger.info(
+                "[factor] Skipping %d alphas: %s...",
+                len(skip), sorted(skip)[:10],
+            )
+            self.results.extend(loader.load(skip, self._factory))
+        return skip
 
     def _compute_to_run(self, skip: set[int]) -> list[int]:
         """Return alpha indices to run (excluding skipped ones)."""

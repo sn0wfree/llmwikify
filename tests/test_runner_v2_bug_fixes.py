@@ -8,7 +8,7 @@ Covers:
     - ignores subdirectories
     - ignores non-matching files
   - FactorRunner._fail_result: synthetic result has all fields (Bug 5)
-  - FactorStage._load_skipped_results: corrupt JSON skipped (Bug 6)
+  - FactorStage SkipLoader integration: corrupt JSON skipped (Bug 6)
 """
 from __future__ import annotations
 
@@ -143,8 +143,15 @@ class TestLoadSkippedResultsBug6:
             "{{{ not json"
         )
 
-        caplog.set_level(logging.WARNING, logger="run_101_alphas_v2")
-        stage._load_skipped_results({1, 2})
+        caplog.set_level(logging.WARNING, logger="llmwikify.reproduction.factor.skip_loader")
+        from llmwikify.reproduction.factor import SkipLoader
+        loader = SkipLoader(
+            output_dir=output_dir,
+            alpha_start=1,
+            alpha_end=3,
+        )
+        results = loader.load([1, 2], stage._factory)
+        stage.results.extend(results)
 
         # Only valid appended (L2: FactorResult, idx in signal.metadata)
         assert len(stage.results) == 1

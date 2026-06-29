@@ -1519,32 +1519,33 @@ if backtest.get("error"):
 
 ### 17.19.4 拆 3 PR 实施
 
-#### PR9a: ResultFactory (本 PR, ~3h)
+#### PR9a: ResultFactory ✅ DONE (`65a3e92`)
 
 | 动作 | 文件 | 行数 |
 |---|---|---|
-| NEW | `src/llmwikify/reproduction/factor/__init__.py` | +15 |
-| NEW | `src/llmwikify/reproduction/factor/result_factory.py` | +80 |
-| NEW | `tests/test_result_factory.py` | +120 |
-| MODIFY | `scripts/run_101_alphas_v2.py`: 删 `_success_fr` / `_fail_codegen_fr` / `_fail_pipeline_fr` / `_dict_to_factor_result` / `_build_signal` (5 methods, ~80 lines) | -80 |
+| NEW | `src/llmwikify/reproduction/factor/__init__.py` | +28 |
+| NEW | `src/llmwikify/reproduction/factor/result_factory.py` | +213 |
+| NEW | `tests/test_result_factory.py` | +300 (22 tests) |
+| MODIFY | `scripts/run_101_alphas_v2.py`: 删 `_success_fr` / `_fail_codegen_fr` / `_fail_pipeline_fr` / `_dict_to_factor_result` / `_build_signal` (5 methods) | -80 |
 | MODIFY | v2 `__init__` 增 `self._factory = ResultFactory()` | +1 |
-| MODIFY | v2 5 个调用点改 `self._factory.xxx()` | ±0 |
-| MODIFY | `docs/designs/run_101_alphas_v2_design.md` §17.19 | +100 |
+| MODIFY | v2 6 个调用点改 `self._factory.xxx()` | ±0 |
+| MODIFY | `tests/test_dict_to_factor_result.py` 改用 ResultFactory | +5 |
+| MODIFY | `docs/designs/run_101_alphas_v2_design.md` §17.19 | +166 |
 
-**验证**: ruff + 270+ tests + byte-equal
+**验证**: ruff ✅ + 128 tests ✅ (22 + 8 + 98) + byte-equal via `test_real_cached_file_round_trip` ✅
 
-#### PR9b: SkipLoader (~2h)
+#### PR9b: SkipLoader (本 PR, ~2h)
 
 | 动作 | 文件 | 行数 |
 |---|---|---|
-| NEW | `src/llmwikify/reproduction/factor/skip_loader.py` | +50 |
-| NEW | `tests/test_skip_loader.py` | +80 |
+| NEW | `src/llmwikify/reproduction/factor/skip_loader.py` | +60 |
+| NEW | `tests/test_skip_loader.py` | +200 (10 tests) |
 | MODIFY | v2: 删 `_process_skip_existing` / `_load_skipped_results` (37 lines) | -37 |
 | MODIFY | v2 `run()` 改用 `SkipLoader.scan()` / `SkipLoader.load()` | ±0 |
 | MODIFY | `tests/test_runner_v2_factor_stage_record.py::TestLoadSkippedResults` 改 patch 路径 | +5 |
 | MODIFY | design doc §17.19 | +20 |
 
-**验证**: ruff + 278+ tests + byte-equal
+**验证**: ruff + 178+ tests + byte-equal
 
 #### PR9c: RecordStage + L4-minimal (~4h)
 
