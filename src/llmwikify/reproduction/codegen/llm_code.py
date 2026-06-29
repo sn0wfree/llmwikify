@@ -34,6 +34,7 @@ import polars as pl
 
 # C1: re-export from kernel/quant/codegen/
 from llmwikify.kernel.quant.codegen import (  # noqa: F401
+    _PYTHON_FENCE_RE,
     OBSERVE_FEEDBACK_TEMPLATE,
     SYSTEM_PROMPT_CODE,
     build_execute_namespace,
@@ -43,7 +44,6 @@ from llmwikify.kernel.quant.codegen import (  # noqa: F401
     validate_safety,
     validate_syntax,
 )
-from llmwikify.kernel.quant.llm_client import build_llm_client  # noqa: F401  (C2)
 
 logger = logging.getLogger(__name__)
 

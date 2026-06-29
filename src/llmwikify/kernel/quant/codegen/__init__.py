@@ -31,6 +31,7 @@ What about the higher-level `generate_factor_code` (ReAct loop)?
   - kernel/quant/codegen/ only holds the building blocks.
 """
 from .code_extract import (
+    _PYTHON_FENCE_RE,
     build_execute_namespace,
     execute_code,
     extract_python,

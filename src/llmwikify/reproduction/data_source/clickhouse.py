@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 # ClickHouse config from ~/.llmwikify/llmwikify.json
-from ..common.config import config
+from ..common.config import config  # noqa: E402
 
 CH_HOST = config.get("clickhouse.host", "0.0.0.0")
 CH_PORT = config.get("clickhouse.port", 8123)

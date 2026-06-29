@@ -277,7 +277,9 @@ class UnifiedWorkflow:
 
             try:
                 if self.config.use_react:
-                    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code_sync
+                    from llmwikify.apps.chat.agent.unified.pipelines.codegen import (
+                        generate_factor_code_sync,
+                    )
 
                     result = generate_factor_code_sync(
                         factor_name=name,
@@ -298,7 +300,11 @@ class UnifiedWorkflow:
                         logger.warning("[workflow] stage2: %s codegen failed: %s", name, result.error)
                 else:
                     # 1-shot fallback
-                    from ..codegen.llm_code import extract_python, validate_syntax, validate_safety
+                    from ..codegen.llm_code import (
+                        extract_python,
+                        validate_safety,
+                        validate_syntax,
+                    )
 
                     user_prompt = (
                         f"Factor: {name}\nFormula: {formula_brief}\n\n"
@@ -315,7 +321,7 @@ class UnifiedWorkflow:
                         syntax_ok, _ = validate_syntax(code)
                         safe_ok, _ = validate_safety(code)
                         if syntax_ok and safe_ok:
-                            series = execute_code(code, df_pl)
+                            _series = execute_code(code, df_pl)
                             coded.append({
                                 "name": name,
                                 "code": code,

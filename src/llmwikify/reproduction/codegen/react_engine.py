@@ -130,7 +130,9 @@ class ReactResult:
 # Prompt template for the OBSERVE → REASON error feedback. Mirrors the
 # pattern runner_v2.py uses to inject tool errors back into the message
 # history (see ``_reason`` around line 415).
-from .feedback_templates import OBSERVE_FEEDBACK_TEMPLATE  # noqa: F401 — backward compat re-export
+from .feedback_templates import (
+    OBSERVE_FEEDBACK_TEMPLATE,  # noqa: F401 — backward compat re-export
+)
 
 
 def compile_to_code_react(
@@ -148,14 +150,6 @@ def compile_to_code_react(
 
     .. deprecated::
         Use ``llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync`` instead.
-    """
-    import warnings
-    warnings.warn(
-        "compile_to_code_react is deprecated. Use "
-        "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
 
     Args:
         factor_name: Display name (for logging / telemetry).
@@ -177,6 +171,13 @@ def compile_to_code_react(
         - self_repair.decide.retry / .done_success / .done_failure
         - self_repair.total_elapsed_sec
     """
+    import warnings
+    warnings.warn(
+        "compile_to_code_react is deprecated. Use "
+        "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     t0 = time.monotonic()
     telemetry = get_telemetry()
     telemetry.record("self_repair.start", factor=factor_name)

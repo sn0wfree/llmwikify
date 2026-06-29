@@ -34,7 +34,7 @@ class DataSource(Protocol):
         symbol: str,
         start: str,
         end: str,
-    ) -> Optional[pd.DataFrame]: ...
+    ) -> pd.DataFrame | None: ...
 
 
 class ParquetLocalDataSource:
@@ -48,7 +48,7 @@ class ParquetLocalDataSource:
 
     def __init__(self, path: str):
         self._path = path
-        self._df: Optional[pd.DataFrame] = None
+        self._df: pd.DataFrame | None = None
 
     def _load(self) -> pd.DataFrame:
         if self._df is None:
@@ -62,7 +62,7 @@ class ParquetLocalDataSource:
         symbol: str,
         start: str,
         end: str,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         try:
             df = self._load()
             # Filter by symbol (handle both "000001" and "000001.SZ")
@@ -146,7 +146,7 @@ class AKShareDataSource:
         symbol: str,
         start: str,
         end: str,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         try:
             import akshare as ak
 
@@ -202,20 +202,20 @@ class ClickHouseDataSource:
         self._database = database if database is not None else config.get("clickhouse.database", "quote")
         self._table_name = table if table is not None else config.get("clickhouse.table", "cn_stock")
         self._table = f"{self._database}.{self._table_name}"
-        self._conn_kwargs = dict(
-            host=self._host,
-            port=self._port,
-            user=self._user,
-            passwd=self._passwd,
-            database=self._database,
-        )
+        self._conn_kwargs = {
+            "host": self._host,
+            "port": self._port,
+            "user": self._user,
+            "passwd": self._passwd,
+            "database": self._database,
+        }
 
     def get(
         self,
         symbol: str,
         start: str,
         end: str,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         try:
             from QuantNodes.database_node import ClickHouseNode
 
@@ -253,7 +253,7 @@ class CachedClickHouseDataSource:
 
     def __init__(
         self,
-        clickhouse: Optional[ClickHouseDataSource] = None,
+        clickhouse: ClickHouseDataSource | None = None,
         cache_dir: str = "~/.llmwikify/cache",
         ttl_days: int = 7,
     ):
@@ -264,7 +264,7 @@ class CachedClickHouseDataSource:
         symbol: str,
         start: str,
         end: str,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         try:
             from QuantNodes.database_node import ClickHouseNode
 
@@ -325,14 +325,14 @@ class DataRouter:
 
     # Class-level default password slot — tests monkeypatch this to
     # bypass the env-var / file-based lookup in `_load_ch_passwd`.
-    DEFAULT_CH_PASSWORD: Optional[str] = None
+    DEFAULT_CH_PASSWORD: str | None = None
 
     def __init__(
         self,
-        sources: Optional[list[DataSource]] = None,
+        sources: list[DataSource] | None = None,
         use_cache: bool = True,
-        clickhouse_passwd: Optional[str] = None,
-        parquet_path: Optional[str] = None,
+        clickhouse_passwd: str | None = None,
+        parquet_path: str | None = None,
     ):
         if sources is not None:
             self._sources = list(sources)
@@ -358,7 +358,7 @@ class DataRouter:
         end: str,
     ) -> tuple[pd.DataFrame, str]:
         """Return (dataframe, source_name). Always succeeds — falls back to synth."""
-        last_exc: Optional[Exception] = None
+        last_exc: Exception | None = None
         for src in self._sources:
             try:
                 df = src.get(symbol, start, end)
@@ -377,8 +377,8 @@ class DataRouter:
         self,
         start: str,
         end: str,
-        benchmark_code: Optional[str] = None,
-    ) -> Optional[pd.DataFrame]:
+        benchmark_code: str | None = None,
+    ) -> pd.DataFrame | None:
         """Fetch benchmark data (default: CSI 300).
 
         Returns DataFrame with 'date' and 'close' columns, or None if unavailable.
@@ -399,7 +399,7 @@ class DataRouter:
         symbols: list[str],
         start: str,
         end: str,
-    ) -> tuple[Optional[pd.DataFrame], str]:
+    ) -> tuple[pd.DataFrame | None, str]:
         """Batch fetch OHLCV for a list of symbols.
 
         Iterates ``symbols`` and concatenates per-stock DataFrames into a
@@ -468,7 +468,7 @@ class DataRouter:
         index_code: str,
         start: str,
         end: str,
-    ) -> Optional[pd.Series]:
+    ) -> pd.Series | None:
         """Fetch close price series for an index.
 
         Args:

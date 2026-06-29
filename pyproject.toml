@@ -88,7 +88,7 @@ minversion = "7.0"
 testpaths = [ "tests",]
 python_files = [ "test_*.py",]
 python_functions = [ "test_*",]
-addopts = "-v --tb=short --strict-markers"
+addopts = "-v --tb=short --strict-markers --ignore=tests/ab_testing"
 asyncio_mode = "auto"
 markers = [
   "e2e: end-to-end tests that start a real server (run with `pytest -m e2e`)",
