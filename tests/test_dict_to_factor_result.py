@@ -1,4 +1,8 @@
-"""Tests for PR8 L2: FactorStage._dict_to_factor_result helper.
+"""Tests for dict → FactorResult conversion (PR8 L2 → PR9a ResultFactory).
+
+PR8 originally tested `FactorStage._dict_to_factor_result`. After PR9a that
+method moved to `ResultFactory.from_cached_dict`. The tests here now cover
+the canonical location (factor/result_factory.py) — same behavior, new home.
 
 Covers:
   - All 14 fields preserved
@@ -17,22 +21,16 @@ from pathlib import Path
 import pytest
 
 from llmwikify.reproduction.backtest.base import FactorResult
-from scripts.run_101_alphas_v2 import FactorStage, RunConfig
+from llmwikify.reproduction.factor import ResultFactory
 
 
 @pytest.fixture
-def stage(tmp_path: Path) -> FactorStage:
-    config = RunConfig(
-        track_b_path=tmp_path / "track_b.json",
-        output_dir=tmp_path / "output",
-        factors_dir=tmp_path / "factors",
-        no_delay=True,
-    )
-    return FactorStage(config)
+def factory() -> ResultFactory:
+    return ResultFactory()
 
 
 class TestDictToFactorResult:
-    def test_full_dict_all_fields(self, stage: FactorStage) -> None:
+    def test_full_dict_all_fields(self, factory: ResultFactory) -> None:
         """All dict fields map to FactorResult fields."""
         d = {
             "status": "success",
@@ -49,7 +47,7 @@ class TestDictToFactorResult:
             "error": None,
             "elapsed_sec": 12.5,
         }
-        fr = stage._dict_to_factor_result(d, 42)
+        fr = factory.from_cached_dict(d, 42)
         assert fr.status == "success"
         assert fr.signal.id == "042"  # byte-equal: "{idx:03d}"
         assert fr.signal.name == "板块轮动周期表"
@@ -64,10 +62,10 @@ class TestDictToFactorResult:
         }
         assert fr.elapsed_sec == 12.5
 
-    def test_missing_optional_fields(self, stage: FactorStage) -> None:
+    def test_missing_optional_fields(self, factory: ResultFactory) -> None:
         """Fields not in dict default to None / 0 / empty."""
         d = {"status": "success", "alpha_index": 1}
-        fr = stage._dict_to_factor_result(d, 1)
+        fr = factory.from_cached_dict(d, 1)
         assert fr.code is None
         assert fr.code_chars == 0
         assert fr.h5_path is None
@@ -78,7 +76,7 @@ class TestDictToFactorResult:
         assert fr.error is None
         assert fr.elapsed_sec == 0.0
 
-    def test_failed_status(self, stage: FactorStage) -> None:
+    def test_failed_status(self, factory: ResultFactory) -> None:
         d = {
             "status": "failed",
             "alpha_index": 7,
@@ -87,35 +85,35 @@ class TestDictToFactorResult:
             "code": "partial code",
             "code_chars": 12,
         }
-        fr = stage._dict_to_factor_result(d, 7)
+        fr = factory.from_cached_dict(d, 7)
         assert fr.status == "failed"
         assert fr.stage == "codegen"
         assert fr.error == "LLM timeout"
         assert fr.code == "partial code"
         assert fr.code_chars == 12
 
-    def test_signal_id_byte_equal(self, stage: FactorStage) -> None:
+    def test_signal_id_byte_equal(self, factory: ResultFactory) -> None:
         """signal.id must be '{idx:03d}' (e.g. '001', '042') for byte-equal."""
         d = {"status": "success", "alpha_index": 1}
-        fr = stage._dict_to_factor_result(d, 1)
+        fr = factory.from_cached_dict(d, 1)
         assert fr.signal.id == "001"  # not "alpha-001"
 
         d = {"status": "success", "alpha_index": 42}
-        fr = stage._dict_to_factor_result(d, 42)
+        fr = factory.from_cached_dict(d, 42)
         assert fr.signal.id == "042"
 
-    def test_h5_path_is_path_object(self, stage: FactorStage) -> None:
+    def test_h5_path_is_path_object(self, factory: ResultFactory) -> None:
         d = {"status": "success", "alpha_index": 1, "h5_path": "/tmp/foo.h5"}
-        fr = stage._dict_to_factor_result(d, 1)
+        fr = factory.from_cached_dict(d, 1)
         assert isinstance(fr.h5_path, Path)
         assert str(fr.h5_path) == "/tmp/foo.h5"
 
-    def test_h5_path_none_when_missing(self, stage: FactorStage) -> None:
+    def test_h5_path_none_when_missing(self, factory: ResultFactory) -> None:
         d = {"status": "success", "alpha_index": 1}
-        fr = stage._dict_to_factor_result(d, 1)
+        fr = factory.from_cached_dict(d, 1)
         assert fr.h5_path is None
 
-    def test_to_dict_round_trip(self, stage: FactorStage) -> None:
+    def test_to_dict_round_trip(self, factory: ResultFactory) -> None:
         """After conversion, to_dict() should preserve key fields for byte-equal."""
         d = {
             "status": "success",
@@ -132,7 +130,7 @@ class TestDictToFactorResult:
             "error": "",
             "elapsed_sec": 12.0,
         }
-        fr = stage._dict_to_factor_result(d, 1)
+        fr = factory.from_cached_dict(d, 1)
         out = fr.to_dict()
         # Key fields preserved
         assert out["status"] == "success"
@@ -142,11 +140,11 @@ class TestDictToFactorResult:
         assert out["ic_winrate"] == 0.51
         assert out["stage"] == ""  # L2: coerced None → ""
 
-    def test_real_cached_file_round_trip(self, stage: FactorStage, tmp_path: Path) -> None:
+    def test_real_cached_file_round_trip(self, factory: ResultFactory, tmp_path: Path) -> None:
         """Real cached v1/v2 single_factor_001.json should round-trip to same JSON shape.
 
         Note: factor_series_len / factor_series_dtype are NOT preserved by
-        _dict_to_factor_result (we have no pl.Series in the JSON). This is
+        from_cached_dict (we have no pl.Series in the JSON). This is
         intentional — L2 doesn't need the actual series, just the metrics.
         """
         # Use an actual v1 output
@@ -154,7 +152,7 @@ class TestDictToFactorResult:
         if not real.exists():
             pytest.skip("Real cached file not available")
         d = json.loads(real.read_text())
-        fr = stage._dict_to_factor_result(d, idx=d.get("alpha_index", 1))
+        fr = factory.from_cached_dict(d, idx=d.get("alpha_index", 1))
         out = fr.to_dict()
         # Check key fields (skip factor_series_len / dtype — not preserved)
         SKIP = {"factor_series_len", "factor_series_dtype"}

@@ -1377,7 +1377,7 @@ sinks:
 
 ## 17.18 PR8 详细计划：L1 + L2 抽象完成度提升
 
-> 状态: 🟡 IN PROGRESS
+> 状态: ✅ DONE (`4018525`)
 > 动机: v2 抽象完成度 ~60%. L1 删 45 行 codegen 重复, L2 删 100 行 dict→FR 转换
 
 ### 17.18.1 评估背景（详见 §17.17）
@@ -1429,3 +1429,167 @@ v2 抽象缺口：
 - byte-equal 验证（与 PR6 相同流程）
 - ruff clean
 - ≥471 tests passed
+
+---
+
+## 17.19 PR9 详细计划：L3 + L4 收尾 — 抽象完成度 90% → 100%
+
+> 状态: 🟡 IN PROGRESS
+> 目标: 把 v2 内部 22 方法拆 3 个 helper class（L3），替换内联 backtest（L4-minimal）。
+> 完成后 v2 内部结构与新 framework 完全对齐。
+
+### 17.19.1 上下文
+
+PR8 后 v2 抽象 ~90%。剩余缺口：
+- **L3**: FactorStage 22 方法，3 个职责重复（result 工厂 / skip loader / record+persist）可抽 helper
+- **L4**: `run_one_factor` 内联 29 行 backtest（lines 760-789），可调 `QuantNodesBacktest.run()`
+
+抽到哪个包？新包 `src/llmwikify/reproduction/factor/`，和 `core/` (framework) / `backtest/` (engine) / `sink/` (output) 平行。
+
+### 17.19.2 L3: 3 个 helper class
+
+#### 17.19.2.1 `ResultFactory` (`factor/result_factory.py`)
+
+**职责**: 构造 `FactorResult`（4 种来源）
+
+| Method | 取代 v2 方法 | 签名 |
+|---|---|---|
+| `build_signal(idx, name, formula_brief)` | `_build_signal` (L2) | → `Signal` |
+| `success(idx, name, formula_brief, code, factor_series, h5_path, backtest, t0)` | `_success_fr` (L2) | → `FactorResult` |
+| `fail_codegen(idx, stage, error, code, t0)` | `_fail_codegen_fr` (L2) | → `FactorResult` |
+| `fail_pipeline(idx, code, exc, t0)` | `_fail_pipeline_fr` (L2) | → `FactorResult` |
+| `from_cached_dict(d, idx)` | `_dict_to_factor_result` (L2) | → `FactorResult` |
+
+**估计**: ~80 行 + ~12 tests
+
+#### 17.19.2.2 `SkipLoader` (`factor/skip_loader.py`)
+
+**职责**: 启动时读 `output_dir` 缓存 JSON，识别可跳过的 idx
+
+| Method | 取代 v2 方法 | 签名 |
+|---|---|---|
+| `scan()` | `_process_skip_existing` | → `set[int]` |
+| `load(skip, factory)` | `_load_skipped_results` | → `list[FactorResult]` |
+
+**估计**: ~50 行 + ~8 tests
+
+#### 17.19.2.3 `RecordStage` (`factor/record_stage.py`)
+
+**职责**: 每跑完一个 signal, atomic record（state + log + persist）
+
+| Method | 取代 v2 方法 | 签名 |
+|---|---|---|
+| `record(result, elapsed_cum)` | `_record_one` | → None |
+| `_idx_from_result(result)` | 同名 | → int |
+| `_log_outcome(idx, result_dict)` | 同名 | → None |
+
+**Mutable 状态**: `RecordStage` 持 `results: list` 和 `failures: list[int]` (Python 无 mutable int, 用 `[0]`)
+
+**估计**: ~80 行 + ~10 tests
+
+### 17.19.3 L4 (Minimal): 替换内联 backtest
+
+**当前 v2 lines 776-789** (14 行):
+```python
+try:
+    qn_config = build_qn_config(factor_name, h5_path, code, config=config)
+    runner = PipelineRunner.from_dict(qn_config)
+    ctx = runner.run()
+    backtest = extract_full_backtest_from_ctx(ctx)
+    logger.info(...)
+except Exception as exc:
+    logger.warning(...)
+    result = self._fail_pipeline_fr(idx, code, exc, t0)
+```
+
+**L4 后** (5 行):
+```python
+backtest = self._engine.run(code=code, h5_path=h5_path, signal=signal_obj)
+if backtest.get("error"):
+    logger.warning(...)
+    result = self._factory.fail_pipeline(idx=idx, code=code, exc=RuntimeError(backtest["error"]), t0=t0)
+```
+
+**为什么 minimal**:
+- noise / wide_from_long / write_factor_h5 留在 v2（PR3 没这些步骤）
+- `QuantNodesBacktest.run()` 已包 try/except（line 103-111 in `quantnodes.py`），返回 `{"error": ...}`
+- v2 用 `backtest.get("error")` 检查，**0 行 try/except**
+
+**byte-equal 风险**: `QuantNodesBacktest.run()` 用 `extract_full_backtest_from_ctx`, 与 v2 内联调用同一函数, 但调用顺序略不同。**需要跑 1 个真实 alpha (招商 idx=1) 验证**。
+
+### 17.19.4 拆 3 PR 实施
+
+#### PR9a: ResultFactory (本 PR, ~3h)
+
+| 动作 | 文件 | 行数 |
+|---|---|---|
+| NEW | `src/llmwikify/reproduction/factor/__init__.py` | +15 |
+| NEW | `src/llmwikify/reproduction/factor/result_factory.py` | +80 |
+| NEW | `tests/test_result_factory.py` | +120 |
+| MODIFY | `scripts/run_101_alphas_v2.py`: 删 `_success_fr` / `_fail_codegen_fr` / `_fail_pipeline_fr` / `_dict_to_factor_result` / `_build_signal` (5 methods, ~80 lines) | -80 |
+| MODIFY | v2 `__init__` 增 `self._factory = ResultFactory()` | +1 |
+| MODIFY | v2 5 个调用点改 `self._factory.xxx()` | ±0 |
+| MODIFY | `docs/designs/run_101_alphas_v2_design.md` §17.19 | +100 |
+
+**验证**: ruff + 270+ tests + byte-equal
+
+#### PR9b: SkipLoader (~2h)
+
+| 动作 | 文件 | 行数 |
+|---|---|---|
+| NEW | `src/llmwikify/reproduction/factor/skip_loader.py` | +50 |
+| NEW | `tests/test_skip_loader.py` | +80 |
+| MODIFY | v2: 删 `_process_skip_existing` / `_load_skipped_results` (37 lines) | -37 |
+| MODIFY | v2 `run()` 改用 `SkipLoader.scan()` / `SkipLoader.load()` | ±0 |
+| MODIFY | `tests/test_runner_v2_factor_stage_record.py::TestLoadSkippedResults` 改 patch 路径 | +5 |
+| MODIFY | design doc §17.19 | +20 |
+
+**验证**: ruff + 278+ tests + byte-equal
+
+#### PR9c: RecordStage + L4-minimal (~4h)
+
+| 动作 | 文件 | 行数 |
+|---|---|---|
+| NEW | `src/llmwikify/reproduction/factor/record_stage.py` | +80 |
+| NEW | `tests/test_record_stage.py` | +100 |
+| MODIFY | v2: 删 `_record_one` / `_idx_from_result` / `_log_outcome` / `_update_state` / `_persist_result` / `_write_single_json` (57 lines) | -57 |
+| MODIFY | v2: L4 替换 lines 760-789 (29 → 5 lines) | -24 |
+| MODIFY | v2 `__init__` 改 `self._failures_ref = [0]` | +1 |
+| MODIFY | v2 删 3 个 inline imports (PipelineRunner / build_qn_config / extract_full_backtest_from_ctx) | -3 |
+| MODIFY | v2 顶部 import 增 `from llmwikify.reproduction.backtest import QuantNodesBacktest` | +1 |
+| MODIFY | `tests/test_runner_v2_factor_stage_record.py::TestRecordOne` 10 个 test 改 patch 路径 | +20 |
+| MODIFY | design doc §17.19 | +20 |
+
+**验证**: ruff + 288+ tests + **byte-equal 跑 1 个真实 alpha (招商 idx=1)**
+
+### 17.19.5 预期结果
+
+| | PR8 后 | PR9a 后 | PR9b 后 | PR9c 后 |
+|---|---|---|---|---|
+| v2 lines | 1108 | 1028 | 991 | **~934 (-16%)** |
+| factor/ 新包 | 0 | 95 | 145 | **225** |
+| tests | 258 | 270 | 278 | **288** |
+| 抽象完成度 | 90% | 92% | 94% | **~98%** |
+
+### 17.19.6 风险
+
+| 风险 | 概率 | 缓解 |
+|---|---|---|
+| byte-equal 失败 (L4) | 中 | PR9c 跑 招商 idx=1 验证 |
+| Test fixture 改坏 (RecordStage) | 中 | 每个 PR 跑受影响 test |
+| PR0 test 漏改 | 低 | 跑 `pytest tests/test_runner_v2_*.py` 全套 |
+| shim 链太长 | 低 | 保留 PR0 shim, 不删旧名 |
+
+### 17.19.7 验证清单 (per PR)
+
+- [ ] `ruff check src/llmwikify/reproduction/factor/ scripts/run_101_alphas_v2.py`
+- [ ] `pytest tests/ -q` (full)
+- [ ] `pytest tests/test_runner_v2_*.py tests/test_result_factory.py -q` (v2 + new)
+- [ ] byte-equal 3 个文件: `multi_alpha_001_to_101.json` / `multi_alpha_summary.md` / `single_factor_001.json`
+
+### 17.19.8 后续 (PR9 完成后)
+
+- **Phase C**: 跑 招商 broker paper (10 signals) 真实 end-to-end
+- **Phase C2**: 跑 1601 academic paper (98 signals)
+- **Phase A (next sprint)**: `paper.yaml` schema + `run_paper.py --recipe`
+- **Phase D (later)**: Plugin registry auto-discovery

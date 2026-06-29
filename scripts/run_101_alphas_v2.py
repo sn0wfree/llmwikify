@@ -76,6 +76,9 @@ from llmwikify.reproduction.codegen.react_runner import (  # noqa: F401
     ReActProgressHook,
     llm_code_react,
 )
+from llmwikify.reproduction.factor import (
+    ResultFactory,  # PR9a: extracted L2 result factories
+)
 from llmwikify.reproduction.pipeline.backtest_extract import (
     extract_full_backtest_from_ctx,
     safe_float,
@@ -91,7 +94,6 @@ from llmwikify.reproduction.pipeline.stages.codegen import llm_code_oneshot
 from llmwikify.reproduction.reporting.aggregator import BatchAggregator
 from llmwikify.reproduction.reporting.reporter import BatchReporter
 from llmwikify.reproduction.reporting.serializer import BatchSerializer
-from llmwikify.reproduction.signal_source.base import Signal  # L2: for _build_signal
 
 # ─── Constants ───────────────────────────────────────────────────────
 
@@ -493,96 +495,8 @@ class FactorRunner(BaseStage):
         }
 
     # ── L2: FactorResult-returning variants (used by FactorStage internally) ──
-
-    def _build_signal(self, alpha_index: int, name: str = "", formula_brief: str = "") -> Signal:
-        """Build a Signal object for the given alpha_index (id="{idx:03d}")."""
-        return Signal(
-            id=f"{alpha_index:03d}",
-            name=name or f"alpha-{alpha_index:03d}",
-            formula_brief=formula_brief,
-            metadata={"alpha_index": alpha_index, "index": alpha_index},
-        )
-
-    def _success_fr(
-        self, alpha_index: int, factor_name: str, formula_brief: str,
-        code: str, factor_series: pl.Series, h5_path: Path,
-        backtest: dict, t0: float,
-    ) -> FactorResult:
-        """L2: Build success FactorResult (replaces inline dict in _run_one_with_codegen)."""
-        elapsed: float = time.monotonic() - t0
-        return FactorResult(
-            signal=self._build_signal(alpha_index, factor_name, formula_brief),
-            status="success",
-            code=code,
-            code_chars=len(code),
-            factor_series=factor_series,
-            h5_path=h5_path,
-            backtest=backtest,
-            stage=None,
-            error=None,
-            elapsed_sec=elapsed,
-        )
-
-    def _fail_codegen_fr(
-        self, alpha_index: int, stage: str, error: str,
-        code: str | None, t0: float,
-    ) -> FactorResult:
-        """L2: Build codegen-fail FactorResult."""
-        return FactorResult(
-            signal=self._build_signal(alpha_index),
-            status="failed",
-            stage=stage,
-            error=error,
-            code=code,
-            code_chars=len(code) if code else 0,
-            backtest={},
-            elapsed_sec=time.monotonic() - t0,
-        )
-
-    def _fail_pipeline_fr(
-        self, alpha_index: int, code: str, exc: Exception, t0: float,
-    ) -> FactorResult:
-        """L2: Build pipeline-fail FactorResult (with traceback[-1500:])."""
-        import traceback
-        tb: str = traceback.format_exc()
-        return FactorResult(
-            signal=self._build_signal(alpha_index),
-            status="failed",
-            stage="pipeline",
-            error=f"{type(exc).__name__}: {exc}",
-            code=code,
-            code_chars=len(code) if code else 0,
-            backtest={},
-            metadata={"traceback": tb[-1500:]},
-            elapsed_sec=time.monotonic() - t0,
-        )
-
-    def _dict_to_factor_result(self, d: dict, idx: int) -> FactorResult:
-        """L2: Convert legacy dict (from single_factor_NNN.json) to FactorResult.
-
-        Used by _load_skipped_results to bridge cached dict → new framework.
-        """
-        signal = Signal(
-            id=f"{idx:03d}",
-            name=d.get("factor_name", f"alpha-{idx:03d}"),
-            formula_brief=d.get("formula_brief", ""),
-            metadata={"alpha_index": idx, "index": idx},
-        )
-        return FactorResult(
-            signal=signal,
-            status=d.get("status", "unknown"),
-            code=d.get("code"),
-            code_chars=d.get("code_chars", 0),
-            h5_path=Path(d["h5_path"]) if d.get("h5_path") else None,
-            backtest={
-                "ic_mean": d.get("ic_mean"),
-                "icir": d.get("icir"),
-                "win_rate": d.get("ic_winrate"),
-            },
-            stage=d.get("stage"),
-            error=d.get("error"),
-            elapsed_sec=d.get("elapsed_sec", 0.0),
-        )
+    # PR9a: moved to `llmwikify.reproduction.factor.ResultFactory`.
+    # Use `self._factory.success(...)` etc. (initialized in FactorStage.__init__).
 
 
 class FactorStage(FactorRunner):
@@ -594,7 +508,7 @@ class FactorStage(FactorRunner):
     modular framework.
     """
 
-    __slots__ = ("results", "failures", "batch_t0", "_single_sink", "_yaml_sink", "_summary_sink")
+    __slots__ = ("results", "failures", "batch_t0", "_single_sink", "_yaml_sink", "_summary_sink", "_factory")
     label = "factor"
 
     def __init__(self, config: RunConfig) -> None:
@@ -608,6 +522,8 @@ class FactorStage(FactorRunner):
         self._single_sink: Any = None
         self._yaml_sink: Any = None
         self._summary_sink: Any = None
+        # PR9a: shared result factory (extracted from FactorRunner's L2 methods)
+        self._factory: ResultFactory = ResultFactory()
 
     def run(self) -> list[FactorResult]:
         """Orchestrate batch alpha processing using the new modular sinks.
@@ -708,8 +624,8 @@ class FactorStage(FactorRunner):
             except (_json.JSONDecodeError, OSError) as exc:
                 logger.warning("[factor] skip-corrupt: alpha-%03d: %s", idx, exc)
                 continue
-            # L2: convert dict → FactorResult via helper (1 helper used 3 places)
-            self.results.append(self._dict_to_factor_result(loaded, idx))
+            # L2: convert dict → FactorResult via shared factory (PR9a)
+            self.results.append(self._factory.from_cached_dict(loaded, idx))
 
     def _compute_to_run(self, skip: set[int]) -> list[int]:
         """Return alpha indices to run (excluding skipped ones)."""
@@ -750,8 +666,10 @@ class FactorStage(FactorRunner):
             )
             if error is not None:
                 logger.warning("[alpha-%03d] failed at %s: %s", idx, stage, error[:100])
-                # L2: returns FactorResult (was dict via _fail_codegen_result)
-                result: FactorResult = self._fail_codegen_fr(idx, stage, error, code, t0)
+                # PR9a: result factory (was _fail_codegen_fr)
+                result: FactorResult = self._factory.fail_codegen(
+                    alpha_index=idx, stage=stage, error=error, code=code, t0=t0,
+                )
             else:
                 # Step 4: H5 + Step 5: backtest + Step 6: metrics
                 import re
@@ -785,13 +703,17 @@ class FactorStage(FactorRunner):
                     )
                 except Exception as exc:
                     logger.warning("[alpha-%03d] failed at pipeline: %s: %s", idx, type(exc).__name__, str(exc)[:100])
-                    # L2: returns FactorResult with traceback in metadata
-                    result = self._fail_pipeline_fr(idx, code, exc, t0)
+                    # PR9a: result factory (was _fail_pipeline_fr)
+                    result = self._factory.fail_pipeline(
+                        alpha_index=idx, code=code, exc=exc, t0=t0,
+                    )
                 else:
-                    # L2: build FactorResult first (used by both persist + return)
-                    success_fr = self._success_fr(
-                        idx, factor_name, formula_brief,
-                        code, factor_series, h5_path, backtest, t0,
+                    # PR9a: result factory (was _success_fr)
+                    success_fr = self._factory.success(
+                        alpha_index=idx, factor_name=factor_name,
+                        formula_brief=formula_brief, code=code,
+                        factor_series=factor_series, h5_path=h5_path,
+                        backtest=backtest, t0=t0,
                     )
                     # Step 7: persist YAML + DuckDB via YamlDuckdbSink (PR4)
                     self._persist_via_sink(success_fr)
@@ -800,9 +722,10 @@ class FactorStage(FactorRunner):
             return result
         except Exception as exc:
             logger.warning("[alpha-%03d] EXCEPTION: %s: %s", idx, type(exc).__name__, str(exc)[:100])
-            # L2: wrapper failure also returns FactorResult
-            return self._fail_codegen_fr(
-                idx, "wrapper", f"{type(exc).__name__}: {exc}", None, t0,
+            # PR9a: result factory (was _fail_codegen_fr)
+            return self._factory.fail_codegen(
+                alpha_index=idx, stage="wrapper",
+                error=f"{type(exc).__name__}: {exc}", code=None, t0=t0,
             )
 
     def _generate_code(self, factor_name: str, formula_brief: str, df_pl) -> tuple:
@@ -957,9 +880,12 @@ class FactorStage(FactorRunner):
             logger.warning("[sink] SingleJsonSink.write_one failed for %s: %s", result.signal.id, exc)
 
     def _handle_parallel_failure(self, idx: int, stage: str, error: str) -> None:
-        """L2: append synthetic FactorResult (not dict) with full Bug 5 fields."""
+        """L2: append synthetic FactorResult (not dict) with full Bug 5 fields.
+
+        PR9a: uses self._factory.build_signal for the Signal construction.
+        """
         result: FactorResult = FactorResult(
-            signal=self._build_signal(idx),
+            signal=self._factory.build_signal(idx),
             status="failed",
             stage=stage,
             error=error[:200],
