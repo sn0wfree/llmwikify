@@ -79,10 +79,7 @@ from llmwikify.reproduction.codegen.react_runner import (  # noqa: F401
 from llmwikify.reproduction.factor import (
     ResultFactory,  # PR9a: extracted L2 result factories
 )
-from llmwikify.reproduction.pipeline.backtest_extract import (
-    extract_full_backtest_from_ctx,
-    safe_float,
-)
+from llmwikify.reproduction.pipeline.backtest_extract import safe_float
 from llmwikify.reproduction.pipeline.data_loader import (
     derive_input_columns,
     load_and_build_df,
@@ -508,7 +505,7 @@ class FactorStage(FactorRunner):
     modular framework.
     """
 
-    __slots__ = ("results", "failures", "batch_t0", "_single_sink", "_yaml_sink", "_summary_sink", "_factory")
+    __slots__ = ("results", "batch_t0", "_single_sink", "_yaml_sink", "_summary_sink", "_factory", "_record_stage", "_failures_ref", "_engine")
     label = "factor"
 
     def __init__(self, config: RunConfig) -> None:
@@ -516,7 +513,9 @@ class FactorStage(FactorRunner):
         # L2: state now stores FactorResult objects (not dicts) so that
         # Sinks can be called directly without dict→FactorResult conversion.
         self.results: list[FactorResult] = []
-        self.failures: int = 0
+        # PR9c: failures is now a property reading self._failures_ref[0]
+        # (Python has no mutable int; RecordStage mutates the [0] slot).
+        self._failures_ref: list[int] = [0]
         self.batch_t0: float = 0.0
         # PR6: sinks (lazy-init in run() OR _write_single_json)
         self._single_sink: Any = None
@@ -524,6 +523,16 @@ class FactorStage(FactorRunner):
         self._summary_sink: Any = None
         # PR9a: shared result factory (extracted from FactorRunner's L2 methods)
         self._factory: ResultFactory = ResultFactory()
+        # PR9c: record stage (per-signal state + log + persist + outcome)
+        # Lazily inited in run() because it needs _single_sink.
+        self._record_stage: Any = None
+        # PR9c L4: QuantNodes backtest engine (replaces inline backtest).
+        self._engine: Any = None  # QuantNodesBacktest, lazy import in run()
+
+    @property
+    def failures(self) -> int:
+        """PR9c: read-only view into _failures_ref[0] (mutable int wrapper)."""
+        return self._failures_ref[0]
 
     def run(self) -> list[FactorResult]:
         """Orchestrate batch alpha processing using the new modular sinks.
@@ -559,6 +568,16 @@ class FactorStage(FactorRunner):
             json_filename="multi_alpha_001_to_101.json",  # v2-specific name
             md_filename="multi_alpha_summary.md",         # v2-specific name
         )
+        # PR9c: initialize record stage (per-signal state + log + persist + outcome)
+        from llmwikify.reproduction.factor import RecordStage
+        self._record_stage = RecordStage(
+            single_sink=self._single_sink,
+            results=self.results,
+            failures=self._failures_ref,
+        )
+        # PR9c L4: initialize QuantNodes backtest engine (replaces inline backtest)
+        from llmwikify.reproduction.backtest import QuantNodesBacktest
+        self._engine = QuantNodesBacktest(config=self.config)
 
         self._log_config()
         self._preload_data()
@@ -661,13 +680,6 @@ class FactorStage(FactorRunner):
                 import re
 
                 import numpy as np
-                from QuantNodes.research.factor_test.pipeline_runner import (
-                    PipelineRunner,
-                )
-
-                from llmwikify.reproduction.pipeline.backtest_config import (
-                    build_qn_config,
-                )
                 unique_vals = factor_series.drop_nulls().unique()
                 if len(unique_vals) <= 2:
                     logger.warning("[alpha] constant/binary factor detected (%d unique values), adding noise", len(unique_vals))
@@ -677,23 +689,29 @@ class FactorStage(FactorRunner):
                 safe_factor_name = re.sub(r"[^A-Za-z0-9_]", "_", factor_name)
                 h5_path = write_factor_h5(factor_wide, safe_factor_name, config.data_path)
                 logger.info("[alpha] h5: written %s", h5_path)
-                try:
-                    qn_config = build_qn_config(factor_name, h5_path, code, config=config)
-                    runner = PipelineRunner.from_dict(qn_config)
-                    ctx = runner.run()
-                    backtest = extract_full_backtest_from_ctx(ctx)
+                # PR9c L4-minimal: delegate backtest to QuantNodesBacktest (PR3).
+                # engine.run() handles the QuantNodes pipeline internally and
+                # returns metrics dict (or {"error": ...} on failure).
+                backtest_signal = self._factory.build_signal(idx, factor_name, formula_brief)
+                backtest = self._engine.run(
+                    code=code, h5_path=h5_path, signal=backtest_signal,
+                )
+                if backtest.get("error"):
+                    logger.warning(
+                        "[alpha-%03d] failed at pipeline: %s",
+                        idx, backtest["error"][:100],
+                    )
+                    # PR9a: result factory (was _fail_pipeline_fr)
+                    result = self._factory.fail_pipeline(
+                        alpha_index=idx, code=code,
+                        exc=RuntimeError(backtest["error"]), t0=t0,
+                    )
+                else:
                     logger.info(
                         "[alpha-%03d] backtest: IC=%.4f, ICIR=%.4f, WinRate=%.1f%%",
                         idx, backtest.get("ic_mean", 0), backtest.get("icir", 0),
                         (backtest.get("win_rate", 0) or 0) * 100,
                     )
-                except Exception as exc:
-                    logger.warning("[alpha-%03d] failed at pipeline: %s: %s", idx, type(exc).__name__, str(exc)[:100])
-                    # PR9a: result factory (was _fail_pipeline_fr)
-                    result = self._factory.fail_pipeline(
-                        alpha_index=idx, code=code, exc=exc, t0=t0,
-                    )
-                else:
                     # PR9a: result factory (was _success_fr)
                     success_fr = self._factory.success(
                         alpha_index=idx, factor_name=factor_name,
@@ -769,12 +787,15 @@ class FactorStage(FactorRunner):
             logger.warning("[sink] YamlDuckdbSink.write_one failed for %s: %s", fr.signal.id, exc)
 
     def _run_one_with_recording(self, idx: int) -> FactorResult:
-        """Serial path: no locks, single thread."""
+        """Serial path: no locks, single thread.
+
+        PR9c: delegates record step to RecordStage (was inline _record_one).
+        """
         elapsed_cum: float = time.monotonic() - self.batch_t0
         logger.info("[factor] alpha-%03d: starting (elapsed: %.0fs, failures: %d)",
                     idx, elapsed_cum, self.failures)
         result = self._run_one_with_codegen(idx)
-        self._record_one(result, elapsed_cum)
+        self._record_stage.record(result, elapsed_cum)
         return result
 
     def _run_serial(self, to_run: list[int]) -> None:
@@ -800,75 +821,23 @@ class FactorStage(FactorRunner):
                     self._handle_parallel_failure(idx, type(exc).__name__, str(exc))
 
     def _run_one_safe(self, idx: int) -> FactorResult:
+        """Parallel path: lock only around RecordStage.record (not codegen).
+
+        PR9c: delegates record step to RecordStage (was inline _record_one).
+        Bug 3 fix: LLM call is OUTSIDE the lock window.
+        """
         with _llm_semaphore:
             result = self._run_one_with_codegen(idx)
             elapsed_cum = time.monotonic() - self.batch_t0
             with _print_lock:
-                self._record_one(result, elapsed_cum)
+                self._record_stage.record(result, elapsed_cum)
             return result
-
-    def _record_one(self, result: FactorResult, elapsed_cum: float) -> None:
-        """L2: Atomic record. Takes FactorResult (was (idx, result_dict)).
-
-        - state: append to self.results
-        - row log: BatchReporter.log_row (still takes dict, so we call to_dict())
-        - persist: SingleJsonSink.write_one (L2: direct, no conversion)
-        - outcome: log success/failure
-        """
-        idx = self._idx_from_result(result)
-        self._update_state(result)
-        BatchReporter.log_row(idx, result.to_dict(), elapsed_cum)
-        self._persist_result(result)
-        self._log_outcome(idx, result.to_dict())
-
-    def _idx_from_result(self, result: FactorResult) -> int:
-        """Extract alpha_index (int) from FactorResult.signal.metadata."""
-        meta = result.signal.metadata
-        if "alpha_index" in meta and isinstance(meta["alpha_index"], int):
-            return meta["alpha_index"]
-        if "index" in meta and isinstance(meta["index"], int):
-            return meta["index"]
-        return 0
-
-    def _log_outcome(self, idx: int, result: dict) -> None:
-        """Backward-compat shim (PR0 test fixture). Log success or failure."""
-        if result.get("status") != "success":
-            logger.warning("[factor] alpha-%03d: failed (%s)", idx, (result.get("error", "?") or "")[:80])
-        else:
-            logger.info("[factor] alpha-%03d: success (%.1fs)", idx, result.get("elapsed_sec", 0))
-
-    def _update_state(self, result: FactorResult) -> None:
-        """L2: append FactorResult to self.results + increment failures on fail.
-
-        L2: no longer mutates result (immutable-like). Idempotent.
-        """
-        self.results.append(result)
-        if result.status != "success":
-            self.failures += 1
-
-    def _persist_result(self, result: FactorResult) -> None:
-        """L2: delegates to SingleJsonSink (PR4) for actual file write."""
-        self._write_single_json(result)
-
-    def _write_single_json(self, result: FactorResult) -> None:
-        """L2: write single_factor_<signal.id>.json via SingleJsonSink.
-
-        L2: now takes FactorResult directly (was dict + 30-line conversion).
-        signal.id is "{idx:03d}" via _build_signal, so output is
-        `single_factor_001.json` (byte-equal to v1).
-        """
-        from llmwikify.reproduction.sink import SingleJsonSink
-        if not hasattr(self, "_single_sink") or self._single_sink is None:
-            self._single_sink = SingleJsonSink(output_dir=self.config.output_dir)
-        try:
-            self._single_sink.write_one(result)
-        except Exception as exc:
-            logger.warning("[sink] SingleJsonSink.write_one failed for %s: %s", result.signal.id, exc)
 
     def _handle_parallel_failure(self, idx: int, stage: str, error: str) -> None:
         """L2: append synthetic FactorResult (not dict) with full Bug 5 fields.
 
         PR9a: uses self._factory.build_signal for the Signal construction.
+        PR9c: uses self._failures_ref[0] for mutable int.
         """
         result: FactorResult = FactorResult(
             signal=self._factory.build_signal(idx),
@@ -881,8 +850,15 @@ class FactorStage(FactorRunner):
             elapsed_sec=0.0,
         )
         self.results.append(result)
-        self.failures += 1
-        self._write_single_json(result)
+        self._failures_ref[0] += 1
+        if self._single_sink is not None:
+            try:
+                self._single_sink.write_one(result)
+            except Exception as exc:
+                logger.warning(
+                    "[sink] SingleJsonSink.write_one failed for %s: %s",
+                    result.signal.id, exc,
+                )
 
     def _write_summary(self) -> None:
         """L2: delegate batch summary to BatchSummarySink (PR4 + PR5).

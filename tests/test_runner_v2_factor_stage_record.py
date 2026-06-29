@@ -1,17 +1,26 @@
-"""Tests for FactorStage record path (P0 + L2 refactor).
+"""Tests for FactorStage record path (P0 + L2 + PR9a + PR9b + PR9c refactor).
 
 Covers:
-  - _record_one: calls _update_state / log_row / _persist_result / _log_outcome in order
+  - _record_one → RecordStage.record (PR9c): calls update_state / log_row /
+    persist / log_outcome in order
   - _run_one_with_recording: serial path (no lock)
-  - _run_one_safe: parallel path (lock around _record_one)
+  - _run_one_safe: parallel path (lock around record)
   - _handle_parallel_failure: synthetic FactorResult (Bug 5)
-  - _load_skipped_results: handles corrupt JSON gracefully (Bug 6, L2: dict→FactorResult)
+  - SkipLoader integration: handles corrupt JSON gracefully (Bug 6)
 
-L2: All fixtures now use FactorResult (was dict). _record_one/_update_state/
+PR9a: All fixtures use FactorResult (was dict). _record_one/_update_state/
 _persist_result/_load_skipped_results signatures all changed to take FactorResult.
 
-Note: FactorStage/FactorRunner use __slots__, so mock patches are applied
-at the CLASS level (patch.object(FactorStage, ...)) not at the instance level.
+PR9b: _load_skipped_results → SkipLoader.load().
+
+PR9c: 6 methods (_record_one / _update_state / _persist_result / _log_outcome /
+_idx_from_result / _write_single_json) replaced by RecordStage helper. Tests
+patch `RecordStage.record` / `RecordStage._update_state` / etc. instead of
+FactorStage methods.
+
+Note: FactorStage/FactorRunner/RecordStage all use __slots__, so mock patches
+are applied at the CLASS level (patch.object(RecordStage, ...)) not at the
+instance level.
 """
 from __future__ import annotations
 
@@ -79,41 +88,78 @@ def _make_fr(idx: int, status: str = "success", **kwargs) -> FactorResult:
     )
 
 
-# ─── _record_one ─────────────────────────────────────────────────────
+# ─── RecordStage integration (PR9c, was _record_one) ────────────────
 
 
 class TestRecordOne:
     def test_calls_all_four_steps(self, stage: FactorStage) -> None:
-        """_record_one must call update_state → log_row → persist_result → log_outcome in order."""
+        """RecordStage.record() must call update_state → log_row → persist → log_outcome in order.
+
+        PR9c: replaces FactorStage._record_one + 4 helper methods.
+        """
+        from llmwikify.reproduction.factor import RecordStage
+
         result = _make_fr(1, status="success", elapsed_sec=1.5)
         call_order: list[str] = []
 
-        # L2: signatures changed — _update_state / _persist_result now take
-        # only (result), no idx. _record_one takes only (result, elapsed_cum).
-        with patch.object(FactorStage, "_update_state",
+        # Lazy-init record_stage (it was created in run() before, but the
+        # test fixture doesn't call run()).
+        from llmwikify.reproduction.sink import SingleJsonSink
+        if stage._record_stage is None:
+            stage._single_sink = SingleJsonSink(output_dir=stage.config.output_dir)
+            stage._record_stage = RecordStage(
+                single_sink=stage._single_sink,
+                results=stage.results,
+                failures=stage._failures_ref,
+            )
+
+        with patch.object(RecordStage, "_update_state",
                           side_effect=lambda r: call_order.append("update_state")):
             with patch.object(BatchReporter, "log_row",
                               side_effect=lambda i, r, t: call_order.append("log_row")):
-                with patch.object(FactorStage, "_persist_result",
+                with patch.object(RecordStage, "_persist_one",
                                   side_effect=lambda r: call_order.append("persist")):
-                    with patch.object(FactorStage, "_log_outcome",
+                    with patch.object(RecordStage, "_log_outcome",
                                       side_effect=lambda i, r: call_order.append("log_outcome")):
-                        stage._record_one(result, 0.0)
+                        stage._record_stage.record(result, 0.0)
 
         assert call_order == ["update_state", "log_row", "persist", "log_outcome"]
 
     def test_updates_results_and_failures(self, stage: FactorStage) -> None:
-        """_update_state inside _record_one appends result + increments failures."""
+        """RecordStage._update_state appends result + increments failures."""
+        from llmwikify.reproduction.factor import RecordStage
+        from llmwikify.reproduction.sink import SingleJsonSink
+
+        if stage._record_stage is None:
+            stage._single_sink = SingleJsonSink(output_dir=stage.config.output_dir)
+            stage._record_stage = RecordStage(
+                single_sink=stage._single_sink,
+                results=stage.results,
+                failures=stage._failures_ref,
+            )
+
         result = _make_fr(1, status="failed", stage="react", error="boom", code_chars=0)
-        stage._record_one(result, 0.0)
+        stage._record_stage._update_state(result)
         assert len(stage.results) == 1
         assert stage.results[0] is result
         assert stage.failures == 1
+        assert stage._failures_ref[0] == 1  # underlying mutable
 
     def test_persist_writes_json(self, stage: FactorStage) -> None:
-        """_record_one's _persist_result writes single_factor_NNN.json to output_dir."""
+        """RecordStage._persist_one writes single_factor_NNN.json to output_dir."""
+        from llmwikify.reproduction.factor import RecordStage
+        from llmwikify.reproduction.sink import SingleJsonSink
+
+        if stage._record_stage is None:
+            stage._single_sink = SingleJsonSink(output_dir=stage.config.output_dir)
+            stage._record_stage = RecordStage(
+                single_sink=stage._single_sink,
+                results=stage.results,
+                failures=stage._failures_ref,
+            )
+
         result = _make_fr(1, status="success", ic_mean=0.02, icir=0.1, ic_winrate=0.5, elapsed_sec=1.0)
-        stage._record_one(result, 0.0)
+        stage._record_stage._persist_one(result)
         json_path = stage.config.output_dir / "single_factor_001.json"
         assert json_path.exists()
         loaded = json.loads(json_path.read_text(encoding="utf-8"))
@@ -126,20 +172,42 @@ class TestRecordOne:
 
 class TestRunOneWithRecording:
     def test_no_lock_serial(self, stage: FactorStage) -> None:
-        """Serial path: no lock, calls run_one_factor + _record_one."""
+        """Serial path: no lock, calls run_one_factor + record_stage.record()."""
+        from llmwikify.reproduction.factor import RecordStage
+        from llmwikify.reproduction.sink import SingleJsonSink
+
+        if stage._record_stage is None:
+            stage._single_sink = SingleJsonSink(output_dir=stage.config.output_dir)
+            stage._record_stage = RecordStage(
+                single_sink=stage._single_sink,
+                results=stage.results,
+                failures=stage._failures_ref,
+            )
+
         fake_result = _make_fr(1, status="success", ic_mean=0.02, icir=0.1, ic_winrate=0.5, elapsed_sec=1.0)
         with patch.object(FactorStage, "run_one_factor", return_value=fake_result):
-            with patch.object(FactorStage, "_record_one") as record:
+            with patch.object(RecordStage, "record") as record:
                 stage.batch_t0 = 0.0
                 result = stage._run_one_with_recording(1)
                 assert record.called
                 assert result is fake_result
 
     def test_appends_to_results(self, stage: FactorStage) -> None:
-        """Serial path appends to results after _record_one (mocked)."""
+        """Serial path appends to results after record_stage.record (mocked)."""
+        from llmwikify.reproduction.factor import RecordStage
+        from llmwikify.reproduction.sink import SingleJsonSink
+
+        if stage._record_stage is None:
+            stage._single_sink = SingleJsonSink(output_dir=stage.config.output_dir)
+            stage._record_stage = RecordStage(
+                single_sink=stage._single_sink,
+                results=stage.results,
+                failures=stage._failures_ref,
+            )
+
         fake_result = _make_fr(1, status="success", ic_mean=0.02, icir=0.1, ic_winrate=0.5, elapsed_sec=1.0)
         with patch.object(FactorStage, "run_one_factor", return_value=fake_result):
-            with patch.object(FactorStage, "_record_one",
+            with patch.object(RecordStage, "record",
                               side_effect=lambda r, t: stage.results.append(r)):
                 stage.batch_t0 = 0.0
                 stage._run_one_with_recording(1)
@@ -152,10 +220,22 @@ class TestRunOneWithRecording:
 
 class TestRunOneSafe:
     def test_lock_wraps_record_only(self, stage: FactorStage) -> None:
-        """Parallel: lock only wraps _record_one, NOT run_one_factor.
+        """Parallel: lock only wraps record_stage.record, NOT run_one_factor.
 
         Bug 3 修复 regression test: ensure the LLM call is OUTSIDE the lock.
+        PR9c: locks wrap RecordStage.record instead of _record_one.
         """
+        from llmwikify.reproduction.factor import RecordStage
+        from llmwikify.reproduction.sink import SingleJsonSink
+
+        if stage._record_stage is None:
+            stage._single_sink = SingleJsonSink(output_dir=stage.config.output_dir)
+            stage._record_stage = RecordStage(
+                single_sink=stage._single_sink,
+                results=stage.results,
+                failures=stage._failures_ref,
+            )
+
         fake_result = _make_fr(1, status="success", elapsed_sec=1.0)
         call_order: list[str] = []
 
@@ -178,7 +258,7 @@ class TestRunOneSafe:
                           side_effect=lambda *a, **kw: (
                               call_order.append("run_one_factor"), fake_result
                           )[1]):
-            with patch.object(FactorStage, "_record_one",
+            with patch.object(RecordStage, "record",
                               side_effect=lambda r, t: call_order.append("record_one")):
                 # Patch the lock used inside _run_one_safe
                 original_lock = v2_mod._print_lock

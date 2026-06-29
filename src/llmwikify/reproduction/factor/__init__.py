@@ -23,7 +23,8 @@ Scope of helpers in this package:
   - SkipLoader    (PR9b)  : read cached JSON results on resume
   - RecordStage   (PR9c)  : atomic record (state + log + persist) after one signal
 """
+from .record_stage import RecordStage
 from .result_factory import ResultFactory
 from .skip_loader import SkipLoader
 
-__all__ = ["ResultFactory", "SkipLoader"]
+__all__ = ["ResultFactory", "SkipLoader", "RecordStage"]

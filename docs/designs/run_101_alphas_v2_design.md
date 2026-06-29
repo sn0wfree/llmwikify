@@ -1534,34 +1534,37 @@ if backtest.get("error"):
 
 **验证**: ruff ✅ + 128 tests ✅ (22 + 8 + 98) + byte-equal via `test_real_cached_file_round_trip` ✅
 
-#### PR9b: SkipLoader (本 PR, ~2h)
+#### PR9b: SkipLoader ✅ DONE (`20a3feb`)
 
 | 动作 | 文件 | 行数 |
 |---|---|---|
-| NEW | `src/llmwikify/reproduction/factor/skip_loader.py` | +60 |
-| NEW | `tests/test_skip_loader.py` | +200 (10 tests) |
+| NEW | `src/llmwikify/reproduction/factor/skip_loader.py` | +100 |
+| NEW | `tests/test_skip_loader.py` | +250 (13 tests) |
 | MODIFY | v2: 删 `_process_skip_existing` / `_load_skipped_results` (37 lines) | -37 |
-| MODIFY | v2 `run()` 改用 `SkipLoader.scan()` / `SkipLoader.load()` | ±0 |
-| MODIFY | `tests/test_runner_v2_factor_stage_record.py::TestLoadSkippedResults` 改 patch 路径 | +5 |
-| MODIFY | design doc §17.19 | +20 |
+| MODIFY | v2 `run()` 改用 `SkipLoader.scan()` / `SkipLoader.load()` | +13 |
+| MODIFY | `tests/test_runner_v2_factor_stage_record.py::TestLoadSkippedResults` → `TestSkipLoaderIntegration` | +20 |
+| MODIFY | `tests/test_runner_v2_bug_fixes.py::TestLoadSkippedResultsBug6` 改用 SkipLoader | +10 |
+| MODIFY | design doc §17.19 | +25 |
 
-**验证**: ruff + 178+ tests + byte-equal
+**验证**: ruff ✅ + 180 tests ✅ (PR9a 167 + 新增 13) + v2 line: 1034 → 1020 (-14)
 
-#### PR9c: RecordStage + L4-minimal (~4h)
+#### PR9c: RecordStage + L4-minimal (本 PR, ~4h)
 
 | 动作 | 文件 | 行数 |
 |---|---|---|
-| NEW | `src/llmwikify/reproduction/factor/record_stage.py` | +80 |
-| NEW | `tests/test_record_stage.py` | +100 |
+| NEW | `src/llmwikify/reproduction/factor/record_stage.py` | +90 |
+| NEW | `tests/test_record_stage.py` | +250 (12 tests) |
 | MODIFY | v2: 删 `_record_one` / `_idx_from_result` / `_log_outcome` / `_update_state` / `_persist_result` / `_write_single_json` (57 lines) | -57 |
-| MODIFY | v2: L4 替换 lines 760-789 (29 → 5 lines) | -24 |
-| MODIFY | v2 `__init__` 改 `self._failures_ref = [0]` | +1 |
+| MODIFY | v2: L4 替换 lines 660-707 (47 → 10 lines) `self._engine.run()` | -37 |
+| MODIFY | v2 `__init__` 加 `self._engine = QuantNodesBacktest(config=self.config)` | +1 |
+| MODIFY | v2 `__init__` 加 `self._record_stage = RecordStage(...)` | +3 |
+| MODIFY | v2 `__init__` 改 `self._failures_ref = [0]`, `failures` 变 property | +3 |
 | MODIFY | v2 删 3 个 inline imports (PipelineRunner / build_qn_config / extract_full_backtest_from_ctx) | -3 |
 | MODIFY | v2 顶部 import 增 `from llmwikify.reproduction.backtest import QuantNodesBacktest` | +1 |
-| MODIFY | `tests/test_runner_v2_factor_stage_record.py::TestRecordOne` 10 个 test 改 patch 路径 | +20 |
+| MODIFY | `tests/test_runner_v2_factor_stage_record.py::TestRecordOne` 等 6 个 test 改 patch 路径 | +30 |
 | MODIFY | design doc §17.19 | +20 |
 
-**验证**: ruff + 288+ tests + **byte-equal 跑 1 个真实 alpha (招商 idx=1)**
+**验证**: ruff + 200+ tests + **byte-equal 跑 1 个真实 alpha (招商 idx=1)**
 
 ### 17.19.5 预期结果
 
