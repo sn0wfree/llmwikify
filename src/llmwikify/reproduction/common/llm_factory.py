@@ -1,82 +1,52 @@
 """LLM client factory: load config from ~/.llmwikify/llmwikify.json.
 
-Provides a single ``build_default_client()`` helper that reads the user-level
-config and instantiates a ``StreamableLLMClient`` matching the
-``[llm]`` section. Centralizes config parsing so the rest of the pipeline
-can ask for a ready-to-use client.
-"""
+⚠️ C2 (PR-C2) refactor: this module is now a **thin re-export wrapper**
+for backward compatibility. The actual implementations live in
+`llmwikify.kernel.quant.llm_client` (which both apps/ and reproduction/
+can import without creating a layer cycle).
 
+New code should import from `llmwikify.kernel.quant.llm_client` directly.
+This wrapper exists for backward compat with pre-C2 callers.
+
+Functions re-exported:
+  - load_llm_config: from llmwikify.kernel.quant.llm_client
+  - build_default_client: re-export of build_llm_client (legacy name)
+    Note: the kernel version is called `build_llm_client`; the legacy
+    name `build_default_client` is kept here for callers that still
+    import it (e.g., scripts/run_101_alphas.py, factor_compiler.py).
+"""
 from __future__ import annotations
 
-import json
-import logging
+import warnings
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from llmwikify.kernel.quant.llm_client import (  # noqa: F401
+    CONFIG_PATH,
+    build_llm_client,
+    load_llm_config,
+)
 
-CONFIG_PATH = Path.home() / ".llmwikify" / "llmwikify.json"
 
+def build_default_client(model: str | None = None) -> Any:
+    """⚠️ DEPRECATED: use ``llmwikify.kernel.quant.llm_client.build_llm_client`` instead.
 
-def load_llm_config() -> dict[str, Any]:
-    """Load the ``[llm]`` section of ``~/.llmwikify/llmwikify.json``.
+    Thin re-export of ``build_llm_client`` for backward compat.
+    C2 changed the canonical name from ``build_default_client`` to
+    ``build_llm_client`` for clarity (it's the one and only client
+    builder — "default" is misleading).
 
-    Returns empty dict if file missing or unparseable.
+    This wrapper emits a DeprecationWarning on first call to nudge callers
+    to migrate. Will be removed in a future release.
     """
-    if not CONFIG_PATH.exists():
-        logger.warning("LLM config not found at %s", CONFIG_PATH)
-        return {}
-    try:
-        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    except Exception as exc:
-        logger.warning("Failed to parse %s: %s", CONFIG_PATH, exc)
-        return {}
-    return data.get("llm", {})
-
-
-def build_default_client(model: str | None = None):
-    """Build a ``StreamableLLMClient`` from user config.
-
-    Args:
-        model: Override model name (default: config's ``model`` field).
-
-    Returns:
-        Configured ``StreamableLLMClient`` instance.
-
-    Raises:
-        RuntimeError: If config missing or required fields absent.
-    """
-    from llmwikify.foundation.llm.streamable import StreamableLLMClient
-
-    cfg = load_llm_config()
-    if not cfg.get("enabled"):
-        raise RuntimeError(
-            "LLM is disabled in ~/.llmwikify/llmwikify.json. "
-            "Set llm.enabled=true to enable."
-        )
-
-    provider = cfg.get("provider", "minimax")
-    base_url = cfg.get("base_url", "")
-    api_key = cfg.get("api_key", "")
-    chosen_model = model or cfg.get("model", "MiniMax-M2.7")
-    timeout = cfg.get("timeout", 600)
-    auth_header = "bearer" if "minimax" in provider else "bearer"
-
-    if not api_key:
-        raise RuntimeError(
-            f"Missing api_key in {CONFIG_PATH}. Set llm.api_key first."
-        )
-
-    logger.info(
-        "[llm] provider=%s model=%s base_url=%s timeout=%s",
-        provider, chosen_model, base_url, timeout,
+    warnings.warn(
+        "reproduction.common.llm_factory.build_default_client is deprecated; "
+        "use llmwikify.kernel.quant.llm_client.build_llm_client instead. "
+        "This wrapper will be removed in a future release.",
+        DeprecationWarning,
+        stacklevel=2,
     )
-    return StreamableLLMClient(
-        provider=provider,
-        base_url=base_url,
-        api_key=api_key,
-        model=chosen_model,
-        auth_header=auth_header,
-        reasoning_split=True,
-        request_timeout_seconds=float(timeout),
-    )
+    return build_llm_client(model=model)
+
+
+__all__ = ["CONFIG_PATH", "load_llm_config", "build_llm_client", "build_default_client"]

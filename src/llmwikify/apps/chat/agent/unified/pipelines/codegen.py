@@ -48,7 +48,7 @@ class CodegenReasoner(Pipeline):
 
     def __init__(self, llm_client: Any = None) -> None:
         if llm_client is None:
-            from llmwikify.reproduction.codegen.llm_code import build_llm_client
+            from llmwikify.kernel.quant.llm_client import build_llm_client
             llm_client = build_llm_client()
         super().__init__(LLMCallStep(llm_client), ExtractCodeStep())
 

@@ -1721,3 +1721,69 @@ from llmwikify.kernel.quant.codegen import (
 - **C2**: 修 `llm_factory` 走 provider registry (破 hardcoded minimax)
 - **C3**: `data_source` 重组
 - **PR9b/c**: factor/ SkipLoader + RecordStage (v2 内部 cleanup, 与 C1 正交)
+
+---
+
+## 17.21 C2: 拆 kernel/quant/llm_client/ — 破 build_llm_client 最后一个 cycle site
+
+> 状态: 🟡 IN PROGRESS
+> 动机: C1 修了 7/8 cycle sites, 剩 1 个 `apps/chat/agent/unified/pipelines/codegen.py:51` 仍 import `reproduction/codegen.llm_code.build_llm_client`. C2 把 `build_llm_client` 抽到 `kernel/quant/llm_client.py`, 同时修 hardcoded `minimax` / `bearer`.
+
+### 17.21.1 剩余 1 cycle site
+
+- `apps/chat/agent/unified/pipelines/codegen.py:51` → `reproduction/codegen/llm_code.py:124 build_llm_client`
+- `reproduction/codegen/llm_code.py:124` → `reproduction.common.llm_factory.build_default_client` (硬编码 `minimax` / `bearer`)
+
+### 17.21.2 解决方案
+
+`kernel/quant/llm_client.py` 作为 apps/ + reproduction/ 共享层:
+- 不依赖 apps/ (无 MiniMaxProvider / XiaomiProvider)
+- 不依赖 reproduction/ (无 paper_understanding)
+- 仅依赖: foundation/llm/streamable + json + pathlib
+
+**位置**: `src/llmwikify/kernel/quant/llm_client.py`
+
+**模块内容**:
+- `load_llm_config()` - 从 ~/.llmwikify/llmwikify.json 读 [llm] section
+- `build_llm_client(config=None, model=None)` - 构造 StreamableLLMClient
+  - 移除 hardcoded `provider = "minimax"` (从 config 必读)
+  - 移除 no-op `auth_header = "bearer" if ... else "bearer"` (硬编码 bearer)
+  - 用 provider-info 表决定 auth_header (small table, 不依赖 apps/)
+
+### 17.21.3 修改的 2 import sites
+
+| 文件 | 旧 import | 新 import |
+|---|---|---|
+| `apps/chat/agent/unified/pipelines/codegen.py:51` | `from llmwikify.reproduction.codegen.llm_code import build_llm_client` | `from llmwikify.kernel.quant.llm_client import build_llm_client` |
+| `reproduction/codegen/llm_code.py:124` | (own function) | 改 re-export from kernel/quant/llm_client |
+
+### 17.21.4 reproduction/common/llm_factory.py 变薄包装
+
+`load_llm_config` + `build_default_client` 改 re-export from kernel/quant/llm_client, 加 deprecation warning.
+
+### 17.21.5 验证清单
+
+- [ ] `python3 -c "import llmwikify.kernel.quant.llm_client"` 无错
+- [ ] `grep -rn "from llmwikify.reproduction.codegen.llm_code import build_llm_client" src/llmwikify/apps/` 应返回 **0** 行
+- [ ] 跑 `tests/reproduction/test_llm_factory.py` (新增) 验证 load_llm_config / build_default_client wrapper
+- [ ] 跑 197+ tests 验证 v2 / framework 不破
+- [ ] ruff clean
+
+### 17.21.6 风险
+
+| 风险 | 概率 | 缓解 |
+|---|---|---|
+| `build_llm_client` 行为变化 → 真实 LLM 调用失败 | 中 | 保留 backward compat wrapper, 行为字段完全相同 |
+| `~/.llmwikify/llmwikify.json` 解析差异 | 低 | load_llm_config 逻辑逐字复制 |
+| apps side 已有 5 处 build_llm_client 调用 | 中 | 全部改 import 路径 |
+
+### 17.21.7 预期结果
+
+| | 前 | 后 |
+|---|---|---|
+| `src/llmwikify/kernel/quant/llm_client.py` | 0 | 1 NEW (~100 行) |
+| `src/llmwikify/reproduction/common/llm_factory.py` | 76 行 | ~30 行 (薄包装) |
+| `reproduction/codegen/llm_code.py:124 build_llm_client` | own function | re-export from kernel |
+| `apps/chat/agent/unified/pipelines/codegen.py:51` | from reproduction | from kernel |
+| 测试 | 197 | 207+ (10 new) |
+| **apps → reproduction codegen imports** | 1 | **0** ✅ |

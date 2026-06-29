@@ -43,6 +43,7 @@ from llmwikify.kernel.quant.codegen import (  # noqa: F401
     validate_safety,
     validate_syntax,
 )
+from llmwikify.kernel.quant.llm_client import build_llm_client  # noqa: F401  (C2)
 
 logger = logging.getLogger(__name__)
 
