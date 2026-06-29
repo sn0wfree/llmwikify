@@ -1,0 +1,12 @@
+{
+  "id": 9,
+  "jsonrpc": "2.0",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"code\":1,\"msg\":\"success\",\"subCode\":null,\"subMsg\":null,\"data\":{\"answer\":\"\",\"datas\":[]}}"
+      }
+    ]
+  }
+}
