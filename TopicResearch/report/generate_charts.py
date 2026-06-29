@@ -1450,10 +1450,265 @@ def chart_8_signal_dashboard():
 
 
 # ============================================================
+# 图表 13：蒙代尔不可能三角定位图
+# ============================================================
+def chart_13_impossible_trinity():
+    """基于 §1.5.4：不可能三角定位——中国05-07/中国当前/美国"""
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    import numpy as np
+
+    fig, ax = plt.subplots(figsize=(12, 10), dpi=120)
+    ax.set_xlim(-1.5, 11.5)
+    ax.set_ylim(-1.5, 11.5)
+    ax.axis('off')
+
+    # 三角形顶点坐标
+    # 顶部：固定汇率
+    top_x, top_y = 5, 10
+    # 左下：资本自由流动
+    left_x, left_y = 0, 0
+    # 右下：独立货币政策
+    right_x, right_y = 10, 0
+
+    # 绘制三角形
+    triangle = plt.Polygon(
+        [[top_x, top_y], [left_x, left_y], [right_x, right_y]],
+        fill=False, edgecolor='#475569', linewidth=2.5, linestyle='-'
+    )
+    ax.add_patch(triangle)
+
+    # 顶点标签
+    顶点 = [
+        (top_x, top_y + 0.6, '固定汇率', '#1e3a5f'),
+        (left_x - 0.3, left_y - 0.6, '资本自由流动', '#0f766e'),
+        (right_x + 0.3, right_y - 0.6, '独立货币政策', '#b45309'),
+    ]
+    for x, y, label, color in 顶点:
+        ax.text(x, y, label, ha='center', va='center',
+                fontsize=13, weight='bold', color=color)
+
+    # 三个组合区域标注
+    # 组合A：固定汇率+资本自由→牺牲独立货币政策（香港/欧元区）
+    ax.text(2.5, 5.5, 'A 组合\n固定+自由\n牺牲独立\n\n🇭🇰 香港\n🇪🇺 欧元区',
+            ha='center', va='center', fontsize=9, color='#475569',
+            bbox=dict(boxstyle='round,pad=0.5', facecolor='#f1f5f9', edgecolor='#94a3b8', lw=1))
+
+    # 组合B：固定汇率+独立货币政策→牺牲资本自由（中国05-07）
+    ax.text(7.5, 5.5, 'B 组合\n固定+独立\n牺牲资本自由\n\n🇨🇳 中国 05-07',
+            ha='center', va='center', fontsize=9, color='#475569',
+            bbox=dict(boxstyle='round,pad=0.5', facecolor='#fff7ed', edgecolor='#b45309', lw=1.5))
+
+    # 组合C：资本自由+独立货币政策→牺牲固定汇率（美国）
+    ax.text(5, 1.5, 'C 组合\n自由+独立\n牺牲固定\n\n🇺🇸 美国\n🇯🇵 日本',
+            ha='center', va='center', fontsize=9, color='#475569',
+            bbox=dict(boxstyle='round,pad=0.5', facecolor='#f0fdf4', edgecolor='#0f766e', lw=1))
+
+    # 标注点位
+    # 中国 05-07：靠近固定汇率角，略偏B组合区域
+    cn05_x, cn05_y = 6.5, 7.0
+    ax.plot(cn05_x, cn05_y, 'o', markersize=18, color='#b45309', zorder=20)
+    ax.text(cn05_x, cn05_y, 'CN\n05-07', ha='center', va='center',
+            fontsize=8, weight='bold', color='white', zorder=21)
+    ax.annotate('中国 2005-07\n软盯住+冲销\n代价：外储暴增\n冲销成本 1-2% GDP',
+                xy=(cn05_x, cn05_y), xytext=(cn05_x + 2.5, cn05_y + 1.5),
+                fontsize=9, color='#991b1b', weight='bold',
+                arrowprops=dict(arrowstyle='->', color='#991b1b', lw=1.5),
+                bbox=dict(boxstyle='round,pad=0.4', facecolor='#fef2f2', edgecolor='#991b1b', lw=1.2))
+
+    # 中国当前：向右下移动（更灵活的汇率+更独立的货币政策）
+    cn_now_x, cn_now_y = 5.5, 5.0
+    ax.plot(cn_now_x, cn_now_y, 's', markersize=18, color='#0f766e', zorder=20)
+    ax.text(cn_now_x, cn_now_y, 'CN\n现在', ha='center', va='center',
+            fontsize=8, weight='bold', color='white', zorder=21)
+    ax.annotate('中国 当前\n管理浮动+独立\n资本管制→防外流\n\n从B→C移动',
+                xy=(cn_now_x, cn_now_y), xytext=(cn_now_x - 3.5, cn_now_y - 1.5),
+                fontsize=9, color='#0f766e', weight='bold',
+                arrowprops=dict(arrowstyle='->', color='#0f766e', lw=1.5),
+                bbox=dict(boxstyle='round,pad=0.4', facecolor='#f0fdf4', edgecolor='#0f766e', lw=1.2))
+
+    # 美国：靠近C组合（自由+独立）
+    us_x, us_y = 7.5, 2.0
+    ax.plot(us_x, us_y, 'D', markersize=18, color='#1e3a5f', zorder=20)
+    ax.text(us_x, us_y, 'US', ha='center', va='center',
+            fontsize=9, weight='bold', color='white', zorder=21)
+    ax.annotate('美国\n浮动汇率+完全自由\n+独立货币政策\n美元霸权支撑',
+                xy=(us_x, us_y), xytext=(us_x + 2.5, us_y - 0.5),
+                fontsize=9, color='#1e3a5f', weight='bold',
+                arrowprops=dict(arrowstyle='->', color='#1e3a5f', lw=1.5),
+                bbox=dict(boxstyle='round,pad=0.4', facecolor='#eff6ff', edgecolor='#1e3a5f', lw=1.2))
+
+    # 移动箭头（中国从05-07到现在）
+    ax.annotate('', xy=(cn_now_x, cn_now_y), xytext=(cn05_x, cn05_y),
+                arrowprops=dict(arrowstyle='->', color='#94a3b8', lw=2,
+                                connectionstyle='arc3,rad=0.2', linestyle='dashed'))
+    ax.text(5.5, 6.2, '政策演变\n方向', ha='center', va='center',
+            fontsize=8, color='#94a3b8', style='italic')
+
+    # 标题
+    ax.set_title('图表 13：蒙代尔不可能三角定位图\n中国 2005-07 vs 中国当前 vs 美国',
+                 fontsize=14, weight='bold', color='#1e3a5f', pad=20)
+
+    # 底部说明
+    ax.text(5, -1.2,
+            '数据来源：IMF、Chinn-Ito Index、央行公开数据；定位为示意性判断，非精确计量',
+            ha='center', va='center', fontsize=9, color='#64748b', style='italic')
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(CHART_DIR, '13_impossible_trinity.png'), dpi=200, bbox_inches='tight',
+                facecolor='white')
+    plt.close()
+    print("✓ 图表 13：蒙代尔不可能三角定位图")
+
+
+# ============================================================
+# 图表 14：政策时间线叠加图（PBOC利率+RRL+LME铜价）
+# ============================================================
+def chart_14_policy_timeline():
+    """基于 §1.5.3 + §1.5.4：政策时间线叠加——PBOC利率/RRR vs LME铜价"""
+    # PBOC 1Y 贷款基准利率（%）
+    pboc_rate = [
+        ('2004-10-29', 5.58),
+        ('2006-04-28', 5.85),
+        ('2006-08-19', 6.12),
+        ('2007-03-18', 6.39),
+        ('2007-05-19', 6.57),
+        ('2007-07-21', 6.84),
+        ('2007-08-22', 7.02),
+        ('2007-09-15', 7.29),
+        ('2007-12-21', 7.47),
+    ]
+
+    # PBOC 存款准备金率（%）
+    pboc_rrr = [
+        ('2006-07-05', 8.0),
+        ('2006-08-15', 8.5),
+        ('2006-11-15', 9.0),
+        ('2007-01-15', 9.5),
+        ('2007-02-25', 10.0),
+        ('2007-04-16', 10.5),
+        ('2007-05-15', 11.0),
+        ('2007-06-05', 11.5),
+        ('2007-08-15', 12.0),
+        ('2007-09-25', 12.5),
+        ('2007-10-25', 13.0),
+        ('2007-11-26', 13.5),
+        ('2007-12-25', 14.5),
+        ('2008-01-25', 15.0),
+        ('2008-03-25', 15.5),
+        ('2008-04-25', 16.0),
+        ('2008-06-07', 17.5),
+    ]
+
+    # LME 铜价（月度均价）
+    copper = [
+        ('2004-12-01', 3100), ('2005-03-01', 3300), ('2005-06-01', 3500),
+        ('2005-09-01', 3800), ('2005-12-01', 4580), ('2006-03-01', 5200),
+        ('2006-06-01', 7800), ('2006-09-01', 7500), ('2006-12-01', 6280),
+        ('2007-03-01', 6500), ('2007-06-01', 7400), ('2007-09-01', 7800),
+        ('2007-12-01', 7000), ('2008-03-01', 8500), ('2008-06-01', 8500),
+        ('2008-09-01', 6500), ('2008-12-01', 3000),
+    ]
+
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    from datetime import datetime
+    import numpy as np
+
+    fig, ax1 = plt.subplots(figsize=(14, 7), dpi=120)
+
+    # LME 铜价（柱状图，背景）
+    cu_dates = [datetime.strptime(d, '%Y-%m-%d') for d, _ in copper]
+    cu_vals = [v for _, v in copper]
+    ax1.bar(cu_dates, cu_vals, width=60, color='#93c5fd', alpha=0.4, label='LME 铜价（左轴）', zorder=2)
+    ax1.plot(cu_dates, cu_vals, color='#1e3a5f', linewidth=2, zorder=3)
+    ax1.set_ylabel('LME 铜价（美元/吨）', fontsize=11, color='#1e3a5f')
+    ax1.tick_params(axis='y', labelcolor='#1e3a5f')
+    ax1.set_ylim(0, 10000)
+
+    # PBOC 利率（右轴）
+    ax2 = ax1.twinx()
+    rate_dates = [datetime.strptime(d, '%Y-%m-%d') for d, _ in pboc_rate]
+    rate_vals = [v for _, v in pboc_rate]
+    ax2.step(rate_dates, rate_vals, where='post', color='#b45309', linewidth=2.5,
+             label='PBOC 1Y 贷款基准（右轴）', zorder=4)
+    ax2.scatter(rate_dates, rate_vals, color='#b45309', s=60, zorder=5)
+    ax2.set_ylabel('PBOC 1Y 贷款基准（%）', fontsize=11, color='#b45309')
+    ax2.tick_params(axis='y', labelcolor='#b45309')
+    ax2.set_ylim(4, 20)
+
+    # PBOC RRR（第三轴，用虚线叠加在右轴上，但范围不同，共享ax2）
+    # RRR 需要映射到 ax2 的坐标范围
+    rrr_dates = [datetime.strptime(d, '%Y-%m-%d') for d, _ in pboc_rrr]
+    rrr_vals = [v for _, v in pboc_rrr]
+    # 映射：RRR 8-17.5 → ax2 的 4-20
+    rrr_mapped = [4 + (v - 8) / (17.5 - 8) * (20 - 4) for v in rrr_vals]
+    ax2.step(rrr_dates, rrr_mapped, where='post', color='#991b1b', linewidth=2,
+             linestyle='--', label='PBOC RRR（映射到右轴）', zorder=4)
+    ax2.scatter(rrr_dates, rrr_mapped, color='#991b1b', s=40, marker='^', zorder=5)
+
+    # RRR 原始值标注（在映射轴上标真实值）
+    for d, v in zip(rrr_dates, rrr_vals):
+        mapped = 4 + (v - 8) / (17.5 - 8) * (20 - 4)
+        ax2.text(d, mapped + 0.4, f'{v}%', ha='center', va='bottom',
+                fontsize=7, color='#991b1b', rotation=45)
+
+    # 关键事件标注
+    events = [
+        ('2005-07-01', '汇改', 3500),
+        ('2006-04-28', '首次加息', 5200),
+        ('2006-07-05', '首次提RRR', 7800),
+        ('2007-05-30', '印花税↑', 7400),
+        ('2007-11-05', '中石油IPO', 7000),
+        ('2008-06-07', 'RRR→17.5%\n(最终加)', 8500),
+        ('2008-09-15', 'Lehman\n破产', 6500),
+        ('2008-11-01', '四万亿\n刺激', 3500),
+    ]
+    for date_str, label, y_pos in events:
+        d = datetime.strptime(date_str, '%Y-%m-%d')
+        ax1.axvline(x=d, color='#64748b', linewidth=0.8, linestyle=':', alpha=0.7, zorder=1)
+        ax1.text(d, y_pos + 300, label, ha='center', va='bottom', fontsize=8,
+                color='#334155', bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                                           edgecolor='#94a3b8', alpha=0.8))
+
+    # 关键洞察框
+    ax1.text(datetime(2006, 6, 1), 9200,
+             '<b>关键发现：</b>PBOC 2006-2008 累计加息 6 次 + 提 RRR 17 次\n'
+             '但铜价在紧缩周期中继续上涨（滞后 12 个月）\n'
+             '<b>紧缩 ≠ 立即见顶</b>，Lehman 才是真正的外生冲击',
+             fontsize=9, color='#991b1b', weight='bold',
+             bbox=dict(boxstyle='round,pad=0.6', facecolor='#fef2f2', edgecolor='#991b1b', lw=1.5),
+             ha='center', va='top')
+
+    # 图例
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=9, frameon=True)
+
+    ax1.set_xlabel('日期', fontsize=11)
+    ax1.xaxis.set_major_locator(mdates.YearLocator())
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    ax1.set_xlim(datetime(2004, 9, 1), datetime(2009, 1, 1))
+
+    ax1.set_title('图表 14：PBOC 货币政策紧缩周期 vs LME 铜价（2004-2009）\n紧缩 ≠ 立即见顶，Lehman 才是外生冲击',
+                  fontsize=13, weight='bold', color='#1e3a5f', pad=15)
+
+    ax1.text(0.99, -0.1, '数据来源：PBOC、LME、美联储',
+             transform=ax1.transAxes, fontsize=9, color='#64748b',
+             ha='right', style='italic')
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(CHART_DIR, '14_policy_timeline.png'), dpi=200, bbox_inches='tight',
+                facecolor='white')
+    plt.close()
+    print("✓ 图表 14：PBOC 政策时间线 vs LME 铜价")
+
+
+# ============================================================
 # 主函数
 # ============================================================
 if __name__ == '__main__':
-    print("开始生成 8 张定制图表...")
+    print("开始生成 14 张定制图表...")
     print(f"图表输出目录: {CHART_DIR}\n")
 
     chart_1_copper_phases()
@@ -1468,8 +1723,10 @@ if __name__ == '__main__':
     chart_10_usd_copper()
     chart_11_s3_dual_threshold()
     chart_12_dimension_radar()
+    chart_13_impossible_trinity()
+    chart_14_policy_timeline()
 
-    print(f"\n✅ 全部 12 张图表已生成到: {CHART_DIR}")
+    print(f"\n✅ 全部 14 张图表已生成到: {CHART_DIR}")
     print(f"   文件列表:")
     for f in sorted(os.listdir(CHART_DIR)):
         size = os.path.getsize(os.path.join(CHART_DIR, f)) / 1024

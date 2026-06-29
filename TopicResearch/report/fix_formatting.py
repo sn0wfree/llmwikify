@@ -32,6 +32,9 @@ DATA_FIXES = [
     # NVDA: $130 → $192 (ifind: current price)
     ('$130', '$192', 'NVDA current price', 'ifind global_stock'),
 
+    # NVDA Table 16: 约130美元 → 约192美元 (ifind: current price)
+    ('约130美元', '约192美元', 'NVDA Table price (Chinese)', 'ifind global_stock'),
+
     # 格林斯潘: +0.65% → 接近零 (FRED: FF-GS10=-0.25%)
     ('+0.65%', '接近零', 'Greenspan spread endpoint', 'FRED GS10+FEDFUNDS'),
 ]
