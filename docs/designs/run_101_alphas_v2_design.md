@@ -1284,3 +1284,93 @@ $ diff /tmp/v2_after/single_factor_001.json /tmp/v2_before/single_factor_001.jso
 下一步:
   PR7: scripts/run_paper.py + 3 paper.yaml + smoke 验证
 
+
+### 17.16 PR7 详细计划
+
+> 状态: 🟡 IN PROGRESS
+
+**目标**: scripts/run_paper.py 通用入口 + 3 papers smoke 验证
+
+**文件**:
+- `scripts/run_paper.py` (~200 行) — 通用 entry point
+- `quant/papers/<id>/paper.yaml` (4 files) — 配置文件
+  - 101_alphas_minimal/paper.yaml
+  - 1601_00991v3/paper.yaml
+  - 招商证券-.../paper.yaml
+  - 浙商证券-.../paper.yaml
+
+**run_paper.py CLI**:
+```
+python scripts/run_paper.py --paper-id 101_alphas_minimal
+python scripts/run_paper.py --paper-id 1601_00991v3 --smoke
+python scripts/run_paper.py --recipe quant/papers/my/paper.yaml
+python scripts/run_paper.py --paper-id 101_alphas_minimal --start 1 --end 5
+python scripts/run_paper.py --paper-id 101_alphas_minimal --skip-existing
+python scripts/run_paper.py --paper-id 101_alphas_minimal --no-delay --workers 3
+```
+
+**关键设计**:
+- 默认 papers 通过 --paper-id 自动选择 SignalSource 类型
+  - 101_alphas_*: TrackBSignalSource
+  - *pass2.json: TrackBPass2SignalSource 或 AcademicPdfSignalSource
+  - 决定逻辑: 文件名包含 "academic" 或 path 包含学术论文 ID
+- --smoke: 只验证 SignalSource.iter_signals() 工作, 不调 LLM
+  - 节省 LLM cost, 验证 pipeline 不会因为 paper format 问题 crash
+- --recipe <yaml>: 完全自定义配置 (高级用法)
+
+**3 paper.yaml 例子**:
+```yaml
+# 101_alphas_minimal/paper.yaml
+paper_id: 101_alphas_minimal
+signal_source:
+  type: track_b
+  track_b_path: quant/papers/101_alphas_minimal/track_b_checkpoint.json
+backtest:
+  type: quantnodes
+sinks:
+  - type: single_json
+    output_dir: scripts/output
+  - type: yaml_duckdb
+    factors_dir: quant/factors
+    strategy_dir: 101_alphas
+  - type: batch_summary
+    output_dir: scripts/output
+    paper_id: 101_alphas_minimal
+    json_filename: multi_alpha_001_to_101.json
+    md_filename: multi_alpha_summary.md
+```
+
+```yaml
+# 1601_00991v3/paper.yaml
+paper_id: 1601_00991v3
+signal_source:
+  type: academic_pdf
+  track_b_pass2_path: quant/papers/1601_00991v3/track_b_pass2.json
+backtest:
+  type: quantnodes
+sinks:
+  - type: single_json
+    output_dir: scripts/output/1601_00991v3
+  - type: yaml_duckdb
+    factors_dir: quant/factors/1601
+    strategy_dir: 1601_alphas
+  - type: batch_summary
+    output_dir: scripts/output/1601_00991v3
+    paper_id: 1601_00991v3
+```
+
+**Smoke test 目标** (无 LLM 调用):
+| Paper | SignalSource | 信号数 (预期) | smoke 目标 |
+|---|---|---|---|
+| 101_alphas_minimal | TrackBSignalSource | 101 | iter_signals 返回 101 signals |
+| 1601_00991v3 | AcademicPdfSignalSource | ~100 (skip 失败) | iter_signals 返回 100 signals |
+| 招商-A股涅槃论 | TrackBPass2SignalSource | ~10 (skip 失败) | iter_signals 返回 10 signals |
+| 浙商-A股行业比较 | TrackBPass2SignalSource | (varies) | iter_signals 工作 |
+
+**测试**:
+- `tests/test_run_paper.py` (10 tests): CLI parsing / paper.yaml loading / SignalSource 选择 / smoke 不调 LLM
+
+**Commit 计划**: 见 git log
+
+**下一步**: PR7 完成后, 7 PR 全部完成, 项目 v2 通用化目标达成
+
