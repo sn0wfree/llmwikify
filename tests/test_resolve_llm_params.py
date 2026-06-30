@@ -16,7 +16,6 @@ from llmwikify.apps.chat.engine_helpers import (
     resolve_llm_params,
 )
 
-
 # -----------------------------------------------------------------------------
 # Fixtures
 # -----------------------------------------------------------------------------
@@ -263,6 +262,7 @@ def test_types_are_stable():
 def test_output_unpacks_into_chat_json_kwargs():
     """resolve_llm_params output can be **-unpacked into chat_json."""
     import inspect
+
     from llmwikify.apps.chat.engine_helpers import chat_json
 
     result = resolve_llm_params(

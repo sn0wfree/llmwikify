@@ -9,8 +9,9 @@
 from __future__ import annotations
 
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 from llmwikify.reproduction.persist import factor_library as fl
 
@@ -80,7 +81,6 @@ class TestConfigPrecedence:
     def test_file_overrides_default(self, tmp_path: Path) -> None:
         """文件覆盖 DEFAULTS."""
         from llmwikify.reproduction.common import config as c
-        import json
         config_file = tmp_path / "cfg.json"
         config_file.write_text(
             json.dumps({"reproduction": {"akshare.timeout_s": 99.9}}),
@@ -92,7 +92,6 @@ class TestConfigPrecedence:
     def test_env_overrides_file(self, tmp_path: Path, monkeypatch) -> None:
         """env 覆盖 file."""
         from llmwikify.reproduction.common import config as c
-        import json
         config_file = tmp_path / "cfg.json"
         config_file.write_text(
             json.dumps({"reproduction": {"akshare.timeout_s": 99.9}}),

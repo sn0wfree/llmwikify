@@ -25,7 +25,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ============================================================================
 # _base.py — Command protocol and registry
 # ============================================================================
@@ -120,7 +119,11 @@ def test_get_command_returns_none_for_unknown():
 
 def test_registered_command_names_is_sorted():
     """registered_command_names returns a sorted list."""
-    from llmwikify.interfaces.cli._base import COMMAND_REGISTRY, register_command, registered_command_names
+    from llmwikify.interfaces.cli._base import (
+        COMMAND_REGISTRY,
+        register_command,
+        registered_command_names,
+    )
 
     @register_command
     class CmdZ:

@@ -8,7 +8,9 @@ import inspect
 
 
 def test_factor_backtest_universe_callable():
-    from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest_universe
+    from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+        run_factor_backtest_universe,
+    )
     assert callable(run_factor_backtest_universe)
 
 
@@ -33,5 +35,7 @@ def test_backtest_import():
 
 
 def test_factor_value_store_import():
-    from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values
+    from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+        store_factor_values,
+    )
     assert callable(store_factor_values)

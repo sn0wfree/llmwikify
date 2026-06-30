@@ -21,15 +21,14 @@ import pytest
 
 from llmwikify.apps.chat.skills.workflows.subagent_runner import SubagentRequest
 from llmwikify.apps.chat.skills.workflows.subagent_worker import (
-    LlmClientDriver,
     _TOOL_HANDLERS,
     _TOOL_SPECS,
+    LlmClientDriver,
     _build_subagent_tools,
     _dispatch_tool_call,
-    _normalize_chat_result,
     _extract_tool_calls,
+    _normalize_chat_result,
 )
-
 
 # ─── Fake client + request helpers ──────────────────────────────
 

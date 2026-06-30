@@ -18,8 +18,8 @@ def _run_async(coro):
         raise
 
 
-from llmwikify.kernel import Wiki
 from llmwikify.interfaces.mcp import create_mcp_server
+from llmwikify.kernel import Wiki
 
 
 @pytest.fixture

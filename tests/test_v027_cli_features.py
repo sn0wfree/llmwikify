@@ -29,7 +29,8 @@ class TestLintJsonFormat:
         """--format json returns valid JSON with all lint fields."""
         cli = _make_cli(temp_wiki)
 
-        import io, sys
+        import io
+        import sys
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured
@@ -58,7 +59,8 @@ class TestLintJsonFormat:
 
         cli.wiki.index.upsert_page('overview', broken_page.read_text(), 'overview.md')
 
-        import io, sys
+        import io
+        import sys
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured
@@ -90,7 +92,8 @@ class TestFixWikilinksCLI:
 
         cli.wiki.index.upsert_page('overview', broken_page.read_text(), 'overview.md')
 
-        import io, sys
+        import io
+        import sys
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured
@@ -121,7 +124,8 @@ class TestFixWikilinksCLI:
 
         cli.wiki.index.upsert_page('overview', broken_page.read_text(), 'overview.md')
 
-        import io, sys
+        import io
+        import sys
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured
@@ -181,7 +185,8 @@ class TestBuildIndexForce:
         # Create old-format page
         cli.wiki.index.upsert_page('Risk Parity', '# Risk Parity', 'concepts/Risk Parity.md')
 
-        import io, sys
+        import io
+        import sys
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured
@@ -205,7 +210,8 @@ class TestBuildIndexForce:
         # Create old-format page
         cli.wiki.index.upsert_page('Risk Parity', '# Risk Parity', 'concepts/Risk Parity.md')
 
-        import io, sys
+        import io
+        import sys
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured

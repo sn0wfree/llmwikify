@@ -17,12 +17,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
-    HYBRID_INTUITION_THRESHOLD,
-    HYBRID_SUPPLEMENT_RATIO,
-    HYBRID_MIN_SUPPLEMENTS,
-    HYBRID_THEORETICAL_MIN,
     HYBRID_HYPOTHESES_MIN,
+    HYBRID_INTUITION_THRESHOLD,
+    HYBRID_MIN_SUPPLEMENTS,
+    HYBRID_SUPPLEMENT_RATIO,
     HYBRID_SUPPLEMENT_USE_SPECIFIC_PROMPT,
+    HYBRID_THEORETICAL_MIN,
     PASS2_HYBRID_ENABLED,
     PROMPT_PASS2,
     PROMPT_PASS2_SUPPLEMENT,
@@ -505,7 +505,10 @@ class TestRunPass2AdaptivePromptParam:
     def test_default_prompt_is_pass2(self):
         """Default prompt_file in _run_pass2_adaptive should be PROMPT_PASS2."""
         import inspect
-        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _run_pass2_adaptive
+
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
+            _run_pass2_adaptive,
+        )
         sig = inspect.signature(_run_pass2_adaptive)
         assert "prompt_file" in sig.parameters
         # Default should be PROMPT_PASS2
@@ -514,7 +517,10 @@ class TestRunPass2AdaptivePromptParam:
     def test_supplement_prompt_acceptable(self):
         """prompt_file parameter should accept PROMPT_PASS2_SUPPLEMENT."""
         import inspect
-        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _run_pass2_adaptive
+
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
+            _run_pass2_adaptive,
+        )
         sig = inspect.signature(_run_pass2_adaptive)
         # Type annotation should be str (or have default str)
         param = sig.parameters["prompt_file"]
@@ -547,9 +553,12 @@ class TestHybridUsesSupplementPrompt:
         # Need to actually call _hybrid_pass2 with shallow factors
         # Build a small client + plan + signals
         # This test is integration-level; verify the wiring exists via imports
-        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _hybrid_pass2
         # Just verify it accepts the same signature
         import inspect
+
+        from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
+            _hybrid_pass2,
+        )
         sig = inspect.signature(_hybrid_pass2)
         assert "client" in sig.parameters
         assert "plan" in sig.parameters

@@ -19,19 +19,22 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import build_default_client
-from llmwikify.reproduction.paper_understanding.llm_extraction.planner import plan_paper
-from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
-    _hybrid_pass2,
-    _assess_factor_quality,
-    HYBRID_SUPPLEMENT_RATIO,
-    select_pass2_mode,
-)
-from llmwikify.reproduction.paper_understanding.llm_extraction.stage0_ingest import parse_paper
-from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
-    SignalDetail, _run_pass2_parallel,
+from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import (
+    build_default_client,
 )
 
+from llmwikify.reproduction.paper_understanding.llm_extraction.planner import plan_paper
+from llmwikify.reproduction.paper_understanding.llm_extraction.stage0_ingest import (
+    parse_paper,
+)
+from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
+    HYBRID_SUPPLEMENT_RATIO,
+    SignalDetail,
+    _assess_factor_quality,
+    _hybrid_pass2,
+    _run_pass2_parallel,
+    select_pass2_mode,
+)
 
 PAPER_ID = "1601.00991v3_hybrid"
 WORK_DIR = ROOT / "quant" / "papers" / "101_alphas_hybrid"
@@ -76,7 +79,9 @@ def main():
     # _hybrid_pass2 expects list[SignalStub], but SignalStub is a dataclass
     # For test purposes, the parallel function uses .name, .formula_brief, .context_excerpt
     # So we need actual SignalStub instances
-    from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import SignalStub
+    from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
+        SignalStub,
+    )
     signals = []
     for i, d in enumerate(pass1_signals_dict):
         signals.append(SignalStub(
@@ -144,7 +149,7 @@ def main():
         "l4_avg_hypotheses": round(avg_hyp, 2),
         "success_rate": round(n_complete / len(details), 4) if details else 0,
     }
-    print(f"\nSummary:")
+    print("\nSummary:")
     print(json.dumps(summary, indent=2, ensure_ascii=False))
 
     # Save summary
@@ -156,7 +161,7 @@ def main():
     v3_summary_path = ROOT / "quant/papers/101_alphas_v3/ab_summary_v3.json"
     if v3_summary_path.exists():
         v3 = json.loads(v3_summary_path.read_text())
-        print(f"\n📊 vs v3.0 Parallel:")
+        print("\n📊 vs v3.0 Parallel:")
         print(f"  Time: {v3.get('elapsed_min', 'N/A')} → {summary['elapsed_min']} min")
         print(f"  l3.intuition: {v3.get('l3_avg_intuition_chars', 'N/A')} → {summary['l3_avg_intuition_chars']} chars")
         print(f"  Success: {v3.get('success_rate', 'N/A')} → {summary['success_rate']}")

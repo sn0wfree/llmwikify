@@ -1,10 +1,12 @@
 """Tests for Phase 14D: pipeline stages."""
 from __future__ import annotations
 
-from llmwikify.reproduction.pipeline.stages.base import Stage, StageContext
 from llmwikify.reproduction.pipeline.stages.backtest import BacktestStage
+from llmwikify.reproduction.pipeline.stages.base import Stage, StageContext
 from llmwikify.reproduction.pipeline.stages.codegen import CodegenStage
-from llmwikify.reproduction.pipeline.stages.paper_understanding import PaperUnderstandingStage
+from llmwikify.reproduction.pipeline.stages.paper_understanding import (
+    PaperUnderstandingStage,
+)
 from llmwikify.reproduction.pipeline.stages.persist_factor import PersistFactorStage
 
 

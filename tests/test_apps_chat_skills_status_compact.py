@@ -25,7 +25,6 @@ from llmwikify.apps.chat.skills.workflows.skill import (
     _handle_status as wf_status,
 )
 
-
 # ─── Fixtures ───────────────────────────────────────────────────
 
 

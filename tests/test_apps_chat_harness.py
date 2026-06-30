@@ -25,7 +25,6 @@ from llmwikify.apps.chat.harness import (
     StructureValidator,
 )
 
-
 # ─── Package exports ──────────────────────────────────────────────
 
 
@@ -45,12 +44,13 @@ class TestPackageExports:
     def test_classes_importable_directly(self) -> None:
         """Each class can be imported from its dedicated module."""
         from llmwikify.apps.chat.harness.quality_gate import GateResult, QualityGate
-        from llmwikify.apps.chat.harness.source_filter import SourceFilter
         from llmwikify.apps.chat.harness.review import (
-            ResearchReviewer, ResearchRevisor,
+            ResearchReviewer,
+            ResearchRevisor,
         )
-        from llmwikify.apps.chat.harness.structure_validator import StructureValidator
         from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
+        from llmwikify.apps.chat.harness.source_filter import SourceFilter
+        from llmwikify.apps.chat.harness.structure_validator import StructureValidator
         assert QualityGate is not None
         assert GateResult is not None
         assert SourceFilter is not None
@@ -246,15 +246,28 @@ class TestComposition:
         classes under their old names for backward compat."""
         from llmwikify.apps.chat import (
             GateResult as OldGR,
+        )
+        from llmwikify.apps.chat import (
             QualityGate as OldQG,
+        )
+        from llmwikify.apps.chat import (
             SourceFilter as OldSF,
+        )
+        from llmwikify.apps.chat import (
             StructureValidator as OldSV,
         )
+
         # These should be the SAME classes as the new home
         from llmwikify.apps.chat.harness import (
             GateResult as NewGR,
+        )
+        from llmwikify.apps.chat.harness import (
             QualityGate as NewQG,
+        )
+        from llmwikify.apps.chat.harness import (
             SourceFilter as NewSF,
+        )
+        from llmwikify.apps.chat.harness import (
             StructureValidator as NewSV,
         )
         assert OldQG is NewQG

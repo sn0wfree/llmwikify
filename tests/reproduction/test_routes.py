@@ -67,6 +67,7 @@ def paper_client(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "_UPLOAD_DIR", upload_dir)
 
     from fastapi import FastAPI
+
     from llmwikify.interfaces.server.http.paper import router
     app = FastAPI()
     app.include_router(router)
@@ -84,6 +85,7 @@ def factor_client(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "_WIKI_REGISTRY", _FakeRegistry(wiki))
 
     from fastapi import FastAPI
+
     from llmwikify.interfaces.server.http.factor import router
     app = FastAPI()
     app.include_router(router)
@@ -101,6 +103,7 @@ def strategy_client(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "_WIKI_REGISTRY", _FakeRegistry(wiki))
 
     from fastapi import FastAPI
+
     from llmwikify.interfaces.server.http.strategy import router
     app = FastAPI()
     app.include_router(router)

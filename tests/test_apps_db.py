@@ -6,8 +6,8 @@ import tempfile
 
 import pytest
 
-from llmwikify.apps.db import AppDatabase
 from llmwikify.apps.chat.db import ChatDatabase
+from llmwikify.apps.db import AppDatabase
 from llmwikify.apps.research.db import ResearchDatabase
 from llmwikify.apps.wiki.db import WikiDatabase
 

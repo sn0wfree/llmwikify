@@ -19,7 +19,10 @@ from pathlib import Path
 ROOT = Path("/home/ll/llmwikify")
 sys.path.insert(0, str(ROOT / "src"))
 
-from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import build_default_client
+from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import (
+    build_default_client,
+)
+
 from llmwikify.reproduction.paper_understanding.llm_extraction.planner import plan_paper
 from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     PROMPT_PASS2_SUPPLEMENT,
@@ -60,6 +63,7 @@ if plan.schema_choice == "summary":
 # Track B Pass 1
 print("\n[Pass 1] Enumerating signals...")
 from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import _run_pass1
+
 pass1_stubs, pass1_latency, n_calls = _run_pass1(
     client, plan, PAPER_ID, parsed_text,
 )
@@ -84,7 +88,10 @@ print(f"\n[Pass 2] Auto-selected mode: {mode}")
 
 # Run Track B (which uses smart mode internally)
 t0 = time.monotonic()
-from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import run_track_b
+from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
+    run_track_b,
+)
+
 result = run_track_b(
     paper_id=PAPER_ID,
     parsed_text=parsed_text,

@@ -15,8 +15,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from llmwikify.interfaces.server.utils.webui import (
-    INDEX_HTML_CACHE_CONTROL,
     HASHED_ASSET_CACHE_CONTROL,
+    INDEX_HTML_CACHE_CONTROL,
     find_webui_dist,
     mount_webui,
 )

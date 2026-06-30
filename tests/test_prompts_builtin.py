@@ -10,11 +10,14 @@ def test_hardcoded_system_prompt_code():
 
 def test_hardcoded_metadata_prompts():
     from llmwikify.reproduction.codegen.metadata import (
-        SYSTEM_PROMPT_METADATA, SYSTEM_PROMPT_METADATA_V2
+        SYSTEM_PROMPT_METADATA,
+        SYSTEM_PROMPT_METADATA_V2,
     )
     assert SYSTEM_PROMPT_METADATA and SYSTEM_PROMPT_METADATA_V2
 
 
 def test_hardcoded_react_feedback():
-    from llmwikify.reproduction.codegen.feedback_templates import OBSERVE_FEEDBACK_TEMPLATE
+    from llmwikify.reproduction.codegen.feedback_templates import (
+        OBSERVE_FEEDBACK_TEMPLATE,
+    )
     assert "error" in OBSERVE_FEEDBACK_TEMPLATE

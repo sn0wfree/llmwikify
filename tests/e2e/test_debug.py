@@ -1,8 +1,9 @@
 """Debug tests to diagnose blank Insights page issue."""
 
-import pytest
-import urllib.request
 import json
+import urllib.request
+
+import pytest
 
 
 def test_debug_insights_dom(page, wiki_server):
@@ -50,10 +51,10 @@ def test_debug_insights_dom(page, wiki_server):
     html = page.content()
     with open("tests/e2e/screenshots/insights-debug.html", "w") as f:
         f.write(html)
-    print(f"\n  Full HTML saved to tests/e2e/screenshots/insights-debug.html")
+    print("\n  Full HTML saved to tests/e2e/screenshots/insights-debug.html")
 
     page.screenshot(path="tests/e2e/screenshots/insights-debug.png", full_page=True)
-    print(f"  Screenshot saved to tests/e2e/screenshots/insights-debug.png")
+    print("  Screenshot saved to tests/e2e/screenshots/insights-debug.png")
 
     assert h2_count > 0, "Insights heading not found"
     assert loading == 0, "Still in loading state after 2s"

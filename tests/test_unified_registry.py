@@ -12,7 +12,6 @@ from llmwikify.apps.chat.agent.unified.registry import (
 )
 from llmwikify.apps.chat.agent.unified.spec import ActResult, BaseSpec, ReasonResponse
 
-
 # ── Mock handlers ─────────────────────────────────────────
 
 

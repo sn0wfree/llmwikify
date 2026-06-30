@@ -31,11 +31,10 @@ from llmwikify.apps.chat.state import ResearchState
 
 def test_engine_constructs_reasoner():
     """ResearchEngine.__init__ creates a self.reasoner attribute."""
-    from llmwikify.apps.chat.research_engine.reasoner import ResearchReasoner
-
     # We can't construct a full engine without deps, so use a
     # mock: assert the attribute is set in __init__.
     import llmwikify.apps.chat.research_engine.engine as engine_mod
+    from llmwikify.apps.chat.research_engine.reasoner import ResearchReasoner
 
     src = inspect.getsource(engine_mod.ResearchEngine.__init__)
     assert "self.reasoner = ResearchReasoner(self)" in src, (

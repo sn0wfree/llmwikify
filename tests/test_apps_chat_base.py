@@ -17,7 +17,6 @@ import pytest
 
 from llmwikify.apps.chat.base import ChatBase, ChatMessage, ChatSession
 
-
 # ─── Stubs ────────────────────────────────────────────────────────
 
 

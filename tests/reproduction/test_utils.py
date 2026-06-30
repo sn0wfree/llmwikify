@@ -11,7 +11,6 @@ import pytest
 
 from llmwikify.reproduction.common.utils import generate_slug, parse_frontmatter
 
-
 # --- generate_slug tests ---
 
 

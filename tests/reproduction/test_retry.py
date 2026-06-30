@@ -28,14 +28,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from llmwikify.reproduction.paper_understanding.llm_extraction.log_decorator import with_logging
+from llmwikify.reproduction.paper_understanding.llm_extraction.log_decorator import (
+    with_logging,
+)
 from llmwikify.reproduction.paper_understanding.llm_extraction.retry import (
     DeferError,
     RetryConfig,
     with_retry,
 )
 from llmwikify.reproduction.paper_understanding.llm_extraction.runlog import RunLogger
-
 
 # ── Helpers ────────────────────────────────────────────
 

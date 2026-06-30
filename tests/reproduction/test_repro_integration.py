@@ -7,12 +7,13 @@
 
 from __future__ import annotations
 
-import pytest
 import tempfile
 from pathlib import Path
 
-from llmwikify.reproduction.persist import sessions, factor_library
+import pytest
+
 from llmwikify.reproduction.paper_understanding import schemas
+from llmwikify.reproduction.persist import factor_library, sessions
 
 
 class TestSessionToFactorLibrary:

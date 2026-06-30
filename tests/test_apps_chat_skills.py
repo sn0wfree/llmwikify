@@ -44,7 +44,6 @@ from llmwikify.apps.chat.skills import (
     reset_default_registry,
 )
 
-
 # ─── Fixtures ──────────────────────────────────────────────────────
 
 

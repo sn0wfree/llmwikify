@@ -20,7 +20,6 @@ from llmwikify.apps.chat.agent.unified.spec import (
     UnifiedResult,
 )
 
-
 # ── Mock handlers ─────────────────────────────────────────
 
 

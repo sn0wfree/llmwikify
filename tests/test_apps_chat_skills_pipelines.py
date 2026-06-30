@@ -18,7 +18,6 @@ from llmwikify.apps.chat.skills.pipelines.ingest_skill import (
     ingest_skill,
 )
 
-
 # ─── Skill metadata ─────────────────────────────────────────────
 
 
@@ -141,7 +140,6 @@ class TestIngestWithWiki:
         ctx = SkillContext(db=None, config={})
         ctx.wiki = MockWiki()
 
-        from unittest.mock import AsyncMock, MagicMock, patch
 
         # Mock extract
         mock_extract_result = MagicMock()

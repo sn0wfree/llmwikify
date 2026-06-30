@@ -24,12 +24,12 @@ import pytest
 
 def test_wiki_caches_analyzer_in_init():
     """Wiki.__init__ sets self._analyzer = WikiAnalyzer(self)."""
-    from llmwikify.kernel import Wiki
-    from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
-
     # We use a tmp path with the standard wiki root structure
     import tempfile
     from pathlib import Path
+
+    from llmwikify.kernel import Wiki
+    from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "test_wiki"
@@ -145,8 +145,8 @@ def test_no_redundant_WikiAnalyzer_self_in_mixins():
     method that re-instantiates, this test fails.
     """
     from llmwikify.kernel.wiki.mixins.analysis.lint import WikiLintMixin
-    from llmwikify.kernel.wiki.mixins.analysis.status import WikiStatusMixin
     from llmwikify.kernel.wiki.mixins.analysis.llm import WikiLLMMixin
+    from llmwikify.kernel.wiki.mixins.analysis.status import WikiStatusMixin
 
     for mixin_cls in (WikiLintMixin, WikiStatusMixin, WikiLLMMixin):
         for name in dir(mixin_cls):

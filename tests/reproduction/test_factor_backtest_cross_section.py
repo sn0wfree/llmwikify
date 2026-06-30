@@ -149,7 +149,9 @@ class TestComputeLongShort:
         curves = {"G1": g1_curve, "G5": g5_curve}
         adj_dates = [pd.Timestamp(f"2024-01-{i+1:02d}") for i in range(n)]
 
-        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_long_short
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+            _compute_long_short,
+        )
         r_pos = _compute_long_short(curves, adj_dates, factor_direction=1)
         r_neg = _compute_long_short(curves, adj_dates, factor_direction=-1)
 
@@ -202,7 +204,9 @@ class TestRunFactorBacktestUniverse:
 
     def test_new_fields_zero_by_default(self):
         """Backward compatibility: new fields default to zero."""
-        from llmwikify.reproduction.paper_understanding.schemas import FactorBacktestResult
+        from llmwikify.reproduction.paper_understanding.schemas import (
+            FactorBacktestResult,
+        )
         r = FactorBacktestResult()
         d = r.to_dict()
         assert d["rank_ic_mean"] == 0.0
@@ -372,7 +376,9 @@ class TestClickHouseConfig:
 
     def test_factor_result_backward_compat(self):
         """Backward compatibility: FactorBacktestResult default values."""
-        from llmwikify.reproduction.paper_understanding.schemas import FactorBacktestResult
+        from llmwikify.reproduction.paper_understanding.schemas import (
+            FactorBacktestResult,
+        )
         r = FactorBacktestResult()
         d = r.to_dict()
         assert d["longshort_curve"] == []

@@ -20,7 +20,6 @@ import inspect
 import re
 from pathlib import Path
 
-
 # The 10 migrated commands: (submodule_name, class_name, run_fn_name, wiki_cli_method)
 MIGRATED_COMMANDS = [
     ("init_cmd", "InitCommand", "run_init", "init"),

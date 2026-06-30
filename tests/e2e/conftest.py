@@ -1,14 +1,14 @@
 """Playwright E2E test fixtures for llmwikify Web UI."""
 
 import asyncio
-import pytest
-import tempfile
-import subprocess
 import socket
-import time
+import subprocess
+import tempfile
 import threading
+import time
 from pathlib import Path
 
+import pytest
 import uvicorn
 
 
@@ -71,8 +71,8 @@ def server_port():
 @pytest.fixture(scope="session", autouse=True)
 def start_server(test_wiki, server_port):
     """Start Unified Server for all tests."""
-    from llmwikify.kernel import Wiki
     from llmwikify.interfaces.mcp.server import create_unified_server
+    from llmwikify.kernel import Wiki
 
     wiki = Wiki(test_wiki)
     wiki.build_index()

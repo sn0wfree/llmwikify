@@ -35,7 +35,6 @@ from llmwikify.apps.chat.skills.actions.web_fetch_action import (
     fetch_url_sync,
 )
 
-
 # ─── Fixtures ────────────────────────────────────────────────────
 
 

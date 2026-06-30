@@ -8,8 +8,9 @@
 
 from __future__ import annotations
 
-import pytest
 import importlib
+
+import pytest
 
 ALL_TOP_MODULES = [
     # common/ (Phase 1)
@@ -75,12 +76,10 @@ class TestCrossModuleCompatibility:
     def test_import_does_not_require_order(self) -> None:
         """import 顺序无关."""
         # 先 import 一些模块
-        from llmwikify.reproduction.persist import factor_library
-        from llmwikify.reproduction.persist import sessions
-        from llmwikify.reproduction.codegen import llm_code as codegen_utils
         # 再 import 其他模块, 不应出错
-        from llmwikify.reproduction.backtest_pkg import l5_validation
-        from llmwikify.reproduction.backtest_pkg import metrics
+        from llmwikify.reproduction.backtest_pkg import l5_validation, metrics
+        from llmwikify.reproduction.codegen import llm_code as codegen_utils
+        from llmwikify.reproduction.persist import factor_library, sessions
         # 全部成功
         assert factor_library is not None
         assert sessions is not None

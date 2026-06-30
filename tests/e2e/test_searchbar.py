@@ -28,7 +28,7 @@ def test_searchbar_shows_dropdown_results(page, wiki_server):
     expect(dropdown).to_be_visible()
 
     # Verify results in dropdown
-    results = dropdown.locator('button.hover\:bg-slate-700')
+    results = dropdown.locator(r'button.hover\:bg-slate-700')
     result_count = results.count()
 
     if result_count > 0:
@@ -65,7 +65,7 @@ def test_searchbar_click_result_navigates(page, wiki_server):
 
     # Click first result in dropdown
     dropdown = page.locator('.search-container .absolute.left-0')
-    results = dropdown.locator('button.hover\:bg-slate-700')
+    results = dropdown.locator(r'button.hover\:bg-slate-700')
     result_count = results.count()
 
     if result_count > 0:

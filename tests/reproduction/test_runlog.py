@@ -21,15 +21,14 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from llmwikify.reproduction.paper_understanding.llm_extraction.runlog import (
+    STAGES,
     Checkpoint,
     RunEvent,
     RunLogger,
-    STAGES,
     load_checkpoint,
     make_run_logger,
     save_checkpoint,
 )
-
 
 # ── RunLogger ────────────────────────────────────────────
 

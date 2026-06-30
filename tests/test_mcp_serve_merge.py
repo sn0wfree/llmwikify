@@ -29,7 +29,6 @@ import io
 import sys
 from contextlib import redirect_stderr, redirect_stdout
 
-
 # ──────────────────────────────────────────────────────────────────
 # Tests 1-3: mcp / serve merge
 # ──────────────────────────────────────────────────────────────────
@@ -142,7 +141,10 @@ def test_help_command_lists_aliases():
     mcp → serve alias appears in the alias table.
     """
     from llmwikify.interfaces.cli._app import _build_parser
-    from llmwikify.interfaces.cli.commands.help_cmd import HelpCommand, SUBCOMMAND_ALIASES
+    from llmwikify.interfaces.cli.commands.help_cmd import (
+        SUBCOMMAND_ALIASES,
+        HelpCommand,
+    )
 
     # Build the parser (this populates SUBCOMMAND_ALIASES).
     _build_parser()

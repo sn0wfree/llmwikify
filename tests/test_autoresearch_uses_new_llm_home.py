@@ -15,7 +15,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 # Resolve autoresearch dir relative to this file so the test is
 # stable when other tests in the same suite chdir or monkeypatch cwd.
 _AUTORESEARCH_DIR = (

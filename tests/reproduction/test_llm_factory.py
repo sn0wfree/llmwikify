@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from llmwikify.reproduction.common import llm_factory as lf
 

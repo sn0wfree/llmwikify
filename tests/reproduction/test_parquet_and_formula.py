@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # ─── ParquetLocalDataSource ────────────────────────────────────────────
 
 
@@ -75,7 +74,10 @@ class TestParquetLocalDataSource:
 class TestDataRouterParquet:
     def test_parquet_first_in_chain(self):
         """ParquetLocalDataSource is first in the DataRouter chain."""
-        from llmwikify.reproduction.data_source.router import DataRouter, ParquetLocalDataSource
+        from llmwikify.reproduction.data_source.router import (
+            DataRouter,
+            ParquetLocalDataSource,
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             dates = pd.date_range("2024-01-01", periods=10, freq="B")
             df = pd.DataFrame({"date": dates, "Code": ["000001.SZ"] * 10, "open": 100, "high": 105, "low": 95, "close": 100, "volume": 1000})
@@ -91,7 +93,9 @@ class TestDataRouterParquet:
 class TestComputeFactorFromCode:
     def test_simple_momentum(self):
         """LLM-generated momentum code works."""
-        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_from_code
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+            _compute_factor_from_code,
+        )
         data = pd.DataFrame({
             "date": pd.date_range("2024-01-01", periods=30, freq="B"),
             "close": np.random.randn(30).cumsum() + 100,
@@ -108,7 +112,9 @@ def compute_factor(df):
 
     def test_rsi_code(self):
         """LLM-generated RSI code works."""
-        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_from_code
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+            _compute_factor_from_code,
+        )
         data = pd.DataFrame({
             "date": pd.date_range("2024-01-01", periods=30, freq="B"),
             "close": np.random.randn(30).cumsum() + 100,
@@ -128,7 +134,9 @@ def compute_factor(df):
 
     def test_unsafe_code_rejected(self):
         """Unsafe code is rejected by sandbox."""
-        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_from_code
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+            _compute_factor_from_code,
+        )
         data = pd.DataFrame({"date": pd.date_range("2024-01-01", periods=10, freq="B"), "close": range(10)})
         code = """
 import os
@@ -144,7 +152,9 @@ os.system("rm -rf /")
 class TestFormulaFactorClass:
     def test_formula_branch(self):
         """factor_class='formula' executes code correctly."""
-        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_values
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+            _compute_factor_values,
+        )
         data = pd.DataFrame({
             "date": pd.date_range("2024-01-01", periods=30, freq="B"),
             "close": np.random.randn(30).cumsum() + 100,
@@ -159,7 +169,9 @@ def compute_factor(df):
 
     def test_formula_fallback_to_momentum(self):
         """formula without code falls back to momentum."""
-        from llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_values
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+            _compute_factor_values,
+        )
         data = pd.DataFrame({
             "date": pd.date_range("2024-01-01", periods=30, freq="B"),
             "close": np.random.randn(30).cumsum() + 100,

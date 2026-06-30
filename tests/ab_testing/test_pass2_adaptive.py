@@ -23,7 +23,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import build_default_client
+from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import (
+    build_default_client,
+)
+
 from llmwikify.reproduction.paper_understanding.llm_extraction.planner import PlanResult
 from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     SignalDetail,
