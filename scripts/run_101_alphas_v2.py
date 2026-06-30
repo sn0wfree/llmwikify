@@ -57,7 +57,7 @@ from typing import Any
 
 import polars as pl
 
-from llmwikify.apps.chat.agent.unified.core import UnifiedHook
+from llmwikify.kernel.agent import UnifiedHook
 from llmwikify.foundation.logging import log_timing, setup_logging
 
 # L2: FactorResult imported at top (was inside methods in PR6).

@@ -116,9 +116,7 @@ def generate_factor_code(
         DeprecationWarning,
         stacklevel=2,
     )
-    from llmwikify.apps.chat.agent.unified.pipelines.codegen import (
-        generate_factor_code_sync,
-    )
+    from llmwikify.kernel.agent import generate_factor_code_sync
 
     if llm is None:
         llm = build_llm_client(model=model)

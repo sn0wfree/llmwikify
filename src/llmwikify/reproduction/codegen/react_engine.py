@@ -149,7 +149,7 @@ def compile_to_code_react(
     """ReAct-style self-retry: LLM emits code → execute → on error, re-prompt.
 
     .. deprecated::
-        Use ``llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync`` instead.
+        Use ``llmwikify.kernel.agent.generate_factor_code_sync`` instead.
 
     Args:
         factor_name: Display name (for logging / telemetry).
@@ -174,7 +174,7 @@ def compile_to_code_react(
     import warnings
     warnings.warn(
         "compile_to_code_react is deprecated. Use "
-        "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync instead.",
+        "llmwikify.kernel.agent.generate_factor_code_sync instead.",
         DeprecationWarning,
         stacklevel=2,
     )

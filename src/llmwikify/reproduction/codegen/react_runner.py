@@ -21,7 +21,7 @@ from typing import Any
 
 import polars as pl
 
-from llmwikify.apps.chat.agent.unified.core import UnifiedHook
+from llmwikify.kernel.agent import UnifiedHook
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +67,7 @@ def llm_code_react(
           - error: Error message (None on success)
           - react_meta: UnifiedResult.to_dict() (iterations / stop_reason)
     """
-    from llmwikify.apps.chat.agent.unified.pipelines.codegen import (
-        generate_factor_code_sync,
-    )
+    from llmwikify.kernel.agent import generate_factor_code_sync
 
     result = generate_factor_code_sync(
         factor_name=factor_name,

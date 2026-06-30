@@ -42,7 +42,7 @@ from llmwikify.reproduction.codegen.llm_code import (
     validate_safety,
     validate_syntax,
 )
-from llmwikify.apps.chat.agent.unified.core import UnifiedHook
+from llmwikify.kernel.agent import UnifiedHook
 from llmwikify.foundation.logging import log_timing, setup_logging
 from llmwikify.reproduction.pipeline.backtest_extract import safe_float, extract_full_backtest_from_ctx
 from llmwikify.reproduction.pipeline.data_loader import wide_from_long, write_factor_h5, derive_input_columns, load_and_build_df
@@ -202,7 +202,7 @@ def _llm_code_react(
 
     Returns (code, factor_series, error, react_result_dict).
     """
-    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code_sync
+    from llmwikify.kernel.agent import generate_factor_code_sync
 
     class _ProgressHook(UnifiedHook):
         """Print progress like the old progress_callback."""

@@ -69,7 +69,7 @@ class TestLLMCodeReactSuccess:
         mock_result = _make_unified_result(code="x = y", factor_series=fs)
 
         with patch(
-            "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync",
+            "llmwikify.kernel.agent.generate_factor_code_sync",
             return_value=mock_result,
         ) as gen:
             code, factor_series, error, meta = llm_code_react(
@@ -90,7 +90,7 @@ class TestLLMCodeReactSuccess:
         mock_result = _make_unified_result(code="x", factor_series=fs)
 
         with patch(
-            "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync",
+            "llmwikify.kernel.agent.generate_factor_code_sync",
             return_value=mock_result,
         ) as gen:
             llm_code_react("a", "b", df, llm=MagicMock(),
@@ -114,7 +114,7 @@ class TestLLMCodeReactError:
                                             error="LLM boom", stop_reason="max_iter")
 
         with patch(
-            "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync",
+            "llmwikify.kernel.agent.generate_factor_code_sync",
             return_value=mock_result,
         ):
             code, factor_series, error, meta = llm_code_react(

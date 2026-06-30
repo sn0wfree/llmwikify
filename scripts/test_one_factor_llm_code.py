@@ -243,7 +243,7 @@ def _llm_code_react(
 
     Returns (code, factor_series, error, react_result_dict).
     """
-    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code_sync
+    from llmwikify.kernel.agent import generate_factor_code_sync
 
     result = generate_factor_code_sync(
         factor_name=factor_name,
