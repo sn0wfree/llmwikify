@@ -1787,3 +1787,114 @@ from llmwikify.kernel.quant.codegen import (
 | `apps/chat/agent/unified/pipelines/codegen.py:51` | from reproduction | from kernel |
 | 测试 | 197 | 207+ (10 new) |
 | **apps → reproduction codegen imports** | 1 | **0** ✅ |
+
+## 17.22 G+Y + 维度 A: kernel/agent/ 拆解 + 彻底去业务前缀
+
+### 17.22.1 动机
+
+C1+C2 修复了 module-level cycle，但：
+1. **4 个 lazy import 仍在**（reproduction → apps），是潜在反向依赖
+2. **`kernel/quant/` 带业务前缀**，违反"kernel/ = 水平能力层"原则
+3. **`apps/chat/agent/unified/` 混了通用框架（1357 行）+ chat-specific（843 行）**
+
+### 17.22.2 目标架构
+
+```
+foundation/
+├── llm/                         (改组)
+│   ├── protocol.py              (was: foundation/llm_client.py)
+│   ├── provider.py              (合并 from foundation/llm/*)
+│   └── client.py                (was: kernel/quant/llm_client.py, 下沉)
+└── ...
+
+kernel/
+├── agent/                       (NEW)
+│   ├── hook.py                  (UnifiedHook)
+│   ├── context.py               (UnifiedContext)
+│   ├── loop.py                  (UnifiedAgentLoop + StepHandler + Pipeline + StreamingHandler)
+│   ├── spec.py                  (BaseSpec + UnifiedResult + CodegenSpec + ReasonResponse + ActResult)
+│   ├── codegen_pipeline.py      (generate_factor_code + _sync + CodegenReasoner + CodeActor)
+│   └── steps/{checks,code,feedback,llm,transforms}.py
+├── codegen/                     (NEW, rename from kernel/quant/codegen/)
+│   ├── code_tools.py            (extract_python / validate / execute)
+│   ├── prompts.py               (SYSTEM_PROMPT_CODE)
+│   ├── json_extract.py          (extract_json_from_response)
+│   └── feedback_templates.py    (OBSERVE_FEEDBACK_TEMPLATE)
+└── wiki/, graph/, search/, storage/
+
+apps/
+├── chat/agent/
+│   ├── runner_v2.py             (不动, shim 兼容 633 tests)
+│   ├── spec.py                  (NEW: ChatSpec 从 apps/unified/spec.py 拆出)
+│   └── unified/                 (维度 A 拆解 + 清爽 shim)
+│       ├── __init__.py          (顶层统一 backward-compat re-export)
+│       ├── events.py            (chat-specific, 不动)
+│       ├── hook_adapter.py      (chat-specific, 不动)
+│       ├── registry.py          (chat-specific, 不动)
+│       ├── handlers/{chat_reasoner,tool_actor}.py  (chat-specific, 不动)
+│       ├── pipelines/__init__.py  (shim: re-export codegen_pipeline)
+│       └── steps/__init__.py    (shim: re-export 15 个 Step classes)
+
+reproduction/                    (改 import 到 kernel.agent, 无反向依赖)
+```
+
+### 17.22.3 依赖关系
+
+```
+interfaces  ──→  apps, kernel, reproduction, foundation
+apps        ──→  foundation, kernel
+kernel      ──→  foundation                     ← 严格不依赖 apps
+reproduction ──→  foundation, kernel            ← 不依赖 apps
+foundation  ──→  (self only)
+```
+
+### 17.22.4 Commit 拆分 (6 个, 分 2 phase)
+
+| Phase | Commit | 内容 | 时间 |
+|---|---|---|---|
+| Phase 1 | 1 | 新建 `kernel/agent/` | 0.5d |
+| | 2 | apps/unified/ 维度 A 拆解 + 清爽 shim | 0.55d |
+| | 3 | reproduction + scripts 改 import | 0.3d |
+| | | **Phase 1 合计** | **1.35d** |
+| Phase 2 | 4 | foundation/llm/ 改组 + build_llm_client 下沉 | 0.5d |
+| | 5 | kernel/quant/codegen/ → kernel/codegen/ rename | 0.4d |
+| | 6 | ruff + pytest + 文档 | 0.3d |
+| | | **Phase 2 合计** | **1.2d** |
+| **总计** | | | **2.55d** |
+
+### 17.22.5 shim 策略
+
+借鉴原则：
+1. **同名 shim 文件**（core.py / loop.py / spec.py）→ 合并到顶层 `__init__.py`
+2. **子目录中间层 shim**（`X/Y.py`）→ 进 `X/__init__.py`
+3. **内容多的 shim**（>10 classes）→ 保留独立 shim 文件
+4. **内容少的 shim** → 进顶层 `__init__.py`
+
+### 17.22.6 验证清单 (commit 6 后)
+
+```bash
+# 1. 双向 cycle
+grep -rn "from llmwikify.apps" src/llmwikify/reproduction/ src/llmwikify/kernel/ --include="*.py"  # 0
+grep -rn "from llmwikify.reproduction" src/llmwikify/apps/ src/llmwikify/kernel/ --include="*.py"  # 0
+
+# 2. 旧路径残留
+grep -rn "kernel\.quant\|llmwikify\.llm_client\b" src/ tests/ scripts/ --include="*.py"  # 0
+grep -rn "from llmwikify\.apps\.chat\.agent\.unified\.\(core\|pipelines\.codegen\)" src/ tests/ scripts/ --include="*.py"  # 0
+
+# 3. apps/unified/ 残留
+ls src/llmwikify/apps/chat/agent/unified/  # __init__.py, events.py, hook_adapter.py, registry.py, handlers/, pipelines/__init__.py, steps/__init__.py
+
+# 4. Lint + Tests + Architecture
+ruff check src/llmwikify/  # 0 error
+pytest tests/ -q --ignore=tests/e2e --ignore=tests/ab_testing --ignore=tests/reproduction/test_llm_factory.py  # 全过
+python scripts/check_architecture.py  # 0 violation
+```
+
+### 17.22.7 风险矩阵
+
+| 风险 | 概率 | 缓解 |
+|---|---|---|
+| Commit 2 删除 8 文件后某处直接 import 旧路径 | 中 | commit 3 同步更新所有 import site + grep 验证 |
+| `foundation/llm/client.py` 下沉后被 kernel/agent 引用产生新 cycle | 低 | `kernel/agent/codegen_pipeline.py` 不 import build_llm_client（外部传入） |
+| Commit 5 rename `kernel/quant/` 后 `__pycache__` 残留 | 中 | 每 commit 后 `find . -name __pycache__ -exec rm -rf {} +` |
+| 633 runner_v2 tests 在 commit 2 失败 | 中 | shim 完整保留所有 re-export |
