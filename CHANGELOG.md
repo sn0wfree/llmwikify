@@ -75,6 +75,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `WikiDiscovery.scan` / `write_factor_yaml` / `update_index` 全部
   与文档示例一致
 
+## [0.37.0] - 2026-06-09
+
+Full release notes: [`docs/releases/v0.37.0.md`](docs/releases/v0.37.0.md)
+
+### Added — Triple ReAct Loop 统一
+
+- **Single `ReActEngine`** (Phase 11) — 替代 ChatService / ResearchEngine /
+  AutoResearch 三个散装 ReAct 实现
+- **13-step round structure** — `pre_reason` / `reason` / `post_reason` /
+  `decide_action` / `execute_action` / `process_observation` / ... /
+  `on_round_complete`
+- **7 lifecycle hooks** — `on_session_start` / `on_round_start` /
+  `on_round_complete` / `on_session_complete` / `on_error` / `on_timeout` /
+  `on_cancel`
+- **Standard event types** — `reasoning` / `action` / `observation` /
+  `round_complete` / `action_error` / `observation_error` / `phase` /
+  `timeout` / `done`
+- **`AbortSignal` cancellation** + configurable timeout (default 300s)
+- **ChatReActBridge** — ChatService 通过新 bridge adapter 接入 ReActEngine
+- **ResearchConfig adapter** — ResearchEngine 通过 `_build_react_config`
+  接入
+- **+55 ReAct unit tests**
+
+### Fixed
+
+- 3 套 ReAct 实现的生命周期钩子去重
+- cancel/timeout 逻辑统一（之前 3 套独立实现各有 bug）
+
+## [0.36.0] - 2026-06-09
+
+Full release notes: [`docs/releases/v0.36.0.md`](docs/releases/v0.36.0.md)
+
+### Hardening — AgentChat 全面硬化
+
+- **5 critical bugs fixed** — tool result feedback loop;
+  `save_message` 错误吞噬；UUID collision（8→32 字符）；
+  React closure staleness；duplicate DB instances
+- **Architecture merged** — ChatService delegates tool-calling loop to
+  `ChatBase.aask_with_tools`
+- **MemoryManager fully integrated** — 6 stores, all async, all used in
+  chat flow
+- **Reliability stack** — LLM/DB retry；rate limiting 60 req/min/IP on
+  `/api/agent/*`；SSE heartbeat；cascade delete
+- **Frontend UX** — Abort button；token reset；any-message regenerate；
+  SSE auto-reconnect
+- **+28 chat tests / +5 webui tests**
+
 ## [0.38.0] - 2026-06-22
 
 Full release notes: [`docs/releases/v0.38.0.md`](docs/releases/v0.38.0.md)
