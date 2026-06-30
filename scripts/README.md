@@ -9,6 +9,8 @@ Standalone scripts for the llmwikify project.
 
 ## Available Scripts
 
+## Available Scripts
+
 | Script | Purpose | Needs LLM? |
 |---|---|---|
 | `check_architecture.py` | Verify 4-layer architecture contracts | No |
@@ -18,10 +20,46 @@ Standalone scripts for the llmwikify project.
 | `smoke_v037.py` | v0.37 Triple ReAct Loop — real-LLM smoke | **Yes** |
 | `migrate_db_v1_to_v2.py` | DB schema migration helper | No |
 | `migrate_autoresearch_v3_to_v4.py` | AutoResearch migration helper | No |
+| `migrate_factors.py` | 迁移因子到新目录结构 | No |
+| `migrate_wiki_paths.py` | 迁移 Wiki 目录结构（旧 → 新 layout） | No |
 | `repair_corrupted_ppt_task.py` | PPT task repair | No |
 | `fix_swot_slide.py` | SWOT slide fix | No |
-| `downgrade_to_v11513.sh` | Downgrade to v1.15.13 | No |
-| `install_opencode_*.sh` | Installer scripts | No |
+| `downgrade_to_v11513.sh` | Downgrade opencode to v1.15.13 (fix SPA 500 bug) | No |
+| `install_opencode_fast.sh` | OpenCode 安装（加速 + mirror + SHA256 校验） | No |
+| `install_opencode_manual.sh` | OpenCode 安装（本地 binary） | No |
+
+### Quant reproduction (paper → factor → backtest)
+
+| Script | Purpose | Needs LLM? |
+|---|---|---|
+| `run_paper.py` | 通用论文复现入口（modular framework） | **Yes** |
+| `run_101_alphas.py` | 101 alphas 批量跑（v1 入口） | **Yes** |
+| `run_101_alphas_v2.py` | 101 alphas 批量跑（v2 recipe-based 重构） | **Yes** |
+| `aggregate_alpha_results.py` | 聚合 101 alphas E2E 结果为 summary | No |
+| `analyze_alpha_results.py` | 分析 101 alphas 结果并生成报告 | No |
+| `compare_old_vs_new.py` | 对比 react_engine vs unified codegen 结果 | No |
+| `merge_alpha_data.py` | 合并 alpha_*.yaml L5 data → 101_alphas family | No |
+| `test_one_factor_llm_code.py` | 单因子 LLM code 路径 + QuantNodes e2e | **Yes** |
+| `fix_definition_from_pass2.py` | 用 pass2.json 的 NL 描述覆盖 l1.definition | No |
+
+### Cross-validation (factor_backtest vs 外部库)
+
+| Script | Purpose | Needs LLM? |
+|---|---|---|
+| `cross_validate_factor.py` | 严格对齐 server 算法分步交叉验证 | No |
+| `validate_alphalens.py` | factor_backtest vs Alphalens 行业标准库 | No |
+| `validate_backtrader.py` | momentum long-short 策略 vs Backtrader | No |
+| `validate_qn_nodes.py` | 聚焦分组逻辑 vs QuantNodes | No |
+| `convert_long_to_h5.py` | HS300 长格式 CSV → QuantNodes 宽格式 H5 | No |
+| `deep_compare_alphalens.py` | factor_backtest vs Alphalens 位级对比 | No |
+
+### Demo / Debug
+
+| Script | Purpose | Needs LLM? |
+|---|---|---|
+| `demo_react_self_repair.py` | ReAct self-repair demo（LLM typo 自动修复） | **Yes** |
+| `stage_c_debug_llm.py` | 阶段 C.2 — 调试 LLM 原始输出 | **Yes** |
+| `stage_c_e2e_smoke.py` | 阶段 C — 真实 LLM 端到端 1-3 个 alpha 验证 | **Yes** |
 
 ---
 
