@@ -9,6 +9,7 @@
 | Doc | Purpose |
 |-----|---------|
 | [README.md](../README.md) | Project overview, quick start, features |
+| [TUTORIAL.md](TUTORIAL.md) | **5 个端到端使用场景（必读）** |
 | [ARCHITECTURE.md](../ARCHITECTURE.md) | Technical architecture, data flows, components |
 | [MIGRATION.md](../MIGRATION.md) | Version migration notes |
 | [CHANGELOG.md](../CHANGELOG.md) | Version history |

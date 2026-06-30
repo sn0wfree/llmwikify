@@ -1,4 +1,9 @@
 """
+DEPRECATED — 保留作为 v0.13 风格 API 演示。
+推荐端到端剧本：
+  ../01_personal_reading_notes/    init + ingest + search + write
+  ../02_company_research_kb/       batch ingest + analyze + synthesize
+
 llmwikify 基础使用示例
 
 演示：

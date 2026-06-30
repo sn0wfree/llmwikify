@@ -5,6 +5,76 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Documentation — Issue fix (outdated docs + missing tutorial)
+
+针对 GitHub issues：
+1. 文档中部分操作已过时
+2. 缺一个完整的使用流程和案例
+
+#### Fixed（过期内容修复，对齐 v0.38.0）
+
+- **CONFIGURATION_GUIDE.md**：
+  - 顶部版本 `v0.12.6` → `v0.38.0 (2026-06-30)`，footer 同步
+  - 全文 8 处 `MCPServer` 引用改为 `WikiServer` + `llmwikify serve` CLI
+  - 新增 3 个配置段：`server` (unified MCP+REST+WebUI)、`search` (FTS5/QMD)、
+    `wikis` (multi-wiki registry)、`llm` (provider)
+- **MCP_SETUP.md**：**全量重写**
+  - 旧 `MCPServer(wiki).serve()` 路径 14 处替换为 `llmwikify serve` /
+    `WikiServer`
+  - 工具数 20 → 26（加 6 个 multi-wiki 工具表 + 2 个 scoped 变体说明）
+  - 新增 Bearer auth + 远程暴露安全说明
+  - 加 Claude Desktop / Cursor / opencode 配置示例
+- **KNOWN_ISSUES.md**：
+  - `Current Issues (v0.30.1)` 表全部标 resolved
+  - 顶部新增 8 条 v0.31–v0.38 闭环记录（lifespan 迁移、MCPServer 废弃、
+    tool 集 20→26、CLI/Agent 对齐、shim 清理、QuickResearch 报告持久化、
+    SSE 自动重连、ingest 事务原子性）
+- **REFERENCE_TRACKING_GUIDE.md**：10 处 `./llmwikify.py` → `llmwikify`
+  CLI，footer 同步
+- **examples/legacy/**：basic_usage / run_server / mcp_agent / django /
+  flask / Dockerfile / docker-compose 全部加 `DEPRECATED` 横幅 + 指向
+  新剧本
+- **examples/run_server.py**：`from llmwikify.server import WikiServer`
+  → `from llmwikify.interfaces.server import WikiServer`（3 处）
+- **examples/mcp_agent.py**：`llmwikify mcp` → `llmwikify serve` 统一
+
+#### Added（教程 + 剧本三件套）
+
+- **docs/TUTORIAL.md** — **5 个端到端使用场景，~700 行中文**
+  - 场景 1：个人阅读笔记 wiki（init/ingest/search/write/index/references/lint）
+  - 场景 2：公司尽调知识库（batch/analyze-source/synthesize/graph）
+  - 场景 3：多 wiki 协作（registry + remote + discovery）
+  - 场景 4：Chat + ReAct Agent（SSE 流式 + 事件类型一览）
+  - 场景 5：Quant 复现（paper → factor → DuckDB → backtest → L5）
+  - 每场景固定 5 段：背景 / 步骤 / 架构图（ASCII + Mermaid）/ 底层产物
+    映射 / 故障排查
+  - 附录 A 配置文件优先级；B CLI vs Python 决策表；C MCP 客户端接入
+- **examples/01_personal_reading_notes/** — init + ingest + search
+  + write + build-index + references + lint 端到端剧本
+- **examples/02_company_research_kb/** — batch + synthesize + GraphAnalyzer
+- **examples/03_multi_wiki_registry/** — `WikiRegistry` + `WikiDiscovery`
+  + set_default_wiki 全 Python API
+- **examples/04_chat_sse_client/** — `httpx.stream` 消费 SSE，列 8 类事件
+- **examples/05_paper_to_factor/** — `write_factor_yaml` + `update_index`
+  + DuckDB 长表 schema
+- **examples/legacy/** — 旧脚本收纳目录
+- **examples/verify_playbooks.sh** — 4 剧本一键冒烟（4 passed, 0 failed）
+
+#### Validation
+
+- `bash examples/verify_playbooks.sh` → **4 passed, 0 failed**
+- `ruff check examples/01-05_*/` → **All checks passed**
+- `git grep -nE '\bMCPServer\b|from llmwikify\.server\b' docs/ examples/`
+  README.md`（已弃用）→ 仅剩 deprecation 横幅中
+- Python API 实测：`Wiki(path).init(agent="generic")` /
+  `ingest_source` / `search` / `write_page` / `build_index` /
+  `get_inbound_links` / `lint` / `GraphAnalyzer.analyze()` /
+  `WikiRegistry.register_wiki/set_default_wiki/list_wikis` /
+  `WikiDiscovery.scan` / `write_factor_yaml` / `update_index` 全部
+  与文档示例一致
+
 ## [0.38.0] - 2026-06-22
 
 Full release notes: [`docs/releases/v0.38.0.md`](docs/releases/v0.38.0.md)

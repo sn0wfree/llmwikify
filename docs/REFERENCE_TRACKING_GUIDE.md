@@ -1,5 +1,8 @@
 # Wiki 引用追踪系统使用指南
 
+> **Last updated**: 2026-06-30 (v0.38.0) — 命令格式从 `./llmwikify.py` 改为
+> 标准 `llmwikify` CLI。
+
 ## 📋 概述
 
 基于 Karpathy LLM Wiki 原则构建的完整双向引用追踪系统，能够准确定位：
@@ -17,7 +20,7 @@
 
 **用法**：
 ```bash
-./llmwikify.py build-index
+llmwikify build-index
 ```
 
 **输出**：
@@ -38,7 +41,7 @@
 
 **用法**：
 ```bash
-./llmwikify.py references "Page Name"
+llmwikify references "Page Name"
 ```
 
 **输出**：
@@ -49,13 +52,13 @@
 **示例**：
 ```bash
 # 查询公司页面
-./llmwikify.py references "Agnico Eagle"
+llmwikify references "Agnico Eagle"
 
 # 查询行业页面
-./llmwikify.py references "Market Overview"
+llmwikify references "Market Overview"
 
 # 查询索引中的页面名
-./llmwikify.py references "gold-industry-news"
+llmwikify references "gold-industry-news"
 ```
 
 ---
@@ -157,7 +160,7 @@
 
 ```bash
 # 查询哪些页面引用了某公司
-./llmwikify.py references "First Quantum"
+llmwikify references "First Quantum"
 
 # 输出显示：
 # - 行业页面引用
@@ -169,7 +172,7 @@
 
 ```bash
 # 构建最新索引
-./llmwikify.py build-index
+llmwikify build-index
 
 # 查询热门页面（被引用最多）
 python3 -c "
@@ -187,13 +190,13 @@ for page, refs in top:
 
 ```bash
 # 检查孤立页面
-./llmwikify.py lint | grep orphan_page
+llmwikify lint | grep orphan_page
 
 # 检查断裂链接
-./llmwikify.py lint | grep broken_link
+llmwikify lint | grep broken_link
 
 # 查询特定页面的引用完整性
-./llmwikify.py references "Page Name"
+llmwikify references "Page Name"
 ```
 
 ---
@@ -236,6 +239,7 @@ for page, refs in top:
 
 ## 📚 参考
 
-- [Karpathy LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md)
-- [Wiki.py Usage Guide](wiki_quick_reference.md)
-- [WIKI.md Configuration](../WIKI.md)
+- [Karpathy LLM Wiki Principles](LLM_WIKI_PRINCIPLES.md)
+- [README Quick Start](../README.md#quick-start)
+- [TUTORIAL.md](TUTORIAL.md) — 5 个端到端场景
+- [wiki.md schema](../WIKI.md)

@@ -1,4 +1,7 @@
 """
+DEPRECATED — 推荐改用 `llmwikify serve` CLI 或 llmwikify.interfaces.mcp.create_mcp_server。
+端到端剧本：../04_chat_sse_client/  (含 MCP + REST + SSE 全栈)
+
 llmwikify MCP 集成示例
 
 演示：
@@ -79,11 +82,11 @@ def example_3_agent_integration_patterns():
     patterns = [
         ("模式 1: 独立 MCP 服务器",
          "llmwikify 作为独立 MCP 服务运行，通过 stdio 或 HTTP 连接到 Agent",
-         "llmwikify mcp --transport stdio"),
+         "llmwikify serve --transport stdio"),
 
         ("模式 2: FastAPI 集成",
          "在统一 FastAPI 服务器中挂载 MCP，同时支持 REST API",
-         "from llmwikify.server import WikiServer\n"
+         "from llmwikify.interfaces.server import WikiServer\n"
          "server = WikiServer(wiki, enable_mcp=True)"),
 
         ("模式 3: 嵌入到 Agent 项目",

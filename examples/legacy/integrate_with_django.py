@@ -1,4 +1,7 @@
 """
+DEPRECATED — 保留作为 Django 集成参考。
+新端到端剧本见 ../01_personal_reading_notes/（Python Wiki API 用法）。
+
 llmwikify 与 Django 集成示例
 
 演示如何将 llmwikify 作为 Django 项目的知识库后端。

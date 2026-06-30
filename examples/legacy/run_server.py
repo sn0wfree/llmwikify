@@ -1,4 +1,12 @@
 """
+DEPRECATED — 保留用于向后兼容。
+
+迁移路径：
+  旧 `from llmwikify.interfaces.server import WikiServer`  →  `from llmwikify.interfaces.server import WikiServer`
+  旧 `MCPServer(wiki).serve()`                →  `llmwikify serve` CLI
+
+推荐示例：../04_chat_sse_client/  (SSE chat) 与 ../03_multi_wiki_registry/  (server 启动)
+
 llmwikify Web 服务器示例
 
 演示：
@@ -22,7 +30,7 @@ def example_1_basic_server():
     print("=" * 60)
 
     from llmwikify import Wiki, create_wiki
-    from llmwikify.server import WikiServer
+    from llmwikify.interfaces.server import WikiServer
 
     import tempfile
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -52,7 +60,7 @@ def example_2_with_auth():
     print("=" * 60)
 
     from llmwikify import Wiki, create_wiki
-    from llmwikify.server import WikiServer
+    from llmwikify.interfaces.server import WikiServer
 
     import tempfile
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -83,7 +91,7 @@ def example_3_mcp_only():
     print("=" * 60)
 
     from llmwikify import Wiki, create_wiki
-    from llmwikify.server import WikiServer
+    from llmwikify.interfaces.server import WikiServer
 
     import tempfile
     with tempfile.TemporaryDirectory() as tmpdir:
