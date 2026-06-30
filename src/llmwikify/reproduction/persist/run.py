@@ -13,12 +13,13 @@ independent reproduction.db managed by ReproductionDatabase.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 from ..backtest_pkg.run_backtest import run_backtest
-from ..paper_understanding.extract_strategy import extract_strategy_config
 from ..data_source.router import DataRouter
+from ..paper_understanding.extract_strategy import extract_strategy_config
 from .sessions import ReproductionDatabase
 
 logger = logging.getLogger(__name__)
@@ -32,8 +33,8 @@ class RunContext:
     symbol: str
     start_date: str
     end_date: str
-    data_router: Optional[DataRouter] = None
-    db: Optional[ReproductionDatabase] = None
+    data_router: DataRouter | None = None
+    db: ReproductionDatabase | None = None
 
 
 def _make_router() -> DataRouter:
@@ -66,8 +67,8 @@ def _build_backtest_page(result, cfg, ctx: RunContext) -> str:
         "",
         "## Metrics",
         "",
-        f"| metric | value |",
-        f"|---|---|",
+        "| metric | value |",
+        "|---|---|",
         f"| Sharpe | {result.sharpe_ratio:.4f} |",
         f"| Max drawdown | {result.max_drawdown:.4f} |",
         f"| Win rate | {result.win_rate:.4f} |",
@@ -110,7 +111,7 @@ def _build_optimization_page(result, cfg, ctx: RunContext) -> str:
 
 def run_reproduction(
     ctx: RunContext,
-    hook: Optional[Callable[[str, dict[str, Any]], None]] = None,
+    hook: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Run the full reproduction pipeline for one session.
 

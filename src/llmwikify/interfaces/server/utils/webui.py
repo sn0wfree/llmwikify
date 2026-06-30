@@ -6,14 +6,13 @@ Used by both WikiServer core and legacy entry points.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import FileResponse, Response
-
 
 logger = logging.getLogger(__name__)
 

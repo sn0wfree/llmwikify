@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .backtest_pkg.run_backtest import run_backtest
-    from .paper_understanding.schemas import BacktestResult, WikiFactor, WikiStrategy, FactorBacktestResult
+    from .paper_understanding.schemas import (
+        BacktestResult,
+        FactorBacktestResult,
+        WikiFactor,
+        WikiStrategy,
+    )
 
 __all__ = [
     "run_backtest",

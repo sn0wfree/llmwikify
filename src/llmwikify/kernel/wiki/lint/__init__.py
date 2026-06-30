@@ -52,7 +52,7 @@ class Rule:
 
     name: str = ""
 
-    def run(self, wiki: "Wiki") -> list[dict[str, Any]]:
+    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
         """Run this rule against ``wiki`` and return any issues found.
 
         Returns:
@@ -79,7 +79,7 @@ class LintEngine:
     ``core.lint.rules.RULES``.
     """
 
-    def __init__(self, wiki: "Wiki", rules: list[Rule] | None = None) -> None:
+    def __init__(self, wiki: Wiki, rules: list[Rule] | None = None) -> None:
         self.wiki = wiki
         self._rules: dict[str, Rule] = {}
         for rule in rules or []:

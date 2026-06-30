@@ -571,6 +571,8 @@ def _register_agent_routes(
     from llmwikify.apps.chat.config import merge_six_step_config
     from llmwikify.apps.chat.research_engine.routes import (
         router as autoresearch_router,
+    )
+    from llmwikify.apps.chat.research_engine.routes import (
         set_autoresearch_deps,
     )
 

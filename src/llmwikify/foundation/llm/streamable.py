@@ -83,7 +83,7 @@ class RetryConfig:
     retry_after_max_seconds: float = _RETRY_AFTER_MAX_SECONDS
 
     @classmethod
-    def from_env(cls) -> "RetryConfig":
+    def from_env(cls) -> RetryConfig:
         """Build a config from environment variables.
 
         Environment variables (all optional):

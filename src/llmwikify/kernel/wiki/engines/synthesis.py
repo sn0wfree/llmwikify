@@ -9,13 +9,13 @@ Design principle: "LLM does analysis, human makes decisions"
 import re
 from pathlib import Path
 
+from llmwikify.kernel.storage.backend import is_path_excluded
+
 from ..constants import (
     CLAIM_OVERLAP_THRESHOLD,
     CONTRADICTION_OVERLAP_THRESHOLD,
     MAX_SUGGESTED_UPDATES,
 )
-
-from llmwikify.kernel.storage.backend import is_path_excluded
 
 
 class SynthesisEngine:

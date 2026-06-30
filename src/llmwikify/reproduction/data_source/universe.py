@@ -138,7 +138,7 @@ def get_index_constituents(index_code: str) -> list[str]:
     return codes
 
 
-def resolve_universe(spec: Union[str, list[str], None]) -> list[str]:
+def resolve_universe(spec: str | list[str] | None) -> list[str]:
     """Resolve a universe specifier to a list of stock codes.
 
     Args:
@@ -204,7 +204,7 @@ def get_index_close_series(
     router: Any,
     start: str,
     end: str,
-) -> Optional[pd.Series]:
+) -> pd.Series | None:
     """Fetch close price series for an index via the given DataRouter.
 
     Args:

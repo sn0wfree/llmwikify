@@ -9,9 +9,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .remote import RemoteWiki
 from .discovery import WikiDiscovery
 from .instance import WikiInstance, WikiStatus, WikiType
+from .remote import RemoteWiki
 
 logger = logging.getLogger(__name__)
 

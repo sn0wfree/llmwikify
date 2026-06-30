@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 PLUGIN_DIR = Path.home() / ".llmwikify" / "skills"
 
 
-def load_plugins(registry: "SkillRegistry") -> int:
+def load_plugins(registry: SkillRegistry) -> int:
     """Scan ``~/.llmwikify/skills/`` and register discovered skills.
 
     Returns the number of skills successfully loaded.
@@ -65,7 +65,7 @@ def load_plugins(registry: "SkillRegistry") -> int:
     return loaded
 
 
-def _load_skill_md(skill_dir: Path, registry: "SkillRegistry") -> None:
+def _load_skill_md(skill_dir: Path, registry: SkillRegistry) -> None:
     """Load a Prompt-Based skill from a ``SKILL.md`` file.
 
     Phase 11 (2026-06-20): delegates frontmatter parsing to
@@ -121,7 +121,7 @@ def _load_skill_md(skill_dir: Path, registry: "SkillRegistry") -> None:
     )
 
 
-def _load_python_skill(py_path: Path, registry: "SkillRegistry") -> None:
+def _load_python_skill(py_path: Path, registry: SkillRegistry) -> None:
     """Load a Code-Based skill from a Python file."""
     from llmwikify.apps.chat.skills.base import Skill
 

@@ -74,6 +74,7 @@ class TavilyProvider:
 
     async def search(self, query: str, num_results: int) -> list[SearchResult]:
         import asyncio
+
         from tavily import TavilyClient
 
         client = TavilyClient(api_key=self.api_key)

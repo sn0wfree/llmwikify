@@ -22,7 +22,6 @@ from fastmcp import FastMCP
 
 from llmwikify.kernel import Wiki
 
-
 # Phase 3 #6 — emit the deprecation warning on import (preserves
 # the existing public contract for downstream users who import
 # ``llmwikify.mcp.server``). Internal callers (cli/commands/serve.py)

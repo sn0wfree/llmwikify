@@ -382,8 +382,9 @@ def save_backtest_duckdb(
     Returns:
         Path to the DuckDB file.
     """
-    import duckdb
     import math
+
+    import duckdb
 
     dir_path = _resolve_factor_dir(factor_name, project_root, factors_dir)
     dir_path.mkdir(parents=True, exist_ok=True)

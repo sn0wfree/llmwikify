@@ -52,7 +52,7 @@ def generate_run_id(
 
     try:
         return template.format(**ctx)
-    except KeyError as exc:
+    except KeyError:
         return f"{safe_start}-{safe_end}-{ctx['uuid4_short']}"
 
 

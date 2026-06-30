@@ -14,7 +14,7 @@ flow (bulk preload → build long DF once → reuse for all signals).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import polars as pl
@@ -37,7 +37,7 @@ class AkShareH5DataSource:
     def __init__(self, data_path: Path, h5_filename: str = "stk_daily.h5") -> None:
         self._data_path: Path = Path(data_path)
         self._h5_filename: str = h5_filename
-        self._df_pl: "pl.DataFrame | None" = None
+        self._df_pl: pl.DataFrame | None = None
         self._data_cache: dict[str, Any] | None = None
 
     @property
@@ -45,7 +45,7 @@ class AkShareH5DataSource:
         return self._data_path
 
     @property
-    def df_pl(self) -> "pl.DataFrame | None":
+    def df_pl(self) -> pl.DataFrame | None:
         """Long-format polars DataFrame (lazy-loaded)."""
         return self._df_pl
 
@@ -54,7 +54,7 @@ class AkShareH5DataSource:
         symbol: str,        # noqa: ARG002 — ignored, preloaded cache
         start: str,         # noqa: ARG002
         end: str,           # noqa: ARG002
-    ) -> "pl.DataFrame | None":
+    ) -> pl.DataFrame | None:
         """Return preloaded long DataFrame (ignores symbol/start/end).
 
         Returns None if preload fails (caller should handle).

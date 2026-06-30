@@ -271,11 +271,11 @@ class ChatOrchestrator:
             # cross-invocation. Parent registries hold a live
             # SubagentManager ref and must rebuild each chat.
             return self._tool_registries[cache_key]
+        from llmwikify.apps.agent.tools.quant_adapter import QuantToolAdapter
         from llmwikify.apps.agent.tools.skill_adapter import (
             CompositeToolRegistry,
             SkillToolAdapter,
         )
-        from llmwikify.apps.agent.tools.quant_adapter import QuantToolAdapter
         adapter_kwargs: dict[str, Any] = {
             "wiki": self.wiki_service.get_wiki(wiki_id),
             "db": self.db,

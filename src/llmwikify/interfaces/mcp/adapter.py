@@ -11,7 +11,7 @@ from fastmcp import FastMCP
 from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
-from .tools import register_wiki_tools, register_multi_wiki_tools
+from .tools import register_multi_wiki_tools, register_wiki_tools
 
 logger = logging.getLogger(__name__)
 

@@ -18,7 +18,6 @@ from typing import Any
 
 from llmwikify.apps.research.base import BaseResearchConfig
 
-
 _SIX_STEP_EXTRAS: dict[str, Any] = {
     # ─── 6-step framework switches (no off-switch for self-loop) ───
     "clarify_enabled": True,

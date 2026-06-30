@@ -31,7 +31,6 @@ import json
 import sys
 from typing import Any, NoReturn
 
-
 # Emoji constants — kept as module-level strings so they can be
 # referenced without re-declaring the unicode literal at every
 # callsite. Using string constants (not f-string interpolations of

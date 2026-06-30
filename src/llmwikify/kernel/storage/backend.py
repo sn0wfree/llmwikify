@@ -28,9 +28,6 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
-
-
 import re
 import shutil
 from datetime import datetime, timezone
@@ -94,7 +91,7 @@ class WikiBackend(Protocol):
     db_path: Path
     """Path to the SQLite index (use ``Path(':memory:')`` for in-mem)."""
 
-    index: "WikiIndex"
+    index: WikiIndex
     """SQL-backed (can be :memory: in future) reference index."""
 
     # === Pages (4 methods) ===

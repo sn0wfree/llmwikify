@@ -18,24 +18,6 @@ Top-level modules:
     - principle_checker: validates wiki content against the
       LLM Wiki Principles (see docs/LLM_WIKI_PRINCIPLES.md).
 """
-from .wiki import VALID_AGENTS, Wiki
-from .wiki.engines import RelationEngine, SynthesisEngine, WikiAnalyzer
-from .wiki.mixins import (
-    WikiInitMixin,
-    WikiIngestMixin,
-    WikiLinkMixin,
-    WikiLLMMixin,
-    WikiLintMixin,
-    WikiPageIOMixin,
-    WikiQueryMixin,
-    WikiRelationMixin,
-    WikiSchemaMixin,
-    WikiSourceAnalysisMixin,
-    WikiStatusMixin,
-    WikiSynthesisMixin,
-    WikiUtilityMixin,
-)
-from .wiki.protocols import WikiProtocol
 from .graph import GraphAnalyzer
 from .multi_wiki import (
     RemoteWiki,
@@ -53,6 +35,24 @@ from .storage import (
     WikiBackend,
     WikiIndex,
 )
+from .wiki import VALID_AGENTS, Wiki
+from .wiki.engines import RelationEngine, SynthesisEngine, WikiAnalyzer
+from .wiki.mixins import (
+    WikiIngestMixin,
+    WikiInitMixin,
+    WikiLinkMixin,
+    WikiLintMixin,
+    WikiLLMMixin,
+    WikiPageIOMixin,
+    WikiQueryMixin,
+    WikiRelationMixin,
+    WikiSchemaMixin,
+    WikiSourceAnalysisMixin,
+    WikiStatusMixin,
+    WikiSynthesisMixin,
+    WikiUtilityMixin,
+)
+from .wiki.protocols import WikiProtocol
 
 __all__ = [
     "Wiki",

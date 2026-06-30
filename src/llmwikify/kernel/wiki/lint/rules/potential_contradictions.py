@@ -27,7 +27,7 @@ class PotentialContradictionsRule(Rule):
 
     name = "contradiction"  # logical name; type field uses concrete subtypes
 
-    def run(self, wiki: "Wiki") -> list[dict[str, Any]]:
+    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
         contradictions: list[dict[str, Any]] = []
         seen_pairs: set = set()
 

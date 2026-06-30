@@ -5,23 +5,23 @@ from pathlib import Path
 from typing import Any
 
 from ...foundation.config import get_db_path, get_directory, load_config
+from ..storage.backend import LocalFileBackend, WikiBackend
 from ..storage.index import WikiIndex
 from ..storage.query_sink import QuerySink
 from .engines.analyzer import WikiAnalyzer
-from ..storage.backend import LocalFileBackend, WikiBackend
-from .mixins.io.ingest import WikiIngestMixin
-from .mixins.core.init import WikiInitMixin
-from .mixins.io.link import WikiLinkMixin
 from .mixins.analysis.lint import WikiLintMixin
 from .mixins.analysis.llm import WikiLLMMixin
-from .mixins.io.page_io import WikiPageIOMixin
 from .mixins.analysis.query import WikiQueryMixin
 from .mixins.analysis.relation import WikiRelationMixin
-from .mixins.core.schema import WikiSchemaMixin
-from .mixins.io.source_analysis import WikiSourceAnalysisMixin
 from .mixins.analysis.status import WikiStatusMixin
 from .mixins.analysis.synthesis import WikiSynthesisMixin
+from .mixins.core.init import WikiInitMixin
+from .mixins.core.schema import WikiSchemaMixin
 from .mixins.core.utility import WikiUtilityMixin
+from .mixins.io.ingest import WikiIngestMixin
+from .mixins.io.link import WikiLinkMixin
+from .mixins.io.page_io import WikiPageIOMixin
+from .mixins.io.source_analysis import WikiSourceAnalysisMixin
 
 logger = logging.getLogger(__name__)
 

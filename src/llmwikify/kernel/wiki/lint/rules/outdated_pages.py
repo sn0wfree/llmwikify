@@ -22,7 +22,7 @@ class OutdatedPagesRule(Rule):
 
     name = "potentially_outdated"
 
-    def run(self, wiki: "Wiki") -> list[dict[str, Any]]:
+    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
         outdated: list[dict[str, Any]] = []
         current_year = datetime.now(timezone.utc).year
 

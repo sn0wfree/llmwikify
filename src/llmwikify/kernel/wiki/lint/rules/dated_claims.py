@@ -27,7 +27,7 @@ class DatedClaimsRule(Rule):
 
     name = "dated_claim"
 
-    def run(self, wiki: "Wiki") -> list[dict[str, Any]]:
+    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
         hints: list[dict[str, Any]] = []
         now = datetime.now(timezone.utc)
         current_year = now.year

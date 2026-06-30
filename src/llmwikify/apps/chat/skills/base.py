@@ -52,7 +52,6 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
-
 # ─── Handler signature ─────────────────────────────────────────────
 
 SyncHandler = Callable[["dict[str, Any]", "SkillContext"], "SkillResult"]
@@ -106,11 +105,11 @@ class SkillResult:
     confirmation_id: str | None = None
 
     @classmethod
-    def ok(cls, data: dict[str, Any] | None = None) -> "SkillResult":
+    def ok(cls, data: dict[str, Any] | None = None) -> SkillResult:
         return cls(status="ok", data=data or {})
 
     @classmethod
-    def fail(cls, error: str, **extra: Any) -> "SkillResult":
+    def fail(cls, error: str, **extra: Any) -> SkillResult:
         return cls(status="error", error=error, data=dict(extra))
 
     @classmethod
@@ -119,7 +118,7 @@ class SkillResult:
         confirmation_id: str,
         message: str = "User approval required",
         **data: Any,
-    ) -> "SkillResult":
+    ) -> SkillResult:
         return cls(
             status="needs_confirmation",
             error=message,
@@ -242,7 +241,7 @@ class SkillContext:
     metrics: Any = None
     session_id: str = ""
 
-    def with_overrides(self, **kwargs: Any) -> "SkillContext":
+    def with_overrides(self, **kwargs: Any) -> SkillContext:
         """Return a shallow copy with the given fields overridden.
 
         Useful for tests and for the Runtime to thread a fresh
@@ -314,7 +313,7 @@ class Skill(ABC):
         """Sorted list of action names. Stable for testing."""
         return sorted(self.actions.keys())
 
-    def manifest(self) -> "SkillManifest":
+    def manifest(self) -> SkillManifest:
         """Build a ``SkillManifest`` for LLM tool generation.
 
         The manifest is the public contract: one skill =

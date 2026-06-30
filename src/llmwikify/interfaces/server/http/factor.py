@@ -23,8 +23,8 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from llmwikify.reproduction.common.config import config
 
+from llmwikify.reproduction.common.config import config
 from llmwikify.reproduction.common.run_id import generate_run_id, sanitize_run_id
 
 logger = logging.getLogger(__name__)
@@ -331,7 +331,7 @@ def _build_factor_backtest_page(
     lines = [
         "---",
         f"title: Factor Backtest — {factor_slug}",
-        f"type: FactorBacktest",
+        "type: FactorBacktest",
         f"factor_ref: {factor_slug}",
         f"universe: {req.universe}",
         f"adj_mode: {req.adj_mode}",
@@ -348,7 +348,7 @@ def _build_factor_backtest_page(
         f"longshort_ann_return: {result.longshort_ann_return:.4f}",
         f"longshort_sharpe: {result.longshort_sharpe:.4f}",
         f"data_source: {source}",
-        f"status: success",
+        "status: success",
         "---",
         "",
         f"# Factor Backtest — {factor_slug} ({run_id})",
@@ -361,8 +361,8 @@ def _build_factor_backtest_page(
         "",
         "## IC Analysis",
         "",
-        f"| Metric | Value |",
-        f"|---|---|",
+        "| Metric | Value |",
+        "|---|---|",
         f"| IC Mean | {result.ic_mean:.4f} |",
         f"| IC Std | {result.ic_std:.4f} |",
         f"| ICIR | {result.icir:.4f} |",
@@ -373,16 +373,16 @@ def _build_factor_backtest_page(
         "",
         "## Quantile Returns",
         "",
-        f"| Group | Annual Return |",
-        f"|---|---|",
+        "| Group | Annual Return |",
+        "|---|---|",
     ]
     for group, ret in result.quantile_returns.items():
         lines.append(f"| {group} | {ret:.4f} |")
     lines.append("")
     lines.append("## Long-Short")
     lines.append("")
-    lines.append(f"| Metric | Value |")
-    lines.append(f"|---|---|")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---|")
     lines.append(f"| Ann Return | {result.longshort_ann_return:.4f} |")
     lines.append(f"| Sharpe | {result.longshort_sharpe:.4f} |")
     lines.append(f"| Max DD | {result.longshort_mdd:.4f} |")
@@ -399,7 +399,7 @@ def _persist_factor_result(
     result: Any,
     source: str,
     factor: dict[str, Any],
-) -> Optional[str]:
+) -> str | None:
     """Persist factor backtest result to DB and Wiki.
 
     All-or-nothing semantics: DB write is committed first, then Wiki.
@@ -460,14 +460,15 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
     - ``universe == "single"``: legacy single-stock mode using ``run_factor_backtest``.
     """
     import asyncio
-    from llmwikify.reproduction.persist.factor_library import read_factor_yaml
+
     from llmwikify.reproduction.data_source.router import DataRouter
-    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
     from llmwikify.reproduction.data_source.universe import (
         HEDGE_INDEX_CODE,
         get_index_constituents,
         resolve_universe,
     )
+    from llmwikify.reproduction.persist.factor_library import read_factor_yaml
+    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
 
     wiki = _get_wiki()
     factor_data = read_factor_yaml(slug)
@@ -499,7 +500,9 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             data, source = await asyncio.to_thread(
                 data_router.get, req.symbol, req.start_date, req.end_date
             )
-            from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest
+            from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+                run_factor_backtest,
+            )
             result = await asyncio.to_thread(
                 run_factor_backtest,
                 data=data,
@@ -560,7 +563,9 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             }
 
         # ── Cross-section (universe) mode ─────────────────────────
-        from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest_universe
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+            run_factor_backtest_universe,
+        )
 
         # 1. Resolve stock universe
         symbols = await asyncio.to_thread(resolve_universe, req.universe)
@@ -609,7 +614,9 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
 
         # 5b. Store factor values in DuckDB (background, best-effort)
         try:
-            from llmwikify.reproduction.backtest_pkg.factor_value_store import compute_and_store_factor
+            from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+                compute_and_store_factor,
+            )
             stored_rows = await asyncio.to_thread(
                 compute_and_store_factor,
                 close_wide=close_wide,
@@ -754,8 +761,9 @@ async def validate_factor(slug: str, req: L5ValidateRequest) -> dict[str, Any]:
     Executes: backtest → 7 analysis modules → scoring → (LLM hypothesis testing) → write YAML.
     """
     import asyncio
-    from llmwikify.reproduction.persist.factor_library import read_factor_yaml
+
     from llmwikify.reproduction.backtest_pkg.l5_orchestrator import run_l5_pipeline
+    from llmwikify.reproduction.persist.factor_library import read_factor_yaml
 
     factor = read_factor_yaml(slug)
     if factor is None:

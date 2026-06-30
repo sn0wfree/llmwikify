@@ -21,7 +21,6 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
-
 # ─── Env var prefix mapping ─────────────────────────────────────────
 # Not all fields use the same env var name. Some legacy names from v3.0
 # (HYBRID_*, ADAPTIVE_*) are kept for backward compat.
@@ -172,7 +171,7 @@ class Pass2Config:
 
     # ─── Methods ─────────────────────────────────────────────────────
     @classmethod
-    def from_env(cls) -> "Pass2Config":
+    def from_env(cls) -> Pass2Config:
         """L1: Read overrides from environment variables.
 
         Naming convention: see `_ENV_OVERRIDES` mapping (legacy HYBRID_*/ADAPTIVE_*
@@ -195,7 +194,7 @@ class Pass2Config:
         return cls(**overrides) if overrides else cls()
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Pass2Config":
+    def from_dict(cls, d: dict[str, Any]) -> Pass2Config:
         """L2: Load from a dict (e.g., parsed JSON config).
 
         Unknown keys are ignored. Field-level validation via type coercion.
@@ -205,11 +204,11 @@ class Pass2Config:
         return cls(**filtered)
 
     @classmethod
-    def from_file(cls, path: str | Path) -> "Pass2Config":
+    def from_file(cls, path: str | Path) -> Pass2Config:
         """L2: Load from a JSON file."""
         return cls.from_dict(json.loads(Path(path).read_text()))
 
-    def merge(self, *overrides: "Pass2Config | dict") -> "Pass2Config":
+    def merge(self, *overrides: Pass2Config | dict) -> Pass2Config:
         """L3/L4: Merge later overrides on top of self.
 
         Example:

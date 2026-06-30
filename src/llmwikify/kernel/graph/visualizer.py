@@ -10,7 +10,6 @@ from typing import Any
 
 from llmwikify.kernel.graph.export import build_graph
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -42,7 +41,7 @@ def build_visualization_data(
         graph_data = build_graph(
             index, include_wikilinks=True, include_relations=False
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to build graph")
         return {
             "nodes": [],

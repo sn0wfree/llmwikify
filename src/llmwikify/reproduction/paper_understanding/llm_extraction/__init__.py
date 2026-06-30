@@ -4,8 +4,8 @@ Replaces the legacy single-prompt extraction in ``extract_paper.py``.
 Stage 0-4 pipeline: Ingest → Plan → Extract → Validate → Save.
 """
 
-from .defer import DeferredItem, DeferredQueue
 from ...common.llm_factory import build_default_client, load_llm_config
+from .defer import DeferredItem, DeferredQueue
 from .log_decorator import with_logging
 from .orchestrator import run_one_paper
 from .plan_saver import save_plan

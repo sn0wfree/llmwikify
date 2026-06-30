@@ -73,14 +73,14 @@ class BatchSummarySink:
     def md_path(self) -> Path:
         return self._dir / self._md_filename
 
-    def write_one(self, result: "FactorResult") -> Path:
+    def write_one(self, result: FactorResult) -> Path:
         """No-op: batch summary is only written at end.
 
         Returns Path("/dev/null") as sentinel.
         """
         return Path("/dev/null")
 
-    def write_batch(self, results: list["FactorResult"]) -> list[Path]:
+    def write_batch(self, results: list[FactorResult]) -> list[Path]:
         """Write aggregated JSON + Markdown summaries.
 
         Returns:

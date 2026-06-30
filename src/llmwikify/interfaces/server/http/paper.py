@@ -32,9 +32,9 @@ router = APIRouter(prefix="/api/paper", tags=["paper"])
 _WIKI_REGISTRY: Any = None
 _LLM_CLIENT: Any = None
 _DB: Any = None
-_RAW_DIR: Optional[Path] = None
-_UPLOAD_DIR: Optional[Path] = None
-_PARQUET_PATH: Optional[str] = None
+_RAW_DIR: Path | None = None
+_UPLOAD_DIR: Path | None = None
+_PARQUET_PATH: str | None = None
 
 
 def set_paper_deps(
@@ -247,7 +247,7 @@ async def _run_paper_extraction(
 
 
 @router.get("/list")
-async def list_paper_sessions(status: Optional[str] = None) -> dict[str, Any]:
+async def list_paper_sessions(status: str | None = None) -> dict[str, Any]:
     """List paper sessions (filtered to those with source_type=pdf|url|raw)."""
     if _DB is None:
         raise HTTPException(status_code=503, detail="Reproduction DB not initialized")

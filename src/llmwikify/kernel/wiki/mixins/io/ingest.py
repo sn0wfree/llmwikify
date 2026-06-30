@@ -6,7 +6,6 @@ import time
 from pathlib import Path
 
 from .....foundation.extractors import extract
-
 from ...protocols import WikiProtocol
 
 logger = logging.getLogger(__name__)
