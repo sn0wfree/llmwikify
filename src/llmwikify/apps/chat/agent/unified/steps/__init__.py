@@ -1,37 +1,35 @@
-"""预置 Steps — 15 个无状态 StepHandler，开箱即用。
+"""Backward-compat shim: 15 个 Step classes 已迁 kernel.agent.steps.
 
-用法::
+历史: 15 个无状态 StepHandler 已从 apps/chat/agent/unified/steps/ 搬到
+kernel/agent/steps/ (commit 1 of G+Y)。本文件保留为 backward-compat re-export,
+让旧 import path 仍工作:
+    from llmwikify.apps.chat.agent.unified.steps import CheckSuccessStep
+    from llmwikify.apps.chat.agent.unified.steps import LLMCallStep
 
-    from llmwikify.apps.chat.agent.unified.steps import (
-        LLMCallStep, ExtractCodeStep, ValidateAndExecuteStep,
-        CheckFieldStep, CheckSuccessStep, MapStep, WrapStep,
+新代码应直接:
+    from llmwikify.kernel.agent.steps import (
+        BuildFeedbackStep, CheckEmptyStep, CheckFieldStep, CheckSuccessStep,
+        CheckToolCallsStep, CodeExecResult, ExecuteCodeStep, ExtractCodeStep,
+        ExtractJSONStep, LLMCallStep, MapStep, TruncateStep,
+        ValidateAndExecuteStep, ValidateSafetyStep, ValidateSyntaxStep, WrapStep,
     )
 """
-
-from llmwikify.apps.chat.agent.unified.steps.checks import (
+from llmwikify.kernel.agent.steps import (
+    BuildFeedbackStep,
     CheckEmptyStep,
     CheckFieldStep,
     CheckSuccessStep,
     CheckToolCallsStep,
-)
-from llmwikify.apps.chat.agent.unified.steps.code import (
     CodeExecResult,
     ExecuteCodeStep,
     ExtractCodeStep,
+    ExtractJSONStep,
+    LLMCallStep,
+    MapStep,
+    TruncateStep,
     ValidateAndExecuteStep,
     ValidateSafetyStep,
     ValidateSyntaxStep,
-)
-from llmwikify.apps.chat.agent.unified.steps.feedback import (
-    BuildFeedbackStep,
-    TruncateStep,
-)
-from llmwikify.apps.chat.agent.unified.steps.llm import (
-    ExtractJSONStep,
-    LLMCallStep,
-)
-from llmwikify.apps.chat.agent.unified.steps.transforms import (
-    MapStep,
     WrapStep,
 )
 

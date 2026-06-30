@@ -23,8 +23,14 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from llmwikify.apps.chat.agent.unified.core import StepHandler, StreamingHandler, UnifiedHook
-from llmwikify.apps.chat.agent.unified.spec import BaseSpec, ChatSpec
+from llmwikify.kernel.agent import (
+    BaseSpec,
+    StepHandler,
+    StreamingHandler,
+    UnifiedHook,
+)  # noqa: F401
+
+from .spec import ChatSpec
 
 
 @dataclass
@@ -81,6 +87,7 @@ def create_agent_loop(name: str, **kwargs: Any) -> Any:
         ValueError: 未知的 mode 名称
     """
     from llmwikify.apps.chat.agent.unified.loop import UnifiedAgentLoop
+    from llmwikify.kernel.agent import UnifiedAgentLoop as _UAL
 
     config = _MODE_REGISTRY.get(name)
     if config is None:
@@ -91,7 +98,7 @@ def create_agent_loop(name: str, **kwargs: Any) -> Any:
     actor = _resolve_handler(config.actor, kwargs)
     hook = config.hook_factory(**kwargs) if config.hook_factory else None
 
-    return UnifiedAgentLoop(
+    return _UAL(
         reasoner=reasoner,
         actor=actor,
         deciders=config.deciders,
@@ -139,7 +146,7 @@ def _chat_finalize(ctx: Any) -> str | None:
 def _register_chat_mode() -> None:
     """注册 chat mode（延迟导入，Phase 6 实现后可用）。"""
     try:
-        from llmwikify.apps.chat.agent.unified.steps import CheckEmptyStep
+        from llmwikify.kernel.agent.steps import CheckEmptyStep
 
         register_mode(AgentModeConfig(
             name="chat",
@@ -173,8 +180,11 @@ def _make_chat_hook(**kwargs: Any) -> UnifiedHook:
 def _register_codegen_mode() -> None:
     """注册 codegen mode（延迟导入，Phase 4 实现后可用）。"""
     try:
-        from llmwikify.apps.chat.agent.unified.pipelines.codegen import CodeActor, CodegenReasoner
-        from llmwikify.apps.chat.agent.unified.steps import CheckSuccessStep
+        from llmwikify.kernel.agent import (
+            CodeActor,
+            CodegenReasoner,
+        )
+        from llmwikify.kernel.agent.steps import CheckSuccessStep
 
         register_mode(AgentModeConfig(
             name="codegen",
@@ -187,7 +197,7 @@ def _register_codegen_mode() -> None:
 
 
 def _make_codegen_reasoner(**kwargs: Any) -> Any:
-    from llmwikify.apps.chat.agent.unified.pipelines.codegen import CodegenReasoner
+    from llmwikify.kernel.agent import CodegenReasoner
     return CodegenReasoner(kwargs.get("llm_client"))
 
 
