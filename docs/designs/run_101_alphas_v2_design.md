@@ -1898,3 +1898,26 @@ python scripts/check_architecture.py  # 0 violation
 | `foundation/llm/client.py` 下沉后被 kernel/agent 引用产生新 cycle | 低 | `kernel/agent/codegen_pipeline.py` 不 import build_llm_client（外部传入） |
 | Commit 5 rename `kernel/quant/` 后 `__pycache__` 残留 | 中 | 每 commit 后 `find . -name __pycache__ -exec rm -rf {} +` |
 | 633 runner_v2 tests 在 commit 2 失败 | 中 | shim 完整保留所有 re-export |
+
+### 17.22.8 最终结果 (commit 1-6 完成)
+
+| Commit | 内容 | 状态 |
+|---|---|---|
+| 1 | 新建 `kernel/agent/` | ✅ b83b472 |
+| 2 | apps/unified/ 维度 A 拆解 + 清爽 shim | ✅ 1945bda |
+| 3 | reproduction + scripts 改 import | ✅ 229fdc7 |
+| 4 | foundation/llm/client.py (build_llm_client 下沉) | ✅ bed0082 |
+| 5 | kernel/quant/codegen/ → kernel/codegen/ rename | ✅ cbeb9e2 |
+| 6 | AgentExecutionContext 移到 kernel/agent/ + 验证收尾 | ✅ 本次 commit |
+
+**最终验证**:
+- `python scripts/check_architecture.py`: 0 violation
+- 反向依赖 (`reproduction/→apps/`, `kernel/→apps/`, `foundation/→others`): 0
+- pytest: 418 passed (kernel/agent/ + test_unified_*.py + test_runner_v2_*.py + reproduction factor_compiler + codegen + import + tests)
+- ruff: clean (除预存 react_engine.py E402)
+
+**架构变化**:
+- `kernel/quant/` → 移除业务前缀, `kernel/codegen/` 扁平化
+- `foundation/llm/client.py` 新增 (build_llm_client 下沉)
+- `apps/chat/agent/unified/` 从 2314 → ~960 行 (净 -1354 行, 维度 A 拆解)
+- `kernel/agent/` 通用 agent 框架独立 (15 个 Step + Spec + Hook + Loop)

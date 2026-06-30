@@ -4,6 +4,7 @@
 
 - hook.UnifiedHook: 16 个 no-op hook 事件点
 - context.UnifiedContext: Loop 内部状态
+- execution_context.AgentExecutionContext: 共享 collaborators dataclass
 - loop.UnifiedAgentLoop + core types (StepHandler / StepResult / StreamingHandler / Pipeline)
 - spec.BaseSpec / CodegenSpec / ReasonResponse / ActResult / UnifiedResult
 - codegen_pipeline: 高层 codegen pipeline (CodegenReasoner / CodeActor / generate_factor_code*)
@@ -12,7 +13,6 @@
 历史: 从 apps/chat/agent/unified/ 搬迁 (维度 A 拆解).
 apps/chat/agent/unified/ 保留为 backward-compat shim.
 """
-from . import _core_types
 from ._core_types import (
     Pipeline,
     StepHandler,
@@ -27,6 +27,7 @@ from .codegen_pipeline import (
     generate_factor_code_sync,
 )
 from .context import UnifiedContext
+from .execution_context import AgentExecutionContext
 from .hook import UnifiedHook
 from .loop import UnifiedAgentLoop
 from .spec import (
@@ -42,6 +43,8 @@ __all__ = [
     "UnifiedHook",
     # Context
     "UnifiedContext",
+    # Execution context
+    "AgentExecutionContext",
     # Loop
     "UnifiedAgentLoop",
     # Spec / Result

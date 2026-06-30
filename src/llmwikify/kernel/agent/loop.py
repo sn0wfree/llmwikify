@@ -283,8 +283,7 @@ class UnifiedAgentLoop:
 
     def execution_context(self) -> Any:
         """返回执行上下文（SubAgentManager 用）。"""
-        # 延迟导入避免 kernel → apps 依赖
-        from llmwikify.apps.chat.agent.execution_context import AgentExecutionContext
+        from .execution_context import AgentExecutionContext
 
         return AgentExecutionContext(
             chat_service=getattr(self._reasoner, "_chat_service", None),

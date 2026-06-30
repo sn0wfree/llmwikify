@@ -74,3 +74,39 @@ stash 遗留改动 commit 前主动提醒。
 **ChatRunner**（`apps/chat/agent/runner.py`）：dataclass 输入用 `ChatRunSpec`（~18 字段，含 microcompact 配置），输出用 `ChatRunResult`（final_content / messages / tools_used / usage / stop_reason / error / compacted_count / total_compacted_chars_saved）；Runner 是 ReActEngine + ChatReActBridge 的薄包装, 不替代主循环；新业务流（Harness / Research / Track B）优先 `ChatRunner.run_to_completion(spec)`，避免直接 new ReActEngine；新 spec 字段加到 `ChatRunSpec`（含 microcompact 子段）而非塞 ReActConfig。
 
 **microcompact**（`apps/chat/agent/microcompact.py`）：默认 ON（`spec.microcompact=True`），`microcompact_keep_chars=1000`；`microcompact_compactable_tools` 默认 `DEFAULT_COMPACTABLE_TOOLS`（read_file / exec / grep / find_files / web_search / web_fetch / list_dir，借鉴 nanobot v0.2.1 `_COMPACTABLE_TOOLS`）；marker 格式 `[Tool result compacted] Tool: ... Original: N chars Kept: M chars ID: ...`；原结果缓存 `spec._compacted_results[call_id]`（per-run 内存，run 结束 GC）；DB 持久化与 observation 生成仍用原 result, 仅 `conversation_messages.append` 用 marker。
+
+## 架构分层 (G+Y 2026-06-30 commit b83b472..c..+)
+
+依赖方向（单向，禁止反向）:
+```
+interfaces  →  apps, kernel, reproduction, foundation
+apps        →  foundation, kernel
+kernel      →  foundation              ← 严格不依赖 apps/reproduction
+reproduction → foundation, kernel      ← 不依赖 apps
+foundation  →  (self only)
+```
+
+包职责:
+- `foundation/` — 零依赖基础设施 (LLM 协议/callback/extractor)
+- `kernel/agent/` — 通用 agent 框架 (UnifiedAgentLoop / StepHandler / Hook / Spec)
+- `kernel/codegen/` — LLM 代码生成工具 (extract/validate/execute)
+- `kernel/{wiki,graph,search,storage}/` — 知识图谱相关
+- `apps/` — 应用层 (chat/wiki/research)，含 chat-specific 业务逻辑
+- `reproduction/` — 量化复现管线 (paper→factor→backtest→report)
+- `interfaces/` — 入口层 (CLI/MCP/HTTP)
+
+禁止:
+- `kernel/ → apps/` 任何 import (含 runtime lazy)
+- `foundation/ → kernel/apps/reproduction/`
+- `reproduction/ → apps/` 任何 import
+- `kernel/quant/` 业务命名（已删）
+
+backward-compat shim 保留:
+- `apps/chat/agent/unified/` — 通用框架已迁 kernel/agent/, 此处为 shim
+- `apps/chat/agent/execution_context.py` — AgentExecutionContext 已迁 kernel/agent/
+- `kernel/quant/llm_client.py` — build_llm_client 已下沉 foundation/llm/client.py
+
+验证:
+- `python scripts/check_architecture.py` 必须 0 violation
+- 反向依赖 grep 必须为空
+- 422+ tests 通过
