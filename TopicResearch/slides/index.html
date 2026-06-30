@@ -114,6 +114,273 @@
                 </ol>
             </section>
 
+            <!-- 全球宏观背景：GDP 增长（4 国 2000-2026） -->
+            <section>
+                <h3>1.1.1 经济增长：三国同步但结构互补</h3>
+                <p style="font-size: 0.55em; color: #7f8c8d; margin: 2px 0 4px 0;">
+                    美国 · 中国 · 日本 · 欧元区 &nbsp;·&nbsp; 数据来源：ifind EDB（名义 GDP 本币口径）
+                </p>
+                <p style="font-size: 0.48em; color: #94a3b8; margin: 0 0 6px 0; font-style: italic;">
+                    注：名义 GDP = 实际 GDP + 通胀（GDP 平减指数），反映货币计价的总产出增速，含价格变动因素
+                </p>
+                <div id="chart-macro-gdp" style="height: 380px;"></div>
+                <div style="font-size: 0.52em; padding: 10px 14px; background: var(--bg-subtle); border-radius: 6px; margin-top: 8px; border-left: 3px solid var(--accent-blue); line-height: 1.5;">
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎关键事件：</b>2005.06 股权分置改革启动（市场底部）· 2005.07 人民币汇率形成机制改革 · 2006.06 美联储加息周期见顶 5.25%</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎三国差异：</b>中国名义 23% vs 实际 14%，差值源于通胀及资产价格重估；日本实际增速已摆脱零增长（1.9/2.4/2.1%）但名义仍接近 0，通缩压力依然存在；美国增速放缓但消费保持韧性，财富效应对商品需求形成支撑</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎叙事：</b>中国「双高一资」阶段，资源股弹性最大；美国温和增长 + 美元走弱 + 大宗商品超级周期共振</p>
+                </div>
+            </section>
+
+            <!-- 全球宏观背景：实际GDP 增长（4 国 2000-2026） -->
+            <section>
+                <h3>1.1.1b 实际经济增长：剔除通胀后的真实产出</h3>
+                <p style="font-size: 0.55em; color: #7f8c8d; margin: 2px 0 4px 0;">
+                    美国 · 中国 · 日本 · 欧元区 &nbsp;·&nbsp; 数据来源：ifind EDB（实际 GDP 不变价）
+                </p>
+                <p style="font-size: 0.48em; color: #94a3b8; margin: 0 0 6px 0; font-style: italic;">
+                    注：实际 GDP 剔除价格变动，反映真实产出增长；名义 GDP - 实际 GDP ≈ GDP 平减指数（通胀）
+                </p>
+                <div id="chart-macro-gdp-real" style="height: 380px;"></div>
+                <div style="font-size: 0.52em; padding: 10px 14px; background: var(--bg-subtle); border-radius: 6px; margin-top: 8px; border-left: 3px solid var(--accent-green); line-height: 1.5;">
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎核心差异：</b>中国名义 23% vs 实际 14%，差值 9pp 主要来自 GDP 平减指数（投资品价格重估）；日本实际 1.7% 但名义 0.7%，通缩拖累名义增长</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎美国韧性：</b>实际增速 2-3% 温和但持续，消费贡献 70%；2008 危机后实际 GDP 跌至 -2.6%，复苏缓慢</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎投资含义：</b>实际 GDP 决定企业盈利基本面，名义 GDP 决定资产价格弹性；05-07 中国「双高」阶段，资源股同时受益于实际需求 + 名义溢价</p>
+                </div>
+            </section>
+
+            <!-- 全球宏观背景：CPI 变动（4 国 2000-2026） -->
+            <section>
+                <h3>1.1.2 通胀走势：异步传导</h3>
+                <p style="font-size: 0.55em; color: #7f8c8d; margin: 2px 0 6px 0;">
+                    美国 · 中国 · 日本 · 欧元区 &nbsp;·&nbsp; 数据来源：ifind EDB
+                </p>
+                <div id="chart-macro-cpi" style="height: 380px;"></div>
+                <div style="font-size: 0.52em; padding: 10px 14px; background: var(--bg-subtle); border-radius: 6px; margin-top: 8px; border-left: 3px solid var(--accent-amber); line-height: 1.5;">
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎关键事件：</b>2008 危机通缩 → 2011 中国 CPI 5.4% 高点 → 2020 疫情扰动 → 2022 全球通胀峰值</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎三国差异：</b>中国 CPI 1-5% 温和可控；美国 2008 后短期通缩、2022 后 8% 高通胀；日本长期通缩陷阱（CPI 多年 ≤0）；欧元区 2022 创纪录 8.4%</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎叙事：</b>中国温和通胀给了货币政策宽松空间；日本通缩压力倒逼安倍 2012 量化宽松；美/欧 2022 高通胀迫使联储/欧央行激进加息 5pct+</p>
+                </div>
+            </section>
+
+            <!-- 货币政策：表面紧缩与实际宽松的背离 -->
+            <section>
+                <h3>1.2.1 货币政策：表面紧缩与实际宽松的背离</h3>
+                <p style="font-size: 0.55em; color: #7f8c8d; margin: 2px 0 4px 0;">
+                    中国 &nbsp;·&nbsp; 数据来源：ifind EDB
+                </p>
+                <p style="font-size: 0.48em; color: #94a3b8; margin: 0 0 6px 0; font-style: italic;">
+                    注：左轴为政策工具（利率+RRM），右轴为实际流动性（M2+贸易顺差）
+                </p>
+                <div id="chart-monetary-policy" style="height: 380px;"></div>
+                <div style="font-size: 0.52em; padding: 10px 14px; background: var(--bg-subtle); border-radius: 6px; margin-top: 8px; border-left: 3px solid var(--accent-red); line-height: 1.5;">
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎紧缩力度：</b>2006.04-2007.12 加息 6 次（5.58→7.47%）+ 提 RRR 10 次（7.5→14.5%），创历史新高</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎背离原因：</b>贸易顺差 1020→2639 亿美元 → 外汇占款被动投放基础货币 → M2 维持 17-19%，紧缩被对冲</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎冲销困境：</b>央票利息支出 + 准备金利息 = 冲销成本约 1-2% GDP，「越紧越松」的流动性陷阱</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎结汇制度：</b>1994-2012 强制结汇 → 企业外汇必须卖给银行 → 央行购汇释放基础货币 → 顺差越大，流动性被动投放越多，紧缩被对冲</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎利率改革：</b>2019 年前为央行基准利率，2019 年 8 月起改用 LPR（贷款市场报价利率）</p>
+                </div>
+            </section>
+
+            <!-- 市场利率：短端/长端利差与货币政策类型 -->
+            <section>
+                <h3>1.2.2 市场利率：短端/长端利差与货币政策类型</h3>
+                <p style="font-size: 0.55em; color: #7f8c8d; margin: 2px 0 4px 0;">
+                    中国 · 美国 · 日本 &nbsp;·&nbsp; 数据来源：ifind EDB（年度均值）
+                </p>
+                <p style="font-size: 0.48em; color: #94a3b8; margin: 0 0 6px 0; font-style: italic;">
+                    注：短端为银行间隔夜/7天回购利率，长端为 10Y 国债收益率；利差 = 长端 - 短端
+                </p>
+                <div id="chart-term-spread" style="height: 350px;"></div>
+                <div style="font-size: 0.52em; padding: 10px 14px; background: var(--bg-subtle); border-radius: 6px; margin-top: 8px; border-left: 3px solid var(--accent-blue); line-height: 1.5;">
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎中美日货币政策类型：</b></p>
+                    <p style="margin: 3px 0;"><b style="color:#2563eb;">美国 — 价格型</b>：以联邦基金利率为中介目标，通过公开市场操作调节短端利率，传导至长端（泰勒规则+预期引导）</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">中国 — 数量型（2019 前）→ 价格型（2019 后）</b>：以 M2 增速为中介目标，通过存款准备金率、央票调节流动性总量；2019 年 LPR 改革后转向利率走廊</p>
+                    <p style="margin: 3px 0;"><b style="color:#16a34a;">日本 — 价格型（YCC）</b>：以 10Y 国债收益率为锚（收益率曲线控制），短端维持负利率，长端锁定 0±0.1%</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎数据证明：</b>中国 M2 增速与 GDP 增速高度相关（R²≈0.8），美国联邦基金利率与通胀负相关（R²≈-0.6），日本短端利率长期为 0</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎利差含义：</b>利差收窄（如 2006-2007 中国）反映紧缩政策推高短端；利差扩大（如 2020 美国）反映宽松政策压低短端</p>
+                </div>
+            </section>
+
+            <!-- 汇率与贸易：全球失衡与资金流向 -->
+            <section>
+                <h3>1.2.3 汇率与贸易：全球失衡与资金流向</h3>
+                <p style="font-size: 0.55em; color: #7f8c8d; margin: 2px 0 4px 0;">
+                    中国 · 美国 · 欧元区 &nbsp;·&nbsp; 数据来源：ifind EDB
+                </p>
+                <p style="font-size: 0.48em; color: #94a3b8; margin: 0 0 6px 0; font-style: italic;">
+                    注：汇率为美元计价（EUR/USD↑=欧元升值，USD/CNY↑=人民币贬值）；贸易差额为亿美元
+                </p>
+                <div id="chart-fx-trade" style="height: 350px;"></div>
+                <div style="font-size: 0.52em; padding: 10px 14px; background: var(--bg-subtle); border-radius: 6px; margin-top: 8px; border-left: 3px solid var(--accent-amber); line-height: 1.5;">
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎汇率制度演变：</b>2005 年前管理浮动（固定 8.28）→ 2005.7.21 汇改（参考一篮子货币）→ 2010.6 重启升值 → 2015.8.11 汇改（中间价报价改革）→ 当前更加灵活</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎美元周期：</b>DXY 2002 年 120 → 2007 年 80（贬值 33%），大宗商品以美元计价上涨 → 2014 年 82 → 2015 年 100（美元走强）→ 资本回流美国</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎全球失衡：</b>中国贸易顺差 1020→2639 亿美元（2005-2007），美国逆差维持 600 亿$/月，「储蓄过剩」推动新兴市场资产泡沫</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎资金流向：</b>人民币升值预期 → 热钱流入 → 外汇占款增加 → 基础货币被动投放 → 流动性泛滥</p>
+                </div>
+            </section>
+
+            <!-- 外汇储备：从积累到消耗 -->
+            <section>
+                <h3>1.2.4 外汇储备：从积累到消耗</h3>
+                <p style="font-size: 0.55em; color: #7f8c8d; margin: 2px 0 4px 0;">
+                    中国 &nbsp;·&nbsp; 数据来源：ifind EDB + 中国国家外汇管理局
+                </p>
+                <p style="font-size: 0.48em; color: #94a3b8; margin: 0 0 6px 0; font-style: italic;">
+                    注：外汇储备/名义 GDP 比率，反映外部失衡程度和央行干预力度
+                </p>
+                <div id="chart-forex-reserve" style="height: 380px;"></div>
+                <div style="font-size: 0.52em; padding: 10px 14px; background: var(--bg-subtle); border-radius: 6px; margin-top: 8px; border-left: 3px solid var(--accent-blue); line-height: 1.5;">
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎积累期（2000-2014）：</b>外汇储备/GDP 从 15% 升至 49%，峰值 3.99 万亿美元（2014.6），反映持续贸易顺差 + 资本流入 + 央行干预</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎消耗期（2015-2016）：</b>资本外流 + 8.11 汇改，外储从 3.99 万亿降至 3.01 万亿，消耗近 1 万亿美元，比率从 49% 降至 28%</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎企稳期（2017-至今）：</b>资本管制 + 贸易顺差扩大，外储稳定在 3.1-3.2 万亿，GDP 增长稀释比率至 18%</p>
+                    <p style="margin: 3px 0;"><b style="color:#dc2626;">▎政策含义：</b>外储/GDP >30% 时，央行面临冲销压力；<20% 时，资本管制压力减轻，汇率弹性可适度放宽</p>
+                </div>
+            </section>
+
+            <!-- 蒙代尔不可能三角 -->
+            <section style="padding: 8px 16px;">
+                <h3 style="margin: 0 0 3px 0; font-size: 1.1em; color: #1e293b;">1.2.5 蒙代尔不可能三角与中国政策选择</h3>
+                <p style="font-size: 0.42em; color: #64748b; margin: 0 0 8px 0; font-style: italic; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
+                    Mundell-Fleming Trilemma：固定汇率、资本自由流动、独立货币政策三者不可兼得
+                </p>
+                <div style="display: flex; gap: 20px; height: 450px;">
+                    <!-- 左侧：三角形图示 -->
+                    <div style="flex: 0.85; position: relative; background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%); border-radius: 14px; padding: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8);">
+                        <svg viewBox="0 0 420 380" style="width: 100%; height: 100%;">
+                            <defs>
+                                <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto">
+                                    <polygon points="0 0, 12 4, 0 8" fill="#dc2626"/>
+                                </marker>
+                                <linearGradient id="triGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#dbeafe;stop-opacity:0.4"/>
+                                    <stop offset="50%" style="stop-color:#f1f5f9;stop-opacity:0.3"/>
+                                    <stop offset="100%" style="stop-color:#dcfce7;stop-opacity:0.3"/>
+                                </linearGradient>
+                                <filter id="glow">
+                                    <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                                    <feMerge>
+                                        <feMergeNode in="coloredBlur"/>
+                                        <feMergeNode in="SourceGraphic"/>
+                                    </feMerge>
+                                </filter>
+                                <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                    <feDropShadow dx="1" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+                                </filter>
+                            </defs>
+                            <!-- 背景装饰 -->
+                            <circle cx="210" cy="190" r="140" fill="none" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,4" opacity="0.5"/>
+                            <!-- 三角形填充 -->
+                            <polygon points="210,55 60,320 360,320" fill="url(#triGrad)" stroke="#94a3b8" stroke-width="2.5" stroke-linejoin="round" filter="url(#shadow)"/>
+                            <!-- 三个顶点圆圈（带光晕） -->
+                            <circle cx="210" cy="55" r="24" fill="#dc2626" filter="url(#glow)"/>
+                            <circle cx="210" cy="55" r="19" fill="#dc2626"/>
+                            <circle cx="60" cy="320" r="24" fill="#2563eb" filter="url(#glow)"/>
+                            <circle cx="60" cy="320" r="19" fill="#2563eb"/>
+                            <circle cx="360" cy="320" r="24" fill="#16a34a" filter="url(#glow)"/>
+                            <circle cx="360" cy="320" r="19" fill="#16a34a"/>
+                            <!-- 三个顶点文字（白色加粗） -->
+                            <text x="210" y="59" text-anchor="middle" font-size="11" font-weight="800" fill="white">固定汇率</text>
+                            <text x="60" y="324" text-anchor="middle" font-size="10" font-weight="800" fill="white">资本自由</text>
+                            <text x="360" y="324" text-anchor="middle" font-size="10" font-weight="800" fill="white">独立货币</text>
+                            <!-- 三个组合标注（圆角卡片） -->
+                            <rect x="85" y="165" width="90" height="36" rx="6" fill="white" stroke="#cbd5e1" stroke-width="1" filter="url(#shadow)"/>
+                            <text x="130" y="180" text-anchor="middle" font-size="9" font-weight="700" fill="#475569">B：固定+管制</text>
+                            <text x="130" y="192" text-anchor="middle" font-size="7.5" fill="#94a3b8">牺牲独立货币政策</text>
+                            <rect x="245" y="165" width="90" height="36" rx="6" fill="white" stroke="#cbd5e1" stroke-width="1" filter="url(#shadow)"/>
+                            <text x="290" y="180" text-anchor="middle" font-size="9" font-weight="700" fill="#475569">C：浮动+自由</text>
+                            <text x="290" y="192" text-anchor="middle" font-size="7.5" fill="#94a3b8">牺牲固定汇率</text>
+                            <rect x="165" y="275" width="90" height="36" rx="6" fill="white" stroke="#cbd5e1" stroke-width="1" filter="url(#shadow)"/>
+                            <text x="210" y="290" text-anchor="middle" font-size="9" font-weight="700" fill="#475569">A：固定+自由</text>
+                            <text x="210" y="302" text-anchor="middle" font-size="7.5" fill="#94a3b8">牺牲独立货币政策</text>
+                            <!-- 中国05-07位置 -->
+                            <circle cx="140" cy="170" r="15" fill="#dc2626" opacity="0.2"/>
+                            <circle cx="140" cy="170" r="12" fill="#dc2626" stroke="white" stroke-width="2.5" filter="url(#shadow)"/>
+                            <text x="140" y="174" text-anchor="middle" font-size="8" fill="white" font-weight="800">05-07</text>
+                            <!-- 中国当前位置 -->
+                            <circle cx="210" cy="220" r="15" fill="#f97316" opacity="0.2"/>
+                            <circle cx="210" cy="220" r="12" fill="#f97316" stroke="white" stroke-width="2.5" filter="url(#shadow)"/>
+                            <text x="210" y="224" text-anchor="middle" font-size="8" fill="white" font-weight="800">现在</text>
+                            <!-- 美国位置 -->
+                            <circle cx="310" cy="275" r="15" fill="#2563eb" opacity="0.2"/>
+                            <circle cx="310" cy="275" r="12" fill="#2563eb" stroke="white" stroke-width="2.5" filter="url(#shadow)"/>
+                            <text x="310" y="279" text-anchor="middle" font-size="8" fill="white" font-weight="800">美国</text>
+                            <!-- 移动箭头 -->
+                            <line x1="152" y1="176" x2="198" y2="213" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="5,3" marker-end="url(#arrowhead)" filter="url(#glow)"/>
+                            <!-- 图例 -->
+                            <rect x="20" y="10" width="110" height="42" rx="5" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+                            <circle cx="32" cy="22" r="5" fill="#dc2626"/>
+                            <text x="40" y="24" font-size="7.5" fill="#475569">中国 05-07（B组合）</text>
+                            <circle cx="32" cy="36" r="5" fill="#f97316"/>
+                            <text x="40" y="38" font-size="7.5" fill="#475569">中国 现在（趋向C）</text>
+                        </svg>
+                    </div>
+                    <!-- 右侧：表格对比 + 说明 -->
+                    <div style="flex: 1.15; display: flex; flex-direction: column; gap: 8px;">
+                        <table style="font-size: 0.5em; width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                            <thead>
+                                <tr style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: white;">
+                                    <th style="padding: 6px 8px; border-bottom: 2px solid #475569; text-align: left; font-weight: 700; font-size: 0.9em;">维度</th>
+                                    <th style="padding: 6px 8px; border-bottom: 2px solid #475569; text-align: center; font-weight: 700; background: rgba(220,38,38,0.2); font-size: 0.9em;">中国 05-07</th>
+                                    <th style="padding: 6px 8px; border-bottom: 2px solid #475569; text-align: center; font-weight: 700; background: rgba(249,115,22,0.2); font-size: 0.9em;">中国 现在</th>
+                                    <th style="padding: 6px 8px; border-bottom: 2px solid #475569; text-align: center; font-weight: 700; background: rgba(37,99,235,0.2); font-size: 0.9em;">美国</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="background: #fef2f2;">
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fecaca; font-weight: 700; color: #dc2626; white-space: nowrap; font-size: 0.9em;">汇率制度</td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fecaca; text-align: center; font-size: 0.9em;">软盯住美元<br><span style="color: #94a3b8;">锁定8.28</span></td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fed7aa; text-align: center; background: rgba(249,115,22,0.05); font-size: 0.9em;">管理浮动<br><span style="color: #94a3b8;">±2%波动</span></td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #bfdbfe; text-align: center; background: rgba(37,99,235,0.05); font-size: 0.9em;">自由浮动</td>
+                                </tr>
+                                <tr style="background: #eff6ff;">
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #bfdbfe; font-weight: 700; color: #2563eb; white-space: nowrap; font-size: 0.9em;">资本流动</td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fecaca; text-align: center; font-size: 0.9em;">名义管制<br><span style="color: #94a3b8;">热钱绕道流入</span></td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fed7aa; text-align: center; background: rgba(249,115,22,0.05); font-size: 0.9em;">渐进开放<br><span style="color: #94a3b8;">防外流为主</span></td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #bfdbfe; text-align: center; background: rgba(37,99,235,0.05); font-size: 0.9em;">完全自由</td>
+                                </tr>
+                                <tr style="background: #f0fdf4;">
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #bbf7d0; font-weight: 700; color: #16a34a; white-space: nowrap; font-size: 0.9em;">货币政策</td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fecaca; text-align: center; font-size: 0.9em;">受冲销约束<br><span style="color: #94a3b8;">被动宽松</span></td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fed7aa; text-align: center; background: rgba(249,115,22,0.05); font-size: 0.9em;">独立性增强<br><span style="color: #94a3b8;">主动宽松</span></td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #bfdbfe; text-align: center; background: rgba(37,99,235,0.05); font-size: 0.9em;">完全独立</td>
+                                </tr>
+                                <tr style="background: #fffbeb;">
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fde68a; font-weight: 700; color: #d97706; white-space: nowrap; font-size: 0.9em;">三角位置</td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fecaca; text-align: center; font-size: 0.9em;">B组合<br><span style="color: #94a3b8;">左上角</span></td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fed7aa; text-align: center; background: rgba(249,115,22,0.05); font-size: 0.9em;">趋向C组合<br><span style="color: #94a3b8;">中间偏右下</span></td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #bfdbfe; text-align: center; background: rgba(37,99,235,0.05); font-size: 0.9em;">C组合<br><span style="color: #94a3b8;">右下角</span></td>
+                                </tr>
+                                <tr style="background: #fef2f2;">
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fecaca; font-weight: 700; color: #dc2626; white-space: nowrap; font-size: 0.9em;">外储/GDP</td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fecaca; text-align: center; font-size: 0.9em;"><span style="color: #dc2626; font-weight: 700;">15%→37%</span><br><span style="color: #94a3b8;">快速积累</span></td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #fed7aa; text-align: center; background: rgba(249,115,22,0.05); font-size: 0.9em;"><span style="color: #f97316; font-weight: 700;">17%</span><br><span style="color: #94a3b8;">相对稳定</span></td>
+                                    <td style="padding: 5px 8px; border-bottom: 1px solid #bfdbfe; text-align: center; background: rgba(37,99,235,0.05); font-size: 0.9em;"><span style="color: #2563eb; font-weight: 700;">0.3%</span><br><span style="color: #94a3b8;">无需外储</span></td>
+                                </tr>
+                                <tr style="background: #eff6ff;">
+                                    <td style="padding: 5px 8px; font-weight: 700; color: #2563eb; white-space: nowrap; font-size: 0.9em;">主要矛盾</td>
+                                    <td style="padding: 5px 8px; text-align: center; font-size: 0.9em;">升值压力<br><span style="color: #94a3b8;">+热钱流入</span></td>
+                                    <td style="padding: 5px 8px; text-align: center; background: rgba(249,115,22,0.05); font-size: 0.9em;">贬值压力<br><span style="color: #94a3b8;">+资本外流</span></td>
+                                    <td style="padding: 5px 8px; text-align: center; background: rgba(37,99,235,0.05); font-size: 0.9em;">通胀 vs 就业</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <!-- 底部说明框 -->
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="flex: 1; padding: 8px 12px; background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%); border-radius: 8px; border-left: 3px solid #dc2626; box-shadow: 0 2px 6px rgba(220,38,38,0.08);">
+                                <p style="margin: 0; font-size: 0.5em; line-height: 1.4;">
+                                    <b style="color:#dc2626;">▎05-07困境：</b>加息→热钱流入→更多冲销→成本更高 = <span style="color:#dc2626; font-weight:700;">自我强化循环</span>
+                                </p>
+                            </div>
+                            <div style="flex: 1; padding: 8px 12px; background: linear-gradient(135deg, #f0fdf4 0%, #f0fdf4 100%); border-radius: 8px; border-left: 3px solid #16a34a; box-shadow: 0 2px 6px rgba(22,163,74,0.08);">
+                                <p style="margin: 0; font-size: 0.5em; line-height: 1.4;">
+                                    <b style="color:#16a34a;">▎核心转变：</b>从"以冲销换三者兼得"→"接受C组合，释放货币政策独立性"，外储从4万亿降至3.2万亿
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section>
                 <h2 style="margin: 0; padding: 0; font-size: 1.6em; font-weight: 700; letter-spacing: -0.02em; color: #1a1a2e;">
                     2005-07 A股有色金属超级周期
@@ -471,6 +738,7 @@
     <script src="reveal.js"></script>
     <script src="chart_data.js"></script>
     <script src="shcomp_data.js"></script>
+    <script src="chart_data_extended.js"></script>
     <script>
         // ========== 图表渲染（所有依赖加载完后执行） ==========
         function renderCharts() {
@@ -657,24 +925,528 @@
                 legend: {x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.85)'}
             }, {responsive: true});
 
-            // Chart 6: 信号仪表盘
-            Plotly.newPlot('chart-signals', [
-                {type:'indicator', mode:'gauge+number', value:0, domain:{x:[0,0.33],y:[0,1]},
-                 title:{text:'S1: Capex 二阶导',font:{size:16,color:'#2c3e50'}}, number:{font:{size:24,color:'#2c3e50'}},
-                 gauge:{axis:{range:[0,2],gridcolor:'#ecf0f1'},bar:{color:'#27ae60'},
-                   steps:[{range:[0,0.5],color:'#d5f5e3'},{range:[0.5,1.5],color:'#fef9e7'},{range:[1.5,2],color:'#fadbd8'}],
-                   threshold:{line:{color:'#c0392b',width:4},thickness:0.75,value:2}}},
-                {type:'indicator', mode:'gauge+number', value:0.5, domain:{x:[0.34,0.66],y:[0,1]},
-                 title:{text:'S2: AI IPO 巅峰',font:{size:16,color:'#2c3e50'}}, number:{font:{size:24,color:'#2c3e50'}},
-                 gauge:{axis:{range:[0,2],gridcolor:'#ecf0f1'},bar:{color:'#f39c12'},
-                   steps:[{range:[0,0.5],color:'#d5f5e3'},{range:[0.5,1.5],color:'#fef9e7'},{range:[1.5,2],color:'#fadbd8'}],
-                   threshold:{line:{color:'#c0392b',width:4},thickness:0.75,value:2}}},
-                {type:'indicator', mode:'gauge+number', value:0, domain:{x:[0.67,1],y:[0,1]},
-                 title:{text:'S3: 龙头估值崩溃',font:{size:16,color:'#2c3e50'}}, number:{font:{size:24,color:'#2c3e50'}},
-                 gauge:{axis:{range:[0,2],gridcolor:'#ecf0f1'},bar:{color:'#27ae60'},
-                   steps:[{range:[0,0.5],color:'#d5f5e3'},{range:[0.5,1.5],color:'#fef9e7'},{range:[1.5,2],color:'#fadbd8'}],
-                   threshold:{line:{color:'#c0392b',width:4},thickness:0.75,value:2}}}
-            ], {margin:{t:40,b:20}, template:'plotly_white'}, {responsive: true});
+            // ========== 宏观背景：4 国 GDP 增长（2000-2026） ==========
+            var gdpTraces = [
+                {x: macroYears, y: macroGDP_US, name: '美国', type:'bar',
+                 marker:{color:'#2563eb', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'美国 %{x}<br>GDP: %{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroGDP_CN, name: '中国', type:'bar',
+                 marker:{color:'#dc2626', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'中国 %{x}<br>GDP: %{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroGDP_JP, name: '日本', type:'bar',
+                 marker:{color:'#16a34a', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'日本 %{x}<br>GDP: %{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroGDP_EU, name: '欧元区', type:'bar',
+                 marker:{color:'#d97706', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'欧元区 %{x}<br>GDP: %{y:.2f}%<extra></extra>'}
+            ];
+            Plotly.newPlot('chart-macro-gdp', gdpTraces, {
+                xaxis: {
+                    title: '年份', gridcolor: '#ecf0f1',
+                    rangeslider: {visible: true, thickness: 0.05},
+                    rangeselector: {
+                        buttons: [
+                            {count: 5, label: '5Y', step: 'year', stepmode: 'backward'},
+                            {count: 10, label: '10Y', step: 'year', stepmode: 'backward'},
+                            {count: 15, label: '15Y', step: 'year', stepmode: 'backward'},
+                            {step: 'all', label: 'All'}
+                        ],
+                        font: {size: 11},
+                        bgcolor: '#ecf0f1',
+                        activecolor: '#2563eb'
+                    }
+                },
+                yaxis: {title: '名义 GDP 同比 (%, 本币)', gridcolor: '#ecf0f1'},
+                hovermode: 'x unified', template: 'plotly_white',
+                margin: {t: 50, b: 60}, showlegend: true,
+                legend: {x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.85)', font: {size: 12}},
+                barmode: 'group', bargap: 0.15, bargroupgap: 0.05,
+                shapes: [
+                    {type:'line', x0:'2008', x1:'2008', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1.5, dash:'dash'}},
+                    {type:'line', x0:'2020', x1:'2020', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1.5, dash:'dash'}}
+                ],
+                annotations: [
+                    {x:'2008.5', y:0.95, xref:'x', yref:'paper', text:'2008 金融危机',
+                     showarrow:false, font:{size:10, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2020.5', y:0.05, xref:'x', yref:'paper', text:'2020 疫情',
+                     showarrow:false, font:{size:10, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2006', y:19, xref:'x', yref:'y', text:'中国过热 19%',
+                     showarrow:true, arrowhead:2, ax:0, ay:-30,
+                     font:{size:10, color:'#dc2626'}, bgcolor:'rgba(255,255,255,0.85)', borderpad:2}
+                ]
+            }, {responsive: true});
+
+            // ========== 宏观背景：4 国 实际GDP 增长（2000-2026） ==========
+            var gdpRealTraces = [
+                {x: macroYears, y: macroGDPReal_US, name: '美国', type:'bar',
+                 marker:{color:'#2563eb', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'美国 %{x}<br>实际GDP: %{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroGDPReal_CN, name: '中国', type:'bar',
+                 marker:{color:'#dc2626', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'中国 %{x}<br>实际GDP: %{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroGDPReal_JP, name: '日本', type:'bar',
+                 marker:{color:'#16a34a', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'日本 %{x}<br>实际GDP: %{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroGDPReal_EU, name: '欧元区', type:'bar',
+                 marker:{color:'#d97706', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'欧元区 %{x}<br>实际GDP: %{y:.2f}%<extra></extra>'}
+            ];
+            Plotly.newPlot('chart-macro-gdp-real', gdpRealTraces, {
+                xaxis: {
+                    title: '年份', gridcolor: '#ecf0f1',
+                    rangeslider: {visible: true, thickness: 0.05},
+                    rangeselector: {
+                        buttons: [
+                            {count: 5, label: '5Y', step: 'year', stepmode: 'backward'},
+                            {count: 10, label: '10Y', step: 'year', stepmode: 'backward'},
+                            {count: 15, label: '15Y', step: 'year', stepmode: 'backward'},
+                            {step: 'all', label: 'All'}
+                        ],
+                        font: {size: 11},
+                        bgcolor: '#ecf0f1',
+                        activecolor: '#2563eb'
+                    }
+                },
+                yaxis: {title: '实际 GDP 同比 (%, 不变价)', gridcolor: '#ecf0f1'},
+                hovermode: 'x unified', template: 'plotly_white',
+                margin: {t: 50, b: 60}, showlegend: true,
+                legend: {x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.85)', font: {size: 12}},
+                barmode: 'group', bargap: 0.15, bargroupgap: 0.05,
+                shapes: [
+                    {type:'line', x0:'2008', x1:'2008', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1.5, dash:'dash'}},
+                    {type:'line', x0:'2020', x1:'2020', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1.5, dash:'dash'}}
+                ],
+                annotations: [
+                    {x:'2008.5', y:0.95, xref:'x', yref:'paper', text:'2008 金融危机',
+                     showarrow:false, font:{size:10, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2020.5', y:0.05, xref:'x', yref:'paper', text:'2020 疫情',
+                     showarrow:false, font:{size:10, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2006', y:14, xref:'x', yref:'y', text:'中国 14%',
+                     showarrow:true, arrowhead:2, ax:0, ay:-30,
+                     font:{size:10, color:'#dc2626'}, bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2009', y:-2.6, xref:'x', yref:'y', text:'美国 -2.6%',
+                     showarrow:true, arrowhead:2, ax:0, ay:25,
+                     font:{size:9, color:'#2563eb'}, bgcolor:'rgba(255,255,255,0.85)', borderpad:2}
+                ]
+            }, {responsive: true});
+
+            // ========== 宏观背景：4 国 CPI 变动（2000-2026） ==========
+            var cpiTraces = [
+                {x: macroYears, y: macroCPI_US, name: '美国', type:'bar',
+                 marker:{color:'#2563eb', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'美国 %{x}<br>CPI: %{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroCPI_CN, name: '中国', type:'bar',
+                 marker:{color:'#dc2626', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'中国 %{x}<br>CPI: %{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroCPI_JP, name: '日本', type:'bar',
+                 marker:{color:'#16a34a', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'日本 %{x}<br>CPI: %{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroCPI_EU, name: '欧元区', type:'bar',
+                 marker:{color:'#d97706', line:{width:0}}, opacity:0.85,
+                 hovertemplate:'欧元区 %{x}<br>CPI: %{y:.2f}%<extra></extra>'}
+            ];
+            Plotly.newPlot('chart-macro-cpi', cpiTraces, {
+                xaxis: {
+                    title: '年份', gridcolor: '#ecf0f1',
+                    rangeslider: {visible: true, thickness: 0.05},
+                    rangeselector: {
+                        buttons: [
+                            {count: 5, label: '5Y', step: 'year', stepmode: 'backward'},
+                            {count: 10, label: '10Y', step: 'year', stepmode: 'backward'},
+                            {count: 15, label: '15Y', step: 'year', stepmode: 'backward'},
+                            {step: 'all', label: 'All'}
+                        ],
+                        font: {size: 11},
+                        bgcolor: '#ecf0f1',
+                        activecolor: '#2563eb'
+                    }
+                },
+                yaxis: {title: 'CPI 同比 (%)', gridcolor: '#ecf0f1'},
+                hovermode: 'x unified', template: 'plotly_white',
+                margin: {t: 50, b: 60}, showlegend: true,
+                legend: {x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.85)', font: {size: 12}},
+                barmode: 'group', bargap: 0.15, bargroupgap: 0.05,
+                shapes: [
+                    {type:'line', x0:'2008', x1:'2008', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1.5, dash:'dash'}},
+                    {type:'line', x0:'2011', x1:'2011', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1.5, dash:'dash'}},
+                    {type:'line', x0:'2020', x1:'2020', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1.5, dash:'dash'}},
+                    {type:'line', x0:'2022', x1:'2022', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1.5, dash:'dash'}},
+                    {type:'rect', x0:'2008', x1:'2009', y0:0, y1:1, yref:'paper',
+                     fillcolor:'rgba(220,38,38,0.06)', line:{width:0}},
+                    {type:'rect', x0:'2020', x1:'2021', y0:0, y1:1, yref:'paper',
+                     fillcolor:'rgba(220,38,38,0.06)', line:{width:0}},
+                    {type:'rect', x0:'2022', x1:'2023', y0:0, y1:1, yref:'paper',
+                     fillcolor:'rgba(220,38,38,0.06)', line:{width:0}}
+                ],
+                annotations: [
+                    {x:'2008.5', y:0.95, xref:'x', yref:'paper', text:'2008 危机',
+                     showarrow:false, font:{size:10, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2011.5', y:0.88, xref:'x', yref:'paper', text:'2011 中国 5.4%',
+                     showarrow:false, font:{size:10, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2020.5', y:0.05, xref:'x', yref:'paper', text:'2020 疫情',
+                     showarrow:false, font:{size:10, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2022.5', y:0.05, xref:'x', yref:'paper', text:'2022 全球通胀峰值',
+                     showarrow:false, font:{size:10, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2011', y:5.4, xref:'x', yref:'y', text:'5.41%',
+                     showarrow:true, arrowhead:2, ax:0, ay:-25,
+                     font:{size:9, color:'#dc2626'}, bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2022', y:8.38, xref:'x', yref:'y', text:'欧元区 8.4%',
+                     showarrow:true, arrowhead:2, ax:-50, ay:-25,
+                     font:{size:9, color:'#d97706'}, bgcolor:'rgba(255,255,255,0.85)', borderpad:2}
+                ]
+            }, {responsive: true});
+
+            // ========== 货币政策：表面紧缩与实际宽松的背离 ==========
+            // 左轴：政策工具（利率+RRR）
+            // 右轴：实际流动性（M2+贸易顺差）
+            
+            // 合并1Y利率：2000-2018用基准利率，2019-2026用LPR
+            var rate1Y_CN = macroRate_CN.map(function(v, i) {
+                var yr = parseInt(macroYears[i]);
+                return (yr >= 2019 && macroLPR_CN[i] !== null) ? macroLPR_CN[i] : v;
+            });
+            
+            var monetaryTraces = [
+                // 左轴 - 政策工具
+                {x: macroYears, y: rate1Y_CN, name: '1Y利率/LPR (%)', type:'scatter', mode:'lines+markers',
+                 line:{color:'#2563eb', width:2.5}, marker:{size:5}, yaxis:'y',
+                 hovertemplate:'1Y利率 %{x}<br>%{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroRRR_CN, name: '存款准备金率 (%)', type:'scatter', mode:'lines+markers',
+                 line:{color:'#dc2626', width:2.5}, marker:{size:5}, yaxis:'y',
+                 hovertemplate:'RRR %{x}<br>%{y:.2f}%<extra></extra>'},
+                // 右轴 - 实际流动性
+                {x: macroYears, y: macroM2_CN, name: 'M2 同比增速 (%)', type:'bar',
+                 marker:{color:'#d97706', opacity:0.7}, yaxis:'y2',
+                 hovertemplate:'M2 %{x}<br>%{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroTrade_CN, name: '贸易顺差 (亿美元)', type:'bar',
+                 marker:{color:'#16a34a', opacity:0.7}, yaxis:'y3',
+                 hovertemplate:'顺差 %{x}<br>%{y:.0f}亿美元<extra></extra>'}
+            ];
+            Plotly.newPlot('chart-monetary-policy', monetaryTraces, {
+                xaxis: {
+                    title: '年份', gridcolor: '#ecf0f1',
+                    rangeslider: {visible: true, thickness: 0.05},
+                    rangeselector: {
+                        buttons: [
+                            {count: 5, label: '5Y', step: 'year', stepmode: 'backward'},
+                            {count: 10, label: '10Y', step: 'year', stepmode: 'backward'},
+                            {step: 'all', label: 'All'}
+                        ],
+                        font: {size: 11},
+                        bgcolor: '#ecf0f1',
+                        activecolor: '#2563eb'
+                    }
+                },
+                yaxis: {title: '政策利率/RRR (%)', side:'left', gridcolor: '#ecf0f1', range: [0, 25]},
+                yaxis2: {title: 'M2 同比 (%)', side:'right', overlaying:'y', gridcolor: '#ecf0f1', range: [0, 30]},
+                yaxis3: {title: '贸易顺差 (亿美元)', side:'right', overlaying:'y', gridcolor: '#ecf0f1', range: [0, 12000], visible: false},
+                hovermode: 'x unified', template: 'plotly_white',
+                margin: {t: 50, b: 60}, showlegend: true,
+                legend: {x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.85)', font: {size: 11}},
+                shapes: [
+                    // 2008 危机
+                    {type:'line', x0:'2008', x1:'2008', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1.5, dash:'dash'}},
+                    // 强制结汇结束
+                    {type:'line', x0:'2012', x1:'2012', y0:0, y1:1, yref:'paper',
+                     line:{color:'#16a34a', width:1.5, dash:'dash'}}
+                ],
+                annotations: [
+                    {x:'2007', y:0.95, xref:'x', yref:'paper', text:'紧缩周期',
+                     showarrow:false, font:{size:10, color:'#dc2626'},
+                     bgcolor:'rgba(220,38,38,0.1)', borderpad:2},
+                    {x:'2007', y:14.5, xref:'x', yref:'y', text:'RRR 14.5%',
+                     showarrow:true, arrowhead:2, ax:0, ay:-25,
+                     font:{size:9, color:'#dc2626'}, bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2007', y:7.47, xref:'x', yref:'y', text:'1Y利率 7.47%',
+                     showarrow:true, arrowhead:2, ax:40, ay:-20,
+                     font:{size:9, color:'#2563eb'}, bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2007', y:17.5, xref:'x', yref:'y2', text:'M2 17.5%',
+                     showarrow:true, arrowhead:2, ax:-40, ay:-25,
+                     font:{size:9, color:'#d97706'}, bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    {x:'2007', y:2639, xref:'x', yref:'y3', text:'顺差 2639亿$',
+                     showarrow:true, arrowhead:2, ax:0, ay:25,
+                     font:{size:9, color:'#16a34a'}, bgcolor:'rgba(255,255,255,0.85)', borderpad:2},
+                    // 强制结汇结束
+                    {x:'2012', y:0.5, xref:'x', yref:'paper', text:'强制结汇结束',
+                     showarrow:false, font:{size:9, color:'#16a34a'},
+                     bgcolor:'rgba(255,255,255,0.85)', borderpad:2}
+                ]
+            }, {responsive: true});
+
+            // ========== 市场利率：短端/长端利差与货币政策类型 ==========
+            // 三面板：短端利率、长端利率、利差变化
+            var termSpreadTraces = [
+                // 中国
+                {x: macroYears, y: macroShort_CN, name: '中国短端', type:'scatter', mode:'lines',
+                 line:{color:'#dc2626', width:2}, yaxis:'y',
+                 hovertemplate:'中国短端 %{x}<br>%{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroLong_CN, name: '中国长端', type:'scatter', mode:'lines',
+                 line:{color:'#dc2626', width:2, dash:'dot'}, yaxis:'y',
+                 hovertemplate:'中国长端 %{x}<br>%{y:.2f}%<extra></extra>'},
+                // 美国
+                {x: macroYears, y: macroShort_US, name: '美国短端', type:'scatter', mode:'lines',
+                 line:{color:'#2563eb', width:2}, yaxis:'y2',
+                 hovertemplate:'美国短端 %{x}<br>%{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroLong_US, name: '美国长端', type:'scatter', mode:'lines',
+                 line:{color:'#2563eb', width:2, dash:'dot'}, yaxis:'y2',
+                 hovertemplate:'美国长端 %{x}<br>%{y:.2f}%<extra></extra>'},
+                // 日本
+                {x: macroYears, y: macroShort_JP, name: '日本短端', type:'scatter', mode:'lines',
+                 line:{color:'#16a34a', width:2}, yaxis:'y3',
+                 hovertemplate:'日本短端 %{x}<br>%{y:.2f}%<extra></extra>'},
+                {x: macroYears, y: macroLong_JP, name: '日本长端', type:'scatter', mode:'lines',
+                 line:{color:'#16a34a', width:2, dash:'dot'}, yaxis:'y3',
+                 hovertemplate:'日本长端 %{x}<br>%{y:.2f}%<extra></extra>'},
+            ];
+            Plotly.newPlot('chart-term-spread', termSpreadTraces, {
+                xaxis: {
+                    title: '年份', gridcolor: '#ecf0f1', domain: [0, 1],
+                    rangeslider: {visible: true, thickness: 0.05},
+                    rangeselector: {
+                        buttons: [
+                            {count: 5, label: '5Y', step: 'year', stepmode: 'backward'},
+                            {count: 10, label: '10Y', step: 'year', stepmode: 'backward'},
+                            {step: 'all', label: 'All'}
+                        ],
+                        font: {size: 11},
+                        bgcolor: '#ecf0f1',
+                        activecolor: '#2563eb'
+                    }
+                },
+                yaxis: {title: '中国 (%)', side:'left', gridcolor: '#ecf0f1', range: [0, 6], domain: [0.65, 1]},
+                yaxis2: {title: '美国 (%)', side:'left', gridcolor: '#ecf0f1', range: [0, 6], domain: [0.35, 0.6]},
+                yaxis3: {title: '日本 (%)', side:'left', gridcolor: '#ecf0f1', range: [-0.5, 3], domain: [0, 0.25]},
+                hovermode: 'x unified', template: 'plotly_white',
+                margin: {t: 30, b: 60, pad: 0}, showlegend: true,
+                legend: {x: 1.02, y: 1, bgcolor: 'rgba(255,255,255,0.85)', font: {size: 10}},
+                shapes: [
+                    // 2006-2007 中国紧缩期
+                    {type:'rect', x0:'2006', x1:'2008', y0:0, y1:0.25, yref:'paper',
+                     fillcolor:'rgba(220,38,38,0.08)', line:{width:0}},
+                    // 2008 危机
+                    {type:'line', x0:'2008', x1:'2008', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1, dash:'dash'}},
+                    // 2015 中国股灾
+                    {type:'line', x0:'2015', x1:'2015', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1, dash:'dot'}},
+                    // 2020 疫情
+                    {type:'line', x0:'2020', x1:'2020', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1, dash:'dash'}}
+                ],
+                annotations: [
+                    // 中国面板
+                    {x:'2007', y:5.5, xref:'x', yref:'y', text:'短端 2.0%',
+                     showarrow:false, font:{size:8, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    {x:'2007', y:4.0, xref:'x', yref:'y', text:'长端 4.0%',
+                     showarrow:false, font:{size:8, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    // 美国面板
+                    {x:'2007', y:5.0, xref:'x', yref:'y2', text:'短端 5.0%',
+                     showarrow:false, font:{size:8, color:'#2563eb'},
+                     bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    {x:'2007', y:4.6, xref:'x', yref:'y2', text:'长端 4.6%',
+                     showarrow:false, font:{size:8, color:'#2563eb'},
+                     bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    // 日本面板
+                    {x:'2007', y:1.7, xref:'x', yref:'y3', text:'长端 1.7%',
+                     showarrow:false, font:{size:8, color:'#16a34a'},
+                     bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                ]
+            }, {responsive: true});
+
+            // ========== 汇率与贸易：全球失衡与资金流向 ==========
+            // 三面板：美元指数 + 汇率 + 贸易差额
+            var fxTradeTraces = [
+                // 美元指数面板
+                {x: macroYears, y: macroDXY, name: '美元指数 DXY', type:'scatter', mode:'lines',
+                 line:{color:'#64748b', width:2.5}, yaxis:'y',
+                 hovertemplate:'DXY %{x}<br>%{y:.1f}<extra></extra>'},
+                // 汇率面板
+                {x: macroYears, y: macroFX_EURUSD.map(function(v){return v ? v*10 : null;}), name: 'EUR/USD×10', type:'scatter', mode:'lines',
+                 line:{color:'#2563eb', width:2}, yaxis:'y2',
+                 hovertemplate:'EUR/USD %{x}<br>%{y:.2f}<extra></extra>'},
+                {x: macroYears, y: macroFX_USDCNY, name: 'USD/CNY', type:'scatter', mode:'lines',
+                 line:{color:'#dc2626', width:2}, yaxis:'y2',
+                 hovertemplate:'USD/CNY %{x}<br>%{y:.2f}<extra></extra>'},
+                {x: macroYears, y: macroFX_USDJPY.map(function(v){return v ? v/10 : null;}), name: 'USD/JPY÷10', type:'scatter', mode:'lines',
+                 line:{color:'#16a34a', width:2, dash:'dot'}, yaxis:'y2',
+                 hovertemplate:'USD/JPY %{x}<br>%{y:.1f}<extra></extra>'},
+                // 贸易面板
+                {x: macroYears, y: macroTrade_CN, name: '中国顺差', type:'bar',
+                 marker:{color:'#dc2626', opacity:0.7}, yaxis:'y3',
+                 hovertemplate:'中国 %{x}<br>%{y:.0f}亿$<extra></extra>'},
+                {x: macroYears, y: macroTrade_US, name: '美国逆差', type:'bar',
+                 marker:{color:'#2563eb', opacity:0.7}, yaxis:'y3',
+                 hovertemplate:'美国 %{x}<br>%{y:.0f}亿$<extra></extra>'},
+                {x: macroYears, y: macroTrade_JP.map(function(v){return v ? v/10 : null;}), name: '日本÷10', type:'bar',
+                 marker:{color:'#16a34a', opacity:0.7}, yaxis:'y3',
+                 hovertemplate:'日本 %{x}<br>%{y:.0f}亿日元<extra></extra>'},
+            ];
+            Plotly.newPlot('chart-fx-trade', fxTradeTraces, {
+                xaxis: {
+                    title: '年份', gridcolor: '#ecf0f1', domain: [0, 1],
+                    rangeslider: {visible: true, thickness: 0.05},
+                    rangeselector: {
+                        buttons: [
+                            {count: 5, label: '5Y', step: 'year', stepmode: 'backward'},
+                            {count: 10, label: '10Y', step: 'year', stepmode: 'backward'},
+                            {step: 'all', label: 'All'}
+                        ],
+                        font: {size: 11},
+                        bgcolor: '#ecf0f1',
+                        activecolor: '#2563eb'
+                    }
+                },
+                yaxis: {title: 'DXY', side:'left', gridcolor: '#ecf0f1', domain: [0.7, 1], range: [70, 140]},
+                yaxis2: {title: '汇率', side:'right', overlaying:'y', gridcolor: '#ecf0f1', domain: [0.7, 1], range: [6, 16], visible: false},
+                yaxis3: {title: '贸易差额 (亿$)', side:'left', gridcolor: '#ecf0f1', domain: [0, 0.6], range: [-800, 3000]},
+                hovermode: 'x unified', template: 'plotly_white',
+                margin: {t: 30, b: 60, pad: 0}, showlegend: true,
+                legend: {x: 1.02, y: 1, bgcolor: 'rgba(255,255,255,0.85)', font: {size: 10}},
+                shapes: [
+                    // 2005 汇改
+                    {type:'line', x0:'2005', x1:'2005', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1, dash:'dot'}},
+                    // 2008 危机
+                    {type:'line', x0:'2008', x1:'2008', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1, dash:'dash'}},
+                    // 2015 汇改
+                    {type:'line', x0:'2015', x1:'2015', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1, dash:'dot'}},
+                ],
+                annotations: [
+                    // DXY面板
+                    {x:'2002', y:120, xref:'x', yref:'y', text:'DXY 120',
+                     showarrow:false, font:{size:8, color:'#64748b'},
+                     bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    {x:'2007', y:80, xref:'x', yref:'y', text:'DXY 80 (低点)',
+                     showarrow:false, font:{size:8, color:'#64748b'},
+                     bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    {x:'2014', y:82, xref:'x', yref:'y', text:'DXY 82→100',
+                     showarrow:true, arrowhead:2, ax:0, ay:-20,
+                     font:{size:8, color:'#64748b'}, bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    // 汇率面板
+                    {x:'2005', y:8.28, xref:'x', yref:'y2', text:'汇改 8.28→8.11',
+                     showarrow:true, arrowhead:2, ax:0, ay:20,
+                     font:{size:8, color:'#dc2626'}, bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    {x:'2007', y:7.6, xref:'x', yref:'y2', text:'CNY 7.6',
+                     showarrow:false, font:{size:8, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    // 贸易面板
+                    {x:'2007', y:2639, xref:'x', yref:'y3', text:'中国 +2639亿$',
+                     showarrow:true, arrowhead:2, ax:0, ay:-25,
+                     font:{size:8, color:'#dc2626'}, bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    {x:'2007', y:-592, xref:'x', yref:'y3', text:'美国 -592亿$/月',
+                     showarrow:true, arrowhead:2, ax:0, ay:25,
+                     font:{size:8, color:'#2563eb'}, bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                ]
+            }, {responsive: true});
+
+            // ========== 外汇储备：从积累到消耗 ==========
+            // 计算外储/GDP比率（用最后可用GDP值填充缺失年份）
+            function calcForexGDP(forexArr, gdpArr) {
+                var lastGDP = null;
+                return macroYears.map(function(y, i) {
+                    var forex = forexArr[i];
+                    var gdp = gdpArr[i];
+                    if (gdp) lastGDP = gdp;
+                    if (forex && lastGDP && lastGDP > 0) {
+                        return Math.round(forex / lastGDP * 1000) / 10;
+                    }
+                    return null;
+                });
+            }
+            var forexGDP_CN = calcForexGDP(macroForex_CN, macroGDP_USD_CN);
+            var forexGDP_US = calcForexGDP(macroForex_US, macroGDP_USD_US);
+            var forexGDP_JP = calcForexGDP(macroForex_JP, macroGDP_USD_JP);
+            
+            var forexReserveTraces = [
+                // 外储/GDP比率 - 三国
+                {x: macroYears, y: forexGDP_CN, name: '中国外储/GDP', type:'scatter', mode:'lines+markers',
+                 line:{color:'#dc2626', width:2.5}, marker:{size:5}, yaxis:'y',
+                 hovertemplate:'中国 %{x}<br>%{y:.1f}%<extra></extra>'},
+                {x: macroYears, y: forexGDP_US, name: '美国外储/GDP', type:'scatter', mode:'lines',
+                 line:{color:'#2563eb', width:2, dash:'dot'}, yaxis:'y',
+                 hovertemplate:'美国 %{x}<br>%{y:.1f}%<extra></extra>'},
+                {x: macroYears, y: forexGDP_JP, name: '日本外储/GDP', type:'scatter', mode:'lines',
+                 line:{color:'#16a34a', width:2, dash:'dash'}, yaxis:'y',
+                 hovertemplate:'日本 %{x}<br>%{y:.1f}%<extra></extra>'},
+                // 外储绝对值 - 三国柱状 (亿美元)
+                {x: macroYears, y: macroForex_CN, name: '中国外储 (亿$)', type:'bar',
+                 marker:{color:'#dc2626', opacity:0.6}, yaxis:'y2',
+                 hovertemplate:'中国 %{x}<br>%{y:.0f}亿$<extra></extra>'},
+                {x: macroYears, y: macroForex_US, name: '美国外储 (亿$)', type:'bar',
+                 marker:{color:'#2563eb', opacity:0.6}, yaxis:'y2',
+                 hovertemplate:'美国 %{x}<br>%{y:.0f}亿$<extra></extra>'},
+                {x: macroYears, y: macroForex_JP, name: '日本外储 (亿$)', type:'bar',
+                 marker:{color:'#16a34a', opacity:0.6}, yaxis:'y2',
+                 hovertemplate:'日本 %{x}<br>%{y:.0f}亿$<extra></extra>'},
+            ];
+            Plotly.newPlot('chart-forex-reserve', forexReserveTraces, {
+                xaxis: {
+                    title: '年份', gridcolor: '#ecf0f1',
+                    rangeslider: {visible: true, thickness: 0.05},
+                    rangeselector: {
+                        buttons: [
+                            {count: 5, label: '5Y', step: 'year', stepmode: 'backward'},
+                            {count: 10, label: '10Y', step: 'year', stepmode: 'backward'},
+                            {step: 'all', label: 'All'}
+                        ],
+                        font: {size: 11},
+                        bgcolor: '#ecf0f1',
+                        activecolor: '#2563eb'
+                    }
+                },
+                yaxis: {title: '外储/GDP (%)', side:'left', gridcolor: '#ecf0f1', range: [0, 55]},
+                yaxis2: {title: '外储 (亿美元)', side:'right', overlaying:'y', gridcolor: '#ecf0f1', range: [0, 45000]},
+                barmode: 'group',
+                hovermode: 'x unified', template: 'plotly_white',
+                margin: {t: 50, b: 60}, showlegend: true,
+                legend: {x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.85)', font: {size: 10}},
+                shapes: [
+                    {type:'line', x0:'2005', x1:'2005', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1, dash:'dot'}},
+                    {type:'line', x0:'2014', x1:'2014', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1, dash:'dash'}},
+                    {type:'line', x0:'2015', x1:'2015', y0:0, y1:1, yref:'paper',
+                     line:{color:'#dc2626', width:1, dash:'dot'}},
+                ],
+                annotations: [
+                    {x:'2014', y:49, xref:'x', yref:'y', text:'中国峰值 49%',
+                     showarrow:true, arrowhead:2, ax:0, ay:-25,
+                     font:{size:8, color:'#dc2626'}, bgcolor:'rgba(255,255,255,0.85)', borderpad:1},
+                    {x:'2016', y:28, xref:'x', yref:'y', text:'中国谷值 28%',
+                     showarrow:true, arrowhead:2, ax:0, ay:25,
+                     font:{size:8, color:'#dc2626'}, bgcolor:'rgba(255,255,255,0.85)', borderpad:1},
+                    {x:'2007', y:37, xref:'x', yref:'y', text:'中国 37%',
+                     showarrow:false, font:{size:8, color:'#dc2626'},
+                     bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    {x:'2007', y:1.2, xref:'x', yref:'y', text:'美国 1.2%',
+                     showarrow:false, font:{size:8, color:'#2563eb'},
+                     bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                    {x:'2007', y:19.8, xref:'x', yref:'y', text:'日本 19.8%',
+                     showarrow:false, font:{size:8, color:'#16a34a'},
+                     bgcolor:'rgba(255,255,255,0.8)', borderpad:1},
+                ]
+            }, {responsive: true});
 
         }
 
