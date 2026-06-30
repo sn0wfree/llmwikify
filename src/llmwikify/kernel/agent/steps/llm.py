@@ -53,7 +53,7 @@ class ExtractJSONStep(StepHandler):
     """
 
     async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
-        from llmwikify.kernel.quant.codegen import extract_json_from_response
+        from llmwikify.kernel.codegen import extract_json_from_response
 
         text = input
         data = extract_json_from_response(text)

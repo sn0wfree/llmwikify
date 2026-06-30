@@ -19,7 +19,7 @@ import json
 import polars as pl
 import pytest
 
-from llmwikify.kernel.quant.codegen import (
+from llmwikify.kernel.codegen import (
     OBSERVE_FEEDBACK_TEMPLATE,
     SYSTEM_PROMPT_CODE,
     build_execute_namespace,
@@ -292,7 +292,7 @@ class TestReexportCompat:
 
         assert hasattr(feedback_templates, "OBSERVE_FEEDBACK_TEMPLATE")
         # Should be the SAME string object (not a copy)
-        from llmwikify.kernel.quant.codegen.feedback_templates import (
+        from llmwikify.kernel.codegen.feedback_templates import (
             OBSERVE_FEEDBACK_TEMPLATE as KERN,
         )
         assert feedback_templates.OBSERVE_FEEDBACK_TEMPLATE is KERN

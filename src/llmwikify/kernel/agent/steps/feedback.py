@@ -21,7 +21,7 @@ class BuildFeedbackStep(StepHandler):
 
     async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
         from llmwikify.kernel.agent.steps.code import CodeExecResult
-        from llmwikify.kernel.quant.codegen import OBSERVE_FEEDBACK_TEMPLATE
+        from llmwikify.kernel.codegen import OBSERVE_FEEDBACK_TEMPLATE
 
         result = input
         if not isinstance(result, CodeExecResult):

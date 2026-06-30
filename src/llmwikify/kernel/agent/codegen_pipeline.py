@@ -183,7 +183,7 @@ async def generate_factor_code(
     Returns:
         UnifiedResult（含 .code, .factor_series, .error, .to_dict()）
     """
-    from llmwikify.kernel.quant.codegen import SYSTEM_PROMPT_CODE
+    from llmwikify.kernel.codegen import SYSTEM_PROMPT_CODE
 
     from .loop import UnifiedAgentLoop
 

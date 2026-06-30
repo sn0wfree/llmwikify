@@ -2,10 +2,10 @@
 
 ⚠️ C1 (PR-C1) refactor: this module is now a **thin re-export wrapper** for
 backward compatibility. The actual implementations live in
-`llmwikify.kernel.quant.codegen` (which both apps/ and reproduction/ can
+`llmwikify.kernel.codegen` (which both apps/ and reproduction/ can
 import without creating a layer cycle).
 
-New code should import from `llmwikify.kernel.quant.codegen` directly.
+New code should import from `llmwikify.kernel.codegen` directly.
 This wrapper exists for backward compat with pre-C1 callers.
 
 Functions kept here (reproduction-specific):
@@ -33,7 +33,7 @@ from typing import Any
 import polars as pl
 
 # C1: re-export from kernel/quant/codegen/
-from llmwikify.kernel.quant.codegen import (  # noqa: F401
+from llmwikify.kernel.codegen import (  # noqa: F401
     _PYTHON_FENCE_RE,
     OBSERVE_FEEDBACK_TEMPLATE,
     SYSTEM_PROMPT_CODE,

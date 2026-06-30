@@ -39,7 +39,7 @@ class ExtractCodeStep(StepHandler):
     """
 
     async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
-        from llmwikify.kernel.quant.codegen import extract_python
+        from llmwikify.kernel.codegen import extract_python
 
         text = input
         code = extract_python(text)
@@ -56,7 +56,7 @@ class ValidateSyntaxStep(StepHandler):
     """
 
     async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
-        from llmwikify.kernel.quant.codegen import validate_syntax
+        from llmwikify.kernel.codegen import validate_syntax
 
         code = input
         ok, err = validate_syntax(code)
@@ -73,7 +73,7 @@ class ValidateSafetyStep(StepHandler):
     """
 
     async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
-        from llmwikify.kernel.quant.codegen import validate_safety
+        from llmwikify.kernel.codegen import validate_safety
 
         code = input
         ok, err = validate_safety(code)
@@ -92,7 +92,7 @@ class ExecuteCodeStep(StepHandler):
     """
 
     async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
-        from llmwikify.kernel.quant.codegen import execute_code
+        from llmwikify.kernel.codegen import execute_code
 
         code = input
         df = getattr(spec, "df", None)
