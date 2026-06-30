@@ -471,12 +471,6 @@ def _make_research_config(args: dict, ctx: SkillContext) -> ReactConfig:
             return fallback[name].actions[action]
         return skill.actions[action]
 
-    plan_action = _action("plan", "plan")
-    analyze_action = _action("analyze", "analyze")
-    summarize_action = _action("summarize", "summarize")
-    score_action = _action("score", "score")
-    revise_action = _action("revise", "revise")
-
     # Wrap each so it can be invoked with the state dict
     # (the framework's action handler contract is (args, ctx)
     # where args is the state; we need a (state, ctx)

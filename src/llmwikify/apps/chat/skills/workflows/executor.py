@@ -543,9 +543,7 @@ class WorkflowExecutor:
             # Materialize N instances
             for index, item in enumerate(upstream_value):
                 instance_id = f"{phase.fan_out.id_prefix}{index}"
-                instance_inputs = {
-                    k: v for k, v in phase.fan_out.per_item_inputs.items()
-                }
+                instance_inputs = dict(phase.fan_out.per_item_inputs.items())
                 # Replace $item with the current item
                 instance_inputs = resolve_dollar_refs(
                     instance_inputs,

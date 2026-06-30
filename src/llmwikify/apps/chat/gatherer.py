@@ -240,7 +240,7 @@ class SourceGatherer:
                 # Fetch web content in parallel
                 if web_tasks:
                     web_contents = await asyncio.gather(*web_tasks, return_exceptions=True)
-                    for fetch_url, content in zip(urls_to_fetch, web_contents):
+                    for fetch_url, content in zip(urls_to_fetch, web_contents, strict=False):
                         if isinstance(content, Exception):
                             logger.warning("Fetch failed for %s: %s", fetch_url, content)
                             continue

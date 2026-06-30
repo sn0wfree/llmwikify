@@ -97,7 +97,7 @@ def _register_wiki_routes(
     wiki_router = APIRouter(prefix="/api/wiki", tags=["wiki"])
 
     @wiki_router.get("/status")
-    async def wiki_status(wiki: Wiki = Depends(get_wiki)):
+    async def wiki_status(wiki: Wiki = Depends(get_wiki)):  # noqa: B008
         """Get wiki status summary."""
         status = wiki.status()
         if "pages_by_type" in status:
@@ -105,12 +105,12 @@ def _register_wiki_routes(
         return status
 
     @wiki_router.get("/search")
-    async def wiki_search(q: str, limit: int = 10, backend: str = "fts5", wiki: Wiki = Depends(get_wiki)):
+    async def wiki_search(q: str, limit: int = 10, backend: str = "fts5", wiki: Wiki = Depends(get_wiki)):  # noqa: B008
         """Full-text search across wiki pages."""
         return wiki.search(q, limit, backend=backend)
 
     @wiki_router.get("/page/{page_name:path}")
-    async def wiki_read_page(page_name: str, wiki: Wiki = Depends(get_wiki)):
+    async def wiki_read_page(page_name: str, wiki: Wiki = Depends(get_wiki)):  # noqa: B008
         """Read a wiki page."""
         try:
             page_data = wiki.read_page(page_name)
@@ -124,7 +124,7 @@ def _register_wiki_routes(
             raise HTTPException(status_code=404, detail=str(e))
 
     @wiki_router.post("/page")
-    async def wiki_write_page(request: Request, wiki: Wiki = Depends(get_wiki)):
+    async def wiki_write_page(request: Request, wiki: Wiki = Depends(get_wiki)):  # noqa: B008
         """Write a wiki page."""
         body = await request.json()
         page_name = body.get("page_name", "")
@@ -135,7 +135,7 @@ def _register_wiki_routes(
         return {"message": result, "page_name": page_name}
 
     @wiki_router.get("/sink/status")
-    async def wiki_sink_status(wiki: Wiki = Depends(get_wiki)):
+    async def wiki_sink_status(wiki: Wiki = Depends(get_wiki)):  # noqa: B008
         """Get sink buffer status."""
         return wiki.sink_status()
 
@@ -144,23 +144,24 @@ def _register_wiki_routes(
         mode: str = "check",
         limit: int = 10,
         force: bool = False,
-        wiki: Wiki = Depends(get_wiki),
+        wiki: Wiki = Depends(get_wiki),  # noqa: B008
+
     ):
         """Health-check the wiki."""
         return wiki.lint(mode=mode, limit=limit, force=force)
 
     @wiki_router.get("/recommend")
-    async def wiki_recommend(wiki: Wiki = Depends(get_wiki)):
+    async def wiki_recommend(wiki: Wiki = Depends(get_wiki)):  # noqa: B008
         """Get wiki recommendations."""
         return wiki.recommend()
 
     @wiki_router.get("/suggest_synthesis")
-    async def wiki_suggest_synthesis(source_name: str | None = None, wiki: Wiki = Depends(get_wiki)):
+    async def wiki_suggest_synthesis(source_name: str | None = None, wiki: Wiki = Depends(get_wiki)):  # noqa: B008
         """Get cross-source synthesis suggestions."""
         return wiki.suggest_synthesis(source_name=source_name)
 
     @wiki_router.get("/graph_analyze")
-    async def wiki_graph_analyze(wiki: Wiki = Depends(get_wiki)):
+    async def wiki_graph_analyze(wiki: Wiki = Depends(get_wiki)):  # noqa: B008
         """Analyze knowledge graph structure."""
         return wiki.graph_analyze()
 
@@ -168,7 +169,8 @@ def _register_wiki_routes(
     async def wiki_graph(
         current_page: str | None = None,
         mode: str = "auto",
-        wiki: Wiki = Depends(get_wiki),
+        wiki: Wiki = Depends(get_wiki),  # noqa: B008
+
     ):
         """Return graph data optimized for visualization."""
         from llmwikify.kernel.graph.visualizer import build_visualization_data

@@ -45,7 +45,7 @@ from .quant_init_cmd import QuantInitCommand, run_quant_init
 from .read_page import ReadPageCommand, run_read_page
 from .references import ReferencesCommand, run_references
 from .report import ReportCommand, run_report
-from .reproduce_cmd import ReproduceCommand, run_batch, run_one_paper_cli
+from .reproduce_cmd import ReproduceCommand, run_one_paper_cli
 from .search import SearchCommand, run_search
 from .serve import ServeCommand, run_serve
 from .sink_status import SinkStatusCommand, run_sink_status

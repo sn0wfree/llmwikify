@@ -130,7 +130,7 @@ class ReactResult:
 # Prompt template for the OBSERVE → REASON error feedback. Mirrors the
 # pattern runner_v2.py uses to inject tool errors back into the message
 # history (see ``_reason`` around line 415).
-from .feedback_templates import (
+from .feedback_templates import (  # noqa: E402
     OBSERVE_FEEDBACK_TEMPLATE,  # noqa: F401 — backward compat re-export
 )
 

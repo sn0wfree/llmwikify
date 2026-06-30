@@ -21,7 +21,6 @@ DEFAULT_RELATION_TYPES = {
 # Valid confidence levels
 CONFIDENCE_LEVELS = {"EXTRACTED", "INFERRED", "AMBIGUOUS"}
 
-
 class RelationEngine:
     """Manage knowledge graph relations stored in SQLite.
 
@@ -99,7 +98,7 @@ class RelationEngine:
             CREATE INDEX IF NOT EXISTS idx_relations_source ON relations(source);
             CREATE INDEX IF NOT EXISTS idx_relations_target ON relations(target);
             CREATE INDEX IF NOT EXISTS idx_relations_pair ON relations(source, target);
-            
+
             CREATE TABLE IF NOT EXISTS entity_aliases (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 alias TEXT NOT NULL UNIQUE,
@@ -220,17 +219,17 @@ class RelationEngine:
 
     def resolve_entity(self, name: str, fuzzy_threshold: float = 0.85) -> str:
         """Resolve entity name to canonical form.
-        
+
         Resolution order:
         1. Exact match in wiki pages
         2. Alias lookup
         3. Fuzzy match against existing entities
         4. Return original name (new entity)
-        
+
         Args:
             name: Entity name to resolve
             fuzzy_threshold: Threshold for fuzzy matching (0-1)
-        
+
         Returns:
             Canonical entity name
         """
@@ -295,7 +294,7 @@ class RelationEngine:
 
     def add_alias(self, alias: str, canonical: str, source: str = "manual", confidence: float = 1.0) -> None:
         """Add an alias mapping for an entity.
-        
+
         Args:
             alias: Alias name
             canonical: Canonical entity name
@@ -330,10 +329,10 @@ class RelationEngine:
 
     def get_aliases(self, canonical: str) -> list[str]:
         """Get all aliases for a canonical entity name.
-        
+
         Args:
             canonical: Canonical entity name
-        
+
         Returns:
             List of alias names
         """

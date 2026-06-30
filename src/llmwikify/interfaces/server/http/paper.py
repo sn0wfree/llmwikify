@@ -287,7 +287,7 @@ async def list_raw_papers() -> dict[str, Any]:
 @router.post("/upload")
 async def upload_paper(
     paper_id: str = Form(...),
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
 ) -> dict[str, Any]:
     """Upload a PDF file, save to raw/{safe(paper_id)}.pdf."""
     if _UPLOAD_DIR is None:

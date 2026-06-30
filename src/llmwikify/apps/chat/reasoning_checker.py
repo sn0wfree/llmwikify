@@ -112,12 +112,9 @@ class ReasoningChecker:
         synthesis: str,
         issues: list[dict[str, str]],
     ) -> float:
-        # Heuristic: look for explicit contradiction markers
-        marker_pattern = re.compile(
-            r"然而(?!.*结论).*?(?:但|却|实际上|事实上)|"
-            r"conversely|on the other hand|however.{0,50}but",
-            re.IGNORECASE | re.DOTALL,
-        )
+        # Heuristic: look for explicit contradiction markers.
+        # marker_pattern reserved for future use; current scoring focuses on
+        # reconciliation/nuance words (see below).
         # We can't detect *logical* contradictions without semantics, so we
         # score "no contradiction markers present" as 0.7 (neutral) and
         # "explicit reconciliation present" as 1.0.

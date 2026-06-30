@@ -104,7 +104,7 @@ class StructureValidator:
         n_claims = max(len(claims), len(reinforced), 1)
         n_cites = len(citations)
         # Ratio: claims per citation. ≥1 means most claims cite something.
-        cite_ratio = min(1.0, n_cites / n_claims) if n_claims else 0.0
+        # cite_ratio = min(1.0, n_cites / n_claims) if n_claims else 0.0
 
         # Has at least 2 distinct sources?
         unique_sources = set(re.findall(r"\[\[Source:([^\]]+)\]\]", report))

@@ -256,7 +256,7 @@ class SkillContext:
 # ─── Skill ABC ─────────────────────────────────────────────────────
 
 
-class Skill(ABC):
+class Skill(ABC):  # noqa: B024
     """Abstract base class for all v0.32 skills.
 
     Subclasses declare:
