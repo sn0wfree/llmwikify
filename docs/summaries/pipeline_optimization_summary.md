@@ -1,7 +1,7 @@
 # Paper Extraction Pipeline 优化总结
 
 > 日期：2026-06-18
-> 分支：feat/v0.4-paper-reproduction
+> 分支：feat/v0.4-paper-reproduction (归档命名)
 > 论文：1601.00991v3 (101 Alphas) + 广发证券行业轮动论文 (181 signals)
 
 ---
