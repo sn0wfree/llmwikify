@@ -1,0 +1,59 @@
+# docker-tests/.dockerignore
+# Files excluded from Docker build context
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI
+.github
+.gitlab-ci.yml
+
+# Docker self
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.egg-info
+.eggs
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.cache
+.pyre/
+
+# Virtual environments
+.venv
+venv
+env/
+ENV/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Build artifacts
+dist
+build
+*.tar.gz
+*.whl
+
+# Documentation (not needed for tests)
+docs/
+*.md
+!README.md
+
+# Docker test output (volume mount handles this)
+docker-tests/test-results/

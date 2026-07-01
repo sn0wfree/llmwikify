@@ -2,10 +2,35 @@
 """Shared fixtures for real-world scenario tests."""
 
 import json
+import os
 import tempfile
 from pathlib import Path
 
 import pytest
+
+
+def _is_llm_available() -> bool:
+    """Check if LLM API key is available (env var or config file)."""
+    if os.environ.get("LLM_API_KEY"):
+        return True
+    config_path = Path.home() / ".llmwikify" / "llmwikify.json"
+    if config_path.exists():
+        try:
+            data = json.loads(config_path.read_text())
+            return bool(data.get("llm", {}).get("api_key"))
+        except (json.JSONDecodeError, OSError):
+            return False
+    return False
+
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip LLM tests when no API key is available."""
+    if _is_llm_available():
+        return
+    skip_llm = pytest.mark.skip(reason="LLM_API_KEY not set")
+    for item in items:
+        if "llm" in item.keywords:
+            item.add_marker(skip_llm)
 
 
 @pytest.fixture
@@ -26,7 +51,19 @@ def wiki(temp_dir):
 
 @pytest.fixture
 def llm_config():
-    """Read LLM configuration from ~/.llmwikify/llmwikify.json."""
+    """Read LLM configuration.
+
+    Priority: env vars (LLM_*) > ~/.llmwikify/llmwikify.json > defaults.
+    """
+    if os.environ.get("LLM_API_KEY"):
+        return {
+            "provider": os.environ.get("LLM_PROVIDER", "minimax"),
+            "model": os.environ.get("LLM_MODEL", "minimax-M3"),
+            "base_url": os.environ.get(
+                "LLM_BASE_URL", "https://api.minimaxi.com/v1"
+            ),
+            "api_key": os.environ.get("LLM_API_KEY"),
+        }
     config_path = Path.home() / ".llmwikify" / "llmwikify.json"
     if config_path.exists():
         data = json.loads(config_path.read_text())
@@ -47,8 +84,12 @@ def llm_client(llm_config):
 
 @pytest.fixture
 def server_url():
-    """Server URL (server must be started before tests)."""
-    return "http://localhost:8765"
+    """Server URL.
+
+    Priority: SERVER_URL env var (Docker) > localhost (local dev).
+    Server must be started before tests that need it.
+    """
+    return os.environ.get("SERVER_URL", "http://localhost:8765")
 
 
 @pytest.fixture
