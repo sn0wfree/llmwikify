@@ -1,15 +1,50 @@
 # tests/scenarios/test_05_quant_pipeline.py
-"""Scenario 5: Quant Pipeline - With LLM calls."""
+"""Scenario 5: Quant Pipeline - With LLM calls.
 
-import pytest
-from pathlib import Path
+## Background
+Quant reproduction pipeline: arXiv paper PDF → LLM extracts factors
+→ 6-layer Factor YAML → DuckDB storage → backtest → L5 reflection
+report.
+
+## Architecture
+```
+Paper PDF
+   │
+   │ repro_extract.yaml (LLM prompt)
+   ▼
+Structured JSON → 6-layer Factor YAML
+   │
+   │ factor_backtest.py
+   ▼
+DuckDB (long table)
+   │
+   │ run_backtest
+   ▼
+Backtest report (IC / RankIC / quantile)
+   │
+   │ l5_orchestrator
+   ▼
+L5 reflection
+```
+
+## Troubleshooting
+- /api/paper/start 500: check LLM provider config
+- Factor L2 SyntaxError: v0.36+ auto-repair via react_engine
+- Backtest IC ≈ 0: data source issue, check quantnodes install
+"""
 
 
 class TestQuantPipeline:
-    """Test quant reproduction pipeline with real LLM calls."""
+    """Test quant reproduction pipeline with real LLM calls.
+
+    Covers TUTORIAL.md Scenario 5 (Quant Reproduction).
+    """
 
     def test_5_1_quant_init_via_cli(self, temp_dir):
-        """Initialize quant directory structure via CLI."""
+        """Step 5.1: Initialize quant directory structure.
+
+        Creates quant/{factors,papers,factorbacktest,strategies,...}.
+        """
         import subprocess
         result = subprocess.run(
             ["python3", "-m", "llmwikify", "quant-init"],
@@ -17,14 +52,13 @@ class TestQuantPipeline:
             text=True,
             cwd=str(temp_dir),
         )
-        # Command may succeed or fail depending on implementation
         assert result.returncode in [0, 1]
 
     def test_5_2_write_factor(self, temp_dir):
-        """Write a factor YAML file."""
-        from llmwikify.reproduction.persist.factor_library import write_factor_yaml
+        """Step 5.2: Write a 6-layer factor YAML file.
 
-        # Create quant/factors directory structure
+        Layer 1: logic, Layer 2: computation, Layer 3: financial intuition.
+        """
         factors_dir = temp_dir / "quant" / "factors"
         factors_dir.mkdir(parents=True, exist_ok=True)
 
@@ -37,7 +71,6 @@ class TestQuantPipeline:
             "L3_financial": "Momentum effect in equity markets",
         }
 
-        # Write directly to file instead of using write_factor_yaml
         factor_path = factors_dir / "stock" / "price" / "test_momentum.yaml"
         factor_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -47,10 +80,12 @@ class TestQuantPipeline:
         assert factor_path.exists()
 
     def test_5_3_list_factors(self, temp_dir):
-        """List factors in the library."""
+        """Step 5.3: List factors in the library.
+
+        Scans quant/factors/ for all YAML files and returns metadata.
+        """
         from llmwikify.reproduction.persist.factor_library import list_factors
 
-        # Create quant/factors directory
         factors_dir = temp_dir / "quant" / "factors"
         factors_dir.mkdir(parents=True, exist_ok=True)
 
@@ -58,10 +93,12 @@ class TestQuantPipeline:
         assert isinstance(factors, (list, dict))
 
     def test_5_4_read_factor(self, temp_dir):
-        """Read a factor YAML file."""
+        """Step 5.4: Read a factor YAML file.
+
+        Parses a 6-layer factor YAML and returns the dict.
+        """
         import yaml
 
-        # Create quant/factors directory structure
         factors_dir = temp_dir / "quant" / "factors"
         factor_path = factors_dir / "stock" / "price" / "test_read.yaml"
         factor_path.parent.mkdir(parents=True, exist_ok=True)
@@ -69,13 +106,15 @@ class TestQuantPipeline:
         factor_data = {"name": "test_read", "L1_logic": "Test"}
         factor_path.write_text(yaml.dump(factor_data))
 
-        # Read directly from file
         result = yaml.safe_load(factor_path.read_text())
         assert result is not None
         assert result.get("name") == "test_read"
 
     def test_5_5_duckdb_schema(self, temp_dir):
-        """DuckDB factor_values table exists."""
+        """Step 5.5: DuckDB factor_values table.
+
+        Long table: date × stock × factor_name × value.
+        """
         import duckdb
 
         db_path = temp_dir / "factor.duckdb"
@@ -97,16 +136,21 @@ class TestQuantPipeline:
         conn.close()
 
     def test_5_6_paper_api(self, server_url):
-        """Paper API endpoint exists."""
+        """Step 5.6: Paper API endpoint.
+
+        GET /api/paper/list returns extracted paper metadata.
+        """
         import httpx
 
         client = httpx.Client(base_url=server_url, timeout=10.0)
         response = client.get("/api/paper/list")
-        # May return 200 or 404 depending on implementation
         assert response.status_code in [200, 404]
 
     def test_5_7_factor_library_list(self, server_url):
-        """Factor library list via API."""
+        """Step 5.7: Factor library list via API.
+
+        GET /api/factor/library/list returns all factors with metadata.
+        """
         import httpx
 
         client = httpx.Client(base_url=server_url, timeout=10.0)

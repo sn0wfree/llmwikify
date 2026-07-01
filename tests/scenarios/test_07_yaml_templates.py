@@ -1,62 +1,113 @@
 # tests/scenarios/test_07_yaml_templates.py
-"""Scenario 7: YAML Config Templates - No LLM required."""
+"""Scenario 7: YAML Config Templates - Feature playbook.
+
+## Background
+4 ready-to-use `.wiki-config.yaml` templates: personal notes (offline),
+project docs, academic research (long timeout), industry news
+(date archiving). Demonstrates copy + customize + load workflow.
+
+## Templates
+- personal-kb.yaml: offline personal notes (no LLM)
+- project-docs.yaml: team project documentation
+- research-wiki.yaml: academic with long LLM timeout
+- mining-news-wiki.yaml: industry news with date archiving
+
+## Troubleshooting
+- Template not found: check examples/07_yaml_templates/yaml_templates/
+- Config ignored: verify file is at wiki root as .wiki-config.yaml
+"""
+
 
 import pytest
-import yaml
 from pathlib import Path
-
-TEMPLATES_DIR = Path(__file__).parent.parent.parent / "examples" / "07_yaml_templates" / "yaml_templates"
 
 
 class TestYAMLTemplates:
-    """Test YAML config template parsing."""
+    """Test YAML config templates (feature playbook 07).
+
+    Covers examples/07_yaml_templates/.
+    """
 
     def test_7_1_parse_personal_kb(self):
-        """Parse personal-kb.yaml template."""
-        template = TEMPLATES_DIR / "personal-kb.yaml"
-        if not template.exists():
-            pytest.skip("Template not found")
+        """Step 7.1: Parse personal-kb.yaml template.
 
-        data = yaml.safe_load(template.read_text())
-        assert "llm" in data or "orphan_detection" in data
+        Offline personal notes configuration. No LLM required.
+        """
+        import yaml
+
+        template_path = (
+            Path(__file__).parent.parent.parent
+            / "examples" / "07_yaml_templates" / "yaml_templates" / "personal-kb.yaml"
+        )
+        if not template_path.exists():
+            pytest.skip("Template file not found")
+
+        template = yaml.safe_load(template_path.read_text())
+        assert template is not None
+        assert "llm" in template or "wiki" in template
 
     def test_7_2_parse_project_docs(self):
-        """Parse project-docs.yaml template."""
-        template = TEMPLATES_DIR / "project-docs.yaml"
-        if not template.exists():
-            pytest.skip("Template not found")
+        """Step 7.2: Parse project-docs.yaml template.
 
-        data = yaml.safe_load(template.read_text())
-        assert data is not None
+        Team project documentation with shared wikis.
+        """
+        import yaml
+
+        template_path = (
+            Path(__file__).parent.parent.parent
+            / "examples" / "07_yaml_templates" / "yaml_templates" / "project-docs.yaml"
+        )
+        if not template_path.exists():
+            pytest.skip("Template file not found")
+
+        template = yaml.safe_load(template_path.read_text())
+        assert template is not None
 
     def test_7_3_parse_research_wiki(self):
-        """Parse research-wiki.yaml template."""
-        template = TEMPLATES_DIR / "research-wiki.yaml"
-        if not template.exists():
-            pytest.skip("Template not found")
+        """Step 7.3: Parse research-wiki.yaml template.
 
-        data = yaml.safe_load(template.read_text())
-        assert data is not None
+        Academic research with long LLM timeout for deep analysis.
+        """
+        import yaml
+
+        template_path = (
+            Path(__file__).parent.parent.parent
+            / "examples" / "07_yaml_templates" / "yaml_templates" / "research-wiki.yaml"
+        )
+        if not template_path.exists():
+            pytest.skip("Template file not found")
+
+        template = yaml.safe_load(template_path.read_text())
+        assert template is not None
 
     def test_7_4_parse_mining_news(self):
-        """Parse mining-news-wiki.yaml template."""
-        template = TEMPLATES_DIR / "mining-news-wiki.yaml"
-        if not template.exists():
-            pytest.skip("Template not found")
+        """Step 7.4: Parse mining-news-wiki.yaml template.
 
-        data = yaml.safe_load(template.read_text())
-        assert data is not None
+        Industry news with date-based archiving.
+        """
+        import yaml
+
+        template_path = (
+            Path(__file__).parent.parent.parent
+            / "examples" / "07_yaml_templates" / "yaml_templates" / "mining-news-wiki.yaml"
+        )
+        if not template_path.exists():
+            pytest.skip("Template file not found")
+
+        template = yaml.safe_load(template_path.read_text())
+        assert template is not None
 
     def test_7_5_custom_config(self, temp_dir):
-        """Custom config loads correctly."""
+        """Step 7.5: Create wiki with custom config.
+
+        Demonstrates create_wiki(path, config={...}) for programmatic
+        configuration without YAML files.
+        """
         from llmwikify import create_wiki
 
         config = {
             "llm": {"provider": "test", "model": "test-model"},
             "orphan_detection": {"exclude_patterns": ["^draft-.*"]},
         }
-        config_path = temp_dir / ".wiki-config.yaml"
-        config_path.write_text(yaml.dump(config))
-
-        wiki = create_wiki(temp_dir / "wiki", config=config)
+        wiki = create_wiki(temp_dir / "custom-wiki", config=config)
         assert wiki is not None

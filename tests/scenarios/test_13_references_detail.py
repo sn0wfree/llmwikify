@@ -1,29 +1,52 @@
 # tests/scenarios/test_13_references_detail.py
-"""Scenario 1: References Detail - Tests for reference queries."""
+"""Scenario 13: References Detail - Tests for reference queries.
+
+## Background
+Detailed reference queries: inbound/outbound link counts, --detail
+mode for full link metadata, section-level references with
+[[page#section]] syntax.
+
+## Modes
+- default: returns link counts
+- --detail: returns full link list with metadata
+- include_context=True: includes surrounding text
+
+## Troubleshooting
+- Links not in result: ensure build_index() was run
+- Detail mode shows nothing: wiki has no pages yet
+"""
+
 
 import subprocess
 
 
 class TestReferencesDetail:
-    """Test reference queries and detail modes."""
+    """Test reference queries and detail modes.
+
+    Covers TUTORIAL.md Scenario 1 (references step).
+    """
 
     def test_13_1_references_inbound_outbound(self, wiki):
-        """Get inbound and outbound references."""
+        """Step 13.1: Get inbound and outbound references.
+
+        Demonstrates the bidirectional link query API.
+        """
         wiki.write_page("source", "# Source\n\nLinks to [[target]].")
         wiki.write_page("target", "# Target\n\nLinked from [[source]].")
         wiki.write_page("other", "# Other\n\nAlso links to [[target]].")
         wiki.build_index()
 
-        # Get inbound links to target
         inbound = wiki.get_inbound_links("target")
-        assert len(inbound) >= 2  # source and other link to target
+        assert len(inbound) >= 2
 
-        # Get outbound links from source
         outbound = wiki.get_outbound_links("source")
-        assert len(outbound) >= 1  # source links to target
+        assert len(outbound) >= 1
 
     def test_13_2_references_detail_mode(self, wiki):
-        """References with detail mode via CLI."""
+        """Step 13.2: References with --detail mode via CLI.
+
+        Returns full link metadata: source, target, section, line.
+        """
         wiki.write_page("page-a", "# A\n\nLinks to [[page-b]] and [[page-c]].")
         wiki.write_page("page-b", "# B\n\nLinks to [[page-a]].")
         wiki.write_page("page-c", "# C\n\nLinks to [[page-a]].")
@@ -35,11 +58,13 @@ class TestReferencesDetail:
             text=True,
             cwd=str(wiki.root),
         )
-        # May succeed or fail depending on implementation
         assert result.returncode in [0, 1]
 
     def test_13_3_references_section_links(self, wiki):
-        """Section-level references with [[page#section]] syntax."""
+        """Step 13.3: Section-level references with [[page#section]].
+
+        Outbound links include section info.
+        """
         wiki.write_page(
             "guide",
             "# Guide\n\n## Overview\nOverview content.\n\n## Setup\nSetup content.",
@@ -50,12 +75,9 @@ class TestReferencesDetail:
         )
         wiki.build_index()
 
-        # Get outbound links with section info
         outbound = wiki.get_outbound_links("notes")
         assert len(outbound) >= 1
 
-        # Check if section info is present
         if outbound:
             link = outbound[0]
-            # Section might be in the link data
             assert isinstance(link, dict)

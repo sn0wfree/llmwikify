@@ -1,959 +1,1521 @@
 # llmwikify End-to-End Tutorial
 
-> **Version**: v0.38.0 (2026-06-30) · **Target audience**: First-time developers / researchers.  
-> **Companion playbooks**: [`examples/01_~08_`](../examples/README.md) — 5 scenarios +  
-> 3 feature playbooks, each with a runnable script.  
-> **Estimated time**: 40-60 min read / 1-2 hours hands-on.
+> **Auto-generated from test files** — tests are the source of truth.
+> **Executable**: `pytest tests/scenarios/ -v` to verify all steps.
+> **Version**: v0.38.0 (2026-07-01)
 
-This tutorial covers 5 real-world scenarios, each with a fixed structure:
-**Background → Steps → Output → Architecture diagram → Artifacts → Troubleshooting**.
-Read in order — later scenarios reuse artifacts from earlier ones.
-Part 3 adds 3 feature playbooks (lint / yaml templates / section anchors)
-that can be referenced anytime.
-
----
+This tutorial is generated from `tests/scenarios/test_*.py`. Each test
+step is an executable, verifiable example. The test docstring describes
+the *why*; the test code shows the *how*.
 
 ## Table of Contents
 
-- [0. Prerequisites: Install Matrix + Decision Tree](#0-prerequisites-install-matrix--decision-tree)
-- [Scenario 1: Personal Reading Notes Wiki](#scenario-1-personal-reading-notes-wiki)
-- [Scenario 2: Company Due-Diligence KB](#scenario-2-company-due-diligence-kb)
-- [Scenario 3: Multi-Wiki Collaboration](#scenario-3-multi-wiki-collaboration)
-- [Scenario 4: Chat + ReAct Agent](#scenario-4-chat--react-agent)
-- [Scenario 5: Quant Reproduction (Paper → Factor → Backtest)](#scenario-5-quant-reproduction-paper--factor--backtest)
-- [Part 3 — Feature Playbook Index](#part-3--feature-playbook-index)
-- [Appendix A: Config Priority Cheat Sheet](#appendix-a-config-priority-cheat-sheet)
-- [Appendix B: CLI vs Python API Decision Table](#appendix-b-cli-vs-python-api-decision-table)
-- [Appendix C: MCP Client Integration Examples](#appendix-c-mcp-client-integration-examples)
+- [Scenario 1: Wiki Core](#scenario-1-wiki-core)
+- [Scenario 2: Knowledge Graph](#scenario-2-knowledge-graph)
+- [Scenario 3: Multi-Wiki](#scenario-3-multi-wiki)
+- [Scenario 4: Chat + ReAct Agent](#scenario-4-chat-plus-react-agent)
+- [Scenario 5: Quant Pipeline](#scenario-5-quant-pipeline)
+- [Scenario 6: Lint Rules (Playbook 06)](#scenario-6-lint-rules-(playbook-06))
+- [Scenario 7: YAML Templates (Playbook 07)](#scenario-7-yaml-templates-(playbook-07))
+- [Scenario 8: Section Anchors (Playbook 08)](#scenario-8-section-anchors-(playbook-08))
+- [Scenario 9: Ingest Workflow](#scenario-9-ingest-workflow)
+- [Scenario 10: Synthesis Workflow](#scenario-10-synthesis-workflow)
+- [Scenario 11: Multi-Wiki Config](#scenario-11-multi-wiki-config)
+- [Scenario 12: Quant Full Pipeline](#scenario-12-quant-full-pipeline)
+- [Scenario 13: References Detail](#scenario-13-references-detail)
+- [Scenario 14: Full Ingest Chain](#scenario-14-full-ingest-chain)
 
 ---
 
-## 0. 预备：安装矩阵 + 决策树
+## Scenario 1: Wiki Core
 
-### 安装矩阵
+### Background
 
-llmwikify 核心是「**零硬依赖**」（只要求 stdlib + `jinja2` + `pyyaml` +
-`requests` + `duckdb`），所有扩展都是可选的。按使用场景选装：
+Core wiki operations: initialize a wiki directory, write/read markdown
+pages, search via FTS5, build bidirectional link index, run lint.
 
-| 场景 | 命令 | 增量 |
-|---|---|---|
-| 纯 wiki（CLI + FTS5） | `pip install llmwikify` | — |
-| + PDF / Office 解析 | `pip install 'llmwikify[extractors]'` | MarkItDown 全套 |
-| + MCP 协议 | `pip install 'llmwikify[mcp]'` | fastmcp |
-| + Web UI / REST | `pip install 'llmwikify[web]'` | FastAPI + uvicorn + httpx |
-| + 文件监听 | `pip install 'llmwikify[watch]'` | watchdog |
-| + 知识图谱可视化 | `pip install 'llmwikify[graph]'` | networkx + pyvis + python-louvain |
-| + Agent（cron + 搜索） | `pip install 'llmwikify[agent]'` | croniter + duckduckgo-search + tavily |
-| + LLM token 计数 | `pip install 'llmwikify[llm]'` | tiktoken |
-| + A股数据源 | `pip install 'llmwikify[quantnodes]'` | quantnodes |
-| **全套** | `pip install 'llmwikify[all]'` | 上面全部 |
-
-开发模式：
-
-```bash
-git clone https://github.com/sn0wfree/llmwikify.git
-cd llmwikify
-pip install -e ".[dev]"   # 含 all + pytest + ruff + mypy
-```
-
-### 决策树
-
-```
-我要做什么？
-├── 仅本地知识库/笔记
-│   └── pip install llmwikify         (FTS5 已够用)
-│
-├── 想要网页 / Web UI
-│   └── pip install 'llmwikify[web]'  (FastAPI + REST)
-│
-├── 想要 AI Agent 集成（Claude / opencode / Cursor）
-│   └── pip install 'llmwikify[mcp]'  + llmwikify serve --transport stdio
-│
-├── 想要语义检索（>1000 页）
-│   └── 装 QMD：npm i -g @tobilu/qmd  +  pip install 'llmwikify[mcp,web]'
-│
-└── 想要量化复现 pipeline
-    └── pip install 'llmwikify[quantnodes,llm,web,mcp]'
-```
-
-### 三个全局路径
-
-- **代码**：`from llmwikify import Wiki, create_wiki` — `Wiki` 是入口类（13
-  mixin 组合）
-- **CLI**：`llmwikify <subcommand>` — 装好包就有的 console 入口
-- **配置**：
-  - `~/.llmwikify/llmwikify.json`（用户级 LLM + server 默认）
-  - `<wiki-root>/.wiki-config.yaml`（每个 wiki 自己的覆盖）
-
-> 优先级：**程序参数 > `.wiki-config.yaml` > 内置默认**（详见 [附录 A](#附录-a配置文件优先级速查)）。
-
----
-
-## 场景 1：个人阅读笔记 wiki
-
-**目标**：把 3 篇关于 LLM Wiki 设计的 PDF / Markdown 读后笔记串成可搜索
-的 wiki。**配套剧本**：[`examples/01_personal_reading_notes/`](../examples/01_personal_reading_notes/README.md)。
-
-### 1.1 背景
-
-你下载了 3 篇 Karpathy/Andrew Ng 的 AI 学习方法 PDF，平时记在 Notion
-里。但 Notion 没有 LLM-native 全文检索、双向引用、合成问答沉淀。llmwikify
-就是为这种"读完就归档、需要时 LLM 重读"场景设计的。
-
-### 1.2 文件树变化
-
-**Before**：
-
-```
-~/notes/
-└── pdfs/
-    ├── karpathy-llm-wiki.md
-    ├── andrew-ng-ai-notes.md
-    └── obsidian-vs-llm-wiki.md
-```
-
-**After**（llmwikify 处理后）：
-
-```
-~/notes/
-├── pdfs/                       # 原始资料，原样保留
-│   ├── karpathy-llm-wiki.md
-│   ├── andrew-ng-ai-notes.md
-│   └── obsidian-vs-llm-wiki.md
-├── raw/                        # ← 新增：llmwikify 拷的原始资料
-│   └── pdfs/
-│       └── (同上)
-├── wiki/                       # ← 新增：维护的页面
-│   ├── index.md
-│   ├── log.md
-│   ├── overview.md
-│   ├── sources/
-│   │   ├── karpathy-llm-wiki.md
-│   │   └── andrew-ng-ai-notes.md
-│   ├── concepts/
-│   │   ├── llm-native-search.md
-│   │   └── bidirectional-references.md
-│   └── synthesis/
-│       └── query-llm-vs-obsidian.md
-├── .llmwikify.db               # ← 新增：FTS5 索引 + 关系数据
-├── reference_index.json        # ← 命令 build-index 后生成
-└── .wiki-config.yaml.example   # ← init 时生成
-```
-
-### 1.3 步骤
-
-```bash
-# Step 1：进入项目目录，初始化 wiki
-cd ~/notes
-llmwikify init
-# 提示：选择 agent 类型 (opencode | claude | codex | generic)
-# 输入：opencode
-# → 创建 raw/ wiki/ .llmwikify.db .wiki-config.yaml.example .gitignore
-# → 还会在 .opencode.json 写入 MCP server 配置
-
-# Step 2：单文件 ingest（先 dry-run 看看会发生什么）
-llmwikify ingest pdfs/karpathy-llm-wiki.md --dry-run
-# 打印：将提取到 raw/pdfs/，等待 LLM 拆分成 2-3 个页面建议
-
-llmwikify ingest pdfs/karpathy-llm-wiki.md
-# 提取内容 → 写 raw/pdfs/ → 用 LLM 拆分 → 写到 wiki/sources/
-
-# Step 3：批量 ingest
-llmwikify batch raw/pdfs/ --self-create
-# --self-create 让 llmwikify 自动创建页面（默认只是 ingest 到 raw/）
-
-# Step 4：搜索
-llmwikify search "bidirectional reference" -l 5
-# → 5 条结果带 snippet + 路径
-
-# Step 5：写入自己的笔记页面（手写）
-llmwikify write_page "concepts/bidirectional-references" "# 双向引用
-
-[[karpathy-llm-wiki]] 中强调..."
-# 自动写 wiki/concepts/bidirectional-references.md
-
-# Step 6：构建引用索引
-llmwikify build-index
-# 扫描所有 wiki/ 页面 → 解析 [[wikilink]] → 写 reference_index.json
-
-# Step 7：查引用关系
-llmwikify references "concepts/bidirectional-references" --detail
-# 打印：Inbound: 2 links; Outbound: 1 link
-
-# Step 8：健康检查
-llmwikify lint --format=brief
-# 0 broken, 0 orphans, 0 contradictions
-```
-
-### 1.4 架构图
-
-**ASCII 视图**：
-
-```
-┌────────────┐      CLI / Python API       ┌──────────────────────────┐
-│   User     │  ────────────────────────►  │  llmwikify (kernel)      │
-└────────────┘                              │  ┌────────────────────┐  │
-                                            │  │ Wiki (13 mixins)   │  │
-                                            │  │  - Init            │  │
-                                            │  │  - Ingest          │  │
-                                            │  │  - PageIO          │  │
-                                            │  │  - Query (FTS5)    │  │
-                                            │  │  - Link / Ref      │  │
-                                            │  │  - Lint            │  │
-                                            │  │  - ...             │  │
-                                            │  └────────┬───────────┘  │
-                                            │           │              │
-                                            │     ┌─────┴──────┐       │
-                                            │     ▼            ▼       │
-                                            │  raw/         wiki/       │
-                                            │  (sources)    (markdown)  │
-                                            │     │            │       │
-                                            │     └─────┬──────┘       │
-                                            │           ▼              │
-                                            │   .llmwikify.db          │
-                                            │   (FTS5 + relations)     │
-                                            └──────────────────────────┘
-```
-
-**Mermaid 视图**（适合嵌 Markdown 渲染）：
+### Architecture
 
 ```mermaid
 graph LR
-    User[👤 User] -->|ingest / batch| Wiki
-    User -->|search / references| Wiki
-    User -->|write_page| Wiki
-    Wiki -->|reads| Raw[raw/<br/>原始资料]
-    Wiki -->|writes| MD[wiki/<br/>markdown 页面]
-    Wiki <-->|FTS5 + ref index| DB[(.llmwikify.db)]
-    Wiki -->|read content| Ext[Extractors<br/>MarkItDown/trafilatura]
-    Ext -->|PDF/DOCX/HTML| Raw
+    User[User] -->|create_wiki| Wiki
+    User -->|write/read| Wiki
+    User -->|search/lint| Wiki
+    Wiki -->|reads| MD[wiki/<br/>markdown pages]
+    Wiki <-->|FTS5 + ref| DB[(.llmwikify.db)]
 ```
 
-### 1.5 底层产物映射
+### Troubleshooting
 
-| CLI 命令 | 操作的文件 / DB 表 |
-|---|---|
-| `init` | 创建 `raw/` `wiki/` `wiki/.sink/` + `index.md` `log.md` `overview.md` `.wiki-config.yaml.example` + DB schema |
-| `ingest <file>` | 写 `raw/<src>/<file>` + 解析后写 `wiki/sources/...` + FTS5 insert |
-| `batch <dir>` | 同 ingest，但并发处理 |
-| `search` | 查 `pages_fts` 表（SQLite FTS5） |
-| `write_page` | 写 `wiki/<page>.md` + FTS5 insert + 更新 `index.md` |
-| `build-index` | 扫所有 `wiki/*.md` → 写 `reference_index.json` + 写 `page_references` 表 |
-| `references` | 查 `page_references` 表（inbound/outbound） |
-| `lint` | 扫所有 `wiki/*.md` + 跑 lint 规则 → 输出 broken/orphan/contradiction |
+- Init fails with "already exists": use --overwrite
+- Search returns 0: run build_index first
+- Lint shows broken links: check [[wikilink]] targets
 
-### 1.6 故障排查 Top-3
+### Step 1.1: Init Wiki
 
-| # | 症状 | 根因 | 修复 |
-|---|---|---|---|
-| 1 | `init` 报 `Wiki already initialized` | 已有 `raw/` + `wiki/` + `.llmwikify.db` | 加 `--overwrite` 重新初始化；或 `--merge` 合并 `wiki.md` schema |
-| 2 | `ingest file.pdf` 报 `ModuleNotFoundError: markitdown` | 没装 extractors | `pip install 'llmwikify[extractors]'` |
-| 3 | `search` 返回 0 条 | LLM 拆完的页面在 `wiki/sources/` 而搜索词在 `wiki/concepts/` | 用 `llmwikify build-index` 重建 FTS；或搜索词改成「双向引用」而不是「bidirectional」 |
+Step 1.1: Initialize wiki directory structure.
 
----
+Creates a Wiki instance with raw/ + wiki/ subdirectories.
+No LLM required.
 
-## 场景 2：公司尽调知识库
-
-**目标**：把 10 份 A 股 / 港股公司年报、招股书、新闻 ingest 进去，自动
-抽取实体/关系/建议页面，跨源综合成「行业对比」wiki 页。  
-**配套剧本**：[`examples/02_company_research_kb/`](../examples/02_company_research_kb/README.md)。
-
-### 2.1 背景
-
-场景 1 是"读后写"。场景 2 是"读得多、让 LLM 帮你看"。典型 workflow：
+**Expected Output:**
 
 ```
-下载 10 份 PDF → ingest → 实体抽取 → 关系建立 → 知识图谱 →
-发现"XX 公司是 YY 行业老大" → 跨源综合成对比页面
+Wiki root: <temp_dir>/test-wiki
 ```
 
-### 2.2 步骤
+### Step 1.2: Write Page
 
-```bash
-# 假设 ~/due-diligence/ 已有 10 份 PDF
-cd ~/due-diligence
+Step 1.2: Write a markdown page and read it back.
 
-llmwikify init --merge   # 如果已有 wiki.md，merge 而不是覆盖
+Uses wiki.write_page() to create a page, then read_page() to
+verify it was stored correctly.
 
-# Step 1：批量 ingest（重点！）
-llmwikify batch raw/ --self-create
-# 每个 PDF 会触发一次 LLM 调用（如果配置了 llm.*）
-# → 实体：{公司, 产品, 行业, 高管}
-# → 关系：{是...子公司, 竞争, 供应}
-# → 建议页面：{XX 公司业务概览, YY 行业分析}
+**Code:**
 
-# Step 2：手动分析某个原始源（更精细）
-llmwikify analyze-source raw/tencent-2024.pdf --force
-# 强制重新分析（即使有缓存）
-
-# Step 3：知识图谱分析
-llmwikify graph-analyze --json
-# PageRank 排序 / 社区检测 / 桥接节点
-# 输出 JSON 含 centrality, communities, suggestions
-
-# Step 4：导出可视化
-llmwikify export-graph --format html --output graph.html
-# 用浏览器打开 graph.html（D3.js 交互图）
-
-# Step 5：跨源综合建议
-llmwikify suggest-synthesis
-# 列出 3-5 个建议合成的页面
-# 例如："中国云计算市场份额对比 (基于 4 份年报)"
-
-# Step 6：执行合成（落盘为 wiki 页面）
-llmwikify synthesize \
-    --query "2024 中国云计算 TOP 5 厂商份额对比" \
-    --source-pages "Alibaba Cloud,Tencent Cloud,Huawei Cloud,JD Cloud,Baidu Cloud" \
-    --raw-sources "raw/alibaba-2024.pdf,raw/tencent-2024.pdf" \
-    --update-existing
-# → 写到 wiki/synthesis/query-2024-china-cloud.md
-
-# Step 7：知识缺口分析
-llmwikify knowledge-gaps --format recommendations
-# → 列出 3 类缺口：outdated / missing / redundant
+```python
+content = '# Test Page\n\nThis is a test page with some content.'
+wiki.write_page('test-page', content)
+result = wiki.read_page('test-page')
 ```
 
-### 2.3 架构图
+### Step 1.3: Write Multiple Pages
 
-**关键扩展：LLM 调用循环**
+Step 1.3: Write multiple pages in a loop.
 
-```
-┌──────────────┐         ┌──────────────┐
-│  Ingest Cmd  │────────►│ Extractors   │──► raw/<file>
-└──────┬───────┘         │ (MarkItDown) │     文本提取
-       │                 └──────────────┘
-       │                       │
-       ▼                       ▼
-┌──────────────┐         ┌──────────────┐
-│  Source      │◄────────│   LLM call   │
-│  Analysis    │         │  (gpt-4o)    │  抽取实体/关系/建议页面
-│  Mixin       │         └──────────────┘
-└──────┬───────┘
-       │ 缓存到 .llmwikify.db（避免重复 LLM 调用）
-       ▼
-┌──────────────┐         ┌──────────────┐
-│  Synthesis   │────────►│   wiki/      │  创建新页面 + 自动 [[wikilink]]
-│  Engine      │         │ synthesis/   │
-└──────┬───────┘         └──────────────┘
-       │
-       ▼
-┌──────────────┐
-│  Graph       │   PageRank / 社区检测
-│  Analyzer    │   → graph.html (D3)
-└──────────────┘
+Demonstrates batch writing pattern for initializing a wiki
+with several pages at once.
+
+**Code:**
+
+```python
+for (name, content) in sample_pages.items():
+    wiki.write_page(name, content)
+for name in sample_pages:
+    result = wiki.read_page(name)
 ```
 
-### 2.4 底层产物映射
+### Step 1.4: Search
 
-| 命令 | 写入 |
-|---|---|
-| `analyze-source` | 缓存到 `source_analysis_cache` 表（in `wiki.md` HTML 注释里也有） |
-| `graph-analyze` | 写 `page_rank` `community` 表 + `graph_analysis_<ts>.json` |
-| `export-graph` | 输出 `graph.html`（pyvis D3.js） |
-| `suggest-synthesis` | 写 `sink_buffer` 表（`wiki/.sink/` JSON） |
-| `synthesize` | 写 `wiki/synthesis/<page>.md` + log + auto-link |
-| `knowledge-gaps` | 写 `wiki/.sink/gaps_<ts>.json` |
+Step 1.4: Full-text search via FTS5.
 
-### 2.5 故障排查 Top-3
+Searches for "Python" across all wiki pages using SQLite FTS5.
 
-| # | 症状 | 修复 |
-|---|---|---|
-| 1 | `analyze-source` 卡住 60s+ | LLM 配置问题：`llm.provider/api_key`；先 `llmwikify init --agent generic` 跳过 LLM |
-| 2 | `graph-analyze` OOM on 1000+ pages | 用 `--limit 200` 或装 QMD 混合搜索分担压力 |
-| 3 | `synthesize` 创建的页面没 wikilink | 确认 `source_pages` 列表里的页面名与 `wiki/` 中文件 stem 一致 |
+**Code:**
 
----
-
-## 场景 3：多 wiki 协作
-
-**目标**：把"个人 wiki"+"项目 wiki"+"远程团队 wiki"在同一个 server 下
-统一管理。  
-**配套剧本**：[`examples/03_multi_wiki_registry/`](../examples/03_multi_wiki_registry/README.md)。
-
-### 3.1 背景
-
-v0.31 起 `WikiRegistry` 让一个 server 同时挂多个 wiki。每个 wiki 可以
-是：
-
-- **local**：本地文件系统路径
-- **remote**：另一台机器的 `llmwikify serve` URL（用 `api_key` 鉴权）
-
-典型场景：
-
-```
-[主笔记本]                    [团队服务器]                [个人云盘]
-~/wikis/personal  ◄──►    http://team-wiki:8765  ◄──►  ~/wikis/obsidian-vault
-   (local)                    (remote)                      (local)
-              │
-              └─── llmwikify serve --web --multi-wiki ───┘
-                              │
-                              ▼
-                     统一 MCP server (26 tools + cross-wiki 检索)
+```python
+for (name, content) in sample_pages.items():
+    wiki.write_page(name, content)
+results = wiki.search('Python', limit=10)
 ```
 
-### 3.2 步骤
+### Step 1.5: Build Index
 
-```bash
-# Step 1：创建 3 个 wiki 根目录
-mkdir -p ~/wikis/{personal,team,cloud}
-for d in personal team cloud; do
-    (cd ~/wikis/$d && llmwikify init --merge)
-done
+Step 1.5: Build the bidirectional reference index.
 
-# Step 2：在主 wiki 写注册表配置
-cat > ~/wikis/personal/.wiki-config.yaml <<'YAML'
-wikis:
-  default: "personal"
+Scans all wiki/*.md files, parses [[wikilink]] syntax, and
+populates the page_links table for backlink queries.
 
-  local:
-    - id: "personal"
-      name: "Personal Wiki"
-      path: "."
-    - id: "team"
-      name: "Team Wiki (local copy)"
-      path: "../team"
-    - id: "cloud"
-      name: "Cloud Wiki"
-      path: "../cloud"
+**Code:**
 
-  remote:
-    - id: "team-remote"
-      name: "Team Wiki (server)"
-      url: "http://team-wiki.internal:8765"
-      api_key: "${TEAM_WIKI_API_KEY}"   # env 引用
-
-  discovery:
-    enabled: true
-    scan_paths: ["../", "~/wikis"]
-    scan_depth: 2
-YAML
-
-# Step 3：启动多 wiki 模式
-cd ~/wikis/personal
-llmwikify serve --web --multi-wiki --port 8765
-# Starting Multi-Wiki Server on 0.0.0.0:8765
-#   Wikis: 4 registered (3 local + 1 remote)
-#   Transport: http
-
-# Step 4：MCP 客户端视角（Claude Desktop / opencode / Cursor）
-# 一份 stdio 配置 + 26 个 wiki_* 工具 + wiki_search_cross
-
-# Step 5：跨 wiki 检索
-llmwikify search "A100 GPU" --backend fts5
-# 自动跨所有 4 个 wiki 搜
-
-llmwikify wikis switch team-remote    # active 切到远程
-llmwikify search "A100 GPU"           # 只搜远程
-
-# Step 6：MCP 端等价命令
-#   wiki_search_cross(query="A100 GPU", wiki_ids=["team-remote", "cloud"])
-#   wiki_list() → 列出所有 wiki
-#   wiki_switch(wiki_id="team-remote")
+```python
+for (name, content) in sample_pages.items():
+    wiki.write_page(name, content)
+idx = wiki.build_index()
 ```
 
-### 3.3 架构图
+### Step 1.6: Bidirectional Links
 
-```
-                              ┌────────────────────────┐
-                              │  llmwikify serve       │
-                              │  --multi-wiki --web    │
-                              │  (port 8765)            │
-                              │  ┌──────────────────┐  │
-                              │  │ WikiRegistry     │  │
-                              │  │  - default       │  │
-                              │  │  - list/scan     │  │
-                              │  └────┬─────────────┘  │
-                              └───────┼────────────────┘
-                                      │
-        ┌───────────────────┬─────────┴──────────┬───────────────────┐
-        ▼                   ▼                    ▼                   ▼
-┌──────────────┐    ┌──────────────┐     ┌──────────────┐    ┌──────────────┐
-│ personal     │    │ team (local) │     │ cloud        │    │ team-remote  │
-│ (local)      │    │ (local)      │     │ (local)      │    │ (HTTP)       │
-│ ~/wikis/     │    │ ~/wikis/     │     │ ~/wikis/     │    │ http://team- │
-│ personal/    │    │ team/        │     │ cloud/       │    │ wiki:8765    │
-└──────────────┘    └──────────────┘     └──────────────┘    └──────┬───────┘
-                                                                    │
-                                                                    ▼
-                                                          ┌──────────────────┐
-                                                          │  llmwikify serve │
-                                                          │  (远程 server)   │
-                                                          └──────────────────┘
+Step 1.6: Query inbound and outbound links.
+
+Demonstrates the bidirectional link system: who links TO a page
+(inbound) and what a page links TO (outbound).
+
+**Code:**
+
+```python
+wiki.write_page('page-a', '# Page A\n\nLinks to [[page-b]].')
+wiki.write_page('page-b', '# Page B\n\nLinked from [[page-a]].')
+wiki.build_index()
+inbound = wiki.get_inbound_links('page-b')
+outbound = wiki.get_outbound_links('page-a')
 ```
 
-### 3.4 故障排查 Top-3
+### Step 1.7: Lint
 
-| # | 症状 | 修复 |
-|---|---|---|
-| 1 | `wikis list` 只看到 default 1 个 | `discovery.enabled: true` + 检查 `scan_paths` 是否覆盖 |
-| 2 | 远程 wiki 连不上 | 远程 server 启了吗？API key 对吗？`curl -H "Authorization: Bearer $KEY" http://remote:8765/api/health` |
-| 3 | `wiki_search_cross` 返回 0 | `wiki_ids` 列表里的 ID 与 `wikis list` 输出必须完全匹配（大小写敏感） |
+Step 1.7: Run health check via lint().
 
----
+Returns issues (broken links, orphans) and hints (improvement
+suggestions) for the wiki.
 
-## 场景 4：Chat + ReAct Agent
+**Code:**
 
-**目标**：用 `llmwikify serve --web` 启动统一 server，连接到 Chat 端点
-用 SSE 流式对话，让 LLM 通过 26 个工具主动查 wiki / 写页面。  
-**配套剧本**：[`examples/04_chat_sse_client/`](../examples/04_chat_sse_client/README.md)。
-
-### 4.1 背景
-
-场景 1-3 都是「人主动操作 wiki」。场景 4 让 LLM 反过来用 wiki：
-
-```
-用户: "把去年 Q3 的腾讯财报和阿里财报对比一下"
-   ↓
-LLM (ReAct loop, 最多 4 轮工具调用)
-   ↓
-工具调用: wiki_search("腾讯 2024 Q3") → wiki_read_page → wiki_synthesize
-   ↓
-SSE 流: reasoning → phase → tool_call → stream_end → save_warning
+```python
+for (name, content) in sample_pages.items():
+    wiki.write_page(name, content)
+result = wiki.lint()
 ```
 
-### 4.2 步骤
+### Step 1.8: Status
 
-**A. 启动 server（一个终端）**：
+Step 1.8: Get wiki statistics.
 
-```bash
-cd ~/notes
-llmwikify serve --web --port 8765 --auth-token mysecret
-# 启动后：MCP @ /mcp  +  REST @ /api/*  +  WebUI @ /
+Returns total page count, link count, and other health metrics.
 
-# 健康检查
-curl -s http://localhost:8765/api/health
+**Code:**
+
+```python
+for (name, content) in sample_pages.items():
+    wiki.write_page(name, content)
+status = wiki.status()
 ```
 
-**B. SSE 客户端（另一个终端，用配套剧本）**：
+## Scenario 2: Knowledge Graph
 
-```bash
-cd examples/04_chat_sse_client
-python play.py
-# 用 httpx 流式打 /api/agent/chat
-# 打印每条 SSE 事件：reasoning / phase / tool_call / stream_end / save_warning
+### Background
+
+Transform a wiki into a knowledge graph: extract entities/relations
+from sources via LLM, compute PageRank, detect communities, export
+visualization (HTML/SVG/GraphML).
+
+### Architecture
+
+```mermaid
+graph LR
+    Wiki --> Analyze[analyze_source<br/>LLM]
+    Analyze --> Graph[Graph Builder]
+    Graph --> PageRank[PageRank]
+    Graph --> Community[Community<br/>Detection]
+    Graph --> Export[HTML/SVG<br/>Export]
 ```
 
-**C. WebUI 试用**：浏览器开 `http://localhost:8765/`，左侧 Chat 面板
-直接对话。
+### Troubleshooting
 
-### 4.3 SSE 事件流（实测示例）
+- analyze_source hangs: check LLM config in ~/.llmwikify/llmwikify.json
+- graph-analyze OOM on 1000+ pages: use --limit 200
+- export-graph blank: install graphviz system package
 
-发起：
+### Step 2.1: Build Index
 
-```bash
-curl -N -H "Authorization: Bearer mysecret" \
-     -H "Content-Type: application/json" \
-     -X POST http://localhost:8765/api/agent/chat \
-     -d '{
-           "session_id": "demo-1",
-           "message": "对比腾讯和阿里 2024 Q3 的云业务"
-         }'
+Step 2.1: Build the graph index.
+
+Indexes wiki pages for graph analysis (nodes + edges).
+
+**Code:**
+
+```python
+wiki.write_page('python', '# Python\n\nA programming language.')
+wiki.write_page('ml', '# Machine Learning\n\nUses Python.')
+wiki.build_index()
+idx = wiki.build_index()
 ```
 
-SSE 输出（v0.38.0 实际事件类型）：
+### Step 2.2: Analyze Source
 
-```
-event: session_created
-data: {"session_id": "demo-1", "model": "gpt-4o"}
+Step 2.2: LLM-powered source analysis.
 
-event: reasoning
-data: {"delta": "用户要求对比两家公司的 2024 Q3 云业务..."}
+Uses LLM to extract entities, relations, and suggested pages
+from a PDF source. Cached in .llmwikify.db.
 
-event: phase
-data: {"phase": "gather", "description": "搜索原始资料"}
+**Code:**
 
-event: tool_call
-data: {"name": "wiki_search", "args": {"query": "腾讯 2024 Q3 云业务", "limit": 3}}
-
-event: tool_call
-data: {"name": "wiki_search", "args": {"query": "阿里 2024 Q3 云业务", "limit": 3}}
-
-event: phase
-data: {"phase": "synthesize", "description": "生成对比报告"}
-
-event: reasoning
-data: {"delta": "已找到 3 条腾讯 + 3 条阿里相关页面..."}
-
-event: tool_call
-data: {"name": "wiki_synthesize", "args": {"query": "...", "answer": "# 2024 Q3...", "auto_link": true}}
-
-event: save_warning
-data: {"reason": "首次落盘，需要人工 review"}
-
-event: confirmation_required
-data: {"action": "write_page", "page_name": "Query: 2024 Q3 腾讯 vs 阿里 云业务"}
-
-event: stream_end
-data: {"usage": {"prompt_tokens": 1200, "completion_tokens": 800}, "stop_reason": "confirmation"}
+```python
+if not test_pdf.exists():
+    pytest.skip('Test PDF not available')
+result = wiki.analyze_source(str(test_pdf))
 ```
 
-### 4.4 架构图
+### Step 2.3: Suggest Synthesis
 
-```
-                    ┌─────────────────────────────┐
-                    │  Browser (WebUI) / curl     │
-                    │  - ChatPanel (React)        │
-                    │  - AgentChat widget         │
-                    └────────────┬────────────────┘
-                                 │ HTTP + SSE
-                                 ▼
-                    ┌─────────────────────────────┐
-                    │  FastAPI (server/core.py)   │
-                    │  - /api/agent/chat (SSE)    │
-                    │  - /api/agent/sessions      │
-                    │  - /api/agent/dream         │
-                    │  - /mcp (MCP HTTP)          │
-                    │  - Bearer auth middleware   │
-                    └────────────┬────────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────────┐
-                    │  ChatService                │
-                    │  (apps/chat/agent/)         │
-                    │  - ReActEngine (v0.37+)     │
-                    │  - max 4 tool-call rounds   │
-                    │  - microcompact (default)   │
-                    └────────────┬────────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────────┐
-                    │  Tool executor (26 wiki)    │
-                    │  + 5 chat-specific          │
-                    │  (confirm, dream, etc.)     │
-                    └────────────┬────────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────────┐
-                    │  LLMProvider                │
-                    │  (foundation/llm/client.py) │
-                    │  - retry / backoff          │
-                    │  - token budget             │
-                    └────────────┬────────────────┘
-                                 │ HTTPS
-                                 ▼
-                          gpt-4o / claude / etc.
+Step 2.3: LLM-powered synthesis suggestions.
+
+Compares new sources against existing wiki, suggests cross-source
+synthesis pages (e.g., "Compare revenue A vs B").
+
+**Code:**
+
+```python
+wiki.write_page('company-a', '# Company A\n\nRevenue: $10B. Growth: 15%.')
+wiki.write_page('company-b', '# Company B\n\nRevenue: $8B. Growth: 20%.')
+result = wiki.suggest_synthesis()
 ```
 
-### 4.5 故障排查 Top-3
+### Step 2.4: Knowledge Gaps Via Cli
 
-| # | 症状 | 修复 |
-|---|---|---|
-| 1 | SSE 一上来就 `stream_end` 报 401 | 没带 `Authorization: Bearer`；或 server 没启 `--auth-token` |
-| 2 | `tool_call` 一直接收不到结果 | LLM 没装 / API key 错；看 `~/.llmwikify/llmwikify.json` 配置 |
-| 3 | `save_warning` 频发 → 用户体验差 | 这是设计：写页面需人工 confirm；可在配置里改 `posthoc` |
+Step 2.4: Detect knowledge gaps via CLI.
 
----
+Identifies outdated pages, missing topics, and redundant content.
 
-## 场景 5：Quant 复现 (Paper → Factor → Backtest)
+**Code:**
 
-**目标**：从一篇 arXiv 量化论文 PDF 出发，自动抽取因子、跑回测、看 L5
-reflection 报告。  
-**配套剧本**：[`examples/05_paper_to_factor/`](../examples/05_paper_to_factor/README.md)。
+```python
+wiki.write_page('topic-a', '# Topic A\n\nBasic information about topic A.')
+result = subprocess.run(['python3', '-m', 'llmwikify', 'knowledge-gaps'], capture_output=True, text=True, cwd=str(wiki.root))
+```
 
-### 5.1 背景
+### Step 2.5: Graph Analyze Via Cli
 
-`reproduction/` 子包是项目的"杀手锏"功能：把论文 → 6 层 Factor YAML →
-DuckDB → Backtest → L5 反思 串成一条 pipeline。
+Step 2.5: PageRank + community detection via CLI.
+
+Computes centrality scores and detects communities in the
+graph, outputs JSON with stats.
+
+**Code:**
+
+```python
+wiki.write_page('page-a', '# A\n\nLinks to [[page-b]] and [[page-c]].')
+wiki.write_page('page-b', '# B\n\nLinks to [[page-a]].')
+wiki.write_page('page-c', '# C\n\nLinks to [[page-a]].')
+wiki.build_index()
+result = subprocess.run(['python3', '-m', 'llmwikify', 'graph-analyze', '--json'], capture_output=True, text=True, cwd=str(wiki.root))
+```
+
+### Step 2.6: Export Graph Via Cli
+
+Step 2.6: Export graph to interactive HTML.
+
+Generates D3.js force-directed graph for browser viewing.
+
+**Code:**
+
+```python
+wiki.write_page('page-a', '# A\n\nLinks to [[page-b]].')
+wiki.write_page('page-b', '# B\n\nLinks to [[page-a]].')
+wiki.build_index()
+output_path = temp_dir / 'graph.html'
+result = subprocess.run(['python3', '-m', 'llmwikify', 'export-graph', '--format', 'html', '--output', str(output_path)], capture_output=True, text=True, cwd=str(wiki.root))
+```
+
+## Scenario 3: Multi-Wiki
+
+### Background
+
+Manage multiple wikis through a single server using WikiRegistry.
+Each wiki can be local (path) or remote (HTTP URL with auth).
+
+### Architecture
+
+```
+        ┌────────────────────────┐
+        │  llmwikify serve       │
+        │  --multi-wiki --web    │
+        │  (WikiRegistry)        │
+        └─────────┬──────────────┘
+                  │
+       ┌──────────┼──────────┐
+       ▼          ▼          ▼
+   ┌──────┐  ┌──────┐  ┌──────────┐
+   │wiki-a│  │wiki-b│  │wiki-c    │
+   │local │  │local │  │remote    │
+   └──────┘  └──────┘  └──────────┘
+```
+
+### Troubleshooting
+
+- wikis list shows only default: check discovery.scan_paths
+- Remote wiki unreachable: verify URL + API key + server running
+- wiki_search_cross returns 0: wiki_ids must match exactly (case-sensitive)
+
+### Step 3.1: Register Wiki
+
+Step 3.1: Register a wiki in the registry.
+
+Creates a wiki at a local path, then registers it in the
+WikiRegistry with a unique wiki_id.
+
+**Code:**
+
+```python
+from llmwikify import create_wiki
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
+wiki_path = temp_dir / 'wiki-a'
+create_wiki(wiki_path)
+config = {'wikis': {'local': [], 'discovery': {}}}
+registry = WikiRegistry(config)
+registry.initialize()
+instance = registry.register_wiki(wiki_id='wiki-a', name='Wiki A', root=wiki_path)
+wikis = registry.list_wikis()
+wiki_ids = [w.wiki_id for w in wikis]
+```
+
+### Step 3.2: List Wikis
+
+Step 3.2: List all registered wikis.
+
+Returns list of WikiInstance objects with id, name, and root.
+
+**Code:**
+
+```python
+from llmwikify import create_wiki
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
+wiki_path = temp_dir / 'wiki-b'
+create_wiki(wiki_path)
+config = {'wikis': {'local': [], 'discovery': {}}}
+registry = WikiRegistry(config)
+registry.initialize()
+registry.register_wiki(wiki_id='wiki-b', name='Wiki B', root=wiki_path)
+wikis = registry.list_wikis()
+```
+
+### Step 3.3: Switch Wiki
+
+Step 3.3: Switch the default active wiki.
+
+Changes which wiki commands operate on by default.
+
+**Code:**
+
+```python
+from llmwikify import create_wiki
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
+for name in ['wiki-c1', 'wiki-c2']:
+    create_wiki(temp_dir / name)
+config = {'wikis': {'local': [], 'discovery': {}}}
+registry = WikiRegistry(config)
+registry.initialize()
+registry.register_wiki(wiki_id='wiki-c1', name='Wiki C1', root=temp_dir / 'wiki-c1')
+registry.register_wiki(wiki_id='wiki-c2', name='Wiki C2', root=temp_dir / 'wiki-c2')
+registry.set_default_wiki('wiki-c2')
+default = registry.get_default_wiki()
+```
+
+### Step 3.4: Unregister Wiki
+
+Step 3.4: Unregister a wiki from the registry.
+
+Removes the wiki from the registry but does not delete the
+underlying wiki directory.
+
+**Code:**
+
+```python
+from llmwikify import create_wiki
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
+wiki_path = temp_dir / 'wiki-d'
+create_wiki(wiki_path)
+config = {'wikis': {'local': [], 'discovery': {}}}
+registry = WikiRegistry(config)
+registry.initialize()
+registry.register_wiki(wiki_id='wiki-d', name='Wiki D', root=wiki_path)
+registry.unregister_wiki('wiki-d')
+wikis = registry.list_wikis()
+```
+
+### Step 3.5: Wiki Discovery
+
+Step 3.5: Auto-discover wikis in a directory.
+
+Scans a directory for existing wiki installations and returns
+their paths.
+
+**Code:**
+
+```python
+from llmwikify import create_wiki
+from llmwikify.kernel.multi_wiki.discovery import WikiDiscovery
+for name in ['wiki-e1', 'wiki-e2']:
+    create_wiki(temp_dir / name)
+discovery = WikiDiscovery()
+found = discovery.scan(str(temp_dir))
+```
+
+## Scenario 4: Chat + ReAct Agent
+
+### Background
+
+The Chat endpoint uses ReAct loop: LLM decides which wiki tools to
+call, executes them, and streams results via SSE. Up to 4 tool-call
+rounds per query.
+
+### Architecture
+
+```mermaid
+graph LR
+    Browser -->|SSE| API[/api/agent/chat/]
+    API --> ChatService
+    ChatService --> ReAct[ReAct Engine<br/>max 4 rounds]
+    ReAct --> Tools[26 wiki_* tools]
+    Tools --> Wiki
+    ReAct --> LLM[LLM Provider]
+```
+
+### Troubleshooting
+
+- SSE 401 Unauthorized: add Authorization Bearer token
+- tool_call never returns: check LLM config (api_key, base_url)
+- save_warning frequent: by design (human-in-loop), set posthoc mode
+
+### Step 4.1: Health Check
+
+Step 4.1: Health check endpoint.
+
+GET /api/health returns {"status": "ok", ...}.
+
+**Code:**
+
+```python
+response = client.get('/api/health')
+data = response.json()
+```
+
+### Step 4.2: Auth Optional
+
+Step 4.2: Authentication is optional by default.
+
+POST /api/agent/chat works without Authorization header
+unless --auth-token is configured on the server.
+
+**Code:**
+
+```python
+client = httpx.Client(base_url='http://localhost:8765', timeout=10.0)
+response = client.post('/api/agent/chat', json={'session_id': 'test', 'message': 'hello'})
+```
+
+### Step 4.3: Chat Sse
+
+Step 4.3: Streaming chat via Server-Sent Events.
+
+POST /api/agent/chat with stream returns SSE events:
+reasoning → phase → tool_call → stream_end.
+
+**Code:**
+
+```python
+headers = {'Authorization': 'Bearer test-token'}
+with client.stream('POST', '/api/agent/chat', json={'session_id': 'test', 'message': 'What is Python?'}, headers=headers) as response:
+    events = []
+    for line in response.iter_lines():
+        if line.startswith('data:'):
+            events.append(line)
+```
+
+### Step 4.4: Chat With Wiki Tool
+
+Step 4.4: Chat can invoke wiki tools.
+
+LLM decides to call wiki_search() to answer a query.
+
+**Code:**
+
+```python
+headers = {'Authorization': 'Bearer test-token'}
+response = client.post('/api/agent/chat', json={'session_id': 'test', 'message': 'Search for Python in the wiki'}, headers=headers)
+```
+
+### Step 4.5: Chat Session List
+
+Step 4.5: List all chat sessions.
+
+GET /api/agent/sessions returns active session metadata.
+
+**Code:**
+
+```python
+response = client.get('/api/agent/sessions')
+data = response.json()
+```
+
+## Scenario 5: Quant Pipeline
+
+### Background
+
+Quant reproduction pipeline: arXiv paper PDF → LLM extracts factors
+→ 6-layer Factor YAML → DuckDB storage → backtest → L5 reflection
+report.
+
+### Architecture
 
 ```
 Paper PDF
    │
-   │  repro_extract.yaml (LLM prompt)
+   │ repro_extract.yaml (LLM prompt)
    ▼
-Structured JSON
+Structured JSON → 6-layer Factor YAML
    │
-   │  repro_factor.yaml
+   │ factor_backtest.py
    ▼
-6-layer Factor YAML (L1 logic / L2 compute / L3 finance / L4 hypothesis / L5 validation / L6 risk)
+DuckDB (long table)
    │
-   │  factor_backtest.py
+   │ run_backtest
    ▼
-DuckDB (long table: date × stock × factor_name × value)
+Backtest report (IC / RankIC / quantile)
    │
-   │  run_backtest
+   │ l5_orchestrator
    ▼
-Backtest report (IC / RankIC / 5-quantile / long-short / 换手率)
-   │
-   │  l5_orchestrator
-   ▼
-L5 reflection (stability / OOS K-fold / 优化建议)
+L5 reflection
 ```
 
-### 5.2 步骤
+### Troubleshooting
 
-```bash
-# Step 0：准备 quant 目录
-cd ~/quant-research
-llmwikify quant-init
-# → 创建 quant/{factors,papers,factorbacktest,strategies,datacache,factor.duckdb}
+- /api/paper/start 500: check LLM provider config
+- Factor L2 SyntaxError: v0.36+ auto-repair via react_engine
+- Backtest IC ≈ 0: data source issue, check quantnodes install
 
-# Step 1：启动 server（unified 模式，paper 端点用得到）
-llmwikify serve --web --port 8765
+### Step 5.1: Quant Init Via Cli
 
-# Step 2：触发论文抽取
-curl -X POST http://localhost:8765/api/paper/start \
-     -H "Content-Type: application/json" \
-     -H "Authorization: Bearer mysecret" \
-     -d '{
-           "paper_id": "momentum-101",
-           "source": "raw/papers/momentum-101.pdf"
-         }'
-# 异步 LLM 抽取（可能 30-60s），返回 paper_run_id
+Step 5.1: Initialize quant directory structure.
 
-# Step 3：查进度
-curl http://localhost:8765/api/paper/status?run_id=<paper_run_id>
-# → stage: extract / factor_full / ready
-# → 完成后：quant/papers/momentum-101/extracted.json
+Creates quant/{factors,papers,factorbacktest,strategies,...}.
 
-# Step 4：列因子库
-curl http://localhost:8765/api/factor/library/list
-# → 列出 quant/factors/stock/**/*.yaml
-#   例如 stock/price/momentum_20d.yaml
+**Code:**
 
-# Step 5：读单个因子（6 层结构）
-curl http://localhost:8765/api/factor/library/stock/price/momentum_20d
-# → L1 logic / L2 compute (Python code) / L3 intuition / L4 hypothesis / L5 / L6
-
-# Step 6：算 + 存因子值（DuckDB）
-# 走 Python API（CLI 没有直接对应）
-python -c "
-from llmwikify.reproduction.factor_value_store import compute_and_store_factor
-compute_and_store_factor('momentum_20d', subcategory='momentum', window=20)
-"
-# → 写 quant/factor.duckdb 的 factor_values 表
-
-# Step 7：跑回测
-curl -X POST http://localhost:8765/api/factor/momentum_20d/backtest
-# 异步回测（可能 1-5 分钟）
-# → 写 quant/factorbacktest/momentum_20d_<ts>.md
-# → 写 quant/factor.duckdb 的 backtest_results 表
-
-# Step 8：读 L5 reflection
-cat quant/factorbacktest/momentum_20d_*.md
-# IC / RankIC / 5-quantile 收益 / 换手率 / 显著性
-# 末尾：L5 reflection（stability、OOS、建议）
+```python
+import subprocess
+result = subprocess.run(['python3', '-m', 'llmwikify', 'quant-init'], capture_output=True, text=True, cwd=str(temp_dir))
 ```
 
-### 5.3 架构图
+### Step 5.2: Write Factor
 
-```
-   ┌────────────┐
-   │ Paper PDF  │  raw/papers/momentum-101.pdf
-   └─────┬──────┘
-         │ repro_extract.yaml
-         ▼
-   ┌────────────────────────────┐
-   │  extract_paper (LLM)       │  apps/reproduction/paper_understanding/
-   │  → JSON contract           │  contract: paper_extract_v3
-   └─────┬──────────────────────┘
-         │
-         ▼
-   ┌────────────────────────────┐
-   │  extract_factors           │  repro_factor.yaml
-   │  → 6-layer YAML            │  L1 logic / L2 compute / L3-L6
-   └─────┬──────────────────────┘
-         │
-         ▼
-   ┌────────────────────────────┐
-   │  quant/factors/stock/      │  L5_validation.yaml
-   │   price/momentum_20d.yaml  │
-   └─────┬──────────────────────┘
-         │ codegen: L2 → Python
-         ▼
-   ┌────────────────────────────┐
-   │  factor_value_store        │  factor.duckdb (long table)
-   │  (DuckDB insert)           │  date × stock × factor_name × value
-   └─────┬──────────────────────┘
-         │
-         ▼
-   ┌────────────────────────────┐
-   │  factor_backtest           │  IC, RankIC, 5-quantile
-   │                            │  long-short, 换手率
-   └─────┬──────────────────────┘
-         │
-         ▼
-   ┌────────────────────────────┐
-   │  factorbacktest/           │  report_<slug>_<ts>.md
-   │   momentum_20d_xxx.md      │
-   └─────┬──────────────────────┘
-         │
-         ▼
-   ┌────────────────────────────┐
-   │  l5_orchestrator           │  stability / OOS K-fold
-   │                            │  → reflection 报告
-   └────────────────────────────┘
+Step 5.2: Write a 6-layer factor YAML file.
+
+Layer 1: logic, Layer 2: computation, Layer 3: financial intuition.
+
+**Code:**
+
+```python
+factors_dir = temp_dir / 'quant' / 'factors'
+factors_dir.mkdir(parents=True, exist_ok=True)
+factor_data = {'name': 'test_momentum', 'asset_type': 'stock', 'category': 'price', 'L1_logic': 'Price momentum over 20 days', 'L2_computation': 'close / close.shift(20) - 1', 'L3_financial': 'Momentum effect in equity markets'}
+factor_path = factors_dir / 'stock' / 'price' / 'test_momentum.yaml'
+factor_path.parent.mkdir(parents=True, exist_ok=True)
+import yaml
+factor_path.write_text(yaml.dump(factor_data))
 ```
 
-### 5.4 故障排查 Top-3
+### Step 5.3: List Factors
 
-| # | 症状 | 修复 |
-|---|---|---|
-| 1 | `/api/paper/start` 返回 500 | LLM provider 未配置；看 `~/.llmwikify/llmwikify.json` |
-| 2 | 因子 L2 代码报 SyntaxError | v0.36 已加 react_engine 自动 repair；看 `logs/` |
-| 3 | 回测 IC 接近 0 | 数据源问题：装 `quantnodes` extra；`python -c "from llmwikify.reproduction.data_source import router; print(router.list())"` |
+Step 5.3: List factors in the library.
 
-### 5.5 进阶：多因子 + 101 Alphas
+Scans quant/factors/ for all YAML files and returns metadata.
 
-```bash
-# 101 Formulaic Alphas 多因子
-curl -X POST http://localhost:8765/api/factor/alpha_001/backtest
-# 详见 docs/designs/run_101_alphas_v2_design.md (73KB 设计稿)
+**Code:**
+
+```python
+from llmwikify.reproduction.persist.factor_library import list_factors
+factors_dir = temp_dir / 'quant' / 'factors'
+factors_dir.mkdir(parents=True, exist_ok=True)
+factors = list_factors(temp_dir)
 ```
 
----
+### Step 5.4: Read Factor
 
-## Part 3 — Feature Playbook Index
+Step 5.4: Read a factor YAML file.
 
-> The following 3 playbooks demonstrate specific features, no LLM required.
-> See each playbook's README for detailed usage.
+Parses a 6-layer factor YAML and returns the dict.
 
-| # | Feature | Playbook | Key API | Related Scenario |
-|---|---------|----------|---------|------------------|
-| 06 | Lint rule triggers | [`06_lint_8_rules/`](../examples/06_lint_8_rules/) | `wiki.lint()` | §1.6 extension |
-| 07 | YAML config templates | [`07_yaml_templates/`](../examples/07_yaml_templates/) | `yaml.safe_load` + `create_wiki` | §0 decision tree |
-| 08 | Section-level anchors | [`08_section_anchor_tracking/`](../examples/08_section_anchor_tracking/) | `get_inbound_links` / `get_outbound_links` | §1.3 extension |
+**Code:**
 
-### 06 — Lint Rule Triggers
-
-Demonstrates the 8 lint rule trigger conditions. Constructs redundant pages,
-old year references, and content without wikilinks to show how `dated_claim` /
-`potentially_outdated` / `unsourced_claims` rules fire. Supports `full` and
-`brief` modes.
-
-```bash
-cd examples/06_lint_8_rules && PYTHONPATH=../.. python3 play.py
+```python
+import yaml
+factors_dir = temp_dir / 'quant' / 'factors'
+factor_path = factors_dir / 'stock' / 'price' / 'test_read.yaml'
+factor_path.parent.mkdir(parents=True, exist_ok=True)
+factor_data = {'name': 'test_read', 'L1_logic': 'Test'}
+factor_path.write_text(yaml.dump(factor_data))
+result = yaml.safe_load(factor_path.read_text())
 ```
 
-### 07 — YAML Config Templates
+### Step 5.5: Duckdb Schema
+
+Step 5.5: DuckDB factor_values table.
+
+Long table: date × stock × factor_name × value.
+
+**Code:**
+
+```python
+import duckdb
+db_path = temp_dir / 'factor.duckdb'
+conn = duckdb.connect(str(db_path))
+conn.execute('\n            CREATE TABLE IF NOT EXISTS factor_values (\n                date DATE,\n                stock VARCHAR,\n                factor_name VARCHAR,\n                value DOUBLE\n            )\n        ')
+result = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+table_names = [r[0] for r in result]
+conn.close()
+```
+
+### Step 5.6: Paper Api
+
+Step 5.6: Paper API endpoint.
+
+GET /api/paper/list returns extracted paper metadata.
+
+**Code:**
+
+```python
+import httpx
+client = httpx.Client(base_url=server_url, timeout=10.0)
+response = client.get('/api/paper/list')
+```
+
+### Step 5.7: Factor Library List
+
+Step 5.7: Factor library list via API.
+
+GET /api/factor/library/list returns all factors with metadata.
+
+**Code:**
+
+```python
+import httpx
+client = httpx.Client(base_url=server_url, timeout=10.0)
+response = client.get('/api/factor/library/list')
+data = response.json()
+```
+
+## Scenario 6: Lint Rules (Playbook 06)
+
+### Background
+
+Demonstrates the 8 lint rule trigger conditions. Constructs redundant
+pages, old year references, and content without wikilinks to show
+how each rule fires.
+
+### Troubleshooting
+
+- False positive on dated_claim: add context, use "since 2018"
+- Lint too noisy: use --brief mode for counts only
+
+### Step 6.1: Dated Claim
+
+Step 6.1: dated_claim rule fires on old year references.
+
+Creates a page with explicit year references; lint flags
+content that may be time-sensitive.
+
+**Code:**
+
+```python
+wiki.write_page('old-report', '# Report 2018\n\nRevenue: $10B.')
+result = wiki.lint()
+```
+
+### Step 6.2: Potentially Outdated
+
+Step 6.2: potentially_outdated rule fires on old data refs.
+
+Pages referencing old data sources are flagged for review.
+
+**Code:**
+
+```python
+wiki.write_page('outdated', '# Data\n\nFrom 2019 report.')
+result = wiki.lint()
+```
+
+### Step 6.3: Unsourced Claims
+
+Step 6.3: unsourced_claims rule fires on missing citations.
+
+Pages making claims without [[Source]] or [Source](path) refs
+are flagged.
+
+**Code:**
+
+```python
+wiki.write_page('claims', '# Claims\n\nMarket grew 15%.')
+result = wiki.lint()
+```
+
+### Step 6.4: Orphan Page
+
+Step 6.4: orphan_page check (inline in WikiAnalyzer.lint).
+
+Pages with zero inbound links are flagged as orphans.
+
+**Code:**
+
+```python
+wiki.write_page('orphan', '# Orphan\n\nNo one links to me.')
+result = wiki.lint()
+```
+
+### Step 6.5: Brief Mode
+
+Step 6.5: lint --brief returns counts only.
+
+Fast mode for CI pipelines: just total issue count.
+
+**Code:**
+
+```python
+wiki.write_page('page', '# Page\n\nSome content.')
+result = wiki.lint(mode='brief')
+```
+
+## Scenario 7: YAML Templates (Playbook 07)
+
+### Background
 
 4 ready-to-use `.wiki-config.yaml` templates: personal notes (offline),
-project docs, academic research (long timeout), industry news (date archiving).
-Demonstrates copy + customize + load workflow.
+project docs, academic research (long timeout), industry news
+(date archiving). Demonstrates copy + customize + load workflow.
 
-```bash
-cd examples/07_yaml_templates && PYTHONPATH=../.. python3 play.py
+### Troubleshooting
+
+- Template not found: check examples/07_yaml_templates/yaml_templates/
+- Config ignored: verify file is at wiki root as .wiki-config.yaml
+
+### Step 7.1: Parse Personal Kb
+
+Step 7.1: Parse personal-kb.yaml template.
+
+Offline personal notes configuration. No LLM required.
+
+**Code:**
+
+```python
+import yaml
+template_path = Path(__file__).parent.parent.parent / 'examples' / '07_yaml_templates' / 'yaml_templates' / 'personal-kb.yaml'
+if not template_path.exists():
+    pytest.skip('Template file not found')
+template = yaml.safe_load(template_path.read_text())
 ```
 
-### 08 — Section-Level Anchors
+### Step 7.2: Parse Project Docs
 
-Demonstrates `[[page#section]]` and `[[page#section|display]]` wikilink syntax,
-including `get_inbound_links` / `get_outbound_links` returning section fields,
-`include_context=True` for surrounding text, and direct DB queries on page_links table.
+Step 7.2: Parse project-docs.yaml template.
 
-```bash
-cd examples/08_section_anchor_tracking && PYTHONPATH=../.. python3 play.py
+Team project documentation with shared wikis.
+
+**Code:**
+
+```python
+import yaml
+template_path = Path(__file__).parent.parent.parent / 'examples' / '07_yaml_templates' / 'yaml_templates' / 'project-docs.yaml'
+if not template_path.exists():
+    pytest.skip('Template file not found')
+template = yaml.safe_load(template_path.read_text())
+```
+
+### Step 7.3: Parse Research Wiki
+
+Step 7.3: Parse research-wiki.yaml template.
+
+Academic research with long LLM timeout for deep analysis.
+
+**Code:**
+
+```python
+import yaml
+template_path = Path(__file__).parent.parent.parent / 'examples' / '07_yaml_templates' / 'yaml_templates' / 'research-wiki.yaml'
+if not template_path.exists():
+    pytest.skip('Template file not found')
+template = yaml.safe_load(template_path.read_text())
+```
+
+### Step 7.4: Parse Mining News
+
+Step 7.4: Parse mining-news-wiki.yaml template.
+
+Industry news with date-based archiving.
+
+**Code:**
+
+```python
+import yaml
+template_path = Path(__file__).parent.parent.parent / 'examples' / '07_yaml_templates' / 'yaml_templates' / 'mining-news-wiki.yaml'
+if not template_path.exists():
+    pytest.skip('Template file not found')
+template = yaml.safe_load(template_path.read_text())
+```
+
+### Step 7.5: Custom Config
+
+Step 7.5: Create wiki with custom config.
+
+Demonstrates create_wiki(path, config={...}) for programmatic
+configuration without YAML files.
+
+**Code:**
+
+```python
+from llmwikify import create_wiki
+config = {'llm': {'provider': 'test', 'model': 'test-model'}, 'orphan_detection': {'exclude_patterns': ['^draft-.*']}}
+wiki = create_wiki(temp_dir / 'custom-wiki', config=config)
+```
+
+## Scenario 8: Section Anchors (Playbook 08)
+
+### Background
+
+Demonstrates `[[page#section]]` and `[[page#section|display]]` wikilink
+syntax, including get_inbound_links / get_outbound_links returning
+section fields, include_context=True for surrounding text, and direct
+DB queries on page_links table.
+
+### Troubleshooting
+
+- Section not in link data: ensure build_index() was run after writing
+- Context empty: include_context=True was not passed
+
+### Step 8.1: Write Target Page
+
+Step 8.1: Write a target page with multiple sections.
+
+The target page must have named sections (## headings) for
+section-level linking to work.
+
+**Code:**
+
+```python
+wiki.write_page('python-style', '\n# Python Style Guide\n\n## Overview\nPython emphasizes code readability.\n\n## Naming\nUse `snake_case` for functions.\n')
+result = wiki.read_page('python-style')
+```
+
+### Step 8.2: Write Source Page
+
+Step 8.2: Write a source page with section-level wikilinks.
+
+Uses [[page#section]] syntax to link to a specific section.
+
+**Code:**
+
+```python
+wiki.write_page('notes', '# Notes\n\nFollow [[python-style#Naming]] rules.')
+result = wiki.read_page('notes')
+```
+
+### Step 8.3: Inbound Links
+
+Step 8.3: Get inbound links with section info.
+
+Returns list of links pointing to this page, including which
+section is targeted.
+
+**Code:**
+
+```python
+wiki.write_page('python-style', '\n# Python Style\n\n## Naming\nUse snake_case.\n')
+wiki.write_page('notes', '# Notes\n\nSee [[python-style#Naming]].')
+wiki.build_index()
+inbound = wiki.get_inbound_links('python-style')
+```
+
+### Step 8.4: Outbound Links
+
+Step 8.4: Get outbound links with section info.
+
+Returns list of links FROM this page, including target section.
+
+**Code:**
+
+```python
+wiki.write_page('python-style', '\n# Python Style\n\n## Naming\nUse snake_case.\n')
+wiki.write_page('notes', '# Notes\n\nSee [[python-style#Naming]].')
+wiki.build_index()
+outbound = wiki.get_outbound_links('notes')
+```
+
+### Step 8.5: Include Context
+
+Step 8.5: Get links with surrounding context.
+
+include_context=True returns the sentence/paragraph around
+each link for disambiguation.
+
+**Code:**
+
+```python
+wiki.write_page('python-style', '\n# Python Style\n\n## Naming\nUse snake_case.\n')
+wiki.write_page('notes', '# Notes\n\nFor variable names, follow [[python-style#Naming]] rules.')
+wiki.build_index()
+inbound = wiki.get_inbound_links('python-style', include_context=True)
+```
+
+## Scenario 9: Ingest Workflow
+
+### Background
+
+Ingest extracts text from files (PDF/MD/HTML), saves to raw/, then
+LLM analyzes for entities/relations. batch --self-create combines
+both steps for one-shot processing.
+
+### Troubleshooting
+
+- ingest fails on PDF: pip install 'llmwikify[extractors]'
+- batch --self-create creates no pages: LLM returned no operations
+- analyze_source hangs: check API key in ~/.llmwikify/llmwikify.json
+
+### Step 9.1: Ingest Single File
+
+Step 9.1: Ingest a single markdown file.
+
+Pure text extraction, no LLM. Saves to raw/ for later analysis.
+
+**Code:**
+
+```python
+if not sample_markdown_file.exists():
+    pytest.skip('Sample markdown file not available')
+result = wiki.ingest_source(str(sample_markdown_file))
+```
+
+### Step 9.2: Ingest Dry Run
+
+Step 9.2: Ingest with --dry-run flag.
+
+Shows what would happen without actually creating files.
+
+**Code:**
+
+```python
+if not sample_markdown_file.exists():
+    pytest.skip('Sample markdown file not available')
+wiki.root.mkdir(parents=True, exist_ok=True)
+dest = wiki.root / 'sample_doc.md'
+shutil.copy(sample_markdown_file, dest)
+result = subprocess.run(['python3', '-m', 'llmwikify', 'ingest', str(dest), '--dry-run'], capture_output=True, text=True, cwd=str(wiki.root))
+```
+
+### Step 9.3: Batch Ingest
+
+Step 9.3: Batch ingest from a directory (no LLM).
+
+Process multiple files at once, extract text only.
+
+**Code:**
+
+```python
+if not batch_dir.exists():
+    pytest.skip('Batch directory not available')
+dest = wiki.root / 'batch_sources'
+shutil.copytree(batch_dir, dest, dirs_exist_ok=True)
+result = subprocess.run(['python3', '-m', 'llmwikify', 'batch', str(dest)], capture_output=True, text=True, cwd=str(wiki.root))
+```
+
+### Step 9.4: Ingest Creates Raw
+
+Step 9.4: Ingest creates raw/ directory structure.
+
+Verifies that raw/ exists after ingest.
+
+**Code:**
+
+```python
+if not sample_markdown_file.exists():
+    pytest.skip('Sample markdown file not available')
+wiki.ingest_source(str(sample_markdown_file))
+```
+
+### Step 9.5: Ingest Fts Index
+
+Step 9.5: Ingest updates FTS5 index for search.
+
+Search should find content from ingested files.
+
+**Code:**
+
+```python
+if not sample_markdown_file.exists():
+    pytest.skip('Sample markdown file not available')
+wiki.ingest_source(str(sample_markdown_file))
+results = wiki.search('llmwikify', limit=5)
+```
+
+### Step 9.6: Analyze Source
+
+Step 9.6: LLM analyzes source for entities/relations.
+
+Two-phase: section metadata (compute) + LLM section selection
++ targeted analysis.
+
+**Code:**
+
+```python
+if not sample_markdown_file.exists():
+    pytest.skip('Sample markdown file not available')
+ingest_result = wiki.ingest_source(str(sample_markdown_file))
+source_name = ingest_result.get('source_name')
+analysis = wiki.analyze_source(f'raw/{source_name}')
+```
+
+### Step 9.7: Batch Self Create
+
+Step 9.7: batch --self-create uses LLM to create pages.
+
+Combines ingest + LLM page creation in one command.
+
+**Code:**
+
+```python
+if not batch_dir.exists():
+    pytest.skip('Batch directory not available')
+dest = wiki.root / 'batch_sources'
+shutil.copytree(batch_dir, dest, dirs_exist_ok=True)
+result = subprocess.run(['python3', '-m', 'llmwikify', 'batch', str(dest), '--self-create'], capture_output=True, text=True, cwd=str(wiki.root))
+```
+
+## Scenario 10: Synthesis Workflow
+
+### Background
+
+Cross-source synthesis: LLM compares multiple sources, suggests
+combined wiki pages, identifies knowledge gaps and contradictions.
+
+### Troubleshooting
+
+- suggest_synthesis returns empty: no sources ingested yet
+- knowledge-gaps OOM: use --limit 200
+- synthesize creates no wikilinks: source_pages names must match stems
+
+### Step 10.1: Suggest Synthesis Multi
+
+Step 10.1: LLM suggests cross-source synthesis pages.
+
+Compares multiple company sources, suggests comparison pages.
+
+**Code:**
+
+```python
+wiki.write_page('alibaba-cloud', '# Alibaba Cloud\n\nRevenue: $12B. Growth: 18%.')
+wiki.write_page('tencent-cloud', '# Tencent Cloud\n\nRevenue: $8B. Growth: 25%.')
+wiki.write_page('huawei-cloud', '# Huawei Cloud\n\nRevenue: $6B. Growth: 30%.')
+result = wiki.suggest_synthesis()
+```
+
+### Step 10.2: Knowledge Gaps Basic
+
+Step 10.2: Knowledge gaps analysis via lint investigations.
+
+Identifies outdated pages, missing topics, and contradictions.
+
+**Code:**
+
+```python
+wiki.write_page('topic-a', '# Topic A\n\nBasic information about topic A.')
+wiki.write_page('topic-b', '# Topic B\n\nLinks to [[topic-a]] and [[nonexistent]].')
+result = wiki.lint(generate_investigations=True)
+```
+
+### Step 10.3: Knowledge Gaps Cli
+
+Step 10.3: Knowledge gaps via CLI command.
+
+Human-readable report of outdated, missing, and redundant content.
+
+**Code:**
+
+```python
+wiki.write_page('outdated-page', '# Data 2019\n\nRevenue: $5B from 2019 report.')
+result = subprocess.run(['python3', '-m', 'llmwikify', 'knowledge-gaps', '--json'], capture_output=True, text=True, cwd=str(wiki.root))
+```
+
+### Step 10.4: Graph Pagerank
+
+Step 10.4: Graph analysis with PageRank ranking.
+
+Identifies most central pages by link topology.
+
+**Code:**
+
+```python
+wiki.write_page('hub', '# Hub\n\nLinks to [[spoke-a]], [[spoke-b]], [[spoke-c]].')
+wiki.write_page('spoke-a', '# Spoke A\n\nLinks to [[hub]].')
+wiki.write_page('spoke-b', '# Spoke B\n\nLinks to [[hub]].')
+wiki.write_page('spoke-c', '# Spoke C\n\nLinks to [[hub]].')
+wiki.build_index()
+result = subprocess.run(['python3', '-m', 'llmwikify', 'graph-analyze', '--json'], capture_output=True, text=True, cwd=str(wiki.root))
+import json
+output = json.loads(result.stdout)
+```
+
+### Step 10.5: Export Graph Formats
+
+Step 10.5: Export graph in HTML format.
+
+Interactive D3.js graph for browser viewing.
+
+**Code:**
+
+```python
+wiki.write_page('page-a', '# A\n\nLinks to [[page-b]].')
+wiki.write_page('page-b', '# B\n\nLinks to [[page-a]].')
+wiki.build_index()
+html_path = temp_dir / 'graph.html'
+result_html = subprocess.run(['python3', '-m', 'llmwikify', 'export-graph', '--format', 'html', '--output', str(html_path)], capture_output=True, text=True, cwd=str(wiki.root))
+```
+
+## Scenario 11: Multi-Wiki Config
+
+### Background
+
+Multi-wiki collaboration via .wiki-config.yaml. Each wiki can be
+local (path) or remote (HTTP URL). Discovery scans directories for
+existing wiki installations.
+
+### Troubleshooting
+
+- Config not loaded: file must be at wiki root as .wiki-config.yaml
+- Discovery finds nothing: check scan_paths relative to wiki root
+
+### Step 11.1: Config Parse Wikis
+
+Step 11.1: Parse .wiki-config.yaml with wikis section.
+
+Validates YAML structure of multi-wiki config.
+
+**Code:**
+
+```python
+config = {'wikis': {'default': 'personal', 'local': [{'id': 'personal', 'name': 'Personal Wiki', 'path': '.'}, {'id': 'team', 'name': 'Team Wiki', 'path': '../team'}]}}
+config_path = temp_dir / '.wiki-config.yaml'
+config_path.write_text(yaml.dump(config))
+loaded = yaml.safe_load(config_path.read_text())
+```
+
+### Step 11.2: Config Local Wikis
+
+Step 11.2: Register local wikis from config.
+
+Creates wikis at the configured paths and registers them.
+
+**Code:**
+
+```python
+from llmwikify import create_wiki
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
+for name in ['personal', 'team', 'cloud']:
+    create_wiki(temp_dir / name)
+config = {'wikis': {'default': 'personal', 'local': [{'id': 'personal', 'name': 'Personal', 'path': str(temp_dir / 'personal')}, {'id': 'team', 'name': 'Team', 'path': str(temp_dir / 'team')}, {'id': 'cloud', 'name': 'Cloud', 'path': str(temp_dir / 'cloud')}], 'discovery': {}}}
+registry = WikiRegistry(config)
+registry.initialize()
+for wiki_config in config['wikis']['local']:
+    registry.register_wiki(wiki_id=wiki_config['id'], name=wiki_config['name'], root=Path(wiki_config['path']))
+wikis = registry.list_wikis()
+wiki_ids = [w.wiki_id for w in wikis]
+```
+
+### Step 11.3: Config Discovery
+
+Step 11.3: Parse discovery section in config.
+
+Auto-discovery scans scan_paths for existing wiki installations.
+
+**Code:**
+
+```python
+config = {'wikis': {'default': 'personal', 'local': [], 'discovery': {'enabled': True, 'scan_paths': [str(temp_dir)], 'scan_depth': 2}}}
+```
+
+### Step 11.4: Search Cross Wiki
+
+Step 11.4: Cross-wiki search with multiple wikis.
+
+Searches across all registered wikis for matching content.
+
+**Code:**
+
+```python
+from llmwikify import create_wiki
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
+for name in ['wiki-a', 'wiki-b']:
+    w = create_wiki(temp_dir / name)
+    w.write_page('common-topic', f'# Common Topic\n\nContent from {name}.')
+config = {'wikis': {'local': [], 'discovery': {}}}
+registry = WikiRegistry(config)
+registry.initialize()
+for name in ['wiki-a', 'wiki-b']:
+    registry.register_wiki(wiki_id=name, name=name, root=temp_dir / name)
+wikis = registry.list_wikis()
+```
+
+## Scenario 12: Quant Full Pipeline
+
+### Background
+
+Full quant reproduction pipeline: paper extraction → factor YAML →
+DuckDB storage → backtest execution → L5 reflection report.
+
+### Troubleshooting
+
+- paper/start 500: check LLM provider config
+- Factor L2 SyntaxError: v0.36+ auto-repair via react_engine
+- Backtest IC ≈ 0: data source issue
+
+### Step 12.1: Quant Init Creates Structure
+
+Step 12.1: Quant-init creates expected directory structure.
+
+Creates quant/{factors,papers,factorbacktest,strategies,...}.
+
+**Code:**
+
+```python
+result = subprocess.run(['python3', '-m', 'llmwikify', 'quant-init'], capture_output=True, text=True, cwd=str(temp_dir))
+quant_dir = temp_dir / 'quant'
+if result.returncode == 0:
+```
+
+### Step 12.2: Factor Write And Read
+
+Step 12.2: Write and read a 6-layer factor YAML.
+
+Layer 1 logic, Layer 2 computation, Layer 3 financial,
+Layer 4 hypothesis.
+
+**Code:**
+
+```python
+import yaml
+factors_dir = temp_dir / 'quant' / 'factors'
+factor_path = factors_dir / 'stock' / 'price' / 'momentum_20d.yaml'
+factor_path.parent.mkdir(parents=True, exist_ok=True)
+factor_data = {'name': 'momentum_20d', 'asset_type': 'stock', 'category': 'price', 'L1_logic': 'Price momentum over 20 days', 'L2_computation': 'close / close.shift(20) - 1', 'L3_financial': 'Momentum effect in equity markets', 'L4_hypothesis': 'Stocks with strong recent momentum continue to outperform'}
+factor_path.write_text(yaml.dump(factor_data))
+loaded = yaml.safe_load(factor_path.read_text())
+```
+
+### Step 12.3: Factor Library List
+
+Step 12.3: List factors in the library.
+
+Scans quant/factors/ recursively.
+
+**Code:**
+
+```python
+import yaml
+from llmwikify.reproduction.persist.factor_library import list_factors
+factors_dir = temp_dir / 'quant' / 'factors' / 'stock' / 'price'
+factors_dir.mkdir(parents=True, exist_ok=True)
+factor_data = {'name': 'test_factor', 'L1_logic': 'Test'}
+(factors_dir / 'test_factor.yaml').write_text(yaml.dump(factor_data))
+factors = list_factors(temp_dir)
+```
+
+### Step 12.4: Duckdb Factor Values
+
+Step 12.4: DuckDB factor_values table.
+
+Long table schema: date × stock × factor_name × value.
+
+**Code:**
+
+```python
+import duckdb
+db_path = temp_dir / 'factor.duckdb'
+conn = duckdb.connect(str(db_path))
+conn.execute('\n            CREATE TABLE IF NOT EXISTS factor_values (\n                date DATE,\n                stock VARCHAR,\n                factor_name VARCHAR,\n                value DOUBLE\n            )\n        ')
+conn.execute("\n            INSERT INTO factor_values VALUES\n            ('2024-01-01', 'AAPL', 'momentum_20d', 0.05),\n            ('2024-01-01', 'GOOGL', 'momentum_20d', 0.03)\n        ")
+result = conn.execute('SELECT COUNT(*) FROM factor_values').fetchone()
+conn.close()
+```
+
+### Step 12.5: Paper Api Endpoint
+
+Step 12.5: Paper API endpoint.
+
+GET /api/paper/list returns extracted papers.
+
+**Code:**
+
+```python
+import httpx
+client = httpx.Client(base_url=server_url, timeout=10.0)
+response = client.get('/api/paper/list')
+```
+
+## Scenario 13: References Detail
+
+### Background
+
+Detailed reference queries: inbound/outbound link counts, --detail
+mode for full link metadata, section-level references with
+[[page#section]] syntax.
+
+### Troubleshooting
+
+- Links not in result: ensure build_index() was run
+- Detail mode shows nothing: wiki has no pages yet
+
+### Step 13.1: References Inbound Outbound
+
+Step 13.1: Get inbound and outbound references.
+
+Demonstrates the bidirectional link query API.
+
+**Code:**
+
+```python
+wiki.write_page('source', '# Source\n\nLinks to [[target]].')
+wiki.write_page('target', '# Target\n\nLinked from [[source]].')
+wiki.write_page('other', '# Other\n\nAlso links to [[target]].')
+wiki.build_index()
+inbound = wiki.get_inbound_links('target')
+outbound = wiki.get_outbound_links('source')
+```
+
+### Step 13.2: References Detail Mode
+
+Step 13.2: References with --detail mode via CLI.
+
+Returns full link metadata: source, target, section, line.
+
+**Code:**
+
+```python
+wiki.write_page('page-a', '# A\n\nLinks to [[page-b]] and [[page-c]].')
+wiki.write_page('page-b', '# B\n\nLinks to [[page-a]].')
+wiki.write_page('page-c', '# C\n\nLinks to [[page-a]].')
+wiki.build_index()
+result = subprocess.run(['python3', '-m', 'llmwikify', 'references', 'page-a', '--detail'], capture_output=True, text=True, cwd=str(wiki.root))
+```
+
+### Step 13.3: References Section Links
+
+Step 13.3: Section-level references with [[page#section]].
+
+Outbound links include section info.
+
+**Code:**
+
+```python
+wiki.write_page('guide', '# Guide\n\n## Overview\nOverview content.\n\n## Setup\nSetup content.')
+wiki.write_page('notes', '# Notes\n\nSee [[guide#Setup]] for setup instructions.')
+wiki.build_index()
+outbound = wiki.get_outbound_links('notes')
+if outbound:
+    link = outbound[0]
+```
+
+## Scenario 14: Full Ingest Chain
+
+### Background
+
+End-to-end ingest chain: extract text → analyze with LLM → batch
+create pages → suggest synthesis → synthesize → verify via search
+and lint.
+
+### Troubleshooting
+
+- Chain breaks at analyze: check LLM config
+- Chain breaks at batch: source must be ingested first
+- Chain breaks at synthesize: source_pages must be valid page stems
+
+### Step 14.1: Ingest Extract
+
+Step 14.1: Ingest extracts text, saves to raw/.
+
+First step in the chain. Pure text extraction, no LLM.
+
+**Code:**
+
+```python
+if not sample_markdown_file.exists():
+    pytest.skip('Sample markdown file not available')
+result = wiki.ingest_source(str(sample_markdown_file))
+```
+
+### Step 14.2: Analyze Source
+
+Step 14.2: analyze-source uses LLM to extract entities/relations.
+
+Second step. LLM processes extracted text.
+
+**Code:**
+
+```python
+if not sample_markdown_file.exists():
+    pytest.skip('Sample markdown file not available')
+ingest_result = wiki.ingest_source(str(sample_markdown_file))
+source_name = ingest_result.get('source_name')
+analysis = wiki.analyze_source(f'raw/{source_name}')
+```
+
+### Step 14.3: Batch Self Create
+
+Step 14.3: batch --self-create uses LLM to create pages.
+
+Combines ingest + LLM page creation.
+
+**Code:**
+
+```python
+if not batch_dir.exists():
+    pytest.skip('Batch directory not available')
+dest = wiki.root / 'batch_sources'
+shutil.copytree(batch_dir, dest, dirs_exist_ok=True)
+result = subprocess.run(['python3', '-m', 'llmwikify', 'batch', str(dest), '--self-create'], capture_output=True, text=True, cwd=str(wiki.root))
+```
+
+### Step 14.4: Suggest Synthesis
+
+Step 14.4: suggest-synthesis generates recommendations.
+
+LLM suggests cross-source synthesis pages.
+
+**Code:**
+
+```python
+wiki.write_page('source-a', '# Company A\n\nRevenue: $10B. Growth: 15%.')
+wiki.write_page('source-b', '# Company B\n\nRevenue: $8B. Growth: 20%.')
+result = wiki.suggest_synthesis()
+```
+
+### Step 14.5: Synthesize Query
+
+Step 14.5: synthesize creates wiki page from query answer.
+
+Writes a new page to wiki/synthesis/ with auto-linking.
+
+**Code:**
+
+```python
+wiki.write_page('company-a', '# Company A\n\nRevenue: $10B.')
+wiki.write_page('company-b', '# Company B\n\nRevenue: $8B.')
+result = wiki.synthesize_query(query='Compare revenue', answer='# Revenue Comparison\n\nA: $10B, B: $8B.', source_pages=['company-a', 'company-b'], auto_link=True)
+page = wiki.read_page(result['page_name'])
+```
+
+### Step 14.6: Full Chain
+
+Complete ingest chain: ingest → analyze → write → search → lint.
+
+End-to-end verification of the entire pipeline.
+
+**Code:**
+
+```python
+if not sample_markdown_file.exists():
+    pytest.skip('Sample markdown file not available')
+ingest_result = wiki.ingest_source(str(sample_markdown_file))
+source_name = ingest_result.get('source_name')
+analysis = wiki.analyze_source(f'raw/{source_name}')
+wiki.write_page('analysis-result', '# Analysis\n\nFrom ingested content.')
+idx = wiki.build_index()
+results = wiki.search('analysis', limit=5)
+lint_result = wiki.lint()
 ```
 
 ---
 
-## Appendix A: Config Priority Cheat Sheet
+## Appendix A: TUTORIAL.md Concepts
 
-```
-Priority (high to low):
+Cross-references to detailed concepts:
 
-1. Explicit params (CLI flags or Python constructor args)
-       ↓
-2. <wiki-root>/.wiki-config.yaml  ← wiki-specific overrides
-       ↓
-3. ~/.llmwikify/llmwikify.json    ← user-level global
-       ↓
-4. Built-in DEFAULT_CONFIG        ← hardcoded defaults
-```
+- **Prerequisites**: see [TUTORIAL.md](TUTORIAL.md) §0 (Install Matrix + Decision Tree)
+- **Configuration Priority**: see [TUTORIAL.md](TUTORIAL.md) Appendix A
+- **CLI vs Python API**: see [TUTORIAL.md](TUTORIAL.md) Appendix B
+- **MCP Client Integration**: see [TUTORIAL.md](TUTORIAL.md) Appendix C
 
-**Practical examples**:
+## Appendix B: How to Use This Tutorial
 
-- Change database name for "personal wiki" → edit `~/.wikis/personal/.wiki-config.yaml`
-- Change LLM provider for all wikis → edit `~/.llmwikify/llmwikify.json`
-- 想测试新功能 → CLI 加 flag（最优先）
+1. **Read the Background** of each scenario to understand the use case
+2. **Review the Architecture** diagram to see data flow
+3. **Execute the steps** via `pytest tests/scenarios/ -v`
+4. **Check Troubleshooting** if a step fails
 
-详见 [CONFIGURATION_GUIDE.md](./CONFIGURATION_GUIDE.md)。
+## Appendix C: Companion Playbooks
 
----
+Runnable examples in [`examples/01_~08_`](../examples/README.md):
 
-## Appendix B: CLI vs Python API Decision Table
-
-| I want to… | CLI | Python API |
-|---|---|---|
-| Initialize wiki | `llmwikify init --agent opencode` | `Wiki(path).init(agent="opencode")` |
-| Ingest 1 file | `llmwikify ingest a.pdf` | `wiki.ingest("a.pdf")` |
-| Write a page | `llmwikify write_page "page" "# content"` | `wiki.write_page("page", "# content")` |
-| Search | `llmwikify search "kw" -l 10` | `wiki.search("kw", limit=10, backend="fts5")` |
-| Start server | `llmwikify serve --web` | `WikiServer(wiki, enable_webui=True).run()` |
-| Chat (SSE) | `curl -N .../api/agent/chat` | `httpx.stream("POST", ...)` |
-| Factor computation | (CLI not available) | `compute_and_store_factor("slug", ...)` |
-| Factor backtest | `curl -X POST .../api/factor/<slug>/backtest` | `run_factor_backtest(slug="...")` |
-| Knowledge graph | `llmwikify graph-analyze --json` | `wiki.analyze_graph()` |
-| Custom workflows | Chain shell commands | Import `Wiki` + `ReActEngine` directly |
-
-**Rule of thumb**:
-
-- Exploration / debugging → CLI is faster
-- Automation / integration → Python API
-- Complex pipelines → CLI scripts + shared `.wiki-config.yaml`
-
----
-
-## Appendix C: MCP Client Integration Examples
-
-### Claude Desktop
-
-`~/.config/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "llmwikify": {
-      "command": "llmwikify",
-      "args": ["serve", "--transport", "stdio"],
-      "cwd": "/home/you/notes"
-    }
-  }
-}
-```
-
-Restart Claude Desktop → look for tool icon in bottom-left → should show 26 `wiki_*` tools.
-
-### opencode
-
-`~/.config/opencode/opencode.json`:
-
-```json
-{
-  "mcp": {
-    "llmwikify": {
-      "type": "local",
-      "command": ["llmwikify", "serve", "--transport", "stdio"],
-      "cwd": "/home/you/notes"
-    }
-  }
-}
-```
-
-### Cursor
-
-`~/.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "llmwikify": {
-      "command": "llmwikify",
-      "args": ["serve", "--transport", "stdio"]
-    }
-  }
-}
-```
-
-### MCPorter Bridge (Multi-MCP Aggregation)
-
-See [docs/MCPORTER_DEPLOYMENT.md](./MCPORTER_DEPLOYMENT.md). Aggregates
-llmwikify + other MCP servers into a single `mcporter-bridge` stdio endpoint.
-
----
-
-## 下一步
-
-- 跑通所有剧本：[`examples/`](../examples/README.md)
-- 看架构：[ARCHITECTURE.md](../ARCHITECTURE.md)
-- 看设计稿：[docs/designs/](designs/)
-- 提交 issue：[GitHub](https://github.com/sn0wfree/llmwikify/issues)
+- 01: Personal Reading Notes
+- 02: Company Research KB
+- 03: Multi-Wiki Registry
+- 04: Chat SSE Client
+- 05: Paper to Factor
+- 06: Lint 8 Rules
+- 07: YAML Templates
+- 08: Section Anchor Tracking

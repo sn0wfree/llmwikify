@@ -1,15 +1,45 @@
 # tests/scenarios/test_03_multi_wiki.py
-"""Scenario 3: Multi-Wiki - No LLM required."""
+"""Scenario 3: Multi-Wiki Collaboration - No LLM required.
 
-import pytest
-from pathlib import Path
+## Background
+Manage multiple wikis through a single server using WikiRegistry.
+Each wiki can be local (path) or remote (HTTP URL with auth).
+
+## Architecture
+```
+        ┌────────────────────────┐
+        │  llmwikify serve       │
+        │  --multi-wiki --web    │
+        │  (WikiRegistry)        │
+        └─────────┬──────────────┘
+                  │
+       ┌──────────┼──────────┐
+       ▼          ▼          ▼
+   ┌──────┐  ┌──────┐  ┌──────────┐
+   │wiki-a│  │wiki-b│  │wiki-c    │
+   │local │  │local │  │remote    │
+   └──────┘  └──────┘  └──────────┘
+```
+
+## Troubleshooting
+- wikis list shows only default: check discovery.scan_paths
+- Remote wiki unreachable: verify URL + API key + server running
+- wiki_search_cross returns 0: wiki_ids must match exactly (case-sensitive)
+"""
 
 
 class TestMultiWiki:
-    """Test multi-wiki registry operations."""
+    """Test multi-wiki registry operations.
+
+    Covers TUTORIAL.md Scenario 3 (Multi-Wiki Collaboration).
+    """
 
     def test_3_1_register_wiki(self, temp_dir):
-        """Register a wiki in the registry."""
+        """Step 3.1: Register a wiki in the registry.
+
+        Creates a wiki at a local path, then registers it in the
+        WikiRegistry with a unique wiki_id.
+        """
         from llmwikify import create_wiki
         from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
@@ -27,12 +57,14 @@ class TestMultiWiki:
 
         assert instance is not None
         wikis = registry.list_wikis()
-        # list_wikis returns list of WikiInstance objects
         wiki_ids = [w.wiki_id for w in wikis]
         assert "wiki-a" in wiki_ids
 
     def test_3_2_list_wikis(self, temp_dir):
-        """List registered wikis."""
+        """Step 3.2: List all registered wikis.
+
+        Returns list of WikiInstance objects with id, name, and root.
+        """
         from llmwikify import create_wiki
         from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
@@ -52,7 +84,10 @@ class TestMultiWiki:
         assert isinstance(wikis, (list, dict))
 
     def test_3_3_switch_wiki(self, temp_dir):
-        """Switch default wiki."""
+        """Step 3.3: Switch the default active wiki.
+
+        Changes which wiki commands operate on by default.
+        """
         from llmwikify import create_wiki
         from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
@@ -75,13 +110,15 @@ class TestMultiWiki:
 
         registry.set_default_wiki("wiki-c2")
         default = registry.get_default_wiki()
-        # get_default_wiki returns a Wiki object
         assert default is not None
-        # Check that the default wiki has the correct root
         assert "wiki-c2" in str(default.root)
 
     def test_3_4_unregister_wiki(self, temp_dir):
-        """Unregister a wiki."""
+        """Step 3.4: Unregister a wiki from the registry.
+
+        Removes the wiki from the registry but does not delete the
+        underlying wiki directory.
+        """
         from llmwikify import create_wiki
         from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
@@ -102,7 +139,11 @@ class TestMultiWiki:
         assert "wiki-d" not in wikis
 
     def test_3_5_wiki_discovery(self, temp_dir):
-        """Discover wikis in a directory."""
+        """Step 3.5: Auto-discover wikis in a directory.
+
+        Scans a directory for existing wiki installations and returns
+        their paths.
+        """
         from llmwikify import create_wiki
         from llmwikify.kernel.multi_wiki.discovery import WikiDiscovery
 

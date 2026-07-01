@@ -30,7 +30,7 @@ TEST_EXIT=$?
 
 echo ""
 echo "[3/4] Generating tutorial..."
-python3 scripts/report_to_tutorial.py tests/test_report.md
+python3 scripts/unified_tutorial_generator.py
 
 echo ""
 echo "=========================================="
@@ -41,5 +41,5 @@ else
 fi
 echo ""
 echo "  Report: tests/test_report.md"
-echo "  Tutorial: docs/tutorials/real_world_scenarios.md"
+echo "  Tutorial: docs/TUTORIAL.md"
 echo "=========================================="
