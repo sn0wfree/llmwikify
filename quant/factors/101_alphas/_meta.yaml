@@ -1,16 +1,14 @@
 name: 101_alphas
-display_name: "101 Formulaic Alphas"
-description: "WorldQuant 2015 年发表的 101 个公式化 alpha"
-
+display_name: 101 Formulaic Alphas
+description: WorldQuant 2015 年发表的 101 个公式化 alpha
 source:
-  paper: "101 Formulaic Alphas"
-  authors: ["WorldQuant"]
+  paper: 101 Formulaic Alphas
+  authors:
+  - WorldQuant
   year: 2015
-  url: "https://arxiv.org/abs/1505.04324"
-
+  url: https://arxiv.org/abs/1505.04324
 asset_class: stk
 category: alpha
-
-factor_count: 99
-created_at: "2026-06-23"
-updated_at: "2026-06-23"
+factor_count: 101
+created_at: '2026-06-23'
+updated_at: '2026-06-25'

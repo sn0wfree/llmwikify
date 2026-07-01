@@ -12,18 +12,17 @@ rule's ``name``).
 
 from __future__ import annotations
 
+from .data_gaps import DataGapsRule
+
 # Each rule is imported here and added to the RULES list.
 # Adding a new rule = add a file + 1 import + 1 list entry.
-
 from .dated_claims import DatedClaimsRule
-from .query_page_overlap import QueryPageOverlapRule
-from .missing_cross_refs import MissingCrossRefsRule
-from .potential_contradictions import PotentialContradictionsRule
-from .data_gaps import DataGapsRule
-from .outdated_pages import OutdatedPagesRule
 from .knowledge_gaps import KnowledgeGapsRule
+from .missing_cross_refs import MissingCrossRefsRule
+from .outdated_pages import OutdatedPagesRule
+from .potential_contradictions import PotentialContradictionsRule
+from .query_page_overlap import QueryPageOverlapRule
 from .redundancy import RedundancyRule
-
 
 RULES = [
     DatedClaimsRule(),

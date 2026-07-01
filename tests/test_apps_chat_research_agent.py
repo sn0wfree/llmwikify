@@ -19,9 +19,8 @@ from typing import Any
 
 import pytest
 
-from llmwikify.apps.chat.research_engine.engine import ResearchEngine
 from llmwikify.apps.chat.research_agent import ResearchAgent
-
+from llmwikify.apps.chat.research_engine.engine import ResearchEngine
 
 # ─── Stubs ────────────────────────────────────────────────────────
 

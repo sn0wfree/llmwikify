@@ -33,7 +33,7 @@
 
 ### 核心原则
 
-基于 Karpathy 的 [LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md)：
+基于 Karpathy 的 [LLM Wiki Principles](../LLM_WIKI_PRINCIPLES.md)：
 - **持久化知识库**: Wiki 是 persistent, compounding artifact
 - **人类主导**: 人类 curate sources, direct analysis; LLM 负责维护
 - **增量维护**: 新来源到达时更新现有页面，而非重写
@@ -803,7 +803,7 @@ function App() {
 
 ## 参考文档
 
-- [LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md)
+- [LLM Wiki Principles](../LLM_WIKI_PRINCIPLES.md)
 - [Nanobot Docs](https://nanobot.wiki)
 - [Karpathy's LLM Wiki](https://karpathy.ai/llmwiki)
 

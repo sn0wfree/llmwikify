@@ -25,6 +25,7 @@ import { OverallAssessment } from './OverallAssessment';
 import { RiskRadar } from './RiskRadar';
 import { ICChart } from '../shared/ICChart';
 import { GroupReturnBar } from '../shared/GroupReturnBar';
+import { GroupNavChart } from '../shared/GroupNavChart';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -246,7 +247,7 @@ export function FactorDetail() {
         {activeLayer === 'l2' && <L2Content data={l2} />}
         {activeLayer === 'l3' && <L3Content data={l3} />}
         {activeLayer === 'l4' && <L4Content data={l4} />}
-        {activeLayer === 'l5' && <L5Content data={l5} factorName={factor.name} />}
+        {activeLayer === 'l5' && <L5Content data={l5} factorName={name} />}
         {activeLayer === 'l6' && <L6Content data={l6} />}
       </div>
     </div>
@@ -444,7 +445,16 @@ interface BacktestRun {
   };
   ic_series: Array<{ date: string; ic: number; rank_ic?: number; n_stocks?: number }>;
   group_metrics: Record<string, { annual_return: number; sharpe?: number }>;
+  equity_curve?: Record<string, Array<{ date: number; nav: number }>>;
 }
+
+const fmt = (v: number | null | undefined, d = 4) => v != null ? v.toFixed(d) : '-';
+const fmtPct = (v: number | null | undefined) => v != null ? `${(v * 100).toFixed(1)}%` : '-';
+const parseICDate = (d: string | number) => {
+  if (typeof d === 'string') return d;
+  const s = String(d);
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+};
 
 function L5Content({ data, factorName }: { data: Record<string, unknown> | undefined; factorName?: string }) {
   const [backtestRuns, setBacktestRuns] = useState<BacktestRun[]>([]);
@@ -497,26 +507,26 @@ function L5Content({ data, factorName }: { data: Record<string, unknown> | undef
           <div className="space-y-4">
             {/* Metrics Summary */}
             <div className="grid grid-cols-4 gap-3">
-              <MetricCard label="IC Mean" value={latestRun.metrics.ic_mean.toFixed(4)} />
-              <MetricCard label="ICIR" value={latestRun.metrics.icir.toFixed(4)} />
-              <MetricCard label="Rank IC" value={latestRun.metrics.rank_ic_mean.toFixed(4)} />
-              <MetricCard label="Win Rate" value={`${(latestRun.metrics.win_rate * 100).toFixed(1)}%`} />
-              <MetricCard label="年化收益" value={`${(latestRun.metrics.annual_return * 100).toFixed(1)}%`} />
-              <MetricCard label="多空年化" value={`${(latestRun.metrics.longshort_ann_return * 100).toFixed(1)}%`} />
-              <MetricCard label="多空Sharpe" value={latestRun.metrics.longshort_sharpe.toFixed(2)} />
-              <MetricCard label="多空MaxDD" value={`${(latestRun.metrics.longshort_max_dd * 100).toFixed(1)}%`} />
+              <MetricCard label="IC Mean" value={fmt(latestRun.metrics.ic_mean, 4)} />
+              <MetricCard label="ICIR" value={fmt(latestRun.metrics.icir, 4)} />
+              <MetricCard label="Rank IC" value={fmt(latestRun.metrics.rank_ic_mean, 4)} />
+              <MetricCard label="Win Rate" value={fmtPct(latestRun.metrics.win_rate)} />
+              <MetricCard label="年化收益" value={fmtPct(latestRun.metrics.annual_return)} />
+              <MetricCard label="多空年化" value={fmtPct(latestRun.metrics.longshort_ann_return)} />
+              <MetricCard label="多空Sharpe" value={fmt(latestRun.metrics.longshort_sharpe, 2)} />
+              <MetricCard label="多空MaxDD" value={fmtPct(latestRun.metrics.longshort_max_dd)} />
             </div>
 
             {/* IC Time Series */}
             {latestRun.ic_series.length > 0 && (
               <div>
                 <h4 className="text-xs font-medium text-muted-foreground mb-2">IC 时序</h4>
-                <ICChart icSeries={latestRun.ic_series} height={280} />
+                <ICChart icSeries={latestRun.ic_series.map(p => ({ ...p, date: parseICDate(p.date) }))} height={280} />
               </div>
             )}
 
             {/* Group Returns */}
-            {Object.keys(latestRun.group_metrics).length > 0 && (
+            {Object.keys(latestRun.group_metrics || {}).length > 0 && (
               <div>
                 <h4 className="text-xs font-medium text-muted-foreground mb-2">分组年化收益</h4>
                 <GroupReturnBar
@@ -525,6 +535,14 @@ function L5Content({ data, factorName }: { data: Record<string, unknown> | undef
                   )}
                   height={160}
                 />
+              </div>
+            )}
+
+            {/* Group NAV Time Series */}
+            {latestRun.equity_curve && Object.keys(latestRun.equity_curve).length > 0 && (
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground mb-2">分组累计净值</h4>
+                <GroupNavChart series={latestRun.equity_curve} height={250} />
               </div>
             )}
 

@@ -8,6 +8,10 @@
 [![Tests: 3100+ collected](https://img.shields.io/badge/tests-3100%2B%20collected-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 [![Version: 0.38.0](https://img.shields.io/badge/version-0.38.0-blue.svg)](pyproject.toml)
 
+> 🚀 **新用户？** 完整 5 场景教程：[`docs/TUTORIAL.md`](docs/TUTORIAL.md) ·
+> 可跑剧本：[`examples/01-05_*/`](examples/README.md) ·
+> 一键验证：`bash examples/verify_playbooks.sh`
+
 ---
 
 > ⚠️ **Beta Release** — APIs may shift between minor versions. Report issues on
@@ -187,7 +191,25 @@ curl http://localhost:8765/api/health
 
 > Do not run with `--reload`; see `AGENTS.md` for project-specific server rules.
 
-### 6. Quant reproduction (Paper → Factor → Backtest)
+### 6. Multi-wiki registry (v0.31+)
+```bash
+# 单一 .wiki-config.yaml 统一管理多个 wiki
+llmwikify serve --web --multi-wiki --port 8765
+# → 暴露 26 个 wiki_* 工具 + wiki_list/switch/register/search_cross/scan
+```
+
+### 7. Chat + ReAct Agent (v0.37+)
+```bash
+# server 起来后，浏览器开 http://localhost:8765/ 走 WebUI Chat 面板；
+# 或脚本化：
+curl -N -H "Authorization: Bearer mysecret" \
+     -H "Content-Type: application/json" \
+     -X POST http://localhost:8765/api/agent/chat \
+     -d '{"session_id":"demo","message":"对比腾讯和阿里 2024 Q3 云业务"}'
+# → SSE 流：reasoning / phase / tool_call / stream_end / save_warning
+```
+
+### 8. Quant reproduction (Paper → Factor → Backtest)
 ```bash
 # Initialise quant/ scaffolding
 llmwikify quant-init
@@ -211,6 +233,11 @@ End-to-end design:
 - [Paper extraction pipeline](docs/designs/paper_extraction_pipeline.md)
 - [Factor library framework](docs/designs/factor_library_framework.md)
 - [Factor reflection design](docs/designs/factor_reflection_design.md)
+
+> 📖 **要更深入的完整教程？** 看 [docs/TUTORIAL.md](docs/TUTORIAL.md) — 5 个
+> 真实场景（个人笔记 / 公司尽调 / 多 wiki 协作 / Chat SSE / 量化复现）每
+> 个都含手把手命令 + 预期输出 + ASCII/Mermaid 架构图 + 故障排查。配
+> 套可跑剧本：[`examples/`](examples/README.md)。
 
 ---
 
@@ -305,10 +332,18 @@ results = wiki.search("singleton", limit=10, backend="fts5")
 
 # Inbound/outbound links
 inbound_links = wiki.get_inbound_links("Python/Patterns/Singleton")
+outbound_links = wiki.get_outbound_links("Python/Patterns/Singleton")
 
 # Status / lint
 status = wiki.status()
-lint_result = wiki.lint(format="brief")
+lint_result = wiki.lint()
+
+# Ingest a raw source (extracts + writes to raw/)
+result = wiki.ingest_source("raw/pdfs/paper.pdf")
+
+# Build reference index
+idx = wiki.build_index()
+print(idx["total_pages"], "pages indexed")
 
 wiki.close()
 ```
@@ -322,15 +357,16 @@ from llmwikify.interfaces.server import WikiServer
 wiki = Wiki("./my-wiki")
 server = WikiServer(
     wiki,
-    api_key="optional-secret",
-    enable_mcp=True,
-    enable_rest=True,
-    enable_webui=True,
+    api_key="optional-secret",     # Bearer auth
+    enable_mcp=True,                # 26 wiki_* tools
+    enable_rest=True,               # /api/wiki/* etc.
+    enable_webui=True,              # React SPA at /
 )
 server.run(host="0.0.0.0", port=8765)
+# OpenAPI docs: http://localhost:8765/docs
 ```
 
-### MCP integration
+### MCP integration (std IO for LLM clients)
 
 ```python
 from llmwikify import Wiki
@@ -340,6 +376,8 @@ wiki = Wiki("./knowledge-base")
 mcp = create_mcp_server(wiki, name="my-wiki")
 mcp.run(transport="stdio")
 ```
+
+> 旧 `MCPServer(wiki).serve()` 已在 v0.30 废弃；统一为 `WikiServer` + `llmwikify serve` CLI。
 
 ### Quant reproduction (Python)
 
@@ -468,10 +506,12 @@ See [Configuration Guide](docs/CONFIGURATION_GUIDE.md) for full options.
 
 ## Documentation
 
+- [TUTORIAL](docs/TUTORIAL.md) — **5 个端到端使用场景（必读）**
+- [Examples](examples/README.md) — 5 个可跑剧本
 - [Architecture](ARCHITECTURE.md) — Layered architecture, modules, data flow
 - [Configuration Guide](docs/CONFIGURATION_GUIDE.md)
 - [LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md) — Karpathy's original vision
-- [Migration Guide](MIGRATION.md) — Version-by-version migration notes (v0.30 → v0.37)
+- [Migration Guide](MIGRATION.md) — Version-by-version migration notes (v0.30 → v0.38)
 - [Factor library framework](docs/designs/factor_library_framework.md) — 6-layer model
 - [Paper extraction pipeline](docs/designs/paper_extraction_pipeline.md)
 - [Factor reflection design](docs/designs/factor_reflection_design.md)

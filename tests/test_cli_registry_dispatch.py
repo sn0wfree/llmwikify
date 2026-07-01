@@ -22,7 +22,6 @@ from __future__ import annotations
 import inspect
 import re
 
-
 ALL_26_COMMANDS = [
     # C2 (10 simple)
     "init", "ingest", "status", "log", "sink-status",

@@ -1,6 +1,6 @@
 # Quick Research 系统分析报告
 
-> 日期: 2026-05-29 | 分支: feature/deep-research-display-language | 版本: f4d8e7f
+> 日期: 2026-05-29 (v0.37 时代快照) | 📦 FROZEN at v0.37
 
 ## 一、架构总览
 

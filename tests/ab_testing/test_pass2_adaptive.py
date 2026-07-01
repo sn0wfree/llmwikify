@@ -23,7 +23,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import build_default_client
+from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import (
+    build_default_client,
+)
+
 from llmwikify.reproduction.paper_understanding.llm_extraction.planner import PlanResult
 from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     SignalDetail,
@@ -157,10 +160,14 @@ def main():
     )
     args = parser.parse_args()
 
-    logging.basicConfig(
+    from llmwikify.foundation.logging import setup_logging
+
+    setup_logging(
         level=logging.INFO,
-        format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s",
+        log_file=None,
+        fmt="%(asctime)s %(levelname)-5s [%(name)s] %(message)s",
         datefmt="%H:%M:%S",
+        force=True,
     )
     logger = logging.getLogger("ab_test")
 

@@ -46,7 +46,8 @@ async def _add_job(args: dict, ctx: SkillContext) -> SkillResult:
     cron_expr = args.get("cron_expr", "")
     if not name or not cron_expr:
         return SkillResult.fail("name and cron_expr are required")
-    handler_ref = args.get("handler_ref", "")
+    # handler_ref reserved for future use; placeholder ignores it
+    _handler_ref = args.get("handler_ref", "")
 
     # Create a placeholder handler; real wiring happens at startup
     def _placeholder() -> dict:

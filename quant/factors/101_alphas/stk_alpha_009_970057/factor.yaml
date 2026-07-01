@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: '((0 < ts_min(delta(close, 1), 5)) ? delta(close, 1) : ((ts_max(delta(close,
-    1), 5) < 0) ? delta(close, 1) : (-1 * delta(close, 1))))'
+  definition: 基于5日滚动窗口内价格变化一致性，在动量与均值回归策略之间动态切换的条件型alpha因子
   formula: '((0 < ts_min(delta(close, 1), 5)) ? delta(close, 1) : ((ts_max(delta(close,
     1), 5) < 0) ? delta(close, 1) : (-1 * delta(close, 1))))'
   frequency: 日频
@@ -95,3 +94,37 @@ l6:
   - '市场风格切换/制度变更 (如涨跌停板放宽、T+0 试点): 短期反转规律可能失效'
   risk_notes: 因子值仅取决于价格, 对停牌/复牌/涨跌停等极端行情敏感 (delta 被截断); 建议配合换手率、成交额等流动性指标做中性化与过滤,
     避免在极端波动个股上集中暴露
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: materialize\
+    \ delta(close, 1)\n    df = df.with_columns(delta(pl.col('close'), periods=1).alias('_delta'))\n\
+    \    \n    # Step 2: materialize ts_min and ts_max of delta over window=5 (Rule\
+    \ 2)\n    df = df.with_columns([\n        ts_min(pl.col('_delta'), window=5).alias('_ts_min'),\n\
+    \        ts_max(pl.col('_delta'), window=5).alias('_ts_max')\n    ])\n    \n \
+    \   # Step 3: nested when logic using pl.when (Rule 3)\n    # If ts_min > 0 ->\
+    \ delta; elif ts_max < 0 -> delta; else -> -delta\n    factor = pl.when(pl.col('_ts_min')\
+    \ > 0).then(pl.col('_delta')).otherwise(\n        pl.when(pl.col('_ts_max') <\
+    \ 0).then(pl.col('_delta')).otherwise(-1 * pl.col('_delta'))\n    )\n    \n  \
+    \  return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 760
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_009.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 50
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.0010889420418684216
+    icir: 0.006955477914824623
+    winrate: 0.4915254237288136
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 4.000528088798916e-06
+    longshort_sharpe: null
+    longshort_max_dd: -0.02275699427126054
+    validated_at: 1782305883.2207732
+  validation_date: '2026-06-24'

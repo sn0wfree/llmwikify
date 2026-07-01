@@ -303,8 +303,7 @@ class ChatBase:
         async def emit(ev: dict[str, Any]) -> None:
             pass
 
-        for iteration in range(max_iterations):
-            pre_count = len(invocations)
+        for _iteration in range(max_iterations):
             accumulated = ""
             emitted_text = ""
             emitted_thinking = ""

@@ -23,7 +23,7 @@ class RedundancyRule(Rule):
 
     name = "redundancy"
 
-    def run(self, wiki: "Wiki") -> list[dict[str, Any]]:
+    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
         redundancy: list[dict[str, Any]] = []
         pages = wiki._wiki_pages()
 

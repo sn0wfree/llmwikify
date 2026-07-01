@@ -76,7 +76,7 @@ def analyze_groups(result: Any) -> dict[str, Any]:
     ls_ann_return, ls_sharpe, ls_max_drawdown.
     """
     quantile_returns = getattr(result, "quantile_returns", {})
-    group_metrics = getattr(result, "group_metrics", {})
+    _group_metrics = getattr(result, "group_metrics", {})
     longshort_sharpe = getattr(result, "longshort_sharpe", 0.0)
     longshort_ann_return = getattr(result, "longshort_ann_return", 0.0)
     longshort_mdd = getattr(result, "longshort_mdd", 0.0)
@@ -282,7 +282,7 @@ def analyze_oos(result: Any, n_folds: int = 5) -> dict[str, Any]:
 
     # ── Simple 70/30 split (backward compatible) ──
     split = int(len(ic_series) * 0.7)
-    is_ics = [pt.get("ic", pt.get("rank_ic", 0)) for pt in ic_series[:split]]
+    _is_ics = [pt.get("ic", pt.get("rank_ic", 0)) for pt in ic_series[:split]]
     oos_ics = [pt.get("ic", pt.get("rank_ic", 0)) for pt in ic_series[split:]]
     oos_rank_ic = statistics.mean(oos_ics) if oos_ics else 0.0
 
@@ -315,7 +315,7 @@ def analyze_oos(result: Any, n_folds: int = 5) -> dict[str, Any]:
             if not is_indices or not oos_indices:
                 continue
 
-            is_ic_mean = statistics.mean([all_ics[i] for i in is_indices])
+            _is_ic_mean = statistics.mean([all_ics[i] for i in is_indices])
             oos_ic_mean = statistics.mean([all_ics[i] for i in oos_indices])
             oos_ics_kfold.append(oos_ic_mean)
 
@@ -434,7 +434,7 @@ def _score_ic(ic_analysis: dict) -> float:
 def _score_group(group_analysis: dict) -> float:
     """Score group analysis (0-20)."""
     ls_sharpe = abs(group_analysis.get("ls_sharpe", 0))
-    ls_return = group_analysis.get("ls_ann_return", 0)
+    _ls_return = group_analysis.get("ls_ann_return", 0)
     ls_mdd = group_analysis.get("ls_max_drawdown", 0)
 
     # Long-short Sharpe (0-10)
@@ -448,7 +448,7 @@ def _score_group(group_analysis: dict) -> float:
         sharpe_score = 1
 
     # Group monotonicity — check if groups are ordered
-    mono = group_analysis.get("group_monotonicity", "")
+    _mono = group_analysis.get("group_monotonicity", "")
     groups = group_analysis.get("group_returns", {})
     if groups:
         n = len(groups)

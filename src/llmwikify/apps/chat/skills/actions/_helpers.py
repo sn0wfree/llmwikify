@@ -26,7 +26,8 @@ Why these helpers exist:
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from llmwikify.apps.chat.skills.base import SkillContext, SkillResult
 from llmwikify.apps.chat.skills.registry import (

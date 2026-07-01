@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((Ts_Rank(decay_linear(decay_linear(correlation(IndNeutralize(close,
-    IndClass.industry), volume, 9.74928), 16.398), 3.83219), 4.8667) - rank(decay_linear(correlation(vwap,
-    adv30, 4.01303), 2.6809))) *
+  definition: 基于行业中性化价格与成交量相关性的双重指数衰减时序排名，减去成交量调整后价格与成交量的相关性排名，两者取负值。
   formula: ((Ts_Rank(decay_linear(decay_linear(correlation(IndNeutralize(close, IndClass.industry),
     volume, 9.74928), 16.398), 3.83219), 4.8667) - rank(decay_linear(correlation(vwap,
     adv30, 4.01303), 2.6809))) * -1)
@@ -96,3 +94,39 @@ l6:
   - 市场处于强趋势 (如 2020 疫后复苏、2023 AI 行情) 时, 价量趋势而非转折主导, 因子 IC 转负
   - 小盘股流动性枯竭 (如 2024 年初微盘股危机) 时, adv30 失真, Part2 信号崩溃
   risk_notes: 需在回测中严格保留 industry 列并使用 GICS/申万等真实分类; 超参数对回看窗口敏感, 建议做 ±20% 鲁棒性测试; 警惕与同策略基金的拥挤踩踏风险
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv30: 30-day average\
+    \ dollar volume (close * volume)\n    adv30 = rolling_mean(pl.col('close') * pl.col('volume'),\
+    \ window=30)\n\n    # Part 1: Ts_Rank(decay_linear(decay_linear(correlation(IndNeutralize(close,\
+    \ industry), volume, 9.74928), 16.398), 3.83219), 4.8667)\n    # Industry neutralize\
+    \ is approximated as identity (no industry column available)\n    ind_neutral_close\
+    \ = pl.col('close')\n    corr1 = rolling_corr(ind_neutral_close, pl.col('volume'),\
+    \ window=10)\n    decay1 = decay_linear(corr1, window=16)\n    decay2 = decay_linear(decay1,\
+    \ window=4)\n    ts_rank_part = ts_rank(decay2, window=5)\n\n    # Part 2: rank(decay_linear(correlation(vwap,\
+    \ adv30, 4.01303), 2.6809))\n    corr2 = rolling_corr(pl.col('vwap'), adv30, window=4)\n\
+    \    decay3 = decay_linear(corr2, window=3)\n    rank_part = rank(decay3).over('date')\n\
+    \n    # Final: ((...) - rank(...)) * -1\n    factor = (ts_rank_part - rank_part)\
+    \ * -1\n\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 996
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_091.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 61
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.04531912929041471
+    icir: 0.2316285115790364
+    winrate: 0.5932203389830508
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.000197051881555943
+    longshort_sharpe: null
+    longshort_max_dd: -0.02508658174252171
+    validated_at: 1782150981.977346
+  validation_date: '2026-06-23'

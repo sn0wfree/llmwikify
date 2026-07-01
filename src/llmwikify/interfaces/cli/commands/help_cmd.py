@@ -16,7 +16,6 @@ from typing import Any
 
 from .._base import COMMAND_REGISTRY, Command
 
-
 # Subcommand aliases — populated by main() at startup.
 # (Phase 3 #6: aliases registered on argparse subparsers
 # are collected here so the ``help`` command can show them

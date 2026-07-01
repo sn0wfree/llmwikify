@@ -244,10 +244,13 @@ async def cancel_autoresearch(session_id: str):
     if not session:
         return {"error": f"Session {session_id} not found"}
     tm = get_task_manager()
-    if session["status"] in ("done", "error", "timeout"):
+    status = session["status"]
+    if status in ("done", "error", "timeout", "cancelling", "planning"):
+        # Terminal or stuck → actually delete
         tm.cancel(session_id)
         deleted = db.delete_research(session_id)
         return {"cancelled": deleted, "session_id": session_id}
+    # Running → soft cancel, engine will exit next tick
     db.update_research_status(session_id, "cancelling", session.get("current_step"))
     return {"cancelled": True, "session_id": session_id}
 

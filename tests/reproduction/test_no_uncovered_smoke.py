@@ -19,7 +19,6 @@ from pathlib import Path
 
 import pytest
 
-
 # 这些模块已有专门的测试文件, 算"已覆盖"
 ALREADY_COVERED = {
     "extract",  # test_extract.py
@@ -113,7 +112,7 @@ def test_no_uncovered_modules() -> None:
     assert not uncovered, (
         f"\n{len(uncovered)} 模块无单元测试:\n"
         + "\n".join(f"  - {m}" for m in uncovered)
-        + f"\n\n需创建 tests/reproduction/test_<module>.py 或加入 ALREADY_COVERED/IMPORT_COVERED 列表"
+        + "\n\n需创建 tests/reproduction/test_<module>.py 或加入 ALREADY_COVERED/IMPORT_COVERED 列表"
     )
 
 

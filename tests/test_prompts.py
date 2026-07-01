@@ -45,8 +45,8 @@ def test_prompt_version_compatibility():
 
 
 def test_prompt_registry_get_latest():
-    from llmwikify.reproduction.prompts.registry import PromptRegistry
     from llmwikify.reproduction.prompts.group import PromptGroup
+    from llmwikify.reproduction.prompts.registry import PromptRegistry
     reg = PromptRegistry()
     reg.register(PromptGroup(name="test", version="1.0.0", source="builtin",
                              system="s1", user_template="t1",

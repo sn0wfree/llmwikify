@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * ((rank((sum(delay(close, 5), 20) / 20)) * correlation(close, volume,
-    2)) * rank(correlation(sum(close, 5), sum(close, 20), 2))))
+  definition: 三重因子组合：5日延迟收盘价的20日均值排名、收盘价与成交量的2日相关性、以及5日与20日收盘价之和的2日相关性的秩，三者乘积取负值
   formula: (-1 * ((rank((sum(delay(close, 5), 20) / 20)) * correlation(close, volume,
     2)) * rank(correlation(sum(close, 5), sum(close, 20), 2))))
   frequency: 日频
@@ -98,3 +97,44 @@ l6:
   - 政策驱动的板块普涨/普跌行情中, 截面 rank 失效, 反转因子集体回撤
   risk_notes: 因子对市场风格切换敏感 (成长 vs 价值切换时回撤大); 建议配合趋势强度过滤器; 短窗口相关性使因子换手率较高, 需考虑交易成本;
     极值因子值对应小市值或异常波动股票, 存在流动性风险。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # delay(close, 5)\n\
+    \    df = df.with_columns(\n        delay(pl.col('close'), 5).alias('_delay_close')\n\
+    \    )\n    # sum(delay(close, 5), 20) / 20\n    df = df.with_columns(\n     \
+    \   (rolling_sum(pl.col('_delay_close'), window=20) / 20).alias('_term1')\n  \
+    \  )\n    # correlation(close, volume, 2)\n    df = df.with_columns(\n       \
+    \ rolling_corr(pl.col('close'), pl.col('volume'), window=2).alias('_corr1')\n\
+    \    )\n    # sum(close, 5) and sum(close, 20)\n    df = df.with_columns(\n  \
+    \      rolling_sum(pl.col('close'), window=5).alias('_sum5')\n    )\n    df =\
+    \ df.with_columns(\n        rolling_sum(pl.col('close'), window=20).alias('_sum20')\n\
+    \    )\n    # correlation(sum(close, 5), sum(close, 20), 2)\n    df = df.with_columns(\n\
+    \        rolling_corr(pl.col('_sum5'), pl.col('_sum20'), window=2).alias('_corr2')\n\
+    \    )\n    # rank((sum(delay(close, 5), 20) / 20)) * correlation(close, volume,\
+    \ 2)\n    df = df.with_columns(\n        (rank(pl.col('_term1')).over('date')\
+    \ * pl.col('_corr1')).alias('_part1')\n    )\n    # rank(correlation(sum(close,\
+    \ 5), sum(close, 20), 2))\n    df = df.with_columns(\n        rank(pl.col('_corr2')).over('date').alias('_part2')\n\
+    \    )\n    # final factor: -1 * (part1 * part2)\n    factor = -1 * (pl.col('_part1')\
+    \ * pl.col('_part2'))\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1328
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_045.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 63
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.03797416022895049
+    icir: 0.24230271415338342
+    winrate: 0.6440677966101694
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00037755317944743183
+    longshort_sharpe: null
+    longshort_max_dd: -0.011994377843218416
+    validated_at: 1782306871.5444431
+  validation_date: '2026-06-24'

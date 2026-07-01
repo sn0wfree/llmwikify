@@ -10,10 +10,9 @@ Output: OrdersResult containing buy/sell signals at MA/RSI crossover points.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 import pandas as pd
-
 from QuantNodes.backtest.strategy_node import Order, OrdersResult, Signal, StrategyNode
 
 logger = logging.getLogger(__name__)
@@ -29,7 +28,7 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _make_orders(signals: List[Signal]) -> OrdersResult:
+def _make_orders(signals: list[Signal]) -> OrdersResult:
     """Convert signals to OrdersResult with corresponding orders.
 
     Always converts date to ISO string to ensure compatibility with broker
@@ -52,12 +51,12 @@ def _make_orders(signals: List[Signal]) -> OrdersResult:
 class MACrossStrategyNode(StrategyNode):
     """双均线交叉策略 (ma_cross)。"""
 
-    def __init__(self, name: str = None, config: Dict[str, Any] = None, **kwargs):
+    def __init__(self, name: str = None, config: dict[str, Any] = None, **kwargs):
         super().__init__(name=name or "MACrossStrategy", config=config, **kwargs)
         self._fast = int(self.config.get("fast", 5))
         self._slow = int(self.config.get("slow", 20))
 
-    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> List[Signal]:
+    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> list[Signal]:
         if input_data is None or input_data.empty:
             return []
         df = _normalize_columns(input_data).sort_values("date").reset_index(drop=True)
@@ -87,13 +86,13 @@ class MACrossStrategyNode(StrategyNode):
 class RSIStrategyNode(StrategyNode):
     """RSI 均值回归策略 (rsi)。"""
 
-    def __init__(self, name: str = None, config: Dict[str, Any] = None, **kwargs):
+    def __init__(self, name: str = None, config: dict[str, Any] = None, **kwargs):
         super().__init__(name=name or "RSIStrategy", config=config, **kwargs)
         self._period = int(self.config.get("period", 14))
         self._oversold = float(self.config.get("oversold", 30))
         self._overbought = float(self.config.get("overbought", 70))
 
-    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> List[Signal]:
+    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> list[Signal]:
         if input_data is None or input_data.empty:
             return []
         df = _normalize_columns(input_data).sort_values("date").reset_index(drop=True)
@@ -126,12 +125,12 @@ class RSIStrategyNode(StrategyNode):
 class MomentumStrategyNode(StrategyNode):
     """时序动量策略 (momentum)。"""
 
-    def __init__(self, name: str = None, config: Dict[str, Any] = None, **kwargs):
+    def __init__(self, name: str = None, config: dict[str, Any] = None, **kwargs):
         super().__init__(name=name or "MomentumStrategy", config=config, **kwargs)
         self._period = int(self.config.get("period", 60))
         self._threshold = float(self.config.get("threshold", 0.05))
 
-    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> List[Signal]:
+    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> list[Signal]:
         if input_data is None or input_data.empty:
             return []
         df = _normalize_columns(input_data).sort_values("date").reset_index(drop=True)
@@ -161,12 +160,12 @@ class MomentumStrategyNode(StrategyNode):
 class VolatilityStrategyNode(StrategyNode):
     """波动率突破策略 (volatility)。"""
 
-    def __init__(self, name: str = None, config: Dict[str, Any] = None, **kwargs):
+    def __init__(self, name: str = None, config: dict[str, Any] = None, **kwargs):
         super().__init__(name=name or "VolatilityStrategy", config=config, **kwargs)
         self._period = int(self.config.get("period", 20))
         self._entry_std = float(self.config.get("entry_std", 1.0))
 
-    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> List[Signal]:
+    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> list[Signal]:
         if input_data is None or input_data.empty:
             return []
         df = _normalize_columns(input_data).sort_values("date").reset_index(drop=True)
@@ -202,12 +201,12 @@ class FactorRankStrategyNode(StrategyNode):
     多标的场景下按因子值排名买入/卖出。
     """
 
-    def __init__(self, name: str = None, config: Dict[str, Any] = None, **kwargs):
+    def __init__(self, name: str = None, config: dict[str, Any] = None, **kwargs):
         super().__init__(name=name or "FactorRankStrategy", config=config, **kwargs)
         self._period = int(self.config.get("period", 20))
         self._factor_col = self.config.get("factor_col", "Close")
 
-    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> List[Signal]:
+    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> list[Signal]:
         if input_data is None or input_data.empty or "Code" not in input_data.columns:
             return []
         df = _normalize_columns(input_data).sort_values("date").reset_index(drop=True)
@@ -246,14 +245,14 @@ class FactorRankStrategyNode(StrategyNode):
 class SignalCompositeStrategyNode(StrategyNode):
     """多信号加权组合策略 (signal_composite)。"""
 
-    def __init__(self, name: str = None, config: Dict[str, Any] = None, **kwargs):
+    def __init__(self, name: str = None, config: dict[str, Any] = None, **kwargs):
         super().__init__(name=name or "SignalCompositeStrategy", config=config, **kwargs)
         self._weights = self.config.get("weights", {"ma": 0.5, "momentum": 0.5})
         self._fast = int(self.config.get("fast", 10))
         self._slow = int(self.config.get("slow", 30))
         self._momentum_period = int(self.config.get("momentum_period", 60))
 
-    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> List[Signal]:
+    def _generate_signals(self, input_data: pd.DataFrame, **kwargs) -> list[Signal]:
         if input_data is None or input_data.empty:
             return []
         df = _normalize_columns(input_data).sort_values("date").reset_index(drop=True)

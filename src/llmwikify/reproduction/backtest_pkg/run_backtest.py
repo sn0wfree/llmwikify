@@ -14,8 +14,8 @@ from typing import Any
 
 import pandas as pd
 
-from .metrics import compute_metrics_from_trades, compute_monthly_returns
 from ..paper_understanding.schemas import BacktestResult
+from .metrics import compute_metrics_from_trades, compute_monthly_returns
 from .strategies import SIGNAL_NODE_REGISTRY, get_strategy_node
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ def _reconstruct_equity_curve(
         if t_date:
             trades_by_date.setdefault(t_date, []).append(t)
 
-    for i, (date_str, close) in enumerate(zip(dates, closes)):
+    for _i, (date_str, close) in enumerate(zip(dates, closes, strict=False)):
         # Process trades for this bar
         for t in trades_by_date.get(date_str, []):
             action = ""
@@ -315,7 +315,7 @@ def _run_codegen(code: str, data: pd.DataFrame, cfg: dict[str, Any]) -> Backtest
         strategy = None
         broker = None
         quote_data = None
-        for name, obj in namespace.items():
+        for _name, obj in namespace.items():
             if isinstance(obj, StrategyNode):
                 strategy = obj
             elif isinstance(obj, SimulatedBrokerNode):

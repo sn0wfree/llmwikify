@@ -26,6 +26,12 @@ from typing import Any
 
 import pytest
 
+from llmwikify.apps.chat.base import (
+    DEFAULT_MAX_TOOL_ITERATIONS,
+    ChatBase,
+    ChatMessage,
+    ChatSession,
+)
 from llmwikify.apps.chat.skills.actions import (
     clarify_skill,
     filter_skill,
@@ -33,7 +39,6 @@ from llmwikify.apps.chat.skills.actions import (
     register_all_actions,
     score_skill,
 )
-from llmwikify.apps.chat.skills.research_skill import research_skill
 from llmwikify.apps.chat.skills.base import (
     SkillContext,
     SkillResult,
@@ -42,13 +47,7 @@ from llmwikify.apps.chat.skills.registry import (
     SkillRegistry,
     default_registry,
 )
-from llmwikify.apps.chat.base import (
-    DEFAULT_MAX_TOOL_ITERATIONS,
-    ChatBase,
-    ChatMessage,
-    ChatSession,
-)
-
+from llmwikify.apps.chat.skills.research_skill import research_skill
 
 # ─── Stub LLM clients ─────────────────────────────────────────────
 

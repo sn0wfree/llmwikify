@@ -143,7 +143,7 @@ def build_factor_pages(
         content += f"factor_class: {factor_class}\n"
         content += f"factor_params: {params_str}\n"
         content += f"factor_source: paper/{paper_id}\n"
-        content += f"status: draft\n---\n\n"
+        content += "status: draft\n---\n\n"
         content += f"# {name}\n\n"
         content += f"**Class:** {factor_class}\n\n"
         content += f"**Description:** {factor.get('description', 'TBD')}\n\n"
@@ -160,7 +160,7 @@ def build_factor_pages(
     return pages
 
 
-def read_factor_from_wiki(wiki: Any, slug: str) -> Optional[dict[str, Any]]:
+def read_factor_from_wiki(wiki: Any, slug: str) -> dict[str, Any] | None:
     """Read a Factor page from wiki and parse its frontmatter.
 
     .. deprecated::

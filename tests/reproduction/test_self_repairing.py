@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from llmwikify.reproduction.codegen import repair as sr
 from llmwikify.reproduction.codegen.ast.nodes import ASTNode

@@ -94,6 +94,19 @@ def extract_full_backtest_from_ctx(ctx: dict) -> dict:
                 }
             out["group_metrics"] = gm
 
+        # Extract group NAV time series from GroupAnalyzer ctx
+        daily_net = ga.get("daily_net_simp")
+        if daily_net is not None and hasattr(daily_net, "columns"):
+            nav_series: dict = {}
+            for g in daily_net.columns:
+                col = daily_net[g].dropna()
+                nav_series[f"G{g}"] = [
+                    {"date": int(d.timestamp() * 1000) if hasattr(d, "timestamp") else int(d), "nav": float(v)}
+                    for d, v in col.items()
+                ]
+            out["equity_curve"] = nav_series
+            out["group_nav_series"] = nav_series
+
     # LongShort
     ls = ctx.get("LongShort") or {}
     if isinstance(ls, dict):

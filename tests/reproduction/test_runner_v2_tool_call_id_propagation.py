@@ -34,7 +34,6 @@ import pytest
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2, _RunContext
 from llmwikify.apps.chat.agent.spec import ChatRunSpec
 
-
 # ── Streamable id propagation ────────────────────────────────
 
 

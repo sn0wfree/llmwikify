@@ -1,0 +1,57 @@
+name: stk_alpha_057_merged
+display_name: 'Alpha #57'
+asset_type: stk
+category: alpha
+status: 已验证
+version: 1
+created_at: '2026-06-25'
+updated_at: '2026-06-25'
+l1:
+  definition: 基于收盘价与VWAP价差、经30日高点距今天数排名加权调整后的均值回归信号，结合动量衰竭效应。
+  formula: (0 - (1 * ((close - vwap) / decay_linear(rank(ts_argmax(close, 30)), 2))))
+  frequency: 日频
+  output_schema: '[date × Code]'
+  input_columns:
+  - close
+  - vwap
+  - open
+  - high
+  - low
+  - volume
+  - returns
+  nan_meaning: 上市不足或窗口期数据不足
+  default_params: {}
+  param_constraints: {}
+  business_constraints: 支持日频调仓, T+1 信号
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: ts_argmax\
+    \ of close over 30-day window\n    df = df.with_columns(ts_argmax(pl.col('close'),\
+    \ window=30).alias('_argmax'))\n    # Step 2: cross-sectional rank of the argmax\
+    \ (must materialize before decay_linear)\n    df = df.with_columns(rank(pl.col('_argmax')).over('date').alias('_rank'))\n\
+    \    # Step 3: linear decay of the rank over 2 periods\n    df = df.with_columns(decay_linear(pl.col('_rank'),\
+    \ window=2).alias('_decay'))\n    # Step 4: compute the final factor: 0 - (1 *\
+    \ ((close - vwap) / decay_linear(...)))\n    factor = -(pl.col('close') - pl.col('vwap'))\
+    \ / pl.col('_decay')\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 681
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_057.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 48
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.006371156629833254
+    icir: -0.04948086429741615
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -4.0166538990416e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.024704410283805812
+    validated_at: 1782364598.7424686
+  validation_date: '2026-06-25'

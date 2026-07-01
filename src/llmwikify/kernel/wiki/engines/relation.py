@@ -21,7 +21,6 @@ DEFAULT_RELATION_TYPES = {
 # Valid confidence levels
 CONFIDENCE_LEVELS = {"EXTRACTED", "INFERRED", "AMBIGUOUS"}
 
-
 class RelationEngine:
     """Manage knowledge graph relations stored in SQLite.
 
@@ -99,7 +98,7 @@ class RelationEngine:
             CREATE INDEX IF NOT EXISTS idx_relations_source ON relations(source);
             CREATE INDEX IF NOT EXISTS idx_relations_target ON relations(target);
             CREATE INDEX IF NOT EXISTS idx_relations_pair ON relations(source, target);
-            
+
             CREATE TABLE IF NOT EXISTS entity_aliases (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 alias TEXT NOT NULL UNIQUE,
@@ -123,7 +122,7 @@ class RelationEngine:
         """Get list of existing wiki page names."""
         if self.wiki_root is None:
             return []
-        
+
         wiki_dir = self.wiki_root / "wiki"
         if not wiki_dir.exists():
             return []
@@ -220,31 +219,31 @@ class RelationEngine:
 
     def resolve_entity(self, name: str, fuzzy_threshold: float = 0.85) -> str:
         """Resolve entity name to canonical form.
-        
+
         Resolution order:
         1. Exact match in wiki pages
         2. Alias lookup
         3. Fuzzy match against existing entities
         4. Return original name (new entity)
-        
+
         Args:
             name: Entity name to resolve
             fuzzy_threshold: Threshold for fuzzy matching (0-1)
-        
+
         Returns:
             Canonical entity name
         """
         if not name or not name.strip():
             return name
-        
+
         normalized_name = self._normalize_name(name)
-        
+
         # 1. Exact match in wiki pages
         wiki_pages = self._get_wiki_pages()
         for page in wiki_pages:
             if self._normalize_name(page) == normalized_name:
                 return page
-        
+
         # 2. Alias lookup
         cursor = self.index.conn.execute(
             "SELECT canonical FROM entity_aliases WHERE alias = ?",
@@ -253,7 +252,7 @@ class RelationEngine:
         row = cursor.fetchone()
         if row:
             return row["canonical"]
-        
+
         # Also check original name (case-sensitive alias)
         cursor = self.index.conn.execute(
             "SELECT canonical FROM entity_aliases WHERE alias = ?",
@@ -262,40 +261,40 @@ class RelationEngine:
         row = cursor.fetchone()
         if row:
             return row["canonical"]
-        
+
         # 3. Fuzzy match against existing entities
         candidates = wiki_pages.copy()
-        
+
         # Also add existing canonical names from aliases
         cursor = self.index.conn.execute("SELECT DISTINCT canonical FROM entity_aliases")
         for row in cursor.fetchall():
             if row["canonical"] not in candidates:
                 candidates.append(row["canonical"])
-        
+
         # Also add existing entity names from relations
         cursor = self.index.conn.execute("SELECT DISTINCT source FROM relations")
         for row in cursor.fetchall():
             if row["source"] not in candidates:
                 candidates.append(row["source"])
-        
+
         cursor = self.index.conn.execute("SELECT DISTINCT target FROM relations")
         for row in cursor.fetchall():
             if row["target"] not in candidates:
                 candidates.append(row["target"])
-        
+
         if candidates:
             best_match = self._fuzzy_match_entity(name, candidates, fuzzy_threshold)
             if best_match:
                 # Auto-add alias
                 self.add_alias(name, best_match, source="fuzzy_match")
                 return best_match
-        
+
         # 4. Return original name (new entity)
         return name
 
     def add_alias(self, alias: str, canonical: str, source: str = "manual", confidence: float = 1.0) -> None:
         """Add an alias mapping for an entity.
-        
+
         Args:
             alias: Alias name
             canonical: Canonical entity name
@@ -303,14 +302,14 @@ class RelationEngine:
             confidence: Confidence level (0-1)
         """
         normalized_alias = self._normalize_name(alias)
-        
+
         # Check if alias already exists
         cursor = self.index.conn.execute(
             "SELECT id, canonical FROM entity_aliases WHERE alias = ?",
             (normalized_alias,),
         )
         existing = cursor.fetchone()
-        
+
         if existing:
             # Update if different canonical
             if existing["canonical"] != canonical:
@@ -325,15 +324,15 @@ class RelationEngine:
                 "INSERT INTO entity_aliases (alias, canonical, confidence, source) VALUES (?, ?, ?, ?)",
                 (normalized_alias, canonical, confidence, source),
             )
-        
+
         self.index.conn.commit()
 
     def get_aliases(self, canonical: str) -> list[str]:
         """Get all aliases for a canonical entity name.
-        
+
         Args:
             canonical: Canonical entity name
-        
+
         Returns:
             List of alias names
         """

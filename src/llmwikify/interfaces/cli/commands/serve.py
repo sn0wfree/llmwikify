@@ -71,7 +71,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
             wiki_count = len(registry.list_wikis())
             print(f"Starting Multi-Wiki Server '{service_name}' on {final_host}:{port}")
             print(f"  Wikis: {wiki_count} registered")
-            print(f"  Transport: http")
+            print("  Transport: http")
             print(f"  Auth: {'enabled' if auth_token else 'disabled'}")
             if web:
                 print(f"  Web UI: http://{final_host}:{port}")

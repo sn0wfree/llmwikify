@@ -20,9 +20,10 @@ Output schema (consumed by run_reproduction):
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterable, Optional
+from collections.abc import Iterable
+from typing import Any, Optional
 
-from ..common.utils import parse_frontmatter, FRONTMATTER_RE
+from ..common.utils import FRONTMATTER_RE, parse_frontmatter
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ def _to_signal_params(raw: Any) -> dict[str, Any]:
     return out
 
 
-def extract_from_page(content: str) -> Optional[dict[str, Any]]:
+def extract_from_page(content: str) -> dict[str, Any] | None:
     """Extract a strategy_config from one wiki page's content."""
     fm = parse_frontmatter(content)
     if not fm:
@@ -109,7 +110,7 @@ def extract_strategy_config(wiki: Any) -> dict[str, Any]:
         or {"signal_type": "unknown", "signal_params": {}, "wiki_page": None}
     """
     for subdir in ("strategy", "trading"):
-        for origin, stem, content in _iter_strategy_pages(wiki, subdir):
+        for _origin, stem, content in _iter_strategy_pages(wiki, subdir):
             cfg = extract_from_page(content)
             if cfg is None:
                 continue

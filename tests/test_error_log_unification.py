@@ -159,6 +159,7 @@ def test_stderr_print_writes_raw_to_stderr():
 def test_graph_query_raises_command_error_on_missing_concept():
     """``graph-query neighbors`` without arg raises CommandError."""
     from argparse import Namespace
+
     from llmwikify.interfaces.cli._base import CommandError
     from llmwikify.interfaces.cli.commands.graph_query import run_graph_query
 
@@ -179,6 +180,7 @@ def test_graph_query_raises_command_error_on_missing_concept():
 def test_graph_query_context_raises_command_error_on_missing_row():
     """``graph-query context`` with unknown relation id raises CommandError."""
     from argparse import Namespace
+
     from llmwikify.interfaces.cli._base import CommandError
     from llmwikify.interfaces.cli.commands.graph_query import run_graph_query
 
@@ -210,6 +212,7 @@ def test_batch_no_longer_uses_file_sys_stderr_for_emoji():
     mentions of the pattern don't false-positive.
     """
     import ast
+
     import llmwikify.interfaces.cli.commands.batch as batch_mod
 
     tree = ast.parse(inspect.getsource(batch_mod))
@@ -253,6 +256,7 @@ def test_ingest_no_longer_uses_file_sys_stderr_for_emoji():
     AST-based check so docstring mentions don't false-positive.
     """
     import ast
+
     import llmwikify.interfaces.cli.commands.ingest as ingest_mod
 
     tree = ast.parse(inspect.getsource(ingest_mod))

@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * rank(covariance(rank(high), rank(volume), 5)))
+  definition: 5日窗口内，股票日最高价与成交量的横截面秩的协方差的负秩，用于捕捉价格极值与成交量之间的横截面关系
   formula: (-1 * rank(covariance(rank(high), rank(volume), 5)))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -96,3 +96,35 @@ l6:
   - 流动性枯竭或市场微观结构变化 (如涨跌幅放宽、注册制) 会改变量价关系, 需重新校准
   risk_notes: 建议结合 20 日均线趋势过滤器使用, 在均线之上不做空以规避趋势市; 同时对极端协方差值做 winsorize 截尾, 防止单只妖股拉偏因子;
     回测时需注意前视偏差 (rolling_cov 不能用未来数据) 及 survivorship bias。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: Materialize\
+    \ cross-sectional ranks before using in rolling covariance\n    df = df.with_columns([\n\
+    \        rank(pl.col('high')).over('date').alias('_rank_high'),\n        rank(pl.col('volume')).over('date').alias('_rank_volume')\n\
+    \    ])\n    # Step 2: Compute rolling covariance of the two ranked series (window=5)\n\
+    \    df = df.with_columns(\n        covariance(pl.col('_rank_high'), pl.col('_rank_volume'),\
+    \ window=5).alias('_cov')\n    )\n    # Step 3: Cross-sectionally rank the covariance\
+    \ result, then negate\n    factor = -1 * rank(pl.col('_cov')).over('date')\n \
+    \   return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 659
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_016.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 50
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.004068664867148064
+    icir: 0.027901169517442065
+    winrate: 0.4915254237288136
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00014389788268021064
+    longshort_sharpe: null
+    longshort_max_dd: -0.0255449454939575
+    validated_at: 1782306026.7932045
+  validation_date: '2026-06-24'

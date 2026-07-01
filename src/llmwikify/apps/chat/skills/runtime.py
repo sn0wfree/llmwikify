@@ -156,7 +156,7 @@ class SkillRuntime:
         self.registry = registry
 
     @classmethod
-    def default(cls) -> "SkillRuntime":
+    def default(cls) -> SkillRuntime:
         """Build a Runtime that uses the default singleton registry."""
         from llmwikify.apps.chat.skills.registry import default_registry
 

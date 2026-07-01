@@ -42,21 +42,27 @@ class TestExtractFactorsFromList:
 
     def test_basic_extraction(self):
         """_extract_factors_from_list produces correct number of factors."""
-        from llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
+        from llmwikify.reproduction.paper_understanding.extract_paper import (
+            _extract_factors_from_list,
+        )
         extraction = self._make_extraction(n_factors=5)
         results = _extract_factors_from_list(extraction, "test_paper")
         assert len(results) == 5
 
     def test_factor_name_format(self):
         """Factor names follow asset/category/slug format."""
-        from llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
+        from llmwikify.reproduction.paper_understanding.extract_paper import (
+            _extract_factors_from_list,
+        )
         extraction = self._make_extraction(n_factors=1)
         results = _extract_factors_from_list(extraction, "test_paper")
         assert results[0]["name"] == "stock/price/alpha-001"
 
     def test_six_layer_structure(self):
         """Each factor has l1-l5 + metadata keys."""
-        from llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
+        from llmwikify.reproduction.paper_understanding.extract_paper import (
+            _extract_factors_from_list,
+        )
         extraction = self._make_extraction(n_factors=1)
         results = _extract_factors_from_list(extraction, "test_paper")
         factor = results[0]["factor"]
@@ -69,7 +75,9 @@ class TestExtractFactorsFromList:
 
     def test_l1_fields(self):
         """L1 contains definition, formula, input_columns, etc."""
-        from llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
+        from llmwikify.reproduction.paper_understanding.extract_paper import (
+            _extract_factors_from_list,
+        )
         extraction = self._make_extraction(n_factors=1)
         results = _extract_factors_from_list(extraction, "test_paper")
         l1 = results[0]["factor"]["l1"]
@@ -80,7 +88,9 @@ class TestExtractFactorsFromList:
 
     def test_l4_hypotheses_unverified(self):
         """L4 hypotheses are marked as 未验证."""
-        from llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
+        from llmwikify.reproduction.paper_understanding.extract_paper import (
+            _extract_factors_from_list,
+        )
         extraction = self._make_extraction(n_factors=1)
         results = _extract_factors_from_list(extraction, "test_paper")
         hypotheses = results[0]["factor"]["l4"]["hypotheses"]
@@ -89,28 +99,36 @@ class TestExtractFactorsFromList:
 
     def test_empty_factor_list(self):
         """Empty factor_list returns empty list."""
-        from llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
+        from llmwikify.reproduction.paper_understanding.extract_paper import (
+            _extract_factors_from_list,
+        )
         extraction = {"factor_list": []}
         results = _extract_factors_from_list(extraction, "test_paper")
         assert results == []
 
     def test_missing_factor_list(self):
         """Missing factor_list returns empty list."""
-        from llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
+        from llmwikify.reproduction.paper_understanding.extract_paper import (
+            _extract_factors_from_list,
+        )
         extraction = {}
         results = _extract_factors_from_list(extraction, "test_paper")
         assert results == []
 
     def test_metadata_source_paper(self):
         """Metadata includes source_paper."""
-        from llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
+        from llmwikify.reproduction.paper_understanding.extract_paper import (
+            _extract_factors_from_list,
+        )
         extraction = self._make_extraction(n_factors=1)
         results = _extract_factors_from_list(extraction, "my_paper")
         assert results[0]["factor"]["metadata"]["source_paper"] == "my_paper"
 
     def test_defaults_for_missing_fields(self):
         """Missing fields get sensible defaults."""
-        from llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
+        from llmwikify.reproduction.paper_understanding.extract_paper import (
+            _extract_factors_from_list,
+        )
         extraction = {"factor_list": [{"name": "minimal_factor"}]}
         results = _extract_factors_from_list(extraction, "test")
         factor = results[0]["factor"]

@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank(delta(vwap, 1.29456))^Ts_Rank(correlation(IndNeutralize(close,
-    IndClass.industry), adv50, 17.8256), 17.9171)) * -1)
+  definition: 基于VWAP动量与行业中性化交易量相关性的组合信号，通过幂函数放大排名差异并取反
   formula: ((rank(delta(vwap, 1.29456))^Ts_Rank(correlation(IndNeutralize(close, IndClass.industry),
     adv50, 17.8256), 17.9171)) * -1)
   frequency: 日频
@@ -108,3 +107,37 @@ l6:
   - 宏观流动性急剧变化 (如央行大幅放/缩量) 导致 adv50 与价格联动结构突变, ts_rank 历史分布失效
   risk_notes: 幂运算放大极端值贡献, 单票权重需做上限约束; 建议与中长期动量或质量因子低相关叠加, 避免在趋势市与动量因子同向踩踏; 行业中性化依赖行业分类准确性,
     分类口径变更会引发因子值断点。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv50: 50-day average\
+    \ dollar volume (close * volume)\n    adv50 = ts_mean(pl.col('close') * pl.col('volume'),\
+    \ window=50)\n\n    # Industry neutralize close (using neutralize as substitute\
+    \ since industry class unavailable)\n    ind_neutral_close = neutralize(pl.col('close')).over('date')\n\
+    \n    # Correlation between ind-neutralized close and adv50\n    corr = rolling_corr(ind_neutral_close,\
+    \ adv50, window=18)\n\n    # Ts_Rank of correlation\n    ts_rank_corr = ts_rank(corr,\
+    \ window=18)\n\n    # Delta of vwap\n    vwap_delta = delta(pl.col('vwap'), periods=1)\n\
+    \n    # Cross-sectional rank of delta(vwap)\n    rank_delta = rank(vwap_delta).over('date')\n\
+    \n    # Raise rank to the power of ts_rank\n    factor = rank_delta ** ts_rank_corr\n\
+    \n    # Multiply by -1\n    factor = factor * -1\n\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 866
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_070.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 47
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.012559456601099054
+    icir: -0.08357830012574002
+    winrate: 0.5084745762711864
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 4.313603884287254e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.03193108808886523
+    validated_at: 1782149924.324742
+  validation_date: '2026-06-23'

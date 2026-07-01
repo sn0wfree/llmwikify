@@ -20,7 +20,6 @@ from llmwikify.apps.chat.skills.wiki_query_skill import (
     wiki_query_skill,
 )
 
-
 # ─── Mock wiki ────────────────────────────────────────────────────
 
 

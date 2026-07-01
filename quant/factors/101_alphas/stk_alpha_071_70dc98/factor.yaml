@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: max(Ts_Rank(decay_linear(correlation(Ts_Rank(close, 3.43976), Ts_Rank(adv180,
-    12.0647), 18.0175), 4.20501), 15.6948), Ts_Rank(decay_linear((rank(((low + open)
-    - (vwap + vwap)))^2), 16.4662), 4.4388))
+  definition: 取两个时间序列排名 decay 加权信号的较大值：成分1为价格成交量相关性动量，成分2为VWAP偏离均值回归强度
   formula: max(Ts_Rank(decay_linear(correlation(Ts_Rank(close, 3.43976), Ts_Rank(adv180,
     12.0647), 18.0175), 4.20501), 15.6948), Ts_Rank(decay_linear((rank(((low + open)
     - (vwap + vwap)))^2), 16.4662), 4.4388))
@@ -89,3 +87,46 @@ l6:
   - 小盘低流动性股票（adv180 噪声大，rank 截面不稳定）
   - 极端波动或政策事件驱动行情（日内价格偏离失真）
   risk_notes: 因子方向可能因 max 选择偏向 Part 1 或 Part 2 而漂移，建议分市场环境检验；衰减窗口较短(4日)使信号对近期数据敏感
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv180 = 180-day\
+    \ average daily volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+    \ window=180).alias('_adv180')\n    )\n    \n    # Ts_Rank(close, ~3)\n    df\
+    \ = df.with_columns(\n        ts_rank(pl.col('close'), window=3).alias('_tsrank_close')\n\
+    \    )\n    \n    # Ts_Rank(adv180, ~12)\n    df = df.with_columns(\n        ts_rank(pl.col('_adv180'),\
+    \ window=12).alias('_tsrank_adv180')\n    )\n    \n    # correlation, window ~18\n\
+    \    df = df.with_columns(\n        correlation(pl.col('_tsrank_close'), pl.col('_tsrank_adv180'),\
+    \ window=18).alias('_corr')\n    )\n    \n    # decay_linear of correlation, window\
+    \ ~4\n    df = df.with_columns(\n        decay_linear(pl.col('_corr'), window=4).alias('_decay1')\n\
+    \    )\n    \n    # Ts_Rank of decay_linear, window ~16\n    df = df.with_columns(\n\
+    \        ts_rank(pl.col('_decay1'), window=16).alias('_tsrank1')\n    )\n    \n\
+    \    # rank((low + open) - (vwap + vwap)) then square\n    diff_expr = (pl.col('low')\
+    \ + pl.col('open')) - (pl.col('vwap') + pl.col('vwap'))\n    df = df.with_columns(\n\
+    \        (rank(diff_expr).over('date') ** 2).alias('_rank_diff_sq')\n    )\n \
+    \   \n    # decay_linear, window ~16\n    df = df.with_columns(\n        decay_linear(pl.col('_rank_diff_sq'),\
+    \ window=16).alias('_decay2')\n    )\n    \n    # Ts_Rank, window ~4\n    df =\
+    \ df.with_columns(\n        ts_rank(pl.col('_decay2'), window=4).alias('_tsrank2')\n\
+    \    )\n    \n    # max of the two branches\n    factor = pl.max_horizontal(pl.col('_tsrank1'),\
+    \ pl.col('_tsrank2'))\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1571
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_071.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 46
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.013244875866919026
+    icir: -0.09770261331937094
+    winrate: 0.4915254237288136
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00015934343990164912
+    longshort_sharpe: null
+    longshort_max_dd: -0.01547716971407487
+    validated_at: 1782349948.8434057
+  validation_date: '2026-06-25'

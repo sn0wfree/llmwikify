@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (rank((open - ts_min(open, 12.4105))) < Ts_Rank((rank(correlation(sum(((high
-    + low) / 2), 19.1351), sum(adv40, 19.1351), 12.8742))^5), 11.7584))
+  definition: 该因子度量开盘价从12.41日最低点的恢复程度与中点价格-40日平均成交量相关性（5次方）时序排名之间的关系，取两者排名之差作为因子值。
   formula: (rank((open - ts_min(open, 12.4105))) < Ts_Rank((rank(correlation(sum(((high
     + low) / 2), 19.1351), sum(adv40, 19.1351), 12.8742))^5), 11.7584))
   frequency: 日频
@@ -29,3 +28,42 @@ l2: {}
 l3: {}
 l4: {}
 l6: {}
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv40 = mean(volume,\
+    \ 40) (standard Alpha101 definition)\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+    \ window=40).alias('_adv40')\n    )\n    # ts_min(open, 12)\n    df = df.with_columns(\n\
+    \        ts_min(pl.col('open'), window=12).alias('_ts_min_open')\n    )\n    #\
+    \ Left side: rank(open - ts_min(open, 12))\n    df = df.with_columns(\n      \
+    \  rank(pl.col('open') - pl.col('_ts_min_open')).over('date').alias('_left')\n\
+    \    )\n    # sum((high+low)/2, 19) and sum(adv40, 19)\n    df = df.with_columns(\n\
+    \        rolling_sum((pl.col('high') + pl.col('low')) / 2, window=19).alias('_sum_hl'),\n\
+    \        rolling_sum(pl.col('_adv40'), window=19).alias('_sum_adv')\n    )\n \
+    \   # correlation(sum_hl, sum_adv, 12)\n    df = df.with_columns(\n        rolling_corr(pl.col('_sum_hl'),\
+    \ pl.col('_sum_adv'), window=12).alias('_corr')\n    )\n    # rank(corr) ^ 5\n\
+    \    df = df.with_columns(\n        (rank(pl.col('_corr')).over('date') ** 5).alias('_rp')\n\
+    \    )\n    # ts_rank(rp, 11)\n    df = df.with_columns(\n        ts_rank(pl.col('_rp'),\
+    \ window=11).alias('_right')\n    )\n    # Final comparison\n    factor = pl.when(pl.col('_left')\
+    \ < pl.col('_right')).then(1).otherwise(0)\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1250
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_095.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 53
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.005185344273138102
+    icir: 0.03480975447516509
+    winrate: 0.559322033898305
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -7.002769598074554e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.04238306107753664
+    validated_at: 1782352158.0288286
+  validation_date: '2026-06-25'

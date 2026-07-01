@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (Ts_Rank(decay_linear(correlation(IndNeutralize(vwap, IndClass.industry),
-    adv81, 17.4193), 19.848), 7.54455) / rank(decay_linear(delta(((close * 0.524434)
-    + (vwap * (1 - 0.524434))), 2.77377), 16.2664
+  definition: Alpha#93是一个日频.alpha，衡量行业中性化VWAP与成交量相关性的时序排名相对于加权价格动量的比率。
   formula: (Ts_Rank(decay_linear(correlation(IndNeutralize(vwap, IndClass.industry),
     adv81, 17.4193), 19.848), 7.54455) / rank(decay_linear(delta(((close * 0.524434)
     + (vwap * (1 - 0.524434))), 2.77377), 16.2664)))
@@ -33,3 +31,38 @@ l2: {}
 l3: {}
 l4: {}
 l6: {}
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
+    \ 'date'])\n    \n    # adv81: 81-day average volume (proxy for average daily\
+    \ volume)\n    adv81 = rolling_mean(pl.col('volume'), window=81)\n    \n    #\
+    \ Numerator: Ts_Rank(decay_linear(correlation(IndNeutralize(vwap), adv81, 17),\
+    \ 20), 8)\n    vwap_neutralized = neutralize(pl.col('vwap')).over('date')\n  \
+    \  corr_val = rolling_corr(vwap_neutralized, adv81, window=17)\n    decay1 = decay_linear(corr_val,\
+    \ window=20)\n    num = ts_rank(decay1, window=8)\n    \n    # Denominator: rank(decay_linear(delta(close*0.524434\
+    \ + vwap*0.475566, 3), 16))\n    weighted_price = pl.col('close') * 0.524434 +\
+    \ pl.col('vwap') * (1 - 0.524434)\n    delta_val = delta(weighted_price, periods=3)\n\
+    \    decay2 = decay_linear(delta_val, window=16)\n    denom = rank(decay2).over('date')\n\
+    \    \n    factor = num / denom\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 900
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_093.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 50
+    status: 待验证
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: null
+    icir: null
+    winrate: null
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.0001486691676113594
+    longshort_sharpe: null
+    longshort_max_dd: -0.021314905285700316
+    validated_at: 1782151060.1045597
+  validation_date: '2026-06-23'

@@ -23,7 +23,6 @@ from llmwikify.apps.agent.tools.skill_adapter import SkillToolAdapter
 from llmwikify.apps.chat.skills.registry import SkillRegistry
 from llmwikify.apps.chat.skills.service import SkillService
 
-
 # ─── Fixtures ────────────────────────────────────────────────────
 
 

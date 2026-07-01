@@ -1,195 +1,80 @@
-# llmwikify 集成示例
+# llmwikify 端到端示例剧本
 
-本目录包含 llmwikify 的各种使用和集成示例。
-
----
-
-## 📋 示例列表
-
-| 文件名 | 说明 |
-|--------|------|
-| **`basic_usage.py`** | 基础使用：创建 Wiki、页面读写、搜索、引用、健康检查 |
-| **`run_server.py`** | Web 服务器：FastAPI 统一服务器、API 认证、MCP 集成 |
-| **`mcp_agent.py`** | MCP Agent 集成：MCP 工具列表、Agent 集成模式、Claude 配置 |
-| **`integrate_with_django.py`** | Django 集成：ORM 集成、视图、API、信号处理 |
-| **`integrate_with_flask.py`** | Flask 集成：Blueprint、REST API、模板渲染 |
-| **`Dockerfile.example`** | Docker 容器化：多阶段构建、健康检查 |
-| **`docker-compose.yml.example`** | Docker Compose：完整服务栈、备份、QMD |
+> **v0.38.0 (2026-06-30)** — 5 个端到端剧本，对应 [docs/TUTORIAL.md](../docs/TUTORIAL.md)
+> 5 个场景。每个剧本 30-80 行独立可跑脚本 + README + fixtures。
 
 ---
 
-## 🚀 快速开始
+## 📋 剧本目录
 
-### 运行基础示例
+| # | 场景 | 路径 | 关键 API |
+|---|---|---|---|
+| 01 | 个人阅读笔记 wiki | [`01_personal_reading_notes/`](01_personal_reading_notes/) | init / ingest / search / write_page / build-index / references / lint |
+| 02 | 公司尽调知识库 | [`02_company_research_kb/`](02_company_research_kb/) | batch ingest / synthesize / GraphAnalyzer / lint |
+| 03 | 多 wiki 注册表 | [`03_multi_wiki_registry/`](03_multi_wiki_registry/) | WikiRegistry / WikiDiscovery / switch / list |
+| 04 | Chat SSE 客户端 | [`04_chat_sse_client/`](04_chat_sse_client/) | httpx.stream / /api/agent/chat / SSE 事件 |
+| 05 | Paper → Factor → Backtest | [`05_paper_to_factor/`](05_paper_to_factor/) | write_factor_yaml / list_factors / DuckDB |
+
+---
+
+## 🚀 一键跑全部
 
 ```bash
-# 确保 llmwikify 已安装
-pip install -e .
+# 1-3、5 不需要 LLM / 网络
+for d in 0[1-3]_* 05_*; do
+    echo "===== $d ====="
+    (cd "$d" && python play.py)
+    echo
+done
 
-# 运行基础使用示例
-python examples/basic_usage.py
-
-# 运行服务器示例
-python examples/run_server.py
-
-# 运行 MCP 示例
-python examples/mcp_agent.py
+# 4 需要先启 server
+(cd /tmp/demo-wiki && llmwikify init --agent generic)
+(cd /tmp/demo-wiki && llmwikify serve --web --port 8765 --auth-token mysecret &) ; sleep 3
+cd 04_chat_sse_client && python play.py
 ```
 
 ---
 
-## 📖 集成场景
+## 📁 配置文件模板
 
-### 场景 1：作为 Python 库使用
+旧版 `*.yaml` 模板（`personal-kb.yaml` / `project-docs.yaml` 等）保留为
+wiki config snippets，可直接 `cat <file> >> .wiki-config.yaml` 合并。
 
-```python
-from llmwikify import Wiki, create_wiki
-
-wiki = create_wiki("./my-wiki")
-wiki.write_page("Test", "content")
-results = wiki.search("keyword")
-```
-
-适用：任何 Python 项目的本地知识库。
-
-### 场景 2：作为 Web 服务
-
-```python
-from llmwikify.server import WikiServer
-
-server = WikiServer(wiki, enable_mcp=True, enable_rest=True)
-server.run(port=8765)
-```
-
-适用：微服务架构、多客户端共享知识库。
-
-### 场景 3：作为 MCP 工具
-
-```bash
-llmwikify mcp --name my-wiki
-```
-
-适用：AI Agent 集成（Claude Desktop、Cursor、OpenCode 等）。
-
-### 场景 4：Web 框架集成
-
-- Django：ORM 模型、视图、信号
-- Flask：Blueprint、REST API、Jinja2 模板
+| 文件 | 用途 |
+|---|---|
+| `personal-kb.yaml` | 个人知识库 config 片段 |
+| `project-docs.yaml` | 项目文档 wiki |
+| `research-wiki.yaml` | 研究知识库 |
+| `mining-news-wiki.yaml` | 矿业新闻 wiki |
 
 ---
 
-## 🔧 配置文件模板
+## 🗄️ Legacy 脚本（已迁移）
 
-| 文件名 | 说明 |
-|--------|------|
-| **`personal-kb.yaml`** | 个人知识库配置 |
-| **`project-docs.yaml`** | 项目文档配置 |
-| **`research-wiki.yaml`** | 研究知识库配置 |
-| **`mining-news-wiki.yaml`** | 新闻摘要配置 |
+历史零散示例已搬到 [`legacy/`](legacy/) 目录并加 **DEPRECATED** 横幅。
+**不要在新代码里引用**。迁移路径见 [legacy/README.md](legacy/README.md)。
 
----
-
-## 🐳 Docker 部署
-
-```bash
-# 复制配置文件
-cp examples/Dockerfile.example ./Dockerfile
-cp examples/docker-compose.yml.example ./docker-compose.yml
-
-# 启动
-docker-compose up -d
-
-# 带 QMD 混合搜索
-docker-compose --profile qmd up -d
-```
+| 旧文件 | 替代剧本 |
+|---|---|
+| `legacy/basic_usage.py` | `01_personal_reading_notes/` |
+| `legacy/run_server.py` | `03_multi_wiki_registry/` + `04_chat_sse_client/` |
+| `legacy/mcp_agent.py` | `04_chat_sse_client/` |
+| `legacy/integrate_with_django.py` | （仍参考用，无端到端剧本） |
+| `legacy/integrate_with_flask.py` | （仍参考用，无端到端剧本） |
+| `legacy/Dockerfile.example` | （仍参考用） |
+| `legacy/docker-compose.yml.example` | （仍参考用） |
 
 ---
 
-## 💡 最佳实践
+## 🔍 选哪个剧本
 
-### 1. 知识库路径管理
-
-```python
-# 好做法：使用绝对路径
-wiki = create_wiki(Path.cwd() / "data" / "wiki")
-
-# 避免：相对路径依赖工作目录
-wiki = create_wiki("../wiki")  # ❌
+```
+我想……
+├── 入门：把 PDF 转成可搜索 wiki          → 01
+├── 多源分析：年报/招股书 → 知识图谱       → 02
+├── 一个 server 挂多个 wiki              → 03
+└── 让 LLM 反过来用 wiki 回答问题         → 04
+└── 量化复现：paper → factor → backtest  → 05
 ```
 
-### 2. Wiki 实例生命周期
-
-```python
-# 在应用启动时初始化，复用单例
-# 避免每次请求都创建 Wiki 实例
-
-# Django: 放入 AppConfig.ready()
-# Flask: 放入应用工厂
-# FastAPI: 放入 lifespan 事件
-```
-
-### 3. 并发访问
-
-Wiki 类是线程安全的，可以在多线程环境下使用。但建议在生产环境中：
-- 使用连接池模式
-- 避免频繁打开关闭
-- 考虑使用文件锁进行写操作
-
-### 4. 备份策略
-
-```bash
-# 定时备份
-0 2 * * * tar -czf backup-$(date +%Y%m%d).tar.gz ./wiki/
-```
-
----
-
-## ❓ 常见问题
-
-### Q: 如何处理大文件？
-
-A: 建议：
-- 单个页面不超过 10MB
-- 大附件放入 raw/ 目录
-- 使用 `wiki_ingest` 自动提取内容
-
-### Q: 如何迁移现有知识库？
-
-A:
-```python
-from pathlib import Path
-
-wiki = Wiki("./new-wiki")
-wiki.init()
-
-# 批量导入
-for md_file in Path("./old-wiki").glob("**/*.md"):
-    content = md_file.read_text()
-    wiki.write_page(md_file.stem, content)
-```
-
-### Q: 如何自定义 MCP 工具？
-
-A:
-```python
-from llmwikify.mcp.tools import register_wiki_tools
-from fastmcp import FastMCP
-
-mcp = FastMCP("my-custom-wiki")
-register_wiki_tools(mcp, wiki)
-
-# 添加自定义工具
-@mcp.tool
-def my_custom_tool():
-    return "..."
-```
-
----
-
-## 📚 相关文档
-
-- [项目 README](../README.md)
-- [架构文档](../ARCHITECTURE.md)
-- [迁移指南](../MIGRATION.md)
-- [MCP 配置](../docs/MCP_SETUP.md)
-- [QMD 配置](../docs/QMD_SETUP.md)
+详见 [docs/TUTORIAL.md §0 决策树](../docs/TUTORIAL.md#0-预备安装矩阵--决策树)。

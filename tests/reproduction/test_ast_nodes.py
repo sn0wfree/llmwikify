@@ -6,9 +6,16 @@ import pytest
 from pydantic import ValidationError
 
 from llmwikify.reproduction.codegen.ast.nodes import (
-    ASTNode, NodeType, OpName,
-    make_col, make_lit, make_binary, make_unary, make_call,
-    is_known_op, get_op_spec,
+    ASTNode,
+    NodeType,
+    OpName,
+    get_op_spec,
+    is_known_op,
+    make_binary,
+    make_call,
+    make_col,
+    make_lit,
+    make_unary,
 )
 
 
@@ -105,7 +112,6 @@ class TestNodeType:
 
     def test_node_type_is_str_enum(self) -> None:
         """NodeType 是 str Enum."""
-        from llmwikify.reproduction.codegen.ast.nodes import NodeType
         assert issubclass(NodeType, str)
         # 至少有 COL 和 LIT
         assert hasattr(NodeType, "COL")

@@ -18,9 +18,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
+    PASS2_MAX_RETRY_ROUNDS,
     PASS2_SUCCESS_THRESHOLD_HIGH,
     PASS2_SUCCESS_THRESHOLD_LOW,
-    PASS2_MAX_RETRY_ROUNDS,
     SignalDetail,
     SignalStub,
     TrackBResult,
@@ -103,10 +103,10 @@ class TestAutoRetryLogic:
         success_rate = 0.97
         n_failed = 3
         retry_rounds = 0
-        
+
         needs_retry = success_rate < PASS2_SUCCESS_THRESHOLD_HIGH and n_failed > 0
         should_retry = needs_retry and retry_rounds < PASS2_MAX_RETRY_ROUNDS
-        
+
         assert not should_retry
 
     def test_retry_when_medium_success(self):
@@ -114,10 +114,10 @@ class TestAutoRetryLogic:
         success_rate = 0.89
         n_failed = 11
         retry_rounds = 0
-        
+
         needs_retry = success_rate < PASS2_SUCCESS_THRESHOLD_HIGH and n_failed > 0
         should_retry = needs_retry and retry_rounds < PASS2_MAX_RETRY_ROUNDS
-        
+
         assert should_retry
 
     def test_no_retry_when_max_rounds_reached(self):
@@ -125,10 +125,10 @@ class TestAutoRetryLogic:
         success_rate = 0.89
         n_failed = 11
         retry_rounds = PASS2_MAX_RETRY_ROUNDS
-        
+
         needs_retry = success_rate < PASS2_SUCCESS_THRESHOLD_HIGH and n_failed > 0
         should_retry = needs_retry and retry_rounds < PASS2_MAX_RETRY_ROUNDS
-        
+
         assert not should_retry
 
     def test_no_retry_when_zero_failures(self):
@@ -136,10 +136,10 @@ class TestAutoRetryLogic:
         success_rate = 0.90
         n_failed = 0
         retry_rounds = 0
-        
+
         needs_retry = success_rate < PASS2_SUCCESS_THRESHOLD_HIGH and n_failed > 0
         should_retry = needs_retry and retry_rounds < PASS2_MAX_RETRY_ROUNDS
-        
+
         assert not should_retry
 
 
@@ -174,9 +174,12 @@ class TestOrchestratorIntegration:
     def test_summary_includes_success_rate_fields(self):
         """Orchestrator summary should include success rate fields."""
         # This is a structural test - actual integration tested in e2e
-        from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import run_one_paper
         import inspect
-        
+
+        from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import (
+            run_one_paper,
+        )
+
         # Check that run_one_paper exists and has the expected signature
         sig = inspect.signature(run_one_paper)
         assert "paper_id" in sig.parameters

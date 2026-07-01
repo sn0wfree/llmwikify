@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: 'rank(((0 < ts_min(delta(close, 1), 4)) ? delta(close, 1) : ((ts_max(delta(close,
-    1), 4) < 0) ? delta(close, 1) : (-1 * delta(close, 1)))))'
+  definition: 4日价格动量一致性排名阿尔法，当过去4日收益方向一致时跟随趋势方向，当收益方向混杂时采取反向操作，并通过横截面排名归一化
   formula: 'rank(((0 < ts_min(delta(close, 1), 4)) ? delta(close, 1) : ((ts_max(delta(close,
     1), 4) < 0) ? delta(close, 1) : (-1 * delta(close, 1)))))'
   frequency: 日频
@@ -95,3 +94,38 @@ l6:
   - 全市场低波动横盘时, 大量股票触发混合信号分支, -delta 反转策略在低波动环境下收益空间被压缩
   risk_notes: '需注意交易成本: 因子换手率较高 (4 日窗口 + 横截面 rank), 实盘中需叠加流动性与换手率约束; 同时在政策驱动或流动性冲击事件中,
     历史统计规律可能短期失效'
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # delta(close, 1)\n\
+    \    df = df.with_columns(delta(pl.col('close'), periods=1).alias('_delta'))\n\
+    \    \n    # ts_min(delta, 4) and ts_max(delta, 4)\n    df = df.with_columns(\n\
+    \        ts_min(pl.col('_delta'), window=4).alias('_ts_min'),\n        ts_max(pl.col('_delta'),\
+    \ window=4).alias('_ts_max')\n    )\n    \n    # Conditional logic: 0 < ts_min\
+    \ ? delta : (ts_max < 0 ? delta : -1*delta)\n    inner = (\n        pl.when(pl.col('_ts_min')\
+    \ > 0)\n        .then(pl.col('_delta'))\n        .when(pl.col('_ts_max') < 0)\n\
+    \        .then(pl.col('_delta'))\n        .otherwise(-1 * pl.col('_delta'))\n\
+    \    )\n    \n    # Materialize before rank\n    df = df.with_columns(inner.alias('_inner'))\n\
+    \    \n    # Cross-sectional rank\n    factor = rank(pl.col('_inner')).over('date')\n\
+    \    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 845
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_010.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 48
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.00841622875053209
+    icir: -0.05664253031930707
+    winrate: 0.4915254237288136
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -0.00019485204230207387
+    longshort_sharpe: null
+    longshort_max_dd: -0.034366194838558795
+    validated_at: 1782305897.942224
+  validation_date: '2026-06-24'

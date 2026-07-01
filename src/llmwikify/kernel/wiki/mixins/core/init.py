@@ -1,6 +1,7 @@
 """Wiki init mixin — directory structure, core files, MCP config, skill files."""
 
 import logging
+from typing import Any
 
 from ...protocols import WikiProtocol
 

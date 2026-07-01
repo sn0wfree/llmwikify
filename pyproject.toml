@@ -11,7 +11,7 @@ license = "MIT"
 requires-python = ">=3.10"
 keywords = [ "wiki", "llm", "knowledge-base", "obsidian", "mcp", "notebook", "second-brain", "pkms",]
 classifiers = [ "Development Status :: 4 - Beta", "Intended Audience :: Developers", "Intended Audience :: Science/Research", "Intended Audience :: Education", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.10", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Topic :: Education", "Topic :: Scientific/Engineering", "Topic :: Text Processing", "Topic :: Utilities",]
-dependencies = [ "jinja2>=3.1.0", "pyyaml>=6.0", "requests>=2.28.0",]
+dependencies = [ "jinja2>=3.1.0", "pyyaml>=6.0", "requests>=2.28.0", "duckdb>=1.0.0",]
 [[project.authors]]
 name = "sn0wfree"
 email = "linlu1234567@sina.com"
@@ -31,7 +31,30 @@ llm = [ "tiktoken>=0.7.0",]
 extractors = [ "markitdown[all]>=0.1.0", "pymupdf>=1.23.0", "trafilatura>=1.7.0", "youtube-transcript-api>=0.6.0",]
 quantnodes = [ "quantnodes>=2.7.0",]
 all = [ "llmwikify[extractors,mcp,config,watch,graph,web,agent,quantnodes]",]
-dev = [ "llmwikify[all]", "pytest>=7.0.0", "pytest-cov>=4.0.0", "black>=23.0.0", "ruff>=0.1.0", "mypy>=1.0.0", "types-PyYAML>=6.0", "types-requests>=2.30", "build>=0.10.0", "twine>=4.0.0", "import-linter>=2.0",]
+# ─── 临时 jaraco 生态 pin (2026-07) ──────────────────────────────
+# 原因: PyPI 上 jaraco.context 6.x / keyring 24+ / twine 5+ 反向要求
+#       jaraco.functools 1.x,而 1.x 有 metadata-version 错配 bug
+#       (expected '1.3' but metadata '0.0.1.3')。pip 26.x 种系求解器
+#       在 llmwikify[all] (7 extras) + jaraco 链上深度爆掉 → resolution-too-deep。
+# 修复: 锁在 2026-06 之前的状态,预估寿命 6-12 个月。
+# 清理: 下次升级 twine/keyring 时,先跑
+#       `pip install -e ".[dev]" --dry-run` 看是否还能解,再批量解除这些 pin。
+# 关联: GitHub Actions #tests.yml #lint.yml 也走 .[dev],自动受益。
+dev = [
+    "llmwikify[all]",
+    "pytest>=7.0.0", "pytest-cov>=4.0.0",
+    "black>=23.0.0", "ruff>=0.1.0", "mypy>=1.0.0",
+    "types-PyYAML>=6.0", "types-requests>=2.30",
+    "build>=0.10.0",
+    # ─── 锁 jaraco 生态在 2026-06 之前 ───
+    "twine>=4.0.0,<5",
+    "import-linter>=2.0,<3",
+    "keyring>=21.2.0,<24",
+    "jaraco.context<5.4",
+    "jaraco.functools>=3,<5",
+    "jaraco.classes<4",
+    "more-itertools<11",
+]
 
 [project.urls]
 Homepage = "https://github.com/sn0wfree/llmwikify"
@@ -88,7 +111,7 @@ minversion = "7.0"
 testpaths = [ "tests",]
 python_files = [ "test_*.py",]
 python_functions = [ "test_*",]
-addopts = "-v --tb=short --strict-markers"
+addopts = "-v --tb=short --strict-markers --ignore=tests/ab_testing"
 asyncio_mode = "auto"
 markers = [
   "e2e: end-to-end tests that start a real server (run with `pytest -m e2e`)",

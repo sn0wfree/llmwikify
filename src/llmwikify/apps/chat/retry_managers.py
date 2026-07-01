@@ -182,7 +182,6 @@ def _is_retriable_llm_error(exc: Exception) -> bool:
     msg = str(exc).lower()
     # Validation/parsing errors are NOT retriable
     non_retriable = (
-        "json decode",
         "value error",
         "key error",
         "index error",

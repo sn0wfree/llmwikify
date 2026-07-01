@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank(correlation(sum(((open * 0.178404) + (low * (1 - 0.178404))),
-    12.7054), sum(adv120, 12.7054), 16.6208)) < rank(delta(((((high + low) / 2) *
-    0.178404) + (vwap * (1 - 0.178404))), 3.69741))) * -1
+  definition: 比较加权价格与120日平均成交额的滚动相关性，与加权中间价-VWAP的3.70日变化率排名的相对强弱alpha，当流动性-价格相关性排名低于价格动量变化率排名时做多。
   formula: ((rank(correlation(sum(((open * 0.178404) + (low * (1 - 0.178404))), 12.7054),
     sum(adv120, 12.7054), 16.6208)) < rank(delta(((((high + low) / 2) * 0.178404)
     + (vwap * (1 - 0.178404))), 3.69741))) * -1)
@@ -107,3 +105,45 @@ l6:
   - 输出为离散 -1/0, 多空不对称 (仅做空一侧), 多头组合需取反向或与其他因子合成
   - A 股做空成本高且券源稀缺, 直接等权做空 -1 篮子难以实施
   - 因子对回看窗口 (13/17/4) 较敏感, 偏离原始参数可能完全改变因子方向
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv120: 120-day\
+    \ average of volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+    \ window=120).alias('_adv120')\n    )\n    \n    # Sum1: sum((open * 0.178404)\
+    \ + (low * (1 - 0.178404)), 12)\n    df = df.with_columns(\n        rolling_sum(\n\
+    \            (pl.col('open') * 0.178404) + (pl.col('low') * (1 - 0.178404)),\n\
+    \            window=12\n        ).alias('_sum1')\n    )\n    \n    # Sum2: sum(adv120,\
+    \ 12)\n    df = df.with_columns(\n        rolling_sum(pl.col('_adv120'), window=12).alias('_sum2')\n\
+    \    )\n    \n    # Correlation between sum1 and sum2, window 16\n    df = df.with_columns(\n\
+    \        correlation(pl.col('_sum1'), pl.col('_sum2'), window=16).alias('_corr')\n\
+    \    )\n    \n    # Delta of (high+low)/2 * 0.178404 + vwap * (1 - 0.178404),\
+    \ period 3\n    df = df.with_columns(\n        delta(\n            ((pl.col('high')\
+    \ + pl.col('low')) / 2 * 0.178404) + (pl.col('vwap') * (1 - 0.178404)),\n    \
+    \        periods=3\n        ).alias('_delta')\n    )\n    \n    # Cross-sectional\
+    \ ranks\n    df = df.with_columns(\n        rank(pl.col('_corr')).over('date').alias('_rank_corr')\n\
+    \    )\n    df = df.with_columns(\n        rank(pl.col('_delta')).over('date').alias('_rank_delta')\n\
+    \    )\n    \n    # Final factor: -1 if rank_corr < rank_delta, else 0\n    factor\
+    \ = pl.when(\n        pl.col('_rank_corr') < pl.col('_rank_delta')\n    ).then(-1).otherwise(0)\n\
+    \    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1441
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_064.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 41
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.025656437987609478
+    icir: -0.18408858889525448
+    winrate: 0.423728813559322
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -2.803492073988334e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.019058669229065888
+    validated_at: 1782349299.2476041
+  validation_date: '2026-06-25'

@@ -18,7 +18,9 @@ from pathlib import Path
 
 import yaml
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+from llmwikify.foundation.logging import setup_logging
+
+setup_logging(level=logging.INFO, log_file=None, fmt="%(asctime)s [%(levelname)s] %(message)s", force=True)
 logger = logging.getLogger(__name__)
 
 FIXTURES_DIR = Path("/home/ll/llmwikify/tests/fixtures/comparison")
@@ -424,10 +426,7 @@ def score_yaml(yaml_data: dict) -> dict[str, float]:
     """Score a 6-layer YAML across 6 dimensions (0-5 each)."""
     scores = {}
     if "error" in yaml_data:
-        return {dim: 0.0 for dim in [
-            "L1_formula", "L1_completeness", "L2_steps",
-            "L3_understanding", "L4_hypotheses", "factor_class"
-        ]}
+        return dict.fromkeys(["L1_formula", "L1_completeness", "L2_steps", "L3_understanding", "L4_hypotheses", "factor_class"], 0.0)
 
     factor = yaml_data.get("factor", {})
     l1 = factor.get("l1", {})
@@ -702,8 +701,8 @@ def generate_report(results: dict, dim_labels: dict) -> str:
         lines.extend([
             f"### {pid}",
             "",
-            f"| 维度 | 权重 | Path A | Path B | Winner |",
-            f"|---|---|---|---|---|",
+            "| 维度 | 权重 | Path A | Path B | Winner |",
+            "|---|---|---|---|---|",
         ])
         for dim, label in dim_labels.items():
             a = paths["A"]["scores"].get(dim, 0)

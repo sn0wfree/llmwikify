@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((-1 * rank(delta(returns, 3))) * correlation(open, volume, 10))
+  definition: 做空过去3日收益下降的标的，同时做多开盘价与成交量相关性强的标的，两者相乘构建因子
   formula: ((-1 * rank(delta(returns, 3))) * correlation(open, volume, 10))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -93,3 +93,33 @@ l6:
   - open-volume 相关性进入结构性高位（市场整体信息密度提升）, 反转幅度被过度加权导致回撤
   - 小盘股流动性枯竭时滚动相关系数估计噪声大, 因子信号失真
   risk_notes: 因子对交易成本敏感（换手率高）, 需扣除双边手续费后评估; 相关性在极端事件下易突变, 建议对 corr 值做 winsorize 或截断处理以提升稳健性。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize time-series\
+    \ operators before cross-sectional rank\n    df = df.with_columns(\n        delta(pl.col('returns'),\
+    \ period=3).alias('_delta'),\n        correlation(pl.col('open'), pl.col('volume'),\
+    \ window=10).alias('_corr')\n    )\n    # -1 * rank(delta(returns, 3)) * correlation(open,\
+    \ volume, 10)\n    factor = -1 * rank(pl.col('_delta')).over('date') * pl.col('_corr')\n\
+    \    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 470
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_014.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 48
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.01070889681869379
+    icir: -0.06994192967388611
+    winrate: 0.4915254237288136
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -9.453944010673343e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.033562558378643914
+    validated_at: 1782305978.9063368
+  validation_date: '2026-06-24'

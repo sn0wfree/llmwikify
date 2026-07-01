@@ -239,54 +239,28 @@ def _llm_code_react(
     max_repair_rounds: int = 3,
     temperature: float = 0.3,
 ) -> tuple[str | None, pl.Series | None, str | None, dict]:
-    """ReAct self-retry path: LLM emits code, executes, on failure feeds
-    error back to LLM up to max_repair_rounds times.
+    """ReAct self-retry path: unified agent loop.
 
     Returns (code, factor_series, error, react_result_dict).
     """
-    from llmwikify.reproduction.codegen.react_engine import (
-        ReactStep,
-        compile_to_code_react,
-    )
+    from llmwikify.kernel.agent import generate_factor_code_sync
 
-    def _progress(step: ReactStep) -> None:
-        state = step.state.value
-        ek = step.error_kind.value
-        if ek == "none":
-            print(f"  [ReAct/{state}] OK ({step.elapsed_sec * 1000:.0f}ms)")
-        else:
-            print(
-                f"  [ReAct/{state}] {ek}: {step.error_message[:120]}"
-                f" ({step.elapsed_sec * 1000:.0f}ms)"
-            )
-
-    result = compile_to_code_react(
+    result = generate_factor_code_sync(
         factor_name=factor_name,
         formula_brief=formula_brief,
-        system_prompt=SYSTEM_PROMPT_CODE,
         df=df_pl,
-        llm=llm,
+        llm_client=llm,
         max_repair_rounds=max_repair_rounds,
         temperature=temperature,
-        progress_callback=_progress,
     )
 
-    print(f"\n[ReAct] iterations={result.iterations}, "
-          f"is_valid={result.is_valid}, error_kind={result.error_kind.value}")
-    for i, step in enumerate(result.steps):
-        print(f"  step {i}: {step.state.value} "
-              f"({step.error_kind.value if step.error_kind.value != 'none' else 'OK'})")
+    print(f"\n[Unified] iterations={result.iterations}, "
+          f"stop_reason={result.stop_reason}, error={result.error}")
 
-    if not result.is_valid:
-        return None, None, result.error_message, result.to_dict()
+    if result.error:
+        return None, None, result.error, result.to_dict()
 
-    # Re-execute the final code to get the Series (compile_to_code_react
-    # doesn't return the Series; we re-run the validated code)
-    try:
-        series = execute_code(result.code, df_pl)
-    except Exception as exc:
-        return None, None, f"final execute failed: {exc}", result.to_dict()
-    return result.code, series, None, result.to_dict()
+    return result.code, result.factor_series, None, result.to_dict()
 
 
 # ─── Phase 1: 完整 backtest 数据提取 + 入库 (2026-06-22) ────────────
@@ -377,6 +351,19 @@ def _extract_full_backtest_from_ctx(ctx: dict) -> dict:
                     "n_stocks": 0,  # filled from group_num below if available
                 }
             out["group_metrics"] = gm
+
+        # Extract group NAV time series from GroupAnalyzer ctx
+        daily_net = ga.get("daily_net_simp")
+        if daily_net is not None and hasattr(daily_net, "columns"):
+            nav_series: dict = {}
+            for g in daily_net.columns:
+                col = daily_net[g].dropna()
+                nav_series[f"G{g}"] = [
+                    {"date": int(d.timestamp() * 1000) if hasattr(d, "timestamp") else int(d), "nav": float(v)}
+                    for d, v in col.items()
+                ]
+            out["equity_curve"] = nav_series
+            out["group_nav_series"] = nav_series
 
     # ─── LongShort ────────────────────────────────────────
     ls = ctx.get("LongShort") or {}
@@ -491,7 +478,8 @@ def persist_code_to_yaml(
 
         # ─── L1 (Phase 2 derivation done here for cohesion) ───
         l1 = factor.setdefault("l1", {})
-        l1["definition"] = formula_brief[:200]
+        if not l1.get("definition"):
+            l1["definition"] = formula_brief[:200]
         l1["formula"] = formula_brief
         l1["frequency"] = "日频"
         l1["output_schema"] = "[date × Code]"
@@ -626,6 +614,7 @@ def save_backtest_to_db(
             longshort_max_dd=_nan_to_none(backtest.get("longshort_max_dd")),
             ic_series=backtest.get("ic_series", []),
             group_metrics=backtest.get("group_metrics", {}),
+            equity_curve=backtest.get("equity_curve") or backtest.get("group_nav_series"),
         )
         print(f"[db] created result run_id={run_id} factor_ref={slug}")
         return True

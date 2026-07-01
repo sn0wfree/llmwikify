@@ -18,43 +18,43 @@ from __future__ import annotations
 
 from .._base import register_command
 
-# C2 (10 simple commands)
-from .init_cmd import InitCommand, run_init
-from .ingest import IngestCommand, run_ingest
-from .status import StatusCommand, run_status
-from .log_cmd import LogCommand, run_log
-from .sink_status import SinkStatusCommand, run_sink_status
-from .write_page import WritePageCommand, run_write_page
-from .read_page import ReadPageCommand, run_read_page
-from .search import SearchCommand, run_search
-from .build_index import BuildIndexCommand, run_build_index
-from .fix_wikilinks import FixWikilinksCommand, run_fix_wikilinks
-
 # C3 (16 complex commands)
 from .analyze_source import AnalyzeSourceCommand, run_analyze_source
-from .lint import LintCommand, run_lint
-from .references import ReferencesCommand, run_references
 from .batch import BatchCommand, run_batch
-from .synthesize import SynthesizeCommand, run_synthesize
-from .watch import WatchCommand, run_watch
-from .graph_query import GraphQueryCommand, run_graph_query
-from .export_graph import ExportGraphCommand, run_export_graph
+from .build_index import BuildIndexCommand, run_build_index
 from .community_detect import CommunityDetectCommand, run_community_detect
-from .report import ReportCommand, run_report
-from .wikis import WikisCommand, run_wikis
-from .suggest_synthesis import SuggestSynthesisCommand, run_suggest_synthesis
-from .knowledge_gaps import KnowledgeGapsCommand, run_knowledge_gaps
-from .graph_analyze import GraphAnalyzeCommand, run_graph_analyze
-from .serve import ServeCommand, run_serve
-from .qmd import QmdCommand, run_qmd
 from .db import DbCommand, run_db
-from .quant_init_cmd import QuantInitCommand, run_quant_init
-from .reproduce_cmd import ReproduceCommand, run_one_paper_cli, run_batch
+from .export_graph import ExportGraphCommand, run_export_graph
+from .fix_wikilinks import FixWikilinksCommand, run_fix_wikilinks
+from .graph_analyze import GraphAnalyzeCommand, run_graph_analyze
+from .graph_query import GraphQueryCommand, run_graph_query
 
 # Phase 3 #6 — new ``help`` subcommand for command + alias
 # discovery. ``mcp`` is no longer a separate Command class —
 # it's an argparse alias of ``serve`` (see serve.py).
 from .help_cmd import HelpCommand
+from .ingest import IngestCommand, run_ingest
+
+# C2 (10 simple commands)
+from .init_cmd import InitCommand, run_init
+from .knowledge_gaps import KnowledgeGapsCommand, run_knowledge_gaps
+from .lint import LintCommand, run_lint
+from .log_cmd import LogCommand, run_log
+from .qmd import QmdCommand, run_qmd
+from .quant_init_cmd import QuantInitCommand, run_quant_init
+from .read_page import ReadPageCommand, run_read_page
+from .references import ReferencesCommand, run_references
+from .report import ReportCommand, run_report
+from .reproduce_cmd import ReproduceCommand, run_one_paper_cli
+from .search import SearchCommand, run_search
+from .serve import ServeCommand, run_serve
+from .sink_status import SinkStatusCommand, run_sink_status
+from .status import StatusCommand, run_status
+from .suggest_synthesis import SuggestSynthesisCommand, run_suggest_synthesis
+from .synthesize import SynthesizeCommand, run_synthesize
+from .watch import WatchCommand, run_watch
+from .wikis import WikisCommand, run_wikis
+from .write_page import WritePageCommand, run_write_page
 
 # Auto-register all 27 commands (10 C2 + 16 C3 + help = 28)
 # Note: ``mcp`` is NOT in the registry — it's an argparse alias

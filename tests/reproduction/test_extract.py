@@ -9,13 +9,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import pytest
 
+from llmwikify.reproduction.common.utils import parse_frontmatter as _parse_frontmatter
 from llmwikify.reproduction.paper_understanding.extract_strategy import (
     VALID_SIGNAL_TYPES,
     extract_from_page,
     extract_strategy_config,
 )
-from llmwikify.reproduction.common.utils import parse_frontmatter as _parse_frontmatter
-
 
 PAGE_MA_CROSS = """---
 title: MA Crossover Strategy

@@ -26,8 +26,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from llmwikify.reproduction.paper_understanding.llm_extraction import (
-    DeferredQueue,
     DeferError,
+    DeferredQueue,
     PlanResult,
     Section,
     SectionDetectionResult,
@@ -36,7 +36,6 @@ from llmwikify.reproduction.paper_understanding.llm_extraction import (
     run_one_paper,
     with_retry,
 )
-
 
 # ── Mock LLM client ──────────────────────────────────
 
@@ -95,7 +94,9 @@ class TestHappyPath:
         pdf.write_bytes(b"%PDF-1.4 fake content for test")
 
         # Mock Stage 0
-        from llmwikify.reproduction.paper_understanding.llm_extraction import run_stage0_ingest
+        from llmwikify.reproduction.paper_understanding.llm_extraction import (
+            run_stage0_ingest,
+        )
 
         # We'll mock at higher level
         llm = MockLLM()
@@ -103,7 +104,8 @@ class TestHappyPath:
         # Detailed flow tested in test_real_101_alphas
         # Simple smoke: verify imports + function exists
         from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import (
-            _make_fallback_plan, _run_planner,
+            _make_fallback_plan,
+            _run_planner,
         )
         plan = _make_fallback_plan("p1", "x" * 200)
         assert plan.schema_choice == "summary"
@@ -155,7 +157,9 @@ class TestStage0Error:
 class TestDeferredQueueIntegration:
     def test_deferred_count_reflects_failures(self, tmp_path):
         """If a stage raises DeferError, the orchestrator adds it to queue."""
-        from llmwikify.reproduction.paper_understanding.llm_extraction import run_one_paper
+        from llmwikify.reproduction.paper_understanding.llm_extraction import (
+            run_one_paper,
+        )
         from llmwikify.reproduction.paper_understanding.llm_extraction.orchestrator import (
             _make_fallback_plan,
         )
@@ -226,7 +230,9 @@ class TestPreviewGeneration:
         }), encoding="utf-8")
 
         # preview.md should be writeable
-        from llmwikify.reproduction.paper_understanding.llm_extraction.preview import write_preview
+        from llmwikify.reproduction.paper_understanding.llm_extraction.preview import (
+            write_preview,
+        )
         out = write_preview(work_dir)
         assert out.exists()
         assert "p1" in out.read_text(encoding="utf-8")
@@ -355,7 +361,9 @@ class TestOrchestratorEnd2End:
 
     def test_defer_section_detector_continues_with_no_sections(self, monkeypatch, tmp_path):
         """Stage 1 Call 1 DeferError → queue + sections=None."""
-        from llmwikify.reproduction.paper_understanding.llm_extraction import orchestrator
+        from llmwikify.reproduction.paper_understanding.llm_extraction import (
+            orchestrator,
+        )
 
         # Stage 0 stub
         def fake_stage0(source, output_root, paper_id, **_):
@@ -431,7 +439,9 @@ class TestOrchestratorEnd2End:
 
     def test_defer_planner_falls_back_to_summary(self, monkeypatch, tmp_path):
         """Stage 1 Call 2 DeferError → queue + summary fallback plan."""
-        from llmwikify.reproduction.paper_understanding.llm_extraction import orchestrator
+        from llmwikify.reproduction.paper_understanding.llm_extraction import (
+            orchestrator,
+        )
 
         def fake_stage0(source, output_root, paper_id, **_):
             work_dir = output_root / paper_id
@@ -484,7 +494,9 @@ class TestOrchestratorEnd2End:
 
     def test_no_defer_no_queue(self, monkeypatch, tmp_path):
         """Happy path: no DeferError → deferred_count=0."""
-        from llmwikify.reproduction.paper_understanding.llm_extraction import orchestrator
+        from llmwikify.reproduction.paper_understanding.llm_extraction import (
+            orchestrator,
+        )
 
         def fake_stage0(source, output_root, paper_id, **_):
             work_dir = output_root / paper_id

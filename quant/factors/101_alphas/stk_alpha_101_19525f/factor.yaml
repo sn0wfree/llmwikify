@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((close - open) / ((high - low) + .001))
+  definition: 收盘价与开盘价的差值，除以当日振幅（最高价减最低价加0.001防零），反映价格在日内波动区间中的相对位置。
   formula: ((close - open) / ((high - low) + .001))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -84,3 +84,29 @@ l6:
   - '事件日 (财报/分红/重大公告): 跳空开盘导致 open 失真, 实体被夸大, 因子噪声急剧上升'
   risk_notes: 未做横截面标准化, 多空头寸大小受个股波动率影响不均衡, 组合构建时需叠加 volatility scaling; 0.001 虽防止除零,
     但仍会令一字板日因子被压到极值, 建议在预处理阶段过滤停牌/一字板
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    factor = (pl.col('close')\
+    \ - pl.col('open')) / ((pl.col('high') - pl.col('low')) + 0.001)\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 184
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_101.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 39
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.03327424384406691
+    icir: -0.23773715879819995
+    winrate: 0.4067796610169492
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -0.0004432015250135368
+    longshort_sharpe: null
+    longshort_max_dd: -0.05006468054445161
+    validated_at: 1782353456.3778248
+  validation_date: '2026-06-25'

@@ -10,7 +10,6 @@ from typing import Any
 
 from llmwikify.kernel.graph.export import build_graph
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -42,7 +41,7 @@ def build_visualization_data(
         graph_data = build_graph(
             index, include_wikilinks=True, include_relations=False
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to build graph")
         return {
             "nodes": [],
@@ -116,7 +115,7 @@ def build_visualization_data(
     for n in display_nodes:
         nid = n["id"]
         page_type = n.get("source_type", "wiki_page")
-        for type_name, type_dir in type_map.items():
+        for _type_name, type_dir in type_map.items():
             if nid.startswith(type_dir + "/") or nid == type_dir:
                 page_type = type_dir
                 break

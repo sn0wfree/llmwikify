@@ -26,8 +26,10 @@ Public API
 
 from __future__ import annotations
 
-from llmwikify.apps.chat.skills.actions.detect.dated_claims import detect_dated_claims_skill
 from llmwikify.apps.chat.skills.actions.detect.data_gaps import detect_data_gaps_skill
+from llmwikify.apps.chat.skills.actions.detect.dated_claims import (
+    detect_dated_claims_skill,
+)
 from llmwikify.apps.chat.skills.actions.detect.knowledge_gaps import (
     detect_knowledge_gaps_skill,
 )
@@ -44,7 +46,6 @@ from llmwikify.apps.chat.skills.actions.detect.query_page_overlap import (
     detect_query_page_overlap_skill,
 )
 from llmwikify.apps.chat.skills.actions.detect.redundancy import detect_redundancy_skill
-
 
 ALL_DETECT_SKILLS = [
     detect_knowledge_gaps_skill,

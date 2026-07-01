@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank(ts_max((vwap - close), 3)) + rank(ts_min((vwap - close), 3)))
-    * rank(delta(volume, 3)))
+  definition: 结合3日最高/最低VWAP价差的排名与3日成交量变化的排名，捕捉VWAP大幅偏离且成交量加速的股票信号。
   formula: ((rank(ts_max((vwap - close), 3)) + rank(ts_min((vwap - close), 3))) *
     rank(delta(volume, 3)))
   frequency: 日频
@@ -94,3 +93,34 @@ l6:
   - 市场处于强趋势阶段时，日内反复反转并不预示反转而是被趋势吸收，因子失效
   - 极端低流动性股票或小市值壳股，volume 突变失真，rank(delta(volume,3)) 噪声主导
   risk_notes: 需对涨跌停、停牌、上市不足 3 日的样本做过滤；同时建议分行业或分市值做中性化，以消除量价分布在截面上的系统性偏差。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    diff = pl.col('vwap')\
+    \ - pl.col('close')\n    # Materialize rolling results before cross-sectional\
+    \ rank\n    df = df.with_columns([\n        ts_max(diff, window=3).alias('_ts_max'),\n\
+    \        ts_min(diff, window=3).alias('_ts_min'),\n        delta(pl.col('volume'),\
+    \ periods=3).alias('_delta_vol')\n    ])\n    factor = (\n        (rank(pl.col('_ts_max')).over('date')\
+    \ + rank(pl.col('_ts_min')).over('date'))\n        * rank(pl.col('_delta_vol')).over('date')\n\
+    \    )\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 549
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_011.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 46
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.01112831310365114
+    icir: -0.0835577268489174
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -0.0003203290722167962
+    longshort_sharpe: null
+    longshort_max_dd: -0.03527190592157808
+    validated_at: 1782305916.7322364
+  validation_date: '2026-06-24'

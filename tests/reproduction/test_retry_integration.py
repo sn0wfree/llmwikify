@@ -26,7 +26,9 @@ from llmwikify.reproduction.paper_understanding.llm_extraction import (
     track_b,
 )
 from llmwikify.reproduction.paper_understanding.llm_extraction.planner import PlanResult
-from llmwikify.reproduction.paper_understanding.llm_extraction.section_detector import Section
+from llmwikify.reproduction.paper_understanding.llm_extraction.section_detector import (
+    Section,
+)
 from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     PASS1_MAX_TOKENS_DEFAULT,
     SignalStub,

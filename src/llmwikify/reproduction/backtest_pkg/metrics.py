@@ -8,7 +8,7 @@ for the same code.
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from ..common.config import config
 
@@ -17,7 +17,7 @@ def _safe_div(a: float, b: float, default: float = 0.0) -> float:
     return a / b if b != 0 else default
 
 
-def _extract_trade_info(trade: Any) -> Tuple[str, float, float]:
+def _extract_trade_info(trade: Any) -> tuple[str, float, float]:
     """Return (side, price, fee) from a Trade object or dict."""
     if isinstance(trade, dict):
         return trade.get("side", ""), float(trade.get("price", 0.0)), float(trade.get("fee", 0.0))
@@ -28,7 +28,7 @@ def _extract_trade_info(trade: Any) -> Tuple[str, float, float]:
     )
 
 
-def _pair_trades_to_pnls(trades: List[Any]) -> List[float]:
+def _pair_trades_to_pnls(trades: list[Any]) -> list[float]:
     """Pair buy/sell trades per code into round-trips and compute pnls.
 
     Strategy:
@@ -42,8 +42,8 @@ def _pair_trades_to_pnls(trades: List[Any]) -> List[float]:
     if not trades:
         return []
 
-    pnls: List[float] = []
-    open_positions: Dict[str, List[Tuple[float, float, float]]] = {}
+    pnls: list[float] = []
+    open_positions: dict[str, list[tuple[float, float, float]]] = {}
 
     for trade in trades:
         side, price, fee = _extract_trade_info(trade)
@@ -102,11 +102,11 @@ def _pair_trades_to_pnls(trades: List[Any]) -> List[float]:
 
 
 def compute_metrics_from_trades(
-    trades: List[Any],
+    trades: list[Any],
     initial_cash: float,
     final_cash: float,
     trading_days: int | None = None,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Compute sharpe_ratio, max_drawdown, win_rate, total_return from trades.
 
     Note: QuantNodes Trade objects lack a `pnl` attribute — we compute round-trip
@@ -157,7 +157,7 @@ def compute_metrics_from_trades(
 
 
 def _compute_max_drawdown(
-    final_cash: float, initial_cash: float, pnls: List[float]
+    final_cash: float, initial_cash: float, pnls: list[float]
 ) -> float:
     """Approximate max drawdown from cumulative pnl path."""
     if not pnls:
@@ -180,13 +180,13 @@ def _compute_max_drawdown(
 
 
 def compute_extended_metrics(
-    trades: List[Any],
+    trades: list[Any],
     initial_cash: float,
     final_cash: float,
     trading_days: int | None = None,
-    benchmark_returns: Optional[List[float]] = None,
+    benchmark_returns: list[float] | None = None,
     risk_free_rate: float | None = None,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Compute extended metrics: CAGR, Sortino, Alpha, Beta.
 
     Args:
@@ -269,10 +269,10 @@ def compute_extended_metrics(
 
 
 def compute_monthly_returns(
-    equity_curve: List[Dict[str, Any]],
-    trades: List[Any],
+    equity_curve: list[dict[str, Any]],
+    trades: list[Any],
     initial_cash: float,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Compute monthly returns from equity curve time series.
 
     Args:
@@ -287,7 +287,7 @@ def compute_monthly_returns(
         return {}
 
     # Group equity by year-month, take last equity value per month
-    monthly_equity: Dict[str, float] = {}
+    monthly_equity: dict[str, float] = {}
     for pt in equity_curve:
         date_str = pt.get("date", "")
         value = pt.get("value", 0.0)
@@ -300,7 +300,7 @@ def compute_monthly_returns(
 
     # Sort by year-month and compute returns
     sorted_months = sorted(monthly_equity.keys())
-    result: Dict[str, float] = {}
+    result: dict[str, float] = {}
     prev_equity = initial_cash
     for ym in sorted_months:
         cur_equity = monthly_equity[ym]

@@ -15,8 +15,10 @@ fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from llmwikify.interfaces.server.http.reproduction import (
-    set_repro_deps,
     router as repro_router,
+)
+from llmwikify.interfaces.server.http.reproduction import (
+    set_repro_deps,
 )
 from llmwikify.reproduction.persist.sessions import ReproductionDatabase
 

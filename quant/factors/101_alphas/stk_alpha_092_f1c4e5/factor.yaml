@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: min(Ts_Rank(decay_linear(((((high + low) / 2) + close) < (low + open)),
-    14.7221), 18.8683), Ts_Rank(decay_linear(correlation(rank(low), rank(adv30), 7.58555),
-    6.94024), 6.80584))
+  definition: 取两个时间序列排名信号的最小值：基于价格结构比较的衰减加权排名与基于低日成交量相关性的衰减加权排名。
   formula: min(Ts_Rank(decay_linear(((((high + low) / 2) + close) < (low + open)),
     14.7221), 18.8683), Ts_Rank(decay_linear(correlation(rank(low), rank(adv30), 7.58555),
     6.94024), 6.80584))
@@ -108,3 +106,43 @@ l6:
   - 政策利好或突发主题行情下, 持续阴线股票反而因超跌反弹领涨, 因子逻辑被破坏
   risk_notes: 因子天然做空弱势股、做多强势股, 在单边下行市中回撤可控; 但在 V 型反转中可能遭受较大回撤; 建议叠加市场状态判断或与反转因子组合使用,
     避免在反弹初期集中暴露。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv30: rolling\
+    \ mean of volume over 30 days\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+    \ window=30).alias('_adv30')\n    )\n\n    # Materialize cross-sectional ranks\
+    \ before rolling (Rule 2)\n    df = df.with_columns([\n        rank(pl.col('low')).over('date').alias('_rank_low'),\n\
+    \        rank(pl.col('_adv30')).over('date').alias('_rank_adv30')\n    ])\n\n\
+    \    # Component 1: Ts_Rank(decay_linear(((high+low)/2+close) < (low+open), 14.7221),\
+    \ 18.8683)\n    cond1 = ((pl.col('high') + pl.col('low')) / 2 + pl.col('close'))\
+    \ < (pl.col('low') + pl.col('open'))\n    df = df.with_columns(cond1.cast(pl.Float64).alias('_c1'))\n\
+    \    df = df.with_columns(decay_linear(pl.col('_c1'), 15).alias('_d1'))\n    df\
+    \ = df.with_columns(ts_rank(pl.col('_d1'), 19).alias('_t1'))\n\n    # Component\
+    \ 2: Ts_Rank(decay_linear(correlation(rank(low), rank(adv30), 7.58555), 6.94024),\
+    \ 6.80584)\n    df = df.with_columns(\n        rolling_corr(pl.col('_rank_low'),\
+    \ pl.col('_rank_adv30'), window=8).alias('_corr')\n    )\n    df = df.with_columns(decay_linear(pl.col('_corr'),\
+    \ 7).alias('_d2'))\n    df = df.with_columns(ts_rank(pl.col('_d2'), 7).alias('_t2'))\n\
+    \n    # Final: min of the two components\n    factor = pl.min_horizontal(pl.col('_t1'),\
+    \ pl.col('_t2'))\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1327
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_092.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 46
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.012762233219293082
+    icir: -0.0915454038414289
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 7.158850444510811e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.022045370061175042
+    validated_at: 1782351828.528622
+  validation_date: '2026-06-25'

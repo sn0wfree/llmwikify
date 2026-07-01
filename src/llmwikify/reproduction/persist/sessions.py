@@ -21,10 +21,11 @@ import json
 import logging
 import sqlite3
 import uuid
-from dataclasses import dataclass, field, asdict
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 
 from ..common.config import config
 
@@ -61,7 +62,7 @@ class Session:
     start_date: str
     end_date: str
     status: str = "pending"
-    error: Optional[str] = None
+    error: str | None = None
     strategy_signal_type: str = ""
     strategy_params_json: str = "{}"
     created_at: str = ""
@@ -132,11 +133,11 @@ class Result:
         """Convert to dict with JSON parsing for complex fields."""
         d = asdict(self)
         # Parse JSON fields
-        for field in ("n_stocks_per_date", "ic_series", "group_metrics", "equity_curve", "monthly_returns"):
-            val = d.get(field)
+        for json_field in ("n_stocks_per_date", "ic_series", "group_metrics", "equity_curve", "monthly_returns"):
+            val = d.get(json_field)
             if val and isinstance(val, str):
                 try:
-                    d[field] = json.loads(val)
+                    d[json_field] = json.loads(val)
                 except (json.JSONDecodeError, TypeError):
                     pass
         return d
@@ -145,7 +146,7 @@ class Result:
 class ReproductionDatabase:
     """SQLite-backed session store. Independent file from main app DB."""
 
-    def __init__(self, db_path: Optional[Path | str] = None):
+    def __init__(self, db_path: Path | str | None = None):
         self.db_path = Path(db_path) if db_path else DEFAULT_DB_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
@@ -286,7 +287,7 @@ class ReproductionDatabase:
             )
         return sid
 
-    def get_session(self, session_id: str) -> Optional[Session]:
+    def get_session(self, session_id: str) -> Session | None:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM reproduction_sessions WHERE id = ?",
@@ -300,9 +301,9 @@ class ReproductionDatabase:
         self,
         session_id: str,
         status: str,
-        error: Optional[str] = None,
-        signal_type: Optional[str] = None,
-        signal_params: Optional[dict[str, Any]] = None,
+        error: str | None = None,
+        signal_type: str | None = None,
+        signal_params: dict[str, Any] | None = None,
     ) -> None:
         if status not in VALID_STATUSES:
             raise ValueError(f"invalid status {status!r}")
@@ -388,7 +389,7 @@ class ReproductionDatabase:
             result.append(d)
         return result
 
-    def list_sessions(self, status: Optional[str] = None) -> list[Session]:
+    def list_sessions(self, status: str | None = None) -> list[Session]:
         sql = "SELECT * FROM reproduction_sessions"
         params: tuple = ()
         if status:
@@ -431,9 +432,9 @@ class ReproductionDatabase:
         """Create a backtest result record."""
         # Serialize JSON fields
         json_fields = {}
-        for field in ("n_stocks_per_date", "ic_series", "group_metrics", "equity_curve", "monthly_returns"):
-            if field in metrics:
-                val = metrics.pop(field)
+        for json_field in ("n_stocks_per_date", "ic_series", "group_metrics", "equity_curve", "monthly_returns"):
+            if json_field in metrics:
+                val = metrics.pop(json_field)
                 if isinstance(val, (list, dict)):
                     json_fields[field] = json.dumps(val, ensure_ascii=False)
                 else:
@@ -476,7 +477,7 @@ class ReproductionDatabase:
             )
         return run_id
 
-    def get_result(self, run_id: str) -> Optional[Result]:
+    def get_result(self, run_id: str) -> Result | None:
         """Get a result by run_id."""
         with self._connect() as conn:
             row = conn.execute(

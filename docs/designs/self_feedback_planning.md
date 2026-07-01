@@ -1,7 +1,7 @@
 # 自反馈规划机制设计文档
 
 > 日期：2026-06-18
-> 分支：feat/v0.4-paper-reproduction
+> 分支：feat/v0.4-paper-reproduction (归档命名)
 > 问题：行业轮动/资产配置类论文被误分类为 factor schema，导致因子数量过多
 
 ---

@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (rank((vwap - ts_min(vwap, 16.1219))) < rank(correlation(vwap, adv180,
-    17.9282)))
+  definition: Alpha#61是一个二元比较Alpha，通过比较VWAP与16.12日最低值的距离排名与VWAP对180日平均成交量的17.93日相关性的排名来判断信号。当VWAP相对最低值的距离排名低于成交量相关性排名时产生做多信号。
   formula: (rank((vwap - ts_min(vwap, 16.1219))) < rank(correlation(vwap, adv180,
     17.9282)))
   frequency: 日频
@@ -97,3 +96,38 @@ l6:
   - 小盘/壳股主导行情中, 180 日 ADV 不可靠, corr 受异常成交干扰, 因子噪声显著放大
   risk_notes: 因子为布尔信号, 持仓集中度天然较高, 需配合市值/行业中性化; T+1 信号在涨停板/停牌股票上无法执行; 180 日窗口导致因子对新股不可用,
     存在生存者偏差
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv180 = rolling_mean\
+    \ of volume over 180 days\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+    \ window=180).alias('_adv180'))\n    # ts_min(vwap, ~16.1219) -> window 16\n \
+    \   df = df.with_columns(ts_min(pl.col('vwap'), window=16).alias('_tsmin_vwap'))\n\
+    \    # vwap - ts_min(vwap, 16)\n    df = df.with_columns((pl.col('vwap') - pl.col('_tsmin_vwap')).alias('_diff_vwap'))\n\
+    \    # correlation(vwap, adv180, ~17.9282) -> window 18 (materialized before .over('date'))\n\
+    \    df = df.with_columns(correlation(pl.col('vwap'), pl.col('_adv180'), window=18).alias('_corr'))\n\
+    \    \n    # cross-sectional ranks (after materialization per Rule 2)\n    r1\
+    \ = rank(pl.col('_diff_vwap')).over('date')\n    r2 = rank(pl.col('_corr')).over('date')\n\
+    \    \n    # boolean comparison via pl.when (Rule 3)\n    factor = pl.when(r1\
+    \ < r2).then(1).otherwise(0)\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 922
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_061.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 51
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.0006624319905851925
+    icir: 0.00434910143200181
+    winrate: 0.5254237288135594
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00013100814962041518
+    longshort_sharpe: null
+    longshort_max_dd: -0.018570960272389008
+    validated_at: 1782348900.5033188
+  validation_date: '2026-06-25'

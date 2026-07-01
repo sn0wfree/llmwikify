@@ -153,36 +153,23 @@ Output ONLY the code block."""
     print("  → expecting: REASON (corrupt) → ACT (AttributeError) → OBSERVE (inject)")
     print("  →            → REASON (real LLM fix) → ACT (success) → DECIDE")
 
-    from llmwikify.reproduction.factor_compiler_react import (
-        ReactStep,
-        compile_to_code_react,
-    )
+    from llmwikify.kernel.agent import generate_factor_code_sync
 
-    def _progress(step: ReactStep) -> None:
-        marker = "  " if step.error_kind.value == "none" else "❌"
-        print(
-            f"  {marker} [ReAct/{step.state.value}] "
-            f"{step.error_kind.value if step.error_kind.value != 'none' else 'OK'}: "
-            f"{step.error_message[:200]}"
-        )
-
-    result = compile_to_code_react(
+    result = generate_factor_code_sync(
         factor_name=factor_name,
         formula_brief=formula_brief,
-        system_prompt=SYSTEM_PROMPT_CODE,
         df=df_pl,
-        llm=seeded_llm,
+        llm_client=seeded_llm,
         max_repair_rounds=3,
         temperature=0.3,
-        progress_callback=_progress,
     )
 
     elapsed = time.monotonic() - t0
-    print(f"\n[result] is_valid={result.is_valid}, iterations={result.iterations}, "
-          f"error_kind={result.error_kind.value}")
+    print(f"\n[result] error={result.error}, iterations={result.iterations}, "
+          f"stop_reason={result.stop_reason}")
     print(f"[result] elapsed: {elapsed:.1f}s, real LLM calls: {seeded_llm._calls - 1}")
 
-    if result.is_valid and "over('date')" in result.code:
+    if not result.error and result.code and "over('date')" in result.code:
         print("\n[SUCCESS] ReAct self-repair RECOVERED from the typo!")
         print(f"  Final code snippet:\n  {result.code[-200:]}")
         success = True
@@ -195,7 +182,7 @@ Output ONLY the code block."""
         "alpha_index": alpha_index,
         "baseline_code_chars": len(baseline_code),
         "corrupted_code_chars": len(corrupted_code),
-        "is_valid": result.is_valid,
+        "is_valid": not result.error,
         "iterations": result.iterations,
         "real_llm_calls": seeded_llm._calls - 1,
         "elapsed_sec": elapsed,

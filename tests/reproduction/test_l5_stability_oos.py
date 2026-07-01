@@ -7,12 +7,12 @@ from types import SimpleNamespace
 import pytest
 
 from llmwikify.reproduction.backtest_pkg.l5_validation import (
+    _score_oos,
+    _score_stability,
     analyze_oos,
     analyze_stability,
     compute_score,
     run_l5_validation,
-    _score_stability,
-    _score_oos,
 )
 
 

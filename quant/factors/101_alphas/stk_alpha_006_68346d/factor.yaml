@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * correlation(open, volume, 10))
+  definition: 10日窗口内开盘价与成交量的皮尔逊相关系数的负值，捕捉开盘价格与交易活跃度的反向均值回归关系
   formula: (-1 * correlation(open, volume, 10))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -87,3 +87,29 @@ l6:
   - '牛市趋势行情: 价升量增的正相关主导市场, -corr 因子选出的''量价背离''股实为震荡整理的优质标的, 因子方向反转'
   risk_notes: 因子为纯时序滚动计算, 不依赖横截面排序, 使用时需自行做标准化 (z-score) 与行业/市值中性化; 此外窗口期较短 (10 日)
     易受单日异常成交 (如解禁、增发) 干扰, 建议结合波动率过滤或 winsorize 处理。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    factor = -1 * correlation(pl.col('open'),\
+    \ pl.col('volume'), window=10)\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 166
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_006.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 44
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.01946172814822468
+    icir: -0.11879482880829478
+    winrate: 0.4406779661016949
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -4.104518227654452e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.01964838268312323
+    validated_at: 1782305828.569217
+  validation_date: '2026-06-24'

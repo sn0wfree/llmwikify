@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * correlation(rank(delta(log(volume), 2)), rank(((close - open)
-    / open)), 6))
+  definition: 该Alpha衡量2日交易量变化率与日内收益率的秩相关性，并取负值形成均值回归信号，用于捕捉交易活动加速与价格运动方向之间的背离机会。
   formula: (-1 * correlation(rank(delta(log(volume), 2)), rank(((close - open) / open)),
     6))
   frequency: 日频
@@ -101,3 +100,39 @@ l6:
   - 排名+滚动相关带来 6 日天然滞后, 在快速反转或跳空行情中可能错过拐点
   - 因子对窗口长度 6 较敏感, 不同市场节奏(波动率/换手率结构)下需重新校准窗口
   - 建议结合波动率、流动性、行业中性化等过滤条件使用, 避免在极端样本和 ST/退市股上交易
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: log(volume)\n\
+    \    log_vol = pl.col('volume').log()\n    # Step 2: delta(log(volume), 2)\n \
+    \   delta_log_vol = delta(log_vol, periods=2)\n    # Step 3: cross-sectional rank\
+    \ of delta\n    rank_delta = rank(delta_log_vol).over('date')\n    \n    # Step\
+    \ 4: (close - open) / open\n    co_open = (pl.col('close') - pl.col('open')) /\
+    \ pl.col('open')\n    # Step 5: cross-sectional rank of that\n    rank_co = rank(co_open).over('date')\n\
+    \    \n    # Materialize ranks first\n    df = df.with_columns([\n        rank_delta.alias('_rank_delta'),\n\
+    \        rank_co.alias('_rank_co')\n    ])\n    \n    # Step 6: rolling correlation\
+    \ with window 6 (materialize rolling result)\n    df = df.with_columns(\n    \
+    \    correlation(pl.col('_rank_delta'), pl.col('_rank_co'), window=6).alias('_corr')\n\
+    \    )\n    \n    # Step 7: multiply by -1\n    factor = -1 * pl.col('_corr')\n\
+    \    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 940
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_002.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 52
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.01359475275663366
+    icir: 0.07945679900171812
+    winrate: 0.4915254237288136
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00018280447259955146
+    longshort_sharpe: null
+    longshort_max_dd: -0.019127186707011416
+    validated_at: 1782305741.60475
+  validation_date: '2026-06-24'

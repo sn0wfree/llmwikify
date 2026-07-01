@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: '(((sum(high, 20) / 20) < high) ? (-1 * delta(high, 2)) : 0)'
+  definition: 当个股当日最高价超过其20日均线时，做空与最高价2日变化的负值成比例的仓位；否则为零仓位。
   formula: '(((sum(high, 20) / 20) < high) ? (-1 * delta(high, 2)) : 0)'
   frequency: 日频
   output_schema: '[date × Code]'
@@ -85,3 +85,33 @@ l6:
   - 流动性极差的小微盘股, 信号噪声大且易受冲击成本侵蚀
   - 政策驱动或黑天鹅事件下市场跳空高开/低开, 滚动均值与 high 关系被扭曲
   risk_notes: 因子取值非对称 (大部分为 0, 少数交易日为非零), 实际持仓换手率较高; 建议配合波动率/流动性因子做中性化处理, 并设置单因子暴露上限以控制回撤
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize rolling\
+    \ mean of high first (Rule 2)\n    df = df.with_columns(rolling_mean(pl.col('high'),\
+    \ window=20).alias('_mean_high'))\n    # If rolling mean < high, return -1 * delta(high,\
+    \ 2), else 0\n    factor = pl.when(pl.col('_mean_high') < pl.col('high')) \\\n\
+    \              .then(-1 * delta(pl.col('high'), periods=2)) \\\n             \
+    \ .otherwise(0)\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 447
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_023.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 62
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.03508018385859729
+    icir: 0.25801084342241587
+    winrate: 0.5932203389830508
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.0007231350211496235
+    longshort_sharpe: null
+    longshort_max_dd: -0.016314480067189406
+    validated_at: 1782306248.5730646
+  validation_date: '2026-06-24'

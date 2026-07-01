@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: rank(((1 - rank((stddev(returns, 2) / stddev(returns, 5)))) + (1 - rank(delta(close,
-    1)))))
+  definition: 该因子通过组合波动率稳定度信号与价格动量信号，捕捉相对稳定的波动率 regime 下具有正向价格动量的股票。
   formula: rank(((1 - rank((stddev(returns, 2) / stddev(returns, 5)))) + (1 - rank(delta(close,
     1)))))
   frequency: 日频
@@ -97,3 +96,35 @@ l6:
   - '行业/风格急剧切换: 低波动暴露与新风格方向背离时，复合因子因双重错配而放大回撤'
   risk_notes: 因子对回撤敏感 (max DD 可能显著高于纯反转或纯低波单因子); 建议在合成前对两个子信号分别做行业与市值中性化以控制共线性，并监控
     IC 在动量周期下的稳定性。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize rolling\
+    \ results first (Rule 2)\n    df = df.with_columns(\n        rolling_std(pl.col('returns'),\
+    \ window=2).alias('_std2')\n    )\n    df = df.with_columns(\n        rolling_std(pl.col('returns'),\
+    \ window=5).alias('_std5')\n    )\n    df = df.with_columns(\n        (pl.col('_std2')\
+    \ / pl.col('_std5')).alias('_ratio')\n    )\n    df = df.with_columns(\n     \
+    \   delta(pl.col('close'), 1).alias('_delta_close')\n    )\n    \n    part1 =\
+    \ 1 - rank(pl.col('_ratio')).over('date')\n    part2 = 1 - rank(pl.col('_delta_close')).over('date')\n\
+    \    factor = rank((part1 + part2)).over('date')\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 680
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_034.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 53
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.00540990906831438
+    icir: 0.03741969161202864
+    winrate: 0.559322033898305
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00010546367266761614
+    longshort_sharpe: null
+    longshort_max_dd: -0.014863556242005279
+    validated_at: 1782306615.9027674
+  validation_date: '2026-06-24'

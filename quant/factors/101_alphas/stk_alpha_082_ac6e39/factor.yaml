@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (min(rank(decay_linear(delta(open, 1.46063), 14.8717)), Ts_Rank(decay_linear(correlation(IndNeutralize(volume,
-    IndClass.sector), ((open * 0.634196) + (open * (1 - 0.634196))), 17.4842), 6.92131),
-    13.4
+  definition: 结合公开价格动量与行业中性交易量相关性的双重排名信号的最小值并取负，用于捕捉价格短期动能与行业相对资金流向的共同信号。
   formula: (min(rank(decay_linear(delta(open, 1.46063), 14.8717)), Ts_Rank(decay_linear(correlation(IndNeutralize(volume,
     IndClass.sector), ((open * 0.634196) + (open * (1 - 0.634196))), 17.4842), 6.92131),
     13.4283)) * -1)
@@ -100,3 +98,39 @@ l6:
   - 行业 beta 剧烈切换或板块轮动加速时, neutralize 近似失效, 量价相关信号被行业因子污染
   - 小盘/低流动性股票中, 滚动相关和 ts_rank 噪声大, 因子 IC 显著衰减
   risk_notes: 因子含 5 个超参, 过拟合风险高; delta/rank 等离散化操作使因子对数据频率敏感; 建议在样本外做参数鲁棒性测试并监控行业暴露。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    df = df.sort(['code',\
+    \ 'date'])\n\n    # Part 1: rank(decay_linear(delta(open, 1.46063), 14.8717))\n\
+    \    delta_open = delta(pl.col('open'), periods=1)\n    decay_1 = decay_linear(delta_open,\
+    \ window=15)\n    rank_1 = rank(decay_1).over('date')\n\n    # Part 2: Ts_Rank(decay_linear(correlation(IndNeutralize(volume,\
+    \ sector), open, 17.4842), 6.92131), 13.4283)\n    # (open * 0.634196) + (open\
+    \ * (1 - 0.634196)) simplifies to open\n    # Using neutralize as substitute for\
+    \ IndNeutralize (no sector classification available)\n    neutralized_volume =\
+    \ neutralize(pl.col('volume')).over('date')\n    corr = rolling_corr(neutralized_volume,\
+    \ pl.col('open'), window=17)\n    decay_2 = decay_linear(corr, window=7)\n   \
+    \ ts_rank_2 = ts_rank(decay_2, window=13)\n\n    # min of the two parts, then\
+    \ negate\n    factor = -1 * pl.min_horizontal([rank_1, ts_rank_2])\n\n    return\
+    \ df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 930
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_082.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 46
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.008292282072630537
+    icir: -0.06629591476959446
+    winrate: 0.4406779661016949
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00017231187729849218
+    longshort_sharpe: null
+    longshort_max_dd: -0.022904785784934163
+    validated_at: 1782150662.2725785
+  validation_date: '2026-06-23'

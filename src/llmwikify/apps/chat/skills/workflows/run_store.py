@@ -44,7 +44,7 @@ class RunState:
         return json.dumps(asdict(self), ensure_ascii=False, indent=2, default=str)
 
     @classmethod
-    def from_json(cls, text: str) -> "RunState":
+    def from_json(cls, text: str) -> RunState:
         d = json.loads(text)
         return cls(
             run_id=d["run_id"],
@@ -69,7 +69,7 @@ class RunStore:
         self.root.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def default(cls) -> "RunStore":
+    def default(cls) -> RunStore:
         return cls(Path(os.path.expanduser("~/.llmwikify/workflows/runs")))
 
     def save(self, state: RunState) -> Path:

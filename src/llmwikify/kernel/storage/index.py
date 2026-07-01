@@ -195,7 +195,7 @@ class WikiIndex:
         """
         page_count = self.get_page_count()
         try:
-            from ..search.qmd_index import QmdIndex, QMD_THRESHOLD
+            from ..search.qmd_index import QMD_THRESHOLD, QmdIndex
             qmd = QmdIndex(self.db_path.parent, config=None)
             return qmd.get_recommendation(page_count)
         except Exception:

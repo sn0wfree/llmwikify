@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((((-1 * rank((open - delay(high, 1)))) * rank((open - delay(close,
-    1)))) * rank((open - delay(low, 1))))
+  definition: 三日收益率之差的负排名乘积指标，衡量今日开盘价相对于昨日最高价、收盘价和最低价的偏离程度。
   formula: ((((-1 * rank((open - delay(high, 1)))) * rank((open - delay(close, 1))))
     * rank((open - delay(low, 1))))
   frequency: 日频
@@ -83,3 +82,34 @@ l6:
   - 重大政策/消息导致跳空, 缺口由基本面变化驱动而非情绪, 反转失败
   - 涨跌停/流动性枯竭导致开盘价被扭曲, rank 排序失真
   risk_notes: 做空端依赖融券, A 股市场做空受限可能影响回测表现; 因子在尾部分布暴露大, 需结合波动率/换手率等风险因子做中性化处理
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # First term: -1\
+    \ * rank(open - delay(high, 1))\n    r1 = -1 * rank(pl.col('open') - delay(pl.col('high'),\
+    \ periods=1)).over('date')\n    \n    # Second term: rank(open - delay(close,\
+    \ 1))\n    r2 = rank(pl.col('open') - delay(pl.col('close'), periods=1)).over('date')\n\
+    \    \n    # Third term: rank(open - delay(low, 1))\n    r3 = rank(pl.col('open')\
+    \ - delay(pl.col('low'), periods=1)).over('date')\n    \n    # Combine: ((-1 *\
+    \ r1) * r2) * r3\n    factor = r1 * r2 * r3\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 557
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_020.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 52
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.00417738966354692
+    icir: 0.02808017016445763
+    winrate: 0.559322033898305
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 8.570748598502043e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.016519399668172195
+    validated_at: 1782306186.6473684
+  validation_date: '2026-06-24'

@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (((-1 * rank(ts_rank(close, 10))) * rank(delta(delta(close, 1), 1)))
-    * rank(ts_rank((volume / adv20), 5)))
+  definition: 一种结合价格动量加速效应与成交量确认的复合alpha因子，通过对收盘价的10日时序排名、价格的二阶变化率、以及相对成交量的5日时序排名进行加权，捕捉价格回调后的反弹机会。
   formula: (((-1 * rank(ts_rank(close, 10))) * rank(delta(delta(close, 1), 1))) *
     rank(ts_rank((volume / adv20), 5)))
   frequency: 日频
@@ -105,3 +104,39 @@ l6:
   risk_notes: 1) 因子绝对值分布长尾, 极值组合对回撤贡献大, 建议对 part1×part2×part3 做截面 z-score 或 winsorize;
     2) part1 取负意味着天然多空组合, 需关注融券成本与做空可行性; 3) 三重条件交集稀疏, 持仓数量过少会放大交易成本与冲击成本, 建议至少 50-100
     只股票等权或因子加权。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize ts_rank(close,\
+    \ 10)\n    df = df.with_columns(\n        ts_rank(pl.col('close'), window=10).alias('_ts_rank_close')\n\
+    \    )\n    # Materialize delta(delta(close, 1), 1)\n    df = df.with_columns(\n\
+    \        delta(delta(pl.col('close'), periods=1), periods=1).alias('_delta2_close')\n\
+    \    )\n    # Materialize adv20 (rolling mean of volume)\n    df = df.with_columns(\n\
+    \        rolling_mean(pl.col('volume'), window=20).alias('_adv20')\n    )\n  \
+    \  # Materialize ts_rank(volume / adv20, 5)\n    df = df.with_columns(\n     \
+    \   ts_rank(pl.col('volume') / pl.col('_adv20'), window=5).alias('_ts_rank_vol')\n\
+    \    )\n\n    # Cross-sectional ranks applied to materialized columns\n    part1\
+    \ = -1 * rank(pl.col('_ts_rank_close')).over('date')\n    part2 = rank(pl.col('_delta2_close')).over('date')\n\
+    \    part3 = rank(pl.col('_ts_rank_vol')).over('date')\n\n    factor = part1 *\
+    \ part2 * part3\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 963
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_017.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 56
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.01905123844731134
+    icir: 0.13893336021376812
+    winrate: 0.5254237288135594
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 5.748003850403194e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.02643590504064722
+    validated_at: 1782306098.8783545
+  validation_date: '2026-06-24'

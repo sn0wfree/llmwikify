@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank(correlation(close, sum(adv30, 37.4843), 15.1365)) < rank(correlation(rank(((high
-    * 0.0261661) + (vwap * (1 - 0.0261661)))), rank(volume), 11.4791))) * -1)
+  definition: 比较收盘价与38日成交量移动合计的滞后相关性，与2.6%最高价+97.74%VWAP加权价格与成交量排名的滞后相关性，取排序差的负值作为alpha。
   formula: ((rank(correlation(close, sum(adv30, 37.4843), 15.1365)) < rank(correlation(rank(((high
     * 0.0261661) + (vwap * (1 - 0.0261661)))), rank(volume), 11.4791))) * -1)
   frequency: 日频
@@ -96,3 +95,47 @@ l6:
   - 政策驱动或事件冲击期：基本面突变使中期量能趋势与短期价量耦合同时失效，因子失效
   - 小盘股流动性枯竭或风格剧烈切换 (如大盘/小盘轮动) 时回撤加大
   risk_notes: 因子输出为离散三值 (-1/0)，实际持仓通常需要叠加其他信号或做连续化处理；注意做空可行性 (融券成本与券源)；建议与动量/质量因子做负相关组合以分散风格风险
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv30 = rolling\
+    \ mean of close * volume over 30 days (dollar volume avg)\n    df = df.with_columns(\n\
+    \        rolling_mean(pl.col('close') * pl.col('volume'), window=30).alias('_adv30')\n\
+    \    )\n    \n    # sum(adv30, 37.4843) -> window=37\n    df = df.with_columns(\n\
+    \        rolling_sum(pl.col('_adv30'), window=37).alias('_sum_adv30_37')\n   \
+    \ )\n    \n    # correlation(close, sum(adv30, 37), 15.1365) -> window=15; materialize\
+    \ before rank\n    df = df.with_columns(\n        rolling_corr(pl.col('close'),\
+    \ pl.col('_sum_adv30_37'), window=15).alias('_corr1')\n    )\n    \n    # rank(correlation(...))\
+    \ cross-sectional; using materialized rolling result\n    df = df.with_columns(\n\
+    \        rank(pl.col('_corr1')).over('date').alias('_rank1')\n    )\n    \n  \
+    \  # rank(((high * 0.0261661) + (vwap * (1 - 0.0261661)))) cross-sectional\n \
+    \   df = df.with_columns(\n        rank(pl.col('high') * 0.0261661 + pl.col('vwap')\
+    \ * (1 - 0.0261661)).over('date').alias('_rank_hv')\n    )\n    \n    # rank(volume)\
+    \ cross-sectional\n    df = df.with_columns(\n        rank(pl.col('volume')).over('date').alias('_rank_vol')\n\
+    \    )\n    \n    # correlation(rank(...), rank(volume), 11.4791) -> window=11;\
+    \ materialize before rank\n    df = df.with_columns(\n        rolling_corr(pl.col('_rank_hv'),\
+    \ pl.col('_rank_vol'), window=11).alias('_corr2')\n    )\n    \n    # rank(correlation(...))\
+    \ cross-sectional\n    df = df.with_columns(\n        rank(pl.col('_corr2')).over('date').alias('_rank2')\n\
+    \    )\n    \n    # ((rank1 < rank2) * -1) using pl.when\n    factor = pl.when(pl.col('_rank1')\
+    \ < pl.col('_rank2')).then(-1).otherwise(0)\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1671
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_074.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 52
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.002366938726753123
+    icir: 0.016502190993404102
+    winrate: 0.5423728813559322
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00017671388273354793
+    longshort_sharpe: null
+    longshort_max_dd: -0.016171131434824737
+    validated_at: 1782350059.7914634
+  validation_date: '2026-06-25'

@@ -296,10 +296,14 @@ def main() -> int:
     # Import the commands subpackage so all Command classes are
     # registered in COMMAND_REGISTRY before main() iterates them.
     # The import is idempotent: subsequent calls are no-ops.
+    from ...foundation.logging import setup_logging
     from . import commands as _commands  # noqa: F401  (registration side effect)
     from ._base import COMMAND_REGISTRY, CommandError, get_command
     from ._config import load_cli_config
     from ._output import print_error
+
+    # CLI logs to the console only (no server.log pollution).
+    setup_logging(log_file=None, console=True)
 
     # Build the parser (extracted to _build_parser() in Phase 3
     # #6 so tests can build it without starting the MCP server).

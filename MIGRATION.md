@@ -1,10 +1,10 @@
 # Migration Guide
 
-> **Current version**: 0.36.0
+> **Current version**: 0.38.0
 
 ---
 
-## v0.31 → v0.37 (summary)
+## v0.31 → v0.38 (summary)
 
 | Range | Highlights |
 |-------|------------|
@@ -13,10 +13,12 @@
 | v0.33 | Service-layer split (`apps/`); `interfaces/mcp/server.py` deprecated in favour of `interfaces/mcp/adapter.MCPAdapter` |
 | v0.36 | **Hardening** — 32-char message IDs (was 8), rate limiting on `/api/agent/*` (60 req/min/IP), new SSE events: `confirmation_required`, `save_warning`, `timeout`; tool-call rounds 1 → up to 4 |
 | v0.37 | **ReAct loop unification** — `ChatService` defaults to `ChatReActBridge`; `reasoning` and `phase` events emitted; `use_react_engine=False` falls back to legacy `aask_with_tools` |
+| v0.38 | **Nanobot v0.2.1 borrowings** — `MessageBus` in-process pub/sub; `WebSocketManager` + `/api/ws/agent`; `AgentRunner[SpecT, ResultT]` ABC; `LLMProvider` ABC + `ProviderConfig` + `RetryMode` + `ThinkingStyle`. No breaking changes — additive. |
 
-Full migration steps for v0.36 / v0.37 (UUID changes, AbortSignal,
-regenerate-any-message, server config) live in
-[docs/MIGRATION_v0.36.md](docs/MIGRATION_v0.36.md).
+Full migration steps for v0.36 / v0.37 / v0.38 (UUID changes, AbortSignal,
+regenerate-any-message, server config, Bus+WS wire-up) live in
+[docs/MIGRATION_v0.36.md](docs/MIGRATION_v0.36.md) and
+[docs/MIGRATION_v0.38.md](docs/MIGRATION_v0.38.md).
 
 ---
 
@@ -596,4 +598,4 @@ from llmwikify.mcp import MCPServer
 
 ---
 
-*Last updated: 2026-04-21 | Current version: 0.30.0*
+*Last updated: 2026-06-30 | Current version: 0.38.0*

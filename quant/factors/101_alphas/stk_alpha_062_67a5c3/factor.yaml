@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank(correlation(vwap, sum(adv20, 22.4101), 9.91009)) < rank(((rank(open)
-    + rank(open)) < (rank(((high + low) / 2)) + rank(high))))) * -1)
+  definition: 做空VWAP-成交量相关性与价格结构排名之差的极端值；当日内价格定位偏强而流动性信号偏弱时，输出-1（做空信号）。
   formula: ((rank(correlation(vwap, sum(adv20, 22.4101), 9.91009)) < rank(((rank(open)
     + rank(open)) < (rank(((high + low) / 2)) + rank(high))))) * -1)
   frequency: 日频
@@ -108,3 +107,43 @@ l6:
   - '小盘低流动性股票: 窗口期数据不足或全天仅几笔成交, corr 估计严重偏差, 易产生极端误判'
   risk_notes: 因子为离散做空信号, 实际构建组合时需配合流动性与可卖空性过滤; 单一 -1 信号的负向收益绝对值可能有限, 建议与价格反转强度结合做连续打分;
     此外 vwap 字段在早期 A 股数据中可能缺失, 需提前做完整性校验。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = 20-day\
+    \ rolling mean of volume\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+    \ window=20).alias('_adv20'))\n    \n    # sum(adv20, 22.4101) -> use window=22\n\
+    \    df = df.with_columns(rolling_sum(pl.col('_adv20'), window=22).alias('_sum_adv20'))\n\
+    \    \n    # correlation(vwap, sum(adv20, 22), 9.91009) -> use window=10\n   \
+    \ df = df.with_columns(rolling_corr(pl.col('vwap'), pl.col('_sum_adv20'), window=10).alias('_corr'))\n\
+    \    \n    # rank(correlation(...)) - cross-sectional rank of materialized column\n\
+    \    rank_corr = rank(pl.col('_corr')).over('date')\n    \n    # rank(open), rank((high+low)/2),\
+    \ rank(high)\n    rank_open = rank(pl.col('open')).over('date')\n    rank_hl_mid\
+    \ = rank((pl.col('high') + pl.col('low')) / 2).over('date')\n    rank_high = rank(pl.col('high')).over('date')\n\
+    \    \n    # (rank(open) + rank(open)) < (rank((high+low)/2) + rank(high))\n \
+    \   inner_bool = (rank_open + rank_open) < (rank_hl_mid + rank_high)\n    \n \
+    \   # Materialize the boolean as int for ranking\n    df = df.with_columns(inner_bool.cast(pl.Int32).alias('_inner_int'))\n\
+    \    \n    # rank of the inner boolean\n    rank_inner = rank(pl.col('_inner_int')).over('date')\n\
+    \    \n    # Final: (rank_corr < rank_inner) * -1  =>  -1 or 0\n    factor = pl.when(rank_corr\
+    \ < rank_inner).then(-1).otherwise(0)\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1382
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_062.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 62
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.039271225200166016
+    icir: 0.2468234445471485
+    winrate: 0.6271186440677966
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 3.488567534093434e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.020885961126348395
+    validated_at: 1782348972.1168275
+  validation_date: '2026-06-25'

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
 from llmwikify.reproduction.data_source import quantnodes_adapter as qa
 

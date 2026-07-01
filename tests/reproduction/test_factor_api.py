@@ -12,9 +12,9 @@ Tracked in: docs/poc/plan-b-results.md (Phase 3 cleanup).
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 
+import pytest
 
 # Skip the whole module until tests are ported to the library contract.
 pytestmark = pytest.mark.skip(

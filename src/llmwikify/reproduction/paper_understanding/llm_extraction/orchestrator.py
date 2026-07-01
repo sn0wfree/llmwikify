@@ -23,17 +23,17 @@ import time
 from pathlib import Path
 from typing import Any
 
+from ...common.llm_factory import build_default_client
 from .defer import DeferredQueue
-from .planner import PlanResult
 from .plan_saver import save_plan
+from .planner import PlanResult
 from .preview import write_preview
 from .retry import DeferError
 from .section_detector import Section, SectionDetectionResult, detect_sections
 from .stage0_ingest import Stage0Result, run_stage0_ingest
 from .track_a import TrackAResult, run_track_a
-from .track_b import TrackBResult, run_track_b, PASS2_SUCCESS_THRESHOLD_HIGH
+from .track_b import PASS2_SUCCESS_THRESHOLD_HIGH, TrackBResult, run_track_b
 from .validator import validate_paper_outputs
-from ...common.llm_factory import build_default_client
 
 logger = logging.getLogger(__name__)
 
@@ -85,16 +85,12 @@ def _write_factor_yamls(
     factors_dir = work_dir / "factors"
     factors_dir.mkdir(parents=True, exist_ok=True)
 
-    # Build pass1 lookup for formula_brief
-    pass1_map = {s.name: s for s in pass1_signals}
-
     written = 0
     for detail in pass2_details:
         if not detail.success or not detail.l1:
             continue
 
         slug = _slugify(detail.name)
-        stub = pass1_map.get(detail.name)
 
         factor_data = {
             "factor": {
@@ -254,7 +250,7 @@ def run_one_paper(
                 sections=sections, llm_client=llm_client,
                 feedback=replan_feedback,
             )
-            
+
             # Validate plan using LLM
             from .planner import validate_plan_with_llm
             client = llm_client or build_default_client()
@@ -264,7 +260,7 @@ def run_one_paper(
                 parsed_text=parsed_text,
                 previous_feedback=replan_feedback,
             )
-            
+
             if is_valid:
                 logger.info(
                     "[orchestrator] paper=%s [3/5] stage1_call2: ok schema=%s n=%d conf=%.2f (attempt %d)",
@@ -277,11 +273,11 @@ def run_one_paper(
                     paper_id, attempt + 1, issues,
                 )
                 replan_feedback = issues
-                
+
                 # Apply revised strategy if provided
                 if revised_strategy:
                     plan.extraction_strategy = revised_strategy
-                
+
         except DeferError as exc:
             logger.warning(
                 "[orchestrator] paper=%s [3/5] stage1_call2: deferred, using summary fallback: %s",
@@ -298,7 +294,7 @@ def run_one_paper(
     if plan is None:
         logger.error("[orchestrator] paper=%s [3/5] stage1_call2: all attempts failed, using fallback", paper_id)
         plan = _make_fallback_plan(paper_id, parsed_text)
-    
+
     summary["plan_success"] = plan.success
 
     # Save plan.json
@@ -458,7 +454,7 @@ def run_one_paper(
         summary["success_rate"] = track_b_result.success_rate
         summary["retry_rounds"] = track_b_result.retry_rounds
         summary["needs_retry"] = track_b_result.needs_retry
-        
+
         # Log success rate decision
         if track_b_result.success_rate >= PASS2_SUCCESS_THRESHOLD_HIGH:
             logger.info(

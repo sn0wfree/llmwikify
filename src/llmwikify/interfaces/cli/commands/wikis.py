@@ -14,7 +14,7 @@ def _wikis_list(config: dict, cli_config: Any) -> int:
     from llmwikify.foundation.config import get_wikis_config
     from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
-    wikis_config = get_wikis_config(config)
+    _wikis_config = get_wikis_config(config)
     registry = WikiRegistry(config)
     registry.initialize()
 
@@ -54,7 +54,7 @@ def _wikis_add(config: dict, args: Any) -> int:
 
     if url:
         # Remote wiki
-        instance = registry.register_remote(
+        _instance = registry.register_remote(
             wiki_id=wiki_id,
             name=name,
             url=url,
@@ -70,7 +70,7 @@ def _wikis_add(config: dict, args: Any) -> int:
             registry.close()
             return 1
 
-        instance = registry.register_wiki(
+        _instance = registry.register_wiki(
             wiki_id=wiki_id,
             name=name,
             root=root,

@@ -161,7 +161,9 @@ class TestMarkItDownPlugins:
         """
         pytest.importorskip('markitdown', reason="markitdown not installed")
 
-        from llmwikify.foundation.extractors.markitdown_extractor import MarkItDownExtractor
+        from llmwikify.foundation.extractors.markitdown_extractor import (
+            MarkItDownExtractor,
+        )
 
         with patch('markitdown.MarkItDown') as MockMD:
             MockMD.return_value = MagicMock()
@@ -182,7 +184,9 @@ class TestMarkItDownPlugins:
         """MarkItDown should disable plugins when LLM is not configured."""
         pytest.importorskip('markitdown', reason="markitdown not installed")
 
-        from llmwikify.foundation.extractors.markitdown_extractor import MarkItDownExtractor
+        from llmwikify.foundation.extractors.markitdown_extractor import (
+            MarkItDownExtractor,
+        )
 
         with patch('markitdown.MarkItDown') as MockMD:
             MockMD.return_value = MagicMock()

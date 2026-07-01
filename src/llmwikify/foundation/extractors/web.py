@@ -1,7 +1,9 @@
 """Web URL extractor."""
 
 import concurrent.futures
+
 import requests
+
 from .base import ExtractedContent
 
 # Default timeout for URL fetching (connect, read)

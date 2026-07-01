@@ -5,12 +5,15 @@ from __future__ import annotations
 import os
 import time
 from collections import defaultdict
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from llmwikify.interfaces.server.constants import EXCLUDED_AUTH_PATHS, EXCLUDED_AUTH_PREFIXES
-
+from llmwikify.interfaces.server.constants import (
+    EXCLUDED_AUTH_PATHS,
+    EXCLUDED_AUTH_PREFIXES,
+)
 
 # Phase 4.3 (v0.36): token-bucket rate limiter.
 # Default: 60 requests per minute per IP. Configurable via

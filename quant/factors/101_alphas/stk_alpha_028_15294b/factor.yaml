@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: scale(((correlation(adv20, low, 5) + ((high + low) / 2)) - close))
+  definition: 收盘价相对于日内中点偏低程度与低量相关性的组合信号，经scale标准化
   formula: scale(((correlation(adv20, low, 5) + ((high + low) / 2)) - close))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -88,3 +88,36 @@ l6:
   - '单边趋势行情中段: 量价持续正相关确认趋势而非反转, H1主假设失效, 因子方向反转'
   - '涨跌停或停牌恢复日: high=low或价格受约束, mid-close 信息含量丧失, 价格分量失真'
   risk_notes: 因子对市场状态敏感, 单独使用稳定性差; 建议先做行业/规模中性化, 再与反转、动量因子合成; T+1时点存在隔夜跳空风险, 需注意交易成本与开盘流动性
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = rolling\
+    \ mean of volume over 20 days\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+    \ window=20).alias('_adv20'))\n    \n    # correlation(adv20, low, 5) - materialize\
+    \ before scale\n    df = df.with_columns(rolling_corr(pl.col('_adv20'), pl.col('low'),\
+    \ window=5).alias('_corr'))\n    \n    # ((high + low) / 2) - close, combined\
+    \ with correlation\n    df = df.with_columns(\n        (pl.col('_corr') + (pl.col('high')\
+    \ + pl.col('low')) / 2 - pl.col('close')).alias('_raw')\n    )\n    \n    # scale\
+    \ cross-sectionally\n    factor = scale(pl.col('_raw')).over('date')\n    \n \
+    \   return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 669
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_028.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 37
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.036706379780287596
+    icir: -0.25811426498056445
+    winrate: 0.3559322033898305
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -0.00024955421275274503
+    longshort_sharpe: null
+    longshort_max_dd: -0.03625625655669806
+    validated_at: 1782306365.6532567
+  validation_date: '2026-06-24'

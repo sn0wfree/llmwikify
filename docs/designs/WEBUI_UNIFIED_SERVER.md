@@ -4,7 +4,7 @@
 **创建日期**: 2026-04-20  
 **更新日期**: 2026-04-27  
 **状态**: ✅ 已完成  
-**关联文档**: [AGENT_INTEGRATION_PLAN.md](AGENT_INTEGRATION_PLAN.md), [LLM_WIKI_PRINCIPLES.md](LLM_WIKI_PRINCIPLES.md)
+**关联文档**: [AGENT_INTEGRATION_PLAN.md](AGENT_INTEGRATION_PLAN.md), [LLM_WIKI_PRINCIPLES.md](../LLM_WIKI_PRINCIPLES.md)
 
 ---
 
@@ -175,7 +175,7 @@ api.ingest.revert(id)      → POST /api/agent/ingest/log/{id}/revert
 
 ### 核心原则
 
-遵循 [LLM_WIKI_PRINCIPLES.md](LLM_WIKI_PRINCIPLES.md)：
+遵循 [LLM_WIKI_PRINCIPLES.md](../LLM_WIKI_PRINCIPLES.md)：
 - **"The human's job is to curate sources, direct the analysis, ask good questions, and think about what it all means. The LLM's job is everything else."**
 - 读操作自动执行，写操作需确认
 - 小改动可自动批准，大改动需人类审核

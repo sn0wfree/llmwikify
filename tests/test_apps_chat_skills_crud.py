@@ -19,11 +19,37 @@ from __future__ import annotations
 import pytest
 
 from llmwikify.apps.chat.skills import SkillContext, SkillResult
-from llmwikify.apps.chat.skills.crud.wiki_dream_skill import WikiDreamSkill, _approve, _get_proposals, _reject, _run, wiki_dream_skill
-from llmwikify.apps.chat.skills.crud.memory_skill import MemorySkill, _add, _clear, _list, _search, memory_skill
-from llmwikify.apps.chat.skills.crud.notify_skill import NotifySkill, _list_notifications, _mark_read, _subscribe, notify_skill
-from llmwikify.apps.chat.skills.crud.scheduler_skill import SchedulerSkill, _add_job, _list_jobs, _remove_job, _trigger, scheduler_skill
-
+from llmwikify.apps.chat.skills.crud.memory_skill import (
+    MemorySkill,
+    _add,
+    _clear,
+    _list,
+    _search,
+    memory_skill,
+)
+from llmwikify.apps.chat.skills.crud.notify_skill import (
+    NotifySkill,
+    _list_notifications,
+    _mark_read,
+    _subscribe,
+    notify_skill,
+)
+from llmwikify.apps.chat.skills.crud.scheduler_skill import (
+    SchedulerSkill,
+    _add_job,
+    _list_jobs,
+    _remove_job,
+    _trigger,
+    scheduler_skill,
+)
+from llmwikify.apps.chat.skills.crud.wiki_dream_skill import (
+    WikiDreamSkill,
+    _approve,
+    _get_proposals,
+    _reject,
+    _run,
+    wiki_dream_skill,
+)
 
 # ─── Mock managers ────────────────────────────────────────────────
 
@@ -131,7 +157,7 @@ class MockWikiDreamEditor:
         return {"status": "ok", "pending_review": 0}
 
     @property
-    def proposals(self) -> "_ProposalManager":
+    def proposals(self) -> _ProposalManager:
         return _ProposalManager(self._proposals)
 
 

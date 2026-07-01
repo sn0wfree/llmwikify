@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (((1.0 - rank(((sign((close - delay(close, 1))) + sign((delay(close,
-    1) - delay(close, 2)))) + sign((delay(close, 2) - delay(close, 3)))))) * sum(volume,
-    5)) / sum(volume, 20))
+  definition: 3日价格动量（基于符号函数）与5/20日成交量比率的组合因子，捕捉价格下跌但成交量相对稳定的股票
   formula: (((1.0 - rank(((sign((close - delay(close, 1))) + sign((delay(close, 1)
     - delay(close, 2)))) + sign((delay(close, 2) - delay(close, 3)))))) * sum(volume,
     5)) / sum(volume, 20))
@@ -104,3 +102,36 @@ l6:
   - 因子换手率较高 (3 日窗口 + 每日重排), 交易成本敏感, 需扣除双边千一以上手续费后评估净 IC
   - 建议结合大盘环境/趋势过滤器使用, 强趋势市降低权重或屏蔽
   - 需监控涨跌停占比与一字板比例, 异常时段谨慎使用
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Three signs of\
+    \ close price changes over consecutive days\n    s1 = (pl.col('close') - delay(pl.col('close'),\
+    \ periods=1)).sign()\n    s2 = (delay(pl.col('close'), periods=1) - delay(pl.col('close'),\
+    \ periods=2)).sign()\n    s3 = (delay(pl.col('close'), periods=2) - delay(pl.col('close'),\
+    \ periods=3)).sign()\n    \n    sign_sum = s1 + s2 + s3\n    \n    # Materialize\
+    \ rank and rolling sums\n    df = df.with_columns(\n        rank(sign_sum).over('date').alias('_rank'),\n\
+    \        rolling_sum(pl.col('volume'), window=5).alias('_vol5'),\n        rolling_sum(pl.col('volume'),\
+    \ window=20).alias('_vol20'),\n    )\n    \n    factor = (1.0 - pl.col('_rank'))\
+    \ * pl.col('_vol5') / pl.col('_vol20')\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 771
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_030.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 53
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.008479678815781785
+    icir: 0.05269524500009853
+    winrate: 0.5254237288135594
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 6.819068303820508e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.02438750562462897
+    validated_at: 1782306447.9085228
+  validation_date: '2026-06-24'

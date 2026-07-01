@@ -104,7 +104,9 @@ function stepToSixStepKey(currentStep: string, status: string): string | null {
       return 'reasoning';
     case 'reporting':
     case 'report':
-      return 'report';
+      // Structure validation (step 4) happens inside the report action.
+      // The final report display is handled by the 'done' status (__done__).
+      return 'structure';
     case 'reviewing':
     case 'revise':
       return 'compliance';
@@ -611,10 +613,13 @@ export function AutoResearchPanel() {
             setActiveTab('sixstep');
           } else if (t === 'evidence_scoring_complete') {
             msg = `✓ 建立依据 — ${ev.count} sources scored, avg=${ev.avg_score.toFixed(2)}`;
+            setActiveTab('sixstep');
           } else if (t === 'reasoning_check_complete') {
             msg = `✓ 推理严密 — aggregate=${ev.aggregate_score.toFixed(2)}, ${ev.issues_count} issues`;
+            setActiveTab('sixstep');
           } else if (t === 'structure_check_complete') {
             msg = `✓ 稳固结构 — aggregate=${ev.aggregate_score.toFixed(2)}, ${ev.issues_count} issues`;
+            setActiveTab('sixstep');
           } else if (t === 'synthesis_complete') msg = `综合完成`;
           else if (t === 'review_passed') msg = `✓ 评审通过 (score=${ev.score})`;
           else if (t === 'review_issues') msg = `⚠ 评审发现 ${ev.issues.length} issues`;

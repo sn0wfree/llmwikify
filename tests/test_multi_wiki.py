@@ -1,13 +1,14 @@
 """Tests for multi-wiki management system (Phase 1)."""
 
-import pytest
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
-from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType, WikiStatus
+import pytest
+
 from llmwikify.kernel.multi_wiki.discovery import WikiDiscovery
-from llmwikify.kernel.multi_wiki.remote import RemoteWiki
+from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiStatus, WikiType
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
+from llmwikify.kernel.multi_wiki.remote import RemoteWiki
 
 
 class TestWikiInstance:

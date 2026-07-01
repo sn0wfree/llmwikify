@@ -277,31 +277,32 @@ class UnifiedWorkflow:
 
             try:
                 if self.config.use_react:
-                    from ..codegen.react_engine import compile_to_code_react
+                    from llmwikify.kernel.agent import generate_factor_code_sync
 
-                    react_result = compile_to_code_react(
+                    result = generate_factor_code_sync(
                         factor_name=name,
                         formula_brief=formula_brief,
-                        system_prompt=SYSTEM_PROMPT_CODE,
                         df=df_pl,
-                        llm=llm,
+                        llm_client=llm,
                         max_repair_rounds=3,
                         temperature=0.3,
                     )
-                    if react_result.is_valid:
-                        # 重新执行获取 Series
-                        series = execute_code(react_result.code, df_pl)
+                    if not result.error and result.code:
                         coded.append({
                             "name": name,
-                            "code": react_result.code,
+                            "code": result.code,
                             "formula_brief": formula_brief,
                         })
-                        logger.info("[workflow] stage2: %s code OK (%d chars)", name, len(react_result.code))
+                        logger.info("[workflow] stage2: %s code OK (%d chars)", name, len(result.code))
                     else:
-                        logger.warning("[workflow] stage2: %s codegen failed: %s", name, react_result.error_message)
+                        logger.warning("[workflow] stage2: %s codegen failed: %s", name, result.error)
                 else:
                     # 1-shot fallback
-                    from ..codegen.llm_code import extract_python, validate_syntax, validate_safety
+                    from ..codegen.llm_code import (
+                        extract_python,
+                        validate_safety,
+                        validate_syntax,
+                    )
 
                     user_prompt = (
                         f"Factor: {name}\nFormula: {formula_brief}\n\n"
@@ -318,7 +319,7 @@ class UnifiedWorkflow:
                         syntax_ok, _ = validate_syntax(code)
                         safe_ok, _ = validate_safety(code)
                         if syntax_ok and safe_ok:
-                            series = execute_code(code, df_pl)
+                            _series = execute_code(code, df_pl)
                             coded.append({
                                 "name": name,
                                 "code": code,

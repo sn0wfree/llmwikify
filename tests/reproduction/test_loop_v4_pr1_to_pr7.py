@@ -16,36 +16,36 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
+from src.llmwikify.reproduction.backtest_pkg.factor_backtest import (
+    _compute_factor_from_ast,
+)
 from src.llmwikify.reproduction.codegen.ast.compiler import CompileError, compile_ast
 from src.llmwikify.reproduction.codegen.ast.nodes import (
     make_call,
     make_col,
     make_lit,
 )
-from src.llmwikify.reproduction.common.errors import StructuredError
-from src.llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_from_ast
 from src.llmwikify.reproduction.codegen.repair import (
     build_error_history,
     repair_once,
 )
 from src.llmwikify.reproduction.codegen.semantic import (
-    get_op,
     get_doc_for_llm,
+    get_op,
     instantiate,
     list_by_family,
     list_ops,
 )
+from src.llmwikify.reproduction.common.errors import StructuredError
 from src.llmwikify.reproduction.common.telemetry import Telemetry, get_telemetry
-
 
 # ─── PR-1: Public API ──────────────────────────────────────
 
 
 def test_pr1_get_operator_public_api() -> None:
     """PR-1: ast_compiler uses public get_operator (not _OPERATOR_REGISTRY)."""
-    import re
-
     import inspect
+    import re
 
     from src.llmwikify.reproduction.codegen.ast import compiler as ast_compiler
     src = inspect.getsource(ast_compiler)
@@ -189,7 +189,9 @@ def test_pr4_compute_factor_from_ast_rolling_mean() -> None:
 
 def test_pr4_compute_factor_values_ast_compiled_branch() -> None:
     """PR-4: _compute_factor_values handles factor_class='ast_compiled'."""
-    from src.llmwikify.reproduction.backtest_pkg.factor_backtest import _compute_factor_values
+    from src.llmwikify.reproduction.backtest_pkg.factor_backtest import (
+        _compute_factor_values,
+    )
 
     df = pd.DataFrame({
         "date": pd.date_range("2024-01-01", periods=20),
@@ -608,8 +610,8 @@ def test_stage_a_compile_error_handled_gracefully() -> None:
 
 def test_stage_a_repair_pipeline_e2e() -> None:
     """Stage A: end-to-end repair flow (LLM emit bad AST -> repair -> compile success)."""
-    from src.llmwikify.reproduction.common.errors import StructuredError
     from src.llmwikify.reproduction.codegen.repair import repair_once
+    from src.llmwikify.reproduction.common.errors import StructuredError
 
     # Simulate LLM emits rolling_mean without window
     bad_ast = make_call("rolling_mean", [make_col("close")])
@@ -672,8 +674,8 @@ def test_stage_b_persist_l5_to_yaml_creates(tmp_path) -> None:
     stock_dir.mkdir(parents=True)
 
     from src.llmwikify.reproduction.codegen.compiler import (
-        FactorCompiler,
         CompileResult,
+        FactorCompiler,
         persist_l5_to_yaml,
     )
     from src.llmwikify.reproduction.persist.factor_library import read_factor_yaml
@@ -704,7 +706,9 @@ def test_stage_b_persist_l5_to_yaml_creates(tmp_path) -> None:
 
 def test_stage_b_extract_paper_l5_placeholder() -> None:
     """Stage B: extract_paper._extract_factors_from_list sets l5.ast=None placeholder."""
-    from src.llmwikify.reproduction.paper_understanding.extract_paper import _extract_factors_from_list
+    from src.llmwikify.reproduction.paper_understanding.extract_paper import (
+        _extract_factors_from_list,
+    )
 
     extraction = {
         "factor_list": [
@@ -776,10 +780,13 @@ def test_stage_b_run_factor_compile_for_paper_mock(tmp_path) -> None:
 
 def test_stage_b_l5_yaml_invalid_status(tmp_path) -> None:
     """Stage B: persist_l5_to_yaml writes 'failed' status when compile failed."""
-    from pathlib import Path
     import os
+    from pathlib import Path
 
-    from src.llmwikify.reproduction.codegen.compiler import CompileResult, persist_l5_to_yaml
+    from src.llmwikify.reproduction.codegen.compiler import (
+        CompileResult,
+        persist_l5_to_yaml,
+    )
 
     # Synthesize a failed CompileResult
     failed_result = CompileResult(

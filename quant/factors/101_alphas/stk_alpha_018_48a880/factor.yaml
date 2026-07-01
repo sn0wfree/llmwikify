@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * rank(((stddev(abs((close - open)), 5) + (close - open)) + correlation(close,
-    open, 10))))
+  definition: 做空高日内波动且价格持续同向运行的股票，通过波动率、价差和相关性三个维度捕捉短周期反转信号。
   formula: (-1 * rank(((stddev(abs((close - open)), 5) + (close - open)) + correlation(close,
     open, 10))))
   frequency: 日频
@@ -95,3 +94,36 @@ l6:
   - '高波动率/危机环境: 低波动股票反而承担系统性下行风险, 流动性挤兑时低波动失效'
   - 'T+1/涨跌停限制严格的市场: 日内反转信号无法被 T+0 套利实现, IC 衰减明显'
   risk_notes: 因子对市场风格切换敏感, 需监控波动率因子和反转因子的拥挤度; 在 A 股需额外考虑涨跌停导致的 close-open 失真; 建议与动量/质量因子做负相关组合以分散风格风险。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # close - open\n\
+    \    co = pl.col('close') - pl.col('open')\n    # abs(close - open)\n    abs_co\
+    \ = co.abs()\n    # stddev(abs(close - open), 5) - materialize first\n    df =\
+    \ df.with_columns(rolling_std(abs_co, window=5).alias('_std_5'))\n    # correlation(close,\
+    \ open, 10) - materialize first\n    df = df.with_columns(correlation(pl.col('close'),\
+    \ pl.col('open'), window=10).alias('_corr_10'))\n    # combined: stddev + (close\
+    \ - open) + correlation\n    combined = pl.col('_std_5') + co + pl.col('_corr_10')\n\
+    \    # rank cross-sectionally and negate\n    factor = -1 * rank(combined).over('date')\n\
+    \    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 678
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_018.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 64
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.03738175772968624
+    icir: 0.27647657544172405
+    winrate: 0.6271186440677966
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.00035871660589426035
+    longshort_sharpe: null
+    longshort_max_dd: -0.01789274270636334
+    validated_at: 1782306113.6686318
+  validation_date: '2026-06-24'

@@ -2,7 +2,11 @@
 
 **llmwikify** uses a flexible configuration system that allows you to customize behavior while maintaining zero core dependencies.
 
-**Current**: v0.12.6
+**Current**: v0.38.0 (2026-06-30) — 与最新 main 分支对齐
+
+> **破坏性变更提示（v0.30+）**：Python API `MCPServer(wiki)` 已废弃，由
+> `llmwikify.interfaces.server.WikiServer` + `llmwikify serve` CLI 统一替代。
+> 本文中所有 `MCPServer` 引用改为 `WikiServer` / `serve`。
 
 ---
 
@@ -149,21 +153,122 @@ performance:
 
 ---
 
-### 7. mcp
+### 7. server (unified server — MCP + REST + WebUI)
 
-MCP server settings (used when `MCPServer(wiki)` reads from wiki config):
+v0.33 起统一服务器（`llmwikify serve --web`）替代了独立的 `MCPServer` 类。
+所有 `MCPServer(wiki)` 旧调用应改为：
 
-```yaml
-mcp:
-  host: "127.0.0.1"
-  port: 8765
-  transport: "stdio"  # or "http" or "sse"
+```python
+# 旧（已废弃）
+from llmwikify import MCPServer
+server = MCPServer(wiki)
+server.serve()
+
+# 新（推荐）
+from llmwikify.interfaces.server import WikiServer
+server = WikiServer(wiki, enable_mcp=True, enable_rest=True, enable_webui=True)
+server.run(host="127.0.0.1", port=8765)
+
+# 或 CLI
+# llmwikify serve --web --port 8765 --host 0.0.0.0 --auth-token mysecret
 ```
 
-**Config priority** in `MCPServer`:
-1. Explicit `config` parameter
-2. `wiki.config["mcp"]` (from `.wiki-config.yaml`)
-3. `DEFAULT_CONFIG` (stdio, 127.0.0.1:8765)
+```yaml
+# .wiki-config.yaml
+server:
+  host: "127.0.0.1"        # 绑定地址
+  port: 8765               # REST + WebUI + MCP HTTP 端口
+  auth_token: null         # 设为非空字符串启用 Bearer auth
+  enable_mcp: true
+  enable_rest: true
+  enable_webui: true
+  multi_wiki: false        # 多 wiki 注册表模式
+
+mcp:                       # 兼容旧 mcp.* 字段；serve 也会读取
+  host: "127.0.0.1"
+  port: 8765
+  transport: "http"        # stdio / http / sse — stdio 时 server 不可用
+```
+
+**Config priority** in `WikiServer`:
+1. 显式构造参数 `WikiServer(wiki, enable_mcp=...)` / CLI flag
+2. `wiki.config["server"]` (from `.wiki-config.yaml`)
+3. `wiki.config["mcp"]` (legacy 兼容)
+4. `DEFAULT_CONFIG` (127.0.0.1:8765)
+
+---
+
+### 8. search (后端选择)
+
+v0.22+ 支持 QMD 混合检索（BM25 + 向量 + LLM rerank）。FTS5 是默认，零额外依赖。
+
+```yaml
+search:
+  backend: "fts5"          # "fts5" (default) | "qmd"
+  qmd:
+    host: "127.0.0.1"
+    port: 8181
+    auto_start: false
+```
+
+详见 [QMD Setup Guide](./QMD_SETUP.md)。
+
+---
+
+### 9. wikis (multi-wiki 注册表 — v0.31+)
+
+统一管理本地 + 远程 wiki。`llmwikify wikis` 子命令 / `/api/wikis/*` REST 端点
+都从这一节读取。
+
+```yaml
+wikis:
+  default: "project-a"
+
+  local:
+    - id: "project-a"
+      name: "Project A"
+      path: "."
+    - id: "research-notes"
+      name: "Research Notes"
+      path: "~/wikis/research"
+
+  remote:
+    - id: "team-docs"
+      name: "Team Docs"
+      url: "http://wiki-server:8765"
+      api_key: "${WIKI_DOCS_API_KEY}"   # 支持 env 引用
+
+  discovery:
+    enabled: true
+    scan_paths: [".", "../", "~/wikis"]
+    scan_depth: 2
+```
+
+启动多 wiki 模式：
+
+```bash
+llmwikify serve --web --multi-wiki --port 8765
+# Wikis: 3 registered
+# Transport: http
+```
+
+---
+
+### 10. llm (LLM provider 配置 — v0.33+)
+
+wiki/chat 路径下需要 LLM 调用（analyze-source、synthesize、chat）时从此处
+读取。CLI 子命令 `llmwikify` 启动时也会读 `~/.llmwikify/llmwikify.json` 中的
+全局配置。
+
+```yaml
+llm:
+  provider: "openai"                    # openai | anthropic | minimax | custom
+  model: "gpt-4o"
+  api_key: "env:OPENAI_API_KEY"         # 显式 env: 前缀
+  base_url: null                        # 留空走 provider 默认
+  max_retries: 3
+  timeout_seconds: 60
+```
 
 ---
 
@@ -184,8 +289,8 @@ orphan_detection:
     - 'archive'
     - 'old'
 
-mcp:
-  transport: "stdio"
+server:
+  transport: "stdio"     # MCP stdio 模式
 ```
 
 ---
@@ -251,6 +356,13 @@ mcp:
   host: "127.0.0.1"
   port: 8765
   transport: "stdio"
+
+wikis:
+  default: "team-wiki"
+  local:
+    - id: "team-wiki"
+      name: "Team Wiki"
+      path: "."
 ```
 
 ---
@@ -273,10 +385,14 @@ custom_config = {
     "orphan_detection": {
         "exclude_patterns": ["^draft-.*"]
     },
-    "mcp": {
-        "transport": "http",
-        "port": 9000
-    }
+    "server": {
+        "host": "0.0.0.0",
+        "port": 9000,
+        "auth_token": "mysecret",
+    },
+    "search": {
+        "backend": "fts5",
+    },
 }
 
 wiki = create_wiki("/path/to/wiki", config=custom_config)
@@ -339,4 +455,4 @@ print(config['database']['name'])  # From .wiki-config.yaml or default
 
 ---
 
-*Last updated: 2026-04-10 | Version: 0.12.6*
+*Last updated: 2026-06-30 | Version: 0.38.0*

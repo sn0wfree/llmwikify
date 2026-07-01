@@ -23,8 +23,8 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from llmwikify.reproduction.common.config import config
 
+from llmwikify.reproduction.common.config import config
 from llmwikify.reproduction.common.run_id import generate_run_id, sanitize_run_id
 
 logger = logging.getLogger(__name__)
@@ -205,6 +205,7 @@ def _load_metrics_for_family(family_slug: str, slugs: list[str] | None = None) -
 @router.get("/families")
 async def list_families() -> dict[str, Any]:
     """List all factor families (directories with _meta.yaml)."""
+    import yaml
     families = _detect_families()
     for fam in families:
         members = _list_members(fam["slug"])
@@ -215,18 +216,35 @@ async def list_families() -> dict[str, Any]:
             s = m["status"]
             status_counts[s] = status_counts.get(s, 0) + 1
         fam["status_counts"] = status_counts
-        # IC coverage (match by alpha_index)
+        # IC coverage + avg_ic (match by alpha_index)
         all_metrics = _load_metrics_for_family(fam["slug"])
-        ic_count = sum(
-            1 for m in members
-            if m.get("alpha_index") and str(m["alpha_index"]) in all_metrics
-            and all_metrics[str(m["alpha_index"])].get("ic_mean") is not None
-        )
+        ic_count = 0
+        ic_values: list[float] = []
+        for m in members:
+            ai = m.get("alpha_index")
+            if ai and str(ai) in all_metrics:
+                val = all_metrics[str(ai)].get("ic_mean")
+                if val is not None:
+                    ic_count += 1
+                    ic_values.append(val)
         fam["ic_coverage"] = f"{ic_count}/{len(members)}" if members else "0/0"
+        fam["avg_ic"] = round(sum(ic_values) / len(ic_values), 4) if ic_values else None
     # Standalone factors (yaml files not in families)
     standalone = []
     for f in sorted(_FACTORS_ROOT.glob("*.yaml")):
-        standalone.append({"slug": f.stem, "name": f.stem})
+        if f.name in ("index.yaml", "_meta.yaml", "config.yaml"):
+            continue
+        if f.name.startswith("test_"):
+            continue
+        entry = {"slug": f.stem, "name": f.stem}
+        try:
+            data = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+            entry["category"] = data.get("category", "")
+            raw_status = data.get("status", "")
+            entry["status"] = _normalize_status(raw_status) if raw_status else ""
+        except Exception:
+            pass
+        standalone.append(entry)
     return {"families": families, "standalone": standalone}
 
 
@@ -313,7 +331,7 @@ def _build_factor_backtest_page(
     lines = [
         "---",
         f"title: Factor Backtest — {factor_slug}",
-        f"type: FactorBacktest",
+        "type: FactorBacktest",
         f"factor_ref: {factor_slug}",
         f"universe: {req.universe}",
         f"adj_mode: {req.adj_mode}",
@@ -330,7 +348,7 @@ def _build_factor_backtest_page(
         f"longshort_ann_return: {result.longshort_ann_return:.4f}",
         f"longshort_sharpe: {result.longshort_sharpe:.4f}",
         f"data_source: {source}",
-        f"status: success",
+        "status: success",
         "---",
         "",
         f"# Factor Backtest — {factor_slug} ({run_id})",
@@ -343,8 +361,8 @@ def _build_factor_backtest_page(
         "",
         "## IC Analysis",
         "",
-        f"| Metric | Value |",
-        f"|---|---|",
+        "| Metric | Value |",
+        "|---|---|",
         f"| IC Mean | {result.ic_mean:.4f} |",
         f"| IC Std | {result.ic_std:.4f} |",
         f"| ICIR | {result.icir:.4f} |",
@@ -355,16 +373,16 @@ def _build_factor_backtest_page(
         "",
         "## Quantile Returns",
         "",
-        f"| Group | Annual Return |",
-        f"|---|---|",
+        "| Group | Annual Return |",
+        "|---|---|",
     ]
     for group, ret in result.quantile_returns.items():
         lines.append(f"| {group} | {ret:.4f} |")
     lines.append("")
     lines.append("## Long-Short")
     lines.append("")
-    lines.append(f"| Metric | Value |")
-    lines.append(f"|---|---|")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---|")
     lines.append(f"| Ann Return | {result.longshort_ann_return:.4f} |")
     lines.append(f"| Sharpe | {result.longshort_sharpe:.4f} |")
     lines.append(f"| Max DD | {result.longshort_mdd:.4f} |")
@@ -381,7 +399,7 @@ def _persist_factor_result(
     result: Any,
     source: str,
     factor: dict[str, Any],
-) -> Optional[str]:
+) -> str | None:
     """Persist factor backtest result to DB and Wiki.
 
     All-or-nothing semantics: DB write is committed first, then Wiki.
@@ -434,7 +452,7 @@ def _persist_factor_result(
     return wiki_page
 
 
-@router.post("/{slug}/backtest")
+@router.post("/{slug:path}/backtest")
 async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, Any]:
     """Run factor backtest.
 
@@ -442,14 +460,15 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
     - ``universe == "single"``: legacy single-stock mode using ``run_factor_backtest``.
     """
     import asyncio
-    from llmwikify.reproduction.persist.factor_library import read_factor_yaml
+
     from llmwikify.reproduction.data_source.router import DataRouter
-    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
     from llmwikify.reproduction.data_source.universe import (
         HEDGE_INDEX_CODE,
         get_index_constituents,
         resolve_universe,
     )
+    from llmwikify.reproduction.persist.factor_library import read_factor_yaml
+    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
 
     wiki = _get_wiki()
     factor_data = read_factor_yaml(slug)
@@ -481,7 +500,9 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             data, source = await asyncio.to_thread(
                 data_router.get, req.symbol, req.start_date, req.end_date
             )
-            from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest
+            from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+                run_factor_backtest,
+            )
             result = await asyncio.to_thread(
                 run_factor_backtest,
                 data=data,
@@ -542,7 +563,9 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
             }
 
         # ── Cross-section (universe) mode ─────────────────────────
-        from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest_universe
+        from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+            run_factor_backtest_universe,
+        )
 
         # 1. Resolve stock universe
         symbols = await asyncio.to_thread(resolve_universe, req.universe)
@@ -591,7 +614,9 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
 
         # 5b. Store factor values in DuckDB (background, best-effort)
         try:
-            from llmwikify.reproduction.backtest_pkg.factor_value_store import compute_and_store_factor
+            from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+                compute_and_store_factor,
+            )
             stored_rows = await asyncio.to_thread(
                 compute_and_store_factor,
                 close_wide=close_wide,
@@ -676,43 +701,45 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
         )
 
 
-@router.get("/{slug}/backtest")
+@router.get("/{slug:path}/backtest")
 async def get_factor_backtest_results(slug: str, limit: int = 10) -> dict[str, Any]:
     """Get past backtest results for a factor.
 
     Returns a list of recent backtest runs with IC series and group metrics,
     suitable for rendering L5 charts in the UI.
+    Reads from per-factor DuckDB ({factor_dir}/factor.duckdb).
     """
-    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
+    from llmwikify.reproduction.persist.factor_library import read_backtest_duckdb
 
-    db = ReproductionDatabase()
-    results = db.list_results(factor_ref=slug, limit=limit)
+    runs = read_backtest_duckdb(slug, limit=limit)
 
-    runs = []
-    for r in results:
-        ic_series = json.loads(r.ic_series) if r.ic_series else []
-        group_metrics = json.loads(r.group_metrics) if r.group_metrics else {}
-        runs.append({
-            "run_id": r.run_id,
-            "created_at": r.created_at,
-            "status": r.status,
-            "universe": r.universe,
-            "start_date": r.start_date,
-            "end_date": r.end_date,
-            "metrics": {
-                "ic_mean": r.ic_mean,
-                "rank_ic_mean": r.rank_ic_mean,
-                "icir": r.icir,
-                "rank_icir": r.rank_icir,
-                "win_rate": r.win_rate,
-                "annual_return": r.annual_return,
-                "longshort_ann_return": r.longshort_ann_return,
-                "longshort_sharpe": r.longshort_sharpe,
-                "longshort_max_dd": r.longshort_max_dd,
-            },
-            "ic_series": ic_series,
-            "group_metrics": group_metrics,
-        })
+    # Fallback: try SQLite if DuckDB has no data
+    if not runs:
+        try:
+            from llmwikify.reproduction.persist.sessions import ReproductionDatabase
+            db = ReproductionDatabase()
+            results = db.list_results(factor_ref=slug, limit=limit)
+            for r in results:
+                runs.append({
+                    "run_id": r.run_id,
+                    "created_at": r.created_at,
+                    "status": r.status,
+                    "metrics": {
+                        "ic_mean": r.ic_mean,
+                        "rank_ic_mean": r.rank_ic_mean,
+                        "icir": r.icir,
+                        "rank_icir": r.rank_icir,
+                        "win_rate": r.win_rate,
+                        "annual_return": r.annual_return,
+                        "longshort_sharpe": r.longshort_sharpe,
+                        "longshort_max_dd": r.longshort_max_dd,
+                    },
+                    "ic_series": json.loads(r.ic_series) if r.ic_series else [],
+                    "equity_curve": json.loads(r.equity_curve) if r.equity_curve else {},
+                    "group_metrics": json.loads(r.group_metrics) if hasattr(r, "group_metrics") and r.group_metrics else {},
+                })
+        except Exception:
+            pass
 
     return {"slug": slug, "runs": runs, "total": len(runs)}
 
@@ -727,14 +754,16 @@ class L5ValidateRequest(BaseModel):
     cost_bps: float = Field(default=15.0, ge=0, le=100)
 
 
-@router.post("/{slug}/validate")
+@router.post("/{slug:path}/validate")
 async def validate_factor(slug: str, req: L5ValidateRequest) -> dict[str, Any]:
     """Run L5 automated validation pipeline for a factor.
 
     Executes: backtest → 7 analysis modules → scoring → (LLM hypothesis testing) → write YAML.
     """
     import asyncio
+
     from llmwikify.reproduction.backtest_pkg.l5_orchestrator import run_l5_pipeline
+    from llmwikify.reproduction.persist.factor_library import read_factor_yaml
 
     factor = read_factor_yaml(slug)
     if factor is None:

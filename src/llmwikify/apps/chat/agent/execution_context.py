@@ -1,65 +1,15 @@
-"""``AgentExecutionContext`` — shared collaborator bundle for any agent loop (Phase 16+).
+"""Backward-compat shim: AgentExecutionContext 已迁 kernel.agent.execution_context.
 
-The 4 collaborators that ``ChatRunnerV2`` (``chat_service``,
-``tool_executor``, ``prompt_builder``, ``config``) accepts in
-``__init__`` are not chat-specific — they are the *execution
-context* any agent loop needs:
+历史: AgentExecutionContext 从 apps/chat/agent/execution_context.py 搬到
+kernel/agent/execution_context.py (G+Y commit 6), 因为它是 agent 框架
+通用概念, 不应依赖 apps/ 层。
 
-  - ``chat_service``  — LLM connectivity (or any callable that
-                         bridges to a model)
-  - ``tool_executor`` — tool dispatch (or no-op for tool-less agents)
-  - ``prompt_builder``— system prompt construction
-  - ``config``         — feature flags (max iterations, microcompact,
-                         etc.)
+本 shim 保留为 backward-compat re-export:
+    from llmwikify.apps.chat.agent.execution_context import AgentExecutionContext
 
-Lifting these into a single dataclass lets :class:`SubagentManager`
-share the context with a child runner **without reading private
-attributes off the parent**, fixing the LSP violation that the
-manager previously enforced at runtime (4-field ``hasattr`` check
-that rejected any non-``ChatRunnerV2`` :class:`AgentRunner`).
-
-Phase 16+ also opens the door to other ``AgentRunner`` subclasses
-(``WorkflowRunner`` / ``CronRunner``) that satisfy the same
-``execution_context()`` contract and can be sub-dispatched via
-the same manager.
-
-Back-compat: ``ChatRunnerV2.__init__`` accepts **either** the ctx
-**or** the legacy individual keyword args (and builds the ctx
-internally). Existing call sites need no change.
+新代码应直接:
+    from llmwikify.kernel.agent import AgentExecutionContext
 """
-
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from typing import Any
-
-
-@dataclass
-class AgentExecutionContext:
-    """Bundle of collaborators shared across an agent loop boundary.
-
-    Attributes:
-        chat_service: LLM-connectivity adapter (or no-op stub for
-            tool-only agents). Sits behind the ``ChatServiceAdapter``
-            Protocol (apps/chat/agent/protocols.py).
-        tool_executor: Tool dispatcher. ``None`` for agents that do
-            not use tools.
-        prompt_builder: System-prompt / message-shape builder.
-        config: Free-form feature flags (max iterations, microcompact,
-            etc.). ``None`` falls back to ``merge_six_step_config()``
-            in ``ChatRunnerV2``.
-        memory_manager: Optional memory layer for the loop. ``None``
-            disables per-run memory consolidation.
-        hook: Optional :class:`AgentHook` for cross-cutting lifecycle
-            events. ``None`` is equivalent to ``NoOpHook()``.
-    """
-
-    chat_service: Any
-    tool_executor: Any
-    prompt_builder: Any
-    config: dict[str, Any] | None = None
-    memory_manager: Any = None
-    hook: Any = field(default=None)
-
+from llmwikify.kernel.agent.execution_context import AgentExecutionContext
 
 __all__ = ["AgentExecutionContext"]

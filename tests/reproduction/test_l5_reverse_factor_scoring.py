@@ -68,7 +68,10 @@ def test_score_group_uses_abs_mdd():
 
 def test_reverse_factor_gets_higher_score():
     """Reverse factors with strong abs metrics should score same as positive factors."""
-    from llmwikify.reproduction.backtest_pkg.l5_validation import _score_return, _score_group
+    from llmwikify.reproduction.backtest_pkg.l5_validation import (
+        _score_group,
+        _score_return,
+    )
 
     # Same absolute metrics, different signs
     return_pos = {"sharpe": 1.5, "calmar": 0.5, "sortino": 2.0}

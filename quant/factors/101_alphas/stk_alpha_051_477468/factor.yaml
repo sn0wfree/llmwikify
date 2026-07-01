@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: '(((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10)
-    - close) / 10)) < (-1 * 0.05)) ? 1 : ((-1 * 1) * (close - delay(close, 1))))'
+  definition: 动量减速阈值切换alpha，当过去10天动量变化率较再前10天下降超过5%时做多，否则做空日收益率
   formula: '(((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10) -
     close) / 10)) < (-1 * 0.05)) ? 1 : ((-1 * 1) * (close - delay(close, 1))))'
   frequency: 日频
@@ -92,3 +91,31 @@ l6:
   - '低波动/低换手环境: 1 日收益噪声降低, 信号不显著, IC 接近 0'
   - '政策/流动性冲击期: 涨跌停板密集或停牌导致 close 序列不连续, 动量差失真, 条件分支误触发'
   risk_notes: 因子对交易成本极敏感, 实盘需严格控制单边换手; 二元条件在样本边缘的过拟合风险较高, 建议做 walk-forward 验证; 因子行业/市值中性化后再用效果更稳健
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    cond = ((delay(pl.col('close'),\
+    \ periods=20) - delay(pl.col('close'), periods=10)) / 10) - ((delay(pl.col('close'),\
+    \ periods=10) - pl.col('close')) / 10) < (-0.05)\n    factor = pl.when(cond).then(1).otherwise(-1\
+    \ * (pl.col('close') - delay(pl.col('close'), periods=1)))\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 362
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_051.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 48
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.002893989323950005
+    icir: -0.022178611990746184
+    winrate: 0.4576271186440678
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.0002396376514066656
+    longshort_sharpe: null
+    longshort_max_dd: -0.014810835345073298
+    validated_at: 1782307488.7362146
+  validation_date: '2026-06-24'

@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: min(rank(decay_linear(((((high + low) / 2) + high) - (vwap + high)),
-    20.0451)), rank(decay_linear(correlation(((high + low) / 2), adv40, 3.1614), 5.64125)))
+  definition: 取两个衰减加权信号的截面排名最小值：价格结构信号（midpoint与high的组合差值衰减）与流动性信号（midpoint与40日均量相关性衰减），取最小值意味着最终信号倾向于更弱的因子方向
   formula: min(rank(decay_linear(((((high + low) / 2) + high) - (vwap + high)), 20.0451)),
     rank(decay_linear(correlation(((high + low) / 2), adv40, 3.1614), 5.64125)))
   frequency: 日频
@@ -94,3 +93,40 @@ l6:
   - 极端缩量阴跌市，成交量均值 adv40 平坦，滚动相关系数不稳定导致 H2 噪声激增
   - 成分股发生大规模拆股/分红或停牌恢复，high/low 与 vwap 关系扭曲，信号失真
   risk_notes: 建议在样本内对 VWAP 数据源做一致性检查；低流动性股票建议剔除以避免衰减加权在低频数据上引入偏差；因子回测需用 T+1 收益对齐避免前视偏差。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv40 = rolling\
+    \ mean of volume over 40 days\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+    \ window=40).alias('_adv40')\n    )\n    # Materialize correlation((high+low)/2,\
+    \ adv40, ~3.1614) for the second branch\n    df = df.with_columns(\n        correlation((pl.col('high')\
+    \ + pl.col('low')) / 2, pl.col('_adv40'), window=3).alias('_corr')\n    )\n  \
+    \  # Part 1: decay_linear((high+low)/2 + high - (vwap+high), 20.0451)\n    # Simplifies\
+    \ to decay_linear((high+low)/2 - vwap, ~20)\n    df = df.with_columns(\n     \
+    \   decay_linear((pl.col('high') + pl.col('low')) / 2 - pl.col('vwap'), period=20).alias('_d1')\n\
+    \    )\n    # Part 2: decay_linear(_corr, 5.64125)\n    df = df.with_columns(\n\
+    \        decay_linear(pl.col('_corr'), period=6).alias('_d2')\n    )\n    # Cross-sectional\
+    \ ranks (materialize time-series first -> Rule 2)\n    rank1 = rank(pl.col('_d1')).over('date')\n\
+    \    rank2 = rank(pl.col('_d2')).over('date')\n    # min(rank1, rank2)\n    factor\
+    \ = pl.min_horizontal(rank1, rank2)\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1081
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_077.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 46
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.016535316369184073
+    icir: -0.10526502776640198
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -4.156258578469352e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.03546658263674812
+    validated_at: 1782350243.2322943
+  validation_date: '2026-06-25'

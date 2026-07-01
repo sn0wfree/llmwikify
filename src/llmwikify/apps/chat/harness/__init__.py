@@ -45,7 +45,6 @@ from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
 from llmwikify.apps.chat.harness.source_filter import SourceFilter
 from llmwikify.apps.chat.harness.structure_validator import StructureValidator
 
-
 __all__ = [
     "QualityGate",
     "GateResult",

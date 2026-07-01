@@ -234,7 +234,7 @@ def _build_reflection_prompt(
     ga = fa.get("group_analysis", {})
     ra = fa.get("return_analysis", {})
     ta = fa.get("turnover_analysis", {})
-    sa = fa.get("stability_analysis", {})
+    _sa = fa.get("stability_analysis", {})
     oa = fa.get("oos_analysis", {})
     ca = fa.get("cost_analysis", {})
     assessment = l5_data.get("overall_assessment", {})
@@ -447,6 +447,7 @@ def run_l5_pipeline(
 def _run_backtest(factor_data: dict, bt_params: dict) -> Any:
     """Run backtest using existing infrastructure."""
     import asyncio
+
     from llmwikify.reproduction.common.config import config
     from llmwikify.reproduction.data_source.router import DataRouter
 
@@ -490,7 +491,9 @@ def _run_backtest(factor_data: dict, bt_params: dict) -> Any:
     )
     close_wide = close_wide.sort_index().dropna(how="all")
 
-    from llmwikify.reproduction.backtest_pkg.factor_backtest import run_factor_backtest_universe
+    from llmwikify.reproduction.backtest_pkg.factor_backtest import (
+        run_factor_backtest_universe,
+    )
     return run_factor_backtest_universe(
         close_wide=close_wide,
         factor_class=factor_class,

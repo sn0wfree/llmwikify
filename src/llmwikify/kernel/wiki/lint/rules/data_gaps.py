@@ -32,7 +32,7 @@ class DataGapsRule(Rule):
 
     name = "data_gap"
 
-    def run(self, wiki: "Wiki") -> list[dict[str, Any]]:
+    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
         gaps: list[dict[str, Any]] = []
 
         if not wiki.wiki_dir.exists():

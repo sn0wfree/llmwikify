@@ -161,7 +161,7 @@ def _extract_table(text: str) -> list[dict[str, str]]:
             elif all(c == "---" for c in cells):
                 continue
             else:
-                rows.append(dict(zip(headers, cells)))
+                rows.append(dict(zip(headers, cells, strict=False)))
     return rows
 
 
@@ -312,7 +312,7 @@ def fetch_ipo_dates(
     # Try cache
     if cache_file.exists():
         df = pd.read_parquet(cache_file)
-        return dict(zip(df["code"], df["ipo_date"]))
+        return dict(zip(df["code"], df["ipo_date"], strict=False))
 
     result: dict[str, str] = {}
     # Field name variants in iFinD response

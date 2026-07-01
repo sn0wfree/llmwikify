@@ -15,7 +15,11 @@ from pathlib import Path
 ROOT = Path("/home/ll/llmwikify")
 sys.path.insert(0, str(ROOT / "src"))
 
-from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import build_default_client
+from llmwikify.reproduction.paper_understanding.llm_extraction.llm_factory import (
+    build_default_client,
+)
+
+from llmwikify.reproduction.paper_understanding.llm_extraction.planner import plan_paper
 from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     PROMPT_PASS2_SUPPLEMENT,
     SignalDetail,
@@ -24,7 +28,6 @@ from llmwikify.reproduction.paper_understanding.llm_extraction.track_b import (
     _run_pass2_adaptive,
     _select_supplement_targets,
 )
-from llmwikify.reproduction.paper_understanding.llm_extraction.planner import plan_paper
 
 PAPER_ID = "101_alphas_hybrid_full"
 WORK_DIR = ROOT / "quant" / "papers" / PAPER_ID
@@ -75,7 +78,7 @@ plan = plan_paper(paper_id=PAPER_ID, title="101 Formulaic Alphas", parsed_text=p
 client = build_default_client()
 
 # Run supplement phase with PROMPT_PASS2_SUPPLEMENT
-print(f"\nRunning supplement with PROMPT_PASS2_SUPPLEMENT...")
+print("\nRunning supplement with PROMPT_PASS2_SUPPLEMENT...")
 t0 = time.monotonic()
 supplement_results, sup_latency = asyncio.run(
     _run_pass2_adaptive(
@@ -124,13 +127,13 @@ avg_int = sum(l3_int)/len(l3_int) if l3_int else 0
 avg_theo = sum(l3_theo)/len(l3_theo) if l3_theo else 0
 avg_hyp = sum(l4_hyp)/len(l4_hyp) if l4_hyp else 0
 
-print(f"\n📊 Hybrid final stats:")
+print("\n📊 Hybrid final stats:")
 print(f"  l3.intuition avg: {avg_int:.1f} chars")
 print(f"  l3.theoretical avg: {avg_theo:.1f} chars")
 print(f"  l4.hypotheses avg: {avg_hyp:.2f}")
 
 # Per-target comparison
-print(f"\nPer-target depth change:")
+print("\nPer-target depth change:")
 for name in [s.name for s in supplement_stubs]:
     v3 = next((d for d in parallel_details if d.name == name), None)
     final = next((d for d in final_details if d.name == name), None)

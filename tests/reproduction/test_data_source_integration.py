@@ -8,11 +8,21 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from llmwikify.reproduction.data_source import (
-    akshare as akshare_data, clickhouse as clickhouse_data, ifind as ifind_data, router,
+    akshare as akshare_data,
+)
+from llmwikify.reproduction.data_source import (
+    clickhouse as clickhouse_data,
+)
+from llmwikify.reproduction.data_source import (
+    ifind as ifind_data,
+)
+from llmwikify.reproduction.data_source import (
+    router,
 )
 
 
@@ -57,6 +67,7 @@ class TestDataSourceMocked:
     def test_router_synth_returns_dataframe(self) -> None:
         """SynthDataSource.get() 返回 DataFrame (mock)."""
         from unittest.mock import patch
+
         import pandas as pd
         with patch.object(router, "SynthDataSource") as mock_cls:
             mock_instance = MagicMock()

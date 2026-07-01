@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * (delta(correlation(high, volume, 5), 5) * rank(stddev(close, 20))))
+  definition: 做空5日价量相关性持续下降且波动率较高的股票
   formula: (-1 * (delta(correlation(high, volume, 5), 5) * rank(stddev(close, 20))))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -93,3 +93,37 @@ l6:
   - 强政策驱动或流动性突变场景下，量价相关性跳变无规律，delta_corr 噪声放大导致因子失效
   - 小盘股流动性枯竭时，volume 噪声激增，corr_hv 失真，因子回撤显著
   risk_notes: 因子对换手率与流动性敏感，建议配合流动性筛选与行业中性化；-1 方向意味着做空高波动品种，需关注融券成本与做空可行性；在极端单边市中可能出现连续回撤。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Step 1: rolling\
+    \ correlation between high and volume, window=5\n    df = df.with_columns(\n \
+    \       correlation(pl.col('high'), pl.col('volume'), window=5).alias('_corr')\n\
+    \    )\n    # Step 2: delta of the correlation with period=5\n    df = df.with_columns(\n\
+    \        delta(pl.col('_corr'), 5).alias('_delta_corr')\n    )\n    # Step 3:\
+    \ rolling stddev of close, window=20\n    df = df.with_columns(\n        rolling_std(pl.col('close'),\
+    \ window=20).alias('_stddev_close')\n    )\n    # Step 4: cross-sectional rank\
+    \ of the stddev\n    df = df.with_columns(\n        rank(pl.col('_stddev_close')).over('date').alias('_rank_stddev')\n\
+    \    )\n    # Step 5: combine: -1 * (delta_corr * rank_stddev)\n    factor = -1\
+    \ * (pl.col('_delta_corr') * pl.col('_rank_stddev'))\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 838
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_022.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 57
+    status: 通过
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.016035486956123272
+    icir: 0.11953524312060598
+    winrate: 0.576271186440678
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 0.0002977094509906131
+    longshort_sharpe: null
+    longshort_max_dd: -0.01818478908252027
+    validated_at: 1782306235.687669
+  validation_date: '2026-06-24'

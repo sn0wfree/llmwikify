@@ -19,6 +19,12 @@ from typing import Any
 
 import polars as pl
 
+from ..common.errors import (
+    StructuredError,
+    categorize_compile_error,
+    categorize_extract_error,
+)
+from ..common.telemetry import get_telemetry
 from .ast.compiler import CompileError, compile_ast
 from .ast.complexity import (
     ComplexityVerdict,
@@ -28,13 +34,7 @@ from .ast.complexity import (
 )
 from .ast.extractor import extract_ast
 from .ast.nodes import QN_OPS, ASTNode
-from ..common.errors import (
-    StructuredError,
-    categorize_compile_error,
-    categorize_extract_error,
-)
 from .repair import build_error_history, repair_once
-from ..common.telemetry import get_telemetry
 
 logger = logging.getLogger(__name__)
 

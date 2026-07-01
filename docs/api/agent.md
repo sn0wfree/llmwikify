@@ -1,6 +1,7 @@
 # AgentChat API Reference
 
-> **Version:** v0.36.0 (2026-06-09)
+> **Version:** v0.38.0 (2026-06-30)
+> **Last reviewed:** v0.36.0 behavior — 行为描述（rate limit / cascade delete / regenerate / MemoryManager 整合 / SSE reconnect）以 v0.36 时代为基准。v0.37/v0.38 增量见 `CHANGELOG.md`。
 > **Base path:** `/api/agent`
 > **Auth:** none (loopback only; production deployment should add a reverse proxy with auth)
 

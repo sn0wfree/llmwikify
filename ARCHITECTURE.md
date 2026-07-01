@@ -1,7 +1,7 @@
 # llmwikify Architecture
 
 > Technical architecture for developers.
-> **Version:** 0.36.0 | **Last updated:** 2026-06-17 | **Tests:** 3100+ Python collected
+> **Version:** 0.38.0 | **Last updated:** 2026-06-30 | **Tests:** 3100+ Python collected
 
 ---
 
@@ -594,10 +594,12 @@ pytest tests/test_v022_relations.py              # graph relations
 | v0.33 | Service-layer split; `interfaces/mcp/server.py` deprecated |
 | v0.36 | Hardening: 32-char message IDs, rate limiting, `confirmation_required` / `save_warning` / `timeout` SSE events |
 | v0.37 | ReAct loop unification — `ChatService` defaults to `ChatReActBridge` |
+| v0.38 | Nanobot v0.2.1 borrowings — `MessageBus` in-process pub/sub; `WebSocketManager` + `/api/ws/agent`; `AgentRunner[SpecT, ResultT]` ABC; `LLMProvider` ABC + `ProviderConfig` + `RetryMode` + `ThinkingStyle`. Additive — no breaking changes. |
 
-See [docs/MIGRATION_v0.36.md](docs/MIGRATION_v0.36.md) and the top-level
+See [docs/MIGRATION_v0.36.md](docs/MIGRATION_v0.36.md),
+[docs/MIGRATION_v0.38.md](docs/MIGRATION_v0.38.md), and the top-level
 [MIGRATION.md](MIGRATION.md).
 
 ---
 
-*Last updated: 2026-06-17 · Version: 0.36.0*
+*Last updated: 2026-06-30 · Version: 0.38.0*

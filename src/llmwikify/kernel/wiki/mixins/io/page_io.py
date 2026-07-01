@@ -163,7 +163,7 @@ class WikiPageIOMixin(WikiProtocol):
             result['sink_entries'] = sink_info['sink_entries']
 
             page_type = 'wiki_page'
-            for type_name, type_dir in page_types.items():
+            for _type_name, type_dir in page_types.items():
                 if page_name.startswith(type_dir + '/') or page_name == type_dir:
                     page_type = type_dir
                     break

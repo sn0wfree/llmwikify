@@ -7,7 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: rank(((((-1 * returns) * adv20) * vwap) * (high - close)))
+  definition: 基于成交量加权均值回归与日内波动率的复合alpha信号，对价格下跌且成交量大、日内振幅高的股票赋予高分
   formula: rank(((((-1 * returns) * adv20) * vwap) * (high - close)))
   frequency: 日频
   output_schema: '[date × Code]'
@@ -94,3 +94,33 @@ l6:
   - 高波动/危机环境下，流动性骤降导致 adv20 失真，VWAP 噪声放大
   - 涨跌停板频繁的 A 股市场，(high-close) 可能被涨跌停截断，信号失真
   risk_notes: 因子换手率较高 (日频截面 rank)，交易成本敏感；建议在 5 日或 10 日调仓频率下使用以降低冲击成本；需监控极端市场下 IC 衰减风险
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize adv20\
+    \ (20-day average daily volume) first\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+    \ window=20).alias('_adv20'))\n    \n    # Inner expression: ((-1 * returns) *\
+    \ adv20) * vwap * (high - close)\n    inner = (-pl.col('returns') * pl.col('_adv20'))\
+    \ * pl.col('vwap') * (pl.col('high') - pl.col('close'))\n    \n    # Cross-sectional\
+    \ rank\n    factor = rank(inner).over('date')\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 494
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_025.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 50
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.0017052802707732562
+    icir: 0.01337403228112719
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -0.00020120178715021808
+    longshort_sharpe: null
+    longshort_max_dd: -0.02963594431062089
+    validated_at: 1782306296.679547
+  validation_date: '2026-06-24'

@@ -34,7 +34,6 @@ from llmwikify.apps.chat.skills.actions import (
 )
 from llmwikify.apps.research.web_search import SearchResult
 
-
 # ─── Fixtures ────────────────────────────────────────────────────
 
 

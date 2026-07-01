@@ -4,7 +4,7 @@
  * Fetches /api/factor/families/{family} + /api/factor/families/{family}/metrics
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Loader2, Search, ChevronUp, ChevronDown,
@@ -40,6 +40,14 @@ interface Metrics {
 
 type SortKey = 'alpha_index' | 'ic_mean' | 'icir' | 'ic_winrate';
 type SortDir = 'asc' | 'desc';
+
+const STATUS_OPTIONS = ['全部', '已验证', '已注册', '草稿', '已废弃'];
+const STATUS_LABELS: Record<string, string> = {
+  '已验证': '已验证',
+  '已注册': '已注册',
+  '草稿': '草稿',
+  '已废弃': '已废弃',
+};
 
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   '已验证': 'default',
@@ -80,6 +88,7 @@ export function FamilyDetail() {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('alpha_index');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [statusFilter, setStatusFilter] = useState('全部');
 
   // Load family structure
   useEffect(() => {
@@ -123,6 +132,7 @@ export function FamilyDetail() {
   // Filter & sort
   const filtered = members
     .filter((m) => {
+      if (statusFilter !== '全部' && m.status !== statusFilter) return false;
       if (!search) return true;
       const q = search.toLowerCase();
       return (
@@ -153,6 +163,14 @@ export function FamilyDetail() {
       setSortDir('desc');
     }
   };
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const m of members) {
+      counts[m.status] = (counts[m.status] || 0) + 1;
+    }
+    return counts;
+  }, [members]);
 
   if (loading) {
     return (
@@ -201,20 +219,39 @@ export function FamilyDetail() {
             )}
           </div>
         )}
+        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2">
+          <span>{members.length} 成员</span>
+          <span>·</span>
+          {Object.entries(statusCounts).map(([status, count]) => (
+            <span key={status}>{STATUS_LABELS[status] || status} {count}</span>
+          ))}
+        </div>
       </div>
 
       {/* Toolbar */}
       <div className="px-6 py-2 border-b border-border flex items-center gap-3">
+        <span className="text-xs font-medium text-muted-foreground">
+          成员因子 ({filtered.length})
+        </span>
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索成员..."
+            placeholder="搜索..."
             className="w-full pl-7 pr-3 py-1.5 text-xs rounded border border-border bg-background focus:outline-none focus:border-primary"
           />
         </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="text-xs px-2 py-1.5 rounded border border-border bg-background focus:outline-none focus:border-primary"
+        >
+          {STATUS_OPTIONS.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
         <span className="text-[11px] text-muted-foreground">
           {filtered.length} / {members.length}
         </span>

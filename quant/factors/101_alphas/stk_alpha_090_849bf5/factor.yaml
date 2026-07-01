@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank((close - ts_max(close, 4.66719)))^Ts_Rank(correlation(IndNeutralize(adv40,
-    IndClass.subindustry), low, 5.38375), 3.21856)) * -1)
+  definition: 收盘价距4.67日最高价的排名，乘以行业中性化后成交量-最低价相关性的时间序列排名的幂，再取负值
   formula: ((rank((close - ts_max(close, 4.66719)))^Ts_Rank(correlation(IndNeutralize(adv40,
     IndClass.subindustry), low, 5.38375), 3.21856)) * -1)
   frequency: 日频
@@ -93,3 +92,41 @@ l6:
   - '行业层面剧烈轮动: 行业中性化不充分或行业分类滞后, 中性化残差仍带强板块 beta'
   risk_notes: 幂运算易放大极端值, 建议对 r 与 tsr 做 winsorize; 行业分类列必须存在且与日期对齐, 否则 neutralize 行为与原始公式偏离,
     需做容灾处理; 负号需通过回测 IC 校准方向, 不应默认公式即因子方向。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Ensure proper per-code\
+    \ ordering for rolling/time-series ops\n    df = df.sort(['code', 'date'])\n\n\
+    \    # adv40: 40-day average dollar volume (volume * close)\n    adv40 = rolling_mean(pl.col('volume')\
+    \ * pl.col('close'), window=40)\n\n    # IndNeutralize: industry classification\
+    \ not available in df columns;\n    # pass adv40 through neutralize (acts as cross-sectional\
+    \ demean fallback)\n    adv40_neut = neutralize(adv40).over('date')\n\n    # Rolling\
+    \ correlation of adv40 (neutralized) with low (~5.38 -> 5)\n    corr = rolling_corr(adv40_neut,\
+    \ pl.col('low'), window=5)\n\n    # Ts_Rank of the correlation over ~3.22 -> 3\
+    \ days\n    ts_ranked = ts_rank(corr, window=3)\n\n    # close - ts_max(close,\
+    \ ~4.67 -> 5)\n    close_minus_max = pl.col('close') - ts_max(pl.col('close'),\
+    \ window=5)\n\n    # Cross-sectional rank of (close - ts_max(close,5))\n    ranked\
+    \ = rank(close_minus_max).over('date')\n\n    # Raise the ranked series to the\
+    \ power of ts_ranked\n    powered = ranked ** ts_ranked\n\n    # Multiply by -1\n\
+    \    factor = powered * -1\n\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1113
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_090.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 47
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.011940199958670943
+    icir: -0.06611530509122206
+    winrate: 0.4745762711864407
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -0.00018956839889294752
+    longshort_sharpe: null
+    longshort_max_dd: -0.03368791024522253
+    validated_at: 1782150951.3435483
+  validation_date: '2026-06-23'

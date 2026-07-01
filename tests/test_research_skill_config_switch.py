@@ -23,7 +23,6 @@ import pytest
 from llmwikify.apps.chat.skills import SkillContext
 from llmwikify.apps.chat.skills.research_skill import _act_gather
 
-
 # ─── Helpers ─────────────────────────────────────────────────────
 
 
@@ -45,8 +44,8 @@ def _patch_gather_handler(return_data: dict | None = None):
     ``gather_skill`` module in ``sys.modules`` (NOT on the
     ``pipelines`` package, which has its own shadowing attribute).
     """
-    import sys
     import importlib
+    import sys
     # Ensure the gather_skill module is fully loaded.
     importlib.import_module(
         "llmwikify.apps.chat.skills.pipelines.gather_skill",

@@ -18,8 +18,9 @@ def test_resolve_universe():
 
 
 def test_quantnodes_adapter():
-    from llmwikify.reproduction.data_source.quantnodes_adapter import build_qn_context
     import pandas as pd
+
+    from llmwikify.reproduction.data_source.quantnodes_adapter import build_qn_context
     idx = pd.to_datetime(["2020-01-01"])
     factor_wide = pd.DataFrame({"1": [0.5]}, index=idx)
     close_wide = pd.DataFrame({"1": [10.0]}, index=idx)

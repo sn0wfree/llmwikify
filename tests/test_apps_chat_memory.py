@@ -154,6 +154,7 @@ class TestMemorySkillIntegration:
 
     def test_add_list_search_via_skill(self, memory_env):
         import asyncio
+
         from llmwikify.apps.chat.skills.base import SkillContext
         from llmwikify.apps.chat.skills.service import SkillService
 

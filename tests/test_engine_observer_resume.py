@@ -196,6 +196,7 @@ def test_resume_loader_returns_silently_for_missing_session():
 def test_resume_loader_hydrates_knowledge_gaps_from_json():
     """resume_loader.load restores state.knowledge_gaps from JSON column."""
     import json
+
     from llmwikify.apps.chat.research_engine.resume import ResearchResumeLoader
     from llmwikify.apps.chat.state import ResearchState
 
@@ -266,6 +267,7 @@ def test_resume_loader_restores_self_loop_metadata():
     retries on resume.
     """
     import json
+
     from llmwikify.apps.chat.research_engine.resume import ResearchResumeLoader
     from llmwikify.apps.chat.state import ResearchState
 
@@ -307,6 +309,7 @@ def test_resume_loader_tolerates_missing_self_loop_fields():
     NULL or malformed (forward-compat with sessions written by
     pre-fix engine versions)."""
     import json
+
     from llmwikify.apps.chat.research_engine.resume import ResearchResumeLoader
     from llmwikify.apps.chat.state import ResearchState
 

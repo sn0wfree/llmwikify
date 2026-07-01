@@ -7,9 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (rank(decay_linear(correlation(vwap, sum(adv5, 26.4719), 4.58418), 7.18088))
-    - rank(decay_linear(Ts_Rank(Ts_ArgMin(correlation(rank(open), rank(adv15), 20.8187),
-    8.62571), 6.95668), 8.07206)))
+  definition: 基于成交量加权平均价(VWAP)与5日平均成交量滚动和的相关性经时间衰减加权后的排名，减去基于开盘价与15日平均成交量相关性的时间序列排名经时间衰减加权后的排名，两者之差构建多空组合。
   formula: (rank(decay_linear(correlation(vwap, sum(adv5, 26.4719), 4.58418), 7.18088))
     - rank(decay_linear(Ts_Rank(Ts_ArgMin(correlation(rank(open), rank(adv15), 20.8187),
     8.62571), 6.95668), 8.07206)))
@@ -96,3 +94,43 @@ l6:
   - 流动性枯竭或政策干预导致 vwap/open 失真 (如 A 股涨跌停板、停牌), 滚动相关性异常
   - 行业轮动剧烈或风格切换 (如大小盘/成长价值) 期间, 因子 IC 方向可能反转
   risk_notes: 因子在极端事件 (流动性危机、监管黑天鹅) 下易出现大幅回撤; 建议配合换手率与波动率因子做组合风控, 避免在高换手小票过度暴露。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Part 1: rank(decay_linear(correlation(vwap,\
+    \ sum(adv5, 26), 4), 7))\n    df = df.with_columns(rolling_mean(pl.col('volume'),\
+    \ window=5).alias('_adv5'))\n    df = df.with_columns(ts_sum(pl.col('_adv5'),\
+    \ window=26).alias('_sum_adv5_26'))\n    df = df.with_columns(rolling_corr(pl.col('vwap'),\
+    \ pl.col('_sum_adv5_26'), window=4).alias('_corr1'))\n    df = df.with_columns(decay_linear(pl.col('_corr1'),\
+    \ window=7).alias('_decay1'))\n    df = df.with_columns(rank(pl.col('_decay1')).over('date').alias('_rank1'))\n\
+    \    \n    # Part 2: rank(decay_linear(Ts_Rank(Ts_ArgMin(correlation(rank(open),\
+    \ rank(adv15), 20), 8), 6), 8))\n    df = df.with_columns(rank(pl.col('open')).over('date').alias('_rank_open'))\n\
+    \    df = df.with_columns(rolling_mean(pl.col('volume'), window=15).alias('_adv15'))\n\
+    \    df = df.with_columns(rank(pl.col('_adv15')).over('date').alias('_rank_adv15'))\n\
+    \    df = df.with_columns(rolling_corr(pl.col('_rank_open'), pl.col('_rank_adv15'),\
+    \ window=20).alias('_corr2'))\n    df = df.with_columns(ts_argmin(pl.col('_corr2'),\
+    \ window=8).alias('_argmin2'))\n    df = df.with_columns(ts_rank(pl.col('_argmin2'),\
+    \ window=6).alias('_tsrank2'))\n    df = df.with_columns(decay_linear(pl.col('_tsrank2'),\
+    \ window=8).alias('_decay2'))\n    df = df.with_columns(rank(pl.col('_decay2')).over('date').alias('_rank2'))\n\
+    \    \n    factor = pl.col('_rank1') - pl.col('_rank2')\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1447
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_098.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 46
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.010186241138766936
+    icir: -0.07299611232102075
+    winrate: 0.4576271186440678
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -8.612911895078401e-05
+    longshort_sharpe: null
+    longshort_max_dd: -0.029831104154826527
+    validated_at: 1782352713.2275069
+  validation_date: '2026-06-25'

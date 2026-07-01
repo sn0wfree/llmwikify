@@ -11,9 +11,9 @@ Tracked in: docs/poc/plan-b-results.md (Phase 3 cleanup).
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 
+import pytest
 
 pytestmark = pytest.mark.skip(
     reason="Strategy API reads from global quant_wiki; "

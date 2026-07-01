@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: ((rank(delay(((high - low) / (sum(close, 5) / 5)), 2)) * rank(rank(volume)))
-    / (((high - low) / (sum(close, 5) / 5)) / (vwap - close)))
+  definition: 衡量标准化波动率排名与交易量排名的乘积相对于VWAP偏离度的比值，反映价格波动相对公允价值的异常程度。
   formula: ((rank(delay(((high - low) / (sum(close, 5) / 5)), 2)) * rank(rank(volume)))
     / (((high - low) / (sum(close, 5) / 5)) / (vwap - close)))
   frequency: 日频
@@ -99,3 +98,40 @@ l6:
   - 市场流动性危机时, VWAP 偏离失效, 微观结构信号失真
   risk_notes: 因子对短期反转依赖较强, 在牛市中可能持续回撤; 建议结合市场状态过滤 (如 trend/volatility regime) 使用;
     交易成本敏感, 高换手时收益可能被侵蚀
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # Materialize base\
+    \ measure: (high - low) / (sum(close, 5) / 5)\n    df = df.with_columns(\n   \
+    \     ((pl.col('high') - pl.col('low')) / rolling_mean(pl.col('close'), window=5)).alias('_base')\n\
+    \    )\n    \n    # Materialize delayed base: delay(base, 2)\n    df = df.with_columns(\n\
+    \        delay(pl.col('_base'), periods=2).alias('_delay_base')\n    )\n    \n\
+    \    # Materialize first rank of volume\n    df = df.with_columns(\n        rank(pl.col('volume')).over('date').alias('_rank_volume_1')\n\
+    \    )\n    \n    # Materialize second rank of volume\n    df = df.with_columns(\n\
+    \        rank(pl.col('_rank_volume_1')).over('date').alias('_rank_volume_2')\n\
+    \    )\n    \n    # Compute final factor: (rank(delay(base,2)) * rank(rank(volume)))\
+    \ / (base / (vwap - close))\n    numerator = rank(pl.col('_delay_base')).over('date')\
+    \ * pl.col('_rank_volume_2')\n    denominator = pl.col('_base') / (pl.col('vwap')\
+    \ - pl.col('close'))\n    \n    factor = numerator / denominator\n    \n    return\
+    \ df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 1038
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_083.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 56
+    status: 待更新
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: 0.01412927907544755
+    icir: 0.09868699629874668
+    winrate: 0.5932203389830508
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: 3.4702772293560002e-06
+    longshort_sharpe: null
+    longshort_max_dd: -0.019304789962581743
+    validated_at: 1782351118.3534467
+  validation_date: '2026-06-25'

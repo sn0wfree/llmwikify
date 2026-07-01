@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: '((adv20 < volume) ? ((-1 * ts_rank(abs(delta(close, 7)), 60)) * sign(delta(close,
-    7))) : (-1 * 1))'
+  definition: 基于成交量条件的状态切换阿尔法，当成交量超过20日平均成交额时，输出7日价格动量变化的60日时间序列排名加权符号值；否则输出-1。
   formula: '((adv20 < volume) ? ((-1 * ts_rank(abs(delta(close, 7)), 60)) * sign(delta(close,
     7))) : (-1 * 1))'
   frequency: 日频
@@ -104,3 +103,37 @@ l6:
   - 前期 7 行 (warmup) 因子恒为 -1, 建议在回测中丢弃, 否则虚增空头收益
   - 建议做行业+市值中性化, 并将低量分支单独提取为子因子分别评估
   - 反转因子波动大, 与动量因子负相关, 可构建反转-动量对冲组合降低回撤
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # adv20 = 20-day\
+    \ average volume\n    df = df.with_columns(\n        rolling_mean(pl.col('volume'),\
+    \ window=20).alias('_adv20')\n    )\n    # delta(close, 7) - materialize since\
+    \ used in multiple places\n    df = df.with_columns(\n        delta(pl.col('close'),\
+    \ periods=7).alias('_delta7')\n    )\n    # ts_rank(abs(delta(close, 7)), 60)\
+    \ - materialize\n    df = df.with_columns(\n        ts_rank(pl.col('_delta7').abs(),\
+    \ window=60).alias('_ts_rank_delta')\n    )\n    # inner branch: -1 * ts_rank(...)\
+    \ * sign(delta(close, 7))\n    inner = -1 * pl.col('_ts_rank_delta') * pl.col('_delta7').sign()\n\
+    \    # conditional: (adv20 < volume) ? inner : -1\n    factor = pl.when(pl.col('_adv20')\
+    \ < pl.col('volume')).then(inner).otherwise(-1)\n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 808
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_007.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 46
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.012114578372307977
+    icir: -0.08639647345471368
+    winrate: 0.4576271186440678
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -0.00010728887602440285
+    longshort_sharpe: null
+    longshort_max_dd: -0.03624798870042878
+    validated_at: 1782305847.501713
+  validation_date: '2026-06-24'

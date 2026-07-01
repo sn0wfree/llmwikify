@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # ─── New home: routers importable ─────────────────────────────
 
 
@@ -38,9 +37,9 @@ class TestNewHomeImports:
 
     def test_chat_sse_imports(self) -> None:
         from llmwikify.interfaces.server.http.chat_sse import (
+            get_agent_service,
             router,
             set_agent_service,
-            get_agent_service,
         )
         assert router is not None
         assert callable(set_agent_service)

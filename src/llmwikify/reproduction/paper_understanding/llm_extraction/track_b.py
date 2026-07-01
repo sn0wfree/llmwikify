@@ -1197,7 +1197,7 @@ def _run_pass2_serial(
             paper_id, len(signals),
         )
 
-    for i, stub in enumerate(remaining, 1):
+    for _i, stub in enumerate(remaining, 1):
         global_idx = len(details) + 1
         detail = _run_pass2_one(
             client, plan, paper_id, stub, parsed_text,

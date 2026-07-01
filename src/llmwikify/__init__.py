@@ -16,22 +16,22 @@ __license__ = "MIT"
 
 from pathlib import Path
 
-from .interfaces.cli import WikiCLI
 from .foundation.config import (
     get_default_config,
     get_mcp_config,
     get_wikis_config,
     load_config,
 )
+from .foundation.extractors import ExtractedContent, Link
+from .interfaces.cli import WikiCLI
+from .interfaces.mcp import create_mcp_server, serve_mcp
 
 # Import main components from modules
 from .kernel import Wiki, WikiIndex
-from .kernel.multi_wiki.remote import RemoteWiki
 from .kernel.multi_wiki.discovery import WikiDiscovery
 from .kernel.multi_wiki.instance import WikiInstance, WikiStatus, WikiType
 from .kernel.multi_wiki.registry import WikiRegistry
-from .foundation.extractors import ExtractedContent, Link
-from .interfaces.mcp import create_mcp_server, serve_mcp
+from .kernel.multi_wiki.remote import RemoteWiki
 
 
 # Convenience functions

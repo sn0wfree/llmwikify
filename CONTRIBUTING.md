@@ -27,7 +27,7 @@ pytest --cov=src/llmwikify --cov-report=html
 open htmlcov/index.html
 ```
 
-**Target**: 1008+ Python tests + 38 frontend tests passing, >85% code coverage.
+**Target**: 3100+ Python tests + 38 frontend tests passing, >85% code coverage.
 
 ## Code Quality
 

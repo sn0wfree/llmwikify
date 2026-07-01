@@ -223,7 +223,7 @@ def _compute_ic_series(
 
     # Compute rank IC (Spearman correlation) per period
     ic_series = []
-    for idx, row in aligned.iterrows():
+    for idx, _row in aligned.iterrows():
         # For single-stock: use time-series rank correlation
         # For simplicity, use Pearson for now (rank IC needs cross-sectional data)
         ic_series.append({
@@ -369,7 +369,7 @@ def _compute_turnover(
     changes = 0
     count = 0
     prev_top = None
-    for i, (idx, val) in enumerate(top_mask.items()):
+    for _i, (_idx, val) in enumerate(top_mask.items()):
         if prev_top is not None and not pd.isna(val) and not pd.isna(prev_top):
             count += 1
             if val != prev_top:
@@ -715,7 +715,7 @@ def _compute_cross_section_groups(
     return_wide: pd.DataFrame,
     adj_dates: list,
     n_groups: int = 5,
-    close_wide: Optional[pd.DataFrame] = None,
+    close_wide: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
     """Compute N-group cross-section quantile analysis.
 
@@ -949,7 +949,7 @@ def run_factor_backtest_universe(
     close_wide: pd.DataFrame,
     factor_class: str,
     factor_params: dict[str, Any],
-    index_close: Optional[pd.Series] = None,
+    index_close: pd.Series | None = None,
     adj_mode: str = "D",
     n_groups: int = 5,
     factor_direction: int = 1,
@@ -1000,15 +1000,15 @@ def run_factor_backtest_universe(
     code_map = build_code_map(factor_valid.columns)
     common_dates = close_wide.index.intersection(factor_valid.index)
     price_aligned = close_wide.loc[common_dates, factor_valid.columns]
-    price_qn = convert_wide_to_qn(price_aligned, code_map)
-    factor_qn = convert_wide_to_qn(factor_valid.loc[common_dates], code_map)
+    _price_qn = convert_wide_to_qn(price_aligned, code_map)
+    _factor_qn = convert_wide_to_qn(factor_valid.loc[common_dates], code_map)
 
     # 2b. TradabilityFilter + FactorPreprocess (full QN pipeline)
     # Only runs when real tradable data is provided. The processed factor
     # has NaN for non-tradable stocks, so we use our own IC/Group/LongShort
     # implementations (which handle sparse factors via index intersection)
     # instead of QuantNodes' nodes (which fail on sparse factors).
-    use_qn_analysis = True
+    _use_qn_analysis = True
     if tradable is not None:
         adj_dates = list(factor_valid.loc[common_dates].index)
         ctx = build_qn_context(
@@ -1071,7 +1071,6 @@ def run_factor_backtest_universe(
 
         # Assemble result
         quantile_returns = group_res_full.get("quantile_returns", {})
-        n_groups_actual = n_groups
         if quantile_returns:
             long_g = f"G{n_groups}" if factor_direction == 1 else "G1"
             top_ann = quantile_returns.get(long_g, 0.0)
@@ -1138,7 +1137,6 @@ def run_factor_backtest_universe(
 
     # Top group annual return
     quantile_returns = group_res.get("quantile_returns", {})
-    n_groups_actual = n_groups
     if quantile_returns:
         long_g = f"G{n_groups}" if factor_direction == 1 else "G1"
         top_ann = quantile_returns.get(long_g, 0.0)
@@ -1198,8 +1196,7 @@ def _compute_group_turnover(
     if len(valid_adj) < 2:
         return 0.0
 
-    long_label = f"G{n_groups}" if factor_direction == 1 else "G1"
-    prev_long: Optional[set] = None
+    prev_long: set | None = None
     turnovers: list[float] = []
 
     for d in valid_adj:
@@ -1233,7 +1230,7 @@ def _compute_single_group_turnover(
     """
     if len(valid_adj) < 2:
         return 0.0
-    prev_members: Optional[set] = None
+    prev_members: set | None = None
     turnovers: list[float] = []
     for d in valid_adj:
         if d not in memberships:

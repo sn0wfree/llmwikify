@@ -12,10 +12,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from llmwikify.reproduction.persist.sessions import (
+    VALID_STATUSES,
     Artifact,
     ReproductionDatabase,
     Session,
-    VALID_STATUSES,
 )
 
 

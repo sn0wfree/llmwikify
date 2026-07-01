@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-
 # ── Fixtures ──────────────────────────────────────────────────
 
 
@@ -128,7 +127,10 @@ class TestFactorLibrary:
     """Tests for factor_library read/write/list operations."""
 
     def test_write_and_read_factor(self, project_root):
-        from llmwikify.reproduction.persist.factor_library import read_factor_yaml, write_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import (
+            read_factor_yaml,
+            write_factor_yaml,
+        )
 
         data = {
             "factor": {
@@ -150,7 +152,10 @@ class TestFactorLibrary:
         assert result is None
 
     def test_list_factors_by_category(self, project_root):
-        from llmwikify.reproduction.persist.factor_library import list_factors_by_category, write_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import (
+            list_factors_by_category,
+            write_factor_yaml,
+        )
 
         write_factor_yaml("stock/price/mom", {"factor": {"name": "mom", "category": "price"}}, project_root)
         write_factor_yaml("stock/price/vol", {"factor": {"name": "vol", "category": "price"}}, project_root)
@@ -163,7 +168,11 @@ class TestFactorLibrary:
         assert len(cats["fundamental"]) == 1
 
     def test_update_index(self, project_root):
-        from llmwikify.reproduction.persist.factor_library import list_factors, update_index, write_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import (
+            list_factors,
+            update_index,
+            write_factor_yaml,
+        )
 
         write_factor_yaml("stock/price/mom", {"factor": {"name": "mom", "category": "price", "status": "已注册"}}, project_root)
         write_factor_yaml("stock/price/vol", {"factor": {"name": "vol", "category": "price", "status": "已通过"}}, project_root)
@@ -175,7 +184,10 @@ class TestFactorLibrary:
         assert names == {"mom", "vol"}
 
     def test_update_index_empty(self, project_root):
-        from llmwikify.reproduction.persist.factor_library import list_factors, update_index
+        from llmwikify.reproduction.persist.factor_library import (
+            list_factors,
+            update_index,
+        )
 
         update_index(project_root)
         factors = list_factors(project_root)
@@ -569,7 +581,11 @@ class TestFactorLibraryEdgeCases:
         assert result == []
 
     def test_update_index_stats(self, project_root):
-        from llmwikify.reproduction.persist.factor_library import list_factors, update_index, write_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import (
+            list_factors,
+            update_index,
+            write_factor_yaml,
+        )
 
         write_factor_yaml("stock/price/a", {"factor": {"name": "a", "category": "price", "status": "已注册"}}, project_root)
         write_factor_yaml("stock/price/b", {"factor": {"name": "b", "category": "price", "status": "已通过"}}, project_root)
@@ -762,8 +778,13 @@ class TestL5Validation:
         from llmwikify.reproduction.backtest_pkg.l5_validation import compute_score
         result = self._make_result()
         from llmwikify.reproduction.backtest_pkg.l5_validation import (
-            analyze_ic, analyze_groups, analyze_returns,
-            analyze_turnover, analyze_stability, analyze_oos, analyze_cost,
+            analyze_cost,
+            analyze_groups,
+            analyze_ic,
+            analyze_oos,
+            analyze_returns,
+            analyze_stability,
+            analyze_turnover,
         )
         ic = analyze_ic(result)
         ga = analyze_groups(result)
@@ -792,7 +813,9 @@ class TestL5Orchestrator:
     """Tests for L5 orchestrator (non-backtest parts)."""
 
     def test_parse_llm_response_valid(self):
-        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import _parse_llm_response
+        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import (
+            _parse_llm_response,
+        )
         resp = '''```json
 {
   "hypothesis_testing": [
@@ -806,12 +829,16 @@ class TestL5Orchestrator:
         assert parsed["final_meaning"] == "动量因子"
 
     def test_parse_llm_response_invalid(self):
-        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import _parse_llm_response
+        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import (
+            _parse_llm_response,
+        )
         parsed = _parse_llm_response("not json at all")
         assert parsed == {}
 
     def test_build_hypothesis_prompt(self):
-        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import _build_hypothesis_prompt
+        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import (
+            _build_hypothesis_prompt,
+        )
         factor = {
             "name": "test_factor",
             "category": "price",
@@ -845,7 +872,11 @@ class TestFactorValueStore:
 
     def test_store_and_query(self, tmp_path):
         import pandas as pd
-        from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values, query_factor_values
+
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+            query_factor_values,
+            store_factor_values,
+        )
 
         db_path = tmp_path / "test.duckdb"
         dates = pd.date_range("2024-01-01", periods=5)
@@ -867,7 +898,10 @@ class TestFactorValueStore:
 
     def test_store_empty(self, tmp_path):
         import pandas as pd
-        from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values
+
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+            store_factor_values,
+        )
 
         db_path = tmp_path / "test.duckdb"
         data = pd.DataFrame()
@@ -876,7 +910,11 @@ class TestFactorValueStore:
 
     def test_upsert(self, tmp_path):
         import pandas as pd
-        from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values, query_factor_values
+
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+            query_factor_values,
+            store_factor_values,
+        )
 
         db_path = tmp_path / "test.duckdb"
         dates = pd.date_range("2024-01-01", periods=3)
@@ -892,7 +930,11 @@ class TestFactorValueStore:
 
     def test_list_stored_factors(self, tmp_path):
         import pandas as pd
-        from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values, list_stored_factors
+
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+            list_stored_factors,
+            store_factor_values,
+        )
 
         db_path = tmp_path / "test.duckdb"
         dates = pd.date_range("2024-01-01", periods=3)
@@ -909,7 +951,11 @@ class TestFactorValueStore:
 
     def test_query_with_date_filter(self, tmp_path):
         import pandas as pd
-        from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values, query_factor_values
+
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+            query_factor_values,
+            store_factor_values,
+        )
 
         db_path = tmp_path / "test.duckdb"
         dates = pd.date_range("2024-01-01", periods=10)
@@ -935,7 +981,10 @@ class TestExtractFactorsDeprecated:
 
     def test_read_factor_from_wiki_redirects(self):
         import warnings
-        from llmwikify.reproduction.paper_understanding.extract_factors import read_factor_from_wiki
+
+        from llmwikify.reproduction.paper_understanding.extract_factors import (
+            read_factor_from_wiki,
+        )
 
         class FakeWiki:
             def __init__(self):
@@ -951,7 +1000,10 @@ class TestExtractFactorsDeprecated:
 
     def test_list_factors_redirects(self):
         import warnings
-        from llmwikify.reproduction.paper_understanding.extract_factors import list_factors
+
+        from llmwikify.reproduction.paper_understanding.extract_factors import (
+            list_factors,
+        )
 
         class FakeWiki:
             def __init__(self):
@@ -968,7 +1020,10 @@ class TestExtractFactorsDeprecated:
 
     def test_build_factor_pages_warns(self):
         import warnings
-        from llmwikify.reproduction.paper_understanding.extract_factors import build_factor_pages
+
+        from llmwikify.reproduction.paper_understanding.extract_factors import (
+            build_factor_pages,
+        )
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -1159,7 +1214,9 @@ class TestL5OrchestratorIntegration:
     """Integration tests for L5 orchestrator (non-backtest parts)."""
 
     def test_parse_llm_response_with_markdown_fences(self):
-        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import _parse_llm_response
+        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import (
+            _parse_llm_response,
+        )
         resp = '''Here is the result:
 ```json
 {
@@ -1175,17 +1232,23 @@ class TestL5OrchestratorIntegration:
         assert len(parsed["hypothesis_testing"]) == 1
 
     def test_parse_llm_response_empty_json(self):
-        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import _parse_llm_response
+        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import (
+            _parse_llm_response,
+        )
         parsed = _parse_llm_response("{}")
         assert parsed == {}
 
     def test_parse_llm_response_no_json(self):
-        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import _parse_llm_response
+        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import (
+            _parse_llm_response,
+        )
         parsed = _parse_llm_response("I cannot determine the answer.")
         assert parsed == {}
 
     def test_build_hypothesis_prompt_includes_all_metrics(self):
-        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import _build_hypothesis_prompt
+        from llmwikify.reproduction.backtest_pkg.l5_orchestrator import (
+            _build_hypothesis_prompt,
+        )
         factor = {
             "name": "test_momentum",
             "category": "price",
@@ -1232,7 +1295,11 @@ class TestFactorValueStoreExtended:
 
     def test_store_single_stock(self, tmp_path):
         import pandas as pd
-        from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values, query_factor_values
+
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+            query_factor_values,
+            store_factor_values,
+        )
 
         db_path = tmp_path / "test.duckdb"
         dates = pd.date_range("2024-01-01", periods=3)
@@ -1247,7 +1314,10 @@ class TestFactorValueStoreExtended:
 
     def test_store_many_stocks(self, tmp_path):
         import pandas as pd
-        from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values
+
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+            store_factor_values,
+        )
 
         db_path = tmp_path / "test.duckdb"
         dates = pd.date_range("2024-01-01", periods=2)
@@ -1263,7 +1333,11 @@ class TestFactorValueStoreExtended:
 
     def test_query_with_stock_filter(self, tmp_path):
         import pandas as pd
-        from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values, query_factor_values
+
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+            query_factor_values,
+            store_factor_values,
+        )
 
         db_path = tmp_path / "test.duckdb"
         dates = pd.date_range("2024-01-01", periods=3)
@@ -1282,9 +1356,12 @@ class TestFactorValueStoreExtended:
         assert (result["stock"] == "A").all()
 
     def test_store_nan_values_excluded(self, tmp_path):
-        import pandas as pd
         import numpy as np
-        from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values
+        import pandas as pd
+
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+            store_factor_values,
+        )
 
         db_path = tmp_path / "test.duckdb"
         dates = pd.date_range("2024-01-01", periods=4)
@@ -1298,7 +1375,11 @@ class TestFactorValueStoreExtended:
 
     def test_multiple_factors_same_db(self, tmp_path):
         import pandas as pd
-        from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values, list_stored_factors
+
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+            list_stored_factors,
+            store_factor_values,
+        )
 
         db_path = tmp_path / "test.duckdb"
         dates = pd.date_range("2024-01-01", periods=3)
@@ -1314,7 +1395,10 @@ class TestFactorValueStoreExtended:
 
     def test_store_empty_wide_df(self, tmp_path):
         import pandas as pd
-        from llmwikify.reproduction.backtest_pkg.factor_value_store import store_factor_values
+
+        from llmwikify.reproduction.backtest_pkg.factor_value_store import (
+            store_factor_values,
+        )
 
         db_path = tmp_path / "test.duckdb"
         data = pd.DataFrame(index=pd.date_range("2024-01-01", periods=3))
@@ -1330,7 +1414,10 @@ class TestFactorLibraryIndexSync:
     """Tests that write_factor_yaml auto-syncs index.yaml."""
 
     def test_write_creates_index(self, project_root):
-        from llmwikify.reproduction.persist.factor_library import write_factor_yaml, list_factors
+        from llmwikify.reproduction.persist.factor_library import (
+            list_factors,
+            write_factor_yaml,
+        )
 
         factor_data = {
             "factor": {
@@ -1349,7 +1436,10 @@ class TestFactorLibraryIndexSync:
         assert "test_sync_factor" in names
 
     def test_write_updates_index_stats(self, project_root):
-        from llmwikify.reproduction.persist.factor_library import write_factor_yaml, list_factors
+        from llmwikify.reproduction.persist.factor_library import (
+            list_factors,
+            write_factor_yaml,
+        )
 
         # Write two factors
         for name, cat in [("f1", "price"), ("f2", "fundamental")]:
@@ -1368,7 +1458,10 @@ class TestFactorLibraryIndexSync:
         assert len(factors) == 2
 
     def test_write_overwrites_existing(self, project_root):
-        from llmwikify.reproduction.persist.factor_library import write_factor_yaml, read_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import (
+            read_factor_yaml,
+            write_factor_yaml,
+        )
 
         data1 = {"factor": {"name": "overwrite_test", "l1": {"definition": "version1"}}}
         data2 = {"factor": {"name": "overwrite_test", "l1": {"definition": "version2"}}}
@@ -1391,7 +1484,10 @@ class TestFactorLibraryReadEdgeCases:
     """Edge cases for factor_library.read_factor_yaml."""
 
     def test_read_nested_path(self, project_root):
-        from llmwikify.reproduction.persist.factor_library import write_factor_yaml, read_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import (
+            read_factor_yaml,
+            write_factor_yaml,
+        )
 
         data = {"factor": {"name": "nested_test", "l1": {"definition": "deep"}}}
         write_factor_yaml("stock/price/momentum/nested_test", data, project_root)
@@ -1400,7 +1496,10 @@ class TestFactorLibraryReadEdgeCases:
         assert result["factor"]["l1"]["definition"] == "deep"
 
     def test_read_with_special_chars(self, project_root):
-        from llmwikify.reproduction.persist.factor_library import write_factor_yaml, read_factor_yaml
+        from llmwikify.reproduction.persist.factor_library import (
+            read_factor_yaml,
+            write_factor_yaml,
+        )
 
         data = {"factor": {"name": "special_test", "l1": {"definition": "test with 中文"}}}
         write_factor_yaml("stock/price/special_test", data, project_root)
@@ -1409,7 +1508,9 @@ class TestFactorLibraryReadEdgeCases:
         assert result["factor"]["l1"]["definition"] == "test with 中文"
 
     def test_list_factors_by_category_empty(self, project_root):
-        from llmwikify.reproduction.persist.factor_library import list_factors_by_category
+        from llmwikify.reproduction.persist.factor_library import (
+            list_factors_by_category,
+        )
         result = list_factors_by_category(project_root)
         assert result == {}
 

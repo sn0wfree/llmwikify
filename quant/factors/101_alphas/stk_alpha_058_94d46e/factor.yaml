@@ -7,8 +7,7 @@ version: 1
 created_at: '2026-06-23'
 updated_at: '2026-06-23'
 l1:
-  definition: (-1 * Ts_Rank(decay_linear(correlation(IndNeutralize(vwap, IndClass.sector),
-    volume, 3.92795), 7.89291), 5.50322))
+  definition: 做空行业中性化VWAP与成交量相关性的时间序列排名因子，通过相关性计算、衰减加权和时间序列排名捕捉剔除行业效应后的量价残差关系。
   formula: (-1 * Ts_Rank(decay_linear(correlation(IndNeutralize(vwap, IndClass.sector),
     volume, 3.92795), 7.89291), 5.50322))
   frequency: 日频
@@ -104,3 +103,35 @@ l6:
   - 行业分类体系变更或缺失, 中性化退化为简单去均值, 引入行业暴露噪声
   risk_notes: 因子换手率较高 (Ts_Rank 窗口仅 6 日), 交易成本敏感; 量价数据在尾盘/集合竞价阶段易受冲击, 建议使用稳健的日内聚合 VWAP;
     行业中性化替代方案 (代码中为全局 neutralize over date) 与真实 sector 中性存在偏差, 实盘需补充真实行业标签以匹配论文假设。
+l5:
+  code: "def compute_factor(df: pl.DataFrame) -> pl.Series:\n    # IndNeutralize(vwap,\
+    \ IndClass.sector) - use neutralize as substitute (sector data not available)\n\
+    \    neutralized_vwap = neutralize(pl.col('vwap')).over('date')\n    \n    # correlation(neutralized_vwap,\
+    \ volume, 3.92795) -> window=4\n    corr = rolling_corr(neutralized_vwap, pl.col('volume'),\
+    \ window=4)\n    \n    # decay_linear(corr, 7.89291) -> window=8\n    decayed\
+    \ = decay_linear(corr, window=8)\n    \n    # Ts_Rank(decayed, 5.50322) -> window=6\n\
+    \    ts_ranked = ts_rank(decayed, window=6)\n    \n    # -1 * Ts_Rank(...)\n \
+    \   factor = -1 * ts_ranked\n    \n    return df.select(factor).to_series()"
+  code_compile_status: success
+  code_chars: 644
+  h5_path: /home/ll/.llmwikify/akshare_cache/quantnodes_h5_long/factor_alpha_058.h5
+  ast: null
+  ast_compile_status: null
+  ast_compile_iterations: null
+  ast_compile_source: null
+  ast_compile_error: null
+  overall_assessment:
+    score: 44
+    status: 失败
+    pass_threshold: 60
+    final_meaning: ''
+    ic_mean: -0.02554918816132528
+    icir: -0.1672955381540883
+    winrate: 0.4915254237288136
+    rank_ic_mean: null
+    rank_icir: null
+    annual_return: -0.00025245950882657464
+    longshort_sharpe: null
+    longshort_max_dd: -0.044096047109917796
+    validated_at: 1782148603.0195081
+  validation_date: '2026-06-23'

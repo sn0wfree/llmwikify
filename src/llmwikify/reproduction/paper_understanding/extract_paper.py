@@ -36,7 +36,9 @@ def _fetch_content(source_ref: str, source_type: str, paper_id: str) -> str:
         # Download PDF to temp file, extract text
         try:
             import tempfile
+
             import requests
+
             from llmwikify.foundation.extractors.pdf import extract_pdf
 
             resp = requests.get(source_ref, timeout=30, headers={
@@ -268,7 +270,7 @@ def build_paper_pages(
     logic = extraction.get("strategy_logic", {})
     if logic:
         content = f"---\ntitle: Strategy Logic — {paper_id}\npage_type: Source\n---\n\n"
-        content += f"# Strategy Logic\n\n"
+        content += "# Strategy Logic\n\n"
         content += f"**Core Hypothesis:** {logic.get('core_hypothesis', 'TBD')}\n\n"
         content += f"**Market Logic:** {logic.get('market_logic', 'TBD')}\n\n"
         content += f"**Alpha Source:** {logic.get('alpha_source', 'TBD')}\n\n"
@@ -279,7 +281,7 @@ def build_paper_pages(
     data = extraction.get("data_requirements", {})
     if data:
         content = f"---\ntitle: Data Requirements — {paper_id}\npage_type: Source\n---\n\n"
-        content += f"# Data Requirements\n\n"
+        content += "# Data Requirements\n\n"
         content += f"**Fields:** {', '.join(data.get('fields', ['TBD']))}\n\n"
         content += f"**Frequency:** {data.get('frequency', 'TBD')}\n\n"
         content += f"**Universe:** {data.get('universe', 'TBD')}\n\n"
@@ -290,7 +292,7 @@ def build_paper_pages(
     risks = extraction.get("risks", {})
     if risks:
         content = f"---\ntitle: Risks — {paper_id}\npage_type: Source\n---\n\n"
-        content += f"# Risks & Limitations\n\n"
+        content += "# Risks & Limitations\n\n"
         for item in risks.get("known_limitations", []):
             content += f"- **Known:** {item}\n"
         for item in risks.get("assumption_risks", []):
@@ -303,7 +305,7 @@ def build_paper_pages(
     ops = extraction.get("operation_steps", {})
     if ops:
         content = f"---\ntitle: Operation Steps — {paper_id}\npage_type: Source\n---\n\n"
-        content += f"# Operation Steps\n\n"
+        content += "# Operation Steps\n\n"
         labels = {
             "signal_generation": "Signal Generation",
             "position_sizing": "Position Sizing",
@@ -320,7 +322,7 @@ def build_paper_pages(
     model = extraction.get("model_framework", {})
     if model:
         content = f"---\ntitle: Model Framework — {paper_id}\npage_type: Source\n---\n\n"
-        content += f"# Model Framework\n\n"
+        content += "# Model Framework\n\n"
         content += f"**Model Type:** {model.get('model_type', 'TBD')}\n\n"
         content += f"**Framework:** {model.get('framework', 'TBD')}\n\n"
         content += f"**Validation:** {model.get('validation', 'TBD')}\n\n"
@@ -333,19 +335,19 @@ def build_paper_pages(
     sw = extraction.get("strengths_weaknesses", {})
     if sw:
         content = f"---\ntitle: Strengths & Weaknesses — {paper_id}\npage_type: Source\n---\n\n"
-        content += f"# Strengths & Weaknesses\n\n"
+        content += "# Strengths & Weaknesses\n\n"
         if sw.get("strengths"):
-            content += f"## Strengths\n\n"
+            content += "## Strengths\n\n"
             for item in sw["strengths"]:
                 content += f"- {item}\n"
             content += "\n"
         if sw.get("weaknesses"):
-            content += f"## Weaknesses\n\n"
+            content += "## Weaknesses\n\n"
             for item in sw["weaknesses"]:
                 content += f"- {item}\n"
             content += "\n"
         if sw.get("improvement_directions"):
-            content += f"## Improvement Directions\n\n"
+            content += "## Improvement Directions\n\n"
             for item in sw["improvement_directions"]:
                 content += f"- {item}\n"
         pages.append({"page_name": f"paper-{paper_id}-sw", "content": content, "page_type": "Source"})
@@ -354,7 +356,7 @@ def build_paper_pages(
     datasets = extraction.get("datasets", {})
     if datasets:
         content = f"---\ntitle: Datasets — {paper_id}\npage_type: Source\n---\n\n"
-        content += f"# Datasets\n\n"
+        content += "# Datasets\n\n"
         content += f"**Name:** {datasets.get('name', 'TBD')}\n\n"
         content += f"**Source:** {datasets.get('source', 'TBD')}\n\n"
         content += f"**Time Range:** {datasets.get('time_range', 'TBD')}\n\n"
@@ -365,16 +367,16 @@ def build_paper_pages(
     refs = extraction.get("references", {})
     if refs:
         content = f"---\ntitle: References — {paper_id}\npage_type: Source\n---\n\n"
-        content += f"# References\n\n"
+        content += "# References\n\n"
         if refs.get("original_paper"):
             content += f"## Original Paper\n\n{refs['original_paper']}\n\n"
         if refs.get("related_papers"):
-            content += f"## Related Papers\n\n"
+            content += "## Related Papers\n\n"
             for item in refs["related_papers"]:
                 content += f"- {item}\n"
             content += "\n"
         if refs.get("code_repositories"):
-            content += f"## Code Repositories\n\n"
+            content += "## Code Repositories\n\n"
             for item in refs["code_repositories"]:
                 content += f"```\n{item}\n```\n"
         pages.append({"page_name": f"paper-{paper_id}-references", "content": content, "page_type": "Source"})
@@ -389,13 +391,13 @@ def build_paper_pages(
         factor_slug = generate_slug(factor_name)
         page_name = f"factor-{paper_id}-{factor_slug}"
         content = f"---\ntitle: Factor — {paper_id}\n"
-        content += f"type: Factor\n"
+        content += "type: Factor\n"
         content += f"factor_class: {signal_type}\n"
         content += f"factor_params: {params_str}\n"
         content += f"factor_source: paper/{paper_id}\n"
         content += f"signal_type: {signal_type}\n"
         content += f"signal_params: {params_str}\n"
-        content += f"status: draft\n---\n\n"
+        content += "status: draft\n---\n\n"
         content += f"# Factor — {paper_id}\n\n"
         content += f"**Signal Type:** {signal_type}\n\n"
         content += f"**Parameters:** {params_str}\n\n"
@@ -409,12 +411,12 @@ def build_paper_pages(
         params_str = json.dumps(params) if isinstance(params, dict) else str(params)
         strategy_class = suggested.get("strategy_class", "trend_following")
         content = f"---\ntitle: Strategy — {paper_id}\n"
-        content += f"type: Strategy\n"
+        content += "type: Strategy\n"
         content += f"strategy_class: {strategy_class}\n"
         content += f"signal_type: {signal_type}\n"
         content += f"signal_params: {params_str}\n"
         content += f"factor_refs: [factor-{paper_id}-{factor_slug}]\n"
-        content += f"status: draft\n---\n\n"
+        content += "status: draft\n---\n\n"
         content += f"# Strategy — {paper_id}\n\n"
         content += f"**Signal Type:** {signal_type}\n\n"
         content += f"**Parameters:** {params_str}\n\n"
