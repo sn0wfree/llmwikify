@@ -42,6 +42,7 @@ DEFAULT_DB_PATH = _get_default_db_path()
 VALID_STATUSES = {
     "pending",
     "extracting",
+    "data.fetching",
     "backtesting",
     "analyzing",
     "done",

@@ -300,3 +300,98 @@ class TestPageTypeRegistryInvariants:
 
         for name, cls in PAGE_TYPES.items():
             assert issubclass(cls, WikiPage), f"{name} is not a WikiPage subclass"
+
+
+# ─── G7 State machine invariants ─────────────────────────────────────────
+
+
+class TestStateMachineInvariants:
+    """P3 invariant: Reproduction state machine is forward-only with no skipped phases.
+
+    Per re-alignment §4.7 the canonical 5-phase pipeline is:
+        pending → extracting → data.fetching → backtesting → analyzing → done
+    """
+
+    def test_session_stage_canonical_phases(self) -> None:
+        """SessionStage enum must cover all 5 intermediate phases + done + error."""
+        values = {s.value for s in SessionStage}
+        assert "pending" in values
+        assert "extracting" in values
+        assert "data.fetching" in values
+        assert "backtesting" in values
+        assert "analyzing" in values
+        assert "done" in values
+        assert "error" in values
+
+    def test_valid_statuses_whitelist_matches_session_stage(self) -> None:
+        """VALID_STATUSES in sessions.py must mirror SessionStage enum (drift guard)."""
+        from llmwikify.reproduction.persist.sessions import VALID_STATUSES
+
+        enum_values = {s.value for s in SessionStage}
+        assert enum_values.issubset(VALID_STATUSES), (
+            f"VALID_STATUSES missing: {enum_values - VALID_STATUSES}"
+        )
+
+    def test_state_machine_strictly_forward(self) -> None:
+        """run_reproduction must visit every canonical phase in order, no skipping.
+
+        Verified by introspecting update_status call order via monkeypatch.
+        The legal chain (re-alignment §4.7) is:
+            extracting → data.fetching → backtesting → analyzing → done
+        """
+        import tempfile
+        from pathlib import Path as _Path
+        import pandas as _pd
+        from llmwikify.reproduction.persist.sessions import ReproductionDatabase
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ReproductionDatabase(db_path=_Path(tmp) / "r.db")
+            sid = db.create_session(
+                wiki_id="w", paper_id="p", source_type="pdf",
+                source_ref="/tmp/x.pdf", symbol="TEST",
+                start_date="2024-01-01", end_date="2024-03-01",
+            )
+            from llmwikify.reproduction.common.paths import WIKI_DIR_STRATEGY
+            wiki_dir = _Path(tmp) / "wiki"
+            (wiki_dir / WIKI_DIR_STRATEGY).mkdir(parents=True)
+            (wiki_dir / WIKI_DIR_STRATEGY / "01-ma.md").write_text(
+                "---\nsignal_type: ma_cross\nsignal_params: {fast: 5, slow: 10}\n---\n",
+                encoding="utf-8",
+            )
+
+            class _FakeWiki:
+                def __init__(self, root: _Path) -> None:
+                    self.wiki_dir = root
+                    self.written: list[tuple[str, str]] = []
+                def write_page(self, name, content, page_type=None):
+                    self.written.append((page_type, name))
+
+            wiki = _FakeWiki(wiki_dir)
+            router = type("R", (), {
+                "get": lambda self, *a: (
+                    _pd.DataFrame({"close": [10.0] * 60, "open": [10.0] * 60,
+                                   "high": [10.0] * 60, "low": [10.0] * 60,
+                                   "volume": [100] * 60}),
+                    "synth",
+                ),
+            })()
+            from llmwikify.reproduction.persist.run import RunContext, run_reproduction
+            ctx = RunContext(
+                session_id=sid, wiki=wiki, symbol="TEST",
+                start_date="2024-01-01", end_date="2024-03-01",
+                data_router=router, db=db,
+            )
+
+            seen: list[str] = []
+            original = db.update_status
+            def _spy(sid_arg: str, status: str, **kwargs: object) -> None:
+                seen.append(status)
+                return original(sid_arg, status, **kwargs)
+            db.update_status = _spy  # type: ignore[method-assign]
+
+            run_reproduction(ctx)
+
+            expected = ["extracting", "data.fetching", "backtesting", "analyzing", "done"]
+            assert seen == expected, (
+                f"state machine broke: expected {expected}, got {seen}"
+            )

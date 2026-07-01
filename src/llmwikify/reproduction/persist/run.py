@@ -133,15 +133,17 @@ def run_reproduction(
         _emit("extract.done",
               signal_type=cfg["signal_type"],
               params=cfg["signal_params"])
+        # Phase 2 of 5-phase pipeline (re-alignment §4.7):
+        # enter data.fetching before hitting DataRouter.
+        db.update_status(ctx.session_id, "data.fetching")
+        df, source = router.get(ctx.symbol, ctx.start_date, ctx.end_date)
+        _emit("data.fetched", source=source, rows=len(df))
         db.update_status(
             ctx.session_id,
             "backtesting",
             signal_type=cfg["signal_type"],
             signal_params=cfg["signal_params"],
         )
-
-        df, source = router.get(ctx.symbol, ctx.start_date, ctx.end_date)
-        _emit("data.fetched", source=source, rows=len(df))
 
         result = run_backtest(
             strategy=cfg["signal_type"],
