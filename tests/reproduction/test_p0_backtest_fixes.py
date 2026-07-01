@@ -52,7 +52,7 @@ class TestBacktestResultEquityCurve:
         assert d["monthly_returns"] == {}
 
 
-# ─── _reconstruct_equity_curve ─────────────────────────────────────────
+# ─── build_equity_curve ────────────────────────────────────────────────
 
 
 class TestReconstructEquityCurve:
@@ -66,21 +66,17 @@ class TestReconstructEquityCurve:
 
     def test_empty_data(self):
         """Empty data returns empty list."""
-        from llmwikify.reproduction.backtest_pkg.run_backtest import (
-            _reconstruct_equity_curve,
-        )
+        from llmwikify.reproduction.equity import build_equity_curve
 
-        result = _reconstruct_equity_curve([], pd.DataFrame(), 100000.0)
+        result = build_equity_curve([], pd.DataFrame(), 100000.0)
         assert result == []
 
     def test_no_trades(self):
         """No trades: equity stays at initial_cash."""
-        from llmwikify.reproduction.backtest_pkg.run_backtest import (
-            _reconstruct_equity_curve,
-        )
+        from llmwikify.reproduction.equity import build_equity_curve
 
         data = self._make_data(n_days=5)
-        result = _reconstruct_equity_curve([], data, 100000.0)
+        result = build_equity_curve([], data, 100000.0)
         assert len(result) == 5
         # All values should be initial_cash (no position)
         for entry in result:
@@ -88,15 +84,13 @@ class TestReconstructEquityCurve:
 
     def test_buy_and_hold(self):
         """Buy on day 1, hold: equity = cash - cost + position * close."""
-        from llmwikify.reproduction.backtest_pkg.run_backtest import (
-            _reconstruct_equity_curve,
-        )
+        from llmwikify.reproduction.equity import build_equity_curve
 
         data = self._make_data(n_days=5, initial_price=100.0)
         trades = [
             {"date": "2024-01-02", "action": "buy", "quantity": 100, "price": 101.0},
         ]
-        result = _reconstruct_equity_curve(trades, data, 100000.0)
+        result = build_equity_curve(trades, data, 100000.0)
         assert len(result) == 5
         # Day 1 (2024-01-01): no trade yet, equity = 100000
         assert result[0]["value"] == 100000.0
@@ -108,16 +102,14 @@ class TestReconstructEquityCurve:
 
     def test_buy_and_sell(self):
         """Buy then sell: track cash through full cycle."""
-        from llmwikify.reproduction.backtest_pkg.run_backtest import (
-            _reconstruct_equity_curve,
-        )
+        from llmwikify.reproduction.equity import build_equity_curve
 
         data = self._make_data(n_days=5, initial_price=100.0)
         trades = [
             {"date": "2024-01-02", "action": "buy", "quantity": 100, "price": 101.0},
             {"date": "2024-01-04", "action": "sell", "quantity": 100, "price": 103.0},
         ]
-        result = _reconstruct_equity_curve(trades, data, 100000.0)
+        result = build_equity_curve(trades, data, 100000.0)
         # Day 4 (2024-01-04): sell 100 @ 103, cash = 89900 + 10300 = 100200, position = 0
         assert result[3]["value"] == 100200.0
         # Day 5 (2024-01-05): no position, cash = 100200
@@ -125,15 +117,13 @@ class TestReconstructEquityCurve:
 
     def test_dict_trades(self):
         """Trades as dicts with 'side' key (alternative format)."""
-        from llmwikify.reproduction.backtest_pkg.run_backtest import (
-            _reconstruct_equity_curve,
-        )
+        from llmwikify.reproduction.equity import build_equity_curve
 
         data = self._make_data(n_days=3, initial_price=100.0)
         trades = [
             {"date": "2024-01-01", "side": "buy", "qty": 50, "price": 100.0},
         ]
-        result = _reconstruct_equity_curve(trades, data, 100000.0)
+        result = build_equity_curve(trades, data, 100000.0)
         # Day 1: buy 50 @ 100, cash = 100000 - 5000 = 95000, position = 50
         # equity = 95000 + 50 * 100 = 100000
         assert result[0]["value"] == 100000.0

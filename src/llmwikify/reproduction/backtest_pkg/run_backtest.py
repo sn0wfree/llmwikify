@@ -14,6 +14,7 @@ from typing import Any
 
 import pandas as pd
 
+from ..equity import build_equity_curve
 from ..paper_understanding.schemas import BacktestResult
 from .metrics import compute_metrics_from_trades, compute_monthly_returns
 from .strategies import SIGNAL_NODE_REGISTRY, get_strategy_node
@@ -121,67 +122,6 @@ def _prepare_data(data: pd.DataFrame, code: str) -> pd.DataFrame:
     return df.sort_values("date").reset_index(drop=True)
 
 
-def _reconstruct_equity_curve(
-    trades: list[Any],
-    data: pd.DataFrame,
-    initial_cash: float,
-) -> list[dict[str, Any]]:
-    """Reconstruct daily equity time series from trades and price data.
-
-    Iterates over each bar in ``data``, tracks open position, and computes
-    equity = cash + position * close_price at each bar.
-    """
-    if data.empty:
-        return []
-
-    dates = data["date"].tolist()
-    closes = data["Close"].tolist()
-
-    cash = initial_cash
-    position = 0.0
-    equity_list: list[dict[str, Any]] = []
-
-    # Index trades by date for O(1) lookup
-    trades_by_date: dict[str, list[dict[str, Any]]] = {}
-    for t in trades:
-        t_date = ""
-        if isinstance(t, dict):
-            t_date = str(t.get("date", t.get("create_date", "")))[:10]
-        elif hasattr(t, "date"):
-            t_date = str(getattr(t, "date", ""))[:10]
-        if t_date:
-            trades_by_date.setdefault(t_date, []).append(t)
-
-    for _i, (date_str, close) in enumerate(zip(dates, closes, strict=False)):
-        # Process trades for this bar
-        for t in trades_by_date.get(date_str, []):
-            action = ""
-            qty = 0.0
-            price = 0.0
-            if isinstance(t, dict):
-                action = str(t.get("action", t.get("side", ""))).lower()
-                qty = float(t.get("quantity", t.get("qty", 0)))
-                price = float(t.get("price", 0))
-            elif hasattr(t, "action"):
-                action = str(getattr(t, "action", "")).lower()
-                qty = float(getattr(t, "quantity", 0))
-                price = float(getattr(t, "price", 0))
-
-            if "buy" in action:
-                cost = qty * price
-                if cost <= cash:
-                    cash -= cost
-                    position += qty
-            elif "sell" in action:
-                cash += qty * price
-                position -= qty
-
-        equity = cash + position * close
-        equity_list.append({"date": date_str, "value": round(equity, 2)})
-
-    return equity_list
-
-
 def _run_prewritten(signal_type: str, data: pd.DataFrame, cfg: dict[str, Any]) -> BacktestResult:
     """Path A: pre-written QuantNodes StrategyNode."""
     from QuantNodes.backtest.broker_node import SimulatedBrokerNode
@@ -205,7 +145,7 @@ def _run_prewritten(signal_type: str, data: pd.DataFrame, cfg: dict[str, Any]) -
             initial_cash=cfg["initial_cash"],
             final_cash=final_cash,
         )
-        equity_curve = _reconstruct_equity_curve(trades_list, df, cfg["initial_cash"])
+        equity_curve = build_equity_curve(trades_list, df, cfg["initial_cash"])
         monthly_returns = compute_monthly_returns(equity_curve, trade_result.trades, cfg["initial_cash"])
 
         return BacktestResult(
@@ -356,7 +296,7 @@ def _run_codegen(code: str, data: pd.DataFrame, cfg: dict[str, Any]) -> Backtest
             initial_cash=cfg["initial_cash"],
             final_cash=final_cash,
         )
-        equity_curve = _reconstruct_equity_curve(trades_serialized, quote_data, cfg["initial_cash"])
+        equity_curve = build_equity_curve(trades_serialized, quote_data, cfg["initial_cash"])
         monthly_returns = compute_monthly_returns(equity_curve, trades_list, cfg["initial_cash"])
 
         return BacktestResult(
