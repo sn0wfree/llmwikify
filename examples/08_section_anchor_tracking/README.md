@@ -1,6 +1,6 @@
 # 08 — 章节级双向引用 (section anchor tracking)
 
-> 对应 [docs/TUTORIAL.md §Part 3 — 9 个功能 playbook (08 section_anchor_tracking)](../../docs/TUTORIAL.md#part-3--9-个功能-playbook)
+> 对应 [docs/TUTORIAL.md §Part 3 — 功能 Playbook 索引 (08 section_anchor_tracking)](../../docs/TUTORIAL.md#part-3--功能-playbook-索引)
 
 ## 跑法
 

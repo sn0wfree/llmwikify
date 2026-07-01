@@ -1,7 +1,7 @@
 # llmwikify 端到端示例剧本
 
-> **v0.38.0 (2026-06-30)** — 5 个端到端剧本，对应 [docs/TUTORIAL.md](../docs/TUTORIAL.md)
-> 5 个场景。每个剧本 30-80 行独立可跑脚本 + README + fixtures。
+> **v0.38.0 (2026-06-30)** — 8 个剧本（5 场景 + 3 功能演示），对应 [docs/TUTORIAL.md](../docs/TUTORIAL.md)
+> 每个剧本独立可跑脚本 + README，无需 LLM / 网络（04 除外）。
 
 ---
 
@@ -14,14 +14,18 @@
 | 03 | 多 wiki 注册表 | [`03_multi_wiki_registry/`](03_multi_wiki_registry/) | WikiRegistry / WikiDiscovery / switch / list |
 | 04 | Chat SSE 客户端 | [`04_chat_sse_client/`](04_chat_sse_client/) | httpx.stream / /api/agent/chat / SSE 事件 |
 | 05 | Paper → Factor → Backtest | [`05_paper_to_factor/`](05_paper_to_factor/) | write_factor_yaml / list_factors / DuckDB |
+| **功能演示** | | | |
+| 06 | lint 规则触发 | [`06_lint_8_rules/`](06_lint_8_rules/) | wiki.lint() / 8 rules |
+| 07 | yaml 配置模板 | [`07_yaml_templates/`](07_yaml_templates/) | yaml.safe_load / create_wiki |
+| 08 | 章节级锚点 | [`08_section_anchor_tracking/`](08_section_anchor_tracking/) | get_inbound_links / get_outbound_links |
 
 ---
 
 ## 🚀 一键跑全部
 
 ```bash
-# 1-3、5 不需要 LLM / 网络
-for d in 0[1-3]_* 05_*; do
+# 1-3、5-8 不需要 LLM / 网络
+for d in 0[1-3]_* 0[5-8]_*; do
     echo "===== $d ====="
     (cd "$d" && python play.py)
     echo
@@ -73,8 +77,11 @@ wiki config snippets，可直接 `cat <file> >> .wiki-config.yaml` 合并。
 ├── 入门：把 PDF 转成可搜索 wiki          → 01
 ├── 多源分析：年报/招股书 → 知识图谱       → 02
 ├── 一个 server 挂多个 wiki              → 03
-└── 让 LLM 反过来用 wiki 回答问题         → 04
-└── 量化复现：paper → factor → backtest  → 05
+├── 让 LLM 反过来用 wiki 回答问题         → 04
+├── 量化复现：paper → factor → backtest  → 05
+├── 理解 lint 规则触发条件                → 06
+├── 看 yaml 配置模板怎么用                → 07
+└── 看 [[page#section]] 章节级引用        → 08
 ```
 
 详见 [docs/TUTORIAL.md §0 决策树](../docs/TUTORIAL.md#0-预备安装矩阵--决策树)。

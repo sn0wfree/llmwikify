@@ -1,6 +1,6 @@
 # 06 — 主动触发 wiki lint 8 rules
 
-> 对应 [docs/TUTORIAL.md §Part 3 — 9 个功能 playbook (06 lint_8_rules)](../../docs/TUTORIAL.md#part-3--9-个功能-playbook)
+> 对应 [docs/TUTORIAL.md §Part 3 — 功能 Playbook 索引 (06 lint_8_rules)](../../docs/TUTORIAL.md#part-3--功能-playbook-索引)
 
 ## 跑法
 

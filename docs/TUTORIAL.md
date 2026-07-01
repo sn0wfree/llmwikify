@@ -2,13 +2,14 @@
 
 > **版本**：v0.38.0 (2026-06-30) · **目标读者**：首次接触 llmwikify 的
 > 开发者 / 研究员。  
-> **配套剧本**：[`examples/01_~05_`](../examples/README.md) — 每节有对应
-> 可跑脚本。  
+> **配套剧本**：[`examples/01_~08_`](../examples/README.md) — 5 个场景 +
+> 3 个功能 playbook，每节有对应可跑脚本。  
 > **预计阅读时间**：40-60 分钟 / 实操 1-2 小时。
 
 本文按 5 个真实场景展开，每个场景覆盖「背景 → 步骤 → 输出 → 架构图 →
 底层产物 → 故障排查」5 个固定段。建议顺序读完，**不要跳读** — 后 4 个
-场景会复用前 3 个的产物。
+场景会复用前 3 个的产物。Part 3 补充 3 个功能 playbook（lint / yaml 模板 /
+章节锚点），可随时查阅。
 
 ---
 
@@ -20,6 +21,7 @@
 - [场景 3：多 wiki 协作](#场景-3多-wiki-协作)
 - [场景 4：Chat + ReAct Agent](#场景-4chat--react-agent)
 - [场景 5：Quant 复现 (Paper → Factor → Backtest)](#场景-5quant-复现-paper--factor--backtest)
+- [Part 3 — 功能 Playbook 索引](#part-3--功能-playbook-索引)
 - [附录 A：配置文件优先级速查](#附录-a配置文件优先级速查)
 - [附录 B：CLI vs Python API 决策表](#附录-bcli-vs-python-api-决策表)
 - [附录 C：MCP 客户端接入示例](#附录-cmcp-客户端接入示例)
@@ -796,6 +798,48 @@ cat quant/factorbacktest/momentum_20d_*.md
 # 101 Formulaic Alphas 多因子
 curl -X POST http://localhost:8765/api/factor/alpha_001/backtest
 # 详见 docs/designs/run_101_alphas_v2_design.md (73KB 设计稿)
+```
+
+---
+
+## Part 3 — 功能 Playbook 索引
+
+> 以下 3 个 playbook 演示特定功能，不依赖 LLM，可独立运行。
+> 详细用法见各 playbook 的 README。
+
+| # | 功能 | playbook | 关键 API | 对应场景 |
+|---|---|---|---|---|
+| 06 | lint 规则触发 | [`06_lint_8_rules/`](../examples/06_lint_8_rules/) | `wiki.lint()` | §1.6 扩展 |
+| 07 | yaml 配置模板 | [`07_yaml_templates/`](../examples/07_yaml_templates/) | `yaml.safe_load` + `create_wiki` | §0 决策树 |
+| 08 | 章节级锚点 | [`08_section_anchor_tracking/`](../examples/08_section_anchor_tracking/) | `get_inbound_links` / `get_outbound_links` | §1.3 扩展 |
+
+### 06 — lint 规则触发
+
+演示 `wiki.lint()` 的 8 条规则触发条件。构造冗余页面、旧年份引用、无 wikilink
+内容等场景，展示 `dated_claim` / `potentially_outdated` / `unsourced_claims`
+等规则的实际报告格式。支持 `full` 和 `brief` 两种模式。
+
+```bash
+cd examples/06_lint_8_rules && PYTHONPATH=../.. python3 play.py
+```
+
+### 07 — yaml 配置模板
+
+4 个开箱即用的 `.wiki-config.yaml` 模板：个人笔记（offline）、项目文档、
+学术研究（长超时）、行业新闻（日期归档）。演示复制 + 自定义 + 加载流程。
+
+```bash
+cd examples/07_yaml_templates && PYTHONPATH=../.. python3 play.py
+```
+
+### 08 — 章节级锚点
+
+演示 `[[page#section]]` 和 `[[page#section|display]]` 风格的章节级 wikilink，
+包括 `get_inbound_links` / `get_outbound_links` 返回 section 字段、
+`include_context=True` 拉取上下文、DB 直接查询 page_links 表。
+
+```bash
+cd examples/08_section_anchor_tracking && PYTHONPATH=../.. python3 play.py
 ```
 
 ---

@@ -1,6 +1,6 @@
 # 07 — 4 个 yaml 配置模板 demo
 
-> 对应 [docs/TUTORIAL.md §Part 3 — 9 个功能 playbook (07 yaml_templates)](../../docs/TUTORIAL.md#part-3--9-个功能-playbook)
+> 对应 [docs/TUTORIAL.md §Part 3 — 功能 Playbook 索引 (07 yaml_templates)](../../docs/TUTORIAL.md#part-3--功能-playbook-索引)
 
 ## 跑法
 
