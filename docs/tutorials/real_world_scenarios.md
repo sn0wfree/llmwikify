@@ -699,6 +699,18 @@ for r in results:
 
 ---
 
+### Step 9.6: Analyze Source ✅
+
+**Result:** PASSED
+
+---
+
+### Step 9.7: Batch Self Create ✅
+
+**Result:** PASSED
+
+---
+
 ## Synthesis Workflow
 
 ### Step 10.1: Suggest Synthesis Multi ✅
@@ -934,6 +946,100 @@ wiki.build_index()
 
 outbound = wiki.get_outbound_links("notes")
 print(f"Links with sections: {len(outbound)}")
+```
+
+**Result:** PASSED
+
+---
+
+## Full Ingest Chain
+
+### Step 14.1: Ingest Extract ✅
+
+```python
+# Step 1: Ingest extracts text, saves to raw/
+result = wiki.ingest_source("path/to/document.md")
+print(f"Saved to raw: {result.get('saved_to_raw')}")
+print(f"Word count: {result.get('word_count')}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 14.2: Analyze Source ✅
+
+```python
+# Step 2: analyze-source uses LLM to extract entities/relations
+analysis = wiki.analyze_source("raw/document.md")
+print(f"Analysis: {analysis}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 14.3: Batch Self Create ✅
+
+```python
+# Step 3: batch --self-create uses LLM to create pages
+# llmwikify batch raw/sources/ --self-create
+```
+
+**Result:** PASSED
+
+---
+
+### Step 14.4: Suggest Synthesis ✅
+
+```python
+# Step 4: suggest-synthesis generates cross-source recommendations
+result = wiki.suggest_synthesis()
+print(f"Suggestions: {len(result.get('suggestions', []))}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 14.5: Synthesize Query ✅
+
+```python
+# Step 5: synthesize creates wiki page from query answer
+result = wiki.synthesize_query(
+    query="Compare revenue",
+    answer="# Revenue Comparison\n\nA: $10B, B: $8B.",
+    source_pages=["company-a", "company-b"],
+    auto_link=True,
+)
+print(f"Created page: {result.get('page_name')}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 14.6: Full Chain ✅
+
+```python
+# Full chain: ingest → analyze → write → search → lint
+# Step 1: ingest
+ingest_result = wiki.ingest_source("document.md")
+
+# Step 2: analyze (LLM)
+analysis = wiki.analyze_source(f"raw/{ingest_result['source_name']}")
+
+# Step 3: write page
+wiki.write_page("analysis", "# Analysis\n\nFrom ingested content.")
+
+# Step 4: build index
+idx = wiki.build_index()
+
+# Step 5: search
+results = wiki.search("analysis", limit=5)
+
+# Step 6: lint
+lint_result = wiki.lint()
 ```
 
 **Result:** PASSED

@@ -27,6 +27,7 @@ SCENARIO_NAMES = {
     "11_multi_wiki_config": "Multi-Wiki Config",
     "12_quant_full_pipeline": "Quant Full Pipeline",
     "13_references_detail": "References Detail",
+    "14_full_ingest_chain": "Full Ingest Chain",
 }
 
 # Example code for each test step
@@ -395,6 +396,50 @@ wiki.build_index()
 
 outbound = wiki.get_outbound_links("notes")
 print(f"Links with sections: {len(outbound)}")""",
+    
+    "14_1": """# Step 1: Ingest extracts text, saves to raw/
+result = wiki.ingest_source("path/to/document.md")
+print(f"Saved to raw: {result.get('saved_to_raw')}")
+print(f"Word count: {result.get('word_count')}")""",
+    
+    "14_2": """# Step 2: analyze-source uses LLM to extract entities/relations
+analysis = wiki.analyze_source("raw/document.md")
+print(f"Analysis: {analysis}")""",
+    
+    "14_3": """# Step 3: batch --self-create uses LLM to create pages
+# llmwikify batch raw/sources/ --self-create""",
+    
+    "14_4": """# Step 4: suggest-synthesis generates cross-source recommendations
+result = wiki.suggest_synthesis()
+print(f"Suggestions: {len(result.get('suggestions', []))}")""",
+    
+    "14_5": """# Step 5: synthesize creates wiki page from query answer
+result = wiki.synthesize_query(
+    query="Compare revenue",
+    answer="# Revenue Comparison\\n\\nA: $10B, B: $8B.",
+    source_pages=["company-a", "company-b"],
+    auto_link=True,
+)
+print(f"Created page: {result.get('page_name')}")""",
+    
+    "14_6": """# Full chain: ingest → analyze → write → search → lint
+# Step 1: ingest
+ingest_result = wiki.ingest_source("document.md")
+
+# Step 2: analyze (LLM)
+analysis = wiki.analyze_source(f"raw/{ingest_result['source_name']}")
+
+# Step 3: write page
+wiki.write_page("analysis", "# Analysis\\n\\nFrom ingested content.")
+
+# Step 4: build index
+idx = wiki.build_index()
+
+# Step 5: search
+results = wiki.search("analysis", limit=5)
+
+# Step 6: lint
+lint_result = wiki.lint()""",
 }
 
 
