@@ -63,9 +63,12 @@ Track your knowledge growth with metrics cards, Wiki Dream activity timeline, an
 # Install
 pip install llmwikify
 
+# Create and enter wiki directory
+mkdir my-wiki
+cd my-wiki
+
 # Initialize a wiki
 llmwikify init
-cd my-wiki
 
 # Ingest a source
 llmwikify ingest document.pdf
