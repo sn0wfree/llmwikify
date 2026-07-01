@@ -242,4 +242,3 @@ llmwikify references "Page Name"
 - [Karpathy LLM Wiki Principles](LLM_WIKI_PRINCIPLES.md)
 - [README Quick Start](../README.md#quick-start)
 - [TUTORIAL.md](TUTORIAL.md) — 5 个端到端场景
-- [wiki.md schema](../WIKI.md)

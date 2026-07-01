@@ -11,7 +11,7 @@
 ## Current Issues (v0.38.0)
 
 **无 P0/P1 active issues。** v0.36–v0.38 期间所有高优先级 bug 已闭环
-（详见 [CHANGELOG.md](../../CHANGELOG.md)），最近一次 release notes
+（详见 [CHANGELOG.md](../CHANGELOG.md)），最近一次 release notes
 [docs/releases/v0.38.0.md](releases/v0.38.0.md) 涵盖完整修复清单。
 
 如果新发现 issue，请到 [GitHub Issues](https://github.com/sn0wfree/llmwikify/issues)
