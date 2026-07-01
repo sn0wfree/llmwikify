@@ -98,6 +98,7 @@ scripts/install_opencode_fast.sh
 scripts/install_opencode_manual.sh
 ui/webui/node_modules/
 ui/webui/dist/
+.opencode/node_modules/
 
 # TypeScript build cache
 *.tsbuildinfo
