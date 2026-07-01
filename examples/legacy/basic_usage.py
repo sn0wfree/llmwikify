@@ -173,7 +173,7 @@ def example_5_health_check():
 
         # 运行 lint
         lint_result = wiki.lint(mode="check")
-        print(f"健康检查结果:")
+        print("健康检查结果:")
         print(f"  问题数量: {lint_result.get('issue_count', 0)}")
         print(f"  孤儿页面: {len(lint_result.get('orphan_pages', []))}")
         print(f"  死链: {len(lint_result.get('broken_links', []))}")

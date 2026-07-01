@@ -22,10 +22,11 @@ def example_1_mcp_server():
     print("示例 1：MCP 服务器")
     print("=" * 60)
 
-    from llmwikify import Wiki, create_wiki
+    import tempfile
+
     from llmwikify.mcp import create_mcp_server, serve_mcp
 
-    import tempfile
+    from llmwikify import Wiki, create_wiki
     with tempfile.TemporaryDirectory() as tmpdir:
         wiki = create_wiki(tmpdir)
         wiki.init()
@@ -33,8 +34,8 @@ def example_1_mcp_server():
         # 创建 MCP 服务器
         mcp = create_mcp_server(wiki, name="example-wiki")
 
-        print(f"✓ MCP 服务器已创建")
-        print(f"  名称: example-wiki")
+        print("✓ MCP 服务器已创建")
+        print("  名称: example-wiki")
         print(f"  可用工具: {len(mcp.tools)} 个")
         print("\n⚠️  此示例仅演示创建，不实际启动服务")
 

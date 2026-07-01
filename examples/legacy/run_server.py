@@ -29,10 +29,10 @@ def example_1_basic_server():
     print("示例 1：基础服务器")
     print("=" * 60)
 
+    import tempfile
+
     from llmwikify import Wiki, create_wiki
     from llmwikify.interfaces.server import WikiServer
-
-    import tempfile
     with tempfile.TemporaryDirectory() as tmpdir:
         wiki = create_wiki(tmpdir)
         wiki.init()
@@ -45,11 +45,11 @@ def example_1_basic_server():
             enable_webui=False,     # 禁用 Web UI（需要前端构建）
         )
 
-        print(f"✓ WikiServer 已创建")
+        print("✓ WikiServer 已创建")
         print(f"  FastAPI App: {type(server.app)}")
-        print(f"  MCP 端点: /mcp")
-        print(f"  API 文档: /docs")
-        print(f"  ReDoc: /redoc")
+        print("  MCP 端点: /mcp")
+        print("  API 文档: /docs")
+        print("  ReDoc: /redoc")
         print("\n⚠️ 此示例仅演示创建，不实际启动服务器")
 
 
@@ -59,10 +59,10 @@ def example_2_with_auth():
     print("示例 2：带 API Key 认证")
     print("=" * 60)
 
+    import tempfile
+
     from llmwikify import Wiki, create_wiki
     from llmwikify.interfaces.server import WikiServer
-
-    import tempfile
     with tempfile.TemporaryDirectory() as tmpdir:
         wiki = create_wiki(tmpdir)
         wiki.init()
@@ -77,7 +77,7 @@ def example_2_with_auth():
             enable_webui=False,
         )
 
-        print(f"✓ 带认证的服务器已创建")
+        print("✓ 带认证的服务器已创建")
         print(f"  API Key: {api_key}")
         print("\n使用方式:")
         print(f"  curl -H 'Authorization: Bearer {api_key}' "
@@ -90,10 +90,10 @@ def example_3_mcp_only():
     print("示例 3：仅 MCP 模式")
     print("=" * 60)
 
+    import tempfile
+
     from llmwikify import Wiki, create_wiki
     from llmwikify.interfaces.server import WikiServer
-
-    import tempfile
     with tempfile.TemporaryDirectory() as tmpdir:
         wiki = create_wiki(tmpdir)
         wiki.init()
@@ -106,7 +106,7 @@ def example_3_mcp_only():
             enable_webui=False,
         )
 
-        print(f"✓ MCP-only 服务器已创建")
+        print("✓ MCP-only 服务器已创建")
         print("  适合与 AI Agent 集成")
         print("  通过 MCP 协议访问所有 Wiki 功能")
 
