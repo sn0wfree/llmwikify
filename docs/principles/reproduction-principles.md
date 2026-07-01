@@ -718,16 +718,16 @@ def fix_bug():
 
 ## 15. 附录 E：反例库（**不要**这样写）
 
-| 反例 | 来自哪里 | 原因 |
-|---|---|---|
-| `if use_quantnodes: ... else: ...` 双路径 | factor_backtest.py 现状 | 违反 P5 |
-| `for subdir in ("trading", "strategy"): ...` 读时 fallback | extract.py 现状 | 违反 P6 |
-| `try: ... except: return {}` 静默失败 | paper.py 现状 | 违反 P7 |
-| `factor_metrics = json.load("side.json")` 派生数据 | 不存在但潜在 | 违反 P8 |
-| spec 写 `factor_class: momentum` 与代码 `factor_class: Momentum` 大小写不一致 | spec 现状 | 违反 P9 |
-| "我先修，测试以后补" | 协作中常见 | 违反 P10 |
-| `wiki/factor/` 和 `wiki/factors/` 都能写 | 现状 | 违反 P1 |
-| 一周后才补的 invariant test | 现状 | 违反 P3 |
+| 反例 | 来自哪里 | 原因 | 状态 |
+|---|---|---|---|
+| `if use_quantnodes: ... else: ...` 双路径 | factor_backtest.py 现状 | 违反 P5 | 待修 (Stage 2) |
+| `for subdir in ("trading", "strategy"): ...` 读时 fallback | ~~extract.py 现状~~ extract_strategy.py:112 | 违反 P6 | ✅ 已修 (G+Y Stage 0) |
+| `try: ... except: return {}` 静默失败 | paper.py 现状 | 违反 P7 | 待修 (Stage 5) |
+| `factor_metrics = json.load("side.json")` 派生数据 | 不存在但潜在 | 违反 P8 | 守门中 |
+| spec 写 `factor_class: momentum` 与代码 `factor_class: Momentum` 大小写不一致 | spec 现状 | 违反 P9 | 待修 |
+| "我先修，测试以后补" | 协作中常见 | 违反 P10 | 流程约束 |
+| `wiki/factor/` 和 `wiki/factors/` 都能写 | ~~现状~~ 迁移脚本 `migrate_wiki_factors_to_factor.py` | 违反 P1 | ✅ 已修 (G+Y Stage 0) |
+| 一周后才补的 invariant test | `tests/reproduction/test_invariants.py` (20 测试) | 违反 P3 | ✅ 已修 (G+Y Stage 0) |
 
 ---
 
