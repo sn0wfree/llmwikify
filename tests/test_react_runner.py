@@ -87,7 +87,7 @@ class TestLLMCodeReact:
         mock_result = _make_unified_result(code="x = 1", factor_series=fs)
 
         with patch(
-            "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync",
+            "llmwikify.kernel.agent.generate_factor_code_sync",
             return_value=mock_result,
         ) as gen:
             code, factor_series, error, meta = llm_code_react(
@@ -107,7 +107,7 @@ class TestLLMCodeReact:
         )
 
         with patch(
-            "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync",
+            "llmwikify.kernel.agent.generate_factor_code_sync",
             return_value=mock_result,
         ):
             code, factor_series, error, meta = llm_code_react(
@@ -126,7 +126,7 @@ class TestLLMCodeReact:
         mock_result = _make_unified_result(code="x", factor_series=fs)
 
         with patch(
-            "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync",
+            "llmwikify.kernel.agent.generate_factor_code_sync",
             return_value=mock_result,
         ) as gen:
             llm_code_react("a", "b", df, llm=MagicMock())
@@ -143,7 +143,7 @@ class TestLLMCodeReact:
         mock_result = _make_unified_result(code="x", factor_series=fs)
 
         with patch(
-            "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync",
+            "llmwikify.kernel.agent.generate_factor_code_sync",
             return_value=mock_result,
         ) as gen:
             llm_code_react("a", "b", df, llm=MagicMock(),
@@ -162,7 +162,7 @@ class TestLLMCodeReact:
         )
 
         with patch(
-            "llmwikify.apps.chat.agent.unified.pipelines.codegen.generate_factor_code_sync",
+            "llmwikify.kernel.agent.generate_factor_code_sync",
             return_value=mock_result,
         ):
             with caplog.at_level(logging.INFO, logger="llmwikify.reproduction.codegen.react_runner"):

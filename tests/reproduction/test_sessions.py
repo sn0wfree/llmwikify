@@ -134,4 +134,4 @@ def test_independent_db_does_not_touch_main_app_db(tmp_path: Path, monkeypatch):
 
 
 def test_valid_statuses_complete():
-    assert {"pending", "extracting", "backtesting", "analyzing", "done", "error"} == VALID_STATUSES
+    assert {"pending", "extracting", "data.fetching", "backtesting", "analyzing", "done", "error"} == VALID_STATUSES

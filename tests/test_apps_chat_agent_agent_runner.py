@@ -269,11 +269,13 @@ class TestFakeAgentRunnerContract:
         assert "3" in result.final_content
         assert runner.call_count == 1
 
-    def test_fake_runner_can_be_passed_to_subagent_manager_check(self) -> None:
-        """SubagentManager duck-types on collaborator attributes
-        (``_chat_service`` etc.); a FakeRunner without those should
-        raise TypeError with a clear message — proving the boundary
-        is enforced at the right level (the manager, not the ABC)."""
+    def test_fake_runner_passes_subagent_manager_construction(self) -> None:
+        """Phase 16+ (2026-06-23): SubagentManager.__init__ no longer
+        gates on the 4 private-attribute ``hasattr`` check; any
+        ``AgentRunner`` subclass is accepted at construction. The
+        canonical test for the runtime validation is in
+        ``tests/test_apps_chat_agent_execution_context.py``
+        (``TestSubagentManagerAcceptsAnyAgentRunner``)."""
 
         class FakeRunner(AgentRunner):
             async def run_stream(self, spec):
@@ -283,49 +285,36 @@ class TestFakeAgentRunnerContract:
                 return None
 
         fake = FakeRunner()
-        # FakeRunner doesn't have _chat_service etc., so SubagentManager
-        # rejects it with a clear TypeError.
-        with pytest.raises(TypeError) as exc:
-            SubagentManager(fake)  # type: ignore[arg-type]
-        msg = str(exc.value)
-        assert "missing required collaborator attributes" in msg
-        assert "_chat_service" in msg
+        # Should NOT raise — FakeRunner is an AgentRunner subclass;
+        # validation happens at run() time via execution_context().
+        mgr = SubagentManager(fake)  # type: ignore[arg-type]
+        assert mgr.max_concurrent == 2
 
-    def test_subagent_manager_accepts_stub_with_collaborator_attrs(self) -> None:
-        """A stub with all four required attributes passes the duck-type
-        check (proving SubagentManager doesn't require ChatRunnerV2 specifically)."""
+    def test_subagent_manager_accepts_plain_object(self) -> None:
+        """Phase 16+ (2026-06-23): SubagentManager accepts ANY
+        object at construction (no isinstance / no hasattr check).
+        Validation is deferred to ``run()`` time. This is a
+        weak-typing stance by design; the canonical test for
+        non-``AgentRunner`` rejection at run time is in
+        ``tests/test_apps_chat_agent_execution_context.py``
+        (``test_rejects_non_agent_runner_at_run_time``)."""
 
-        class _StubWithAttrs:
-            """Stand-in: provides the 4 collaborator attributes but
-            isn't a ChatRunnerV2 subclass."""
-
-            def __init__(self) -> None:
-                self._chat_service = object()
-                self._tool_executor = object()
-                self._prompt_builder = object()
-                self._config = {}
-
-        stub = _StubWithAttrs()
-        # Should NOT raise
+        stub = object()
         mgr = SubagentManager(stub)  # type: ignore[arg-type]
         assert mgr.max_concurrent == 2
 
-    def test_subagent_manager_missing_attrs_lists_them(self) -> None:
-        """The error message must list WHICH attributes are missing."""
+    def test_subagent_manager_does_not_check_attrs_at_construction(self) -> None:
+        """Phase 16+ (2026-06-23): the 4-field ``hasattr`` check is
+        gone — even a partial object is accepted at construction.
+        The canonical runtime-validation test is in
+        ``tests/test_apps_chat_agent_execution_context.py``."""
 
         class _StubPartial:
             def __init__(self) -> None:
-                self._chat_service = object()
-                # missing: _tool_executor, _prompt_builder, _config
+                self._chat_service = object()  # only one of four
 
-        with pytest.raises(TypeError) as exc:
-            SubagentManager(_StubPartial())  # type: ignore[arg-type]
-        msg = str(exc.value)
-        assert "_tool_executor" in msg
-        assert "_prompt_builder" in msg
-        assert "_config" in msg
-        # _chat_service is present, so it should NOT be in the missing list
-        assert "'_chat_service'" not in msg
+        mgr = SubagentManager(_StubPartial())  # type: ignore[arg-type]
+        assert mgr.max_concurrent == 2
 
 
 # ── Polymorphism: dispatch via base type ────────────────────────

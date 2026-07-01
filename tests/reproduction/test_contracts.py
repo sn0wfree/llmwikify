@@ -55,6 +55,37 @@ class TestModels:
         )
         assert page.title == "BT Result 1"
         assert page.run_id == "20240101-20241231"
+        assert page.equity_curve == []
+        assert page.monthly_returns == {}
+
+
+    def test_backtest_result_page_time_series(self) -> None:
+        """BacktestResultPage accepts equity_curve + monthly_returns (P2 schema, P3 inputs)."""
+        page = ct.BacktestResultPage(
+            title="BT",
+            run_id="r1",
+            final_cash=1_100_000.0,
+            equity_curve=[
+                {"date": "2024-01-01", "value": 1_000_000.0},
+                {"date": "2024-12-31", "value": 1_100_000.0},
+            ],
+            monthly_returns={"2024-01": 1.2, "2024-02": -0.5},
+        )
+        assert len(page.equity_curve) == 2
+        assert page.equity_curve[0]["date"] == "2024-01-01"
+        assert page.monthly_returns["2024-01"] == 1.2
+
+    def test_backtest_result_page_render_includes_time_series(self) -> None:
+        """render_page must emit equity_curve + monthly_returns lines (P2 Schema 优先)."""
+        page = ct.BacktestResultPage(
+            title="BT",
+            run_id="r1",
+            equity_curve=[{"date": "2024-01-01", "value": 1.0}],
+            monthly_returns={"2024-01": 1.5},
+        )
+        md = ct.render_page(page, body="body")
+        assert "equity_curve:" in md
+        assert "monthly_returns:" in md
 
     def test_reproduction_page(self) -> None:
         """ReproductionPage 构造."""

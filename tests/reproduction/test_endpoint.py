@@ -20,15 +20,16 @@ from llmwikify.interfaces.server.http.reproduction import (
 from llmwikify.interfaces.server.http.reproduction import (
     set_repro_deps,
 )
+from llmwikify.reproduction.common.paths import WIKI_DIR_STRATEGY  # noqa: E402
 from llmwikify.reproduction.persist.sessions import ReproductionDatabase
 
 
 class _FakeWiki:
     def __init__(self, tmp: Path):
         self.wiki_dir = tmp
-        trading = tmp / "trading"
-        trading.mkdir(parents=True, exist_ok=True)
-        (trading / "01-ma.md").write_text(
+        strategy = tmp / WIKI_DIR_STRATEGY
+        strategy.mkdir(parents=True, exist_ok=True)
+        (strategy / "01-ma.md").write_text(
             "---\nsignal_type: ma_cross\nsignal_params: {fast: 5, slow: 10}\n---\n",
             encoding="utf-8",
         )

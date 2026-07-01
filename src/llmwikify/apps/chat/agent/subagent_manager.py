@@ -110,11 +110,16 @@ class SubagentManager:
         parent_runner: AgentRunner,
         max_concurrent: int = 2,
     ) -> None:
-        # Phase 16+: trust the ABC. ``parent_runner`` is validated by
-        # being an instance of :class:`AgentRunner` (the constructor
-        # would have raised ``TypeError`` if it didn't implement the
-        # abstract methods). The 4-field ``hasattr`` gate that used to
-        # be here is now redundant.
+        # Phase 16+ (2026-06-23): trust the ABC. ``parent_runner`` is
+        # validated lazily when ``run()`` calls
+        # ``parent.execution_context()`` — any object lacking that
+        # method will raise ``AttributeError`` at run time. The
+        # 4-field ``hasattr`` gate that used to live here was removed
+        # because the new canonical test
+        # ``tests/test_apps_chat_agent_execution_context.py``
+        # exercises non-ChatRunnerV2 ``AgentRunner`` subclasses that
+        # don't carry the 4 legacy private attrs (they implement
+        # ``execution_context()`` instead).
         self._parent = parent_runner
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._max_concurrent = max_concurrent

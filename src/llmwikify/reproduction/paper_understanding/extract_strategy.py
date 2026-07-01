@@ -1,29 +1,29 @@
 """Strategy extraction from wiki pages.
 
-Walks the wiki looking for TradingStrategy pages (a custom page type
-declared in wiki_schema.yaml). Each match is read, its YAML frontmatter is
-parsed, and a strategy_config dict is assembled for run_backtest().
+Scans the single canonical location ``wiki/strategy/`` (per P1 path
+uniqueness + P6 兼容窗口=0). Each page's YAML frontmatter is parsed and
+a strategy_config dict is assembled for run_backtest().
 
 This is intentionally LLM-free: the heavy lifting of "read the paper and
 extract the strategy" happens upstream in the ingest pipeline via
 analyze_source.yaml. By the time extract_strategy_config runs, the wiki
-already contains structured TradingStrategy pages with frontmatter.
+already contains structured Strategy pages with frontmatter.
 
 Output schema (consumed by run_reproduction):
     {
         "signal_type": "ma_cross",            # one of 6 prewritten, or "unknown"
         "signal_params": {"fast": 5, ...},    # params for the strategy node
-        "wiki_page": "trading/some-slug",     # source page for traceability
+        "wiki_page": "some-slug",             # source page slug (under strategy/)
     }
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
-from typing import Any, Optional
+from typing import Any
 
-from ..common.utils import FRONTMATTER_RE, parse_frontmatter
+from ..common.paths import WIKI_DIR_STRATEGY, list_pages
+from ..common.utils import parse_frontmatter
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +62,25 @@ def _to_signal_params(raw: Any) -> dict[str, Any]:
 
 
 def extract_from_page(content: str) -> dict[str, Any] | None:
-    """Extract a strategy_config from one wiki page's content."""
+    """Extract a strategy_config from one wiki page's content.
+
+    Backward-compat helper used by older callers / tests. The canonical
+    wiki-scan path is now ``extract_strategy_config`` (paths-based, P1+P6).
+    """
     fm = parse_frontmatter(content)
     if not fm:
         return None
-    signal_type = fm.get("signal_type", "").strip().lower()
+    return _config_from_fm(fm)
+
+
+def _config_from_fm(fm: dict[str, Any]) -> dict[str, Any] | None:
+    """Build a strategy_config (without ``wiki_page`` slug) from a frontmatter dict.
+
+    Returns:
+        ``{"signal_type": str, "signal_params": dict, "page_name": str}``
+        or ``None`` if no recognized ``signal_type`` is present.
+    """
+    signal_type = str(fm.get("signal_type", "") or "").strip().lower()
     if not signal_type:
         return None
     if signal_type not in VALID_SIGNAL_TYPES:
@@ -81,41 +95,22 @@ def extract_from_page(content: str) -> dict[str, Any] | None:
     }
 
 
-def _iter_strategy_pages(wiki: Any, subdir: str) -> Iterable[tuple[str, str, str]]:
-    """Yield ``(subdir, stem, content)`` tuples under ``wiki/{subdir}/``.
-
-    ``stem`` is the filename without directory prefix or ``.md`` extension,
-    i.e. the full page slug (e.g. ``strategy-arxiv-2024-momentum``).
-    """
-    page_dir = wiki.wiki_dir / subdir
-    if not page_dir.is_dir():
-        return
-    for md in sorted(page_dir.glob("*.md")):
-        try:
-            yield subdir, md.stem, md.read_text(encoding="utf-8")
-        except OSError as exc:
-            logger.warning("could not read %s: %s", md, exc)
-
-
 def extract_strategy_config(wiki: Any) -> dict[str, Any]:
-    """Pull the first recognized strategy page and assemble strategy_config.
+    """Pull the first recognized strategy page from ``wiki/strategy/``.
 
-    Scans both ``wiki/strategy/`` (newly written by Paper extraction via
-    ``extract_paper.build_paper_pages``) and ``wiki/trading/`` (legacy
-    TradingStrategy pages). Preference order: ``strategy`` first because
-    paper-extracted pages carry richer frontmatter (factor_refs, etc.).
+    Single source of truth (P1 path uniqueness, P6 兼容窗口=0): scans only
+    ``WIKI_DIR_STRATEGY`` via :func:`reproduction.common.paths.list_pages`.
 
     Returns:
-        {"signal_type": "...", "signal_params": {...}, "wiki_page": "..."}
-        or {"signal_type": "unknown", "signal_params": {}, "wiki_page": None}
+        ``{"signal_type": str, "signal_params": dict, "wiki_page": str}``
+        or ``{"signal_type": "unknown", "signal_params": {}, "wiki_page": None}``
     """
-    for subdir in ("strategy", "trading"):
-        for _origin, stem, content in _iter_strategy_pages(wiki, subdir):
-            cfg = extract_from_page(content)
-            if cfg is None:
-                continue
-            cfg["wiki_page"] = stem
-            return cfg
+    for page in list_pages(wiki, WIKI_DIR_STRATEGY):
+        cfg = _config_from_fm(page)
+        if cfg is None:
+            continue
+        cfg["wiki_page"] = page["_slug"]
+        return cfg
     return {"signal_type": "unknown", "signal_params": {}, "wiki_page": None}
 
 

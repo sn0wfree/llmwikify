@@ -10,6 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
+from llmwikify.reproduction.common.paths import WIKI_DIR_STRATEGY
 from llmwikify.reproduction.data_source.router import SynthDataSource
 from llmwikify.reproduction.persist.run import RunContext, run_reproduction
 from llmwikify.reproduction.persist.sessions import ReproductionDatabase
@@ -25,9 +26,9 @@ signal_params: {fast: 5, slow: 10}
 class _FakeWiki:
     def __init__(self, tmp: Path):
         self.wiki_dir = tmp
-        trading = tmp / "trading"
-        trading.mkdir(parents=True, exist_ok=True)
-        (trading / "01-ma.md").write_text(PAGE_MA, encoding="utf-8")
+        strategy = tmp / WIKI_DIR_STRATEGY
+        strategy.mkdir(parents=True, exist_ok=True)
+        (strategy / "01-ma.md").write_text(PAGE_MA, encoding="utf-8")
         self.written: list[tuple[str, str, str]] = []
 
     def write_page(self, name, content, page_type=None):
@@ -149,3 +150,58 @@ def test_pipeline_writes_backtest_page_to_wiki(tmp_path):
     run_reproduction(ctx)
     files = list((tmp_path / "wiki" / "backtestresult").glob("*.md"))
     assert files, "BacktestResult page not written"
+
+
+# ─── G7 P3 invariant: state machine includes data.fetching (re-alignment §4.7) ──
+
+
+def test_pipeline_emits_data_fetching_status(ctx: RunContext) -> None:
+    """G7: status flow must include data.fetching between extracting and backtesting.
+
+    Re-alignment §4.7 specifies a 5-phase pipeline:
+        pending → extracting → data.fetching → backtesting → analyzing → done
+    """
+    run_reproduction(ctx)
+    session = ctx.db.get_session(ctx.session_id)
+    # Final status is "done" (terminal); intermediate data.fetching should have
+    # been visited. The full sequence is recorded in events.
+    assert session.status == "done"
+    # Inspect the recorded status transitions
+    events = ctx.db.get_events(ctx.session_id)
+    event_types = {e["event_type"] for e in events}
+    assert "extract.done" in event_types
+    assert "data.fetched" in event_types
+    assert "backtest.done" in event_types
+    assert "wiki.written" in event_types
+
+
+def test_pipeline_state_machine_strictly_forward(ctx: RunContext, monkeypatch) -> None:
+    """G7 P3 invariant: SessionStage transitions never skip a phase.
+
+    Allowed forward-only path (re-alignment §4.7):
+        pending → extracting → data.fetching → backtesting → analyzing → done
+    """
+    seen: list[str] = []
+    original = ctx.db.update_status
+    def _spy(sid: str, status: str, **kwargs: object) -> None:
+        seen.append(status)
+        return original(sid, status, **kwargs)
+    monkeypatch.setattr(ctx.db, "update_status", _spy)
+
+    run_reproduction(ctx)
+
+    # Strict forward chain — every transition must be adjacent (no skipping).
+    expected_chain = ["extracting", "data.fetching", "backtesting", "analyzing", "done"]
+    assert seen == expected_chain, (
+        f"state machine broke: expected {expected_chain}, got {seen}"
+    )
+
+
+def test_valid_statuses_includes_data_fetching() -> None:
+    """Whitelist must accept all 7 SessionStage values."""
+    from llmwikify.reproduction.persist.sessions import VALID_STATUSES
+    expected = {
+        "pending", "extracting", "data.fetching",
+        "backtesting", "analyzing", "done", "error",
+    }
+    assert expected.issubset(VALID_STATUSES)

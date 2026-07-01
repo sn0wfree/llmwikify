@@ -322,11 +322,14 @@ def build_equity_curve(
 ## 5. 落地路线图
 
 ### Stage 0: Foundation (1-2 天) — 必须先做
-- [ ] `reproduction/paths.py` 路径常量集中
-- [ ] `reproduction/contracts.py` Pydantic schemas
-- [ ] `interfaces/server/http/routes.py` 注册 4 个 router
-- [ ] `paper.py` 注入 `llm_client`
-- [ ] 删除 `wiki/trading/` 兼容代码 (一次性)
+- [x] `reproduction/paths.py` 路径常量集中
+- [x] `reproduction/contracts.py` Pydantic schemas
+- [x] `interfaces/server/http/routes.py` 注册 4 个 router
+- [x] `paper.py` 注入 `llm_client`
+- [x] 删除 `wiki/trading/` 兼容代码 (一次性) — extract_strategy.py: `for subdir in ("strategy", "trading")` 双轨 fallback 已删 (G+Y Stage 0)
+- [x] `wiki/factors/` → `wiki/factor/` 迁移脚本 (`scripts/migrate_wiki_factors_to_factor.py`)
+- [x] `BacktestResultPage` Pydantic 补 `equity_curve` + `monthly_returns` 字段
+- [x] `tests/reproduction/test_invariants.py` P3 不变量守门 (20 测试)
 
 ### Stage 1: Paper 端到端 (2-3 天)
 - [ ] `paper.py` 注入 LLM 后产出 paper-{id}-logic / factor-{id}-{slug} / strategy-{id}

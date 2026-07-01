@@ -634,21 +634,28 @@ def _compute_cross_section_ic(
     rank_ic_values: list[float] = []
     n_stocks_list: list[int] = []
 
+    def _date_str(d: Any) -> str:
+        return str(d)[:10] if hasattr(d, "isoformat") else str(d)
+
     for d in adj_dates:
         if d not in factor_wide.index or d not in return_wide.index:
+            n_stocks_list.append(0)
             continue
         f = factor_wide.loc[d].dropna()
         r = return_wide.loc[d].dropna()
         common = f.index.intersection(r.index)
         if len(common) < 5:
+            n_stocks_list.append(0)
             continue
         f_al = f.loc[common]
         r_al = r.loc[common]
         try:
             pearson = float(f_al.corr(r_al))
             if pd.isna(pearson):
+                n_stocks_list.append(0)
                 continue
         except Exception:
+            n_stocks_list.append(0)
             continue
         try:
             rank_ic = float(f_al.rank().corr(r_al.rank()))
@@ -657,11 +664,11 @@ def _compute_cross_section_ic(
         except Exception:
             rank_ic = pearson
 
+        n_stocks_list.append(len(common))
         ic_values.append(pearson)
         rank_ic_values.append(rank_ic)
-        n_stocks_list.append(len(common))
         ic_series.append({
-            "date": str(d)[:10] if hasattr(d, "isoformat") else str(d),
+            "date": _date_str(d),
             "ic": round(pearson, 6),
             "rank_ic": round(rank_ic, 6),
             "n_stocks": len(common),
@@ -1083,13 +1090,14 @@ def run_factor_backtest_universe(
         # Build ic_series for extract_group_result
         ic_series = ic_res_full.get("ic_series", [])
 
-        # Convert n_stocks_per_date to list of dicts
+        # Convert n_stocks_per_date to list of dicts.
+        # After G5 fix: n_stocks_per_date is aligned with adj_dates
+        # (length = total_rebalances; failed dates get n=0).
         n_stocks_raw = ic_res_full.get("n_stocks_per_date", [])
-        ic_series_full = ic_res_full.get("ic_series", [])
-        n_stocks_per_date = []
-        for i, n in enumerate(n_stocks_raw):
-            date_str = ic_series_full[i]["date"] if i < len(ic_series_full) else ""
-            n_stocks_per_date.append({"date": date_str, "n": n})
+        n_stocks_per_date = [
+            {"date": str(d)[:10] if hasattr(d, "isoformat") else str(d), "n": n}
+            for d, n in zip(adj_qn, n_stocks_raw, strict=True)
+        ]
 
         return FactorBacktestResult(
             ic_mean=ic_res_full["ic_mean"],
@@ -1143,13 +1151,14 @@ def run_factor_backtest_universe(
     else:
         top_ann = 0.0
 
-    # Convert n_stocks_per_date to list of dicts
+    # Convert n_stocks_per_date to list of dicts.
+    # After G5 fix: n_stocks_per_date is aligned with adj_dates
+    # (length = total_rebalances; failed dates get n=0).
     n_stocks_raw = ic_res.get("n_stocks_per_date", [])
-    ic_series_data = ic_res.get("ic_series", [])
-    n_stocks_per_date = []
-    for i, n in enumerate(n_stocks_raw):
-        date_str = ic_series_data[i]["date"] if i < len(ic_series_data) else ""
-        n_stocks_per_date.append({"date": date_str, "n": n})
+    n_stocks_per_date = [
+        {"date": str(d)[:10] if hasattr(d, "isoformat") else str(d), "n": n}
+        for d, n in zip(adj_dates, n_stocks_raw, strict=True)
+    ]
 
     return FactorBacktestResult(
         ic_mean=ic_res["ic_mean"],

@@ -384,3 +384,52 @@ class TestClickHouseConfig:
         assert d["longshort_curve"] == []
         assert d["rank_ic_mean"] == 0.0
         assert d["longshort_curve"] == []
+
+
+class TestCrossSectionNStocksAlignment:
+    """P3 invariant (G5 fix): n_stocks_per_date length == total_rebalances."""
+
+    def test_n_stocks_per_date_length_equals_total_rebalances(self, synthetic_close):
+        """After G5 fix: n_stocks_per_date must align with adj_dates (one entry per
+        rebalance date, including failed dates with n=0)."""
+        factor_matrix = _compute_factor_matrix(synthetic_close, "momentum", {"period": 20})
+        return_matrix = _compute_return_matrix(synthetic_close, forward_days=1)
+        adj_dates = generate_adj_dates(synthetic_close.index, "D")
+        adj_dates = [d for d in adj_dates if d in return_matrix.index and d in factor_matrix.index]
+
+        ic_res = _compute_cross_section_ic(factor_matrix, return_matrix, adj_dates)
+
+        n_stocks_raw = ic_res.get("n_stocks_per_date", [])
+        assert len(n_stocks_raw) == len(adj_dates), (
+            f"n_stocks_per_date length {len(n_stocks_raw)} must equal "
+            f"adj_dates length {len(adj_dates)} (P3 invariant)"
+        )
+
+    def test_failed_dates_get_zero_stocks(self, synthetic_close):
+        """Dates with < 5 common stocks must record n=0 (not skipped)."""
+        factor_matrix = _compute_factor_matrix(synthetic_close, "momentum", {"period": 20})
+        return_matrix = _compute_return_matrix(synthetic_close, forward_days=1)
+        # Use a small subset of dates (some may have insufficient overlap)
+        adj_dates = list(factor_matrix.index[:50])
+        adj_dates = [d for d in adj_dates if d in return_matrix.index and d in factor_matrix.index]
+
+        ic_res = _compute_cross_section_ic(factor_matrix, return_matrix, adj_dates)
+        n_stocks_raw = ic_res.get("n_stocks_per_date", [])
+
+        # Length invariant
+        assert len(n_stocks_raw) == len(adj_dates)
+        # All values are non-negative (n=0 for failed, n>=5 for successful)
+        assert all(n >= 0 for n in n_stocks_raw)
+
+    def test_universe_backtest_n_stocks_length_invariant(self, synthetic_close):
+        """End-to-end: run_factor_backtest_universe must produce n_stocks_per_date
+        with length == total_rebalances (the P3 invariant)."""
+        result = run_factor_backtest_universe(
+            close_wide=synthetic_close,
+            factor_class="momentum",
+            factor_params={"period": 20},
+            adj_mode="D",
+            n_groups=5,
+        )
+        assert len(result.n_stocks_per_date) == result.total_rebalances
+        assert result.total_rebalances >= result.valid_rebalances
