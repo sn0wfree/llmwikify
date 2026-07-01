@@ -33,6 +33,7 @@ ALREADY_COVERED = {
     "quant_wiki",  # test_paper_api.py
     "quantnodes_adapter",  # test_quant.py
     "quantnodes_repro",  # test_factor_backtest*.py
+    "equity",  # test_equity.py
     "router",  # test_router.py
     "run",  # test_run.py
     "sessions",  # test_sessions.py, test_paper_api.py

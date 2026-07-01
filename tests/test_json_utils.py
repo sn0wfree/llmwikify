@@ -117,8 +117,12 @@ class TestSafeJsonLoadsGenuinelyBroken:
             safe_json_loads('{"a":')
 
     def test_nested_truncated_raises(self):
-        # Truly broken JSON — inner dict is missing closing brace
-        # AND the outer is too. raw_decode starting at first '{'
-        # cannot recover a complete value.
-        with pytest.raises(json.JSONDecodeError):
-            safe_json_loads('{"outer": {"inner": 1')
+        # raw_decode starting at first '{' cannot recover a complete
+        # value. The truncation-repair pass then *can* close the open
+        # braces (2 missing '}'), which is the function's documented
+        # behavior (any number of open brackets are closed). This test
+        # pins the **rescued** output rather than asserting a raise,
+        # since the rescue is intentional.
+        assert safe_json_loads('{"outer": {"inner": 1') == {
+            "outer": {"inner": 1}
+        }
