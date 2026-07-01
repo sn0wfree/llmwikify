@@ -11,7 +11,7 @@
 **llmwikify** is a Python CLI + library + unified server for building **persistent,
 LLM-maintained knowledge bases** with a dedicated **quant research reproduction pipeline**.
 
-![Chat Demo](docs/screenshots/chat.png)
+![Dashboard](docs/screenshots/dashboard.png)
 
 > ⚠️ **Beta Release** — APIs may shift between minor versions. Report issues on
 > [GitHub](https://github.com/sn0wfree/llmwikify/issues).
@@ -33,8 +33,10 @@ LLM-maintained knowledge bases** with a dedicated **quant research reproduction 
 
 ## Features
 
-### Chat + ReAct Agent
+### Chat + ReAct Agent ⚠️ Under Active Development
 Streaming chat with tool calling, confirmations, and 26 MCP tools. The agent can search your wiki, analyze sources, and generate insights — all with human-in-the-loop confirmations.
+
+> ⚠️ **Note:** This feature is under active development and may be unstable.
 
 ![Chat](docs/screenshots/chat.png)
 
@@ -52,16 +54,6 @@ Interactive D3.js force-directed graph with PageRank node sizing, community colo
 Track your knowledge growth with metrics cards, Wiki Dream activity timeline, and health indicators. See how your wiki evolves over time.
 
 ![Dashboard](docs/screenshots/dashboard.png)
-
-### Quant: Factor Detail
-6-layer factor view with IC charts, quantile curves, risk radar, and hypothesis lists. Deep dive into any factor's performance and characteristics.
-
-![Factor](docs/screenshots/factor.png)
-
-### Quant: Backtest Platform
-Run single-factor and strategy backtests with IC heatmaps, group return bars, equity curves, and comprehensive KPI metrics.
-
-![Backtest](docs/screenshots/backtest.png)
 
 ---
 
