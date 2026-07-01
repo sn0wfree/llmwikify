@@ -126,18 +126,27 @@ class AgentRunner(ABC, Generic[SpecT, ResultT]):
 
     # ── collaborator access (Phase 16+) ────────────────────────
 
-    @abstractmethod
-    def execution_context(self) -> AgentExecutionContext:
+    def execution_context(self) -> AgentExecutionContext | None:
         """Return the execution context for spawning a child runner.
 
-        Phase 16+: lets :class:`SubagentManager` (and any future
-        dispatch helper) construct a child runner from the parent's
-        collaborator bundle **without** reading private attributes.
-        Implementations should return a stable, freshly-allocated
-        :class:`AgentExecutionContext` capturing the current
-        collaborators.
+        Phase 16+ (2026-06-23): lets :class:`SubagentManager` (and any
+        future dispatch helper) construct a child runner from the
+        parent's collaborator bundle **without** reading private
+        attributes. Subclasses SHOULD override; the default raises
+        ``NotImplementedError`` so callers like ``SubagentManager``
+        fail fast when a partial subclass is passed in.
+
+        The base-class default is **not** marked ``@abstractmethod``
+        so that simple test stubs (FakeRunner / CompleteRunner) can
+        still be instantiated without implementing this Phase 16+
+        collaborator accessor. SubagentManager's __init__ does the
+        isinstance + duck-type check that gates real usage.
         """
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement execution_context(); "
+            "override it to return an AgentExecutionContext capturing "
+            "the runner's chat_service / tool_executor / prompt_builder / config."
+        )
 
     # ── capability check ──────────────────────────────────────
 
