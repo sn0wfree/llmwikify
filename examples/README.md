@@ -1,37 +1,37 @@
-# llmwikify 端到端示例剧本
+# llmwikify End-to-End Playbooks
 
-> **v0.38.0 (2026-06-30)** — 8 个剧本（5 场景 + 3 功能演示），对应 [docs/TUTORIAL.md](../docs/TUTORIAL.md)
-> 每个剧本独立可跑脚本 + README，无需 LLM / 网络（04 除外）。
+> **v0.38.0 (2026-06-30)** — 8 playbooks (5 scenarios + 3 feature demos), aligned with [docs/TUTORIAL.md](../docs/TUTORIAL.md)
+> Each playbook is a self-contained runnable script + README, no LLM/network required (except 04).
 
 ---
 
-## 📋 剧本目录
+## 📋 Playbook Directory
 
-| # | 场景 | 路径 | 关键 API |
-|---|---|---|---|
-| 01 | 个人阅读笔记 wiki | [`01_personal_reading_notes/`](01_personal_reading_notes/) | init / ingest / search / write_page / build-index / references / lint |
-| 02 | 公司尽调知识库 | [`02_company_research_kb/`](02_company_research_kb/) | batch ingest / synthesize / GraphAnalyzer / lint |
-| 03 | 多 wiki 注册表 | [`03_multi_wiki_registry/`](03_multi_wiki_registry/) | WikiRegistry / WikiDiscovery / switch / list |
-| 04 | Chat SSE 客户端 | [`04_chat_sse_client/`](04_chat_sse_client/) | httpx.stream / /api/agent/chat / SSE 事件 |
+| # | Scenario | Path | Key API |
+|---|----------|------|---------|
+| 01 | Personal Reading Notes | [`01_personal_reading_notes/`](01_personal_reading_notes/) | init / ingest / search / write_page / build-index / references / lint |
+| 02 | Company Due-Diligence KB | [`02_company_research_kb/`](02_company_research_kb/) | batch ingest / synthesize / GraphAnalyzer / lint |
+| 03 | Multi-Wiki Registry | [`03_multi_wiki_registry/`](03_multi_wiki_registry/) | WikiRegistry / WikiDiscovery / switch / list |
+| 04 | Chat SSE Client | [`04_chat_sse_client/`](04_chat_sse_client/) | httpx.stream / /api/agent/chat / SSE events |
 | 05 | Paper → Factor → Backtest | [`05_paper_to_factor/`](05_paper_to_factor/) | write_factor_yaml / list_factors / DuckDB |
-| **功能演示** | | | |
-| 06 | lint 规则触发 | [`06_lint_8_rules/`](06_lint_8_rules/) | wiki.lint() / 8 rules |
-| 07 | yaml 配置模板 | [`07_yaml_templates/`](07_yaml_templates/) | yaml.safe_load / create_wiki |
-| 08 | 章节级锚点 | [`08_section_anchor_tracking/`](08_section_anchor_tracking/) | get_inbound_links / get_outbound_links |
+| **Feature Demos** | | | |
+| 06 | Lint Rule Triggers | [`06_lint_8_rules/`](06_lint_8_rules/) | wiki.lint() / 8 rules |
+| 07 | YAML Config Templates | [`07_yaml_templates/`](07_yaml_templates/) | yaml.safe_load / create_wiki |
+| 08 | Section-Level Anchors | [`08_section_anchor_tracking/`](08_section_anchor_tracking/) | get_inbound_links / get_outbound_links |
 
 ---
 
-## 🚀 一键跑全部
+## 🚀 Run All Playbooks
 
 ```bash
-# 1-3、5-8 不需要 LLM / 网络
+# 1-3, 5-8 don't need LLM / network
 for d in 0[1-3]_* 0[5-8]_*; do
     echo "===== $d ====="
     (cd "$d" && python play.py)
     echo
 done
 
-# 4 需要先启 server
+# 4 needs a running server first
 (cd /tmp/demo-wiki && llmwikify init --agent generic)
 (cd /tmp/demo-wiki && llmwikify serve --web --port 8765 --auth-token mysecret &) ; sleep 3
 cd 04_chat_sse_client && python play.py
@@ -39,49 +39,49 @@ cd 04_chat_sse_client && python play.py
 
 ---
 
-## 📁 配置文件模板
+## 📁 Config Templates
 
-旧版 `*.yaml` 模板（`personal-kb.yaml` / `project-docs.yaml` 等）保留为
-wiki config snippets，可直接 `cat <file> >> .wiki-config.yaml` 合并。
+Legacy `*.yaml` templates (`personal-kb.yaml` / `project-docs.yaml` etc.) are kept as
+wiki config snippets. Merge with `cat <file> >> .wiki-config.yaml`.
 
-| 文件 | 用途 |
-|---|---|
-| `personal-kb.yaml` | 个人知识库 config 片段 |
-| `project-docs.yaml` | 项目文档 wiki |
-| `research-wiki.yaml` | 研究知识库 |
-| `mining-news-wiki.yaml` | 矿业新闻 wiki |
+| File | Purpose |
+|------|---------|
+| `personal-kb.yaml` | Personal knowledge base config snippet |
+| `project-docs.yaml` | Project documentation wiki |
+| `research-wiki.yaml` | Research knowledge base |
+| `mining-news-wiki.yaml` | Industry news wiki |
 
 ---
 
-## 🗄️ Legacy 脚本（已迁移）
+## 🗄️ Legacy Scripts (Migrated)
 
-历史零散示例已搬到 [`legacy/`](legacy/) 目录并加 **DEPRECATED** 横幅。
-**不要在新代码里引用**。迁移路径见 [legacy/README.md](legacy/README.md)。
+Historical scripts moved to [`legacy/`](legacy/) directory with **DEPRECATED** banner.
+**Do not reference in new code.** See [legacy/README.md](legacy/README.md) for migration paths.
 
-| 旧文件 | 替代剧本 |
-|---|---|
+| Old File | Replacement |
+|----------|-------------|
 | `legacy/basic_usage.py` | `01_personal_reading_notes/` |
 | `legacy/run_server.py` | `03_multi_wiki_registry/` + `04_chat_sse_client/` |
 | `legacy/mcp_agent.py` | `04_chat_sse_client/` |
-| `legacy/integrate_with_django.py` | （仍参考用，无端到端剧本） |
-| `legacy/integrate_with_flask.py` | （仍参考用，无端到端剧本） |
-| `legacy/Dockerfile.example` | （仍参考用） |
-| `legacy/docker-compose.yml.example` | （仍参考用） |
+| `legacy/integrate_with_django.py` | (reference only, no end-to-end playbook) |
+| `legacy/integrate_with_flask.py` | (reference only, no end-to-end playbook) |
+| `legacy/Dockerfile.example` | (reference only) |
+| `legacy/docker-compose.yml.example` | (reference only) |
 
 ---
 
-## 🔍 选哪个剧本
+## 🔍 Which Playbook Should I Use?
 
 ```
-我想……
-├── 入门：把 PDF 转成可搜索 wiki          → 01
-├── 多源分析：年报/招股书 → 知识图谱       → 02
-├── 一个 server 挂多个 wiki              → 03
-├── 让 LLM 反过来用 wiki 回答问题         → 04
-├── 量化复现：paper → factor → backtest  → 05
-├── 理解 lint 规则触发条件                → 06
-├── 看 yaml 配置模板怎么用                → 07
-└── 看 [[page#section]] 章节级引用        → 08
+I want to...
+├── Get started: PDF → searchable wiki           → 01
+├── Multi-source analysis: reports → knowledge graph → 02
+├── One server, multiple wikis                   → 03
+├── Let LLM answer questions using my wiki       → 04
+├── Quant reproduction: paper → factor → backtest → 05
+├── Understand lint rule triggers                → 06
+├── See YAML config templates in action          → 07
+└── See [[page#section]] anchor tracking         → 08
 ```
 
-详见 [docs/TUTORIAL.md §0 决策树](../docs/TUTORIAL.md#0-预备安装矩阵--决策树)。
+See [docs/TUTORIAL.md §0 Decision Tree](../docs/TUTORIAL.md#0-prerequisites-install-matrix--decision-tree).

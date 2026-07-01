@@ -1,30 +1,30 @@
-# llmwikify 端到端使用教程
+# llmwikify End-to-End Tutorial
 
-> **版本**：v0.38.0 (2026-06-30) · **目标读者**：首次接触 llmwikify 的
-> 开发者 / 研究员。  
-> **配套剧本**：[`examples/01_~08_`](../examples/README.md) — 5 个场景 +
-> 3 个功能 playbook，每节有对应可跑脚本。  
-> **预计阅读时间**：40-60 分钟 / 实操 1-2 小时。
+> **Version**: v0.38.0 (2026-06-30) · **Target audience**: First-time developers / researchers.  
+> **Companion playbooks**: [`examples/01_~08_`](../examples/README.md) — 5 scenarios +  
+> 3 feature playbooks, each with a runnable script.  
+> **Estimated time**: 40-60 min read / 1-2 hours hands-on.
 
-本文按 5 个真实场景展开，每个场景覆盖「背景 → 步骤 → 输出 → 架构图 →
-底层产物 → 故障排查」5 个固定段。建议顺序读完，**不要跳读** — 后 4 个
-场景会复用前 3 个的产物。Part 3 补充 3 个功能 playbook（lint / yaml 模板 /
-章节锚点），可随时查阅。
+This tutorial covers 5 real-world scenarios, each with a fixed structure:
+**Background → Steps → Output → Architecture diagram → Artifacts → Troubleshooting**.
+Read in order — later scenarios reuse artifacts from earlier ones.
+Part 3 adds 3 feature playbooks (lint / yaml templates / section anchors)
+that can be referenced anytime.
 
 ---
 
-## 目录
+## Table of Contents
 
-- [0. 预备：安装矩阵 + 决策树](#0-预备安装矩阵--决策树)
-- [场景 1：个人阅读笔记 wiki](#场景-1个人阅读笔记-wiki)
-- [场景 2：公司尽调知识库](#场景-2公司尽调知识库)
-- [场景 3：多 wiki 协作](#场景-3多-wiki-协作)
-- [场景 4：Chat + ReAct Agent](#场景-4chat--react-agent)
-- [场景 5：Quant 复现 (Paper → Factor → Backtest)](#场景-5quant-复现-paper--factor--backtest)
-- [Part 3 — 功能 Playbook 索引](#part-3--功能-playbook-索引)
-- [附录 A：配置文件优先级速查](#附录-a配置文件优先级速查)
-- [附录 B：CLI vs Python API 决策表](#附录-bcli-vs-python-api-决策表)
-- [附录 C：MCP 客户端接入示例](#附录-cmcp-客户端接入示例)
+- [0. Prerequisites: Install Matrix + Decision Tree](#0-prerequisites-install-matrix--decision-tree)
+- [Scenario 1: Personal Reading Notes Wiki](#scenario-1-personal-reading-notes-wiki)
+- [Scenario 2: Company Due-Diligence KB](#scenario-2-company-due-diligence-kb)
+- [Scenario 3: Multi-Wiki Collaboration](#scenario-3-multi-wiki-collaboration)
+- [Scenario 4: Chat + ReAct Agent](#scenario-4-chat--react-agent)
+- [Scenario 5: Quant Reproduction (Paper → Factor → Backtest)](#scenario-5-quant-reproduction-paper--factor--backtest)
+- [Part 3 — Feature Playbook Index](#part-3--feature-playbook-index)
+- [Appendix A: Config Priority Cheat Sheet](#appendix-a-config-priority-cheat-sheet)
+- [Appendix B: CLI vs Python API Decision Table](#appendix-b-cli-vs-python-api-decision-table)
+- [Appendix C: MCP Client Integration Examples](#appendix-c-mcp-client-integration-examples)
 
 ---
 
@@ -802,41 +802,43 @@ curl -X POST http://localhost:8765/api/factor/alpha_001/backtest
 
 ---
 
-## Part 3 — 功能 Playbook 索引
+## Part 3 — Feature Playbook Index
 
-> 以下 3 个 playbook 演示特定功能，不依赖 LLM，可独立运行。
-> 详细用法见各 playbook 的 README。
+> The following 3 playbooks demonstrate specific features, no LLM required.
+> See each playbook's README for detailed usage.
 
-| # | 功能 | playbook | 关键 API | 对应场景 |
-|---|---|---|---|---|
-| 06 | lint 规则触发 | [`06_lint_8_rules/`](../examples/06_lint_8_rules/) | `wiki.lint()` | §1.6 扩展 |
-| 07 | yaml 配置模板 | [`07_yaml_templates/`](../examples/07_yaml_templates/) | `yaml.safe_load` + `create_wiki` | §0 决策树 |
-| 08 | 章节级锚点 | [`08_section_anchor_tracking/`](../examples/08_section_anchor_tracking/) | `get_inbound_links` / `get_outbound_links` | §1.3 扩展 |
+| # | Feature | Playbook | Key API | Related Scenario |
+|---|---------|----------|---------|------------------|
+| 06 | Lint rule triggers | [`06_lint_8_rules/`](../examples/06_lint_8_rules/) | `wiki.lint()` | §1.6 extension |
+| 07 | YAML config templates | [`07_yaml_templates/`](../examples/07_yaml_templates/) | `yaml.safe_load` + `create_wiki` | §0 decision tree |
+| 08 | Section-level anchors | [`08_section_anchor_tracking/`](../examples/08_section_anchor_tracking/) | `get_inbound_links` / `get_outbound_links` | §1.3 extension |
 
-### 06 — lint 规则触发
+### 06 — Lint Rule Triggers
 
-演示 `wiki.lint()` 的 8 条规则触发条件。构造冗余页面、旧年份引用、无 wikilink
-内容等场景，展示 `dated_claim` / `potentially_outdated` / `unsourced_claims`
-等规则的实际报告格式。支持 `full` 和 `brief` 两种模式。
+Demonstrates the 8 lint rule trigger conditions. Constructs redundant pages,
+old year references, and content without wikilinks to show how `dated_claim` /
+`potentially_outdated` / `unsourced_claims` rules fire. Supports `full` and
+`brief` modes.
 
 ```bash
 cd examples/06_lint_8_rules && PYTHONPATH=../.. python3 play.py
 ```
 
-### 07 — yaml 配置模板
+### 07 — YAML Config Templates
 
-4 个开箱即用的 `.wiki-config.yaml` 模板：个人笔记（offline）、项目文档、
-学术研究（长超时）、行业新闻（日期归档）。演示复制 + 自定义 + 加载流程。
+4 ready-to-use `.wiki-config.yaml` templates: personal notes (offline),
+project docs, academic research (long timeout), industry news (date archiving).
+Demonstrates copy + customize + load workflow.
 
 ```bash
 cd examples/07_yaml_templates && PYTHONPATH=../.. python3 play.py
 ```
 
-### 08 — 章节级锚点
+### 08 — Section-Level Anchors
 
-演示 `[[page#section]]` 和 `[[page#section|display]]` 风格的章节级 wikilink，
-包括 `get_inbound_links` / `get_outbound_links` 返回 section 字段、
-`include_context=True` 拉取上下文、DB 直接查询 page_links 表。
+Demonstrates `[[page#section]]` and `[[page#section|display]]` wikilink syntax,
+including `get_inbound_links` / `get_outbound_links` returning section fields,
+`include_context=True` for surrounding text, and direct DB queries on page_links table.
 
 ```bash
 cd examples/08_section_anchor_tracking && PYTHONPATH=../.. python3 play.py
@@ -844,58 +846,58 @@ cd examples/08_section_anchor_tracking && PYTHONPATH=../.. python3 play.py
 
 ---
 
-## 附录 A：配置文件优先级速查
+## Appendix A: Config Priority Cheat Sheet
 
 ```
-优先级从高到低：
+Priority (high to low):
 
-1. 显式参数（CLI flag 或 Python 构造参数）
+1. Explicit params (CLI flags or Python constructor args)
        ↓
-2. <wiki-root>/.wiki-config.yaml  ← wiki 自己的覆盖
+2. <wiki-root>/.wiki-config.yaml  ← wiki-specific overrides
        ↓
-3. ~/.llmwikify/llmwikify.json    ← 用户级全局
+3. ~/.llmwikify/llmwikify.json    ← user-level global
        ↓
-4. 内置 DEFAULT_CONFIG            ← 代码里硬编码兜底
+4. Built-in DEFAULT_CONFIG        ← hardcoded defaults
 ```
 
-**实战**：
+**Practical examples**:
 
-- 想给"个人 wiki"换数据库名 → 改 `~/.wikis/personal/.wiki-config.yaml`
-- 想给所有 wiki 换 LLM provider → 改 `~/.llmwikify/llmwikify.json`
+- Change database name for "personal wiki" → edit `~/.wikis/personal/.wiki-config.yaml`
+- Change LLM provider for all wikis → edit `~/.llmwikify/llmwikify.json`
 - 想测试新功能 → CLI 加 flag（最优先）
 
 详见 [CONFIGURATION_GUIDE.md](./CONFIGURATION_GUIDE.md)。
 
 ---
 
-## 附录 B：CLI vs Python API 决策表
+## Appendix B: CLI vs Python API Decision Table
 
-| 我想… | CLI | Python API |
+| I want to… | CLI | Python API |
 |---|---|---|
-| 初始化 wiki | `llmwikify init --agent opencode` | `Wiki(path).init(agent="opencode")` |
-| Ingest 1 个文件 | `llmwikify ingest a.pdf` | `wiki.ingest("a.pdf")` |
-| 写页面 | `llmwikify write_page "page" "# content"` | `wiki.write_page("page", "# content")` |
-| 搜索 | `llmwikify search "kw" -l 10` | `wiki.search("kw", limit=10, backend="fts5")` |
-| 启动 server | `llmwikify serve --web` | `WikiServer(wiki, enable_webui=True).run()` |
+| Initialize wiki | `llmwikify init --agent opencode` | `Wiki(path).init(agent="opencode")` |
+| Ingest 1 file | `llmwikify ingest a.pdf` | `wiki.ingest("a.pdf")` |
+| Write a page | `llmwikify write_page "page" "# content"` | `wiki.write_page("page", "# content")` |
+| Search | `llmwikify search "kw" -l 10` | `wiki.search("kw", limit=10, backend="fts5")` |
+| Start server | `llmwikify serve --web` | `WikiServer(wiki, enable_webui=True).run()` |
 | Chat (SSE) | `curl -N .../api/agent/chat` | `httpx.stream("POST", ...)` |
-| 因子计算 | （CLI 无） | `compute_and_store_factor("slug", ...)` |
-| 因子回测 | `curl -X POST .../api/factor/<slug>/backtest` | `run_factor_backtest(slug="...")` |
-| 知识图谱 | `llmwikify graph-analyze --json` | `wiki.analyze_graph()` |
-| 自定义工作流 | 拼 shell | 直接 import `Wiki` + `ReActEngine` |
+| Factor computation | (CLI not available) | `compute_and_store_factor("slug", ...)` |
+| Factor backtest | `curl -X POST .../api/factor/<slug>/backtest` | `run_factor_backtest(slug="...")` |
+| Knowledge graph | `llmwikify graph-analyze --json` | `wiki.analyze_graph()` |
+| Custom workflows | Chain shell commands | Import `Wiki` + `ReActEngine` directly |
 
-**经验法则**：
+**Rule of thumb**:
 
-- 探索 / 调试 → CLI 更快
-- 自动化 / 集成 → Python API
-- 复杂流程 → CLI 拼脚本 + 共享 `.wiki-config.yaml`
+- Exploration / debugging → CLI is faster
+- Automation / integration → Python API
+- Complex pipelines → CLI scripts + shared `.wiki-config.yaml`
 
 ---
 
-## 附录 C：MCP 客户端接入示例
+## Appendix C: MCP Client Integration Examples
 
 ### Claude Desktop
 
-`~/.config/claude_desktop_config.json`：
+`~/.config/claude_desktop_config.json`:
 
 ```json
 {
@@ -909,11 +911,11 @@ cd examples/08_section_anchor_tracking && PYTHONPATH=../.. python3 play.py
 }
 ```
 
-重启 Claude Desktop → 看左下角工具图标 → 应该有 26 个 `wiki_*` 工具。
+Restart Claude Desktop → look for tool icon in bottom-left → should show 26 `wiki_*` tools.
 
 ### opencode
 
-`~/.config/opencode/opencode.json`：
+`~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -929,7 +931,7 @@ cd examples/08_section_anchor_tracking && PYTHONPATH=../.. python3 play.py
 
 ### Cursor
 
-`~/.cursor/mcp.json`：
+`~/.cursor/mcp.json`:
 
 ```json
 {
@@ -942,10 +944,10 @@ cd examples/08_section_anchor_tracking && PYTHONPATH=../.. python3 play.py
 }
 ```
 
-### MCPorter Bridge（多 MCP 聚合）
+### MCPorter Bridge (Multi-MCP Aggregation)
 
-详见 [docs/MCPORTER_DEPLOYMENT.md](./MCPORTER_DEPLOYMENT.md)。把
-llmwikify + 其他 MCP 聚合到 `mcporter-bridge` 一个 stdio 端点。
+See [docs/MCPORTER_DEPLOYMENT.md](./MCPORTER_DEPLOYMENT.md). Aggregates
+llmwikify + other MCP servers into a single `mcporter-bridge` stdio endpoint.
 
 ---
 
