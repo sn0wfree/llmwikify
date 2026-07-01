@@ -1,5 +1,8 @@
 # `archive/` — Frozen Legacy Code
 
+> ⚠️ **历史参考，不维护**。当前架构以 [`ARCHITECTURE.md`](../../../ARCHITECTURE.md) v0.38 为准。
+> `reports/` 子目录是 v0.13–v0.41 时代的设计/迁移报告，仅作考古。
+
 This directory contained code archived (via `git mv`, never deleted)
 during the v0.42 → v0.4 god-class decomposition. **As of 2026-06-19,
 all v0.41 archive content has been physically removed** (D6-3 cleanup).

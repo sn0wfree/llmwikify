@@ -136,12 +136,70 @@ Historical documents kept for reference. Not actively maintained.
 
 ---
 
+## 🔌 API Reference (`docs/api/`)
+
+Per-module API documentation. Generated/synced with source code; serves as the
+authoritative reference for individual endpoints.
+
+| Doc | Scope |
+|-----|-------|
+| [agent.md](api/agent.md) | `AgentChat` REST + SSE endpoints (`/api/agent/*`) |
+
+---
+
+## 🩺 Diagnostics (`docs/diagnostics/`)
+
+Per-module architecture and health diagnostics. Generated when a module's
+complexity warrants deep analysis.
+
+| Doc | Scope |
+|-----|-------|
+| [chat-architecture-2026-06.md](diagnostics/chat-architecture-2026-06.md) | Chat 模块 (115 文件 / ~23,500 行 / 21 张表) 架构诊断 v0.36 时代 |
+
+---
+
+## 🧪 LLM Code Gen (`docs/llm_code_generation/`)
+
+LLM-driven 量化因子代码生成的经验库。Prompt 设计、失败模式、ReAct 流程
+优化的累积知识，用于指导 reproduction/ pipeline 改进。
+
+| Doc | Scope |
+|-----|-------|
+| [README.md](llm_code_generation/README.md) | 索引 |
+| [LESSONS_LEARNED.md](llm_code_generation/LESSONS_LEARNED.md) | 项目成果 + 关键教训 |
+| [PARSING_FAILURE_MODES.md](llm_code_generation/PARSING_FAILURE_MODES.md) | LLM 代码生成 5 大失败模式 |
+| [PROMPT_ENGINEERING.md](llm_code_generation/PROMPT_ENGINEERING.md) | Prompt 设计原则 |
+| [REACT_FLOW_OPTIMIZATION.md](llm_code_generation/REACT_FLOW_OPTIMIZATION.md) | ReAct 流程优化策略 |
+
+---
+
+## 📜 Principles (`docs/principles/`)
+
+功能/子系统的开发原则，**不是**设计稿（设计稿在 `designs/`）。
+
+| Doc | Scope |
+|-----|-------|
+| [reproduction-principles.md](principles/reproduction-principles.md) | 研报复现功能开发原则 v1.1 |
+
+---
+
+## 📋 TODO (`docs/TODO.md`)
+
+跨版本 in-flight 待办清单。当前主要是 reproduction/ Phase 3+ 优化项。
+
+| Doc | Scope |
+|-----|-------|
+| [TODO.md](TODO.md) | Phase 3+ 优化待办（子因子拆分、sourcing 改进等） |
+
+---
+
 ## 🗂 Layout Summary
 
 ```
 docs/
 ├── README.md                          # THIS FILE
 ├── LLM_WIKI_PRINCIPLES.md             # Core (README-referenced)
+├── TUTORIAL.md                        # 5 个端到端使用场景
 ├── CONFIGURATION_GUIDE.md             # User guides
 ├── KNOWN_ISSUES.md
 ├── MCP_SETUP.md
@@ -149,10 +207,17 @@ docs/
 ├── QMD_SETUP.md
 ├── REFERENCE_TRACKING_GUIDE.md
 │
-├── designs/                           # 24 active/recent feature designs
-├── releases/                          # 6 per-version notes (v0.32 → v0.38)
-├── research/                          # 1 landscape research doc
+├── api/                               # API reference (1 doc)
+├── diagnostics/                       # Architecture diagnostics (1 doc)
+├── llm_code_generation/               # LLM 代码生成经验库 (5 docs)
+├── principles/                        # 开发原则 (1 doc)
+├── TODO.md                            # in-flight 待办
+│
+├── designs/                           # 64 active/recent feature designs
+├── releases/                          # 7 per-version notes (v0.32 → v0.38)
+├── research/                          # 4 landscape research docs
 ├── issues/                            # bug reports + issue tracker
+├── summaries/                         # 4 experiment summaries
 └── archive/
     ├── done/                          # 3 implemented designs
     ├── status/                        # 1 expired status snapshot
