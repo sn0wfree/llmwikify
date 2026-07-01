@@ -18,6 +18,23 @@
 
 ---
 
+## 📸 Screenshots
+
+WebUI screenshots for reference (dark theme, English interface):
+
+| Screenshot | Description |
+|------------|-------------|
+| [`screenshots/chat.png`](screenshots/chat.png) | Chat + ReAct Agent with tool calls |
+| [`screenshots/editor.png`](screenshots/editor.png) | Markdown Editor with live preview |
+| [`screenshots/graph.png`](screenshots/graph.png) | Knowledge Graph (D3.js force-directed) |
+| [`screenshots/dashboard.png`](screenshots/dashboard.png) | Dashboard with metrics and activity |
+| [`screenshots/factor.png`](screenshots/factor.png) | Quant Factor Detail (6-layer view) |
+| [`screenshots/backtest.png`](screenshots/backtest.png) | Backtest Platform with IC heatmap |
+| [`screenshots/insights.png`](screenshots/insights.png) | Insights (synthesis + graph analysis) |
+| [`screenshots/autoresearch.png`](screenshots/autoresearch.png) | AutoResearch (6-step research panel) |
+
+---
+
 ## 🛠 User Guides
 
 | Doc | Purpose |

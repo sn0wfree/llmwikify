@@ -1,138 +1,180 @@
 # llmwikify
 
-> **Build persistent, LLM-maintained knowledge bases — and reproduce quant research from papers.** Inspired by Karpathy's LLM Wiki Principles.
+> **Build persistent, LLM-maintained knowledge bases — and reproduce quant research from papers.**
 
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 3100+ collected](https://img.shields.io/badge/tests-3100%2B%20collected-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
-[![Version: 0.38.0](https://img.shields.io/badge/version-0.38.0-blue.svg)](pyproject.toml)
+[![Tests](https://img.shields.io/badge/tests-5900%2B%20passed-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Version](https://img.shields.io/badge/version-0.38.0-blue.svg)](pyproject.toml)
 
-> 🚀 **新用户？** 完整 5 场景教程：[`docs/TUTORIAL.md`](docs/TUTORIAL.md) ·
-> 可跑剧本：[`examples/01-05_*/`](examples/README.md) ·
-> 一键验证：`bash examples/verify_playbooks.sh`
+**llmwikify** is a Python CLI + library + unified server for building **persistent,
+LLM-maintained knowledge bases** with a dedicated **quant research reproduction pipeline**.
 
----
+![Chat Demo](docs/screenshots/chat.png)
 
 > ⚠️ **Beta Release** — APIs may shift between minor versions. Report issues on
 > [GitHub](https://github.com/sn0wfree/llmwikify/issues).
 
 ---
 
-## What is llmwikify?
+## Why llmwikify?
 
-**llmwikify** is a Python package and CLI for building **persistent,
-LLM-maintained knowledge bases**, with a dedicated **quant research reproduction
-pipeline** (Paper → 6-layer Factor → DuckDB → Backtest → L5 reflection).
-
-It is organised as four cooperating layers plus a standalone `reproduction/`
-module:
-
-| Layer | Purpose |
-|-------|---------|
-| **kernel/** | Core engines — wiki, multi-wiki, search, knowledge graph, storage |
-| **foundation/** | LLM client, prompt registry, extractors, configuration, IO |
-| **apps/** | Application services — wiki, chat (ReAct + Skills), research, agent |
-| **interfaces/** | CLI, MCP, HTTP/WebSocket server, Web UI |
-| **reproduction/** | Paper → Factor → Strategy quant pipeline (independent) |
-
-### Core Philosophy
-
-> **The wiki is a persistent, compounding artifact.** Cross-references are
-> already there. Contradictions have already been flagged. The synthesis
-> already reflects everything you've read.
-
-Based on [Karpathy's LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md):
-- **Raw sources** — Immutable inputs in `raw/`
-- **The wiki** — LLM-maintained markdown pages with cross-references
-- **The schema** — `wiki.md` tells the LLM how to maintain the wiki
-- **Quant repro** — Papers and factors live in `quant/`, separate from `wiki/`
+| | |
+|---|---|
+| 🔍 **Smart Search** | SQLite FTS5 + optional QMD hybrid (BM25 + vector + LLM reranking) |
+| 🔗 **Bidirectional Links** | Automatic `[[wikilink]]` detection with section-level granularity |
+| 🧠 **Knowledge Graph** | 8 relation types, PageRank, community detection, interactive D3.js visualization |
+| 🤖 **ReAct Agent** | Streaming chat with tool calling, confirmations, and 26 MCP tools |
+| 📊 **Quant Pipeline** | Paper → 6-layer Factor YAML → DuckDB → Backtest → L5 reflection |
+| 🌐 **Unified Server** | MCP + REST + WebSocket + Web UI in one process |
 
 ---
 
 ## Features
 
-### Wiki Core
-- **SQLite FTS5 search** — Porter stemmer, BM25 ranking, sub-second queries
-- **Bidirectional references** — Automatic `[[wikilink]]` detection with section-level granularity
-- **Query compounding** — Save query answers as persistent wiki pages (`wiki_synthesize`)
-- **Query sink** — Buffer pending updates with urgency tracking
-- **Multi-Wiki Registry** (`kernel/multi_wiki/`) — Manage local + remote wikis through one server
+### Chat + ReAct Agent
+Streaming chat with tool calling, confirmations, and 26 MCP tools. The agent can search your wiki, analyze sources, and generate insights — all with human-in-the-loop confirmations.
 
-### Smart Lint & Synthesis
-- **Smart Lint 2.0** — Broken links, orphans, contradictions, outdated pages, knowledge gaps, redundancy alerts
-- **Cross-Source Synthesis** — Reinforced claims, contradictions, knowledge gaps across sources
-- **Source Analysis** — Cached LLM extraction (entities, relations, suggested pages)
-- CLIs: `lint`, `suggest-synthesis`, `knowledge-gaps`, `analyze-source`
+![Chat](docs/screenshots/chat.png)
+
+### Markdown Editor
+Split-pane live markdown editor with page tree, front-matter panel, and wikilink autocomplete. Edit, preview, and manage your wiki pages in one view.
+
+![Editor](docs/screenshots/editor.png)
 
 ### Knowledge Graph
-- **Relation engine** — 8 relation types × 3 confidence levels stored in SQLite
-- **Graph queries** — Neighbours, shortest path, statistics, context, contradiction detection
-- **Graph Analyzer** — PageRank centrality, hubs/authorities, community auto-labelling, bridge nodes
-- **Visualisation** — Interactive HTML (pyvis), SVG (graphviz), GraphML (Gephi)
+Interactive D3.js force-directed graph with PageRank node sizing, community coloring, and bridge highlighting. Explore relationships between your wiki pages visually.
 
-### Chat + Agent + Skills (`apps/chat/`, `apps/agent/`, `apps/research/`)
-- **ChatService + ReActEngine (v0.37)** — Unified ReAct loop, up to 4 tool-call rounds, streaming events (`reasoning`, `phase`, `confirmation_required`, `save_warning`, `timeout`)
-- **Skills system** (`apps/chat/skills/`) — `registry`, `pipelines`, `actions`, `workflows`, plugin loader, `wiki_query_skill`, `research_skill`, `autoresearch_compound_skill`
-- **Research engine** (`apps/research/`) — Web search + structured reasoning + quality gate + harness eval
-- **Dynamic Workflow DSL (LAL)** — Strict validation, alias rejection, subagent LLM inheritance, configurable retry/backoff
-- **Agent runtime** (`apps/agent/`) — DreamEditor (async proposal + human confirmation), Scheduler (croniter), Hooks, Notifications
+![Graph](docs/screenshots/graph.png)
 
-### Quant Reproduction (`reproduction/`) — first-class
+### Dashboard
+Track your knowledge growth with metrics cards, Wiki Dream activity timeline, and health indicators. See how your wiki evolves over time.
 
-> **20-phase refactor complete** (2026-06-24): 8 subpackages, 0 top-level files.
+![Dashboard](docs/screenshots/dashboard.png)
 
-| Subpackage | Purpose |
-|------------|---------|
-| `common/` | 基础设施 (config, paths, errors, utils, llm_factory) |
-| `data_source/` | 数据源 (router, universe, akshare, clickhouse, ifind) |
-| `codegen/` | 代码生成 (llm_code, react_engine, compiler, repair, semantic, metadata, ast/) |
-| `prompts/` | Prompt 系统 (group, registry, loader, renderer, store, builtin/) |
-| `backtest_pkg/` | 回测 (factor_backtest, run_backtest, metrics, strategies, l5_validation, l5_orchestrator) |
-| `persist/` | 持久化 (factor_library, sessions, run) |
-| `paper_understanding/` | 论文理解 (extract_paper, extract_factors, extract_strategy, quant_wiki, schemas, contracts, llm_extraction/) |
-| `pipeline/` | 流水线框架 (config, runner, workspace, react, stages/) |
+### Quant: Factor Detail
+6-layer factor view with IC charts, quantile curves, risk radar, and hypothesis lists. Deep dive into any factor's performance and characteristics.
 
-- **Paper Extraction Pipeline** — Trigger via `POST /api/paper/start`; PDF/Markdown → structured JSON via `repro_extract.yaml`, `repro_factor.yaml`, `repro_factor_full.yaml` prompts
-- **6-layer Factor YAML** — `quant/factors/{asset_type}/{category}/{slug}.yaml` covering L1 logic, L2 computation, L3 financial intuition, L4 hypotheses, L5 validation, L6 risk; see [docs/designs/factor_library_framework.md](docs/designs/factor_library_framework.md)
-- **Factor library API** (`persist/factor_library.py`) — Read/write YAML, rebuild `quant/factors/index.yaml`, list by category
-- **Factor value store** (`backtest_pkg/factor_value_store.py`) — DuckDB long-table `factor_values(date, stock, factor_name, value)` at `quant/factor.duckdb`
-- **Backtesting** (`backtest_pkg/factor_backtest.py`) — Single-stock + cross-sectional, IC/RankIC, quantile groups, long-short, tradability filter
-- **L5 reflection** (`backtest_pkg/l5_orchestrator.py`, `l5_validation.py`) — Stability analysis, OOS K-fold, reflection-driven optimisation
-- **Multi-factor / Parquet** — 101 Formulaic Alphas style multi-factor extraction; local Parquet ingestion + LLM-generated factor formula code
-- **Pipeline Framework** (`pipeline/`) — Config-driven pipeline with 4 stages (paper_understanding, codegen, backtest, persist_factor), ReAct-based error recovery, CLI entry point
+![Factor](docs/screenshots/factor.png)
 
-### Web UI
-- **React + TypeScript SPA** (Vitest tested)
-- **Markdown editor** — Live preview, front-matter panel, wikilink autocomplete
-- **Interactive Graph View** — D3.js, PageRank sizing, community colours, bridge highlighting
-- **Insights dashboard** — Cross-source synthesis, knowledge gaps, graph analysis
-- **Chat console** — ReAct streaming, tool-call rounds, confirmations, regenerate, abort
-- **Quant pages** — Paper extraction status, Factor library viewer/editor, backtest summary
+### Quant: Backtest Platform
+Run single-factor and strategy backtests with IC heatmaps, group return bars, equity curves, and comprehensive KPI metrics.
 
-### Extraction & Ingestion
-- **MarkItDown unified extractor** — PDF, Word, Excel, PowerPoint, images, audio
-- **Web / YouTube** — trafilatura + transcript API
-- **File watcher** — Watch `raw/`, optional auto-ingest
+![Backtest](docs/screenshots/backtest.png)
 
-### MCP Server
-- **26 wiki tools** exposed over MCP (stdio + HTTP), incl. scoped variants for multi-wiki, cross-wiki search, and registry management
+---
+
+## Quick Start
+
+```bash
+# Install
+pip install llmwikify
+
+# Initialize a wiki
+llmwikify init
+cd my-wiki
+
+# Ingest a source
+llmwikify ingest document.pdf
+
+# Start the server (MCP + REST + Web UI)
+llmwikify serve --web --port 8765
+# Open http://localhost:8765
+```
+
+---
+
+## Tutorial
+
+New to llmwikify? Start with our **5 end-to-end scenarios**:
+
+| # | Scenario | Description |
+|---|----------|-------------|
+| 1 | Personal Reading Notes | PDF → searchable wiki with cross-references |
+| 2 | Company Due-Diligence KB | Multi-source analysis → knowledge graph |
+| 3 | Multi-Wiki Collaboration | Manage multiple wikis through one server |
+| 4 | Chat + ReAct Agent | LLM-powered Q&A with tool calling |
+| 5 | Quant Reproduction | Paper → Factor → Backtest → L5 reflection |
+
+📖 **Full tutorial**: [`docs/TUTORIAL.md`](docs/TUTORIAL.md) (40-60 min read)
+🎯 **Runnable examples**: [`examples/`](examples/README.md) (8 playbooks, no LLM required)
+
+---
+
+## Features at a Glance
+
+| Feature | Description |
+|---------|-------------|
+| **Wiki Core** | FTS5 search, bidirectional references, query compounding, multi-wiki registry |
+| **Smart Lint** | Broken links, orphans, contradictions, outdated pages, knowledge gaps |
+| **Knowledge Graph** | 8 relation types, PageRank, community detection, HTML/SVG/GraphML export |
+| **Chat + Agent** | ReAct streaming, 26 MCP tools, skills system, research engine |
+| **Quant Reproduction** | Paper extraction, 6-layer factors, DuckDB, backtesting, L5 reflection |
+| **Web UI** | React SPA: editor, graph, dashboard, chat, quant pages |
+| **Extraction** | PDF, Word, Excel, PowerPoint, images, audio, web, YouTube |
+| **MCP Server** | 26 tools over stdio + HTTP, multi-wiki support |
+
+---
+
+## Architecture
+
+```mermaid
+graph TB
+    subgraph "Interfaces"
+        CLI[CLI]
+        MCP[MCP Server]
+        REST[REST API]
+        UI[Web UI]
+    end
+    
+    subgraph "Apps"
+        Wiki[Wiki Service]
+        Chat[Chat + ReAct]
+        Research[Research Engine]
+        Agent[Agent Runtime]
+    end
+    
+    subgraph "Kernel"
+        Engine[Wiki Engine]
+        Graph[Knowledge Graph]
+        Search[Search Engine]
+        Storage[SQLite Storage]
+    end
+    
+    subgraph "Foundation"
+        LLM[LLM Client]
+        Extract[Extractors]
+        Config[Configuration]
+    end
+    
+    subgraph "Reproduction"
+        Paper[Paper Pipeline]
+        Factor[Factor Library]
+        Backtest[Backtest Engine]
+    end
+    
+    CLI --> Wiki
+    MCP --> Wiki
+    REST --> Wiki
+    UI --> Chat
+    Chat --> Engine
+    Research --> LLM
+    Paper --> LLM
+    Factor --> Storage
+    Backtest --> Factor
+```
 
 ---
 
 ## Installation
 
 ```bash
-# Basic (zero hard dependencies — only stdlib + jinja2 + pyyaml + requests)
-pip install llmwikify
-
-# Full (all features)
-pip install llmwikify[all]
-
-# Development
-git clone https://github.com/sn0wfree/llmwikify.git
-cd llmwikify
-pip install -e ".[dev]"
+pip install llmwikify              # Core (zero hard deps)
+pip install llmwikify[all]         # Full features
+pip install llmwikify[web]         # Web UI + REST
+pip install llmwikify[mcp]         # MCP server
+pip install llmwikify[extractors]  # PDF/Office/media
 ```
 
 ### Optional Extras
@@ -142,7 +184,7 @@ pip install -e ".[dev]"
 | `extractors` | PDF / Office / images / audio / YouTube via MarkItDown |
 | `mcp` | MCP server (`fastmcp`) |
 | `watch` | Filesystem watching (`watchdog`) |
-| `graph` | Graph visualisation + community detection |
+| `graph` | Graph visualization + community detection |
 | `web` | FastAPI / Starlette / Uvicorn for the unified server |
 | `agent` | Scheduler + filelock + DuckDuckGo / Tavily search |
 | `llm` | `tiktoken` for token counting |
@@ -150,200 +192,49 @@ pip install -e ".[dev]"
 
 ---
 
-## Quick Start
+## CLI Reference
 
-### 1. Initialise a wiki
-```bash
-llmwikify init
-# Creates: raw/, wiki/, wiki.md, .llmwikify.db
-```
-
-### 2. Ingest sources
-```bash
-llmwikify ingest document.pdf
-llmwikify ingest document.pdf --self-create        # Auto-create wiki pages
-llmwikify ingest https://example.com/article
-llmwikify ingest https://youtube.com/watch?v=abc
-llmwikify batch raw/pdfs/ --self-create            # Batch ingest
-```
-
-### 3. Search & query
-```bash
-llmwikify search "topic" -l 10
-llmwikify references "Page Name" --detail
-llmwikify lint --format=brief
-```
-
-### 4. Analyse the knowledge graph
-```bash
-llmwikify graph-analyze              # PageRank, communities, suggestions
-llmwikify graph-analyze --json
-llmwikify suggest-synthesis
-llmwikify knowledge-gaps
-```
-
-### 5. Start the unified server (MCP + REST + Web UI)
-```bash
-llmwikify serve --web --port 8765 --host 0.0.0.0
-curl http://localhost:8765/api/health
-# OpenAPI docs: http://localhost:8765/docs
-```
-
-> Do not run with `--reload`; see `AGENTS.md` for project-specific server rules.
-
-### 6. Multi-wiki registry (v0.31+)
-```bash
-# 单一 .wiki-config.yaml 统一管理多个 wiki
-llmwikify serve --web --multi-wiki --port 8765
-# → 暴露 26 个 wiki_* 工具 + wiki_list/switch/register/search_cross/scan
-```
-
-### 7. Chat + ReAct Agent (v0.37+)
-```bash
-# server 起来后，浏览器开 http://localhost:8765/ 走 WebUI Chat 面板；
-# 或脚本化：
-curl -N -H "Authorization: Bearer mysecret" \
-     -H "Content-Type: application/json" \
-     -X POST http://localhost:8765/api/agent/chat \
-     -d '{"session_id":"demo","message":"对比腾讯和阿里 2024 Q3 云业务"}'
-# → SSE 流：reasoning / phase / tool_call / stream_end / save_warning
-```
-
-### 8. Quant reproduction (Paper → Factor → Backtest)
-```bash
-# Initialise quant/ scaffolding
-llmwikify quant-init
-# -> quant/{factors, papers, factorbacktest, strategies, datacache, factor.duckdb}
-
-# Trigger paper extraction (POST or via Web UI)
-curl -X POST http://localhost:8765/api/paper/start \
-     -H "Content-Type: application/json" \
-     -d '{"paper_id": "<id>", "source": "raw/<id>.pdf"}'
-
-# Inspect generated 6-layer Factor YAMLs
-ls quant/factors/stock/price/                       # e.g. momentum_20d.yaml
-curl http://localhost:8765/api/factor/library/list
-curl http://localhost:8765/api/factor/library/stock/price/momentum_20d
-
-# Run a backtest, persisted to quant/factorbacktest/*.md and quant/factor.duckdb
-curl -X POST http://localhost:8765/api/factor/momentum_20d/backtest
-```
-
-End-to-end design:
-- [Paper extraction pipeline](docs/designs/paper_extraction_pipeline.md)
-- [Factor library framework](docs/designs/factor_library_framework.md)
-- [Factor reflection design](docs/designs/factor_reflection_design.md)
-
-> 📖 **要更深入的完整教程？** 看 [docs/TUTORIAL.md](docs/TUTORIAL.md) — 5 个
-> 真实场景（个人笔记 / 公司尽调 / 多 wiki 协作 / Chat SSE / 量化复现）每
-> 个都含手把手命令 + 预期输出 + ASCII/Mermaid 架构图 + 故障排查。配
-> 套可跑剧本：[`examples/`](examples/README.md)。
+| Command | Description |
+|---------|-------------|
+| `init` | Initialize a wiki |
+| `ingest` | Ingest a source file or URL |
+| `batch` | Batch ingest a directory |
+| `search` | Full-text search |
+| `references` | Show inbound/outbound links |
+| `lint` | Health check |
+| `graph-analyze` | PageRank, communities, suggestions |
+| `export-graph` | Export visualization (HTML/SVG/GraphML) |
+| `synthesize` | Save query answer as a wiki page |
+| `serve` | Start unified server (MCP + REST + Web UI) |
+| `quant-init` | Scaffold quant/ directory |
+| `wiki_*` | 26 MCP tools for LLM integration |
 
 ---
 
-## MCP Server (26 Tools)
-
-Wiki maintenance and query:
-
-| Tool | Description |
-|------|-------------|
-| `wiki_init` | Initialise wiki structure |
-| `wiki_ingest` | Ingest a source file |
-| `wiki_write_page` | Write/update a wiki page |
-| `wiki_read_page` | Read a wiki page |
-| `wiki_search` | Full-text search (FTS5) |
-| `wiki_lint` | Health check |
-| `wiki_status` | Status overview |
-| `wiki_log` | Append log entry |
-| `wiki_recommend` | Get recommendations |
-| `wiki_build_index` | Build reference index |
-| `wiki_read_schema` | Read `wiki.md` |
-| `wiki_update_schema` | Update `wiki.md` |
-| `wiki_synthesize` | Save query answer as wiki page |
-| `wiki_sink_status` | Sink buffer overview |
-| `wiki_references` | Page references |
-| `wiki_analyze_source` | Analyse raw source file |
-| `wiki_suggest_synthesis` | Cross-source synthesis suggestions |
-| `wiki_knowledge_gaps` | Knowledge gap + outdated + redundancy |
-| `wiki_graph` | Graph query / modify |
-| `wiki_graph_analyze` | Graph export / detect / report / analyse |
-
-Multi-wiki management:
-
-| Tool | Description |
-|------|-------------|
-| `wiki_list` | List all registered wikis |
-| `wiki_switch` | Switch to a different wiki |
-| `wiki_register` | Register a new wiki |
-| `wiki_unregister` | Unregister a wiki |
-| `wiki_search_cross` | Search across multiple wikis |
-| `wiki_scan` | Scan directories for wikis |
-
-> `wiki_status` and `wiki_search` accept an optional `wiki_id` to scope the
-> request to a specific registered wiki.
-
----
-
-## QMD Hybrid Search (Optional)
-
-For larger wikis (1000+ pages), enable QMD for semantic search with LLM
-reranking:
-
-- **Hybrid**: BM25 keyword + vector embeddings
-- **Query Expansion**: LLM generates semantic variants
-- **LLM Reranking**: Cross-encoder reorders results
-- **Auto Recommendation**: Prompts to enable at scale
-
-```bash
-# Check status and recommendations
-llmwikify qmd status
-
-# Start QMD MCP server (separate process)
-qmd mcp --http --port 8181
-
-# Use QMD backend
-llmwikify search "your query" --backend qmd
-llmwikify qmd search "your query"
-```
-
-See [QMD Setup Guide](docs/QMD_SETUP.md) for installation instructions.
-
----
-
-## Python Usage
+## Python API
 
 ```python
-from llmwikify import Wiki, create_wiki
+from llmwikify import create_wiki
 
 # Create or open a wiki
 wiki = create_wiki("./my-wiki")
 
 # Write a page
-wiki.write_page("Python/Patterns/Singleton", """
-# Singleton Pattern
-Ensures a class has only one instance...
-""")
+wiki.write_page("Python/Singleton", "# Singleton Pattern\nEnsures one instance...")
 
 # Read a page
-content = wiki.read_page("Python/Patterns/Singleton")
+content = wiki.read_page("Python/Singleton")
 
-# Search (supports FTS5 and QMD backends)
-results = wiki.search("singleton", limit=10, backend="fts5")
+# Search
+results = wiki.search("singleton", limit=10)
 
 # Inbound/outbound links
-inbound_links = wiki.get_inbound_links("Python/Patterns/Singleton")
-outbound_links = wiki.get_outbound_links("Python/Patterns/Singleton")
+inbound = wiki.get_inbound_links("Python/Singleton")
+outbound = wiki.get_outbound_links("Python/Singleton")
 
 # Status / lint
 status = wiki.status()
 lint_result = wiki.lint()
-
-# Ingest a raw source (extracts + writes to raw/)
-result = wiki.ingest_source("raw/pdfs/paper.pdf")
-
-# Build reference index
-idx = wiki.build_index()
-print(idx["total_pages"], "pages indexed")
 
 wiki.close()
 ```
@@ -357,192 +248,60 @@ from llmwikify.interfaces.server import WikiServer
 wiki = Wiki("./my-wiki")
 server = WikiServer(
     wiki,
-    api_key="optional-secret",     # Bearer auth
-    enable_mcp=True,                # 26 wiki_* tools
-    enable_rest=True,               # /api/wiki/* etc.
-    enable_webui=True,              # React SPA at /
+    api_key="optional-secret",
+    enable_mcp=True,
+    enable_rest=True,
+    enable_webui=True,
 )
 server.run(host="0.0.0.0", port=8765)
-# OpenAPI docs: http://localhost:8765/docs
 ```
-
-### MCP integration (std IO for LLM clients)
-
-```python
-from llmwikify import Wiki
-from llmwikify.interfaces.mcp import create_mcp_server
-
-wiki = Wiki("./knowledge-base")
-mcp = create_mcp_server(wiki, name="my-wiki")
-mcp.run(transport="stdio")
-```
-
-> 旧 `MCPServer(wiki).serve()` 已在 v0.30 废弃；统一为 `WikiServer` + `llmwikify serve` CLI。
-
-### Quant reproduction (Python)
-
-```python
-from llmwikify.reproduction.factor_library import (
-    list_factors, read_factor_yaml, write_factor_yaml,
-)
-from llmwikify.reproduction.factor_value_store import (
-    compute_and_store_factor, query_factor_values,
-)
-from llmwikify.reproduction.factor_backtest import run_factor_backtest
-
-# Load a 6-layer factor definition
-factor = read_factor_yaml("stock/price/momentum_20d")
-
-# Compute and persist factor values to quant/factor.duckdb
-compute_and_store_factor("momentum_20d", subcategory="momentum", window=20)
-
-# Single-factor backtest (results land in quant/factorbacktest/)
-result = run_factor_backtest(slug="momentum_20d")
-```
-
-**Full examples:** see [examples/](examples/) for Django, Flask, Docker, and more.
 
 ---
 
-## Configuration
+## MCP Server (26 Tools)
 
-Project-wide config: `~/.llmwikify/llmwikify.json` (LLM, server defaults).
+Wiki maintenance and query:
 
-Per-wiki config: `.wiki-config.yaml` in the wiki root:
+| Tool | Description |
+|------|-------------|
+| `wiki_init` | Initialize wiki structure |
+| `wiki_ingest` | Ingest a source file |
+| `wiki_write_page` | Write/update a wiki page |
+| `wiki_read_page` | Read a wiki page |
+| `wiki_search` | Full-text search (FTS5) |
+| `wiki_lint` | Health check |
+| `wiki_status` | Status overview |
+| `wiki_references` | Page references |
+| `wiki_synthesize` | Save query answer as wiki page |
+| `wiki_graph` | Graph query / modify |
+| `wiki_graph_analyze` | Graph export / detect / report |
 
-```yaml
-orphan_detection:
-  exclude_patterns:
-    - '^\d{4}-\d{2}-\d{2}$'  # Date pages
-    - '^meeting-.*'           # Meeting notes
-  archive_directories:
-    - 'archive'
-    - 'logs'
+Multi-wiki management:
 
-llm:
-  provider: "openai"
-  model: "gpt-4o"
-  api_key: "env:OPENAI_API_KEY"
-
-mcp:
-  host: "127.0.0.1"
-  port: 8765
-  transport: "stdio"
-
-# Multi-Wiki (kernel/multi_wiki/)
-wikis:
-  default: "project-a"
-  local:
-    - id: "project-a"
-      name: "Project A"
-      path: "."
-  remote:
-    - id: "remote-docs"
-      name: "Remote Docs"
-      url: "http://wiki-server:8765"
-      api_key: "${WIKI_DOCS_API_KEY}"
-  discovery:
-    enabled: true
-    scan_paths: [".", "../", "~/wikis"]
-    scan_depth: 2
-```
-
-See [Configuration Guide](docs/CONFIGURATION_GUIDE.md) for full options.
-
----
-
-## CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `init` | Initialise a wiki |
-| `quant-init` | Scaffold `quant/` for the reproduction pipeline |
-| `ingest` | Ingest a source file or URL |
-| `batch` | Batch ingest a directory |
-| `analyze-source` | Run LLM source analysis |
-| `write_page` / `read_page` | Page CRUD |
-| `search` | FTS5 / QMD search |
-| `references` | Show inbound/outbound references |
-| `build-index` | Rebuild the reference index |
-| `fix-wikilinks` | Fix broken `[[wikilink]]` targets |
-| `lint` | Health check |
-| `status` | Status overview |
-| `log` | Append log entry |
-| `synthesize` | Save query answer as a wiki page |
-| `sink-status` | Sink buffer overview |
-| `suggest-synthesis` | Cross-source synthesis suggestions |
-| `knowledge-gaps` | Knowledge-gap analysis |
-| `graph-query` / `graph-analyze` | Graph queries + PageRank/community analysis |
-| `export-graph` | Export visualisation (HTML/SVG/GraphML) |
-| `community-detect` | Run Leiden/Louvain community detection |
-| `report` | Surprise / connection report |
-| `watch` | Watch `raw/` for new files |
-| `qmd` | QMD hybrid search subcommands |
-| `wikis` | Multi-wiki registry management |
-| `serve` | Start MCP + REST + Web UI (unified server) |
-| `db` | Low-level database utilities |
-| `help` | Show CLI help (with `--aliases`) |
-
----
-
-## REST API Surface
-
-`llmwikify serve --web` exposes:
-
-| Prefix | Purpose |
-|--------|---------|
-| `/api/wiki/*` | Page CRUD, search, lint, sink, recommend, graph |
-| `/api/wikis/*` | Multi-wiki registry (list/register/scan/reload) |
-| `/api/search/cross` | Cross-wiki search |
-| `/api/agent/*` | Chat (SSE), sessions, dream, notifications, ingest log, confirmations, config, tools |
-| `/api/paper/*` | Paper extraction pipeline (start, status, list, upload, artifacts) |
-| `/api/factor/*` | Factor library list/read/update + backtest |
-| `/api/strategy/*` | Strategy listing + backtest |
-| `/api/reproduction/*` | Reproduction sessions |
-| `/api/log/error` | Error log ingestion |
-| `/docs`, `/redoc` | OpenAPI docs |
+| Tool | Description |
+|------|-------------|
+| `wiki_list` | List all registered wikis |
+| `wiki_switch` | Switch to a different wiki |
+| `wiki_register` | Register a new wiki |
+| `wiki_search_cross` | Search across multiple wikis |
+| `wiki_scan` | Scan directories for wikis |
 
 ---
 
 ## Documentation
 
-- [TUTORIAL](docs/TUTORIAL.md) — **5 个端到端使用场景（必读）**
-- [Examples](examples/README.md) — 5 个可跑剧本
-- [Architecture](ARCHITECTURE.md) — Layered architecture, modules, data flow
-- [Configuration Guide](docs/CONFIGURATION_GUIDE.md)
-- [LLM Wiki Principles](docs/LLM_WIKI_PRINCIPLES.md) — Karpathy's original vision
-- [Migration Guide](MIGRATION.md) — Version-by-version migration notes (v0.30 → v0.38)
-- [Factor library framework](docs/designs/factor_library_framework.md) — 6-layer model
-- [Paper extraction pipeline](docs/designs/paper_extraction_pipeline.md)
-- [Factor reflection design](docs/designs/factor_reflection_design.md)
-- [Dynamic workflows guide](docs/dynamic-workflows-guide.md)
-- [LLM access layer](docs/designs/llm-access-layer.md)
-- [Multi-wiki plan](docs/designs/MULTI_WIKI_PLAN.md)
-- [WebUI unified server](docs/designs/WEBUI_UNIFIED_SERVER.md)
-- [Known Issues](docs/KNOWN_ISSUES.md)
-- [Contributing](CONTRIBUTING.md)
-
----
-
-## Testing
-
-```bash
-pytest                                # 3100+ tests collected
-pytest --cov=src/llmwikify             # With coverage
-pytest tests/reproduction/             # Quant reproduction tests (1313 passed)
-pytest tests/test_apps_chat_agent_react_engine.py  # ReAct engine
-
-# Frontend tests
-cd src/llmwikify/web/webui && npm test
-```
+- [`docs/TUTORIAL.md`](docs/TUTORIAL.md) — **5 end-to-end scenarios (must read)**
+- [`examples/`](examples/README.md) — 8 runnable playbooks
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — Layered architecture, modules, data flow
+- [`docs/CONFIGURATION_GUIDE.md`](docs/CONFIGURATION_GUIDE.md) — All config options
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — Development setup and workflow
 
 ---
 
 ## Contributing
 
-Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development
-setup, coding standards, and the contribution workflow. Project-internal agent
-rules live in [AGENTS.md](AGENTS.md).
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for development
+setup, coding standards, and the contribution workflow.
 
 ---
 
@@ -558,13 +317,6 @@ rules live in [AGENTS.md](AGENTS.md).
 ## License
 
 MIT License — see [LICENSE](LICENSE).
-
-## Credits
-
-- **PPT Generator theme system** is based on
-  [html-ppt-skill](https://github.com/lewislulu/html-ppt-skill) (MIT, © 2026
-  lewislulu). Theme tokens, category structure, and inspiration are adapted
-  from their CSS-token design system.
 
 ## Contact
 
