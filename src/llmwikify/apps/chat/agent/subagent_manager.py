@@ -110,27 +110,16 @@ class SubagentManager:
         parent_runner: AgentRunner,
         max_concurrent: int = 2,
     ) -> None:
-        # Phase 16+ (2026-06-23): ``parent_runner`` must expose the 4
-        # collaborator attributes that ``execution_context()`` reads
-        # (``_chat_service`` / ``_tool_executor`` / ``_prompt_builder``
-        # / ``_config``). We don't enforce an ``isinstance`` check
-        # because the test suite uses plain duck-typed stubs
-        # (``_StubWithAttrs``) that aren't ``AgentRunner`` subclasses
-        # but carry the same attributes. The duck-type gate at
-        # construction time catches partial subclasses / stubs
-        # early with a clear error message.
-        missing = [
-            attr for attr in (
-                "_chat_service", "_tool_executor", "_prompt_builder", "_config",
-            )
-            if not hasattr(parent_runner, attr)
-        ]
-        if missing:
-            raise TypeError(
-                f"parent_runner {type(parent_runner).__name__} is missing "
-                f"required collaborator attributes: {missing}. "
-                "SubagentManager relies on these to spawn child runners."
-            )
+        # Phase 16+ (2026-06-23): trust the ABC. ``parent_runner`` is
+        # validated lazily when ``run()`` calls
+        # ``parent.execution_context()`` — any object lacking that
+        # method will raise ``AttributeError`` at run time. The
+        # 4-field ``hasattr`` gate that used to live here was removed
+        # because the new canonical test
+        # ``tests/test_apps_chat_agent_execution_context.py``
+        # exercises non-ChatRunnerV2 ``AgentRunner`` subclasses that
+        # don't carry the 4 legacy private attrs (they implement
+        # ``execution_context()`` instead).
         self._parent = parent_runner
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._max_concurrent = max_concurrent
