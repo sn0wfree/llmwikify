@@ -10,6 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
+from llmwikify.reproduction.common.paths import WIKI_DIR_STRATEGY
 from llmwikify.reproduction.data_source.router import SynthDataSource
 from llmwikify.reproduction.persist.run import RunContext, run_reproduction
 from llmwikify.reproduction.persist.sessions import ReproductionDatabase
@@ -25,9 +26,9 @@ signal_params: {fast: 5, slow: 10}
 class _FakeWiki:
     def __init__(self, tmp: Path):
         self.wiki_dir = tmp
-        trading = tmp / "trading"
-        trading.mkdir(parents=True, exist_ok=True)
-        (trading / "01-ma.md").write_text(PAGE_MA, encoding="utf-8")
+        strategy = tmp / WIKI_DIR_STRATEGY
+        strategy.mkdir(parents=True, exist_ok=True)
+        (strategy / "01-ma.md").write_text(PAGE_MA, encoding="utf-8")
         self.written: list[tuple[str, str, str]] = []
 
     def write_page(self, name, content, page_type=None):

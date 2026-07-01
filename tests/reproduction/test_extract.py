@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import pytest
 
+from llmwikify.reproduction.common.paths import WIKI_DIR_STRATEGY
 from llmwikify.reproduction.common.utils import parse_frontmatter as _parse_frontmatter
 from llmwikify.reproduction.paper_understanding.extract_strategy import (
     VALID_SIGNAL_TYPES,
@@ -49,12 +50,12 @@ signal_type: nonsense
 
 
 class _FakeWiki:
-    def __init__(self, tmp: Path, pages: dict[str, str]):
+    def __init__(self, tmp: Path, pages: dict[str, str], subdir: str | None = None):
         self.wiki_dir = tmp
-        trading = tmp / "trading"
-        trading.mkdir(parents=True, exist_ok=True)
+        target = tmp / (subdir or WIKI_DIR_STRATEGY)
+        target.mkdir(parents=True, exist_ok=True)
         for slug, content in pages.items():
-            (trading / f"{slug}.md").write_text(content, encoding="utf-8")
+            (target / f"{slug}.md").write_text(content, encoding="utf-8")
 
 
 def test_parse_frontmatter_extracts_scalar():
@@ -131,3 +132,37 @@ def test_extract_strategy_config_takes_first_match(tmp_path):
     )
     cfg = extract_strategy_config(wiki)
     assert cfg["signal_type"] == "ma_cross"
+    assert cfg["wiki_page"] == "01-first"
+
+
+def test_extract_strategy_config_legacy_trading_ignored(tmp_path):
+    """P6 兼容窗口=0: legacy wiki/trading/ must be skipped, not read."""
+    wiki = _FakeWiki(
+        tmp_path,
+        {"trading-only": PAGE_MA_CROSS},
+        subdir="trading",
+    )
+    cfg = extract_strategy_config(wiki)
+    assert cfg["signal_type"] == "unknown"
+    assert cfg["wiki_page"] is None
+
+
+def test_extract_strategy_config_uses_wiki_dir_strategy(tmp_path):
+    """P1 path uniqueness: must read from WIKI_DIR_STRATEGY, no hardcoded subdir."""
+    assert WIKI_DIR_STRATEGY != "trading"
+    wiki = _FakeWiki(tmp_path, {"momentum-1": PAGE_MA_CROSS})
+    cfg = extract_strategy_config(wiki)
+    assert cfg["signal_type"] == "ma_cross"
+    assert cfg["wiki_page"] == "momentum-1"
+
+
+def test_extract_strategy_config_skips_page_without_signal_type(tmp_path):
+    """Pages missing signal_type are skipped, not picked as 'unknown'."""
+    page_no_signal = "---\ntitle: Bare\n---\nbody"
+    wiki = _FakeWiki(
+        tmp_path,
+        {"01-bare": page_no_signal, "02-strategy": PAGE_MA_CROSS},
+    )
+    cfg = extract_strategy_config(wiki)
+    assert cfg["signal_type"] == "ma_cross"
+    assert cfg["wiki_page"] == "02-strategy"
