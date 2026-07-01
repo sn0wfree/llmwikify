@@ -298,14 +298,14 @@ class TestFactorAPIRedirected:
         # Write a factor YAML
         factor_data = {
             "factor": {
-                "name": "test_factor",
+                "name": "factor_x",
                 "category": "price",
                 "l1": {"definition": "test"},
             }
         }
         factor_dir = factors_dir / "stock" / "price"
         factor_dir.mkdir(parents=True)
-        (factor_dir / "test_factor.yaml").write_text(
+        (factor_dir / "factor_x.yaml").write_text(
             yaml.dump(factor_data, allow_unicode=True),
             encoding="utf-8",
         )
@@ -1421,19 +1421,19 @@ class TestFactorLibraryIndexSync:
 
         factor_data = {
             "factor": {
-                "name": "test_sync_factor",
+                "name": "sync_factor_a",
                 "asset_type": "stock",
                 "category": "price",
                 "subcategory": "momentum",
                 "l1": {"definition": "test"},
             }
         }
-        write_factor_yaml("stock/price/test_sync", factor_data, project_root)
+        write_factor_yaml("stock/price/sync_factor_a", factor_data, project_root)
 
         # Index should now contain the factor
         factors = list_factors(project_root)
         names = [f["name"] for f in factors]
-        assert "test_sync_factor" in names
+        assert "sync_factor_a" in names
 
     def test_write_updates_index_stats(self, project_root):
         from llmwikify.reproduction.persist.factor_library import (
