@@ -160,10 +160,13 @@ class TestRetryAfterInLoop:
         # Use a real ok response (with .json attribute)
         ok = _ok_response()
 
-        with patch("httpx.Client.post", side_effect=[resp_429, ok]) as mock_post:
+        with patch(
+            "httpx.Client.stream",
+            side_effect=[_stream_ctx(resp_429), _stream_ctx(ok)],
+        ) as mock_stream:
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "ok"
-        assert mock_post.call_count == 2
+        assert mock_stream.call_count == 2
 
     def test_503_with_retry_after_waits_per_header(self, monkeypatch):
         client = _make_client()
@@ -174,7 +177,10 @@ class TestRetryAfterInLoop:
         resp_503.close = MagicMock()
         ok = _ok_response()
 
-        with patch("httpx.Client.post", side_effect=[resp_503, ok]):
+        with patch(
+            "httpx.Client.stream",
+            side_effect=[_stream_ctx(resp_503), _stream_ctx(ok)],
+        ):
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "ok"
 
@@ -187,7 +193,10 @@ class TestRetryAfterInLoop:
         resp_429.close = MagicMock()
         ok = _ok_response()
 
-        with patch("httpx.Client.post", side_effect=[resp_429, ok]):
+        with patch(
+            "httpx.Client.stream",
+            side_effect=[_stream_ctx(resp_429), _stream_ctx(ok)],
+        ):
             result = client.chat([{"role": "user", "content": "hi"}])
         assert result == "ok"
 
@@ -283,7 +292,9 @@ class TestMetricsIntegration:
     def test_metrics_record_successful_call(self, monkeypatch):
         reset_retry_metrics()
         client = _make_client()
-        with patch("httpx.Client.post", return_value=_ok_response("hi")):
+        with patch(
+            "httpx.Client.stream", return_value=_stream_ctx(_ok_response("hi")),
+        ):
             client.chat([{"role": "user", "content": "hi"}])
         m = get_retry_metrics()
         assert m.calls_completed == 1
@@ -299,8 +310,8 @@ class TestMetricsIntegration:
         client = _make_client()
         ok = _ok_response("hi")
         with patch(
-            "httpx.Client.post",
-            side_effect=[httpx.ReadTimeout("timeout"), ok],
+            "httpx.Client.stream",
+            side_effect=[httpx.ReadTimeout("timeout"), _stream_ctx(ok)],
         ):
             client.chat([{"role": "user", "content": "hi"}])
         m = get_retry_metrics()
@@ -317,7 +328,7 @@ class TestMetricsIntegration:
         reset_retry_metrics()
         client = _make_client()
         with patch(
-            "httpx.Client.post",
+            "httpx.Client.stream",
             side_effect=httpx.ReadTimeout("timeout"),
         ):
             with pytest.raises(httpx.ReadTimeout):
@@ -338,7 +349,8 @@ class TestMetricsIntegration:
         from llmwikify.foundation.llm.streamable import LLMRequestError
 
         with patch(
-            "httpx.Client.post", return_value=_err_response(400, b"bad")
+            "httpx.Client.stream",
+            return_value=_stream_ctx(_err_response(400, b"bad")),
         ):
             with pytest.raises(LLMRequestError):
                 client.chat([{"role": "user", "content": "hi"}])
@@ -353,12 +365,18 @@ class TestMetricsIntegration:
 
 
 def _ok_response(content: str = "ok") -> MagicMock:
+    """Build a mock streaming response with SSE-formatted iter_lines.
+
+    The chat() method goes through client.stream() (not client.post()),
+    so we need a response that supports iter_lines() to yield SSE events.
+    """
     resp = MagicMock()
     resp.status_code = 200
     resp.content = b""
     resp.close = MagicMock()
     resp.headers = {}
-    resp.json.return_value = {"choices": [{"message": {"content": content}}]}
+    sse = f'data: {{"choices":[{{"delta":{{"content":"{content}"}}}}]}}\n\ndata: [DONE]\n\n'
+    resp.iter_lines.return_value = iter(sse.splitlines(keepends=True))
     return resp
 
 
@@ -366,9 +384,23 @@ def _err_response(status_code: int, body: bytes = b"") -> MagicMock:
     resp = MagicMock()
     resp.status_code = status_code
     resp.content = body
+    resp.read.return_value = body
     resp.close = MagicMock()
     resp.headers = {}
     return resp
+
+
+def _stream_ctx(resp: MagicMock) -> MagicMock:
+    """Wrap a mock response in a streaming context manager.
+
+    The chat() method uses httpx.Client.stream("POST", ...) which returns
+    a context manager. We need to mock the entire chain so __enter__()
+    returns the resp.
+    """
+    ctx = MagicMock()
+    ctx.__enter__ = MagicMock(return_value=resp)
+    ctx.__exit__ = MagicMock(return_value=False)
+    return ctx
 
 
 def _make_client() -> StreamableLLMClient:
