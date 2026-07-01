@@ -220,6 +220,15 @@ class BacktestResultPage(WikiPage):
     max_drawdown: float | None = None
     total_trades: int | None = None
 
+    # Time-series data (P3 invariant: equity_curve >= 2 points; final_cash
+    # must match the tail value within 1% — guarded in test_invariants.py).
+    # Field types are intentionally loose (list[Any], dict[str, Any])
+    # because the YAML-ish frontmatter parser in common/utils.py cannot
+    # round-trip nested structures with strict inner types. A proper
+    # YAML parser upgrade is tracked as a separate refactor.
+    equity_curve: list[Any] = Field(default_factory=list)
+    monthly_returns: dict[str, Any] = Field(default_factory=dict)
+
     # Metadata
     adj_mode: str | None = None
     hedge: str | None = None
@@ -367,6 +376,10 @@ def render_page(page: WikiPage, body: str = "") -> str:
             lines.append(f"max_drawdown: {page.max_drawdown:.4f}")
         if page.total_trades is not None:
             lines.append(f"total_trades: {page.total_trades}")
+        if page.equity_curve:
+            lines.append(f"equity_curve: {page.equity_curve}")
+        if page.monthly_returns:
+            lines.append(f"monthly_returns: {page.monthly_returns}")
         if page.adj_mode:
             lines.append(f"adj_mode: {page.adj_mode}")
         if page.hedge:
