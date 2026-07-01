@@ -47,7 +47,19 @@ def server_url():
 @pytest.fixture
 def test_pdf():
     """Path to test PDF file."""
-    return Path(__file__).parent.parent / "fixtures" / "test.pdf"
+    return Path(__file__).parent.parent.parent / "raw" / "1601.00991v3.pdf"
+
+
+@pytest.fixture
+def sample_markdown_file():
+    """Path to sample markdown file for ingest testing."""
+    return Path(__file__).parent.parent / "fixtures" / "sample_doc.md"
+
+
+@pytest.fixture
+def batch_dir():
+    """Path to batch sources directory."""
+    return Path(__file__).parent.parent / "fixtures" / "batch_sources"
 
 
 @pytest.fixture

@@ -134,7 +134,7 @@ wiki.build_index()
 
 ---
 
-### Step 2.2: Analyze Source ⏭️
+### Step 2.2: Analyze Source ✅
 
 ```python
 # Analyze a source file (requires LLM)
@@ -142,7 +142,7 @@ result = wiki.analyze_source("raw/paper.pdf")
 print(f"Entities: {len(result.get('entities', []))}")
 ```
 
-**Result:** SKIPPED
+**Result:** PASSED
 
 ---
 
@@ -631,6 +631,309 @@ for link in outbound:
 inbound = wiki.get_inbound_links("python-style", include_context=True)
 for link in inbound:
     print(f"Context: {link.get('context', '')}")
+```
+
+**Result:** PASSED
+
+---
+
+## 09 Ingest Workflow
+
+### Step 9.1: Ingest Single File ✅
+
+```python
+# Ingest a single file
+result = wiki.ingest_source("path/to/document.md")
+print(f"Status: {result.get('status')}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 9.2: Ingest Dry Run ✅
+
+```python
+# Ingest with dry-run (CLI)
+# llmwikify ingest document.md --dry-run
+```
+
+**Result:** PASSED
+
+---
+
+### Step 9.3: Batch Ingest ✅
+
+```python
+# Batch ingest from directory (CLI)
+# llmwikify batch raw/sources/
+```
+
+**Result:** PASSED
+
+---
+
+### Step 9.4: Ingest Creates Raw ✅
+
+```python
+# Verify raw/ directory structure after ingest
+from pathlib import Path
+raw_dir = wiki.root / "raw"
+print(f"Raw dir exists: {raw_dir.exists()}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 9.5: Ingest Fts Index ✅
+
+```python
+# Search ingested content
+results = wiki.search("keyword", limit=5)
+for r in results:
+    print(f"{r['page']}: {r['snippet']}")
+```
+
+**Result:** PASSED
+
+---
+
+## Synthesis Workflow
+
+### Step 10.1: Suggest Synthesis Multi ✅
+
+```python
+# Get synthesis suggestions (requires LLM)
+result = wiki.suggest_synthesis()
+print(f"Suggestions: {len(result.get('suggestions', []))}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 10.2: Knowledge Gaps Basic ✅
+
+```python
+# Knowledge gaps via lint with investigations
+result = wiki.lint(generate_investigations=True)
+print(f"Issues: {result['issue_count']}")
+print(f"Investigations: {len(result.get('investigations', {}))}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 10.3: Knowledge Gaps Cli ✅
+
+```python
+# Knowledge gaps via CLI
+# llmwikify knowledge-gaps --json
+```
+
+**Result:** PASSED
+
+---
+
+### Step 10.4: Graph Pagerank ✅
+
+```python
+# Graph analysis with PageRank
+# llmwikify graph-analyze --json
+```
+
+**Result:** PASSED
+
+---
+
+### Step 10.5: Export Graph Formats ✅
+
+```python
+# Export graph in multiple formats
+# llmwikify export-graph --format html --output graph.html
+```
+
+**Result:** PASSED
+
+---
+
+## Multi-Wiki Config
+
+### Step 11.1: Config Parse Wikis ✅
+
+```python
+import yaml
+
+# Parse .wiki-config.yaml
+config = yaml.safe_load(Path(".wiki-config.yaml").read_text())
+print(f"Default wiki: {config['wikis']['default']}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 11.2: Config Local Wikis ✅
+
+```python
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
+
+config = {"wikis": {"local": [{"id": "my-wiki", "path": "."}], "discovery": {}}}
+registry = WikiRegistry(config)
+registry.initialize()
+```
+
+**Result:** PASSED
+
+---
+
+### Step 11.3: Config Discovery ✅
+
+```python
+# Parse discovery section
+config = {
+    "wikis": {
+        "discovery": {
+            "enabled": True,
+            "scan_paths": ["~/wikis"],
+            "scan_depth": 2,
+        }
+    }
+}
+```
+
+**Result:** PASSED
+
+---
+
+### Step 11.4: Search Cross Wiki ✅
+
+```python
+# Cross-wiki search
+wikis = registry.list_wikis()
+for w in wikis:
+    print(f"{w.wiki_id}: {w.name}")
+```
+
+**Result:** PASSED
+
+---
+
+## Quant Full Pipeline
+
+### Step 12.1: Quant Init Creates Structure ✅
+
+```python
+# Initialize quant directory
+# llmwikify quant-init
+```
+
+**Result:** PASSED
+
+---
+
+### Step 12.2: Factor Write And Read ✅
+
+```python
+import yaml
+
+# Write and read a factor YAML
+factor = {"name": "momentum_20d", "L1_logic": "Price momentum"}
+factor_path = Path("quant/factors/stock/price/momentum_20d.yaml")
+factor_path.parent.mkdir(parents=True, exist_ok=True)
+factor_path.write_text(yaml.dump(factor))
+
+loaded = yaml.safe_load(factor_path.read_text())
+print(f"Factor: {loaded['name']}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 12.3: Factor Library List ✅
+
+```python
+from llmwikify.reproduction.persist.factor_library import list_factors
+
+factors = list_factors(".")
+print(f"Found {len(factors)} factors")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 12.4: Duckdb Factor Values ✅
+
+```python
+import duckdb
+
+# Create and query factor_values table
+conn = duckdb.connect("factor.duckdb")
+conn.execute(
+    "CREATE TABLE IF NOT EXISTS factor_values "
+    "(date DATE, stock VARCHAR, factor_name VARCHAR, value DOUBLE)"
+)
+result = conn.execute("SELECT COUNT(*) FROM factor_values").fetchone()
+print(f"Rows: {result[0]}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 12.5: Paper Api Endpoint ✅
+
+```python
+# Paper API endpoint
+import httpx
+response = httpx.get("http://localhost:8765/api/paper/list")
+print(response.json())
+```
+
+**Result:** PASSED
+
+---
+
+## References Detail
+
+### Step 13.1: References Inbound Outbound ✅
+
+```python
+# Get inbound and outbound links
+inbound = wiki.get_inbound_links("target")
+outbound = wiki.get_outbound_links("source")
+print(f"Inbound: {len(inbound)}, Outbound: {len(outbound)}")
+```
+
+**Result:** PASSED
+
+---
+
+### Step 13.2: References Detail Mode ✅
+
+```python
+# References with detail mode (CLI)
+# llmwikify references page-a --detail
+```
+
+**Result:** PASSED
+
+---
+
+### Step 13.3: References Section Links ✅
+
+```python
+# Section-level references with [[page#section]]
+wiki.write_page("guide", "# Guide\n\n## Setup\nSetup content.")
+wiki.write_page("notes", "# Notes\n\nSee [[guide#Setup]].")
+wiki.build_index()
+
+outbound = wiki.get_outbound_links("notes")
+print(f"Links with sections: {len(outbound)}")
 ```
 
 **Result:** PASSED
