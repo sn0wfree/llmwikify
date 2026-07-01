@@ -138,7 +138,7 @@ Read [[python-style#Imports]] before writing any imports.
             # Re-write to trigger index update
             wiki2.write_page("new-name", "# New Name\n\n## Section A\ncontent\n")
             result = wiki2.fix_wikilinks(dry_run=True)
-            print(f"   fix-wikilinks dry_run: {result.get('stats', {})}")
+            print(f"   fix-wikilinks dry_run: fixed={result.get('fixed', 0)} skipped={result.get('skipped', 0)}")
 
         # ── Step 11: summary
         step(11, "Summary — section-level tracking")

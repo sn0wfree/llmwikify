@@ -27,9 +27,12 @@ PYTHONPATH=../.. python3 play.py
 | `redundancy` | 两页内容高度相似 | · | 需 LLM 调用 |
 | `data_gap` (unsourced_claims) | 页面有断言但无 source 引用 | ✓ | 3 个页面 |
 | `knowledge_gap` | 有 raw 源但无 wiki 页链接 | · | 路径需特定结构 |
+| **内联检查** | | | |
+| `orphan_page` | 页面无入站 `[[wikilink]]` | ✓ | 5 个页面全部触发 (无互相链接) |
 
-3/8 rule 在本剧本中触发 (其中 `unsourced_claims` 是 `data_gap` 的子类型)。
-其余 5 个需要 LLM 调用或特定 wikilink 结构, 不在 0-LLM 范围内。
+3/8 Rule + 1 内联检查在本剧本中触发 (其中 `unsourced_claims` 是 `data_gap` 的子类型,
+`orphan_page` 是 `WikiAnalyzer.lint()` 内联检查, 不在 8 个 `Rule` 子类中)。
+其余 5 个 Rule 需要 LLM 调用或特定 wikilink 结构, 不在 0-LLM 范围内。
 
 ## 涉及 API
 

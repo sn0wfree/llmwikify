@@ -128,7 +128,7 @@ class WikiLinkMixin(WikiProtocol):
         if include_context:
             for link in links:
                 link['context'] = self._get_link_context(
-                    link['source'], link.get('section', '')
+                    link['source'], link.get('section', ''), page_name
                 )
 
         return links
