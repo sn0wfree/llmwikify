@@ -17,7 +17,7 @@ class TestLoadLlmConfig:
         """config 文件不存在返回 {}."""
         # 模拟 CONFIG_PATH 为不存在路径
         fake_path = tmp_path / "nonexistent.json"
-        monkeypatch.setattr(lf, "CONFIG_PATH", fake_path)
+        monkeypatch.setattr("llmwikify.foundation.llm.client.CONFIG_PATH", fake_path)
         result = lf.load_llm_config()
         assert result == {}
 
@@ -27,16 +27,16 @@ class TestLoadLlmConfig:
         config_file.write_text(
             json.dumps({
                 "llm": {
-                    "model": "minimax",
+                    "model": "minimax-M3",
                     "api_key": "test-key",
                 },
                 "other_section": {"key": "value"},
             }),
             encoding="utf-8",
         )
-        monkeypatch.setattr(lf, "CONFIG_PATH", config_file)
+        monkeypatch.setattr("llmwikify.foundation.llm.client.CONFIG_PATH", config_file)
         result = lf.load_llm_config()
-        assert result["model"] == "minimax"
+        assert result["model"] == "minimax-M3"
         assert result["api_key"] == "test-key"
         # other section 不应出现
         assert "key" not in result
@@ -45,7 +45,7 @@ class TestLoadLlmConfig:
         """无效 JSON 返回 {}."""
         config_file = tmp_path / "bad.json"
         config_file.write_text(":\n  - [unclosed", encoding="utf-8")
-        monkeypatch.setattr(lf, "CONFIG_PATH", config_file)
+        monkeypatch.setattr("llmwikify.foundation.llm.client.CONFIG_PATH", config_file)
         result = lf.load_llm_config()
         assert result == {}
 
@@ -55,7 +55,7 @@ class TestBuildDefaultClient:
 
     def test_missing_config_raises(self, tmp_path: Path, monkeypatch) -> None:
         """config 缺失时 build_default_client 抛 RuntimeError."""
-        monkeypatch.setattr(lf, "CONFIG_PATH", tmp_path / "nonexistent.json")
+        monkeypatch.setattr("llmwikify.foundation.llm.client.CONFIG_PATH", tmp_path / "nonexistent.json")
         with pytest.raises((RuntimeError, Exception)):
             lf.build_default_client()
 
