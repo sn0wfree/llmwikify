@@ -82,8 +82,14 @@ Bug reports and issue tracking.
 
 | Doc | Type |
 |-----|------|
-| [issues.md](issues/issues.md) | Issue tracker (historical) |
+| [issues.md](issues/issues.md) | Issue tracker (pointer to snapshots/) |
 | [autoresearch-7fe6f04f-partial-completion.json](issues/autoresearch-7fe6f04f-partial-completion.json) | AutoResearch partial-completion bug report |
+
+### `issues/snapshots/` — historical snapshots
+
+| Doc | Description |
+|-----|-------------|
+| [2026-05-31.md](issues/snapshots/2026-05-31.md) | v0.36 时代 issues tracker snapshot（674 行 P0/P1/P2 表） |
 
 ---
 
@@ -216,7 +222,8 @@ docs/
 ├── designs/                           # 64 active/recent feature designs
 ├── releases/                          # 7 per-version notes (v0.32 → v0.38)
 ├── research/                          # 4 landscape research docs
-├── issues/                            # bug reports + issue tracker
+├── issues/                            # bug reports + issue tracker (active pointer)
+│   └── snapshots/                     #   historical issues snapshots
 ├── summaries/                         # 4 experiment summaries
 └── archive/
     ├── done/                          # 3 implemented designs
