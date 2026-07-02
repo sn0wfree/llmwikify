@@ -1,26 +1,24 @@
-"""HTTP auth routes — POST /auth/login, GET /auth/me.
+"""HTTP auth routes — PAT-based authentication (decision 25).
 
-Layer: L4 (interfaces/server/http). Uses fastapi-login (decision 17) to
-mechanically handle the JWT-in-cookie dance; we keep the
-application-specific bits (scope/wikis/public_read/local-mode)
-inside our own JWTAuthMiddleware.
+Layer: L4 (interfaces/server/http). No fastapi-login dependency.
 
 Endpoints:
-  POST /auth/login    { email, password }    -> 200 { access_token, user }
-                                                 + Set-Cookie: llmwikify_token
-  GET  /auth/me        (no body)              -> 200 { email, is_first_admin,
-                                                            can_edit, wikis }
+  POST /auth/register   { email }              -> 200 { pat, user }
+  POST /auth/verify     { pat }                -> 200 { access_token, user }
+  POST /auth/tokens     { name }               -> 200 { pat, key }       (authenticated)
+  GET  /auth/tokens                               -> 200 { keys }         (authenticated)
+  DELETE /auth/tokens/{id}                         -> 200 { ok }          (authenticated)
+  GET  /auth/me                                    -> 200 { user }        (authenticated)
 
 Error response format: decision 10 — JSON {error, status_code, detail}.
 
 Decisions cross-referenced:
   - 1  /me returns `{can_edit, wikis}` not raw scope
-  - 3  Login sets httpOnly cookie; the response body also returns
-        access_token for CLI/curl use (the body token is identical
-        to what's in the cookie)
-  - 6  cookie secure=False in MVP (HTTPS not required locally)
   - 10 error format = JSON
   - 12 in local mode /me still returns the local trust info
+  - 25 PAT replaces passwords
+  - 26 PAT format = llmw_ prefix + 24-byte hex
+  - 27 api_keys table stores SHA-256 hash
 """
 
 from __future__ import annotations
@@ -29,101 +27,151 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, Cookie, HTTPException, Request, Response
 
 from llmwikify.foundation.auth import (
+    ApiKeyRepository,
     TokenClaims,
     UserRepository,
     auth_db_path,
     decode,
     encode,
     env_host,
+    generate_pat,
+    hash_pat,
     is_local_default,
     require_secret,
-    verify_password,
+    verify_pat,
 )
 
 logger = logging.getLogger(__name__)
 
 
-# Cookie name is namespaced under the package to avoid clashes with other
-# apps on the same host.
 COOKIE_NAME = "llmwikify_token"
 COOKIE_MAX_AGE = 30 * 24 * 3600  # 30d, matches owner JWT TTL
 
 
 def _get_jwt_secret() -> bytes:
-    """Read the JWT signing secret. Hard-fails if not initialized."""
     return require_secret()
 
 
 def _build_router() -> APIRouter:
     router = APIRouter(prefix="/auth", tags=["auth"])
 
-    @router.post("/login")
-    async def login(
-        request: Request,
-        response: Response,
-        form_data: OAuth2PasswordRequestForm = Depends(),  # noqa: B008
-    ) -> dict[str, Any]:
-        """Verify password, issue JWT, set httpOnly cookie.
+    @router.post("/register")
+    async def register(request: Request) -> dict[str, Any]:
+        """Create a new user + issue a PAT.
 
-        Body params (OAuth2PasswordRequestForm):
-            username:  actually the email (OAuth2 form spec uses
-                      `username` for the principal name; we treat it
-                      as email since that's our unique identifier)
-            password:  the cleartext password
+        Body: { "email": "user@example.com" }
+        Returns: { "pat": "llmw_xxx...", "user": { ... } }
 
-        In `local mode` (decision 12), if no auth.db exists yet, we
-        still allow login as a synthetic "local user" — no actual
-        authentication happens. This mirrors the local-trust posture.
+        In local mode with no auth.db, creates the first admin.
         """
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail={"error": "invalid_json", "detail": "Request body must be JSON."})
+
+        email = (body.get("email") or "").strip().lower()
+        if not email or "@" not in email:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "invalid_email", "detail": "A valid email is required."},
+            )
+
         repo = UserRepository()
         host = _resolve_effective_host(request)
         local_mode = is_local_default(host)
-        if not repo.exists() and local_mode:
-            # No auth.db in local mode: synthesize a virtual owner.
-            # We can't sign a real JWT without a keyring secret, so
-            # we return a no-op token + a marker in the body.
-            response.set_cookie(
-                key=COOKIE_NAME,
-                value="local-mode-no-auth",
-                max_age=COOKIE_MAX_AGE,
-                httponly=True,
-                samesite="lax",
-                secure=False,
-                path="/",
-            )
-            return {
-                "access_token": "local-mode-no-auth",
-                "expires_at": None,
-                "user": {
-                    "email": "local@host",
-                    "is_first_admin": True,
-                    "can_edit": True,
-                    "wikis": ["*"],
-                    "local_mode": True,
-                },
-            }
 
-        user = repo.get_by_email(form_data.username)
-        if user is None or not verify_password(form_data.password, user.password_hash):
-            # Generic message: don't reveal whether the email exists.
+        # In local mode with no existing user, create first admin.
+        is_first = not repo.exists() and local_mode
+
+        if repo.get_by_email(email) is not None:
             raise HTTPException(
-                status_code=401,
-                detail={
-                    "error": "invalid_credentials",
-                    "status_code": 401,
-                    "detail": "Invalid email or password.",
-                },
+                status_code=409,
+                detail={"error": "email_taken", "detail": f"User with email {email!r} already exists."},
             )
 
-        # Build claims.
+        user = repo.create(email=email, is_first_admin=is_first)
+
+        # Generate PAT.
+        pat, pat_hash = generate_pat()
+        ak_repo = ApiKeyRepository()
+        ak_repo.create(
+            user_id=user.id,
+            key_prefix=pat[:12],
+            key_hash=pat_hash,
+            name="webui-default",
+            scopes="write",
+        )
+
+        # Build JWT for immediate use.
         wikis = _list_wikis_from_registry(request)
         claims = TokenClaims.new(
             sub=f"user:{user.id}",
             scope="write",
+            wikis=wikis or ["*"],
+        )
+        token = encode(claims, _get_jwt_secret())
+
+        return {
+            "pat": pat,
+            "access_token": token,
+            "user": _user_to_dict(user, claims, local_mode=local_mode),
+        }
+
+    @router.post("/verify")
+    async def verify_token(request: Request, response: Response) -> dict[str, Any]:
+        """Verify a PAT and return a short-lived JWT.
+
+        Body: { "pat": "llmw_xxx..." }
+        Returns: { "access_token": "...", "user": { ... } }
+
+        WebUI uses this to exchange a PAT (stored in localStorage)
+        for a JWT (stored in authStore + cookie).
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail={"error": "invalid_json", "detail": "Request body must be JSON."})
+
+        pat = (body.get("pat") or "").strip()
+        if not pat:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "missing_pat", "detail": "PAT is required."},
+            )
+
+        # Lookup by hash.
+        pat_hash = hash_pat(pat)
+        ak_repo = ApiKeyRepository()
+        api_key = ak_repo.get_by_hash(pat_hash)
+        if api_key is None:
+            raise HTTPException(
+                status_code=401,
+                detail={"error": "invalid_pat", "detail": "Invalid or revoked PAT."},
+            )
+
+        # Touch last_used_at (best-effort).
+        try:
+            ak_repo.touch_last_used(api_key.id)
+        except Exception:
+            logger.warning("failed to touch last_used_at for api_key %s", api_key.id, exc_info=True)
+
+        # Resolve user.
+        repo = UserRepository()
+        user = repo.get_by_id(api_key.user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=401,
+                detail={"error": "user_not_found", "detail": "PAT owner no longer exists."},
+            )
+
+        # Issue JWT.
+        wikis = _list_wikis_from_registry(request)
+        claims = TokenClaims.new(
+            sub=f"user:{user.id}",
+            scope=api_key.scopes,
             wikis=wikis or ["*"],
         )
         token = encode(claims, _get_jwt_secret())
@@ -134,14 +182,9 @@ def _build_router() -> APIRouter:
             max_age=COOKIE_MAX_AGE,
             httponly=True,
             samesite="lax",
-            secure=False,  # decision 6: MVP
+            secure=False,
             path="/",
         )
-        # touch last login (best-effort, don't block response)
-        try:
-            repo.touch_last_login(user.id)
-        except Exception:  # pragma: no cover - best effort
-            logger.warning("failed to touch last_login_at for %s", user.id, exc_info=True)
 
         return {
             "access_token": token,
@@ -149,16 +192,85 @@ def _build_router() -> APIRouter:
             "user": _user_to_dict(user, claims, local_mode=False),
         }
 
+    @router.post("/tokens")
+    async def create_token(request: Request) -> dict[str, Any]:
+        """Create a new PAT for the authenticated user.
+
+        Body: { "name": "laptop" }
+        Returns: { "pat": "llmw_xxx...", "key": { id, prefix, name, ... } }
+
+        The PAT is shown once. Store it securely.
+        """
+        claims = _require_auth(request)
+        user_id = claims.sub[len("user:"):]
+        body = await request.json()
+        name = (body.get("name") or "unnamed").strip()
+
+        pat, pat_hash = generate_pat()
+        ak_repo = ApiKeyRepository()
+        ak = ak_repo.create(
+            user_id=user_id,
+            key_prefix=pat[:12],
+            key_hash=pat_hash,
+            name=name,
+            scopes="write",
+        )
+
+        return {
+            "pat": pat,
+            "key": {
+                "id": ak.id,
+                "prefix": ak.key_prefix,
+                "name": ak.name,
+                "scopes": ak.scopes,
+                "created_at": ak.created_at,
+            },
+        }
+
+    @router.get("/tokens")
+    async def list_tokens(request: Request) -> dict[str, Any]:
+        """List all PATs for the authenticated user."""
+        claims = _require_auth(request)
+        user_id = claims.sub[len("user:"):]
+        ak_repo = ApiKeyRepository()
+        keys = ak_repo.list_by_user(user_id)
+        return {
+            "keys": [
+                {
+                    "id": k.id,
+                    "prefix": k.key_prefix,
+                    "name": k.name,
+                    "scopes": k.scopes,
+                    "created_at": k.created_at,
+                    "last_used_at": k.last_used_at,
+                    "expires_at": k.expires_at,
+                    "revoked_at": k.revoked_at,
+                }
+                for k in keys
+            ],
+        }
+
+    @router.delete("/tokens/{key_id}")
+    async def revoke_token(key_id: str, request: Request) -> dict[str, Any]:
+        """Revoke a PAT."""
+        claims = _require_auth(request)
+        user_id = claims.sub[len("user:"):]
+        ak_repo = ApiKeyRepository()
+        ak = ak_repo.get_by_id(key_id)
+        if ak is None or ak.user_id != user_id:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "not_found", "detail": "API key not found."},
+            )
+        ak_repo.revoke(key_id)
+        return {"ok": True}
+
     @router.get("/me")
     async def me(
         request: Request,
-        llmwikify_token: str | None = Cookie(default=None),  # noqa: B008
+        llmwikify_token: str | None = Cookie(default=None),
     ) -> dict[str, Any]:
-        """Return identity of current user (or local-mode marker).
-
-        Decision 1: response body is the user-friendly shape, not
-        the raw scope string. The raw claims never leave the server.
-        """
+        """Return identity of current user (or local-mode marker)."""
         host = _resolve_effective_host(request)
         local_mode = is_local_default(host)
 
@@ -176,16 +288,10 @@ def _build_router() -> APIRouter:
                 }
             raise HTTPException(
                 status_code=401,
-                detail={
-                    "error": "not_authenticated",
-                    "status_code": 401,
-                    "detail": "No session cookie present. POST /auth/login first.",
-                },
+                detail={"error": "not_authenticated", "detail": "No session cookie. POST /auth/verify first."},
             )
 
         if llmwikify_token == "local-mode-no-auth":
-            # Server was in local-mode-no-auth at login time. Mirror that
-            # here so the client gets a consistent shape.
             return {
                 "authenticated": True,
                 "user": {
@@ -199,41 +305,24 @@ def _build_router() -> APIRouter:
 
         try:
             claims = decode(llmwikify_token, _get_jwt_secret())
-        except Exception as exc:  # jwt.ExpiredSignatureError, etc.
-            logger.info("/auth/me: token decode failed: %s", exc)
+        except Exception as exc:
             raise HTTPException(
                 status_code=401,
-                detail={
-                    "error": "invalid_token",
-                    "status_code": 401,
-                    "detail": f"Token is invalid or expired: {type(exc).__name__}",
-                },
+                detail={"error": "invalid_token", "detail": f"Token invalid: {type(exc).__name__}"},
             )
 
-        # Resolve user from sub. We don't expose the raw sub in the
-        # response; we look up the user record and return friendly fields.
         if not claims.sub.startswith("user:"):
-            # Phase 3: this is a share token. /me is only meaningful for
-            # owner; for share we'd return 401 in the user-friendly shape
-            # and have the WebUI redirect to /share/{slug} instead.
             raise HTTPException(
                 status_code=401,
-                detail={
-                    "error": "share_token_not_here",
-                    "status_code": 401,
-                    "detail": "/auth/me is owner-only; use the share URL directly.",
-                },
+                detail={"error": "share_token_not_here", "detail": "/auth/me is owner-only."},
             )
+
         user_id = claims.sub[len("user:"):]
         user = UserRepository().get_by_id(user_id)
         if user is None:
             raise HTTPException(
                 status_code=401,
-                detail={
-                    "error": "user_not_found",
-                    "status_code": 401,
-                    "detail": "Token refers to a user that no longer exists.",
-                },
+                detail={"error": "user_not_found", "detail": "Token refers to a deleted user."},
             )
         return {
             "authenticated": True,
@@ -243,12 +332,24 @@ def _build_router() -> APIRouter:
     return router
 
 
+# ─── helpers ─────────────────────────────────────────────────────
+
+
+def _require_auth(request: Request) -> TokenClaims:
+    """Extract and validate JWT from request. Raises 401 on failure."""
+    claims = getattr(request.state, "auth_claims", None)
+    if claims is None:
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "not_authenticated", "detail": "Authentication required."},
+        )
+    return claims
+
+
 def _user_to_dict(user, claims: TokenClaims, *, local_mode: bool) -> dict[str, Any]:
-    """Map a User + TokenClaims to the friendly /me response shape."""
     return {
         "email": user.email if not local_mode else "local@host",
         "is_first_admin": user.is_first_admin if not local_mode else True,
-        # Decision 1: expose can_edit + wikis, not raw scope.
         "can_edit": claims.scope == "write",
         "wikis": list(claims.wikis),
         "local_mode": local_mode,
@@ -256,28 +357,17 @@ def _user_to_dict(user, claims: TokenClaims, *, local_mode: bool) -> dict[str, A
 
 
 def _list_wikis_from_registry(request: Request) -> list[str]:
-    """Try to read the WikiRegistry from app state. Return [] if not present.
-
-    The middleware stores `app.state.wiki_registry` when it sets up. If
-    the route is hit before the registry is built (e.g. test fixtures),
-    we fall back to ["*"] for the bootstrap token.
-    """
     registry = getattr(request.app.state, "wiki_registry", None)
     if registry is None:
         return ["*"]
     try:
         wikis = registry.list_wikis()
-    except Exception:  # pragma: no cover - defensive
+    except Exception:
         return ["*"]
     return [w.wiki_id for w in wikis] or ["*"]
 
 
 def _resolve_effective_host(request: Request) -> str:
-    """What host is the request coming in on?
-
-    For local-mode detection we use the request URL's host. Falls back
-    to env_host() if request.url.hostname is None.
-    """
     try:
         host = request.url.hostname or ""
     except Exception:
@@ -285,5 +375,4 @@ def _resolve_effective_host(request: Request) -> str:
     return host or env_host()
 
 
-# Module-level singleton for FastAPI's `app.include_router(auth_router)`.
 auth_router = _build_router()

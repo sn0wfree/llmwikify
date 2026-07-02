@@ -16,9 +16,12 @@ from llmwikify.foundation.auth import (
     AuthError,
     TokenClaims,
     decode,
+    hash_pat,
     is_local_default,
     require_secret,
+    verify_pat,
 )
+from llmwikify.foundation.auth.db import ApiKeyRepository, UserRepository
 from llmwikify.interfaces.server.constants import (
     EXCLUDED_AUTH_PATHS,
     EXCLUDED_AUTH_PREFIXES,
@@ -173,15 +176,10 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 return await call_next(request)
             return _deny_no_token(request.method, self.public_read)
 
-        # Token present — verify.
-        try:
-            claims = decode(token, self._get_secret())
-        except _pyjwt.ExpiredSignatureError:
-            return _deny(401, "token_expired", "JWT has expired; re-login.")
-        except _pyjwt.InvalidTokenError as exc:
-            return _deny(401, "invalid_token", f"JWT invalid: {type(exc).__name__}")
-        except AuthError as exc:
-            return JSONResponse(exc.to_dict(), status_code=exc.status_code)
+        # Token present — verify (JWT first, then PAT fallback).
+        claims = self._verify_token(token)
+        if claims is None:
+            return _deny(401, "invalid_token", "Token is invalid or expired.")
 
         # Scope enforcement (decision 4): non-GET requires scope=write.
         if request.method != "GET" and claims.scope != "write":
@@ -198,12 +196,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
     def _extract_token(self, request: Request) -> str:
-        """Read token from cookie (preferred) or Authorization header.
-
-        Query param ?token= is NOT supported for JWT (decision: only
-        the legacy static-key mode uses it; we don't enable that path
-        anymore because it leaks via referer logs).
-        """
+        """Read token from cookie (preferred) or Authorization header."""
         cookie_token = request.cookies.get("llmwikify_token")
         if cookie_token:
             return cookie_token
@@ -211,6 +204,46 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         if auth_header.lower().startswith("bearer "):
             return auth_header[7:].strip()
         return ""
+
+    def _verify_token(self, token: str) -> TokenClaims | None:
+        """Try JWT decode first, then PAT lookup. Returns claims or None."""
+        # 1. Try JWT.
+        try:
+            return decode(token, self._get_secret())
+        except _pyjwt.ExpiredSignatureError:
+            pass  # expired JWT — fall through to PAT
+        except _pyjwt.InvalidTokenError:
+            pass  # not a valid JWT — might be a PAT
+        except AuthError:
+            pass
+
+        # 2. Try PAT lookup (SHA-256 hash in api_keys table).
+        try:
+            pat_hash = hash_pat(token)
+            ak_repo = ApiKeyRepository()
+            api_key = ak_repo.get_by_hash(pat_hash)
+            if api_key is None:
+                return None
+
+            # Touch last_used_at (best-effort).
+            try:
+                ak_repo.touch_last_used(api_key.id)
+            except Exception:
+                logger.warning("failed to touch last_used_at for api_key %s", api_key.id, exc_info=True)
+
+            # Resolve user to build claims.
+            user = UserRepository().get_by_id(api_key.user_id)
+            if user is None:
+                return None
+
+            return TokenClaims.new(
+                sub=f"user:{user.id}",
+                scope=api_key.scopes,
+                wikis=["*"],
+            )
+        except Exception:
+            logger.debug("PAT lookup failed", exc_info=True)
+            return None
 
 
 # ─── helpers ─────────────────────────────────────────────────────
