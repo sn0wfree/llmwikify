@@ -101,6 +101,7 @@ contracts = []
 [tool.setuptools.package-data]
 llmwikify = [ "py.typed",]
 "llmwikify.foundation.templates" = [ "*.json", "_gitignore", "skill_llmwikify/*.md", "skill_llmwikify/resources/*.md",]
+"llmwikify.foundation.prompts._defaults" = [ "*.yaml",]
 
 [tool.ruff.lint]
 select = [ "E", "F", "I", "W", "B", "C4", "UP",]
