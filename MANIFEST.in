@@ -4,6 +4,8 @@ include CHANGELOG.md
 include pyproject.toml
 recursive-include src/llmwikify *.py
 recursive-include src/llmwikify *.yaml
+recursive-include src/llmwikify *.json
+recursive-include src/llmwikify *.md
 recursive-include src/llmwikify py.typed
 recursive-include docs *.md
 recursive-include tests *.py
