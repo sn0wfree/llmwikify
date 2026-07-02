@@ -1,0 +1,92 @@
+name: Version Bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "New version (e.g. 0.38.1 or 0.39.0). Leave 'auto' to use latest tag + 1 patch."
+        required: true
+        type: string
+        default: "auto"
+      bump_type:
+        description: "Bump type (only used when version='auto')"
+        required: false
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: "patch"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine new version
+        id: version
+        run: |
+          if [ "${{ inputs.version }}" != "auto" ]; then
+            NEW_VERSION="${{ inputs.version }}"
+          else
+            # Read current version from pyproject.toml
+            CURRENT=$(grep -E '^version = ' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+            echo "Current version: $CURRENT"
+            IFS='.' read -r -a PARTS <<< "$CURRENT"
+            MAJOR="${PARTS[0]}"
+            MINOR="${PARTS[1]}"
+            PATCH="${PARTS[2]}"
+            case "${{ inputs.bump_type }}" in
+              major)
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              minor)
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              patch|*)
+                PATCH=$((PATCH + 1))
+                ;;
+            esac
+            NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Bumping to: $NEW_VERSION"
+
+      - name: Update version in pyproject.toml
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          sed -i "s/^version = \".*\"/version = \"${NEW_VERSION}\"/" pyproject.toml
+          grep '^version = ' pyproject.toml
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(release): bump version to v${{ steps.version.outputs.new_version }}"
+          title: "chore(release): bump version to v${{ steps.version.outputs.new_version }}"
+          body: |
+            Automated version bump.
+
+            - Old: $(grep -E '^version = ' pyproject.toml.bak 2>/dev/null | head -1 || echo "n/a")
+            - New: ${{ steps.version.outputs.new_version }}
+
+            After merge, create a GitHub Release with tag `v${{ steps.version.outputs.new_version }}`
+            to trigger PyPI publication via `.github/workflows/publish.yml`.
+          branch: "release/v${{ steps.version.outputs.new_version }}"
+          base: main
+          delete-branch: true
+          add-paths: |
+            pyproject.toml
+            src/llmwikify/__init__.py
+            src/llmwikify/_version.py

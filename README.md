@@ -7,6 +7,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://img.shields.io/badge/tests-6100%2B%20passed-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 [![Version](https://img.shields.io/badge/version-0.38.0-blue.svg)](pyproject.toml)
+[![CI Tests](https://github.com/sn0wfree/llmwikify/actions/workflows/tests.yml/badge.svg)](https://github.com/sn0wfree/llmwikify/actions/workflows/tests.yml)
+[![Lint](https://github.com/sn0wfree/llmwikify/actions/workflows/lint.yml/badge.svg)](https://github.com/sn0wfree/llmwikify/actions/workflows/lint.yml)
+[![codecov](https://codecov.io/gh/sn0wfree/llmwikify/branch/main/graph/badge.svg)](https://codecov.io/gh/sn0wfree/llmwikify)
 
 **llmwikify** is a Python CLI + library + unified server for building **persistent,
 LLM-maintained knowledge bases** with a dedicated **quant research reproduction pipeline**.
