@@ -128,6 +128,12 @@ class UserRepository:
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
+            # Phase 2.5 migration: detect old schema with password_hash column.
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+            if "password_hash" in columns:
+                conn.executescript(
+                    "DROP TABLE IF EXISTS api_keys; DROP TABLE IF EXISTS users;"
+                )
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS users (
@@ -317,6 +323,12 @@ class ApiKeyRepository:
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
+            # Phase 2.5 migration: detect old schema with password_hash column.
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+            if "password_hash" in columns:
+                conn.executescript(
+                    "DROP TABLE IF EXISTS api_keys; DROP TABLE IF EXISTS users;"
+                )
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS users (
