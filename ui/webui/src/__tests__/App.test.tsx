@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from './test-utils';
 import App from '../App';
+import { useAuthStore } from '../stores/authStore';
 
 vi.mock('../api', () => ({
   api: {
@@ -33,6 +34,12 @@ vi.mock('../components/wiki/WikiSelector', () => ({
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Pre-populate auth store so ProtectedRoute allows access
+    useAuthStore.setState({
+      token: 'test-token',
+      user: { username: 'test', email: 'test@test.com' },
+      isAuthenticated: true,
+    });
   });
 
   it('should render navigation', async () => {

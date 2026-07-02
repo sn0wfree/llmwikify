@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { WikiLayout } from './components/wiki/WikiLayout';
 import { AgentLayout } from './components/agent/AgentLayout';
+import { LoginPage } from './components/auth/LoginPage';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
 const Editor = lazy(() =>
   import('./components/wiki/Editor').then(m => ({ default: m.Editor }))
@@ -61,31 +63,37 @@ function App() {
     <BrowserRouter>
       <Suspense fallback={<Loading />}>
         <Routes>
-          {/* Wiki routes */}
-          <Route path="/" element={<WikiLayout />}>
-            <Route index element={<Navigate to="/edit" replace />} />
-            <Route path="edit" element={<Editor />} />
-            <Route path="dashboard" element={<KnowledgeGrowth />} />
-            <Route path="insights" element={<Insights />} />
-          </Route>
+          {/* Public routes */}
+          <Route path="/login" element={<LoginPage />} />
 
-          {/* Agent routes */}
-          <Route path="/agent" element={<AgentLayout />}>
-            <Route index element={<Navigate to="/agent/chat" replace />} />
-            <Route path="chat" element={<AgentChat />} />
-            <Route path="research" element={<Navigate to="/agent/autoresearch" replace />} />
-            <Route path="autoresearch" element={<AutoResearchPanel />} />
-            <Route path="reproduction" element={<ReproductionPanel />} />
-            <Route path="paper" element={<PaperPanel />} />
-            <Route path="factor" element={<FactorFamilyList />} />
-            <Route path="factor/fam/:family" element={<FamilyDetail />} />
-            <Route path="factor/families" element={<FactorFamilyList />} />
-            <Route path="factor/*" element={<FactorDetail />} />
-            <Route path="strategy" element={<StrategyList />} />
-            <Route path="strategy/:name" element={<StrategyDetail />} />
-            <Route path="backtest" element={<BacktestPlatform />} />
-            <Route path="tasks" element={<TaskMonitor />} />
-            <Route path="settings" element={<LLMSettings />} />
+          {/* Protected routes */}
+          <Route element={<ProtectedRoute />}>
+            {/* Wiki routes */}
+            <Route path="/" element={<WikiLayout />}>
+              <Route index element={<Navigate to="/edit" replace />} />
+              <Route path="edit" element={<Editor />} />
+              <Route path="dashboard" element={<KnowledgeGrowth />} />
+              <Route path="insights" element={<Insights />} />
+            </Route>
+
+            {/* Agent routes */}
+            <Route path="/agent" element={<AgentLayout />}>
+              <Route index element={<Navigate to="/agent/chat" replace />} />
+              <Route path="chat" element={<AgentChat />} />
+              <Route path="research" element={<Navigate to="/agent/autoresearch" replace />} />
+              <Route path="autoresearch" element={<AutoResearchPanel />} />
+              <Route path="reproduction" element={<ReproductionPanel />} />
+              <Route path="paper" element={<PaperPanel />} />
+              <Route path="factor" element={<FactorFamilyList />} />
+              <Route path="factor/fam/:family" element={<FamilyDetail />} />
+              <Route path="factor/families" element={<FactorFamilyList />} />
+              <Route path="factor/*" element={<FactorDetail />} />
+              <Route path="strategy" element={<StrategyList />} />
+              <Route path="strategy/:name" element={<StrategyDetail />} />
+              <Route path="backtest" element={<BacktestPlatform />} />
+              <Route path="tasks" element={<TaskMonitor />} />
+              <Route path="settings" element={<LLMSettings />} />
+            </Route>
           </Route>
         </Routes>
       </Suspense>
