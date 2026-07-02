@@ -7,6 +7,8 @@ Currently:
     WikiServer and serve.py to decide between "local trust" mode
     and "auth enforced" mode (decision 12 + 13).
   * hash_password / verify_password — Argon2id wrapper (decision 16).
+  * local_token_path / chmod_600 — POSIX permission helper for the
+    owner-token file at ~/.llmwikify/local_token (decision 9).
 
 This module is intentionally small. The two halves of the auth system
 (L1 primitives vs L4 web layer) both need to import from here; placing
@@ -17,10 +19,13 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import stat
+from pathlib import Path
 
 from argon2 import PasswordHasher
 from argon2.exceptions import (
     InvalidHashError,
+    VerificationError,
     VerifyMismatchError,
 )
 
@@ -101,7 +106,10 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
     try:
         return _PH.verify(hashed, plain)
-    except (VerifyMismatchError, InvalidHashError):
+    except (VerifyMismatchError, InvalidHashError, VerificationError):
+        # VerificationError is the parent class; catches malformed PHC
+        # strings, wrong algorithm, corrupted salts, etc. All of these
+        # are "no match" from the caller's perspective.
         return False
 
 
@@ -131,3 +139,33 @@ def env_host(default: str = "127.0.0.1") -> str:
     """
     val = os.environ.get("LLMWIKIFY_HOST", "").strip()
     return val or default
+
+
+# ─── Local token file helpers (decision 9) ────────────────────────
+
+
+def local_token_path() -> Path:
+    """Return canonical local_token path: ~/.llmwikify/local_token.
+
+    Honors $LLMWIKIFY_HOME for tests / non-standard layouts.
+    """
+    home = os.environ.get("LLMWIKIFY_HOME", "").strip() or os.path.expanduser("~")
+    return Path(home) / ".llmwikify" / "local_token"
+
+
+def chmod_600(path: Path) -> None:
+    """Set POSIX permissions 0o600 on a file. No-op on Windows."""
+    try:
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+    except OSError:
+        # Windows has limited chmod semantics; best effort.
+        pass
+
+
+def ensure_dir_700(path: Path) -> None:
+    """Create the parent dir if missing, chmod 0o700 (best effort)."""
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(path, 0o700)
+    except OSError:
+        pass

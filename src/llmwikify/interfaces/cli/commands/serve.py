@@ -16,9 +16,8 @@ Phase 2a additions (decisions 12, 13, 14, 15):
 from __future__ import annotations
 
 import asyncio  # Phase 3 #6 — used by stdio/http/sse paths
-import os  # Phase 2a: LLMWIKIFY_HOST env var, chmod
+import os  # Phase 2a: LLMWIKIFY_HOST env var
 import sys  # Phase 2a: print to stderr
-from pathlib import Path  # Phase 2a: local_token path
 from typing import Any
 
 from llmwikify.interfaces.mcp.adapter import MCPAdapter  # Phase 3 #6
@@ -69,10 +68,12 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     # if needed (decision 12, 14, 15).
     local_mode = is_local_default(final_host)
     if not local_mode:
-        from llmwikify.foundation.auth import UserRepository, auth_db_path
-        from llmwikify.foundation.auth.prompt import (
-            _chmod_600,
-            _local_token_path,
+        from llmwikify.foundation.auth import (
+            UserRepository,
+            auth_db_path,
+            chmod_600,
+            ensure_dir_700,
+            local_token_path,
             prompt_first_admin,
         )
         repo = UserRepository(db_path=auth_db_path())
@@ -87,14 +88,16 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                 return 1
             # Persist the local_token so subsequent CLI commands
             # (auth token, etc.) have a baseline.
-            token_path = Path(_local_token_path())
-            token_path.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                os.chmod(token_path.parent, 0o700)
-            except OSError:
-                pass
+            token_path = local_token_path()
+            ensure_dir_700(token_path.parent)
             token_path.write_text(result.token + "\n", encoding="utf-8")
-            _chmod_600(token_path)
+            chmod_600(token_path)
+            print()
+            print("Your owner token (30d, scope=write):")
+            print(f"  {result.token}")
+            print()
+            print(f"  WebUI: open http://{final_host}:{port} and POST /auth/login")
+            print("  CLI:   export LLMWIKIFY_AUTH_TOKEN=\"<token-above>\"")
             print()
             print("Your owner token (30d, scope=write):")
             print(f"  {result.token}")

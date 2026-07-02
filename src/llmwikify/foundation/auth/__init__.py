@@ -32,9 +32,12 @@ from ._keyring import get_secret, require_secret, set_secret
 from .db import UserRepository, auth_db_path, auto_first_admin
 from .prompt import FirstAdminPromptResult, prompt_first_admin
 from .utils import (
+    chmod_600,
+    ensure_dir_700,
     env_host,
     hash_password,
     is_local_default,
+    local_token_path,
     needs_rehash,
     verify_password,
 )
@@ -57,4 +60,7 @@ __all__ = [
     "FirstAdminPromptResult",
     "is_local_default",
     "env_host",
+    "local_token_path",
+    "chmod_600",
+    "ensure_dir_700",
 ]

@@ -10,7 +10,7 @@ Subcommands (Phase 2a):
 Decisions:
   - 7  wikis claim re-signed on every `token` call (picks up newly
         registered wikis)
-  - 9  local_token written with chmod 600
+  - 9  local_token written with chmod 600 (delegated to foundation.auth)
   - 11 auth.db location: ~/.llmwikify/auth.db (single source of truth)
   - 15 TTY fallback: init prompts via prompt_first_admin; if not a
         TTY, print a clear hint + exit 1
@@ -20,28 +20,21 @@ Decisions:
 from __future__ import annotations
 
 import json
-import os
-import stat
 import sys
-from pathlib import Path
 from typing import Any
+
+from llmwikify.foundation.auth import (
+    chmod_600,
+    ensure_dir_700,
+    local_token_path,
+)
 
 from .._base import Command
 
-
-# Canonical paths (mirrored in foundation/auth/db.py; we re-import to
-# avoid duplicating constants).
-def _local_token_path() -> Path:
-    home = os.environ.get("LLMWIKIFY_HOME", "").strip() or os.path.expanduser("~")
-    return Path(home) / ".llmwikify" / "local_token"
-
-
-def _chmod_600(path: Path) -> None:
-    """Set POSIX permissions 0o600 on a file. No-op on Windows."""
-    try:
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
-    except OSError:
-        pass  # best effort
+# Backward-compat shim: tests + older call sites may import these
+# private names from this module. We re-export from foundation.auth.
+_local_token_path = local_token_path
+_chmod_600 = chmod_600
 
 
 # ─── free functions (runnable from main() dispatch) ────────────────
@@ -99,11 +92,7 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
 
     # Write to local_token with chmod 600.
     token_path = _local_token_path()
-    token_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(token_path.parent, 0o700)
-    except OSError:
-        pass
+    ensure_dir_700(token_path.parent)
     token_path.write_text(token + "\n", encoding="utf-8")
     _chmod_600(token_path)
 
@@ -170,11 +159,7 @@ def run_auth_token(wiki: Any, config: dict, args: Any) -> int:
     )
     token = encode(claims, require_secret())
     token_path = _local_token_path()
-    token_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(token_path.parent, 0o700)
-    except OSError:
-        pass
+    ensure_dir_700(token_path.parent)
     token_path.write_text(token + "\n", encoding="utf-8")
     _chmod_600(token_path)
     print(token)
@@ -224,13 +209,13 @@ def run_auth_whoami(wiki: Any, config: dict, args: Any) -> int:
             is_first_admin = user.is_first_admin
 
     payload = {
-        "sub": claims.sub,
+        # Decision 1: friendly shape, same as /auth/me. Do not
+        # expose the raw `scope` string or `sub` JWT-internal field.
         "email": user_email,
         "is_first_admin": is_first_admin,
         "can_edit": claims.scope == "write",
-        "scope": claims.scope,
         "wikis": list(claims.wikis),
-        "exp": claims.exp,
+        "expires_at": claims.exp,  # unix timestamp; same as /auth/me
     }
     print(json.dumps(payload, indent=2, ensure_ascii=False))
     return 0
