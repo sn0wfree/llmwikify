@@ -5,7 +5,99 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.38.0] - 2026-07-02 — Onboarding + CI (actual release)
+
+> **Note**: This is the **actual published release** of v0.38.0. The previous
+> `## [0.38.0] - 2026-06-22` section below documents the v0.38.0 development
+> (nanobot v0.2.1 borrowings + auth refactor) that was merged on 2026-06-22
+> but **never published to PyPI**. This section covers the 5 commits
+> (302b15c, 0b6457c, 2fef73e, c763e0a, 977fe3b) that are actually shipped in
+> the 2026-07-02 PyPI release.
+
+### Added — New CLI tools (P3+)
+
+- **`llmwikify doctor`** — System health check with 9 categories
+  - Config file (existence + parse)
+  - Python version (>= 3.10)
+  - Core dependencies (llmwikify, yaml, duckdb, jinja2)
+  - Optional extras (fastapi, fastmcp, watchdog, networkx, markitdown, tiktoken, httpx)
+  - **LLM connectivity** (actual API call, 5s timeout, `max_tokens=5`, `"Say hi"`)
+  - **Wiki directory** (wiki.md, .llmwikify.db, index.md, raw/)
+  - **Permissions** (~/.llmwikify/ + wiki_root writability)
+  - WebUI bundle (ui/webui/dist/index.html)
+  - Server (GET /api/health)
+  - Flags: `--skip-llm`, `--json`, `--wiki-root`
+  - Exit codes: 0 (all pass), 1 (failed), 2 (config missing)
+
+- **`llmwikify init-llm`** + `llmwikify init --llm` — One-command LLM config setup
+  - Auto-detects provider from `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `MINIMAX_API_KEY`
+  - Default model per provider
+  - `--base-url` for OpenAI-compatible endpoints (DeepSeek, etc.)
+  - `--overwrite` to replace existing config
+  - Interactive prompt on first `init` if no config exists (default N)
+  - `--no-llm-prompt` for non-tty/CI environments
+
+### Fixed — Onboarding barriers (P1+P2)
+
+- `wiki.md` no longer shows `v0.11.0` (now correctly shows `v0.38.0`)
+  - Root cause: `_get_version()` imported from wrong package
+- README Quick Start: 4 commands → 7 commands
+  - `init → write_page → ingest → build-index → search → read_page → status → serve`
+- README install hint: `pip install llmwikify` → `pip install 'llmwikify[extractors,web]'`
+- CLI Reference: 12 → 32 commands (all 9 categories listed)
+- Test count badge: 5900+ → 6100+ (verified via `pytest --collect-only -q`)
+- TUTORIAL.md §0 broken cross-ref → inline Prerequisites line
+- `serve --web` warns when WebUI bundle missing
+
+### Added — Examples
+
+- **`examples/04_chat_sse_client/play.py`** (new) — SSE client example
+  - Was missing despite README claiming to run it
+  - Supports 8 SSE event types: `session_created`, `reasoning`, `phase`,
+    `tool_call`, `confirmation_required`, `save_warning`, `stream_end`, `error`
+  - Configurable base URL, token, message via CLI args
+
+### Changed — Polish (P4)
+
+- `init` "Next steps" message no longer suggests `--agent` after first init
+- `init_llm_cmd.py` — Extracted shared `create_llm_config()` function
+  (used by both `init-llm` and `init --llm`)
+
+### Documentation
+
+- **`docs/ONBOARDING.md`** (new) — Onboarding guide + design rationale
+  - 10 barriers fixed (with root cause + verify)
+  - 4 design decisions (why merge init-llm into init, etc.)
+- README LLM Setup section — 3 options (one-shot / standalone / interactive)
+- README Doctor section — Full details (checks, exit codes, examples)
+- `docs/CONFIGURATION_GUIDE.md` — Doctor chapter + global LLM config section
+
+### CI / Release
+
+- **`release-drafter.yml`** (new) — Auto-update draft releases on push to main
+  - **Note**: Removed in v0.38.0 publish-on-tag refactor (replaced by tag-triggered pipeline)
+- **`version-bump.yml`** (new) — Manual workflow to auto-PR version bumps
+- **`dependency-review.yml`** (new) — PR-time dependency change review
+- **README CI badges** — Tests, Lint, codecov
+- **`publish-on-tag.yml`** (new) — Tag-triggered full release pipeline
+  - Replaces old `release: published` trigger
+  - `git push origin v0.38.0` → build → check → PyPI → GitHub Release
+  - Version consistency check (pyproject.toml == tag)
+
+### Build verified
+
+- `python -m build` ✅
+- `twine check dist/*` ✅
+- 6192 tests collected (6092 + 100 new scenario tests)
+- 6 workflows YAML syntax check ✅
+
+### Migration from v0.30 → v0.38
+
+This release jumps 8 minor versions (v0.30.0 → v0.38.0). The main changes:
+- `MCPServer` Python API removed (use `llmwikify serve` CLI)
+- Auth system refactored (PAT-based, see `llmwikify auth`)
+- LLM config moved to `~/.llmwikify/llmwikify.json` (use `llmwikify init-llm`)
+- New CLI: `doctor`, `init-llm`
 
 ### Documentation — Issue fix (outdated docs + missing tutorial)
 

@@ -78,11 +78,26 @@ jobs:
           body: |
             Automated version bump.
 
-            - Old: $(grep -E '^version = ' pyproject.toml.bak 2>/dev/null | head -1 || echo "n/a")
             - New: ${{ steps.version.outputs.new_version }}
 
-            After merge, create a GitHub Release with tag `v${{ steps.version.outputs.new_version }}`
-            to trigger PyPI publication via `.github/workflows/publish.yml`.
+            ## After merge
+
+            Push the tag to trigger the full release pipeline:
+
+            ```bash
+            git checkout main
+            git pull
+            git tag v${{ steps.version.outputs.new_version }}
+            git push origin v${{ steps.version.outputs.new_version }}
+            ```
+
+            This triggers `.github/workflows/publish-on-tag.yml` which:
+            1. Builds sdist + wheel
+            2. Runs `twine check`
+            3. Publishes to PyPI (via `PYPI_API_TOKEN`)
+            4. Creates GitHub Release with .whl + .tar.gz assets
+
+            ⚠️ **Make sure `PYPI_API_TOKEN` is configured in GitHub Secrets** before tagging.
           branch: "release/v${{ steps.version.outputs.new_version }}"
           base: main
           delete-branch: true
