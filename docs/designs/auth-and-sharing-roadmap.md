@@ -18,7 +18,7 @@
 
 | 维度 | 决定 |
 |---|---|
-| 鉴权层级 | 多用户 + JWT(每人独立身份) |
+| 鉴权层级 | 多用户 + PAT(每人独立 token,无密码) |
 | 入口覆盖 | 本地 CLI + Web/MCP/REST 远端均鉴权 |
 | session 隔离 | session 绑 user_id(Notion 模式),Phase 2 不动 chat DB |
 | 存储位置 | `~/.llmwikify/auth.db`(独立 SQLite) |
@@ -28,9 +28,9 @@
 | **serve 默认 host** | **读 env var `LLMWIKIFY_HOST`,缺省 `127.0.0.1`** |
 | **auto-init 触发** | `serve` 时检测 host + 缺失 `auth.db` 时,自动交互 prompt first admin(email + password) |
 | **TTY 不可用 fallback** | print hint `请运行 llmwikify auth init` + exit 1 |
-| **password hash** | **Argon2id**(t=3, m=64MB, p=4) — 2026 best practice, memory-hard 抗 GPU |
-| **WebUI 鉴权库** | **fastapi-login** (`LoginManager`) — 节省 ~100 LoC 机械代码,0 新依赖 |
-| **CLI 交互 prompt** | **stdlib `input()` + `getpass.getpass()`** + TTY fallback(不引入 questionary) |
+| **认证方式** | **PAT (Personal Access Token)** — `llmw_` 前缀 + 24 字节 hex,SHA-256 hash 存储,无密码 |
+| **WebUI 鉴权库** | **无** — 直接用 PAT 验证 + JWT 签发,不需要 fastapi-login |
+| **CLI 交互 prompt** | **stdlib `input()`** — 只 prompt email,无密码 |
 | **CLI OOB pairing** | stdlib `http.server` + `webbrowser` (Phase 2b) |
 | **Cookie/session** | 自定义 JWT-in-httpOnly-cookie(fastapi-login `cookie_manager`) |
 | 无感知机制 | A1 (本机 OOB token) + A2 (30d 长寿 access token) |
@@ -38,7 +38,7 @@
 | WebUI Login | MVP 包含(Phase 2 后期) |
 | share 保护 | scope=read JWT,无独立路由 |
 | share 渲染 | 路径 A(server 不渲染,WebUI 复用 react-markdown) |
-| 复杂度 | PyJWT + Argon2id + fastapi-login + YAGNI |
+| 复杂度 | PyJWT + PAT (SHA-256 stdlib) + YAGNI |
 | keyring fallback | hard fail + 明确提示 |
 | Passkey 预留 | 不加 stub |
 | share 默认 exp | 7 天 |
@@ -78,6 +78,10 @@
 | **22** | **AuthInitBanner** | **独立组件** — 检测 local_mode=true 时不显示 |
 | **23** | **VITE_API_TOKEN** | **保留为 fallback** — authStore 优先,兼容 CI/CD |
 | **24** | **WebSocket auth** | **Query param `?token=xxx`** — 浏览器 WS 不支持自定义 headers |
+| **25** | **认证方式** | **PAT (Personal Access Token)** — 一步到位删密码,token 即凭证 |
+| **26** | **PAT 格式** | `llmw_` 前缀 + 24 字节 hex = 51 字符,SHA-256 hash 存储 |
+| **27** | **PAT 存储** | `api_keys` 表 (id, key_prefix, key_hash, user_id, name, scopes, created_at, last_used_at, expires_at, revoked_at) |
+| **28** | **密码处理** | **完全删除** — users 表删 password_hash 列,移除 argon2-cffi 依赖 |
 
 ### 1.2 文件清单
 
@@ -253,6 +257,119 @@ TOK=$(echo "<your-token>")
 curl -i http://<server-ip>:8765/api/wiki/pages | head -1   # 200 (public_read)
 curl -i -X POST http://<server-ip>:8765/api/wiki/pages -d '{}' | head -1   # 403 (无 token)
 curl -i -H "Authorization: Bearer $TOK" -X POST http://<server-ip>:8765/api/wiki/pages -d '{}' | head -1   # 200/201
+```
+
+---
+
+## 1.10 Phase 2.5 — 无密码 PAT 认证(~560 行, 5 commits, 1 天)
+
+### 1.10.1 决策 25-28(锁定)
+
+| # | 决策 | 锁定答案 |
+|---|---|---|
+| 25 | 认证方式 | **PAT (Personal Access Token)** — 一步到位删密码,token 即凭证 |
+| 26 | PAT 格式 | `llmw_` 前缀 + 24 字节 hex = 51 字符,SHA-256 hash 存储 |
+| 27 | PAT 存储 | `api_keys` 表 (id, key_prefix, key_hash, user_id, name, scopes, created_at, last_used_at, expires_at, revoked_at) |
+| 28 | 密码处理 | **完全删除** — users 表删 password_hash 列,移除 argon2-cffi 依赖 |
+
+### 1.10.2 Schema 变更
+
+```sql
+-- users 表: 删除 password_hash
+CREATE TABLE users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    username TEXT UNIQUE,
+    is_first_admin INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_login_at TEXT
+);
+
+-- 新增 api_keys 表
+CREATE TABLE api_keys (
+    id TEXT PRIMARY KEY,                    -- uuid4 hex
+    key_prefix TEXT NOT NULL,               -- 前 8 字符: "llmw_a1b2"
+    key_hash TEXT UNIQUE NOT NULL,          -- SHA-256(pat)
+    user_id TEXT NOT NULL REFERENCES users(id),
+    name TEXT,                              -- "laptop", "ci-pipeline"
+    scopes TEXT NOT NULL DEFAULT 'write',   -- "read" | "write"
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_used_at TEXT,
+    expires_at TEXT,                        -- NULL = 永不过期
+    revoked_at TEXT                         -- NULL = 有效
+);
+
+CREATE INDEX idx_api_keys_hash ON api_keys(key_hash);
+CREATE INDEX idx_api_keys_user ON api_keys(user_id);
+```
+
+### 1.10.3 认证流程
+
+```
+CLI 创建用户:
+  llmwikify auth create-token --name "laptop"
+  → prompt email (仅首次)
+  → 生成 PAT (llmw_xxxxxxxxxxxx...)
+  → SHA-256 hash 存 api_keys 表
+  → 显示 token 一次
+  → 保存到 ~/.llmwikify/local_token
+
+WebUI 首次:
+  GET /auth/me → 401
+  显示 "Get Started":
+    方式 A: "粘贴 token" → POST /auth/verify → 签 JWT → session
+    方式 B: "创建账号" → 输入邮箱 → POST /auth/register → 返回 PAT → 存 localStorage
+
+分享:
+  llmwikify share create main --expires 7d
+  → scope=read JWT (share token)
+  → recipient 直接用, 不需要 PAT
+```
+
+### 1.10.4 文件清单
+
+**新增 (1 文件)**:
+```
+foundation/auth/_pat.py       60  generate_pat / hash_pat / verify_pat
+```
+
+**改动 (9 文件)**:
+```
+foundation/auth/db.py          +40/-30  api_keys 表 + ApiKeyRepository + 删 password_hash
+foundation/auth/utils.py       -50      删 hash_password / verify_password / needs_rehash / _PH
+foundation/auth/prompt.py      -40      删密码 prompt,只保留 email
+foundation/auth/__init__.py    +5/-10   更新 re-export
+interfaces/server/http/auth_routes.py  +80/-30  PAT 路由 + /auth/register + /auth/verify
+interfaces/server/http/middleware.py    +20      PAT 验证
+interfaces/cli/commands/auth.py         +60/-20  create-token / list-tokens / revoke-token
+pyproject.toml                          -1       删 argon2-cffi
+ui/webui/src/components/auth/LoginPage.tsx  +30/-40  无密码登录
+ui/webui/src/types/auth.ts             -5       删 password
+```
+
+**删除依赖**:
+```
+argon2-cffi  (从 pyproject.toml 移除)
+```
+
+### 1.10.5 5 个 commit 序列
+
+```
+commit 1: feat(auth): PAT 替代密码 — schema + utils + prompt 简化
+  db.py (api_keys 表 + drop password_hash) + _pat.py + utils.py + prompt.py + __init__.py
+  + 删除 argon2-cffi 依赖
+
+commit 2: feat(auth): PAT 路由 + middleware 验证
+  auth_routes.py + middleware.py
+
+commit 3: feat(cli): auth create-token/list-tokens/revoke-token
+  commands/auth.py
+
+commit 4: feat(ui): WebUI 无密码登录 — token 粘贴 + 创建账号
+  LoginPage.tsx + types/auth.ts
+
+commit 5: tests + design doc 更新
+  更新 4 个 auth 测试文件 + 本文档
 ```
 
 ---
@@ -513,12 +630,18 @@ Phase 4:      (单独 llmwikify-hub 仓) posts, follows, takedowns
 - [x] Phase 2a commit 3: tests (4 文件) + 端到端冒烟
 - [x] Phase 2a 完成后 review
 - [x] Phase 2b 设计文档: 增 §0/§1.1 决策 19-24 (WebUI Login + auth store + token 持久化)
-- [ ] Phase 2b commit 4: authStore + api.ts interceptor (runtime token + 401 redirect + WS query param)
-- [ ] Phase 2b commit 5: LoginPage + ProtectedRoute + App.tsx 路由守卫
-- [ ] Phase 2b commit 6: AuthInitBanner 独立组件 + App.tsx 嵌入
-- [ ] Phase 2b 完成后 review
-- [ ] Phase 3 commits 7-10: share + remote wiki
-- [ ] Phase 4 commits 11-14: 中央 hub publish
+- [x] Phase 2b commit 4: authStore + api.ts interceptor (runtime token + 401 redirect + WS query param)
+- [x] Phase 2b commit 5: LoginPage + ProtectedRoute + App.tsx 路由守卫
+- [x] Phase 2b commit 6: AuthInitBanner 独立组件 + App.tsx 嵌入
+- [x] Phase 2b 完成后 review
+- [x] Phase 2.5 设计文档: 增 §0/§1.1/§1.10 决策 25-28 (无密码 PAT 认证)
+- [ ] Phase 2.5 commit 7: schema + utils + prompt 简化 + 删 argon2-cffi
+- [ ] Phase 2.5 commit 8: PAT 路由 + middleware 验证
+- [ ] Phase 2.5 commit 9: CLI create-token/list/revoke
+- [ ] Phase 2.5 commit 10: WebUI 无密码登录
+- [ ] Phase 2.5 commit 11: tests + design doc 更新
+- [ ] Phase 3 commits 12-15: share + remote wiki
+- [ ] Phase 4 commits 16-19: 中央 hub publish
 - [ ] Phase 4 hub 服务端独立仓立项 + 并行实施
 
 ---
