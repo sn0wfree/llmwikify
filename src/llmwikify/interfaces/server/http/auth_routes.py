@@ -60,13 +60,24 @@ def _build_router() -> APIRouter:
 
     @router.post("/register")
     async def register(request: Request) -> dict[str, Any]:
-        """Create a new user + issue a PAT.
+        """Create the first admin user + issue a PAT.
 
         Body: { "email": "user@example.com" }
         Returns: { "pat": "llmw_xxx...", "user": { ... } }
 
-        In local mode with no auth.db, creates the first admin.
+        Only allowed when no users exist (first-time setup).
+        After that, admin must use POST /auth/tokens to create PATs.
         """
+        repo = UserRepository()
+        if repo.exists():
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "registration_closed",
+                    "detail": "Registration is closed. Ask the admin to create a token for you via CLI.",
+                },
+            )
+
         try:
             body = await request.json()
         except Exception:
@@ -79,12 +90,9 @@ def _build_router() -> APIRouter:
                 detail={"error": "invalid_email", "detail": "A valid email is required."},
             )
 
-        repo = UserRepository()
         host = _resolve_effective_host(request)
         local_mode = is_local_default(host)
-
-        # In local mode with no existing user, create first admin.
-        is_first = not repo.exists()
+        is_first = True  # Always first user (registration closed above)
 
         if repo.get_by_email(email) is not None:
             raise HTTPException(

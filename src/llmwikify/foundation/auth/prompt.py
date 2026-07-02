@@ -38,6 +38,8 @@ class FirstAdminPromptResult:
     token: str
     """The owner JWT (already signed). Caller should print + write to
     ~/.llmwikify/local_token (decision 9)."""
+    pat: str
+    """The personal access token (shown once). WebUI users paste this."""
     user_id: str
     is_first_admin: bool
 
@@ -118,6 +120,20 @@ def prompt_first_admin(
     # Create the user (idempotent on email).
     user = auto_first_admin(email=email)
 
+    # Generate a PAT for the user (decision 25).
+    from ._pat import generate_pat
+    from .db import ApiKeyRepository
+
+    pat, pat_hash = generate_pat()
+    ak_repo = ApiKeyRepository()
+    ak_repo.create(
+        user_id=user.id,
+        key_prefix=pat[:12],
+        key_hash=pat_hash,
+        name="init",
+        scopes="write",
+    )
+
     claims = TokenClaims.new(
         sub=f"user:{user.id}",
         scope="write",
@@ -128,6 +144,7 @@ def prompt_first_admin(
     return FirstAdminPromptResult(
         user_email=user.email,
         token=token,
+        pat=pat,
         user_id=user.id,
         is_first_admin=user.is_first_admin,
     )

@@ -145,15 +145,16 @@ class TestRegisterVerifyFlow:
         assert body["user"]["is_first_admin"] is True
         assert body["user"]["can_edit"] is True
 
-    def test_register_duplicate_email_returns_409(self):
-        UserRepository().create(email="dup@example.com")
+    def test_register_closed_after_first_user(self):
+        """Registration is closed once a user exists (403, not 409)."""
+        UserRepository().create(email="first@example.com")
         client = TestClient(_make_app())
         resp = client.post(
             "/auth/register",
-            json={"email": "dup@example.com"},
+            json={"email": "second@example.com"},
         )
-        assert resp.status_code == 409
-        assert resp.json()["detail"]["error"] == "email_taken"
+        assert resp.status_code == 403
+        assert resp.json()["detail"]["error"] == "registration_closed"
 
     def test_register_invalid_email_returns_400(self):
         client = TestClient(_make_app())
