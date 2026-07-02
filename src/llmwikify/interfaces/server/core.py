@@ -19,7 +19,8 @@ from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
 from ..mcp.adapter import MCPAdapter
-from .http.middleware import AuthMiddleware
+
+# Phase 2a: AuthMiddleware replaced by JWTAuthMiddleware (below).
 from .http.routes import register_routes
 from .utils.webui import mount_webui
 
@@ -72,6 +73,9 @@ class WikiServer:
         provider: Any = None,
         enable_dream_scheduler: bool = True,
         enable_auto_compact: bool = True,
+        *,
+        public_read: bool = True,
+        local_mode: bool = False,
     ):
         # Unified architecture: always use WikiRegistry
         if isinstance(wiki, WikiRegistry):
@@ -107,6 +111,10 @@ class WikiServer:
         self.provider = provider
         self.enable_dream_scheduler = enable_dream_scheduler
         self.enable_auto_compact = enable_auto_compact
+        # Phase 2a: public_read + local_mode flags drive the new
+        # JWTAuthMiddleware. Defaults match decision 12 + decision 1.
+        self.public_read = public_read
+        self.local_mode = local_mode
         self.mcp: MCPAdapter | None = None
         # Reference to AgentService after register_routes; needed by the
         # lifespan handler to start/stop the DreamScheduler. Set by
@@ -146,6 +154,17 @@ class WikiServer:
                 get_agent_service,
             )
             self._agent_service = get_agent_service()
+
+            # Phase 2a: register auth routes (POST /auth/login, GET /auth/me)
+            # Mounted here (not in routes.py) so the WikiRegistry is
+            # already attached to app.state when auth/login runs and
+            # /auth/me can read it for the wikis claim.
+            from llmwikify.interfaces.server.http.auth_routes import (
+                auth_router,
+            )
+            self.app.include_router(auth_router)
+            # Make the registry reachable from request handlers.
+            self.app.state.wiki_registry = self.registry
 
         # 4. Mount WebUI static files
         if enable_webui:
@@ -245,9 +264,42 @@ class WikiServer:
                 allow_headers=["*"],
             )
 
-        # Auth middleware
-        if self.api_key:
-            app.add_middleware(AuthMiddleware, api_key=self.api_key)
+        # Auth middleware (Phase 2a: JWT-based; supersedes the
+        # old static api_key check). We mount it conditionally:
+        #   * If `local_mode` is True (loopback bind), the middleware
+        #     becomes a pass-through (decision 12).
+        #   * Otherwise, it requires a valid JWT in cookie / header
+        #     (decisions 1, 4, 7).
+        from llmwikify.interfaces.server.http.middleware import (
+            JWTAuthMiddleware,
+        )
+        if not self.local_mode:
+            try:
+                secret = self._load_jwt_secret()
+            except Exception as exc:  # AuthError, keyring missing
+                logger.warning(
+                    "JWT secret unavailable; middleware will "
+                    "verify at request time (%s).",
+                    exc,
+                )
+                secret = None
+            app.add_middleware(
+                JWTAuthMiddleware,
+                secret=secret,
+                public_read=self.public_read,
+                local_mode=self.local_mode,
+            )
+        else:
+            # In local mode we still mount the middleware, but with
+            # local_mode=True so it's a pass-through. (Alternative
+            # would be to skip the mount entirely; we mount it so
+            # other features like cookies still work consistently.)
+            app.add_middleware(
+                JWTAuthMiddleware,
+                secret=None,
+                public_read=True,
+                local_mode=True,
+            )
 
         # Phase 4.3 (v0.36): Rate limit middleware. Token-bucket
         # per IP, applied to /api/agent/* routes only. Default
@@ -361,6 +413,17 @@ class WikiServer:
     def _mount_webui(self) -> None:
         """Mount React SPA static files (single source of truth)."""
         mount_webui(self.app)
+
+    def _load_jwt_secret(self) -> bytes:
+        """Load the JWT signing secret from the OS keyring.
+
+        Used by ``_build_app`` to inject the secret into the
+        JWTAuthMiddleware at server boot. If the keyring is empty
+        (user hasn't run `llmwikify auth init` yet) we raise AuthError;
+        the caller falls back to lazy verification at request time.
+        """
+        from llmwikify.foundation.auth import require_secret
+        return require_secret()
 
     def run(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
         """Run unified HTTP server."""

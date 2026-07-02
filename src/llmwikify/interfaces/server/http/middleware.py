@@ -2,22 +2,35 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from collections import defaultdict
 
+import jwt as _pyjwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from llmwikify.foundation.auth import (
+    AuthError,
+    TokenClaims,
+    decode,
+    is_local_default,
+    require_secret,
+)
 from llmwikify.interfaces.server.constants import (
     EXCLUDED_AUTH_PATHS,
     EXCLUDED_AUTH_PREFIXES,
 )
 
+logger = logging.getLogger(__name__)
+
+
 # Phase 4.3 (v0.36): token-bucket rate limiter.
 # Default: 60 requests per minute per IP. Configurable via
 # RATE_LIMIT_PER_MIN env var (set to 0 to disable).
+
 
 def _parse_rate_limit() -> int:
     """Parse RATE_LIMIT_PER_MIN env var. Returns 0 if disabled."""
@@ -26,6 +39,7 @@ def _parse_rate_limit() -> int:
         return max(0, int(raw))
     except ValueError:
         return 60
+
 
 RATE_LIMIT_PER_MIN = _parse_rate_limit()
 
@@ -85,40 +99,167 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-class AuthMiddleware(BaseHTTPMiddleware):
-    """Simple API Key authentication middleware.
+class JWTAuthMiddleware(BaseHTTPMiddleware):
+    """JWT-based auth middleware with scope + local-mode bypass.
 
-    Verifies requests using either:
-    1. Header: Authorization: Bearer <token>
-    2. Query param: ?token=<token> (fallback)
+    Replaces the previous `AuthMiddleware` (static API-key check).
 
-    Excludes:
-    - Homepage /
-    - MCP endpoint /mcp
-    - Health check /api/health
-    - API docs /docs, /redoc
-    - Static assets /assets/
+    Verifies requests using (in priority order):
+      1. httpOnly cookie ``llmwikify_token`` (browser path)
+      2. ``Authorization: Bearer <token>`` (CLI/curl)
+      3. ``?token=<X>`` query param (legacy static-key fallback only;
+         JWT-in-query-param is intentionally NOT supported because
+         it leaks via referer logs — see decision 1 + Phase 3 share
+         for proper share-token handling)
+
+    Decisions enforced:
+      - 1   GET  (read)  + public_read=True  + no token    → 200
+                  POST (write) + no token                    → 403
+      - 4   scope based on HTTP method (GET=read, others=write)
+      - 6   cookie secure=False (MVP) — TLS termination
+                expected at reverse proxy in production
+      - 7   wikis claim validated per-request against path
+                /api/wiki/{wiki_id}/...
+      - 12  local mode (loopback bind) → middleware is a
+                pass-through: anyone on localhost is fully trusted,
+                including POST/PUT/DELETE
     """
 
-    def __init__(self, app, api_key: str):
+    def __init__(
+        self,
+        app,
+        *,
+        secret: bytes | None = None,
+        public_read: bool = True,
+        local_mode: bool = False,
+    ) -> None:
         super().__init__(app)
-        self.api_key = api_key
+        # Secret is loaded lazily (and lazily fetched) so that servers
+        # that never need to verify a token (pure local-mode, no cookie)
+        # don't crash at boot if the keyring isn't ready yet.
+        self._explicit_secret = secret
+        self.public_read = public_read
+        self.local_mode = local_mode
+
+    def _get_secret(self) -> bytes:
+        if self._explicit_secret is not None:
+            return self._explicit_secret
+        return require_secret()
+
+    def _is_excluded(self, path: str) -> bool:
+        if path in EXCLUDED_AUTH_PATHS:
+            return True
+        for prefix in EXCLUDED_AUTH_PREFIXES:
+            if path.startswith(prefix):
+                return True
+        return False
 
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path
-
-        if path in EXCLUDED_AUTH_PATHS:
+        if self._is_excluded(path):
             return await call_next(request)
-        for prefix in EXCLUDED_AUTH_PREFIXES:
-            if path.startswith(prefix):
-                return await call_next(request)
 
-        auth_header = request.headers.get("Authorization", "")
-        token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
+        # Local-mode bypass (decision 12): anyone on localhost is fully
+        # trusted. We never block writes here. The serve.py controller
+        # is responsible for setting local_mode based on the bind host.
+        if self.local_mode:
+            return await call_next(request)
+
+        # Try to extract token from cookie or Authorization header.
+        token = self._extract_token(request)
         if not token:
-            token = request.query_params.get("token", "")
+            # No token at all. Allow GETs if public_read, else 401/403.
+            if request.method == "GET" and self.public_read:
+                return await call_next(request)
+            return _deny_no_token(request.method, self.public_read)
 
-        if token != self.api_key:
-            return JSONResponse({"error": "Unauthorized", "status_code": 401}, status_code=401)
+        # Token present — verify.
+        try:
+            claims = decode(token, self._get_secret())
+        except _pyjwt.ExpiredSignatureError:
+            return _deny(401, "token_expired", "JWT has expired; re-login.")
+        except _pyjwt.InvalidTokenError as exc:
+            return _deny(401, "invalid_token", f"JWT invalid: {type(exc).__name__}")
+        except AuthError as exc:
+            return JSONResponse(exc.to_dict(), status_code=exc.status_code)
 
+        # Scope enforcement (decision 4): non-GET requires scope=write.
+        if request.method != "GET" and claims.scope != "write":
+            return _deny(403, "forbidden_scope", f"scope=write required; got {claims.scope!r}")
+
+        # Wikis claim enforcement (decision 7): for /api/wiki/{wiki_id}/...
+        # paths, check that the token covers this wiki.
+        wiki_violation = _check_wikis_claim(path, claims)
+        if wiki_violation is not None:
+            return _deny(403, "forbidden_wiki", wiki_violation)
+
+        # Attach claims to request.state so downstream handlers can read.
+        request.state.auth_claims = claims
         return await call_next(request)
+
+    def _extract_token(self, request: Request) -> str:
+        """Read token from cookie (preferred) or Authorization header.
+
+        Query param ?token= is NOT supported for JWT (decision: only
+        the legacy static-key mode uses it; we don't enable that path
+        anymore because it leaks via referer logs).
+        """
+        cookie_token = request.cookies.get("llmwikify_token")
+        if cookie_token:
+            return cookie_token
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            return auth_header[7:].strip()
+        return ""
+
+
+# ─── helpers ─────────────────────────────────────────────────────
+
+
+def _deny(status_code: int, code: str, detail: str) -> JSONResponse:
+    return JSONResponse(
+        {"error": code, "status_code": status_code, "detail": detail},
+        status_code=status_code,
+    )
+
+
+def _deny_no_token(method: str, public_read: bool) -> JSONResponse:
+    """Special-case 401 vs 403 for unauthenticated requests.
+
+    401 Unauthorized: no token AND public_read=False (always require
+                      auth, even for reads).
+    403 Forbidden:   no token AND public_read=True  (GET would have
+                      been allowed, but the caller is doing a non-GET
+                      so we forbid).
+    """
+    if not public_read:
+        return _deny(401, "auth_required", "Authentication required.")
+    if method == "GET":
+        # Should not reach here in normal flow (GET bypassed above),
+        # but be defensive.
+        return _deny(401, "auth_required", "Authentication required.")
+    return _deny(403, "auth_required", f"{method} requires authentication; POST /auth/login first.")
+
+
+def _check_wikis_claim(path: str, claims: TokenClaims) -> str | None:
+    """If the path is /api/wiki/{wiki_id}/..., enforce the wikis claim.
+
+    Returns None on pass, an error message on fail.
+    """
+    if not path.startswith("/api/wiki/"):
+        return None
+    # Split off the wiki id. Format: /api/wiki/{wiki_id}/...
+    parts = path.split("/")
+    # parts = ['', 'api', 'wiki', '{wiki_id}', ...]
+    if len(parts) < 4 or not parts[3]:
+        return None
+    wiki_id = parts[3]
+    # Wildcard "*" is the bootstrap owner token; allow everything.
+    if "*" in claims.wikis:
+        return None
+    if wiki_id in claims.wikis:
+        return None
+    return (
+        f"Token does not cover wiki {wiki_id!r}. "
+        f"Allowed: {claims.wikis!r}. Re-run `llmwikify auth token` to refresh."
+    )
