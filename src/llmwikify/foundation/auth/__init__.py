@@ -30,6 +30,7 @@ from ._errors import AuthError
 from ._jwt import TokenClaims, decode, encode
 from ._keyring import get_secret, require_secret, set_secret
 from .db import UserRepository, auth_db_path, auto_first_admin
+from .prompt import FirstAdminPromptResult, prompt_first_admin
 from .utils import (
     env_host,
     hash_password,
@@ -52,6 +53,8 @@ __all__ = [
     "UserRepository",
     "auth_db_path",
     "auto_first_admin",
+    "prompt_first_admin",
+    "FirstAdminPromptResult",
     "is_local_default",
     "env_host",
 ]

@@ -20,6 +20,7 @@ from .._base import register_command
 
 # C3 (16 complex commands)
 from .analyze_source import AnalyzeSourceCommand, run_analyze_source
+from .auth import AuthCommand
 from .batch import BatchCommand, run_batch
 from .build_index import BuildIndexCommand, run_build_index
 from .community_detect import CommunityDetectCommand, run_community_detect
@@ -89,6 +90,7 @@ register_command(DbCommand())
 register_command(QuantInitCommand())
 register_command(ReproduceCommand())
 register_command(HelpCommand())
+register_command(AuthCommand())
 
 # C3 backward-compat re-exports — when ``commands.py`` was
 # renamed to ``_app.py`` (Phase 1 #2 / C2-C3) to make room

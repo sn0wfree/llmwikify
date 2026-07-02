@@ -1,11 +1,24 @@
 """``serve`` command — start MCP server (and optional Web UI).
 
 Also wired up to the ``mcp`` alias by ``main()``.
+
+Phase 2a additions (decisions 12, 13, 14, 15):
+  - Default host reads ``LLMWIKIFY_HOST`` env var, falling back to
+    ``127.0.0.1``. This is the gate that decides "local trust" vs
+    "auth enforced" mode.
+  - When host is non-loopback and no auth.db exists, we call
+    ``prompt_first_admin()`` to bootstrap the first admin interactively
+    (TTY required; otherwise print hint and exit 1).
+  - When host is loopback (local mode), WikiServer runs with
+    ``local_mode=True`` and the middleware is a pass-through.
 """
 
 from __future__ import annotations
 
 import asyncio  # Phase 3 #6 — used by stdio/http/sse paths
+import os  # Phase 2a: LLMWIKIFY_HOST env var, chmod
+import sys  # Phase 2a: print to stderr
+from pathlib import Path  # Phase 2a: local_token path
 from typing import Any
 
 from llmwikify.interfaces.mcp.adapter import MCPAdapter  # Phase 3 #6
@@ -41,8 +54,60 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
 
     service_name = name or mcp_config.get("name") or wiki.root.name
     port = mcp_port or mcp_config.get("port", 8765)
-    final_host = host or mcp_config.get("host", "127.0.0.1")
+    # Phase 2a decision 13: host precedence is
+    #   --host > LLMWIKIFY_HOST env > mcp.host config > 127.0.0.1
+    from llmwikify.foundation.auth import env_host, is_local_default
+    final_host = (
+        host
+        or os.environ.get("LLMWIKIFY_HOST")
+        or mcp_config.get("host")
+        or env_host()  # reads LLMWIKIFY_HOST again, with default
+    )
     final_transport = transport or mcp_config.get("transport", "stdio")
+
+    # Phase 2a: detect local vs public mode and bootstrap auth.db
+    # if needed (decision 12, 14, 15).
+    local_mode = is_local_default(final_host)
+    if not local_mode:
+        from llmwikify.foundation.auth import UserRepository, auth_db_path
+        from llmwikify.foundation.auth.prompt import (
+            _chmod_600,
+            _local_token_path,
+            prompt_first_admin,
+        )
+        repo = UserRepository(db_path=auth_db_path())
+        if not repo.exists():
+            try:
+                result = prompt_first_admin()
+            except Exception as exc:  # AuthError (no_tty, etc.)
+                print(
+                    f"\n[!] {type(exc).__name__}: {getattr(exc, 'detail', exc)}",
+                    file=sys.stderr,
+                )
+                return 1
+            # Persist the local_token so subsequent CLI commands
+            # (auth token, etc.) have a baseline.
+            token_path = Path(_local_token_path())
+            token_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.chmod(token_path.parent, 0o700)
+            except OSError:
+                pass
+            token_path.write_text(result.token + "\n", encoding="utf-8")
+            _chmod_600(token_path)
+            print()
+            print("Your owner token (30d, scope=write):")
+            print(f"  {result.token}")
+            print()
+            print(f"  WebUI: open http://{final_host}:{port} and POST /auth/login")
+            print("  CLI:   export LLMWIKIFY_AUTH_TOKEN=\"<token-above>\"")
+            print()
+
+    # Decide WikiServer's local_mode flag (decision 12).
+    # We pass it to WikiServer, which uses it to mount JWTAuthMiddleware
+    # in pass-through mode.
+    server_local_mode = local_mode
+    server_public_read = True  # default; can be overridden later
 
     try:
         # Check if multi-wiki mode is enabled
@@ -66,13 +131,19 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                 enable_mcp=True,
                 enable_rest=True,
                 enable_webui=web,
+                public_read=server_public_read,
+                local_mode=server_local_mode,
             )
 
             wiki_count = len(registry.list_wikis())
             print(f"Starting Multi-Wiki Server '{service_name}' on {final_host}:{port}")
             print(f"  Wikis: {wiki_count} registered")
             print("  Transport: http")
-            print(f"  Auth: {'enabled' if auth_token else 'disabled'}")
+            # Phase 2a: clearer auth banner (decision 12 + 13)
+            if server_local_mode:
+                print(f"  Auth: DISABLED (local mode, host {final_host} is loopback)")
+            else:
+                print(f"  Auth: ENFORCED (host {final_host} is non-loopback)")
             if web:
                 print(f"  Web UI: http://{final_host}:{port}")
                 print(f"  API Docs: http://{final_host}:{port}/docs")
@@ -88,11 +159,16 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                     enable_mcp=True,
                     enable_rest=True,
                     enable_webui=True,
+                    public_read=server_public_read,
+                    local_mode=server_local_mode,
                 )
 
                 print(f"Starting Unified Server '{service_name}' on {final_host}:{port}")
                 print("  Transport: http")
-                print(f"  Auth: {'enabled' if auth_token else 'disabled'}")
+                if server_local_mode:
+                    print(f"  Auth: DISABLED (local mode, host {final_host} is loopback)")
+                else:
+                    print(f"  Auth: ENFORCED (host {final_host} is non-loopback)")
                 print(f"  Web UI: http://{final_host}:{port}")
                 print(f"  API Docs: http://{final_host}:{port}/docs")
                 print()
@@ -155,12 +231,25 @@ def setup_serve_parser(subparsers: Any) -> None:
         aliases=["mcp"],
     )
     p.add_argument("--transport", "-t", choices=["stdio", "http", "sse"], help="Transport protocol")
-    p.add_argument("--host", help="Host address")
+    p.add_argument(
+        "--host",
+        help=(
+            "Host address. Default: $LLMWIKIFY_HOST env var, or 127.0.0.1. "
+            "Loopback = local trust mode (no auth). Non-loopback = public mode (auth enforced; "
+            "auto-prompts for first admin if ~/.llmwikify/auth.db is missing)."
+        ),
+    )
     p.add_argument("--mcp-port", type=int, help="MCP server port")
     p.add_argument("--port", "-p", type=int, help="[Deprecated] Use --mcp-port instead")
     p.add_argument("--name", "-n", help="Service name (defaults to directory name)")
     p.add_argument("--web", action="store_true", help="Start unified Web UI (single process)")
-    p.add_argument("--auth-token", help="API Key for authentication")
+    p.add_argument(
+        "--auth-token",
+        help=(
+            "API Key (legacy, decision 2 plan B: treated as JWT signing secret). "
+            "Prefer running `llmwikify auth init` for first-time setup."
+        ),
+    )
     p.add_argument("--multi-wiki", action="store_true", help="Enable multi-wiki mode")
 
 
