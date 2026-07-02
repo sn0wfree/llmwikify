@@ -6,7 +6,6 @@ Currently:
   * is_local_default — loopback / IPv4 / IPv6 host detection used by
     WikiServer and serve.py to decide between "local trust" mode
     and "auth enforced" mode (decision 12 + 13).
-  * hash_password / verify_password — Argon2id wrapper (decision 16).
   * local_token_path / chmod_600 — POSIX permission helper for the
     owner-token file at ~/.llmwikify/local_token (decision 9).
 
@@ -21,20 +20,6 @@ import ipaddress
 import os
 import stat
 from pathlib import Path
-
-from argon2 import PasswordHasher
-from argon2.exceptions import (
-    InvalidHashError,
-    VerificationError,
-    VerifyMismatchError,
-)
-
-# Argon2id parameters (decision 16): t=3, m=64MB, p=4. RFC 9106
-# recommended mid-strength; modern CPU should hash in ~50ms. Ph
-# instance is module-level so parameters are loaded once at import
-# (re-instantiation per call would cost ~ms).
-_PH = PasswordHasher(time_cost=3, memory_cost=64 * 1024, parallelism=4)
-
 
 # Loopback literals. We check these as well as the parsed ipaddress
 # form, because hosts may be passed as DNS names that we should NOT
@@ -74,58 +59,6 @@ def is_local_default(host: str | None) -> bool:
     except ValueError:
         return False
     return bool(ip.is_loopback)
-
-
-# ─── Password hashing (Argon2id) ────────────────────────────────────────
-
-
-def hash_password(plain: str) -> str:
-    """Hash a password with Argon2id (decision 16).
-
-    The returned string is a PHC-formatted hash that includes all
-    parameters, salt, and the encoded digest. Verifier can be any
-    compatible Argon2 implementation.
-    """
-    if not isinstance(plain, str):
-        raise TypeError(f"plain must be str, got {type(plain).__name__}")
-    return _PH.hash(plain)
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a password against an Argon2id hash.
-
-    Returns:
-        True if the password matches, False otherwise (including
-        invalid hash, wrong algorithm, mismatch, etc.). We never raise
-        on a bad password — caller just sees False. Other errors
-        (e.g. hash corruption) return False too; logging the original
-        exception is the caller's responsibility if they want to
-        distinguish.
-    """
-    if not isinstance(plain, str) or not isinstance(hashed, str):
-        return False
-    try:
-        return _PH.verify(hashed, plain)
-    except (VerifyMismatchError, InvalidHashError, VerificationError):
-        # VerificationError is the parent class; catches malformed PHC
-        # strings, wrong algorithm, corrupted salts, etc. All of these
-        # are "no match" from the caller's perspective.
-        return False
-
-
-def needs_rehash(hashed: str) -> bool:
-    """Check if a stored hash should be upgraded to current parameters.
-
-    Use after a successful verify_password to opportunistically upgrade
-    the hash when the cost parameters have changed. Returns True if
-    the caller's hash was generated with weaker parameters than the
-    current PasswordHasher instance. The caller is expected to re-store
-    the upgraded hash.
-    """
-    try:
-        return _PH.check_needs_rehash(hashed)
-    except InvalidHashError:
-        return True  # corrupt hash → rehash
 
 
 # ─── Env var helper (decision 13: serve default host) ──────────────────

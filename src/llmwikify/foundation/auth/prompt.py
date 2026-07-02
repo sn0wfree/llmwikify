@@ -1,13 +1,14 @@
-"""Interactive first-admin prompt (decision 14, 15, 18).
+"""Interactive first-admin prompt (decision 14, 15, 18, 25).
 
 Layer: L1 (foundation). Pure function — given a TTY (or not), prompt
-the user for email + password, validate, and call auto_first_admin().
+the user for email (no password — PAT-only auth, decision 25), and
+call auto_first_admin().
 
 This module is intentionally tiny and side-effect-only because CLI is
-the only caller. We use stdlib `input()` and `getpass.getpass()` (decision
-18) — no questionary / rich / click. The TTY fallback (decision 15)
-is a hard requirement: if stdin/stdout is not a TTY, we cannot prompt,
-so we exit with a clear hint and a non-zero code.
+the only caller. We use stdlib `input()` (decision 18) — no questionary
+/ rich / click. The TTY fallback (decision 15) is a hard requirement:
+if stdin/stdout is not a TTY, we cannot prompt, so we exit with a clear
+hint and a non-zero code.
 
 Why in foundation (L1) and not in interfaces/cli/commands/auth.py?
 Because:
@@ -22,9 +23,7 @@ Because:
 
 from __future__ import annotations
 
-import getpass
 import sys
-import time
 from dataclasses import dataclass
 
 from ._errors import AuthError
@@ -66,32 +65,6 @@ def _prompt_email(input_fn=input, out=sys.stdout) -> str:
         return raw.lower()
 
 
-def _prompt_password(input_fn=input, out=sys.stdout) -> str:
-    """Ask for password, hidden via getpass. Empty input → retry."""
-    while True:
-        raw = getpass.getpass("Password: ")
-        if not raw:
-            out.write("  (empty; please provide a password)\n")
-            continue
-        if len(raw) < 8:
-            out.write("  (too short; need at least 8 characters)\n")
-            continue
-        if len(raw) > 1024:
-            out.write("  (too long; cap at 1024 characters)\n")
-            continue
-        return raw
-
-
-def _prompt_password_confirm(pw: str, input_fn=input, out=sys.stdout) -> bool:
-    """Confirm password matches. Up to 3 retries on mismatch."""
-    for _ in range(3):
-        confirm = getpass.getpass("Password (again): ")
-        if confirm == pw:
-            return True
-        out.write("  (mismatch; try again)\n")
-    return False
-
-
 def prompt_first_admin(
     *,
     input_fn=input,
@@ -107,12 +80,14 @@ def prompt_first_admin(
 
     Decision 18: stdlib prompts only.
 
+    Decision 25: PAT-only auth — no password prompt.
+
     Returns:
         FirstAdminPromptResult with email + token + user_id.
 
     Raises:
-        AuthError: not a TTY, or password confirm loop exhausted, or
-            keyring unavailable (re-raised from the underlying helpers).
+        AuthError: not a TTY, or keyring unavailable (re-raised from
+            the underlying helpers).
     """
     if not _is_tty():
         raise AuthError(
@@ -120,7 +95,7 @@ def prompt_first_admin(
             detail=(
                 "Cannot prompt for first admin: stdin/stdout is not a TTY. "
                 "Run `llmwikify auth init --email <you@example.com>` interactively first, "
-                "or set the email/password via env vars (Phase 3+)."
+                "or set the email via env var."
             ),
             status_code=1,
         )
@@ -129,13 +104,6 @@ def prompt_first_admin(
     out.write("[!] Let's create the first admin (one-time setup):\n\n")
 
     email = _prompt_email(input_fn=input_fn, out=out)
-    password = _prompt_password(input_fn=input_fn, out=out)
-    if not _prompt_password_confirm(password, input_fn=input_fn, out=out):
-        raise AuthError(
-            code="password_mismatch",
-            detail="Password confirm did not match after 3 tries; aborting.",
-            status_code=1,
-        )
 
     # Lazy import: foundation.auth._jwt + _keyring so a missing
     # keyring backend only fails here (not at module import).
@@ -148,13 +116,8 @@ def prompt_first_admin(
         secret = set_secret()
 
     # Create the user (idempotent on email).
-    user = auto_first_admin(email=email, password=password)
+    user = auto_first_admin(email=email)
 
-    # Note: the wikis claim is always ["*"] at this point. We deliberately
-    # do NOT import kernel.multi_wiki.registry here (L1 → L2 upward
-    # import is forbidden by the G+Y 4-layer rule). The owner token's
-    # wikis claim gets re-signed on the next `auth token` invocation
-    # by the CLI, which can then safely import L2.
     claims = TokenClaims.new(
         sub=f"user:{user.id}",
         scope="write",

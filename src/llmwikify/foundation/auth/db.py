@@ -1,23 +1,25 @@
-"""SQLite auth.db + UserRepository.
+"""SQLite auth.db + UserRepository + ApiKeyRepository.
 
-Layer: L1 (foundation). Single-table SQLite, no ORM (consistent with
+Layer: L1 (foundation). Single-file SQLite, no ORM (consistent with
 existing llmwikify style: pure sqlite3 stdlib). The auth.db is at
 `~/.llmwikify/auth.db` (decision 11), separate from any wiki DB.
 
-Schema (see docs/designs/auth-and-sharing-roadmap.md §1.4):
+Schema (see docs/designs/auth-and-sharing-roadmap.md §1.4 + §1.10.2):
 
-    users(id, email, username, password_hash, is_first_admin,
-          created_at, last_login_at)
+    users(id, email, username, is_first_admin, created_at, last_login_at)
+    api_keys(id, key_prefix, key_hash, user_id, name, scopes,
+             created_at, last_used_at, expires_at, revoked_at)
 
 Decisions:
   - 11: path = ~/.llmwikify/auth.db
-  - 16: password_hash = Argon2id PHC string
+  - 25: PAT replaces passwords (no password_hash column)
+  - 27: api_keys table stores SHA-256 hash of PATs
   - 18: arg parsing is up to the CLI; this module just persists records
 
 This module is the only place that knows the table layout. callers
-go through UserRepository methods. The raw sqlite3.Connection is
-exposed only for the auto_first_admin() convenience function and for
-tests.
+go through UserRepository / ApiKeyRepository methods. The raw
+sqlite3.Connection is exposed only for the auto_first_admin()
+convenience function and for tests.
 """
 
 from __future__ import annotations
@@ -32,10 +34,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from argon2 import PasswordHasher
-
 from ._errors import AuthError
-from .utils import hash_password
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +73,6 @@ class User:
     id: str
     email: str
     username: str | None
-    password_hash: str
     is_first_admin: bool
     created_at: str
     last_login_at: str | None
@@ -136,13 +134,27 @@ class UserRepository:
                     id TEXT PRIMARY KEY,
                     email TEXT UNIQUE NOT NULL,
                     username TEXT UNIQUE,
-                    password_hash TEXT NOT NULL,
                     is_first_admin INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     last_login_at TEXT
                 );
                 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
                 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
+                CREATE TABLE IF NOT EXISTS api_keys (
+                    id TEXT PRIMARY KEY,
+                    key_prefix TEXT NOT NULL,
+                    key_hash TEXT UNIQUE NOT NULL,
+                    user_id TEXT NOT NULL REFERENCES users(id),
+                    name TEXT,
+                    scopes TEXT NOT NULL DEFAULT 'write',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    last_used_at TEXT,
+                    expires_at TEXT,
+                    revoked_at TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+                CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
                 """
             )
             conn.commit()
@@ -177,14 +189,13 @@ class UserRepository:
     def create(
         self,
         email: str,
-        password: str,
         *,
         is_first_admin: bool = False,
         username: str | None = None,
     ) -> User:
         """Create a new user. Raises AuthError if email is taken.
 
-        Hashes the password with Argon2id (decision 16) before storing.
+        No password — PAT-only auth (decision 25).
         """
         if self.get_by_email(email) is not None:
             raise AuthError(
@@ -193,21 +204,17 @@ class UserRepository:
                 status_code=409,
             )
         user_id = uuid.uuid4().hex
-        # If is_first_admin, force username (used for hub @handle later).
-        # Otherwise leave NULL — Phase 4 will derive.
         if username is None:
             username = _derive_username(email) if is_first_admin else None
-        pwd_hash = hash_password(password)
         with self._atomic_write() as conn:
             conn.execute(
                 """
                 INSERT INTO users
-                    (id, email, username, password_hash, is_first_admin)
-                VALUES (?, ?, ?, ?, ?)
+                    (id, email, username, is_first_admin)
+                VALUES (?, ?, ?, ?)
                 """,
-                (user_id, email, username, pwd_hash, 1 if is_first_admin else 0),
+                (user_id, email, username, 1 if is_first_admin else 0),
             )
-        # Re-fetch to get the DB-managed created_at value.
         created = self.get_by_id(user_id)
         if created is None:
             raise AuthError(
@@ -234,7 +241,6 @@ def _row_to_user(row: sqlite3.Row) -> User:
         id=row["id"],
         email=row["email"],
         username=row["username"],
-        password_hash=row["password_hash"],
         is_first_admin=bool(row["is_first_admin"]),
         created_at=row["created_at"],
         last_login_at=row["last_login_at"],
@@ -246,7 +252,6 @@ def _row_to_user(row: sqlite3.Row) -> User:
 
 def auto_first_admin(
     email: str,
-    password: str,
     *,
     db_path: Path | None = None,
 ) -> User:
@@ -257,16 +262,143 @@ def auto_first_admin(
       - serve auto-init prompt (decision 14) when --host is non-loopback
         and no admin exists yet.
 
-    Returns the User. Raises AuthError on email collision or weak input.
+    Returns the User. Raises AuthError on email collision.
     """
     repo = UserRepository(db_path=db_path)
     if repo.get_by_email(email) is not None:
-        # Idempotent: same email → return existing user.
         existing = repo.get_by_email(email)
         if existing is not None:
             return existing
     return repo.create(
         email=email,
-        password=password,
         is_first_admin=True,
+    )
+
+
+# ─── API Key (PAT) Repository ──────────────────────────────────────
+
+
+@dataclass
+class ApiKey:
+    """In-memory representation of an api_keys row."""
+
+    id: str
+    key_prefix: str
+    key_hash: str
+    user_id: str
+    name: str | None
+    scopes: str
+    created_at: str
+    last_used_at: str | None
+    expires_at: str | None
+    revoked_at: str | None
+
+
+class ApiKeyRepository:
+    """Thin SQLite-backed repository for the api_keys table (decision 27)."""
+
+    def __init__(self, db_path: Path | None = None) -> None:
+        self.db_path = db_path or auth_db_path()
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+
+    @contextmanager
+    def _atomic_write(self) -> Iterator[sqlite3.Connection]:
+        conn = self._connect()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def create(
+        self,
+        *,
+        user_id: str,
+        key_prefix: str,
+        key_hash: str,
+        name: str | None = None,
+        scopes: str = "write",
+        expires_at: str | None = None,
+    ) -> ApiKey:
+        """Insert a new API key record."""
+        api_key_id = uuid.uuid4().hex
+        with self._atomic_write() as conn:
+            conn.execute(
+                """
+                INSERT INTO api_keys
+                    (id, key_prefix, key_hash, user_id, name, scopes, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (api_key_id, key_prefix, key_hash, user_id, name, scopes, expires_at),
+            )
+        return self.get_by_id(api_key_id)
+
+    def get_by_id(self, key_id: str) -> ApiKey | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM api_keys WHERE id = ?", (key_id,),
+            ).fetchone()
+        return _row_to_api_key(row) if row else None
+
+    def get_by_hash(self, key_hash: str) -> ApiKey | None:
+        """Look up an active (not revoked, not expired) key by its hash."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM api_keys
+                WHERE key_hash = ?
+                  AND revoked_at IS NULL
+                  AND (expires_at IS NULL OR expires_at > datetime('now'))
+                """,
+                (key_hash,),
+            ).fetchone()
+        return _row_to_api_key(row) if row else None
+
+    def list_by_user(self, user_id: str) -> list[ApiKey]:
+        """List all keys for a user (including revoked/expired)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM api_keys WHERE user_id = ? ORDER BY created_at DESC",
+                (user_id,),
+            ).fetchall()
+        return [_row_to_api_key(r) for r in rows]
+
+    def touch_last_used(self, key_id: str) -> None:
+        """Update last_used_at to now."""
+        with self._atomic_write() as conn:
+            conn.execute(
+                "UPDATE api_keys SET last_used_at = datetime('now') WHERE id = ?",
+                (key_id,),
+            )
+
+    def revoke(self, key_id: str) -> bool:
+        """Set revoked_at. Returns True if a row was updated."""
+        with self._atomic_write() as conn:
+            cursor = conn.execute(
+                "UPDATE api_keys SET revoked_at = datetime('now') WHERE id = ? AND revoked_at IS NULL",
+                (key_id,),
+            )
+            return cursor.rowcount > 0
+
+
+def _row_to_api_key(row: sqlite3.Row) -> ApiKey:
+    return ApiKey(
+        id=row["id"],
+        key_prefix=row["key_prefix"],
+        key_hash=row["key_hash"],
+        user_id=row["user_id"],
+        name=row["name"],
+        scopes=row["scopes"],
+        created_at=row["created_at"],
+        last_used_at=row["last_used_at"],
+        expires_at=row["expires_at"],
+        revoked_at=row["revoked_at"],
     )
