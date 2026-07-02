@@ -102,3 +102,34 @@ def ensure_dir_700(path: Path) -> None:
         os.chmod(path, 0o700)
     except OSError:
         pass
+
+
+# ─── PAT file helpers (Phase 2.5) ────────────────────────────────
+
+
+def pat_file_path() -> Path:
+    """Return canonical PAT file path: ~/.llmwikify/pat.
+
+    Honors $LLMWIKIFY_HOME for tests / non-standard layouts.
+    """
+    home = os.environ.get("LLMWIKIFY_HOME", "").strip() or os.path.expanduser("~")
+    return Path(home) / ".llmwikify" / "pat"
+
+
+def save_pat(pat: str) -> None:
+    """Save a PAT to file (chmod 600). Called after PAT creation."""
+    path = pat_file_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(pat + "\n", encoding="utf-8")
+    chmod_600(path)
+
+
+def load_pat() -> str:
+    """Read PAT from file. Returns empty string if not found."""
+    path = pat_file_path()
+    if not path.exists():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""

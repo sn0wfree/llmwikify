@@ -84,6 +84,8 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
             name="cli-init",
             scopes="write",
         )
+        from llmwikify.foundation.auth.utils import save_pat
+        save_pat(pat)
 
         claims = TokenClaims.new(
             sub=f"user:{user.id}",

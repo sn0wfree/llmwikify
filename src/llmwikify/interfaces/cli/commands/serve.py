@@ -102,6 +102,32 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
             print("  CLI:   export LLMWIKIFY_AUTH_TOKEN=\"<pat-above>\"")
             print()
 
+        # Show PAT info on every startup (not just first time).
+        from llmwikify.foundation.auth.db import ApiKeyRepository
+        from llmwikify.foundation.auth.utils import pat_file_path
+        pf = pat_file_path()
+        if pf.exists():
+            print(f"  PAT file: {pf}")
+        # List PAT prefixes for the first user.
+        _repo = UserRepository(db_path=auth_db_path())
+        _first_user = None
+        try:
+            for row in _repo._connect().execute("SELECT * FROM users LIMIT 1"):
+                from llmwikify.foundation.auth.db import _row_to_user
+                _first_user = _row_to_user(row)
+                break
+        except Exception:
+            pass
+        if _first_user:
+            _ak_repo = ApiKeyRepository()
+            _keys = _ak_repo.list_by_user(_first_user.id)
+            _active = [k for k in _keys if k.revoked_at is None]
+            if _active:
+                print("  Your PATs:")
+                for k in _active:
+                    print(f"    {k.key_prefix}... ({k.name or 'unnamed'})")
+                print()
+
     # Decide WikiServer's local_mode flag (decision 12).
     # We pass it to WikiServer, which uses it to mount JWTAuthMiddleware
     # in pass-through mode.

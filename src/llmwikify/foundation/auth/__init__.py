@@ -39,7 +39,10 @@ from .utils import (
     ensure_dir_700,
     env_host,
     is_local_default,
+    load_pat,
     local_token_path,
+    pat_file_path,
+    save_pat,
 )
 
 __all__ = [
@@ -62,6 +65,9 @@ __all__ = [
     "is_local_default",
     "env_host",
     "local_token_path",
+    "pat_file_path",
+    "save_pat",
+    "load_pat",
     "chmod_600",
     "ensure_dir_700",
 ]

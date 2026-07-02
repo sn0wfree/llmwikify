@@ -123,6 +123,7 @@ def prompt_first_admin(
     # Generate a PAT for the user (decision 25).
     from ._pat import generate_pat
     from .db import ApiKeyRepository
+    from .utils import save_pat
 
     pat, pat_hash = generate_pat()
     ak_repo = ApiKeyRepository()
@@ -133,6 +134,9 @@ def prompt_first_admin(
         name="init",
         scopes="write",
     )
+
+    # Save PAT to file for later retrieval (cat ~/.llmwikify/pat).
+    save_pat(pat)
 
     claims = TokenClaims.new(
         sub=f"user:{user.id}",
