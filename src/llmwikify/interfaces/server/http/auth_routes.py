@@ -114,11 +114,10 @@ def _build_router() -> APIRouter:
         )
 
         # Build JWT for immediate use.
-        wikis = _list_wikis_from_registry(request)
         claims = TokenClaims.new(
             sub=f"user:{user.id}",
             scope="write",
-            wikis=wikis or ["*"],
+            wikis=["*"],
         )
         token = encode(claims, _get_jwt_secret())
 
@@ -175,12 +174,11 @@ def _build_router() -> APIRouter:
                 detail={"error": "user_not_found", "detail": "PAT owner no longer exists."},
             )
 
-        # Issue JWT.
-        wikis = _list_wikis_from_registry(request)
+        # Issue JWT — PAT owner is admin, always gets all-wikis access.
         claims = TokenClaims.new(
             sub=f"user:{user.id}",
             scope=api_key.scopes,
-            wikis=wikis or ["*"],
+            wikis=["*"],
         )
         token = encode(claims, _get_jwt_secret())
 
@@ -368,17 +366,6 @@ def _user_to_dict(user, claims: TokenClaims, *, local_mode: bool) -> dict[str, A
         "wikis": list(claims.wikis),
         "local_mode": local_mode,
     }
-
-
-def _list_wikis_from_registry(request: Request) -> list[str]:
-    registry = getattr(request.app.state, "wiki_registry", None)
-    if registry is None:
-        return ["*"]
-    try:
-        wikis = registry.list_wikis()
-    except Exception:
-        return ["*"]
-    return [w.wiki_id for w in wikis] or ["*"]
 
 
 def _resolve_effective_host(request: Request) -> str:
