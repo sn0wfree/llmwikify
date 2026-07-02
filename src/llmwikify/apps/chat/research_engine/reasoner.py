@@ -97,6 +97,7 @@ class ResearchReasoner:
 
         Walks the state in canonical order:
           error → done
+          consecutive plan loop break → gather (or report) (anti-spin)
           no clarification → plan (defensive; normally
                               handled before the loop)
           no sub-queries → plan
@@ -109,6 +110,15 @@ class ResearchReasoner:
           review approved → done
           review failed + rounds left → revise
           else → done
+
+        Anti-spin guard:
+            When the same state has been returning ``plan`` for
+            ``_max_replan`` consecutive rounds, the next ``plan``
+            decision is suppressed. Control falls through to the
+            gather/analyze/synthesize/report cascade so the engine
+            makes forward progress. Without this, the engine spins
+            on the planning→planning transition and the UI looks
+            frozen.
         """
         # Error state → done (let LLM override if it wants to retry)
         if state.phase == "error":
@@ -150,11 +160,24 @@ class ResearchReasoner:
         # the planning→planning transition. The correct path after
         # the report exists is report→review→done (or revise on
         # review failure).
+        #
+        # Anti-spin: if the previous N rounds all returned "plan"
+        # (where N == _max_replan), the replan budget is effectively
+        # exhausted. Suppress this branch so control falls through
+        # to "report" (or "review" / "done" depending on state).
+        consecutive_plan = getattr(state, "_consecutive_plan", 0)
         if (state.knowledge_gaps
                 and state.budget_remaining > 0.15
                 and state.round < self._max_replan + 1
-                and state.report_md is None):
+                and state.report_md is None
+                and consecutive_plan < self._max_replan):
             return "plan"
+        if consecutive_plan >= self._max_replan and state.report_md is None:
+            logger.info(
+                "Plan anti-spin: %d consecutive plan rounds (limit=%d); "
+                "falling through to 'report'",
+                consecutive_plan, self._max_replan,
+            )
 
         # No report yet → report
         if state.report_md is None:
@@ -227,6 +250,18 @@ class ResearchReasoner:
 
         action = result.get("action", "done")
         thought = result.get("thought", "")
+
+        # Anti-spin guard for the LLM path: if the LLM keeps returning
+        # ``plan`` after a report already exists, that means the
+        # prompt is misguiding the model into replanning forever.
+        # Force a rule-based decision so the engine makes progress
+        # (gather → analyze → synthesize → report → review → done).
+        if action == "plan" and state.report_md is not None:
+            logger.info(
+                "LLM reason returned 'plan' but report exists; "
+                "applying rule-based fallback to break the loop"
+            )
+            return self.rule_based(state)
 
         # Validate against the allow-list (defensive).
         if action not in VALID_ACTIONS:

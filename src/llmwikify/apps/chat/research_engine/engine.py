@@ -288,6 +288,14 @@ class ResearchEngine:
             action = await engine_ref._reason(state)
             thought = getattr(state, "_last_thought", "")
 
+            # Anti-spin bookkeeping: track consecutive ``plan``
+            # decisions on the state so the reasoner can break the
+            # plan→plan self-loop. Reset on any other action.
+            if action == "plan":
+                state._consecutive_plan = getattr(state, "_consecutive_plan", 0) + 1
+            else:
+                state._consecutive_plan = 0
+
             # Framework compliance gate: intercept "done"
             if action == "done":
                 if engine_ref.config.get("strict_exit", True):

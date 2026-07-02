@@ -279,3 +279,8 @@ class ResearchState:
     # Engine back-reference (set after construction by ResearchEngine).
     # Excluded from repr/eq to avoid circular references.
     _engine: Any = field(default=None, repr=False, compare=False)
+
+    # Reasoner-internal: counts consecutive ``plan`` decisions to break
+    # plan→plan self-loops. Reset to 0 on any non-plan action. Excluded
+    # from repr/eq because it is observation state, not value state.
+    _consecutive_plan: int = field(default=0, repr=False, compare=False)
