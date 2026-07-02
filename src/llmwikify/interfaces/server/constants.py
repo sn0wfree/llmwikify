@@ -22,6 +22,8 @@ class TransportType(str, Enum):
 # /auth/register and /auth/verify must be in EXCLUDED_AUTH_PATHS —
 # otherwise the JWTAuthMiddleware would block the very routes that
 # issue tokens. /auth/me and /auth/tokens require authentication.
+# Both /auth/... and /api/auth/... variants are needed because the
+# WebUI requests /api/auth/... (with the /api prefix).
 EXCLUDED_AUTH_PATHS = {
     "/",
     "/mcp",
@@ -32,6 +34,8 @@ EXCLUDED_AUTH_PATHS = {
     "/openapi.json",
     "/auth/register",
     "/auth/verify",
+    "/api/auth/register",
+    "/api/auth/verify",
 }
 EXCLUDED_AUTH_PREFIXES = {"/assets/"}
 
