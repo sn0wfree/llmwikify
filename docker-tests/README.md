@@ -1,31 +1,85 @@
 # Docker Test Environment
 
-Run llmwikify scenario tests in a Docker container for reproducible CI/CD
+Run llmwikify scenario tests in Docker containers for reproducible CI/CD
 and local development.
 
 ## Quick Start
 
+### P2: Dual Container (Recommended)
+
+Run server + test containers together using Docker Compose:
+
 ```bash
-# One command: build + run
-./docker-tests/run.sh --build
+# One command: build + run server + run tests
+./docker-tests/run-compose.sh
 
 # With LLM key (auto-detected from ~/.llmwikify/llmwikify.json)
 export LLM_API_KEY=sk-xxx
-./docker-tests/run.sh
+./docker-tests/run-compose.sh
 
 # Run with custom Python version
-./docker-tests/run.sh --py 3.12
+./docker-tests/run-compose.sh --py 3.12
 
-# Run specific test
-./docker-tests/run.sh -- tests/scenarios/test_01_wiki_core.py
-
-# Or manually:
-docker build -f docker-tests/Dockerfile -t llmwikify-test .
-docker run --rm \
-    -e LLM_API_KEY="$LLM_API_KEY" \
-    -v $(pwd)/docker-tests/test-results:/app/test-results \
-    llmwikify-test
+# Keep wiki data after tests (for debugging)
+./docker-tests/run-compose.sh --keep-volumes
 ```
+
+### P1: Single Container (No Server)
+
+Run tests only (server-dependent tests will fail):
+
+```bash
+./docker-tests/run.sh --build
+```
+
+## Architecture
+
+### P2: Dual Container (docker-compose.yml)
+
+```
+┌─────────────────────────────────┐
+│  docker-tests network           │
+│  ┌───────────────────────────┐  │
+│  │  server (long-running)    │  │
+│  │  - Port: 8765             │  │
+│  │  - Health: /api/health    │  │
+│  │  - Volume: wiki-data      │  │
+│  └───────────────────────────┘  │
+│             ▲                   │
+│             │ depends_on        │
+│             │ service_healthy   │
+│  ┌───────────────────────────┐  │
+│  │  test (short-lived)       │  │
+│  │  - Runs pytest            │  │
+│  │  - Exits after tests      │  │
+│  └───────────────────────────┘  │
+└─────────────────────────────────┘
+```
+
+**Key Features:**
+- Server starts first, health-checked before tests run
+- Tests use `SERVER_URL=http://server:8765` via Docker DNS
+- Wiki data persists in Docker volume (optional cleanup)
+
+### P1: Single Container
+
+```
+┌─────────────────────────────┐
+│  test container             │
+│  - No server running        │
+│  - Server tests fail        │
+│  - Fast for non-server tests│
+└─────────────────────────────┘
+```
+
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `run-compose.sh` | **P2**: Run server + test containers |
+| `run.sh` | **P1**: Run tests only (no server) |
+| `server-entrypoint.sh` | Server container entry point |
+| `entrypoint.sh` | Test container entry point |
 
 ## Environment Variables
 
@@ -35,77 +89,107 @@ docker run --rm \
 | `LLM_PROVIDER` | `minimax` | LLM provider name |
 | `LLM_MODEL` | `minimax-M3` | LLM model name |
 | `LLM_BASE_URL` | `https://api.minimaxi.com/v1` | LLM API base URL |
-| `SERVER_URL` | `http://localhost:8765` | llmwikify server URL (for chat tests) |
+| `SERVER_URL` | `http://localhost:8765` (P1) / `http://server:8765` (P2) | Server URL |
+| `AUTH_TOKEN` | (empty) | Bearer token for server auth |
 | `TZ` | `UTC` | Timezone |
 
 ## Test Behavior
 
 - **No `LLM_API_KEY`**: LLM-marked tests are auto-skipped, others run
-- **With `LLM_API_KEY`**: All tests run
+- **With `LLM_API_KEY`**: All tests run (76 tests total)
+- **P1 (no server)**: Server-dependent tests fail (8 tests in test_04, test_12)
+- **P2 (with server)**: All tests pass
 - **Output**: JUnit XML written to `/app/test-results/junit.xml`
 
-## Running Specific Tests
+## Test Results
+
+| Mode | Passed | Skipped | Failed |
+|---|---|---|---|
+| P2 + LLM key | 76 | 0 | 0 |
+| P2 no LLM key | 52 | 24 | 0 |
+| P1 + LLM key | 68 | 0 | 8 (server tests) |
+| P1 no LLM key | 44 | 24 | 8 (server tests) |
+
+## Commands Reference
 
 ```bash
-# Run a single test file
-docker run --rm -e LLM_API_KEY="$LLM_API_KEY" \
-    llmwikify-test pytest tests/scenarios/test_01_wiki_core.py -v
+# Full integration (P2 recommended)
+./docker-tests/run-compose.sh
 
-# Run a single test function
-docker run --rm -e LLM_API_KEY="$LLM_API_KEY" \
-    llmwikify-test pytest tests/scenarios/test_01_wiki_core.py::TestWikiCore::test_1_1_init_wiki -v
+# Run server only (for debugging)
+./docker-tests/run-compose.sh --profile server
+
+# Skip image rebuild
+./docker-tests/run-compose.sh --no-build
+
+# Keep wiki data after tests
+./docker-tests/run-compose.sh --keep-volumes
+
+# Run specific tests
+docker compose -f docker-tests/docker-compose.yml --profile full up
+# Then in test container:
+docker exec llmwikify-tests pytest tests/scenarios/test_01_wiki_core.py -v
+
+# Run tests only without server (P1)
+./docker-tests/run.sh
 
 # Skip LLM tests
-docker run --rm -e LLM_API_KEY="" \
-    llmwikify-test pytest tests/scenarios/ -m "not llm"
+./docker-tests/run.sh -- -m "not llm"
 ```
 
 ## Multi-Python Support
 
-The Dockerfile accepts a `PYTHON_VERSION` build argument:
-
 ```bash
-for v in 3.10 3.11 3.12; do
-    docker build --build-arg PYTHON_VERSION=$v \
-        -t llmwikify-test:py$v \
-        -f docker-tests/Dockerfile .
-done
+# Build images for specific Python version
+docker build --build-arg PYTHON_VERSION=3.12 \
+    -f docker-tests/Dockerfile \
+    -t llmwikify-test:py3.12 .
+
+docker build --build-arg PYTHON_VERSION=3.12 \
+    -f docker-tests/Dockerfile.server \
+    -t llmwikify-server:py3.12 .
 ```
 
 ## Image Structure
 
+### Test Image (Dockerfile)
+
 - **Base**: `python:3.11-slim`
 - **User**: `testuser` (UID 1000, non-root)
-- **Timezone**: UTC
 - **Workdir**: `/app`
-- **Entrypoint**: `tini` + `entrypoint.sh` (clean signal handling)
-- **Output**: `/app/test-results/` (mount as volume)
+- **Entrypoint**: `tini` + `entrypoint.sh`
+- **Size**: ~1GB
 
-## Layer Caching
+### Server Image (Dockerfile.server)
 
-The image is built in two layers for optimal caching:
-
-1. **Dependencies layer** (rebuilt only when `pyproject.toml` changes)
-2. **Code layer** (rebuilt when test files change)
-
-This makes incremental builds fast (< 5s for code-only changes).
+- **Base**: `python:3.11-slim`
+- **User**: `llmuser` (UID 1000, non-root)
+- **Workdir**: `/app`
+- **Entrypoint**: `tini` + `server-entrypoint.sh`
+- **Healthcheck**: `curl -f http://localhost:8765/api/health`
+- **Size**: ~940MB
+- **Note**: Reproduction routes disabled (missing QuantNodes dependency)
 
 ## Troubleshooting
 
-**Tests fail with "LLM_API_KEY not set"**
-→ Set `LLM_API_KEY` env var or accept the auto-skip behavior
-
 **Tests fail with "Connection refused"**
-→ Server is not running. Tests in `test_04_*` and `test_12_5` need a server.
+→ Run with P2 (docker-compose) which starts server automatically.
+Or start server manually before running P1 tests.
 
 **Container exits with code 1**
 → Check `/app/test-results/junit.xml` for failure details
 
 **Permission denied on volume mount**
-→ Container runs as UID 1000. Ensure host dir is writable.
+→ Containers run as UID 1000. Ensure host dir is writable.
+
+**Reproduction routes return 404**
+→ Expected when QuantNodes is not installed (private package).
+Routes are automatically disabled.
+
+**Build timeout on pip install**
+→ Network issues with mirrors. Retry or use `--no-build` with existing images.
 
 ## Next Steps
 
-- P2: docker-compose with separate server + test containers
 - P3: GitHub Actions CI integration
-- P4+: AI test generation framework
+- P4: AI test generation framework

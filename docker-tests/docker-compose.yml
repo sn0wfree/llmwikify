@@ -1,0 +1,71 @@
+# docker-tests/docker-compose.yml
+# Two-container orchestration: server (long-running) + test (short-lived).
+#
+# Usage:
+#   docker compose -f docker-tests/docker-compose.yml --profile full up
+#   docker compose -f docker-tests/docker-compose.yml --profile server up  # server only
+#
+# Auto-detects LLM_API_KEY from ~/.llmwikify/llmwikify.json
+
+services:
+  # ============================================================
+  # Server: long-running, health-checked
+  # ============================================================
+  server:
+    build:
+      context: ..
+      dockerfile: docker-tests/Dockerfile.server
+    image: llmwikify-server:dev
+    container_name: llmwikify-server
+    restart: "no"
+    environment:
+      - WIKI_ROOT=/app/data/wiki
+      - HOST=0.0.0.0
+      - PORT=8765
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-minimax}
+      - LLM_MODEL=${LLM_MODEL:-minimax-M3}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.minimaxi.com/v1}
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TZ=UTC
+    volumes:
+      - wiki-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/api/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 30s
+    profiles: ["full", "server"]
+
+  # ============================================================
+  # Test: short-lived, runs after server is healthy
+  # ============================================================
+  test:
+    build:
+      context: ..
+      dockerfile: docker-tests/Dockerfile
+    image: llmwikify-test:dev
+    container_name: llmwikify-tests
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      # Use compose DNS to find the server
+      - SERVER_URL=http://server:8765
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-minimax}
+      - LLM_MODEL=${LLM_MODEL:-minimax-M3}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.minimaxi.com/v1}
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
+      - TZ=UTC
+    volumes:
+      - ./test-results:/app/test-results
+    command: ["pytest", "tests/scenarios/", "-v", "--tb=short",
+              "--junit-xml=/app/test-results/junit.xml"]
+    profiles: ["full"]
+
+volumes:
+  wiki-data:
+    name: llmwikify-wiki-data

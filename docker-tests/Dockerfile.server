@@ -1,0 +1,61 @@
+# docker-tests/Dockerfile.server
+# Lightweight server image for llmwikify.
+# Build: docker build -f docker-tests/Dockerfile.server -t llmwikify-server .
+# Run:   docker run --rm -p 8765:8765 -e LLM_API_KEY=$LLM_API_KEY llmwikify-server
+
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TZ=UTC
+
+# Use Aliyun mirrors for faster downloads
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+    || sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ---- Install only what server needs (lighter than full test image) ----
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ \
+    ".[mcp,config,watch,graph,web,extractors]"
+
+# Non-root user
+RUN useradd -m -u 1000 llmuser && \
+    mkdir -p /app/data && \
+    chown -R llmuser:llmuser /app
+USER llmuser
+
+# Server config
+ENV WIKI_ROOT=/app/data/wiki \
+    HOST=0.0.0.0 \
+    PORT=8765 \
+    LOG_LEVEL=INFO
+
+# Volume for wiki data persistence
+VOLUME ["/app/data"]
+
+# Expose server port
+EXPOSE 8765
+
+# Health check
+HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --retries=20 \
+    CMD curl -f http://localhost:8765/api/health || exit 1
+
+# Entrypoint
+COPY --chown=llmuser:llmuser docker-tests/server-entrypoint.sh /app/server-entrypoint.sh
+RUN chmod +x /app/server-entrypoint.sh
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/server-entrypoint.sh"]
+CMD ["serve", "--web", "--host", "0.0.0.0", "--port", "8765"]

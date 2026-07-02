@@ -50,13 +50,12 @@ class TestChatReAct:
         data = response.json()
         assert data.get("status") == "ok"
 
-    def test_4_2_auth_optional(self):
+    def test_4_2_auth_optional(self, client):
         """Step 4.2: Authentication is optional by default.
 
         POST /api/agent/chat works without Authorization header
         unless --auth-token is configured on the server.
         """
-        client = httpx.Client(base_url="http://localhost:8765", timeout=10.0)
         response = client.post(
             "/api/agent/chat",
             json={"session_id": "test", "message": "hello"},
