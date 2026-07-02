@@ -5,7 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-5900%2B%20passed-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Tests](https://img.shields.io/badge/tests-6100%2B%20passed-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
 [![Version](https://img.shields.io/badge/version-0.38.0-blue.svg)](pyproject.toml)
 
 **llmwikify** is a Python CLI + library + unified server for building **persistent,
@@ -60,8 +60,8 @@ Track your knowledge growth with metrics cards, Wiki Dream activity timeline, an
 ## Quick Start
 
 ```bash
-# Install
-pip install llmwikify
+# Install (with PDF/document extractors + web server)
+pip install 'llmwikify[extractors,web]'
 
 # Create and enter wiki directory
 mkdir my-wiki
@@ -70,8 +70,23 @@ cd my-wiki
 # Initialize a wiki
 llmwikify init
 
-# Ingest a source
-llmwikify ingest document.pdf
+# Add a page manually
+llmwikify write_page "hello" --content "# Hello World\n\nThis is my first page."
+
+# Ingest a markdown source (PDF requires [extractors])
+llmwikify ingest README.md
+
+# Build the link index (finds [[wikilinks]])
+llmwikify build-index
+
+# Search the wiki
+llmwikify search "hello"
+
+# Read a page
+llmwikify read_page hello
+
+# Show wiki status
+llmwikify status
 
 # Start the server (MCP + REST + Web UI)
 llmwikify serve --web --port 8765
@@ -189,20 +204,87 @@ pip install llmwikify[extractors]  # PDF/Office/media
 
 ## CLI Reference
 
+### Core Wiki Operations
+
 | Command | Description |
 |---------|-------------|
-| `init` | Initialize a wiki |
-| `ingest` | Ingest a source file or URL |
-| `batch` | Batch ingest a directory |
-| `search` | Full-text search |
-| `references` | Show inbound/outbound links |
-| `lint` | Health check |
-| `graph-analyze` | PageRank, communities, suggestions |
-| `export-graph` | Export visualization (HTML/SVG/GraphML) |
+| `init` | Initialize a wiki (creates dirs + `wiki.md` schema + `.llmwikify.db`) |
+| `write_page` | Write/update a wiki page (`llmwikify write_page "Name" --content "..."`) |
+| `read_page` | Read a wiki page (name only, no `.md` suffix) |
+| `ingest` | Ingest a source file or URL (PDF requires `[extractors]`) |
+| `batch` | Batch ingest a directory of sources |
+| `status` | Show wiki stats (page count, index, links) |
+| `log` | Record an operation in `log.md` |
+
+### Search & Analysis
+
+| Command | Description |
+|---------|-------------|
+| `search` | Full-text search (FTS5 backend) |
+| `analyze-source` | LLM-powered source analysis and caching |
+| `knowledge-gaps` | Detect missing pages, outdated content, redundancy |
+| `suggest-synthesis` | LLM: generate cross-source synthesis suggestions |
 | `synthesize` | Save query answer as a wiki page |
-| `serve` | Start unified server (MCP + REST + Web UI) |
-| `quant-init` | Scaffold quant/ directory |
-| `wiki_*` | 26 MCP tools for LLM integration |
+| `report` | Generate unexpected connections report |
+
+### Link Index & References
+
+| Command | Description |
+|---------|-------------|
+| `build-index` | Build bidirectional link index from `[[wikilinks]]` |
+| `references` | Show inbound/outbound links, broken links, stats |
+| `fix-wikilinks` | Fix broken wikilinks by adding directory prefix |
+
+### Knowledge Graph
+
+| Command | Description |
+|---------|-------------|
+| `graph-analyze` | PageRank, community detection, suggestions |
+| `graph-query` | Query graph (neighbors / path / stats / context) |
+| `community-detect` | Detect knowledge communities (Leiden/Louvain) |
+| `export-graph` | Export visualization (HTML/SVG/GraphML) |
+
+### Multi-Wiki
+
+| Command | Description |
+|---------|-------------|
+| `wikis` | Multi-wiki management (list / add / remove / scan) |
+
+### Server & MCP
+
+| Command | Description |
+|---------|-------------|
+| `serve` | Start unified server — MCP + REST + Web UI (alias: `mcp`) |
+| `watch` | Watch `raw/` directory for new files, auto-ingest |
+
+### Quant Research
+
+| Command | Description |
+|---------|-------------|
+| `quant-init` | Scaffold `quant/` directory structure |
+| `reproduce` | Paper reproduction pipeline (Stage 0/1 + Track A/B) |
+
+### Database & Health
+
+| Command | Description |
+|---------|-------------|
+| `db` | Database management (stats / list / clean / export) |
+| `lint` | Health check (broken links, orphans, contradictions) |
+| `sink-status` | Show query sink buffer status |
+
+### Auth
+
+| Command | Description |
+|---------|-------------|
+| `auth` | Auth bootstrap (init / create-token / list-tokens / revoke / whoami) |
+
+### QMD Hybrid Search
+
+| Command | Description |
+|---------|-------------|
+| `qmd` | QMD search engine (status / search / install / embed / mcp) |
+
+> **MCP tools**: 26 `wiki_*` tools available when server runs with `--transport stdio` or HTTP. See [docs/MCP_SETUP.md](docs/MCP_SETUP.md).
 
 ---
 

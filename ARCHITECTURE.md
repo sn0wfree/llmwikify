@@ -1,7 +1,7 @@
 # llmwikify Architecture
 
 > Technical architecture for developers.
-> **Version:** 0.38.0 | **Last updated:** 2026-06-30 | **Tests:** 3100+ Python collected
+> **Version:** 0.38.0 | **Last updated:** 2026-07-02 | **Tests:** 6100+ Python collected
 
 ---
 
@@ -558,7 +558,7 @@ applies to the initial connection only.
 
 ## Testing
 
-- **3100+ Python tests** collected (`pytest --collect-only -q`)
+- **6100+ Python tests** collected (`pytest --collect-only -q`)
 - Frontend: Vitest + React Testing Library (`src/llmwikify/web/webui`)
 - pytest with coverage target ≥ 85%
 - Test isolation via temp directories

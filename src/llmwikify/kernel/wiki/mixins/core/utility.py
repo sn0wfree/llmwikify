@@ -54,10 +54,10 @@ class WikiUtilityMixin(WikiProtocol):
     def _get_version() -> str:
         """Get llmwikify version."""
         try:
-            from .. import __version__
+            from llmwikify import __version__
             return __version__
         except ImportError:
-            return "0.11.0"
+            return "0.0.0"
 
     @staticmethod
     def _detect_file_type(filename: str) -> str:
