@@ -534,6 +534,67 @@ def _load_research_config() -> dict[str, Any] | None:
         return None
 
 
+def _load_llm_config() -> dict[str, Any] | None:
+    """Load llm config from global config file (~/.llmwikify/llmwikify.json).
+
+    Reads the "llm" section if present. Returns None if file doesn't exist.
+    """
+    import json as _json
+
+    config_file = Path.home() / ".llmwikify" / "llmwikify.json"
+    if not config_file.exists():
+        return None
+    try:
+        data = _json.loads(config_file.read_text())
+        return data.get("llm")
+    except Exception:
+        return None
+
+
+def _build_research_config_overrides() -> dict[str, Any]:
+    """Build research config overrides from global llmwikify.json.
+
+    Reads the ``research`` section and applies automatic fallbacks so that
+    existing deployments get a working web-search provider without any
+    config change:
+
+    - If ``research.minimax_api_key`` is unset and the LLM provider is
+      ``minimax``, reuse ``llm.api_key``. Most users with a MiniMax Coding
+      Plan key use it for both chat and search; explicitly setting
+      ``research.minimax_api_key`` always wins.
+    - If ``research.minimax_api_host`` is unset, derive it from
+      ``llm.base_url`` (stripping the ``/v1`` suffix) so the search
+      endpoint resolves to the same host as chat.
+
+    Returns an empty dict when no overrides apply or the config file is
+    missing. Never raises.
+    """
+    try:
+        user_cfg = _load_research_config() or {}
+        out: dict[str, Any] = {k: v for k, v in user_cfg.items() if v is not None}
+
+        needs_key = (
+            out.get("minimax_api_key") is None
+            and (out.get("search_provider", "auto") in (None, "auto", "minimax"))
+        )
+        if needs_key:
+            llm_cfg = _load_llm_config() or {}
+            if llm_cfg.get("provider") == "minimax":
+                api_key = llm_cfg.get("api_key")
+                if api_key:
+                    out["minimax_api_key"] = api_key
+                base_url = llm_cfg.get("base_url")
+                if base_url and "minimax_api_host" not in out:
+                    host = base_url.rstrip("/")
+                    if host.endswith("/v1"):
+                        host = host[: -len("/v1")]
+                    out["minimax_api_host"] = host
+        return out
+    except Exception as e:
+        logger.warning("Failed to build research config overrides: %s", e)
+        return {}
+
+
 def _register_agent_routes(
     app: FastAPI,
     registry: WikiRegistry,
@@ -585,11 +646,12 @@ def _register_agent_routes(
             autoresearch_llm = agent_service._get_llm()
         except Exception:
             pass
+    research_overrides = _build_research_config_overrides()
     set_autoresearch_deps(
         db=db,
         wiki_registry=registry,
         llm_client=autoresearch_llm,
-        config=merge_six_step_config(),
+        config=merge_six_step_config(research_overrides),
         tool_registry=agent_service._get_tool_registry(),
     )
     app.include_router(autoresearch_router)
@@ -621,7 +683,10 @@ def _register_agent_routes(
         pass
     app.include_router(create_openai_router(model=model_name))
 
-    _register_reproduction_routes(app, registry, agent_service, data_dir=data_dir)
+    try:
+        _register_reproduction_routes(app, registry, agent_service, data_dir=data_dir)
+    except ImportError as e:
+        logger.warning("Reproduction routes disabled (missing dependency: %s)", e)
 
     _mount_agent_spa(app)
 
