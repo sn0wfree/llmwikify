@@ -1,16 +1,24 @@
 export interface User {
   username: string;
   email: string;
+  is_first_admin?: boolean;
+  can_edit?: boolean;
+  wikis?: string[];
+  local_mode?: boolean;
 }
 
-export interface LoginRequest {
-  username: string;
-  password: string;
+export interface RegisterRequest {
+  email: string;
+}
+
+export interface VerifyRequest {
+  pat: string;
 }
 
 export interface LoginResponse {
   access_token: string;
-  token_type: string;
+  pat?: string;
+  user: User;
 }
 
 export interface AuthError {

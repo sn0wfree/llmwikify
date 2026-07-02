@@ -1,32 +1,33 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
-import type { LoginResponse, AuthError } from '../../types/auth';
+import type { AuthError } from '../../types/auth';
 
 const API_BASE = '/api';
 
+type Tab = 'token' | 'register';
+
 export function LoginPage() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [tab, setTab] = useState<Tab>('token');
+  const [email, setEmail] = useState('');
+  const [pat, setPat] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleTokenSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
+      const res = await fetch(`${API_BASE}/auth/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ pat: pat.trim() }),
       });
-
       if (!res.ok) {
-        let msg = `Login failed (${res.status})`;
+        let msg = `Verification failed (${res.status})`;
         try {
           const body: AuthError = await res.json();
           msg = body.detail || body.error || msg;
@@ -35,14 +36,42 @@ export function LoginPage() {
         setLoading(false);
         return;
       }
+      const data = await res.json();
+      login(data.access_token, data.user);
+      navigate('/', { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error');
+      setLoading(false);
+    }
+  };
 
-      const data: LoginResponse = await res.json();
-      // Decode JWT to extract user info (sub field = "user:<uuid>")
-      const payload = JSON.parse(atob(data.access_token.split('.')[1]));
-      login(data.access_token, {
-        username: payload.sub || username,
-        email: payload.email || username,
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
       });
+      if (!res.ok) {
+        let msg = `Registration failed (${res.status})`;
+        try {
+          const body: AuthError = await res.json();
+          msg = body.detail || body.error || msg;
+        } catch { /* non-JSON */ }
+        setError(msg);
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      // PAT is returned once — store in localStorage for immediate use.
+      login(data.access_token, data.user);
+      // Also store the PAT for future sessions.
+      if (data.pat) {
+        localStorage.setItem('llmwikify_pat', data.pat);
+      }
       navigate('/', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error');
@@ -57,54 +86,94 @@ export function LoginPage() {
           llmwikify
         </h1>
 
+        {/* Tab switcher */}
+        <div className="flex mb-6 border border-border/50 rounded-lg overflow-hidden">
+          <button
+            onClick={() => { setTab('token'); setError(''); }}
+            className={`flex-1 py-2 text-sm font-medium transition-colors ${
+              tab === 'token'
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Paste Token
+          </button>
+          <button
+            onClick={() => { setTab('register'); setError(''); }}
+            className={`flex-1 py-2 text-sm font-medium transition-colors ${
+              tab === 'register'
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Create Account
+          </button>
+        </div>
+
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-foreground mb-1.5">
-              Username
-            </label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              autoFocus
-              autoComplete="username"
-              className="w-full px-3 py-2 rounded-lg bg-background border border-border/50 text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-              placeholder="admin"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-foreground mb-1.5">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              className="w-full px-3 py-2 rounded-lg bg-background border border-border/50 text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-              placeholder="Password"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
+        {tab === 'token' ? (
+          <form onSubmit={handleTokenSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="pat" className="block text-sm font-medium text-foreground mb-1.5">
+                Personal Access Token
+              </label>
+              <input
+                id="pat"
+                type="text"
+                value={pat}
+                onChange={(e) => setPat(e.target.value)}
+                required
+                autoFocus
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border/50 text-foreground text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+                placeholder="llmw_..."
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Get a token via CLI: <code className="px-1 py-0.5 rounded bg-muted text-[10px]">llmwikify auth create-token</code>
+              </p>
+            </div>
+            <button
+              type="submit"
+              disabled={loading || !pat.trim()}
+              className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Verifying...' : 'Sign in'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleRegisterSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-foreground mb-1.5">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoFocus
+                autoComplete="email"
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border/50 text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+                placeholder="you@example.com"
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                No password needed. You'll get a token instantly.
+              </p>
+            </div>
+            <button
+              type="submit"
+              disabled={loading || !email.trim()}
+              className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Creating...' : 'Create account'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
