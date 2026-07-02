@@ -91,7 +91,7 @@ function truncate(s: string, n: number): string {
 function stepToSixStepKey(currentStep: string, status: string): string | null {
   // Terminal statuses: caller has special handling.
   if (status === 'done') return '__done__';
-  if (status === 'error' || status === 'timeout' || status === 'cancelled') return null;
+  if (status === 'error' || status === 'timeout' || status === 'cancelled' || status === 'incomplete') return null;
 
   switch (currentStep) {
     case 'clarifying':
@@ -376,11 +376,13 @@ function NewSessionForm({ onCreated }: { onCreated: (id: string) => void }) {
 
 function SessionHeader({
   session,
+  lastError,
   onRefresh,
   onResume,
   onSaveToWiki,
 }: {
   session: AutoResearchSession;
+  lastError: string | null;
   onRefresh: () => void;
   onResume: () => void;
   onSaveToWiki: () => void;
@@ -406,6 +408,11 @@ function SessionHeader({
           <div className="text-sm text-foreground font-medium line-clamp-2">
             {session.query}
           </div>
+          {lastError && (session.status === 'error' || session.status === 'incomplete' || session.status === 'timeout') && (
+            <div className="mt-2 text-xs text-red-400 bg-red-950/30 rounded px-2 py-1.5 border border-red-900/50 line-clamp-3">
+              {lastError}
+            </div>
+          )}
         </div>
         <div className="flex gap-1">
           {session.status === 'done' && !session.wiki_page_name && (
@@ -518,6 +525,7 @@ export function AutoResearchPanel() {
   const abortRef = useRef<AbortController | null>(null);
   const [saveModalSessionId, setSaveModalSessionId] = useState<string | null>(null);
   const [saveModalQuery, setSaveModalQuery] = useState('');
+  const [lastError, setLastError] = useState<string | null>(null);
 
   // Load session details
   const loadSession = useCallback(async (id: string) => {
@@ -540,6 +548,7 @@ export function AutoResearchPanel() {
       setSession(null);
       setSixStep(null);
       setEventLog([]);
+      setLastError(null);
       return;
     }
     loadSession(selectedId);
@@ -592,6 +601,7 @@ export function AutoResearchPanel() {
     const controller = new AbortController();
     abortRef.current = controller;
     setIsStreaming(true);
+    setLastError(null);
 
     const stream = streamAutoResearch(selectedId, { signal: controller.signal });
     const reader = stream.getReader();
@@ -630,10 +640,14 @@ export function AutoResearchPanel() {
           else if (t === 'done') {
             msg = `✓ 研究完成`;
             setActiveTab('report');
-          } else if (t === 'error') msg = `✗ ${ev.error}`;
-          else if (t === 'cancelled' || t === 'paused') msg = `${t}: ${ev.phase}`;
-          else if (t === 'incomplete') {
+          } else if (t === 'error') {
+            msg = `✗ ${ev.error}`;
+            setLastError(ev.error);
+          } else if (t === 'cancelled' || t === 'paused') {
+            msg = `${t}: ${ev.phase}`;
+          } else if (t === 'incomplete') {
             msg = `⚠ 部分完成 — ${ev.reason} (${ev.framework_completed}/${ev.framework_total} 步)`;
+            setLastError(ev.reason || `部分完成 (${ev.framework_completed}/${ev.framework_total} 步)`);
           } else if (t === 'framework_redirect') {
             msg = `↪ 框架不完整: ${ev.from} → ${ev.to} (${ev.reason})`;
           } else if (t === 'quality_redirect') {
@@ -725,6 +739,7 @@ export function AutoResearchPanel() {
           <>
             <SessionHeader
               session={session}
+              lastError={lastError}
               onRefresh={handleRefresh}
               onResume={handleResume}
               onSaveToWiki={() => {
