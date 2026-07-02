@@ -4,6 +4,7 @@ import { WikiLayout } from './components/wiki/WikiLayout';
 import { AgentLayout } from './components/agent/AgentLayout';
 import { LoginPage } from './components/auth/LoginPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { AuthInitBanner } from './components/auth/AuthInitBanner';
 
 const Editor = lazy(() =>
   import('./components/wiki/Editor').then(m => ({ default: m.Editor }))
@@ -61,6 +62,7 @@ function Loading() {
 function App() {
   return (
     <BrowserRouter>
+      <AuthInitBanner />
       <Suspense fallback={<Loading />}>
         <Routes>
           {/* Public routes */}
