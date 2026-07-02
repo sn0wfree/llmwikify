@@ -40,6 +40,7 @@ WebUI screenshots for reference (dark theme, English interface):
 | Doc | Purpose |
 |-----|---------|
 | [CONFIGURATION_GUIDE.md](CONFIGURATION_GUIDE.md) | `.wiki-config.yaml` reference (all options) |
+| [ONBOARDING.md](ONBOARDING.md) | New-user onboarding guide + onboarding improvements (v0.38+) |
 | [MCP_SETUP.md](MCP_SETUP.md) | MCP server setup (general, 20 tools) |
 | [MCPORTER_DEPLOYMENT.md](MCPORTER_DEPLOYMENT.md) | MCPorter Bridge deployment guide |
 | [QMD_SETUP.md](QMD_SETUP.md) | QMD hybrid search setup |

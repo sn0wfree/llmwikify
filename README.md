@@ -103,15 +103,30 @@ llmwikify init --llm
 # Option 2: Standalone — set up LLM separately
 llmwikify init-llm
 llmwikify init-llm --provider openai --api-key sk-...
+llmwikify init-llm --provider anthropic  # uses ANTHROPIC_API_KEY
+llmwikify init-llm --provider minimax    # uses MINIMAX_API_KEY
 
 # Option 3: Interactive — init will prompt you
 llmwikify init
-# No config detected. Set one up now? [y/N]: y
-# Detected OPENAI_API_KEY in env vars. Provider: openai
+# 💡 LLM features (analyze-source, synthesize, chat) need ~/.llmwikify/llmwikify.json
+#    No LLM config detected. Set one up now? [y/N]: y
+#    Detected OPENAI_API_KEY in env vars. Provider: openai
 # ✅ LLM config written to ~/.llmwikify/llmwikify.json
+```
 
-# Verify everything works
-llmwikify doctor
+#### Custom endpoint / OpenAI-compatible
+
+```bash
+llmwikify init-llm \
+    --provider openai \
+    --api-key sk-... \
+    --base-url https://api.deepseek.com/v1
+```
+
+#### Non-interactive (CI / scripts)
+
+```bash
+llmwikify init --llm --no-llm-prompt --llm-overwrite
 ```
 
 > **Without LLM**: `init`, `search`, `write_page`, `read_page`, `build-index`,
@@ -123,12 +138,42 @@ llmwikify doctor
 
 ```bash
 llmwikify doctor                     # Check everything (5s LLM test)
-llmwikify doctor --skip-llm          # Skip LLM API call
+llmwikify doctor --skip-llm          # Skip LLM API call (faster)
 llmwikify doctor --wiki-root /path   # Check a specific wiki
 llmwikify doctor --json              # JSON output for CI/scripts
 ```
 
-Checks: config, Python, core deps, optional extras, **LLM connectivity**, **wiki structure**, **permissions**, WebUI bundle, server health.
+### What it checks
+
+| # | Check | What |
+|---|-------|------|
+| 1 | **Config** | `~/.llmwikify/llmwikify.json` exists, parseable, has valid `api_key` |
+| 2 | **Python** | Version >= 3.10 |
+| 3 | **Core deps** | llmwikify, yaml, duckdb, jinja2 |
+| 4 | **Optional extras** | fastapi, fastmcp, watchdog, networkx, markitdown, tiktoken, httpx |
+| 5 | **LLM connectivity** | Actually calls provider API (5s timeout) with `"Say hi"` — verifies key works |
+| 6 | **Wiki directory** | wiki.md, .llmwikify.db, index.md, raw/ present |
+| 7 | **Permissions** | `~/.llmwikify/` and wiki root are writable |
+| 8 | **WebUI bundle** | `ui/webui/dist/index.html` exists |
+| 9 | **Server** | `GET /api/health` returns 200 |
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | All checks passed |
+| 1 | One or more checks failed |
+| 2 | Config missing — run `llmwikify init-llm` |
+
+### Examples
+
+```bash
+# CI integration (JSON + skip LLM)
+llmwikify doctor --json --skip-llm | jq -e '.summary.failed == 0'
+
+# Quick check before running expensive operations
+llmwikify doctor --skip-llm  # ~1 second
+```
 
 ---
 
@@ -408,9 +453,10 @@ Multi-wiki management:
 ## Documentation
 
 - [`docs/TUTORIAL.md`](docs/TUTORIAL.md) — **5 end-to-end scenarios (must read)**
+- [`docs/ONBOARDING.md`](docs/ONBOARDING.md) — New-user guide + onboarding improvements (v0.38+)
 - [`examples/`](examples/README.md) — 8 runnable playbooks
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — Layered architecture, modules, data flow
-- [`docs/CONFIGURATION_GUIDE.md`](docs/CONFIGURATION_GUIDE.md) — All config options
+- [`docs/CONFIGURATION_GUIDE.md`](docs/CONFIGURATION_GUIDE.md) — All config options + Doctor
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — Development setup and workflow
 
 ---

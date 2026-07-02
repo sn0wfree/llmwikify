@@ -587,8 +587,106 @@ EOF
 ### Verify config
 
 ```bash
-llmwikify doctor    # Check config, extractors, WebUI bundle
+llmwikify doctor    # Check config, deps, LLM, wiki, server
 llmwikify --help    # Confirm CLI is working
+```
+
+---
+
+## 🩺 Doctor — Health Check
+
+The `llmwikify doctor` command validates your installation and reports issues
+before you hit them in production.
+
+```bash
+# Full check (5s timeout for LLM API call)
+llmwikify doctor
+
+# Skip LLM API call (faster, ~1s)
+llmwikify doctor --skip-llm
+
+# Check a specific wiki directory (default: cwd)
+llmwikify doctor --wiki-root /path/to/wiki
+
+# JSON output for scripts/CI
+llmwikify doctor --json
+```
+
+### What it checks
+
+| # | Category | What it verifies | Fix command if it fails |
+|---|----------|------------------|-------------------------|
+| 1 | **Config** | `~/.llmwikify/llmwikify.json` exists, valid JSON, has `api_key` | `llmwikify init-llm` |
+| 2 | **Python** | Version >= 3.10 | Upgrade Python |
+| 3 | **Core deps** | llmwikify, yaml, duckdb, jinja2 | `pip install llmwikify` |
+| 4 | **Optional extras** | fastapi, fastmcp, watchdog, networkx, markitdown, tiktoken, httpx | `pip install 'llmwikify[extractors,web,mcp]'` |
+| 5 | **LLM connectivity** | **Actual API call** to provider with `"Say hi"`, 5s timeout | Re-check `api_key`, network, `base_url` |
+| 6 | **Wiki directory** | wiki.md, .llmwikify.db, index.md, raw/ present | `llmwikify init` (in wiki dir) |
+| 7 | **Permissions** | `~/.llmwikify/` and wiki root writable | `chmod 755 ~/.llmwikify/` |
+| 8 | **WebUI bundle** | `ui/webui/dist/index.html` exists | `cd ui/webui && pnpm build` |
+| 9 | **Server** | `GET /api/health` returns 200 | `llmwikify serve --web` (in another terminal) |
+
+### Exit codes
+
+| Code | Meaning | When |
+|------|---------|------|
+| 0 | All passed | Healthy install |
+| 1 | One or more checks failed | Issues to fix |
+| 2 | Config missing | First-time setup incomplete |
+
+### CI / Scripting
+
+```bash
+# Fail the script if doctor finds issues
+llmwikify doctor --json --skip-llm | jq -e '.summary.failed == 0'
+
+# Pretty output with errors highlighted
+llmwikify doctor 2>&1 | grep -E "❌|error"
+```
+
+### Example output
+
+```
+🔍 llmwikify doctor
+
+Config file:
+  ✅ ~/.llmwikify/llmwikify.json — provider=minimax, model=minimax-M3
+
+Python:
+  ✅ Python 3.11.15 — requires >= 3.10
+
+Core dependencies:
+  ✅ llmwikify
+  ✅ yaml
+  ✅ duckdb
+  ✅ jinja2
+
+Optional extras:
+  ✅ fastapi — web
+  ✅ fastmcp — mcp
+  ✅ watchdog — watch
+  ✅ networkx — graph
+  ✅ markitdown — extractors
+  ✅ tiktoken — llm
+  ✅ httpx — http
+
+LLM connectivity:
+  ✅ minimax/minimax-M3 — responded in 1.2s
+
+Wiki directory (/home/user/my-wiki):
+  ✅ /home/user/my-wiki — 4 files present
+
+Permissions:
+  ✅ ~/.llmwikify/ — writable
+  ✅ /home/user/my-wiki/ — writable
+
+WebUI bundle:
+  ✅ ui/webui/dist/ — found
+
+Server (http://localhost:8765):
+  ✅ Server reachable — status=ok
+
+✅ All checks passed.
 ```
 
 ---
