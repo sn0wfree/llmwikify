@@ -1,5 +1,5 @@
 export interface User {
-  username: string;
+  username?: string;
   email: string;
   is_first_admin?: boolean;
   can_edit?: boolean;

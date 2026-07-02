@@ -133,7 +133,7 @@ class TestRegisterVerifyFlow:
     def test_register_creates_user_and_returns_pat(self):
         client = TestClient(_make_app())
         resp = client.post(
-            "/auth/register",
+            "/api/auth/register",
             json={"email": "alice@example.com"},
         )
         assert resp.status_code == 200, resp.text
@@ -150,7 +150,7 @@ class TestRegisterVerifyFlow:
         UserRepository().create(email="first@example.com")
         client = TestClient(_make_app())
         resp = client.post(
-            "/auth/register",
+            "/api/auth/register",
             json={"email": "second@example.com"},
         )
         assert resp.status_code == 403
@@ -159,7 +159,7 @@ class TestRegisterVerifyFlow:
     def test_register_invalid_email_returns_400(self):
         client = TestClient(_make_app())
         resp = client.post(
-            "/auth/register",
+            "/api/auth/register",
             json={"email": "not-an-email"},
         )
         assert resp.status_code == 400
@@ -169,14 +169,14 @@ class TestRegisterVerifyFlow:
         # Register first to get a PAT.
         client = TestClient(_make_app())
         reg_resp = client.post(
-            "/auth/register",
+            "/api/auth/register",
             json={"email": "bob@example.com"},
         )
         pat = reg_resp.json()["pat"]
 
         # Verify the PAT.
         resp = client.post(
-            "/auth/verify",
+            "/api/auth/verify",
             json={"pat": pat},
         )
         assert resp.status_code == 200
@@ -189,7 +189,7 @@ class TestRegisterVerifyFlow:
     def test_verify_wrong_pat_returns_401(self):
         client = TestClient(_make_app())
         resp = client.post(
-            "/auth/verify",
+            "/api/auth/verify",
             json={"pat": "llmw_000000000000000000000000000000000000000000000000"},
         )
         assert resp.status_code == 401
@@ -198,7 +198,7 @@ class TestRegisterVerifyFlow:
     def test_verify_missing_pat_returns_400(self):
         client = TestClient(_make_app())
         resp = client.post(
-            "/auth/verify",
+            "/api/auth/verify",
             json={"pat": ""},
         )
         assert resp.status_code == 400
@@ -207,7 +207,7 @@ class TestRegisterVerifyFlow:
     def test_me_after_register(self):
         client = TestClient(_make_app())
         client.post(
-            "/auth/register",
+            "/api/auth/register",
             json={"email": "c@e.com"},
         )
         # Verify the PAT to set the cookie.
@@ -217,7 +217,7 @@ class TestRegisterVerifyFlow:
         ak_repo = ApiKeyRepository()
         # Use verify to set cookie.
         client.post(
-            "/auth/verify",
+            "/api/auth/verify",
             json={"pat": "invalid"},  # This won't set cookie
         )
         # We need to generate a valid PAT. Register gives us one.
@@ -231,12 +231,12 @@ class TestRegisterVerifyFlow:
             name="test",
         )
         resp = client.post(
-            "/auth/verify",
+            "/api/auth/verify",
             json={"pat": plain},
         )
         assert resp.status_code == 200
         # Now /auth/me should work.
-        me_resp = client.get("/auth/me")
+        me_resp = client.get("/api/auth/me")
         assert me_resp.status_code == 200
         body = me_resp.json()
         assert body["authenticated"] is True
@@ -244,7 +244,7 @@ class TestRegisterVerifyFlow:
 
     def test_me_without_cookie(self):
         client = TestClient(_make_app(public_read=False))
-        resp = client.get("/auth/me")
+        resp = client.get("/api/auth/me")
         assert resp.status_code == 401
 
     def test_me_local_mode_marker(self):
@@ -256,7 +256,7 @@ class TestRegisterVerifyFlow:
             return_value=True,
         ):
             client = TestClient(_make_app(local_mode=True, public_read=True))
-            resp = client.get("/auth/me")
+            resp = client.get("/api/auth/me")
             assert resp.status_code == 200
             assert resp.json()["user"]["local_mode"] is True
             assert resp.json()["user"]["can_edit"] is True
@@ -270,14 +270,14 @@ class TestTokenManagement:
         """Register a user and return a client with a valid JWT cookie."""
         client = TestClient(_make_app())
         resp = client.post(
-            "/auth/register",
+            "/api/auth/register",
             json={"email": email},
         )
         assert resp.status_code == 200
         pat = resp.json()["pat"]
         # Verify to get the cookie.
         verify_resp = client.post(
-            "/auth/verify",
+            "/api/auth/verify",
             json={"pat": pat},
         )
         assert verify_resp.status_code == 200
@@ -286,7 +286,7 @@ class TestTokenManagement:
     def test_create_token(self):
         client = self._auth_client()
         resp = client.post(
-            "/auth/tokens",
+            "/api/auth/tokens",
             json={"name": "laptop"},
         )
         assert resp.status_code == 200
@@ -297,9 +297,9 @@ class TestTokenManagement:
     def test_list_tokens(self):
         client = self._auth_client()
         # Create two more tokens (register already created one).
-        client.post("/auth/tokens", json={"name": "k1"})
-        client.post("/auth/tokens", json={"name": "k2"})
-        resp = client.get("/auth/tokens")
+        client.post("/api/auth/tokens", json={"name": "k1"})
+        client.post("/api/auth/tokens", json={"name": "k2"})
+        resp = client.get("/api/auth/tokens")
         assert resp.status_code == 200
         keys = resp.json()["keys"]
         assert len(keys) == 3  # 1 from register + 2 created
@@ -307,14 +307,14 @@ class TestTokenManagement:
     def test_revoke_token(self):
         client = self._auth_client()
         # Create a token.
-        create_resp = client.post("/auth/tokens", json={"name": "revoke-me"})
+        create_resp = client.post("/api/auth/tokens", json={"name": "revoke-me"})
         key_id = create_resp.json()["key"]["id"]
         # Revoke it.
-        resp = client.delete(f"/auth/tokens/{key_id}")
+        resp = client.delete(f"/api/auth/tokens/{key_id}")
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
         # List should show revoked.
-        list_resp = client.get("/auth/tokens")
+        list_resp = client.get("/api/auth/tokens")
         keys = list_resp.json()["keys"]
         revoked = [k for k in keys if k["id"] == key_id]
         assert len(revoked) == 1
@@ -322,17 +322,17 @@ class TestTokenManagement:
 
     def test_revoke_nonexistent_token_returns_404(self):
         client = self._auth_client()
-        resp = client.delete("/auth/tokens/nonexistent-id")
+        resp = client.delete("/api/auth/tokens/nonexistent-id")
         assert resp.status_code == 404
 
     def test_unauthenticated_tokens_returns_401(self):
         client = TestClient(_make_app())
-        resp = client.get("/auth/tokens")
+        resp = client.get("/api/auth/tokens")
         assert resp.status_code == 401
 
     def test_unauthenticated_create_token_returns_401(self):
         client = TestClient(_make_app())
-        resp = client.post("/auth/tokens", json={"name": "test"})
+        resp = client.post("/api/auth/tokens", json={"name": "test"})
         assert resp.status_code in (401, 403)  # 401 if no public_read, 403 if public_read
 
 
@@ -452,7 +452,7 @@ class TestLocalModePassThrough:
         ):
             client = TestClient(_make_app(local_mode=True, public_read=True))
             resp = client.post(
-                "/auth/register",
+                "/api/auth/register",
                 json={"email": "localadmin@e.com"},
             )
             assert resp.status_code == 200
@@ -477,6 +477,6 @@ class TestShareTokenRejection:
         client = TestClient(_make_app(public_read=True, local_mode=False))
         client.cookies.clear()
         client.cookies["llmwikify_token"] = token
-        resp = client.get("/auth/me")
+        resp = client.get("/api/auth/me")
         assert resp.status_code == 401
         assert resp.json()["detail"]["error"] == "share_token_not_here"

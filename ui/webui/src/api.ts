@@ -82,6 +82,12 @@ export function chatStream(
         });
 
         if (!res.ok) {
+          if (res.status === 401) {
+            useAuthStore.getState().clearToken();
+            window.location.href = '/login';
+            controller.error(new Error('Authentication required'));
+            return;
+          }
           let errorMessage = `API error: ${res.status}`;
           try {
             const body = await res.json();
@@ -492,6 +498,13 @@ export const api = {
               signal,
             });
             if (!res.ok || !res.body) {
+              if (res.status === 401) {
+                useAuthStore.getState().clearToken();
+                window.location.href = '/login';
+                controller.enqueue({ type: 'error', message: 'Authentication required' });
+                controller.close();
+                return;
+              }
               controller.enqueue({ type: 'error', message: `HTTP ${res.status}` });
               controller.close();
               return;

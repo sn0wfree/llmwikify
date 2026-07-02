@@ -56,7 +56,7 @@ def _get_jwt_secret() -> bytes:
 
 
 def _build_router() -> APIRouter:
-    router = APIRouter(prefix="/auth", tags=["auth"])
+    router = APIRouter(prefix="/api/auth", tags=["auth"])
 
     @router.post("/register")
     async def register(request: Request) -> dict[str, Any]:
@@ -336,6 +336,12 @@ def _build_router() -> APIRouter:
             "authenticated": True,
             "user": _user_to_dict(user, claims, local_mode=False),
         }
+
+    @router.post("/logout")
+    async def logout(response: Response) -> dict[str, Any]:
+        """Clear the httpOnly auth cookie."""
+        response.delete_cookie(COOKIE_NAME, path="/")
+        return {"ok": True}
 
     return router
 

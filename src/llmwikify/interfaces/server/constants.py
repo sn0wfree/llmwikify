@@ -19,11 +19,8 @@ class TransportType(str, Enum):
 
 
 # Authentication (Phase 2.5 — PAT-only)
-# /auth/register and /auth/verify must be in EXCLUDED_AUTH_PATHS —
-# otherwise the JWTAuthMiddleware would block the very routes that
-# issue tokens. /auth/me and /auth/tokens require authentication.
-# Both /auth/... and /api/auth/... variants are needed because the
-# WebUI requests /api/auth/... (with the /api prefix).
+# Auth routes are registered under /api/auth (consistent with other routers).
+# /auth/register and /auth/verify are excluded for CLI/curl direct access.
 EXCLUDED_AUTH_PATHS = {
     "/",
     "/mcp",
@@ -36,6 +33,7 @@ EXCLUDED_AUTH_PATHS = {
     "/auth/verify",
     "/api/auth/register",
     "/api/auth/verify",
+    "/api/auth/logout",
 }
 EXCLUDED_AUTH_PREFIXES = {"/assets/"}
 

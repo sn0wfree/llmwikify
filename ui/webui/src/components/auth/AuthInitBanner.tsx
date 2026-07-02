@@ -8,11 +8,11 @@ interface HealthResponse {
 
 export function AuthInitBanner() {
   const [show, setShow] = useState(false);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const token = useAuthStore((s) => s.token);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuthenticated) return;
+    if (token) return;
 
     let cancelled = false;
     fetch('/api/health')
@@ -25,7 +25,7 @@ export function AuthInitBanner() {
       .catch(() => {});
 
     return () => { cancelled = true; };
-  }, [isAuthenticated]);
+  }, [token]);
 
   if (!show) return null;
 

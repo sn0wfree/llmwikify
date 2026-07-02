@@ -38,7 +38,6 @@ describe('App', () => {
     useAuthStore.setState({
       token: 'test-token',
       user: { username: 'test', email: 'test@test.com' },
-      isAuthenticated: true,
     });
   });
 
