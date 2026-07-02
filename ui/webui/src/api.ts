@@ -1,5 +1,12 @@
+import { useAuthStore } from './stores/authStore';
+
 const API_BASE = '/api';
 const API_TOKEN = import.meta.env.VITE_API_TOKEN;
+
+function getAuthToken(): string | null {
+  const storeToken = useAuthStore.getState().token;
+  return storeToken || API_TOKEN || null;
+}
 
 export interface ResearchRunTimelineItem {
   phase_id: string;
@@ -59,8 +66,9 @@ export function chatStream(
   attachments?: Array<{ name: string; mime: string; data: string }>,
 ): ReadableStream<ChatStreamEvent> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (API_TOKEN) {
-    headers['Authorization'] = `Bearer ${API_TOKEN}`;
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   return new ReadableStream<ChatStreamEvent>({
@@ -268,10 +276,16 @@ export interface GraphData {
 
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (API_TOKEN) {
-    headers['Authorization'] = `Bearer ${API_TOKEN}`;
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
   const res = await fetch(`${API_BASE}${endpoint}`, { headers, ...options });
+  if (res.status === 401) {
+    useAuthStore.getState().clearToken();
+    window.location.href = '/login';
+    throw new Error('Authentication required');
+  }
   if (!res.ok) {
     let errorMessage = `API error: ${res.status}`;
     try {
@@ -466,7 +480,8 @@ export const api = {
     }),
     approveAndContinue: (id: string, sessionId: string, wikiId?: string, signal?: AbortSignal): ReadableStream<ChatStreamEvent> => {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
+      const token = getAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       return new ReadableStream<ChatStreamEvent>({
         async start(controller) {
           try {
