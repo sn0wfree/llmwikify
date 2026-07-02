@@ -447,6 +447,141 @@ print(config['database']['name'])  # From .wiki-config.yaml or default
 
 ---
 
+## 🌐 Global LLM Config (`~/.llmwikify/llmwikify.json`)
+
+The CLI reads LLM settings from `~/.llmwikify/llmwikify.json`. This is **separate** from
+`.wiki-config.yaml` (which is per-wiki). LLM features (`analyze-source`, `synthesize`,
+`--self-create`, `chat`, `reproduce`) require this file.
+
+**Config priority** (highest → lowest):
+1. Programmatic config (Python API)
+2. `~/.llmwikify/llmwikify.json` (global, CLI reads this)
+3. Built-in defaults
+
+### Minimum config
+
+```json
+{
+  "llm": {
+    "enabled": true,
+    "provider": "openai",
+    "model": "gpt-4o",
+    "api_key": "sk-your-key-here"
+  }
+}
+```
+
+### Supported providers
+
+| Provider | `provider` value | Default `base_url` | Env var for `api_key` |
+|----------|-----------------|---------------------|----------------------|
+| OpenAI | `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
+| Anthropic | `anthropic` | `https://api.anthropic.com/v1` | `ANTHROPIC_API_KEY` |
+| Minimax | `minimax` | `https://api.minimaxi.com/v1` | `MINIMAX_API_KEY` |
+| Xiaomi | `xiaomi` | `https://api.xiaomi.com/v1` | — |
+
+### OpenAI example
+
+```json
+{
+  "llm": {
+    "enabled": true,
+    "provider": "openai",
+    "model": "gpt-4o",
+    "api_key": "sk-proj-...",
+    "base_url": "https://api.openai.com/v1",
+    "timeout": 600
+  }
+}
+```
+
+### Anthropic example
+
+```json
+{
+  "llm": {
+    "enabled": true,
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "api_key": "sk-ant-...",
+    "base_url": "https://api.anthropic.com/v1"
+  }
+}
+```
+
+### Minimax example
+
+```json
+{
+  "llm": {
+    "enabled": true,
+    "provider": "minimax",
+    "model": "minimax-M3",
+    "api_key": "eyJ...",
+    "base_url": "https://api.minimaxi.com/v1"
+  }
+}
+```
+
+### OpenAI-compatible / custom endpoint
+
+```json
+{
+  "llm": {
+    "enabled": true,
+    "provider": "openai",
+    "model": "deepseek-chat",
+    "api_key": "sk-...",
+    "base_url": "https://api.deepseek.com/v1"
+  }
+}
+```
+
+### Offline mode (no LLM)
+
+Simply don't create the config file, or set `enabled` to `false`:
+
+```json
+{
+  "llm": {
+    "enabled": false
+  }
+}
+```
+
+Features that work without LLM: `init`, `write_page`, `read_page`, `search`,
+`build-index`, `references`, `status`, `lint`, `fix-wikilinks`, `graph-analyze`,
+`export-graph`, `community-detect`, `serve` (REST + MCP, no chat).
+
+### Quick setup
+
+```bash
+# Auto-create config from environment variable (if supported)
+llmwikify init-llm --provider openai
+
+# Or manually:
+mkdir -p ~/.llmwikify
+cat > ~/.llmwikify/llmwikify.json << 'EOF'
+{
+  "llm": {
+    "enabled": true,
+    "provider": "openai",
+    "model": "gpt-4o",
+    "api_key": "sk-your-key-here"
+  }
+}
+EOF
+```
+
+### Verify config
+
+```bash
+llmwikify doctor    # Check config, extractors, WebUI bundle
+llmwikify --help    # Confirm CLI is working
+```
+
+---
+
 ## 📚 Related
 
 - [MCP Setup Guide](./MCP_SETUP.md)
@@ -455,4 +590,4 @@ print(config['database']['name'])  # From .wiki-config.yaml or default
 
 ---
 
-*Last updated: 2026-06-30 | Version: 0.38.0*
+*Last updated: 2026-07-02 | Version: 0.38.0*

@@ -25,6 +25,7 @@ from .batch import BatchCommand, run_batch
 from .build_index import BuildIndexCommand, run_build_index
 from .community_detect import CommunityDetectCommand, run_community_detect
 from .db import DbCommand, run_db
+from .doctor_cmd import DoctorCommand, run_doctor
 from .export_graph import ExportGraphCommand, run_export_graph
 from .fix_wikilinks import FixWikilinksCommand, run_fix_wikilinks
 from .graph_analyze import GraphAnalyzeCommand, run_graph_analyze
@@ -38,6 +39,7 @@ from .ingest import IngestCommand, run_ingest
 
 # C2 (10 simple commands)
 from .init_cmd import InitCommand, run_init
+from .init_llm_cmd import InitLlmCommand, run_init_llm
 from .knowledge_gaps import KnowledgeGapsCommand, run_knowledge_gaps
 from .lint import LintCommand, run_lint
 from .log_cmd import LogCommand, run_log
@@ -61,6 +63,7 @@ from .write_page import WritePageCommand, run_write_page
 # Note: ``mcp`` is NOT in the registry — it's an argparse alias
 # of ``serve`` (added via ``aliases=['mcp']`` in serve.py).
 register_command(InitCommand())
+register_command(InitLlmCommand())
 register_command(IngestCommand())
 register_command(StatusCommand())
 register_command(LogCommand())
@@ -87,6 +90,7 @@ register_command(GraphAnalyzeCommand())
 register_command(ServeCommand())
 register_command(QmdCommand())
 register_command(DbCommand())
+register_command(DoctorCommand())
 register_command(QuantInitCommand())
 register_command(ReproduceCommand())
 register_command(HelpCommand())
@@ -128,6 +132,7 @@ def __getattr__(name):
 __all__ = [
     # C2 simple commands
     "InitCommand", "run_init",
+    "InitLlmCommand", "run_init_llm",
     "IngestCommand", "run_ingest",
     "StatusCommand", "run_status",
     "LogCommand", "run_log",
@@ -155,6 +160,7 @@ __all__ = [
     "ServeCommand", "run_serve",  # McpCommand removed in Phase 3 #6
     "QmdCommand", "run_qmd",
     "DbCommand", "run_db",
+    "DoctorCommand", "run_doctor",
     "HelpCommand",  # Phase 3 #6
     "ReproduceCommand", "run_one_paper_cli", "run_batch",  # Phase 4 — paper reproduction
 ]

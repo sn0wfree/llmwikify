@@ -93,6 +93,23 @@ llmwikify serve --web --port 8765
 # Open http://localhost:8765
 ```
 
+### LLM Setup (for AI features)
+
+```bash
+# Auto-detect from environment variable
+export OPENAI_API_KEY=sk-...
+llmwikify init-llm
+
+# Or specify provider + key
+llmwikify init-llm --provider openai --api-key sk-...
+
+# Verify everything works
+llmwikify doctor
+```
+
+> **Without LLM**: `init`, `search`, `write_page`, `read_page`, `build-index`,
+> `references`, `lint`, `graph-analyze`, `export-graph` all work offline.
+
 ---
 
 ## Tutorial
