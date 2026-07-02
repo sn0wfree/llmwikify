@@ -556,10 +556,21 @@ Features that work without LLM: `init`, `write_page`, `read_page`, `search`,
 ### Quick setup
 
 ```bash
-# Auto-create config from environment variable (if supported)
-llmwikify init-llm --provider openai
+# Option 1: One-shot during wiki init
+export OPENAI_API_KEY=sk-...
+llmwikify init --llm
 
-# Or manually:
+# Option 2: Standalone (auto-detects from env vars)
+llmwikify init-llm
+
+# Option 3: Explicit
+llmwikify init-llm --provider openai --api-key sk-...
+
+# Option 4: Interactive (init prompts you)
+llmwikify init
+# No config detected. Set one up now? [y/N]: y
+
+# Option 5: Manual
 mkdir -p ~/.llmwikify
 cat > ~/.llmwikify/llmwikify.json << 'EOF'
 {

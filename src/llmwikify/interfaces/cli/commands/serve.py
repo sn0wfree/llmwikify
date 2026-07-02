@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio  # Phase 3 #6 — used by stdio/http/sse paths
 import os  # Phase 2a: LLMWIKIFY_HOST env var
 import sys  # Phase 2a: print to stderr
+from pathlib import Path
 from typing import Any
 
 from llmwikify.interfaces.mcp.adapter import MCPAdapter  # Phase 3 #6
@@ -193,6 +194,16 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
             if web:
                 print(f"  Web UI: http://{final_host}:{port}")
                 print(f"  API Docs: http://{final_host}:{port}/docs")
+                # Warn if WebUI bundle not built
+                try:
+                    import llmwikify
+                    pkg_dir = Path(llmwikify.__file__).parent.parent.parent
+                    dist_path = pkg_dir / "ui" / "webui" / "dist" / "index.html"
+                    if not dist_path.exists():
+                        print("  ⚠️  WebUI bundle not built — the page may be blank.")
+                        print("     Fix: cd ui/webui && pnpm install && pnpm build")
+                except Exception:
+                    pass
             print()
 
             server.run(host=final_host, port=port)

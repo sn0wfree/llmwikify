@@ -96,12 +96,19 @@ llmwikify serve --web --port 8765
 ### LLM Setup (for AI features)
 
 ```bash
-# Auto-detect from environment variable
+# Option 1: One-shot — set up LLM with your wiki
 export OPENAI_API_KEY=sk-...
-llmwikify init-llm
+llmwikify init --llm
 
-# Or specify provider + key
+# Option 2: Standalone — set up LLM separately
+llmwikify init-llm
 llmwikify init-llm --provider openai --api-key sk-...
+
+# Option 3: Interactive — init will prompt you
+llmwikify init
+# No config detected. Set one up now? [y/N]: y
+# Detected OPENAI_API_KEY in env vars. Provider: openai
+# ✅ LLM config written to ~/.llmwikify/llmwikify.json
 
 # Verify everything works
 llmwikify doctor
@@ -109,6 +116,19 @@ llmwikify doctor
 
 > **Without LLM**: `init`, `search`, `write_page`, `read_page`, `build-index`,
 > `references`, `lint`, `graph-analyze`, `export-graph` all work offline.
+
+---
+
+## Doctor — Health Check
+
+```bash
+llmwikify doctor                     # Check everything (5s LLM test)
+llmwikify doctor --skip-llm          # Skip LLM API call
+llmwikify doctor --wiki-root /path   # Check a specific wiki
+llmwikify doctor --json              # JSON output for CI/scripts
+```
+
+Checks: config, Python, core deps, optional extras, **LLM connectivity**, **wiki structure**, **permissions**, WebUI bundle, server health.
 
 ---
 
@@ -226,6 +246,8 @@ pip install llmwikify[extractors]  # PDF/Office/media
 | Command | Description |
 |---------|-------------|
 | `init` | Initialize a wiki (creates dirs + `wiki.md` schema + `.llmwikify.db`) |
+| `init --llm` | Initialize wiki + set up LLM config (one-shot) |
+| `init-llm` | Set up LLM config only (auto-detects from `OPENAI_API_KEY` etc.) |
 | `write_page` | Write/update a wiki page (`llmwikify write_page "Name" --content "..."`) |
 | `read_page` | Read a wiki page (name only, no `.md` suffix) |
 | `ingest` | Ingest a source file or URL (PDF requires `[extractors]`) |
@@ -287,6 +309,7 @@ pip install llmwikify[extractors]  # PDF/Office/media
 |---------|-------------|
 | `db` | Database management (stats / list / clean / export) |
 | `lint` | Health check (broken links, orphans, contradictions) |
+| `doctor` | **System health check** (config, deps, LLM, wiki, permissions, server) |
 | `sink-status` | Show query sink buffer status |
 
 ### Auth

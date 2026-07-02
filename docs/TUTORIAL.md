@@ -1495,7 +1495,7 @@ lint_result = wiki.lint()
 
 Cross-references to detailed concepts:
 
-- **Prerequisites**: see [TUTORIAL.md](TUTORIAL.md) §0 (Install Matrix + Decision Tree)
+- **Prerequisites**: Python 3.10+, `pip install 'llmwikify[extractors,web]'`, optional LLM key
 - **Configuration Priority**: see [TUTORIAL.md](TUTORIAL.md) Appendix A
 - **CLI vs Python API**: see [TUTORIAL.md](TUTORIAL.md) Appendix B
 - **MCP Client Integration**: see [TUTORIAL.md](TUTORIAL.md) Appendix C

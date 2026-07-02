@@ -2,10 +2,82 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from typing import Any
 
 from .._base import Command
 from .._output import ICON_SUCCESS, ICON_WARNING, print_success, print_warning
+
+
+def _maybe_prompt_llm_setup() -> int:
+    """After wiki init, prompt the user to set up LLM config if not present.
+
+    Returns:
+        0 on skip, 1 on error.
+    """
+    from .init_llm_cmd import (
+        CONFIG_PATH, create_llm_config, auto_detect_provider, resolve_api_key,
+        _PROVIDER_ENV_KEY, _DEFAULT_MODELS,
+    )
+
+    if CONFIG_PATH.exists():
+        return 0
+
+    if not sys.stdin.isatty():
+        return 0
+
+    print()
+    print("💡 LLM features (analyze-source, synthesize, chat) need ~/.llmwikify/llmwikify.json")
+    print("   No LLM config detected. Set one up now? [y/N]: ", end="", flush=True)
+    try:
+        answer = input().strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return 0
+
+    if answer not in ("y", "yes"):
+        print("  Skipped. Run later: llmwikify init-llm")
+        return 0
+
+    print()
+    detected = auto_detect_provider()
+    detected_env = _PROVIDER_ENV_KEY.get(detected, "API_KEY") if detected else None
+    default = detected or "openai"
+    if detected:
+        print(f"  Detected {detected_env or 'API key'} in env vars. Provider: {default}")
+    else:
+        print("  Provider [openai/anthropic/minimax/xiaomi] [openai]: ", end="", flush=True)
+        try:
+            provider_input = input().strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if provider_input:
+            default = provider_input
+        if not detected_env or default != detected:
+            detected_env = _PROVIDER_ENV_KEY.get(default)
+            if detected_env and not os.environ.get(detected_env):
+                print(f"  API key for {default} (or set {detected_env} first): ", end="", flush=True)
+                try:
+                    api_key = input().strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    return 0
+                if not api_key:
+                    print("  No key provided. Skipping.")
+                    return 0
+                # Use create_llm_config with explicit key
+                return create_llm_config(
+                    provider=default,
+                    model=_DEFAULT_MODELS.get(default, "gpt-4o"),
+                    api_key=api_key,
+                )
+
+    return create_llm_config(
+        provider=default,
+        model=_DEFAULT_MODELS.get(default, "gpt-4o"),
+    )
 
 
 def run_init(wiki: Any, wiki_root: Any, args: Any) -> int:
@@ -17,7 +89,8 @@ def run_init(wiki: Any, wiki_root: Any, args: Any) -> int:
             "already exists" message; wiki.init() reads from
             its own internal root).
         args: Parsed argparse Namespace with ``overwrite``, ``agent``,
-            ``force``, ``merge``.
+            ``force``, ``merge``, ``llm``, ``llm_provider``, ``llm_model``,
+            ``llm_api_key``, ``llm_base_url``, ``llm_overwrite``, ``no_llm_prompt``.
 
     Returns:
         0 on success or "already exists", 1 on invalid agent.
@@ -95,7 +168,24 @@ def run_init(wiki: Any, wiki_root: Any, args: Any) -> int:
             print("    2. Run: opencode (codex mode)")
         print("    3. Tell the agent: 'Start ingesting news from raw/'")
     else:
-        print("    Run: llmwikify init --agent <opencode|claude|codex|generic> for full setup")
+        print("    1. Drop sources into raw/")
+        print("    2. Run: llmwikify ingest <filename>")
+        print("    3. Or use an AI agent: llmwikify init --agent <opencode|claude|codex>")
+
+    # --- LLM setup (P3) ---
+    if getattr(args, "llm", False):
+        from .init_llm_cmd import create_llm_config
+        rc = create_llm_config(
+            provider=getattr(args, "llm_provider", None),
+            model=getattr(args, "llm_model", None),
+            api_key=getattr(args, "llm_api_key", None),
+            base_url=getattr(args, "llm_base_url", None),
+            overwrite=getattr(args, "llm_overwrite", False),
+        )
+        if rc != 0:
+            return rc
+    elif not getattr(args, "no_llm_prompt", False):
+        _maybe_prompt_llm_setup()
 
     return 0
 
@@ -128,6 +218,36 @@ class InitCommand(Command):
         p.add_argument(
             "--merge", action="store_true",
             help="Merge into existing wiki.md instead of skipping",
+        )
+        # LLM setup (P3)
+        p.add_argument(
+            "--llm", action="store_true",
+            help="Also set up global LLM config (~/.llmwikify/llmwikify.json)",
+        )
+        p.add_argument(
+            "--llm-provider", dest="llm_provider",
+            choices=["openai", "anthropic", "minimax", "xiaomi"],
+            help="LLM provider (default: auto-detect from env)",
+        )
+        p.add_argument(
+            "--llm-model", dest="llm_model",
+            help="Model name (default: provider-specific)",
+        )
+        p.add_argument(
+            "--llm-api-key", dest="llm_api_key",
+            help="API key (default: from env var)",
+        )
+        p.add_argument(
+            "--llm-base-url", dest="llm_base_url",
+            help="Custom API base URL",
+        )
+        p.add_argument(
+            "--llm-overwrite", dest="llm_overwrite", action="store_true",
+            help="Overwrite existing LLM config",
+        )
+        p.add_argument(
+            "--no-llm-prompt", dest="no_llm_prompt", action="store_true",
+            help="Skip interactive LLM setup prompt (for non-tty/CI)",
         )
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
