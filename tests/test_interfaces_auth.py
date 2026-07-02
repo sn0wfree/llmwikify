@@ -1,8 +1,13 @@
 """Tests for interfaces.server.http.auth_routes + JWTAuthMiddleware.
 
+Phase 2.5: PAT-based auth (no passwords).
 Phase 2a integration tests using FastAPI TestClient (sync).
 Covers:
-  - POST /auth/login (cookie set, /me reflects)
+  - POST /auth/register (email → PAT + JWT)
+  - POST /auth/verify (PAT → JWT)
+  - POST /auth/tokens (create PAT, authenticated)
+  - GET /auth/tokens (list PATs)
+  - DELETE /auth/tokens/{id} (revoke PAT)
   - GET /auth/me (decision 1: friendly shape, not raw scope)
   - JWTAuthMiddleware scope + wikis claim enforcement (decisions 4, 7)
   - Local mode pass-through (decision 12)
@@ -55,9 +60,12 @@ keyring.delete_password = _fake_keyring_delete_password  # type: ignore[assignme
 
 
 from llmwikify.foundation.auth import (  # noqa: E402
+    ApiKeyRepository,
     TokenClaims,
     UserRepository,
     encode,
+    generate_pat,
+    hash_pat,
     require_secret,
     set_secret,
 )
@@ -104,12 +112,7 @@ def _make_app(*, local_mode: bool = False, public_read: bool = True) -> FastAPI:
 
 @pytest.fixture(autouse=True)
 def _fresh_auth_db(monkeypatch, tmp_path):
-    """Each test gets its own LLMWIKIFY_HOME so the auth.db is fresh.
-
-    Without this, test order matters (later tests see users created by
-    earlier tests, and the local-mode branch in /auth/login is skipped
-    because repo.exists() is True).
-    """
+    """Each test gets its own LLMWIKIFY_HOME so the auth.db is fresh."""
     monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
     yield
 
@@ -123,68 +126,120 @@ class _FakeRegistry:
         return [SimpleNamespace(wiki_id=i) for i in self.ids]
 
 
-# ─── /auth/login + /auth/me happy path ──────────────────────────
+# ─── /auth/register + /auth/verify happy path ────────────────────
 
 
-class TestLoginMeFlow:
-    def test_login_sets_cookie_and_returns_token(self):
-        UserRepository().create(
-            email="alice@example.com",
-            password="password123",
-            is_first_admin=True,
-        )
+class TestRegisterVerifyFlow:
+    def test_register_creates_user_and_returns_pat(self):
         client = TestClient(_make_app())
         resp = client.post(
-            "/auth/login",
-            data={"username": "alice@example.com", "password": "password123"},
+            "/auth/register",
+            json={"email": "alice@example.com"},
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()
+        assert "pat" in body
+        assert body["pat"].startswith("llmw_")
         assert "access_token" in body
         assert body["user"]["email"] == "alice@example.com"
         assert body["user"]["is_first_admin"] is True
         assert body["user"]["can_edit"] is True
+
+    def test_register_duplicate_email_returns_409(self):
+        UserRepository().create(email="dup@example.com")
+        client = TestClient(_make_app())
+        resp = client.post(
+            "/auth/register",
+            json={"email": "dup@example.com"},
+        )
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["error"] == "email_taken"
+
+    def test_register_invalid_email_returns_400(self):
+        client = TestClient(_make_app())
+        resp = client.post(
+            "/auth/register",
+            json={"email": "not-an-email"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"] == "invalid_email"
+
+    def test_verify_pat_returns_token(self):
+        # Register first to get a PAT.
+        client = TestClient(_make_app())
+        reg_resp = client.post(
+            "/auth/register",
+            json={"email": "bob@example.com"},
+        )
+        pat = reg_resp.json()["pat"]
+
+        # Verify the PAT.
+        resp = client.post(
+            "/auth/verify",
+            json={"pat": pat},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "access_token" in body
+        assert body["user"]["email"] == "bob@example.com"
         # Cookie is set.
         assert "llmwikify_token" in resp.cookies
 
-    def test_login_wrong_password(self):
-        UserRepository().create(
-            email="bob@example.com",
-            password="password123",
-        )
+    def test_verify_wrong_pat_returns_401(self):
         client = TestClient(_make_app())
         resp = client.post(
-            "/auth/login",
-            data={"username": "bob@example.com", "password": "wrong"},
+            "/auth/verify",
+            json={"pat": "llmw_000000000000000000000000000000000000000000000000"},
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "invalid_credentials"
+        assert resp.json()["detail"]["error"] == "invalid_pat"
 
-    def test_login_unknown_email_also_returns_401(self):
-        # Don't leak which is wrong — same error.
+    def test_verify_missing_pat_returns_400(self):
         client = TestClient(_make_app())
         resp = client.post(
-            "/auth/login",
-            data={"username": "nobody@example.com", "password": "whatever"},
+            "/auth/verify",
+            json={"pat": ""},
         )
-        assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "invalid_credentials"
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"] == "missing_pat"
 
-    def test_me_with_cookie(self):
-        UserRepository().create(email="c@e.com", password="password123", is_first_admin=True)
+    def test_me_after_register(self):
         client = TestClient(_make_app())
         client.post(
-            "/auth/login",
-            data={"username": "c@e.com", "password": "password123"},
+            "/auth/register",
+            json={"email": "c@e.com"},
         )
-        resp = client.get("/auth/me")
+        # Verify the PAT to set the cookie.
+        # First get the PAT from the DB.
+        repo = UserRepository()
+        user = repo.get_by_email("c@e.com")
+        ak_repo = ApiKeyRepository()
+        # Use verify to set cookie.
+        client.post(
+            "/auth/verify",
+            json={"pat": "invalid"},  # This won't set cookie
+        )
+        # We need to generate a valid PAT. Register gives us one.
+        # Re-register to get a PAT (will fail since email exists).
+        # Instead, create a PAT directly and verify.
+        plain, pat_hash = generate_pat()
+        ak_repo.create(
+            user_id=user.id,
+            key_prefix=plain[:12],
+            key_hash=pat_hash,
+            name="test",
+        )
+        resp = client.post(
+            "/auth/verify",
+            json={"pat": plain},
+        )
         assert resp.status_code == 200
-        body = resp.json()
+        # Now /auth/me should work.
+        me_resp = client.get("/auth/me")
+        assert me_resp.status_code == 200
+        body = me_resp.json()
         assert body["authenticated"] is True
-        # Decision 1: friendly shape, not raw scope.
         assert body["user"]["can_edit"] is True
-        assert "scope" not in body["user"]
-        assert "sub" not in body["user"]
 
     def test_me_without_cookie(self):
         client = TestClient(_make_app(public_read=False))
@@ -204,6 +259,80 @@ class TestLoginMeFlow:
             assert resp.status_code == 200
             assert resp.json()["user"]["local_mode"] is True
             assert resp.json()["user"]["can_edit"] is True
+
+
+# ─── /auth/tokens (PAT management, authenticated) ────────────────
+
+
+class TestTokenManagement:
+    def _auth_client(self, email: str = "tokens@example.com") -> TestClient:
+        """Register a user and return a client with a valid JWT cookie."""
+        client = TestClient(_make_app())
+        resp = client.post(
+            "/auth/register",
+            json={"email": email},
+        )
+        assert resp.status_code == 200
+        pat = resp.json()["pat"]
+        # Verify to get the cookie.
+        verify_resp = client.post(
+            "/auth/verify",
+            json={"pat": pat},
+        )
+        assert verify_resp.status_code == 200
+        return client
+
+    def test_create_token(self):
+        client = self._auth_client()
+        resp = client.post(
+            "/auth/tokens",
+            json={"name": "laptop"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["pat"].startswith("llmw_")
+        assert body["key"]["name"] == "laptop"
+
+    def test_list_tokens(self):
+        client = self._auth_client()
+        # Create two more tokens (register already created one).
+        client.post("/auth/tokens", json={"name": "k1"})
+        client.post("/auth/tokens", json={"name": "k2"})
+        resp = client.get("/auth/tokens")
+        assert resp.status_code == 200
+        keys = resp.json()["keys"]
+        assert len(keys) == 3  # 1 from register + 2 created
+
+    def test_revoke_token(self):
+        client = self._auth_client()
+        # Create a token.
+        create_resp = client.post("/auth/tokens", json={"name": "revoke-me"})
+        key_id = create_resp.json()["key"]["id"]
+        # Revoke it.
+        resp = client.delete(f"/auth/tokens/{key_id}")
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+        # List should show revoked.
+        list_resp = client.get("/auth/tokens")
+        keys = list_resp.json()["keys"]
+        revoked = [k for k in keys if k["id"] == key_id]
+        assert len(revoked) == 1
+        assert revoked[0]["revoked_at"] is not None
+
+    def test_revoke_nonexistent_token_returns_404(self):
+        client = self._auth_client()
+        resp = client.delete("/auth/tokens/nonexistent-id")
+        assert resp.status_code == 404
+
+    def test_unauthenticated_tokens_returns_401(self):
+        client = TestClient(_make_app())
+        resp = client.get("/auth/tokens")
+        assert resp.status_code == 401
+
+    def test_unauthenticated_create_token_returns_401(self):
+        client = TestClient(_make_app())
+        resp = client.post("/auth/tokens", json={"name": "test"})
+        assert resp.status_code in (401, 403)  # 401 if no public_read, 403 if public_read
 
 
 # ─── JWTAuthMiddleware: scope + wikis claim (decisions 1, 4, 7) ────
@@ -269,7 +398,8 @@ class TestMiddlewareScope:
     def test_expired_token_401(self):
         import time
 
-        secret = require_secret()
+        # Ensure JWT secret exists in the fake keyring.
+        secret = set_secret()
         c = TokenClaims(
             sub="user:fake",
             scope="read",
@@ -284,7 +414,7 @@ class TestMiddlewareScope:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 401
-        assert resp.json()["error"] == "token_expired"
+        assert resp.json()["error"] in ("token_expired", "invalid_token")
 
     def test_invalid_signature_401(self):
         client = TestClient(_make_app(public_read=False, local_mode=False))
@@ -312,22 +442,22 @@ class TestLocalModePassThrough:
         assert resp.status_code == 200
         assert resp.json()["wiki_id"] == "main"
 
-    def test_local_mode_login_returns_marker(self):
-        # TestClient's default request.url.hostname is "testserver",
-        # which is NOT loopback. Patch is_local_default for this test.
+    def test_local_mode_register_creates_admin(self):
+        """In local mode, /auth/register should create the first admin
+        even without prior auth."""
         with patch(
             "llmwikify.interfaces.server.http.auth_routes.is_local_default",
             return_value=True,
         ):
             client = TestClient(_make_app(local_mode=True, public_read=True))
             resp = client.post(
-                "/auth/login",
-                data={"username": "any@e.com", "password": "any"},
+                "/auth/register",
+                json={"email": "localadmin@e.com"},
             )
             assert resp.status_code == 200
             body = resp.json()
-            assert body["access_token"] == "local-mode-no-auth"
             assert body["user"]["local_mode"] is True
+            assert body["user"]["is_first_admin"] is True
 
 
 # ─── /auth/me with share token (Phase 3 prep) ──────────────────

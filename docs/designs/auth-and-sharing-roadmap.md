@@ -639,7 +639,7 @@ Phase 4:      (单独 llmwikify-hub 仓) posts, follows, takedowns
 - [ ] Phase 2.5 commit 8: PAT 路由 + middleware 验证
 - [ ] Phase 2.5 commit 9: CLI create-token/list/revoke
 - [ ] Phase 2.5 commit 10: WebUI 无密码登录
-- [ ] Phase 2.5 commit 11: tests + design doc 更新
+- [x] Phase 2.5 commit 11: tests + design doc 更新
 - [ ] Phase 3 commits 12-15: share + remote wiki
 - [ ] Phase 4 commits 16-19: 中央 hub publish
 - [ ] Phase 4 hub 服务端独立仓立项 + 并行实施

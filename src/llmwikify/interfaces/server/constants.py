@@ -18,10 +18,10 @@ class TransportType(str, Enum):
     SSE = "sse"
 
 
-# Authentication (Phase 2a)
-# /auth/login must be in EXCLUDED_AUTH_PATHS — otherwise the
-# JWTAuthMiddleware would block the very route that issues tokens.
-# /auth/me is NOT excluded; it requires an existing cookie/token.
+# Authentication (Phase 2.5 — PAT-only)
+# /auth/register and /auth/verify must be in EXCLUDED_AUTH_PATHS —
+# otherwise the JWTAuthMiddleware would block the very routes that
+# issue tokens. /auth/me and /auth/tokens require authentication.
 EXCLUDED_AUTH_PATHS = {
     "/",
     "/mcp",
@@ -30,7 +30,8 @@ EXCLUDED_AUTH_PATHS = {
     "/docs",
     "/redoc",
     "/openapi.json",
-    "/auth/login",
+    "/auth/register",
+    "/auth/verify",
 }
 EXCLUDED_AUTH_PREFIXES = {"/assets/"}
 

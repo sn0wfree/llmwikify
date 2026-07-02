@@ -32,6 +32,8 @@ def generate_pat() -> tuple[str, str]:
 
 def hash_pat(plain: str) -> str:
     """Return the SHA-256 hex digest of a PAT."""
+    if not isinstance(plain, str):
+        raise TypeError(f"plain must be str, got {type(plain).__name__}")
     return hashlib.sha256(plain.encode("utf-8")).hexdigest()
 
 

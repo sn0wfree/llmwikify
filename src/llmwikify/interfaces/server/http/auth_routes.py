@@ -84,7 +84,7 @@ def _build_router() -> APIRouter:
         local_mode = is_local_default(host)
 
         # In local mode with no existing user, create first admin.
-        is_first = not repo.exists() and local_mode
+        is_first = not repo.exists()
 
         if repo.get_by_email(email) is not None:
             raise HTTPException(

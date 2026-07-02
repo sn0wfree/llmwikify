@@ -299,12 +299,51 @@ class ApiKeyRepository:
 
     def __init__(self, db_path: Path | None = None) -> None:
         self.db_path = db_path or auth_db_path()
+        self._ensure_dir()
+        self._init_schema()
+
+    def _ensure_dir(self) -> None:
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(self.db_path.parent, 0o700)
+        except OSError:
+            pass
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         return conn
+
+    def _init_schema(self) -> None:
+        with self._connect() as conn:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    username TEXT UNIQUE,
+                    is_first_admin INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    last_login_at TEXT
+                );
+                CREATE TABLE IF NOT EXISTS api_keys (
+                    id TEXT PRIMARY KEY,
+                    key_prefix TEXT NOT NULL,
+                    key_hash TEXT UNIQUE NOT NULL,
+                    user_id TEXT NOT NULL REFERENCES users(id),
+                    name TEXT,
+                    scopes TEXT NOT NULL DEFAULT 'write',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    last_used_at TEXT,
+                    expires_at TEXT,
+                    revoked_at TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+                CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
+                """
+            )
+            conn.commit()
 
     @contextmanager
     def _atomic_write(self) -> Iterator[sqlite3.Connection]:

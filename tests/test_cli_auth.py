@@ -1,10 +1,10 @@
-"""Tests for interfaces.cli.commands.auth (Phase 2a).
+"""Tests for interfaces.cli.commands.auth (Phase 2.5 — PAT-only auth).
 
 Decisions exercised:
   - 9  chmod 600 on local_token
   - 11 auth.db location via LLMWIKIFY_HOME
-  - 15 TTY fallback (we use io.StringIO for stdin/stdout)
-  - 18 stdlib prompts
+  - 25 PAT replaces passwords (no password prompt)
+  - 26 PAT format = llmw_ prefix + 24-byte hex
 """
 
 from __future__ import annotations
@@ -34,10 +34,18 @@ keyring.get_password = lambda s, u: _KEYRING_STORE.get((s, u))  # type: ignore[a
 keyring.delete_password = lambda s, u: _KEYRING_STORE.pop((s, u), None)  # type: ignore[assignment]
 
 
-from llmwikify.foundation.auth import UserRepository  # noqa: E402
+from llmwikify.foundation.auth import (  # noqa: E402
+    ApiKeyRepository,
+    UserRepository,
+    generate_pat,
+    hash_pat,
+)
 from llmwikify.interfaces.cli.commands.auth import (  # noqa: E402
+    run_auth_create_token,
     run_auth_init,
+    run_auth_list_tokens,
     run_auth_logout,
+    run_auth_revoke_token,
     run_auth_token,
     run_auth_whoami,
 )
@@ -78,16 +86,15 @@ def _fresh_home(monkeypatch, tmp_path):
 
 class TestAuthInitInteractive:
     def test_init_creates_user_and_local_token(self, monkeypatch):
-        # Real path: prompt TTY + getpass returns a known password.
+        # PAT-only: only email prompt, no password.
         fake_stdin = FakeTTY("alice@example.com")
         fake_stdout = FakeTTY()
         with patch("sys.stdin", fake_stdin), patch("sys.stdout", fake_stdout):
-            with patch("getpass.getpass", return_value="password123"):
-                # run_auth_init signature: (wiki, config, args)
-                # Build a minimal args namespace.
-                import argparse
-                args = argparse.Namespace(email=None, password=None)
-                rc = run_auth_init(wiki=None, config={}, args=args)
+            # run_auth_init signature: (wiki, config, args)
+            # Build a minimal args namespace.
+            import argparse
+            args = argparse.Namespace(email=None)
+            rc = run_auth_init(wiki=None, config={}, args=args)
         assert rc == 0
 
         # Verify local_token was written with chmod 600.
@@ -114,13 +121,13 @@ class TestAuthInitInteractive:
         fake = io.StringIO()  # NOT a TTY
         with patch("sys.stdin", fake), patch("sys.stdout", fake):
             import argparse
-            args = argparse.Namespace(email=None, password=None)
+            args = argparse.Namespace(email=None)
             rc = run_auth_init(wiki=None, config={}, args=args)
         assert rc == 1
 
-    def test_init_with_email_and_password_non_interactive(self):
+    def test_init_with_email_non_interactive(self):
         import argparse
-        args = argparse.Namespace(email="bob@example.com", password="password123")
+        args = argparse.Namespace(email="bob@example.com")
         rc = run_auth_init(wiki=None, config={}, args=args)
         assert rc == 0
         # local_token should exist.
@@ -130,24 +137,153 @@ class TestAuthInitInteractive:
         repo = UserRepository()
         assert repo.get_by_email("bob@example.com") is not None
 
-    def test_init_non_interactive_without_password_returns_1(self):
+    def test_init_non_interactive_without_email_returns_1(self):
         import argparse
-        args = argparse.Namespace(email="c@e.com", password=None)
+        args = argparse.Namespace(email="")
         rc = run_auth_init(wiki=None, config={}, args=args)
         assert rc == 1
 
     def test_init_idempotent_same_email(self):
         # Run init twice with same email → second is a no-op (no error).
         import argparse
-        args1 = argparse.Namespace(email="dup@e.com", password="password123")
+        args1 = argparse.Namespace(email="dup@e.com")
         rc1 = run_auth_init(wiki=None, config={}, args=args1)
         assert rc1 == 0
-        args2 = argparse.Namespace(email="dup@e.com", password="password123")
+        args2 = argparse.Namespace(email="dup@e.com")
         rc2 = run_auth_init(wiki=None, config={}, args=args2)
         assert rc2 == 0
         # Only one user in the table.
         repo = UserRepository()
         assert repo.count() == 1
+
+
+# ─── auth create-token ──────────────────────────────────────────
+
+
+class TestAuthCreateToken:
+    def test_create_token_creates_pat_and_local_token(self):
+        import argparse
+        # First init to create a user.
+        init_args = argparse.Namespace(email="ct@e.com")
+        run_auth_init(wiki=None, config={}, args=init_args)
+        # Create a named token.
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_create_token(
+                wiki=None, config={}, args=argparse.Namespace(name="laptop")
+            )
+        assert rc == 0
+        printed = out.getvalue()
+        assert "PAT created" in printed
+        assert "llmw_" in printed
+        # local_token should exist.
+        token_path = Path(os.environ["LLMWIKIFY_HOME"]) / ".llmwikify" / "local_token"
+        assert token_path.exists()
+
+    def test_create_token_no_users_returns_1(self):
+        import argparse
+        out = io.StringIO()
+        err = io.StringIO()
+        with patch("sys.stdout", out), patch("sys.stderr", err):
+            rc = run_auth_create_token(
+                wiki=None, config={}, args=argparse.Namespace(name="test")
+            )
+        assert rc == 1
+        assert "No users found" in err.getvalue()
+
+
+# ─── auth list-tokens ───────────────────────────────────────────
+
+
+class TestAuthListTokens:
+    def test_list_tokens_after_init(self):
+        import argparse
+        run_auth_init(wiki=None, config={}, args=argparse.Namespace(email="lt@e.com"))
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_list_tokens(wiki=None, config={}, args=argparse.Namespace())
+        assert rc == 0
+        printed = out.getvalue()
+        # No tokens created yet besides implicit ones.
+        assert "No PATs found" in printed or "ID" in printed
+
+    def test_list_tokens_with_tokens(self):
+        import argparse
+        run_auth_init(wiki=None, config={}, args=argparse.Namespace(email="lt2@e.com"))
+        # Create a token.
+        err = io.StringIO()
+        with patch("sys.stderr", err):
+            run_auth_create_token(
+                wiki=None, config={}, args=argparse.Namespace(name="mykey")
+            )
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_list_tokens(wiki=None, config={}, args=argparse.Namespace())
+        assert rc == 0
+        assert "mykey" in out.getvalue()
+
+    def test_list_tokens_no_users_returns_1(self):
+        import argparse
+        out = io.StringIO()
+        err = io.StringIO()
+        with patch("sys.stdout", out), patch("sys.stderr", err):
+            rc = run_auth_list_tokens(wiki=None, config={}, args=argparse.Namespace())
+        assert rc == 1
+        assert "No users found" in err.getvalue()
+
+
+# ─── auth revoke-token ──────────────────────────────────────────
+
+
+class TestAuthRevokeToken:
+    def test_revoke_existing_token(self):
+        import argparse
+        run_auth_init(wiki=None, config={}, args=argparse.Namespace(email="rt@e.com"))
+        # Create a token so we have a key_id.
+        create_out = io.StringIO()
+        create_err = io.StringIO()
+        with patch("sys.stdout", create_out), patch("sys.stderr", create_err):
+            run_auth_create_token(
+                wiki=None, config={}, args=argparse.Namespace(name="revoke-me")
+            )
+        # Get the key_id from ApiKeyRepository.
+        repo = UserRepository()
+        user = repo.get_by_email("rt@e.com")
+        ak_repo = ApiKeyRepository()
+        keys = ak_repo.list_by_user(user.id)
+        assert len(keys) >= 1
+        key_id = keys[0].id
+        # Revoke it.
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_revoke_token(
+                wiki=None, config={}, args=argparse.Namespace(key_id=key_id)
+            )
+        assert rc == 0
+        assert "Revoked" in out.getvalue()
+
+    def test_revoke_nonexistent_returns_1(self):
+        import argparse
+        # Init first so we have a user.
+        run_auth_init(wiki=None, config={}, args=argparse.Namespace(email="rn@e.com"))
+        out = io.StringIO()
+        err = io.StringIO()
+        with patch("sys.stdout", out), patch("sys.stderr", err):
+            rc = run_auth_revoke_token(
+                wiki=None, config={}, args=argparse.Namespace(key_id="nonexistent")
+            )
+        assert rc == 1
+        assert "not found" in err.getvalue()
+
+    def test_revoke_no_key_id_returns_1(self):
+        import argparse
+        out = io.StringIO()
+        err = io.StringIO()
+        with patch("sys.stdout", out), patch("sys.stderr", err):
+            rc = run_auth_revoke_token(
+                wiki=None, config={}, args=argparse.Namespace(key_id=None)
+            )
+        assert rc == 1
 
 
 # ─── auth token ────────────────────────────────────────────────
@@ -157,7 +293,7 @@ class TestAuthToken:
     def test_token_after_init_writes_local_token(self):
         import argparse
         # First init.
-        init_args = argparse.Namespace(email="d@e.com", password="password123")
+        init_args = argparse.Namespace(email="d@e.com")
         run_auth_init(wiki=None, config={}, args=init_args)
         # Re-issue token.
         out = io.StringIO()
@@ -197,7 +333,7 @@ class TestAuthWhoami:
         run_auth_init(
             wiki=None,
             config={},
-            args=argparse.Namespace(email="e@e.com", password="password123"),
+            args=argparse.Namespace(email="e@e.com"),
         )
         out = io.StringIO()
         with patch("sys.stdout", out):
@@ -223,7 +359,7 @@ class TestAuthLogout:
         run_auth_init(
             wiki=None,
             config={},
-            args=argparse.Namespace(email="f@e.com", password="password123"),
+            args=argparse.Namespace(email="f@e.com"),
         )
         token_path = Path(os.environ["LLMWIKIFY_HOME"]) / ".llmwikify" / "local_token"
         assert token_path.exists()

@@ -1,10 +1,11 @@
-"""Tests for serve.py host detection + auto-init (Phase 2a).
+"""Tests for serve.py host detection + auto-init (Phase 2.5 — PAT-only auth).
 
 Decisions exercised:
   - 12 local mode (loopback → pass-through, no auth)
   - 13 serve default host reads LLMWIKIFY_HOST env, then config, then 127.0.0.1
   - 14 public mode + missing auth.db → call prompt_first_admin (auto-init)
   - 15 TTY fallback in serve: print hint + exit 1
+  - 25 PAT replaces passwords (no password prompt)
 
 We do NOT actually run the server (would require uvicorn event loop
 setup); we exercise `run_serve` up to the point where it would call
@@ -41,6 +42,7 @@ keyring.delete_password = lambda s, u: _KEYRING_STORE.pop((s, u), None)  # type:
 from llmwikify.foundation.auth import (  # noqa: E402
     UserRepository,
     auth_db_path,
+    env_host,
 )
 from llmwikify.interfaces.cli.commands.serve import run_serve  # noqa: E402
 
@@ -91,18 +93,15 @@ def _build_wiki_stub():
 class TestHostSelection:
     def test_default_host_is_127_0_0_1(self, monkeypatch):
         monkeypatch.delenv("LLMWIKIFY_HOST", raising=False)
-        from llmwikify.foundation.auth import env_host
         assert env_host() == "127.0.0.1"
 
     def test_env_var_overrides_default(self, monkeypatch):
         monkeypatch.setenv("LLMWIKIFY_HOST", "10.0.0.1")
-        from llmwikify.foundation.auth import env_host
         assert env_host() == "10.0.0.1"
 
     def test_cli_host_flag_overrides_env(self, monkeypatch):
         # --host has the highest precedence.
         monkeypatch.setenv("LLMWIKIFY_HOST", "10.0.0.1")
-        from llmwikify.foundation.auth import env_host
         # The CLI flag handling is in run_serve, not env_host itself.
         # env_host just reads the env. The precedence logic lives in
         # run_serve which we'll exercise below.
@@ -173,30 +172,29 @@ class TestLocalMode:
 class TestPublicModeAutoInit:
     def test_serve_public_triggers_auto_init(self, monkeypatch):
         """When host is non-loopback and auth.db missing, serve should
-        call prompt_first_admin and create the user.
+        call prompt_first_admin and create the user (no password — PAT-only).
         """
         monkeypatch.setenv("LLMWIKIFY_HOST", "0.0.0.0")
-        # Provide stdin (email) + getpass (password)
+        # prompt_first_admin only needs email (no password).
         fake_stdin = FakeTTY("admin@example.com")
         fake_stdout = FakeTTY()
         with patch("sys.stdin", fake_stdin), patch("sys.stdout", fake_stdout):
-            with patch("getpass.getpass", return_value="password123"):
-                wiki = _build_wiki_stub()
-                args = argparse.Namespace(
-                    name=None,
-                    transport=None,
-                    host=None,
-                    mcp_port=None,
-                    port=None,
-                    web=True,
-                    auth_token=None,
-                    multi_wiki=False,
-                )
-                config = {"mcp": {}}
-                with patch(
-                    "llmwikify.interfaces.server.WikiServer"
-                ):
-                    run_serve(wiki, config, args)
+            wiki = _build_wiki_stub()
+            args = argparse.Namespace(
+                name=None,
+                transport=None,
+                host=None,
+                mcp_port=None,
+                port=None,
+                web=True,
+                auth_token=None,
+                multi_wiki=False,
+            )
+            config = {"mcp": {}}
+            with patch(
+                "llmwikify.interfaces.server.WikiServer"
+            ):
+                run_serve(wiki, config, args)
         # auth.db should now exist (auto-init succeeded).
         assert auth_db_path().exists()
         repo = UserRepository()
@@ -236,11 +234,10 @@ class TestPublicModeAutoInit:
         should skip auto-init and proceed to mount WikiServer.
         """
         monkeypatch.setenv("LLMWIKIFY_HOST", "0.0.0.0")
-        # Pre-create the auth.db with a user.
+        # Pre-create the auth.db with a user (no password).
         repo = UserRepository()
         repo.create(
             email="existing@example.com",
-            password="password123",
             is_first_admin=True,
         )
         wiki = _build_wiki_stub()
