@@ -282,19 +282,25 @@ def _deny_no_token(method: str, public_read: bool) -> JSONResponse:
 
 
 def _check_wikis_claim(path: str, claims: TokenClaims) -> str | None:
-    """If the path is /api/wiki/{wiki_id}/..., enforce the wikis claim.
+    """Enforce wikis claim for wiki-specific routes.
 
-    Returns None on pass, an error message on fail.
+    Fixed routes like /api/wiki/status have fewer path segments and
+    are automatically skipped. Only routes matching /api/wiki/{wiki_id}/...
+    (5+ segments) are checked.
     """
     if not path.startswith("/api/wiki/"):
         return None
-    # Split off the wiki id. Format: /api/wiki/{wiki_id}/...
     parts = path.split("/")
-    # parts = ['', 'api', 'wiki', '{wiki_id}', ...]
-    if len(parts) < 4 or not parts[3]:
+    # /api/wiki/status → 4 segments (skip)
+    # /api/wiki/sink/status → 5 segments (sink is a fixed prefix, not a wiki_id)
+    # /api/wiki/strategy/page/xxx → 5+ segments (check)
+    if len(parts) < 5:
         return None
     wiki_id = parts[3]
-    # Wildcard "*" is the bootstrap owner token; allow everything.
+    # Skip known non-wiki prefixes (fixed routes under /api/wiki/).
+    _NON_WIKI_PREFIXES = frozenset({"sink"})
+    if wiki_id in _NON_WIKI_PREFIXES:
+        return None
     if "*" in claims.wikis:
         return None
     if wiki_id in claims.wikis:
