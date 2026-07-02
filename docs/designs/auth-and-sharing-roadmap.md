@@ -72,6 +72,12 @@
 | **16** | **password hash** | **Argon2id** (t=3, m=64MB, p=4) — memory-hard 抗 GPU |
 | **17** | **WebUI 鉴权库** | **fastapi-login** `LoginManager` — 节省 ~100 LoC 机械代码 |
 | **18** | **CLI prompts** | **stdlib `input()` + `getpass.getpass()`** + TTY fallback |
+| **19** | **WebUI Login 形式** | **独立页面 `/login`** — 全屏居中卡片,首次访问直接看到 |
+| **20** | **Token 持久化** | **localStorage** — 关闭浏览器后仍登录,工具类产品 |
+| **21** | **Device pairing** | **跳过 X2 (MVP)** — 留 Phase 3+ 再做 |
+| **22** | **AuthInitBanner** | **独立组件** — 检测 local_mode=true 时不显示 |
+| **23** | **VITE_API_TOKEN** | **保留为 fallback** — authStore 优先,兼容 CI/CD |
+| **24** | **WebSocket auth** | **Query param `?token=xxx`** — 浏览器 WS 不支持自定义 headers |
 
 ### 1.2 文件清单
 
@@ -502,15 +508,17 @@ Phase 4:      (单独 llmwikify-hub 仓) posts, follows, takedowns
 ## 8. 待办(全部等你说 "go")
 
 - [x] Phase 2a 设计文档: 增 §0/§1.1/§1.2/§1.4/§1.5/§1.6/§1.8 决策 12-18 + Argon2id 切换
-- [ ] Phase 2a commit 1: foundation/auth + auth_routes + middleware + pyproject
-- [ ] Phase 2a commit 2: CLI auth + serve host 检测 + auto-init prompt
-- [ ] Phase 2a commit 3: tests (4 文件) + 端到端冒烟
-- [ ] Phase 2a 完成后 review
-- [ ] Phase 2b commit 4: webui Login + auth store + AuthInitBanner
-- [ ] Phase 2b commit 5: device pairing (X2) — auth login --web + CliPair
+- [x] Phase 2a commit 1: foundation/auth + auth_routes + middleware + pyproject
+- [x] Phase 2a commit 2: CLI auth + serve host 检测 + auto-init prompt
+- [x] Phase 2a commit 3: tests (4 文件) + 端到端冒烟
+- [x] Phase 2a 完成后 review
+- [x] Phase 2b 设计文档: 增 §0/§1.1 决策 19-24 (WebUI Login + auth store + token 持久化)
+- [ ] Phase 2b commit 4: authStore + api.ts interceptor (runtime token + 401 redirect + WS query param)
+- [ ] Phase 2b commit 5: LoginPage + ProtectedRoute + App.tsx 路由守卫
+- [ ] Phase 2b commit 6: AuthInitBanner 独立组件 + App.tsx 嵌入
 - [ ] Phase 2b 完成后 review
-- [ ] Phase 3 commits 6-9: share + remote wiki
-- [ ] Phase 4 commits 10-13: 中央 hub publish
+- [ ] Phase 3 commits 7-10: share + remote wiki
+- [ ] Phase 4 commits 11-14: 中央 hub publish
 - [ ] Phase 4 hub 服务端独立仓立项 + 并行实施
 
 ---
