@@ -104,7 +104,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
 
         # Show PAT info on every startup (not just first time).
         from llmwikify.foundation.auth.db import ApiKeyRepository
-        from llmwikify.foundation.auth.utils import pat_file_path
+        from llmwikify.foundation.auth.utils import pat_file_path, save_pat
         pf = pat_file_path()
         if pf.exists():
             print(f"  PAT file: {pf}")
@@ -122,6 +122,27 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
             _ak_repo = ApiKeyRepository()
             _keys = _ak_repo.list_by_user(_first_user.id)
             _active = [k for k in _keys if k.revoked_at is None]
+
+            # If user exists but has no PATs, auto-create one.
+            if not _active:
+                from llmwikify.foundation.auth._pat import generate_pat
+                _pat, _pat_hash = generate_pat()
+                _ak_repo.create(
+                    user_id=_first_user.id,
+                    key_prefix=_pat[:12],
+                    key_hash=_pat_hash,
+                    name="auto",
+                    scopes="write",
+                )
+                save_pat(_pat)
+                print()
+                print("  ✓ Auto-created PAT for existing user:")
+                print(f"    {_pat}")
+                print(f"    Saved to: {pf}")
+                print()
+                _active = _ak_repo.list_by_user(_first_user.id)
+                _active = [k for k in _active if k.revoked_at is None]
+
             if _active:
                 print("  Your PATs:")
                 for k in _active:
