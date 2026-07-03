@@ -219,18 +219,31 @@ async def get_clarification(session_id: str):
 
 
 @router.get("/{session_id}/events")
-async def get_events(session_id: str):
+async def get_events(
+    session_id: str,
+    since_ts: float | None = None,
+    limit: int = 500,
+):
     """Get the persisted event log for a session.
 
-    Returns the full history of events emitted by the engine (typed
-    messages from the SSE stream), in insertion order. Empty list for
+    Issue#15: optional ``since_ts`` cursor for incremental fetches.
+    When provided, returns only events with ``ts > since_ts`` (sorted
+    ASC, capped by ``limit``). The client should track the max ts it
+    has seen and pass it as since_ts to avoid re-downloading the full
+    event history on every poll.
+
+    Returns the full history if since_ts is None. Empty list for
     sessions that have no events yet (in-flight or pre-persistence).
     """
     db = _get_db()
     session = db.get_research_session(session_id)
     if not session:
         return {"error": f"Session {session_id} not found", "events": []}
-    return {"events": db.get_events(session_id)}
+    if since_ts is not None:
+        events = db.get_events_since(session_id, since_ts, limit=limit)
+    else:
+        events = db.get_events(session_id)
+    return {"events": events, "count": len(events), "since_ts": since_ts}
 
 
 # ─── Control: pause / cancel ────────────────────────────────────────

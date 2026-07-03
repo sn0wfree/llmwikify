@@ -738,6 +738,43 @@ class ResearchDatabase(BaseDatabase):
         except (json.JSONDecodeError, TypeError):
             return []
 
+    def get_events_since(
+        self, session_id: str, since_ts: float, *, limit: int = 500,
+    ) -> list[dict]:
+        """Return events for a session with ``ts > since_ts`` (Issue#15).
+
+        Uses the indexed ``(session_id, ts)`` range scan for O(log n)
+        cost. Used by clients that track the max ts they've seen and
+        only need to fetch the delta on each poll.
+
+        Args:
+            since_ts: Unix epoch seconds. Events with ``ts > since_ts``
+                are returned (strictly greater, so the cursor event is
+                not duplicated).
+            limit: Maximum number of events to return. Defaults to 500
+                which is enough for a 5s polling cycle at ~100 events/s.
+
+        Returns:
+            List of event dicts, in insertion order. Empty if no
+            new events since the cursor.
+        """
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT payload_json, ts FROM autoresearch_events
+                   WHERE session_id = ? AND ts > ?
+                   ORDER BY ts ASC, id ASC
+                   LIMIT ?""",
+                (session_id, since_ts, int(limit)),
+            ).fetchall()
+        out: list[dict] = []
+        for r in rows:
+            try:
+                out.append(json.loads(r["payload_json"]))
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return out
+
     # ─── Issue#5: events_json → autoresearch_events migration ─────
 
     def count_event_rows(self, session_id: str) -> int:

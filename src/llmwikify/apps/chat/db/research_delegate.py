@@ -175,6 +175,13 @@ class ResearchDelegate:
     def get_events(self, session_id: str) -> list[dict]:
         return self._research.get_events(session_id)
 
+    def get_events_since(
+        self, session_id: str, since_ts: float, *, limit: int = 500,
+    ) -> list[dict]:
+        return self._research.get_events_since(
+            session_id, since_ts, limit=limit,
+        )
+
     # ─── Issue#5: events_json → autoresearch_events migration ─────
 
     def count_event_rows(self, session_id: str) -> int:

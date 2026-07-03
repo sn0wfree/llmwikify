@@ -491,6 +491,67 @@ class TestEventsTableMigration:
         assert db.migrate_session_events_to_table(sid) == 0
 
 
+class TestEventsCursor:
+    """Issue#15: get_events_since for incremental fetches."""
+
+    def test_get_events_since_returns_only_newer(self, db):
+        sid = db.create_research_session("w", "q")
+        db.append_events(sid, [
+            {"type": "step", "message": "a"},
+            {"type": "step", "message": "b"},
+        ])
+        # First read: get max ts
+        all_events = db.get_events(sid)
+        assert len(all_events) == 2
+        # Get the ts of the 2nd event
+        with db._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT ts FROM autoresearch_events WHERE session_id = ? ORDER BY ts DESC LIMIT 1",
+                (sid,),
+            ).fetchall()
+        cursor = float(rows[0]["ts"])
+        # Append more events
+        db.append_events(sid, [
+            {"type": "step", "message": "c"},
+            {"type": "step", "message": "d"},
+        ])
+        # Cursor fetch should return only c, d
+        newer = db.get_events_since(sid, cursor)
+        assert [e["message"] for e in newer] == ["c", "d"]
+
+    def test_get_events_since_excludes_cursor_event(self, db):
+        """Strict > comparison, so the cursor event itself is not returned."""
+        sid = db.create_research_session("w", "q")
+        db.append_events(sid, [{"type": "step", "message": "a"}])
+        with db._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            ts_a = float(conn.execute(
+                "SELECT ts FROM autoresearch_events WHERE session_id = ?",
+                (sid,),
+            ).fetchone()["ts"])
+        # since_ts == ts_a → a is NOT returned
+        newer = db.get_events_since(sid, ts_a)
+        assert newer == []
+
+    def test_get_events_since_respects_limit(self, db):
+        sid = db.create_research_session("w", "q")
+        db.append_events(sid, [
+            {"type": "step", "message": f"m{i}"} for i in range(10)
+        ])
+        # Use a cursor before all events so all 10 are returned, capped at 3
+        newer = db.get_events_since(sid, since_ts=0.0, limit=3)
+        assert len(newer) == 3
+        assert [e["message"] for e in newer] == ["m0", "m1", "m2"]
+
+    def test_get_events_since_empty_when_no_new(self, db):
+        sid = db.create_research_session("w", "q")
+        db.append_events(sid, [{"type": "step", "message": "a"}])
+        # Use a far-future ts
+        newer = db.get_events_since(sid, since_ts=10**12)
+        assert newer == []
+
+
 # ─── 2c. EventBuffer (task manager layer) ─────────────────────────
 
 
