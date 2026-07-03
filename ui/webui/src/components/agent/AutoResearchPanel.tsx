@@ -187,7 +187,22 @@ function AutoResearchSidebar({
       try {
         const data = await listAutoResearch(currentWikiId || undefined);
         if (mounted) {
-          setSessions(data.autoresearch_sessions);
+          // Issue#6: only update state when sessions actually changed,
+          // to avoid re-rendering all <MiniSixStepBar>s every poll.
+          setSessions((prev) => {
+            const next = data.autoresearch_sessions;
+            if (prev.length === next.length) {
+              let same = true;
+              for (let i = 0; i < next.length; i++) {
+                if (prev[i]?.id !== next[i]?.id || prev[i]?.status !== next[i]?.status) {
+                  same = false;
+                  break;
+                }
+              }
+              if (same) return prev;
+            }
+            return next;
+          });
           setLoading(false);
         }
       } catch {
@@ -198,7 +213,11 @@ function AutoResearchSidebar({
       }
     };
     fetchSessions();
-    const i = setInterval(fetchSessions, 5000);
+    const i = setInterval(() => {
+      // Issue#6: pause polling when the tab is hidden — server is still
+      // running, the next visible-poll will catch up.
+      if (document.visibilityState === 'visible') fetchSessions();
+    }, 10000);
     return () => {
       mounted = false;
       clearInterval(i);
