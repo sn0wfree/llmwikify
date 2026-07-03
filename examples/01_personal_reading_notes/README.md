@@ -50,3 +50,15 @@ python play.py
 ## 不依赖
 
 无 LLM 配置需求（`agent="generic"`），fixture 已用 markdown 自带 frontmatter。
+
+## E2E equivalent
+
+This playbook is the **manual** walkthrough. The **automated** version
+of the same 10-step flow lives in
+[`examples/09_wiki_build_e2e/scripts/01_cli_only.py`](../09_wiki_build_e2e/scripts/01_cli_only.py)
+and can be run inside the generic `python-e2e-runner` Docker image.
+
+```bash
+# Same flow, automated + Docker-isolated
+./docker-tests/run-e2e.sh
+```

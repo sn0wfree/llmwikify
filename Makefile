@@ -1,4 +1,4 @@
-.PHONY: test lint eval-prompts check-prompts harness-tests help
+.PHONY: test lint eval-prompts check-prompts harness-tests e2e e2e-local help
 
 PYTHONPATH := src
 PYTEST := python3 -m pytest
@@ -21,3 +21,9 @@ eval-prompts: ## Run offline prompt evaluation
 
 harness-tests: ## Run prompt harness regression tests
 	PYTHONPATH=$(PYTHONPATH) $(PYTEST) tests/test_v019_harness_regression.py -v
+
+e2e: ## Run e2e suite in generic python-e2e-runner container (builds wheel + image)
+	./docker-tests/run-e2e.sh
+
+e2e-local: ## Run e2e scripts on the host (no docker; uses python -m llmwikify)
+	bash examples/09_wiki_build_e2e/scripts/run_all.sh

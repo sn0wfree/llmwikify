@@ -69,3 +69,15 @@ python play.py <base_url> <token> "<message>"
 - §4.2 步骤 A/B/C
 - §4.3 SSE 事件流
 - §4.5 故障排查
+
+## E2E equivalent
+
+This playbook is the **manual** walkthrough (start the server yourself, then
+run the script). The **automated** version that boots the server, posts a
+query, parses events, and tears down lives in
+[`examples/09_wiki_build_e2e/scripts/02_chat_sse.py`](../09_wiki_build_e2e/scripts/02_chat_sse.py):
+
+```bash
+# Same flow, automated + Docker-isolated + agent path = 03
+./docker-tests/run-e2e.sh
+```

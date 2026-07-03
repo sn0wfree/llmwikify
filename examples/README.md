@@ -1,23 +1,28 @@
 # llmwikify End-to-End Playbooks
 
-> **v0.38.0 (2026-06-30)** — 8 playbooks (5 scenarios + 3 feature demos), aligned with [docs/TUTORIAL.md](../docs/TUTORIAL.md)
-> Each playbook is a self-contained runnable script + README, no LLM/network required (except 04).
+> **v0.38.0 (2026-07-02)** — 9 playbooks (5 scenarios + 3 feature demos + 1 e2e suite), aligned with [docs/TUTORIAL.md](../docs/TUTORIAL.md)
+> Each playbook is a self-contained runnable script + README, no LLM/network required (except 04, 09).
 
 ---
 
 ## 📋 Playbook Directory
 
-| # | Scenario | Path | Key API |
-|---|----------|------|---------|
-| 01 | Personal Reading Notes | [`01_personal_reading_notes/`](01_personal_reading_notes/) | init / ingest / search / write_page / build-index / references / lint |
-| 02 | Company Due-Diligence KB | [`02_company_research_kb/`](02_company_research_kb/) | batch ingest / synthesize / GraphAnalyzer / lint |
-| 03 | Multi-Wiki Registry | [`03_multi_wiki_registry/`](03_multi_wiki_registry/) | WikiRegistry / WikiDiscovery / switch / list |
-| 04 | Chat SSE Client | [`04_chat_sse_client/`](04_chat_sse_client/) | httpx.stream / /api/agent/chat / SSE events |
-| 05 | Paper → Factor → Backtest | [`05_paper_to_factor/`](05_paper_to_factor/) | write_factor_yaml / list_factors / DuckDB |
-| **Feature Demos** | | | |
-| 06 | Lint Rule Triggers | [`06_lint_8_rules/`](06_lint_8_rules/) | wiki.lint() / 8 rules |
-| 07 | YAML Config Templates | [`07_yaml_templates/`](07_yaml_templates/) | yaml.safe_load / create_wiki |
-| 08 | Section-Level Anchors | [`08_section_anchor_tracking/`](08_section_anchor_tracking/) | get_inbound_links / get_outbound_links |
+| # | Scenario | Path | Mode | LLM? | Key API |
+|---|----------|------|------|------|---------|
+| 01 | Personal Reading Notes | [`01_personal_reading_notes/`](01_personal_reading_notes/) | A+B | no | init / ingest / search / write_page / build-index / references / lint |
+| 02 | Company Due-Diligence KB | [`02_company_research_kb/`](02_company_research_kb/) | A+B | no | batch ingest / synthesize / GraphAnalyzer / lint |
+| 03 | Multi-Wiki Registry | [`03_multi_wiki_registry/`](03_multi_wiki_registry/) | both | no | WikiRegistry / WikiDiscovery / switch / list |
+| 04 | Chat SSE Client | [`04_chat_sse_client/`](04_chat_sse_client/) | B | yes | httpx.stream / /api/agent/chat / SSE events |
+| 05 | Paper → Factor → Backtest | [`05_paper_to_factor/`](05_paper_to_factor/) | both | no | write_factor_yaml / list_factors / DuckDB |
+| **Feature Demos** | | | | | |
+| 06 | Lint Rule Triggers | [`06_lint_8_rules/`](06_lint_8_rules/) | both | no | wiki.lint() / 8 rules |
+| 07 | YAML Config Templates | [`07_yaml_templates/`](07_yaml_templates/) | both | no | yaml.safe_load / create_wiki |
+| 08 | Section-Level Anchors | [`08_section_anchor_tracking/`](08_section_anchor_tracking/) | both | no | get_inbound_links / get_outbound_links |
+| **E2E Verification Suite** | | | | | |
+| 09 | Wiki Build E2E | [`09_wiki_build_e2e/`](09_wiki_build_e2e/) | both | optional | install check + 10-step CLI + chat SSE + agent CLI (Docker-friendly) |
+
+> **Mode column**: A = Agent mode (opencode/claude/codex), B = LLM model mode
+> (llmwikify calls LLM directly). See [`docs/USAGE_MODES.md`](../docs/USAGE_MODES.md).
 
 ---
 
