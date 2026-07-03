@@ -84,6 +84,12 @@ class SourceGatherer:
         done_count = 0
         threshold_reached = False
         grace_deadline = None
+        # Issue#12: last progress-event timestamp for the grace period.
+        # Emit a progress event at most every 5s so the SSE consumer
+        # shows "waiting for X stragglers..." feedback during the
+        # 15s grace window.
+        last_grace_progress_ts: float = 0.0
+        GRACE_PROGRESS_INTERVAL = 5.0
 
         try:
             while tasks:
@@ -113,16 +119,50 @@ class SourceGatherer:
                         done_count += 1
 
                 progress_frac = done_count / total
+                now = asyncio.get_event_loop().time()
                 if not threshold_reached and progress_frac >= early_exit_threshold:
                     threshold_reached = True
-                    grace_deadline = asyncio.get_event_loop().time() + early_exit_grace
+                    grace_deadline = now + early_exit_grace
+                    last_grace_progress_ts = now
                     logger.info(
                         "Gathering threshold reached: %d/%d done (%.0f%%), grace %ds",
                         done_count, total, progress_frac * 100, early_exit_grace,
                     )
+                    # Issue#12: emit a progress event so the SSE consumer
+                    # shows the user we're in the grace period.
+                    events.append({
+                        "type": "progress",
+                        "phase": "gathering",
+                        "completed": done_count,
+                        "total": total,
+                        "in_grace": True,
+                        "grace_remaining_s": early_exit_grace,
+                        "message": (
+                            f"Threshold reached ({done_count}/{total}), "
+                            f"waiting up to {early_exit_grace}s for stragglers"
+                        ),
+                    })
 
                 if threshold_reached and pending:
-                    if asyncio.get_event_loop().time() >= grace_deadline:
+                    # Issue#12: periodically emit progress during grace so
+                    # the UI shows "waiting..." feedback (default 15s grace
+                    # is a long silence without these events).
+                    if now - last_grace_progress_ts >= GRACE_PROGRESS_INTERVAL:
+                        last_grace_progress_ts = now
+                        remaining = max(0.0, grace_deadline - now)
+                        events.append({
+                            "type": "progress",
+                            "phase": "gathering",
+                            "completed": done_count,
+                            "total": total,
+                            "in_grace": True,
+                            "grace_remaining_s": int(remaining),
+                            "message": (
+                                f"Waiting for {len(pending)} straggler(s) — "
+                                f"{int(remaining)}s left"
+                            ),
+                        })
+                    if now >= grace_deadline:
                         logger.info("Grace expired, cancelling %d remaining tasks", len(pending))
                         for t in pending:
                             if not t.done():
