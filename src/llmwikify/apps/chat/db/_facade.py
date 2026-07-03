@@ -486,6 +486,21 @@ class ChatDatabase(BaseDatabase):
     def get_events(self, session_id: str) -> list[dict]:
         return self._research.get_events(session_id)
 
+    # ─── Issue#5: events_json → autoresearch_events migration ─────
+
+    def count_event_rows(self, session_id: str) -> int:
+        return self._research.count_event_rows(session_id)
+
+    def list_sessions_with_unmigrated_events(self) -> list[str]:
+        return self._research.list_sessions_with_unmigrated_events()
+
+    def migrate_session_events_to_table(
+        self, session_id: str, *, base_ts: float | None = None,
+    ) -> int:
+        return self._research.migrate_session_events_to_table(
+            session_id, base_ts=base_ts,
+        )
+
     def save_step(
         self, session_id: str, step_num: int, action: str,
         status: str = "pending", thought: str | None = None,

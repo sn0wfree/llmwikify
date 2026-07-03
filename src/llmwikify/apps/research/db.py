@@ -190,6 +190,30 @@ class ResearchDatabase(BaseDatabase):
         """
             )
 
+            # ── Issue#5: autoresearch_events table (replaces events_json blob) ──
+            # Each event is a row with the full payload as JSON + an index on
+            # (session_id, ts) for O(log n) range queries and pagination.
+            # The events_json column is kept for now (dual-write period)
+            # as a fallback for sessions that haven't been migrated.
+            conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS autoresearch_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            ts REAL NOT NULL,
+            event_type TEXT,
+            payload_json TEXT NOT NULL,
+            FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id)
+        )
+        """
+            )
+            conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_autoresearch_events_sid_ts
+        ON autoresearch_events(session_id, ts)
+        """
+            )
+
             conn.commit()
 
     # ─── Research methods (moved from ChatDatabase) ─────────────
@@ -336,7 +360,8 @@ class ResearchDatabase(BaseDatabase):
             conn.commit()
 
     def delete_research(self, session_id: str) -> bool:
-        """Delete a session and cascade-delete its sub_queries, sources, and steps."""
+        """Delete a session and cascade-delete its sub_queries, sources,
+        steps, and events (Issue#5)."""
         with self._connect() as conn:
             conn.execute(
                 "DELETE FROM autoresearch_sources WHERE session_id = ?",
@@ -348,6 +373,15 @@ class ResearchDatabase(BaseDatabase):
             )
             conn.execute(
                 "DELETE FROM research_steps WHERE session_id = ?",
+                (session_id,),
+            )
+            # Issue#5: clear the new event table too. Without this, a
+            # future get_events(sid) would fall through to the events_json
+            # blob (which IS cleared by the session DELETE above since
+            # it's a column) — but new append_events would re-create
+            # events under a non-existent session. Be explicit.
+            conn.execute(
+                "DELETE FROM autoresearch_events WHERE session_id = ?",
                 (session_id,),
             )
             cursor = conn.execute(
@@ -607,36 +641,91 @@ class ResearchDatabase(BaseDatabase):
     # ─── Event log persistence ───────────────────────────────
 
     def append_events(self, session_id: str, events: list[dict]) -> int:
-        """Append a batch of events to the session's persisted event log."""
+        """Append a batch of events to the session's persisted event log.
+
+        Issue#5: dual-write to the new ``autoresearch_events`` table
+        (O(1) per event) AND the legacy ``events_json`` column (kept
+        as fallback for sessions not yet migrated to the new table).
+        After the migration script runs against all existing sessions
+        and the blob is confirmed stale, the events_json write can
+        be removed.
+        """
+        if not events:
+            return 0
+        import time as _time
+        now_ts = _time.time()
         with self._connect() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
-                (session_id,),
-            ).fetchone()
-            existing: list[dict] = []
-            if row and row["events_json"]:
-                try:
-                    parsed = json.loads(row["events_json"])
-                    if isinstance(parsed, list):
-                        existing = parsed
-                except (json.JSONDecodeError, TypeError):
-                    existing = []
-            existing.extend(events)
-            new_json = json.dumps(existing, ensure_ascii=False)
-            conn.execute(
-                """UPDATE autoresearch_sessions
-                   SET events_json = ?, updated_at = datetime('now')
-                   WHERE id = ?""",
-                (new_json, session_id),
-            )
-            conn.commit()
-            return len(existing)
+            # New table: O(1) bulk insert
+            conn.execute("BEGIN")
+            try:
+                conn.executemany(
+                    """INSERT INTO autoresearch_events
+                       (session_id, ts, event_type, payload_json)
+                       VALUES (?, ?, ?, ?)""",
+                    (
+                        (
+                            session_id,
+                            now_ts + i * 0.0001,  # preserve insertion order
+                            e.get("type"),
+                            json.dumps(e, ensure_ascii=False),
+                        )
+                        for i, e in enumerate(events)
+                    ),
+                )
+                # Legacy blob: kept during dual-write period
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
+                    (session_id,),
+                ).fetchone()
+                existing: list[dict] = []
+                if row and row["events_json"]:
+                    try:
+                        parsed = json.loads(row["events_json"])
+                        if isinstance(parsed, list):
+                            existing = parsed
+                    except (json.JSONDecodeError, TypeError):
+                        existing = []
+                existing.extend(events)
+                new_json = json.dumps(existing, ensure_ascii=False)
+                conn.execute(
+                    """UPDATE autoresearch_sessions
+                       SET events_json = ?, updated_at = datetime('now')
+                       WHERE id = ?""",
+                    (new_json, session_id),
+                )
+                conn.commit()
+                return len(existing)
+            except Exception:
+                conn.rollback()
+                raise
 
     def get_events(self, session_id: str) -> list[dict]:
-        """Return all persisted events for a session, in insertion order."""
+        """Return all persisted events for a session, in insertion order.
+
+        Issue#5: reads from the new ``autoresearch_events`` table
+        (O(n) where n = number of events for this session). If the
+        new table is empty (session was created before this migration
+        and has never been touched since), falls back to the legacy
+        ``events_json`` blob to preserve backward compatibility.
+        """
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT payload_json FROM autoresearch_events
+                   WHERE session_id = ?
+                   ORDER BY ts ASC, id ASC""",
+                (session_id,),
+            ).fetchall()
+            if rows:
+                out: list[dict] = []
+                for r in rows:
+                    try:
+                        out.append(json.loads(r["payload_json"]))
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                return out
+            # Fallback: legacy blob (only when new table has nothing)
             row = conn.execute(
                 "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
                 (session_id,),
@@ -648,6 +737,119 @@ class ResearchDatabase(BaseDatabase):
             return parsed if isinstance(parsed, list) else []
         except (json.JSONDecodeError, TypeError):
             return []
+
+    # ─── Issue#5: events_json → autoresearch_events migration ─────
+
+    def count_event_rows(self, session_id: str) -> int:
+        """Return how many event rows exist in the new table for a session.
+
+        Used by the migration script to detect sessions that still need
+        to be migrated (count == 0 + events_json blob is non-null).
+        """
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT COUNT(*) AS c FROM autoresearch_events
+                   WHERE session_id = ?""",
+                (session_id,),
+            ).fetchone()
+        return int(row["c"]) if row else 0
+
+    def migrate_session_events_to_table(
+        self, session_id: str, *, base_ts: float | None = None,
+    ) -> int:
+        """One-shot migration: copy events_json blob → autoresearch_events.
+
+        Idempotent: if the new table already has rows for this session,
+        returns 0 (no-op). Otherwise, parses the blob and inserts one
+        row per event with synthetic timestamps (base_ts + i * 0.0001)
+        to preserve insertion order.
+
+        Returns: number of rows inserted (0 if already migrated or
+        no blob to migrate).
+        """
+        import time as _time
+        if base_ts is None:
+            base_ts = _time.time()
+
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            # Skip if already migrated
+            existing = conn.execute(
+                """SELECT COUNT(*) AS c FROM autoresearch_events
+                   WHERE session_id = ?""",
+                (session_id,),
+            ).fetchone()
+            if existing and int(existing["c"]) > 0:
+                return 0
+
+            row = conn.execute(
+                "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            if not row or not row["events_json"]:
+                return 0
+
+            try:
+                events = json.loads(row["events_json"])
+            except (json.JSONDecodeError, TypeError):
+                return 0
+            if not isinstance(events, list) or not events:
+                return 0
+
+            conn.executemany(
+                """INSERT INTO autoresearch_events
+                   (session_id, ts, event_type, payload_json)
+                   VALUES (?, ?, ?, ?)""",
+                (
+                    (
+                        session_id,
+                        base_ts + i * 0.0001,
+                        e.get("type") if isinstance(e, dict) else None,
+                        json.dumps(e, ensure_ascii=False),
+                    )
+                    for i, e in enumerate(events)
+                ),
+            )
+            conn.commit()
+            return len(events)
+
+    def list_sessions_with_unmigrated_events(self) -> list[str]:
+        """Return session_ids where events_json blob is non-empty but
+        the new autoresearch_events table has no rows.
+
+        Used by the migration script to find pending work.
+        """
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT s.id AS id
+                   FROM autoresearch_sessions s
+                   WHERE s.events_json IS NOT NULL
+                     AND s.events_json != ''
+                     AND s.events_json != '[]'
+                     AND NOT EXISTS (
+                       SELECT 1 FROM autoresearch_events e
+                       WHERE e.session_id = s.id
+                     )""",
+            ).fetchall()
+        return [r["id"] for r in rows]
+
+    def drop_legacy_events_json(self) -> int:
+        """Drop the events_json column from autoresearch_sessions.
+
+        Phase 3 of Issue#5 — only call this after the migration script
+        has been run on all production data and the new table is the
+        sole source of truth. Returns 0 (SQLite ALTER DROP COLUMN was
+        added in 3.35.0 and we always return successfully or raise).
+        """
+        # We use raw SQL via the connection; SQLite supports DROP COLUMN
+        # since 3.35.0 (Jan 2021). The base_db pragmas ensure modern SQLite.
+        with self._connect() as conn:
+            conn.execute(
+                "ALTER TABLE autoresearch_sessions DROP COLUMN events_json",
+            )
+            conn.commit()
+        return 0
 
     # ─── research_steps (Phase 3 NEW) ────────────────────────
 

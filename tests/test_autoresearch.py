@@ -326,6 +326,171 @@ class TestEventLogPersistence:
         assert db.get_events(sid) == []
 
 
+# ─── Issue#5: autoresearch_events table (replaces events_json blob) ──
+
+
+class TestEventsTableSchema:
+    """Verify the new autoresearch_events table + index exist."""
+
+    def test_events_table_exists(self, db):
+        import sqlite3
+        with sqlite3.connect(db.db_path) as conn:
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+        assert "autoresearch_events" in tables
+
+    def test_events_table_index_exists(self, db):
+        import sqlite3
+        with sqlite3.connect(db.db_path) as conn:
+            indexes = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index'"
+                ).fetchall()
+            }
+        assert "idx_autoresearch_events_sid_ts" in indexes
+
+
+class TestEventsTableReadWrite:
+    """Verify the dual-write path and the new read path."""
+
+    def test_append_writes_to_table(self, db):
+        sid = db.create_research_session("w", "q")
+        db.append_events(sid, [
+            {"type": "step", "message": "m1"},
+            {"type": "done", "message": "m2"},
+        ])
+        assert db.count_event_rows(sid) == 2
+
+    def test_get_reads_from_table(self, db):
+        sid = db.create_research_session("w", "q")
+        db.append_events(sid, [{"type": "step", "message": "hello"}])
+        evs = db.get_events(sid)
+        assert evs == [{"type": "step", "message": "hello"}]
+
+    def test_dual_write_keeps_events_json(self, db):
+        """During the dual-write period, both table AND blob are written."""
+        sid = db.create_research_session("w", "q")
+        db.append_events(sid, [{"type": "step", "message": "x"}])
+        # Read the events_json column directly
+        import sqlite3
+        with sqlite3.connect(db.db_path) as conn:
+            row = conn.execute(
+                "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
+                (sid,),
+            ).fetchone()
+        assert row[0] is not None
+        import json
+        parsed = json.loads(row[0])
+        assert parsed == [{"type": "step", "message": "x"}]
+
+    def test_preserves_event_order_via_ts(self, db):
+        sid = db.create_research_session("w", "q")
+        batch = [{"type": "step", "message": f"m{i}"} for i in range(10)]
+        db.append_events(sid, batch)
+        evs = db.get_events(sid)
+        assert [e["message"] for e in evs] == [f"m{i}" for i in range(10)]
+
+    def test_empty_batch_is_noop(self, db):
+        sid = db.create_research_session("w", "q")
+        assert db.append_events(sid, []) == 0
+        assert db.count_event_rows(sid) == 0
+
+
+class TestEventsTableMigration:
+    """Verify migration helpers and the blob-fallback read path."""
+
+    def test_list_sessions_with_unmigrated_events(self, db):
+        """A session with only a blob (no table rows) shows up as pending."""
+        sid = db.create_research_session("w", "q")
+        # Inject blob directly to simulate pre-migration data
+        import json
+        import sqlite3
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                "UPDATE autoresearch_sessions SET events_json = ? WHERE id = ?",
+                (json.dumps([{"type": "step", "message": "old"}]), sid),
+            )
+            conn.commit()
+        pending = db.list_sessions_with_unmigrated_events()
+        assert sid in pending
+
+    def test_migrate_session_events_copies_blob_to_table(self, db):
+        sid = db.create_research_session("w", "q")
+        import json
+        import sqlite3
+        events = [
+            {"type": "step", "message": "a"},
+            {"type": "step", "message": "b"},
+            {"type": "done", "message": "c"},
+        ]
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                "UPDATE autoresearch_sessions SET events_json = ? WHERE id = ?",
+                (json.dumps(events), sid),
+            )
+            conn.commit()
+        n = db.migrate_session_events_to_table(sid)
+        assert n == 3
+        assert db.count_event_rows(sid) == 3
+        # get_events now reads from the table
+        evs = db.get_events(sid)
+        assert [e["message"] for e in evs] == ["a", "b", "c"]
+
+    def test_migrate_is_idempotent(self, db):
+        sid = db.create_research_session("w", "q")
+        import json
+        import sqlite3
+        events = [{"type": "step", "message": "a"}]
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                "UPDATE autoresearch_sessions SET events_json = ? WHERE id = ?",
+                (json.dumps(events), sid),
+            )
+            conn.commit()
+        # First migration: 1 row
+        assert db.migrate_session_events_to_table(sid) == 1
+        # Second migration: no-op (table already populated)
+        assert db.migrate_session_events_to_table(sid) == 0
+
+    def test_fallback_to_blob_when_table_empty(self, db):
+        """If table is empty but blob exists, get_events returns the blob."""
+        sid = db.create_research_session("w", "q")
+        import json
+        import sqlite3
+        events = [{"type": "step", "message": "from_blob"}]
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                "UPDATE autoresearch_sessions SET events_json = ? WHERE id = ?",
+                (json.dumps(events), sid),
+            )
+            conn.commit()
+        # Table is empty, blob has data → fallback to blob
+        assert db.count_event_rows(sid) == 0
+        evs = db.get_events(sid)
+        assert evs == events
+
+    def test_migrate_empty_blob_returns_zero(self, db):
+        sid = db.create_research_session("w", "q")
+        # No blob, no rows
+        assert db.migrate_session_events_to_table(sid) == 0
+
+    def test_migrate_malformed_blob_returns_zero(self, db):
+        sid = db.create_research_session("w", "q")
+        import sqlite3
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                "UPDATE autoresearch_sessions SET events_json = ? WHERE id = ?",
+                ("not valid json", sid),
+            )
+            conn.commit()
+        assert db.migrate_session_events_to_table(sid) == 0
+
+
 # ─── 2c. EventBuffer (task manager layer) ─────────────────────────
 
 
