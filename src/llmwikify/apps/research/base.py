@@ -347,6 +347,12 @@ class BaseResearchTaskManager:
         self._tasks: dict[str, asyncio.Task] = {}
         self._queues: dict[str, asyncio.Queue[dict | None]] = {}
         self._engines: dict[str, Any] = {}
+        # Issue#10: per-task wakeup event. The producer (engine.run)
+        # sets this whenever it enqueues a new event; the consumer
+        # (``get_event_stream``) waits on it instead of busy-polling
+        # a 1s timeout. Eliminates per-second wakeups for idle SSE
+        # consumers.
+        self._wakeup_events: dict[str, asyncio.Event] = {}
 
     def is_running(self, session_id: str) -> bool:
         task = self._tasks.get(session_id)
@@ -367,6 +373,9 @@ class BaseResearchTaskManager:
         queue: asyncio.Queue[dict | None] = asyncio.Queue()
         self._queues[session_id] = queue
         self._engines[session_id] = engine
+        # Issue#10: per-task wakeup event. Created here (not in the task)
+        # so get_event_stream() can wait on it from a different task.
+        self._wakeup_events[session_id] = asyncio.Event()
 
         # Hook: subclass creates per-session persistence (e.g. EventBuffer).
         self._on_session_start(session_id, engine)
@@ -393,9 +402,19 @@ class BaseResearchTaskManager:
 
         Yields events from the per-session queue. Returns when
         the task completes and all events are consumed.
+
+        Issue#10: instead of busy-waiting with a 1s timeout, await
+        a per-task ``_wakeup_event`` that the producer (engine.run)
+        sets whenever it puts a new event. This eliminates the
+        event-loop wakeups-per-second that the previous timeout
+        design caused for idle connections.
         """
         queue = self._queues.get(session_id)
         if queue is None:
+            return
+
+        wakeup = self._wakeup_events.get(session_id)
+        if wakeup is None:
             return
 
         while True:
@@ -405,10 +424,12 @@ class BaseResearchTaskManager:
                 task = self._tasks.get(session_id)
                 if task is None or task.done():
                     break
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=1.0)
-                except asyncio.TimeoutError:
-                    continue
+                # Block until the producer signals a new event
+                # (or until the task finishes, in which case
+                # _on_task_done sets the event as a side effect).
+                wakeup.clear()
+                await wakeup.wait()
+                continue
 
             if event is None:
                 break
@@ -432,14 +453,20 @@ class BaseResearchTaskManager:
         Issue#2: forward events to the SSE consumer in real time via
         an emit callback. The action handlers call this callback for
         each inner event as it happens (not buffered).
+
+        Issue#10: signal the per-task ``_wakeup_event`` after each put
+        so idle SSE consumers stop busy-waiting on a 1s timeout.
         """
         lock = _get_wiki_lock(engine)
+        wakeup = self._wakeup_events.get(session_id)
         # Issue#2: emit callback that puts events onto the same queue
         # the outer for-loop reads from. Safe because asyncio.Queue.put
         # is awaitable and we just need to schedule it on this loop.
         async def _emit(ev: dict) -> None:
             await queue.put(ev)
             self._on_event(session_id, ev)
+            if wakeup is not None:
+                wakeup.set()
         async with lock:
             try:
                 async for event in engine.run(
@@ -447,6 +474,8 @@ class BaseResearchTaskManager:
                 ):
                     await queue.put(event)
                     self._on_event(session_id, event)
+                    if wakeup is not None:
+                        wakeup.set()
             except asyncio.CancelledError:
                 logger.info("Research task %s cancelled", session_id)
                 try:
@@ -462,8 +491,13 @@ class BaseResearchTaskManager:
                 err_event = {"type": "error", "error": str(e)}
                 await queue.put(err_event)
                 self._on_event(session_id, err_event)
+                if wakeup is not None:
+                    wakeup.set()
             finally:
                 await queue.put(None)
+                # Issue#10: signal SSE consumers to drain the queue and exit.
+                if wakeup is not None:
+                    wakeup.set()
                 self._on_task_finalize(session_id)
 
     def _on_task_done(self, session_id: str, task: asyncio.Task) -> None:
@@ -476,6 +510,11 @@ class BaseResearchTaskManager:
 
         self._tasks.pop(session_id, None)
         self._engines.pop(session_id, None)
+        # Issue#10: clean up the wakeup event. If a consumer is still
+        # waiting, signal it so it can re-check task state and exit.
+        wakeup = self._wakeup_events.pop(session_id, None)
+        if wakeup is not None:
+            wakeup.set()
         # Hook: subclass closes per-session persistence storage.
         self._on_session_cleanup(session_id)
 
