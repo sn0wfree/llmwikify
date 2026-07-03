@@ -1,7 +1,30 @@
+<!-- agents-sync managed · edit locally, then: agents-sync push -->
+
 # llmwikify Agent 规约
 
+> **v1.3.0** · **最后审查**: 2026-07-02 · **下次审查**: 2026-10-02 (3 个月)
+> **Gist 源**: https://gist.github.com/sn0wfree/4496c389faca9f3a2de36fb23aa37fa1
+> **维护者**: sn0wfree
+>
 > 8 原则受 [Karpathy 4 原则](https://github.com/forrestchang/andrej-karpathy-skills) 启发，
 > 4 条为本项目实践沉淀。优先级高于 agent 默认行为。
+
+## 变更日志
+
+### v1.3.0 (2026-07-02)
+- 新增原则 9（Safety First / 破坏性操作红线）
+- Before Acting Checklist +2 项（docker 状态 + dry-run 强制）
+- 添加"教训记录"段：2026-07-02 docker 误删事故
+- 加版本号 + 审查周期头部
+- 加"维护政策"段
+- 由 agents-sync 工具托管
+
+### v1.2.0 (2026-06-15)
+- 新增 microcompact 规范
+- ChatRunner / CompositeHook / ChatReActBridge 规则
+
+### v1.1.0 (2026-05-20)
+- 8 核心原则（Karpathy 4 + 项目沉淀 4）
 
 ## 核心原则
 
@@ -36,14 +59,55 @@
 中文 commit `<type>(<scope>): 说明`。archive 不删（保留 rename）。
 stash 遗留改动 commit 前主动提醒。
 
-### Before Acting Checklist（操作前清单）
-**每次修改文件/删除/提交前，必须过这 5 步：**
+### 9. Safety First（破坏性操作红线）
 
+**`docker` / `pkill` / `rm -rf` / `git push --force` 永远指定目标，禁止模糊匹配。**
+
+| 禁止 | 必须替代为 | 原因 |
+|------|-----------|------|
+| `docker rm -f $(docker ps -aq)` | `docker rm -f <container_id>` | `ps -aq` 包含**所有**容器（含其他服务），`-f` 强删 = 误杀 |
+| `pkill -f <pattern>` | `kill <pid>` 或 `pkill -x <exact_name>` | `-f` 匹配整条命令行，可能误杀同名进程 |
+| `rm -rf $path`（变量未引号） | 先 `ls "$path"` 确认范围，加 `set -e` 早停 | 变量未引号 = 灾难 |
+| `git push --force` | 永远先 `git status` + `git log --oneline` | 误覆盖他人提交 |
+
+**debug 卡住进程的顺序**：
+1. `docker logs <id>` / `docker exec <id> ps aux` 看具体卡哪
+2. `docker stop <id>`（指定单个，给 10s 优雅停）
+3. 实在不行才 `docker kill <id>` + `docker rm <id>`（指定单个）
+4. **绝不**用 `$(docker ps -aq)` 或 `pkill -f` 一锅端
+
+## Before Acting Checklist（操作前清单）
+**每次修改文件/删除/提交前，必须过这 7 步：**
+
+0. （**docker/systemd/全局进程**）先 `docker ps` / `ps aux` 列出**当前所有**在跑的容器/进程，操作前报告「会动哪些」给用户
+0. （**破坏性批量命令**）`rm -f <list>` 类必须先 dry-run（`docker ps -q --filter name=...` 列出）再执行
 1. 这个操作需要做吗？（YAGNI — 不需要就别做）
 2. 这是用户明确请求的吗？（未请求 → 不动）
 3. 会影响其他文件吗？（grep 改动范围）
 4. 改完后 ruff / test 会过吗？（验证）
 5. 用户确认了吗？（commit/删除/大改动必须确认）
+
+## 教训记录
+
+### 2026-07-02：误删所有 docker 容器
+
+**事故**：`docker rm -f $(docker ps -aq)` 用于停一个卡住的测试容器，但 `ps -aq`
+**返回了所有 25+ 个容器**（含 opencode-nginx-proxy、insight-trendradar、
+quantnodes-mysql、caddy、redis 等），全部被 `-f` 强删。容器配置（端口、env、
+卷挂载）随实例消失。
+
+**根因**：
+1. `ps -aq` 本身没错，错在**用 `-f` + 模糊匹配**做破坏性操作
+2. 没有先看 `docker ps` 报告"我要操作哪些容器"
+3. 卡住进程时直接用全局命令，没有先用 `docker logs <id>` debug
+
+**修复**：
+- 镜像 + 数据卷**全部还在**（没误删），可重建容器
+- 重建需 35+ 个 compose 文件 + 启动参数（部分通过 `/home/ll/Public/*/docker-compose.yml` + `/home/ll/Public/opencode_ngnix/start.sh` 找到）
+- 部分服务配置无法恢复（需凭记忆或文档）
+
+**预防**：见原则 9（破坏性操作红线）+ Before Acting Checklist 第 0 项。
+详见 `DOCKER_RECOVERY_NOTES.md`。
 
 ## 项目规约
 
@@ -74,6 +138,17 @@ stash 遗留改动 commit 前主动提醒。
 **ChatRunner**（`apps/chat/agent/runner.py`）：dataclass 输入用 `ChatRunSpec`（~18 字段，含 microcompact 配置），输出用 `ChatRunResult`（final_content / messages / tools_used / usage / stop_reason / error / compacted_count / total_compacted_chars_saved）；Runner 是 ReActEngine + ChatReActBridge 的薄包装, 不替代主循环；新业务流（Harness / Research / Track B）优先 `ChatRunner.run_to_completion(spec)`，避免直接 new ReActEngine；新 spec 字段加到 `ChatRunSpec`（含 microcompact 子段）而非塞 ReActConfig。
 
 **microcompact**（`apps/chat/agent/microcompact.py`）：默认 ON（`spec.microcompact=True`），`microcompact_keep_chars=1000`；`microcompact_compactable_tools` 默认 `DEFAULT_COMPACTABLE_TOOLS`（read_file / exec / grep / find_files / web_search / web_fetch / list_dir，借鉴 nanobot v0.2.1 `_COMPACTABLE_TOOLS`）；marker 格式 `[Tool result compacted] Tool: ... Original: N chars Kept: M chars ID: ...`；原结果缓存 `spec._compacted_results[call_id]`（per-run 内存，run 结束 GC）；DB 持久化与 observation 生成仍用原 result, 仅 `conversation_messages.append` 用 marker。
+
+## 维护政策
+
+1. **审查周期**：每 3 个月（或重大事故后立即）
+2. **修订流程**：
+   - `agents-sync edit` 改本地
+   - `agents-sync push` 推 gist（公开可见）
+   - 其他机器 `agents-sync pull` 同步
+3. **冲突解决**：在 gist 评论段讨论；分歧无法调和时 revert
+4. **过期清理**：标记 DEPRECATED 的规则 6 个月后删除
+5. **跨项目兼容**：任何规则如果只对单个项目有效，加 `[project: <name>]` 标签
 
 ## 架构分层 (G+Y 2026-06-30 commit b83b472..c..+)
 
@@ -110,3 +185,5 @@ backward-compat shim 保留:
 - `python scripts/check_architecture.py` 必须 0 violation
 - 反向依赖 grep 必须为空
 - 422+ tests 通过
+
+<!-- /agents-sync -->
