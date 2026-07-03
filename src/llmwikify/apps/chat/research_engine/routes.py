@@ -80,7 +80,20 @@ def _get_tool_registry(wiki_id: str | None = None) -> Any:
     return _WIKI_REGISTRY.get_tool_registry(wiki_id)
 
 
+# Issue#11B: per-wiki engine cache. ResearchEngine is heavy to build
+# (gathers all sub-components: gatherer/analyzer/synthesizer/report/
+# reviewer/revisor/clarifier/quality_gate). Caching by wiki_id avoids
+# rebuilding on every /start and /resume call. The per-wiki Lock in
+# apps/research/base.py serializes engine.run() so cached engines
+# are safe (no concurrent mutation of self.session_manager.session_id).
+_ENGINE_CACHE: dict[str, ResearchEngine] = {}
+
+
 def _get_engine(wiki_id: str | None = None) -> ResearchEngine:
+    cache_key = wiki_id or "default"
+    cached = _ENGINE_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     db = _get_db()
     wiki = _get_wiki(wiki_id)
     llm = _LLM_CLIENT
@@ -89,12 +102,14 @@ def _get_engine(wiki_id: str | None = None) -> ResearchEngine:
             "AutoResearch LLM client not initialized. "
             "Call set_autoresearch_deps(llm_client=...) at startup."
         )
-    return ResearchEngine(
+    engine = ResearchEngine(
         wiki=wiki,
         db=db,
         llm_client=llm,
         config=_AUTORESEARCH_CONFIG,
     )
+    _ENGINE_CACHE[cache_key] = engine
+    return engine
 
 
 # ─── SSE Streaming ──────────────────────────────────────────────────

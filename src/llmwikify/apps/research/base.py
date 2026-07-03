@@ -40,6 +40,33 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+# Issue#11B: per-wiki asyncio.Lock registry. ResearchEngine mutates
+# self.session_manager.session_id at the start of run(); without
+# serialization, two concurrent runs for the same wiki race on writes
+# (sources saved under wrong session_id). We keep one lock per wiki_id
+# so different wikis can still run in parallel.
+_WIKI_LOCKS: dict[str, asyncio.Lock] = {}
+_WIKI_LOCKS_GUARD = asyncio.Lock()
+
+
+async def _get_wiki_lock(engine: Any) -> asyncio.Lock:
+    """Return the asyncio.Lock for the wiki that ``engine`` is bound to.
+
+    Lock is lazily created on first request for a given wiki_id. Safe under
+    concurrent access thanks to ``_WIKI_LOCKS_GUARD``.
+    """
+    wiki_id = getattr(getattr(engine, "wiki", None), "wiki_id", None) or "default"
+    lock = _WIKI_LOCKS.get(wiki_id)
+    if lock is not None:
+        return lock
+    async with _WIKI_LOCKS_GUARD:
+        lock = _WIKI_LOCKS.get(wiki_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            _WIKI_LOCKS[wiki_id] = lock
+        return lock
+
+
 class BaseResearchConfig:
     """Shared default config keys + merge helper for both packages.
 
@@ -395,29 +422,37 @@ class BaseResearchTaskManager:
         queue: asyncio.Queue[dict | None],
         resume: bool,
     ) -> None:
-        """Run the engine in background, feeding events to the queue."""
-        try:
-            async for event in engine.run(session_id, query, resume=resume):
-                await queue.put(event)
-                self._on_event(session_id, event)
-        except asyncio.CancelledError:
-            logger.info("Research task %s cancelled", session_id)
+        """Run the engine in background, feeding events to the queue.
+
+        Issue#11B: serialize engine.run() per-wiki via a lock on the engine.
+        ResearchEngine mutates self.session_manager.session_id at the start
+        of run(); without serialization, two concurrent runs for the same
+        wiki would race on writes (sources saved under wrong session_id).
+        """
+        lock = _get_wiki_lock(engine)
+        async with lock:
             try:
-                db = engine.db
-                session = db.get_research_session(session_id)
-                if session and session.get("status") not in ("done", "cancelled", "paused", "timeout", "error"):
-                    db.update_research_status(session_id, "paused", session.get("current_step"))
-            except Exception:
-                pass
-            raise
-        except Exception as e:
-            logger.error("Research task %s failed: %s", session_id, e, exc_info=True)
-            err_event = {"type": "error", "error": str(e)}
-            await queue.put(err_event)
-            self._on_event(session_id, err_event)
-        finally:
-            await queue.put(None)
-            self._on_task_finalize(session_id)
+                async for event in engine.run(session_id, query, resume=resume):
+                    await queue.put(event)
+                    self._on_event(session_id, event)
+            except asyncio.CancelledError:
+                logger.info("Research task %s cancelled", session_id)
+                try:
+                    db = engine.db
+                    session = db.get_research_session(session_id)
+                    if session and session.get("status") not in ("done", "cancelled", "paused", "timeout", "error"):
+                        db.update_research_status(session_id, "paused", session.get("current_step"))
+                except Exception:
+                    pass
+                raise
+            except Exception as e:
+                logger.error("Research task %s failed: %s", session_id, e, exc_info=True)
+                err_event = {"type": "error", "error": str(e)}
+                await queue.put(err_event)
+                self._on_event(session_id, err_event)
+            finally:
+                await queue.put(None)
+                self._on_task_finalize(session_id)
 
     def _on_task_done(self, session_id: str, task: asyncio.Task) -> None:
         """Clean up after a task completes."""
