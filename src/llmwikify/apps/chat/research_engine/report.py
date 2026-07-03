@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from typing import Any
 
 from llmwikify.apps.chat.prompts import source_hash as _source_hash
@@ -195,14 +195,20 @@ class ReportGenerator:
 
         return report_md
 
-    def generate_streaming(
+    async def generate_streaming(
         self,
         query: str,
         sources: list[dict[str, Any]],
         synthesis: dict[str, Any],
         six_step_context: dict[str, Any] | None = None,
-    ) -> Iterator[dict[str, Any]]:
+    ) -> AsyncIterator[dict[str, Any]]:
         """Generate a structured markdown report with streaming output.
+
+        Issue#7: native async generator so the caller can ``async for``
+        over chunks without an extra thread + queue bridge. Yields
+        each chunk as soon as the LLM emits it, so the SSE consumer
+        sees progress in real time (instead of buffering until the
+        whole report is generated).
 
         Yields:
             dict: {"type": "progress", "message": str} or
@@ -231,27 +237,14 @@ class ReportGenerator:
             except Exception as e:
                 logger.warning("Streaming failed, falling back to non-streaming: %s", e)
 
-        # Fallback: non-streaming (uses run_prompt via asyncio.run)
-        import asyncio
-
+        # Fallback: non-streaming via run_prompt (already an async fn,
+        # so we just await — no asyncio.run / no thread bridge).
         try:
-            # Sync generator must NOT be called from a running event loop
-            # (would raise RuntimeError on asyncio.run). Verify and fail
-            # fast with a clear message rather than the cryptic stack trace.
-            try:
-                asyncio.get_running_loop()
-                raise RuntimeError(
-                    "generate_streaming must be called from a thread without "
-                    "a running event loop (use asyncio.to_thread)"
-                )
-            except RuntimeError as e:
-                if "no running event loop" not in str(e):
-                    raise
             kwargs = self._build_prompt_kwargs(
                 query, sources, synthesis, six_step_context,
             )
-            report_md = asyncio.run(
-                run_prompt(self._as_ctx(), "research_report", **kwargs)
+            report_md = await run_prompt(
+                self._as_ctx(), "research_report", **kwargs,
             )
             self._validate_citations(report_md, sources)
             yield {"type": "done", "content": report_md}

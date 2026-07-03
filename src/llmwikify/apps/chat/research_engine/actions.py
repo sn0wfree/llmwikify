@@ -576,26 +576,44 @@ async def action_report(
     # ─── 6-step context: build dict to pass into report + review ───
     six_step_context = _build_six_step_context(state)
 
-    # Use streaming report generation (DR-3)
-    import asyncio
+    # Use streaming report generation (DR-3).
+    # Issue#7: generate_streaming is now an async generator, so we can
+    # async-for directly — no thread + queue bridge needed. Each chunk
+    # is forwarded to the SSE consumer as soon as the LLM emits it.
     report_chunks: list[str] = []
+    streaming_failed = False
 
-    def _generate_streaming():
-        for event in generator.generate_streaming(
+    try:
+        async for event in generator.generate_streaming(
             state.query, sources, state.synthesis or {},
             six_step_context=six_step_context,
         ):
             if event["type"] == "chunk":
-                report_chunks.append(event["text"])
+                text = event.get("text", "")
+                report_chunks.append(text)
+                yield {
+                    "type": "report_chunk",
+                    "text": text,
+                    "session_id": state.session_id,
+                }
             elif event["type"] == "done":
-                return event["content"]
+                # If the streaming path already gave us chunks, prefer
+                # the accumulated chunks (which preserve real-time
+                # ordering) over the single "done" content blob. If
+                # the streaming path was bypassed (fallback), use the
+                # done content directly.
+                if report_chunks:
+                    state.report_md = "".join(report_chunks)
+                else:
+                    state.report_md = event["content"]
+                break
             elif event["type"] == "error":
+                streaming_failed = True
                 raise Exception(event["error"])
-        return "".join(report_chunks)
-
-    try:
-        # Run streaming generator in thread pool
-        state.report_md = await asyncio.to_thread(_generate_streaming)
+        else:
+            # Generator exhausted without a "done" event — accumulate
+            # whatever chunks we got.
+            state.report_md = "".join(report_chunks)
 
         # Persist report immediately so it survives pause/cancel/error
         ctx.session_manager.persist_report(state.session_id, {
@@ -610,7 +628,8 @@ async def action_report(
         })
         yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
     except Exception as e:
-        logger.error("Report generation failed: %s", e)
+        if not streaming_failed:
+            logger.error("Report generation failed: %s", e)
         yield {"type": "error", "error": f"Report generation failed: {e}"}
         ctx.session_manager.update_status(state.session_id, "error", "report", -1)
         state.phase = "error"
