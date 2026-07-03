@@ -590,14 +590,29 @@ export function AutoResearchPanel() {
     };
   }, [selectedId, session?.status]);
 
-  // Start streaming when a session is selected and not done
+  // Keep loadSession in a ref so the SSE effect doesn't tear down on every
+  // session.status change (Issue#3: avoid re-connecting the SSE stream
+  // every time the server reports a step transition).
+  const loadSessionRef = useRef(loadSession);
   useEffect(() => {
-    if (!selectedId || !session) return;
-    if (session.status === 'done' || session.status === 'error' || session.status === 'cancelled' || session.status === 'timeout' || session.status === 'incomplete') {
-      return;
-    }
+    loadSessionRef.current = loadSession;
+  }, [loadSession]);
 
-    abortRef.current?.abort();
+  // Status-driven UI: only react to terminal states, no stream teardown.
+  useEffect(() => {
+    if (!session) return;
+    if (session.status === 'done' || session.status === 'error'
+        || session.status === 'cancelled' || session.status === 'timeout'
+        || session.status === 'incomplete') {
+      setIsStreaming(false);
+    }
+  }, [session?.status]);
+
+  // Start streaming when a session is selected. Only re-runs when
+  // selectedId changes (or component unmounts), not on every status update.
+  useEffect(() => {
+    if (!selectedId) return;
+
     const controller = new AbortController();
     abortRef.current = controller;
     setIsStreaming(true);
@@ -657,21 +672,14 @@ export function AutoResearchPanel() {
           if (msg) {
             setEventLog((prev) => [...prev, { type: t, message: msg, timestamp: Date.now() }]);
           }
-
-          // Refresh session on key 6-step events
-          if (t === 'clarification_complete' || t === 'evidence_scoring_complete'
-              || t === 'reasoning_check_complete' || t === 'structure_check_complete'
-              || t === 'synthesis_complete' || t === 'review_passed' || t === 'review_issues'
-              || t === 'done' || t === 'error') {
-            loadSession(selectedId);
-          }
         }
       } catch (e) {
         // Stream aborted or errored
       } finally {
         setIsStreaming(false);
-        // Final refresh
-        if (selectedId) loadSession(selectedId);
+        // Final refresh once when the stream closes (Issue#4: was being
+        // called twice — once inline on 'done'/'error' events, plus here).
+        if (selectedId) loadSessionRef.current(selectedId);
       }
     })();
 
@@ -679,7 +687,7 @@ export function AutoResearchPanel() {
       controller.abort();
       abortRef.current = null;
     };
-  }, [selectedId, session?.status, loadSession]);
+  }, [selectedId]);
 
   const handleNew = (id: string) => {
     setRefreshKey((k) => k + 1);
