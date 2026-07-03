@@ -28,8 +28,14 @@ logger = logging.getLogger(__name__)
 # Phase 4.4 (v0.36): SSE heartbeat and timeout configuration.
 # HEARTBEAT_INTERVAL: seconds between keepalive pings (15s).
 # STREAM_TIMEOUT: total stream lifetime in seconds (300s = 5min).
+# STUDY_STREAM_TIMEOUT: extended timeout for /study research triggers
+# (30min) so long-running research workflows aren't cut off mid-run.
 HEARTBEAT_INTERVAL = 15
 STREAM_TIMEOUT = 300
+STUDY_STREAM_TIMEOUT = 30 * 60  # 30 minutes
+
+# /study trigger prefix (matches autoresearch_compound_skill triggers)
+_STUDY_TRIGGER = "/study"
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -62,6 +68,14 @@ async def chat(request: Request):
     jwt_token = get_jwt_from_request(request)
     service = get_agent_service()
 
+    # Issue#14: detect /study research triggers and use a longer
+    # stream timeout so long-running research workflows aren't cut
+    # off mid-run (the default 5min is too short for 6-step research).
+    is_study = (
+        req.message.lstrip().lower().startswith(_STUDY_TRIGGER)
+    )
+    stream_timeout = STUDY_STREAM_TIMEOUT if is_study else STREAM_TIMEOUT
+
     # Phase 19-A: bus adapter for SSE→bus mirror. The adapter is a
     # stateless wrapper around MessageBus + the SSE→WS translator;
     # see apps/chat/bus/adapter.py. Default bus is the process-wide
@@ -73,7 +87,8 @@ async def chat(request: Request):
 
         Sends a heartbeat comment every 15s to keep the
         connection alive through proxies/CDNs. Total stream
-        lifetime is capped at 5 minutes (300s).
+        lifetime is capped at 5 minutes (300s) for normal chats,
+        or 30 minutes for /study research triggers (Issue#14).
 
         Phase 19-A: each yielded event is mirrored to the in-process
         ``MessageBus`` so WebSocket subscribers and any future channel
@@ -102,11 +117,12 @@ async def chat(request: Request):
                 "data": json.dumps(event),
             }
             last_event_time = time.monotonic()
-            # Check total timeout
-            if last_event_time - start_time > STREAM_TIMEOUT:
+            # Check total timeout (Issue#14: /study uses 30min)
+            if last_event_time - start_time > stream_timeout:
+                timeout_minutes = int(stream_timeout // 60)
                 timeout_event = {
                     "type": "timeout",
-                    "message": "Stream timed out after 5 minutes",
+                    "message": f"Stream timed out after {timeout_minutes} minutes",
                 }
                 bus_adapter.mirror_sse_event(
                     timeout_event,
