@@ -165,7 +165,7 @@ class MetricsCollector:
             for c in self.llm_calls:
                 status = (
                     "fallback" if c.fallback_used
-                    else ("ok" if c.success else f"err: {c.error[:30]}")
+                    else ("ok" if c.success else f"err: {c.error[-80:]}")
                 )
                 lines.append(
                     f"│   ├── {c.prompt_name} ({c.llm_role}): "

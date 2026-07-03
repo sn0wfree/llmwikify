@@ -288,13 +288,16 @@ def is_arrearage_response(
     semantic tokens in the error body. They will NOT clear on
     retry, so callers should treat them as terminal.
 
+    Issue: MiniMax sometimes returns 401 (not 402/429) for quota
+    exhaustion. Check 401/402/429 for quota-related text markers.
+
     Used by 4xx error handlers to decide whether to log a
     permanent-failure warning vs a transient-retry warning.
     """
-    if status_code == 402:
-        return True
-    lowered = (content or "").lower()
-    return any(marker in lowered for marker in _NON_RETRYABLE_429_TEXT_MARKERS)
+    if status_code in (401, 402, 429):
+        lowered = (content or "").lower()
+        return any(marker in lowered for marker in _NON_RETRYABLE_429_TEXT_MARKERS)
+    return False
 
 
 # ─── Thinking style map (borrowed from nanobot OpenAICompatProvider) ───
@@ -715,6 +718,12 @@ class LLMRequestError(RuntimeError):
         self.body = body
         # Truncate body to keep logs readable
         preview = body[:500] + ("…" if len(body) > 500 else "")
+        # Issue: detect quota/billing errors and append a helpful hint
+        if is_arrearage_response(status_code, body):
+            preview += (
+                "\n  💡 Quota/billing error detected. "
+                "Check your provider dashboard for token balance."
+            )
         super().__init__(
             f"LLM API returned {status_code} for {url}: {preview}"
         )

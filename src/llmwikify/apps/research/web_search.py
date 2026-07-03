@@ -152,15 +152,32 @@ class MiniMaxSearchProvider:
                 },
                 json={"q": query},
             )
+            # Issue: detect quota/auth errors with clear message
+            if resp.status_code in (401, 402, 429):
+                body = resp.text
+                from llmwikify.foundation.llm.streamable import is_arrearage_response
+                if is_arrearage_response(resp.status_code, body):
+                    raise RuntimeError(
+                        f"MiniMax search quota exhausted (HTTP {resp.status_code}). "
+                        f"Check your MiniMax dashboard for daily search quota."
+                    )
+                raise RuntimeError(
+                    f"MiniMax search auth error (HTTP {resp.status_code}): {body[:200]}"
+                )
             resp.raise_for_status()
             data = resp.json()
 
         # Check API-level error
         base_resp = data.get("base_resp", {})
         if base_resp.get("status_code", 0) != 0:
+            status_msg = base_resp.get("status_msg", "unknown")
+            # Issue: detect quota-related error messages
+            if any(m in status_msg.lower() for m in ("quota", "limit", "exhausted", "rate")):
+                raise RuntimeError(
+                    f"MiniMax search quota exhausted: {status_msg}"
+                )
             raise RuntimeError(
-                f"MiniMax API error {base_resp.get('status_code')}: "
-                f"{base_resp.get('status_msg', 'unknown')}"
+                f"MiniMax API error {base_resp.get('status_code')}: {status_msg}"
             )
 
         return [
