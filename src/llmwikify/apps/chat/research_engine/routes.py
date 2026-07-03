@@ -165,10 +165,10 @@ async def resume_autoresearch(session_id: str):
 
 
 @router.get("/list")
-async def list_autoresearch(wiki_id: str | None = None):
-    """List all autoresearch sessions."""
+async def list_autoresearch(wiki_id: str | None = None, limit: int = 50):
+    """List autoresearch sessions (most recent first, capped by `limit`)."""
     db = _get_db()
-    sessions = db.list_research_sessions(wiki_id)
+    sessions = db.list_research_sessions(wiki_id, limit=limit)
     return {"autoresearch_sessions": sessions}
 
 

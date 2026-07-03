@@ -249,10 +249,14 @@ export async function startAutoResearch(
 }
 
 /** List all autoresearch sessions (optionally filtered by wiki). */
-export async function listAutoResearch(wikiId?: string): Promise<{
+export async function listAutoResearch(wikiId?: string, limit = 50): Promise<{
   autoresearch_sessions: AutoResearchSession[];
 }> {
-  const url = `${API_BASE}/list${wikiId ? `?wiki_id=${encodeURIComponent(wikiId)}` : ''}`;
+  const params = new URLSearchParams();
+  if (wikiId) params.set('wiki_id', wikiId);
+  if (limit) params.set('limit', String(limit));
+  const qs = params.toString();
+  const url = `${API_BASE}/list${qs ? `?${qs}` : ''}`;
   const response = await fetchWithRetry(url, {
     method: 'GET',
     headers: { ...authHeaders() },

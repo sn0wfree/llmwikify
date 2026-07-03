@@ -226,16 +226,19 @@ class ResearchDatabase(BaseDatabase):
         return dict(row) if row else None
 
     def list_research_sessions(
-        self, wiki_id: str | None = None, session_type: str | None = None
+        self,
+        wiki_id: str | None = None,
+        session_type: str | None = None,
+        limit: int = 50,
     ) -> list[dict]:
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             sql = """SELECT s.*,
-                       (SELECT COUNT(*) FROM autoresearch_sub_queries
-                        WHERE session_id = s.id) AS sub_query_count,
-                       (SELECT COUNT(*) FROM autoresearch_sources
-                        WHERE session_id = s.id) AS source_count
-                    FROM autoresearch_sessions s"""
+                       COUNT(DISTINCT sq.id) AS sub_query_count,
+                       COUNT(DISTINCT src.id) AS source_count
+                    FROM autoresearch_sessions s
+                    LEFT JOIN autoresearch_sub_queries sq ON sq.session_id = s.id
+                    LEFT JOIN autoresearch_sources src ON src.session_id = s.id"""
             clauses: list[str] = []
             params: list[Any] = []
             if wiki_id is not None:
@@ -243,7 +246,8 @@ class ResearchDatabase(BaseDatabase):
                 params.append(wiki_id)
             if clauses:
                 sql += " WHERE " + " AND ".join(clauses)
-            sql += " ORDER BY s.created_at DESC"
+            sql += " GROUP BY s.id ORDER BY s.created_at DESC LIMIT ?"
+            params.append(int(limit))
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
