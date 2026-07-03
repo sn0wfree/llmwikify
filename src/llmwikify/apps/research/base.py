@@ -428,11 +428,23 @@ class BaseResearchTaskManager:
         ResearchEngine mutates self.session_manager.session_id at the start
         of run(); without serialization, two concurrent runs for the same
         wiki would race on writes (sources saved under wrong session_id).
+
+        Issue#2: forward events to the SSE consumer in real time via
+        an emit callback. The action handlers call this callback for
+        each inner event as it happens (not buffered).
         """
         lock = _get_wiki_lock(engine)
+        # Issue#2: emit callback that puts events onto the same queue
+        # the outer for-loop reads from. Safe because asyncio.Queue.put
+        # is awaitable and we just need to schedule it on this loop.
+        async def _emit(ev: dict) -> None:
+            await queue.put(ev)
+            self._on_event(session_id, ev)
         async with lock:
             try:
-                async for event in engine.run(session_id, query, resume=resume):
+                async for event in engine.run(
+                    session_id, query, resume=resume, emit=_emit,
+                ):
                     await queue.put(event)
                     self._on_event(session_id, event)
             except asyncio.CancelledError:

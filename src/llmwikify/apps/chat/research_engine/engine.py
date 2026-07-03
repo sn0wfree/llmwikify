@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
@@ -165,8 +165,21 @@ class ResearchEngine:
             if elapsed > self._timeout_seconds:
                 raise TimeoutError(f"Research timed out after {elapsed:.0f}s (limit: {self._timeout_seconds}s)")
 
-    async def run(self, session_id: str, query: str, resume: bool = False) -> AsyncIterator[dict[str, Any]]:
-        """Execute the ReAct research loop, yielding SSE events."""
+    async def run(
+        self,
+        session_id: str,
+        query: str,
+        resume: bool = False,
+        emit: Callable[[dict], Awaitable[None] | None] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Execute the ReAct research loop, yielding SSE events.
+
+        Args:
+            emit: optional side-channel callback. When provided, action
+                handlers forward their inner events via ctx.emit (in
+                addition to the buffered _events path), enabling real-time
+                SSE propagation (Issue#2).
+        """
         self.session_manager.session_id = session_id
         self._start_time = time.monotonic()
 
@@ -217,14 +230,18 @@ class ResearchEngine:
 
         try:
             async for event in translate_react_events(
-                engine.run(SkillContext(
-                    session_id=session_id,
-                    wiki=self.wiki,
-                    db=self.db,
-                    llm_client=self._default_llm,
-                    config=self.config,
-                    metrics=self._metrics,
-                )),
+                engine.run(
+                    SkillContext(
+                        session_id=session_id,
+                        wiki=self.wiki,
+                        db=self.db,
+                        llm_client=self._default_llm,
+                        config=self.config,
+                        metrics=self._metrics,
+                        emit=emit,
+                    ),
+                    emit=emit,
+                ),
                 state=state,
                 session_id=session_id,
                 timeout_seconds=self._timeout_seconds,
@@ -256,8 +273,23 @@ class ResearchEngine:
                 if dispatch is None:
                     return SkillResult.fail(f"Unknown action: {action_name}")
                 events = []
+                emit_cb = getattr(ctx, "emit", None) if ctx is not None else None
                 async for ev in dispatch(state):
                     events.append(ev)
+                    # Issue#2: forward each event to the SSE consumer in
+                    # real time. Falls back silently if ctx has no emit.
+                    if emit_cb is not None:
+                        try:
+                            import inspect
+                            if inspect.iscoroutinefunction(emit_cb):
+                                await emit_cb(ev)
+                            else:
+                                emit_cb(ev)
+                        except Exception as e:  # noqa: BLE001
+                            logger.warning(
+                                "emit callback failed for action %s: %s",
+                                action_name, e,
+                            )
                 return SkillResult.ok({"_events": events, "action": action_name})
             return handler
 

@@ -240,6 +240,12 @@ class SkillContext:
     config: dict[str, Any] = field(default_factory=dict)
     metrics: Any = None
     session_id: str = ""
+    # Issue#2: optional side-channel emit callback for real-time event
+    # propagation. Handlers can call ctx.emit(ev) to forward events to
+    # the SSE consumer immediately, without buffering until the action
+    # completes. When None, falls back to the legacy buffered path
+    # (events collected in result.data["_events"]).
+    emit: Any = None
 
     def with_overrides(self, **kwargs: Any) -> SkillContext:
         """Return a shallow copy with the given fields overridden.
