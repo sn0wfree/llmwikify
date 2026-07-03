@@ -1,0 +1,49 @@
+# docker-tests/Dockerfile.e2e-runner
+# Generic e2e test runner. NO project code, NO project deps.
+# The image contains only Python + pip + a thin entrypoint that
+# ``pip install``s whatever PIP_PACKAGES asks for and then exec's
+# the TEST_SCRIPT command.
+#
+# Build:  docker build -f docker-tests/Dockerfile.e2e-runner \
+#            -t python-e2e-runner:py3.11 .
+# Run:    docker run --rm -e PIP_PACKAGES="..." -e TEST_SCRIPT="..." \
+#            -v $PWD/examples:/app/examples python-e2e-runner:py3.11
+
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TZ=UTC
+
+# System: python + tini + curl + git + bash. Nothing else.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tini \
+    curl \
+    git \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+# Non-root user (matches test image convention).
+RUN useradd -m -u 1000 e2euser
+
+WORKDIR /app
+RUN mkdir -p /app/data /app/test-results \
+    && chown -R e2euser:e2euser /app
+USER e2euser
+
+VOLUME ["/app/data"]
+VOLUME ["/app/test-results"]
+
+# Entry point: dynamic install + exec.
+COPY --chown=e2euser:e2euser docker-tests/e2e-entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Defaults — overridden at run time.
+ENV PIP_PACKAGES="" \
+    TEST_SCRIPT="" \
+    LLMWIKIFY_VERSION=""
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
+CMD ["bash"]

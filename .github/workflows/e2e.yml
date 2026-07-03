@@ -1,0 +1,58 @@
+name: E2E (wiki build + chat SSE)
+
+> **Generic e2e runner.** This job uses the same `python-e2e-runner`
+> image as the local `docker-tests/run-e2e.sh`. It builds the local
+> wheel, mounts it in the generic container, and runs the 4-script
+> chain (`00 -> 01 -> 02 -> 03`).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e:
+    name: e2e (py3.11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python (for wheel build)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build llmwikify wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Build generic e2e-runner image
+        run: |
+          docker build \
+            --build-arg PYTHON_VERSION=3.11 \
+            -f docker-tests/Dockerfile.e2e-runner \
+            -t python-e2e-runner:py3.11 .
+
+      - name: Run e2e suite in container
+        run: |
+          docker run --rm \
+            -e IN_DOCKER=1 \
+            -e PIP_PACKAGES="/app/dist/$(ls dist/llmwikify-*.whl | head -1 | xargs basename) httpx" \
+            -e TEST_SCRIPT="python3 /app/examples/09_wiki_build_e2e/scripts/run_all.sh" \
+            -v ${{ github.workspace }}/dist:/app/dist \
+            -v ${{ github.workspace }}/examples:/app/examples \
+            -v ${{ github.workspace }}/docker-tests/test-results:/app/test-results \
+            python-e2e-runner:py3.11
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: docker-tests/test-results/
+          if-no-files-found: ignore
