@@ -121,6 +121,9 @@ class ResearchDelegate:
     def get_sub_queries(self, session_id: str) -> list[dict]:
         return self._research.get_sub_queries(session_id)
 
+    def get_sub_query_count(self, session_id: str) -> int:
+        return self._research.get_sub_query_count(session_id)
+
     # ─── Sources ──────────────────────────────────────────────
 
     def save_source(

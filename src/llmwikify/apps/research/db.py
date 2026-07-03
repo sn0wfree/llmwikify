@@ -422,6 +422,20 @@ class ResearchDatabase(BaseDatabase):
             out.append(d)
         return out
 
+    def get_sub_query_count(self, session_id: str) -> int:
+        """Cheap count-only query (no row hydration).
+
+        Issue#8: used by the observer's dirty-check to decide whether
+        the full ``get_sub_queries`` is needed.
+        """
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT COUNT(*) AS c FROM autoresearch_sub_queries
+                   WHERE session_id = ?""",
+                (session_id,),
+            ).fetchone()
+        return int(row[0]) if row else 0
+
     # ─── Sources ──────────────────────────────────────────────
 
     def save_source(
@@ -478,6 +492,15 @@ class ResearchDatabase(BaseDatabase):
                     pass
             out.append(d)
         return out
+
+    def count_sources(self, session_id: str) -> int:
+        """Cheap count-only query (no row hydration).
+
+        Issue#8: used by the observer's dirty-check to decide whether
+        the full ``get_sources`` is needed. Alias of ``get_source_count``
+        for naming consistency with ``get_sub_query_count``.
+        """
+        return self.get_source_count(session_id)
 
     def rate_source(self, source_id: str, rating: int) -> None:
         with self._connect() as conn:

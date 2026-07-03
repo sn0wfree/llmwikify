@@ -46,24 +46,45 @@ class ResearchObserver:
         self._db = engine.db
 
     def observe(self, state: ResearchState) -> None:
-        """Refresh state from DB and generate interpreted observations."""
-        state.sources = self._db.get_sources(state.session_id) or []
-        state.sub_queries_raw = self._db.get_sub_queries(state.session_id) or []
+        """Refresh state from DB and generate interpreted observations.
 
-        # Rebuild sub_queries list from DB
-        state.sub_queries = [
-            {
-                "id": sq["id"],
-                "query": sq["query"],
-                "source_type": sq["source_type"],
-                "url": sq.get("url"),
-                "status": sq.get("status", "pending"),
-            }
-            for sq in state.sub_queries_raw
-        ]
+        Issue#8: skip the DB reload when neither sources nor sub_queries
+        have changed since the last observation. The DB has cost
+        (queries + Python reshape of all rows); for 6-step loops that
+        run observe() 8+ times per round, that adds up. We compare
+        cached counts (cheap) and only re-read when something grew.
+        """
+        cached_source_count = getattr(state, "_cached_source_count", -1)
+        cached_subq_count = getattr(state, "_cached_subq_count", -1)
 
-        state.total_sources = len(state.sources)
-        state.total_sub_queries = len(state.sub_queries)
+        current_source_count = self._db.get_source_count(state.session_id) or 0
+        current_subq_count = self._db.get_sub_query_count(state.session_id) or 0
+
+        # Only reload if the counts changed (cheap, one query each).
+        # If both unchanged, the rows can't have changed either.
+        sources_changed = current_source_count != cached_source_count
+        subqueries_changed = current_subq_count != cached_subq_count
+
+        if sources_changed:
+            state.sources = self._db.get_sources(state.session_id) or []
+            state._cached_source_count = current_source_count
+        if subqueries_changed:
+            state.sub_queries_raw = self._db.get_sub_queries(state.session_id) or []
+            state._cached_subq_count = current_subq_count
+            # Rebuild sub_queries list from DB only when we re-read.
+            state.sub_queries = [
+                {
+                    "id": sq["id"],
+                    "query": sq["query"],
+                    "source_type": sq["source_type"],
+                    "url": sq.get("url"),
+                    "status": sq.get("status", "pending"),
+                }
+                for sq in state.sub_queries_raw
+            ]
+
+        state.total_sources = current_source_count
+        state.total_sub_queries = current_subq_count
 
         # Extract knowledge gaps from synthesis
         if state.synthesis:

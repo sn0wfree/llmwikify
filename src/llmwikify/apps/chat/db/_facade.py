@@ -438,6 +438,9 @@ class ChatDatabase(BaseDatabase):
     def get_sub_queries(self, session_id: str) -> list[dict]:
         return self._research.get_sub_queries(session_id)
 
+    def get_sub_query_count(self, session_id: str) -> int:
+        return self._research.get_sub_query_count(session_id)
+
     def save_source(
         self, session_id: str, sub_query_id: str, source_type: str,
         url: str, title: str, content_length: int,
